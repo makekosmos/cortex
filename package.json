@@ -1,5 +1,5 @@
 {
   "name": "kosmos",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"]
+  "workspaces": ["apps/*", "apps/delphi/ts", "packages/*"]
 }

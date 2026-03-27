@@ -62,4 +62,5 @@ local.properties
 *.env
 *.env.*
 !*.env.example
+*.docx
 .turbo/

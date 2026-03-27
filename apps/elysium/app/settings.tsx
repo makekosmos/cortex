@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, Text, TextInput, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, fontSize, spacing, cardRadius, fonts } from '@/theme';
 import { useNutritionStore } from '@/stores/nutrition-store';
 import { useSettingsStore, type FoodSource } from '@/stores/settings-store';
+import { useSyncStore } from '@/sync/sync-store';
 import { Card } from '@/components/Card';
 import { CardRow } from '@/components/CardRow';
 import type { Macros } from '@/types/nutrition';
@@ -18,7 +19,19 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { goals, updateGoals } = useNutritionStore();
   const { foodSource, setFoodSource } = useSettingsStore();
+  const sync = useSyncStore();
   const [form, setForm] = useState<Macros>({ ...goals });
+  const [syncUrl, setSyncUrl] = useState(sync.serverUrl);
+  const [syncKey, setSyncKey] = useState(sync.apiKey);
+
+  useEffect(() => {
+    sync.hydrate();
+  }, []);
+
+  useEffect(() => {
+    setSyncUrl(sync.serverUrl);
+    setSyncKey(sync.apiKey);
+  }, [sync.serverUrl, sync.apiKey]);
 
   const computedCalories = caloriesFromMacros(form.protein, form.fat, form.carbs);
 
@@ -88,6 +101,74 @@ export default function SettingsScreen() {
           </CardRow>
         ))}
       </Card>
+
+      <Text style={styles.sectionLabel}>Синхронизация</Text>
+      <Card noPadding style={styles.sectionCard}>
+        <CardRow first>
+          <View style={styles.syncField}>
+            <Text style={styles.rowLabel}>Сервер</Text>
+            <TextInput
+              style={[styles.input, styles.syncInput]}
+              value={syncUrl}
+              onChangeText={setSyncUrl}
+              placeholder="ws://192.168.1.x:8000"
+              placeholderTextColor={colors.text.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        </CardRow>
+        <CardRow>
+          <View style={styles.syncField}>
+            <Text style={styles.rowLabel}>API Key</Text>
+            <TextInput
+              style={[styles.input, styles.syncInput]}
+              value={syncKey}
+              onChangeText={setSyncKey}
+              placeholder="xxxxxxxx"
+              placeholderTextColor={colors.text.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+            />
+          </View>
+        </CardRow>
+        <CardRow>
+          <View style={styles.syncStatusRow}>
+            <View style={styles.syncStatusLeft}>
+              <View style={[styles.dot, sync.isConnected ? styles.dotOn : sync.isSyncing ? styles.dotSyncing : styles.dotOff]} />
+              <Text style={styles.rowLabel}>
+                {sync.isSyncing ? 'Подключение...' : sync.isConnected ? 'Подключено' : 'Отключено'}
+              </Text>
+            </View>
+            {sync.lastSyncAt && (
+              <Text style={styles.syncMeta}>
+                {new Date(sync.lastSyncAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            )}
+          </View>
+        </CardRow>
+      </Card>
+
+      <Pressable
+        style={[styles.saveBtn, sync.isConnected && styles.disconnectBtn]}
+        onPress={() => {
+          if (sync.isConnected) {
+            sync.disconnect();
+          } else {
+            if (!syncUrl || !syncKey) {
+              Alert.alert('Ошибка', 'Укажите сервер и API key');
+              return;
+            }
+            sync.configureServer(syncUrl, syncKey);
+            sync.connect();
+          }
+        }}
+      >
+        <Text style={styles.saveBtnText}>
+          {sync.isConnected ? 'Отключиться' : 'Подключиться'}
+        </Text>
+      </Pressable>
 
       <Card noPadding style={styles.sectionCard}>
         <CardRow first>
@@ -168,4 +249,14 @@ const styles = StyleSheet.create({
   aboutText: { fontSize: fontSize.sm, fontFamily: fonts.regular, color: colors.text.secondary, lineHeight: 22 },
   computed: { fontSize: fontSize.md, fontFamily: fonts.monoBold, color: colors.text.muted },
   versionText: { fontSize: fontSize.md, fontFamily: fonts.mono, color: colors.text.muted },
+  syncField: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  syncInput: { width: 160, textAlign: 'right' },
+  syncStatusRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  syncStatusLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  dotOn: { backgroundColor: colors.accent },
+  dotSyncing: { backgroundColor: '#FACC15' },
+  dotOff: { backgroundColor: colors.text.muted },
+  syncMeta: { fontSize: fontSize.xs, fontFamily: fonts.mono, color: colors.text.muted },
+  disconnectBtn: { backgroundColor: colors.over },
 });

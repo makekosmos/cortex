@@ -12,7 +12,7 @@
 ### Olympia - приложение для тренировок 
 Здесь держать тренировки
 
-### Elysium - трекинг питания
+### [Elysium](./apps/elysium/README.md) - трекинг питания
 Здесь трекать питание
 
 ### [Delphi](./apps/delphi/README.md)

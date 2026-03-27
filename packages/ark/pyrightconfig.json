@@ -1,0 +1,8 @@
+{
+  "include": ["core", "plugins", "server"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": "none",
+}

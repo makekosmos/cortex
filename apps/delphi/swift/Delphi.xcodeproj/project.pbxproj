@@ -1,0 +1,517 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02F7CB27817C45B421EAF3F1 /* ArkSyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B1C224D6A2EA95338F55AD /* ArkSyncClient.swift */; };
+		1117B9734B342779713955F2 /* Area.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B546892E3D3207617E27CD /* Area.swift */; };
+		155577DD822D4D3916C12C6E /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C83D540EB909A86DEE2D952 /* UpcomingView.swift */; };
+		20A26F60FCCA715B1940ED49 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C8AC3F82ED476E9ECE47AC /* Date+Extensions.swift */; };
+		29F3555CE668EB1305B82CD6 /* LemmaSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141252CBD9A35D4B5EF344CE /* LemmaSearchService.swift */; };
+		34652EA19711CC459BC72951 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1760F06781048994BA9CEA20 /* Project.swift */; };
+		3A021EE9FE515BA78CAC009F /* TagChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70529D134387C1CC318EE256 /* TagChip.swift */; };
+		3A0980A721EE24C732374520 /* MoveToDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2E07333E1A9627A6F28E55 /* MoveToDialog.swift */; };
+		4A4F822FA05D88FDA31091D0 /* TodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF6851A17D26E70B89855B5 /* TodoItem.swift */; };
+		4B4BFEE5140387F669B4B0E0 /* SyncSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53AE353852563A3A39966837 /* SyncSettings.swift */; };
+		878F46A2EFDF04DDBBEC1E0A /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DEB0956FFBEAAD58489D194 /* TodoListView.swift */; };
+		9DEBAC08F48BB96E79E6E5B7 /* QuickEntryPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35218E433A432FCBD4401295 /* QuickEntryPanel.swift */; };
+		A093C166405D5D7804939812 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AFB019B9C2DBEE60F80FD9D /* SidebarView.swift */; };
+		A373E36C11ECE1ABECA8876C /* TodoFilterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC11B49B4D96C7BD32E8F73E /* TodoFilterService.swift */; };
+		AD6A6F4203D1910F48004810 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B06DC289CEB84C67712796 /* Tag.swift */; };
+		B42D89F4CAA7CC983F090EC7 /* ArkEventMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B902F9CD35AD1CE123C1DB2 /* ArkEventMapper.swift */; };
+		B44538B62CC9989DFCCEB5DD /* SidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16BF00CBDB7D6B01BA0AD49A /* SidebarRow.swift */; };
+		BE6541BFF78371221E158920 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCB3D9CDC2067C22A3648CFB /* ContentView.swift */; };
+		BE6855A7A0669F3542A1E236 /* ChecklistItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55F0DCFA08D31895168A8187 /* ChecklistItem.swift */; };
+		CA06256D359986AB276F5B02 /* DelphiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB008F376EA27B8F52B9F667 /* DelphiApp.swift */; };
+		CD6D219DAA93B0196D4EE6BB /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64018C65AA2EB0A2917CD9A2 /* Enums.swift */; };
+		CECC69FC4A4D8F15336A0D7F /* NaturalDateParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B820FD8042D1B7D70D3A957 /* NaturalDateParser.swift */; };
+		CFBA7D9C8494BAF8601002EA /* TodoRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD10EF7AC097982F68347EE4 /* TodoRowView.swift */; };
+		D992E80835F69738CBF77766 /* TodoListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC97613152592EEC554A4803 /* TodoListViewModel.swift */; };
+		E19BC6910D0FD625DECC6423 /* Heading.swift in Sources */ = {isa = PBXBuildFile; fileRef = F28B0B5C4EE33EBA98A16164 /* Heading.swift */; };
+		E34DDB31F270F49A397E4D92 /* QuickOpenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17DE32C9F2236A7BCC300907 /* QuickOpenView.swift */; };
+		F166F6823D939DCFE7261E93 /* DelphiCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D3ADFDBC6924665E24187F /* DelphiCommands.swift */; };
+		F185C8BD1C09780193901765 /* SidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D185D143DE9DE0234BD7BA /* SidebarViewModel.swift */; };
+		FAEDDA85B153DE67AA86ED21 /* SyncSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848C8CD1C5716FBC1672A047 /* SyncSettingsView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0B902F9CD35AD1CE123C1DB2 /* ArkEventMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkEventMapper.swift; sourceTree = "<group>"; };
+		1143DCAF50DD642944F5B192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		141252CBD9A35D4B5EF344CE /* LemmaSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LemmaSearchService.swift; sourceTree = "<group>"; };
+		16BF00CBDB7D6B01BA0AD49A /* SidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRow.swift; sourceTree = "<group>"; };
+		1760F06781048994BA9CEA20 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
+		17DE32C9F2236A7BCC300907 /* QuickOpenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenView.swift; sourceTree = "<group>"; };
+		35218E433A432FCBD4401295 /* QuickEntryPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryPanel.swift; sourceTree = "<group>"; };
+		3D2E07333E1A9627A6F28E55 /* MoveToDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoveToDialog.swift; sourceTree = "<group>"; };
+		48C8AC3F82ED476E9ECE47AC /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
+		4B820FD8042D1B7D70D3A957 /* NaturalDateParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaturalDateParser.swift; sourceTree = "<group>"; };
+		4DEB0956FFBEAAD58489D194 /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
+		53AE353852563A3A39966837 /* SyncSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSettings.swift; sourceTree = "<group>"; };
+		55F0DCFA08D31895168A8187 /* ChecklistItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistItem.swift; sourceTree = "<group>"; };
+		64018C65AA2EB0A2917CD9A2 /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
+		6BF6851A17D26E70B89855B5 /* TodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoItem.swift; sourceTree = "<group>"; };
+		70529D134387C1CC318EE256 /* TagChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChip.swift; sourceTree = "<group>"; };
+		70B546892E3D3207617E27CD /* Area.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Area.swift; sourceTree = "<group>"; };
+		74BA9AC4148DFAC893F34259 /* Delphi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Delphi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		848C8CD1C5716FBC1672A047 /* SyncSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSettingsView.swift; sourceTree = "<group>"; };
+		8AFB019B9C2DBEE60F80FD9D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		9C83D540EB909A86DEE2D952 /* UpcomingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingView.swift; sourceTree = "<group>"; };
+		A4D3ADFDBC6924665E24187F /* DelphiCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelphiCommands.swift; sourceTree = "<group>"; };
+		BB008F376EA27B8F52B9F667 /* DelphiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelphiApp.swift; sourceTree = "<group>"; };
+		C9D185D143DE9DE0234BD7BA /* SidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewModel.swift; sourceTree = "<group>"; };
+		CA37028F554FAE6F402204A0 /* Delphi.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Delphi.entitlements; sourceTree = "<group>"; };
+		CD10EF7AC097982F68347EE4 /* TodoRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoRowView.swift; sourceTree = "<group>"; };
+		DC97613152592EEC554A4803 /* TodoListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListViewModel.swift; sourceTree = "<group>"; };
+		DCB3D9CDC2067C22A3648CFB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E3B06DC289CEB84C67712796 /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
+		E9B1C224D6A2EA95338F55AD /* ArkSyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkSyncClient.swift; sourceTree = "<group>"; };
+		EC11B49B4D96C7BD32E8F73E /* TodoFilterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoFilterService.swift; sourceTree = "<group>"; };
+		F28B0B5C4EE33EBA98A16164 /* Heading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Heading.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		032F0C4CD2A0BB3B24383B7A /* TodoList */ = {
+			isa = PBXGroup;
+			children = (
+				4DEB0956FFBEAAD58489D194 /* TodoListView.swift */,
+				CD10EF7AC097982F68347EE4 /* TodoRowView.swift */,
+				9C83D540EB909A86DEE2D952 /* UpcomingView.swift */,
+			);
+			path = TodoList;
+			sourceTree = "<group>";
+		};
+		085C1052EC82127D750E7B8C /* QuickEntry */ = {
+			isa = PBXGroup;
+			children = (
+				35218E433A432FCBD4401295 /* QuickEntryPanel.swift */,
+			);
+			path = QuickEntry;
+			sourceTree = "<group>";
+		};
+		22BC010C9D61FF4402EC57D3 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				CA37028F554FAE6F402204A0 /* Delphi.entitlements */,
+				1143DCAF50DD642944F5B192 /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		3CA9A30DE9D6A0400F0A6CE5 /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				0B902F9CD35AD1CE123C1DB2 /* ArkEventMapper.swift */,
+				E9B1C224D6A2EA95338F55AD /* ArkSyncClient.swift */,
+				53AE353852563A3A39966837 /* SyncSettings.swift */,
+				848C8CD1C5716FBC1672A047 /* SyncSettingsView.swift */,
+			);
+			path = Sync;
+			sourceTree = "<group>";
+		};
+		4B4A78E4E1EF07AD4EE1C5A6 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				3D2E07333E1A9627A6F28E55 /* MoveToDialog.swift */,
+				70529D134387C1CC318EE256 /* TagChip.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		4E65F30898CEE6016CA4B4D5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				74BA9AC4148DFAC893F34259 /* Delphi.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5BDBBEAE18D86B5A5731391A /* QuickOpen */ = {
+			isa = PBXGroup;
+			children = (
+				17DE32C9F2236A7BCC300907 /* QuickOpenView.swift */,
+			);
+			path = QuickOpen;
+			sourceTree = "<group>";
+		};
+		72CC53E66824E67E3920AADA /* Delphi */ = {
+			isa = PBXGroup;
+			children = (
+				905BBB9FF3DDD0F010D24078 /* App */,
+				779F62BBA40E2292512A92C0 /* Extensions */,
+				F4113243DD7F34845446B2FA /* Models */,
+				22BC010C9D61FF4402EC57D3 /* Resources */,
+				ED6394B280A6DB940DD69D2D /* Services */,
+				3CA9A30DE9D6A0400F0A6CE5 /* Sync */,
+				D3CE60B53FB59ABDB844B4C8 /* ViewModels */,
+				A8CF1D0620B4C6C18C752523 /* Views */,
+			);
+			path = Delphi;
+			sourceTree = "<group>";
+		};
+		779F62BBA40E2292512A92C0 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				48C8AC3F82ED476E9ECE47AC /* Date+Extensions.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		905BBB9FF3DDD0F010D24078 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				DCB3D9CDC2067C22A3648CFB /* ContentView.swift */,
+				BB008F376EA27B8F52B9F667 /* DelphiApp.swift */,
+				A4D3ADFDBC6924665E24187F /* DelphiCommands.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A8CF1D0620B4C6C18C752523 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				085C1052EC82127D750E7B8C /* QuickEntry */,
+				5BDBBEAE18D86B5A5731391A /* QuickOpen */,
+				4B4A78E4E1EF07AD4EE1C5A6 /* Shared */,
+				BC4B05CFFA997A9DD4E578C6 /* Sidebar */,
+				032F0C4CD2A0BB3B24383B7A /* TodoList */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		BC4B05CFFA997A9DD4E578C6 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				16BF00CBDB7D6B01BA0AD49A /* SidebarRow.swift */,
+				8AFB019B9C2DBEE60F80FD9D /* SidebarView.swift */,
+			);
+			path = Sidebar;
+			sourceTree = "<group>";
+		};
+		D3CE60B53FB59ABDB844B4C8 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				C9D185D143DE9DE0234BD7BA /* SidebarViewModel.swift */,
+				DC97613152592EEC554A4803 /* TodoListViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		ED6394B280A6DB940DD69D2D /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				141252CBD9A35D4B5EF344CE /* LemmaSearchService.swift */,
+				4B820FD8042D1B7D70D3A957 /* NaturalDateParser.swift */,
+				EC11B49B4D96C7BD32E8F73E /* TodoFilterService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		F052139458EA0AC9C3115813 = {
+			isa = PBXGroup;
+			children = (
+				72CC53E66824E67E3920AADA /* Delphi */,
+				4E65F30898CEE6016CA4B4D5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F4113243DD7F34845446B2FA /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				70B546892E3D3207617E27CD /* Area.swift */,
+				55F0DCFA08D31895168A8187 /* ChecklistItem.swift */,
+				64018C65AA2EB0A2917CD9A2 /* Enums.swift */,
+				F28B0B5C4EE33EBA98A16164 /* Heading.swift */,
+				1760F06781048994BA9CEA20 /* Project.swift */,
+				E3B06DC289CEB84C67712796 /* Tag.swift */,
+				6BF6851A17D26E70B89855B5 /* TodoItem.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B51620B340ACA44818458E9E /* Delphi */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 376F3E65A324E7D03EAFC4E0 /* Build configuration list for PBXNativeTarget "Delphi" */;
+			buildPhases = (
+				D78F9C87C31225F589BF9F58 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Delphi;
+			packageProductDependencies = (
+			);
+			productName = Delphi;
+			productReference = 74BA9AC4148DFAC893F34259 /* Delphi.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E613ED5C4B85EDD1C8303AAD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					B51620B340ACA44818458E9E = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 567C86A416872BCE1D2DB0E2 /* Build configuration list for PBXProject "Delphi" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F052139458EA0AC9C3115813;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 4E65F30898CEE6016CA4B4D5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B51620B340ACA44818458E9E /* Delphi */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D78F9C87C31225F589BF9F58 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1117B9734B342779713955F2 /* Area.swift in Sources */,
+				B42D89F4CAA7CC983F090EC7 /* ArkEventMapper.swift in Sources */,
+				02F7CB27817C45B421EAF3F1 /* ArkSyncClient.swift in Sources */,
+				BE6855A7A0669F3542A1E236 /* ChecklistItem.swift in Sources */,
+				BE6541BFF78371221E158920 /* ContentView.swift in Sources */,
+				20A26F60FCCA715B1940ED49 /* Date+Extensions.swift in Sources */,
+				CA06256D359986AB276F5B02 /* DelphiApp.swift in Sources */,
+				F166F6823D939DCFE7261E93 /* DelphiCommands.swift in Sources */,
+				CD6D219DAA93B0196D4EE6BB /* Enums.swift in Sources */,
+				E19BC6910D0FD625DECC6423 /* Heading.swift in Sources */,
+				29F3555CE668EB1305B82CD6 /* LemmaSearchService.swift in Sources */,
+				3A0980A721EE24C732374520 /* MoveToDialog.swift in Sources */,
+				CECC69FC4A4D8F15336A0D7F /* NaturalDateParser.swift in Sources */,
+				34652EA19711CC459BC72951 /* Project.swift in Sources */,
+				9DEBAC08F48BB96E79E6E5B7 /* QuickEntryPanel.swift in Sources */,
+				E34DDB31F270F49A397E4D92 /* QuickOpenView.swift in Sources */,
+				B44538B62CC9989DFCCEB5DD /* SidebarRow.swift in Sources */,
+				A093C166405D5D7804939812 /* SidebarView.swift in Sources */,
+				F185C8BD1C09780193901765 /* SidebarViewModel.swift in Sources */,
+				4B4BFEE5140387F669B4B0E0 /* SyncSettings.swift in Sources */,
+				FAEDDA85B153DE67AA86ED21 /* SyncSettingsView.swift in Sources */,
+				AD6A6F4203D1910F48004810 /* Tag.swift in Sources */,
+				3A021EE9FE515BA78CAC009F /* TagChip.swift in Sources */,
+				A373E36C11ECE1ABECA8876C /* TodoFilterService.swift in Sources */,
+				4A4F822FA05D88FDA31091D0 /* TodoItem.swift in Sources */,
+				878F46A2EFDF04DDBBEC1E0A /* TodoListView.swift in Sources */,
+				D992E80835F69738CBF77766 /* TodoListViewModel.swift in Sources */,
+				CFBA7D9C8494BAF8601002EA /* TodoRowView.swift in Sources */,
+				155577DD822D4D3916C12C6E /* UpcomingView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		47FFC374E9EB87DF3554DB02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+		5E8E3AE267D9C156058DC64A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Delphi/Resources/Delphi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Delphi/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kazui.delphi;
+				PRODUCT_NAME = Delphi;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		AB2AC0CE097BC84E4E28623C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		B8AB7438968276EDA7F84849 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Delphi/Resources/Delphi.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Delphi/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kazui.delphi;
+				PRODUCT_NAME = Delphi;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		376F3E65A324E7D03EAFC4E0 /* Build configuration list for PBXNativeTarget "Delphi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E8E3AE267D9C156058DC64A /* Debug */,
+				B8AB7438968276EDA7F84849 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		567C86A416872BCE1D2DB0E2 /* Build configuration list for PBXProject "Delphi" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB2AC0CE097BC84E4E28623C /* Debug */,
+				47FFC374E9EB87DF3554DB02 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E613ED5C4B85EDD1C8303AAD /* Project object */;
+}
