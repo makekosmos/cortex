@@ -57,6 +57,11 @@ local.properties
 .gradle/
 .cxx/
 
+# === Python ===
+.venv/
+__pycache__/
+*.pyc
+
 # === Общее ===
 *.log
 *.env
