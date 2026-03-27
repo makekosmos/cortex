@@ -48,8 +48,8 @@ struct DelphiApp: App {
                 .onAppear {
                     syncClient.setModelContainer(container)
 
-                    // Auto-connect if configured
-                    if syncSettings.isConfigured && syncSettings.isAutoSyncEnabled {
+                    // Auto-connect on launch if device was previously paired
+                    if syncSettings.isPaired {
                         syncClient.connect()
                     }
 

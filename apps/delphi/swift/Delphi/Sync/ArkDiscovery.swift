@@ -4,7 +4,7 @@ import os
 
 /// Discovers Ark servers on the local network via Bonjour/mDNS.
 ///
-/// Ark advertises itself as `_ark._tcp.` on the LAN.
+/// Ark advertises itself as `_ark-sync._tcp.` on the LAN.
 /// When found, we resolve the hostname:port and build the server URL.
 @Observable
 @MainActor
@@ -26,7 +26,7 @@ final class ArkDiscovery {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
 
-        let browser = NWBrowser(for: .bonjour(type: "_ark._tcp.", domain: nil), using: parameters)
+        let browser = NWBrowser(for: .bonjour(type: "_ark-sync._tcp.", domain: nil), using: parameters)
         self.browser = browser
 
         browser.stateUpdateHandler = { [weak self] state in

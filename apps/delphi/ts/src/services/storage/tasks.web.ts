@@ -1,5 +1,5 @@
 import type { Task } from '@/types/task';
-import { isTauriRuntime } from '@/services/runtime/platform';
+import { isElectronRuntime } from '@/services/runtime/platform';
 
 const TASKS_KEY = 'todofus.tasks';
 
@@ -8,7 +8,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 export function loadTasksFromWebStorage(): Task[] {
-  if (isTauriRuntime()) return [];
+  if (isElectronRuntime()) return [];
 
   try {
     const raw = localStorage.getItem(TASKS_KEY);
@@ -40,7 +40,7 @@ export function loadTasksFromWebStorage(): Task[] {
 }
 
 export function saveTasksToWebStorage(tasks: Task[]) {
-  if (isTauriRuntime()) return;
+  if (isElectronRuntime()) return;
 
   const payload = tasks.map((task) => ({
     ...task,

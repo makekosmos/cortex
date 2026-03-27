@@ -1,3 +1,5 @@
+import { normalizeApiUrl, normalizePassphrase } from '@/helpers/normalize';
+
 const TOKEN_KEY = 'todofus.jwt';
 const API_URL_KEY = 'todofus.apiUrl';
 const PASSPHRASE_KEY = 'todofus.passphrase';
@@ -108,13 +110,7 @@ type LoginResponse = {
   userId: string;
 };
 
-export function normalizeApiUrl(value: string) {
-  return value.trim().replace(/\/+$/, '');
-}
-
-export function normalizePassphrase(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
-}
+export { normalizeApiUrl, normalizePassphrase };
 
 export function getReadableError(error: unknown) {
   if (error instanceof ApiError) {

@@ -740,6 +740,108 @@ class TestSchemaIntegrity(unittest.TestCase):
         conn.close()
 
 
+class TestKeepAlive(unittest.TestCase):
+    """Test keep_alive connection pooling."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.mkdtemp()
+        self.db_path = Path(self.temp_dir) / "test_ka.db"
+
+    def tearDown(self) -> None:
+        import shutil
+
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_keep_alive_basic_operations(self) -> None:
+        """keep_alive=True should work for normal CRUD."""
+        db = Ark(self.db_path, keep_alive=True)
+        eid = db.record_event("hr", {"bpm": 72}, summary="test")
+        event = db.get_event(eid)
+        assert event is not None
+        assert event.data["bpm"] == 72
+        db.close()
+
+    def test_keep_alive_reuses_connection(self) -> None:
+        """Persistent mode should reuse the same connection object."""
+        db = Ark(self.db_path, keep_alive=True)
+        with db.connection() as c1:
+            pass
+        with db.connection() as c2:
+            pass
+        assert c1 is c2
+        db.close()
+
+    def test_default_does_not_reuse(self) -> None:
+        """Default mode should use a fresh connection each time."""
+        db = Ark(self.db_path, keep_alive=False)
+        with db.connection() as c1:
+            pass
+        with db.connection() as c2:
+            pass
+        assert c1 is not c2
+
+    def test_context_manager(self) -> None:
+        """Ark should work as a context manager and close on exit."""
+        with Ark(self.db_path, keep_alive=True) as db:
+            db.record_event("note", {"text": "hello"})
+            # Force connection creation
+            with db.connection() as conn:
+                pass
+        # After exiting, the persistent connection should be closed
+        assert getattr(db._local, "conn", None) is None
+
+    def test_close_idempotent(self) -> None:
+        """Calling close() multiple times should not raise."""
+        db = Ark(self.db_path, keep_alive=True)
+        db.record_event("note", {"text": "hi"})
+        db.close()
+        db.close()  # second call should be safe
+
+    def test_close_noop_without_keep_alive(self) -> None:
+        """close() should be a no-op when keep_alive=False."""
+        db = Ark(self.db_path, keep_alive=False)
+        db.record_event("note", {"text": "hi"})
+        db.close()  # should not raise
+
+    def test_keep_alive_thread_safety(self) -> None:
+        """Each thread should get its own connection."""
+        import threading
+
+        db = Ark(self.db_path, keep_alive=True)
+        connections: list = []
+        barrier = threading.Barrier(2)
+
+        def worker() -> None:
+            with db.connection() as conn:
+                connections.append(conn)
+                barrier.wait()
+
+        t1 = threading.Thread(target=worker)
+        t2 = threading.Thread(target=worker)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert len(connections) == 2
+        assert connections[0] is not connections[1]
+        db.close()
+
+    def test_keep_alive_rollback_on_error(self) -> None:
+        """Errors inside keep_alive connection should rollback but keep conn alive."""
+        db = Ark(self.db_path, keep_alive=True)
+        db.record_event("note", {"text": "before"})
+
+        with self.assertRaises(sqlite3.OperationalError):
+            with db.connection() as conn:
+                conn.execute("SELECT * FROM nonexistent_table_xyz")
+
+        # Connection should still be usable
+        eid = db.record_event("note", {"text": "after"})
+        assert db.get_event(eid) is not None
+        db.close()
+
+
 class TestDataclasses(unittest.TestCase):
     """Test Event and Entity dataclasses."""
 
@@ -834,6 +936,7 @@ def run_tests() -> None:
     suite.addTests(loader.loadTestsFromTestCase(TestUtilityFunctions))
     suite.addTests(loader.loadTestsFromTestCase(TestArk))
     suite.addTests(loader.loadTestsFromTestCase(TestSchemaIntegrity))
+    suite.addTests(loader.loadTestsFromTestCase(TestKeepAlive))
     suite.addTests(loader.loadTestsFromTestCase(TestDataclasses))
 
     runner = unittest.TextTestRunner(verbosity=2)

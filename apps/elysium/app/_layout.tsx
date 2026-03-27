@@ -11,6 +11,7 @@ import { useNutritionStore } from '@/stores/nutrition-store';
 import { useWaterStore } from '@/stores/water-store';
 import { useFoodStore } from '@/stores/food-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useSyncStore } from '@/sync/sync-store';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,6 +34,7 @@ export default function RootLayout() {
       useWaterStore.getState().hydrate();
       useFoodStore.getState().hydrate();
       useSettingsStore.getState().hydrate();
+      useSyncStore.getState().hydrate(); // auto-connects if previously paired
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);

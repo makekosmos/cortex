@@ -1,6 +1,8 @@
 import './global.css';
 import { useEffect, useState } from 'react';
 import AuthOverlay from '@/components/AuthOverlay';
+import QuickEntry from '@/components/QuickEntry';
+import QuickOpen from '@/components/QuickOpen';
 import SideBar from '@/components/sideBar';
 import AppRoutes from '@/routes';
 import {
@@ -22,6 +24,7 @@ import {
   loadTasksFromWebStorage,
   saveTasksToWebStorage,
 } from '@/services/storage/tasks.web';
+import { arkSync, getArkApiKey, getArkUrl } from '@/services/sync/ark-client';
 import useTask from '@/store/tasks';
 
 type TaskSocketEvent = { type: string; payload?: unknown };
@@ -181,6 +184,15 @@ function App() {
     saveTasksToWebStorage(tasks);
   }, [hydrated, tasks]);
 
+  // Auto-connect to Ark on startup if paired
+  useEffect(() => {
+    const url = getArkUrl();
+    const key = getArkApiKey();
+    if (url && key && !arkSync.isConnected) {
+      arkSync.connect(url, key);
+    }
+  }, []);
+
   const handleAuthSubmit = async (input: { apiUrl: string; passphrase: string }) => {
     const apiUrl = normalizeApiUrl(input.apiUrl);
     const passphrase = normalizePassphrase(input.passphrase);
@@ -219,6 +231,8 @@ function App() {
         <SideBar />
         <AppRoutes />
       </main>
+      <QuickEntry />
+      <QuickOpen />
       {authRequired ? (
         <AuthOverlay busy={authBusy} errorMessage={authError} onSubmit={handleAuthSubmit} />
       ) : null}

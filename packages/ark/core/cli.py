@@ -412,6 +412,70 @@ def cmd_sync_resolve(db: Ark, args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def cmd_pair(db: Ark, args: argparse.Namespace) -> None:
+    """Generate a pairing code + QR for mobile device onboarding."""
+    import json
+    import platform as _platform
+
+    try:
+        import qrcode  # type: ignore[import-untyped]
+    except ImportError:
+        print(
+            "Ошибка: qrcode не установлен. Установите: pip install qrcode",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    from server.discovery import _get_local_ip
+    from server.pairing import (
+        create_pairing,
+        generate_pairing_code,
+        generate_pairing_payload,
+    )
+
+    # Read config from env (same vars as the server)
+    api_key = os.environ.get("LIFE_API_KEY")
+    if not api_key:
+        print(
+            "Ошибка: LIFE_API_KEY не задан.\n"
+            "  export LIFE_API_KEY=your-secret-key",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    port = int(os.environ.get("ARK_PORT", "8000"))
+    device_name = os.environ.get("ARK_DEVICE_NAME", _platform.node() or "ark")
+    local_ip = _get_local_ip()
+    server_url = f"http://{local_ip}:{port}"
+
+    # Generate code and payload
+    code = generate_pairing_code()
+    payload = generate_pairing_payload(server_url, api_key, device_name, code)
+    qr_content = json.dumps(payload, ensure_ascii=False)
+
+    # Render ASCII QR in terminal
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=1,
+        border=1,
+    )
+    qr.add_data(qr_content)
+    qr.make(fit=True)
+
+    print()
+    print(_c(BOLD, "Ark Pairing"))
+    print()
+    qr.print_ascii(invert=True)
+    print()
+    print(f"  Код:     {_c(BOLD, code)}")
+    print(f"  Сервер:  {_c(CYAN, server_url)}")
+    print(f"  Устр-во: {device_name}")
+    print()
+    print(_c(DIM, "  Отсканируйте QR или введите код на мобильном устройстве."))
+    print(_c(DIM, "  Код действителен 5 минут."))
+    print()
+
+
 def cmd_serve(db: Ark, args: argparse.Namespace) -> None:
     """Start the FastAPI server."""
     try:
@@ -508,6 +572,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--keep", required=True, choices=["local", "remote"], help="Какую версию оставить"
     )
 
+    # --- pair ---
+    sub.add_parser("pair", help="Сгенерировать код + QR для подключения устройства")
+
     # --- serve ---
     p_serve = sub.add_parser("serve", help="Запустить FastAPI сервер")
     p_serve.add_argument("--host", default="0.0.0.0", help="Хост (по умолчанию: 0.0.0.0)")
@@ -531,7 +598,7 @@ def main(argv: Optional[list[str]] = None) -> None:
 
     # Resolve DB path
     db_path = Path(args.db) if args.db else DEFAULT_DB_PATH
-    create = args.command in ("add", "task", "note", "health", "serve")
+    create = args.command in ("add", "task", "note", "health", "serve", "pair")
 
     try:
         db = Ark(db_path, create=create)
@@ -568,6 +635,8 @@ def main(argv: Optional[list[str]] = None) -> None:
             cmd_sync_resolve(db, args)
         else:
             print("Используйте: ark sync conflicts | ark sync resolve <id> --keep local|remote")
+    elif args.command == "pair":
+        cmd_pair(db, args)
     elif args.command == "serve":
         cmd_serve(db, args)
     else:

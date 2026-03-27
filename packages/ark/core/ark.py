@@ -14,7 +14,9 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+import threading
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -118,6 +120,17 @@ def to_iso8601(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def sanitize_fts_query(query: str) -> str:
+    """Strip FTS5 special characters/operators from user input to prevent injection."""
+    # Remove FTS5 operators (as whole words) and special characters
+    _FTS5_OPERATORS = re.compile(r'\b(NEAR|AND|OR|NOT)\b', re.IGNORECASE)
+    cleaned = _FTS5_OPERATORS.sub(' ', query)
+    # Remove special FTS5 characters: * " ( ) + - ^ :
+    cleaned = re.sub(r'[*"()+\-^:]', ' ', cleaned)
+    # Collapse whitespace
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
+
 def parse_iso8601(s: str) -> datetime:
     """Parse ISO 8601 string to datetime."""
     formats = [
@@ -155,15 +168,24 @@ class Ark:
         db.record_event("heart_rate", {"bpm": 72}, category="health")
     """
 
-    def __init__(self, db_path: Union[str, Path], create: bool = True):
+    def __init__(
+        self,
+        db_path: Union[str, Path],
+        create: bool = True,
+        keep_alive: bool = False,
+    ):
         """
         Initialize Ark connection.
 
         Args:
             db_path: Path to SQLite database file
             create: If True, create database if it doesn't exist
+            keep_alive: If True, keep a persistent connection open per thread
+                        instead of opening/closing on every operation.
         """
         self.db_path = Path(db_path)
+        self._keep_alive = keep_alive
+        self._local = threading.local() if keep_alive else None
 
         if self.db_path.exists():
             if self.db_path.is_dir():
@@ -210,9 +232,8 @@ class Ark:
         # Accept various ISO-8601 strings and normalize them to UTC Z.
         return to_iso8601(parse_iso8601(occurred_at))
 
-    @contextmanager
-    def connection(self) -> Iterator[sqlite3.Connection]:
-        """Context manager for database connection."""
+    def _make_connection(self) -> sqlite3.Connection:
+        """Create a new SQLite connection with standard pragmas."""
         conn = sqlite3.connect(
             self.db_path,
             detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
@@ -223,14 +244,65 @@ class Ark:
         conn.execute("PRAGMA busy_timeout = 5000")
         # Prefer durability over raw write throughput. Individual apps can override.
         conn.execute("PRAGMA synchronous = FULL")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+        return conn
+
+    def _get_persistent_connection(self) -> sqlite3.Connection:
+        """Return the thread-local persistent connection, creating it if needed."""
+        assert self._local is not None
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = self._make_connection()
+            self._local.conn = conn
+        return conn
+
+    @contextmanager
+    def connection(self) -> Iterator[sqlite3.Connection]:
+        """Context manager for database connection.
+
+        When *keep_alive* is True the connection is kept open across calls
+        (one per thread via ``threading.local``).  When False, a fresh
+        connection is opened and closed for every operation.
+        """
+        if self._keep_alive:
+            conn = self._get_persistent_connection()
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        else:
+            conn = self._make_connection()
+            try:
+                yield conn
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
+    # -- Lifecycle helpers ---------------------------------------------------
+
+    def close(self) -> None:
+        """Close the persistent connection (no-op when *keep_alive* is False).
+
+        Safe to call multiple times.
+        """
+        if self._local is not None:
+            conn = getattr(self._local, "conn", None)
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                self._local.conn = None
+
+    def __enter__(self) -> "Ark":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
 
     # ========================================================================
     # Event Recording
@@ -570,6 +642,9 @@ class Ark:
             conditions.append(f"({' OR '.join(tag_conditions)})")
 
         if search:
+            search = sanitize_fts_query(search)
+            if not search:
+                return []
             query = f"""
                 SELECT e.* FROM events e
                 JOIN events_fts fts ON e.rowid = fts.rowid

@@ -1,4 +1,4 @@
-import { Database, LogOut, Save, ShieldCheck, ShieldOff, SunMoon } from 'lucide-react';
+import { Database, Link, Loader2, LogOut, Save, ShieldCheck, ShieldOff, SunMoon, Unlink } from 'lucide-react';
 import { useState } from 'react';
 import { useTheme } from '@/features/themeProvider';
 import {
@@ -19,6 +19,7 @@ import {
   setArkApiKey,
   setArkUrl,
 } from '@/services/sync/ark-client';
+import { claimPairingCode } from '@/services/sync/pairing';
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -28,33 +29,70 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('');
   const [hasToken, setHasToken] = useState(Boolean(getToken()));
 
-  const [arkUrlDraft, setArkUrlDraft] = useState(getArkUrl());
-  const [arkKeyDraft, setArkKeyDraft] = useState(getArkApiKey());
-  const [arkMessage, setArkMessage] = useState('');
+  const isPaired = Boolean(getArkUrl() && getArkApiKey());
   const [arkConnected, setArkConnected] = useState(arkSync.isConnected);
+  const [arkMessage, setArkMessage] = useState('');
 
-  const handleSaveArk = () => {
-    const url = arkUrlDraft.trim().replace(/\/+$/, '');
-    const key = arkKeyDraft.trim();
+  // Pairing form state (when not paired)
+  const [pairingServerUrl, setPairingServerUrl] = useState('');
+  const [pairingCode, setPairingCode] = useState('');
+  const [pairing, setPairing] = useState(false);
+  const [paired, setPaired] = useState(isPaired);
 
-    if (!url || !key) {
-      setArkMessage('Both Ark URL and API key are required.');
+  const handlePair = async () => {
+    const serverUrl = pairingServerUrl.trim().replace(/\/+$/, '');
+    const code = pairingCode.trim();
+
+    if (!serverUrl || !code) {
+      setArkMessage('Укажите сервер и код сопряжения.');
       return;
     }
 
-    setArkUrl(url);
-    setArkApiKey(key);
+    setPairing(true);
+    setArkMessage('');
+
+    try {
+      const result = await claimPairingCode(serverUrl, code, 'Delphi Web');
+      setArkUrl(result.server_url);
+      setArkApiKey(result.api_key);
+      setPaired(true);
+
+      // Auto-connect after pairing
+      arkSync.disconnect();
+      arkSync.onStatus((connected) => setArkConnected(connected));
+      arkSync.connect(result.server_url, result.api_key);
+      setArkMessage('Устройство привязано.');
+    } catch (error) {
+      setArkMessage(error instanceof Error ? error.message : 'Ошибка привязки');
+    } finally {
+      setPairing(false);
+    }
+  };
+
+  const handleUnpair = () => {
+    arkSync.disconnect();
+    setArkUrl('');
+    setArkApiKey('');
+    setArkConnected(false);
+    setPaired(false);
+    setArkMessage('Устройство отвязано.');
+  };
+
+  const handleReconnectArk = () => {
+    const url = getArkUrl();
+    const key = getArkApiKey();
+    if (!url || !key) return;
 
     arkSync.disconnect();
     arkSync.onStatus((connected) => setArkConnected(connected));
     arkSync.connect(url, key);
-    setArkMessage('Connecting to Ark...');
+    setArkMessage('Подключение...');
   };
 
   const handleDisconnectArk = () => {
     arkSync.disconnect();
     setArkConnected(false);
-    setArkMessage('Disconnected from Ark.');
+    setArkMessage('Отключено от Ark.');
   };
 
   const handleSaveApiUrl = () => {
@@ -178,65 +216,108 @@ export default function SettingsPage() {
             Ark Server
           </h2>
           <p className="text-muted-foreground mb-4 text-sm">
-            Connect to Ark for cross-device sync.
+            Синхронизация между устройствами через Ark.
           </p>
 
-          <label className="mb-2 block text-sm font-medium" htmlFor="ark-url">
-            Server URL
-          </label>
-          <input
-            id="ark-url"
-            value={arkUrlDraft}
-            onChange={(event) => setArkUrlDraft(event.target.value)}
-            className="border-border bg-secondary mb-4 w-full rounded-md border px-3 py-2 text-sm"
-            placeholder="https://your-ark-server.com"
-            autoComplete="off"
-          />
+          {paired ? (
+            <>
+              <div className="mb-4 flex items-center gap-2 text-sm">
+                <div
+                  className={`h-2 w-2 rounded-full ${arkConnected ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                />
+                <span className="text-muted-foreground">
+                  {arkConnected ? 'Подключено' : 'Отключено'}
+                </span>
+              </div>
 
-          <label className="mb-2 block text-sm font-medium" htmlFor="ark-key">
-            API Key
-          </label>
-          <input
-            id="ark-key"
-            value={arkKeyDraft}
-            onChange={(event) => setArkKeyDraft(event.target.value)}
-            className="border-border bg-secondary mb-4 w-full rounded-md border px-3 py-2 text-sm font-mono"
-            placeholder="your-api-key"
-            autoComplete="off"
-            type="password"
-          />
+              <label className="mb-2 block text-sm font-medium">
+                Сервер
+              </label>
+              <input
+                value={getArkUrl()}
+                readOnly
+                className="border-border bg-secondary text-muted-foreground mb-4 w-full rounded-md border px-3 py-2 text-sm font-mono"
+              />
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSaveArk}
-              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
-            >
-              <Save size={16} />
-              {arkConnected ? 'Reconnect' : 'Connect'}
-            </button>
-            {arkConnected ? (
+              <div className="flex items-center gap-2">
+                {arkConnected ? (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectArk}
+                    className="bg-secondary text-secondary-foreground inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+                  >
+                    Отключиться
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleReconnectArk}
+                    className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+                  >
+                    Подключиться
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleUnpair}
+                  className="text-destructive inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+                >
+                  <Unlink size={16} />
+                  Отвязать
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <label className="mb-2 block text-sm font-medium" htmlFor="pairing-server">
+                Сервер
+              </label>
+              <input
+                id="pairing-server"
+                value={pairingServerUrl}
+                onChange={(event) => setPairingServerUrl(event.target.value)}
+                className="border-border bg-secondary mb-4 w-full rounded-md border px-3 py-2 text-sm"
+                placeholder="https://your-ark-server.com"
+                autoComplete="off"
+                autoCapitalize="off"
+              />
+
+              <label className="mb-2 block text-sm font-medium" htmlFor="pairing-code">
+                Код сопряжения
+              </label>
+              <input
+                id="pairing-code"
+                value={pairingCode}
+                onChange={(event) => setPairingCode(event.target.value)}
+                className="border-border bg-secondary mb-4 w-full rounded-md border px-3 py-2 text-sm font-mono"
+                placeholder="ark-XXXX"
+                autoComplete="off"
+                autoCapitalize="off"
+              />
+
               <button
                 type="button"
-                onClick={handleDisconnectArk}
-                className="text-destructive inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+                onClick={() => { void handlePair(); }}
+                disabled={pairing}
+                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm disabled:opacity-60"
               >
-                Disconnect
+                {pairing ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Привязка...
+                  </>
+                ) : (
+                  <>
+                    <Link size={16} />
+                    Привязать
+                  </>
+                )}
               </button>
-            ) : null}
-          </div>
-
-          <div className="mt-3 flex items-center gap-2 text-sm">
-            <div
-              className={`h-2 w-2 rounded-full ${arkConnected ? 'bg-emerald-500' : 'bg-rose-500'}`}
-            />
-            <span className="text-muted-foreground">
-              {arkConnected ? 'Connected to Ark' : 'Not connected'}
-            </span>
-          </div>
+            </>
+          )}
 
           {arkMessage ? (
-            <p className="text-muted-foreground mt-2 text-sm">{arkMessage}</p>
+            <p className="text-muted-foreground mt-3 text-sm">{arkMessage}</p>
           ) : null}
         </section>
 

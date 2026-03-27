@@ -4,9 +4,9 @@ import App from './App';
 import { ThemeProvider } from './features/themeProvider';
 import './global.css';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
-import { isTauriRuntime } from '@/services/runtime/platform';
+import { isElectronRuntime } from '@/services/runtime/platform';
 
-const Router = isTauriRuntime() ? MemoryRouter : BrowserRouter;
+const Router = isElectronRuntime() ? MemoryRouter : BrowserRouter;
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

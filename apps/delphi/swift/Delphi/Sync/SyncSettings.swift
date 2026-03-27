@@ -35,6 +35,10 @@ final class SyncSettings {
         !serverUrl.isEmpty && !apiKey.isEmpty
     }
 
+    var isPaired: Bool {
+        isConfigured
+    }
+
     init() {
         serverUrl = defaults.string(forKey: Keys.serverUrl) ?? ""
         apiKey = defaults.string(forKey: Keys.apiKey) ?? ""

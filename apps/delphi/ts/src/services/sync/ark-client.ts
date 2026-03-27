@@ -8,6 +8,7 @@
  * instead of SQLite for vector persistence.
  */
 
+import { normalizeApiUrl } from '@/helpers/normalize';
 import type { Task } from '@/types/task';
 
 // ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ export function getArkUrl(): string {
 }
 
 export function setArkUrl(url: string) {
-  localStorage.setItem(ARK_URL_KEY, url.trim().replace(/\/+$/, ''));
+  localStorage.setItem(ARK_URL_KEY, normalizeApiUrl(url));
 }
 
 export function getArkApiKey(): string {
@@ -190,7 +191,7 @@ export class ArkSyncClient {
   }
 
   connect(serverUrl: string, apiKey: string) {
-    this.serverUrl = serverUrl.replace(/\/+$/, '');
+    this.serverUrl = normalizeApiUrl(serverUrl);
     this.apiKey = apiKey;
     this.vector = loadVector();
     this.deviceSeq = this.vector[this.deviceId] ?? 0;

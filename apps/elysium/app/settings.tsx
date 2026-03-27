@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Text, TextInput, Pressable, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, Text, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,17 +21,12 @@ export default function SettingsScreen() {
   const { foodSource, setFoodSource } = useSettingsStore();
   const sync = useSyncStore();
   const [form, setForm] = useState<Macros>({ ...goals });
-  const [syncUrl, setSyncUrl] = useState(sync.serverUrl);
-  const [syncKey, setSyncKey] = useState(sync.apiKey);
+  const [pairingServerUrl, setPairingServerUrl] = useState('');
+  const [pairingCode, setPairingCode] = useState('');
 
   useEffect(() => {
     sync.hydrate();
   }, []);
-
-  useEffect(() => {
-    setSyncUrl(sync.serverUrl);
-    setSyncKey(sync.apiKey);
-  }, [sync.serverUrl, sync.apiKey]);
 
   const computedCalories = caloriesFromMacros(form.protein, form.fat, form.carbs);
 
@@ -103,72 +98,122 @@ export default function SettingsScreen() {
       </Card>
 
       <Text style={styles.sectionLabel}>Синхронизация</Text>
-      <Card noPadding style={styles.sectionCard}>
-        <CardRow first>
-          <View style={styles.syncField}>
-            <Text style={styles.rowLabel}>Сервер</Text>
-            <TextInput
-              style={[styles.input, styles.syncInput]}
-              value={syncUrl}
-              onChangeText={setSyncUrl}
-              placeholder="ws://192.168.1.x:8000"
-              placeholderTextColor={colors.text.muted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-        </CardRow>
-        <CardRow>
-          <View style={styles.syncField}>
-            <Text style={styles.rowLabel}>API Key</Text>
-            <TextInput
-              style={[styles.input, styles.syncInput]}
-              value={syncKey}
-              onChangeText={setSyncKey}
-              placeholder="xxxxxxxx"
-              placeholderTextColor={colors.text.muted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-            />
-          </View>
-        </CardRow>
-        <CardRow>
-          <View style={styles.syncStatusRow}>
-            <View style={styles.syncStatusLeft}>
-              <View style={[styles.dot, sync.isConnected ? styles.dotOn : sync.isSyncing ? styles.dotSyncing : styles.dotOff]} />
-              <Text style={styles.rowLabel}>
-                {sync.isSyncing ? 'Подключение...' : sync.isConnected ? 'Подключено' : 'Отключено'}
-              </Text>
-            </View>
-            {sync.lastSyncAt && (
-              <Text style={styles.syncMeta}>
-                {new Date(sync.lastSyncAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            )}
-          </View>
-        </CardRow>
-      </Card>
+      {sync.isPaired ? (
+        <>
+          <Card noPadding style={styles.sectionCard}>
+            <CardRow first>
+              <View style={styles.syncStatusRow}>
+                <View style={styles.syncStatusLeft}>
+                  <View style={[styles.dot, sync.isConnected ? styles.dotOn : sync.isSyncing ? styles.dotSyncing : styles.dotOff]} />
+                  <Text style={styles.rowLabel}>
+                    {sync.isSyncing ? 'Подключение...' : sync.isConnected ? 'Подключено' : 'Отключено'}
+                  </Text>
+                </View>
+                {sync.lastSyncAt && (
+                  <Text style={styles.syncMeta}>
+                    {new Date(sync.lastSyncAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                )}
+              </View>
+            </CardRow>
+            <CardRow>
+              <View style={styles.syncField}>
+                <Text style={styles.rowLabel}>Сервер</Text>
+                <Text style={styles.syncServerValue} numberOfLines={1}>{sync.serverUrl}</Text>
+              </View>
+            </CardRow>
+          </Card>
 
-      <Pressable
-        style={[styles.saveBtn, sync.isConnected && styles.disconnectBtn]}
-        onPress={() => {
-          if (sync.isConnected) {
-            sync.disconnect();
-          } else {
-            if (!syncUrl || !syncKey) {
-              Alert.alert('Ошибка', 'Укажите сервер и API key');
-              return;
-            }
-            sync.configureServer(syncUrl, syncKey);
-            sync.connect();
-          }
-        }}
-      >
-        <Text style={styles.saveBtnText}>
-          {sync.isConnected ? 'Отключиться' : 'Подключиться'}
-        </Text>
-      </Pressable>
+          <View style={styles.pairedButtons}>
+            <Pressable
+              style={[styles.saveBtn, styles.pairedBtn, sync.isConnected && styles.disconnectBtn]}
+              onPress={() => {
+                if (sync.isConnected) {
+                  sync.disconnect();
+                } else {
+                  sync.connect();
+                }
+              }}
+            >
+              <Text style={styles.saveBtnText}>
+                {sync.isConnected ? 'Отключиться' : 'Подключиться'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.saveBtn, styles.pairedBtn, styles.unpairBtn]}
+              onPress={() => {
+                Alert.alert('Отвязать устройство?', 'Данные синхронизации будут удалены.', [
+                  { text: 'Отмена', style: 'cancel' },
+                  { text: 'Отвязать', style: 'destructive', onPress: () => sync.unpair() },
+                ]);
+              }}
+            >
+              <Text style={[styles.saveBtnText, styles.unpairBtnText]}>Отвязать</Text>
+            </Pressable>
+          </View>
+        </>
+      ) : (
+        <>
+          <Card noPadding style={styles.sectionCard}>
+            <CardRow first>
+              <View style={styles.syncField}>
+                <Text style={styles.rowLabel}>Сервер</Text>
+                <TextInput
+                  style={[styles.input, styles.syncInput]}
+                  value={pairingServerUrl}
+                  onChangeText={setPairingServerUrl}
+                  placeholder="http://192.168.1.x:8000"
+                  placeholderTextColor={colors.text.muted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </CardRow>
+            <CardRow>
+              <View style={styles.syncField}>
+                <Text style={styles.rowLabel}>Код</Text>
+                <TextInput
+                  style={[styles.input, styles.syncInput]}
+                  value={pairingCode}
+                  onChangeText={setPairingCode}
+                  placeholder="ark-XXXX"
+                  placeholderTextColor={colors.text.muted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </CardRow>
+            {sync.pairingError && (
+              <CardRow>
+                <Text style={styles.pairingError}>{sync.pairingError}</Text>
+              </CardRow>
+            )}
+          </Card>
+
+          <Pressable
+            style={[styles.saveBtn, sync.isPairing && styles.disabledBtn]}
+            disabled={sync.isPairing}
+            onPress={async () => {
+              if (!pairingServerUrl || !pairingCode) {
+                Alert.alert('Ошибка', 'Укажите сервер и код сопряжения');
+                return;
+              }
+              try {
+                await sync.pair(pairingServerUrl.replace(/\/+$/, ''), pairingCode.trim());
+                Alert.alert('Готово', 'Устройство привязано');
+              } catch {
+                // error already in sync.pairingError
+              }
+            }}
+          >
+            {sync.isPairing ? (
+              <ActivityIndicator color={colors.text.primary} />
+            ) : (
+              <Text style={styles.saveBtnText}>Привязать</Text>
+            )}
+          </Pressable>
+        </>
+      )}
 
       <Card noPadding style={styles.sectionCard}>
         <CardRow first>
@@ -258,5 +303,12 @@ const styles = StyleSheet.create({
   dotSyncing: { backgroundColor: '#FACC15' },
   dotOff: { backgroundColor: colors.text.muted },
   syncMeta: { fontSize: fontSize.xs, fontFamily: fonts.mono, color: colors.text.muted },
+  syncServerValue: { fontSize: fontSize.sm, fontFamily: fonts.mono, color: colors.text.muted, flexShrink: 1 },
   disconnectBtn: { backgroundColor: colors.over },
+  pairedButtons: { flexDirection: 'row', gap: spacing.sm },
+  pairedBtn: { flex: 1 },
+  unpairBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.text.muted },
+  unpairBtnText: { color: colors.text.muted },
+  pairingError: { fontSize: fontSize.sm, fontFamily: fonts.regular, color: '#EF4444', flex: 1 },
+  disabledBtn: { opacity: 0.5 },
 });

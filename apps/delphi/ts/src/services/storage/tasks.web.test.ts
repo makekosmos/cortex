@@ -6,8 +6,7 @@ const TASKS_KEY = 'todofus.tasks';
 describe('web task storage', () => {
   beforeEach(() => {
     localStorage.clear();
-    delete (window as Window & { __TAURI__?: unknown }).__TAURI__;
-    delete (window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    delete (window as Window & { electronAPI?: unknown }).electronAPI;
   });
 
   it('round-trips tasks in browser storage', () => {
@@ -36,8 +35,8 @@ describe('web task storage', () => {
     expect(loadTasksFromWebStorage()).toEqual([]);
   });
 
-  it('does not write browser cache in tauri runtime', () => {
-    (window as Window & { __TAURI__?: unknown }).__TAURI__ = {};
+  it('does not write browser cache in electron runtime', () => {
+    (window as Window & { electronAPI?: unknown }).electronAPI = {} as ElectronAPI;
 
     saveTasksToWebStorage([
       {

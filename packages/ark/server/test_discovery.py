@@ -2,7 +2,7 @@
 
 import time
 
-from discovery import ArkServiceBroadcaster, ArkServiceDiscoverer
+from server.discovery import ArkServiceBroadcaster, ArkServiceDiscoverer
 
 
 def test_discovery() -> None:

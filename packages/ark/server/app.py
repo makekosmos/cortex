@@ -12,14 +12,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Body, Depends, FastAPI, Header, HTTPException
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from core.ark import Ark
+from core.ark import Ark, sanitize_fts_query
 from server.discovery import ArkServiceBroadcaster, ArkServiceDiscoverer
 from server.pairing import claim_pairing, create_pairing, generate_device_id
 
@@ -120,8 +120,8 @@ class FilterIn(BaseModel):
 
 
 class PageRequestIn(BaseModel):
-    offset: int = 0
-    limit: int = 100
+    offset: int = Field(default=0, ge=0, le=10000)
+    limit: int = Field(default=100, ge=0, le=10000)
     sort_column: Optional[str] = None
     sort_direction: Optional[str] = None
     filters: Optional[list[FilterIn]] = None
@@ -167,7 +167,7 @@ class TimeSeriesRequestIn(BaseModel):
 class CategoricalRequestIn(BaseModel):
     column: str = "category"
     filters: Optional[list[FilterIn]] = None
-    limit: Optional[int] = None
+    limit: Optional[int] = Field(default=None, ge=0, le=10000)
 
 
 # =============================================================================
@@ -311,7 +311,7 @@ def _build_where(
                     params.extend(["" if v is None else str(v) for v in f.value])
 
     if search:
-        s = search.strip()
+        s = sanitize_fts_query(search)
         if s:
             conditions.append(
                 "rowid IN (SELECT rowid FROM events_fts WHERE events_fts MATCH ?)"
@@ -533,8 +533,8 @@ def query_events(
     source: Optional[str] = None,
     tags: Optional[str] = None,  # comma-separated
     search: Optional[str] = None,
-    limit: int = 1000,
-    offset: int = 0,
+    limit: int = Query(default=1000, ge=0, le=10000),
+    offset: int = Query(default=0, ge=0, le=10000),
     order: str = "DESC",
 ) -> list[dict[str, Any]]:
     tags_list = None
@@ -688,8 +688,8 @@ def aggregate_categorical(payload: CategoricalRequestIn) -> list[dict[str, Any]]
 
 
 @app.get("/search", dependencies=[Depends(require_api_key)])
-def search_events(query: str, limit: int = 50) -> list[dict[str, Any]]:
-    q = query.strip()
+def search_events(query: str, limit: int = Query(default=50, ge=0, le=10000)) -> list[dict[str, Any]]:
+    q = sanitize_fts_query(query)
     if not q:
         return []
 
@@ -923,7 +923,9 @@ if UI_DIST.exists():
     @app.get("/{path:path}", include_in_schema=False)
     def _ui_spa(path: str) -> FileResponse:
         # Serve real files if they exist, otherwise fall back to SPA entrypoint.
-        file_path = UI_DIST / path
+        file_path = (UI_DIST / path).resolve()
+        if not file_path.is_relative_to(UI_DIST.resolve()):
+            return FileResponse(UI_DIST / "index.html")
         if file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(UI_DIST / "index.html")
