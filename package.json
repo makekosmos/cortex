@@ -1,0 +1,5 @@
+{
+  "name": "kosmos",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}

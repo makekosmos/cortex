@@ -1,0 +1,54 @@
+name: Tasko
+options:
+  bundleIdPrefix: com.kazui
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "15.0"
+  minimumXcodeGenVersion: "2.30"
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    GENERATE_INFOPLIST_FILE: YES
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0.0
+    SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  Tasko:
+    type: application
+    platform: macOS
+    sources:
+      - path: Tasko
+        excludes:
+          - "**/*.xcassets"
+    resources:
+      - path: Tasko/Resources/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kazui.tasko
+        INFOPLIST_FILE: Tasko/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Tasko/Resources/Tasko.entitlements
+        PRODUCT_NAME: Tasko
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: Tasko/Resources/Info.plist
+      properties:
+        CFBundleName: Tasko
+        CFBundleDisplayName: Tasko
+        CFBundleIdentifier: com.kazui.tasko
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0.0"
+        CFBundlePackageType: APPL
+        CFBundleExecutable: Tasko
+        LSMinimumSystemVersion: "14.0"
+        LSApplicationCategoryType: public.app-category.productivity
+    entitlements:
+      path: Tasko/Resources/Tasko.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true

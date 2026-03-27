@@ -1,0 +1,493 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		045D9C9AB20EA164DAB356D7 /* ChecklistItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A225EA9B4A5F15CA48A93A /* ChecklistItem.swift */; };
+		0874A732A7FC106E2BB939B7 /* Area.swift in Sources */ = {isa = PBXBuildFile; fileRef = 352AA080E5CAAF906652D0FC /* Area.swift */; };
+		14E5D2F33CF71859A71B74EA /* TodoListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15ED57B94519470CAEFB80BB /* TodoListViewModel.swift */; };
+		1E9FE850EE2BA4988602B725 /* TaskoCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1EAC7DF03586B0B9A046BD /* TaskoCommands.swift */; };
+		223684A3F44A73F6019031E0 /* QuickEntryPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174D175D7E24047D468851F5 /* QuickEntryPanel.swift */; };
+		3CEDFC84D66A60F2EC55DD1D /* Heading.swift in Sources */ = {isa = PBXBuildFile; fileRef = 650B2915021321CF0AF95A72 /* Heading.swift */; };
+		48BA4F836D3A6B0F52A6893B /* TodoItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4420DC691C03989A9922CD5 /* TodoItem.swift */; };
+		6633DA5B0CCD080E60B48CD4 /* MoveToDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74663767245F4D0792E40AF1 /* MoveToDialog.swift */; };
+		67A7E2BC29BC45A3BE04E6C3 /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2693492691BA35A5367A4B9 /* TodoListView.swift */; };
+		69597D3AA9BC5CFBDE072399 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD936D59088AFD4FEDFACAE /* Tag.swift */; };
+		76E9E6FD9EA177C3B6B9E07E /* TodoFilterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 489BDAFB776467750B7E0DED /* TodoFilterService.swift */; };
+		7D1635372A24934CCE9DFF7E /* LemmaSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F315273A639414EA3D23C7 /* LemmaSearchService.swift */; };
+		899898487696EFB6D174D281 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D7C5E6AA659257555C65C3 /* Project.swift */; };
+		9177DD15C9749E4AA7577441 /* TodoRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9944ED2FB10757B063959F47 /* TodoRowView.swift */; };
+		A1662D6D59438985FC45F97F /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BAA59122CE33CDAB9E56BE /* SidebarView.swift */; };
+		BF461453831653322AA8833E /* SidebarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5BD7C2669BBE9FF6F6F425B /* SidebarViewModel.swift */; };
+		BFFAE5A96782DDDAD54B5828 /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E1724C4FA55BC2D6B90D9E3 /* UpcomingView.swift */; };
+		CB0D5C3B2DA6F02E5B3D79F5 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF8C6D0093432B3DEC35DEC /* Enums.swift */; };
+		D53CBF62E0B1C9D585AC4895 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D26221A9BE7CA036F09952B8 /* Date+Extensions.swift */; };
+		D9C56A2BD2AE29239F4A08EA /* NaturalDateParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013C643F670F2294203D1BA4 /* NaturalDateParser.swift */; };
+		DC024F09EF0BEB785ACADD7F /* QuickOpenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3EA2BCC3DC167F9B347279E /* QuickOpenView.swift */; };
+		DCF9D31833AF2A37E7B36720 /* TaskoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90CD5CA6BAAAE5F4D8847186 /* TaskoApp.swift */; };
+		E99CD4EF3C941EB0B1C62E4B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39EB56369A08303362AB3BC /* ContentView.swift */; };
+		EE43B57793CD961D7503C3CA /* SidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3E3DB747D3670234E6E520 /* SidebarRow.swift */; };
+		FAD2F24576E8017D38C1B8FD /* TagChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01EE27B283990A68344583A /* TagChip.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		013C643F670F2294203D1BA4 /* NaturalDateParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NaturalDateParser.swift; sourceTree = "<group>"; };
+		0E1724C4FA55BC2D6B90D9E3 /* UpcomingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingView.swift; sourceTree = "<group>"; };
+		12D7C5E6AA659257555C65C3 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
+		15ED57B94519470CAEFB80BB /* TodoListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListViewModel.swift; sourceTree = "<group>"; };
+		174D175D7E24047D468851F5 /* QuickEntryPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryPanel.swift; sourceTree = "<group>"; };
+		352AA080E5CAAF906652D0FC /* Area.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Area.swift; sourceTree = "<group>"; };
+		489BDAFB776467750B7E0DED /* TodoFilterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoFilterService.swift; sourceTree = "<group>"; };
+		57BAA59122CE33CDAB9E56BE /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		650B2915021321CF0AF95A72 /* Heading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Heading.swift; sourceTree = "<group>"; };
+		650D2D5C8CBC9DAF5FF25BA0 /* Tasko.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tasko.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6AF8C6D0093432B3DEC35DEC /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
+		74663767245F4D0792E40AF1 /* MoveToDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoveToDialog.swift; sourceTree = "<group>"; };
+		7D1EAC7DF03586B0B9A046BD /* TaskoCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskoCommands.swift; sourceTree = "<group>"; };
+		90CD5CA6BAAAE5F4D8847186 /* TaskoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskoApp.swift; sourceTree = "<group>"; };
+		9944ED2FB10757B063959F47 /* TodoRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoRowView.swift; sourceTree = "<group>"; };
+		9FD936D59088AFD4FEDFACAE /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
+		A5BD7C2669BBE9FF6F6F425B /* SidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewModel.swift; sourceTree = "<group>"; };
+		AA3E3DB747D3670234E6E520 /* SidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRow.swift; sourceTree = "<group>"; };
+		B01EE27B283990A68344583A /* TagChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChip.swift; sourceTree = "<group>"; };
+		C0F315273A639414EA3D23C7 /* LemmaSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LemmaSearchService.swift; sourceTree = "<group>"; };
+		C2693492691BA35A5367A4B9 /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
+		C3EA2BCC3DC167F9B347279E /* QuickOpenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenView.swift; sourceTree = "<group>"; };
+		D26221A9BE7CA036F09952B8 /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
+		D4420DC691C03989A9922CD5 /* TodoItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoItem.swift; sourceTree = "<group>"; };
+		ED94A27BEB817D380693E74A /* Tasko.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tasko.entitlements; sourceTree = "<group>"; };
+		F39EB56369A08303362AB3BC /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		F4A225EA9B4A5F15CA48A93A /* ChecklistItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistItem.swift; sourceTree = "<group>"; };
+		FCDE21193D1E0C7805E1538D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0EABB6325A31807D9EDFFED3 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				74663767245F4D0792E40AF1 /* MoveToDialog.swift */,
+				B01EE27B283990A68344583A /* TagChip.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		1F889A10249FBFD766C4F135 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				650D2D5C8CBC9DAF5FF25BA0 /* Tasko.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3A9F43D9FB4760016C3B56F1 = {
+			isa = PBXGroup;
+			children = (
+				6F9A562E3062368A7F19FCA2 /* Tasko */,
+				1F889A10249FBFD766C4F135 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		451BD61BEA888B9E085B711B /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				C0F315273A639414EA3D23C7 /* LemmaSearchService.swift */,
+				013C643F670F2294203D1BA4 /* NaturalDateParser.swift */,
+				489BDAFB776467750B7E0DED /* TodoFilterService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		46286F12A535CAC2308F71DB /* QuickEntry */ = {
+			isa = PBXGroup;
+			children = (
+				174D175D7E24047D468851F5 /* QuickEntryPanel.swift */,
+			);
+			path = QuickEntry;
+			sourceTree = "<group>";
+		};
+		5988FEBE1E456BDD0B5778B6 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				F39EB56369A08303362AB3BC /* ContentView.swift */,
+				90CD5CA6BAAAE5F4D8847186 /* TaskoApp.swift */,
+				7D1EAC7DF03586B0B9A046BD /* TaskoCommands.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		6F9A562E3062368A7F19FCA2 /* Tasko */ = {
+			isa = PBXGroup;
+			children = (
+				5988FEBE1E456BDD0B5778B6 /* App */,
+				947D00773B9766A2729316B0 /* Extensions */,
+				BB6011CC8E613AC3CCC5B743 /* Models */,
+				C1DDF2BE9D52A6DE28E5261A /* Resources */,
+				451BD61BEA888B9E085B711B /* Services */,
+				C3F86029FDC064AF53F7FDCA /* ViewModels */,
+				C7E790CF029F87308F80488C /* Views */,
+			);
+			path = Tasko;
+			sourceTree = "<group>";
+		};
+		77D30C4A541AC2F444F8D7FD /* QuickOpen */ = {
+			isa = PBXGroup;
+			children = (
+				C3EA2BCC3DC167F9B347279E /* QuickOpenView.swift */,
+			);
+			path = QuickOpen;
+			sourceTree = "<group>";
+		};
+		947D00773B9766A2729316B0 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				D26221A9BE7CA036F09952B8 /* Date+Extensions.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		B0DC6A4A238BC40F41D3DF3C /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				AA3E3DB747D3670234E6E520 /* SidebarRow.swift */,
+				57BAA59122CE33CDAB9E56BE /* SidebarView.swift */,
+			);
+			path = Sidebar;
+			sourceTree = "<group>";
+		};
+		BAEDAE96FB84BBCBBA64119F /* TodoList */ = {
+			isa = PBXGroup;
+			children = (
+				C2693492691BA35A5367A4B9 /* TodoListView.swift */,
+				9944ED2FB10757B063959F47 /* TodoRowView.swift */,
+				0E1724C4FA55BC2D6B90D9E3 /* UpcomingView.swift */,
+			);
+			path = TodoList;
+			sourceTree = "<group>";
+		};
+		BB6011CC8E613AC3CCC5B743 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				352AA080E5CAAF906652D0FC /* Area.swift */,
+				F4A225EA9B4A5F15CA48A93A /* ChecklistItem.swift */,
+				6AF8C6D0093432B3DEC35DEC /* Enums.swift */,
+				650B2915021321CF0AF95A72 /* Heading.swift */,
+				12D7C5E6AA659257555C65C3 /* Project.swift */,
+				9FD936D59088AFD4FEDFACAE /* Tag.swift */,
+				D4420DC691C03989A9922CD5 /* TodoItem.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		C1DDF2BE9D52A6DE28E5261A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FCDE21193D1E0C7805E1538D /* Info.plist */,
+				ED94A27BEB817D380693E74A /* Tasko.entitlements */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		C3F86029FDC064AF53F7FDCA /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				A5BD7C2669BBE9FF6F6F425B /* SidebarViewModel.swift */,
+				15ED57B94519470CAEFB80BB /* TodoListViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		C7E790CF029F87308F80488C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				46286F12A535CAC2308F71DB /* QuickEntry */,
+				77D30C4A541AC2F444F8D7FD /* QuickOpen */,
+				0EABB6325A31807D9EDFFED3 /* Shared */,
+				B0DC6A4A238BC40F41D3DF3C /* Sidebar */,
+				BAEDAE96FB84BBCBBA64119F /* TodoList */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		7B0A287FC32A93EA883FC28D /* Tasko */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E6C5A4D29DA985C04F97F3CA /* Build configuration list for PBXNativeTarget "Tasko" */;
+			buildPhases = (
+				AB9E5679DD95171FD2C57B9B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Tasko;
+			packageProductDependencies = (
+			);
+			productName = Tasko;
+			productReference = 650D2D5C8CBC9DAF5FF25BA0 /* Tasko.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E105C99E9759C9A51D7EE0C4 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					7B0A287FC32A93EA883FC28D = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 83633AE45A65B390614E5396 /* Build configuration list for PBXProject "Tasko" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3A9F43D9FB4760016C3B56F1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1F889A10249FBFD766C4F135 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				7B0A287FC32A93EA883FC28D /* Tasko */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AB9E5679DD95171FD2C57B9B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0874A732A7FC106E2BB939B7 /* Area.swift in Sources */,
+				045D9C9AB20EA164DAB356D7 /* ChecklistItem.swift in Sources */,
+				E99CD4EF3C941EB0B1C62E4B /* ContentView.swift in Sources */,
+				D53CBF62E0B1C9D585AC4895 /* Date+Extensions.swift in Sources */,
+				CB0D5C3B2DA6F02E5B3D79F5 /* Enums.swift in Sources */,
+				3CEDFC84D66A60F2EC55DD1D /* Heading.swift in Sources */,
+				7D1635372A24934CCE9DFF7E /* LemmaSearchService.swift in Sources */,
+				6633DA5B0CCD080E60B48CD4 /* MoveToDialog.swift in Sources */,
+				D9C56A2BD2AE29239F4A08EA /* NaturalDateParser.swift in Sources */,
+				899898487696EFB6D174D281 /* Project.swift in Sources */,
+				223684A3F44A73F6019031E0 /* QuickEntryPanel.swift in Sources */,
+				DC024F09EF0BEB785ACADD7F /* QuickOpenView.swift in Sources */,
+				EE43B57793CD961D7503C3CA /* SidebarRow.swift in Sources */,
+				A1662D6D59438985FC45F97F /* SidebarView.swift in Sources */,
+				BF461453831653322AA8833E /* SidebarViewModel.swift in Sources */,
+				69597D3AA9BC5CFBDE072399 /* Tag.swift in Sources */,
+				FAD2F24576E8017D38C1B8FD /* TagChip.swift in Sources */,
+				DCF9D31833AF2A37E7B36720 /* TaskoApp.swift in Sources */,
+				1E9FE850EE2BA4988602B725 /* TaskoCommands.swift in Sources */,
+				76E9E6FD9EA177C3B6B9E07E /* TodoFilterService.swift in Sources */,
+				48BA4F836D3A6B0F52A6893B /* TodoItem.swift in Sources */,
+				67A7E2BC29BC45A3BE04E6C3 /* TodoListView.swift in Sources */,
+				14E5D2F33CF71859A71B74EA /* TodoListViewModel.swift in Sources */,
+				9177DD15C9749E4AA7577441 /* TodoRowView.swift in Sources */,
+				BFFAE5A96782DDDAD54B5828 /* UpcomingView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		40AEFA27179264DF2536836A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		8B73B1E81D0945EDCBD498E7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Tasko/Resources/Tasko.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Tasko/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kazui.tasko;
+				PRODUCT_NAME = Tasko;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		E2BA32482691883F256885AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+		F9B19B8CECA802FE1CA37B09 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Tasko/Resources/Tasko.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Tasko/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kazui.tasko;
+				PRODUCT_NAME = Tasko;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		83633AE45A65B390614E5396 /* Build configuration list for PBXProject "Tasko" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				40AEFA27179264DF2536836A /* Debug */,
+				E2BA32482691883F256885AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E6C5A4D29DA985C04F97F3CA /* Build configuration list for PBXNativeTarget "Tasko" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F9B19B8CECA802FE1CA37B09 /* Debug */,
+				8B73B1E81D0945EDCBD498E7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = E105C99E9759C9A51D7EE0C4 /* Project object */;
+}

@@ -1,0 +1,65 @@
+# === OS ===
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# === IDEs ===
+.idea/
+.vscode/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+xcuserdata/
+*.perspectivev3
+*.mode1v3
+*.mode2v3
+*.pbxuser
+!default.pbxuser
+!default.mode1v3
+!default.mode2v3
+!default.perspectivev3
+
+# === TypeScript / JavaScript ===
+node_modules/
+dist/
+.expo/
+*.tsbuildinfo
+.cache/
+
+# === Bun ===
+bun.lockb
+
+# === Rust ===
+target/
+Cargo.lock
+*.rlib
+
+# === Swift / Xcode ===
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.moved-aside
+*.hmap
+*.xccheckout
+*.xcscmblueprint
+.build/
+Package.resolved
+
+# === Kotlin / Android ===
+*.apk
+*.aab
+*.class
+*.jar
+*.aar
+local.properties
+.gradle/
+.cxx/
+
+# === Общее ===
+*.log
+*.env
+*.env.*
+!*.env.example
+.turbo/
