@@ -36,8 +36,13 @@ export default function RootLayout() {
       try {
         const url = await getSetting("ark_url");
         const key = await getSetting("ark_api_key");
-        if (url && key) {
+        if (url && key && !url.includes("localhost") && !url.includes("127.0.0.1")) {
           arkSync.connect(url, key);
+        } else if (url?.includes("localhost")) {
+          // Clear invalid localhost credentials from mobile
+          const { deleteSetting } = await import("@/db/storage");
+          await deleteSetting("ark_url");
+          await deleteSetting("ark_api_key");
         }
       } catch (e) {
         console.warn("[RootLayout] Ark connect failed:", e);
