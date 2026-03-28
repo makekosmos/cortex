@@ -16,7 +16,6 @@ export default function RootLayout() {
   const hydrated = useTodoStore((s) => s.hydrated);
   const upsertTodo = useTodoStore((s) => s.upsertTodo);
   const upsertProject = useTodoStore((s) => s.upsertProject);
-  const initialized = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   // Hydrate store from SQLite on launch
@@ -27,28 +26,8 @@ export default function RootLayout() {
     });
   }, [hydrate]);
 
-  // Connect to Ark after hydration
+  // Subscribe to Ark sync changes — always active
   useEffect(() => {
-    if (!hydrated || initialized.current) return;
-    initialized.current = true;
-
-    (async () => {
-      try {
-        const url = await getSetting("ark_url");
-        const key = await getSetting("ark_api_key");
-        if (url && key && !url.includes("localhost") && !url.includes("127.0.0.1")) {
-          arkSync.connect(url, key);
-        } else if (url?.includes("localhost")) {
-          // Clear invalid localhost credentials from mobile
-          const { deleteSetting } = await import("@/db/storage");
-          await deleteSetting("ark_url");
-          await deleteSetting("ark_api_key");
-        }
-      } catch (e) {
-        console.warn("[RootLayout] Ark connect failed:", e);
-      }
-    })();
-
     const unsub = arkSync.onChange((change) => {
       try {
         const eventType = arkChangeEventType(change);
@@ -63,12 +42,35 @@ export default function RootLayout() {
         console.warn("[RootLayout] Change handler error:", e);
       }
     });
+    return unsub;
+  }, [upsertTodo, upsertProject]);
+
+  // Auto-connect to Ark if credentials exist
+  useEffect(() => {
+    if (!hydrated) return;
+
+    (async () => {
+      try {
+        const url = await getSetting("ark_url");
+        const key = await getSetting("ark_api_key");
+        if (url && key && !url.includes("localhost") && !url.includes("127.0.0.1")) {
+          if (!arkSync.isConnected) {
+            arkSync.connect(url, key);
+          }
+        } else if (url?.includes("localhost")) {
+          const { deleteSetting } = await import("@/db/storage");
+          await deleteSetting("ark_url");
+          await deleteSetting("ark_api_key");
+        }
+      } catch (e) {
+        console.warn("[RootLayout] Ark connect failed:", e);
+      }
+    })();
 
     return () => {
-      unsub();
       arkSync.disconnect();
     };
-  }, [hydrated, upsertTodo, upsertProject]);
+  }, [hydrated]);
 
   if (error) {
     return (

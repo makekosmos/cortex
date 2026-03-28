@@ -31,6 +31,7 @@ import {
   loadProjects,
   saveProjects,
 } from "@/db/storage";
+import { arkSync, todoToArkChange } from "@/services/sync/ark-client";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -169,6 +170,7 @@ const useTodoStore = create<TodoStore>((set, get) => ({
     const todos = [todo, ...get().todos];
     set({ todos });
     persistTodos(todos);
+    arkSync.sendChange(todoToArkChange(todo, "create"));
     return todo;
   },
 
@@ -176,12 +178,16 @@ const useTodoStore = create<TodoStore>((set, get) => ({
     const todos = mapTodo(get().todos, id, (t) => ({ ...t, ...patch }));
     set({ todos });
     persistTodos(todos);
+    const updated = todos.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoToArkChange(updated, "update"));
   },
 
   removeTodo: (id) => {
+    const todo = get().todos.find((t) => t.id === id);
     const todos = get().todos.filter((t) => t.id !== id);
     set({ todos });
     persistTodos(todos);
+    if (todo) arkSync.sendChange(todoToArkChange(todo, "delete"));
   },
 
   upsertTodo: (todo) => {
@@ -200,12 +206,16 @@ const useTodoStore = create<TodoStore>((set, get) => ({
     const todos = mapTodo(get().todos, id, markTodoCompleted);
     set({ todos });
     persistTodos(todos);
+    const updated = todos.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoToArkChange(updated, "update"));
   },
 
   incompleteTodo: (id) => {
     const todos = mapTodo(get().todos, id, markTodoIncomplete);
     set({ todos });
     persistTodos(todos);
+    const updated = todos.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoToArkChange(updated, "update"));
   },
 
   cancelTodo: (id) => {
