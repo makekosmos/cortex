@@ -80,7 +80,7 @@ const sorters: Record<SmartList, (a: TodoItem, b: TodoItem) => number> = {
 // ---------------------------------------------------------------------------
 
 export function filterTodos(list: SmartList, todos: TodoItem[]): TodoItem[] {
-  return todos.filter(predicates[list]).toSorted(sorters[list]);
+  return [...todos.filter(predicates[list])].sort(sorters[list]);
 }
 
 export function countTodos(list: SmartList, todos: TodoItem[]): number {
