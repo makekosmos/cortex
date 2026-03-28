@@ -31,26 +31,38 @@ export default function SettingsScreen() {
   }, []);
 
   const handlePair = useCallback(async () => {
-    const conn = parseConnectionString(connectionString.trim());
-    if (!conn) {
-      Alert.alert("Ошибка", "Неверный формат строки подключения.\nФормат: ark://host:port?key=SECRET");
+    const trimmed = connectionString.trim();
+    if (!trimmed) {
+      Alert.alert("Ошибка", "Введите строку подключения");
       return;
     }
 
-    await setSetting("ark_url", conn.server_url);
-    await setSetting("ark_api_key", conn.api_key);
-    setArkUrl(conn.server_url);
-
-    // Fetch initial data
-    const todos = await fetchTasksFromArk(conn.server_url, conn.api_key);
-    if (todos.length > 0) {
-      setTodos(todos);
+    const conn = parseConnectionString(trimmed);
+    if (!conn) {
+      Alert.alert("Ошибка", "Неверный формат.\nФормат: ark://host:port?key=SECRET");
+      return;
     }
 
-    // Connect WebSocket
-    arkSync.disconnect();
-    arkSync.connect(conn.server_url, conn.api_key);
-    setConnectionString("");
+    try {
+      await setSetting("ark_url", conn.server_url);
+      await setSetting("ark_api_key", conn.api_key);
+      setArkUrl(conn.server_url);
+
+      // Connect WebSocket
+      arkSync.disconnect();
+      arkSync.connect(conn.server_url, conn.api_key);
+
+      // Fetch initial data
+      fetchTasksFromArk(conn.server_url, conn.api_key).then((todos) => {
+        if (todos.length > 0) setTodos(todos);
+      }).catch((e) => console.warn("[Settings] fetch tasks failed:", e));
+
+      setConnectionString("");
+      Alert.alert("Готово", `Подключено к ${conn.server_url}`);
+    } catch (e) {
+      console.error("[Settings] pairing error:", e);
+      Alert.alert("Ошибка", String(e));
+    }
   }, [connectionString, setTodos]);
 
   const handleDisconnect = useCallback(async () => {
