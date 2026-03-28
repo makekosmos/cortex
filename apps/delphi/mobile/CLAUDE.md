@@ -4,7 +4,7 @@ GTD-менеджер задач для iOS/Android. Часть экосисте�
 
 ## Стек
 
-- **Expo** (SDK 55) + **React Native** 0.83
+- **Expo** (SDK 54) + **React Native** 0.79
 - **expo-router** — файловый роутинг
 - **Zustand** — стейт-менеджмент
 - **expo-sqlite** — локальное хранилище
