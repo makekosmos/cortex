@@ -403,8 +403,8 @@ export class ArkSyncClient {
       this.handleMessage(msg);
     };
 
-    this.ws.onerror = (e) => {
-      console.error("[ArkSync] WebSocket error:", e);
+    this.ws.onerror = () => {
+      // Silently handle — onclose will fire next and trigger reconnect
     };
 
     this.ws.onclose = () => {
