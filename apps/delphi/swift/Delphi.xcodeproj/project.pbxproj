@@ -10,9 +10,11 @@
 		02F7CB27817C45B421EAF3F1 /* ArkSyncClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B1C224D6A2EA95338F55AD /* ArkSyncClient.swift */; };
 		0749209CF3D1DBB251D98E41 /* ArkPairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0BF0537B764E00021DF43A3 /* ArkPairing.swift */; };
 		1117B9734B342779713955F2 /* Area.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B546892E3D3207617E27CD /* Area.swift */; };
+		1442E9769EAFADCFA7B74466 /* ArkPeerServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D60A7A3860D62A3F2421612 /* ArkPeerServer.swift */; };
 		155577DD822D4D3916C12C6E /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C83D540EB909A86DEE2D952 /* UpcomingView.swift */; };
 		20A26F60FCCA715B1940ED49 /* Date+Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C8AC3F82ED476E9ECE47AC /* Date+Extensions.swift */; };
 		29F3555CE668EB1305B82CD6 /* LemmaSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 141252CBD9A35D4B5EF344CE /* LemmaSearchService.swift */; };
+		2CE229B39B38337C4D032BF0 /* ArkPeerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 898557020B8093DFE21701CB /* ArkPeerProtocol.swift */; };
 		34652EA19711CC459BC72951 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1760F06781048994BA9CEA20 /* Project.swift */; };
 		3A021EE9FE515BA78CAC009F /* TagChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70529D134387C1CC318EE256 /* TagChip.swift */; };
 		3A0980A721EE24C732374520 /* MoveToDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2E07333E1A9627A6F28E55 /* MoveToDialog.swift */; };
@@ -20,6 +22,8 @@
 		4B4BFEE5140387F669B4B0E0 /* SyncSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53AE353852563A3A39966837 /* SyncSettings.swift */; };
 		7F30CA371F5CC493C2903C0F /* ArkDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 872BD37C8DD377D37A6CFD50 /* ArkDiscovery.swift */; };
 		878F46A2EFDF04DDBBEC1E0A /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DEB0956FFBEAAD58489D194 /* TodoListView.swift */; };
+		8EBE48E55F30561A3512F1A1 /* ArkHLC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 182F4246E411F3D6A95DE548 /* ArkHLC.swift */; };
+		90F309B2A9A92C8D7B6B8453 /* ArkPeerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA506FEF75E9841CF2D0CBA0 /* ArkPeerManager.swift */; };
 		9DEBAC08F48BB96E79E6E5B7 /* QuickEntryPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35218E433A432FCBD4401295 /* QuickEntryPanel.swift */; };
 		A093C166405D5D7804939812 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AFB019B9C2DBEE60F80FD9D /* SidebarView.swift */; };
 		A373E36C11ECE1ABECA8876C /* TodoFilterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC11B49B4D96C7BD32E8F73E /* TodoFilterService.swift */; };
@@ -42,11 +46,13 @@
 
 /* Begin PBXFileReference section */
 		0B902F9CD35AD1CE123C1DB2 /* ArkEventMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkEventMapper.swift; sourceTree = "<group>"; };
+		0D60A7A3860D62A3F2421612 /* ArkPeerServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkPeerServer.swift; sourceTree = "<group>"; };
 		1143DCAF50DD642944F5B192 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		141252CBD9A35D4B5EF344CE /* LemmaSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LemmaSearchService.swift; sourceTree = "<group>"; };
 		16BF00CBDB7D6B01BA0AD49A /* SidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRow.swift; sourceTree = "<group>"; };
 		1760F06781048994BA9CEA20 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		17DE32C9F2236A7BCC300907 /* QuickOpenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOpenView.swift; sourceTree = "<group>"; };
+		182F4246E411F3D6A95DE548 /* ArkHLC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkHLC.swift; sourceTree = "<group>"; };
 		35218E433A432FCBD4401295 /* QuickEntryPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickEntryPanel.swift; sourceTree = "<group>"; };
 		3D2E07333E1A9627A6F28E55 /* MoveToDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoveToDialog.swift; sourceTree = "<group>"; };
 		48C8AC3F82ED476E9ECE47AC /* Date+Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Extensions.swift"; sourceTree = "<group>"; };
@@ -61,9 +67,11 @@
 		74BA9AC4148DFAC893F34259 /* Delphi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Delphi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		848C8CD1C5716FBC1672A047 /* SyncSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSettingsView.swift; sourceTree = "<group>"; };
 		872BD37C8DD377D37A6CFD50 /* ArkDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkDiscovery.swift; sourceTree = "<group>"; };
+		898557020B8093DFE21701CB /* ArkPeerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkPeerProtocol.swift; sourceTree = "<group>"; };
 		8AFB019B9C2DBEE60F80FD9D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		9C83D540EB909A86DEE2D952 /* UpcomingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingView.swift; sourceTree = "<group>"; };
 		A4D3ADFDBC6924665E24187F /* DelphiCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelphiCommands.swift; sourceTree = "<group>"; };
+		AA506FEF75E9841CF2D0CBA0 /* ArkPeerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkPeerManager.swift; sourceTree = "<group>"; };
 		B0BF0537B764E00021DF43A3 /* ArkPairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArkPairing.swift; sourceTree = "<group>"; };
 		BB008F376EA27B8F52B9F667 /* DelphiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelphiApp.swift; sourceTree = "<group>"; };
 		C9D185D143DE9DE0234BD7BA /* SidebarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewModel.swift; sourceTree = "<group>"; };
@@ -110,7 +118,11 @@
 			children = (
 				872BD37C8DD377D37A6CFD50 /* ArkDiscovery.swift */,
 				0B902F9CD35AD1CE123C1DB2 /* ArkEventMapper.swift */,
+				182F4246E411F3D6A95DE548 /* ArkHLC.swift */,
 				B0BF0537B764E00021DF43A3 /* ArkPairing.swift */,
+				AA506FEF75E9841CF2D0CBA0 /* ArkPeerManager.swift */,
+				898557020B8093DFE21701CB /* ArkPeerProtocol.swift */,
+				0D60A7A3860D62A3F2421612 /* ArkPeerServer.swift */,
 				E9B1C224D6A2EA95338F55AD /* ArkSyncClient.swift */,
 				53AE353852563A3A39966837 /* SyncSettings.swift */,
 				848C8CD1C5716FBC1672A047 /* SyncSettingsView.swift */,
@@ -265,7 +277,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1600;
 				TargetAttributes = {
 					B51620B340ACA44818458E9E = {
 						ProvisioningStyle = Automatic;
@@ -299,7 +311,11 @@
 				1117B9734B342779713955F2 /* Area.swift in Sources */,
 				7F30CA371F5CC493C2903C0F /* ArkDiscovery.swift in Sources */,
 				B42D89F4CAA7CC983F090EC7 /* ArkEventMapper.swift in Sources */,
+				8EBE48E55F30561A3512F1A1 /* ArkHLC.swift in Sources */,
 				0749209CF3D1DBB251D98E41 /* ArkPairing.swift in Sources */,
+				90F309B2A9A92C8D7B6B8453 /* ArkPeerManager.swift in Sources */,
+				2CE229B39B38337C4D032BF0 /* ArkPeerProtocol.swift in Sources */,
+				1442E9769EAFADCFA7B74466 /* ArkPeerServer.swift in Sources */,
 				02F7CB27817C45B421EAF3F1 /* ArkSyncClient.swift in Sources */,
 				BE6855A7A0669F3542A1E236 /* ChecklistItem.swift in Sources */,
 				BE6541BFF78371221E158920 /* ContentView.swift in Sources */,
@@ -380,7 +396,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -389,7 +405,7 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 5.10;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -465,7 +481,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -475,7 +491,7 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
-				SWIFT_VERSION = 5.10;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};

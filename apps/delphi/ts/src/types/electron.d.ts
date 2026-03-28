@@ -7,6 +7,8 @@ interface ElectronFsAPI {
 
 interface ElectronAPI {
   fs: ElectronFsAPI;
+  invoke(channel: string, ...args: unknown[]): Promise<unknown>;
+  on(channel: string, listener: (...args: unknown[]) => void): () => void;
 }
 
 interface Window {

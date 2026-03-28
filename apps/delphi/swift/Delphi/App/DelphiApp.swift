@@ -6,6 +6,7 @@ struct DelphiApp: App {
     let container: ModelContainer
     @State private var syncSettings = SyncSettings()
     @State private var syncClient: ArkSyncClient
+    @State private var peerManager: ArkPeerManager?
 
     init() {
         let schema = Schema([
@@ -52,6 +53,7 @@ struct DelphiApp: App {
                     // Auto-connect on launch if device was previously paired
                     if syncSettings.isPaired {
                         syncClient.connect()
+                        startPeerManager()
                     }
 
                     // Register local hotkey for Quick Entry (Ctrl+Space) after app is ready
@@ -74,5 +76,86 @@ struct DelphiApp: App {
         Settings {
             SyncSettingsView(settings: syncSettings, syncClient: syncClient)
         }
+    }
+
+    // MARK: - P2P Peer Manager
+
+    private func startPeerManager() {
+        guard syncSettings.isPaired, peerManager == nil else { return }
+
+        let manager = ArkPeerManager(
+            meshSecret: syncSettings.apiKey,
+            deviceId: syncSettings.deviceId,
+            deviceName: Host.current().localizedName ?? "Mac"
+        )
+
+        // When peer sends a change, apply it to SwiftData
+        let modelContainer = container
+        manager.onPeerChange = { change, fromDevice in
+            Task { @MainActor in
+                let context = modelContainer.mainContext
+                applyPeerChange(change, context: context)
+                try? context.save()
+            }
+        }
+
+        manager.start()
+        peerManager = manager
+    }
+}
+
+// MARK: - Apply peer changes to SwiftData
+
+/// Apply a change received from a P2P peer to the local SwiftData store.
+@MainActor
+private func applyPeerChange(_ change: [String: Any], context: ModelContext) {
+    let changeType = change["change_type"] as? String ?? "create"
+    let eventData = change["data"] as? [String: Any] ?? change
+    let eventType = eventData["event_type"] as? String ?? "task"
+
+    if changeType == "delete" {
+        guard let sourceId = change["event_id"] as? String
+                ?? (change["data"] as? [String: Any])?["source_id"] as? String,
+              let uuid = UUID(uuidString: sourceId)
+        else { return }
+
+        switch eventType {
+        case "task":
+            let descriptor = FetchDescriptor<TodoItem>(predicate: #Predicate { $0.id == uuid })
+            if let item = try? context.fetch(descriptor).first {
+                context.delete(item)
+            }
+        case "project":
+            let descriptor = FetchDescriptor<Project>(predicate: #Predicate { $0.id == uuid })
+            if let item = try? context.fetch(descriptor).first {
+                context.delete(item)
+            }
+        case "area":
+            let descriptor = FetchDescriptor<Area>(predicate: #Predicate { $0.id == uuid })
+            if let item = try? context.fetch(descriptor).first {
+                context.delete(item)
+            }
+        case "tag":
+            let descriptor = FetchDescriptor<Tag>(predicate: #Predicate { $0.id == uuid })
+            if let item = try? context.fetch(descriptor).first {
+                context.delete(item)
+            }
+        default:
+            break
+        }
+        return
+    }
+
+    switch eventType {
+    case "task":
+        _ = ArkEventMapper.arkEventToTodo(eventData, context: context)
+    case "project":
+        _ = ArkEventMapper.arkEventToProject(eventData, context: context)
+    case "area":
+        _ = ArkEventMapper.arkEventToArea(eventData, context: context)
+    case "tag":
+        _ = ArkEventMapper.arkEventToTag(eventData, context: context)
+    default:
+        break
     }
 }

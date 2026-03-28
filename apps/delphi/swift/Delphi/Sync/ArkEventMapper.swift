@@ -6,7 +6,7 @@ enum ArkEventMapper {
 
     // MARK: - ISO 8601 formatter
 
-    private static let iso8601: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let iso8601: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f

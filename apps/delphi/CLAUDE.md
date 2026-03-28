@@ -1,6 +1,6 @@
 # Delphi
 
-GTD-менеджер задач — часть экосистемы Kosmos. Две реализации: macOS (SwiftUI) и Web (Electron + React).
+GTD-менеджер задач — часть экосистемы Kosmos. Три реализации: macOS (SwiftUI), Web (Electron + React) и Mobile (Expo + React Native).
 
 ## Платформы
 
@@ -8,8 +8,9 @@ GTD-менеджер задач — часть экосистемы Kosmos. Дв
 |-----------|------|------|
 | **macOS** | `swift/` | SwiftUI + SwiftData, macOS 14+ |
 | **Web/Desktop** | `ts/` | Electron + React + Vite, TypeScript |
+| **Mobile** | `mobile/` | Expo + React Native, TypeScript |
 
-Обе версии синхронизируют данные с Ark через WebSocket (`/ws/sync`).
+Все версии синхронизируют данные с Ark через WebSocket (`/ws/sync`).
 
 ## Навигация по умолчанию
 

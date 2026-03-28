@@ -27,6 +27,7 @@ function colorTagClass(colorTag?: string | null): string {
 }
 import TodoRow from "@/components/TodoRow";
 import { arkSync, projectToArkChange } from "@/services/sync/ark-client";
+import { broadcastToPeers } from "@/services/sync/peer-bridge";
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -85,28 +86,30 @@ export default function ProjectPage() {
     const trimmed = editTitle.trim();
     if (trimmed && trimmed !== project.title) {
       updateProject(project.id, { title: trimmed });
-      arkSync.sendChange(
-        projectToArkChange({ ...project, title: trimmed }, "update"),
-      );
+      const change = projectToArkChange({ ...project, title: trimmed }, "update");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
     }
   };
 
   const handleDelete = () => {
     setMenuOpen(false);
     removeProject(project.id);
-    arkSync.sendChange(projectToArkChange(project, "delete"));
+    const change = projectToArkChange(project, "delete");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
     navigate("/");
   };
 
   const handleArchive = () => {
     setMenuOpen(false);
     updateProject(project.id, { status: ProjectStatus.Completed });
-    arkSync.sendChange(
-      projectToArkChange(
-        { ...project, status: ProjectStatus.Completed },
-        "update",
-      ),
+    const change = projectToArkChange(
+      { ...project, status: ProjectStatus.Completed },
+      "update",
     );
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
     navigate("/");
   };
 

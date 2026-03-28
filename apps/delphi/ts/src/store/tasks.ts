@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { arkSync, taskToArkChange } from "@/services/sync/ark-client";
+import { broadcastToPeers } from "@/services/sync/peer-bridge";
 import type { Task } from "@/types/task";
 
 type TaskStore = {
@@ -35,14 +36,18 @@ const useTask = create<TaskStore>((set) => ({
     };
 
     set((state) => ({ tasks: [task, ...state.tasks] }));
-    arkSync.sendChange(taskToArkChange(task, "create"));
+    const change = taskToArkChange(task, "create");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
     return task;
   },
   removeTask: (task) => {
     set((state) => ({
       tasks: state.tasks.filter((item) => item.id !== task.id),
     }));
-    arkSync.sendChange(taskToArkChange(task, "delete"));
+    const change = taskToArkChange(task, "delete");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
   },
   removeAllTasks: () => set({ tasks: [] }),
   completeTask: (task) => {
@@ -54,7 +59,9 @@ const useTask = create<TaskStore>((set) => ({
     set((state) => ({
       tasks: state.tasks.map((item) => (item.id === task.id ? updated : item)),
     }));
-    arkSync.sendChange(taskToArkChange(updated, "update"));
+    const change = taskToArkChange(updated, "update");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
   },
   editTask: (task) => {
     const updated: Task = {
@@ -65,7 +72,9 @@ const useTask = create<TaskStore>((set) => ({
     set((state) => ({
       tasks: state.tasks.map((item) => (item.id === task.id ? updated : item)),
     }));
-    arkSync.sendChange(taskToArkChange(updated, "update"));
+    const change = taskToArkChange(updated, "update");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
   },
   upsertTask: (task) =>
     set((state) => {

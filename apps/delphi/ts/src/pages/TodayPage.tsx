@@ -8,6 +8,7 @@ export default function TodayPage() {
   const { filtered } = useSmartList(SmartList.Today);
   const completeTodo = useTodoStore((s) => s.completeTodo);
   const trashTodo = useTodoStore((s) => s.trashTodo);
+  const updateTodo = useTodoStore((s) => s.updateTodo);
 
   return (
     <div className="flex w-full min-w-0 flex-col">
@@ -37,6 +38,7 @@ export default function TodayPage() {
                   todo={todo}
                   onComplete={() => completeTodo(todo.id)}
                   onTrash={() => trashTodo(todo.id)}
+                  onRename={(title) => updateTodo(todo.id, { title })}
                   extra={
                     todo.isEvening ? (
                       <span className="text-[10px] text-indigo-400">Вечер</span>

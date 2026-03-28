@@ -6,6 +6,7 @@ import QuickOpen from "@/components/QuickOpen";
 import SideBar from "@/components/sideBar";
 import AppRoutes from "@/routes";
 import {
+  type ArkChange,
   arkChangeToTodoItem,
   arkChangeToProject,
   arkChangeEventType,
@@ -18,6 +19,7 @@ import {
   fetchProjectsFromArk,
 } from "@/services/sync/ark-client";
 import { parseConnectionString } from "@/services/sync/pairing";
+import { setupMeshFromArkKey } from "@/services/sync/peer-bridge";
 import useTodoStore from "@/store/todos";
 
 type ConnectionState = "online" | "syncing" | "offline";
@@ -136,6 +138,44 @@ function App() {
     removeProject,
   ]);
 
+  // Listen for incoming P2P peer changes (Electron only)
+  useEffect(() => {
+    if (!window.electronAPI?.on) return;
+    const cleanup = window.electronAPI.on("peer:change", (...args: unknown[]) => {
+      const change = args[0] as ArkChange;
+      if (!change || !change.event_id) return;
+
+      const eventType = arkChangeEventType(change);
+
+      if (eventType === "project") {
+        if (change.change_type === "delete") {
+          removeProject(change.event_id);
+          return;
+        }
+        const project = arkChangeToProject(change);
+        if (project) upsertProject(project);
+        return;
+      }
+
+      // Default: handle as task
+      if (change.change_type === "delete") {
+        removeTodo(change.event_id);
+        return;
+      }
+      const todo = arkChangeToTodoItem(change);
+      if (todo) upsertTodo(todo);
+    });
+    return cleanup;
+  }, [upsertTodo, removeTodo, upsertProject, removeProject]);
+
+  // Auto-setup mesh credentials from existing Ark key (Electron only)
+  useEffect(() => {
+    const key = getArkApiKey();
+    if (key) {
+      setupMeshFromArkKey(key);
+    }
+  }, []);
+
   const handleAuthSubmit = async (connectionCode: string) => {
     const parsed = parseConnectionString(connectionCode);
 
@@ -152,6 +192,7 @@ function App() {
       setArkUrl(parsed.server_url);
       setArkApiKey(parsed.api_key);
       arkSync.connect(parsed.server_url, parsed.api_key);
+      setupMeshFromArkKey(parsed.api_key);
       setAuthRequired(false);
       setBootstrapNonce((value) => value + 1);
     } catch (error) {
