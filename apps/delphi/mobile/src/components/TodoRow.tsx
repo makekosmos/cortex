@@ -5,7 +5,6 @@ import {
   Pressable,
   StyleSheet,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import type { TodoItem } from "@/types/task";
 import { PriorityColor, Priority } from "@/types/task";
 import useTodoStore from "@/store/todos";
@@ -34,15 +33,9 @@ export default function TodoRow({ todo }: Props) {
   return (
     <Pressable style={styles.container}>
       <Pressable onPress={onToggle} hitSlop={8} style={styles.checkbox}>
-        <Ionicons
-          name={todo.isCompleted ? "checkmark-circle" : "ellipse-outline"}
-          size={24}
-          color={
-            todo.isCompleted
-              ? "#4ade80"
-              : priorityColor ?? "rgba(255,255,255,0.4)"
-          }
-        />
+        <Text style={{ fontSize: 22, color: todo.isCompleted ? "#4ade80" : priorityColor ?? "rgba(255,255,255,0.4)" }}>
+          {todo.isCompleted ? "✓" : "○"}
+        </Text>
       </Pressable>
       <View style={styles.content}>
         <Text

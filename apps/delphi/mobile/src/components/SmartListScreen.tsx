@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { SmartList, SmartListTitle } from "@/types/task";
 import useSmartList from "@/hooks/useSmartList";
 import useTodoStore from "@/store/todos";
@@ -87,7 +86,7 @@ export default function SmartListScreen({ list }: Props) {
                 }}
               />
               <Pressable onPress={handleAdd} style={styles.sendButton}>
-                <Ionicons name="arrow-up-circle" size={32} color="#60a5fa" />
+                <Text style={{ fontSize: 28, color: "#60a5fa" }}>↑</Text>
               </Pressable>
             </View>
           ) : (
@@ -95,7 +94,7 @@ export default function SmartListScreen({ list }: Props) {
               style={styles.fab}
               onPress={() => setShowInput(true)}
             >
-              <Ionicons name="add" size={28} color="#fff" />
+              <Text style={{ fontSize: 28, color: "#fff", fontWeight: "300" }}>+</Text>
             </Pressable>
           )}
         </>

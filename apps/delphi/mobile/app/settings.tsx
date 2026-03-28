@@ -9,7 +9,6 @@ import {
   ScrollView,
   Modal,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { parseConnectionString } from "@/services/sync/pairing";
 import { arkSync, fetchTasksFromArk } from "@/services/sync/ark-client";
 import { getSetting, setSetting, deleteSetting } from "@/db/storage";
@@ -116,7 +115,7 @@ export default function SettingsScreen() {
             Отсканируйте QR-код из Ark или введите строку подключения вручную.
           </Text>
           <Pressable style={styles.scanButton} onPress={() => setShowScanner(true)}>
-            <Ionicons name="qr-code-outline" size={18} color="#fff" />
+            <Text style={{ fontSize: 16, color: "#fff" }}>📷</Text>
             <Text style={styles.pairText}>Сканировать QR</Text>
           </Pressable>
           <View style={styles.dividerRow}>
@@ -137,7 +136,7 @@ export default function SettingsScreen() {
             Формат: ark://192.168.x.x:8000?key=SECRET
           </Text>
           <Pressable style={styles.pairButton} onPress={handlePair}>
-            <Ionicons name="link" size={18} color="#fff" />
+            <Text style={{ fontSize: 16, color: "#fff" }}>🔗</Text>
             <Text style={styles.pairText}>Подключить</Text>
           </Pressable>
         </View>
