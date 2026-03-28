@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import {
   Archive,
   Book,
@@ -14,6 +13,23 @@ import { Link, useLocation } from "react-router-dom";
 import SideBarButton from "@/components/SideBarButton";
 import useTodoStore from "@/store/todos";
 import { ProjectStatus } from "@/types/task";
+import { ResizableSidebar, type SidebarConfig } from "@kosmos/ui-sidebar";
+
+const STORAGE_KEY = "delphi-sidebar-config";
+
+function loadConfig(): Partial<SidebarConfig> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as Partial<SidebarConfig>;
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+function saveConfig(config: SidebarConfig) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
 
 function colorTagClass(colorTag?: string | null): string {
   switch (colorTag) {
@@ -28,54 +44,15 @@ function colorTagClass(colorTag?: string | null): string {
   }
 }
 
-export default function SideBar() {
+function SidebarExpandedContent({ toggle }: { toggle: () => void }) {
   const projects = useTodoStore((s) => s.projects);
   const activeProjects = projects
     .filter((p) => p.status === ProjectStatus.Active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Cmd+/ to toggle
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === "/") {
-        e.preventDefault();
-        setCollapsed((prev) => !prev);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  if (collapsed) {
-    return (
-      <aside className="flex min-h-0 flex-col items-center border-r border-r-(--border) bg-(--sidebar) py-2 px-1">
-        <div
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-          className="h-3 w-full shrink-0"
-        />
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          className="mb-2 rounded-lg p-2 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
-          title="Показать сайдбар (⌘/)"
-        >
-          <PanelLeftOpen size={18} />
-        </button>
-        <SideBarButton icon={Inbox} to="/" />
-        <SideBarButton icon={Star} to="/today" />
-        <SideBarButton icon={Calendar} to="/upcoming" />
-        <SideBarButton icon={Book} to="/logbook" />
-        <SideBarButton icon={Archive} to="/trash" />
-        <div className="flex-1" />
-        <SideBarButton icon={Settings} to="/settings" />
-      </aside>
-    );
-  }
 
   return (
-    <aside className="left-0 flex min-h-0 w-48 flex-col justify-between border-r border-r-(--border) bg-(--sidebar) p-2">
+    <aside className="flex min-h-0 h-full flex-col justify-between border-r border-r-(--border) bg-(--sidebar) p-2">
       {/* Drag region + collapse button */}
       <div className="flex items-center">
         <div
@@ -84,7 +61,7 @@ export default function SideBar() {
         />
         <button
           type="button"
-          onClick={() => setCollapsed(true)}
+          onClick={toggle}
           className="rounded-lg p-1.5 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
           title="Скрыть сайдбар (⌘/)"
         >
@@ -128,5 +105,48 @@ export default function SideBar() {
         <SideBarButton icon={Settings} to="/settings" />
       </div>
     </aside>
+  );
+}
+
+function SidebarCollapsedContent({ toggle }: { toggle: () => void }) {
+  return (
+    <aside className="flex min-h-0 flex-col items-center border-r border-r-(--border) bg-(--sidebar) py-2 px-1">
+      <div
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        className="h-3 w-full shrink-0"
+      />
+      <button
+        type="button"
+        onClick={toggle}
+        className="mb-2 rounded-lg p-2 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
+        title="Показать сайдбар (⌘/)"
+      >
+        <PanelLeftOpen size={18} />
+      </button>
+      <SideBarButton icon={Inbox} to="/" />
+      <SideBarButton icon={Star} to="/today" />
+      <SideBarButton icon={Calendar} to="/upcoming" />
+      <SideBarButton icon={Book} to="/logbook" />
+      <SideBarButton icon={Archive} to="/trash" />
+      <div className="flex-1" />
+      <SideBarButton icon={Settings} to="/settings" />
+    </aside>
+  );
+}
+
+export default function SideBar() {
+  return (
+    <ResizableSidebar
+      defaultWidth={200}
+      minWidth={160}
+      maxWidth={320}
+      collapseThreshold={60}
+      toggleShortcut="meta+/"
+      initialConfig={loadConfig()}
+      onConfigChange={saveConfig}
+      collapsedContent={(toggle) => <SidebarCollapsedContent toggle={toggle} />}
+    >
+      {(toggle) => <SidebarExpandedContent toggle={toggle} />}
+    </ResizableSidebar>
   );
 }

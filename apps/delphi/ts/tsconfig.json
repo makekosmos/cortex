@@ -24,8 +24,11 @@
     /* Alias */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@kosmos/ui-sidebar": ["../../../packages/ui/sidebar/index.ts"],
+      "react": ["./node_modules/@types/react"],
+      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../../packages/ui/sidebar"]
 }

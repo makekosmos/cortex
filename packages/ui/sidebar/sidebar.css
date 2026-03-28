@@ -1,0 +1,65 @@
+.kosmos-sidebar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.kosmos-sidebar-wrapper.animating {
+  transition: width 0.2s linear;
+}
+
+.kosmos-sidebar-wrapper.collapsed {
+  width: 0 !important;
+}
+
+.kosmos-sidebar-content {
+  height: 100%;
+  opacity: 1;
+  transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kosmos-sidebar-wrapper.collapsed .kosmos-sidebar-content {
+  opacity: 0;
+}
+
+.kosmos-sidebar-collapsed-content {
+  height: 100%;
+}
+
+.kosmos-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.kosmos-sidebar-wrapper:hover .kosmos-sidebar-resize-handle,
+.kosmos-sidebar-wrapper.is-resizing .kosmos-sidebar-resize-handle {
+  opacity: 1;
+}
+
+.kosmos-resize-handle-line {
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.kosmos-sidebar-resize-handle:hover .kosmos-resize-handle-line {
+  opacity: 1;
+}
+
+body.sidebar-resizing {
+  user-select: none;
+  cursor: col-resize;
+}
