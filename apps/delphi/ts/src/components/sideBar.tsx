@@ -13,7 +13,8 @@ import { Link, useLocation } from "react-router-dom";
 import SideBarButton from "@/components/SideBarButton";
 import useTodoStore from "@/store/todos";
 import { ProjectStatus } from "@/types/task";
-import { ResizableSidebar, type SidebarConfig } from "@kosmos/ui-sidebar";
+import { ResizableSidebar, type SidebarConfig } from "@kosmos/ui";
+import "@kosmos/ui/components/sidebar.css";
 
 const STORAGE_KEY = "delphi-sidebar-config";
 

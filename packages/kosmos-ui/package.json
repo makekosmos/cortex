@@ -1,0 +1,15 @@
+{
+  "name": "@kosmos/ui",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./tokens": "./tokens/index.ts",
+    "./theme": "./theme/index.ts",
+    "./components": "./components/index.ts",
+    "./theme/css": "./theme/css-variables.css",
+    "./components/sidebar.css": "./components/sidebar.css"
+  }
+}

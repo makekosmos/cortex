@@ -25,10 +25,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@kosmos/ui-sidebar": ["../../../packages/ui/sidebar/index.ts"],
+      "@kosmos/ui": ["../../../packages/kosmos-ui/index.ts"],
+      "@kosmos/ui/*": ["../../../packages/kosmos-ui/*"],
       "react": ["./node_modules/@types/react"],
       "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"]
     }
   },
-  "include": ["src", "../../../packages/ui/sidebar"]
+  "include": ["src", "../../../packages/kosmos-ui"]
 }

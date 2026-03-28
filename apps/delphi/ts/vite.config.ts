@@ -27,7 +27,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@kosmos/ui-sidebar': path.resolve(__dirname, '../../../packages/ui/sidebar'),
+      '@kosmos/ui': path.resolve(__dirname, '../../../packages/kosmos-ui'),
       'react': path.resolve(__dirname, './node_modules/react'),
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
       'react/jsx-runtime': path.resolve(__dirname, './node_modules/react/jsx-runtime'),
