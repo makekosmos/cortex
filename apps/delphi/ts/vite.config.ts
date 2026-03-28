@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
   plugins: [
     react(),
-    checker({ typescript: true }),
+    checker({ typescript: { tsconfigPath: './tsconfig.json' } }),
     tailwindcss(),
     electron({
       main: {
