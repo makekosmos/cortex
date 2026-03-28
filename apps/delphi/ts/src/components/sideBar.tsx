@@ -145,9 +145,9 @@ export default function SideBar() {
       toggleShortcut="meta+/"
       initialConfig={loadConfig()}
       onConfigChange={saveConfig}
-      collapsedContent={(toggle) => <SidebarCollapsedContent toggle={toggle} />}
+      collapsedContent={(toggle: () => void) => <SidebarCollapsedContent toggle={toggle} />}
     >
-      {(toggle) => <SidebarExpandedContent toggle={toggle} />}
+      {(toggle: () => void) => <SidebarExpandedContent toggle={toggle} />}
     </ResizableSidebar>
   );
 }
