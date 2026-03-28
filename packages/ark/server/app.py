@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from core.ark import Ark, sanitize_fts_query
 from server.discovery import ArkServiceBroadcaster, ArkServiceDiscoverer
-from server.pairing import claim_pairing, create_pairing, generate_device_id
+from server.pairing import claim_pairing, create_pairing, generate_device_id, parse_connection_string
 
 logger = logging.getLogger(__name__)
 
@@ -804,11 +804,7 @@ def pairing_create() -> dict[str, Any]:
     """Generate a new pairing code + QR for device onboarding."""
     if not API_KEY:
         raise HTTPException(status_code=500, detail="LIFE_API_KEY not configured")
-    # Determine the server URL visible to clients.
-    from server.discovery import _get_local_ip
-
-    local_ip = _get_local_ip()
-    server_url = f"http://{local_ip}:{ARK_PORT}"
+    server_url = f"http://localhost:{ARK_PORT}"
     result = create_pairing(server_url, API_KEY, ARK_DEVICE_NAME)
     return result
 
@@ -842,27 +838,25 @@ def pairing_claim(body: PairingClaimIn) -> dict[str, Any]:
 @app.get("/pairing/qr")
 def pairing_qr() -> HTMLResponse:
     """
-    Return an HTML page with a freshly generated QR code for scanning.
+    Return an HTML page with QR code and connection string for instant pairing.
 
     No auth required — opening this URL from the server machine is enough.
-    The page auto-generates a pairing code that expires in 5 minutes.
+    The connection string contains everything: server address + API key.
     """
     if not API_KEY:
         raise HTTPException(status_code=500, detail="LIFE_API_KEY not configured")
 
-    from server.discovery import _get_local_ip
-
-    local_ip = _get_local_ip()
-    server_url = f"http://{local_ip}:{ARK_PORT}"
+    server_url = f"http://localhost:{ARK_PORT}"
     result = create_pairing(server_url, API_KEY, ARK_DEVICE_NAME)
+    conn = result["connection_string"]
 
     html = f"""\
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ark — Device Pairing</title>
+  <title>Ark — Подключение</title>
   <style>
     body {{
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -874,22 +868,30 @@ def pairing_qr() -> HTMLResponse:
       text-align: center; padding: 2rem;
       background: #1a1a1a; border-radius: 16px;
       box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-      max-width: 400px;
+      max-width: 420px;
     }}
     h1 {{ font-size: 1.4rem; margin-bottom: 0.25rem; }}
-    .code {{ font-size: 2rem; font-family: monospace; letter-spacing: 0.1em;
-             color: #60a5fa; margin: 1rem 0; }}
-    img {{ max-width: 280px; border-radius: 8px; }}
+    .conn {{
+      font-size: 0.95rem; font-family: monospace;
+      color: #60a5fa; margin: 1rem 0; padding: 0.75rem;
+      background: #111; border-radius: 8px;
+      word-break: break-all; cursor: pointer;
+      border: 1px solid #333; transition: border-color 0.2s;
+    }}
+    .conn:hover {{ border-color: #60a5fa; }}
+    .copied {{ color: #34d399; font-size: 0.8rem; margin-top: 0.25rem; }}
+    img {{ max-width: 280px; border-radius: 8px; margin-top: 1rem; }}
     .hint {{ color: #888; font-size: 0.85rem; margin-top: 1rem; }}
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Ark Pairing</h1>
-    <p>Scan with Elysium / Delphi or enter the code manually</p>
-    <div class="code">{result["code"]}</div>
+    <h1>Ark</h1>
+    <p>Отсканируй QR или скопируй код подключения</p>
+    <div class="conn" onclick="navigator.clipboard.writeText(this.textContent.trim()).then(()=>{{document.getElementById('cp').style.display='block';setTimeout(()=>document.getElementById('cp').style.display='none',2000)}})">{conn}</div>
+    <div id="cp" class="copied" style="display:none">Скопировано!</div>
     <img src="{result["qr_data_url"]}" alt="QR code">
-    <p class="hint">Expires in {result["expires_in"] // 60} minutes</p>
+    <p class="hint">Вставь код в Delphi / Elysium — и готово</p>
   </div>
 </body>
 </html>"""

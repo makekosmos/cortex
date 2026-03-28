@@ -44,6 +44,50 @@ def generate_pairing_code() -> str:
     return f"ark-{suffix}"
 
 
+def build_connection_string(server_url: str, api_key: str) -> str:
+    """Build a connection string like ``ark://host:port?key=SECRET``."""
+    # Strip protocol prefix for the ark:// URI
+    host_part = server_url.replace("https://", "").replace("http://", "").rstrip("/")
+    return f"ark://{host_part}?key={api_key}"
+
+
+def parse_connection_string(conn: str) -> Optional[dict[str, str]]:
+    """
+    Parse a connection string into server_url and api_key.
+
+    Accepts formats:
+      - ``ark://host:port?key=SECRET``
+      - ``ark://host?key=SECRET``
+
+    Returns dict with ``server_url`` and ``api_key``, or None if invalid.
+    """
+    conn = conn.strip()
+    if not conn.startswith("ark://"):
+        return None
+
+    rest = conn[len("ark://"):]
+    if "?key=" not in rest:
+        return None
+
+    host_part, _, key = rest.partition("?key=")
+    if not host_part or not key:
+        return None
+
+    server_url = f"http://{host_part}"
+    return {"server_url": server_url, "api_key": key}
+
+
+def generate_qr_data_url(data: str) -> str:
+    """Render *data* string as a QR-code PNG and return a ``data:`` URL."""
+    import qrcode  # type: ignore[import-untyped]
+
+    img = qrcode.make(data)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/png;base64,{b64}"
+
+
 def generate_pairing_payload(
     server_url: str,
     api_key: str,
@@ -60,27 +104,17 @@ def generate_pairing_payload(
     }
 
 
-def generate_qr_data_url(payload: dict[str, Any]) -> str:
-    """Render *payload* as a QR-code PNG and return a ``data:`` URL."""
-    import json
-    import qrcode  # type: ignore[import-untyped]
-
-    img = qrcode.make(json.dumps(payload, ensure_ascii=False))
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    return f"data:image/png;base64,{b64}"
-
-
 def create_pairing(server_url: str, api_key: str, device_name: str) -> dict[str, Any]:
     """
-    Generate a new pairing code, store it, and return the public response.
+    Generate a connection string + QR for instant device onboarding.
 
-    Returns dict with keys: code, qr_data_url, expires_in, payload.
+    Returns dict with keys: connection_string, qr_data_url, code (legacy),
+    expires_in, payload (legacy).
     """
     code = generate_pairing_code()
+    connection_string = build_connection_string(server_url, api_key)
+    qr_data_url = generate_qr_data_url(connection_string)
     payload = generate_pairing_payload(server_url, api_key, device_name, code)
-    qr_data_url = generate_qr_data_url(payload)
 
     with _lock:
         _cleanup_expired()
@@ -90,6 +124,7 @@ def create_pairing(server_url: str, api_key: str, device_name: str) -> dict[str,
         }
 
     return {
+        "connection_string": connection_string,
         "code": code,
         "qr_data_url": qr_data_url,
         "expires_in": _CODE_TTL,

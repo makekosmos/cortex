@@ -4,6 +4,7 @@ import SwiftData
 struct TodoListView: View {
     @Bindable var viewModel: TodoListViewModel
     @Environment(\.modelContext) private var modelContext
+    @Environment(ArkSyncClient.self) private var syncClient
     @Query private var allTodos: [TodoItem]
     @Query(sort: \Tag.title) private var allTags: [Tag]
     @FocusState private var isNewTodoFieldFocused: Bool
@@ -50,8 +51,11 @@ struct TodoListView: View {
                 }
 
                 if cachedTodos.isEmpty && !viewModel.isCreatingNewTodo {
-                    emptyState
-                        .frame(maxHeight: .infinity)
+                    if smartList != nil {
+                        emptyState
+                            .frame(maxHeight: .infinity)
+                    }
+                    Spacer()
                         .contentShape(Rectangle())
                         .onTapGesture { dismissCreation() }
                 } else {
@@ -103,7 +107,7 @@ struct TodoListView: View {
         .onKeyPress(.upArrow) { moveSelection(up: true); return .handled }
         .onKeyPress(.downArrow) { moveSelection(up: false); return .handled }
         .onKeyPress(.delete) { handleDelete() }
-        .modifier(TodoCommandHandlers(viewModel: viewModel, cachedTodos: cachedTodos, modelContext: modelContext))
+        .modifier(TodoCommandHandlers(viewModel: viewModel, cachedTodos: cachedTodos, modelContext: modelContext, syncClient: syncClient))
     }
 
     // MARK: - Cache
@@ -212,6 +216,7 @@ struct TodoListView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     viewModel.toggleCompletion(todo)
                 }
+                syncClient.sendTodoChange(todo, changeType: "update")
                 if !todo.isCompleted { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                     withAnimation(.easeOut(duration: 0.3)) {
@@ -294,6 +299,7 @@ struct TodoListView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     for todo in cachedTodos where viewModel.selectedTodoIDs.contains(todo.id) {
                         viewModel.toggleCompletion(todo)
+                        syncClient.sendTodoChange(todo, changeType: "update")
                     }
                 }
                 viewModel.clearSelection()
@@ -307,6 +313,7 @@ struct TodoListView: View {
                 withAnimation {
                     for todo in cachedTodos where viewModel.selectedTodoIDs.contains(todo.id) {
                         viewModel.moveToTrash(todo)
+                        syncClient.sendTodoChange(todo, changeType: "update")
                     }
                 }
                 viewModel.clearSelection()
@@ -513,17 +520,23 @@ struct TodoListView: View {
     private func todoContextMenu(for todo: TodoItem) -> some View {
         Button(todo.isToday ? "Убрать из Сегодня" : "На сегодня  ⌘T") {
             viewModel.toggleToday(todo)
+            syncClient.sendTodoChange(todo, changeType: "update")
         }
         Button(todo.isEvening ? "Убрать из Вечера" : "Этим вечером  ⌘E") {
             viewModel.toggleEvening(todo)
+            syncClient.sendTodoChange(todo, changeType: "update")
         }
         Divider()
-        Button("Когда-нибудь  ⌘O") { viewModel.setSomeday(todo) }
+        Button("Когда-нибудь  ⌘O") {
+            viewModel.setSomeday(todo)
+            syncClient.sendTodoChange(todo, changeType: "update")
+        }
         Divider()
         Menu("Приоритет") {
             ForEach(Priority.allCases) { priority in
                 Button {
                     todo.priority = priority
+                    syncClient.sendTodoChange(todo, changeType: "update")
                 } label: {
                     if todo.priority == priority {
                         Label(priority.label, systemImage: "checkmark")
@@ -538,10 +551,12 @@ struct TodoListView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 viewModel.toggleCompletion(todo)
             }
+            syncClient.sendTodoChange(todo, changeType: "update")
         }
         Button("Дублировать  ⌘D") {
             let copy = todo.duplicate()
             modelContext.insert(copy)
+            syncClient.sendTodoChange(copy, changeType: "create")
         }
         Button("Переместить…  ⇧⌘M") {
             viewModel.selectTodo(todo)
@@ -549,13 +564,18 @@ struct TodoListView: View {
         }
         Divider()
         if todo.isTrashed {
-            Button("Восстановить") { todo.restore() }
+            Button("Восстановить") {
+                todo.restore()
+                syncClient.sendTodoChange(todo, changeType: "update")
+            }
             Button("Удалить навсегда  ⌘⌫", role: .destructive) {
+                syncClient.sendTodoChange(todo, changeType: "delete")
                 modelContext.delete(todo)
             }
         } else {
             Button("В корзину  ⌘⌫", role: .destructive) {
                 viewModel.moveToTrash(todo)
+                syncClient.sendTodoChange(todo, changeType: "update")
             }
         }
     }
@@ -694,6 +714,7 @@ struct TodoListView: View {
         if smartList == .today { todo.isToday = true }
         else if smartList == .someday { todo.isSomeday = true }
         modelContext.insert(todo)
+        syncClient.sendTodoChange(todo, changeType: "create")
         viewModel.newTodoTitle = ""
         viewModel.isCreatingNewTodo = false
     }
@@ -705,26 +726,28 @@ private struct TodoCommandHandlers: ViewModifier {
     let viewModel: TodoListViewModel
     let cachedTodos: [TodoItem]
     let modelContext: ModelContext
+    let syncClient: ArkSyncClient
 
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: .setToday)) { _ in
-                apply { viewModel.toggleToday($0) }
+                apply { viewModel.toggleToday($0); syncClient.sendTodoChange($0, changeType: "update") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .setEvening)) { _ in
-                apply { viewModel.toggleEvening($0) }
+                apply { viewModel.toggleEvening($0); syncClient.sendTodoChange($0, changeType: "update") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .setSomeday)) { _ in
-                apply { viewModel.setSomeday($0) }
+                apply { viewModel.setSomeday($0); syncClient.sendTodoChange($0, changeType: "update") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .setAnytime)) { _ in
-                apply { viewModel.setAnytime($0) }
+                apply { viewModel.setAnytime($0); syncClient.sendTodoChange($0, changeType: "update") }
             }
             .onReceive(NotificationCenter.default.publisher(for: .completeTodo)) { _ in
                 apply { todo in
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         viewModel.toggleCompletion(todo)
                     }
+                    syncClient.sendTodoChange(todo, changeType: "update")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .cancelTodo)) { _ in
@@ -732,12 +755,14 @@ private struct TodoCommandHandlers: ViewModifier {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         viewModel.cancelTodo(todo)
                     }
+                    syncClient.sendTodoChange(todo, changeType: "update")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .duplicateTodo)) { _ in
                 apply { todo in
                     let copy = todo.duplicate()
                     modelContext.insert(copy)
+                    syncClient.sendTodoChange(copy, changeType: "create")
                 }
             }
     }

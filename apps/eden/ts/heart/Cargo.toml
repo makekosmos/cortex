@@ -1,0 +1,18 @@
+[package]
+name = "eden-heart"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tantivy = "0.22"
+tantivy-stemmers = { version = "0.4.0", features = ["russian"] }
+walkdir = "2.5"
+
+[profile.dev]
+opt-level = 0
+
+[profile.dev.package."*"]
+opt-level = 2

@@ -93,6 +93,7 @@ type TodoStore = {
   addProject: (params: CreateProjectParams) => Project;
   updateProject: (id: string, patch: Partial<Project>) => void;
   removeProject: (id: string) => void;
+  upsertProject: (project: Project) => void;
 
   // Area CRUD
   addArea: (title: string) => Area;
@@ -300,6 +301,16 @@ const useTodoStore = create<TodoStore>((set, get) => ({
         t.projectId === id ? { ...t, projectId: null } : t,
       ),
     })),
+
+  upsertProject: (project) =>
+    set((s) => {
+      const exists = s.projects.some((p) => p.id === project.id);
+      return {
+        projects: exists
+          ? s.projects.map((p) => (p.id === project.id ? project : p))
+          : [project, ...s.projects],
+      };
+    }),
 
   // ----- Area CRUD -----
 

@@ -4,12 +4,9 @@ struct SyncSettingsView: View {
     @Bindable var settings: SyncSettings
     var syncClient: ArkSyncClient
 
-    @State private var discovery = ArkDiscovery()
-    @State private var pairingCode = ""
-    @State private var serverUrlInput = ""
-    @State private var isPairing = false
-    @State private var pairingError: String?
-    @State private var pairingSuccess = false
+    @State private var connectionCode = ""
+    @State private var connectionError: String?
+    @State private var connectionSuccess = false
 
     var body: some View {
         Form {
@@ -29,22 +26,6 @@ struct SyncSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(minWidth: 400)
-        .onAppear {
-            serverUrlInput = settings.serverUrl
-            discovery.startSearching()
-            Task {
-                if let url = await discovery.checkLocalhost() {
-                    if serverUrlInput.isEmpty {
-                        serverUrlInput = url
-                    }
-                }
-            }
-        }
-        .onChange(of: discovery.discoveredUrl) {
-            if let url = discovery.discoveredUrl, serverUrlInput.isEmpty {
-                serverUrlInput = url
-            }
-        }
     }
 
     // MARK: - Pairing (not yet paired)
@@ -55,67 +36,33 @@ struct SyncSettingsView: View {
                 Text("Подключение к Ark")
                     .font(.headline)
 
-                Text("Запустите `ark pair` на сервере, затем введите полученный код.")
+                Text("Вставьте строку подключения, полученную от Ark сервера.")
                     .foregroundStyle(.secondary)
                     .font(.callout)
 
                 HStack {
-                    TextField("URL сервера", text: $serverUrlInput)
-                        .textFieldStyle(.roundedBorder)
-
-                    if discovery.isSearching {
-                        ProgressView()
-                            .controlSize(.small)
-                            .help("Поиск Ark в локальной сети...")
-                    } else if discovery.discoveredUrl != nil {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .help("Обнаружен в локальной сети")
-                    }
-
-                    Button {
-                        discovery.startSearching()
-                        Task {
-                            if let url = await discovery.checkLocalhost() {
-                                serverUrlInput = url
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Искать Ark в локальной сети")
-                }
-
-                HStack {
-                    TextField("Код сопряжения", text: $pairingCode, prompt: Text("ark-XXXX"))
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .onSubmit { startPairing() }
+                    TextField(
+                        "Код подключения",
+                        text: $connectionCode,
+                        prompt: Text("ark://192.168.1.5:8000?key=...")
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { connect() }
 
                     Button("Подключить") {
-                        startPairing()
+                        connect()
                     }
-                    .disabled(!canPair)
+                    .disabled(connectionCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .buttonStyle(.borderedProminent)
                 }
 
-                if isPairing {
-                    HStack {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Сопряжение...")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if let error = pairingError {
+                if let error = connectionError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
                         .font(.callout)
                 }
 
-                if pairingSuccess {
+                if connectionSuccess {
                     Label("Подключено!", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.callout)
@@ -228,51 +175,44 @@ struct SyncSettingsView: View {
 
     // MARK: - Helpers
 
-    private var canPair: Bool {
-        !serverUrlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        && !pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        && !isPairing
-    }
-
     private var maskedApiKey: String {
         let key = settings.apiKey
         if key.count <= 8 { return String(repeating: "*", count: key.count) }
         return String(key.prefix(4)) + "..." + String(key.suffix(4))
     }
 
-    private func startPairing() {
-        guard canPair else { return }
+    /// Parse ark://host:port?key=SECRET → (serverUrl, apiKey)
+    private func parseConnectionString(_ input: String) -> (serverUrl: String, apiKey: String)? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("ark://") else { return nil }
 
-        isPairing = true
-        pairingError = nil
-        pairingSuccess = false
+        let rest = String(trimmed.dropFirst("ark://".count))
+        guard let keyRange = rest.range(of: "?key=") else { return nil }
 
-        let url = serverUrlInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        let deviceName = Host.current().localizedName ?? "Mac"
+        let hostPart = String(rest[rest.startIndex..<keyRange.lowerBound])
+        let apiKey = String(rest[keyRange.upperBound...])
 
-        Task {
-            do {
-                let result = try await ArkPairing.claim(
-                    serverUrl: url,
-                    code: code,
-                    deviceName: deviceName
-                )
+        guard !hostPart.isEmpty, !apiKey.isEmpty else { return nil }
 
-                settings.serverUrl = url
-                settings.apiKey = result.apiKey
-                pairingSuccess = true
-                pairingCode = ""
+        return (serverUrl: "http://\(hostPart)", apiKey: apiKey)
+    }
 
-                // Auto-connect after successful pairing
-                settings.isAutoSyncEnabled = true
-                syncClient.connect()
-            } catch {
-                pairingError = error.localizedDescription
-            }
+    private func connect() {
+        connectionError = nil
+        connectionSuccess = false
 
-            isPairing = false
+        guard let parsed = parseConnectionString(connectionCode) else {
+            connectionError = "Неверный формат. Ожидается: ark://host:port?key=..."
+            return
         }
+
+        settings.serverUrl = parsed.serverUrl
+        settings.apiKey = parsed.apiKey
+        settings.isAutoSyncEnabled = true
+        connectionSuccess = true
+        connectionCode = ""
+
+        syncClient.connect()
     }
 
     private func unpair() {
@@ -280,9 +220,8 @@ struct SyncSettingsView: View {
         settings.serverUrl = ""
         settings.apiKey = ""
         settings.isAutoSyncEnabled = false
-        serverUrlInput = ""
-        pairingCode = ""
-        pairingSuccess = false
-        pairingError = nil
+        connectionCode = ""
+        connectionSuccess = false
+        connectionError = nil
     }
 }

@@ -329,9 +329,12 @@ async def websocket_sync(websocket: WebSocket, key: Optional[str] = None) -> Non
         # Register device & connection
         _register_device(db, device_id, device_name, platform)
         await manager.connect(device_id, websocket, device_name, platform)
+        logger.info("Device connected: %s (%s/%s), vector=%s, total_connections=%d",
+                     device_id, device_name, platform, client_vector, len(manager.connections))
 
         # Send changes the client hasn't seen
         changes = _get_changes_since(db, client_vector)
+        logger.info("Sending %d missed changes to %s", len(changes), device_id)
         await websocket.send_json({"type": "sync_changes", "changes": changes})
 
         # Start heartbeat
@@ -346,8 +349,12 @@ async def websocket_sync(websocket: WebSocket, key: Optional[str] = None) -> Non
             if msg_type == "sync_changes":
                 # Client sends batch of changes it has that server doesn't
                 incoming_changes: list[dict[str, Any]] = msg.get("changes", [])
+                logger.info("Received %d sync_changes from %s", len(incoming_changes), device_id)
                 for ch in incoming_changes:
                     seq = _apply_change(db, ch, device_id)
+                    logger.info("Applied change %s/%s from %s, seq=%d, broadcasting to %d peers",
+                                ch.get("event_id"), ch.get("change_type"), device_id, seq,
+                                len(manager.connections) - 1)
                     # Broadcast to other connected clients
                     await manager.broadcast(
                         {
@@ -369,6 +376,9 @@ async def websocket_sync(websocket: WebSocket, key: Optional[str] = None) -> Non
             elif msg_type == "change":
                 # Single realtime change
                 seq = _apply_change(db, msg, device_id)
+                logger.info("Realtime change %s/%s from %s, seq=%d, broadcasting to %d peers",
+                            msg.get("event_id"), msg.get("change_type"), device_id, seq,
+                            len(manager.connections) - 1)
                 await manager.broadcast(
                     {
                         "type": "change",

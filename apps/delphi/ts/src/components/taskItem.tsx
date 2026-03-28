@@ -7,7 +7,7 @@ export default function TaskItem({
   onToggle,
 }: {
   task: Task;
-  onToggle: (t: Task) => Promise<void>;
+  onToggle: (t: Task) => void;
 }) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isMutatedTask, setIsMutatedTask] = useState<Task>({ ...task });

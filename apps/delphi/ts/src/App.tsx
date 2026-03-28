@@ -6,55 +6,42 @@ import QuickOpen from '@/components/QuickOpen';
 import SideBar from '@/components/sideBar';
 import AppRoutes from '@/routes';
 import {
-  api,
-  ApiError,
-  clearSavedPassphrase,
-  clearToken,
-  connectTasksWebSocket,
-  getReadableError,
-  getSavedPassphrase,
-  getToken,
-  loginWithPassphrase,
-  normalizeApiUrl,
-  normalizePassphrase,
-  setApiUrl,
-} from '@/services/api/client';
-import { fromTaskDto } from '@/services/api/tasks';
-import {
   loadTasksFromWebStorage,
   saveTasksToWebStorage,
 } from '@/services/storage/tasks.web';
-import { arkSync, getArkApiKey, getArkUrl } from '@/services/sync/ark-client';
+import {
+  arkChangeToTask,
+  arkChangeToProject,
+  arkChangeEventType,
+  arkSync,
+  getArkApiKey,
+  getArkUrl,
+  setArkApiKey,
+  setArkUrl,
+  fetchTasksFromArk,
+  fetchProjectsFromArk,
+} from '@/services/sync/ark-client';
+import { parseConnectionString } from '@/services/sync/pairing';
 import useTask from '@/store/tasks';
+import useTodoStore from '@/store/todos';
 
-type TaskSocketEvent = { type: string; payload?: unknown };
 type ConnectionState = 'online' | 'syncing' | 'offline';
 
-function isTaskPayload(value: unknown): value is Parameters<typeof fromTaskDto>[0] {
-  if (!value || typeof value !== 'object') return false;
-  const payload = value as Record<string, unknown>;
-  return (
-    typeof payload.id === 'string' &&
-    typeof payload.title === 'string' &&
-    typeof payload.completed === 'boolean' &&
-    typeof payload.created_at === 'string'
-  );
-}
-
-function ConnectionBadge({ state }: { state: ConnectionState }) {
-  const label =
-    state === 'online' ? 'Synced' : state === 'syncing' ? 'Syncing...' : 'Offline';
+function ConnectionDot({ state }: { state: ConnectionState }) {
   const color =
     state === 'online'
-      ? 'bg-emerald-600/85'
+      ? 'bg-emerald-500'
       : state === 'syncing'
-        ? 'bg-amber-600/85'
-        : 'bg-rose-700/85';
+        ? 'bg-amber-500 animate-pulse'
+        : 'bg-rose-500';
+  const title =
+    state === 'online' ? 'Подключено' : state === 'syncing' ? 'Подключение...' : 'Нет связи';
 
   return (
-    <div className={`fixed top-3 right-3 z-40 rounded-md px-2 py-1 text-xs text-white ${color}`}>
-      {label}
-    </div>
+    <div
+      className={`fixed top-4 right-4 z-40 h-2.5 w-2.5 rounded-full ${color}`}
+      title={title}
+    />
   );
 }
 
@@ -65,7 +52,9 @@ function App() {
   const hydrated = useTask((s) => s.hydrated);
   const upsertTask = useTask((s) => s.upsertTask);
   const removeTaskById = useTask((s) => s.removeTaskById);
-
+  const setProjects = useTodoStore((s) => s.setProjects);
+  const upsertProject = useTodoStore((s) => s.upsertProject);
+  const removeProject = useTodoStore((s) => s.removeProject);
   const [authRequired, setAuthRequired] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -73,136 +62,81 @@ function App() {
   const [connectionState, setConnectionState] = useState<ConnectionState>('syncing');
 
   useEffect(() => {
-    let mounted = true;
+    const cached = loadTasksFromWebStorage();
+    if (cached.length > 0) {
+      setTasks(cached);
+    }
 
-    (async () => {
-      const cached = loadTasksFromWebStorage();
-      if (cached.length > 0 && mounted) {
-        setTasks(cached);
+    // Subscribe to sync changes BEFORE connecting so we don't miss initial sync_changes
+    const unsubStatus = arkSync.onStatus((connected) => {
+      setConnectionState(connected ? (arkSync.isSynced ? 'online' : 'syncing') : 'offline');
+    });
+
+    const unsubChange = arkSync.onChange((change) => {
+      const eventType = arkChangeEventType(change);
+
+      if (eventType === 'project') {
+        if (change.change_type === 'delete') {
+          removeProject(change.event_id);
+          return;
+        }
+        const project = arkChangeToProject(change);
+        if (project) upsertProject(project);
+        return;
       }
 
-      try {
-        if (!getToken()) {
-          const savedPassphrase = getSavedPassphrase();
-          if (!savedPassphrase) {
-            if (mounted) {
-              setAuthRequired(true);
-              setConnectionState('offline');
-            }
-            return;
-          }
-          await loginWithPassphrase(savedPassphrase);
-        }
-
-        const fetched = await api.getTasks();
-        if (!mounted) return;
-        setTasks(fetched.map(fromTaskDto));
-        setAuthRequired(false);
-        setAuthError(null);
-        setConnectionState('syncing');
-      } catch (error) {
-        if (!mounted) return;
-
-        if (error instanceof ApiError && error.status === 401) {
-          clearToken();
-          clearSavedPassphrase();
-        }
-
-        setAuthRequired(true);
-        setAuthError(getReadableError(error));
-        setConnectionState('offline');
-      } finally {
-        if (mounted) {
-          setHydrated(true);
-        }
+      // Default: handle as task
+      if (change.change_type === 'delete') {
+        removeTaskById(change.event_id);
+        return;
       }
-    })();
+      const task = arkChangeToTask(change);
+      if (task) upsertTask(task);
+    });
+
+    const url = getArkUrl();
+    const key = getArkApiKey();
+
+    if (!url || !key) {
+      setAuthRequired(true);
+      setConnectionState('offline');
+      setHydrated(true);
+      return () => { unsubStatus(); unsubChange(); };
+    }
+
+    // Load tasks and projects from Ark HTTP API (source of truth in Electron where localStorage is disabled)
+    fetchTasksFromArk().then((tasks) => {
+      if (tasks.length > 0) setTasks(tasks);
+    });
+    fetchProjectsFromArk().then((projects) => {
+      if (projects.length > 0) setProjects(projects);
+    });
+
+    // Connect WebSocket for realtime sync
+    if (!arkSync.isConnected) {
+      arkSync.connect(url, key);
+    }
+    setAuthRequired(false);
+    setAuthError(null);
+    setConnectionState('syncing');
+    setHydrated(true);
 
     return () => {
-      mounted = false;
+      unsubStatus();
+      unsubChange();
     };
-  }, [bootstrapNonce, setHydrated, setTasks]);
-
-  useEffect(() => {
-    if (!hydrated || authRequired || !getToken()) return;
-
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let stopped = false;
-
-    const handleEvent = (raw: unknown) => {
-      const event = raw as TaskSocketEvent;
-      if (
-        (event.type === 'task.created' || event.type === 'task.updated') &&
-        isTaskPayload(event.payload)
-      ) {
-        upsertTask(fromTaskDto(event.payload));
-      }
-      if (
-        event.type === 'task.deleted' &&
-        event.payload &&
-        typeof event.payload === 'object' &&
-        'id' in event.payload &&
-        typeof event.payload.id === 'string'
-      ) {
-        removeTaskById(event.payload.id);
-      }
-    };
-
-    const connect = () => {
-      if (stopped) return;
-      setConnectionState('syncing');
-
-      socket = connectTasksWebSocket(
-        handleEvent,
-        () => {
-          if (stopped) return;
-          setConnectionState('offline');
-          reconnectTimer = setTimeout(connect, 2000);
-        },
-        () => {
-          setConnectionState('online');
-        },
-      );
-
-      if (!socket) {
-        setConnectionState('offline');
-      }
-    };
-
-    connect();
-
-    return () => {
-      stopped = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      socket?.close();
-    };
-  }, [authRequired, hydrated, removeTaskById, upsertTask]);
+  }, [bootstrapNonce, setHydrated, setTasks, upsertTask, removeTaskById, setProjects, upsertProject, removeProject]);
 
   useEffect(() => {
     if (!hydrated) return;
     saveTasksToWebStorage(tasks);
   }, [hydrated, tasks]);
 
-  // Auto-connect to Ark on startup if paired
-  useEffect(() => {
-    const url = getArkUrl();
-    const key = getArkApiKey();
-    if (url && key && !arkSync.isConnected) {
-      arkSync.connect(url, key);
-    }
-  }, []);
+  const handleAuthSubmit = async (connectionCode: string) => {
+    const parsed = parseConnectionString(connectionCode);
 
-  const handleAuthSubmit = async (input: { apiUrl: string; passphrase: string }) => {
-    const apiUrl = normalizeApiUrl(input.apiUrl);
-    const passphrase = normalizePassphrase(input.passphrase);
-
-    if (!apiUrl) {
-      setAuthError('API URL is required.');
-      return;
-    }
-    if (!passphrase) {
-      setAuthError('Passphrase is required.');
+    if (!parsed) {
+      setAuthError('Неверный формат. Ожидается: ark://host:port?key=...');
       return;
     }
 
@@ -211,13 +145,13 @@ function App() {
     setConnectionState('syncing');
 
     try {
-      setApiUrl(apiUrl);
-      clearToken();
-      await loginWithPassphrase(passphrase);
+      setArkUrl(parsed.server_url);
+      setArkApiKey(parsed.api_key);
+      arkSync.connect(parsed.server_url, parsed.api_key);
       setAuthRequired(false);
       setBootstrapNonce((value) => value + 1);
     } catch (error) {
-      setAuthError(getReadableError(error));
+      setAuthError(error instanceof Error ? error.message : 'Ошибка подключения');
       setConnectionState('offline');
     } finally {
       setAuthBusy(false);
@@ -226,7 +160,7 @@ function App() {
 
   return (
     <>
-      <ConnectionBadge state={connectionState} />
+      <ConnectionDot state={connectionState} />
       <main className="flex min-h-0 min-w-0 flex-1">
         <SideBar />
         <AppRoutes />

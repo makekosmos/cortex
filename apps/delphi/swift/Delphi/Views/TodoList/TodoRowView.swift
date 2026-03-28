@@ -12,6 +12,7 @@ struct TodoRowView: View {
     var onStopEditing: (() -> Void)?
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(ArkSyncClient.self) private var syncClient
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \Tag.title) private var allTags: [Tag]
 
@@ -66,8 +67,8 @@ struct TodoRowView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 14))
                         .focused($isTitleFocused)
-                        .onSubmit { onStopEditing?() }
-                        .onExitCommand { onStopEditing?() }
+                        .onSubmit { syncClient.sendTodoChange(todo, changeType: "update"); onStopEditing?() }
+                        .onExitCommand { syncClient.sendTodoChange(todo, changeType: "update"); onStopEditing?() }
                 } else {
                     Text(todo.title)
                         .font(.system(size: 14))
@@ -143,6 +144,9 @@ struct TodoRowView: View {
             metadataPills
         }
         .padding(.top, 4)
+        .onDisappear {
+            syncClient.sendTodoChange(todo, changeType: "update")
+        }
     }
 
     // MARK: - Checklist
@@ -206,6 +210,7 @@ struct TodoRowView: View {
             Button {
                 todo.isToday.toggle()
                 if todo.isToday { todo.isSomeday = false }
+                syncClient.sendTodoChange(todo, changeType: "update")
             } label: {
                 Label("Сегодня", systemImage: "star.fill")
                     .font(.system(size: 11))
@@ -221,7 +226,7 @@ struct TodoRowView: View {
             // Tags
             Menu {
                 ForEach(allTags.filter { tag in !todo.tags.contains { $0.id == tag.id } }) { tag in
-                    Button(tag.title) { todo.tags.append(tag) }
+                    Button(tag.title) { todo.tags.append(tag); syncClient.sendTodoChange(todo, changeType: "update") }
                 }
             } label: {
                 Label(todo.tags.isEmpty ? "Теги" : todo.tags.map(\.title).joined(separator: ", "), systemImage: "tag")
@@ -232,10 +237,10 @@ struct TodoRowView: View {
 
             // Project
             Menu {
-                Button("Без проекта") { todo.project = nil }
+                Button("Без проекта") { todo.project = nil; syncClient.sendTodoChange(todo, changeType: "update") }
                 Divider()
                 ForEach(projects) { p in
-                    Button(p.title) { todo.project = p }
+                    Button(p.title) { todo.project = p; syncClient.sendTodoChange(todo, changeType: "update") }
                 }
             } label: {
                 Label(todo.project?.title ?? "Проект", systemImage: "folder")

@@ -131,8 +131,13 @@ enum ArkEventMapper {
 
     static func arkEventToTodo(_ event: [String: Any], context: ModelContext) -> TodoItem? {
         guard let eventData = event["data"] as? [String: Any],
-              let title = eventData["title"] as? String,
-              let sourceId = event["source_id"] as? String
+              let title = eventData["title"] as? String
+        else { return nil }
+
+        // Swift sends source_id at top level; TS sends it at top level too,
+        // but also puts id inside the inner data dict as fallback.
+        guard let sourceId = event["source_id"] as? String
+                ?? eventData["id"] as? String
         else { return nil }
 
         // Look up existing by source_id
@@ -155,9 +160,11 @@ enum ArkEventMapper {
 
     private static func applyTodoData(_ data: [String: Any], to todo: TodoItem, context: ModelContext) {
         if let title = data["title"] as? String { todo.title = title }
-        if let notes = data["notes"] as? String { todo.notes = notes }
+        // Swift uses "notes", TS uses "description"
+        if let notes = data["notes"] as? String ?? data["description"] as? String { todo.notes = notes }
         if let priority = data["priority"] as? Int, let p = Priority(rawValue: priority) { todo.priority = p }
-        if let v = data["isCompleted"] as? Bool { todo.isCompleted = v }
+        // Swift uses "isCompleted", TS uses "completed"
+        if let v = data["isCompleted"] as? Bool ?? data["completed"] as? Bool { todo.isCompleted = v }
         if let v = data["isCancelled"] as? Bool { todo.isCancelled = v }
         if let v = data["isTrashed"] as? Bool { todo.isTrashed = v }
         if let v = data["isToday"] as? Bool { todo.isToday = v }

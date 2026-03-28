@@ -4,6 +4,7 @@ struct NewProjectSheet: View {
     @Bindable var viewModel: SidebarViewModel
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(ArkSyncClient.self) private var syncClient
 
     var body: some View {
         VStack(spacing: 16) {
@@ -32,6 +33,7 @@ struct NewProjectSheet: View {
         guard !title.isEmpty else { return }
         let project = Project(title: title)
         modelContext.insert(project)
+        syncClient.sendProjectChange(project, changeType: "create")
         viewModel.newProjectTitle = ""
         dismiss()
         viewModel.selectProject(project)

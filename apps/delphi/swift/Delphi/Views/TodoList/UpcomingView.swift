@@ -4,6 +4,7 @@ import SwiftData
 struct UpcomingView: View {
     @Bindable var viewModel: TodoListViewModel
     @Environment(\.modelContext) private var modelContext
+    @Environment(ArkSyncClient.self) private var syncClient
     @Query private var allTodos: [TodoItem]
     @State private var expandedTodoID: UUID?
 
@@ -131,6 +132,7 @@ struct UpcomingView: View {
                                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                                     viewModel.toggleCompletion(todo)
                                                 }
+                                                syncClient.sendTodoChange(todo, changeType: "update")
                                             },
                                             onSelect: {
                                                 viewModel.selectTodo(todo)
@@ -143,8 +145,8 @@ struct UpcomingView: View {
                                         )
                                         .padding(.horizontal, 16)
                                         .contextMenu {
-                                            Button("На сегодня") { viewModel.toggleToday(todo) }
-                                            Button("В корзину", role: .destructive) { viewModel.moveToTrash(todo) }
+                                            Button("На сегодня") { viewModel.toggleToday(todo); syncClient.sendTodoChange(todo, changeType: "update") }
+                                            Button("В корзину", role: .destructive) { viewModel.moveToTrash(todo); syncClient.sendTodoChange(todo, changeType: "update") }
                                         }
                                     }
                                 }

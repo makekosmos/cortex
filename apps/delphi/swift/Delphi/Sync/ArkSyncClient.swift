@@ -273,41 +273,55 @@ final class ArkSyncClient {
 
     private func handleSyncChanges(_ json: [String: Any]) async {
         guard let changes = json["changes"] as? [[String: Any]] else { return }
-        guard !changes.isEmpty else {
-            logger.info("No new changes from server")
-            await flushOutbox()
-            lastSyncAt = Date()
-            return
-        }
 
         isSyncing = true
-        logger.info("Received \(changes.count) changes from server")
 
-        guard let container = modelContainer else {
-            logger.error("No ModelContainer set")
-            isSyncing = false
-            return
-        }
+        // Track which source_ids came from the server so we don't re-push them
+        var remoteSourceIds = Set<String>()
 
-        let context = ModelContext(container)
-        context.autosaveEnabled = false
+        if !changes.isEmpty {
+            logger.info("Received \(changes.count) changes from server")
 
-        for change in changes {
-            applyRemoteChange(change, context: context)
-
-            // Update version vector
-            if let deviceId = change["device_id"] as? String,
-               let seq = change["device_seq"] as? Int {
-                settings.updateVector(deviceId: deviceId, seq: seq)
+            guard let container = modelContainer else {
+                logger.error("No ModelContainer set")
+                isSyncing = false
+                return
             }
+
+            // Use mainContext so SwiftUI @Query views see the changes immediately
+            let context = container.mainContext
+
+            for change in changes {
+                applyRemoteChange(change, context: context)
+
+                // Track source_ids from remote
+                if let data = change["data"] as? [String: Any],
+                   let sourceId = data["source_id"] as? String {
+                    remoteSourceIds.insert(sourceId)
+                }
+                if let eventId = change["event_id"] as? String {
+                    remoteSourceIds.insert(eventId)
+                }
+
+                // Update version vector
+                if let deviceId = change["device_id"] as? String,
+                   let seq = change["device_seq"] as? Int {
+                    settings.updateVector(deviceId: deviceId, seq: seq)
+                }
+            }
+
+            do {
+                try context.save()
+                logger.info("Applied \(changes.count) remote changes")
+            } catch {
+                logger.error("Failed to save remote changes: \(error.localizedDescription)")
+            }
+        } else {
+            logger.info("No new changes from server")
         }
 
-        do {
-            try context.save()
-            logger.info("Applied \(changes.count) remote changes")
-        } catch {
-            logger.error("Failed to save remote changes: \(error.localizedDescription)")
-        }
+        // Push all local tasks that the server doesn't have yet
+        await pushLocalTodos(excludingSourceIds: remoteSourceIds)
 
         isSyncing = false
         lastSyncAt = Date()
@@ -316,13 +330,38 @@ final class ArkSyncClient {
         await flushOutbox()
     }
 
+    // MARK: - Push local todos on first sync
+
+    /// Send all local TodoItems to the server (dedup via source_id).
+    private func pushLocalTodos(excludingSourceIds: Set<String>) async {
+        guard let container = modelContainer else { return }
+
+        let context = container.mainContext
+        let descriptor = FetchDescriptor<TodoItem>()
+        guard let todos = try? context.fetch(descriptor) else { return }
+
+        var pushed = 0
+        for todo in todos where !todo.isTrashed {
+            let idStr = todo.id.uuidString
+            if excludingSourceIds.contains(idStr) { continue }
+
+            let event = ArkEventMapper.todoToArkEvent(todo, changeType: "create")
+            sendChange(event, changeType: "create")
+            pushed += 1
+        }
+
+        if pushed > 0 {
+            logger.info("Pushed \(pushed) local todos to Ark")
+        }
+    }
+
     // MARK: - Handle single incoming change (realtime)
 
     private func handleIncomingChange(_ json: [String: Any]) async {
         guard let container = modelContainer else { return }
 
-        let context = ModelContext(container)
-        context.autosaveEnabled = false
+        // Use mainContext so SwiftUI @Query views see changes immediately
+        let context = container.mainContext
 
         applyRemoteChange(json, context: context)
 
@@ -347,6 +386,8 @@ final class ArkSyncClient {
             ?? (change["data"] as? [String: Any])?["event_type"] as? String
             ?? "task"
 
+        logger.info("Applying remote change: type=\(eventType) changeType=\(changeType) eventId=\(change["event_id"] as? String ?? "?")")
+
         if changeType == "delete" {
             handleRemoteDeletion(change, eventType: eventType, context: context)
             return
@@ -354,7 +395,8 @@ final class ArkSyncClient {
 
         switch eventType {
         case "task":
-            _ = ArkEventMapper.arkEventToTodo(eventData, context: context)
+            let result = ArkEventMapper.arkEventToTodo(eventData, context: context)
+            logger.info("arkEventToTodo result: \(result?.title ?? "nil")")
         case "project":
             _ = ArkEventMapper.arkEventToProject(eventData, context: context)
         case "area":

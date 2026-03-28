@@ -6,6 +6,7 @@ import AppKit
 
 struct QuickEntryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(ArkSyncClient.self) private var syncClient
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \Tag.title) private var allTags: [Tag]
 
@@ -151,6 +152,7 @@ struct QuickEntryView: View {
         )
         for tag in selectedTags { todo.tags.append(tag) }
         modelContext.insert(todo)
+        syncClient.sendTodoChange(todo, changeType: "create")
         onSave()
     }
 }
@@ -161,11 +163,13 @@ struct QuickEntryView: View {
 class QuickEntryPanelController {
     private var panel: NSPanel?
     private var modelContainer: ModelContainer?
+    private var syncClient: ArkSyncClient?
 
     static let shared = QuickEntryPanelController()
 
-    func setup(container: ModelContainer) {
+    func setup(container: ModelContainer, syncClient: ArkSyncClient) {
         self.modelContainer = container
+        self.syncClient = syncClient
     }
 
     func toggle() {
@@ -177,13 +181,14 @@ class QuickEntryPanelController {
     }
 
     func show() {
-        guard let container = modelContainer else { return }
+        guard let container = modelContainer, let syncClient else { return }
 
         let view = QuickEntryView(
             onSave: { [weak self] in self?.dismiss() },
             onDismiss: { [weak self] in self?.dismiss() }
         )
         .modelContainer(container)
+        .environment(syncClient)
 
         let hostingView = NSHostingView(rootView: view)
         hostingView.frame = NSRect(x: 0, y: 0, width: 480, height: 200)

@@ -6,6 +6,7 @@ struct MoveToDialog: View {
     let onDismiss: () -> Void
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(ArkSyncClient.self) private var syncClient
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \Area.sortOrder) private var areas: [Area]
     @Query private var allTodos: [TodoItem]
@@ -135,6 +136,7 @@ struct MoveToDialog: View {
                 todo.project = nil
                 todo.headingID = nil
             }
+            syncClient.sendTodoChange(todo, changeType: "update")
         }
 
         onDismiss()

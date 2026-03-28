@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-text-primary: #e1e1e1;
+  --color-text-secondary: #a3a3a3;
+  --color-text-tertiary: #5c5c5c;
+  --color-text-inversion: #171717;
+  --color-text-primary-inversion: #252525;
+  --color-text-secondary-inversion: #6f6f6f;
+  --color-text-tertiary-inversion: #bfbfbf;
+
+  --color-very-light-grey: #313131;
+  --color-light-grey: #292929;
+  --color-grey: #737373;
+  --color-dark-grey: #414141;
+  --color-orange: #ffb522;
+  --color-light-orange: #5f430a;
+
+  --color-shape-primary: #313131;
+  --color-shape-secondary: #292929;
+  --color-shape-secondary-inversion: #ebebeb;
+  --color-shape-tertiary: #232323;
+  --color-shape-highlight-dark: rgba(255, 255, 255, 0.11);
+  --color-shape-highlight-medium: rgba(255, 255, 255, 0.05);
+  --color-shape-highlight-light: rgba(255, 255, 255, 0.03);
+  --color-shape-highlight-light-solid: #1e1e1e;
+
+  --color-bg-primary: #171717;
+  --color-bg-primary-90: rgba(23, 23, 23, 0.9);
+  --color-bg-primary-inversion: #ffffff;
+
+  --color-control-accent: #d4d4d4;
+  --color-control-active: #737373;
+  --color-control-active-inversion: #b6b6b6;
+  --color-control-inactive: #414141;
+  --color-control-bg: #171717;
+
+  --accent: #e1e1e1;
+  --accent-hover: #ffffff;
+  --accent-muted: rgba(255, 255, 255, 0.12);
+  --accent-strong: rgba(255, 255, 255, 0.18);
+  --danger: #f55522;
+  --danger-muted: rgba(245, 85, 34, 0.14);
+
+  --bg-app: #171717;
+  --bg-sidebar: var(--color-bg-primary);
+  --bg-sidebar-hover: var(--color-shape-highlight-medium);
+  --bg-sidebar-active: rgba(255, 255, 255, 0.08);
+  --bg-editor: var(--color-bg-primary);
+  --bg-elevated: var(--color-bg-primary);
+  --bg-surface: var(--color-shape-highlight-light-solid);
+  --bg-input: var(--color-shape-highlight-light-solid);
+  --bg-input-focus: #1e1e1e;
+
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-tertiary: var(--color-text-tertiary);
+  --text-quaternary: var(--color-control-active);
+
+  --border-subtle: var(--color-shape-secondary);
+  --border-default: var(--color-shape-primary);
+  --border-focus: rgba(255, 255, 255, 0.2);
+  --border-divider: var(--color-shape-secondary);
+  --border-glass: var(--color-shape-secondary);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 18px;
+
+  --blur-sm: blur(4px);
+  --blur-md: blur(8px);
+  --blur-lg: blur(12px);
+  --blur-xl: blur(18px);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.32);
+  --shadow-xl: 0 18px 56px rgba(0, 0, 0, 0.4);
+  --shadow-glass: 0 0 0 1px var(--color-shape-secondary) inset, 0 8px 24px rgba(0, 0, 0, 0.24);
+  --shadow-window: 0 0 0 1px var(--color-shape-secondary) inset, 0 18px 48px rgba(0, 0, 0, 0.3);
+
+  --transition-fast: 120ms cubic-bezier(0.2, 0, 0, 1);
+  --transition-normal: 200ms cubic-bezier(0.2, 0, 0, 1);
+  --transition-slow: 300ms cubic-bezier(0.2, 0, 0, 1);
+  --titlebar-height: 28px;
+  --titlebar-bg: #232323;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.57;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  letter-spacing: -0.12px;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, h4, h5, h6, p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-control-active);
+}

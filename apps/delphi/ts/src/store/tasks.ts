@@ -1,16 +1,15 @@
 import { create } from 'zustand';
-import { api } from '@/services/api/client';
-import { fromTaskDto } from '@/services/api/tasks';
+import { arkSync, taskToArkChange } from '@/services/sync/ark-client';
 import type { Task } from '@/types/task';
 
 type TaskStore = {
   tasks: Task[];
   setTasks: (tasks: Task[]) => void;
-  addTask: (title: string) => Promise<Task>;
-  removeTask: (task: Task) => Promise<void>;
+  addTask: (title: string) => Task;
+  removeTask: (task: Task) => void;
   removeAllTasks: () => void;
-  completeTask: (task: Task) => Promise<void>;
-  editTask: (task: Task) => Promise<void>;
+  completeTask: (task: Task) => void;
+  editTask: (task: Task) => void;
   upsertTask: (task: Task) => void;
   removeTaskById: (id: string) => void;
   hydrated: boolean;
@@ -20,44 +19,57 @@ type TaskStore = {
 const useTask = create<TaskStore>((set) => ({
   tasks: [],
   setTasks: (tasks) => set({ tasks }),
-  addTask: async (title) => {
+  addTask: (title) => {
     const taskTitle = title.trim() || 'New task';
-    const created = await api.createTask(taskTitle);
-    const createdTask = fromTaskDto(created);
-    set((state) => ({
-      tasks: state.tasks.some((item) => item.id === createdTask.id)
-        ? state.tasks.map((item) => (item.id === createdTask.id ? createdTask : item))
-        : [createdTask, ...state.tasks],
-    }));
-    return createdTask;
+    const now = new Date();
+    const task: Task = {
+      id: crypto.randomUUID(),
+      title: taskTitle,
+      description: null,
+      completed: false,
+      priority: 0,
+      due_date: null,
+      list_id: null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    set((state) => ({ tasks: [task, ...state.tasks] }));
+    arkSync.sendChange(taskToArkChange(task, 'create'));
+    return task;
   },
-  removeTask: async (task) => {
-    await api.deleteTask(task.id);
+  removeTask: (task) => {
     set((state) => ({
       tasks: state.tasks.filter((item) => item.id !== task.id),
     }));
+    arkSync.sendChange(taskToArkChange(task, 'delete'));
   },
   removeAllTasks: () => set({ tasks: [] }),
-  completeTask: async (task) => {
-    const updated = await api.updateTask(task.id, {
+  completeTask: (task) => {
+    const updated: Task = {
+      ...task,
       completed: !task.completed,
-    });
+      updated_at: new Date(),
+    };
     set((state) => ({
       tasks: state.tasks.map((item) =>
-        item.id === task.id ? fromTaskDto(updated) : item,
+        item.id === task.id ? updated : item,
       ),
     }));
+    arkSync.sendChange(taskToArkChange(updated, 'update'));
   },
-  editTask: async (task) => {
-    const taskTitle = task.title.trim() || 'New task';
-    const updated = await api.updateTask(task.id, {
-      title: taskTitle,
-    });
+  editTask: (task) => {
+    const updated: Task = {
+      ...task,
+      title: task.title.trim() || 'New task',
+      updated_at: new Date(),
+    };
     set((state) => ({
       tasks: state.tasks.map((item) =>
-        item.id === task.id ? fromTaskDto(updated) : item,
+        item.id === task.id ? updated : item,
       ),
     }));
+    arkSync.sendChange(taskToArkChange(updated, 'update'));
   },
   upsertTask: (task) =>
     set((state) => {

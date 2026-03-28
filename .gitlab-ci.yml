@@ -1,0 +1,325 @@
+# Kosmos Monorepo CI/CD
+# Pipelines: MR (полная проверка), main (deploy), tags (release)
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_TAG
+
+stages:
+  - install
+  - lint
+  - test
+  - build
+  - deploy
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  CARGO_HOME: "$CI_PROJECT_DIR/.cache/cargo"
+
+# ── Reusable fragments ───────────────────────
+
+.rules:delphi-ts:
+  rules:
+    - changes:
+        - apps/delphi/ts/**/*
+        - packages/ark/**/*
+        - bun.lock
+        - .gitlab-ci.yml
+      when: always
+    - when: never
+
+.rules:eden-ts:
+  rules:
+    - changes:
+        - apps/eden/ts/**/*
+        - bun.lock
+        - .gitlab-ci.yml
+      when: always
+    - when: never
+
+.rules:ark:
+  rules:
+    - changes:
+        - packages/ark/**/*
+        - .gitlab-ci.yml
+      when: always
+    - when: never
+
+.rules:elysium:
+  rules:
+    - changes:
+        - apps/elysium/**/*
+        - .gitlab-ci.yml
+      when: always
+    - when: never
+
+.rules:delphi-swift:
+  rules:
+    - changes:
+        - apps/delphi/swift/**/*
+        - .gitlab-ci.yml
+      when: always
+    - when: never
+
+.rules:any-ts:
+  rules:
+    - changes:
+        - apps/delphi/ts/**/*
+        - apps/eden/ts/**/*
+        - apps/elysium/**/*
+        - apps/olympia/**/*
+        - packages/**/*.ts
+        - bun.lock
+        - .gitlab-ci.yml
+      when: always
+    - when: never
+
+# ── Cache templates ───────────────────────────
+
+.cache:node:
+  cache:
+    key:
+      files:
+        - bun.lock
+    paths:
+      - node_modules/
+      - apps/delphi/ts/node_modules/
+      - apps/eden/ts/node_modules/
+      - apps/elysium/node_modules/
+      - apps/olympia/node_modules/
+
+.cache:cargo:
+  cache:
+    key:
+      files:
+        - apps/eden/ts/heart/Cargo.lock
+    paths:
+      - .cache/cargo/registry/
+      - .cache/cargo/git/
+      - apps/eden/ts/heart/target/
+
+.cache:pip:
+  cache:
+    key:
+      files:
+        - packages/ark/server/requirements.txt
+    paths:
+      - .cache/pip/
+
+# ══════════════════════════════════════════════
+# INSTALL
+# ══════════════════════════════════════════════
+
+install:node:
+  stage: install
+  image: oven/bun:latest
+  needs: []
+  extends: .cache:node
+  script:
+    - bun install --frozen-lockfile
+  rules:
+    - !reference [.rules:any-ts, rules]
+
+# ══════════════════════════════════════════════
+# LINT
+# ══════════════════════════════════════════════
+
+lint:delphi-ts:
+  stage: lint
+  image: oven/bun:latest
+  needs: ["install:node"]
+  extends: .cache:node
+  script:
+    - cd apps/delphi/ts
+    - bun run lint
+    - bun run format:check
+    - bunx tsc --noEmit
+  rules:
+    - !reference [.rules:delphi-ts, rules]
+
+lint:eden-ts:
+  stage: lint
+  image: oven/bun:latest
+  needs: ["install:node"]
+  extends: .cache:node
+  script:
+    - cd apps/eden/ts
+    - bun run lint
+    - bun run format
+    - bunx tsc --noEmit
+  rules:
+    - !reference [.rules:eden-ts, rules]
+
+lint:ark:
+  stage: lint
+  image: python:3.12-slim
+  needs: []
+  extends: .cache:pip
+  script:
+    - pip install pyright
+    - cd packages/ark
+    - pyright core/ server/ plugins/
+  rules:
+    - !reference [.rules:ark, rules]
+
+lint:eden-heart:
+  stage: lint
+  image: rust:1.82
+  needs: []
+  extends: .cache:cargo
+  script:
+    - cd apps/eden/ts/heart
+    - cargo clippy -- -D warnings
+    - cargo fmt --check
+  rules:
+    - !reference [.rules:eden-ts, rules]
+
+# ══════════════════════════════════════════════
+# TEST
+# ══════════════════════════════════════════════
+
+test:delphi-ts:
+  stage: test
+  image: oven/bun:latest
+  needs: ["lint:delphi-ts"]
+  extends: .cache:node
+  script:
+    - cd apps/delphi/ts
+    - bun run test
+  rules:
+    - !reference [.rules:delphi-ts, rules]
+
+test:ark:
+  stage: test
+  image: python:3.12-slim
+  needs: ["lint:ark"]
+  extends: .cache:pip
+  script:
+    - cd packages/ark
+    - pip install -r server/requirements.txt
+    - python -m pytest core/tests/ server/ -v --tb=short
+  rules:
+    - !reference [.rules:ark, rules]
+
+test:eden-heart:
+  stage: test
+  image: rust:1.82
+  needs: ["lint:eden-heart"]
+  extends: .cache:cargo
+  script:
+    - cd apps/eden/ts/heart
+    - cargo test
+  rules:
+    - !reference [.rules:eden-ts, rules]
+
+test:elysium:
+  stage: test
+  image: oven/bun:latest
+  needs: ["install:node"]
+  extends: .cache:node
+  script:
+    - cd apps/elysium
+    - bun run test
+  rules:
+    - !reference [.rules:elysium, rules]
+
+# ══════════════════════════════════════════════
+# BUILD
+# ══════════════════════════════════════════════
+
+build:delphi-ts:
+  stage: build
+  image: oven/bun:latest
+  needs: ["test:delphi-ts"]
+  extends: .cache:node
+  script:
+    - cd apps/delphi/ts
+    - bun run build
+  rules:
+    - !reference [.rules:delphi-ts, rules]
+
+build:eden-ts:
+  stage: build
+  image: oven/bun:latest
+  needs: ["lint:eden-ts", "test:eden-heart"]
+  extends:
+    - .cache:node
+    - .cache:cargo
+  script:
+    - apt-get update && apt-get install -y build-essential
+    - cd apps/eden/ts
+    - cargo build --release --manifest-path heart/Cargo.toml
+    - bun run build
+  rules:
+    - !reference [.rules:eden-ts, rules]
+
+build:delphi-swift:
+  stage: build
+  tags: [macos]
+  needs: []
+  script:
+    - cd apps/delphi/swift
+    - xcodegen generate
+    - xcodebuild -scheme Delphi -configuration Release -derivedDataPath build/ build
+  rules:
+    - !reference [.rules:delphi-swift, rules]
+
+# ══════════════════════════════════════════════
+# E2E (тяжёлые, только на MR и main)
+# ══════════════════════════════════════════════
+
+e2e:delphi-ts:
+  stage: build
+  image: mcr.microsoft.com/playwright:v1.58.2-noble
+  needs: ["build:delphi-ts"]
+  extends: .cache:node
+  script:
+    - cd apps/delphi/ts
+    - bun run e2e
+  artifacts:
+    when: on_failure
+    paths:
+      - apps/delphi/ts/test-results/
+    expire_in: 3 days
+  rules:
+    - !reference [.rules:delphi-ts, rules]
+  allow_failure: true
+
+e2e:eden-ts:
+  stage: build
+  image: mcr.microsoft.com/playwright:v1.58.2-noble
+  needs: ["build:eden-ts"]
+  extends: .cache:node
+  script:
+    - cd apps/eden/ts
+    - bun run test:e2e
+  artifacts:
+    when: on_failure
+    paths:
+      - apps/eden/ts/test-results/
+    expire_in: 3 days
+  rules:
+    - !reference [.rules:eden-ts, rules]
+  allow_failure: true
+
+# ══════════════════════════════════════════════
+# DEPLOY
+# ══════════════════════════════════════════════
+
+deploy:ark:
+  stage: deploy
+  image: python:3.12-slim
+  needs: ["test:ark"]
+  script:
+    - echo "TODO: deploy ark to VPS via ssh/rsync"
+    # - ssh deploy@vps "cd /opt/ark && git pull && systemctl restart ark"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - packages/ark/**/*
+      when: manual
+  environment:
+    name: production
+    url: https://ark.yourdomain.com

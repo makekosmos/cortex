@@ -4,6 +4,7 @@ import SwiftData
 struct SidebarView: View {
     @Bindable var viewModel: SidebarViewModel
     @Environment(\.modelContext) private var modelContext
+    @Environment(ArkSyncClient.self) private var syncClient
     @Query(sort: \Area.sortOrder) private var areas: [Area]
     @Query(sort: \Project.sortOrder) private var allProjects: [Project]
     @Query private var allTodos: [TodoItem]
@@ -113,6 +114,7 @@ struct SidebarView: View {
                 if let uuid = UUID(uuidString: idString),
                    let todo = allTodos.first(where: { $0.id == uuid }) {
                     todo.project = project
+                    syncClient.sendTodoChange(todo, changeType: "update")
                 }
             }
             return true
@@ -120,12 +122,15 @@ struct SidebarView: View {
         .contextMenu {
             Button("Завершить проект") {
                 project.status = .completed
+                syncClient.sendProjectChange(project, changeType: "update")
             }
             Button("Потом") {
                 project.status = .someday
+                syncClient.sendProjectChange(project, changeType: "update")
             }
             Divider()
             Button("Удалить проект", role: .destructive) {
+                syncClient.sendProjectChange(project, changeType: "delete")
                 modelContext.delete(project)
             }
         }
@@ -176,6 +181,7 @@ struct SidebarView: View {
                 if let uuid = UUID(uuidString: idString),
                    let todo = allTodos.first(where: { $0.id == uuid }) {
                     todo.area = area
+                    syncClient.sendTodoChange(todo, changeType: "update")
                 }
             }
             return true

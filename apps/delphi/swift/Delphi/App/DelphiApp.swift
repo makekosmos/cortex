@@ -34,10 +34,11 @@ struct DelphiApp: App {
         }
 
         let settings = SyncSettings()
+        let client = ArkSyncClient(settings: settings)
         _syncSettings = State(initialValue: settings)
-        _syncClient = State(initialValue: ArkSyncClient(settings: settings))
+        _syncClient = State(initialValue: client)
 
-        QuickEntryPanelController.shared.setup(container: container)
+        QuickEntryPanelController.shared.setup(container: container, syncClient: client)
     }
 
     var body: some Scene {
