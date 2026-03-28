@@ -99,7 +99,8 @@ struct QuickOpenView: View {
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 10))
         .shadow(color: .black.opacity(0.3), radius: 30, y: 8)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            Task {
+                try? await Task.sleep(for: .milliseconds(50))
                 isSearchFocused = true
             }
         }

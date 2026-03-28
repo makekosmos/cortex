@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron'
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { initStore, saveEntry, loadEntry, listEntries, getVaultPath, getRecentVaultPaths, setVaultPath, createFolder, listFolders, listNoteTypes, moveEntryToFolder, moveFolderToFolder, deleteEntry, deleteFolder, getCodeToolsSettings, updateCodeToolsSettings, saveNoteType, deleteNoteType, searchEntries, getSidebarConfig, updateSidebarConfig, exportMarkdownVault, listTrashEntries, restoreEntry, permanentDeleteEntry, purgeExpiredTrash, getVaultStorageInfo, getHevyAuthToken, getHevyUsername, setHevyAuth, clearHevyAuth, type SidebarConfigPatch } from './store'
@@ -58,10 +59,6 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
-  })
-
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
 
   win.once('ready-to-show', () => {
@@ -163,7 +160,8 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('select-folder', async () => {
-    const result = await dialog.showOpenDialog(win!, {
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory', 'createDirectory']
     })
     if (!result.canceled && result.filePaths.length > 0) {
@@ -178,7 +176,8 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('export-markdown-vault', async () => {
-    const result = await dialog.showOpenDialog(win!, {
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
       properties: ['openDirectory', 'createDirectory'],
       title: 'Выберите папку для экспорта Markdown',
     })
@@ -361,13 +360,22 @@ app.whenReady().then(async () => {
     const vaultPath = getVaultPath()
     if (!vaultPath) return 0
     try {
-      // Use drive letter on Windows
-      const drive = vaultPath.substring(0, 3)
+      if (process.platform === 'win32') {
+        // Use PowerShell (wmic is deprecated) with execFile to avoid shell injection
+        const drive = vaultPath.substring(0, 2).replace(/[^A-Za-z:]/g, '')
+        return new Promise<number>((resolve) => {
+          execFile('powershell', ['-NoProfile', '-Command', `(Get-PSDrive ${drive[0]}).Free`], (err, stdout) => {
+            if (err) { resolve(0); return }
+            const value = parseInt(stdout.trim(), 10)
+            resolve(Number.isFinite(value) ? value : 0)
+          })
+        })
+      }
+      // macOS / Linux: use Node's fs.statfs (available since Node 18.15)
       return new Promise<number>((resolve) => {
-        exec(`wmic logicaldisk where "DeviceID='${drive.substring(0, 2)}'" get FreeSpace /format:value`, (err, stdout) => {
+        fs.statfs(vaultPath, (err, stats) => {
           if (err) { resolve(0); return }
-          const match = stdout.match(/FreeSpace=(\d+)/)
-          resolve(match ? parseInt(match[1], 10) : 0)
+          resolve(stats.bavail * stats.bsize)
         })
       })
     } catch {

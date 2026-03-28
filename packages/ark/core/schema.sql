@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS events (
     tags            TEXT DEFAULT '[]',      -- JSON array
     is_deleted      INTEGER NOT NULL DEFAULT 0,
 
+    -- Sync
+    hlc             TEXT,                   -- hybrid logical clock of last write
+
     -- Audit
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
     updated_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
@@ -313,7 +316,11 @@ CREATE TABLE IF NOT EXISTS sync_outbox (
     device_id   TEXT NOT NULL,
     device_seq  INTEGER NOT NULL,
     created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    synced      INTEGER NOT NULL DEFAULT 0  -- 0 = pending, 1 = synced
+    synced      INTEGER NOT NULL DEFAULT 0, -- 0 = pending, 1 = synced
+    origin_device TEXT,                     -- device that originally created the change
+    origin_seq  INTEGER,                    -- original device_seq from origin
+    hlc         TEXT,                       -- hybrid logical clock value
+    hop_path    TEXT                        -- JSON array of device_ids that relayed this change
 );
 
 CREATE INDEX IF NOT EXISTS idx_sync_outbox_synced ON sync_outbox(synced) WHERE synced = 0;
@@ -353,6 +360,30 @@ INSERT INTO metadata (key, value) VALUES ('migration_sync_columns', '1')
 
 -- These must be run manually or by the application on first connect.
 -- The SyncManager handles adding these columns if missing.
+
+-- ============================================================================
+-- P2P SYNC TABLES: Mesh networking and peer discovery
+-- ============================================================================
+
+-- Mesh networks this device belongs to
+CREATE TABLE IF NOT EXISTS sync_mesh (
+    mesh_id         TEXT PRIMARY KEY,
+    mesh_secret_hash TEXT NOT NULL,
+    relay_url       TEXT,
+    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- Known peers in the mesh
+CREATE TABLE IF NOT EXISTS sync_peers (
+    peer_id         TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    platform        TEXT NOT NULL,
+    mesh_id         TEXT NOT NULL,
+    last_connected  TEXT,
+    connection_type TEXT,                    -- 'lan', 'relay', 'bluetooth'
+    address         TEXT,                    -- last known address
+    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
 
 -- Initialize statistics
 ANALYZE;

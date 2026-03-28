@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 import type {
   TodoItem,
   Project,
@@ -7,7 +7,7 @@ import type {
   Heading,
   SmartList,
   RecurrenceData,
-} from '@/types/task';
+} from "@/types/task";
 import {
   createTodoItem,
   markCompleted as markTodoCompleted,
@@ -19,15 +19,18 @@ import {
   toggleChecklistItem as toggleChecklist,
   removeChecklistItem as removeChecklist,
   reorderChecklistItems as reorderChecklist,
-} from '@/models/todoItem';
-import { createProject } from '@/models/project';
-import { createArea } from '@/models/area';
-import { createTag } from '@/models/tag';
-import { createHeading } from '@/models/heading';
-import { filterTodos, countAll } from '@/services/filters/todoFilterService';
-import { createNextRecurrence, duplicateTodo } from '@/services/recurrence/recurrence';
-import type { CreateTodoParams } from '@/models/todoItem';
-import type { CreateProjectParams } from '@/models/project';
+} from "@/models/todoItem";
+import { createProject } from "@/models/project";
+import { createArea } from "@/models/area";
+import { createTag } from "@/models/tag";
+import { createHeading } from "@/models/heading";
+import { filterTodos, countAll } from "@/services/filters/todoFilterService";
+import {
+  createNextRecurrence,
+  duplicateTodo,
+} from "@/services/recurrence/recurrence";
+import type { CreateTodoParams } from "@/models/todoItem";
+import type { CreateProjectParams } from "@/models/project";
 
 // ---------------------------------------------------------------------------
 // Store shape
@@ -332,9 +335,7 @@ const useTodoStore = create<TodoStore>((set, get) => ({
       projects: s.projects.map((p) =>
         p.areaId === id ? { ...p, areaId: null } : p,
       ),
-      todos: s.todos.map((t) =>
-        t.areaId === id ? { ...t, areaId: null } : t,
-      ),
+      todos: s.todos.map((t) => (t.areaId === id ? { ...t, areaId: null } : t)),
     })),
 
   // ----- Tag CRUD -----

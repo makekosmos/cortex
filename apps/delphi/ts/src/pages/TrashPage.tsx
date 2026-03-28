@@ -1,8 +1,8 @@
-import { Archive } from 'lucide-react';
-import useSmartList from '@/hooks/useSmartList';
-import { SmartList } from '@/types/task';
-import TodoRow from '@/components/TodoRow';
-import useTodoStore from '@/store/todos';
+import { Archive } from "lucide-react";
+import useSmartList from "@/hooks/useSmartList";
+import { SmartList } from "@/types/task";
+import TodoRow from "@/components/TodoRow";
+import useTodoStore from "@/store/todos";
 
 export default function TrashPage() {
   const { filtered } = useSmartList(SmartList.Trash);
@@ -12,9 +12,13 @@ export default function TrashPage() {
     <div className="flex w-full min-w-0 flex-col">
       <div className="flex items-center gap-2.5 px-7 pb-3 pt-6">
         <Archive size={24} className="text-gray-500" />
-        <h1 className="text-2xl font-bold text-(--foreground) select-none">Корзина</h1>
+        <h1 className="text-2xl font-bold text-(--foreground) select-none">
+          Корзина
+        </h1>
         {filtered.length > 0 && (
-          <span className="text-sm text-(--muted-foreground)">{filtered.length}</span>
+          <span className="text-sm text-(--muted-foreground)">
+            {filtered.length}
+          </span>
         )}
       </div>
 

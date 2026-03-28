@@ -2,15 +2,15 @@ name: Delphi
 options:
   bundleIdPrefix: com.kazui
   deploymentTarget:
-    macOS: "14.0"
-  xcodeVersion: "15.0"
+    macOS: "15.0"
+  xcodeVersion: "16.0"
   minimumXcodeGenVersion: "2.30"
   groupSortPosition: top
 
 settings:
   base:
-    SWIFT_VERSION: "5.10"
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
     GENERATE_INFOPLIST_FILE: YES
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 1.0.0
@@ -45,7 +45,7 @@ targets:
         CFBundleShortVersionString: "1.0.0"
         CFBundlePackageType: APPL
         CFBundleExecutable: Delphi
-        LSMinimumSystemVersion: "14.0"
+        LSMinimumSystemVersion: "15.0"
         LSApplicationCategoryType: public.app-category.productivity
     entitlements:
       path: Delphi/Resources/Delphi.entitlements

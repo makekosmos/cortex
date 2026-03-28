@@ -1,4 +1,4 @@
-import { SmartList, type TodoItem } from '@/types/task';
+import { SmartList, type TodoItem } from "@/types/task";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,26 +25,21 @@ function isActive(t: TodoItem): boolean {
 // ---------------------------------------------------------------------------
 
 const predicates: Record<SmartList, (t: TodoItem) => boolean> = {
-  [SmartList.Inbox]: (t) =>
-    !t.projectId && !t.isSomeday && isActive(t),
+  [SmartList.Inbox]: (t) => !t.projectId && !t.isSomeday && isActive(t),
 
   [SmartList.Today]: (t) =>
     isActive(t) && (t.isToday || isDateToday(t.scheduledDate)),
 
-  [SmartList.Upcoming]: (t) =>
-    !!t.scheduledDate && isActive(t) && !t.isSomeday,
+  [SmartList.Upcoming]: (t) => !!t.scheduledDate && isActive(t) && !t.isSomeday,
 
-  [SmartList.Anytime]: (t) =>
-    isActive(t) && !t.isSomeday,
+  [SmartList.Anytime]: (t) => isActive(t) && !t.isSomeday,
 
   [SmartList.Someday]: (t) =>
     t.isSomeday && !t.isCompleted && !t.isCancelled && !t.isTrashed,
 
-  [SmartList.Logbook]: (t) =>
-    t.isCompleted || t.isCancelled,
+  [SmartList.Logbook]: (t) => t.isCompleted || t.isCancelled,
 
-  [SmartList.Trash]: (t) =>
-    t.isTrashed,
+  [SmartList.Trash]: (t) => t.isTrashed,
 };
 
 // ---------------------------------------------------------------------------
@@ -52,7 +47,7 @@ const predicates: Record<SmartList, (t: TodoItem) => boolean> = {
 // ---------------------------------------------------------------------------
 
 function byCreatedAtDesc(a: TodoItem, b: TodoItem): number {
-  return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+  return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
 }
 
 function bySortOrderAsc(a: TodoItem, b: TodoItem): number {
@@ -60,14 +55,14 @@ function bySortOrderAsc(a: TodoItem, b: TodoItem): number {
 }
 
 function byScheduledDateAsc(a: TodoItem, b: TodoItem): number {
-  const da = a.scheduledDate ?? '\uffff';
-  const db = b.scheduledDate ?? '\uffff';
+  const da = a.scheduledDate ?? "\uffff";
+  const db = b.scheduledDate ?? "\uffff";
   return da.localeCompare(db);
 }
 
 function byCompletionDesc(a: TodoItem, b: TodoItem): number {
-  const da = a.completedAt ?? a.cancelledAt ?? '';
-  const db = b.completedAt ?? b.cancelledAt ?? '';
+  const da = a.completedAt ?? a.cancelledAt ?? "";
+  const db = b.completedAt ?? b.cancelledAt ?? "";
   return db.localeCompare(da);
 }
 

@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/suspicious/noArrayIndexKey: mocked */
-import Skeleton from '@/components/skeleton';
+import Skeleton from "@/components/skeleton";
 
 export default function MockTaskList() {
   return (

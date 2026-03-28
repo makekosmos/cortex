@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { arkSync, taskToArkChange } from '@/services/sync/ark-client';
-import type { Task } from '@/types/task';
+import { create } from "zustand";
+import { arkSync, taskToArkChange } from "@/services/sync/ark-client";
+import type { Task } from "@/types/task";
 
 type TaskStore = {
   tasks: Task[];
@@ -20,7 +20,7 @@ const useTask = create<TaskStore>((set) => ({
   tasks: [],
   setTasks: (tasks) => set({ tasks }),
   addTask: (title) => {
-    const taskTitle = title.trim() || 'New task';
+    const taskTitle = title.trim() || "New task";
     const now = new Date();
     const task: Task = {
       id: crypto.randomUUID(),
@@ -35,14 +35,14 @@ const useTask = create<TaskStore>((set) => ({
     };
 
     set((state) => ({ tasks: [task, ...state.tasks] }));
-    arkSync.sendChange(taskToArkChange(task, 'create'));
+    arkSync.sendChange(taskToArkChange(task, "create"));
     return task;
   },
   removeTask: (task) => {
     set((state) => ({
       tasks: state.tasks.filter((item) => item.id !== task.id),
     }));
-    arkSync.sendChange(taskToArkChange(task, 'delete'));
+    arkSync.sendChange(taskToArkChange(task, "delete"));
   },
   removeAllTasks: () => set({ tasks: [] }),
   completeTask: (task) => {
@@ -52,24 +52,20 @@ const useTask = create<TaskStore>((set) => ({
       updated_at: new Date(),
     };
     set((state) => ({
-      tasks: state.tasks.map((item) =>
-        item.id === task.id ? updated : item,
-      ),
+      tasks: state.tasks.map((item) => (item.id === task.id ? updated : item)),
     }));
-    arkSync.sendChange(taskToArkChange(updated, 'update'));
+    arkSync.sendChange(taskToArkChange(updated, "update"));
   },
   editTask: (task) => {
     const updated: Task = {
       ...task,
-      title: task.title.trim() || 'New task',
+      title: task.title.trim() || "New task",
       updated_at: new Date(),
     };
     set((state) => ({
-      tasks: state.tasks.map((item) =>
-        item.id === task.id ? updated : item,
-      ),
+      tasks: state.tasks.map((item) => (item.id === task.id ? updated : item)),
     }));
-    arkSync.sendChange(taskToArkChange(updated, 'update'));
+    arkSync.sendChange(taskToArkChange(updated, "update"));
   },
   upsertTask: (task) =>
     set((state) => {

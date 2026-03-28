@@ -28,9 +28,11 @@ def client(tmp_path):
     # We reload the modules so each test gets a fresh DB.
     import importlib
     import server.sync_ws as sync_ws_mod
+    import server.peer_server as peer_server_mod
     import server.app as app_mod
 
     importlib.reload(sync_ws_mod)
+    importlib.reload(peer_server_mod)
     importlib.reload(app_mod)
 
     yield TestClient(app_mod.app)

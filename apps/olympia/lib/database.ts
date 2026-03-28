@@ -228,24 +228,26 @@ export async function saveWorkout(
 ): Promise<void> {
   const database = await getDatabase();
 
-  await database.runAsync(
-    'INSERT INTO workouts (id, title, started_at, finished_at, notes, duration_seconds) VALUES (?, ?, ?, ?, ?, ?)',
-    [workout.id, workout.title, workout.started_at, workout.finished_at, workout.notes, workout.duration_seconds]
-  );
-
-  for (const ex of exercises) {
+  await database.withTransactionAsync(async () => {
     await database.runAsync(
-      'INSERT INTO workout_exercises (id, workout_id, exercise_id, sort_order, notes) VALUES (?, ?, ?, ?, ?)',
-      [ex.id, workout.id, ex.exercise_id, ex.sort_order, ex.notes]
+      'INSERT INTO workouts (id, title, started_at, finished_at, notes, duration_seconds) VALUES (?, ?, ?, ?, ?, ?)',
+      [workout.id, workout.title, workout.started_at, workout.finished_at, workout.notes, workout.duration_seconds]
     );
 
-    for (const set of ex.sets) {
+    for (const ex of exercises) {
       await database.runAsync(
-        'INSERT INTO workout_sets (id, workout_exercise_id, set_index, set_type, weight_kg, reps, completed, rpe) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [set.id, ex.id, set.set_index, set.set_type, set.weight_kg, set.reps, set.completed ? 1 : 0, set.rpe]
+        'INSERT INTO workout_exercises (id, workout_id, exercise_id, sort_order, notes) VALUES (?, ?, ?, ?, ?)',
+        [ex.id, workout.id, ex.exercise_id, ex.sort_order, ex.notes]
       );
+
+      for (const set of ex.sets) {
+        await database.runAsync(
+          'INSERT INTO workout_sets (id, workout_exercise_id, set_index, set_type, weight_kg, reps, completed, rpe) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [set.id, ex.id, set.set_index, set.set_type, set.weight_kg, set.reps, set.completed ? 1 : 0, set.rpe]
+        );
+      }
     }
-  }
+  });
 }
 
 export async function getWorkouts(): Promise<any[]> {
@@ -333,16 +335,18 @@ export async function saveRoutine(
 ): Promise<void> {
   const database = await getDatabase();
   const now = new Date().toISOString();
-  await database.runAsync(
-    'INSERT INTO routines (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
-    [routine.id, routine.title, now, now]
-  );
-  for (const ex of exercises) {
+  await database.withTransactionAsync(async () => {
     await database.runAsync(
-      'INSERT INTO routine_exercises (id, routine_id, exercise_id, sort_order, target_sets, target_reps, target_weight_kg, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [ex.id, routine.id, ex.exercise_id, ex.sort_order, ex.target_sets, ex.target_reps, ex.target_weight_kg, ex.notes]
+      'INSERT INTO routines (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)',
+      [routine.id, routine.title, now, now]
     );
-  }
+    for (const ex of exercises) {
+      await database.runAsync(
+        'INSERT INTO routine_exercises (id, routine_id, exercise_id, sort_order, target_sets, target_reps, target_weight_kg, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [ex.id, routine.id, ex.exercise_id, ex.sort_order, ex.target_sets, ex.target_reps, ex.target_weight_kg, ex.notes]
+      );
+    }
+  });
 }
 
 export async function getRoutines(): Promise<any[]> {

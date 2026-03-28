@@ -7,17 +7,17 @@ import {
   type FunctionCall,
   type LiveServerMessage,
   type Session,
-} from '@google/genai';
+} from "@google/genai";
 
-const GEMINI_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
-const GEMINI_AUDIO_MIME_TYPE = 'audio/pcm;rate=16000';
+const GEMINI_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
+const GEMINI_AUDIO_MIME_TYPE = "audio/pcm;rate=16000";
 const TARGET_SAMPLE_RATE = 16_000;
 
-const CREATE_TASK_FUNCTION = 'create_task';
-const UPDATE_LAST_TASK_FUNCTION = 'update_last_task';
-const DELETE_LAST_TASK_FUNCTION = 'delete_last_task';
+const CREATE_TASK_FUNCTION = "create_task";
+const UPDATE_LAST_TASK_FUNCTION = "update_last_task";
+const DELETE_LAST_TASK_FUNCTION = "delete_last_task";
 
-const LIVE_DEBUG = import.meta.env.VITE_GEMINI_LIVE_DEBUG === '1';
+const LIVE_DEBUG = import.meta.env.VITE_GEMINI_LIVE_DEBUG === "1";
 const VAD_PREFIX_PADDING_MS = 120;
 const VAD_SILENCE_DURATION_MS = 260;
 
@@ -51,7 +51,7 @@ function getGeminiApiKey() {
   const key = import.meta.env.VITE_GEMINI_API_KEY?.trim();
   if (!key) {
     throw new Error(
-      'VITE_GEMINI_API_KEY is missing. Add Gemini API key before using voice tasks.',
+      "VITE_GEMINI_API_KEY is missing. Add Gemini API key before using voice tasks.",
     );
   }
   return key;
@@ -59,12 +59,12 @@ function getGeminiApiKey() {
 
 function toErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
-  return 'Gemini Live API request failed.';
+  return "Gemini Live API request failed.";
 }
 
 function normalizeTaskTitle(value: unknown) {
-  if (typeof value !== 'string') return '';
-  return value.replace(/\s+/g, ' ').trim();
+  if (typeof value !== "string") return "";
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function mergeTranscriptChunk(current: string, chunk: string) {
@@ -77,7 +77,7 @@ function mergeTranscriptChunk(current: string, chunk: string) {
   if (base.startsWith(part)) return base;
   if (base.endsWith(part)) return base;
   if (part.endsWith(base)) return part;
-  return `${base} ${part}`.replace(/\s+/g, ' ').trim();
+  return `${base} ${part}`.replace(/\s+/g, " ").trim();
 }
 
 function isLikelyEditCommand(text: string) {
@@ -87,7 +87,7 @@ function isLikelyEditCommand(text: string) {
 }
 
 function toBase64(bytes: Uint8Array) {
-  let binary = '';
+  let binary = "";
   const chunkSize = 0x8000;
 
   for (let index = 0; index < bytes.length; index += chunkSize) {
@@ -156,8 +156,8 @@ class LiveVoiceTaskSession {
   private isClosed = false;
   private wsOpen = false;
   private setupComplete = false;
-  private transcript = '';
-  private utteranceBuffer = '';
+  private transcript = "";
+  private utteranceBuffer = "";
   private sentAudioChunks = 0;
   private errorsReported = 0;
 
@@ -194,7 +194,7 @@ class LiveVoiceTaskSession {
     stopStream(this.stream);
     this.stream = null;
 
-    if (this.audioContext && this.audioContext.state !== 'closed') {
+    if (this.audioContext && this.audioContext.state !== "closed") {
       await this.audioContext.close();
     }
     this.audioContext = null;
@@ -210,13 +210,15 @@ class LiveVoiceTaskSession {
 
   async start() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('Audio recording is not supported in this environment.');
+      throw new Error("Audio recording is not supported in this environment.");
     }
-    if (typeof AudioContext === 'undefined') {
-      throw new Error('AudioContext API is not available in this environment.');
+    if (typeof AudioContext === "undefined") {
+      throw new Error("AudioContext API is not available in this environment.");
     }
-    if (typeof window === 'undefined' || !('ScriptProcessorNode' in window)) {
-      throw new Error('ScriptProcessorNode is not available in this environment.');
+    if (typeof window === "undefined" || !("ScriptProcessorNode" in window)) {
+      throw new Error(
+        "ScriptProcessorNode is not available in this environment.",
+      );
     }
 
     this.stream = await navigator.mediaDevices.getUserMedia({
@@ -250,38 +252,40 @@ class LiveVoiceTaskSession {
             functionDeclarations: [
               {
                 name: CREATE_TASK_FUNCTION,
-                description: 'Create one task immediately from current speech fragment.',
+                description:
+                  "Create one task immediately from current speech fragment.",
                 parametersJsonSchema: {
-                  type: 'object',
+                  type: "object",
                   properties: {
                     title: {
-                      type: 'string',
-                      description: 'Short task title in user language.',
+                      type: "string",
+                      description: "Short task title in user language.",
                     },
                   },
-                  required: ['title'],
+                  required: ["title"],
                 },
               },
               {
                 name: UPDATE_LAST_TASK_FUNCTION,
                 description:
-                  'Update the most recently created task when user corrects wording.',
+                  "Update the most recently created task when user corrects wording.",
                 parametersJsonSchema: {
-                  type: 'object',
+                  type: "object",
                   properties: {
                     title: {
-                      type: 'string',
-                      description: 'Corrected title in user language.',
+                      type: "string",
+                      description: "Corrected title in user language.",
                     },
                   },
-                  required: ['title'],
+                  required: ["title"],
                 },
               },
               {
                 name: DELETE_LAST_TASK_FUNCTION,
-                description: 'Delete the most recently created task when user cancels it.',
+                description:
+                  "Delete the most recently created task when user cancels it.",
                 parametersJsonSchema: {
-                  type: 'object',
+                  type: "object",
                   properties: {},
                 },
               },
@@ -292,23 +296,23 @@ class LiveVoiceTaskSession {
       callbacks: {
         onopen: () => {
           this.wsOpen = true;
-          this.debug('WebSocket opened.');
+          this.debug("WebSocket opened.");
         },
         onmessage: (message) => {
           void this.handleMessage(message);
         },
         onerror: (error) => {
-          this.debug('WebSocket error event.', error);
+          this.debug("WebSocket error event.", error);
         },
         onclose: (event) => {
           this.wsOpen = false;
           if (this.isClosed) return;
 
-          const code = event?.code ?? 'unknown';
-          const reason = event?.reason?.trim() || 'no reason from server';
+          const code = event?.code ?? "unknown";
+          const reason = event?.reason?.trim() || "no reason from server";
           const diagnostic = `Gemini Live closed: code=${code}, reason="${reason}", setupComplete=${this.setupComplete}, sentAudioChunks=${this.sentAudioChunks}.`;
 
-          this.debug('WebSocket closed.', diagnostic);
+          this.debug("WebSocket closed.", diagnostic);
           this.reportError(diagnostic);
           void this.forceStopWithoutSignal();
         },
@@ -326,7 +330,10 @@ class LiveVoiceTaskSession {
 
       const input = event.inputBuffer.getChannelData(0);
       const chunk = new Float32Array(input);
-      const downsampled = downsampleTo16k(chunk, this.audioContext?.sampleRate ?? 48000);
+      const downsampled = downsampleTo16k(
+        chunk,
+        this.audioContext?.sampleRate ?? 48000,
+      );
       const pcm = floatToPcm16(downsampled);
       const data = toBase64(pcm);
       if (!data) return;
@@ -342,7 +349,7 @@ class LiveVoiceTaskSession {
       } catch (error) {
         this.wsOpen = false;
         const message = toErrorMessage(error);
-        this.debug('Failed to send realtime audio chunk.', message);
+        this.debug("Failed to send realtime audio chunk.", message);
         this.reportError(`Audio send failed: ${message}`);
         void this.forceStopWithoutSignal();
       }
@@ -374,7 +381,9 @@ class LiveVoiceTaskSession {
     this.wsOpen = false;
   }
 
-  private async executeToolCall(call: FunctionCall): Promise<ToolResponsePayload> {
+  private async executeToolCall(
+    call: FunctionCall,
+  ): Promise<ToolResponsePayload> {
     const responseBase = {
       id: call.id,
       name: call.name,
@@ -383,7 +392,7 @@ class LiveVoiceTaskSession {
     if (call.id && this.processedToolCallIds.has(call.id)) {
       return {
         ...responseBase,
-        response: { output: { ok: true, ignored: 'duplicate_call' } },
+        response: { output: { ok: true, ignored: "duplicate_call" } },
       };
     }
 
@@ -397,7 +406,7 @@ class LiveVoiceTaskSession {
         if (!title) {
           return {
             ...responseBase,
-            response: { error: 'title is required for create_task' },
+            response: { error: "title is required for create_task" },
           };
         }
 
@@ -405,7 +414,9 @@ class LiveVoiceTaskSession {
         if (this.emittedCreateTitles.has(dedupeKey)) {
           return {
             ...responseBase,
-            response: { output: { ok: true, ignored: 'duplicate_title', title } },
+            response: {
+              output: { ok: true, ignored: "duplicate_title", title },
+            },
           };
         }
 
@@ -413,7 +424,7 @@ class LiveVoiceTaskSession {
         if (ok) this.emittedCreateTitles.add(dedupeKey);
         return {
           ...responseBase,
-          response: { output: { ok, action: 'create', title } },
+          response: { output: { ok, action: "create", title } },
         };
       }
 
@@ -422,14 +433,14 @@ class LiveVoiceTaskSession {
         if (!title) {
           return {
             ...responseBase,
-            response: { error: 'title is required for update_last_task' },
+            response: { error: "title is required for update_last_task" },
           };
         }
 
         const ok = await this.callbacks.onUpdateLastTask(title);
         return {
           ...responseBase,
-          response: { output: { ok, action: 'update_last', title } },
+          response: { output: { ok, action: "update_last", title } },
         };
       }
 
@@ -437,13 +448,13 @@ class LiveVoiceTaskSession {
         const ok = await this.callbacks.onDeleteLastTask();
         return {
           ...responseBase,
-          response: { output: { ok, action: 'delete_last' } },
+          response: { output: { ok, action: "delete_last" } },
         };
       }
 
       return {
         ...responseBase,
-        response: { error: `unsupported function: ${call.name ?? 'unknown'}` },
+        response: { error: `unsupported function: ${call.name ?? "unknown"}` },
       };
     } catch (error) {
       return {
@@ -464,21 +475,24 @@ class LiveVoiceTaskSession {
     const ok = await this.callbacks.onCreateTask(title);
     if (ok) {
       this.emittedCreateTitles.add(dedupeKey);
-      this.debug('Fallback create_task from transcription.', title);
+      this.debug("Fallback create_task from transcription.", title);
     }
   }
 
   private async handleMessage(message: LiveServerMessage) {
     if (message.setupComplete) {
       this.setupComplete = true;
-      this.debug('Received setupComplete.');
+      this.debug("Received setupComplete.");
     }
 
     const inputTranscription = message.serverContent?.inputTranscription;
     const transcriptChunk = inputTranscription?.text?.trim();
     if (transcriptChunk) {
       this.transcript = mergeTranscriptChunk(this.transcript, transcriptChunk);
-      this.utteranceBuffer = mergeTranscriptChunk(this.utteranceBuffer, transcriptChunk);
+      this.utteranceBuffer = mergeTranscriptChunk(
+        this.utteranceBuffer,
+        transcriptChunk,
+      );
       this.callbacks.onTranscript?.(this.transcript);
     }
 
@@ -494,9 +508,11 @@ class LiveVoiceTaskSession {
         try {
           await this.createTaskFromTranscriptFallback(this.utteranceBuffer);
         } catch (error) {
-          this.reportError(`Fallback task create failed: ${toErrorMessage(error)}`);
+          this.reportError(
+            `Fallback task create failed: ${toErrorMessage(error)}`,
+          );
         } finally {
-          this.utteranceBuffer = '';
+          this.utteranceBuffer = "";
         }
       }
       return;
@@ -516,7 +532,7 @@ class LiveVoiceTaskSession {
     }
 
     if (hasAnyToolCall) {
-      this.utteranceBuffer = '';
+      this.utteranceBuffer = "";
     }
   }
 }

@@ -706,10 +706,9 @@ export default function Editor({ entry, allEntries, noteTypes, codeToolsSettings
     lastSavedSnapshotRef.current = getCurrentSnapshot() ?? snapshotBeforeSave
   }, [activeNoteType, codeToolsSettings?.formatOnSave, codeToolsSettings?.lintTrigger, editor, entry, formatAllCodeBlocks, getCurrentSnapshot, headerLayout, headerProps, lintAllCodeBlocks, noteTypeId, onSave, title])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reacts only to title changes
   useEffect(() => {
-    if (saveConflict) {
-      setSaveConflict(null)
-    }
+    setSaveConflict(null)
   }, [title])
 
   useEffect(() => {

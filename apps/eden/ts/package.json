@@ -13,7 +13,6 @@
     "test:e2e": "npm run build && playwright test --config playwright.config.ts"
   },
   "dependencies": {
-    "@floating-ui/dom": "^1.7.4",
     "@tiptap/extension-code-block-lowlight": "^3.20.1",
     "@tiptap/extension-mention": "^3.20.1",
     "@tiptap/extension-placeholder": "^3.20.1",
@@ -22,10 +21,7 @@
     "@tiptap/pm": "^3.20.1",
     "@tiptap/react": "^3.20.1",
     "@tiptap/starter-kit": "^3.20.1",
-    "jsdom": "^28.1.0",
     "lowlight": "^3.3.0",
-    "oxfmt": "^0.36.0",
-    "oxlint": "^1.51.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tippy.js": "^6.3.7",
@@ -41,6 +37,9 @@
     "electron": "^38.8.4",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
+    "jsdom": "^28.1.0",
+    "oxfmt": "^0.36.0",
+    "oxlint": "^1.51.0",
     "playwright": "^1.58.2",
     "typescript": "^5.2.2",
     "vite": "^7.3.1"

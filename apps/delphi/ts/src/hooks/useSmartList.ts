@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import useTodoStore from '@/store/todos';
-import { SmartList } from '@/types/task';
-import { filterTodos, countAll } from '@/services/filters/todoFilterService';
+import { useMemo } from "react";
+import useTodoStore from "@/store/todos";
+import { SmartList } from "@/types/task";
+import { filterTodos, countAll } from "@/services/filters/todoFilterService";
 
 /**
  * Returns filtered todos for the given smart list,

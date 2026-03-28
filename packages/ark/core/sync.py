@@ -184,7 +184,11 @@ class SyncManager:
                     device_id   TEXT NOT NULL,
                     device_seq  INTEGER NOT NULL,
                     created_at  TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-                    synced      INTEGER NOT NULL DEFAULT 0
+                    synced      INTEGER NOT NULL DEFAULT 0,
+                    origin_device TEXT,
+                    origin_seq  INTEGER,
+                    hlc         TEXT,
+                    hop_path    TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS sync_conflicts (
@@ -200,19 +204,54 @@ class SyncManager:
                     resolution          TEXT,
                     created_at          TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
                 );
+
+                CREATE TABLE IF NOT EXISTS sync_mesh (
+                    mesh_id         TEXT PRIMARY KEY,
+                    mesh_secret_hash TEXT NOT NULL,
+                    relay_url       TEXT,
+                    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS sync_peers (
+                    peer_id         TEXT PRIMARY KEY,
+                    name            TEXT NOT NULL,
+                    platform        TEXT NOT NULL,
+                    mesh_id         TEXT NOT NULL,
+                    last_connected  TEXT,
+                    connection_type TEXT,
+                    address         TEXT,
+                    created_at      TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                );
             """)
 
     def _ensure_sync_columns(self) -> None:
-        """Add device_id and device_seq columns to events if missing."""
+        """Add sync-related columns to events and sync_outbox if missing."""
         with self.connection() as conn:
-            columns = {
+            # Events table columns
+            event_cols = {
                 row["name"]
                 for row in conn.execute("PRAGMA table_info(events)").fetchall()
             }
-            if "device_id" not in columns:
+            if "device_id" not in event_cols:
                 conn.execute("ALTER TABLE events ADD COLUMN device_id TEXT")
-            if "device_seq" not in columns:
+            if "device_seq" not in event_cols:
                 conn.execute("ALTER TABLE events ADD COLUMN device_seq INTEGER")
+            if "hlc" not in event_cols:
+                conn.execute("ALTER TABLE events ADD COLUMN hlc TEXT")
+
+            # Outbox P2P columns (for pre-existing databases)
+            outbox_cols = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(sync_outbox)").fetchall()
+            }
+            for col_name, col_type in [
+                ("origin_device", "TEXT"),
+                ("origin_seq", "INTEGER"),
+                ("hlc", "TEXT"),
+                ("hop_path", "TEXT"),
+            ]:
+                if col_name not in outbox_cols:
+                    conn.execute(f"ALTER TABLE sync_outbox ADD COLUMN {col_name} {col_type}")
 
     def _register_device(self) -> None:
         """Register this device in sync_devices."""
@@ -377,7 +416,7 @@ class SyncManager:
         with self.connection() as conn:
             # Get all devices that have entries in the outbox
             device_rows = conn.execute(
-                "SELECT DISTINCT device_id FROM sync_outbox WHERE synced = 0 OR 1=1"
+                "SELECT DISTINCT device_id FROM sync_outbox"
             ).fetchall()
 
             for device_row in device_rows:

@@ -40,7 +40,8 @@ struct TodoRowView: View {
         .onHover { isHovered = $0 }
         .onChange(of: isEditing) { _, editing in
             if editing {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(50))
                     isTitleFocused = true
                 }
             }

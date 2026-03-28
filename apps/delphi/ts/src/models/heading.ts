@@ -1,7 +1,10 @@
-import type { Heading } from '@/types/task';
+import type { Heading } from "@/types/task";
 const uuid = () => crypto.randomUUID();
 
-export function createHeading(title: string, projectId?: string | null): Heading {
+export function createHeading(
+  title: string,
+  projectId?: string | null,
+): Heading {
   return {
     id: uuid(),
     title,

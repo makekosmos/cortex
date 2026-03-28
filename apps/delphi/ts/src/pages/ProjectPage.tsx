@@ -1,24 +1,32 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
-import { Circle, MoreHorizontal } from 'lucide-react';
-import useTodoStore from '@/store/todos';
-import { ProjectStatus } from '@/types/task';
+import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Circle, MoreHorizontal } from "lucide-react";
+import useTodoStore from "@/store/todos";
+import { ProjectStatus } from "@/types/task";
 
 /** Map colorTag strings to Tailwind text color classes. */
 function colorTagClass(colorTag?: string | null): string {
   switch (colorTag) {
-    case 'red': return 'text-red-500';
-    case 'orange': return 'text-orange-500';
-    case 'yellow': return 'text-yellow-500';
-    case 'green': return 'text-green-500';
-    case 'blue': return 'text-blue-500';
-    case 'purple': return 'text-purple-500';
-    case 'pink': return 'text-pink-500';
-    default: return 'text-(--muted-foreground)';
+    case "red":
+      return "text-red-500";
+    case "orange":
+      return "text-orange-500";
+    case "yellow":
+      return "text-yellow-500";
+    case "green":
+      return "text-green-500";
+    case "blue":
+      return "text-blue-500";
+    case "purple":
+      return "text-purple-500";
+    case "pink":
+      return "text-pink-500";
+    default:
+      return "text-(--muted-foreground)";
   }
 }
-import TodoRow from '@/components/TodoRow';
-import { arkSync, projectToArkChange } from '@/services/sync/ark-client';
+import TodoRow from "@/components/TodoRow";
+import { arkSync, projectToArkChange } from "@/services/sync/ark-client";
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,7 +42,7 @@ export default function ProjectPage() {
   const todos = id ? todosForProject(id) : [];
 
   const [editing, setEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState('');
+  const [editTitle, setEditTitle] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -54,8 +62,8 @@ export default function ProjectPage() {
         setMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
 
   if (!project) {
@@ -78,7 +86,7 @@ export default function ProjectPage() {
     if (trimmed && trimmed !== project.title) {
       updateProject(project.id, { title: trimmed });
       arkSync.sendChange(
-        projectToArkChange({ ...project, title: trimmed }, 'update'),
+        projectToArkChange({ ...project, title: trimmed }, "update"),
       );
     }
   };
@@ -86,17 +94,20 @@ export default function ProjectPage() {
   const handleDelete = () => {
     setMenuOpen(false);
     removeProject(project.id);
-    arkSync.sendChange(projectToArkChange(project, 'delete'));
-    navigate('/');
+    arkSync.sendChange(projectToArkChange(project, "delete"));
+    navigate("/");
   };
 
   const handleArchive = () => {
     setMenuOpen(false);
     updateProject(project.id, { status: ProjectStatus.Completed });
     arkSync.sendChange(
-      projectToArkChange({ ...project, status: ProjectStatus.Completed }, 'update'),
+      projectToArkChange(
+        { ...project, status: ProjectStatus.Completed },
+        "update",
+      ),
     );
-    navigate('/');
+    navigate("/");
   };
 
   const activeTodos = todos.filter((t) => !t.isCompleted && !t.isCancelled);
@@ -119,8 +130,8 @@ export default function ProjectPage() {
             onChange={(e) => setEditTitle(e.target.value)}
             onBlur={commitRename}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename();
-              if (e.key === 'Escape') setEditing(false);
+              if (e.key === "Enter") commitRename();
+              if (e.key === "Escape") setEditing(false);
             }}
             className="flex-1 bg-transparent text-2xl font-bold text-(--foreground) outline-none"
           />
@@ -134,7 +145,9 @@ export default function ProjectPage() {
         )}
 
         {todos.length > 0 && (
-          <span className="text-sm text-(--muted-foreground)">{activeTodos.length}</span>
+          <span className="text-sm text-(--muted-foreground)">
+            {activeTodos.length}
+          </span>
         )}
 
         {/* Context menu */}

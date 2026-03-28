@@ -1,20 +1,36 @@
-import { Archive, Book, Calendar, Circle, Inbox, Settings, Star } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
-import SideBarButton from '@/components/SideBarButton';
-import useTodoStore from '@/store/todos';
-import { ProjectStatus } from '@/types/task';
+import {
+  Archive,
+  Book,
+  Calendar,
+  Circle,
+  Inbox,
+  Settings,
+  Star,
+} from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import SideBarButton from "@/components/SideBarButton";
+import useTodoStore from "@/store/todos";
+import { ProjectStatus } from "@/types/task";
 
 /** Map colorTag strings to Tailwind text color classes. */
 function colorTagClass(colorTag?: string | null): string {
   switch (colorTag) {
-    case 'red': return 'text-red-500';
-    case 'orange': return 'text-orange-500';
-    case 'yellow': return 'text-yellow-500';
-    case 'green': return 'text-green-500';
-    case 'blue': return 'text-blue-500';
-    case 'purple': return 'text-purple-500';
-    case 'pink': return 'text-pink-500';
-    default: return 'text-(--muted-foreground)';
+    case "red":
+      return "text-red-500";
+    case "orange":
+      return "text-orange-500";
+    case "yellow":
+      return "text-yellow-500";
+    case "green":
+      return "text-green-500";
+    case "blue":
+      return "text-blue-500";
+    case "purple":
+      return "text-purple-500";
+    case "pink":
+      return "text-pink-500";
+    default:
+      return "text-(--muted-foreground)";
   }
 }
 
@@ -26,12 +42,10 @@ export default function SideBar() {
   const location = useLocation();
 
   return (
-    <aside
-      className="left-0 flex min-h-0 w-fit flex-col justify-between border-r border-r-(--border) bg-(--sidebar) p-2"
-    >
+    <aside className="left-0 flex min-h-0 w-fit flex-col justify-between border-r border-r-(--border) bg-(--sidebar) p-2">
       {/* Drag region for Electron title bar */}
       <div
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
         className="h-3 w-full shrink-0"
       />
 
@@ -52,13 +66,20 @@ export default function SideBar() {
               const path = `/project/${project.id}`;
               const isActive = location.pathname === path;
               const base =
-                'flex h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors';
+                "flex h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors";
               const activeClass = isActive
-                ? 'bg-(--accent) text-(--foreground) font-medium'
-                : 'text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)';
+                ? "bg-(--accent) text-(--foreground) font-medium"
+                : "text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)";
               return (
-                <Link key={project.id} to={path} className={`${base} ${activeClass}`}>
-                  <Circle size={10} className={`shrink-0 fill-current ${colorTagClass(project.colorTag)}`} />
+                <Link
+                  key={project.id}
+                  to={path}
+                  className={`${base} ${activeClass}`}
+                >
+                  <Circle
+                    size={10}
+                    className={`shrink-0 fill-current ${colorTagClass(project.colorTag)}`}
+                  />
                   <span className="truncate">{project.title}</span>
                 </Link>
               );

@@ -1,4 +1,4 @@
-import { ProjectStatus, type Project, type TodoItem } from '@/types/task';
+import { ProjectStatus, type Project, type TodoItem } from "@/types/task";
 const uuid = () => crypto.randomUUID();
 
 export type CreateProjectParams = {

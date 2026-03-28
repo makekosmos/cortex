@@ -1,16 +1,17 @@
-import { Calendar, Folder, Moon, Star, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import useTodoStore from '@/store/todos';
-
+import { Calendar, Folder, Moon, Star, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useTodoStore from "@/store/todos";
 
 export default function QuickEntry() {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const [notes, setNotes] = useState('');
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
   const [isToday, setIsToday] = useState(false);
   const [isEvening, setIsEvening] = useState(false);
-  const [scheduledDate, setScheduledDate] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
+  );
   const [showProjectMenu, setShowProjectMenu] = useState(false);
 
   const titleRef = useRef<HTMLInputElement>(null);
@@ -23,11 +24,11 @@ export default function QuickEntry() {
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
   const reset = useCallback(() => {
-    setTitle('');
-    setNotes('');
+    setTitle("");
+    setNotes("");
     setIsToday(false);
     setIsEvening(false);
-    setScheduledDate('');
+    setScheduledDate("");
     setSelectedProjectId(null);
     setShowProjectMenu(false);
   }, []);
@@ -54,12 +55,21 @@ export default function QuickEntry() {
     });
 
     close();
-  }, [title, notes, isToday, isEvening, scheduledDate, selectedProjectId, addTodo, close]);
+  }, [
+    title,
+    notes,
+    isToday,
+    isEvening,
+    scheduledDate,
+    selectedProjectId,
+    addTodo,
+    close,
+  ]);
 
   // Cmd+N to toggle
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === 'n' && !e.shiftKey && !e.altKey) {
+      if (e.metaKey && e.key === "n" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setOpen((prev) => {
           if (prev) {
@@ -70,8 +80,8 @@ export default function QuickEntry() {
         });
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [reset]);
 
   // Focus title when opened
@@ -85,12 +95,15 @@ export default function QuickEntry() {
   useEffect(() => {
     if (!showProjectMenu) return;
     const handler = (e: MouseEvent) => {
-      if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
+      if (
+        projectMenuRef.current &&
+        !projectMenuRef.current.contains(e.target as Node)
+      ) {
         setShowProjectMenu(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [showProjectMenu]);
 
   if (!open) return null;
@@ -114,11 +127,11 @@ export default function QuickEntry() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 save();
               }
-              if (e.key === 'Escape') {
+              if (e.key === "Escape") {
                 e.preventDefault();
                 close();
               }
@@ -133,7 +146,7 @@ export default function QuickEntry() {
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             onKeyDown={(e) => {
-              if (e.key === 'Escape') {
+              if (e.key === "Escape") {
                 e.preventDefault();
                 close();
               }
@@ -148,7 +161,12 @@ export default function QuickEntry() {
           <div className="flex flex-wrap items-center gap-2">
             {/* Schedule date */}
             <label className="flex cursor-pointer items-center gap-1.5 rounded-full bg-(--secondary) px-3 py-1.5 text-xs transition-colors hover:bg-(--accent)">
-              <Calendar size={12} className={scheduledDate ? 'text-blue-500' : 'text-(--muted-foreground)'} />
+              <Calendar
+                size={12}
+                className={
+                  scheduledDate ? "text-blue-500" : "text-(--muted-foreground)"
+                }
+              />
               <input
                 type="date"
                 value={scheduledDate}
@@ -166,8 +184,8 @@ export default function QuickEntry() {
               }}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
                 isToday
-                  ? 'bg-yellow-500/15 text-yellow-500'
-                  : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)'
+                  ? "bg-yellow-500/15 text-yellow-500"
+                  : "bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)"
               }`}
             >
               <Star size={12} />
@@ -183,8 +201,8 @@ export default function QuickEntry() {
               }}
               className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
                 isEvening
-                  ? 'bg-indigo-500/15 text-indigo-400'
-                  : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)'
+                  ? "bg-indigo-500/15 text-indigo-400"
+                  : "bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)"
               }`}
             >
               <Moon size={12} />
@@ -200,12 +218,12 @@ export default function QuickEntry() {
                 onClick={() => setShowProjectMenu((prev) => !prev)}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors ${
                   selectedProject
-                    ? 'bg-blue-500/15 text-blue-500'
-                    : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)'
+                    ? "bg-blue-500/15 text-blue-500"
+                    : "bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)"
                 }`}
               >
                 <Folder size={12} />
-                <span>{selectedProject?.title ?? 'Входящие'}</span>
+                <span>{selectedProject?.title ?? "Входящие"}</span>
               </button>
 
               {showProjectMenu && (

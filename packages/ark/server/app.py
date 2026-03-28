@@ -12,7 +12,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
@@ -193,29 +193,35 @@ class PluginSyncIn(BaseModel):
     full_sync: bool = False
 
 
+def _dict_row_factory(cursor: Any, row: Any) -> dict[str, Any]:
+    return {cursor.description[i][0]: row[i] for i in range(len(cursor.description))}
+
+
 def _get_last_import(source: str) -> Optional[dict[str, Any]]:
     with db.connection() as conn:
-        conn.row_factory = None
-        conn.row_factory = lambda cursor, row: {
-            cursor.description[i][0]: row[i] for i in range(len(cursor.description))
-        }
-        return conn.execute(
-            """
-            SELECT
-              status,
-              started_at,
-              completed_at,
-              records_created,
-              records_updated,
-              records_skipped,
-              error_message
-            FROM imports
-            WHERE source = ?
-            ORDER BY started_at DESC
-            LIMIT 1
-            """,
-            (source,),
-        ).fetchone()
+        saved_factory = conn.row_factory
+        conn.row_factory = _dict_row_factory
+        try:
+            result = conn.execute(
+                """
+                SELECT
+                  status,
+                  started_at,
+                  completed_at,
+                  records_created,
+                  records_updated,
+                  records_skipped,
+                  error_message
+                FROM imports
+                WHERE source = ?
+                ORDER BY started_at DESC
+                LIMIT 1
+                """,
+                (source,),
+            ).fetchone()
+        finally:
+            conn.row_factory = saved_factory
+        return result
 
 
 def _import_to_status(
@@ -594,28 +600,28 @@ def get_page(request: PageRequestIn) -> PageResponseOut:
         sort_direction = "DESC"
 
     with db.connection() as conn:
-        conn.row_factory = None
-        conn.row_factory = lambda cursor, row: {
-            cursor.description[i][0]: row[i] for i in range(len(cursor.description))
-        }
+        saved_factory = conn.row_factory
+        conn.row_factory = _dict_row_factory
+        try:
+            total_count = int(
+                conn.execute(
+                    f"SELECT COUNT(*) as cnt FROM events WHERE {where_clause}",  # noqa: S608
+                    where_params,
+                ).fetchone()["cnt"]
+            )
 
-        total_count = int(
-            conn.execute(
-                f"SELECT COUNT(*) as cnt FROM events WHERE {where_clause}",  # noqa: S608
-                where_params,
-            ).fetchone()["cnt"]
-        )
-
-        rows = conn.execute(
-            f"""
-            SELECT id, event_type, category, occurred_at, data, summary, source, tags, created_at
-            FROM events
-            WHERE {where_clause}
-            ORDER BY {sort_column} {sort_direction}
-            LIMIT ? OFFSET ?
-            """,  # noqa: S608
-            [*where_params, int(request.limit), int(request.offset)],
-        ).fetchall()
+            rows = conn.execute(
+                f"""
+                SELECT id, event_type, category, occurred_at, data, summary, source, tags, created_at
+                FROM events
+                WHERE {where_clause}
+                ORDER BY {sort_column} {sort_direction}
+                LIMIT ? OFFSET ?
+                """,  # noqa: S608
+                [*where_params, int(request.limit), int(request.offset)],
+            ).fetchall()
+        finally:
+            conn.row_factory = saved_factory
 
     events = [_row_to_event_dict(r) for r in rows]
     has_more = request.offset + len(events) < total_count
@@ -694,22 +700,22 @@ def search_events(query: str, limit: int = Query(default=50, ge=0, le=10000)) ->
         return []
 
     with db.connection() as conn:
-        conn.row_factory = None
-        conn.row_factory = lambda cursor, row: {
-            cursor.description[i][0]: row[i] for i in range(len(cursor.description))
-        }
-
-        rows = conn.execute(
-            """
-            SELECT e.id, e.event_type, e.category, e.occurred_at, e.data, e.summary, e.source, e.tags, e.created_at
-            FROM events e
-            JOIN events_fts fts ON e.rowid = fts.rowid
-            WHERE e.is_deleted = 0 AND events_fts MATCH ?
-            ORDER BY rank
-            LIMIT ?
-            """,
-            (q, int(limit)),
-        ).fetchall()
+        saved_factory = conn.row_factory
+        conn.row_factory = _dict_row_factory
+        try:
+            rows = conn.execute(
+                """
+                SELECT e.id, e.event_type, e.category, e.occurred_at, e.data, e.summary, e.source, e.tags, e.created_at
+                FROM events e
+                JOIN events_fts fts ON e.rowid = fts.rowid
+                WHERE e.is_deleted = 0 AND events_fts MATCH ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (q, int(limit)),
+            ).fetchall()
+        finally:
+            conn.row_factory = saved_factory
 
     return [_row_to_event_dict(r) for r in rows]
 
@@ -836,13 +842,17 @@ def pairing_claim(body: PairingClaimIn) -> dict[str, Any]:
 
 
 @app.get("/pairing/qr")
-def pairing_qr() -> HTMLResponse:
+def pairing_qr(request: Request) -> HTMLResponse:
     """
     Return an HTML page with QR code and connection string for instant pairing.
 
-    No auth required — opening this URL from the server machine is enough.
-    The connection string contains everything: server address + API key.
+    Access restricted to localhost — the connection string contains the API key.
     """
+    # Restrict to localhost: this endpoint exposes the API key without auth.
+    _LOCALHOST_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
+    client_host = request.client.host if request.client else None
+    if client_host is not None and client_host not in _LOCALHOST_HOSTS:
+        raise HTTPException(status_code=403, detail="QR pairing page is only accessible from localhost")
     if not API_KEY:
         raise HTTPException(status_code=500, detail="LIFE_API_KEY not configured")
 
@@ -906,6 +916,11 @@ from server.sync_ws import init_sync, router as sync_router
 
 init_sync(db)
 app.include_router(sync_router)
+
+from server.peer_server import init_peer_sync, router as peer_router
+
+init_peer_sync(db)
+app.include_router(peer_router)
 
 # =============================================================================
 # Optional: serve the built web UI (ui/dist) from the same process.

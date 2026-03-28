@@ -16,16 +16,18 @@ export interface ArkConnection {
  * @param connectionString  e.g. "ark://192.168.1.5:8000?key=dev-test-key"
  * @returns parsed connection or null if invalid format
  */
-export function parseConnectionString(connectionString: string): ArkConnection | null {
+export function parseConnectionString(
+  connectionString: string,
+): ArkConnection | null {
   const trimmed = connectionString.trim();
-  if (!trimmed.startsWith('ark://')) return null;
+  if (!trimmed.startsWith("ark://")) return null;
 
-  const rest = trimmed.slice('ark://'.length);
-  const keyIndex = rest.indexOf('?key=');
+  const rest = trimmed.slice("ark://".length);
+  const keyIndex = rest.indexOf("?key=");
   if (keyIndex === -1) return null;
 
   const hostPart = rest.slice(0, keyIndex);
-  const apiKey = rest.slice(keyIndex + '?key='.length);
+  const apiKey = rest.slice(keyIndex + "?key=".length);
 
   if (!hostPart || !apiKey) return null;
 

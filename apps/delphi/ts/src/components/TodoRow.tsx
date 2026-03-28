@@ -1,5 +1,5 @@
-import { Circle, CheckCircle2 } from 'lucide-react';
-import type { TodoItem } from '@/types/task';
+import { Circle, CheckCircle2 } from "lucide-react";
+import type { TodoItem } from "@/types/task";
 
 type TodoRowProps = {
   todo: TodoItem;
@@ -8,7 +8,12 @@ type TodoRowProps = {
   extra?: React.ReactNode;
 };
 
-export default function TodoRow({ todo, onComplete, onTrash, extra }: TodoRowProps) {
+export default function TodoRow({
+  todo,
+  onComplete,
+  onTrash,
+  extra,
+}: TodoRowProps) {
   const isCompleted = todo.isCompleted || todo.isCancelled;
 
   return (
@@ -18,17 +23,24 @@ export default function TodoRow({ todo, onComplete, onTrash, extra }: TodoRowPro
         {isCompleted ? (
           <CheckCircle2 size={18} className="text-(--muted-foreground)" />
         ) : (
-          <Circle size={18} className="text-(--ring) hover:text-(--foreground)" />
+          <Circle
+            size={18}
+            className="text-(--ring) hover:text-(--foreground)"
+          />
         )}
       </button>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className={`truncate text-sm ${isCompleted ? 'text-(--muted-foreground) line-through' : 'text-(--foreground)'}`}>
+        <div
+          className={`truncate text-sm ${isCompleted ? "text-(--muted-foreground) line-through" : "text-(--foreground)"}`}
+        >
           {todo.title}
         </div>
         {todo.notes && (
-          <div className="truncate text-xs text-(--muted-foreground)/70">{todo.notes}</div>
+          <div className="truncate text-xs text-(--muted-foreground)/70">
+            {todo.notes}
+          </div>
         )}
       </div>
 

@@ -158,6 +158,10 @@ class HeartClient {
       this.child.removeAllListeners()
       this.child.stdout.removeAllListeners()
       this.child.stderr.removeAllListeners()
+
+      if (!this.child.killed) {
+        this.child.kill()
+      }
     }
 
     this.child = null

@@ -1,5 +1,5 @@
-import { Moon, Sun } from 'lucide-react';
-import { useTheme } from '@/features/themeProvider';
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "@/features/themeProvider";
 
 export function ModeToggle() {
   const { theme, toggleTheme } = useTheme();
@@ -10,7 +10,7 @@ export function ModeToggle() {
         onClick={toggleTheme}
         className="rounded-md p-3 text-sm"
       >
-        {theme === 'dark' ? <Moon /> : <Sun />}
+        {theme === "dark" ? <Moon /> : <Sun />}
       </button>
       {/* <button onClick={() => setTheme('system')} className="text-xs underline">
         system

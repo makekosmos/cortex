@@ -1,9 +1,9 @@
-import type { Tag } from '@/types/task';
+import type { Tag } from "@/types/task";
 const uuid = () => crypto.randomUUID();
 
 export function createTag(
   title: string,
-  color: string = 'blue',
+  color: string = "blue",
   shortcut?: string | null,
 ): Tag {
   return {

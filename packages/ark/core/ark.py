@@ -838,6 +838,182 @@ class Ark:
             self._link_event_entity(conn, event_id, entity_id, role)
 
     # ========================================================================
+    # P2P Sync: Mesh & Peers
+    # ========================================================================
+
+    def upsert_mesh(
+        self,
+        mesh_id: str,
+        mesh_secret_hash: str,
+        relay_url: Optional[str] = None,
+    ) -> str:
+        """
+        Create or update a mesh network entry.
+
+        Returns:
+            The mesh_id
+        """
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO sync_mesh (mesh_id, mesh_secret_hash, relay_url)
+                VALUES (?, ?, ?)
+                ON CONFLICT(mesh_id) DO UPDATE SET
+                    mesh_secret_hash = excluded.mesh_secret_hash,
+                    relay_url = excluded.relay_url
+                """,
+                (mesh_id, mesh_secret_hash, relay_url),
+            )
+        return mesh_id
+
+    def get_mesh(self, mesh_id: str) -> Optional[dict[str, Any]]:
+        """Get a mesh network by ID."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM sync_mesh WHERE mesh_id = ?", (mesh_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "mesh_id": row["mesh_id"],
+                "mesh_secret_hash": row["mesh_secret_hash"],
+                "relay_url": row["relay_url"],
+                "created_at": row["created_at"],
+            }
+
+    def list_meshes(self) -> list[dict[str, Any]]:
+        """List all mesh networks."""
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM sync_mesh ORDER BY created_at DESC"
+            ).fetchall()
+            return [
+                {
+                    "mesh_id": row["mesh_id"],
+                    "mesh_secret_hash": row["mesh_secret_hash"],
+                    "relay_url": row["relay_url"],
+                    "created_at": row["created_at"],
+                }
+                for row in rows
+            ]
+
+    def delete_mesh(self, mesh_id: str) -> bool:
+        """Delete a mesh network and its associated peers."""
+        with self.connection() as conn:
+            conn.execute(
+                "DELETE FROM sync_peers WHERE mesh_id = ?", (mesh_id,)
+            )
+            cur = conn.execute(
+                "DELETE FROM sync_mesh WHERE mesh_id = ?", (mesh_id,)
+            )
+            return cur.rowcount == 1
+
+    def upsert_peer(
+        self,
+        peer_id: str,
+        name: str,
+        platform: str,
+        mesh_id: str,
+        connection_type: Optional[str] = None,
+        address: Optional[str] = None,
+    ) -> str:
+        """
+        Create or update a peer entry.
+
+        Returns:
+            The peer_id
+        """
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO sync_peers (peer_id, name, platform, mesh_id, connection_type, address)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(peer_id) DO UPDATE SET
+                    name = excluded.name,
+                    platform = excluded.platform,
+                    mesh_id = excluded.mesh_id,
+                    connection_type = excluded.connection_type,
+                    address = excluded.address
+                """,
+                (peer_id, name, platform, mesh_id, connection_type, address),
+            )
+        return peer_id
+
+    def get_peer(self, peer_id: str) -> Optional[dict[str, Any]]:
+        """Get a peer by ID."""
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM sync_peers WHERE peer_id = ?", (peer_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "peer_id": row["peer_id"],
+                "name": row["name"],
+                "platform": row["platform"],
+                "mesh_id": row["mesh_id"],
+                "last_connected": row["last_connected"],
+                "connection_type": row["connection_type"],
+                "address": row["address"],
+                "created_at": row["created_at"],
+            }
+
+    def list_peers(self, mesh_id: Optional[str] = None) -> list[dict[str, Any]]:
+        """List peers, optionally filtered by mesh_id."""
+        with self.connection() as conn:
+            if mesh_id:
+                rows = conn.execute(
+                    "SELECT * FROM sync_peers WHERE mesh_id = ? ORDER BY created_at DESC",
+                    (mesh_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM sync_peers ORDER BY created_at DESC"
+                ).fetchall()
+            return [
+                {
+                    "peer_id": row["peer_id"],
+                    "name": row["name"],
+                    "platform": row["platform"],
+                    "mesh_id": row["mesh_id"],
+                    "last_connected": row["last_connected"],
+                    "connection_type": row["connection_type"],
+                    "address": row["address"],
+                    "created_at": row["created_at"],
+                }
+                for row in rows
+            ]
+
+    def update_peer_connection(
+        self,
+        peer_id: str,
+        connection_type: Optional[str] = None,
+        address: Optional[str] = None,
+    ) -> bool:
+        """Update a peer's last_connected timestamp and optionally connection info."""
+        with self.connection() as conn:
+            now = utc_now()
+            cur = conn.execute(
+                """
+                UPDATE sync_peers SET
+                    last_connected = ?,
+                    connection_type = COALESCE(?, connection_type),
+                    address = COALESCE(?, address)
+                WHERE peer_id = ?
+                """,
+                (now, connection_type, address, peer_id),
+            )
+            return cur.rowcount == 1
+
+    def delete_peer(self, peer_id: str) -> bool:
+        """Delete a peer."""
+        with self.connection() as conn:
+            cur = conn.execute(
+                "DELETE FROM sync_peers WHERE peer_id = ?", (peer_id,)
+            )
+            return cur.rowcount == 1
+
+    # ========================================================================
     # Import Tracking
     # ========================================================================
 

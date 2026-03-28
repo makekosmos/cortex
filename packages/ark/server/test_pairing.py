@@ -229,8 +229,8 @@ class TestPairingQREndpoint:
         r = client.get("/pairing/qr")
         assert r.status_code == 200
         assert "text/html" in r.headers["content-type"]
-        assert "ark-" in r.text
-        assert "Ark Pairing" in r.text
+        assert "ark://" in r.text
+        assert "Ark" in r.text
 
     def test_qr_no_auth_required(self) -> None:
         """QR page should be accessible without API key (opened from server machine)."""

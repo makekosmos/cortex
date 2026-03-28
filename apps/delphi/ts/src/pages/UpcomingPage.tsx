@@ -1,7 +1,7 @@
-import { Calendar } from 'lucide-react';
-import { useMemo } from 'react';
-import useTodoStore from '@/store/todos';
-import type { TodoItem } from '@/types/task';
+import { Calendar } from "lucide-react";
+import { useMemo } from "react";
+import useTodoStore from "@/store/todos";
+import type { TodoItem } from "@/types/task";
 
 // ---------------------------------------------------------------------------
 // Section type
@@ -38,27 +38,32 @@ function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
-const shortDateFmt = new Intl.DateTimeFormat('ru-RU', {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
+const shortDateFmt = new Intl.DateTimeFormat("ru-RU", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
 });
 
-const dayNameFmt = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' });
+const dayNameFmt = new Intl.DateTimeFormat("ru-RU", { weekday: "long" });
 
-const monthFmt = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' });
+const monthFmt = new Intl.DateTimeFormat("ru-RU", {
+  month: "long",
+  year: "numeric",
+});
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function dayTitle(date: Date, offset: number): string {
-  if (offset === 1) return 'Завтра';
+  if (offset === 1) return "Завтра";
   return capitalize(dayNameFmt.format(date));
 }
 
 function weekOfYear(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const d = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
@@ -80,7 +85,12 @@ export default function UpcomingPage() {
   const upcomingTodos = useMemo(
     () =>
       todos.filter(
-        (t) => t.scheduledDate && !t.isCompleted && !t.isCancelled && !t.isTrashed && !t.isSomeday,
+        (t) =>
+          t.scheduledDate &&
+          !t.isCompleted &&
+          !t.isCancelled &&
+          !t.isTrashed &&
+          !t.isSomeday,
       ),
     [todos],
   );
@@ -120,8 +130,8 @@ export default function UpcomingPage() {
           return d >= weekStart && d < weekEnd;
         })
         .sort((a, b) => {
-          const da = a.scheduledDate ?? '';
-          const db = b.scheduledDate ?? '';
+          const da = a.scheduledDate ?? "";
+          const db = b.scheduledDate ?? "";
           return da.localeCompare(db);
         });
 
@@ -139,10 +149,18 @@ export default function UpcomingPage() {
     // Months beyond that, up to 1 year
     const monthBoundary = addDays(today, 30);
     const yearBoundary = addDays(today, 365);
-    let cursor = new Date(monthBoundary.getFullYear(), monthBoundary.getMonth(), 1);
+    let cursor = new Date(
+      monthBoundary.getFullYear(),
+      monthBoundary.getMonth(),
+      1,
+    );
 
     while (cursor < yearBoundary) {
-      const nextMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+      const nextMonth = new Date(
+        cursor.getFullYear(),
+        cursor.getMonth() + 1,
+        1,
+      );
       const monthTodos = upcomingTodos
         .filter((t) => {
           if (!t.scheduledDate) return false;
@@ -150,8 +168,8 @@ export default function UpcomingPage() {
           return d >= cursor && d < nextMonth;
         })
         .sort((a, b) => {
-          const da = a.scheduledDate ?? '';
-          const db = b.scheduledDate ?? '';
+          const da = a.scheduledDate ?? "";
+          const db = b.scheduledDate ?? "";
           return da.localeCompare(db);
         });
 
@@ -160,7 +178,7 @@ export default function UpcomingPage() {
         result.push({
           id: `month-${label}`,
           title: label,
-          dateLabel: '',
+          dateLabel: "",
           todos: monthTodos,
         });
       }
@@ -183,7 +201,9 @@ export default function UpcomingPage() {
       {/* Header */}
       <div className="flex items-center gap-2.5 px-7 pb-3 pt-6">
         <Calendar size={24} className="text-red-500" />
-        <h1 className="text-2xl font-bold text-(--foreground) select-none">Планы</h1>
+        <h1 className="text-2xl font-bold text-(--foreground) select-none">
+          Планы
+        </h1>
       </div>
 
       {/* Scrollable content */}
@@ -193,7 +213,9 @@ export default function UpcomingPage() {
             <div key={section.id}>
               {/* Section header */}
               <div className="sticky top-0 z-10 flex items-center gap-2 bg-(--background) px-7 py-2">
-                <span className="text-sm font-bold text-(--foreground)">{section.title}</span>
+                <span className="text-sm font-bold text-(--foreground)">
+                  {section.title}
+                </span>
                 {section.todos.length > 0 && (
                   <span className="text-xs font-medium text-(--muted-foreground)">
                     {section.todos.length}
@@ -201,20 +223,28 @@ export default function UpcomingPage() {
                 )}
                 <div className="flex-1" />
                 {section.dateLabel && (
-                  <span className="text-xs text-(--muted-foreground)/60">{section.dateLabel}</span>
+                  <span className="text-xs text-(--muted-foreground)/60">
+                    {section.dateLabel}
+                  </span>
                 )}
               </div>
 
               {/* Section content */}
               {section.todos.length === 0 ? (
-                <div className="px-7 py-2 text-xs text-(--muted-foreground)/50">Нет задач</div>
+                <div className="px-7 py-2 text-xs text-(--muted-foreground)/50">
+                  Нет задач
+                </div>
               ) : (
                 <div className="flex flex-col">
                   {section.todos.map((todo) => (
                     <UpcomingTodoRow
                       key={todo.id}
                       todo={todo}
-                      projectName={todo.projectId ? projectById.get(todo.projectId) : undefined}
+                      projectName={
+                        todo.projectId
+                          ? projectById.get(todo.projectId)
+                          : undefined
+                      }
                       onComplete={() => completeTodo(todo.id)}
                       onTrash={() => trashTodo(todo.id)}
                       onToggleToday={() =>
@@ -258,11 +288,7 @@ function UpcomingTodoRow({
       }}
     >
       {/* Checkbox */}
-      <button
-        type="button"
-        onClick={onComplete}
-        className="shrink-0"
-      >
+      <button type="button" onClick={onComplete} className="shrink-0">
         <div className="h-[18px] w-[18px] rounded-full border border-(--ring) transition-colors hover:bg-(--ring)" />
       </button>
 
@@ -270,7 +296,9 @@ function UpcomingTodoRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm text-(--foreground)">{todo.title}</div>
         {projectName && (
-          <div className="truncate text-xs text-(--muted-foreground)">{projectName}</div>
+          <div className="truncate text-xs text-(--muted-foreground)">
+            {projectName}
+          </div>
         )}
       </div>
 
@@ -282,8 +310,8 @@ function UpcomingTodoRow({
           title="На сегодня"
           className={`rounded px-1.5 py-0.5 text-[10px] transition-colors ${
             todo.isToday
-              ? 'bg-yellow-500/15 text-yellow-500'
-              : 'text-(--muted-foreground) hover:bg-(--accent)'
+              ? "bg-yellow-500/15 text-yellow-500"
+              : "text-(--muted-foreground) hover:bg-(--accent)"
           }`}
         >
           Сегодня

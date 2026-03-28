@@ -95,6 +95,10 @@ struct TodoListView: View {
         .toolbar(.hidden, for: .automatic)
         .toolbarBackground(.hidden)
         // Recompute cache when inputs change
+        .onChange(of: allTodos.map(\.isCompleted)) { _, _ in refilter() }
+        .onChange(of: allTodos.map(\.isTrashed)) { _, _ in refilter() }
+        .onChange(of: allTodos.map(\.isToday)) { _, _ in refilter() }
+        .onChange(of: allTodos.map(\.isSomeday)) { _, _ in refilter() }
         .onChange(of: allTodos.count) { _, _ in refilter() }
         .onChange(of: smartList) { _, _ in dismissCreation(); viewModel.clearSelection(); refilter() }
         .onChange(of: project?.id) { _, _ in dismissCreation(); viewModel.clearSelection(); refilter() }
@@ -218,7 +222,8 @@ struct TodoListView: View {
                 }
                 syncClient.sendTodoChange(todo, changeType: "update")
                 if !todo.isCompleted { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(800))
                     withAnimation(.easeOut(duration: 0.3)) {
                         viewModel.removeCompletedFromView(todo.id)
                     }

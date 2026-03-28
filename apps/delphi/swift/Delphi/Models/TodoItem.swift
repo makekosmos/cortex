@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class TodoItem {
-    var id: UUID
+    @Attribute(.unique) var id: UUID
     var title: String
     var notes: String?
     var priority: Priority

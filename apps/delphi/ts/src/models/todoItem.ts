@@ -1,4 +1,4 @@
-import { Priority, type TodoItem, type ChecklistItem } from '@/types/task';
+import { Priority, type TodoItem, type ChecklistItem } from "@/types/task";
 
 const uuid = () => crypto.randomUUID();
 
@@ -108,10 +108,7 @@ export function createChecklistItem(
   };
 }
 
-export function addChecklistItem(
-  todo: TodoItem,
-  title: string,
-): TodoItem {
+export function addChecklistItem(todo: TodoItem, title: string): TodoItem {
   const item = createChecklistItem(title, todo.id);
   item.sortOrder = todo.checklistItems.length;
   return {
@@ -120,10 +117,7 @@ export function addChecklistItem(
   };
 }
 
-export function toggleChecklistItem(
-  todo: TodoItem,
-  itemId: string,
-): TodoItem {
+export function toggleChecklistItem(todo: TodoItem, itemId: string): TodoItem {
   return {
     ...todo,
     checklistItems: todo.checklistItems.map((ci) =>
@@ -132,10 +126,7 @@ export function toggleChecklistItem(
   };
 }
 
-export function removeChecklistItem(
-  todo: TodoItem,
-  itemId: string,
-): TodoItem {
+export function removeChecklistItem(todo: TodoItem, itemId: string): TodoItem {
   return {
     ...todo,
     checklistItems: todo.checklistItems.filter((ci) => ci.id !== itemId),

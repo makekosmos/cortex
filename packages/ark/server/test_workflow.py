@@ -36,20 +36,19 @@ _temp_dir = tempfile.mkdtemp()
 _db_path = str(Path(_temp_dir) / "test_workflow.db")
 
 os.environ["LIFE_DB_PATH"] = _db_path
-os.environ["LIFE_API_KEY"] = "test-workflow-key"
+os.environ.setdefault("LIFE_API_KEY", "test-key")
 os.environ["ARK_MDNS"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from server.app import API_KEY, app, db  # noqa: E402
+import server.app as app_mod  # noqa: E402
+import server.sync_ws as sync_ws_mod  # noqa: E402
+import server.peer_server as peer_server_mod  # noqa: E402
 from server.pairing import _codes, _lock  # noqa: E402
 from server.sync_ws import _ensure_sync_tables, manager  # noqa: E402
 
-client = TestClient(app)
-HEADERS = {"X-API-Key": API_KEY}
-
 # Ensure sync tables exist for the workflow
-_ensure_sync_tables(db)
+_ensure_sync_tables(app_mod.db)
 
 
 # ---------------------------------------------------------------------------
@@ -57,11 +56,10 @@ _ensure_sync_tables(db)
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(autouse=True)
-def _clean_state() -> Any:
-    """Wipe all data between tests so they stay independent."""
-    yield
-    with db.connection() as conn:
+def _wipe_db() -> None:
+    """Clear all data so tests stay independent."""
+    _ensure_sync_tables(app_mod.db)
+    with app_mod.db.connection() as conn:
         conn.execute("DELETE FROM events")
         conn.execute("DELETE FROM event_entity_links")
         conn.execute("DELETE FROM entities")
@@ -70,9 +68,20 @@ def _clean_state() -> Any:
         conn.execute("DELETE FROM sync_vectors")
     with _lock:
         _codes.clear()
-    # Clear any lingering WS connections
     manager._connections.clear()
     manager._device_info.clear()
+
+
+@pytest.fixture(autouse=True)
+def _clean_state() -> Any:
+    """Wipe all data between tests so they stay independent."""
+    # Re-initialize sync modules to use the correct DB
+    # (test_sync_ws.py reloads app.py and may leave _db_ref pointing elsewhere)
+    sync_ws_mod.init_sync(app_mod.db)
+    peer_server_mod.init_peer_sync(app_mod.db)
+    _wipe_db()
+    yield
+    _wipe_db()
 
 
 @pytest.fixture(autouse=True)
@@ -97,14 +106,19 @@ def _mock_ip() -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _do_pairing(device_name: str = "Test Phone", platform: str = "android") -> dict[str, Any]:
+def _make_client() -> TestClient:
+    return TestClient(app_mod.app)
+
+
+def _do_pairing(tc: TestClient, device_name: str = "Test Phone", platform: str = "android") -> dict[str, Any]:
     """Run the pairing flow and return claim response (server_url, api_key, device_id)."""
+    headers = {"X-API-Key": app_mod.API_KEY}
     with patch("server.discovery._get_local_ip", return_value="192.168.1.100"):
-        r1 = client.post("/pairing/create", headers=HEADERS)
+        r1 = tc.post("/pairing/create", headers=headers)
     assert r1.status_code == 200
     code = r1.json()["code"]
 
-    r2 = client.post(
+    r2 = tc.post(
         "/pairing/claim",
         json={"code": code, "device_name": device_name, "platform": platform},
     )
@@ -124,10 +138,14 @@ class TestEndToEndWorkflow:
     """
 
     def test_full_pair_sync_workflow(self) -> None:
+        tc = _make_client()
+        headers = {"X-API-Key": app_mod.API_KEY}
+        db = app_mod.db
+
         # ---------------------------------------------------------------
         # Step 1-2: Pairing — create code and claim it
         # ---------------------------------------------------------------
-        claim = _do_pairing(device_name="Pixel 8", platform="android")
+        claim = _do_pairing(tc, device_name="Pixel 8", platform="android")
 
         assert "server_url" in claim
         assert "api_key" in claim
@@ -150,7 +168,7 @@ class TestEndToEndWorkflow:
         # ---------------------------------------------------------------
         # Step 3-4: Connect via WebSocket, send sync_start
         # ---------------------------------------------------------------
-        with client.websocket_connect(f"/ws/sync?key={api_key}") as ws:
+        with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws:
             ws.send_json({
                 "type": "sync_start",
                 "device_id": device_id,
@@ -166,7 +184,7 @@ class TestEndToEndWorkflow:
             # ---------------------------------------------------------------
             # Step 5: Create an event via HTTP API
             # ---------------------------------------------------------------
-            r = client.post(
+            r = tc.post(
                 "/events",
                 json={
                     "event_type": "task",
@@ -174,7 +192,7 @@ class TestEndToEndWorkflow:
                     "summary": "Buy groceries",
                     "category": "personal",
                 },
-                headers=HEADERS,
+                headers=headers,
             )
             assert r.status_code == 200
             http_event_id = r.json()["id"]
@@ -185,7 +203,7 @@ class TestEndToEndWorkflow:
             # This is expected: only WS-originated changes are broadcast.)
             # Verify the event exists via GET instead.
             # ---------------------------------------------------------------
-            r2 = client.get(f"/events/{http_event_id}", headers=HEADERS)
+            r2 = tc.get(f"/events/{http_event_id}", headers=headers)
             assert r2.status_code == 200
             assert r2.json()["summary"] == "Buy groceries"
 
@@ -212,7 +230,7 @@ class TestEndToEndWorkflow:
         # ---------------------------------------------------------------
         # Step 8: Verify the WS-created event appears in HTTP API
         # ---------------------------------------------------------------
-        r3 = client.get("/events?event_type=note", headers=HEADERS)
+        r3 = tc.get("/events?event_type=note", headers=headers)
         assert r3.status_code == 200
         notes = r3.json()
         ws_notes = [e for e in notes if e["summary"] == "WS Note"]
@@ -222,10 +240,10 @@ class TestEndToEndWorkflow:
         # Step 9-10: Connect a second WebSocket client, verify it
         # receives existing events via sync_changes
         # ---------------------------------------------------------------
-        second_claim = _do_pairing(device_name="MacBook", platform="macos")
+        second_claim = _do_pairing(tc, device_name="MacBook", platform="macos")
         second_device_id = second_claim["device_id"]
 
-        with client.websocket_connect(f"/ws/sync?key={api_key}") as ws2:
+        with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws2:
             ws2.send_json({
                 "type": "sync_start",
                 "device_id": second_device_id,
@@ -247,12 +265,13 @@ class TestPairThenSyncMultipleChanges:
     """Pair a device, push multiple changes via WS, verify second device gets all."""
 
     def test_batch_sync_after_pairing(self) -> None:
-        claim = _do_pairing(device_name="Phone A", platform="ios")
+        tc = _make_client()
+        claim = _do_pairing(tc, device_name="Phone A", platform="ios")
         api_key = claim["api_key"]
         device_id = claim["device_id"]
 
         # First device sends a batch of changes
-        with client.websocket_connect(f"/ws/sync?key={api_key}") as ws1:
+        with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws1:
             ws1.send_json({
                 "type": "sync_start",
                 "device_id": device_id,
@@ -288,10 +307,10 @@ class TestPairThenSyncMultipleChanges:
             assert ack["applied"] == 3
 
         # Second device pairs and connects
-        claim2 = _do_pairing(device_name="Phone B", platform="android")
+        claim2 = _do_pairing(tc, device_name="Phone B", platform="android")
         device_id_2 = claim2["device_id"]
 
-        with client.websocket_connect(f"/ws/sync?key={api_key}") as ws2:
+        with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws2:
             ws2.send_json({
                 "type": "sync_start",
                 "device_id": device_id_2,
@@ -312,12 +331,13 @@ class TestVersionVectorFiltering:
     """Verify that a device with an up-to-date vector skips known changes."""
 
     def test_vector_skips_seen_changes(self) -> None:
-        claim = _do_pairing(device_name="Device X", platform="test")
+        tc = _make_client()
+        claim = _do_pairing(tc, device_name="Device X", platform="test")
         api_key = claim["api_key"]
         device_id = claim["device_id"]
 
         # Device X sends a change
-        with client.websocket_connect(f"/ws/sync?key={api_key}") as ws:
+        with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws:
             ws.send_json({
                 "type": "sync_start",
                 "device_id": device_id,
@@ -337,10 +357,10 @@ class TestVersionVectorFiltering:
             seq = ack["device_seq"]
 
         # Device Y connects with vector that includes Device X's seq
-        claim2 = _do_pairing(device_name="Device Y", platform="test")
+        claim2 = _do_pairing(tc, device_name="Device Y", platform="test")
         device_id_2 = claim2["device_id"]
 
-        with client.websocket_connect(f"/ws/sync?key={api_key}") as ws2:
+        with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws2:
             ws2.send_json({
                 "type": "sync_start",
                 "device_id": device_id_2,
@@ -358,11 +378,12 @@ class TestRealtimeBroadcastBetweenDevices:
     """Two devices connected simultaneously — one sends, the other receives."""
 
     def test_realtime_broadcast(self) -> None:
-        claim1 = _do_pairing(device_name="Sender", platform="test")
-        claim2 = _do_pairing(device_name="Receiver", platform="test")
+        tc = _make_client()
+        claim1 = _do_pairing(tc, device_name="Sender", platform="test")
+        claim2 = _do_pairing(tc, device_name="Receiver", platform="test")
         api_key = claim1["api_key"]
 
-        with client.websocket_connect(f"/ws/sync?key={api_key}") as ws_sender:
+        with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws_sender:
             ws_sender.send_json({
                 "type": "sync_start",
                 "device_id": claim1["device_id"],
@@ -372,7 +393,7 @@ class TestRealtimeBroadcastBetweenDevices:
             })
             ws_sender.receive_json()  # empty sync_changes
 
-            with client.websocket_connect(f"/ws/sync?key={api_key}") as ws_receiver:
+            with tc.websocket_connect(f"/ws/sync?key={api_key}") as ws_receiver:
                 ws_receiver.send_json({
                     "type": "sync_start",
                     "device_id": claim2["device_id"],

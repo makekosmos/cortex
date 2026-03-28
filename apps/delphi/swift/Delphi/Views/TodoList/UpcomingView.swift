@@ -7,6 +7,7 @@ struct UpcomingView: View {
     @Environment(ArkSyncClient.self) private var syncClient
     @Query private var allTodos: [TodoItem]
     @State private var expandedTodoID: UUID?
+    @State private var cachedSections: [UpcomingSection] = []
 
     private static let headerDateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -33,7 +34,11 @@ struct UpcomingView: View {
         }
     }
 
-    private var sections: [UpcomingSection] {
+    private func recomputeSections() {
+        cachedSections = computeSections()
+    }
+
+    private func computeSections() -> [UpcomingSection] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
 
@@ -114,7 +119,7 @@ struct UpcomingView: View {
 
                 ScrollView {
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        ForEach(sections) { section in
+                        ForEach(cachedSections) { section in
                             Section {
                                 if section.todos.isEmpty {
                                     Text("Нет задач")
@@ -163,6 +168,8 @@ struct UpcomingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .toolbar(.hidden, for: .automatic)
         .toolbarBackground(.hidden)
+        .onAppear { recomputeSections() }
+        .onChange(of: allTodos.count) { _, _ in recomputeSections() }
     }
 
     @ViewBuilder

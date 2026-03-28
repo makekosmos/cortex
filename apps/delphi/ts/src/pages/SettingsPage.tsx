@@ -1,30 +1,37 @@
-import { Database, Link, SunMoon, Unlink } from 'lucide-react';
-import { useState } from 'react';
-import { useTheme } from '@/features/themeProvider';
+import { Database, Link, SunMoon, Unlink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useTheme } from "@/features/themeProvider";
 import {
   arkSync,
   getArkApiKey,
   getArkUrl,
   setArkApiKey,
   setArkUrl,
-} from '@/services/sync/ark-client';
-import { parseConnectionString } from '@/services/sync/pairing';
+} from "@/services/sync/ark-client";
+import { parseConnectionString } from "@/services/sync/pairing";
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
 
   const isPaired = Boolean(getArkUrl() && getArkApiKey());
   const [arkConnected, setArkConnected] = useState(arkSync.isConnected);
-  const [arkMessage, setArkMessage] = useState('');
+  const [arkMessage, setArkMessage] = useState("");
 
   // Pairing form state (when not paired)
-  const [connectionCode, setConnectionCode] = useState('');
+  const [connectionCode, setConnectionCode] = useState("");
   const [paired, setPaired] = useState(isPaired);
+
+  // Single status listener with cleanup — prevents memory leak from
+  // registering a new listener on every connect/reconnect click.
+  useEffect(() => {
+    const unsub = arkSync.onStatus((connected) => setArkConnected(connected));
+    return unsub;
+  }, []);
 
   const handleConnect = () => {
     const parsed = parseConnectionString(connectionCode);
     if (!parsed) {
-      setArkMessage('Неверный формат. Ожидается: ark://host:port?key=...');
+      setArkMessage("Неверный формат. Ожидается: ark://host:port?key=...");
       return;
     }
 
@@ -34,18 +41,17 @@ export default function SettingsPage() {
 
     // Auto-connect
     arkSync.disconnect();
-    arkSync.onStatus((connected) => setArkConnected(connected));
     arkSync.connect(parsed.server_url, parsed.api_key);
-    setArkMessage('Подключено к Ark.');
+    setArkMessage("Подключено к Ark.");
   };
 
   const handleUnpair = () => {
     arkSync.disconnect();
-    setArkUrl('');
-    setArkApiKey('');
+    setArkUrl("");
+    setArkApiKey("");
     setArkConnected(false);
     setPaired(false);
-    setArkMessage('Устройство отвязано.');
+    setArkMessage("Устройство отвязано.");
   };
 
   const handleReconnectArk = () => {
@@ -54,15 +60,14 @@ export default function SettingsPage() {
     if (!url || !key) return;
 
     arkSync.disconnect();
-    arkSync.onStatus((connected) => setArkConnected(connected));
     arkSync.connect(url, key);
-    setArkMessage('Подключение...');
+    setArkMessage("Подключение...");
   };
 
   const handleDisconnectArk = () => {
     arkSync.disconnect();
     setArkConnected(false);
-    setArkMessage('Отключено от Ark.');
+    setArkMessage("Отключено от Ark.");
   };
 
   return (
@@ -81,16 +86,14 @@ export default function SettingsPage() {
             <>
               <div className="mb-4 flex items-center gap-2 text-sm">
                 <div
-                  className={`h-2 w-2 rounded-full ${arkConnected ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                  className={`h-2 w-2 rounded-full ${arkConnected ? "bg-emerald-500" : "bg-rose-500"}`}
                 />
                 <span className="text-(--muted-foreground)">
-                  {arkConnected ? 'Подключено' : 'Отключено'}
+                  {arkConnected ? "Подключено" : "Отключено"}
                 </span>
               </div>
 
-              <label className="mb-2 block text-sm font-medium">
-                Сервер
-              </label>
+              <label className="mb-2 block text-sm font-medium">Сервер</label>
               <input
                 value={getArkUrl()}
                 readOnly
@@ -127,14 +130,19 @@ export default function SettingsPage() {
             </>
           ) : (
             <>
-              <label className="mb-2 block text-sm font-medium" htmlFor="connection-code">
+              <label
+                className="mb-2 block text-sm font-medium"
+                htmlFor="connection-code"
+              >
                 Код подключения
               </label>
               <input
                 id="connection-code"
                 value={connectionCode}
                 onChange={(event) => setConnectionCode(event.target.value)}
-                onKeyDown={(event) => { if (event.key === 'Enter') handleConnect(); }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleConnect();
+                }}
                 className="border-(--border) bg-(--secondary) mb-4 w-full rounded-md border px-3 py-2 text-sm font-mono"
                 placeholder="ark://192.168.1.5:8000?key=..."
                 autoComplete="off"
@@ -153,7 +161,9 @@ export default function SettingsPage() {
           )}
 
           {arkMessage ? (
-            <p className="text-(--muted-foreground) mt-3 text-sm">{arkMessage}</p>
+            <p className="text-(--muted-foreground) mt-3 text-sm">
+              {arkMessage}
+            </p>
           ) : null}
         </section>
 
@@ -165,27 +175,33 @@ export default function SettingsPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setTheme('light')}
+              onClick={() => setTheme("light")}
               className={`rounded-md px-3 py-2 text-sm ${
-                theme === 'light' ? 'bg-(--primary) text-(--primary-foreground)' : 'bg-(--secondary)'
+                theme === "light"
+                  ? "bg-(--primary) text-(--primary-foreground)"
+                  : "bg-(--secondary)"
               }`}
             >
               Light
             </button>
             <button
               type="button"
-              onClick={() => setTheme('dark')}
+              onClick={() => setTheme("dark")}
               className={`rounded-md px-3 py-2 text-sm ${
-                theme === 'dark' ? 'bg-(--primary) text-(--primary-foreground)' : 'bg-(--secondary)'
+                theme === "dark"
+                  ? "bg-(--primary) text-(--primary-foreground)"
+                  : "bg-(--secondary)"
               }`}
             >
               Dark
             </button>
             <button
               type="button"
-              onClick={() => setTheme('system')}
+              onClick={() => setTheme("system")}
               className={`rounded-md px-3 py-2 text-sm ${
-                theme === 'system' ? 'bg-(--primary) text-(--primary-foreground)' : 'bg-(--secondary)'
+                theme === "system"
+                  ? "bg-(--primary) text-(--primary-foreground)"
+                  : "bg-(--secondary)"
               }`}
             >
               System

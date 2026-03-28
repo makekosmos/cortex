@@ -1,4 +1,4 @@
-import type { Area } from '@/types/task';
+import type { Area } from "@/types/task";
 const uuid = () => crypto.randomUUID();
 
 export function createArea(title: string): Area {

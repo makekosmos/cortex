@@ -1,10 +1,10 @@
-import type { Task } from '@/types/task';
-import { isElectronRuntime } from '@/services/runtime/platform';
+import type { Task } from "@/types/task";
+import { isElectronRuntime } from "@/services/runtime/platform";
 
-const TASKS_KEY = 'todofus.tasks';
+const TASKS_KEY = "todofus.tasks";
 
 function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object';
+  return value !== null && typeof value === "object";
 }
 
 export function loadTasksFromWebStorage(): Task[] {
@@ -20,14 +20,15 @@ export function loadTasksFromWebStorage(): Task[] {
     return parsed
       .filter(isObject)
       .map((task) => ({
-        id: String(task.id ?? ''),
-        title: String(task.title ?? ''),
-        description: typeof task.description === 'string' ? task.description : null,
+        id: String(task.id ?? ""),
+        title: String(task.title ?? ""),
+        description:
+          typeof task.description === "string" ? task.description : null,
         completed: Boolean(task.completed),
         priority: Number(task.priority ?? 0),
-        due_date: typeof task.due_date === 'string' ? task.due_date : null,
-        list_id: typeof task.list_id === 'string' ? task.list_id : null,
-        user_id: typeof task.user_id === 'string' ? task.user_id : undefined,
+        due_date: typeof task.due_date === "string" ? task.due_date : null,
+        list_id: typeof task.list_id === "string" ? task.list_id : null,
+        user_id: typeof task.user_id === "string" ? task.user_id : undefined,
         created_at: new Date(String(task.created_at ?? Date.now())),
         updated_at: task.updated_at
           ? new Date(String(task.updated_at))

@@ -1,12 +1,12 @@
-import { normalizeApiUrl, normalizePassphrase } from '@/helpers/normalize';
+import { normalizeApiUrl, normalizePassphrase } from "@/helpers/normalize";
 
-const TOKEN_KEY = 'todofus.jwt';
-const API_URL_KEY = 'todofus.apiUrl';
-const PASSPHRASE_KEY = 'todofus.passphrase';
+const TOKEN_KEY = "todofus.jwt";
+const API_URL_KEY = "todofus.apiUrl";
+const PASSPHRASE_KEY = "todofus.passphrase";
 const REQUEST_TIMEOUT_MS = 12000;
 
 function getCookie(key: string) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
 }
@@ -87,7 +87,7 @@ export class ApiError extends Error {
 
   constructor(message: string, status: number) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
     this.status = status;
   }
 }
@@ -114,24 +114,24 @@ export { normalizeApiUrl, normalizePassphrase };
 
 export function getReadableError(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 401) return 'Invalid passphrase.';
+    if (error.status === 401) return "Invalid passphrase.";
     return error.message || `Request failed (${error.status}).`;
   }
   if (error instanceof Error) return error.message;
-  return 'Connection failed.';
+  return "Connection failed.";
 }
 
 export function getApiUrl() {
   const stored = storageGet(API_URL_KEY);
   const envValue = import.meta.env.VITE_API_URL;
-  const defaultValue = 'https://213.165.58.219.nip.io';
+  const defaultValue = "https://213.165.58.219.nip.io";
 
-  const storedLooksLocalhost = stored ? /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(stored) : false;
+  const storedLooksLocalhost = stored
+    ? /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(stored)
+    : false;
 
   const resolved =
-    stored && !storedLooksLocalhost
-      ? stored
-      : envValue ?? defaultValue;
+    stored && !storedLooksLocalhost ? stored : (envValue ?? defaultValue);
 
   return normalizeApiUrl(resolved);
 }
@@ -164,11 +164,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
   const headers = new Headers(init?.headers);
   if (init?.body !== undefined) {
-    headers.set('Content-Type', 'application/json');
+    headers.set("Content-Type", "application/json");
   }
 
   if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const controller = new AbortController();
@@ -182,8 +182,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       signal: controller.signal,
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new ApiError('Request timeout. Check server availability.', 408);
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("Request timeout. Check server availability.", 408);
     }
     throw error;
   } finally {
@@ -217,13 +217,13 @@ export async function loginWithPassphrase(passphrase: string) {
   const normalizedPassphrase = normalizePassphrase(passphrase);
 
   const response = await fetch(`${getApiUrl()}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ passphrase: normalizedPassphrase }),
   });
 
   if (!response.ok) {
-    let message = 'Invalid passphrase';
+    let message = "Invalid passphrase";
     try {
       const parsed = (await response.json()) as { message?: string };
       if (parsed?.message) {
@@ -242,7 +242,7 @@ export async function loginWithPassphrase(passphrase: string) {
 }
 
 export function buildTasksWsUrl(apiUrl: string, token: string) {
-  const baseUrl = normalizeApiUrl(apiUrl).replace(/^http/, 'ws');
+  const baseUrl = normalizeApiUrl(apiUrl).replace(/^http/, "ws");
   return `${baseUrl}/ws?token=${encodeURIComponent(token)}`;
 }
 
@@ -277,19 +277,22 @@ export function connectTasksWebSocket(
 }
 
 export const api = {
-  getTasks: () => request<TaskDto[]>('/tasks'),
+  getTasks: () => request<TaskDto[]>("/tasks"),
   createTask: (title: string) =>
-    request<TaskDto>('/tasks', {
-      method: 'POST',
+    request<TaskDto>("/tasks", {
+      method: "POST",
       body: JSON.stringify({ title }),
     }),
-  updateTask: (id: string, patch: Partial<Pick<TaskDto, 'title' | 'completed'>>) =>
+  updateTask: (
+    id: string,
+    patch: Partial<Pick<TaskDto, "title" | "completed">>,
+  ) =>
     request<TaskDto>(`/tasks/${id}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(patch),
     }),
   deleteTask: (id: string) =>
     request<{ success: boolean }>(`/tasks/${id}`, {
-      method: 'DELETE',
+      method: "DELETE",
     }),
 };

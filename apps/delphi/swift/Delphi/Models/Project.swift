@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class Project {
-    var id: UUID
+    @Attribute(.unique) var id: UUID
     var title: String
     var notes: String?
     var status: ProjectStatus

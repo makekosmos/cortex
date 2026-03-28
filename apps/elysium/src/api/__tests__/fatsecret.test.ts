@@ -73,7 +73,7 @@ beforeEach(() => {
 });
 
 function mockFetch(html: string, ok = true) {
-  global.fetch = jest.fn().mockResolvedValue({
+  (globalThis as Record<string, unknown>).fetch = jest.fn().mockResolvedValue({
     ok,
     text: () => Promise.resolve(html),
   });
@@ -125,7 +125,7 @@ describe('searchFatSecret', () => {
   });
 
   it('returns empty array on network failure', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+    (globalThis as Record<string, unknown>).fetch = jest.fn().mockRejectedValue(new Error('Network error'));
     const results = await searchFatSecret('test');
     expect(results).toEqual([]);
   });
@@ -161,7 +161,7 @@ describe('searchFatSecret', () => {
     mockFetch(SAMPLE_HTML);
     await searchFatSecret('test', 3);
 
-    const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+    const calledUrl = (globalThis.fetch as jest.Mock).mock.calls[0][0];
     expect(calledUrl).toContain('pg=2'); // page 3 → pg=2 (0-indexed)
   });
 });

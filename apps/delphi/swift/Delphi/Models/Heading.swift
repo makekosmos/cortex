@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class Heading {
-    var id: UUID
+    @Attribute(.unique) var id: UUID
     var title: String
     var sortOrder: Int
 

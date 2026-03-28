@@ -75,6 +75,8 @@ final class ArkSyncClient {
         receiveTask = nil
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
+        session?.invalidateAndCancel()
+        session = nil
         isConnected = false
     }
 
@@ -96,7 +98,8 @@ final class ArkSyncClient {
             Task {
                 do {
                     let data = try JSONSerialization.data(withJSONObject: message)
-                    try await ws.send(.string(String(data: data, encoding: .utf8)!))
+                    guard let text = String(data: data, encoding: .utf8) else { return }
+                    try await ws.send(.string(text))
                 } catch {
                     logger.error("Failed to send change: \(error.localizedDescription)")
                     outbox.append(change)
@@ -162,6 +165,7 @@ final class ArkSyncClient {
             return
         }
 
+        session?.invalidateAndCancel()
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
         session = URLSession(configuration: config)
@@ -181,7 +185,11 @@ final class ArkSyncClient {
                     "vector": settings.versionVector,
                 ]
                 let data = try JSONSerialization.data(withJSONObject: syncStart)
-                try await ws.send(.string(String(data: data, encoding: .utf8)!))
+                guard let text = String(data: data, encoding: .utf8) else {
+                    logger.error("Failed to encode sync_start as UTF-8")
+                    return
+                }
+                try await ws.send(.string(text))
                 logger.info("Sent sync_start to \(url.absoluteString)")
 
                 isConnected = true
@@ -200,12 +208,12 @@ final class ArkSyncClient {
 
     private func startReceiving() {
         receiveTask?.cancel()
-        receiveTask = Task { [weak self] in
-            guard let self else { return }
+        guard let ws = webSocketTask else { return }
+        receiveTask = Task { [weak self, ws] in
             while !Task.isCancelled {
                 do {
-                    guard let ws = self.webSocketTask else { break }
                     let message = try await ws.receive()
+                    guard let self else { return }
                     switch message {
                     case .string(let text):
                         await self.handleMessage(text)
@@ -218,8 +226,10 @@ final class ArkSyncClient {
                     }
                 } catch {
                     if !Task.isCancelled {
-                        self.logger.error("WebSocket receive error: \(error.localizedDescription)")
-                        await MainActor.run { self.handleDisconnect() }
+                        await MainActor.run { [weak self] in
+                            self?.logger.error("WebSocket receive error: \(error.localizedDescription)")
+                            self?.handleDisconnect()
+                        }
                     }
                     break
                 }
@@ -462,7 +472,12 @@ final class ArkSyncClient {
 
         do {
             let data = try JSONSerialization.data(withJSONObject: message)
-            try await ws.send(.string(String(data: data, encoding: .utf8)!))
+            guard let text = String(data: data, encoding: .utf8) else {
+                outbox.insert(contentsOf: changes, at: 0)
+                pendingChanges = outbox.count
+                return
+            }
+            try await ws.send(.string(text))
             logger.info("Flushed \(changes.count) outbox changes")
         } catch {
             // Put them back

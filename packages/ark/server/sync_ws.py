@@ -52,7 +52,7 @@ class ConnectionManager:
             try:
                 await self._connections[device_id].close(code=4001, reason="replaced")
             except Exception:
-                pass
+                logger.debug("Connection cleanup error", exc_info=True)
         self._connections[device_id] = websocket
         self._device_info[device_id] = {"name": device_name, "platform": platform}
 
@@ -107,7 +107,8 @@ def _ensure_sync_tables(db: Ark) -> None:
                 data TEXT NOT NULL,
                 device_id TEXT NOT NULL,
                 device_seq INTEGER NOT NULL,
-                created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+                created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                synced INTEGER NOT NULL DEFAULT 0
             );
         """)
 
@@ -126,7 +127,6 @@ def _register_device(db: Ark, device_id: str, name: str, platform: str) -> None:
             """,
             (device_id, name, platform, now),
         )
-        conn.commit()
 
 
 def _get_server_vector(db: Ark) -> dict[str, int]:
@@ -204,7 +204,6 @@ def _apply_change(db: Ark, change: dict[str, Any], device_id: str) -> int:
             """,
             (event_id, change_type, data_json, device_id, next_seq),
         )
-        conn.commit()
 
     # Apply to actual events table
     _apply_to_events(db, event_id, change_type, data if isinstance(data, dict) else {})
@@ -270,7 +269,7 @@ async def _heartbeat(ws: WebSocket, device_id: str, interval: float = 30.0) -> N
             await asyncio.sleep(interval)
             await ws.send_json({"type": "ping"})
     except Exception:
-        pass
+        logger.debug("Heartbeat stopped for %s", device_id, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +306,12 @@ async def websocket_sync(websocket: WebSocket, key: Optional[str] = None) -> Non
     heartbeat_task: asyncio.Task[None] | None = None
 
     try:
-        # ---- Wait for sync_start ----
-        raw = await websocket.receive_text()
+        # ---- Wait for sync_start (with timeout to prevent idle connections) ----
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+        except asyncio.TimeoutError:
+            await websocket.close(code=4000, reason="sync_start timeout")
+            return
         msg = json.loads(raw)
 
         if msg.get("type") != "sync_start":

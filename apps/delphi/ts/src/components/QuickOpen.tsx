@@ -1,16 +1,16 @@
-import { CheckCircle, Folder, Search, Tag } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import useTodoStore from '@/store/todos';
-import type { TodoItem, Project, Tag as TagType } from '@/types/task';
+import { CheckCircle, Folder, Search, Tag } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useTodoStore from "@/store/todos";
+import type { TodoItem, Project, Tag as TagType } from "@/types/task";
 
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
 
 type QuickOpenResult =
-  | { kind: 'todo'; item: TodoItem }
-  | { kind: 'project'; item: Project }
-  | { kind: 'tag'; item: TagType };
+  | { kind: "todo"; item: TodoItem }
+  | { kind: "project"; item: Project }
+  | { kind: "tag"; item: TagType };
 
 function resultId(r: QuickOpenResult): string {
   return `${r.kind}-${r.item.id}`;
@@ -29,7 +29,10 @@ function fuzzyScore(text: string, query: string): number {
 
   // Token match: all query words present
   const queryTokens = q.split(/\s+/).filter(Boolean);
-  if (queryTokens.length > 1 && queryTokens.every((tok) => lower.includes(tok))) {
+  if (
+    queryTokens.length > 1 &&
+    queryTokens.every((tok) => lower.includes(tok))
+  ) {
     return 0.8;
   }
 
@@ -48,8 +51,8 @@ function fuzzyScore(text: string, query: string): number {
 
 export default function QuickOpen() {
   const [open, setOpen] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searchText, setSearchText] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,20 +63,20 @@ export default function QuickOpen() {
 
   const close = useCallback(() => {
     setOpen(false);
-    setSearchText('');
-    setDebouncedQuery('');
+    setSearchText("");
+    setDebouncedQuery("");
     setSelectedIndex(0);
   }, []);
 
   // Cmd+K to toggle
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === 'k') {
+      if (e.metaKey && e.key === "k") {
         e.preventDefault();
         setOpen((prev) => {
           if (prev) {
-            setSearchText('');
-            setDebouncedQuery('');
+            setSearchText("");
+            setDebouncedQuery("");
             setSelectedIndex(0);
             return false;
           }
@@ -81,8 +84,8 @@ export default function QuickOpen() {
         });
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   // Focus on open
@@ -119,19 +122,23 @@ export default function QuickOpen() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 8);
 
-    items.push(...scoredTodos.map((x) => ({ kind: 'todo' as const, item: x.todo })));
+    items.push(
+      ...scoredTodos.map((x) => ({ kind: "todo" as const, item: x.todo })),
+    );
 
     // Projects (top 3)
     const matchedProjects = projects
       .filter((p) => fuzzyScore(p.title, q) > 0)
       .slice(0, 3);
-    items.push(...matchedProjects.map((p) => ({ kind: 'project' as const, item: p })));
+    items.push(
+      ...matchedProjects.map((p) => ({ kind: "project" as const, item: p })),
+    );
 
     // Tags (top 3)
     const matchedTags = tags
       .filter((t) => fuzzyScore(t.title, q) > 0)
       .slice(0, 3);
-    items.push(...matchedTags.map((t) => ({ kind: 'tag' as const, item: t })));
+    items.push(...matchedTags.map((t) => ({ kind: "tag" as const, item: t })));
 
     return items;
   }, [debouncedQuery, todos, projects, tags]);
@@ -141,13 +148,13 @@ export default function QuickOpen() {
     const result = results[selectedIndex];
 
     // Navigate to relevant view based on result type
-    if (result.kind === 'todo') {
+    if (result.kind === "todo") {
       // Could dispatch navigation event; for now just close
-      console.log('Selected todo:', result.item.id);
-    } else if (result.kind === 'project') {
-      console.log('Selected project:', result.item.id);
-    } else if (result.kind === 'tag') {
-      console.log('Selected tag:', result.item.id);
+      console.log("Selected todo:", result.item.id);
+    } else if (result.kind === "project") {
+      console.log("Selected project:", result.item.id);
+    } else if (result.kind === "tag") {
+      console.log("Selected tag:", result.item.id);
     }
 
     close();
@@ -155,16 +162,16 @@ export default function QuickOpen() {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((prev) => Math.min(results.length - 1, prev + 1));
-      } else if (e.key === 'ArrowUp') {
+      } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((prev) => Math.max(0, prev - 1));
-      } else if (e.key === 'Enter') {
+      } else if (e.key === "Enter") {
         e.preventDefault();
         activateSelected();
-      } else if (e.key === 'Escape') {
+      } else if (e.key === "Escape") {
         e.preventDefault();
         close();
       }
@@ -219,7 +226,7 @@ export default function QuickOpen() {
         )}
 
         {/* Empty state */}
-        {results.length === 0 && debouncedQuery.trim() !== '' && (
+        {results.length === 0 && debouncedQuery.trim() !== "" && (
           <div className="px-4 py-3.5 text-center text-sm text-(--muted-foreground)">
             Ничего не найдено
           </div>
@@ -250,11 +257,11 @@ function ResultRow({
 }) {
   const icon = (() => {
     switch (result.kind) {
-      case 'todo':
+      case "todo":
         return <CheckCircle size={16} className="text-blue-500" />;
-      case 'project':
+      case "project":
         return <Folder size={16} className="text-purple-500" />;
-      case 'tag':
+      case "tag":
         return <Tag size={16} className="text-orange-500" />;
     }
   })();
@@ -263,21 +270,23 @@ function ResultRow({
 
   const subtitle = (() => {
     switch (result.kind) {
-      case 'todo': {
+      case "todo": {
         const todo = result.item as TodoItem;
-        if (todo.isCompleted) return 'Завершена';
+        if (todo.isCompleted) return "Завершена";
         if (todo.projectId) {
           const project = projects.find((p) => p.id === todo.projectId);
-          return project?.title ?? 'Входящие';
+          return project?.title ?? "Входящие";
         }
-        return 'Входящие';
+        return "Входящие";
       }
-      case 'project': {
+      case "project": {
         const project = result.item as Project;
-        const count = todos.filter((t) => t.projectId === project.id && !t.isTrashed).length;
+        const count = todos.filter(
+          (t) => t.projectId === project.id && !t.isTrashed,
+        ).length;
         return `${count} задач`;
       }
-      case 'tag': {
+      case "tag": {
         const tag = result.item;
         const count = todos.filter((t) => t.tagIds.includes(tag.id)).length;
         return `${count} задач`;
@@ -290,13 +299,15 @@ function ResultRow({
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       className={`flex cursor-pointer items-center gap-2.5 px-4 py-2 ${
-        isSelected ? 'bg-blue-500/10' : ''
+        isSelected ? "bg-blue-500/10" : ""
       }`}
     >
       <div className="shrink-0">{icon}</div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm text-(--foreground)">{title}</div>
-        <div className="truncate text-xs text-(--muted-foreground)">{subtitle}</div>
+        <div className="truncate text-xs text-(--muted-foreground)">
+          {subtitle}
+        </div>
       </div>
     </div>
   );

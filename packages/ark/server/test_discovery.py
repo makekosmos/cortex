@@ -35,8 +35,9 @@ def test_discovery() -> None:
     print(f"Discovered peers: {peers}")
 
     assert len(peers) >= 1, f"Expected at least 1 peer, got {len(peers)}"
-    assert peers[0]["name"] == "test-device"
-    assert peers[0]["port"] == 8765
+    test_peers = [p for p in peers if p["name"] == "test-device"]
+    assert len(test_peers) == 1, f"Expected test-device in peers, got {[p['name'] for p in peers]}"
+    assert test_peers[0]["port"] == 8765
     print("PASS: service discovered successfully")
 
     print("Stopping...")

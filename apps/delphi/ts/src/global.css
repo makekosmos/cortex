@@ -1,8 +1,8 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @font-face {
-  font-family: 'Zed Mono';
-  src: url('/fonts/zed-mono-extended.ttf') format('truetype');
+  font-family: "Zed Mono";
+  src: url("/fonts/zed-mono-extended.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
 }
@@ -63,7 +63,7 @@ li {
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 
-  --font-mono: 'Zed Mono', sans-serif;
+  --font-mono: "Zed Mono", sans-serif;
   --radius: 0.65rem;
 
   --background: oklch(1 0 0);

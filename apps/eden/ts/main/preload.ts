@@ -14,27 +14,11 @@ import type { CodeFormatResult, CodeLintResult, CodeToolsSettings } from './code
 import type { HevyLoginResponse } from './hevy' // eslint-disable-line
 
 // --------- Expose some API to the Renderer process ---------
-contextBridge.exposeInMainWorld('ipcRenderer', {
-  on(...args: Parameters<typeof ipcRenderer.on>) {
-    const [channel, listener] = args
-    return ipcRenderer.on(channel, (event, ...args) => listener(event, ...args))
-  },
-  off(...args: Parameters<typeof ipcRenderer.off>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.off(channel, ...omit)
-  },
-  send(...args: Parameters<typeof ipcRenderer.send>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.send(channel, ...omit)
-  },
-  invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
-    const [channel, ...omit] = args
-    return ipcRenderer.invoke(channel, ...omit)
-  },
-
-  // You can expose other APTs you need here.
-  // ...
-})
+// NOTE: Only expose specific, validated API methods via window.api below.
+// A raw ipcRenderer bridge (on/off/send/invoke) is intentionally NOT exposed
+// because it allows the renderer to call ANY IPC channel, bypassing the
+// whitelisted API surface. If XSS occurs, an attacker could invoke arbitrary
+// IPC handlers (e.g., delete entries, exec commands, access filesystem).
 
 contextBridge.exposeInMainWorld('api', {
   saveEntry: (entry: Entry): Promise<SaveEntryResult> => ipcRenderer.invoke('save-entry', entry),

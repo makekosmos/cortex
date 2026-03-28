@@ -1,6 +1,6 @@
-import type { Task } from '@/types/task';
+import type { Task } from "@/types/task";
 
-const DATA_DIR = 'data';
+const DATA_DIR = "data";
 const FILE_PATH = `${DATA_DIR}/tasks.json`;
 
 function getElectronFs() {

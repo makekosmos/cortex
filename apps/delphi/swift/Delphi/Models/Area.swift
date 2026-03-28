@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class Area {
-    var id: UUID
+    @Attribute(.unique) var id: UUID
     var title: String
     var sortOrder: Int
     var isVisible: Bool

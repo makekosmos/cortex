@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class ChecklistItem {
-    var id: UUID
+    @Attribute(.unique) var id: UUID
     var title: String
     var isCompleted: Bool
     var sortOrder: Int

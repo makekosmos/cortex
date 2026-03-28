@@ -8,9 +8,9 @@
  * instead of SQLite for vector persistence.
  */
 
-import { normalizeApiUrl } from '@/helpers/normalize';
-import type { Task, Project } from '@/types/task';
-import { ProjectStatus } from '@/types/task';
+import { normalizeApiUrl } from "@/helpers/normalize";
+import type { Task, Project, TodoItem } from "@/types/task";
+import { Priority, ProjectStatus } from "@/types/task";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,7 +18,7 @@ import { ProjectStatus } from '@/types/task';
 
 export interface ArkChange {
   event_id: string;
-  change_type: 'create' | 'update' | 'delete';
+  change_type: "create" | "update" | "delete";
   data: Record<string, unknown>;
   device_id?: string;
   device_seq?: number;
@@ -31,8 +31,8 @@ type StatusHandler = (connected: boolean) => void;
 // Version vector persistence (localStorage)
 // ---------------------------------------------------------------------------
 
-const VECTOR_KEY = 'delphi.sync_vector';
-const DEVICE_ID_KEY = 'delphi.sync_device_id';
+const VECTOR_KEY = "delphi.sync_vector";
+const DEVICE_ID_KEY = "delphi.sync_device_id";
 
 function loadVector(): Record<string, number> {
   try {
@@ -60,11 +60,11 @@ function getOrCreateDeviceId(): string {
 // Ark settings persistence
 // ---------------------------------------------------------------------------
 
-const ARK_URL_KEY = 'delphi.ark_url';
-const ARK_KEY_KEY = 'delphi.ark_api_key';
+const ARK_URL_KEY = "delphi.ark_url";
+const ARK_KEY_KEY = "delphi.ark_api_key";
 
 export function getArkUrl(): string {
-  return localStorage.getItem(ARK_URL_KEY) ?? '';
+  return localStorage.getItem(ARK_URL_KEY) ?? "";
 }
 
 export function setArkUrl(url: string) {
@@ -72,7 +72,7 @@ export function setArkUrl(url: string) {
 }
 
 export function getArkApiKey(): string {
-  return localStorage.getItem(ARK_KEY_KEY) ?? '';
+  return localStorage.getItem(ARK_KEY_KEY) ?? "";
 }
 
 export function setArkApiKey(key: string) {
@@ -85,15 +85,15 @@ export function setArkApiKey(key: string) {
 
 export function taskToArkChange(
   task: Task,
-  changeType: 'create' | 'update' | 'delete',
+  changeType: "create" | "update" | "delete",
 ): ArkChange {
   return {
     event_id: task.id,
     change_type: changeType,
     data: {
-      event_type: 'task',
-      category: 'productivity',
-      source: 'delphi-web',
+      event_type: "task",
+      category: "productivity",
+      source: "delphi-web",
       source_id: task.id,
       summary: task.title,
       occurred_at: task.created_at.toISOString(),
@@ -116,30 +116,100 @@ export function arkChangeToTask(change: ArkChange): Task | null {
   // The inner data dict (task fields) is at change.data.data for both Swift and TS formats
   const outerData = change.data as Record<string, unknown> | undefined;
   const data = outerData?.data as Record<string, unknown> | undefined;
-  if (!data || typeof data !== 'object') return null;
+  if (!data || typeof data !== "object") return null;
 
   // Only process task events (accept both "task" and "task_created" for compat)
   const eventType = outerData?.event_type as string | undefined;
-  if (eventType && eventType !== 'task' && eventType !== 'task_created') return null;
+  if (eventType && eventType !== "task" && eventType !== "task_created")
+    return null;
 
-  const id = (data.id as string) || (outerData?.source_id as string) || change.event_id;
+  const id =
+    (data.id as string) || (outerData?.source_id as string) || change.event_id;
   const title = (data.title as string) ?? (outerData?.summary as string);
-  if (!id || typeof title !== 'string') return null;
+  if (!id || typeof title !== "string") return null;
 
   return {
     id,
     title,
     // Swift sends "notes", TS sends "description"
-    description: (data.description as string | null) ?? (data.notes as string | null) ?? null,
+    description:
+      (data.description as string | null) ??
+      (data.notes as string | null) ??
+      null,
     // Swift sends "isCompleted", TS sends "completed"
     completed: Boolean(data.completed ?? data.isCompleted ?? false),
     priority: Number(data.priority ?? 0),
-    due_date: (data.due_date as string | null) ?? (data.deadline as string | null) ?? null,
+    due_date:
+      (data.due_date as string | null) ??
+      (data.deadline as string | null) ??
+      null,
     list_id: (data.list_id as string | null) ?? null,
-    created_at: new Date(String(data.created_at ?? data.createdAt ?? Date.now())),
-    updated_at: (data.updated_at ?? data.updatedAt)
-      ? new Date(String(data.updated_at ?? data.updatedAt))
-      : undefined,
+    created_at: new Date(
+      String(data.created_at ?? data.createdAt ?? Date.now()),
+    ),
+    updated_at:
+      (data.updated_at ?? data.updatedAt)
+        ? new Date(String(data.updated_at ?? data.updatedAt))
+        : undefined,
+  };
+}
+
+/**
+ * Convert an ArkChange to a TodoItem (new GTD model).
+ * Swift clients send all GTD fields (isToday, isSomeday, etc.) in data.data.
+ */
+export function arkChangeToTodoItem(change: ArkChange): TodoItem | null {
+  const outerData = change.data as Record<string, unknown> | undefined;
+  const data = outerData?.data as Record<string, unknown> | undefined;
+  if (!data || typeof data !== "object") return null;
+
+  const eventType = outerData?.event_type as string | undefined;
+  if (eventType && eventType !== "task" && eventType !== "task_created")
+    return null;
+
+  const id =
+    (data.id as string) || (outerData?.source_id as string) || change.event_id;
+  const title = (data.title as string) ?? (outerData?.summary as string);
+  if (!id || typeof title !== "string") return null;
+
+  return {
+    id,
+    title,
+    notes:
+      (data.notes as string | null) ??
+      (data.description as string | null) ??
+      null,
+    priority: Number(data.priority ?? Priority.None) as Priority,
+    scheduledDate: (data.scheduledDate as string | null) ?? null,
+    deadline:
+      (data.deadline as string | null) ??
+      (data.due_date as string | null) ??
+      null,
+    reminderDate: (data.reminderDate as string | null) ?? null,
+    isToday: Boolean(data.isToday ?? false),
+    isEvening: Boolean(data.isEvening ?? false),
+    isSomeday: Boolean(data.isSomeday ?? false),
+    isCompleted: Boolean(data.isCompleted ?? data.completed ?? false),
+    completedAt: (data.completedAt as string | null) ?? null,
+    isCancelled: Boolean(data.isCancelled ?? false),
+    cancelledAt: (data.cancelledAt as string | null) ?? null,
+    isTrashed: Boolean(data.isTrashed ?? false),
+    sortOrder: Number(data.sortOrder ?? 0),
+    createdAt:
+      (data.createdAt as string) ??
+      (data.created_at as string) ??
+      new Date().toISOString(),
+    headingId: (data.headingId as string | null) ?? null,
+    projectId:
+      (data.projectId as string | null) ??
+      (data.list_id as string | null) ??
+      null,
+    areaId: (data.areaId as string | null) ?? null,
+    tagIds: Array.isArray(data.tagIds) ? (data.tagIds as string[]) : [],
+    checklistItems: Array.isArray(data.checklistItems)
+      ? (data.checklistItems as TodoItem["checklistItems"])
+      : [],
+    recurrenceRule: (data.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
   };
 }
 
@@ -149,15 +219,15 @@ export function arkChangeToTask(change: ArkChange): Task | null {
 
 export function projectToArkChange(
   project: Project,
-  changeType: 'create' | 'update' | 'delete',
+  changeType: "create" | "update" | "delete",
 ): ArkChange {
   return {
     event_id: project.id,
     change_type: changeType,
     data: {
-      event_type: 'project',
-      category: 'productivity',
-      source: 'delphi-web',
+      event_type: "project",
+      category: "productivity",
+      source: "delphi-web",
       source_id: project.id,
       summary: project.title,
       occurred_at: project.createdAt,
@@ -180,14 +250,15 @@ export function projectToArkChange(
 export function arkChangeToProject(change: ArkChange): Project | null {
   const outerData = change.data as Record<string, unknown> | undefined;
   const data = outerData?.data as Record<string, unknown> | undefined;
-  if (!data || typeof data !== 'object') return null;
+  if (!data || typeof data !== "object") return null;
 
   const eventType = outerData?.event_type as string | undefined;
-  if (eventType !== 'project') return null;
+  if (eventType !== "project") return null;
 
-  const id = (data.id as string) || (outerData?.source_id as string) || change.event_id;
+  const id =
+    (data.id as string) || (outerData?.source_id as string) || change.event_id;
   const title = (data.title as string) ?? (outerData?.summary as string);
-  if (!id || typeof title !== 'string') return null;
+  if (!id || typeof title !== "string") return null;
 
   return {
     id,
@@ -215,50 +286,81 @@ export function arkChangeEventType(change: ArkChange): string | undefined {
 // Fetch tasks from Ark via HTTP (for initial load in Electron)
 // ---------------------------------------------------------------------------
 
-export async function fetchTasksFromArk(): Promise<Task[]> {
+export async function fetchTasksFromArk(): Promise<TodoItem[]> {
   const url = getArkUrl();
   const key = getArkApiKey();
   if (!url || !key) return [];
 
   try {
     const resp = await fetch(`${url}/events?limit=1000`, {
-      headers: { 'X-API-Key': key },
+      headers: { "X-API-Key": key },
     });
     if (!resp.ok) return [];
     const events: Record<string, unknown>[] = await resp.json();
 
-    const tasks: Task[] = [];
+    const todos: TodoItem[] = [];
     for (const event of events) {
-      // Accept both "task" and "task_created" event types
       const evtType = event.event_type as string | undefined;
-      if (evtType && evtType !== 'task' && evtType !== 'task_created') continue;
+      if (evtType && evtType !== "task" && evtType !== "task_created") continue;
 
       const dataRaw = event.data as Record<string, unknown> | undefined;
-      if (!dataRaw || typeof dataRaw !== 'object') continue;
+      if (!dataRaw || typeof dataRaw !== "object") continue;
 
       const sourceId = event.source_id as string | undefined;
       const id = (dataRaw.id as string) || sourceId || (event.id as string);
       const title = (dataRaw.title as string) ?? (event.summary as string);
-      if (!id || typeof title !== 'string') continue;
+      if (!id || typeof title !== "string") continue;
 
-      tasks.push({
+      todos.push({
         id,
         title,
-        description: (dataRaw.description as string | null) ?? (dataRaw.notes as string | null) ?? null,
-        completed: Boolean(dataRaw.completed ?? dataRaw.isCompleted ?? false),
-        priority: Number(dataRaw.priority ?? 0),
-        due_date: (dataRaw.due_date as string | null) ?? (dataRaw.deadline as string | null) ?? null,
-        list_id: (dataRaw.list_id as string | null) ?? null,
-        created_at: new Date(String(dataRaw.created_at ?? dataRaw.createdAt ?? event.occurred_at ?? Date.now())),
-        updated_at: (dataRaw.updated_at ?? dataRaw.updatedAt)
-          ? new Date(String(dataRaw.updated_at ?? dataRaw.updatedAt))
-          : undefined,
+        notes:
+          (dataRaw.notes as string | null) ??
+          (dataRaw.description as string | null) ??
+          null,
+        priority: Number(dataRaw.priority ?? Priority.None) as Priority,
+        scheduledDate: (dataRaw.scheduledDate as string | null) ?? null,
+        deadline:
+          (dataRaw.deadline as string | null) ??
+          (dataRaw.due_date as string | null) ??
+          null,
+        reminderDate: (dataRaw.reminderDate as string | null) ?? null,
+        isToday: Boolean(dataRaw.isToday ?? false),
+        isEvening: Boolean(dataRaw.isEvening ?? false),
+        isSomeday: Boolean(dataRaw.isSomeday ?? false),
+        isCompleted: Boolean(
+          dataRaw.isCompleted ?? dataRaw.completed ?? false,
+        ),
+        completedAt: (dataRaw.completedAt as string | null) ?? null,
+        isCancelled: Boolean(dataRaw.isCancelled ?? false),
+        cancelledAt: (dataRaw.cancelledAt as string | null) ?? null,
+        isTrashed: Boolean(dataRaw.isTrashed ?? false),
+        sortOrder: Number(dataRaw.sortOrder ?? 0),
+        createdAt:
+          (dataRaw.createdAt as string) ??
+          (dataRaw.created_at as string) ??
+          (event.occurred_at as string) ??
+          new Date().toISOString(),
+        headingId: (dataRaw.headingId as string | null) ?? null,
+        projectId:
+          (dataRaw.projectId as string | null) ??
+          (dataRaw.list_id as string | null) ??
+          null,
+        areaId: (dataRaw.areaId as string | null) ?? null,
+        tagIds: Array.isArray(dataRaw.tagIds)
+          ? (dataRaw.tagIds as string[])
+          : [],
+        checklistItems: Array.isArray(dataRaw.checklistItems)
+          ? (dataRaw.checklistItems as TodoItem["checklistItems"])
+          : [],
+        recurrenceRule:
+          (dataRaw.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
       });
     }
-    console.log(`[ArkSync] Fetched ${tasks.length} tasks from Ark HTTP API`);
-    return tasks;
+    console.log(`[ArkSync] Fetched ${todos.length} tasks from Ark HTTP API`);
+    return todos;
   } catch (e) {
-    console.warn('[ArkSync] Failed to fetch tasks from Ark:', e);
+    console.warn("[ArkSync] Failed to fetch tasks from Ark:", e);
     return [];
   }
 }
@@ -274,7 +376,7 @@ export async function fetchProjectsFromArk(): Promise<Project[]> {
 
   try {
     const resp = await fetch(`${url}/events?limit=1000`, {
-      headers: { 'X-API-Key': key },
+      headers: { "X-API-Key": key },
     });
     if (!resp.ok) return [];
     const events: Record<string, unknown>[] = await resp.json();
@@ -282,15 +384,15 @@ export async function fetchProjectsFromArk(): Promise<Project[]> {
     const projects: Project[] = [];
     for (const event of events) {
       const evtType = event.event_type as string | undefined;
-      if (evtType !== 'project') continue;
+      if (evtType !== "project") continue;
 
       const dataRaw = event.data as Record<string, unknown> | undefined;
-      if (!dataRaw || typeof dataRaw !== 'object') continue;
+      if (!dataRaw || typeof dataRaw !== "object") continue;
 
       const sourceId = event.source_id as string | undefined;
       const id = (dataRaw.id as string) || sourceId || (event.id as string);
       const title = (dataRaw.title as string) ?? (event.summary as string);
-      if (!id || typeof title !== 'string') continue;
+      if (!id || typeof title !== "string") continue;
 
       projects.push({
         id,
@@ -301,14 +403,19 @@ export async function fetchProjectsFromArk(): Promise<Project[]> {
         deadline: (dataRaw.deadline as string | null) ?? null,
         sortOrder: Number(dataRaw.sortOrder ?? 0),
         colorTag: (dataRaw.colorTag as string | null) ?? null,
-        createdAt: (dataRaw.createdAt as string) ?? (event.occurred_at as string) ?? new Date().toISOString(),
+        createdAt:
+          (dataRaw.createdAt as string) ??
+          (event.occurred_at as string) ??
+          new Date().toISOString(),
         areaId: (dataRaw.areaId as string | null) ?? null,
       });
     }
-    console.log(`[ArkSync] Fetched ${projects.length} projects from Ark HTTP API`);
+    console.log(
+      `[ArkSync] Fetched ${projects.length} projects from Ark HTTP API`,
+    );
     return projects;
   } catch (e) {
-    console.warn('[ArkSync] Failed to fetch projects from Ark:', e);
+    console.warn("[ArkSync] Failed to fetch projects from Ark:", e);
     return [];
   }
 }
@@ -318,7 +425,7 @@ export async function fetchProjectsFromArk(): Promise<Project[]> {
 // ---------------------------------------------------------------------------
 
 const MAX_BACKOFF = 30_000;
-const OUTBOX_KEY = 'delphi.sync_outbox';
+const OUTBOX_KEY = "delphi.sync_outbox";
 
 function loadOutbox(): ArkChange[] {
   try {
@@ -342,8 +449,8 @@ export class ArkSyncClient {
   private vector: Record<string, number>;
   private deviceSeq: number;
 
-  private serverUrl = '';
-  private apiKey = '';
+  private serverUrl = "";
+  private apiKey = "";
   private deviceId: string;
 
   private onChangeHandlers: MessageHandler[] = [];
@@ -389,8 +496,12 @@ export class ArkSyncClient {
 
   connect(serverUrl: string, apiKey: string) {
     // Prevent duplicate connections
-    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
-      console.log('[ArkSync] Already connected/connecting, skipping');
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.CONNECTING ||
+        this.ws.readyState === WebSocket.OPEN)
+    ) {
+      console.log("[ArkSync] Already connected/connecting, skipping");
       return;
     }
 
@@ -406,7 +517,7 @@ export class ArkSyncClient {
     this.cancelReconnect();
     if (this.ws) {
       try {
-        this.ws.close(1000, 'user disconnect');
+        this.ws.close(1000, "user disconnect");
       } catch {
         // ignore
       }
@@ -422,7 +533,11 @@ export class ArkSyncClient {
    */
   sendChange(change: ArkChange): boolean {
     if (!this.ws || !this._connected) {
-      console.log('[ArkSync] Not connected, queuing change:', change.event_id, change.change_type);
+      console.log(
+        "[ArkSync] Not connected, queuing change:",
+        change.event_id,
+        change.change_type,
+      );
       this.outbox.push(change);
       saveOutbox(this.outbox);
       return false;
@@ -435,16 +550,20 @@ export class ArkSyncClient {
     try {
       this.ws.send(
         JSON.stringify({
-          type: 'change',
+          type: "change",
           event_id: change.event_id,
           change_type: change.change_type,
           data: change.data,
         }),
       );
-      console.log('[ArkSync] Sent change:', change.event_id, change.change_type);
+      console.log(
+        "[ArkSync] Sent change:",
+        change.event_id,
+        change.change_type,
+      );
       return true;
     } catch (e) {
-      console.warn('[ArkSync] Send failed, queuing:', e);
+      console.warn("[ArkSync] Send failed, queuing:", e);
       this.outbox.push(change);
       saveOutbox(this.outbox);
       return false;
@@ -468,15 +587,15 @@ export class ArkSyncClient {
   private doConnect() {
     this.cancelReconnect();
 
-    const wsBase = this.serverUrl.replace(/^http/, 'ws');
+    const wsBase = this.serverUrl.replace(/^http/, "ws");
     const url = `${wsBase}/ws/sync?key=${encodeURIComponent(this.apiKey)}`;
 
-    console.log('[ArkSync] Connecting to', url);
+    console.log("[ArkSync] Connecting to", url);
 
     try {
       this.ws = new WebSocket(url);
     } catch (e) {
-      console.error('[ArkSync] WebSocket constructor failed:', e);
+      console.error("[ArkSync] WebSocket constructor failed:", e);
       this.scheduleReconnect();
       return;
     }
@@ -484,16 +603,16 @@ export class ArkSyncClient {
     this.ws.onopen = () => {
       this.backoff = 1000;
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        console.warn('[ArkSync] onopen fired but socket not OPEN, skipping');
+        console.warn("[ArkSync] onopen fired but socket not OPEN, skipping");
         return;
       }
-      console.log('[ArkSync] WebSocket opened, sending sync_start');
+      console.log("[ArkSync] WebSocket opened, sending sync_start");
       this.ws.send(
         JSON.stringify({
-          type: 'sync_start',
+          type: "sync_start",
           device_id: this.deviceId,
-          device_name: 'Delphi Web',
-          platform: 'web',
+          device_name: "Delphi Web",
+          platform: "web",
           vector: this.vector,
         }),
       );
@@ -502,9 +621,7 @@ export class ArkSyncClient {
     this.ws.onmessage = (event) => {
       let msg: Record<string, unknown>;
       try {
-        msg = JSON.parse(
-          typeof event.data === 'string' ? event.data : '',
-        );
+        msg = JSON.parse(typeof event.data === "string" ? event.data : "");
       } catch {
         return;
       }
@@ -512,11 +629,11 @@ export class ArkSyncClient {
     };
 
     this.ws.onerror = (e) => {
-      console.error('[ArkSync] WebSocket error:', e);
+      console.error("[ArkSync] WebSocket error:", e);
     };
 
     this.ws.onclose = (e) => {
-      console.log('[ArkSync] WebSocket closed:', e.code, e.reason);
+      console.log("[ArkSync] WebSocket closed:", e.code, e.reason);
       this.ws = null;
       this.setConnected(false);
       this._synced = false;
@@ -528,12 +645,19 @@ export class ArkSyncClient {
     const type = msg.type as string;
 
     switch (type) {
-      case 'sync_changes': {
+      case "sync_changes": {
         // Initial batch of missed changes
         const changes = (msg.changes as ArkChange[]) ?? [];
-        console.log(`[ArkSync] Received sync_changes: ${changes.length} changes`);
+        console.log(
+          `[ArkSync] Received sync_changes: ${changes.length} changes`,
+        );
         for (const ch of changes) {
-          console.log('[ArkSync] Applying initial change:', ch.event_id, ch.change_type, (ch.data as Record<string, unknown>)?.summary);
+          console.log(
+            "[ArkSync] Applying initial change:",
+            ch.event_id,
+            ch.change_type,
+            (ch.data as Record<string, unknown>)?.summary,
+          );
           this.updateVector(ch);
           this.emitChange(ch);
         }
@@ -544,16 +668,21 @@ export class ArkSyncClient {
         break;
       }
 
-      case 'change': {
+      case "change": {
         // Realtime change from another device
         const ch = msg as unknown as ArkChange;
-        console.log('[ArkSync] Received realtime change:', ch.event_id, ch.change_type, (ch.data as Record<string, unknown>)?.summary);
+        console.log(
+          "[ArkSync] Received realtime change:",
+          ch.event_id,
+          ch.change_type,
+          (ch.data as Record<string, unknown>)?.summary,
+        );
         this.updateVector(ch);
         this.emitChange(ch);
         break;
       }
 
-      case 'change_ack': {
+      case "change_ack": {
         // Server acknowledged our change
         const seq = msg.device_seq as number | undefined;
         if (seq != null) {
@@ -566,16 +695,16 @@ export class ArkSyncClient {
         break;
       }
 
-      case 'sync_ack': {
+      case "sync_ack": {
         // Batch acknowledged
         break;
       }
 
-      case 'ping': {
+      case "ping": {
         // Respond with pong
         if (this.ws) {
           try {
-            this.ws.send(JSON.stringify({ type: 'pong' }));
+            this.ws.send(JSON.stringify({ type: "pong" }));
           } catch {
             // ignore
           }
@@ -583,8 +712,8 @@ export class ArkSyncClient {
         break;
       }
 
-      case 'error': {
-        console.warn('[ArkSync] server error:', msg.message);
+      case "error": {
+        console.warn("[ArkSync] server error:", msg.message);
         break;
       }
     }
@@ -604,7 +733,7 @@ export class ArkSyncClient {
       try {
         h(change);
       } catch (e) {
-        console.warn('[ArkSync] handler error:', e);
+        console.warn("[ArkSync] handler error:", e);
       }
     }
   }

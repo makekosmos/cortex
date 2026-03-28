@@ -1,5 +1,5 @@
-import type { Task } from '@/types/task';
-import type { TaskDto } from './client';
+import type { Task } from "@/types/task";
+import type { TaskDto } from "./client";
 
 export function fromTaskDto(dto: TaskDto): Task {
   return {
