@@ -7,7 +7,7 @@ import { SmartList } from "@/types/task";
 import { countAll } from "@/services/filters/todoFilterService";
 
 export default function TabLayout() {
-  const todos = useTodoStore((s) => s.todos);
+  const todos = useTodoStore((s) => s.todos) ?? [];
   const counts = countAll(todos);
   const router = useRouter();
 

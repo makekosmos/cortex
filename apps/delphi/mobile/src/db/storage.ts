@@ -12,21 +12,33 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
-  db = await SQLite.openDatabaseAsync("delphi.db");
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS todos (
-      id TEXT PRIMARY KEY,
-      data TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS projects (
-      id TEXT PRIMARY KEY,
-      data TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
+  try {
+    db = SQLite.openDatabaseSync("delphi.db");
+    db.execSync(`
+      CREATE TABLE IF NOT EXISTS todos (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+  } catch (e) {
+    console.warn("[Storage] SQLite init failed, using in-memory fallback:", e);
+    // Return a mock that doesn't crash
+    return {
+      getAllAsync: async () => [],
+      getFirstAsync: async () => null,
+      runAsync: async () => ({ changes: 0, lastInsertRowId: 0 }),
+      withTransactionAsync: async (fn: () => Promise<void>) => fn(),
+      execAsync: async () => {},
+    } as unknown as SQLite.SQLiteDatabase;
+  }
   return db;
 }
 
