@@ -11,6 +11,7 @@
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
     "expo": "~55.0.0",
+    "expo-camera": "~16.0.0",
     "expo-constants": "~55.0.9",
     "expo-crypto": "~55.0.10",
     "expo-linking": "~55.0.9",

@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from core.ark import Ark, sanitize_fts_query
-from server.discovery import ArkServiceBroadcaster, ArkServiceDiscoverer
+from server.discovery import ArkServiceBroadcaster, ArkServiceDiscoverer, _get_local_ip
 from server.pairing import claim_pairing, create_pairing, generate_device_id, parse_connection_string
 
 logger = logging.getLogger(__name__)
@@ -810,7 +810,8 @@ def pairing_create() -> dict[str, Any]:
     """Generate a new pairing code + QR for device onboarding."""
     if not API_KEY:
         raise HTTPException(status_code=500, detail="LIFE_API_KEY not configured")
-    server_url = f"http://localhost:{ARK_PORT}"
+    lan_ip = _get_local_ip()
+    server_url = f"http://{lan_ip}:{ARK_PORT}"
     result = create_pairing(server_url, API_KEY, ARK_DEVICE_NAME)
     return result
 
@@ -856,7 +857,8 @@ def pairing_qr(request: Request) -> HTMLResponse:
     if not API_KEY:
         raise HTTPException(status_code=500, detail="LIFE_API_KEY not configured")
 
-    server_url = f"http://localhost:{ARK_PORT}"
+    lan_ip = _get_local_ip()
+    server_url = f"http://{lan_ip}:{ARK_PORT}"
     result = create_pairing(server_url, API_KEY, ARK_DEVICE_NAME)
     conn = result["connection_string"]
 

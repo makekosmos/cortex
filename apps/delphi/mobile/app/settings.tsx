@@ -7,17 +7,20 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { parseConnectionString } from "@/services/sync/pairing";
 import { arkSync, fetchTasksFromArk } from "@/services/sync/ark-client";
 import { getSetting, setSetting, deleteSetting } from "@/db/storage";
 import useTodoStore from "@/store/todos";
+import QRScanner from "@/components/QRScanner";
 
 export default function SettingsScreen() {
   const [connectionString, setConnectionString] = useState("");
   const [arkUrl, setArkUrl] = useState("");
   const [connected, setConnected] = useState(arkSync.isConnected);
+  const [showScanner, setShowScanner] = useState(false);
   const setTodos = useTodoStore((s) => s.setTodos);
 
   useEffect(() => {
@@ -30,16 +33,10 @@ export default function SettingsScreen() {
     return unsub;
   }, []);
 
-  const handlePair = useCallback(async () => {
-    const trimmed = connectionString.trim();
-    if (!trimmed) {
-      Alert.alert("Ошибка", "Введите строку подключения");
-      return;
-    }
-
-    const conn = parseConnectionString(trimmed);
+  const connectWithString = useCallback(async (raw: string) => {
+    const conn = parseConnectionString(raw.trim());
     if (!conn) {
-      Alert.alert("Ошибка", "Неверный формат.\nФормат: ark://host:port?key=SECRET");
+      Alert.alert("Ошибка", "Неверный формат.\nФормат: ark://192.168.x.x:8000?key=SECRET");
       return;
     }
 
@@ -63,7 +60,25 @@ export default function SettingsScreen() {
       console.error("[Settings] pairing error:", e);
       Alert.alert("Ошибка", String(e));
     }
-  }, [connectionString, setTodos]);
+  }, [setTodos]);
+
+  const handlePair = useCallback(async () => {
+    const trimmed = connectionString.trim();
+    if (!trimmed) {
+      Alert.alert("Ошибка", "Введите строку подключения");
+      return;
+    }
+    await connectWithString(trimmed);
+  }, [connectionString, connectWithString]);
+
+  const handleQRScan = useCallback(async (data: string) => {
+    setShowScanner(false);
+    if (data.startsWith("ark://")) {
+      await connectWithString(data);
+    } else {
+      Alert.alert("Ошибка", "QR-код не содержит строку подключения Ark");
+    }
+  }, [connectWithString]);
 
   const handleDisconnect = useCallback(async () => {
     arkSync.disconnect();
@@ -98,23 +113,42 @@ export default function SettingsScreen() {
       ) : (
         <View style={styles.card}>
           <Text style={styles.description}>
-            Введите строку подключения для синхронизации с Ark сервером.
+            Отсканируйте QR-код из Ark или введите строку подключения вручную.
           </Text>
+          <Pressable style={styles.scanButton} onPress={() => setShowScanner(true)}>
+            <Ionicons name="qr-code-outline" size={18} color="#fff" />
+            <Text style={styles.pairText}>Сканировать QR</Text>
+          </Pressable>
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>или вручную</Text>
+            <View style={styles.dividerLine} />
+          </View>
           <TextInput
             style={styles.input}
             value={connectionString}
             onChangeText={setConnectionString}
-            placeholder="ark://192.168.1.5:8000?key=..."
+            placeholder="ark://192.168.x.x:8000?key=..."
             placeholderTextColor="rgba(255,255,255,0.3)"
             autoCapitalize="none"
             autoCorrect={false}
           />
+          <Text style={styles.formatHint}>
+            Формат: ark://192.168.x.x:8000?key=SECRET
+          </Text>
           <Pressable style={styles.pairButton} onPress={handlePair}>
             <Ionicons name="link" size={18} color="#fff" />
             <Text style={styles.pairText}>Подключить</Text>
           </Pressable>
         </View>
       )}
+
+      <Modal visible={showScanner} animationType="slide">
+        <QRScanner
+          onScan={handleQRScan}
+          onClose={() => setShowScanner(false)}
+        />
+      </Modal>
 
       <Text style={styles.sectionTitle}>О приложении</Text>
       <View style={styles.card}>
@@ -168,6 +202,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     marginBottom: 12,
+  },
+  scanButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#8b5cf6",
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  dividerText: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 12,
+    marginHorizontal: 10,
+  },
+  formatHint: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 12,
+    marginBottom: 10,
+    marginTop: -6,
+    marginLeft: 2,
   },
   pairButton: {
     flexDirection: "row",
