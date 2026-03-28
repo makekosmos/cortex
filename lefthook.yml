@@ -21,7 +21,7 @@ pre-commit:
       run: cd apps/eden/ts/heart && cargo fmt --check
     ark-pyright:
       glob: "packages/ark/**/*.py"
-      run: cd packages/ark && pyright core/ server/
+      run: cd packages/ark && bunx pyright core/ server/
     typecheck-delphi:
       glob: "apps/delphi/ts/**/*.{ts,tsx}"
       run: cd apps/delphi/ts && bunx tsc --noEmit
@@ -37,7 +37,7 @@ pre-push:
       run: cd apps/delphi/ts && bun run test
     test-ark:
       glob: "packages/ark/**/*"
-      run: cd packages/ark && python -m pytest core/tests/ server/ -v --tb=short -q
+      run: cd packages/ark && .venv/bin/python -m pytest core/tests/ server/ -v --tb=short -q
     test-eden-heart:
       glob: "apps/eden/ts/heart/**/*"
       run: cd apps/eden/ts/heart && cargo test
