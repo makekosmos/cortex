@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Text, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, Text, TextInput, Pressable, Alert, ActivityIndicator, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, fontSize, spacing, cardRadius, fonts } from '@/theme';
 import { useNutritionStore } from '@/stores/nutrition-store';
 import { useSettingsStore, type FoodSource } from '@/stores/settings-store';
@@ -23,6 +24,39 @@ export default function SettingsScreen() {
   const [form, setForm] = useState<Macros>({ ...goals });
   const [pairingServerUrl, setPairingServerUrl] = useState('');
   const [pairingCode, setPairingCode] = useState('');
+  const [connectionString, setConnectionString] = useState('');
+  const [showQR, setShowQR] = useState(false);
+  const [camPermission, requestCamPermission] = useCameraPermissions();
+  const [qrScanned, setQrScanned] = useState(false);
+
+  const handleQRScan = useCallback(({ data }: { data: string }) => {
+    if (qrScanned) return;
+    setQrScanned(true);
+    setShowQR(false);
+    if (data.startsWith('ark://')) {
+      try {
+        sync.connectWithString(data);
+        Alert.alert('Готово', 'Подключено к Ark');
+      } catch (e) {
+        Alert.alert('Ошибка', e instanceof Error ? e.message : String(e));
+      }
+    } else {
+      Alert.alert('Ошибка', 'QR-код не содержит строку подключения Ark');
+    }
+    setTimeout(() => setQrScanned(false), 2000);
+  }, [sync, qrScanned]);
+
+  const handleConnectString = useCallback(() => {
+    const trimmed = connectionString.trim();
+    if (!trimmed) { Alert.alert('Ошибка', 'Введите строку подключения'); return; }
+    try {
+      sync.connectWithString(trimmed);
+      setConnectionString('');
+      Alert.alert('Готово', 'Подключено к Ark');
+    } catch (e) {
+      Alert.alert('Ошибка', e instanceof Error ? e.message : String(e));
+    }
+  }, [connectionString, sync]);
 
   useEffect(() => {
     sync.hydrate();
@@ -154,6 +188,58 @@ export default function SettingsScreen() {
         </>
       ) : (
         <>
+          {/* QR scan */}
+          <Pressable
+            style={[styles.saveBtn, { backgroundColor: '#8b5cf6', marginBottom: spacing.sm }]}
+            onPress={async () => {
+              if (!camPermission?.granted) {
+                const result = await requestCamPermission();
+                if (!result.granted) { Alert.alert('Нет доступа', 'Разрешите камеру в настройках'); return; }
+              }
+              setQrScanned(false);
+              setShowQR(true);
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="qr-code-outline" size={18} color={colors.text.primary} />
+              <Text style={styles.saveBtnText}>Сканировать QR</Text>
+            </View>
+          </Pressable>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.bg.card }} />
+            <Text style={{ color: colors.text.muted, fontSize: fontSize.xs, marginHorizontal: 10 }}>или строка подключения</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.bg.card }} />
+          </View>
+
+          {/* Connection string */}
+          <Card noPadding style={styles.sectionCard}>
+            <CardRow first>
+              <View style={styles.syncField}>
+                <TextInput
+                  style={[styles.input, { width: '100%', textAlign: 'left' }]}
+                  value={connectionString}
+                  onChangeText={setConnectionString}
+                  placeholder="ark://192.168.x.x:8000?key=..."
+                  placeholderTextColor={colors.text.muted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </CardRow>
+          </Card>
+
+          <Pressable style={styles.saveBtn} onPress={handleConnectString}>
+            <Text style={styles.saveBtnText}>Подключить</Text>
+          </Pressable>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: spacing.sm }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.bg.card }} />
+            <Text style={{ color: colors.text.muted, fontSize: fontSize.xs, marginHorizontal: 10 }}>или код сопряжения</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.bg.card }} />
+          </View>
+
+          {/* Legacy pairing code flow */}
           <Card noPadding style={styles.sectionCard}>
             <CardRow first>
               <View style={styles.syncField}>
@@ -212,6 +298,23 @@ export default function SettingsScreen() {
               <Text style={styles.saveBtnText}>Привязать</Text>
             )}
           </Pressable>
+
+          {/* QR Scanner Modal */}
+          <Modal visible={showQR} animationType="slide">
+            <View style={{ flex: 1, backgroundColor: '#000' }}>
+              <CameraView
+                style={{ flex: 1 }}
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={handleQRScan}
+              />
+              <Pressable
+                style={{ position: 'absolute', top: 60, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, padding: 10 }}
+                onPress={() => setShowQR(false)}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </Pressable>
+            </View>
+          </Modal>
         </>
       )}
 

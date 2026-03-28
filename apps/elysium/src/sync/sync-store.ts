@@ -50,6 +50,7 @@ interface SyncState {
   configureServer: (url: string, key: string) => void;
   connect: () => void;
   disconnect: () => void;
+  connectWithString: (connectionString: string) => void;
   pair: (serverBaseUrl: string, code: string) => Promise<void>;
   unpair: () => void;
 }
@@ -126,6 +127,28 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     unsubStatus = null;
     unsubChange = null;
     set({ isConnected: false, isSyncing: false });
+  },
+
+  /** Connect directly via ark:// connection string (from QR or manual input). */
+  connectWithString: (connectionString: string) => {
+    const trimmed = connectionString.trim();
+    if (!trimmed.startsWith('ark://')) throw new Error('Неверный формат: ожидается ark://...');
+    const rest = trimmed.slice('ark://'.length);
+    const keyIdx = rest.indexOf('?key=');
+    if (keyIdx === -1) throw new Error('Неверный формат: отсутствует ?key=');
+    const host = rest.slice(0, keyIdx);
+    const apiKey = rest.slice(keyIdx + '?key='.length);
+    if (!host || !apiKey) throw new Error('Неверный формат');
+    const serverUrl = `http://${host}`;
+    let deviceId = get().deviceId;
+    if (!deviceId) {
+      deviceId = generateDeviceId();
+      setSetting('sync_device_id', deviceId);
+    }
+    setSetting('sync_server_url', serverUrl);
+    setSetting('sync_api_key', apiKey);
+    set({ serverUrl, apiKey, deviceId, isPaired: true });
+    get().connect();
   },
 
   pair: async (serverBaseUrl, code) => {
