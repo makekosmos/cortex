@@ -119,8 +119,7 @@ install:node:
   extends: .cache:node
   script:
     - bun install --frozen-lockfile
-  rules:
-    - !reference [.rules:any-ts, rules]
+  rules: !reference [.rules:any-ts, rules]
 
 # ══════════════════════════════════════════════
 # LINT
@@ -136,8 +135,7 @@ lint:delphi-ts:
     - bun run lint
     - bun run format:check
     - bunx tsc --noEmit
-  rules:
-    - !reference [.rules:delphi-ts, rules]
+  rules: !reference [.rules:delphi-ts, rules]
 
 lint:eden-ts:
   stage: lint
@@ -149,8 +147,7 @@ lint:eden-ts:
     - bun run lint
     - bun run format
     - bunx tsc --noEmit
-  rules:
-    - !reference [.rules:eden-ts, rules]
+  rules: !reference [.rules:eden-ts, rules]
 
 lint:ark:
   stage: lint
@@ -161,8 +158,7 @@ lint:ark:
     - pip install pyright
     - cd packages/ark
     - pyright core/ server/ plugins/
-  rules:
-    - !reference [.rules:ark, rules]
+  rules: !reference [.rules:ark, rules]
 
 lint:eden-heart:
   stage: lint
@@ -173,8 +169,7 @@ lint:eden-heart:
     - cd apps/eden/ts/heart
     - cargo clippy -- -D warnings
     - cargo fmt --check
-  rules:
-    - !reference [.rules:eden-ts, rules]
+  rules: !reference [.rules:eden-ts, rules]
 
 # ══════════════════════════════════════════════
 # TEST
@@ -188,8 +183,7 @@ test:delphi-ts:
   script:
     - cd apps/delphi/ts
     - bun run test
-  rules:
-    - !reference [.rules:delphi-ts, rules]
+  rules: !reference [.rules:delphi-ts, rules]
 
 test:ark:
   stage: test
@@ -200,8 +194,7 @@ test:ark:
     - cd packages/ark
     - pip install -r server/requirements.txt
     - python -m pytest core/tests/ server/ -v --tb=short
-  rules:
-    - !reference [.rules:ark, rules]
+  rules: !reference [.rules:ark, rules]
 
 test:eden-heart:
   stage: test
@@ -211,8 +204,7 @@ test:eden-heart:
   script:
     - cd apps/eden/ts/heart
     - cargo test
-  rules:
-    - !reference [.rules:eden-ts, rules]
+  rules: !reference [.rules:eden-ts, rules]
 
 test:elysium:
   stage: test
@@ -222,8 +214,7 @@ test:elysium:
   script:
     - cd apps/elysium
     - bun run test
-  rules:
-    - !reference [.rules:elysium, rules]
+  rules: !reference [.rules:elysium, rules]
 
 # ══════════════════════════════════════════════
 # BUILD
@@ -237,8 +228,7 @@ build:delphi-ts:
   script:
     - cd apps/delphi/ts
     - bun run build
-  rules:
-    - !reference [.rules:delphi-ts, rules]
+  rules: !reference [.rules:delphi-ts, rules]
 
 build:eden-ts:
   stage: build
@@ -252,8 +242,7 @@ build:eden-ts:
     - cd apps/eden/ts
     - cargo build --release --manifest-path heart/Cargo.toml
     - bun run build
-  rules:
-    - !reference [.rules:eden-ts, rules]
+  rules: !reference [.rules:eden-ts, rules]
 
 build:delphi-swift:
   stage: build
@@ -263,8 +252,7 @@ build:delphi-swift:
     - cd apps/delphi/swift
     - xcodegen generate
     - xcodebuild -scheme Delphi -configuration Release -derivedDataPath build/ build
-  rules:
-    - !reference [.rules:delphi-swift, rules]
+  rules: !reference [.rules:delphi-swift, rules]
 
 # ══════════════════════════════════════════════
 # E2E (тяжёлые, только на MR и main)
@@ -283,8 +271,7 @@ e2e:delphi-ts:
     paths:
       - apps/delphi/ts/test-results/
     expire_in: 3 days
-  rules:
-    - !reference [.rules:delphi-ts, rules]
+  rules: !reference [.rules:delphi-ts, rules]
   allow_failure: true
 
 e2e:eden-ts:
@@ -300,8 +287,7 @@ e2e:eden-ts:
     paths:
       - apps/eden/ts/test-results/
     expire_in: 3 days
-  rules:
-    - !reference [.rules:eden-ts, rules]
+  rules: !reference [.rules:eden-ts, rules]
   allow_failure: true
 
 # ══════════════════════════════════════════════
