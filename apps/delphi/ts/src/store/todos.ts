@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
+import { arkSync, todoItemToArkChange } from "@/services/sync/ark-client";
 import type {
   TodoItem,
   Project,
@@ -111,15 +112,20 @@ export const useTodoStore = defineStore("todos", () => {
   function addTodo(params: CreateTodoParams): TodoItem {
     const todo = createTodoItem(params);
     todos.value = [todo, ...todos.value];
+    arkSync.sendChange(todoItemToArkChange(todo, "create"));
     return todo;
   }
 
   function updateTodo(id: string, patch: Partial<TodoItem>) {
     todos.value = mapTodo(todos.value, id, (t) => ({ ...t, ...patch }));
+    const updated = todos.value.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoItemToArkChange(updated, "update"));
   }
 
   function removeTodo(id: string) {
+    const todo = todos.value.find((t) => t.id === id);
     todos.value = todos.value.filter((t) => t.id !== id);
+    if (todo) arkSync.sendChange(todoItemToArkChange(todo, "delete"));
   }
 
   function upsertTodo(todo: TodoItem) {
@@ -142,25 +148,35 @@ export const useTodoStore = defineStore("todos", () => {
     const next = createNextRecurrence(completed);
     if (next) {
       newTodos = [next, ...newTodos];
+      arkSync.sendChange(todoItemToArkChange(next, "create"));
     }
 
     todos.value = newTodos;
+    arkSync.sendChange(todoItemToArkChange(completed, "update"));
   }
 
   function incompleteTodo(id: string) {
     todos.value = mapTodo(todos.value, id, markTodoIncomplete);
+    const updated = todos.value.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoItemToArkChange(updated, "update"));
   }
 
   function cancelTodo(id: string) {
     todos.value = mapTodo(todos.value, id, markTodoCancelled);
+    const updated = todos.value.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoItemToArkChange(updated, "update"));
   }
 
   function trashTodo(id: string) {
     todos.value = mapTodo(todos.value, id, trashTodoItem);
+    const updated = todos.value.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoItemToArkChange(updated, "update"));
   }
 
   function restoreTodo(id: string) {
     todos.value = mapTodo(todos.value, id, restoreTodoItem);
+    const updated = todos.value.find((t) => t.id === id);
+    if (updated) arkSync.sendChange(todoItemToArkChange(updated, "update"));
   }
 
   function duplicateTodo(id: string): TodoItem | null {
@@ -168,6 +184,7 @@ export const useTodoStore = defineStore("todos", () => {
     if (!todo) return null;
     const copy = duplicateTodoItem(todo);
     todos.value = [copy, ...todos.value];
+    arkSync.sendChange(todoItemToArkChange(copy, "create"));
     return copy;
   }
 

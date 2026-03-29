@@ -231,18 +231,93 @@ reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Ta
 
 ## Синхронизация с Ark
 
-Оба клиента (Swift и TS) подключаются к Ark через WebSocket:
+Все клиенты (Swift, Android Kotlin, Web/TS) синхронизируются с Ark **только через WebSocket**. REST `/tasks` не существует.
+
+### Подключение
+
 ```
 ws://ark-server/ws/sync?key=API_KEY
 ```
 
-Маппинг в Ark-события:
-- TodoItem → `event_type: "task"`, `category: "productivity"`, `source: "delphi"`
-- Project → `event_type: "project"`, `category: "productivity"`
-- Area → `event_type: "area"`, `category: "productivity"`
-- Tag → `event_type: "tag"`, `category: "productivity"`
+После открытия WebSocket клиент сразу шлёт `sync_start`:
+```json
+{
+  "type": "sync_start",
+  "device_id": "delphi-web-<uuid>",
+  "device_name": "Delphi Web",
+  "platform": "web",
+  "vector": {"delphi-web-abc": 42, "delphi-android-xyz": 15}
+}
+```
 
-Дедупликация: `source_id` = UUID объекта.
+Сервер отвечает пачкой пропущенных изменений:
+```json
+{"type": "sync_changes", "changes": [...]}
+```
+
+### Realtime изменения
+
+Каждая мутация отправляется немедленно:
+```json
+{
+  "type": "change",
+  "event_id": "<todo-uuid>",
+  "change_type": "create" | "update" | "delete",
+  "data": {
+    "event_type": "task",
+    "category": "productivity",
+    "source": "delphi-web",
+    "source_id": "<todo-uuid>",
+    "summary": "Заголовок задачи",
+    "occurred_at": "2025-01-01T12:00:00Z",
+    "data": { /* все поля TodoItem */ }
+  }
+}
+```
+
+Сервер бродкастит изменение всем другим подключённым клиентам.
+
+### Маппинг event_type
+
+| Модель | event_type | source |
+|--------|-----------|--------|
+| TodoItem | `"task"` | `"delphi-web"` / `"delphi"` / `"delphi-android"` |
+| Project | `"project"` | `"delphi-web"` |
+| Area | `"area"` | `"delphi-web"` |
+| Tag | `"tag"` | `"delphi-web"` |
+
+Дедупликация: `source_id` = UUID объекта (идемпотентный upsert).
+
+### Offline
+
+Изменения, сделанные без соединения, попадают в outbox (localStorage).
+После reconnect — flushOutbox отправляет их в порядке очереди.
+
+### Где живёт код
+
+| Файл | Роль |
+|------|------|
+| `services/sync/ark-client.ts` | `ArkSyncClient` (WS), маппинг TodoItem↔ArkChange |
+| `store/todos.ts` | CRUD + вызов `arkSync.sendChange()` на каждой мутации |
+| `App.vue` | `arkSync.onChange()` → `store.upsertTodo()` / `store.upsertProject()` |
+
+### Входящие изменения (App.vue)
+
+```
+arkSync.onChange(change) →
+  arkChangeEventType(change) === "task"    → arkChangeToTodoItem → store.upsertTodo
+  arkChangeEventType(change) === "project" → arkChangeToProject  → store.upsertProject
+```
+
+### Исходящие изменения (store/todos.ts)
+
+```
+addTodo()      → todoItemToArkChange(todo, "create")  → arkSync.sendChange()
+updateTodo()   → todoItemToArkChange(todo, "update")  → arkSync.sendChange()
+removeTodo()   → todoItemToArkChange(todo, "delete")  → arkSync.sendChange()
+completeTodo() → todoItemToArkChange(todo, "update")  → arkSync.sendChange()
+(и т.д. для cancel, trash, restore, duplicate)
+```
 
 ## Голосовой ввод (Web)
 

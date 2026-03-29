@@ -80,6 +80,53 @@ export function setArkApiKey(key: string) {
 }
 
 // ---------------------------------------------------------------------------
+// TodoItem <-> ArkChange mapping (GTD model — used by todos store)
+// ---------------------------------------------------------------------------
+
+export function todoItemToArkChange(
+  todo: TodoItem,
+  changeType: "create" | "update" | "delete",
+): ArkChange {
+  return {
+    event_id: todo.id,
+    change_type: changeType,
+    data: {
+      event_type: "task",
+      category: "productivity",
+      source: "delphi-web",
+      source_id: todo.id,
+      summary: todo.title,
+      occurred_at: todo.createdAt,
+      data: {
+        id: todo.id,
+        title: todo.title,
+        notes: todo.notes ?? null,
+        priority: todo.priority,
+        scheduledDate: todo.scheduledDate ?? null,
+        deadline: todo.deadline ?? null,
+        reminderDate: todo.reminderDate ?? null,
+        isToday: todo.isToday,
+        isEvening: todo.isEvening,
+        isSomeday: todo.isSomeday,
+        isCompleted: todo.isCompleted,
+        completedAt: todo.completedAt ?? null,
+        isCancelled: todo.isCancelled,
+        cancelledAt: todo.cancelledAt ?? null,
+        isTrashed: todo.isTrashed,
+        sortOrder: todo.sortOrder,
+        headingId: todo.headingId ?? null,
+        projectId: todo.projectId ?? null,
+        areaId: todo.areaId ?? null,
+        tagIds: todo.tagIds,
+        checklistItems: todo.checklistItems,
+        recurrenceRule: todo.recurrenceRule ?? null,
+        createdAt: todo.createdAt,
+      },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Task <-> ArkChange mapping
 // ---------------------------------------------------------------------------
 

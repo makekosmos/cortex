@@ -63,6 +63,10 @@ local.properties
 __pycache__/
 *.pyc
 
+# === SQLite ===
+*.db-shm
+*.db-wal
+
 # === Общее ===
 *.log
 *.env

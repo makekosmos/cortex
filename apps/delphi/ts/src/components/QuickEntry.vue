@@ -152,7 +152,7 @@ watch(showProjectMenu, (val) => {
 
     <!-- Panel -->
     <div
-      class="relative z-10 w-[480px] rounded-2xl border border-(--border) bg-(--popover) shadow-2xl"
+      class="relative z-10 w-120 rounded-2xl border border-(--border) bg-(--popover) shadow-2xl"
     >
       <div class="flex flex-col gap-3 p-5">
         <!-- Title -->
@@ -194,7 +194,7 @@ watch(showProjectMenu, (val) => {
             <input
               type="date"
               :value="scheduledDate"
-              class="w-[100px] cursor-pointer bg-transparent text-xs"
+              class="w-25 cursor-pointer bg-transparent text-xs"
               @input="scheduledDate = ($event.target as HTMLInputElement).value"
             />
           </label>
@@ -249,7 +249,7 @@ watch(showProjectMenu, (val) => {
 
             <div
               v-if="showProjectMenu"
-              class="absolute right-0 top-full z-20 mt-1 min-w-[180px] rounded-lg border border-(--border) bg-(--popover) py-1 shadow-lg"
+              class="absolute right-0 top-full z-20 mt-1 min-w-45 rounded-lg border border-(--border) bg-(--popover) py-1 shadow-lg"
             >
               <button
                 type="button"

@@ -55,12 +55,75 @@ LIFE_DB_PATH=examples/demo.db python3 -m core.cli task "Купить кефир"
 
 ## Sync протокол
 
-См. SYNC.md для полного описания. Кратко:
-- WebSocket `/ws/sync?key=API_KEY`
-- Клиент шлёт `sync_start` с device_id + version vector
-- Сервер отвечает пропущенными изменениями
-- Realtime: изменения бродкастятся всем подключённым клиентам
-- Pairing: `POST /pairing/create` → код `ark-XXXX` → `POST /pairing/claim`
+Полное описание в SYNC.md. Здесь — что нужно знать при разработке.
+
+### WebSocket endpoint
+
+```
+ws://host:8000/ws/sync?key=<LIFE_API_KEY>
+```
+
+Реализация сервера: `server/sync_ws.py` → `websocket_sync()`.
+
+### Последовательность подключения
+
+```
+1. Client → Server:  {"type": "sync_start", "device_id": "...", "platform": "...", "vector": {...}}
+2. Server → Client:  {"type": "sync_changes", "changes": [...]}   ← пропущенные изменения
+3. Client → Server:  {"type": "change", ...}                       ← realtime мутации
+4. Server → Others:  {"type": "change", ...}                       ← broadcast всем кроме отправителя
+5. Server → Client:  {"type": "change_ack", "event_id": "...", "device_seq": 42}
+6. Server → Client:  {"type": "ping"}  (каждые 30с)
+7. Client → Server:  {"type": "pong"}
+```
+
+### Структура change-сообщения
+
+```json
+{
+  "type": "change",
+  "event_id": "<uuid>",
+  "change_type": "create" | "update" | "delete",
+  "device_id": "delphi-web-abc",
+  "device_seq": 43,
+  "data": {
+    "event_type": "task" | "project" | "area" | "tag",
+    "category": "productivity",
+    "source": "delphi-web" | "delphi" | "delphi-android",
+    "source_id": "<uuid объекта>",
+    "summary": "Заголовок",
+    "occurred_at": "2025-01-01T12:00:00Z",
+    "data": { /* произвольные поля объекта */ }
+  }
+}
+```
+
+### Как Ark хранит события
+
+`_apply_to_events()` в `sync_ws.py` делает upsert в таблицу `events` по `source + source_id`.
+- `create` / `update` → upsert (idempotent)
+- `delete` → `is_deleted = 1`
+
+Структура таблицы `events` — см. `core/schema.sql`.
+
+### Как получить данные через CLI
+
+```bash
+# Задачи
+LIFE_DB_PATH=examples/demo.db .venv/bin/python -m core.cli list --type task
+
+# Все события
+LIFE_DB_PATH=examples/demo.db .venv/bin/python -m core.cli list
+```
+
+### Pairing (подключение нового устройства)
+
+```bash
+# Генерировать QR + код
+LIFE_API_KEY=... LIFE_DB_PATH=... .venv/bin/python -m core.cli pair
+```
+
+REST: `POST /pairing/create` → код `ark-XXXX` → `POST /pairing/claim` (клиент вводит код).
 
 ## Тесты
 
