@@ -299,8 +299,7 @@ deploy:ark:
   image: python:3.12-slim
   needs: ["test:ark"]
   script:
-    - echo "TODO: deploy ark to VPS via ssh/rsync"
-    # - ssh deploy@vps "cd /opt/ark && git pull && systemctl restart ark"
+    - echo "TODO deploy ark to VPS via ssh/rsync"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       changes:
