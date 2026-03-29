@@ -1,26 +1,22 @@
-import { create } from "zustand";
+import { defineStore } from "pinia";
+import { ref } from "vue";
 import { arkSync, taskToArkChange } from "@/services/sync/ark-client";
 import { broadcastToPeers } from "@/services/sync/peer-bridge";
 import type { Task } from "@/types/task";
 
-type TaskStore = {
-  tasks: Task[];
-  setTasks: (tasks: Task[]) => void;
-  addTask: (title: string) => Task;
-  removeTask: (task: Task) => void;
-  removeAllTasks: () => void;
-  completeTask: (task: Task) => void;
-  editTask: (task: Task) => void;
-  upsertTask: (task: Task) => void;
-  removeTaskById: (id: string) => void;
-  hydrated: boolean;
-  setHydrated: (value: boolean) => void;
-};
+export const useTaskStore = defineStore("tasks", () => {
+  const tasks = ref<Task[]>([]);
+  const hydrated = ref(false);
 
-const useTask = create<TaskStore>((set) => ({
-  tasks: [],
-  setTasks: (tasks) => set({ tasks }),
-  addTask: (title) => {
+  function setTasks(value: Task[]) {
+    tasks.value = value;
+  }
+
+  function setHydrated(value: boolean) {
+    hydrated.value = value;
+  }
+
+  function addTask(title: string): Task {
     const taskTitle = title.trim() || "New task";
     const now = new Date();
     const task: Task = {
@@ -35,64 +31,76 @@ const useTask = create<TaskStore>((set) => ({
       updated_at: now,
     };
 
-    set((state) => ({ tasks: [task, ...state.tasks] }));
+    tasks.value = [task, ...tasks.value];
     const change = taskToArkChange(task, "create");
     arkSync.sendChange(change);
     broadcastToPeers(change);
     return task;
-  },
-  removeTask: (task) => {
-    set((state) => ({
-      tasks: state.tasks.filter((item) => item.id !== task.id),
-    }));
+  }
+
+  function removeTask(task: Task) {
+    tasks.value = tasks.value.filter((item) => item.id !== task.id);
     const change = taskToArkChange(task, "delete");
     arkSync.sendChange(change);
     broadcastToPeers(change);
-  },
-  removeAllTasks: () => set({ tasks: [] }),
-  completeTask: (task) => {
+  }
+
+  function removeAllTasks() {
+    tasks.value = [];
+  }
+
+  function completeTask(task: Task) {
     const updated: Task = {
       ...task,
       completed: !task.completed,
       updated_at: new Date(),
     };
-    set((state) => ({
-      tasks: state.tasks.map((item) => (item.id === task.id ? updated : item)),
-    }));
+    tasks.value = tasks.value.map((item) =>
+      item.id === task.id ? updated : item,
+    );
     const change = taskToArkChange(updated, "update");
     arkSync.sendChange(change);
     broadcastToPeers(change);
-  },
-  editTask: (task) => {
+  }
+
+  function editTask(task: Task) {
     const updated: Task = {
       ...task,
       title: task.title.trim() || "New task",
       updated_at: new Date(),
     };
-    set((state) => ({
-      tasks: state.tasks.map((item) => (item.id === task.id ? updated : item)),
-    }));
+    tasks.value = tasks.value.map((item) =>
+      item.id === task.id ? updated : item,
+    );
     const change = taskToArkChange(updated, "update");
     arkSync.sendChange(change);
     broadcastToPeers(change);
-  },
-  upsertTask: (task) =>
-    set((state) => {
-      const exists = state.tasks.some((item) => item.id === task.id);
-      if (exists) {
-        return {
-          tasks: state.tasks.map((item) => (item.id === task.id ? task : item)),
-        };
-      }
+  }
 
-      return { tasks: [task, ...state.tasks] };
-    }),
-  removeTaskById: (id) =>
-    set((state) => ({
-      tasks: state.tasks.filter((item) => item.id !== id),
-    })),
-  hydrated: false,
-  setHydrated: (value) => set({ hydrated: value }),
-}));
+  function upsertTask(task: Task) {
+    const exists = tasks.value.some((item) => item.id === task.id);
+    tasks.value = exists
+      ? tasks.value.map((item) => (item.id === task.id ? task : item))
+      : [task, ...tasks.value];
+  }
 
-export default useTask;
+  function removeTaskById(id: string) {
+    tasks.value = tasks.value.filter((item) => item.id !== id);
+  }
+
+  return {
+    tasks,
+    hydrated,
+    setTasks,
+    setHydrated,
+    addTask,
+    removeTask,
+    removeAllTasks,
+    completeTask,
+    editTask,
+    upsertTask,
+    removeTaskById,
+  };
+});
+
+export default useTaskStore;

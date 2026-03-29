@@ -43,13 +43,13 @@ export class HLC {
   }
 
   toString(): string {
-    const paddedCounter = String(this.counter).padStart(6, '0');
+    const paddedCounter = String(this.counter).padStart(6, "0");
     return `${this.wallTime}:${paddedCounter}:${this.deviceId}`;
   }
 
   static fromString(s: string): HLC {
-    const firstColon = s.indexOf(':',  s.indexOf('Z'));
-    const secondColon = s.indexOf(':', firstColon + 1);
+    const firstColon = s.indexOf(":", s.indexOf("Z"));
+    const secondColon = s.indexOf(":", firstColon + 1);
     const wallTime = s.slice(0, firstColon);
     const counter = parseInt(s.slice(firstColon + 1, secondColon), 10);
     const deviceId = s.slice(secondColon + 1);

@@ -328,9 +328,7 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
         isToday: Boolean(dataRaw.isToday ?? false),
         isEvening: Boolean(dataRaw.isEvening ?? false),
         isSomeday: Boolean(dataRaw.isSomeday ?? false),
-        isCompleted: Boolean(
-          dataRaw.isCompleted ?? dataRaw.completed ?? false,
-        ),
+        isCompleted: Boolean(dataRaw.isCompleted ?? dataRaw.completed ?? false),
         completedAt: (dataRaw.completedAt as string | null) ?? null,
         isCancelled: Boolean(dataRaw.isCancelled ?? false),
         cancelledAt: (dataRaw.cancelledAt as string | null) ?? null,

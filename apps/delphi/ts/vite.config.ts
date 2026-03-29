@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
+import vue from '@vitejs/plugin-vue';
 import checker from 'vite-plugin-checker';
 import tailwindcss from '@tailwindcss/vite';
 import electron from 'vite-plugin-electron/simple';
@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    vue({ features: { vaporInterop: true } }),
     checker({ typescript: { tsconfigPath: './tsconfig.json' } }),
     tailwindcss(),
     electron({
@@ -28,9 +28,6 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@kosmos/ui': path.resolve(__dirname, '../../../packages/kosmos-ui'),
-      'react': path.resolve(__dirname, './node_modules/react'),
-      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
-      'react/jsx-runtime': path.resolve(__dirname, './node_modules/react/jsx-runtime'),
     },
   },
   clearScreen: false,

@@ -5,7 +5,7 @@
  * future renderer-side logic that needs to construct/validate messages.
  */
 
-import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 
 // ---------------------------------------------------------------------------
 // Crypto helpers
@@ -13,15 +13,15 @@ import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 /** Derive a short mesh identifier from the shared secret (first 16 hex chars of SHA-256). */
 export function computeMeshId(meshSecret: string): string {
-  return createHmac('sha256', 'mesh-id')
+  return createHmac("sha256", "mesh-id")
     .update(meshSecret)
-    .digest('hex')
+    .digest("hex")
     .slice(0, 16);
 }
 
 /** Produce an HMAC-SHA256 tag over the nonce using the mesh secret. */
 export function computeAuthHmac(meshSecret: string, nonce: string): string {
-  return createHmac('sha256', meshSecret).update(nonce).digest('hex');
+  return createHmac("sha256", meshSecret).update(nonce).digest("hex");
 }
 
 /** Constant-time verification of an HMAC tag. */
@@ -33,8 +33,8 @@ export function verifyAuthHmac(
   const expected = computeAuthHmac(meshSecret, nonce);
   try {
     return timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(provided, 'hex'),
+      Buffer.from(expected, "hex"),
+      Buffer.from(provided, "hex"),
     );
   } catch {
     return false;
@@ -43,7 +43,7 @@ export function verifyAuthHmac(
 
 /** Generate a random 32-byte hex nonce. */
 export function generateNonce(): string {
-  return randomBytes(32).toString('hex');
+  return randomBytes(32).toString("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ export function generateNonce(): string {
 // ---------------------------------------------------------------------------
 
 export interface PeerHello {
-  type: 'peer_hello';
+  type: "peer_hello";
   protocol_version: 2;
   device_id: string;
   device_name: string;
@@ -62,7 +62,7 @@ export interface PeerHello {
 }
 
 export interface PeerHelloAck {
-  type: 'peer_hello_ack';
+  type: "peer_hello_ack";
   ok: boolean;
   device_id: string;
   device_name: string;
@@ -73,9 +73,9 @@ export interface PeerHelloAck {
 }
 
 export interface PeerChange {
-  type: 'change';
+  type: "change";
   event_id: string;
-  change_type: 'create' | 'update' | 'delete';
+  change_type: "create" | "update" | "delete";
   data: Record<string, unknown>;
   origin_device: string;
   origin_seq: number;
@@ -95,7 +95,7 @@ export function createPeerHello(
 ): PeerHello {
   const nonce = generateNonce();
   return {
-    type: 'peer_hello',
+    type: "peer_hello",
     protocol_version: 2,
     device_id: deviceId,
     device_name: deviceName,
@@ -116,7 +116,7 @@ export function createPeerHelloAck(
 ): PeerHelloAck {
   const nonce = generateNonce();
   const msg: PeerHelloAck = {
-    type: 'peer_hello_ack',
+    type: "peer_hello_ack",
     ok,
     device_id: deviceId,
     device_name: deviceName,

@@ -1,13 +1,13 @@
 # Delphi
 
-GTD-менеджер задач — часть экосистемы Kosmos. Три реализации: macOS (SwiftUI), Web (Electron + React) и Mobile (Expo + React Native).
+GTD-менеджер задач — часть экосистемы Kosmos. Три реализации: macOS (SwiftUI), Web (Electron + Vue) и Mobile (Expo + React Native).
 
 ## Платформы
 
 | Платформа | Путь | Стек |
 |-----------|------|------|
 | **macOS** | `swift/` | SwiftUI + SwiftData, macOS 14+ |
-| **Web/Desktop** | `ts/` | Electron + React + Vite, TypeScript |
+| **Web/Desktop** | `ts/` | Electron 41 + Vue 3 (Composition API, `<script setup>`) + Vite 8 + Pinia + reka-ui + Tailwind CSS 4 |
 | **Mobile** | `mobile/` | Expo + React Native, TypeScript |
 
 Все версии синхронизируют данные с Ark через WebSocket (`/ws/sync`).
@@ -152,6 +152,68 @@ endDate         Date?
 | Сайдбар | Cmd+/ |
 | Smart List 1-6 | Cmd+1..6 |
 
+## Архитектура TS-версии (`ts/`)
+
+### Структура
+
+```
+ts/
+├── electron/              — Electron main process
+│   ├── main.ts            — точка входа, IPC-хендлеры
+│   ├── peer-discovery.ts  — mDNS (bonjour-service), _ark-peer._tcp
+│   ├── peer-manager.ts    — P2P mesh: outbound WS, HMAC auth, broadcast
+│   ├── peer-server.ts     — inbound WS для входящих peer-подключений
+│   └── peer-protocol.ts   — типы и протокол P2P-сообщений
+├── src/
+│   ├── App.vue            — корневой layout, connection bootstrap, P2P bridge
+│   ├── main.ts            — createApp, router, Pinia
+│   ├── components/        — UI-компоненты (SideBar, QuickEntry, QuickOpen, TodoRow, …)
+│   ├── pages/             — route views (TodayPage, AllTaskPage, ProjectPage, …)
+│   ├── composables/       — useSmartList, useQuickEntry, useTheme
+│   ├── store/
+│   │   ├── todos.ts       — Pinia store: задачи, проекты, CRUD, Ark sync helpers
+│   │   └── tasks.ts       — вспомогательные утилиты для задач
+│   ├── services/
+│   │   ├── sync/          — ark-client (WS), hlc (Hybrid Logical Clock), pairing, peer-bridge
+│   │   ├── api/           — HTTP helpers
+│   │   ├── filters/       — smart list фильтры
+│   │   ├── gemini/        — голосовой ввод (Gemini Live API)
+│   │   ├── recurrence/    — повторяющиеся задачи
+│   │   ├── runtime/       — runtime utilities
+│   │   └── storage/       — localStorage wrappers
+│   ├── router/            — vue-router конфиг
+│   └── types/             — TypeScript типы (Task, Project, Priority, …)
+└── vite.config.ts
+```
+
+### UI-библиотека
+
+reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Tailwind CSS 4 с CSS-переменными (`--background`, `--foreground`, `--border`, `--popover`, `--muted-foreground`).
+
+### Состояние подключения (App.vue)
+
+Индикатор-точка в правом верхнем углу:
+- **Зелёный** (`online`) — WebSocket с Ark активен, realtime sync работает
+- **Жёлтый пульсирующий** (`syncing`) — устанавливается соединение
+- **Красный** (`offline`) — соединение потеряно или не настроено
+
+При наведении — тултип (reka-ui Tooltip) с описанием текущего состояния.
+
+### Синхронизация (renderer)
+
+`ArkSyncClient` (`services/sync/ark-client.ts`):
+- WebSocket с version vectors (localStorage)
+- Outbox для offline-изменений
+- Heartbeat ping/pong
+- Reconnect с exponential backoff (max 30s)
+- `onStatus(cb)` / `onChange(cb)` для подписки
+
+### P2P mesh (Electron main process)
+
+- mDNS discovery → peer-manager координирует outbound WS
+- HMAC auth, hop_path для предотвращения петель
+- IPC bridge `peer:change` → renderer обрабатывает как Ark changes
+
 ## Сервисы
 
 ### TodoFilterService
@@ -196,3 +258,8 @@ Google Gemini 2.5 Live API:
 - Шрифт: Zed Mono Extended (web), системный (macOS)
 - Тема: тёмная по умолчанию, поддержка светлой
 - Path alias: `@/` → `src/`
+- Vue: Composition API + `<script setup lang="ts">`, без Options API
+- State: Pinia stores (`defineStore`), `shallowRef` для примитивов
+- UI-компоненты: reka-ui (headless) + Tailwind CSS 4
+- Линтер: oxlint, форматтер: prettier
+- Тесты: vitest (unit), playwright (e2e)

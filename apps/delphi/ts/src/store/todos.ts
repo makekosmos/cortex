@@ -1,4 +1,5 @@
-import { create } from "zustand";
+import { defineStore } from "pinia";
+import { ref, computed } from "vue";
 import type {
   TodoItem,
   Project,
@@ -13,8 +14,8 @@ import {
   markCompleted as markTodoCompleted,
   markIncomplete as markTodoIncomplete,
   markCancelled as markTodoCancelled,
-  moveToTrash as trashTodo,
-  restoreFromTrash as restoreTodo,
+  moveToTrash as trashTodoItem,
+  restoreFromTrash as restoreTodoItem,
   addChecklistItem as addChecklist,
   toggleChecklistItem as toggleChecklist,
   removeChecklistItem as removeChecklist,
@@ -27,92 +28,10 @@ import { createHeading } from "@/models/heading";
 import { filterTodos, countAll } from "@/services/filters/todoFilterService";
 import {
   createNextRecurrence,
-  duplicateTodo,
+  duplicateTodo as duplicateTodoItem,
 } from "@/services/recurrence/recurrence";
 import type { CreateTodoParams } from "@/models/todoItem";
 import type { CreateProjectParams } from "@/models/project";
-
-// ---------------------------------------------------------------------------
-// Store shape
-// ---------------------------------------------------------------------------
-
-type TodoStore = {
-  // Data
-  todos: TodoItem[];
-  projects: Project[];
-  areas: Area[];
-  tags: Tag[];
-  headings: Heading[];
-  activeSmartList: SmartList | null;
-
-  // Hydration
-  hydrated: boolean;
-  setHydrated: (v: boolean) => void;
-
-  // Bulk setters (for sync / hydration)
-  setTodos: (todos: TodoItem[]) => void;
-  setProjects: (projects: Project[]) => void;
-  setAreas: (areas: Area[]) => void;
-  setTags: (tags: Tag[]) => void;
-  setHeadings: (headings: Heading[]) => void;
-
-  // Navigation
-  setActiveSmartList: (list: SmartList | null) => void;
-
-  // Derived
-  filteredTodos: (list: SmartList) => TodoItem[];
-  smartListCounts: () => Record<SmartList, number>;
-  todosForProject: (projectId: string) => TodoItem[];
-  headingsForProject: (projectId: string) => Heading[];
-
-  // Todo CRUD
-  addTodo: (params: CreateTodoParams) => TodoItem;
-  updateTodo: (id: string, patch: Partial<TodoItem>) => void;
-  removeTodo: (id: string) => void;
-  upsertTodo: (todo: TodoItem) => void;
-
-  // Todo state transitions
-  completeTodo: (id: string) => void;
-  incompleteTodo: (id: string) => void;
-  cancelTodo: (id: string) => void;
-  trashTodo: (id: string) => void;
-  restoreTodo: (id: string) => void;
-  duplicateTodo: (id: string) => TodoItem | null;
-
-  // Checklist
-  addChecklistItem: (todoId: string, title: string) => void;
-  toggleChecklistItem: (todoId: string, itemId: string) => void;
-  removeChecklistItem: (todoId: string, itemId: string) => void;
-  reorderChecklistItems: (todoId: string, orderedIds: string[]) => void;
-
-  // Recurrence
-  setRecurrence: (todoId: string, rule: RecurrenceData | null) => void;
-
-  // Tags on todos
-  addTagToTodo: (todoId: string, tagId: string) => void;
-  removeTagFromTodo: (todoId: string, tagId: string) => void;
-
-  // Project CRUD
-  addProject: (params: CreateProjectParams) => Project;
-  updateProject: (id: string, patch: Partial<Project>) => void;
-  removeProject: (id: string) => void;
-  upsertProject: (project: Project) => void;
-
-  // Area CRUD
-  addArea: (title: string) => Area;
-  updateArea: (id: string, patch: Partial<Area>) => void;
-  removeArea: (id: string) => void;
-
-  // Tag CRUD
-  addTag: (title: string, color?: string, shortcut?: string | null) => Tag;
-  updateTag: (id: string, patch: Partial<Tag>) => void;
-  removeTag: (id: string) => void;
-
-  // Heading CRUD
-  addHeading: (title: string, projectId?: string | null) => Heading;
-  updateHeading: (id: string, patch: Partial<Heading>) => void;
-  removeHeading: (id: string) => void;
-};
 
 // ---------------------------------------------------------------------------
 // Helper: update a single todo in-place
@@ -130,75 +49,94 @@ function mapTodo(
 // Store
 // ---------------------------------------------------------------------------
 
-const useTodoStore = create<TodoStore>((set, get) => ({
-  // Data
-  todos: [],
-  projects: [],
-  areas: [],
-  tags: [],
-  headings: [],
-  activeSmartList: null,
+export const useTodoStore = defineStore("todos", () => {
+  // ---- State ----
+  const todos = ref<TodoItem[]>([]);
+  const projects = ref<Project[]>([]);
+  const areas = ref<Area[]>([]);
+  const tags = ref<Tag[]>([]);
+  const headings = ref<Heading[]>([]);
+  const activeSmartList = ref<SmartList | null>(null);
+  const hydrated = ref(false);
 
-  hydrated: false,
-  setHydrated: (v) => set({ hydrated: v }),
+  // ---- Bulk setters (for sync / hydration) ----
 
-  // Bulk setters
-  setTodos: (todos) => set({ todos }),
-  setProjects: (projects) => set({ projects }),
-  setAreas: (areas) => set({ areas }),
-  setTags: (tags) => set({ tags }),
-  setHeadings: (headings) => set({ headings }),
+  function setTodos(value: TodoItem[]) {
+    todos.value = value;
+  }
+  function setProjects(value: Project[]) {
+    projects.value = value;
+  }
+  function setAreas(value: Area[]) {
+    areas.value = value;
+  }
+  function setTags(value: Tag[]) {
+    tags.value = value;
+  }
+  function setHeadings(value: Heading[]) {
+    headings.value = value;
+  }
+  function setHydrated(v: boolean) {
+    hydrated.value = v;
+  }
 
-  // Navigation
-  setActiveSmartList: (list) => set({ activeSmartList: list }),
+  // ---- Navigation ----
 
-  // Derived (not stored — computed on call)
-  filteredTodos: (list) => filterTodos(list, get().todos),
-  smartListCounts: () => countAll(get().todos),
-  todosForProject: (projectId) =>
-    get()
-      .todos.filter((t) => t.projectId === projectId && !t.isTrashed)
-      .sort((a, b) => a.sortOrder - b.sortOrder),
-  headingsForProject: (projectId) =>
-    get()
-      .headings.filter((h) => h.projectId === projectId)
-      .sort((a, b) => a.sortOrder - b.sortOrder),
+  function setActiveSmartList(list: SmartList | null) {
+    activeSmartList.value = list;
+  }
 
-  // ----- Todo CRUD -----
+  // ---- Derived ----
 
-  addTodo: (params) => {
+  function filteredTodos(list: SmartList): TodoItem[] {
+    return filterTodos(list, todos.value);
+  }
+
+  const smartListCounts = computed(() => countAll(todos.value));
+
+  function todosForProject(projectId: string): TodoItem[] {
+    return todos.value
+      .filter((t) => t.projectId === projectId && !t.isTrashed)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  function headingsForProject(projectId: string): Heading[] {
+    return headings.value
+      .filter((h) => h.projectId === projectId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  // ---- Todo CRUD ----
+
+  function addTodo(params: CreateTodoParams): TodoItem {
     const todo = createTodoItem(params);
-    set((s) => ({ todos: [todo, ...s.todos] }));
+    todos.value = [todo, ...todos.value];
     return todo;
-  },
+  }
 
-  updateTodo: (id, patch) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, id, (t) => ({ ...t, ...patch })),
-    })),
+  function updateTodo(id: string, patch: Partial<TodoItem>) {
+    todos.value = mapTodo(todos.value, id, (t) => ({ ...t, ...patch }));
+  }
 
-  removeTodo: (id) =>
-    set((s) => ({ todos: s.todos.filter((t) => t.id !== id) })),
+  function removeTodo(id: string) {
+    todos.value = todos.value.filter((t) => t.id !== id);
+  }
 
-  upsertTodo: (todo) =>
-    set((s) => {
-      const exists = s.todos.some((t) => t.id === todo.id);
-      return {
-        todos: exists
-          ? s.todos.map((t) => (t.id === todo.id ? todo : t))
-          : [todo, ...s.todos],
-      };
-    }),
+  function upsertTodo(todo: TodoItem) {
+    const exists = todos.value.some((t) => t.id === todo.id);
+    todos.value = exists
+      ? todos.value.map((t) => (t.id === todo.id ? todo : t))
+      : [todo, ...todos.value];
+  }
 
-  // ----- State transitions -----
+  // ---- State transitions ----
 
-  completeTodo: (id) => {
-    const state = get();
-    const todo = state.todos.find((t) => t.id === id);
+  function completeTodo(id: string) {
+    const todo = todos.value.find((t) => t.id === id);
     if (!todo) return;
 
     const completed = markTodoCompleted(todo);
-    let newTodos = mapTodo(state.todos, id, () => completed);
+    let newTodos = mapTodo(todos.value, id, () => completed);
 
     // If recurring, create next occurrence
     const next = createNextRecurrence(completed);
@@ -206,183 +144,258 @@ const useTodoStore = create<TodoStore>((set, get) => ({
       newTodos = [next, ...newTodos];
     }
 
-    set({ todos: newTodos });
-  },
+    todos.value = newTodos;
+  }
 
-  incompleteTodo: (id) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, id, markTodoIncomplete),
-    })),
+  function incompleteTodo(id: string) {
+    todos.value = mapTodo(todos.value, id, markTodoIncomplete);
+  }
 
-  cancelTodo: (id) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, id, markTodoCancelled),
-    })),
+  function cancelTodo(id: string) {
+    todos.value = mapTodo(todos.value, id, markTodoCancelled);
+  }
 
-  trashTodo: (id) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, id, trashTodo),
-    })),
+  function trashTodo(id: string) {
+    todos.value = mapTodo(todos.value, id, trashTodoItem);
+  }
 
-  restoreTodo: (id) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, id, restoreTodo),
-    })),
+  function restoreTodo(id: string) {
+    todos.value = mapTodo(todos.value, id, restoreTodoItem);
+  }
 
-  duplicateTodo: (id) => {
-    const todo = get().todos.find((t) => t.id === id);
+  function duplicateTodo(id: string): TodoItem | null {
+    const todo = todos.value.find((t) => t.id === id);
     if (!todo) return null;
-    const copy = duplicateTodo(todo);
-    set((s) => ({ todos: [copy, ...s.todos] }));
+    const copy = duplicateTodoItem(todo);
+    todos.value = [copy, ...todos.value];
     return copy;
-  },
+  }
 
-  // ----- Checklist -----
+  // ---- Checklist ----
 
-  addChecklistItem: (todoId, title) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) => addChecklist(t, title)),
-    })),
+  function addChecklistItem(todoId: string, title: string) {
+    todos.value = mapTodo(todos.value, todoId, (t) => addChecklist(t, title));
+  }
 
-  toggleChecklistItem: (todoId, itemId) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) => toggleChecklist(t, itemId)),
-    })),
+  function toggleChecklistItem(todoId: string, itemId: string) {
+    todos.value = mapTodo(todos.value, todoId, (t) =>
+      toggleChecklist(t, itemId),
+    );
+  }
 
-  removeChecklistItem: (todoId, itemId) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) => removeChecklist(t, itemId)),
-    })),
+  function removeChecklistItem(todoId: string, itemId: string) {
+    todos.value = mapTodo(todos.value, todoId, (t) =>
+      removeChecklist(t, itemId),
+    );
+  }
 
-  reorderChecklistItems: (todoId, orderedIds) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) => reorderChecklist(t, orderedIds)),
-    })),
+  function reorderChecklistItems(todoId: string, orderedIds: string[]) {
+    todos.value = mapTodo(todos.value, todoId, (t) =>
+      reorderChecklist(t, orderedIds),
+    );
+  }
 
-  // ----- Recurrence -----
+  // ---- Recurrence ----
 
-  setRecurrence: (todoId, rule) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) => ({ ...t, recurrenceRule: rule })),
-    })),
+  function setRecurrence(todoId: string, rule: RecurrenceData | null) {
+    todos.value = mapTodo(todos.value, todoId, (t) => ({
+      ...t,
+      recurrenceRule: rule,
+    }));
+  }
 
-  // ----- Tags on todos -----
+  // ---- Tags on todos ----
 
-  addTagToTodo: (todoId, tagId) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) =>
-        t.tagIds.includes(tagId) ? t : { ...t, tagIds: [...t.tagIds, tagId] },
-      ),
-    })),
+  function addTagToTodo(todoId: string, tagId: string) {
+    todos.value = mapTodo(todos.value, todoId, (t) =>
+      t.tagIds.includes(tagId) ? t : { ...t, tagIds: [...t.tagIds, tagId] },
+    );
+  }
 
-  removeTagFromTodo: (todoId, tagId) =>
-    set((s) => ({
-      todos: mapTodo(s.todos, todoId, (t) => ({
-        ...t,
-        tagIds: t.tagIds.filter((id) => id !== tagId),
-      })),
-    })),
+  function removeTagFromTodo(todoId: string, tagId: string) {
+    todos.value = mapTodo(todos.value, todoId, (t) => ({
+      ...t,
+      tagIds: t.tagIds.filter((id) => id !== tagId),
+    }));
+  }
 
-  // ----- Project CRUD -----
+  // ---- Project CRUD ----
 
-  addProject: (params) => {
+  function addProject(params: CreateProjectParams): Project {
     const project = createProject(params);
-    set((s) => ({ projects: [project, ...s.projects] }));
+    projects.value = [project, ...projects.value];
     return project;
-  },
+  }
 
-  updateProject: (id, patch) =>
-    set((s) => ({
-      projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    })),
+  function updateProject(id: string, patch: Partial<Project>) {
+    projects.value = projects.value.map((p) =>
+      p.id === id ? { ...p, ...patch } : p,
+    );
+  }
 
-  removeProject: (id) =>
-    set((s) => ({
-      projects: s.projects.filter((p) => p.id !== id),
-      // Unlink todos from removed project
-      todos: s.todos.map((t) =>
-        t.projectId === id ? { ...t, projectId: null } : t,
-      ),
-    })),
+  function removeProject(id: string) {
+    projects.value = projects.value.filter((p) => p.id !== id);
+    // Unlink todos from removed project
+    todos.value = todos.value.map((t) =>
+      t.projectId === id ? { ...t, projectId: null } : t,
+    );
+  }
 
-  upsertProject: (project) =>
-    set((s) => {
-      const exists = s.projects.some((p) => p.id === project.id);
-      return {
-        projects: exists
-          ? s.projects.map((p) => (p.id === project.id ? project : p))
-          : [project, ...s.projects],
-      };
-    }),
+  function upsertProject(project: Project) {
+    const exists = projects.value.some((p) => p.id === project.id);
+    projects.value = exists
+      ? projects.value.map((p) => (p.id === project.id ? project : p))
+      : [project, ...projects.value];
+  }
 
-  // ----- Area CRUD -----
+  // ---- Area CRUD ----
 
-  addArea: (title) => {
+  function addArea(title: string): Area {
     const area = createArea(title);
-    set((s) => ({ areas: [area, ...s.areas] }));
+    areas.value = [area, ...areas.value];
     return area;
-  },
+  }
 
-  updateArea: (id, patch) =>
-    set((s) => ({
-      areas: s.areas.map((a) => (a.id === id ? { ...a, ...patch } : a)),
-    })),
+  function updateArea(id: string, patch: Partial<Area>) {
+    areas.value = areas.value.map((a) =>
+      a.id === id ? { ...a, ...patch } : a,
+    );
+  }
 
-  removeArea: (id) =>
-    set((s) => ({
-      areas: s.areas.filter((a) => a.id !== id),
-      // Unlink projects & todos from removed area
-      projects: s.projects.map((p) =>
-        p.areaId === id ? { ...p, areaId: null } : p,
-      ),
-      todos: s.todos.map((t) => (t.areaId === id ? { ...t, areaId: null } : t)),
-    })),
+  function removeArea(id: string) {
+    areas.value = areas.value.filter((a) => a.id !== id);
+    // Unlink projects & todos from removed area
+    projects.value = projects.value.map((p) =>
+      p.areaId === id ? { ...p, areaId: null } : p,
+    );
+    todos.value = todos.value.map((t) =>
+      t.areaId === id ? { ...t, areaId: null } : t,
+    );
+  }
 
-  // ----- Tag CRUD -----
+  // ---- Tag CRUD ----
 
-  addTag: (title, color, shortcut) => {
+  function addTag(
+    title: string,
+    color?: string,
+    shortcut?: string | null,
+  ): Tag {
     const tag = createTag(title, color, shortcut);
-    set((s) => ({ tags: [tag, ...s.tags] }));
+    tags.value = [tag, ...tags.value];
     return tag;
-  },
+  }
 
-  updateTag: (id, patch) =>
-    set((s) => ({
-      tags: s.tags.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-    })),
+  function updateTag(id: string, patch: Partial<Tag>) {
+    tags.value = tags.value.map((t) => (t.id === id ? { ...t, ...patch } : t));
+  }
 
-  removeTag: (id) =>
-    set((s) => ({
-      tags: s.tags.filter((t) => t.id !== id),
-      // Remove tag from all todos
-      todos: s.todos.map((t) =>
-        t.tagIds.includes(id)
-          ? { ...t, tagIds: t.tagIds.filter((tid) => tid !== id) }
-          : t,
-      ),
-    })),
+  function removeTag(id: string) {
+    tags.value = tags.value.filter((t) => t.id !== id);
+    // Remove tag from all todos
+    todos.value = todos.value.map((t) =>
+      t.tagIds.includes(id)
+        ? { ...t, tagIds: t.tagIds.filter((tid) => tid !== id) }
+        : t,
+    );
+  }
 
-  // ----- Heading CRUD -----
+  // ---- Heading CRUD ----
 
-  addHeading: (title, projectId) => {
+  function addHeading(title: string, projectId?: string | null): Heading {
     const heading = createHeading(title, projectId);
-    set((s) => ({ headings: [heading, ...s.headings] }));
+    headings.value = [heading, ...headings.value];
     return heading;
-  },
+  }
 
-  updateHeading: (id, patch) =>
-    set((s) => ({
-      headings: s.headings.map((h) => (h.id === id ? { ...h, ...patch } : h)),
-    })),
+  function updateHeading(id: string, patch: Partial<Heading>) {
+    headings.value = headings.value.map((h) =>
+      h.id === id ? { ...h, ...patch } : h,
+    );
+  }
 
-  removeHeading: (id) =>
-    set((s) => ({
-      headings: s.headings.filter((h) => h.id !== id),
-      // Clear headingId from todos that referenced it
-      todos: s.todos.map((t) =>
-        t.headingId === id ? { ...t, headingId: null } : t,
-      ),
-    })),
-}));
+  function removeHeading(id: string) {
+    headings.value = headings.value.filter((h) => h.id !== id);
+    // Clear headingId from todos that referenced it
+    todos.value = todos.value.map((t) =>
+      t.headingId === id ? { ...t, headingId: null } : t,
+    );
+  }
+
+  return {
+    // State
+    todos,
+    projects,
+    areas,
+    tags,
+    headings,
+    activeSmartList,
+    hydrated,
+
+    // Bulk setters
+    setTodos,
+    setProjects,
+    setAreas,
+    setTags,
+    setHeadings,
+    setHydrated,
+
+    // Navigation
+    setActiveSmartList,
+
+    // Derived
+    filteredTodos,
+    smartListCounts,
+    todosForProject,
+    headingsForProject,
+
+    // Todo CRUD
+    addTodo,
+    updateTodo,
+    removeTodo,
+    upsertTodo,
+
+    // State transitions
+    completeTodo,
+    incompleteTodo,
+    cancelTodo,
+    trashTodo,
+    restoreTodo,
+    duplicateTodo,
+
+    // Checklist
+    addChecklistItem,
+    toggleChecklistItem,
+    removeChecklistItem,
+    reorderChecklistItems,
+
+    // Recurrence
+    setRecurrence,
+
+    // Tags on todos
+    addTagToTodo,
+    removeTagFromTodo,
+
+    // Project CRUD
+    addProject,
+    updateProject,
+    removeProject,
+    upsertProject,
+
+    // Area CRUD
+    addArea,
+    updateArea,
+    removeArea,
+
+    // Tag CRUD
+    addTag,
+    updateTag,
+    removeTag,
+
+    // Heading CRUD
+    addHeading,
+    updateHeading,
+    removeHeading,
+  };
+});
 
 export default useTodoStore;

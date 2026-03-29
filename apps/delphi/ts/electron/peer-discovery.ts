@@ -5,7 +5,13 @@
  * and browses for other peers with the same mesh_id.
  */
 
-import Bonjour, { type Service } from 'bonjour-service';
+import BonjourModule, { type Service } from 'bonjour-service';
+
+// bonjour-service exports a class as default, but the ESM interop
+// may wrap it in { default: Bonjour }. Handle both cases.
+const Bonjour = (typeof (BonjourModule as any).default === 'function'
+  ? (BonjourModule as any).default
+  : BonjourModule) as typeof BonjourModule;
 
 export interface DiscoveredPeer {
   deviceId: string;

@@ -13,7 +13,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
 
     /* Linting */
     "strict": true,
@@ -24,12 +24,8 @@
     /* Alias */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@kosmos/ui": ["../../../packages/kosmos-ui/index.ts"],
-      "@kosmos/ui/*": ["../../../packages/kosmos-ui/*"],
-      "react": ["./node_modules/@types/react"],
-      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime"]
+      "@/*": ["src/*"]
     }
   },
-  "include": ["src", "../../../packages/kosmos-ui"]
+  "include": ["src"]
 }

@@ -1,0 +1,285 @@
+<script setup lang="ts">
+import {
+  computed,
+  shallowRef,
+  watch,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+} from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { Circle, MoreHorizontal, Plus } from "lucide-vue-next";
+import { useQuickEntry } from "@/composables/useQuickEntry";
+
+const { show: openQuickEntry } = useQuickEntry();
+import { useTodoStore } from "@/store/todos";
+import { storeToRefs } from "pinia";
+import { ProjectStatus } from "@/types/task";
+import TodoRow from "@/components/TodoRow.vue";
+import { arkSync, projectToArkChange } from "@/services/sync/ark-client";
+import { broadcastToPeers } from "@/services/sync/peer-bridge";
+
+// ---------------------------------------------------------------------------
+// Color tag helper
+// ---------------------------------------------------------------------------
+
+function colorTagClass(colorTag?: string | null): string {
+  switch (colorTag) {
+    case "red":
+      return "text-red-500";
+    case "orange":
+      return "text-orange-500";
+    case "yellow":
+      return "text-yellow-500";
+    case "green":
+      return "text-green-500";
+    case "blue":
+      return "text-blue-500";
+    case "purple":
+      return "text-purple-500";
+    case "pink":
+      return "text-pink-500";
+    default:
+      return "text-(--muted-foreground)";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Router & store
+// ---------------------------------------------------------------------------
+
+const router = useRouter();
+const route = useRoute();
+const store = useTodoStore();
+const { projects } = storeToRefs(store);
+
+const id = computed(() => route.params.id as string | undefined);
+
+const project = computed(() => projects.value.find((p) => p.id === id.value));
+
+const todos = computed(() => (id.value ? store.todosForProject(id.value) : []));
+
+const activeTodos = computed(() =>
+  todos.value.filter((t) => !t.isCompleted && !t.isCancelled),
+);
+
+const completedTodos = computed(() =>
+  todos.value.filter((t) => t.isCompleted || t.isCancelled),
+);
+
+// ---------------------------------------------------------------------------
+// Editable title
+// ---------------------------------------------------------------------------
+
+const editing = shallowRef(false);
+const editTitle = shallowRef("");
+const inputRef = ref<HTMLInputElement | null>(null);
+
+watch(editing, async (val) => {
+  if (val) {
+    await nextTick();
+    inputRef.value?.focus();
+    inputRef.value?.select();
+  }
+});
+
+function startRename() {
+  if (!project.value) return;
+  editTitle.value = project.value.title;
+  editing.value = true;
+  menuOpen.value = false;
+}
+
+function commitRename() {
+  editing.value = false;
+  const trimmed = editTitle.value.trim();
+  if (project.value && trimmed && trimmed !== project.value.title) {
+    store.updateProject(project.value.id, { title: trimmed });
+    const change = projectToArkChange(
+      { ...project.value, title: trimmed },
+      "update",
+    );
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Context menu
+// ---------------------------------------------------------------------------
+
+const menuOpen = shallowRef(false);
+const menuRef = ref<HTMLDivElement | null>(null);
+
+function handleOutsideClick(e: MouseEvent) {
+  if (menuRef.value && !menuRef.value.contains(e.target as Node)) {
+    menuOpen.value = false;
+  }
+}
+
+watch(menuOpen, (val) => {
+  if (val) {
+    document.addEventListener("mousedown", handleOutsideClick);
+  } else {
+    document.removeEventListener("mousedown", handleOutsideClick);
+  }
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", handleOutsideClick);
+});
+
+function handleDelete() {
+  if (!project.value) return;
+  menuOpen.value = false;
+  store.removeProject(project.value.id);
+  const change = projectToArkChange(project.value, "delete");
+  arkSync.sendChange(change);
+  broadcastToPeers(change);
+  router.push("/");
+}
+
+function handleArchive() {
+  if (!project.value) return;
+  menuOpen.value = false;
+  store.updateProject(project.value.id, { status: ProjectStatus.Completed });
+  const change = projectToArkChange(
+    { ...project.value, status: ProjectStatus.Completed },
+    "update",
+  );
+  arkSync.sendChange(change);
+  broadcastToPeers(change);
+  router.push("/");
+}
+</script>
+
+<template>
+  <!-- Project not found -->
+  <div
+    v-if="!project"
+    class="flex w-full min-w-0 flex-col items-center justify-center"
+  >
+    <p class="text-(--muted-foreground)">Проект не найден</p>
+  </div>
+
+  <!-- Project view -->
+  <div v-else class="flex w-full min-w-0 flex-col">
+    <!-- Header -->
+    <div class="flex items-center gap-2.5 px-7 pb-3 pt-6">
+      <Circle
+        :size="12"
+        :class="['shrink-0 fill-current', colorTagClass(project.colorTag)]"
+      />
+
+      <input
+        v-if="editing"
+        ref="inputRef"
+        v-model="editTitle"
+        type="text"
+        class="flex-1 bg-transparent text-2xl font-bold text-(--foreground) outline-none"
+        @blur="commitRename"
+        @keydown.enter="commitRename"
+        @keydown.escape="editing = false"
+      />
+      <h1
+        v-else
+        class="text-2xl font-bold text-(--foreground) select-none cursor-pointer"
+        @dblclick="startRename"
+      >
+        {{ project.title }}
+      </h1>
+
+      <span v-if="todos.length > 0" class="text-sm text-(--muted-foreground)">
+        {{ activeTodos.length }}
+      </span>
+
+      <!-- Context menu -->
+      <div ref="menuRef" class="relative ml-auto">
+        <button
+          type="button"
+          class="rounded p-1 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
+          @click="menuOpen = !menuOpen"
+        >
+          <MoreHorizontal :size="18" />
+        </button>
+
+        <div
+          v-if="menuOpen"
+          class="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-(--border) bg-(--popover) py-1 shadow-lg"
+        >
+          <button
+            type="button"
+            class="flex w-full items-center px-3 py-2 text-sm text-(--foreground) hover:bg-(--secondary)"
+            @click="startRename"
+          >
+            Переименовать
+          </button>
+          <button
+            type="button"
+            class="flex w-full items-center px-3 py-2 text-sm text-(--foreground) hover:bg-(--secondary)"
+            @click="handleArchive"
+          >
+            Архивировать
+          </button>
+          <div class="my-1 border-t border-(--border)" />
+          <button
+            type="button"
+            class="flex w-full items-center px-3 py-2 text-sm text-red-500 hover:bg-red-500/10"
+            @click="handleDelete"
+          >
+            Удалить
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Task list -->
+    <div class="scrollbar-gutter flex-1 overflow-y-auto">
+      <div class="pb-20 pt-1">
+        <div
+          v-if="activeTodos.length === 0 && completedTodos.length === 0"
+          class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
+        >
+          Нет задач в проекте
+        </div>
+        <template v-else>
+          <div v-if="activeTodos.length > 0" class="flex flex-col">
+            <TodoRow
+              v-for="todo in activeTodos"
+              :key="todo.id"
+              :todo="todo"
+              @complete="store.completeTodo(todo.id)"
+              @trash="store.trashTodo(todo.id)"
+            />
+          </div>
+
+          <template v-if="completedTodos.length > 0">
+            <div
+              class="px-7 pb-1 pt-4 text-xs font-semibold uppercase tracking-wider text-(--muted-foreground)/60 select-none"
+            >
+              Завершённые ({{ completedTodos.length }})
+            </div>
+            <div class="flex flex-col">
+              <TodoRow
+                v-for="todo in completedTodos"
+                :key="todo.id"
+                :todo="todo"
+                @complete="store.completeTodo(todo.id)"
+              />
+            </div>
+          </template>
+        </template>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      class="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary) text-(--primary-foreground) shadow-lg transition-transform hover:scale-105 active:scale-95"
+      title="Новая задача (⌘N)"
+      @click="openQuickEntry"
+    >
+      <Plus :size="24" />
+    </button>
+  </div>
+</template>
