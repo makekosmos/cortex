@@ -20,7 +20,7 @@ export default function SettingsScreen() {
   const [arkUrl, setArkUrl] = useState("");
   const [connected, setConnected] = useState(arkSync.isConnected);
   const [showScanner, setShowScanner] = useState(false);
-  const setTodos = useTodoStore((s) => s.setTodos);
+  const upsertTodos = useTodoStore((s) => s.upsertTodos);
 
   useEffect(() => {
     (async () => {
@@ -50,7 +50,7 @@ export default function SettingsScreen() {
 
       // Fetch initial data
       fetchTasksFromArk(conn.server_url, conn.api_key).then((todos) => {
-        if (todos.length > 0) setTodos(todos);
+        if (todos.length > 0) upsertTodos(todos);
       }).catch((e) => console.warn("[Settings] fetch tasks failed:", e));
 
       setConnectionString("");
@@ -59,7 +59,7 @@ export default function SettingsScreen() {
       console.error("[Settings] pairing error:", e);
       Alert.alert("Ошибка", String(e));
     }
-  }, [setTodos]);
+  }, [upsertTodos]);
 
   const handlePair = useCallback(async () => {
     const trimmed = connectionString.trim();

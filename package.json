@@ -8,8 +8,5 @@
     "apps/eden/ts",
     "packages/*"
   ],
-  "dependencies": {
-    "expo-router": "~5.0.0",
-    "expo-splash-screen": "~0.30.0"
-  }
+  "dependencies": {}
 }

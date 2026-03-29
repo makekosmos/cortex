@@ -52,9 +52,24 @@ src/
 
 Подключение к Ark через WebSocket (`ws://ark-server/ws/sync?key=API_KEY`).
 
-Строка подключения: `ark://host:port?key=SECRET` — вводится в настройках.
+Строка подключения: `ark://host:port?key=SECRET` — вводится в настройках или сканируется QR.
+
+HTTP fetch (`GET /events?event_type=task&limit=1000`) загружает существующие задачи при подключении.
+
+Incoming данные мержатся через `upsertTodos` (не перезаписывают локальные задачи).
+
+Localhost/127.0.0.1 URL в настройках автоматически удаляются (мобильный не может достучаться до localhost десктопа).
 
 P2P mesh пока не реализован (только Ark relay).
+
+## Metro (монорепо)
+
+`metro.config.js` настроен для bun workspace:
+- `projectRoot` = mobile app dir
+- `watchFolders` = monorepo root (для hoisted deps)
+- `nodeModulesPaths` = local + root node_modules
+- Custom `resolveRequest` — предотвращает HMR crash при resolve монорепо корня
+- `scripts/fix-jsc-safe-url.js` — патч jsc-safe-url для пустых URL путей
 
 ## Команды
 

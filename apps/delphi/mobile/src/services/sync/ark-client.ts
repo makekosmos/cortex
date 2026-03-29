@@ -168,7 +168,7 @@ export async function fetchTasksFromArk(
   if (!url || !key) return [];
 
   try {
-    const resp = await fetch(`${url}/events?limit=1000`, {
+    const resp = await fetch(`${url}/events?event_type=task&limit=1000`, {
       headers: { "X-API-Key": key },
     });
     if (!resp.ok) return [];

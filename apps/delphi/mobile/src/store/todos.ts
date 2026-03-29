@@ -52,6 +52,7 @@ type TodoStore = {
   // Bulk setters (for sync)
   setTodos: (todos: TodoItem[]) => void;
   setProjects: (projects: Project[]) => void;
+  upsertTodos: (incoming: TodoItem[]) => void;
 
   // Derived
   filteredTodos: (list: SmartList) => TodoItem[];
@@ -157,6 +158,16 @@ const useTodoStore = create<TodoStore>((set, get) => ({
   setProjects: (projects) => {
     set({ projects });
     persistProjects(projects);
+  },
+  upsertTodos: (incoming) => {
+    const current = get().todos;
+    const byId = new Map(current.map((t) => [t.id, t]));
+    for (const todo of incoming) {
+      byId.set(todo.id, todo);
+    }
+    const todos = Array.from(byId.values());
+    set({ todos });
+    persistTodos(todos);
   },
 
   // Derived

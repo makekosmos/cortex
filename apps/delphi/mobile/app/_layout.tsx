@@ -8,6 +8,7 @@ import {
   arkChangeToTodoItem,
   arkChangeToProject,
   arkChangeEventType,
+  fetchTasksFromArk,
 } from "@/services/sync/ark-client";
 import { getSetting } from "@/db/storage";
 
@@ -16,6 +17,7 @@ export default function RootLayout() {
   const hydrated = useTodoStore((s) => s.hydrated);
   const upsertTodo = useTodoStore((s) => s.upsertTodo);
   const upsertProject = useTodoStore((s) => s.upsertProject);
+  const upsertTodos = useTodoStore((s) => s.upsertTodos);
   const [error, setError] = useState<string | null>(null);
 
   // Hydrate store from SQLite on launch
@@ -56,6 +58,15 @@ export default function RootLayout() {
         if (url && key && !url.includes("localhost") && !url.includes("127.0.0.1")) {
           if (!arkSync.isConnected) {
             arkSync.connect(url, key);
+            // Fetch existing tasks via HTTP (outbox may not have everything)
+            fetchTasksFromArk(url, key)
+              .then((todos) => {
+                if (todos.length > 0) {
+                  console.log(`[RootLayout] Fetched ${todos.length} tasks from Ark HTTP`);
+                  upsertTodos(todos);
+                }
+              })
+              .catch((e) => console.warn("[RootLayout] HTTP fetch failed:", e));
           }
         } else if (url?.includes("localhost")) {
           const { deleteSetting } = await import("@/db/storage");
