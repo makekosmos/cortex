@@ -183,7 +183,6 @@ def _full_sync_from_events(db: Ark) -> list[dict[str, Any]]:
         events = conn.execute(
             "SELECT rowid, event_type, source, source_id, summary, occurred_at, data "
             "FROM events WHERE is_deleted=0 "
-            "AND event_type IN ('task', 'project', 'area', 'tag') "
             "ORDER BY rowid"
         ).fetchall()
 
