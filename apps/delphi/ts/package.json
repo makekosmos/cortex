@@ -5,8 +5,10 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "build:sidecar": "cargo build --release --manifest-path sidecar/Cargo.toml",
+    "build:sidecar:dev": "cargo build --manifest-path sidecar/Cargo.toml",
+    "dev": "bun run build:sidecar:dev && vite",
+    "build": "bun run build:sidecar && tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
@@ -63,6 +65,12 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "sidecar/target/release/delphi-db",
+        "to": "delphi-db/delphi-db"
+      }
     ],
     "mac": {
       "target": "dmg"

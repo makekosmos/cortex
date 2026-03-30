@@ -18,6 +18,7 @@ import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
 import ResizableSidebar from "@/components/ResizableSidebar.vue";
 import type { SidebarConfig } from "@/components/ResizableSidebar.vue";
+// eslint-disable-next-line import/no-unassigned-import
 import "@/components/sidebar.css";
 
 const STORAGE_KEY = "delphi-sidebar-config";

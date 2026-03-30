@@ -112,7 +112,7 @@ def _make_client() -> TestClient:
 
 def _do_pairing(tc: TestClient, device_name: str = "Test Phone", platform: str = "android") -> dict[str, Any]:
     """Run the pairing flow and return claim response (server_url, api_key, device_id)."""
-    headers = {"X-API-Key": app_mod.API_KEY}
+    headers: dict[str, str] = {"X-API-Key": app_mod.API_KEY or ""}
     with patch("server.discovery._get_local_ip", return_value="192.168.1.100"):
         r1 = tc.post("/pairing/create", headers=headers)
     assert r1.status_code == 200
@@ -139,7 +139,7 @@ class TestEndToEndWorkflow:
 
     def test_full_pair_sync_workflow(self) -> None:
         tc = _make_client()
-        headers = {"X-API-Key": app_mod.API_KEY}
+        headers: dict[str, str] = {"X-API-Key": app_mod.API_KEY or ""}
         db = app_mod.db
 
         # ---------------------------------------------------------------

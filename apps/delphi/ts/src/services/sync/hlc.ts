@@ -25,7 +25,7 @@ export class HLC {
 
   merge(remote: HLC): HLC {
     const now = new Date().toISOString();
-    const maxTime = [now, this.wallTime, remote.wallTime].sort().pop()!;
+    const maxTime = [now, this.wallTime, remote.wallTime].toSorted().pop()!;
 
     let counter: number;
     if (maxTime === this.wallTime && maxTime === remote.wallTime) {

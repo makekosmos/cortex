@@ -4,6 +4,19 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PeerManager } from './peer-manager';
 import type { PeerChange } from '../src/services/sync/peer-protocol';
+import { sidecar, dbLoadAll, dbUpsertTodo, dbDeleteTodo, dbBatchUpsertTodos, dbUpsertProject, dbDeleteProject, dbGetSyncKv, dbSetSyncKv, dbClearAll } from './sidecar';
+
+// Suppress mDNS multicast errors — these happen on networks that don't support
+// multicast (VPN, some Wi-Fi). They're non-fatal; P2P degrades to relay-only.
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EHOSTUNREACH' || err.code === 'ENETUNREACH' || err.code === 'EADDRNOTAVAIL') {
+    console.warn('[Main] mDNS unavailable on this network:', err.message);
+    return;
+  }
+  // Re-throw anything else
+  console.error('[Main] Uncaught exception:', err);
+  throw err;
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,6 +170,18 @@ ipcMain.handle('peer:isActive', async () => {
   return peerManager !== null;
 });
 
+// --- IPC handlers for local DB ---
+
+ipcMain.handle('db:loadAll', () => dbLoadAll())
+ipcMain.handle('db:upsertTodo', (_e, todo) => dbUpsertTodo(todo))
+ipcMain.handle('db:deleteTodo', (_e, id) => dbDeleteTodo(id))
+ipcMain.handle('db:batchUpsertTodos', (_e, todos) => dbBatchUpsertTodos(todos))
+ipcMain.handle('db:upsertProject', (_e, project) => dbUpsertProject(project))
+ipcMain.handle('db:deleteProject', (_e, id) => dbDeleteProject(id))
+ipcMain.handle('db:getSyncKv', (_e, key) => dbGetSyncKv(key))
+ipcMain.handle('db:setSyncKv', (_e, key, value) => dbSetSyncKv(key, value))
+ipcMain.handle('db:clearAll', () => dbClearAll())
+
 // --- App lifecycle ---
 
 app.whenReady().then(async () => {
@@ -168,6 +193,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  sidecar.shutdown();
 });
 
 app.on('activate', () => {

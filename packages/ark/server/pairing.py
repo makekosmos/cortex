@@ -83,7 +83,7 @@ def generate_qr_data_url(data: str) -> str:
 
     img = qrcode.make(data)
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="PNG")  # type: ignore[call-arg]
     b64 = base64.b64encode(buf.getvalue()).decode()
     return f"data:image/png;base64,{b64}"
 

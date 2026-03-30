@@ -87,6 +87,9 @@ final class ArkSyncClient {
         var change = event
         change["change_type"] = changeType
 
+        let sourceId = event["source_id"] as? String ?? "?"
+        logger.info("sendChange called: \(changeType) \(sourceId) connected=\(self.isConnected) ws=\(self.webSocketTask != nil)")
+
         if isConnected, let ws = webSocketTask {
             let message: [String: Any] = [
                 "type": "change",
@@ -98,15 +101,20 @@ final class ArkSyncClient {
             Task {
                 do {
                     let data = try JSONSerialization.data(withJSONObject: message)
-                    guard let text = String(data: data, encoding: .utf8) else { return }
+                    guard let text = String(data: data, encoding: .utf8) else {
+                        logger.error("sendChange: failed to encode as UTF-8")
+                        return
+                    }
                     try await ws.send(.string(text))
+                    logger.info("sendChange: sent \(changeType) \(sourceId) (\(text.count) bytes)")
                 } catch {
-                    logger.error("Failed to send change: \(error.localizedDescription)")
+                    logger.error("sendChange: ws.send failed: \(error.localizedDescription)")
                     outbox.append(change)
                     pendingChanges = outbox.count
                 }
             }
         } else {
+            logger.warning("sendChange: offline, queuing \(changeType) \(sourceId) (outbox=\(self.outbox.count + 1))")
             outbox.append(change)
             pendingChanges = outbox.count
         }
@@ -131,6 +139,48 @@ final class ArkSyncClient {
             return
         }
         Task { await flushOutbox() }
+    }
+
+    /// Clear all local data and resync from server.
+    func clearLocalData() {
+        disconnect()
+
+        guard let container = modelContainer else { return }
+        let context = container.mainContext
+
+        // Delete all SwiftData records one-by-one to avoid batch delete
+        // constraint violations from inverse relationships.
+        do {
+            // Todos first (they reference Project/Area/Tag)
+            let todos = try context.fetch(FetchDescriptor<TodoItem>())
+            for item in todos { context.delete(item) }
+
+            let projects = try context.fetch(FetchDescriptor<Project>())
+            for item in projects { context.delete(item) }
+
+            let areas = try context.fetch(FetchDescriptor<Area>())
+            for item in areas { context.delete(item) }
+
+            let tags = try context.fetch(FetchDescriptor<Tag>())
+            for item in tags { context.delete(item) }
+
+            let headings = try context.fetch(FetchDescriptor<Heading>())
+            for item in headings { context.delete(item) }
+
+            try context.save()
+            logger.info("Cleared all local data")
+        } catch {
+            logger.error("Failed to clear local data: \(error.localizedDescription)")
+        }
+
+        // Reset sync state
+        settings.resetVector()
+        settings.serverEpoch = nil
+        outbox = []
+        pendingChanges = 0
+
+        // Reconnect — empty vector triggers full sync
+        connect()
     }
 
     // MARK: - Internal: Connection
@@ -284,13 +334,27 @@ final class ArkSyncClient {
     private func handleSyncChanges(_ json: [String: Any]) async {
         guard let changes = json["changes"] as? [[String: Any]] else { return }
 
+        // --- Epoch / full-sync detection ---
+        let isFullSync = (json["is_full_sync"] as? Bool) ?? false
+        let incomingEpoch = json["server_epoch"] as? String
+        let storedEpoch = settings.serverEpoch
+        let epochChanged = incomingEpoch != nil && storedEpoch != nil && incomingEpoch != storedEpoch
+
+        if epochChanged {
+            logger.warning("Server epoch changed — resetting version vector, will push full local state")
+            settings.resetVector()
+        }
+        if let epoch = incomingEpoch {
+            settings.serverEpoch = epoch
+        }
+
         isSyncing = true
 
-        // Track which source_ids came from the server so we don't re-push them
-        var remoteSourceIds = Set<String>()
+        // Collect task source_ids the server sent us (for zombie cleanup & sendMissing)
+        var serverTaskIds = Set<String>()
 
         if !changes.isEmpty {
-            logger.info("Received \(changes.count) changes from server")
+            logger.info("Received \(changes.count) changes from server (fullSync=\(isFullSync), epochChanged=\(epochChanged))")
 
             guard let container = modelContainer else {
                 logger.error("No ModelContainer set")
@@ -298,19 +362,22 @@ final class ArkSyncClient {
                 return
             }
 
-            // Use mainContext so SwiftUI @Query views see the changes immediately
             let context = container.mainContext
 
             for change in changes {
                 applyRemoteChange(change, context: context)
 
-                // Track source_ids from remote
-                if let data = change["data"] as? [String: Any],
-                   let sourceId = data["source_id"] as? String {
-                    remoteSourceIds.insert(sourceId)
+                // Collect task ids for reconciliation
+                if let data = change["data"] as? [String: Any] {
+                    let eventType = data["event_type"] as? String ?? ""
+                    if eventType == "task" {
+                        if let sourceId = data["source_id"] as? String {
+                            serverTaskIds.insert(sourceId.lowercased())
+                        }
+                    }
                 }
                 if let eventId = change["event_id"] as? String {
-                    remoteSourceIds.insert(eventId)
+                    serverTaskIds.insert(eventId.lowercased())
                 }
 
                 // Update version vector
@@ -327,23 +394,33 @@ final class ArkSyncClient {
                 logger.error("Failed to save remote changes: \(error.localizedDescription)")
             }
         } else {
-            logger.info("No new changes from server")
+            logger.info("No new changes from server (fullSync=\(isFullSync), epochChanged=\(epochChanged))")
         }
 
-        // Push all local tasks that the server doesn't have yet
-        await pushLocalTodos(excludingSourceIds: remoteSourceIds)
+        // Zombie cleanup: remove local tasks missing from the server snapshot.
+        // ONLY on a genuine full sync without an epoch change — if epoch changed the server
+        // was wiped and we must NOT delete user data based on an empty/partial snapshot.
+        if isFullSync && !epochChanged && !serverTaskIds.isEmpty {
+            await removeZombies(serverTaskIds: serverTaskIds)
+        }
+
+        // Push local tasks missing on the server.
+        // Only run on full sync or when the epoch changed — NOT on every incremental reconnect.
+        if isFullSync || epochChanged {
+            await pushLocalTodos(serverTaskIds: serverTaskIds)
+        }
 
         isSyncing = false
         lastSyncAt = Date()
 
-        // Now send our pending outbox
         await flushOutbox()
     }
 
-    // MARK: - Push local todos on first sync
+    // MARK: - Push local todos missing on server (full sync / epoch change only)
 
-    /// Send all local TodoItems to the server (dedup via source_id).
-    private func pushLocalTodos(excludingSourceIds: Set<String>) async {
+    /// Send local TodoItems that the server snapshot doesn't contain.
+    /// `serverTaskIds` is the set of lowercase source_ids from the full-sync batch.
+    private func pushLocalTodos(serverTaskIds: Set<String>) async {
         guard let container = modelContainer else { return }
 
         let context = container.mainContext
@@ -351,9 +428,9 @@ final class ArkSyncClient {
         guard let todos = try? context.fetch(descriptor) else { return }
 
         var pushed = 0
-        for todo in todos where !todo.isTrashed {
-            let idStr = todo.id.uuidString
-            if excludingSourceIds.contains(idStr) { continue }
+        for todo in todos {
+            let idStr = todo.id.uuidString.lowercased()
+            if serverTaskIds.contains(idStr) { continue }
 
             let event = ArkEventMapper.todoToArkEvent(todo, changeType: "create")
             sendChange(event, changeType: "create")
@@ -361,7 +438,36 @@ final class ArkSyncClient {
         }
 
         if pushed > 0 {
-            logger.info("Pushed \(pushed) local todos to Ark")
+            logger.info("Pushed \(pushed) local todos missing on server")
+        }
+    }
+
+    // MARK: - Zombie cleanup (full sync only, epoch unchanged)
+
+    /// Delete local tasks that the server doesn't know about AND aren't in the outbox.
+    /// Guards: only called when isFullSync=true AND epochChanged=false.
+    private func removeZombies(serverTaskIds: Set<String>) async {
+        guard let container = modelContainer else { return }
+
+        let context = container.mainContext
+        let descriptor = FetchDescriptor<TodoItem>()
+        guard let todos = try? context.fetch(descriptor) else { return }
+
+        // Build outbox id set so we never delete tasks pending upload
+        let outboxIds = Set(outbox.compactMap { $0["source_id"] as? String }.map { $0.lowercased() })
+
+        var removed = 0
+        for todo in todos {
+            let idStr = todo.id.uuidString.lowercased()
+            if !serverTaskIds.contains(idStr) && !outboxIds.contains(idStr) {
+                context.delete(todo)
+                removed += 1
+            }
+        }
+
+        if removed > 0 {
+            logger.info("Removed \(removed) zombie tasks not present on server")
+            try? context.save()
         }
     }
 
@@ -455,13 +561,43 @@ final class ArkSyncClient {
     private func flushOutbox() async {
         guard !outbox.isEmpty, let ws = webSocketTask, isConnected else { return }
 
-        let changes = outbox
+        let pending = outbox
         outbox = []
         pendingChanges = 0
 
+        // Re-read current SwiftData state for non-delete events so we never
+        // send stale payloads that were enqueued before a remote update arrived.
+        let context = modelContainer?.mainContext
+        let freshChanges: [[String: Any]] = pending.map { change in
+            let changeType = change["change_type"] as? String ?? "create"
+            let eventType = change["event_type"] as? String ?? "task"
+
+            // Deletes carry no payload to freshen; non-task events are fine as-is.
+            guard changeType != "delete", eventType == "task" else { return change }
+
+            guard let context,
+                  let sourceIdStr = change["source_id"] as? String,
+                  let uuid = UUID(uuidString: sourceIdStr)
+            else { return change }
+
+            let descriptor = FetchDescriptor<TodoItem>(predicate: #Predicate { $0.id == uuid })
+            if let current = try? context.fetch(descriptor).first {
+                // Rebuild payload from the live SwiftData object.
+                var fresh = ArkEventMapper.todoToArkEvent(current, changeType: changeType)
+                // Preserve any extra keys the original change carried (e.g. hlc timestamp).
+                for (key, value) in change where fresh[key] == nil {
+                    fresh[key] = value
+                }
+                return fresh
+            }
+            // Task was deleted locally after being enqueued — skip stale entry.
+            logger.info("Outbox: task \(sourceIdStr) no longer exists, skipping stale entry")
+            return change
+        }
+
         let message: [String: Any] = [
             "type": "sync_changes",
-            "changes": changes.map { change -> [String: Any] in
+            "changes": freshChanges.map { change -> [String: Any] in
                 [
                     "event_id": change["source_id"] as? String ?? UUID().uuidString,
                     "change_type": change["change_type"] as? String ?? "create",
@@ -473,15 +609,15 @@ final class ArkSyncClient {
         do {
             let data = try JSONSerialization.data(withJSONObject: message)
             guard let text = String(data: data, encoding: .utf8) else {
-                outbox.insert(contentsOf: changes, at: 0)
+                outbox.insert(contentsOf: pending, at: 0)
                 pendingChanges = outbox.count
                 return
             }
             try await ws.send(.string(text))
-            logger.info("Flushed \(changes.count) outbox changes")
+            logger.info("Flushed \(freshChanges.count) outbox changes")
         } catch {
-            // Put them back
-            outbox.insert(contentsOf: changes, at: 0)
+            // Put the original pending items back (not the freshened copies).
+            outbox.insert(contentsOf: pending, at: 0)
             pendingChanges = outbox.count
             logger.error("Failed to flush outbox: \(error.localizedDescription)")
         }

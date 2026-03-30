@@ -1,6 +1,6 @@
 # Delphi
 
-GTD-менеджер задач — часть экосистемы Kosmos. Три реализации: macOS (SwiftUI), Web (Electron + Vue) и Mobile (Expo + React Native).
+GTD-менеджер задач — часть экосистемы Kosmos. Четыре реализации: macOS (SwiftUI), Web (Electron + Vue), Android (Kotlin + Compose) и Mobile (Expo + React Native).
 
 ## Платформы
 
@@ -8,6 +8,7 @@ GTD-менеджер задач — часть экосистемы Kosmos. Тр
 |-----------|------|------|
 | **macOS** | `swift/` | SwiftUI + SwiftData, macOS 14+ |
 | **Web/Desktop** | `ts/` | Electron 41 + Vue 3 (Composition API, `<script setup>`) + Vite 8 + Pinia + reka-ui + Tailwind CSS 4 |
+| **Android** | `kotlin/` | Kotlin + Jetpack Compose + Material 3 + Room + Hilt, minSdk 28 |
 | **Mobile** | `mobile/` | Expo + React Native, TypeScript |
 
 Все версии синхронизируют данные с Ark через WebSocket (`/ws/sync`).
@@ -158,8 +159,12 @@ endDate         Date?
 
 ```
 ts/
+├── sidecar/               — Rust sidecar (delphi-db)
+│   ├── Cargo.toml         — rusqlite (bundled), serde_json
+│   └── src/main.rs        — stdin/stdout JSON RPC + SQLite (WAL)
 ├── electron/              — Electron main process
-│   ├── main.ts            — точка входа, IPC-хендлеры
+│   ├── main.ts            — точка входа, IPC-хендлеры (db:*, fs:*, peer:*)
+│   ├── sidecar.ts         — SidecarClient: spawn delphi-db, JSON queue, dbLoadAll/upsertTodo/…
 │   ├── peer-discovery.ts  — mDNS (bonjour-service), _ark-peer._tcp
 │   ├── peer-manager.ts    — P2P mesh: outbound WS, HMAC auth, broadcast
 │   ├── peer-server.ts     — inbound WS для входящих peer-подключений
@@ -171,7 +176,7 @@ ts/
 │   ├── pages/             — route views (TodayPage, AllTaskPage, ProjectPage, …)
 │   ├── composables/       — useSmartList, useQuickEntry, useTheme
 │   ├── store/
-│   │   ├── todos.ts       — Pinia store: задачи, проекты, CRUD, Ark sync helpers
+│   │   ├── todos.ts       — Pinia store: задачи, проекты, CRUD → localDb + arkSync
 │   │   └── tasks.ts       — вспомогательные утилиты для задач
 │   ├── services/
 │   │   ├── sync/          — ark-client (WS), hlc (Hybrid Logical Clock), pairing, peer-bridge
@@ -180,10 +185,40 @@ ts/
 │   │   ├── gemini/        — голосовой ввод (Gemini Live API)
 │   │   ├── recurrence/    — повторяющиеся задачи
 │   │   ├── runtime/       — runtime utilities
-│   │   └── storage/       — localStorage wrappers
+│   │   └── storage/       — local-db.ts (sidecar bridge), localStorage wrappers
 │   ├── router/            — vue-router конфиг
 │   └── types/             — TypeScript типы (Task, Project, Priority, …)
 └── vite.config.ts
+```
+
+### Rust Sidecar (локальная БД)
+
+`sidecar/` — бинарник `delphi-db` на Rust (паттерн из Eden):
+- **Протокол**: stdin/stdout, одна строка = один JSON-запрос/ответ
+- **БД**: `<userData>/delphi.db` (SQLite WAL, rusqlite bundled)
+- **Таблицы**: `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`
+- **IPC**: Electron main → `electron/sidecar.ts` → `SidecarClient` → spawn процесс
+
+**Операции**: `init` (открыть БД), `load_all`, `upsert_todo`, `delete_todo`, `batch_upsert_todos`, `upsert_project`, `delete_project`, `upsert_area`, `upsert_tag`, `upsert_heading`, `delete_heading`, `get_sync_kv`, `set_sync_kv`, `clear_all`
+
+**Поток данных при старте (Electron)**:
+```
+App.vue → isLocalDbAvailable()
+  true  → loadAllFromLocalDb() → IPC db:loadAll → sidecar → SQLite  (мгновенно, offline)
+  false → fetchTasksFromArk()  → HTTP /events                       (web режим, fallback)
+```
+
+**Каждая мутация (store/todos.ts)**:
+```
+addTodo/updateTodo/… → localDbUpsertTodo (fire & forget)
+                     → arkSync.sendChange (WebSocket relay)
+```
+
+**Сборка**:
+```bash
+bun run build:sidecar:dev   # cargo build (debug)
+bun run build:sidecar       # cargo build --release
+bun run dev                 # build sidecar:dev + vite
 ```
 
 ### UI-библиотека
@@ -286,12 +321,42 @@ ws://ark-server/ws/sync?key=API_KEY
 | Area | `"area"` | `"delphi-web"` |
 | Tag | `"tag"` | `"delphi-web"` |
 
-Дедупликация: `source_id` = UUID объекта (идемпотентный upsert).
+Дедупликация: `source_id` = UUID объекта (идемпотентный upsert по `source_id` alone, без `source`).
 
 ### Offline
 
 Изменения, сделанные без соединения, попадают в outbox (localStorage).
 После reconnect — flushOutbox отправляет их в порядке очереди.
+
+### UUID normalization
+
+Все `source_id`/`event_id` MUST be lowercase на всех платформах. Mac UUID по умолчанию uppercase.
+- **Swift**: `.lowercased()` при генерации/отправке
+- **Kotlin**: `.lowercase()` при получении
+- **TS/Electron**: `.toLowerCase()` при получении
+
+### server_epoch
+
+Сервер включает `server_epoch` (UUID) в каждый `sync_changes`. Клиенты хранят его локально. Когда epoch меняется → БД сервера была стёрта → сбросить version vector, запушить все локальные данные, НЕ удалять локальные данные.
+
+### is_full_sync
+
+Сервер включает `is_full_sync` boolean в `sync_changes`. `pushLocalTodos`/`sendMissingToServer` выполняется только когда `is_full_sync=true` ИЛИ `epochChanged=true` — НЕ при каждом reconnect.
+
+### Zombie cleanup
+
+Удаление локальных задач, отсутствующих на сервере (исключая outbox). Запускается ТОЛЬКО когда `is_full_sync=true AND epochChanged=false`.
+
+### "Clear local data" (dev)
+
+Временная кнопка в настройках на всех платформах. Очищает локальную БД + sync state (vector, epoch, outbox), затем переподключается для свежего full sync.
+- **Swift**: `ArkSyncClient.clearLocalData()` — per-object deletion (не batch) из-за ограничений SwiftData relationships
+- **Kotlin**: `ArkSyncClient.clearLocalData()` — использует `deleteAll()` DAO методы
+- **TS/Electron**: `handleClearLocalData()` в App.vue — очищает localStorage + sidecar через `dbClearAll()`
+
+### Sidecar: clear_all
+
+Добавлена операция `clear_all` в Rust sidecar delphi-db — удаляет все строки из таблиц `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`.
 
 ### Где живёт код
 

@@ -42,7 +42,8 @@ from server.pairing import (  # noqa: E402
 )
 
 client = TestClient(app)
-HEADERS = {"X-API-Key": API_KEY}
+assert API_KEY is not None, "LIFE_API_KEY must be set"
+HEADERS: dict[str, str] = {"X-API-Key": API_KEY}
 
 
 @pytest.fixture(autouse=True)

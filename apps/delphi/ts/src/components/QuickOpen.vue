@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable no-console */
 import {
   shallowRef,
   computed,
@@ -124,7 +125,7 @@ const results = computed<QuickOpenResult[]>(() => {
       return { todo: t, score: Math.max(titleScore, notesScore) };
     })
     .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .toSorted((a, b) => b.score - a.score)
     .slice(0, 8);
 
   items.push(

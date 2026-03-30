@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Ark WebSocket sync client for Delphi web.
  *
@@ -26,6 +27,12 @@ export interface ArkChange {
 
 type MessageHandler = (change: ArkChange) => void;
 type StatusHandler = (connected: boolean) => void;
+type TodoResolver = (id: string) => TodoItem | undefined;
+type AllTodosResolver = () => TodoItem[];
+type FullSyncHandler = (
+  serverTaskIds: Set<string>,
+  outboxTaskIds: Set<string>,
+) => void;
 
 // ---------------------------------------------------------------------------
 // Version vector persistence (localStorage)
@@ -33,6 +40,7 @@ type StatusHandler = (connected: boolean) => void;
 
 const VECTOR_KEY = "delphi.sync_vector";
 const DEVICE_ID_KEY = "delphi.sync_device_id";
+const SERVER_EPOCH_KEY = "delphi.server_epoch";
 
 function loadVector(): Record<string, number> {
   try {
@@ -170,10 +178,11 @@ export function arkChangeToTask(change: ArkChange): Task | null {
   if (eventType && eventType !== "task" && eventType !== "task_created")
     return null;
 
-  const id =
+  const rawId =
     (data.id as string) || (outerData?.source_id as string) || change.event_id;
   const title = (data.title as string) ?? (outerData?.summary as string);
-  if (!id || typeof title !== "string") return null;
+  if (!rawId || typeof title !== "string") return null;
+  const id = rawId.toLowerCase();
 
   return {
     id,
@@ -214,10 +223,12 @@ export function arkChangeToTodoItem(change: ArkChange): TodoItem | null {
   if (eventType && eventType !== "task" && eventType !== "task_created")
     return null;
 
-  const id =
+  const rawId =
     (data.id as string) || (outerData?.source_id as string) || change.event_id;
   const title = (data.title as string) ?? (outerData?.summary as string);
-  if (!id || typeof title !== "string") return null;
+  if (!rawId || typeof title !== "string") return null;
+  // Normalize UUID to lowercase — Swift sends uppercase, Android/Web lowercase
+  const id = rawId.toLowerCase();
 
   return {
     id,
@@ -302,10 +313,11 @@ export function arkChangeToProject(change: ArkChange): Project | null {
   const eventType = outerData?.event_type as string | undefined;
   if (eventType !== "project") return null;
 
-  const id =
+  const rawId =
     (data.id as string) || (outerData?.source_id as string) || change.event_id;
   const title = (data.title as string) ?? (outerData?.summary as string);
-  if (!id || typeof title !== "string") return null;
+  if (!rawId || typeof title !== "string") return null;
+  const id = rawId.toLowerCase();
 
   return {
     id,
@@ -345,7 +357,9 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
     if (!resp.ok) return [];
     const events: Record<string, unknown>[] = await resp.json();
 
-    const todos: TodoItem[] = [];
+    // Deduplicate by lowercase id — events table may have the same logical task
+    // stored under multiple sources (delphi, delphi-android, null, …).
+    const todoMap = new Map<string, TodoItem>();
     for (const event of events) {
       const evtType = event.event_type as string | undefined;
       if (evtType && evtType !== "task" && evtType !== "task_created") continue;
@@ -358,7 +372,7 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
       const title = (dataRaw.title as string) ?? (event.summary as string);
       if (!id || typeof title !== "string") continue;
 
-      todos.push({
+      const todo: TodoItem = {
         id,
         title,
         notes:
@@ -400,9 +414,18 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
           : [],
         recurrenceRule:
           (dataRaw.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
-      });
+      };
+      // Deduplicate: prefer completed/cancelled over not-completed for same id
+      const dedupeKey = id.toLowerCase();
+      const existing = todoMap.get(dedupeKey);
+      if (!existing || todo.isCompleted || todo.isCancelled) {
+        todoMap.set(dedupeKey, todo);
+      }
     }
-    console.log(`[ArkSync] Fetched ${todos.length} tasks from Ark HTTP API`);
+    const todos = Array.from(todoMap.values());
+    console.log(
+      `[ArkSync] Fetched ${todos.length} unique tasks from Ark HTTP API`,
+    );
     return todos;
   } catch (e) {
     console.warn("[ArkSync] Failed to fetch tasks from Ark:", e);
@@ -493,13 +516,15 @@ export class ArkSyncClient {
   private backoff = 1000;
   private vector: Record<string, number>;
   private deviceSeq: number;
-
   private serverUrl = "";
   private apiKey = "";
   private deviceId: string;
 
   private onChangeHandlers: MessageHandler[] = [];
   private onStatusHandlers: StatusHandler[] = [];
+  private todoResolver: TodoResolver | null = null;
+  private allTodosResolver: AllTodosResolver | null = null;
+  private fullSyncHandlers: FullSyncHandler[] = [];
 
   /** Outbox for changes made while disconnected. Persisted in localStorage. */
   private outbox: ArkChange[];
@@ -537,6 +562,38 @@ export class ArkSyncClient {
         (h) => h !== handler,
       );
     };
+  }
+
+  /**
+   * Register a resolver that returns the current in-memory TodoItem for a
+   * given id.  Used by flushOutbox to avoid sending stale cached payloads
+   * after receiving sync_changes from another device.
+   */
+  setTodoResolver(resolver: TodoResolver) {
+    this.todoResolver = resolver;
+  }
+
+  setAllTodosResolver(resolver: AllTodosResolver) {
+    this.allTodosResolver = resolver;
+  }
+
+  onFullSync(handler: FullSyncHandler) {
+    this.fullSyncHandlers.push(handler);
+    return () => {
+      this.fullSyncHandlers = this.fullSyncHandlers.filter(
+        (h) => h !== handler,
+      );
+    };
+  }
+
+  private emitFullSync(serverTaskIds: Set<string>, outboxTaskIds: Set<string>) {
+    for (const h of this.fullSyncHandlers) {
+      try {
+        h(serverTaskIds, outboxTaskIds);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   connect(serverUrl: string, apiKey: string) {
@@ -615,15 +672,96 @@ export class ArkSyncClient {
     }
   }
 
-  /** Flush queued outbox changes after reconnection. */
+  /** Flush queued outbox changes after reconnection.
+   *
+   * Before sending each pending change we attempt to refresh the payload from
+   * the current Pinia store state (via todoResolver).  This prevents stale
+   * outbox entries — e.g. a task that was completed on another device and
+   * already applied locally via sync_changes — from overwriting the server
+   * with the old pre-sync data.
+   */
   private flushOutbox() {
     if (this.outbox.length === 0) return;
     console.log(`[ArkSync] Flushing ${this.outbox.length} outbox changes`);
     const pending = [...this.outbox];
     this.outbox = [];
     saveOutbox(this.outbox);
-    for (const change of pending) {
+    for (let change of pending) {
+      // Refresh non-delete task changes from current store state so we always
+      // push the current truth rather than the pre-sync cached payload.
+      if (
+        change.change_type !== "delete" &&
+        (change.data as Record<string, unknown>)?.event_type === "task" &&
+        this.todoResolver
+      ) {
+        const sourceId =
+          ((change.data as Record<string, unknown>)?.source_id as
+            | string
+            | undefined) ?? change.event_id;
+        const current = this.todoResolver(sourceId);
+        if (current) {
+          change = todoItemToArkChange(current, change.change_type);
+          console.log(
+            "[ArkSync] Outbox: refreshed stale payload for",
+            sourceId,
+          );
+        } else {
+          // Task was deleted locally — skip sending the update
+          console.log(
+            "[ArkSync] Outbox: skipping change for locally-deleted task",
+            sourceId,
+          );
+          continue;
+        }
+      }
       this.sendChange(change);
+    }
+  }
+
+  /** Send local tasks that the server doesn't have (bidirectional initial sync). */
+  private sendMissingToServer(serverChanges: ArkChange[]) {
+    if (!this.allTodosResolver || !this.ws || !this._connected) return;
+
+    const serverKnownIds = new Set(
+      serverChanges
+        .map((c) =>
+          (
+            (c.data as Record<string, unknown>)?.source_id as string | undefined
+          )?.toLowerCase(),
+        )
+        .filter((id): id is string => Boolean(id)),
+    );
+
+    const allTodos = this.allTodosResolver();
+    const missing = allTodos.filter(
+      (t) => !serverKnownIds.has(t.id.toLowerCase()),
+    );
+
+    if (missing.length === 0) return;
+
+    console.log(`[ArkSync] Sending ${missing.length} missing tasks to server`);
+
+    const batchChanges = missing.map((todo) => {
+      this.deviceSeq += 1;
+      const change = todoItemToArkChange(todo, "create");
+      return {
+        ...change,
+        event_id: todo.id,
+        device_id: this.deviceId,
+        device_seq: this.deviceSeq,
+      };
+    });
+
+    this.vector[this.deviceId] = this.deviceSeq;
+    saveVector(this.vector);
+
+    try {
+      this.ws.send(
+        JSON.stringify({ type: "sync_changes", changes: batchChanges }),
+      );
+      console.log(`[ArkSync] Sent batch of ${missing.length} missing tasks`);
+    } catch (e) {
+      console.warn("[ArkSync] Failed to send missing tasks:", e);
     }
   }
 
@@ -645,7 +783,7 @@ export class ArkSyncClient {
       return;
     }
 
-    this.ws.onopen = () => {
+    this.ws.addEventListener("open", () => {
       this.backoff = 1000;
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         console.warn("[ArkSync] onopen fired but socket not OPEN, skipping");
@@ -661,9 +799,9 @@ export class ArkSyncClient {
           vector: this.vector,
         }),
       );
-    };
+    });
 
-    this.ws.onmessage = (event) => {
+    this.ws.addEventListener("message", (event) => {
       let msg: Record<string, unknown>;
       try {
         msg = JSON.parse(typeof event.data === "string" ? event.data : "");
@@ -671,19 +809,19 @@ export class ArkSyncClient {
         return;
       }
       this.handleMessage(msg);
-    };
+    });
 
-    this.ws.onerror = (e) => {
+    this.ws.addEventListener("error", (e) => {
       console.error("[ArkSync] WebSocket error:", e);
-    };
+    });
 
-    this.ws.onclose = (e) => {
+    this.ws.addEventListener("close", (e) => {
       console.log("[ArkSync] WebSocket closed:", e.code, e.reason);
       this.ws = null;
       this.setConnected(false);
       this._synced = false;
       this.scheduleReconnect();
-    };
+    });
   }
 
   private handleMessage(msg: Record<string, unknown>) {
@@ -691,25 +829,65 @@ export class ArkSyncClient {
 
     switch (type) {
       case "sync_changes": {
-        // Initial batch of missed changes
         const changes = (msg.changes as ArkChange[]) ?? [];
+        const isFullSync = Boolean(msg.is_full_sync);
+        const incomingEpoch = msg.server_epoch as string | undefined;
+        const storedEpoch = localStorage.getItem(SERVER_EPOCH_KEY);
+        const epochChanged =
+          incomingEpoch && storedEpoch && incomingEpoch !== storedEpoch;
+
         console.log(
-          `[ArkSync] Received sync_changes: ${changes.length} changes`,
+          `[ArkSync] sync_changes: ${changes.length} items, full=${isFullSync}, epoch=${incomingEpoch?.slice(0, 8)}${epochChanged ? " (CHANGED — server was reset)" : ""}`,
         );
-        for (const ch of changes) {
-          console.log(
-            "[ArkSync] Applying initial change:",
-            ch.event_id,
-            ch.change_type,
-            (ch.data as Record<string, unknown>)?.summary,
+
+        // Server epoch changed = server DB was wiped. Clients push all their local data
+        // without deleting anything locally — the client is the authority here.
+        if (epochChanged) {
+          console.warn(
+            "[ArkSync] Server epoch changed — pushing full local state",
           );
+          localStorage.removeItem(VECTOR_KEY);
+          this.vector = {};
+          this.deviceSeq = 0;
+        }
+
+        // Persist the new epoch
+        if (incomingEpoch) {
+          localStorage.setItem(SERVER_EPOCH_KEY, incomingEpoch);
+        }
+
+        for (const ch of changes) {
           this.updateVector(ch);
           this.emitChange(ch);
         }
         this.setConnected(true);
         this._synced = true;
-        // Flush outbox after initial sync
         this.flushOutbox();
+
+        if (isFullSync || epochChanged) {
+          // Collect server's known task IDs for zombie-safe reconciliation
+          const serverTaskIds = new Set<string>();
+          for (const ch of changes) {
+            const data = ch.data as Record<string, unknown> | undefined;
+            if (data?.event_type === "task") {
+              const srcId = (
+                data?.source_id as string | undefined
+              )?.toLowerCase();
+              if (srcId) serverTaskIds.add(srcId);
+            }
+          }
+          const outboxTaskIds = new Set(
+            this.outbox
+              .map((c) => c.event_id?.toLowerCase())
+              .filter((id): id is string => Boolean(id)),
+          );
+          // Zombie cleanup only when epoch matches (no server reset) —
+          // on epoch change we keep all local data and push it to server instead.
+          if (isFullSync && !epochChanged) {
+            this.emitFullSync(serverTaskIds, outboxTaskIds);
+          }
+          this.sendMissingToServer(changes);
+        }
         break;
       }
 

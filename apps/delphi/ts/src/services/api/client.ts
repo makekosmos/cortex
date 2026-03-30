@@ -257,21 +257,21 @@ export function connectTasksWebSocket(
   const wsUrl = buildTasksWsUrl(getApiUrl(), token);
   const socket = new WebSocket(wsUrl);
 
-  socket.onopen = () => {
+  socket.addEventListener("open", () => {
     if (onOpen) onOpen();
-  };
+  });
 
-  socket.onmessage = (event) => {
+  socket.addEventListener("message", (event) => {
     try {
       onMessage(JSON.parse(event.data));
     } catch {
       // ignore malformed messages
     }
-  };
+  });
 
-  socket.onclose = () => {
+  socket.addEventListener("close", () => {
     if (onClose) onClose();
-  };
+  });
 
   return socket;
 }

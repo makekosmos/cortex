@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {
   EndSensitivity,
   GoogleGenAI,
@@ -520,6 +521,7 @@ class LiveVoiceTaskSession {
 
     const responses: ToolResponsePayload[] = [];
     for (const call of functionCalls) {
+      // eslint-disable-next-line no-await-in-loop
       responses.push(await this.executeToolCall(call));
     }
 

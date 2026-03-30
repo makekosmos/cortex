@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* eslint-disable no-console */
 import { shallowRef, computed, onMounted, onUnmounted } from "vue";
 import { RouterView } from "vue-router";
 import {
@@ -22,6 +23,13 @@ import {
   fetchTasksFromArk,
   fetchProjectsFromArk,
 } from "@/services/sync/ark-client";
+import {
+  loadAllFromLocalDb,
+  isLocalDbAvailable,
+  localDbBatchUpsertTodos,
+  localDbUpsertProject,
+  localDbClearAll,
+} from "@/services/storage/local-db";
 import { parseConnectionString } from "@/services/sync/pairing";
 import { setupMeshFromArkKey } from "@/services/sync/peer-bridge";
 import { useTodoStore } from "@/store/todos";
@@ -138,6 +146,7 @@ function handleArkChange(change: ArkChange) {
 let unsubStatus: (() => void) | null = null;
 let unsubChange: (() => void) | null = null;
 let cleanupPeerListener: (() => void) | null = null;
+let unsubFullSync: (() => void) | null = null;
 
 // ---------------------------------------------------------------------------
 // Bootstrap: connect to Ark, setup listeners
@@ -160,6 +169,27 @@ function bootstrap() {
   // Subscribe to sync change events
   unsubChange = arkSync.onChange(handleArkChange);
 
+  unsubFullSync = arkSync.onFullSync((serverTaskIds, outboxTaskIds) => {
+    // Delete zombie tasks: exist locally but server doesn't know about them
+    // and they're not pending to be sent. These are duplicates from old buggy syncs.
+    const zombies = store.todos.value.filter(
+      (t) =>
+        !serverTaskIds.has(t.id.toLowerCase()) &&
+        !outboxTaskIds.has(t.id.toLowerCase()),
+    );
+    if (zombies.length > 0) {
+      console.log(
+        `[App] Removing ${zombies.length} zombie tasks after full sync`,
+      );
+      zombies.forEach((t) => store.removeTodoLocal(t.id));
+    }
+  });
+
+  // Register a resolver so flushOutbox can re-read current task state and
+  // avoid pushing stale outbox payloads after receiving sync_changes.
+  arkSync.setTodoResolver((id) => store.todos.value.find((t) => t.id === id));
+  arkSync.setAllTodosResolver(() => store.todos.value);
+
   const url = getArkUrl();
   const key = getArkApiKey();
 
@@ -170,15 +200,39 @@ function bootstrap() {
     return;
   }
 
-  // Load tasks and projects from Ark HTTP API
-  Promise.all([fetchTasksFromArk(), fetchProjectsFromArk()])
-    .then(([tasks, projects]) => {
-      if (tasks.length > 0) store.setTodos(tasks);
-      if (projects.length > 0) store.setProjects(projects);
-    })
-    .catch((err) => {
-      console.warn("[App] Failed to bootstrap from Ark:", err);
-    });
+  // Load tasks: local SQLite first (fast, offline), then HTTP fallback if DB is empty
+  if (isLocalDbAvailable()) {
+    loadAllFromLocalDb()
+      .then(({ todos, projects, areas, tags }) => {
+        if (todos.length > 0) store.setTodos(todos);
+        if (projects.length > 0) store.setProjects(projects);
+        if (areas.length > 0) store.setAreas(areas);
+        if (tags.length > 0) store.setTags(tags);
+        console.log(
+          `[App] Loaded from local DB: ${todos.length} todos, ${projects.length} projects`,
+        );
+        // First run: local DB is empty, bootstrap from Ark HTTP to populate it
+        if (todos.length === 0) {
+          Promise.all([fetchTasksFromArk(), fetchProjectsFromArk()])
+            .then(([tasks, projs]) => {
+              if (tasks.length > 0) store.setTodos(tasks);
+              if (projs.length > 0) store.setProjects(projs);
+              // Persist to local DB so next launch is instant
+              void localDbBatchUpsertTodos(tasks);
+              projs.forEach((p) => void localDbUpsertProject(p));
+            })
+            .catch((err) => console.warn("[App] HTTP bootstrap failed:", err));
+        }
+      })
+      .catch((err) => console.warn("[App] Local DB load failed:", err));
+  } else {
+    Promise.all([fetchTasksFromArk(), fetchProjectsFromArk()])
+      .then(([tasks, projects]) => {
+        if (tasks.length > 0) store.setTodos(tasks);
+        if (projects.length > 0) store.setProjects(projects);
+      })
+      .catch((err) => console.warn("[App] Failed to bootstrap from Ark:", err));
+  }
 
   // Connect WebSocket for realtime sync
   if (!arkSync.isConnected) {
@@ -221,6 +275,32 @@ function handleReconnect() {
     }
     syncTimer = null;
   }, SYNC_TIMEOUT);
+}
+
+// ---------------------------------------------------------------------------
+// Clear local data
+// ---------------------------------------------------------------------------
+
+async function handleClearLocalData() {
+  arkSync.disconnect();
+  // Clear sync state from localStorage
+  localStorage.removeItem("delphi.sync_vector");
+  localStorage.removeItem("delphi.sync_outbox");
+  localStorage.removeItem("delphi.server_epoch");
+  // Clear local DB
+  await localDbClearAll();
+  // Clear in-memory state
+  store.setTodos([]);
+  store.setProjects([]);
+  store.setAreas([]);
+  store.setTags([]);
+  // Reconnect — will get full sync from server (empty vector)
+  const url = getArkUrl();
+  const key = getArkApiKey();
+  if (url && key) {
+    connectionState.value = "syncing";
+    arkSync.connect(url, key);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +371,7 @@ onMounted(() => {
 onUnmounted(() => {
   unsubStatus?.();
   unsubChange?.();
+  unsubFullSync?.();
   cleanupPeerListener?.();
   if (syncTimer) clearTimeout(syncTimer);
   arkSync.disconnect();
@@ -340,6 +421,13 @@ onUnmounted(() => {
             @click="handleReconnect"
           >
             Подключиться
+          </button>
+          <button
+            v-if="connectionState !== 'syncing'"
+            class="mt-1.5 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
+            @click="handleClearLocalData"
+          >
+            Очистить данные
           </button>
           <PopoverArrow class="fill-(--popover)" />
         </PopoverContent>

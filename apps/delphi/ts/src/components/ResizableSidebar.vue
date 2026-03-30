@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, watch, onMounted, onUnmounted, computed } from "vue";
+// eslint-disable-next-line import/no-unassigned-import
 import "./sidebar.css";
 
 export interface SidebarConfig {

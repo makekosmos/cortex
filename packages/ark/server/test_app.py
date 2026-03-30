@@ -33,7 +33,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 from server.app import API_KEY, app, db  # noqa: E402
 
 client = TestClient(app)
-HEADERS = {"X-API-Key": API_KEY}
+assert API_KEY is not None, "LIFE_API_KEY must be set"
+HEADERS: dict[str, str] = {"X-API-Key": API_KEY}
 
 
 # ---------------------------------------------------------------------------

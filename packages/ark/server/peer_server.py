@@ -187,9 +187,9 @@ async def peer_sync(ws: WebSocket) -> None:
             await ws.close(4003, "Authentication failed")
             return
 
-        device_id = msg["device_id"]
-        peer_name = msg.get("device_name", device_id)
-        peer_platform = msg.get("platform", "unknown")
+        device_id = str(msg["device_id"])
+        peer_name = str(msg.get("device_name", device_id))
+        peer_platform = str(msg.get("platform", "unknown"))
 
         # ---- Step 3: Send our hello_ack ----
         ack = PeerHelloAck.create(

@@ -106,7 +106,7 @@ const sections = computed<UpcomingSection[]>(() => {
         if (!t.scheduledDate) return false;
         return isSameDay(new Date(t.scheduledDate), date);
       })
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+      .toSorted((a, b) => a.sortOrder - b.sortOrder);
 
     result.push({
       id: `day-${offset}`,
@@ -128,7 +128,7 @@ const sections = computed<UpcomingSection[]>(() => {
         const d = new Date(t.scheduledDate);
         return d >= weekStart && d < weekEnd;
       })
-      .sort((a, b) => {
+      .toSorted((a, b) => {
         const da = a.scheduledDate ?? "";
         const db = b.scheduledDate ?? "";
         return da.localeCompare(db);
@@ -162,7 +162,7 @@ const sections = computed<UpcomingSection[]>(() => {
         const d = new Date(t.scheduledDate);
         return d >= cursor && d < nextMonth;
       })
-      .sort((a, b) => {
+      .toSorted((a, b) => {
         const da = a.scheduledDate ?? "";
         const db = b.scheduledDate ?? "";
         return da.localeCompare(db);
@@ -197,7 +197,7 @@ function handleToggleToday(todo: TodoItem) {
 </script>
 
 <template>
-  <div class="flex w-full min-w-0 flex-col">
+  <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
     <div class="flex items-center gap-2.5 px-7 pb-3 pt-6">
       <Calendar :size="24" class="text-red-500" />

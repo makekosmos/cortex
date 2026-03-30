@@ -164,7 +164,7 @@ function handleArchive() {
   </div>
 
   <!-- Project view -->
-  <div v-else class="flex w-full min-w-0 flex-col">
+  <div v-else class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
     <div class="flex items-center gap-2.5 px-7 pb-3 pt-6">
       <Circle

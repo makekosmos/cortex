@@ -56,7 +56,15 @@ async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
             _discoverer.start()
         except Exception:
             logger.warning("mDNS init failed, LAN discovery disabled", exc_info=True)
+
+    # Start outbound peer connections (ARK_PEER_URLS)
+    from server.peer_connector import peer_connector
+    if os.environ.get("ARK_PEER_URLS", "").strip():
+        peer_connector.start(db)
+
     yield
+
+    peer_connector.stop()
     if _discoverer:
         _discoverer.stop()
     if _broadcaster:

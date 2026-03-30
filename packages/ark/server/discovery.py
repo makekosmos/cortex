@@ -21,7 +21,63 @@ API_VERSION = "1"
 
 
 def _get_local_ip() -> str:
-    """Best-effort LAN IP address of this machine."""
+    """Best-effort LAN IP address of this machine.
+
+    Prefers physical/WiFi interfaces (en0, eth0) over VPN tunnels (utun*, tun*, wg*).
+    Falls back to the UDP-trick if no suitable interface is found.
+    """
+    import fcntl
+    import struct
+
+    _PREFERRED = ("en0", "eth0", "wlan0", "en1", "en2")
+    _VPN_PREFIXES = ("utun", "tun", "wg", "vpn", "ppp")
+    SIOCGIFADDR = 0x8915  # Linux; macOS uses same ioctl number
+
+    def _iface_ip(name: str) -> Optional[str]:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                result = fcntl.ioctl(
+                    s.fileno(),
+                    SIOCGIFADDR,
+                    struct.pack("256s", name[:15].encode()),
+                )
+                ip = socket.inet_ntoa(result[20:24])
+                return ip if not ip.startswith("127.") else None
+            finally:
+                s.close()
+        except Exception:
+            return None
+
+    # 1. Try preferred physical interfaces first
+    for name in _PREFERRED:
+        ip = _iface_ip(name)
+        if ip:
+            return ip
+
+    # 2. Any non-loopback, non-VPN interface via /proc/net/if_inet6 or getifaddrs
+    try:
+        import subprocess
+
+        out = subprocess.check_output(
+            ["ifconfig"], stderr=subprocess.DEVNULL, text=True
+        )
+        current_iface = ""
+        for line in out.splitlines():
+            if line and not line[0].isspace():
+                current_iface = line.split(":")[0].split()[0]
+            if "inet " in line and current_iface:
+                if any(current_iface.startswith(p) for p in _VPN_PREFIXES):
+                    continue
+                if current_iface.startswith("lo"):
+                    continue
+                ip = line.strip().split()[1]
+                if not ip.startswith("127."):
+                    return ip
+    except Exception:
+        pass
+
+    # 3. Fallback: UDP trick (may pick VPN)
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -135,6 +191,8 @@ class ArkServiceDiscoverer:
                 return
             host = addresses[0]
             port = info.port
+            if port is None:
+                return
             props = info.properties or {}
             device_name = (props.get(b"device_name") or b"unknown").decode()
             api_version = (props.get(b"api_version") or b"1").decode()

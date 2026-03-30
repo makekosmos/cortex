@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Bridge between the renderer process and the Electron main-process PeerManager.
  *

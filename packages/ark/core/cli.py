@@ -445,7 +445,7 @@ def cmd_pair(db: Ark, args: argparse.Namespace) -> None:
 
     port = int(os.environ.get("ARK_PORT", "8000"))
     device_name = os.environ.get("ARK_DEVICE_NAME", _platform.node() or "ark")
-    local_ip = _get_local_ip()
+    local_ip = "127.0.0.1" if getattr(args, "localhost", False) else _get_local_ip()
     server_url = f"http://{local_ip}:{port}"
 
     # Generate code and payload
@@ -455,7 +455,7 @@ def cmd_pair(db: Ark, args: argparse.Namespace) -> None:
 
     # Render ASCII QR in terminal
     qr = qrcode.QRCode(
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,  # type: ignore[attr-defined]
         box_size=1,
         border=1,
     )
@@ -573,7 +573,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # --- pair ---
-    sub.add_parser("pair", help="Сгенерировать код + QR для подключения устройства")
+    p_pair = sub.add_parser("pair", help="Сгенерировать код + QR для подключения устройства")
+    p_pair.add_argument(
+        "--localhost",
+        action="store_true",
+        help="Использовать 127.0.0.1 вместо LAN IP (для подключения с того же устройства)",
+    )
 
     # --- serve ---
     p_serve = sub.add_parser("serve", help="Запустить FastAPI сервер")

@@ -22,6 +22,8 @@ struct SyncSettingsView: View {
                 actionsSection
             }
 
+            clearDataSection
+
             deviceSection
         }
         .formStyle(.grouped)
@@ -158,6 +160,17 @@ struct SyncSettingsView: View {
                     syncClient.syncNow()
                 }
                 .disabled(!syncClient.isConnected)
+            }
+
+        }
+    }
+
+    // MARK: - Clear data (always visible)
+
+    private var clearDataSection: some View {
+        Section {
+            Button("Очистить данные", role: .destructive) {
+                syncClient.clearLocalData()
             }
         }
     }

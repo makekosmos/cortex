@@ -34,10 +34,10 @@ enum ArkEventMapper {
         if let reminderDate = todo.reminderDate { data["reminderDate"] = iso8601.string(from: reminderDate) }
         if let completedAt = todo.completedAt { data["completedAt"] = iso8601.string(from: completedAt) }
         if let cancelledAt = todo.cancelledAt { data["cancelledAt"] = iso8601.string(from: cancelledAt) }
-        if let headingID = todo.headingID { data["headingID"] = headingID.uuidString }
-        if let projectId = todo.project?.id { data["projectId"] = projectId.uuidString }
-        if let areaId = todo.area?.id { data["areaId"] = areaId.uuidString }
-        if !todo.tags.isEmpty { data["tagIds"] = todo.tags.map { $0.id.uuidString } }
+        if let headingID = todo.headingID { data["headingID"] = headingID.uuidString.lowercased() }
+        if let projectId = todo.project?.id { data["projectId"] = projectId.uuidString.lowercased() }
+        if let areaId = todo.area?.id { data["areaId"] = areaId.uuidString.lowercased() }
+        if !todo.tags.isEmpty { data["tagIds"] = todo.tags.map { $0.id.uuidString.lowercased() } }
 
         if let rule = todo.recurrenceRule {
             data["recurrenceRule"] = [
@@ -53,7 +53,7 @@ enum ArkEventMapper {
             "event_type": "task",
             "category": "productivity",
             "source": "delphi",
-            "source_id": todo.id.uuidString,
+            "source_id": todo.id.uuidString.lowercased(),
             "summary": todo.title,
             "data": data,
             "change_type": changeType,
@@ -74,13 +74,13 @@ enum ArkEventMapper {
         if let scheduledDate = project.scheduledDate { data["scheduledDate"] = iso8601.string(from: scheduledDate) }
         if let deadline = project.deadline { data["deadline"] = iso8601.string(from: deadline) }
         if let colorTag = project.colorTag { data["colorTag"] = colorTag }
-        if let areaId = project.area?.id { data["areaId"] = areaId.uuidString }
+        if let areaId = project.area?.id { data["areaId"] = areaId.uuidString.lowercased() }
 
         return [
             "event_type": "project",
             "category": "productivity",
             "source": "delphi",
-            "source_id": project.id.uuidString,
+            "source_id": project.id.uuidString.lowercased(),
             "summary": project.title,
             "data": data,
             "change_type": changeType,
@@ -100,7 +100,7 @@ enum ArkEventMapper {
             "event_type": "area",
             "category": "productivity",
             "source": "delphi",
-            "source_id": area.id.uuidString,
+            "source_id": area.id.uuidString.lowercased(),
             "summary": area.title,
             "data": data,
             "change_type": changeType,
@@ -120,7 +120,7 @@ enum ArkEventMapper {
             "event_type": "tag",
             "category": "productivity",
             "source": "delphi",
-            "source_id": tag.id.uuidString,
+            "source_id": tag.id.uuidString.lowercased(),
             "summary": tag.title,
             "data": data,
             "change_type": changeType,

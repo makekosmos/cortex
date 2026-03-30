@@ -30,6 +30,8 @@ export class PeerDiscovery {
   private onPeerFound: (peer: DiscoveredPeer) => void;
   private onPeerLost: (deviceId: string) => void;
 
+  private mdnsAvailable = true;
+
   constructor(
     onFound: (peer: DiscoveredPeer) => void,
     onLost: (deviceId: string) => void,
@@ -47,29 +49,38 @@ export class PeerDiscovery {
     meshId: string;
     port: number;
   }): void {
-    if (this.published) return;
+    if (this.published || !this.mdnsAvailable) return;
 
-    this.bonjour.publish({
-      name: opts.deviceId,
-      type: 'ark-peer',
-      protocol: 'tcp',
-      port: opts.port,
-      txt: {
-        device_id: opts.deviceId,
-        device_name: opts.deviceName,
-        platform: opts.platform,
-        mesh_id: opts.meshId,
-        api_version: '2',
-      },
-    });
-
-    this.published = true;
-    console.log(`[PeerDiscovery] Advertising ${opts.deviceName} on port ${opts.port}`);
+    try {
+      this.bonjour.publish({
+        name: opts.deviceId,
+        type: 'ark-peer',
+        protocol: 'tcp',
+        port: opts.port,
+        txt: {
+          device_id: opts.deviceId,
+          device_name: opts.deviceName,
+          platform: opts.platform,
+          mesh_id: opts.meshId,
+          api_version: '2',
+        },
+      });
+      this.published = true;
+      console.log(`[PeerDiscovery] Advertising ${opts.deviceName} on port ${opts.port}`);
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EHOSTUNREACH' || code === 'ENETUNREACH' || code === 'EADDRNOTAVAIL') {
+        this.mdnsAvailable = false;
+        console.warn('[PeerDiscovery] mDNS unavailable on this network, P2P discovery disabled');
+      } else {
+        console.error('[PeerDiscovery] advertise failed:', err);
+      }
+    }
   }
 
   /** Browse for peers with a matching mesh_id. */
   browse(meshId: string): void {
-    if (this.browser) return;
+    if (this.browser || !this.mdnsAvailable) return;
 
     this.browser = this.bonjour.find({ type: 'ark-peer', protocol: 'tcp' }, (service: Service) => {
       const txt = service.txt as Record<string, string> | undefined;
@@ -110,10 +121,10 @@ export class PeerDiscovery {
 
   stop(): void {
     if (this.browser) {
-      this.browser.stop();
+      try { this.browser.stop(); } catch { /* ignore */ }
       this.browser = null;
     }
-    this.bonjour.destroy();
+    try { this.bonjour.destroy(); } catch { /* ignore */ }
     this.published = false;
     this.knownPeers.clear();
     console.log('[PeerDiscovery] Stopped');

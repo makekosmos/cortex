@@ -13,7 +13,7 @@ const filtered = computed(() => filterTodos(SmartList.Logbook, todos.value));
 </script>
 
 <template>
-  <div class="flex w-full min-w-0 flex-col">
+  <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <div class="flex items-center gap-2.5 px-7 pb-3 pt-6">
       <Book :size="24" class="text-green-500" />
       <h1 class="text-2xl font-bold text-(--foreground) select-none">Журнал</h1>
