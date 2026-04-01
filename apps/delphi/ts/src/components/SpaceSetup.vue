@@ -150,10 +150,9 @@ function handleJoin() {
           />
         </div>
         <div
-          class="bg-(--muted) mb-5 rounded-lg p-4 text-center font-mono tracking-widest"
-          :class="displayCode.length > 12 ? 'text-base' : 'text-2xl'"
+          class="bg-(--muted) mb-5 rounded-lg p-4 text-center font-mono text-2xl tracking-widest"
         >
-          {{ formatSpaceCode(displayCode) }}
+          {{ formatSpaceCode(generatedCode) }}
         </div>
         <button
           class="bg-(--foreground) text-(--background) w-full rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"

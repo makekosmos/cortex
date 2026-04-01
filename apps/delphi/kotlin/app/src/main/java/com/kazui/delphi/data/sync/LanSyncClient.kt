@@ -64,7 +64,9 @@ class LanSyncClient @Inject constructor(
 
     private var webSocket: WebSocket? = null
     private var reconnectJob: Job? = null
+    private var syncJob: Job? = null  // tracks coroutines from current connection
     @Volatile private var isRunning = false
+    @Volatile private var connectionGeneration = 0  // incremented on each connect to invalidate old callbacks
 
     private var serverIp: String = ""
     private var spaceId: String = ""
@@ -126,8 +128,11 @@ class LanSyncClient @Inject constructor(
 
     fun disconnect() {
         isRunning = false
+        connectionGeneration++
         reconnectJob?.cancel()
         reconnectJob = null
+        syncJob?.cancel()
+        syncJob = null
         webSocket?.close(1000, "client disconnecting")
         webSocket = null
         vectorBuilt = false
@@ -198,16 +203,50 @@ class LanSyncClient @Inject constructor(
     private fun doConnect() {
         if (!isRunning) return
 
-        val url = "ws://$serverIp:$LAN_SYNC_PORT"
-        Log.i(TAG, "Connecting to $url")
+        // Validate IP before creating URL
+        if (serverIp.isBlank()) {
+            Log.w(TAG, "doConnect: empty server IP, skipping")
+            return
+        }
 
-        val request = Request.Builder().url(url).build()
+        // Cancel any ongoing work from previous connection
+        syncJob?.cancel()
+        syncJob = null
+        vectorBuilt = false
+
+        // Close previous WebSocket if still lingering
+        webSocket?.let {
+            try { it.cancel() } catch (_: Exception) {}
+            webSocket = null
+        }
+
+        connectionGeneration++
+        val thisGeneration = connectionGeneration
+
+        // IPv6 addresses must be wrapped in brackets for URLs; strip zone ID (e.g. %en0) which OkHttp rejects
+        val cleanIp = serverIp.substringBefore('%')
+        val host = if (cleanIp.contains(':')) "[$cleanIp]" else cleanIp
+        val url = "ws://$host:$LAN_SYNC_PORT"
+        Log.i(TAG, "Connecting to $url (gen=$thisGeneration)")
+
+        val request = try {
+            Request.Builder().url(url).build()
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "Invalid URL '$url': ${e.message}")
+            scheduleReconnect()
+            return
+        }
 
         okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
+                if (thisGeneration != connectionGeneration) {
+                    Log.w(TAG, "Stale onOpen (gen=$thisGeneration, current=$connectionGeneration), closing")
+                    ws.cancel()
+                    return
+                }
                 webSocket = ws
                 _state.value = LanSyncState.CONNECTED
-                Log.i(TAG, "Connected to server")
+                Log.i(TAG, "Connected to server (gen=$thisGeneration)")
 
                 // Send hello with own addresses
                 val hello = JSONObject().apply {
@@ -222,25 +261,32 @@ class LanSyncClient @Inject constructor(
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
+                if (thisGeneration != connectionGeneration) return
                 try {
                     val msg = JSONObject(text)
                     handleMessage(ws, msg)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error handling message: ${e.message}")
+                    Log.e(TAG, "Error handling message: ${e.message}", e)
                 }
             }
 
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                if (thisGeneration != connectionGeneration) return
                 webSocket = null
                 _state.value = LanSyncState.DISCONNECTED
-                Log.i(TAG, "Connection closed: $reason")
+                Log.i(TAG, "Connection closed: code=$code reason=$reason (gen=$thisGeneration)")
                 scheduleReconnect()
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                if (thisGeneration != connectionGeneration) {
+                    Log.d(TAG, "Stale onFailure ignored (gen=$thisGeneration)")
+                    return
+                }
+                ws.cancel()  // OkHttp requires cancel() in onFailure
                 webSocket = null
                 _state.value = LanSyncState.DISCONNECTED
-                Log.w(TAG, "Connection failed: ${t.message}")
+                Log.w(TAG, "Connection failed (gen=$thisGeneration): ${t.message}")
                 scheduleReconnect()
             }
         })
@@ -277,8 +323,9 @@ class LanSyncClient @Inject constructor(
         val serverDeviceName = msg.optString("device_name", "")
         val serverDeviceId = msg.optString("device_id", "")
         val serverAddresses = jsonArrayToStringList(msg.optJSONArray("addresses"))
+        val gen = connectionGeneration
 
-        Log.i(TAG, "Server hello: $serverDeviceName")
+        Log.i(TAG, "Server hello: $serverDeviceName (id=$serverDeviceId, gen=$gen)")
         _state.value = LanSyncState.SYNCING
 
         // Persist server info
@@ -295,23 +342,33 @@ class LanSyncClient @Inject constructor(
             } catch (_: Exception) {}
         }
 
-        // Build and send our version vector
-        scope.launch {
-            buildVersionVector()
-            vectorBuilt = true
-            val vectorJson = JSONObject()
-            versionVector.forEach { (k, v) -> vectorJson.put(k, v) }
+        // Build and send our version vector — tracked in syncJob for cancellation on reconnect
+        syncJob?.cancel()
+        syncJob = scope.launch {
+            try {
+                buildVersionVector()
+                vectorBuilt = true
+                val vectorJson = JSONObject()
+                versionVector.forEach { (k, v) -> vectorJson.put(k, v) }
 
+                if (gen != connectionGeneration) return@launch
+                val vectorMsg = JSONObject().apply {
+                    put("type", "version_vector")
+                    put("vector", vectorJson)
+                }
+                if (!ws.send(vectorMsg.toString())) {
+                    Log.w(TAG, "Failed to send version_vector (ws closed, gen=$gen)")
+                    return@launch
+                }
 
-            val vectorMsg = JSONObject().apply {
-                put("type", "version_vector")
-                put("vector", vectorJson)
+                // Send our peer list after version vector
+                delay(100)
+                if (gen != connectionGeneration) return@launch
+                sendPeerList(ws)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(TAG, "Error in handleHello sync job: ${e.message}", e)
             }
-            ws.send(vectorMsg.toString())
-
-            // Send our peer list after version vector
-            delay(100)
-            sendPeerList(ws)
         }
     }
 
@@ -340,50 +397,60 @@ class LanSyncClient @Inject constructor(
 
     private fun handleVersionVector(ws: WebSocket, msg: JSONObject) {
         val remoteVector = msg.optJSONObject("vector") ?: return
+        val gen = connectionGeneration
 
         scope.launch {
-            // Ensure version vector is built before processing
-            if (!vectorBuilt) {
-                buildVersionVector()
-                vectorBuilt = true
-            }
+            try {
+                // Ensure version vector is built before processing
+                if (!vectorBuilt) {
+                    buildVersionVector()
+                    vectorBuilt = true
+                }
 
-            // Compute what the server needs from us
-            val entitiesToSend = mutableListOf<JSONObject>()
+                if (gen != connectionGeneration) return@launch
 
-            versionVector.forEach { (entityId, localHlc) ->
-                val remoteHlc = remoteVector.optString(entityId, "")
-                if (remoteHlc.isEmpty() || compareHlc(localHlc, remoteHlc) > 0) {
-                    // We have something the server doesn't or ours is newer
-                    val entity = loadEntityById(entityId)
-                    if (entity != null) {
-                        entitiesToSend.add(entity)
+                // Compute what the server needs from us
+                val entitiesToSend = mutableListOf<JSONObject>()
+
+                versionVector.forEach { (entityId, localHlc) ->
+                    val remoteHlc = remoteVector.optString(entityId, "")
+                    if (remoteHlc.isEmpty() || compareHlc(localHlc, remoteHlc) > 0) {
+                        val entity = loadEntityById(entityId)
+                        if (entity != null) {
+                            entitiesToSend.add(entity)
+                        }
                     }
                 }
-            }
 
+                Log.i(TAG, "Version vector diff: ${entitiesToSend.size} entities to send (gen=$gen)")
 
+                if (gen != connectionGeneration) return@launch
 
-            // Send in batches
-            if (entitiesToSend.isEmpty()) {
-                val emptyBatch = JSONObject().apply {
-                    put("type", "sync_changes")
-                    put("batch_id", generateId())
-                    put("entities", JSONArray())
-                    put("is_last", true)
-                }
-                ws.send(emptyBatch.toString())
-            } else {
-                val batches = entitiesToSend.chunked(MAX_BATCH_SIZE)
-                batches.forEachIndexed { i, batch ->
-                    val batchMsg = JSONObject().apply {
+                // Send in batches
+                if (entitiesToSend.isEmpty()) {
+                    val emptyBatch = JSONObject().apply {
                         put("type", "sync_changes")
                         put("batch_id", generateId())
-                        put("entities", JSONArray(batch.map { it.toString() }.map { JSONObject(it) }))
-                        put("is_last", i == batches.size - 1)
+                        put("entities", JSONArray())
+                        put("is_last", true)
                     }
-                    ws.send(batchMsg.toString())
+                    ws.send(emptyBatch.toString())
+                } else {
+                    val batches = entitiesToSend.chunked(MAX_BATCH_SIZE)
+                    batches.forEachIndexed { i, batch ->
+                        if (gen != connectionGeneration) return@launch
+                        val batchMsg = JSONObject().apply {
+                            put("type", "sync_changes")
+                            put("batch_id", generateId())
+                            put("entities", JSONArray(batch.map { it.toString() }.map { JSONObject(it) }))
+                            put("is_last", i == batches.size - 1)
+                        }
+                        ws.send(batchMsg.toString())
+                    }
                 }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(TAG, "Error in handleVersionVector: ${e.message}", e)
             }
         }
     }
@@ -393,35 +460,45 @@ class LanSyncClient @Inject constructor(
         val entities = msg.optJSONArray("entities") ?: JSONArray()
         val isLast = msg.optBoolean("is_last", false)
         var accepted = 0
+        val gen = connectionGeneration
 
         scope.launch {
-            for (i in 0 until entities.length()) {
-                val entity = entities.optJSONObject(i) ?: continue
-                if (applySyncEntity(entity)) {
-                    accepted++
+            try {
+                for (i in 0 until entities.length()) {
+                    val entity = entities.optJSONObject(i) ?: continue
+                    if (applySyncEntity(entity)) {
+                        accepted++
+                    }
                 }
-            }
 
-            // Persist version vector after batch processing
-            if (accepted > 0) {
-                persistVersionVector()
-            }
+                // Persist version vector after batch processing
+                if (accepted > 0) {
+                    persistVersionVector()
+                }
 
-            // Send ACK
-            val ack = JSONObject().apply {
-                put("type", "sync_ack")
-                put("batch_id", batchId)
-                put("accepted", accepted)
-            }
-            ws.send(ack.toString())
+                // Send ACK (check generation to avoid sending on stale connection)
+                if (gen == connectionGeneration) {
+                    val ack = JSONObject().apply {
+                        put("type", "sync_ack")
+                        put("batch_id", batchId)
+                        put("accepted", accepted)
+                    }
+                    ws.send(ack.toString())
+                }
 
-            if (accepted > 0) {
-                onDataChanged?.invoke()
-            }
+                if (accepted > 0) {
+                    onDataChanged?.invoke()
+                }
 
-            if (isLast) {
-                _state.value = LanSyncState.LIVE
-                Log.i(TAG, "Initial sync complete, entering live mode")
+                if (isLast) {
+                    if (gen == connectionGeneration) {
+                        _state.value = LanSyncState.LIVE
+                    }
+                    Log.i(TAG, "Initial sync complete, entering live mode (accepted=$accepted, gen=$gen)")
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(TAG, "Error in handleSyncChanges: ${e.message}", e)
             }
         }
     }
@@ -429,22 +506,30 @@ class LanSyncClient @Inject constructor(
     private fun handleLiveChange(ws: WebSocket, msg: JSONObject) {
         val changeId = msg.optString("change_id", "")
         val entity = msg.optJSONObject("entity") ?: return
+        val gen = connectionGeneration
         scope.launch {
-            val applied = applySyncEntity(entity)
+            try {
+                val applied = applySyncEntity(entity)
 
-            if (applied) {
-                persistVersionVector()
-            }
+                if (applied) {
+                    persistVersionVector()
+                }
 
-            // Always ACK
-            val ack = JSONObject().apply {
-                put("type", "live_ack")
-                put("change_id", changeId)
-            }
-            ws.send(ack.toString())
+                // Always ACK (if still same connection)
+                if (gen == connectionGeneration) {
+                    val ack = JSONObject().apply {
+                        put("type", "live_ack")
+                        put("change_id", changeId)
+                    }
+                    ws.send(ack.toString())
+                }
 
-            if (applied) {
-                onDataChanged?.invoke()
+                if (applied) {
+                    onDataChanged?.invoke()
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e(TAG, "Error in handleLiveChange: ${e.message}", e)
             }
         }
     }
@@ -602,9 +687,11 @@ class LanSyncClient @Inject constructor(
     private fun scheduleReconnect() {
         if (!isRunning) return
         reconnectJob?.cancel()
+        Log.i(TAG, "Scheduling reconnect in ${RECONNECT_DELAY_MS}ms")
         reconnectJob = scope.launch {
             delay(RECONNECT_DELAY_MS)
             if (isRunning) {
+                Log.i(TAG, "Reconnecting now...")
                 _state.value = LanSyncState.CONNECTING
                 doConnect()
             }

@@ -89,12 +89,14 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (activeSpaceCode != null) {
-                        // Space code (XXXX-XXXX-XXXX)
+                        // Space code (XXXX-XXXX-XXXX) — full width so it doesn't truncate
                         Text(
                             text = viewModel.formatSpaceCode(activeSpaceCode ?: ""),
                             style = MaterialTheme.typography.headlineSmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            modifier = Modifier.fillMaxWidth(),
                         )
 
                         // Connection status

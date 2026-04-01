@@ -82,41 +82,34 @@ const peerServerAddress = shallowRef<string | null>(null);
 const connectedPeerCount = shallowRef(0);
 const connectedPeerNames = shallowRef<string[]>([]);
 
-const popoverQrDataUrl = shallowRef("");
+const showQrOverlay = shallowRef(false);
+const fullQrDataUrl = shallowRef("");
 
-// Generate QR for the popover when space code changes
-watch(activeSpaceCode, async (code) => {
-  if (!code) {
-    popoverQrDataUrl.value = "";
-    return;
-  }
+// Generate large QR on demand
+async function openQrOverlay() {
+  const code = activeSpaceCode.value;
+  if (!code) return;
   try {
+    let payload = "";
     if (isElectron && window.electronAPI?.invoke) {
-      const payload = (await window.electronAPI.invoke(
-        "sync:getQrPayload",
-        code,
-      )) as string;
-      if (payload) {
-        popoverQrDataUrl.value = await QRCode.toDataURL(payload, {
-          width: 120,
-          margin: 2,
-          color: { dark: "#000000", light: "#ffffff" },
-          errorCorrectionLevel: "M",
-        });
-        return;
-      }
+      payload =
+        ((await window.electronAPI.invoke(
+          "sync:getQrPayload",
+          code,
+        )) as string) || "";
     }
-    // Fallback: just the formatted code
-    popoverQrDataUrl.value = await QRCode.toDataURL(formatSpaceCode(code), {
-      width: 120,
-      margin: 2,
+    if (!payload) payload = formatSpaceCode(code);
+    fullQrDataUrl.value = await QRCode.toDataURL(payload, {
+      width: 512,
+      margin: 3,
       color: { dark: "#000000", light: "#ffffff" },
       errorCorrectionLevel: "M",
     });
   } catch {
-    popoverQrDataUrl.value = "";
+    fullQrDataUrl.value = "";
   }
-});
+  showQrOverlay.value = true;
+}
 
 const connectionDotClass = computed(() => {
   switch (connectionState.value) {
@@ -742,14 +735,12 @@ onUnmounted(() => {
             <p class="font-mono text-sm font-bold tracking-widest">
               {{ formatSpaceCode(activeSpaceCode) }}
             </p>
-            <img
-              v-if="popoverQrDataUrl"
-              :src="popoverQrDataUrl"
-              alt="QR"
-              class="mx-auto mt-2 rounded"
-              width="120"
-              height="120"
-            />
+            <button
+              class="mt-2 w-full rounded-md border border-(--border) px-2 py-1.5 text-xs font-medium transition-colors hover:bg-(--muted)"
+              @click="openQrOverlay"
+            >
+              Показать QR-код
+            </button>
             <div v-if="connectedPeerNames.length > 0" class="mt-2">
               <p class="mb-1 text-xs text-(--muted-foreground)">
                 Подключённые пиры
@@ -789,5 +780,41 @@ onUnmounted(() => {
     />
 
     <SpaceSetup v-if="spaceRequired" @space-joined="handleSpaceJoined" />
+
+    <!-- Fullscreen QR overlay -->
+    <div
+      v-if="showQrOverlay"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8"
+      @click.self="showQrOverlay = false"
+    >
+      <div
+        class="flex flex-col items-center gap-4 rounded-2xl bg-(--background) p-8 shadow-2xl"
+      >
+        <p class="text-xs text-(--muted-foreground)">Пространство</p>
+        <p
+          v-if="activeSpaceCode"
+          class="font-mono text-2xl font-bold tracking-widest"
+        >
+          {{ formatSpaceCode(activeSpaceCode) }}
+        </p>
+        <img
+          v-if="fullQrDataUrl"
+          :src="fullQrDataUrl"
+          alt="QR"
+          class="rounded-lg"
+          width="320"
+          height="320"
+        />
+        <p class="max-w-xs text-center text-xs text-(--muted-foreground)">
+          Отсканируйте на другом устройстве для подключения
+        </p>
+        <button
+          class="rounded-md border border-(--border) px-4 py-2 text-sm transition-colors hover:bg-(--muted)"
+          @click="showQrOverlay = false"
+        >
+          Закрыть
+        </button>
+      </div>
+    </div>
   </div>
 </template>

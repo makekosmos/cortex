@@ -127,6 +127,13 @@ class SyncServer @Inject constructor(
         val maxPort = port + 10
         var lastException: Exception? = null
         for (tryPort in port..maxPort) {
+            // Pre-check: is the port actually free? Ktor CIO binds async,
+            // so a BindException would crash the app on a background dispatcher.
+            if (!isPortAvailable(tryPort)) {
+                Log.w(TAG, "Port $tryPort busy (pre-check), trying next...")
+                continue
+            }
+
             server = embeddedServer(CIO, port = tryPort) {
                 install(io.ktor.server.websocket.WebSockets) {
                     pingPeriod = PING_INTERVAL_MS.milliseconds
@@ -143,6 +150,8 @@ class SyncServer @Inject constructor(
 
             try {
                 server?.start(wait = false)
+                // Give Ktor CIO a moment to actually bind
+                delay(200)
                 actualPort = tryPort
                 Log.i(TAG, "Server listening on port $tryPort, ${knownPeerRecords.size} known peers")
                 return
@@ -157,13 +166,12 @@ class SyncServer @Inject constructor(
             }
         }
 
-        // All ports failed
+        // All ports failed — do NOT throw, just log; app can still work as client-only
         isRunning = false
-        Log.e(TAG, "Failed to start server on any port in $port..$maxPort")
-        throw lastException ?: RuntimeException("Failed to bind to any port")
+        Log.e(TAG, "Failed to start server on any port in $port..$maxPort (will work as client only)")
     }
 
-    fun stop() {
+    suspend fun stop() {
         isRunning = false
         peers.clear()
         try {
@@ -174,6 +182,22 @@ class SyncServer @Inject constructor(
         server = null
         actualPort = 0
         Log.i(TAG, "Server stopped")
+
+        // Wait for OS to release the port
+        delay(300)
+    }
+
+    /** Check if a port is available before letting Ktor CIO try to bind it async. */
+    private fun isPortAvailable(port: Int): Boolean {
+        return try {
+            java.nio.channels.ServerSocketChannel.open().use { ch ->
+                ch.socket().reuseAddress = true
+                ch.socket().bind(java.net.InetSocketAddress(port))
+            }
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     fun setOwnAddresses(addresses: List<String>) {
@@ -231,9 +255,21 @@ class SyncServer @Inject constructor(
                     put("type", "pong")
                     put("ts", msg.optLong("ts"))
                 }
-                session.send(pong.toString())
+                safeSend(session, pong.toString())
             }
             "pong" -> { /* heartbeat */ }
+        }
+    }
+
+    /** Send text on a WebSocketServerSession, catching ClosedSendChannelException gracefully. */
+    private suspend fun safeSend(session: WebSocketServerSession, text: String): Boolean {
+        return try {
+            session.send(text)
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.w(TAG, "safeSend failed (session closed?): ${e.message}")
+            false
         }
     }
 
@@ -268,7 +304,7 @@ class SyncServer @Inject constructor(
             put("space_id", spaceId)
             put("addresses", JSONArray(ownAddresses))
         }
-        session.send(hello.toString())
+        if (!safeSend(session, hello.toString())) return
 
         onPeerConnected?.invoke(peer.deviceId, peer.deviceName)
 
@@ -277,8 +313,13 @@ class SyncServer @Inject constructor(
 
         // Send peer list after a short delay
         scope.launch {
-            delay(100)
-            sendPeerList(session)
+            try {
+                delay(100)
+                sendPeerList(session)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.w(TAG, "Failed to send peer list: ${e.message}")
+            }
         }
     }
 
@@ -295,7 +336,7 @@ class SyncServer @Inject constructor(
             put("type", "peer_list")
             put("peers", peersJson)
         }
-        session.send(msg.toString())
+        safeSend(session, msg.toString())
     }
 
     private suspend fun handlePeerList(peer: PeerState, msg: JSONObject) {
@@ -348,7 +389,7 @@ class SyncServer @Inject constructor(
             put("type", "version_vector")
             put("vector", vector)
         }
-        session.send(msg.toString())
+        safeSend(session, msg.toString())
     }
 
     private suspend fun handleVersionVector(session: WebSocketServerSession, peer: PeerState, msg: JSONObject) {
@@ -370,11 +411,11 @@ class SyncServer @Inject constructor(
                     put("entities", JSONArray())
                     put("is_last", true)
                 }
-                session.send(emptyBatch.toString())
+                safeSend(session, emptyBatch.toString())
             }
 
             peer.syncComplete = true
-            Log.i(TAG, "Sync complete with ${peer.deviceName} (sent our batches)")
+            Log.i(TAG, "Sync complete with ${peer.deviceName} (sent our batches, first connect)")
             flushQueuedLiveChanges(session, peer)
             return
         }
@@ -391,6 +432,8 @@ class SyncServer @Inject constructor(
             }
         }
 
+        Log.i(TAG, "Version vector diff: ${toSend.size}/${allEntities.size} entities to send to ${peer.deviceName}")
+
         if (toSend.isNotEmpty()) {
             sendBatches(session, toSend)
         } else {
@@ -400,11 +443,11 @@ class SyncServer @Inject constructor(
                 put("entities", JSONArray())
                 put("is_last", true)
             }
-            session.send(emptyBatch.toString())
+            safeSend(session, emptyBatch.toString())
         }
 
         peer.syncComplete = true
-        Log.i(TAG, "Sync complete with ${peer.deviceName} (sent our batches)")
+        Log.i(TAG, "Sync complete with ${peer.deviceName} (sent ${toSend.size} entities)")
         flushQueuedLiveChanges(session, peer)
     }
 
@@ -421,7 +464,7 @@ class SyncServer @Inject constructor(
                 put("entities", JSONArray())
                 put("is_last", true)
             }
-            session.send(emptyBatch.toString())
+            safeSend(session, emptyBatch.toString())
             return
         }
 
@@ -432,7 +475,7 @@ class SyncServer @Inject constructor(
                 put("entities", JSONArray(batch.map { it.toString() }.map { JSONObject(it) }))
                 put("is_last", i == batches.size - 1)
             }
-            session.send(batchMsg.toString())
+            if (!safeSend(session, batchMsg.toString())) return
         }
     }
 
@@ -471,10 +514,10 @@ class SyncServer @Inject constructor(
             put("batch_id", batchId)
             put("accepted", accepted)
         }
-        session.send(ack.toString())
+        safeSend(session, ack.toString())
 
         if (isLast) {
-            Log.i(TAG, "Received all sync batches from ${peer.deviceName}")
+            Log.i(TAG, "Received all sync batches from ${peer.deviceName} (accepted=$accepted)")
         }
     }
 
@@ -513,13 +556,14 @@ class SyncServer @Inject constructor(
     private suspend fun flushQueuedLiveChanges(session: WebSocketServerSession, peer: PeerState) {
         if (peer.queuedLiveChanges.isEmpty()) return
 
+        Log.i(TAG, "Flushing ${peer.queuedLiveChanges.size} queued live changes to ${peer.deviceName}")
         for (entity in peer.queuedLiveChanges) {
             val msg = JSONObject().apply {
                 put("type", "live_change")
                 put("change_id", generateId())
                 put("entity", entity)
             }
-            session.send(msg.toString())
+            if (!safeSend(session, msg.toString())) break
         }
         peer.queuedLiveChanges.clear()
     }
@@ -548,7 +592,7 @@ class SyncServer @Inject constructor(
             put("type", "live_ack")
             put("change_id", changeId)
         }
-        session.send(ack.toString())
+        safeSend(session, ack.toString())
     }
 
     // ---------------------------------------------------------------------------

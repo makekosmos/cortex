@@ -154,7 +154,7 @@ class PeerManager @Inject constructor(
         reconnectJobs.values.forEach { it.cancel() }
         reconnectJobs.clear()
         lanSyncClient.disconnect()
-        syncServer.stop()
+        scope.launch { syncServer.stop() }
         _connectedPeerCount.value = 0
         _connectedPeerNames.value = emptyList()
         Log.i(TAG, "Stopped")
@@ -307,19 +307,34 @@ class PeerManager @Inject constructor(
     }
 
     /**
-     * Extract IP (host) from an address string like "192.168.1.70:21531" or "[fe80::1]:21531"
+     * Extract IP (host) from an address string like "192.168.1.70:21531" or "[fe80::1%en0]:21531"
+     * Also handles bare IPv6 without brackets: "fe80::1%en0:21531"
      */
     private fun extractIpFromAddress(addr: String): String? {
         val trimmed = addr.trim()
-        return if (trimmed.startsWith("[")) {
-            // IPv6: [fe80::1%en0]:21531
+        if (trimmed.startsWith("[")) {
+            // Bracketed IPv6: [fe80::1%en0]:21531
             val closeBracket = trimmed.indexOf(']')
             if (closeBracket < 0) return null
-            trimmed.substring(1, closeBracket)
-        } else {
-            // IPv4: 192.168.1.70:21531
-            val colonIdx = trimmed.lastIndexOf(':')
-            if (colonIdx < 0) trimmed else trimmed.substring(0, colonIdx)
+            return trimmed.substring(1, closeBracket)
         }
+        // Check if this looks like IPv6 (contains multiple colons)
+        val colonCount = trimmed.count { it == ':' }
+        if (colonCount > 1) {
+            // Bare IPv6 with port: "fe80::1%en0:21531"
+            // The port is after the last colon, but only if what follows is a pure number
+            val lastColon = trimmed.lastIndexOf(':')
+            val afterLastColon = trimmed.substring(lastColon + 1)
+            return if (afterLastColon.all { it.isDigit() } && afterLastColon.isNotEmpty()) {
+                // Strip the port part
+                trimmed.substring(0, lastColon)
+            } else {
+                // No port, entire string is the IPv6 address
+                trimmed
+            }
+        }
+        // IPv4: 192.168.1.70:21531
+        val colonIdx = trimmed.lastIndexOf(':')
+        return if (colonIdx < 0) trimmed else trimmed.substring(0, colonIdx)
     }
 }
