@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /* eslint-disable no-console */
-import { shallowRef, computed, onMounted, onUnmounted } from "vue";
+import { shallowRef, computed, watch, onMounted, onUnmounted } from "vue";
 import { RouterView } from "vue-router";
 import {
   PopoverRoot,
@@ -10,11 +10,13 @@ import {
   PopoverArrow,
 } from "reka-ui";
 import { Wifi, WifiOff, Loader } from "lucide-vue-next";
+import QRCode from "qrcode";
 import {
   type ArkChange,
   arkChangeToTodoItem,
   arkChangeToProject,
   arkChangeEventType,
+  todoItemToArkChange,
   arkSync,
   getArkApiKey,
   getArkUrl,
@@ -28,15 +30,29 @@ import {
   isLocalDbAvailable,
   localDbBatchUpsertTodos,
   localDbUpsertProject,
-  localDbClearAll,
 } from "@/services/storage/local-db";
 import { parseConnectionString } from "@/services/sync/pairing";
-import { setupMeshFromArkKey } from "@/services/sync/peer-bridge";
+import {
+  setupMeshFromArkKey,
+  setupMeshFromSpaceCode,
+  stopMesh,
+  broadcastToPeers,
+} from "@/services/sync/peer-bridge";
+import {
+  getActiveSpace,
+  setActiveSpace,
+  saveSpace,
+  formatSpaceCode,
+  deriveSpaceId,
+  generateQrPayload,
+} from "@/services/space/space-manager";
+import type { SyncEntity, SyncEntityType } from "@/services/sync/lan-protocol";
 import { useTodoStore } from "@/store/todos";
 import SideBar from "@/components/SideBar.vue";
 import QuickEntry from "@/components/QuickEntry.vue";
 import QuickOpen from "@/components/QuickOpen.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
+import SpaceSetup from "@/components/SpaceSetup.vue";
 
 // ---------------------------------------------------------------------------
 // Store
@@ -57,6 +73,50 @@ const authRequired = shallowRef(false);
 const authBusy = shallowRef(false);
 const authError = shallowRef<string | null>(null);
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Ark Space state (Electron P2P mode)
+const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+const spaceRequired = shallowRef(false);
+const activeSpaceCode = shallowRef<string | null>(null);
+const peerServerAddress = shallowRef<string | null>(null);
+const connectedPeerCount = shallowRef(0);
+const connectedPeerNames = shallowRef<string[]>([]);
+
+const popoverQrDataUrl = shallowRef("");
+
+// Generate QR for the popover when space code changes
+watch(activeSpaceCode, async (code) => {
+  if (!code) {
+    popoverQrDataUrl.value = "";
+    return;
+  }
+  try {
+    if (isElectron && window.electronAPI?.invoke) {
+      const payload = (await window.electronAPI.invoke(
+        "sync:getQrPayload",
+        code,
+      )) as string;
+      if (payload) {
+        popoverQrDataUrl.value = await QRCode.toDataURL(payload, {
+          width: 120,
+          margin: 2,
+          color: { dark: "#000000", light: "#ffffff" },
+          errorCorrectionLevel: "M",
+        });
+        return;
+      }
+    }
+    // Fallback: just the formatted code
+    popoverQrDataUrl.value = await QRCode.toDataURL(formatSpaceCode(code), {
+      width: 120,
+      margin: 2,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
+  } catch {
+    popoverQrDataUrl.value = "";
+  }
+});
 
 const connectionDotClass = computed(() => {
   switch (connectionState.value) {
@@ -103,6 +163,9 @@ const connectionIcon = computed(() => {
 });
 
 const connectionSubtext = computed(() => {
+  if (connectionState.value === "online" && connectedPeerCount.value > 0) {
+    return `${connectedPeerCount.value} ${connectedPeerCount.value === 1 ? "пир" : "пиров"} подключено`;
+  }
   switch (connectionState.value) {
     case "online":
       return "Соединение установлено";
@@ -147,6 +210,7 @@ let unsubStatus: (() => void) | null = null;
 let unsubChange: (() => void) | null = null;
 let cleanupPeerListener: (() => void) | null = null;
 let unsubFullSync: (() => void) | null = null;
+let cleanupLanSyncListener: (() => void) | null = null;
 
 // ---------------------------------------------------------------------------
 // Bootstrap: connect to Ark, setup listeners
@@ -243,7 +307,6 @@ function bootstrap() {
   connectionState.value = "syncing";
   store.setHydrated(true);
 
-  // Если за SYNC_TIMEOUT соединение не установилось — переключаем в offline
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     if (connectionState.value === "syncing") {
@@ -278,29 +341,83 @@ function handleReconnect() {
 }
 
 // ---------------------------------------------------------------------------
-// Clear local data
+// Ark Space handlers (Electron P2P mode)
 // ---------------------------------------------------------------------------
 
-async function handleClearLocalData() {
-  arkSync.disconnect();
-  // Clear sync state from localStorage
-  localStorage.removeItem("delphi.sync_vector");
-  localStorage.removeItem("delphi.sync_outbox");
-  localStorage.removeItem("delphi.server_epoch");
-  // Clear local DB
-  await localDbClearAll();
-  // Clear in-memory state
+async function activateSpace(code: string) {
+  const spaceId = await deriveSpaceId(code);
+  setActiveSpace(code);
+  saveSpace({
+    code,
+    name: formatSpaceCode(code),
+    createdAt: new Date().toISOString(),
+  });
+  activeSpaceCode.value = code;
+  spaceRequired.value = false;
+
+  // Switch sidecar to per-space DB
+  if (window.electronAPI?.invoke) {
+    await window.electronAPI
+      .invoke("db:switchSpace", spaceId)
+      .catch(console.warn);
+  }
+
+  // Start P2P mesh with space code as shared secret
+  setupMeshFromSpaceCode(code);
+
+  // Reload data from the (now space-specific) local DB
   store.setTodos([]);
   store.setProjects([]);
   store.setAreas([]);
   store.setTags([]);
-  // Reconnect — will get full sync from server (empty vector)
-  const url = getArkUrl();
-  const key = getArkApiKey();
-  if (url && key) {
-    connectionState.value = "syncing";
-    arkSync.connect(url, key);
+
+  if (isLocalDbAvailable()) {
+    loadAllFromLocalDb()
+      .then(({ todos, projects, areas, tags }) => {
+        if (todos.length > 0) store.setTodos(todos);
+        if (projects.length > 0) store.setProjects(projects);
+        if (areas.length > 0) store.setAreas(areas);
+        if (tags.length > 0) store.setTags(tags);
+      })
+      .catch((err) => console.warn("[App] Space DB load failed:", err));
   }
+
+  store.setHydrated(true);
+  connectionState.value = "offline"; // P2P -- Ark WS not needed
+
+  // Get the server address for manual connect display
+  if (window.electronAPI?.invoke) {
+    window.electronAPI
+      .invoke("peer:getServerAddress")
+      .then((addr: string | null) => {
+        peerServerAddress.value = addr;
+      })
+      .catch(() => {});
+  }
+
+  // Start sync server
+  startSyncServer().catch(console.warn);
+}
+
+function handleSpaceJoined(code: string) {
+  activateSpace(code).catch(console.error);
+}
+
+function handleLeaveSpace() {
+  stopMesh();
+  if (window.electronAPI?.invoke) {
+    window.electronAPI.invoke("lan-sync:stop").catch(() => {});
+  }
+  setActiveSpace(null);
+  activeSpaceCode.value = null;
+  connectedPeerCount.value = 0;
+  connectedPeerNames.value = [];
+  store.setTodos([]);
+  store.setProjects([]);
+  store.setAreas([]);
+  store.setTags([]);
+  store.setHydrated(false);
+  spaceRequired.value = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +435,133 @@ function setupPeerBridge() {
       handleArkChange(change);
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// LAN Sync bridge (Electron only)
+// ---------------------------------------------------------------------------
+
+function handleLanSyncEntity(entity: SyncEntity) {
+  if (!entity || !entity.id) return;
+
+  if (entity.deleted) {
+    if (entity.type === "todo") store.removeTodoLocal(entity.id);
+    else if (entity.type === "project") store.removeProjectLocal(entity.id);
+    return;
+  }
+
+  const data = entity.data as Record<string, unknown>;
+  switch (entity.type) {
+    case "todo":
+      store.upsertTodo(data as unknown as import("@/types/task").TodoItem);
+      break;
+    case "project":
+      store.upsertProject(data as unknown as import("@/types/task").Project);
+      break;
+    // areas, tags, headings -- will add store support later
+  }
+}
+
+/** Broadcast a local change to sync peers. */
+function broadcastToLanSync(
+  entityType: SyncEntityType,
+  id: string,
+  data: Record<string, unknown>,
+  deleted?: boolean,
+) {
+  if (!window.electronAPI?.invoke) return;
+  const entity: SyncEntity = {
+    type: entityType,
+    id,
+    data,
+    hlc: "", // will be set by main process
+    deleted,
+  };
+  window.electronAPI
+    .invoke("lan-sync:broadcastChange", entity)
+    .catch((err: unknown) => {
+      console.warn("[LanSync] Failed to broadcast change:", err);
+    });
+}
+
+async function startSyncServer() {
+  if (!window.electronAPI?.invoke) return;
+
+  const deviceId = localStorage.getItem("delphi.sync_device_id") ?? "unknown";
+  const deviceName = "Delphi Electron";
+
+  try {
+    await window.electronAPI.invoke(
+      "lan-sync:start",
+      undefined,
+      deviceId,
+      deviceName,
+    );
+    console.log("[App] Sync server started");
+  } catch (err) {
+    console.warn("[App] Failed to start sync server:", err);
+  }
+}
+
+function setupLanSyncBridge() {
+  if (!window.electronAPI?.on) return;
+
+  // Listen for incoming changes from sync peers
+  const unsub1 = window.electronAPI.on(
+    "lan-sync:change",
+    (...args: unknown[]) => {
+      const entity = args[0] as SyncEntity;
+      if (entity) handleLanSyncEntity(entity);
+    },
+  );
+
+  const unsub2 = window.electronAPI.on(
+    "lan-sync:peerConnected",
+    (...args: unknown[]) => {
+      const deviceId = args[0] as string;
+      console.log(`[App] Sync peer connected: ${deviceId}`);
+      connectedPeerCount.value++;
+      connectionState.value = "online";
+      // Refresh peer list
+      refreshPeerStatus();
+    },
+  );
+
+  const unsub3 = window.electronAPI.on(
+    "lan-sync:peerDisconnected",
+    (...args: unknown[]) => {
+      const deviceId = args[0] as string;
+      const remaining = (args[1] as number) ?? 0;
+      console.log(
+        `[App] Sync peer disconnected: ${deviceId}, remaining: ${remaining}`,
+      );
+      connectedPeerCount.value = remaining;
+      if (remaining === 0) {
+        connectionState.value = "offline";
+      }
+      refreshPeerStatus();
+    },
+  );
+
+  cleanupLanSyncListener = () => {
+    unsub1?.();
+    unsub2?.();
+    unsub3?.();
+  };
+}
+
+/** Refresh peer status from main process. */
+function refreshPeerStatus() {
+  if (!window.electronAPI?.invoke) return;
+  window.electronAPI
+    .invoke("lan-sync:getStatus")
+    .then(
+      (status: { active: boolean; peers: number; peerNames?: string[] }) => {
+        connectedPeerCount.value = status.peers;
+        connectedPeerNames.value = status.peerNames ?? [];
+      },
+    )
+    .catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -358,13 +602,73 @@ async function handleAuthSubmit(connectionCode: string) {
 // ---------------------------------------------------------------------------
 
 onMounted(() => {
-  bootstrap();
-  setupPeerBridge();
+  if (isElectron) {
+    // Electron: P2P space mode takes priority
+    const code = getActiveSpace();
+    if (code) {
+      // Resume existing space
+      activeSpaceCode.value = code;
+      activateSpace(code).catch(console.error);
+    } else {
+      // No space -- show setup screen
+      spaceRequired.value = true;
+      store.setHydrated(true);
+      connectionState.value = "offline";
+    }
 
-  // Auto-setup mesh credentials from existing Ark key (Electron only)
-  const key = getArkApiKey();
-  if (key) {
-    setupMeshFromArkKey(key);
+    setupPeerBridge();
+    setupLanSyncBridge();
+
+    // Old P2P peer bridge: only push local state when LAN sync is NOT active.
+    if (window.electronAPI?.on && !activeSpaceCode.value) {
+      window.electronAPI.on("peer:peerConnected", (...args: unknown[]) => {
+        const deviceId = args[0] as string;
+        console.log(
+          `[App] P2P peer connected: ${deviceId} -- pushing local state`,
+        );
+        connectionState.value = "online";
+        const currentTodos = store.todos ?? [];
+        const currentProjects = store.projects ?? [];
+        currentTodos.forEach((todo) => {
+          broadcastToPeers(todoItemToArkChange(todo, "update"));
+        });
+        currentProjects.forEach((project) => {
+          broadcastToPeers({
+            event_id: project.id,
+            change_type: "update",
+            data: {
+              event_type: "project",
+              category: "productivity",
+              source: "delphi-web",
+              source_id: project.id,
+              summary: project.title,
+              occurred_at: new Date().toISOString(),
+              data: project,
+            },
+          });
+        });
+      });
+
+      window.electronAPI.on("peer:peerDisconnected", (...args: unknown[]) => {
+        const deviceId = args[0] as string;
+        const remaining = (args[1] as number) ?? 0;
+        console.log(
+          `[App] P2P peer disconnected: ${deviceId}, remaining: ${remaining}`,
+        );
+        if (remaining === 0) {
+          connectionState.value = "offline";
+        }
+      });
+    }
+  } else {
+    // Web mode: classic Ark WS auth flow
+    bootstrap();
+    setupPeerBridge();
+
+    const key = getArkApiKey();
+    if (key) {
+      setupMeshFromArkKey(key);
+    }
   }
 });
 
@@ -373,6 +677,7 @@ onUnmounted(() => {
   unsubChange?.();
   unsubFullSync?.();
   cleanupPeerListener?.();
+  cleanupLanSyncListener?.();
   if (syncTimer) clearTimeout(syncTimer);
   arkSync.disconnect();
 });
@@ -394,7 +699,7 @@ onUnmounted(() => {
           side="bottom"
           :side-offset="8"
           align="end"
-          class="z-50 w-56 rounded-lg border border-(--border) bg-(--popover) p-3 text-xs text-(--popover-foreground) shadow-md"
+          class="z-50 w-64 rounded-lg border border-(--border) bg-(--popover) p-3 text-xs text-(--popover-foreground) shadow-md"
         >
           <div class="flex items-center gap-2.5">
             <div
@@ -416,19 +721,51 @@ onUnmounted(() => {
             </div>
           </div>
           <button
-            v-if="connectionState === 'offline'"
+            v-if="connectionState === 'offline' && !activeSpaceCode"
             class="mt-3 w-full rounded-md bg-(--foreground) px-2 py-1.5 text-xs font-medium text-(--background) transition-opacity hover:opacity-80"
             @click="handleReconnect"
           >
             Подключиться
           </button>
-          <button
-            v-if="connectionState !== 'syncing'"
-            class="mt-1.5 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
-            @click="handleClearLocalData"
+          <p
+            v-if="activeSpaceCode && connectionState === 'offline'"
+            class="mt-2 text-center text-xs text-(--muted-foreground)"
           >
-            Очистить данные
-          </button>
+            Ожидание пиров в сети...
+          </p>
+          <div
+            v-if="activeSpaceCode"
+            class="mt-3 border-t border-(--border) pt-3"
+          >
+            <p class="mb-1 text-xs text-(--muted-foreground)">Пространство</p>
+            <p class="font-mono text-sm font-bold tracking-widest">
+              {{ formatSpaceCode(activeSpaceCode) }}
+            </p>
+            <img
+              v-if="popoverQrDataUrl"
+              :src="popoverQrDataUrl"
+              alt="QR"
+              class="mx-auto mt-2 rounded"
+              width="120"
+              height="120"
+            />
+            <div v-if="connectedPeerNames.length > 0" class="mt-2">
+              <p class="mb-1 text-xs text-(--muted-foreground)">
+                Подключённые пиры
+              </p>
+              <ul class="text-xs">
+                <li v-for="name in connectedPeerNames" :key="name">
+                  {{ name }}
+                </li>
+              </ul>
+            </div>
+            <button
+              class="mt-2 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
+              @click="handleLeaveSpace"
+            >
+              Покинуть пространство
+            </button>
+          </div>
           <PopoverArrow class="fill-(--popover)" />
         </PopoverContent>
       </PopoverPortal>
@@ -449,5 +786,7 @@ onUnmounted(() => {
       :error-message="authError"
       @submit="handleAuthSubmit"
     />
+
+    <SpaceSetup v-if="spaceRequired" @space-joined="handleSpaceJoined" />
   </div>
 </template>

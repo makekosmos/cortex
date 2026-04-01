@@ -26,6 +26,8 @@ export class PeerServer {
   private deviceName: string;
   private connections: Map<string, WebSocket> = new Map();
   private onChangeHandler: ChangeHandler | null = null;
+  private onPeerConnectHandler: ((deviceId: string) => void) | null = null;
+  private onPeerDisconnectHandler: ((deviceId: string) => void) | null = null;
 
   constructor(meshSecret: string, deviceId: string, deviceName: string) {
     this.meshSecret = meshSecret;
@@ -35,6 +37,14 @@ export class PeerServer {
 
   onChange(handler: ChangeHandler): void {
     this.onChangeHandler = handler;
+  }
+
+  onPeerConnect(handler: (deviceId: string) => void): void {
+    this.onPeerConnectHandler = handler;
+  }
+
+  onPeerDisconnect(handler: (deviceId: string) => void): void {
+    this.onPeerDisconnectHandler = handler;
   }
 
   async start(preferredPort = 0): Promise<number> {
@@ -155,6 +165,7 @@ export class PeerServer {
       if (peerDeviceId) {
         this.connections.delete(peerDeviceId);
         console.log(`[PeerServer] Peer disconnected: ${peerDeviceId}`);
+        this.onPeerDisconnectHandler?.(peerDeviceId);
       }
     });
 
@@ -205,6 +216,7 @@ export class PeerServer {
 
     this.connections.set(hello.device_id, ws);
     console.log(`[PeerServer] Authenticated peer: ${hello.device_id} (${hello.device_name})`);
+    this.onPeerConnectHandler?.(hello.device_id);
 
     const ack = createPeerHelloAck(true, this.deviceId, this.deviceName, 'electron', this.meshSecret);
     ws.send(JSON.stringify(ack));

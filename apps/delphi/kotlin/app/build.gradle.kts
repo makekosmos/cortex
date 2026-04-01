@@ -96,8 +96,13 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
 
-    // OkHttp for WebSocket (more reliable than Ktor CIO on Android)
+    // OkHttp for WebSocket client (more reliable than Ktor CIO on Android)
     implementation(libs.okhttp)
+
+    // Ktor Server (embedded WS server for equal-peer P2P sync)
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.cio)
+    implementation(libs.ktor.server.websockets)
 
     // Kotlinx
     implementation(libs.kotlinx.serialization.json)
@@ -109,8 +114,9 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
 
-    // ML Kit Barcode
+    // ML Kit Barcode (scanning) + ZXing (QR generation)
     implementation(libs.mlkit.barcode)
+    implementation(libs.zxing.core)
 
     // DataStore
     implementation(libs.datastore.preferences)

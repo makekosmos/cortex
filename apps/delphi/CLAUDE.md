@@ -1,22 +1,113 @@
 # Delphi
 
-GTD-менеджер задач — часть экосистемы Kosmos. Четыре реализации: macOS (SwiftUI), Web (Electron + Vue), Android (Kotlin + Compose) и Mobile (Expo + React Native).
+GTD-менеджер задач — часть экосистемы Kosmos. Три реализации: macOS (SwiftUI), Web/Desktop (Electron + Vue), Android (Kotlin + Compose).
 
 ## Платформы
 
 | Платформа | Путь | Стек |
 |-----------|------|------|
-| **macOS** | `swift/` | SwiftUI + SwiftData, macOS 14+ |
-| **Web/Desktop** | `ts/` | Electron 41 + Vue 3 (Composition API, `<script setup>`) + Vite 8 + Pinia + reka-ui + Tailwind CSS 4 |
+| **macOS** | `swift/` | SwiftUI + SwiftData, macOS 15+ |
+| **Web/Desktop** | `ts/` | Electron + Vue 3 + Vite + Pinia + reka-ui + Tailwind CSS 4 |
 | **Android** | `kotlin/` | Kotlin + Jetpack Compose + Material 3 + Room + Hilt, minSdk 28 |
-| **Mobile** | `mobile/` | Expo + React Native, TypeScript |
 
-Все версии синхронизируют данные с Ark через WebSocket (`/ws/sync`).
+Синхронизация: **P2P mesh (equal peers)** — все платформы запускают WS-сервер И клиент. Нет хаба.
+
+## P2P Sync — равноправная синхронизация
+
+### Архитектура
+
+Все платформы (Electron, Android, macOS) — **равноправные пиры**. Каждый запускает WebSocket-сервер И подключается как клиент к другим пирам. Нет выделенного хаба.
+
+| Платформа | WS-сервер | WS-клиент | Порт |
+|-----------|-----------|-----------|------|
+| **Electron** | `ws` library | `ws` library | 21531 |
+| **Android** | Ktor CIO embedded | OkHttp | 21531 (fallback 21531-21541) |
+| **macOS** | NWListener | URLSession | 21531 |
+
+### Space Code
+
+12-символьный Base32-Crockford код (формат `XXXX-XXXX-XXXX`), генерируемый случайно. Не кодирует IP.
+
+- **Любая платформа** может создать пространство → генерирует случайный код
+- **HMAC secret** = `normalizeCode(code)` (uppercase, без тире) — для аутентификации пиров
+- **Space ID** = `SHA-256(normalized_code)[:16 hex]` = per-space DB identifier
+- **Один активный Space** на устройство
+- **Без пространства** → показывается экран настройки (SpaceSetupScreen/SpaceSetupView)
+
+### QR-payload
+
+```
+ark://join?code=XXXX-XXXX-XXXX&addrs=192.168.1.70:21531,10.0.0.5:21531
+```
+
+Содержит Space code + все известные адреса создающего пира (LAN, WAN, IPv6).
+
+### Multi-address peer records
+
+Каждый пир хранит список адресов (LAN, WAN, IPv6) для каждого известного пира. При подключении пробует все адреса **параллельно**, берёт первый успешный.
+
+### Peer list exchange (mesh discovery)
+
+После `hello` пиры обмениваются списками известных пиров с их адресами. Это позволяет обнаруживать пиры транзитивно без mDNS.
+
+### Протокол синхронизации
+
+1. **hello** — клиент отправляет при подключении, сервер отвечает `hello_ack`
+2. **peer_list** — обмен известными пирами и их адресами для mesh discovery
+3. **version_vector** — обмен version vectors, вычисление diff
+4. **batch sync** — пачки до 100 изменений, каждая с ACK (`batch_ack`)
+5. **live mode** — после завершения sync, мутации идут как `live_change` с `live_ack`
+
+- **Конфликт-резолюция**: HLC-based Last-Writer-Wins (Hybrid Logical Clock)
+- **Version vector**: персистится в `sync_kv` (Electron/sidecar), DataStore (Android), UserDefaults (macOS)
+- **Сущности**: todo, project, area, tag, heading
+
+### Ключевые файлы
+
+| Файл | Роль |
+|------|------|
+| `ts/electron/sync-server.ts` | Electron WS-сервер |
+| `ts/electron/sync-client.ts` | Electron WS-клиент |
+| `ts/src/services/sync/lan-protocol.ts` | Общие типы, HLC, diff, batch splitting |
+| `ts/src/store/todos.ts` | `broadcastToLanSync()` на каждой мутации |
+| `kotlin/.../data/sync/SyncServer.kt` | Android Ktor WS-сервер |
+| `kotlin/.../data/sync/LanSyncClient.kt` | Android WS-клиент |
+| `kotlin/.../data/sync/PeerManager.kt` | Android координатор пиров |
+| `swift/Delphi/Sync/SyncServer.swift` | macOS NWListener WS-сервер |
+| `swift/Delphi/Sync/SyncClient.swift` | macOS URLSession WS-клиент |
+| `swift/Delphi/Sync/PeerManager.swift` | macOS координатор пиров |
+
+### Важные правила реализации
+
+- Vue 3 reactive proxies **MUST** быть deep-cloned через `JSON.parse(JSON.stringify())` перед Electron IPC (structured clone не может сериализовать Proxy-объекты)
+- Android version vector **MUST** персиститься в DataStore, **НЕ** регенерироваться с `Instant.now()` при reconnect
+- OkHttp WebSocket: без `pingInterval` (сервер шлёт WS-level pings), `readTimeout=0`
+- **Нет кнопки "Очистить данные"** — данные удаляются только через системные настройки (Settings → Apps)
+
+### Поведение синхронизации
+
+- **Initial sync**: version vectors обмениваются, diff вычисляется, батчи отправляются с ACK
+- **Live mode**: мутации транслируются как `live_change` с `live_ack`
+- **Reconnection**: автоматический с exponential backoff
+- **Persistence**: данные сохраняются между reconnect — space хранит всех пиров и задачи
+
+### Файлы по платформам (Space UI)
+
+| Платформа | SpaceManager | SpaceSetupUI |
+|-----------|-------------|--------------|
+| **TS/Electron** | `src/services/space/space-manager.ts` | `src/components/SpaceSetup.vue` |
+| **Swift** | `Delphi/Space/SpaceManager.swift` | `Delphi/Space/SpaceSetupView.swift` |
+| **Kotlin** | `data/space/SpaceManager.kt` | `ui/screens/space/SpaceSetupScreen.kt` |
+
+> Подробная документация по каждой платформе:
+> - `swift/CLAUDE.md` — macOS SwiftUI
+> - `kotlin/CLAUDE.md` — Android Kotlin
+> Архитектура TS/Electron описана ниже.
 
 ## Навигация по умолчанию
 
-- **Мобильные устройства** (iOS/Android): главный экран при открытии — **Сегодня**
-- **Десктоп** (macOS/Electron): главный экран при открытии — **Входящие** (Inbox)
+- **Android**: главный экран — **Сегодня**
+- **macOS/Electron**: главный экран — **Входящие** (Inbox)
 
 ## Модели данных
 
@@ -163,23 +254,24 @@ ts/
 │   ├── Cargo.toml         — rusqlite (bundled), serde_json
 │   └── src/main.rs        — stdin/stdout JSON RPC + SQLite (WAL)
 ├── electron/              — Electron main process
-│   ├── main.ts            — точка входа, IPC-хендлеры (db:*, fs:*, peer:*)
+│   ├── main.ts            — точка входа, IPC-хендлеры (db:*, fs:*, lan-sync:*)
 │   ├── sidecar.ts         — SidecarClient: spawn delphi-db, JSON queue, dbLoadAll/upsertTodo/…
-│   ├── peer-discovery.ts  — mDNS (bonjour-service), _ark-peer._tcp
-│   ├── peer-manager.ts    — P2P mesh: outbound WS, HMAC auth, broadcast
-│   ├── peer-server.ts     — inbound WS для входящих peer-подключений
-│   └── peer-protocol.ts   — типы и протокол P2P-сообщений
+│   ├── sync-server.ts     — WS-сервер (порт 21531), sync protocol
+│   ├── sync-client.ts     — WS-клиент, подключение к другим пирам
+│   ├── peer-manager.ts    — координатор пиров, mesh discovery
+│   ├── peer-discovery.ts  — mDNS (bonjour-service), _ark-peer._tcp (legacy)
+│   └── peer-protocol.ts   — типы протокола P2P-сообщений
 ├── src/
-│   ├── App.vue            — корневой layout, connection bootstrap, P2P bridge
+│   ├── App.vue            — корневой layout, connection bootstrap, P2P sync bridge
 │   ├── main.ts            — createApp, router, Pinia
 │   ├── components/        — UI-компоненты (SideBar, QuickEntry, QuickOpen, TodoRow, …)
 │   ├── pages/             — route views (TodayPage, AllTaskPage, ProjectPage, …)
 │   ├── composables/       — useSmartList, useQuickEntry, useTheme
 │   ├── store/
-│   │   ├── todos.ts       — Pinia store: задачи, проекты, CRUD → localDb + arkSync
+│   │   ├── todos.ts       — Pinia store: задачи, проекты, CRUD → localDb + lanSync
 │   │   └── tasks.ts       — вспомогательные утилиты для задач
 │   ├── services/
-│   │   ├── sync/          — ark-client (WS), hlc (Hybrid Logical Clock), pairing, peer-bridge
+│   │   ├── sync/          — lan-protocol, hlc, ark-client (legacy), peer-bridge
 │   │   ├── api/           — HTTP helpers
 │   │   ├── filters/       — smart list фильтры
 │   │   ├── gemini/        — голосовой ввод (Gemini Live API)
@@ -211,7 +303,7 @@ App.vue → isLocalDbAvailable()
 **Каждая мутация (store/todos.ts)**:
 ```
 addTodo/updateTodo/… → localDbUpsertTodo (fire & forget)
-                     → arkSync.sendChange (WebSocket relay)
+                     → broadcastToLanSync() (live_change to connected peers)
 ```
 
 **Сборка**:
@@ -228,26 +320,29 @@ reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Ta
 ### Состояние подключения (App.vue)
 
 Индикатор-точка в правом верхнем углу:
-- **Зелёный** (`online`) — WebSocket с Ark активен, realtime sync работает
-- **Жёлтый пульсирующий** (`syncing`) — устанавливается соединение
-- **Красный** (`offline`) — соединение потеряно или не настроено
+- **Зелёный** (`online`) — LAN sync активен, live mode работает
+- **Жёлтый пульсирующий** (`syncing`) — устанавливается соединение / batch sync
+- **Красный** (`offline`) — нет подключённых клиентов или пространство не создано
 
 При наведении — тултип (reka-ui Tooltip) с описанием текущего состояния.
 
-### Синхронизация (renderer)
+### P2P Sync (Electron main process)
 
-`ArkSyncClient` (`services/sync/ark-client.ts`):
-- WebSocket с version vectors (localStorage)
-- Outbox для offline-изменений
-- Heartbeat ping/pong
-- Reconnect с exponential backoff (max 30s)
-- `onStatus(cb)` / `onChange(cb)` для подписки
+`sync-server.ts` — WebSocket-сервер на порту 21531:
+- Принимает подключения от Android/macOS пиров
+- Протокол: hello → peer_list → version_vector → batch sync (max 100/batch) → ACK → live mode
+- HLC-based LWW конфликт-резолюция
+- Version vector персистится в sidecar (`sync_kv`)
+- IPC bridge `lan-sync:change` → renderer обрабатывает входящие изменения
 
-### P2P mesh (Electron main process)
+`sync-client.ts` — WebSocket-клиент:
+- Подключается к другим пирам по известным адресам
+- Пробует все адреса пира параллельно (LAN, WAN, IPv6)
 
-- mDNS discovery → peer-manager координирует outbound WS
-- HMAC auth, hop_path для предотвращения петель
-- IPC bridge `peer:change` → renderer обрабатывает как Ark changes
+### Legacy: ArkSyncClient
+
+Код остаётся, но не используется:
+- `ark-client.ts` — WS relay через Ark-сервер
 
 ## Сервисы
 
@@ -264,125 +359,41 @@ reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Ta
 - "in 5 days", "next monday"
 - Русские дни недели, относительные фразы
 
-## Синхронизация с Ark
+## Синхронизация
 
-Все клиенты (Swift, Android Kotlin, Web/TS) синхронизируются с Ark **только через WebSocket**. REST `/tasks` не существует.
+### P2P Sync (основной режим)
 
-### Подключение
+Описан выше. При первом запуске без пространства → показать SpaceSetupScreen/View.
 
-```
-ws://ark-server/ws/sync?key=API_KEY
-```
-
-После открытия WebSocket клиент сразу шлёт `sync_start`:
-```json
-{
-  "type": "sync_start",
-  "device_id": "delphi-web-<uuid>",
-  "device_name": "Delphi Web",
-  "platform": "web",
-  "vector": {"delphi-web-abc": 42, "delphi-android-xyz": 15}
-}
-```
-
-Сервер отвечает пачкой пропущенных изменений:
-```json
-{"type": "sync_changes", "changes": [...]}
-```
-
-### Realtime изменения
-
-Каждая мутация отправляется немедленно:
-```json
-{
-  "type": "change",
-  "event_id": "<todo-uuid>",
-  "change_type": "create" | "update" | "delete",
-  "data": {
-    "event_type": "task",
-    "category": "productivity",
-    "source": "delphi-web",
-    "source_id": "<todo-uuid>",
-    "summary": "Заголовок задачи",
-    "occurred_at": "2025-01-01T12:00:00Z",
-    "data": { /* все поля TodoItem */ }
-  }
-}
-```
-
-Сервер бродкастит изменение всем другим подключённым клиентам.
-
-### Маппинг event_type
-
-| Модель | event_type | source |
-|--------|-----------|--------|
-| TodoItem | `"task"` | `"delphi-web"` / `"delphi"` / `"delphi-android"` |
-| Project | `"project"` | `"delphi-web"` |
-| Area | `"area"` | `"delphi-web"` |
-| Tag | `"tag"` | `"delphi-web"` |
-
-Дедупликация: `source_id` = UUID объекта (идемпотентный upsert по `source_id` alone, без `source`).
-
-### Offline
-
-Изменения, сделанные без соединения, попадают в outbox (localStorage).
-После reconnect — flushOutbox отправляет их в порядке очереди.
-
-### UUID normalization
-
-Все `source_id`/`event_id` MUST be lowercase на всех платформах. Mac UUID по умолчанию uppercase.
-- **Swift**: `.lowercased()` при генерации/отправке
-- **Kotlin**: `.lowercase()` при получении
-- **TS/Electron**: `.toLowerCase()` при получении
-
-### server_epoch
-
-Сервер включает `server_epoch` (UUID) в каждый `sync_changes`. Клиенты хранят его локально. Когда epoch меняется → БД сервера была стёрта → сбросить version vector, запушить все локальные данные, НЕ удалять локальные данные.
-
-### is_full_sync
-
-Сервер включает `is_full_sync` boolean в `sync_changes`. `pushLocalTodos`/`sendMissingToServer` выполняется только когда `is_full_sync=true` ИЛИ `epochChanged=true` — НЕ при каждом reconnect.
-
-### Zombie cleanup
-
-Удаление локальных задач, отсутствующих на сервере (исключая outbox). Запускается ТОЛЬКО когда `is_full_sync=true AND epochChanged=false`.
-
-### "Clear local data" (dev)
-
-Временная кнопка в настройках на всех платформах. Очищает локальную БД + sync state (vector, epoch, outbox), затем переподключается для свежего full sync.
-- **Swift**: `ArkSyncClient.clearLocalData()` — per-object deletion (не batch) из-за ограничений SwiftData relationships
-- **Kotlin**: `ArkSyncClient.clearLocalData()` — использует `deleteAll()` DAO методы
-- **TS/Electron**: `handleClearLocalData()` в App.vue — очищает localStorage + sidecar через `dbClearAll()`
-
-### Sidecar: clear_all
-
-Добавлена операция `clear_all` в Rust sidecar delphi-db — удаляет все строки из таблиц `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`.
-
-### Где живёт код
+### Где живёт код (TS/Electron)
 
 | Файл | Роль |
 |------|------|
-| `services/sync/ark-client.ts` | `ArkSyncClient` (WS), маппинг TodoItem↔ArkChange |
-| `store/todos.ts` | CRUD + вызов `arkSync.sendChange()` на каждой мутации |
-| `App.vue` | `arkSync.onChange()` → `store.upsertTodo()` / `store.upsertProject()` |
-
-### Входящие изменения (App.vue)
-
-```
-arkSync.onChange(change) →
-  arkChangeEventType(change) === "task"    → arkChangeToTodoItem → store.upsertTodo
-  arkChangeEventType(change) === "project" → arkChangeToProject  → store.upsertProject
-```
+| `electron/sync-server.ts` | WS-сервер (порт 21531), sync protocol |
+| `electron/sync-client.ts` | WS-клиент, подключение к другим пирам |
+| `electron/peer-manager.ts` | Координатор пиров, mesh discovery |
+| `src/services/sync/lan-protocol.ts` | Типы, HLC, diff, batch splitting |
+| `store/todos.ts` | CRUD + `broadcastToLanSync()` на каждой мутации |
+| `App.vue` | Bootstrap sync, обработка входящих изменений |
 
 ### Исходящие изменения (store/todos.ts)
 
-```
-addTodo()      → todoItemToArkChange(todo, "create")  → arkSync.sendChange()
-updateTodo()   → todoItemToArkChange(todo, "update")  → arkSync.sendChange()
-removeTodo()   → todoItemToArkChange(todo, "delete")  → arkSync.sendChange()
-completeTodo() → todoItemToArkChange(todo, "update")  → arkSync.sendChange()
-(и т.д. для cancel, trash, restore, duplicate)
-```
+Каждая мутация вызывает `broadcastToLanSync()` — отправляет `live_change` всем подключённым пирам.
+
+### UUID normalization
+
+Все UUID MUST be lowercase на всех платформах. Mac UUID по умолчанию uppercase.
+- **Swift**: `uuidString.lowercased()`
+- **Kotlin**: `.lowercase()`
+- **TS/Electron**: `.toLowerCase()`
+
+### Sidecar: clear_all
+
+Операция `clear_all` в Rust sidecar delphi-db — удаляет все строки из таблиц `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`.
+
+### Ark WebSocket relay (legacy/отключён)
+
+Старая синхронизация через Ark-сервер по WebSocket (`ws://ark-server/ws/sync?key=API_KEY`). Код остаётся в `services/sync/ark-client.ts`, но не используется при активном LAN sync.
 
 ## Голосовой ввод (Web)
 

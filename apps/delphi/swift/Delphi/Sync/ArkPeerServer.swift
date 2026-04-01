@@ -31,6 +31,9 @@ final class ArkPeerServer {
     /// Called when a change is received from a peer.
     var onPeerChange: (([String: Any], String) -> Void)?  // (change, fromDeviceId)
 
+    /// Called with the peer deviceId after a successful inbound authentication.
+    var onPeerConnect: ((String) -> Void)?
+
     // MARK: - Init
 
     init(meshSecret: String, deviceId: String, deviceName: String, port: UInt16 = 9473) {
@@ -238,6 +241,7 @@ final class ArkPeerServer {
             meshSecret: meshSecret
         )
         sendJSON(ack, on: connection)
+        onPeerConnect?(peerDeviceId)
 
         // Enter receive loop
         startReceiveLoop(connection, peerDeviceId: peerDeviceId)

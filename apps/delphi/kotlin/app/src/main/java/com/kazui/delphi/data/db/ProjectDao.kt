@@ -54,6 +54,9 @@ interface ProjectDao {
     @Query("DELETE FROM headings WHERE id = :id")
     suspend fun deleteHeadingById(id: String)
 
+    @Query("SELECT * FROM projects ORDER BY sortOrder ASC")
+    suspend fun getAllForSync(): List<Project>
+
     @Query("DELETE FROM projects")
     suspend fun deleteAllProjects()
 

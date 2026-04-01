@@ -83,37 +83,37 @@ Recommended field model:
 
 ```ts
 type NoteFieldKind =
-  | 'text'
-  | 'long_text'
-  | 'number'
-  | 'date'
-  | 'boolean'
-  | 'select'
-  | 'image'
-  | 'url'
+  | "text"
+  | "long_text"
+  | "number"
+  | "date"
+  | "boolean"
+  | "select"
+  | "image"
+  | "url";
 
 interface NoteTypeField {
-  id: string
-  label: string
-  kind: NoteFieldKind
-  required: boolean
-  options?: string[]
-  placeholder?: string
+  id: string;
+  label: string;
+  kind: NoteFieldKind;
+  required: boolean;
+  options?: string[];
+  placeholder?: string;
 }
 
 interface NoteTypeDefinition {
-  id: string
-  name: string
-  slug: string
-  icon?: string
-  color?: string
-  fields: NoteTypeField[]
+  id: string;
+  name: string;
+  slug: string;
+  icon?: string;
+  color?: string;
+  fields: NoteTypeField[];
 }
 
 interface HeaderTemplateDefinition {
-  id: string
-  kind: 'default' | 'centered_portrait' | 'compact_meta'
-  config: Record<string, unknown>
+  id: string;
+  kind: "default" | "centered_portrait" | "compact_meta";
+  config: Record<string, unknown>;
 }
 ```
 
@@ -123,10 +123,10 @@ Each note becomes:
 
 ```ts
 interface TypedEntry extends Entry {
-  type_id: string | null
-  header_layout: string | null
-  header_props_json: string
-  schema_version: number
+  type_id: string | null;
+  header_layout: string | null;
+  header_props_json: string;
+  schema_version: number;
 }
 ```
 

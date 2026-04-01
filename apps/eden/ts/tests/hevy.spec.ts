@@ -1,7 +1,7 @@
-import { test, expect, _electron as electron, type Page } from '@playwright/test';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { test, expect, _electron as electron, type Page } from "@playwright/test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 type ElectronApp = Awaited<ReturnType<typeof electron.launch>>;
 
@@ -12,30 +12,33 @@ interface LaunchedApp {
   homePath: string;
 }
 
-async function launchApp(homePath = fs.mkdtempSync(path.join(os.tmpdir(), 'eden-hevy-')), attempt = 0): Promise<LaunchedApp> {
+async function launchApp(
+  homePath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-hevy-")),
+  attempt = 0,
+): Promise<LaunchedApp> {
   const electronApp = await electron.launch({
-    args: ['.'],
+    args: ["."],
     env: {
       ...process.env,
-      EDEN_BACKGROUND_LAUNCH: '1',
+      EDEN_BACKGROUND_LAUNCH: "1",
       HOME: homePath,
-      NODE_ENV: 'development',
+      NODE_ENV: "development",
     },
   });
 
   const window = await electronApp.firstWindow();
   const pageErrors: string[] = [];
 
-  window.on('console', (msg) => console.log(msg.text()));
-  window.on('pageerror', (error) => {
+  window.on("console", (msg) => console.log(msg.text()));
+  window.on("pageerror", (error) => {
     pageErrors.push(error.message);
-    console.log('Page error:', error);
+    console.log("Page error:", error);
   });
 
-  await window.waitForLoadState('domcontentloaded');
+  await window.waitForLoadState("domcontentloaded");
 
   try {
-    await window.waitForSelector('.app-container', { timeout: 10000 });
+    await window.waitForSelector(".app-container", { timeout: 10000 });
     return { electronApp, window, pageErrors, homePath };
   } catch (error) {
     await electronApp.close();
@@ -46,15 +49,15 @@ async function launchApp(homePath = fs.mkdtempSync(path.join(os.tmpdir(), 'eden-
 
 async function ensureVault(launch: LaunchedApp, vaultPath: string): Promise<LaunchedApp> {
   const { window, electronApp, homePath } = launch;
-  await window.waitForSelector('.app-container');
+  await window.waitForSelector(".app-container");
 
   await window.evaluate(async (selectedVaultPath: string) => {
-    const api = Reflect.get(window, 'api');
-    if (api && typeof api === 'object') {
-      const setVaultPath = Reflect.get(api, 'setVaultPath');
-      if (typeof setVaultPath === 'function') await setVaultPath(selectedVaultPath);
-      const updateSidebarConfig = Reflect.get(api, 'updateSidebarConfig');
-      if (typeof updateSidebarConfig === 'function') {
+    const api = Reflect.get(window, "api");
+    if (api && typeof api === "object") {
+      const setVaultPath = Reflect.get(api, "setVaultPath");
+      if (typeof setVaultPath === "function") await setVaultPath(selectedVaultPath);
+      const updateSidebarConfig = Reflect.get(api, "updateSidebarConfig");
+      if (typeof updateSidebarConfig === "function") {
         await updateSidebarConfig({
           vault: { width: 232, collapsed: false },
           widget: { width: 320, collapsed: false },
@@ -65,20 +68,20 @@ async function ensureVault(launch: LaunchedApp, vaultPath: string): Promise<Laun
 
   await electronApp.close();
   const relaunched = await launchApp(homePath);
-  await relaunched.window.waitForSelector('.widget-sidebar-wrapper', { state: 'attached' });
+  await relaunched.window.waitForSelector(".widget-sidebar-wrapper", { state: "attached" });
   return relaunched;
 }
 
-test.describe('Hevy Integration', () => {
-  test.describe.configure({ mode: 'serial' });
+test.describe("Hevy Integration", () => {
+  test.describe.configure({ mode: "serial" });
 
-  test('should expose hevy API methods on window.api', async () => {
+  test("should expose hevy API methods on window.api", async () => {
     test.setTimeout(30000);
     let launch: LaunchedApp | null = null;
     try {
       launch = await launchApp();
       const hevyMethods = await launch.window.evaluate(() => {
-        const api = Reflect.get(window, 'api') as Record<string, unknown>;
+        const api = Reflect.get(window, "api") as Record<string, unknown>;
         return {
           hevyLogin: typeof api.hevyLogin,
           hevyLogout: typeof api.hevyLogout,
@@ -90,14 +93,14 @@ test.describe('Hevy Integration', () => {
           hevySyncWorkouts: typeof api.hevySyncWorkouts,
         };
       });
-      expect(hevyMethods.hevyLogin).toBe('function');
-      expect(hevyMethods.hevyLogout).toBe('function');
-      expect(hevyMethods.hevyGetAuthStatus).toBe('function');
-      expect(hevyMethods.hevyGetAccount).toBe('function');
-      expect(hevyMethods.hevyGetWorkoutCount).toBe('function');
-      expect(hevyMethods.hevyFetchWorkouts).toBe('function');
-      expect(hevyMethods.hevyFetchAllWorkouts).toBe('function');
-      expect(hevyMethods.hevySyncWorkouts).toBe('function');
+      expect(hevyMethods.hevyLogin).toBe("function");
+      expect(hevyMethods.hevyLogout).toBe("function");
+      expect(hevyMethods.hevyGetAuthStatus).toBe("function");
+      expect(hevyMethods.hevyGetAccount).toBe("function");
+      expect(hevyMethods.hevyGetWorkoutCount).toBe("function");
+      expect(hevyMethods.hevyFetchWorkouts).toBe("function");
+      expect(hevyMethods.hevyFetchAllWorkouts).toBe("function");
+      expect(hevyMethods.hevySyncWorkouts).toBe("function");
       expect(launch.pageErrors).toEqual([]);
     } finally {
       if (launch) {
@@ -107,13 +110,13 @@ test.describe('Hevy Integration', () => {
     }
   });
 
-  test('should return not logged in status initially', async () => {
+  test("should return not logged in status initially", async () => {
     test.setTimeout(30000);
     let launch: LaunchedApp | null = null;
     try {
       launch = await launchApp();
       const authStatus = await launch.window.evaluate(async () => {
-        const api = Reflect.get(window, 'api') as {
+        const api = Reflect.get(window, "api") as {
           hevyGetAuthStatus: () => Promise<{ loggedIn: boolean; username: string | null }>;
         };
         return api.hevyGetAuthStatus();
@@ -128,19 +131,19 @@ test.describe('Hevy Integration', () => {
     }
   });
 
-  test('should return error when fetching workouts without login', async () => {
+  test("should return error when fetching workouts without login", async () => {
     test.setTimeout(30000);
     let launch: LaunchedApp | null = null;
     try {
       launch = await launchApp();
       const result = await launch.window.evaluate(async () => {
-        const api = Reflect.get(window, 'api') as {
+        const api = Reflect.get(window, "api") as {
           hevyFetchWorkouts: (startIndex?: number) => Promise<{ ok: boolean; error?: string }>;
         };
         return api.hevyFetchWorkouts();
       });
       expect(result.ok).toBe(false);
-      expect(result.error).toBe('Not logged in');
+      expect(result.error).toBe("Not logged in");
     } finally {
       if (launch) {
         await launch.electronApp.close();
@@ -149,9 +152,9 @@ test.describe('Hevy Integration', () => {
     }
   });
 
-  test('should show connected apps settings page with Hevy card', async () => {
+  test("should show connected apps settings page with Hevy card", async () => {
     test.setTimeout(60000);
-    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), 'eden-hevy-settings-'));
+    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-hevy-settings-"));
     let launch: LaunchedApp | null = null;
     try {
       launch = await launchApp();
@@ -160,10 +163,10 @@ test.describe('Hevy Integration', () => {
       // Open settings
       await launch.window.locator('[data-testid="open-settings-btn"]').scrollIntoViewIfNeeded();
       await launch.window.locator('[data-testid="open-settings-btn"]').click({ force: true });
-      await expect(launch.window.locator('.settings-page')).toBeVisible();
+      await expect(launch.window.locator(".settings-page")).toBeVisible();
 
       // Navigate to Connected Apps tab
-      await launch.window.locator('.settings-nav-item', { hasText: 'Связанные программы' }).click();
+      await launch.window.locator(".settings-nav-item", { hasText: "Связанные программы" }).click();
       await expect(launch.window.locator('[data-testid="connected-apps-settings"]')).toBeVisible();
 
       // Hevy card should be visible
@@ -172,7 +175,9 @@ test.describe('Hevy Integration', () => {
 
       // Login button should be visible when not connected
       await expect(launch.window.locator('[data-testid="hevy-login-btn"]')).toBeVisible();
-      await expect(launch.window.locator('[data-testid="hevy-login-btn"]')).toContainText('Войти через Hevy');
+      await expect(launch.window.locator('[data-testid="hevy-login-btn"]')).toContainText(
+        "Войти через Hevy",
+      );
 
       expect(launch.pageErrors).toEqual([]);
     } finally {
@@ -184,9 +189,9 @@ test.describe('Hevy Integration', () => {
     }
   });
 
-  test('should show system types (Тренировка, Упражнение) in object types settings', async () => {
+  test("should show system types (Тренировка, Упражнение) in object types settings", async () => {
     test.setTimeout(60000);
-    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), 'eden-hevy-types-'));
+    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-hevy-types-"));
     let launch: LaunchedApp | null = null;
     try {
       launch = await launchApp();
@@ -195,18 +200,24 @@ test.describe('Hevy Integration', () => {
       // Open settings
       await launch.window.locator('[data-testid="open-settings-btn"]').scrollIntoViewIfNeeded();
       await launch.window.locator('[data-testid="open-settings-btn"]').click({ force: true });
-      await expect(launch.window.locator('.settings-page')).toBeVisible();
+      await expect(launch.window.locator(".settings-page")).toBeVisible();
 
       // Navigate to Object Types tab
-      await launch.window.locator('.settings-nav-item', { hasText: 'Типы объектов' }).click();
-      await expect(launch.window.locator('.object-types-layout')).toBeVisible();
+      await launch.window.locator(".settings-nav-item", { hasText: "Типы объектов" }).click();
+      await expect(launch.window.locator(".object-types-layout")).toBeVisible();
 
       // System types should be listed as built-in (non-editable)
-      const builtinItems = launch.window.locator('.object-types-item.builtin');
+      const builtinItems = launch.window.locator(".object-types-item.builtin");
       await expect(builtinItems).toHaveCount(3); // Страница, Тренировка, Упражнение
-      await expect(launch.window.locator('.object-types-item.builtin', { hasText: 'Страница' })).toBeVisible();
-      await expect(launch.window.locator('.object-types-item.builtin', { hasText: 'Тренировка' })).toBeVisible();
-      await expect(launch.window.locator('.object-types-item.builtin', { hasText: 'Упражнение' })).toBeVisible();
+      await expect(
+        launch.window.locator(".object-types-item.builtin", { hasText: "Страница" }),
+      ).toBeVisible();
+      await expect(
+        launch.window.locator(".object-types-item.builtin", { hasText: "Тренировка" }),
+      ).toBeVisible();
+      await expect(
+        launch.window.locator(".object-types-item.builtin", { hasText: "Упражнение" }),
+      ).toBeVisible();
 
       expect(launch.pageErrors).toEqual([]);
     } finally {
@@ -218,9 +229,9 @@ test.describe('Hevy Integration', () => {
     }
   });
 
-  test('should show diary space with today section and history', async () => {
+  test("should show diary space with today section and history", async () => {
     test.setTimeout(60000);
-    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), 'eden-hevy-diary-'));
+    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-hevy-diary-"));
     let launch: LaunchedApp | null = null;
     try {
       launch = await launchApp();
@@ -233,14 +244,20 @@ test.describe('Hevy Integration', () => {
 
       // Today section should be visible
       await expect(launch.window.locator('[data-testid="diary-today-section"]')).toBeVisible();
-      await expect(launch.window.locator('[data-testid="diary-today-section"]')).toContainText('Сегодня');
+      await expect(launch.window.locator('[data-testid="diary-today-section"]')).toContainText(
+        "Сегодня",
+      );
 
       // History section should be visible
       await expect(launch.window.locator('[data-testid="diary-history-section"]')).toBeVisible();
-      await expect(launch.window.locator('[data-testid="diary-history-section"]')).toContainText('История тренировок');
+      await expect(launch.window.locator('[data-testid="diary-history-section"]')).toContainText(
+        "История тренировок",
+      );
 
       // No workouts yet — should show empty message
-      await expect(launch.window.locator('[data-testid="space-view-diary"]')).toContainText('Подключите Hevy');
+      await expect(launch.window.locator('[data-testid="space-view-diary"]')).toContainText(
+        "Подключите Hevy",
+      );
 
       expect(launch.pageErrors).toEqual([]);
     } finally {
@@ -252,20 +269,26 @@ test.describe('Hevy Integration', () => {
     }
   });
 
-  test('should show system types in all-properties space', async () => {
+  test("should show system types in all-properties space", async () => {
     test.setTimeout(60000);
-    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), 'eden-hevy-props-'));
+    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-hevy-props-"));
     let launch: LaunchedApp | null = null;
     try {
       launch = await launchApp();
       launch = await ensureVault(launch, vaultPath);
 
       await launch.window.locator('[data-testid="widget-link-all-properties"]').click();
-      await expect(launch.window.locator('[data-testid="space-view-all-properties"]')).toBeVisible();
+      await expect(
+        launch.window.locator('[data-testid="space-view-all-properties"]'),
+      ).toBeVisible();
 
       // System types should appear in properties view
-      await expect(launch.window.locator('[data-testid="space-view-all-properties"]')).toContainText('Тренировка');
-      await expect(launch.window.locator('[data-testid="space-view-all-properties"]')).toContainText('Упражнение');
+      await expect(
+        launch.window.locator('[data-testid="space-view-all-properties"]'),
+      ).toContainText("Тренировка");
+      await expect(
+        launch.window.locator('[data-testid="space-view-all-properties"]'),
+      ).toContainText("Упражнение");
 
       expect(launch.pageErrors).toEqual([]);
     } finally {

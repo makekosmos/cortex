@@ -31,6 +31,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -43,6 +45,8 @@ import com.kazui.delphi.ui.screens.logbook.LogbookScreen
 import com.kazui.delphi.ui.screens.more.MoreScreen
 import com.kazui.delphi.ui.screens.project.ProjectScreen
 import com.kazui.delphi.ui.screens.settings.SettingsScreen
+import com.kazui.delphi.ui.screens.space.SpaceSetupScreen
+import com.kazui.delphi.ui.screens.space.SpaceSetupViewModel
 import com.kazui.delphi.ui.screens.today.TodayScreen
 import com.kazui.delphi.ui.screens.trash.TrashScreen
 import com.kazui.delphi.ui.screens.upcoming.UpcomingScreen
@@ -79,7 +83,24 @@ private val slideEnter get() = slideInHorizontally(animationSpec = navTween) { i
 private val slideExit get() = slideOutHorizontally(animationSpec = navTween) { it }
 
 @Composable
-fun DelphiNavGraph() {
+fun DelphiNavGraph(
+    spaceViewModel: SpaceSetupViewModel = hiltViewModel(),
+) {
+    val isInitialized by spaceViewModel.isInitialized.collectAsStateWithLifecycle()
+    val activeSpaceCode by spaceViewModel.activeSpaceCode.collectAsStateWithLifecycle()
+
+    // Show nothing while DataStore is loading (avoids flicker)
+    if (!isInitialized) return
+
+    // No space configured → show setup screen
+    if (activeSpaceCode == null) {
+        SpaceSetupScreen(
+            onSpaceJoined = { /* DataStore update triggers recomposition */ },
+            viewModel = spaceViewModel,
+        )
+        return
+    }
+
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination

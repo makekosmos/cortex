@@ -59,6 +59,9 @@ interface TodoDao {
     @Query("SELECT * FROM todos WHERE isTrashed = 1 ORDER BY createdAt DESC")
     fun getTrash(): Flow<List<TodoItem>>
 
+    @Query("SELECT * FROM todos WHERE isTrashed = 0 ORDER BY createdAt ASC")
+    suspend fun getAllForSync(): List<TodoItem>
+
     @Query("DELETE FROM todos")
     suspend fun deleteAll()
 

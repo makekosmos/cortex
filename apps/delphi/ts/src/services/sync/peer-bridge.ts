@@ -27,16 +27,20 @@ export function broadcastToPeers(change: ArkChange): void {
   const deviceId = getDeviceId();
   localSeq += 1;
 
-  const peerChange = {
-    type: "change" as const,
-    event_id: change.event_id,
-    change_type: change.change_type,
-    data: change.data,
-    origin_device: deviceId,
-    origin_seq: localSeq,
-    hlc: HLC.now(deviceId).toString(),
-    hop_path: [deviceId],
-  };
+  // Deep-clone to strip Vue 3 reactive proxies — Electron IPC structured clone
+  // cannot serialize Proxy objects.
+  const peerChange = JSON.parse(
+    JSON.stringify({
+      type: "change",
+      event_id: change.event_id,
+      change_type: change.change_type,
+      data: change.data,
+      origin_device: deviceId,
+      origin_seq: localSeq,
+      hlc: HLC.now(deviceId).toString(),
+      hop_path: [deviceId],
+    }),
+  );
 
   window.electronAPI.invoke("peer:broadcastChange", peerChange).catch((err) => {
     console.warn("[PeerBridge] Failed to broadcast change:", err);
@@ -56,4 +60,30 @@ export function setupMeshFromArkKey(apiKey: string): void {
     .catch((err) => {
       console.warn("[PeerBridge] Failed to set mesh credentials:", err);
     });
+}
+
+/**
+ * Set up mesh credentials in the main process from a space code.
+ * The space code IS the mesh secret — same call, different source.
+ */
+export function setupMeshFromSpaceCode(code: string): void {
+  if (!window.electronAPI?.invoke) return;
+
+  const deviceId = getDeviceId();
+  // Use the raw code (no dashes) as the mesh secret
+  const meshSecret = code.replace(/[-\s]/g, "").toUpperCase();
+  window.electronAPI
+    .invoke("peer:setMeshCredentials", meshSecret, deviceId, "Delphi Electron")
+    .catch((err) => {
+      console.warn(
+        "[PeerBridge] Failed to set mesh credentials from space code:",
+        err,
+      );
+    });
+}
+
+/** Stop the P2P mesh (called when leaving a space). */
+export function stopMesh(): void {
+  if (!window.electronAPI?.invoke) return;
+  window.electronAPI.invoke("peer:stop").catch(() => {});
 }

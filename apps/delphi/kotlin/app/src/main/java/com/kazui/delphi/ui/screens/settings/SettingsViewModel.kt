@@ -6,72 +6,88 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kazui.delphi.data.space.SpaceManager
+import com.kazui.delphi.data.sync.ArkPeerManager
 import com.kazui.delphi.data.sync.ArkSyncClient
+import com.kazui.delphi.data.sync.LanSyncClient
+import com.kazui.delphi.data.sync.LanSyncState
+import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.data.sync.SyncStatus
 import com.kazui.delphi.data.sync.parseConnectionString
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val arkSyncClient: ArkSyncClient,
+    private val peerManager: PeerManager,
+    private val spaceManager: SpaceManager,
     private val dataStore: DataStore<Preferences>,
+    // Legacy — kept for backward compat
+    private val arkSyncClient: ArkSyncClient,
+    private val arkPeerManager: ArkPeerManager,
 ) : ViewModel() {
 
-    private val ARK_URL_KEY = stringPreferencesKey("ark_url")
-    private val ARK_KEY_KEY = stringPreferencesKey("ark_api_key")
+    val activeSpaceCode: StateFlow<String?> = spaceManager.activeSpaceCode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // PeerManager state
+    val lanSyncState: StateFlow<LanSyncState> = peerManager.lanSyncState
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LanSyncState.DISCONNECTED)
+
+    val connectedPeerCount: StateFlow<Int> = peerManager.connectedPeerCount
+    val connectedPeerNames: StateFlow<List<String>> = peerManager.connectedPeerNames
+
+    // Legacy Ark relay
     val syncStatus: StateFlow<SyncStatus> = arkSyncClient.status
 
-    private val _savedUrl = MutableStateFlow<String?>(null)
-    val savedUrl: StateFlow<String?> = _savedUrl.asStateFlow()
-
-    init {
+    fun leaveSpace() {
         viewModelScope.launch {
-            dataStore.data.first().let { prefs ->
-                _savedUrl.value = prefs[ARK_URL_KEY]
-                val url = prefs[ARK_URL_KEY]
-                val key = prefs[ARK_KEY_KEY]
-                if (!url.isNullOrBlank() && !key.isNullOrBlank()) {
-                    arkSyncClient.connect(url, key)
-                }
-            }
+            peerManager.stop()
+            spaceManager.clearActiveSpaceCode()
         }
     }
 
+    fun formatSpaceCode(code: String): String = spaceManager.formatCode(code)
+
+    fun getQrPayload(): String {
+        val code = activeSpaceCode.value ?: return ""
+        return spaceManager.generateQrPayload(code)
+    }
+
+    // Legacy methods preserved for hidden section
     fun connect(input: String) {
         val conn = parseConnectionString(input) ?: return
         viewModelScope.launch {
+            val urlKey = stringPreferencesKey("ark_url")
+            val keyKey = stringPreferencesKey("ark_api_key")
             dataStore.edit { prefs ->
-                prefs[ARK_URL_KEY] = conn.serverUrl
-                prefs[ARK_KEY_KEY] = conn.apiKey
+                prefs[urlKey] = conn.serverUrl
+                prefs[keyKey] = conn.apiKey
             }
-            _savedUrl.value = conn.serverUrl
             arkSyncClient.connect(conn.serverUrl, conn.apiKey)
         }
     }
 
     fun disconnect() {
         viewModelScope.launch {
+            val urlKey = stringPreferencesKey("ark_url")
+            val keyKey = stringPreferencesKey("ark_api_key")
             dataStore.edit { prefs ->
-                prefs.remove(ARK_URL_KEY)
-                prefs.remove(ARK_KEY_KEY)
+                prefs.remove(urlKey)
+                prefs.remove(keyKey)
             }
-            _savedUrl.value = null
             arkSyncClient.disconnect()
         }
     }
 
     fun resetSync() {
         arkSyncClient.resetAndResync()
-    }
-
-    fun clearLocalData() {
-        arkSyncClient.clearLocalData()
     }
 }

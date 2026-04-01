@@ -1,36 +1,141 @@
 import SwiftUI
+import CoreImage.CIFilterBuiltins
 
 struct SyncSettingsView: View {
     @Bindable var settings: SyncSettings
     var syncClient: ArkSyncClient
+    var peerManager: PeerManager?
 
     @State private var connectionCode = ""
     @State private var connectionError: String?
     @State private var connectionSuccess = false
+    @State private var showLegacySync = false
+
+    private let spaceManager = SpaceManager()
 
     var body: some View {
         Form {
-            if settings.isConfigured {
-                pairedSection
-            } else {
-                pairingSection
+            // Space section — always visible when space is configured
+            if settings.isSpaceConfigured {
+                spaceSection
+                peersSection
+                qrSection
+                leaveSpaceSection
             }
 
-            connectionSection
+            // Ark WS relay — legacy, hidden by default
+            if showLegacySync {
+                if settings.isConfigured {
+                    pairedSection
+                } else {
+                    pairingSection
+                }
 
-            if settings.isConfigured {
-                actionsSection
+                connectionSection
+
+                if settings.isConfigured {
+                    actionsSection
+                }
             }
-
-            clearDataSection
 
             deviceSection
+
+            Section {
+                Button(showLegacySync ? "Скрыть Ark WS (legacy)" : "Показать Ark WS (legacy)") {
+                    showLegacySync.toggle()
+                }
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            }
         }
         .formStyle(.grouped)
         .frame(minWidth: 400)
     }
 
-    // MARK: - Pairing (not yet paired)
+    // MARK: - Space
+
+    private var spaceSection: some View {
+        Section("Пространство") {
+            if let code = settings.spaceCode {
+                LabeledContent("Код пространства") {
+                    Text(spaceManager.formatCode(code))
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+            }
+        }
+    }
+
+    // MARK: - Connected Peers
+
+    private var peersSection: some View {
+        Section("Устройства") {
+            if let pm = peerManager {
+                HStack {
+                    Circle()
+                        .fill(pm.connectedPeerCount > 0 ? .green : .orange)
+                        .frame(width: 8, height: 8)
+                    Text(pm.connectedPeerCount > 0
+                        ? "Подключено: \(pm.connectedPeerCount)"
+                        : "Нет подключённых устройств")
+                        .foregroundStyle(.secondary)
+                }
+
+                if !pm.connectedPeerNames.isEmpty {
+                    ForEach(pm.connectedPeerNames, id: \.self) { name in
+                        HStack {
+                            Image(systemName: "desktopcomputer")
+                                .foregroundStyle(.secondary)
+                            Text(name)
+                        }
+                    }
+                }
+            } else {
+                Text("Синхронизация не запущена")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - QR Code
+
+    private var qrSection: some View {
+        Section("Поделиться") {
+            if let code = settings.spaceCode {
+                let addresses = getOwnAddresses()
+                let qrPayload = spaceManager.generateQrPayload(code: code, addresses: addresses)
+
+                if let qrImage = generateQRCode(from: qrPayload) {
+                    HStack {
+                        Spacer()
+                        Image(nsImage: qrImage)
+                            .interpolation(.none)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 160, height: 160)
+                            .cornerRadius(8)
+                        Spacer()
+                    }
+                }
+
+                Text("Отсканируйте QR на другом устройстве для присоединения к пространству.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Leave Space
+
+    private var leaveSpaceSection: some View {
+        Section {
+            Button("Покинуть пространство", role: .destructive) {
+                NotificationCenter.default.post(name: .didLeaveSpace, object: nil)
+            }
+        }
+    }
+
+    // MARK: - Pairing (not yet paired) — legacy
 
     private var pairingSection: some View {
         Section {
@@ -73,7 +178,7 @@ struct SyncSettingsView: View {
         }
     }
 
-    // MARK: - Paired state
+    // MARK: - Paired state — legacy
 
     private var pairedSection: some View {
         Section("Ark сервер") {
@@ -92,7 +197,7 @@ struct SyncSettingsView: View {
         }
     }
 
-    // MARK: - Connection status
+    // MARK: - Connection status — legacy
 
     private var connectionSection: some View {
         Section("Подключение") {
@@ -138,7 +243,7 @@ struct SyncSettingsView: View {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - Actions — legacy
 
     private var actionsSection: some View {
         Section {
@@ -165,16 +270,6 @@ struct SyncSettingsView: View {
         }
     }
 
-    // MARK: - Clear data (always visible)
-
-    private var clearDataSection: some View {
-        Section {
-            Button("Очистить данные", role: .destructive) {
-                syncClient.clearLocalData()
-            }
-        }
-    }
-
     // MARK: - Device info
 
     private var deviceSection: some View {
@@ -194,7 +289,7 @@ struct SyncSettingsView: View {
         return String(key.prefix(4)) + "..." + String(key.suffix(4))
     }
 
-    /// Parse ark://host:port?key=SECRET → (serverUrl, apiKey)
+    /// Parse ark://host:port?key=SECRET -> (serverUrl, apiKey)
     private func parseConnectionString(_ input: String) -> (serverUrl: String, apiKey: String)? {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("ark://") else { return nil }
@@ -236,5 +331,22 @@ struct SyncSettingsView: View {
         connectionCode = ""
         connectionSuccess = false
         connectionError = nil
+    }
+
+    // MARK: - QR Code Generation
+
+    private func generateQRCode(from string: String) -> NSImage? {
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(string.utf8)
+        filter.correctionLevel = "M"
+
+        guard let outputImage = filter.outputImage else { return nil }
+
+        let scale = 8.0
+        let scaled = outputImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: scaled.extent.width, height: scaled.extent.height))
     }
 }

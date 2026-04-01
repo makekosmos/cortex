@@ -35,6 +35,8 @@ export class PeerManager {
   private stopped = false;
 
   private onChangeHandler: ChangeHandler | null = null;
+  private onPeerConnectHandler: ((deviceId: string) => void) | null = null;
+  private onPeerDisconnectHandler: ((deviceId: string, remaining: number) => void) | null = null;
 
   constructor(opts: {
     meshSecret: string;
@@ -60,11 +62,41 @@ export class PeerManager {
         this.onChangeHandler(change, fromDevice);
       }
     });
+
+    // Fire onPeerConnectHandler when server accepts an inbound peer
+    this.server.onPeerConnect((deviceId) => {
+      this.onPeerConnectHandler?.(deviceId);
+    });
+
+    // Fire onPeerDisconnectHandler when an inbound peer disconnects
+    this.server.onPeerDisconnect((deviceId) => {
+      this.onPeerDisconnectHandler?.(deviceId, this.connectedPeerCount);
+    });
   }
 
   /** Register a handler for incoming changes from any peer. */
   onChange(handler: ChangeHandler): void {
     this.onChangeHandler = handler;
+  }
+
+  /** Register a handler called when a new peer completes authentication. */
+  onPeerConnect(handler: (deviceId: string) => void): void {
+    this.onPeerConnectHandler = handler;
+  }
+
+  /** Register a handler called when a peer disconnects. */
+  onPeerDisconnect(handler: (deviceId: string, remaining: number) => void): void {
+    this.onPeerDisconnectHandler = handler;
+  }
+
+  /** Count of currently connected peers (inbound + outbound). */
+  get connectedPeerCount(): number {
+    return this.outbound.size + this.server.getConnectedDevices().length;
+  }
+
+  /** Get the port this peer server is listening on. */
+  getPort(): number {
+    return this.server.getPort();
   }
 
   async start(): Promise<void> {
@@ -176,6 +208,7 @@ export class PeerManager {
         authenticated = true;
         this.outbound.set(peer.deviceId, ws);
         console.log(`[PeerManager] Connected to peer: ${peer.deviceName}`);
+        this.onPeerConnectHandler?.(peer.deviceId);
         return;
       }
 
@@ -204,6 +237,7 @@ export class PeerManager {
       this.outbound.delete(peer.deviceId);
       if (authenticated) {
         console.log(`[PeerManager] Disconnected from peer: ${peer.deviceName}`);
+        this.onPeerDisconnectHandler?.(peer.deviceId, this.connectedPeerCount);
       }
       this.scheduleReconnect(peer);
     });

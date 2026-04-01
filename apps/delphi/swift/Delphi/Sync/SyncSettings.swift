@@ -49,6 +49,19 @@ final class SyncSettings {
         isConfigured
     }
 
+    /// Active Ark Space code (raw, no dashes). Mirrors SpaceManager.activeSpaceCode.
+    var spaceCode: String? {
+        get { defaults.string(forKey: "ark.space.activeCode") }
+        set {
+            if let v = newValue { defaults.set(v, forKey: "ark.space.activeCode") }
+            else { defaults.removeObject(forKey: "ark.space.activeCode") }
+        }
+    }
+
+    var isSpaceConfigured: Bool {
+        !(spaceCode ?? "").isEmpty
+    }
+
     init() {
         serverUrl = defaults.string(forKey: Keys.serverUrl) ?? ""
         apiKey = defaults.string(forKey: Keys.apiKey) ?? ""

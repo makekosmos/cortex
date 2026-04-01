@@ -49,7 +49,7 @@ describe("api client helpers", () => {
   });
 
   it("logs in and stores token + passphrase", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ token: "jwt-token", userId: "u1" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },

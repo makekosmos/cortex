@@ -43,6 +43,9 @@ final class ArkPeerManager {
     /// Called when a change arrives from any peer (inbound or outbound).
     var onPeerChange: (([String: Any], String) -> Void)?
 
+    /// Called when a new peer successfully authenticates (inbound or outbound).
+    var onPeerConnected: ((String) -> Void)?
+
     // MARK: - Init
 
     init(meshSecret: String, deviceId: String, deviceName: String, port: UInt16 = 9473) {
@@ -56,6 +59,13 @@ final class ArkPeerManager {
         self.server.onPeerChange = { [weak self] change, fromDevice in
             Task { @MainActor in
                 self?.handleIncomingChange(change, fromDevice: fromDevice)
+            }
+        }
+
+        // Fire onPeerConnected when server accepts an inbound peer
+        self.server.onPeerConnect = { [weak self] deviceId in
+            Task { @MainActor in
+                self?.onPeerConnected?(deviceId)
             }
         }
     }
@@ -356,6 +366,7 @@ final class ArkPeerManager {
 
                 // Connected
                 outbound[peerDeviceId] = ws
+                onPeerConnected?(peerDeviceId)
                 updateConnectedPeers()
                 logger.info("Connected to peer: \(peerDeviceName) (\(peerDeviceId))")
 

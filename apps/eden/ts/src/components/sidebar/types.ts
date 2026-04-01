@@ -1,17 +1,19 @@
-export type SortMode = 'updated_at' | 'created_at' | 'title'
+export type SpaceId = "my-space" | "all-objects" | "all-notes" | "all-properties" | "diary";
 
-export type DragPayload = { type: 'entry'; id: string }
+export type SortMode = "updated_at" | "created_at" | "title";
+
+export type DragPayload = { type: "entry"; id: string };
 
 export function sortEntries(entries: Entry[], sortMode: SortMode) {
   return [...entries].sort((entryA, entryB) => {
-    if (sortMode === 'title') {
-      return (entryA.title || 'Без названия').localeCompare(entryB.title || 'Без названия', 'ru')
+    if (sortMode === "title") {
+      return (entryA.title || "Без названия").localeCompare(entryB.title || "Без названия", "ru");
     }
 
-    if (sortMode === 'created_at') {
-      return entryB.created_at - entryA.created_at
+    if (sortMode === "created_at") {
+      return entryB.created_at - entryA.created_at;
     }
 
-    return entryB.updated_at - entryA.updated_at
-  })
+    return entryB.updated_at - entryA.updated_at;
+  });
 }

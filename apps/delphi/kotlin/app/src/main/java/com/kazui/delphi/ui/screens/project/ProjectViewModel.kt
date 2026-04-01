@@ -9,6 +9,7 @@ import com.kazui.delphi.data.model.Project
 import com.kazui.delphi.data.model.TodoItem
 import com.kazui.delphi.data.sync.ArkEventMapper
 import com.kazui.delphi.data.sync.ArkSyncClient
+import com.kazui.delphi.data.sync.PeerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,7 @@ class ProjectViewModel @Inject constructor(
     private val todoDao: TodoDao,
     private val projectDao: ProjectDao,
     private val arkSyncClient: ArkSyncClient,
+    private val peerManager: PeerManager,
 ) : ViewModel() {
 
     private val projectId: String = checkNotNull(savedStateHandle["projectId"])
@@ -47,6 +49,7 @@ class ProjectViewModel @Inject constructor(
             )
             todoDao.upsert(todo)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(todo, "create", ""))
+            peerManager.broadcastTodoChange(todo)
         }
     }
 
@@ -59,6 +62,7 @@ class ProjectViewModel @Inject constructor(
             }
             todoDao.upsert(updated)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
+            peerManager.broadcastTodoChange(updated)
         }
     }
 }

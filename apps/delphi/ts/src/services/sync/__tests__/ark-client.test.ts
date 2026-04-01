@@ -162,7 +162,7 @@ describe("fetchTasksFromArk — deduplication", () => {
   it("returns [] when Ark URL is not configured", async () => {
     localStorage.removeItem("delphi.ark_url");
     // fetch should not even be called
-    const spy = vi.fn();
+    const spy = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", spy);
 
     const todos = await fetchTasksFromArk();

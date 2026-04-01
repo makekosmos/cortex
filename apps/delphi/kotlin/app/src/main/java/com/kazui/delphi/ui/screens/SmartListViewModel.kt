@@ -7,6 +7,7 @@ import com.kazui.delphi.data.model.SmartList
 import com.kazui.delphi.data.model.TodoItem
 import com.kazui.delphi.data.sync.ArkEventMapper
 import com.kazui.delphi.data.sync.ArkSyncClient
+import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.domain.filter.TodoFilterService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,6 +23,7 @@ import java.util.UUID
 abstract class SmartListViewModel(
     protected val todoDao: TodoDao,
     protected val arkSyncClient: ArkSyncClient,
+    protected val peerManager: PeerManager,
     private val smartList: SmartList,
     private val defaultIsToday: Boolean = false,
     private val defaultIsSomeday: Boolean = false,
@@ -55,6 +57,7 @@ abstract class SmartListViewModel(
             )
             todoDao.upsert(todo)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(todo, "create", ""))
+            peerManager.broadcastTodoChange(todo)
         }
     }
 
@@ -67,6 +70,7 @@ abstract class SmartListViewModel(
             }
             todoDao.upsert(updated)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
+            peerManager.broadcastTodoChange(updated)
         }
     }
 }

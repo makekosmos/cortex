@@ -1,12 +1,18 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import { arkSync, todoItemToArkChange } from "@/services/sync/ark-client";
+import {
+  arkSync,
+  todoItemToArkChange,
+  projectToArkChange,
+} from "@/services/sync/ark-client";
+import { broadcastToPeers } from "@/services/sync/peer-bridge";
 import {
   localDbUpsertTodo,
   localDbDeleteTodo,
   localDbUpsertProject,
   localDbDeleteProject,
 } from "@/services/storage/local-db";
+import type { SyncEntityType } from "@/services/sync/lan-protocol";
 import type {
   TodoItem,
   Project,
@@ -50,6 +56,42 @@ function mapTodo(
   fn: (t: TodoItem) => TodoItem,
 ): TodoItem[] {
   return todos.map((t) => (t.id === id ? fn(t) : t));
+}
+
+// ---------------------------------------------------------------------------
+// LAN Sync broadcast helper
+// ---------------------------------------------------------------------------
+
+function broadcastToLanSync(
+  entityType: SyncEntityType,
+  id: string,
+  data: Record<string, unknown>,
+  deleted?: boolean,
+): void {
+  if (
+    typeof window === "undefined" ||
+    !(window as unknown as Record<string, unknown>).electronAPI
+  )
+    return;
+  const electronAPI = (
+    window as unknown as Record<
+      string,
+      { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
+    >
+  ).electronAPI;
+  if (!electronAPI?.invoke) return;
+  // Deep-clone to strip Vue 3 reactive proxies — structured clone (Electron IPC)
+  // cannot serialize Proxy objects.
+  const plainData = JSON.parse(JSON.stringify(data));
+  electronAPI
+    .invoke("lan-sync:broadcastChange", {
+      type: entityType,
+      id,
+      data: plainData,
+      hlc: "",
+      deleted,
+    })
+    .catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +161,14 @@ export const useTodoStore = defineStore("todos", () => {
     const todo = createTodoItem(params);
     todos.value = [todo, ...todos.value];
     void localDbUpsertTodo(todo);
-    arkSync.sendChange(todoItemToArkChange(todo, "create"));
+    const change = todoItemToArkChange(todo, "create");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
+    broadcastToLanSync(
+      "todo",
+      todo.id,
+      todo as unknown as Record<string, unknown>,
+    );
     return todo;
   }
 
@@ -128,7 +177,14 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
     if (updated) {
       void localDbUpsertTodo(updated);
-      arkSync.sendChange(todoItemToArkChange(updated, "update"));
+      const change = todoItemToArkChange(updated, "update");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync(
+        "todo",
+        updated.id,
+        updated as unknown as Record<string, unknown>,
+      );
     }
   }
 
@@ -136,13 +192,28 @@ export const useTodoStore = defineStore("todos", () => {
     const todo = todos.value.find((t) => t.id === id);
     todos.value = todos.value.filter((t) => t.id !== id);
     void localDbDeleteTodo(id);
-    if (todo) arkSync.sendChange(todoItemToArkChange(todo, "delete"));
+    if (todo) {
+      const change = todoItemToArkChange(todo, "delete");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync("todo", id, {}, true);
+    }
   }
 
   /** Remove from local memory + DB without sending to server (used for full sync reconciliation). */
   function removeTodoLocal(id: string) {
     todos.value = todos.value.filter((t) => t.id !== id);
     void localDbDeleteTodo(id);
+  }
+
+  /** Remove project from local memory + DB without broadcasting (used for incoming sync). */
+  function removeProjectLocal(id: string) {
+    projects.value = projects.value.filter((p) => p.id !== id);
+    // Unlink todos from removed project
+    todos.value = todos.value.map((t) =>
+      t.projectId === id ? { ...t, projectId: null } : t,
+    );
+    void localDbDeleteProject(id);
   }
 
   function upsertTodo(todo: TodoItem) {
@@ -167,12 +238,26 @@ export const useTodoStore = defineStore("todos", () => {
     if (next) {
       newTodos = [next, ...newTodos];
       void localDbUpsertTodo(next);
-      arkSync.sendChange(todoItemToArkChange(next, "create"));
+      const nextChange = todoItemToArkChange(next, "create");
+      arkSync.sendChange(nextChange);
+      broadcastToPeers(nextChange);
+      broadcastToLanSync(
+        "todo",
+        next.id,
+        next as unknown as Record<string, unknown>,
+      );
     }
 
     todos.value = newTodos;
     void localDbUpsertTodo(completed);
-    arkSync.sendChange(todoItemToArkChange(completed, "update"));
+    const completedChange = todoItemToArkChange(completed, "update");
+    arkSync.sendChange(completedChange);
+    broadcastToPeers(completedChange);
+    broadcastToLanSync(
+      "todo",
+      completed.id,
+      completed as unknown as Record<string, unknown>,
+    );
   }
 
   function incompleteTodo(id: string) {
@@ -180,7 +265,14 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
     if (updated) {
       void localDbUpsertTodo(updated);
-      arkSync.sendChange(todoItemToArkChange(updated, "update"));
+      const change = todoItemToArkChange(updated, "update");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync(
+        "todo",
+        updated.id,
+        updated as unknown as Record<string, unknown>,
+      );
     }
   }
 
@@ -189,7 +281,14 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
     if (updated) {
       void localDbUpsertTodo(updated);
-      arkSync.sendChange(todoItemToArkChange(updated, "update"));
+      const change = todoItemToArkChange(updated, "update");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync(
+        "todo",
+        updated.id,
+        updated as unknown as Record<string, unknown>,
+      );
     }
   }
 
@@ -198,7 +297,14 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
     if (updated) {
       void localDbUpsertTodo(updated);
-      arkSync.sendChange(todoItemToArkChange(updated, "update"));
+      const change = todoItemToArkChange(updated, "update");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync(
+        "todo",
+        updated.id,
+        updated as unknown as Record<string, unknown>,
+      );
     }
   }
 
@@ -207,7 +313,14 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
     if (updated) {
       void localDbUpsertTodo(updated);
-      arkSync.sendChange(todoItemToArkChange(updated, "update"));
+      const change = todoItemToArkChange(updated, "update");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync(
+        "todo",
+        updated.id,
+        updated as unknown as Record<string, unknown>,
+      );
     }
   }
 
@@ -216,7 +329,14 @@ export const useTodoStore = defineStore("todos", () => {
     if (!todo) return null;
     const copy = duplicateTodoItem(todo);
     todos.value = [copy, ...todos.value];
-    arkSync.sendChange(todoItemToArkChange(copy, "create"));
+    const change = todoItemToArkChange(copy, "create");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
+    broadcastToLanSync(
+      "todo",
+      copy.id,
+      copy as unknown as Record<string, unknown>,
+    );
     return copy;
   }
 
@@ -274,6 +394,14 @@ export const useTodoStore = defineStore("todos", () => {
     const project = createProject(params);
     projects.value = [project, ...projects.value];
     void localDbUpsertProject(project);
+    const change = projectToArkChange(project, "create");
+    arkSync.sendChange(change);
+    broadcastToPeers(change);
+    broadcastToLanSync(
+      "project",
+      project.id,
+      project as unknown as Record<string, unknown>,
+    );
     return project;
   }
 
@@ -282,16 +410,33 @@ export const useTodoStore = defineStore("todos", () => {
       p.id === id ? { ...p, ...patch } : p,
     );
     const updated = projects.value.find((p) => p.id === id);
-    if (updated) void localDbUpsertProject(updated);
+    if (updated) {
+      void localDbUpsertProject(updated);
+      const change = projectToArkChange(updated, "update");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync(
+        "project",
+        updated.id,
+        updated as unknown as Record<string, unknown>,
+      );
+    }
   }
 
   function removeProject(id: string) {
+    const project = projects.value.find((p) => p.id === id);
     projects.value = projects.value.filter((p) => p.id !== id);
     // Unlink todos from removed project
     todos.value = todos.value.map((t) =>
       t.projectId === id ? { ...t, projectId: null } : t,
     );
     void localDbDeleteProject(id);
+    if (project) {
+      const change = projectToArkChange(project, "delete");
+      arkSync.sendChange(change);
+      broadcastToPeers(change);
+      broadcastToLanSync("project", id, {}, true);
+    }
   }
 
   function upsertProject(project: Project) {
@@ -407,6 +552,7 @@ export const useTodoStore = defineStore("todos", () => {
     updateTodo,
     removeTodo,
     removeTodoLocal,
+    removeProjectLocal,
     upsertTodo,
 
     // State transitions

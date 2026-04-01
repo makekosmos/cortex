@@ -1,5 +1,11 @@
 /// <reference types="vite/client" />
 
+declare module "*.vue" {
+  import type { DefineComponent } from "vue";
+  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>;
+  export default component;
+}
+
 interface Entry {
   id: string;
   title: string;
@@ -14,8 +20,8 @@ interface Entry {
   deleted_at: number | null;
 }
 
-type NoteFieldKind = 'text' | 'long_text' | 'number' | 'date' | 'boolean' | 'select' | 'image';
-type HeaderLayoutKind = 'default' | 'centered_profile';
+type NoteFieldKind = "text" | "long_text" | "number" | "date" | "boolean" | "select" | "image";
+type HeaderLayoutKind = "default" | "centered_profile";
 
 interface NoteTypeField {
   id: string;
@@ -66,7 +72,7 @@ type CreateFolderResult =
     }
   | {
       ok: false;
-      reason: 'duplicate_folder_name';
+      reason: "duplicate_folder_name";
       name: string;
     };
 
@@ -78,7 +84,7 @@ type MoveFolderResult =
     }
   | {
       ok: false;
-      reason: 'folder_not_found' | 'invalid_target' | 'duplicate_folder_name';
+      reason: "folder_not_found" | "invalid_target" | "duplicate_folder_name";
       message: string;
     };
 
@@ -89,14 +95,14 @@ type SaveEntryResult =
     }
   | {
       ok: false;
-      reason: 'duplicate_title';
+      reason: "duplicate_title";
       conflictingEntryId: string;
       title: string;
       folder_id: string | null;
     }
   | {
       ok: false;
-      reason: 'invalid_type_metadata';
+      reason: "invalid_type_metadata";
       message: string;
     };
 
@@ -107,7 +113,7 @@ type DeleteEntryResult =
     }
   | {
       ok: false;
-      reason: 'entry_not_found';
+      reason: "entry_not_found";
       message: string;
     };
 
@@ -118,12 +124,12 @@ type DeleteFolderResult =
     }
   | {
       ok: false;
-      reason: 'folder_not_found';
+      reason: "folder_not_found";
       message: string;
     }
   | {
       ok: false;
-      reason: 'folder_not_empty';
+      reason: "folder_not_empty";
       message: string;
       entryCount: number;
     };
@@ -135,12 +141,12 @@ type SaveNoteTypeResult =
     }
   | {
       ok: false;
-      reason: 'duplicate_slug' | 'invalid_definition';
+      reason: "duplicate_slug" | "invalid_definition";
       message: string;
     };
 
-type CodeToolsPreset = 'myagkiy' | 'balans' | 'strogiy';
-type CodeLintTrigger = 'on_save' | 'on_idle';
+type CodeToolsPreset = "myagkiy" | "balans" | "strogiy";
+type CodeLintTrigger = "on_save" | "on_idle";
 
 interface CodeToolsSettings {
   formatOnSave: boolean;
@@ -149,7 +155,7 @@ interface CodeToolsSettings {
 }
 
 interface CodeLintDiagnostic {
-  severity: 'error' | 'warning';
+  severity: "error" | "warning";
   message: string;
   line?: number;
   column?: number;
@@ -195,7 +201,11 @@ interface Window {
     setVaultPath: (path: string) => Promise<boolean>;
     exportMarkdownVault: () => Promise<ExportMarkdownVaultResult | null>;
     searchEntries: (query: string) => Promise<SearchResult[]>;
-    createFolder: (id: string, name: string, parentId?: string | null) => Promise<CreateFolderResult>;
+    createFolder: (
+      id: string,
+      name: string,
+      parentId?: string | null,
+    ) => Promise<CreateFolderResult>;
     listFolders: () => Promise<Folder[]>;
     listNoteTypes: () => Promise<NoteType[]>;
     saveNoteType: (noteType: NoteType) => Promise<SaveNoteTypeResult>;
@@ -231,6 +241,5 @@ interface Window {
     minimize: () => void;
     maximize: () => void;
     close: () => void;
-  }
+  };
 }
-
