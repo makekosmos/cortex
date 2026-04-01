@@ -84,6 +84,8 @@ const connectedPeerNames = shallowRef<string[]>([]);
 
 const showQrOverlay = shallowRef(false);
 const fullQrDataUrl = shallowRef("");
+const qrOverlayPayload = shallowRef("");
+const qrLinkCopied = shallowRef(false);
 
 // Generate large QR on demand
 async function openQrOverlay() {
@@ -99,6 +101,7 @@ async function openQrOverlay() {
         )) as string) || "";
     }
     if (!payload) payload = formatSpaceCode(code);
+    qrOverlayPayload.value = payload;
     fullQrDataUrl.value = await QRCode.toDataURL(payload, {
       width: 512,
       margin: 3,
@@ -109,6 +112,17 @@ async function openQrOverlay() {
     fullQrDataUrl.value = "";
   }
   showQrOverlay.value = true;
+}
+
+async function copyQrLink() {
+  if (!qrOverlayPayload.value) return;
+  try {
+    await navigator.clipboard.writeText(qrOverlayPayload.value);
+    qrLinkCopied.value = true;
+    setTimeout(() => (qrLinkCopied.value = false), 2000);
+  } catch {
+    /* clipboard blocked */
+  }
 }
 
 const connectionDotClass = computed(() => {
@@ -732,7 +746,7 @@ onUnmounted(() => {
             class="mt-3 border-t border-(--border) pt-3"
           >
             <p class="mb-1 text-xs text-(--muted-foreground)">Пространство</p>
-            <p class="font-mono text-sm font-bold tracking-widest">
+            <p class="break-all font-mono text-sm font-bold tracking-wide">
               {{ formatSpaceCode(activeSpaceCode) }}
             </p>
             <button
@@ -806,14 +820,23 @@ onUnmounted(() => {
           height="320"
         />
         <p class="max-w-xs text-center text-xs text-(--muted-foreground)">
-          Отсканируйте на другом устройстве для подключения
+          Отсканируйте QR или вставьте ссылку на другом устройстве
         </p>
-        <button
-          class="rounded-md border border-(--border) px-4 py-2 text-sm transition-colors hover:bg-(--muted)"
-          @click="showQrOverlay = false"
-        >
-          Закрыть
-        </button>
+        <div class="flex w-full gap-2">
+          <button
+            v-if="qrOverlayPayload"
+            class="flex-1 rounded-md bg-(--foreground) px-4 py-2 text-sm font-medium text-(--background) transition-opacity hover:opacity-80"
+            @click="copyQrLink"
+          >
+            {{ qrLinkCopied ? "Скопировано!" : "Скопировать ссылку" }}
+          </button>
+          <button
+            class="rounded-md border border-(--border) px-4 py-2 text-sm transition-colors hover:bg-(--muted)"
+            @click="showQrOverlay = false"
+          >
+            Закрыть
+          </button>
+        </div>
       </div>
     </div>
   </div>

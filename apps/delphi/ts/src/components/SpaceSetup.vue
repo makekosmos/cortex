@@ -23,6 +23,19 @@ const joinError = shallowRef("");
 const qrDataUrl = shallowRef("");
 
 const isElectron = typeof window !== "undefined" && !!window.electronAPI;
+const qrPayloadRaw = shallowRef(""); // full ark://join?... for copy
+const copied = shallowRef(false);
+
+async function copyLink() {
+  if (!qrPayloadRaw.value) return;
+  try {
+    await navigator.clipboard.writeText(qrPayloadRaw.value);
+    copied.value = true;
+    setTimeout(() => (copied.value = false), 2000);
+  } catch {
+    /* clipboard blocked */
+  }
+}
 
 async function generateQr(payload: string) {
   if (!payload) {
@@ -54,6 +67,7 @@ async function handleCreate() {
         "sync:getOwnAddresses",
       )) as string[];
       const payload = generateQrPayload(code, addresses ?? []);
+      qrPayloadRaw.value = payload;
       await generateQr(payload);
 
       // Build extended code from first LAN IPv4 address
@@ -150,10 +164,17 @@ function handleJoin() {
           />
         </div>
         <div
-          class="bg-(--muted) mb-5 rounded-lg p-4 text-center font-mono text-2xl tracking-widest"
+          class="bg-(--muted) mb-3 rounded-lg p-4 text-center font-mono text-2xl tracking-widest"
         >
           {{ formatSpaceCode(generatedCode) }}
         </div>
+        <button
+          v-if="qrPayloadRaw"
+          class="border-(--border) mb-5 w-full rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-(--muted)"
+          @click="copyLink"
+        >
+          {{ copied ? "Скопировано!" : "Скопировать ссылку для подключения" }}
+        </button>
         <button
           class="bg-(--foreground) text-(--background) w-full rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
           :disabled="!generatedCode"
