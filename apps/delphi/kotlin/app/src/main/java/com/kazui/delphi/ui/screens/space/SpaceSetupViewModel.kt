@@ -54,6 +54,12 @@ class SpaceSetupViewModel @Inject constructor(
     /** Parse a QR payload. Returns (normalizedCode, addresses) or null. */
     fun parseQrPayload(payload: String): Pair<String, List<String>>? = spaceManager.parseQrPayload(payload)
 
+    /** Generate a 19-char extended code with embedded LAN IPv4. Returns null if no LAN IP. */
+    fun generateExtendedCode(code: String): String? = spaceManager.generateExtendedCode(code)
+
+    /** Parse a 19-char extended code. Returns (secret, addresses) or null. */
+    fun parseExtendedCode(code: String): Pair<String, List<String>>? = spaceManager.parseExtendedCode(code)
+
     /**
      * Create a new space: save code, start PeerManager (server + clients).
      */

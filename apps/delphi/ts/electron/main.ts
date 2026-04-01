@@ -32,6 +32,8 @@ const isDev = !app.isPackaged;
 let peerManager: PeerManager | null = null;
 let syncServer: SyncServer | null = null;
 const syncClients: Map<string, SyncClient> = new Map(); // device_id -> SyncClient
+let currentDeviceId = '';
+let currentDeviceName = 'Delphi Electron';
 
 function getDataDir(): string {
   const dir = path.join(app.getPath('appData'), 'delphi', 'data');
@@ -308,8 +310,61 @@ function startSyncClientForPeer(peer: PeerRecord, deviceId: string, deviceName: 
   client.start();
 }
 
+/** Connect to seed addresses from QR payload — used on first join when no known peers exist. */
+function connectToSeedAddresses(addresses: string[], deviceId: string, deviceName: string, ownAddresses: string[]): void {
+  if (!syncServer || addresses.length === 0) return;
+
+  // Skip if these addresses belong to an already-known peer
+  const knownPeers = syncServer.getKnownPeers();
+  const alreadyKnown = knownPeers.some(p => p.addresses.some(a => addresses.includes(a)));
+  if (alreadyKnown) return;
+
+  const tempId = `seed-${Date.now()}`;
+  let client: SyncClient;
+
+  client = new SyncClient({
+    peer: { device_id: tempId, device_name: 'Bootstrap', addresses, last_seen: new Date().toISOString() },
+    deviceId,
+    deviceName,
+    spaceId: '',
+    ownAddresses,
+    onChange: (entity) => {
+      notifyRendererSyncChange(entity);
+      syncServer?.broadcastLiveChange(entity, tempId);
+    },
+    onConnected: (peerDeviceId, peerDeviceName) => {
+      // Re-key from temp ID to real device ID
+      syncClients.delete(tempId);
+      if (!syncClients.has(peerDeviceId)) {
+        syncClients.set(peerDeviceId, client);
+      }
+      syncServer?.registerExternalPeer(peerDeviceId, peerDeviceName, addresses);
+      notifyRendererPeerConnect(peerDeviceId);
+    },
+    onDisconnected: (peerDeviceId) => {
+      syncClients.delete(peerDeviceId);
+      syncClients.delete(tempId);
+      notifyRendererPeerDisconnect(peerDeviceId, getTotalConnectedPeerCount());
+    },
+    onPeerList: (peers) => {
+      if (!syncServer) return;
+      const knownPeers = syncServer.getKnownPeers();
+      const merged = mergePeerRecords(knownPeers, peers.filter(p => p.device_id !== deviceId));
+      for (const newPeer of merged) {
+        if (!syncClients.has(newPeer.device_id) && !syncServer.isConnectedTo(newPeer.device_id)) {
+          startSyncClientForPeer(newPeer, deviceId, deviceName, '', ownAddresses);
+        }
+      }
+    },
+  });
+
+  syncClients.set(tempId, client);
+  client.start();
+  console.log(`[Main] Connecting to seed addresses: ${addresses.join(', ')}`);
+}
+
 /** Start the sync server and connect to known peers. */
-async function startSync(deviceId: string, deviceName?: string): Promise<void> {
+async function startSync(deviceId: string, deviceName?: string, seedAddresses?: string[]): Promise<void> {
   if (syncServer) {
     syncServer.stop();
     syncServer = null;
@@ -321,8 +376,11 @@ async function startSync(deviceId: string, deviceName?: string): Promise<void> {
   }
   syncClients.clear();
 
+  currentDeviceId = deviceId;
+  currentDeviceName = deviceName ?? 'Delphi Electron';
+
   const ownAddresses = collectOwnAddresses();
-  const name = deviceName ?? 'Delphi Electron';
+  const name = currentDeviceName;
 
   syncServer = new SyncServer();
 
@@ -353,6 +411,11 @@ async function startSync(deviceId: string, deviceName?: string): Promise<void> {
     for (const peer of knownPeers) {
       startSyncClientForPeer(peer, deviceId, name, '', ownAddresses);
     }
+
+    // Connect to seed addresses from QR payload (first join, no known peers)
+    if (seedAddresses && seedAddresses.length > 0) {
+      connectToSeedAddresses(seedAddresses, deviceId, name, ownAddresses);
+    }
   } catch (err) {
     console.error('[Main] Failed to start sync server:', err);
     syncServer = null;
@@ -360,8 +423,8 @@ async function startSync(deviceId: string, deviceName?: string): Promise<void> {
 }
 
 /** IPC: start sync (spaceId kept for backward compat but ignored). */
-ipcMain.handle('lan-sync:start', async (_e, _spaceId: string | undefined, deviceId: string, deviceName?: string) => {
-  await startSync(deviceId, deviceName);
+ipcMain.handle('lan-sync:start', async (_e, _spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
+  await startSync(deviceId, deviceName, seedAddresses);
   return syncServer !== null;
 });
 

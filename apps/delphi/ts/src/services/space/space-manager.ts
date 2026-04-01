@@ -2,12 +2,15 @@
  * Ark Space manager -- generates, stores, and retrieves space codes.
  *
  * v3: 12-character random Base32-Crockford code, format XXXX-XXXX-XXXX.
+ * v4: 19-character extended code = 12-char secret + 7-char encoded IPv4,
+ *     format XXXX-XXXX-XXXX-XXXX-XXX. Encodes primary LAN IP for codeless join.
  * All peers are equal -- the code is used as HMAC secret for auth.
  *
  * QR payload: ark://join?code=XXXX-XXXX-XXXX&addrs=addr1,addr2
  */
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // no I, L, O, U
+const LAN_PORT = 21531;
 const SPACES_KEY = "delphi.spaces";
 const ACTIVE_SPACE_KEY = "delphi.active_space";
 
@@ -25,22 +28,79 @@ export function generateSpaceCode(): string {
 }
 
 /**
- * Format code with dashes -- handles both 7-char (XXXX-XXX, legacy) and
- * 12-char (XXXX-XXXX-XXXX) codes.
+ * Encode an IPv4 address string ("192.168.1.70") into 7 Base32-Crockford chars.
+ * Packs 32 bits into 35-bit (7 × 5-bit) space, padding 3 low bits with zero.
+ */
+export function encodeIpv4(ipv4: string): string | null {
+  const m = ipv4.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const parts = [+m[1], +m[2], +m[3], +m[4]];
+  if (parts.some((n) => n < 0 || n > 255)) return null;
+  const n = BigInt(
+    ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0,
+  );
+  const shifted = n << 3n; // 32 bits → 35 bits, low 3 bits = 0
+  let result = "";
+  for (let i = 6; i >= 0; i--) {
+    result = CROCKFORD[Number((shifted >> BigInt(i * 5)) & 0x1fn)] + result;
+  }
+  return result;
+}
+
+/**
+ * Decode 7 Base32-Crockford chars back to an IPv4 string ("192.168.1.70").
+ */
+export function decodeIpv4(encoded: string): string | null {
+  const clean = encoded.toUpperCase();
+  if (clean.length !== 7) return null;
+  if (![...clean].every((c) => CROCKFORD.includes(c))) return null;
+  let value = 0n;
+  for (const c of clean) {
+    value = (value << 5n) | BigInt(CROCKFORD.indexOf(c));
+  }
+  value = value >> 3n; // drop the 3 padding bits
+  const parts = [
+    Number((value >> 24n) & 0xffn),
+    Number((value >> 16n) & 0xffn),
+    Number((value >> 8n) & 0xffn),
+    Number(value & 0xffn),
+  ];
+  return `${parts[0]}.${parts[1]}.${parts[2]}.${parts[3]}`;
+}
+
+/**
+ * Build an extended 19-char code = 12-char secret + 7-char encoded IPv4.
+ * Returns null if the address can't be encoded (e.g. IPv6 or invalid).
+ */
+export function generateExtendedCode(
+  code: string,
+  primaryIpv4: string,
+): string | null {
+  const encoded = encodeIpv4(primaryIpv4);
+  if (!encoded) return null;
+  return code.replace(/[-\s]/g, "").toUpperCase().slice(0, 12) + encoded;
+}
+
+/**
+ * Format code with dashes -- handles legacy 7-char, standard 12-char,
+ * and extended 19-char (XXXX-XXXX-XXXX-XXXX-XXX) codes.
  */
 export function formatSpaceCode(code: string): string {
   const clean = code.replace(/[-\s]/g, "").toUpperCase();
   if (clean.length === 7) {
     return `${clean.slice(0, 4)}-${clean.slice(4, 7)}`;
   }
-  // 12-char (standard)
   if (clean.length === 12) {
     return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}`;
+  }
+  // 19-char extended (secret + IPv4)
+  if (clean.length === 19) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}-${clean.slice(12, 16)}-${clean.slice(16, 19)}`;
   }
   return code;
 }
 
-/** Parse user input -- accepts both 7-char and 12-char codes. Returns raw code or null. */
+/** Parse user input -- accepts 7-char and 12-char codes. Returns raw 12-char code or null. */
 export function parseSpaceCode(input: string): string | null {
   const clean = input.replace(/[-\s]/g, "").toUpperCase();
   if (clean.length === 7 || clean.length === 12) {
@@ -94,7 +154,16 @@ export function parseQrPayload(
     }
   }
 
-  // Fallback: try parsing as a raw space code
+  // Extended 19-char code: first 12 = secret, last 7 = encoded IPv4
+  const clean = payload.replace(/[-\s]/g, "").toUpperCase();
+  if (clean.length === 19 && [...clean].every((c) => CROCKFORD.includes(c))) {
+    const code = clean.slice(0, 12);
+    const ipv4 = decodeIpv4(clean.slice(12));
+    const addresses = ipv4 ? [`${ipv4}:${LAN_PORT}`] : [];
+    return { code, addresses };
+  }
+
+  // Fallback: try parsing as a raw 12-char space code
   const code = parseSpaceCode(payload);
   if (code) return { code, addresses: [] };
 

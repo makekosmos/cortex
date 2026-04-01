@@ -344,7 +344,7 @@ function handleReconnect() {
 // Ark Space handlers (Electron P2P mode)
 // ---------------------------------------------------------------------------
 
-async function activateSpace(code: string) {
+async function activateSpace(code: string, seedAddresses: string[] = []) {
   const spaceId = await deriveSpaceId(code);
   setActiveSpace(code);
   saveSpace({
@@ -396,11 +396,11 @@ async function activateSpace(code: string) {
   }
 
   // Start sync server
-  startSyncServer().catch(console.warn);
+  startSyncServer(seedAddresses).catch(console.warn);
 }
 
-function handleSpaceJoined(code: string) {
-  activateSpace(code).catch(console.error);
+function handleSpaceJoined(code: string, addresses: string[] = []) {
+  activateSpace(code, addresses).catch(console.error);
 }
 
 function handleLeaveSpace() {
@@ -484,7 +484,7 @@ function broadcastToLanSync(
     });
 }
 
-async function startSyncServer() {
+async function startSyncServer(seedAddresses: string[] = []) {
   if (!window.electronAPI?.invoke) return;
 
   const deviceId = localStorage.getItem("delphi.sync_device_id") ?? "unknown";
@@ -496,6 +496,7 @@ async function startSyncServer() {
       undefined,
       deviceId,
       deviceName,
+      seedAddresses,
     );
     console.log("[App] Sync server started");
   } catch (err) {

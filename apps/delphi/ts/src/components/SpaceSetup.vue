@@ -1,21 +1,23 @@
 <script setup lang="ts">
-import { shallowRef, watch } from "vue";
+import { shallowRef } from "vue";
 import {
   generateSpaceCode,
   formatSpaceCode,
   parseSpaceCode,
   generateQrPayload,
   parseQrPayload,
+  generateExtendedCode,
 } from "@/services/space/space-manager";
 import QRCode from "qrcode";
 
 const emit = defineEmits<{
-  spaceJoined: [code: string];
+  spaceJoined: [code: string, addresses: string[]];
 }>();
 
 type Mode = "choose" | "create" | "join";
 const mode = shallowRef<Mode>("choose");
-const generatedCode = shallowRef("");
+const generatedCode = shallowRef(""); // 12-char secret
+const displayCode = shallowRef(""); // 19-char extended (with IP) or 12-char fallback
 const joinInput = shallowRef("");
 const joinError = shallowRef("");
 const qrDataUrl = shallowRef("");
@@ -42,9 +44,10 @@ async function generateQr(payload: string) {
 async function handleCreate() {
   const code = generateSpaceCode();
   generatedCode.value = code;
+  displayCode.value = code; // fallback — may be upgraded below
   mode.value = "create";
 
-  // Get own addresses via IPC for QR payload
+  // Get own addresses via IPC for QR payload and extended code
   if (isElectron && window.electronAPI?.invoke) {
     try {
       const addresses = (await window.electronAPI.invoke(
@@ -52,8 +55,17 @@ async function handleCreate() {
       )) as string[];
       const payload = generateQrPayload(code, addresses ?? []);
       await generateQr(payload);
+
+      // Build extended code from first LAN IPv4 address
+      const primaryAddr = (addresses ?? []).find((a) =>
+        /^\d+\.\d+\.\d+\.\d+:\d+$/.test(a),
+      );
+      if (primaryAddr) {
+        const ipv4 = primaryAddr.split(":")[0];
+        const ext = generateExtendedCode(code, ipv4);
+        if (ext) displayCode.value = ext;
+      }
     } catch {
-      // Fallback: QR with just the formatted code
       await generateQr(formatSpaceCode(code));
     }
   } else {
@@ -62,7 +74,7 @@ async function handleCreate() {
 }
 
 function handleConfirmCreate() {
-  emit("spaceJoined", generatedCode.value);
+  emit("spaceJoined", generatedCode.value, []);
 }
 
 function handleJoin() {
@@ -72,7 +84,7 @@ function handleJoin() {
   const qrParsed = parseQrPayload(input);
   if (qrParsed) {
     joinError.value = "";
-    emit("spaceJoined", qrParsed.code);
+    emit("spaceJoined", qrParsed.code, qrParsed.addresses);
     return;
   }
 
@@ -80,11 +92,11 @@ function handleJoin() {
   const parsed = parseSpaceCode(input);
   if (!parsed) {
     joinError.value =
-      "Введите корректный код (XXXX-XXXX-XXXX) или ark:// ссылку";
+      "Введите корректный код (XXXX-XXXX-XXXX или XXXX-XXXX-XXXX-XXXX-XXX)";
     return;
   }
   joinError.value = "";
-  emit("spaceJoined", parsed);
+  emit("spaceJoined", parsed, []);
 }
 </script>
 
@@ -138,9 +150,10 @@ function handleJoin() {
           />
         </div>
         <div
-          class="bg-(--muted) mb-5 rounded-lg p-4 text-center font-mono text-2xl tracking-widest"
+          class="bg-(--muted) mb-5 rounded-lg p-4 text-center font-mono tracking-widest"
+          :class="displayCode.length > 12 ? 'text-base' : 'text-2xl'"
         >
-          {{ formatSpaceCode(generatedCode) }}
+          {{ formatSpaceCode(displayCode) }}
         </div>
         <button
           class="bg-(--foreground) text-(--background) w-full rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
@@ -161,11 +174,12 @@ function handleJoin() {
         </button>
         <h2 class="mb-1 text-lg font-semibold">Присоединиться</h2>
         <p class="text-(--muted-foreground) mb-4 text-sm">
-          Введите код пространства или вставьте ark:// ссылку.
+          Введите код пространства. Длинный код (XXXX-XXXX-XXXX-XXXX-XXX)
+          включает адрес устройства для прямого подключения.
         </p>
         <input
           v-model="joinInput"
-          placeholder="XXXX-XXXX-XXXX"
+          placeholder="XXXX-XXXX-XXXX или XXXX-XXXX-XXXX-XXXX-XXX"
           class="border-(--border) bg-(--secondary) mb-1 w-full rounded-md border px-3 py-2 font-mono text-sm uppercase outline-none focus:border-(--foreground)"
           @keyup.enter="handleJoin"
         />

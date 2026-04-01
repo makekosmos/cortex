@@ -67,20 +67,80 @@ class SpaceManager @Inject constructor(
     fun normalizeCode(code: String): String =
         code.replace("-", "").replace(" ", "").uppercase()
 
-    /** Format code with dashes -- handles both 7-char (XXXX-XXX) and 12-char (XXXX-XXXX-XXXX). */
+    /** Format code with dashes -- handles 7-char, 12-char, and 19-char (XXXX-XXXX-XXXX-XXXX-XXX) extended codes. */
     fun formatCode(code: String): String {
         val raw = normalizeCode(code)
         return when (raw.length) {
             7 -> "${raw.substring(0, 4)}-${raw.substring(4, 7)}"
             12 -> "${raw.substring(0, 4)}-${raw.substring(4, 8)}-${raw.substring(8, 12)}"
+            19 -> "${raw.substring(0, 4)}-${raw.substring(4, 8)}-${raw.substring(8, 12)}-${raw.substring(12, 16)}-${raw.substring(16, 19)}"
             else -> code
         }
     }
 
-    /** Validate that a code is valid Base32-Crockford (7-char legacy or 12-char). */
+    // ---------------------------------------------------------------------------
+    // Extended code (v4): 12-char secret + 7-char encoded IPv4
+    // ---------------------------------------------------------------------------
+
+    /** Encode an IPv4 string ("192.168.1.70") into 7 Base32-Crockford characters. */
+    fun encodeIpv4(ipv4: String): String? {
+        val parts = ipv4.split(".").mapNotNull { it.toIntOrNull() }
+        if (parts.size != 4 || parts.any { it < 0 || it > 255 }) return null
+        val n = (parts[0].toLong() shl 24) or (parts[1].toLong() shl 16) or
+                (parts[2].toLong() shl 8) or parts[3].toLong()
+        val shifted = n shl 3 // 32 bits -> 35 bits, 3 low padding bits = 0
+        return buildString {
+            for (i in 6 downTo 0) {
+                append(ALPHABET[((shifted shr (i * 5)) and 0x1FL).toInt()])
+            }
+        }
+    }
+
+    /** Decode 7 Base32-Crockford characters back to an IPv4 string. */
+    fun decodeIpv4(encoded: String): String? {
+        val clean = encoded.uppercase()
+        if (clean.length != 7 || clean.any { it !in ALPHABET }) return null
+        var value = 0L
+        for (c in clean) {
+            value = (value shl 5) or ALPHABET.indexOf(c).toLong()
+        }
+        value = value shr 3 // remove 3 padding bits
+        val a = ((value shr 24) and 0xFF).toInt()
+        val b = ((value shr 16) and 0xFF).toInt()
+        val c = ((value shr 8) and 0xFF).toInt()
+        val d = (value and 0xFF).toInt()
+        return "$a.$b.$c.$d"
+    }
+
+    /**
+     * Build a 19-char extended code = 12-char secret + 7-char encoded primary LAN IPv4.
+     * Returns null if no LAN IPv4 address is available.
+     */
+    fun generateExtendedCode(code: String): String? {
+        val primaryAddr = getOwnAddresses()
+            .firstOrNull { it.matches(Regex("""\d+\.\d+\.\d+\.\d+:\d+""")) }
+            ?: return null
+        val ipv4 = primaryAddr.substringBefore(":")
+        val encoded = encodeIpv4(ipv4) ?: return null
+        return normalizeCode(code).take(12) + encoded
+    }
+
+    /**
+     * Parse a 19-char extended code: first 12 chars = secret, last 7 = encoded IPv4.
+     * Returns Pair(secret, listOf("ip:port")) or null if invalid.
+     */
+    fun parseExtendedCode(code: String): Pair<String, List<String>>? {
+        val clean = normalizeCode(code)
+        if (clean.length != 19 || clean.any { it !in ALPHABET }) return null
+        val secret = clean.take(12)
+        val ipv4 = decodeIpv4(clean.drop(12)) ?: return null
+        return secret to listOf("$ipv4:$LAN_SYNC_PORT")
+    }
+
+    /** Validate that a code is valid Base32-Crockford (7-char legacy, 12-char, or 19-char extended). */
     fun isValidCode(code: String): Boolean {
         val raw = normalizeCode(code)
-        if (raw.length != 7 && raw.length != 12) return false
+        if (raw.length != 7 && raw.length != 12 && raw.length != 19) return false
         return raw.all { it in ALPHABET }
     }
 

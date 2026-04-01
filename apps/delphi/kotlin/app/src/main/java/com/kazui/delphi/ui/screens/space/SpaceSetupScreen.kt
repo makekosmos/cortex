@@ -51,29 +51,31 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.kazui.delphi.ui.components.QRScannerScreen
 
 /**
- * Displays the connection code with dashes (XXXX-XXXX-XXXX or XXXX-XXX)
- * without modifying the underlying raw value.
+ * Displays the connection code with dashes.
+ * Handles 7-char (XXXX-XXX), 12-char (XXXX-XXXX-XXXX),
+ * and 19-char extended (XXXX-XXXX-XXXX-XXXX-XXX) formats.
  */
 class SpaceCodeTransformation : VisualTransformation {
+    private val dashPositions = listOf(4, 8, 12, 16)
+
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text.uppercase()
         val formatted = buildString {
             raw.forEachIndexed { i, c ->
-                if ((i == 4 || i == 8) && raw.length > i) append('-')
+                if (i in dashPositions && raw.length > i) append('-')
                 append(c)
             }
         }
         val offsetMapping = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int {
-                var extra = 0
-                if (offset > 4) extra++
-                if (offset > 8) extra++
-                return offset + extra
-            }
+            override fun originalToTransformed(offset: Int): Int =
+                offset + dashPositions.count { it <= offset && raw.length > it }
+
             override fun transformedToOriginal(offset: Int): Int {
                 var result = offset
                 if (offset > 4) result--
                 if (offset > 9) result--
+                if (offset > 14) result--
+                if (offset > 19) result--
                 return result.coerceIn(0, raw.length)
             }
         }
@@ -96,17 +98,29 @@ fun SpaceSetupScreen(
 
     // Create mode state
     var generatedCode by remember { mutableStateOf("") }
+    var displayCode by remember { mutableStateOf("") } // 19-char extended or 12-char fallback
     var qrPayload by remember { mutableStateOf("") }
 
     fun sanitize(raw: String): String =
         raw.replace("-", "").replace(" ", "").uppercase()
             .filter { it in "0123456789ABCDEFGHJKMNPQRSTVWXYZ" }
-            .take(12)
+            .take(19) // support 19-char extended codes
 
     fun handleJoin() {
         val code = input
+        // Try 19-char extended code first (has embedded IPv4)
+        if (code.length == 19) {
+            val parsed = viewModel.parseExtendedCode(code)
+            if (parsed != null) {
+                val (secret, addresses) = parsed
+                error = ""
+                viewModel.joinSpace(secret, addresses)
+                onSpaceJoined(secret)
+                return
+            }
+        }
         if (!viewModel.isValidCode(code)) {
-            error = "Введите корректный код (формат: XXXX-XXXX-XXXX)"
+            error = "Введите корректный код (XXXX-XXXX-XXXX или XXXX-XXXX-XXXX-XXXX-XXX)"
             return
         }
         error = ""
@@ -172,6 +186,7 @@ fun SpaceSetupScreen(
                             Button(
                                 onClick = {
                                     generatedCode = viewModel.generateCode()
+                                    displayCode = viewModel.generateExtendedCode(generatedCode) ?: generatedCode
                                     qrPayload = viewModel.generateQrPayload(generatedCode)
                                     mode = SetupMode.CREATE
                                 },
@@ -208,16 +223,19 @@ fun SpaceSetupScreen(
                                 Text("Новое пространство", style = MaterialTheme.typography.titleLarge)
                             }
 
-                            // Display formatted code
+                            // Display extended code (with embedded IP) for manual entry
                             Text(
-                                text = viewModel.formatCode(generatedCode),
-                                style = MaterialTheme.typography.headlineMedium,
+                                text = viewModel.formatCode(displayCode.ifEmpty { generatedCode }),
+                                style = if (displayCode.length > 12)
+                                    MaterialTheme.typography.titleMedium
+                                else
+                                    MaterialTheme.typography.headlineMedium,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.primary,
                             )
 
                             Text(
-                                "Отсканируйте QR-код на другом устройстве или введите код вручную.",
+                                "Отсканируйте QR-код или введите длинный код на другом устройстве.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -263,7 +281,7 @@ fun SpaceSetupScreen(
                                 Text("Присоединиться", style = MaterialTheme.typography.titleLarge)
                             }
                             Text(
-                                "Отсканируйте QR-код или введите код пространства.",
+                                "Отсканируйте QR-код или введите код пространства. Длинный код (XXXX-XXXX-XXXX-XXXX-XXX) подключается напрямую по IP.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -277,7 +295,7 @@ fun SpaceSetupScreen(
                                         input = sanitize(it)
                                         error = ""
                                     },
-                                    placeholder = { Text("XXXX-XXXX-XXXX", fontFamily = FontFamily.Monospace) },
+                                    placeholder = { Text("XXXX-XXXX-XXXX(-XXXX-XXX)", fontFamily = FontFamily.Monospace) },
                                     label = { Text("Код пространства") },
                                     modifier = Modifier.weight(1f),
                                     singleLine = true,
@@ -305,7 +323,7 @@ fun SpaceSetupScreen(
                             }
                             Button(
                                 onClick = { handleJoin() },
-                                enabled = input.length == 12 || input.length == 7,
+                                enabled = input.length == 12 || input.length == 7 || input.length == 19,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Text("Подключиться")
