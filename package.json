@@ -4,7 +4,6 @@
   "workspaces": [
     "apps/*",
     "apps/delphi/ts",
-    "apps/delphi/mobile",
     "apps/eden/ts",
     "packages/*"
   ],
