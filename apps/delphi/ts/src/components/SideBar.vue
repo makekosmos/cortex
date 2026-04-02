@@ -71,34 +71,19 @@ const activeProjects = computed(() =>
     :default-width="200"
     :min-width="160"
     :max-width="320"
-    :collapse-threshold="60"
-    toggle-shortcut="meta+/"
+    :hidden-width="80"
+    toggle-shortcut="meta+b"
+    drag-region
     :initial-config="loadConfig()"
     @config-change="saveConfig"
   >
-    <!-- Collapsed content (intermediate: drag below threshold) -->
-    <template #collapsed>
-      <aside class="flex min-h-0 flex-col items-center py-2 px-1">
-        <SideBarButton :icon="Inbox" to="/" />
-        <SideBarButton :icon="Star" to="/today" />
-        <SideBarButton :icon="Calendar" to="/upcoming" />
-        <SideBarButton :icon="Book" to="/logbook" />
-        <SideBarButton :icon="Archive" to="/trash" />
-        <div class="flex-1" />
-        <SideBarButton :icon="Settings" to="/settings" />
-      </aside>
-    </template>
-
-    <!-- Expanded content (default slot) -->
     <template #default="{ toggle }">
-      <aside
-        class="flex min-h-0 h-full flex-col justify-between p-2"
-      >
+      <aside class="flex min-h-0 h-full flex-col justify-between p-2">
         <div class="flex items-center justify-end">
           <button
             type="button"
             class="rounded-lg p-1.5 text-white/40 hover:bg-white/6 hover:text-white transition-colors"
-            title="Скрыть сайдбар (⌘/)"
+            title="Скрыть сайдбар (⌘B)"
             @click="toggle"
           >
             <PanelLeftClose :size="16" />

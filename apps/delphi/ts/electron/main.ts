@@ -8,6 +8,7 @@ import type { PeerChange } from '../src/services/sync/peer-protocol';
 import { sidecar, dbLoadAll, dbUpsertTodo, dbDeleteTodo, dbBatchUpsertTodos, dbUpsertProject, dbDeleteProject, dbGetSyncKv, dbSetSyncKv, dbClearAll, dbSwitchSpace } from './sidecar';
 import { SyncServer } from './sync-server';
 import { SyncClient } from './sync-client';
+import { BroadcastDiscovery } from './broadcast-discovery';
 import type { SyncEntity, PeerRecord } from '../src/services/sync/lan-protocol';
 import { LAN_SYNC_PORT, mergePeerRecords } from '../src/services/sync/lan-protocol';
 import { getOwnAddresses } from '../src/services/space/space-manager';
@@ -31,6 +32,7 @@ const isDev = !app.isPackaged;
 
 let peerManager: PeerManager | null = null;
 let syncServer: SyncServer | null = null;
+let broadcastDiscovery: BroadcastDiscovery | null = null;
 const syncClients: Map<string, SyncClient> = new Map(); // device_id -> SyncClient
 let currentDeviceId = '';
 let currentDeviceName = 'Delphi Electron';
@@ -49,6 +51,7 @@ function createWindow() {
     minHeight: 200,
     title: 'Delphi',
     titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 18, y: 18 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -222,6 +225,18 @@ ipcMain.handle('db:setSyncKv', (_e, key, value) => dbSetSyncKv(key, value))
 ipcMain.handle('db:clearAll', () => dbClearAll())
 ipcMain.handle('db:switchSpace', (_e, spaceId: string) => dbSwitchSpace(spaceId))
 
+ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
+  const spaceDir = path.join(app.getPath('userData'), 'spaces', spaceId);
+  try {
+    fs.rmSync(spaceDir, { recursive: true, force: true });
+    console.log(`[Main] Deleted space DB: ${spaceDir}`);
+    return true;
+  } catch (err) {
+    console.error(`[Main] Failed to delete space DB:`, err);
+    return false;
+  }
+})
+
 ipcMain.handle('peer:stop', async () => {
   if (peerManager) {
     peerManager.stop();
@@ -364,10 +379,16 @@ function connectToSeedAddresses(addresses: string[], deviceId: string, deviceNam
 }
 
 /** Start the sync server and connect to known peers. */
-async function startSync(deviceId: string, deviceName?: string, seedAddresses?: string[]): Promise<void> {
+async function startSync(spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]): Promise<void> {
   if (syncServer) {
     syncServer.stop();
     syncServer = null;
+  }
+
+  // Stop broadcast discovery
+  if (broadcastDiscovery) {
+    broadcastDiscovery.stop();
+    broadcastDiscovery = null;
   }
 
   // Stop existing clients
@@ -403,12 +424,16 @@ async function startSync(deviceId: string, deviceName?: string, seedAddresses?: 
   });
 
   try {
-    await syncServer.start(undefined, deviceId, name, ownAddresses);
+    await syncServer.start(spaceId, deviceId, name, ownAddresses);
     console.log('[Main] Sync server started');
 
-    // Connect to known peers from previous sessions
+    // Connect to known peers from previous sessions (skip self)
     const knownPeers = syncServer.getKnownPeers();
     for (const peer of knownPeers) {
+      if (peer.device_name === name && peer.addresses.some(a => ownAddresses.includes(a))) {
+        console.log(`[Main] Skipping self-connect to ${peer.device_name} (${peer.device_id})`);
+        continue;
+      }
       startSyncClientForPeer(peer, deviceId, name, '', ownAddresses);
     }
 
@@ -416,20 +441,66 @@ async function startSync(deviceId: string, deviceName?: string, seedAddresses?: 
     if (seedAddresses && seedAddresses.length > 0) {
       connectToSeedAddresses(seedAddresses, deviceId, name, ownAddresses);
     }
+
+    // Start UDP broadcast discovery for automatic peer re-discovery
+    if (spaceId) {
+      broadcastDiscovery = new BroadcastDiscovery({
+        spaceId,
+        deviceId,
+        deviceName: name,
+        wsPort: LAN_SYNC_PORT,
+        onPeerDiscovered: (beaconPeer) => {
+          // Update peer record with fresh address
+          syncServer?.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, [beaconPeer.address]);
+
+          const existingClient = syncClients.get(beaconPeer.deviceId);
+          if (existingClient) {
+            // Update existing client with fresh addresses (in case IP changed)
+            if (!existingClient.isConnected) {
+              existingClient.updatePeer({
+                device_id: beaconPeer.deviceId,
+                device_name: beaconPeer.deviceName,
+                addresses: [beaconPeer.address],
+                last_seen: new Date().toISOString(),
+              });
+            }
+            return;
+          }
+
+          // Already connected inbound via server
+          if (syncServer?.isConnectedTo(beaconPeer.deviceId)) return;
+
+          // Start new client connection
+          console.log(`[Main] Beacon: connecting to ${beaconPeer.deviceName} at ${beaconPeer.address}`);
+          const freshPeer: PeerRecord = {
+            device_id: beaconPeer.deviceId,
+            device_name: beaconPeer.deviceName,
+            addresses: [beaconPeer.address],
+            last_seen: new Date().toISOString(),
+          };
+          startSyncClientForPeer(freshPeer, deviceId, name, '', collectOwnAddresses());
+        },
+      });
+      broadcastDiscovery.start();
+    }
   } catch (err) {
     console.error('[Main] Failed to start sync server:', err);
     syncServer = null;
   }
 }
 
-/** IPC: start sync (spaceId kept for backward compat but ignored). */
-ipcMain.handle('lan-sync:start', async (_e, _spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
-  await startSync(deviceId, deviceName, seedAddresses);
+/** IPC: start sync. */
+ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
+  await startSync(spaceId, deviceId, deviceName, seedAddresses);
   return syncServer !== null;
 });
 
 /** IPC: stop sync. */
 ipcMain.handle('lan-sync:stop', async () => {
+  if (broadcastDiscovery) {
+    broadcastDiscovery.stop();
+    broadcastDiscovery = null;
+  }
   for (const client of syncClients.values()) {
     client.stop();
   }
@@ -501,6 +572,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  // Stop broadcast discovery
+  if (broadcastDiscovery) {
+    broadcastDiscovery.stop();
+    broadcastDiscovery = null;
+  }
   // Stop sync clients
   for (const client of syncClients.values()) {
     client.stop();

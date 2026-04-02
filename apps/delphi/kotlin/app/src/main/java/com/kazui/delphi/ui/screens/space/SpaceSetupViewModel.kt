@@ -31,11 +31,21 @@ class SpaceSetupViewModel @Inject constructor(
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
+    private val _savedSpaces = MutableStateFlow<List<SpaceManager.SavedSpace>>(emptyList())
+    val savedSpaces: StateFlow<List<SpaceManager.SavedSpace>> = _savedSpaces.asStateFlow()
+
     init {
         viewModelScope.launch {
             spaceManager.activeSpaceCode.collect { _ ->
                 if (!_isInitialized.value) _isInitialized.value = true
             }
+        }
+        loadSavedSpaces()
+    }
+
+    private fun loadSavedSpaces() {
+        viewModelScope.launch {
+            _savedSpaces.value = spaceManager.getSavedSpaces()
         }
     }
 
@@ -98,6 +108,32 @@ class SpaceSetupViewModel @Inject constructor(
         viewModelScope.launch {
             peerManager.stop()
             spaceManager.clearActiveSpaceCode()
+        }
+    }
+
+    /** Rejoin a previously saved space. */
+    fun rejoinSpace(code: String) {
+        val normalized = spaceManager.normalizeCode(code)
+        viewModelScope.launch {
+            spaceManager.setActiveSpaceCode(normalized)
+            val deviceId = getDeviceId()
+            val deviceName = getDeviceName()
+            peerManager.start(normalized, deviceId, deviceName)
+        }
+    }
+
+    /** Delete a saved space and its sync data. */
+    fun deleteSpace(code: String) {
+        viewModelScope.launch {
+            // If active, leave first
+            val currentCode = spaceManager.activeSpaceCode.first()
+            if (currentCode == spaceManager.normalizeCode(code)) {
+                peerManager.stop()
+                spaceManager.clearActiveSpaceCode()
+            }
+            spaceManager.removeSpaceFromList(spaceManager.normalizeCode(code))
+            // Clear sync data for this space (version vector, known peers are per-space via DataStore)
+            _savedSpaces.value = spaceManager.getSavedSpaces()
         }
     }
 

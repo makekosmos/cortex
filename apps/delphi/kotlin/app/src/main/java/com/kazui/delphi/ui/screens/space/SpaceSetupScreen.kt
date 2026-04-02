@@ -23,15 +23,19 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,10 +95,13 @@ fun SpaceSetupScreen(
     onSpaceJoined: (String) -> Unit,
     viewModel: SpaceSetupViewModel = hiltViewModel(),
 ) {
+    val savedSpaces by viewModel.savedSpaces.collectAsState()
+
     var mode by remember { mutableStateOf(SetupMode.CHOOSE) }
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
     var showQr by remember { mutableStateOf(false) }
+    var deletingSpaceCode by remember { mutableStateOf<String?>(null) }
 
     // Create mode state
     var generatedCode by remember { mutableStateOf("") }
@@ -179,10 +186,78 @@ fun SpaceSetupScreen(
                         ) {
                             Text("Пространство", style = MaterialTheme.typography.titleLarge)
                             Text(
-                                "Создайте новое пространство или присоединитесь к существующему.",
+                                "Синхронизация без сервера — через локальную сеть.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+
+                            // Saved spaces list
+                            if (savedSpaces.isNotEmpty()) {
+                                Text(
+                                    "СОХРАНЁННЫЕ",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    for (space in savedSpaces) {
+                                        OutlinedCard(
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                            ) {
+                                                if (deletingSpaceCode == space.code) {
+                                                    Text(
+                                                        "Удалить с данными?",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.error,
+                                                    )
+                                                    Row {
+                                                        TextButton(onClick = {
+                                                            viewModel.deleteSpace(space.code)
+                                                            deletingSpaceCode = null
+                                                        }) {
+                                                            Text("Да", color = MaterialTheme.colorScheme.error)
+                                                        }
+                                                        TextButton(onClick = { deletingSpaceCode = null }) {
+                                                            Text("Нет")
+                                                        }
+                                                    }
+                                                } else {
+                                                    TextButton(
+                                                        onClick = {
+                                                            viewModel.rejoinSpace(space.code)
+                                                            onSpaceJoined(space.code)
+                                                        },
+                                                        modifier = Modifier.weight(1f),
+                                                    ) {
+                                                        Text(
+                                                            viewModel.formatCode(space.code),
+                                                            fontFamily = FontFamily.Monospace,
+                                                        )
+                                                    }
+                                                    IconButton(
+                                                        onClick = { deletingSpaceCode = space.code },
+                                                        modifier = Modifier.size(32.dp),
+                                                    ) {
+                                                        Text(
+                                                            "\u00D7",
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                HorizontalDivider()
+                            }
+
                             Button(
                                 onClick = {
                                     generatedCode = viewModel.generateCode()

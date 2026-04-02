@@ -403,11 +403,18 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
   }
 
   // Start sync server
-  startSyncServer(seedAddresses).catch(console.warn);
+  startSyncServer(spaceId, seedAddresses).catch(console.warn);
 }
 
 function handleSpaceJoined(code: string, addresses: string[] = []) {
   activateSpace(code, addresses).catch(console.error);
+}
+
+function handleSpaceDeleted(code: string) {
+  // If the deleted space was the active one, clear it
+  if (activeSpaceCode.value === code) {
+    handleLeaveSpace();
+  }
 }
 
 function handleLeaveSpace() {
@@ -491,7 +498,7 @@ function broadcastToLanSync(
     });
 }
 
-async function startSyncServer(seedAddresses: string[] = []) {
+async function startSyncServer(spaceId?: string, seedAddresses: string[] = []) {
   if (!window.electronAPI?.invoke) return;
 
   const deviceId = localStorage.getItem("delphi.sync_device_id") ?? "unknown";
@@ -500,7 +507,7 @@ async function startSyncServer(seedAddresses: string[] = []) {
   try {
     await window.electronAPI.invoke(
       "lan-sync:start",
-      undefined,
+      spaceId,
       deviceId,
       deviceName,
       seedAddresses,
@@ -793,7 +800,11 @@ onUnmounted(() => {
       @submit="handleAuthSubmit"
     />
 
-    <SpaceSetup v-if="spaceRequired" @space-joined="handleSpaceJoined" />
+    <SpaceSetup
+      v-if="spaceRequired"
+      @space-joined="handleSpaceJoined"
+      @space-deleted="handleSpaceDeleted"
+    />
 
     <!-- Fullscreen QR overlay -->
     <div

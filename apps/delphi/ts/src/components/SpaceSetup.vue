@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef } from "vue";
+import { shallowRef, ref } from "vue";
 import {
   generateSpaceCode,
   formatSpaceCode,
@@ -7,15 +7,50 @@ import {
   generateQrPayload,
   parseQrPayload,
   generateExtendedCode,
+  getSpaces,
+  removeSpace,
+  deriveSpaceId,
+  type Space,
 } from "@/services/space/space-manager";
 import QRCode from "qrcode";
 
 const emit = defineEmits<{
   spaceJoined: [code: string, addresses: string[]];
+  spaceDeleted: [code: string];
 }>();
 
 type Mode = "choose" | "create" | "join";
 const mode = shallowRef<Mode>("choose");
+const savedSpaces = ref<Space[]>(getSpaces());
+const deletingSpace = shallowRef<string | null>(null);
+
+function handleRejoin(space: Space) {
+  emit("spaceJoined", space.code, []);
+}
+
+async function handleDelete(space: Space) {
+  deletingSpace.value = space.code;
+}
+
+async function confirmDelete() {
+  if (!deletingSpace.value) return;
+  const code = deletingSpace.value;
+
+  // Delete DB files via IPC
+  if (window.electronAPI?.invoke) {
+    const spaceId = await deriveSpaceId(code);
+    await window.electronAPI.invoke("db:deleteSpace", spaceId).catch(() => {});
+  }
+
+  removeSpace(code);
+  savedSpaces.value = getSpaces();
+  emit("spaceDeleted", code);
+  deletingSpace.value = null;
+}
+
+function cancelDelete() {
+  deletingSpace.value = null;
+}
 const generatedCode = shallowRef(""); // 12-char secret
 const displayCode = shallowRef(""); // 19-char extended (with IP) or 12-char fallback
 const joinInput = shallowRef("");
@@ -124,10 +159,61 @@ function handleJoin() {
       <!-- Choose mode -->
       <template v-if="mode === 'choose'">
         <h2 class="mb-1 text-lg font-semibold">Ark Space</h2>
-        <p class="text-(--muted-foreground) mb-5 text-sm">
-          Синхронизация без сервера — через локальную сеть. Создайте
-          пространство или присоединитесь к существующему.
+        <p class="text-(--muted-foreground) mb-4 text-sm">
+          Синхронизация без сервера — через локальную сеть.
         </p>
+
+        <!-- Saved spaces -->
+        <div v-if="savedSpaces.length > 0" class="mb-4">
+          <p
+            class="text-(--muted-foreground) mb-2 text-xs font-medium uppercase tracking-wider"
+          >
+            Сохранённые пространства
+          </p>
+          <div class="space-y-2">
+            <div
+              v-for="space in savedSpaces"
+              :key="space.code"
+              class="border-(--border) flex items-center justify-between rounded-lg border px-3 py-2"
+            >
+              <!-- Delete confirmation overlay -->
+              <template v-if="deletingSpace === space.code">
+                <span class="text-xs text-rose-400">Удалить с данными?</span>
+                <div class="flex gap-2">
+                  <button
+                    class="rounded px-2 py-1 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
+                    @click="confirmDelete"
+                  >
+                    Да
+                  </button>
+                  <button
+                    class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
+                    @click="cancelDelete"
+                  >
+                    Нет
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <button
+                  class="flex-1 text-left font-mono text-sm tracking-wider transition-colors hover:text-(--foreground)"
+                  @click="handleRejoin(space)"
+                >
+                  {{ formatSpaceCode(space.code) }}
+                </button>
+                <button
+                  class="text-(--muted-foreground) ml-2 rounded p-1 text-xs transition-colors hover:text-rose-400"
+                  @click.stop="handleDelete(space)"
+                  title="Удалить пространство"
+                >
+                  &times;
+                </button>
+              </template>
+            </div>
+          </div>
+          <div class="border-(--border) my-4 border-t"></div>
+        </div>
+
         <button
           class="bg-(--foreground) text-(--background) mb-2 w-full rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
           @click="handleCreate"

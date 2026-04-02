@@ -49,6 +49,7 @@ class PeerManager @Inject constructor(
     private var deviceId: String = ""
     private var deviceName: String = ""
 
+    private val broadcastDiscovery = BroadcastDiscovery(scope)
     private val reconnectJobs = mutableMapOf<String, Job>()
 
     // Exposed state
@@ -147,10 +148,33 @@ class PeerManager @Inject constructor(
                 connectToPeer(peer)
             }
         }
+
+        // Start UDP broadcast discovery for automatic peer re-discovery
+        val actualPort = syncServer.actualPort.takeIf { it > 0 } ?: SpaceManager.LAN_SYNC_PORT
+        broadcastDiscovery.onPeerDiscovered = { beaconPeer ->
+            Log.i(TAG, "Beacon from ${beaconPeer.deviceName} at ${beaconPeer.address}")
+            scope.launch {
+                // Update peer record with fresh address
+                syncServer.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, listOf(beaconPeer.address))
+
+                // Connect if not already connected
+                if (!syncServer.isConnectedTo(beaconPeer.deviceId)) {
+                    val record = PeerRecord(
+                        deviceId = beaconPeer.deviceId,
+                        deviceName = beaconPeer.deviceName,
+                        addresses = listOf(beaconPeer.address),
+                        lastSeen = Instant.now().toString(),
+                    )
+                    connectToPeer(record)
+                }
+            }
+        }
+        broadcastDiscovery.start(spaceId, deviceId, deviceName, actualPort)
     }
 
     fun stop() {
         isRunning = false
+        broadcastDiscovery.stop()
         reconnectJobs.values.forEach { it.cancel() }
         reconnectJobs.clear()
         lanSyncClient.disconnect()
@@ -195,6 +219,12 @@ class PeerManager @Inject constructor(
     private suspend fun connectToPeer(record: PeerRecord) {
         if (!isRunning) return
         if (record.deviceId == deviceId) return
+
+        // Don't reconnect if already connected or connecting as client
+        val clientState = lanSyncClient.state.value
+        if (clientState == LanSyncState.LIVE || clientState == LanSyncState.SYNCING || clientState == LanSyncState.CONNECTED || clientState == LanSyncState.CONNECTING) {
+            return
+        }
 
         // Sort addresses: lastAddress first, then LAN IPs, then others
         val sortedAddresses = buildList {

@@ -5,7 +5,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.NetworkInterface
@@ -25,8 +28,15 @@ import javax.inject.Singleton
 class SpaceManager @Inject constructor(
     private val dataStore: DataStore<Preferences>,
 ) {
+    data class SavedSpace(
+        val code: String,
+        val name: String,
+        val createdAt: String,
+    )
+
     companion object {
         private val ACTIVE_SPACE_KEY = stringPreferencesKey("ark.space.activeCode")
+        private val SAVED_SPACES_KEY = stringPreferencesKey("ark.space.savedSpaces")
         // Base32-Crockford alphabet: no I, L, O, U
         const val ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
         const val LAN_SYNC_PORT = 21531
@@ -40,11 +50,62 @@ class SpaceManager @Inject constructor(
     val activeSpaceCode: Flow<String?> = dataStore.data.map { it[ACTIVE_SPACE_KEY] }
 
     suspend fun setActiveSpaceCode(code: String) {
-        dataStore.edit { it[ACTIVE_SPACE_KEY] = normalizeCode(code) }
+        val normalized = normalizeCode(code)
+        dataStore.edit { it[ACTIVE_SPACE_KEY] = normalized }
+        // Also save to space list
+        saveSpaceToList(normalized)
     }
 
     suspend fun clearActiveSpaceCode() {
         dataStore.edit { it.remove(ACTIVE_SPACE_KEY) }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Saved spaces list
+    // ---------------------------------------------------------------------------
+
+    /** Get all saved spaces from DataStore. */
+    suspend fun getSavedSpaces(): List<SavedSpace> {
+        return try {
+            val prefs = dataStore.data.first()
+            val raw = prefs[SAVED_SPACES_KEY] ?: return emptyList()
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                SavedSpace(
+                    code = obj.optString("code", ""),
+                    name = obj.optString("name", ""),
+                    createdAt = obj.optString("createdAt", ""),
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Save a space to the list (dedup by code). */
+    private suspend fun saveSpaceToList(code: String) {
+        val spaces = getSavedSpaces().filter { it.code != code }.toMutableList()
+        spaces.add(0, SavedSpace(code, formatCode(code), java.time.Instant.now().toString()))
+        persistSpaceList(spaces)
+    }
+
+    /** Remove a space from the saved list. */
+    suspend fun removeSpaceFromList(code: String) {
+        val spaces = getSavedSpaces().filter { it.code != code }
+        persistSpaceList(spaces)
+    }
+
+    private suspend fun persistSpaceList(spaces: List<SavedSpace>) {
+        val arr = JSONArray()
+        for (s in spaces) {
+            arr.put(JSONObject().apply {
+                put("code", s.code)
+                put("name", s.name)
+                put("createdAt", s.createdAt)
+            })
+        }
+        dataStore.edit { it[SAVED_SPACES_KEY] = arr.toString() }
     }
 
     // ---------------------------------------------------------------------------
