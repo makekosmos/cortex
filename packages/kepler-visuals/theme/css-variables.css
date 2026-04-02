@@ -1,6 +1,9 @@
 :root {
   --radius: 0.65rem;
 
+  --color-bg-primary: #171717;
+  --color-shape-highlight-light-solid: #1e1e1e;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
 

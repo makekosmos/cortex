@@ -17,6 +17,8 @@ interface Props {
   className?: string;
   initialConfig?: Partial<SidebarConfig>;
   dragRegion?: boolean;
+  offsetX?: number;
+  collapsed?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -28,30 +30,51 @@ const props = withDefaults(defineProps<Props>(), {
   className: undefined,
   initialConfig: undefined,
   dragRegion: false,
+  offsetX: 0,
+  collapsed: undefined,
 });
 
 const emit = defineEmits<{
   configChange: [config: SidebarConfig];
+  "update:collapsed": [collapsed: boolean];
 }>();
 
 const width = shallowRef(props.initialConfig?.width ?? props.defaultWidth);
-const collapsed = shallowRef(props.initialConfig?.collapsed ?? false);
+const _collapsed = shallowRef(
+  props.collapsed !== undefined
+    ? props.collapsed
+    : (props.initialConfig?.collapsed ?? false),
+);
+const _fullyHidden = shallowRef(false);
 const isResizing = shallowRef(false);
 const animating = shallowRef(false);
+const lineExpanded = shallowRef(false);
+
+let mouseDownX = 0;
+let mouseDownY = 0;
 
 const resizeRaf = shallowRef<number | null>(null);
 const animTimer = shallowRef<number | null>(null);
 const isAnimatingRef = shallowRef(false);
 
-// Keep a config ref in sync for use inside rAF callbacks
 const configRef = shallowRef<SidebarConfig>({
   width: width.value,
-  collapsed: collapsed.value,
+  collapsed: _collapsed.value,
 });
 
-watch([width, collapsed], () => {
-  configRef.value = { width: width.value, collapsed: collapsed.value };
+watch([width, _collapsed], () => {
+  configRef.value = { width: width.value, collapsed: _collapsed.value };
 });
+
+watch(
+  () => props.collapsed,
+  (val) => {
+    if (val !== undefined && val !== _collapsed.value) {
+      startAnimation();
+      _collapsed.value = val;
+    }
+  },
+);
 
 function notifyConfigChange(config: SidebarConfig) {
   emit("configChange", config);
@@ -71,13 +94,14 @@ function startAnimation() {
 }
 
 function toggle() {
-  startAnimation();
-  const next = !collapsed.value;
-  collapsed.value = next;
-  notifyConfigChange({ width: width.value, collapsed: next });
+  const next = !_fullyHidden.value;
+  _fullyHidden.value = next;
+  if (!next && _collapsed.value) {
+    _collapsed.value = false;
+    emit("update:collapsed", false);
+  }
 }
 
-// Keyboard shortcut
 function handleKeydown(e: KeyboardEvent) {
   if (!props.toggleShortcut) return;
 
@@ -86,7 +110,7 @@ function handleKeydown(e: KeyboardEvent) {
   const needsMeta = parts.includes("meta");
   const needsCtrl = parts.includes("ctrl");
   const needsShift = parts.includes("shift");
-  const needsAlt = parts.includes("alt");
+  const needsAlt = props.toggleShortcut.toLowerCase().includes("alt");
 
   if (needsMeta && !e.metaKey) return;
   if (needsCtrl && !e.ctrlKey) return;
@@ -98,15 +122,16 @@ function handleKeydown(e: KeyboardEvent) {
   toggle();
 }
 
-// Resize handlers
 function handleResizeStart(e: MouseEvent) {
   e.preventDefault();
+  mouseDownX = e.clientX;
+  mouseDownY = e.clientY;
   isResizing.value = true;
   document.body.classList.add("sidebar-resizing");
 }
 
 function handleResizeMove(e: MouseEvent) {
-  if (isAnimatingRef.value) return;
+  if (isAnimatingRef.value || _fullyHidden.value) return;
 
   if (resizeRaf.value) {
     cancelAnimationFrame(resizeRaf.value);
@@ -115,22 +140,24 @@ function handleResizeMove(e: MouseEvent) {
   resizeRaf.value = requestAnimationFrame(() => {
     if (isAnimatingRef.value) return;
 
-    const newWidth = e.clientX;
+    const newWidth = e.clientX - (props.offsetX ?? 0);
 
     if (newWidth <= props.collapseThreshold) {
-      if (!configRef.value.collapsed) {
+      if (!_collapsed.value) {
         startAnimation();
-        collapsed.value = true;
+        _collapsed.value = true;
         configRef.value = { ...configRef.value, collapsed: true };
+        emit("update:collapsed", true);
       }
       return;
     }
 
-    if (configRef.value.collapsed) {
+    if (_collapsed.value) {
       startAnimation();
-      collapsed.value = false;
+      _collapsed.value = false;
       width.value = props.minWidth;
       configRef.value = { width: props.minWidth, collapsed: false };
+      emit("update:collapsed", false);
       return;
     }
 
@@ -143,17 +170,28 @@ function handleResizeMove(e: MouseEvent) {
   });
 }
 
-function handleResizeEnd() {
+function handleResizeEnd(e: MouseEvent) {
   if (resizeRaf.value) {
     cancelAnimationFrame(resizeRaf.value);
     resizeRaf.value = null;
   }
   isResizing.value = false;
   document.body.classList.remove("sidebar-resizing");
+
+  const dx = Math.abs(e.clientX - mouseDownX);
+  const dy = Math.abs(e.clientY - mouseDownY);
+  if (dx < 4 && dy < 4) {
+    lineExpanded.value = true;
+    window.setTimeout(() => {
+      lineExpanded.value = false;
+      toggle();
+    }, 180);
+    return;
+  }
+
   notifyConfigChange(configRef.value);
 }
 
-// Attach/detach global mouse listeners during resize
 watch(isResizing, (resizing) => {
   if (resizing) {
     window.addEventListener("mousemove", handleResizeMove);
@@ -177,10 +215,17 @@ onUnmounted(() => {
   document.body.classList.remove("sidebar-resizing");
 });
 
+const wrapperStyle = computed(() => {
+  if (_fullyHidden.value) return { width: "6px", padding: "0" };
+  if (_collapsed.value) return {};
+  return { width: `${width.value}px` };
+});
+
 const wrapperClasses = computed(() =>
   [
-    "kosmos-sidebar-wrapper",
-    collapsed.value ? "collapsed" : "",
+    "kepler-sidebar-wrapper",
+    _fullyHidden.value ? "fully-hidden" : "",
+    _collapsed.value && !_fullyHidden.value ? "collapsed" : "",
     animating.value ? "animating" : "",
     isResizing.value ? "is-resizing" : "",
     props.className ?? "",
@@ -191,33 +236,18 @@ const wrapperClasses = computed(() =>
 </script>
 
 <template>
-  <!-- Collapsed with collapsed slot -->
-  <template v-if="collapsed && $slots.collapsed">
-    <slot name="collapsed" :toggle="toggle" />
-  </template>
-
-  <!-- Collapsed without collapsed slot -->
-  <div
-    v-else-if="collapsed"
-    :class="wrapperClasses"
-    :style="{ width: '0px' }"
-  />
-
-  <!-- Expanded -->
-  <div v-else :class="wrapperClasses" :style="{ width: `${width}px` }">
+  <div :class="wrapperClasses" :style="wrapperStyle">
     <div
-      v-if="dragRegion"
+      v-if="dragRegion && !_fullyHidden"
       :style="{ WebkitAppRegion: 'drag' } as any"
-      class="kosmos-sidebar-drag-region"
+      class="kepler-sidebar-drag-region"
     />
-    <div
-      class="kosmos-sidebar-content"
-      :style="{ width: `${width}px`, minWidth: `${width}px` }"
-    >
-      <slot :toggle="toggle" />
+    <div class="kepler-sidebar-content">
+      <slot v-if="!_collapsed" :toggle="toggle" />
+      <slot v-else-if="$slots.collapsed" name="collapsed" :toggle="toggle" />
     </div>
-    <div class="kosmos-sidebar-resize-handle" @mousedown="handleResizeStart">
-      <div class="kosmos-resize-handle-line" />
+    <div class="kepler-sidebar-resize-handle" @mousedown="handleResizeStart">
+      <div :class="['kepler-resize-handle-line', lineExpanded ? 'expanded' : '']" />
     </div>
   </div>
 </template>

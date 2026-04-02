@@ -5,4 +5,4 @@ export { colors, spacing, typography, radius, animations } from './tokens';
 export { type ThemeMode, type ColorToken, getColor } from './theme';
 
 // Components
-export { ResizableSidebar, type SidebarConfig, type ResizableSidebarProps } from './components';
+export { ResizableSidebar, type SidebarConfig } from './components';

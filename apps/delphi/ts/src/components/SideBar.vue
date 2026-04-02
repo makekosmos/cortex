@@ -8,7 +8,6 @@ import {
   Circle,
   Inbox,
   PanelLeftClose,
-  PanelLeftOpen,
   Settings,
   Star,
 } from "lucide-vue-next";
@@ -16,10 +15,8 @@ import SideBarButton from "@/components/SideBarButton.vue";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
-import ResizableSidebar from "@/components/ResizableSidebar.vue";
-import type { SidebarConfig } from "@/components/ResizableSidebar.vue";
-// eslint-disable-next-line import/no-unassigned-import
-import "@/components/sidebar.css";
+import ResizableSidebar from "@kepler/visuals/components/ResizableSidebar.vue";
+import type { SidebarConfig } from "@kepler/visuals/components/ResizableSidebar.vue";
 
 const STORAGE_KEY = "delphi-sidebar-config";
 
@@ -79,20 +76,9 @@ const activeProjects = computed(() =>
     :initial-config="loadConfig()"
     @config-change="saveConfig"
   >
-    <!-- Collapsed content -->
-    <template #collapsed="{ toggle }">
-      <aside
-        class="flex min-h-0 flex-col items-center border-r border-r-(--border) bg-(--sidebar) py-2 px-1"
-      >
-        <div :style="{ WebkitAppRegion: 'drag' }" class="h-3 w-full shrink-0" />
-        <button
-          type="button"
-          class="mb-2 rounded-lg p-2 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
-          title="Показать сайдбар (⌘/)"
-          @click="toggle"
-        >
-          <PanelLeftOpen :size="18" />
-        </button>
+    <!-- Collapsed content (intermediate: drag below threshold) -->
+    <template #collapsed>
+      <aside class="flex min-h-0 flex-col items-center py-2 px-1">
         <SideBarButton :icon="Inbox" to="/" />
         <SideBarButton :icon="Star" to="/today" />
         <SideBarButton :icon="Calendar" to="/upcoming" />
@@ -106,14 +92,12 @@ const activeProjects = computed(() =>
     <!-- Expanded content (default slot) -->
     <template #default="{ toggle }">
       <aside
-        class="flex min-h-0 h-full flex-col justify-between border-r border-r-(--border) bg-(--sidebar) p-2"
+        class="flex min-h-0 h-full flex-col justify-between p-2"
       >
-        <!-- Drag region + collapse button -->
-        <div class="flex items-center">
-          <div :style="{ WebkitAppRegion: 'drag' }" class="h-7 flex-1" />
+        <div class="flex items-center justify-end">
           <button
             type="button"
-            class="rounded-lg p-1.5 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
+            class="rounded-lg p-1.5 text-white/40 hover:bg-white/6 hover:text-white transition-colors"
             title="Скрыть сайдбар (⌘/)"
             @click="toggle"
           >

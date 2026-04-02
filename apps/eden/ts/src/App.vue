@@ -30,65 +30,61 @@
     />
 
     <div
-      :class="['sidebar-layout', layout.activeResizePanel ? 'is-resizing' : '']"
+      class="sidebar-layout"
       :style="eden.activeScreen === 'settings' ? { display: 'none' } : undefined"
     >
       <!-- Vault sidebar -->
-      <div
-        :class="[
-          'vault-sidebar-wrapper',
-          layout.vaultSidebarCollapsed ? 'collapsed' : '',
-          layout.sidebarAnimating ? 'sidebarAnimation' : '',
-          layout.activeResizePanel === 'vault' ? 'is-resizing' : '',
-        ]"
-        :style="{ width: (layout.vaultSidebarCollapsed ? 0 : layout.vaultSidebarWidth) + 'px' }"
+      <ResizableSidebar
+        v-model:collapsed="layout.vaultSidebarCollapsed"
+        :default-width="232"
+        :min-width="180"
+        :max-width="360"
+        :collapse-threshold="60"
+        :initial-config="{ width: layout.vaultSidebarWidth, collapsed: layout.vaultSidebarCollapsed }"
+        @config-change="layout.onVaultConfigChange"
       >
-        <VaultSidebar
-          :vault-path="eden.vaultPath"
-          :recent-vault-paths="eden.recentVaultPaths"
-          :collapsed="layout.vaultSidebarCollapsed"
-          @toggle-collapsed="layout.toggleVaultSidebar()"
-          @select-vault="(path) => eden.selectVaultPath(path)"
-          @open-vault-picker="eden.selectFolder()"
-        />
-        <div class="vault-sidebar-resize-handle" @mousedown.prevent="layout.onResizeStart('vault')">
-          <div class="resize-handle-line" />
-        </div>
-      </div>
+        <template #default="{ toggle }">
+          <VaultSidebar
+            :vault-path="eden.vaultPath"
+            :recent-vault-paths="eden.recentVaultPaths"
+            :collapsed="layout.vaultSidebarCollapsed"
+            @toggle-collapsed="toggle"
+            @select-vault="(path) => eden.selectVaultPath(path)"
+            @open-vault-picker="eden.selectFolder()"
+          />
+        </template>
+      </ResizableSidebar>
 
       <!-- Widget sidebar -->
-      <div
-        :class="[
-          'widget-sidebar-wrapper',
-          layout.widgetSidebarCollapsed ? 'collapsed' : '',
-          layout.sidebarAnimating ? 'sidebarAnimation' : '',
-          layout.activeResizePanel === 'widget' ? 'is-resizing' : '',
-        ]"
-        :style="{ width: (layout.widgetSidebarCollapsed ? 0 : layout.widgetSidebarWidth) + 'px' }"
+      <ResizableSidebar
+        v-model:collapsed="layout.widgetSidebarCollapsed"
+        :default-width="320"
+        :min-width="220"
+        :max-width="520"
+        :collapse-threshold="60"
+        :offset-x="layout.vaultSidebarCollapsed ? 0 : layout.vaultSidebarWidth"
+        :initial-config="{ width: layout.widgetSidebarWidth, collapsed: layout.widgetSidebarCollapsed }"
+        @config-change="layout.onWidgetConfigChange"
       >
-        <WidgetSidebar
-          :is-search-open="layout.isSearchOpen"
-          :is-vault-sidebar-collapsed="layout.vaultSidebarCollapsed"
-          :active-space="eden.activeSpace"
-          :entries="eden.entries"
-          :note-types="eden.noteTypes"
-          :current-entry="eden.currentEntry"
-          :search-query="layout.searchQuery"
-          @toggle-collapse="layout.toggleWidgetSidebar()"
-          @toggle-vault-sidebar="layout.toggleVaultSidebar()"
-          @select-space="onSelectSpace"
-          @search-toggle="layout.isSearchOpen = !layout.isSearchOpen"
-          @create-root-entry="eden.createNewEntry()"
-          @open-entry="(id) => eden.navigateTo(id)"
-          @open-settings="eden.activeScreen = 'settings'"
-        />
-        <div
-          class="widget-sidebar-resize-handle"
-          @mousedown.prevent="layout.onResizeStart('widget')"
-        >
-          <div class="resize-handle-line" />
-        </div>
-      </div>
+        <template #default="{ toggle }">
+          <WidgetSidebar
+            :is-search-open="layout.isSearchOpen"
+            :is-vault-sidebar-collapsed="layout.vaultSidebarCollapsed"
+            :active-space="eden.activeSpace"
+            :entries="eden.entries"
+            :note-types="eden.noteTypes"
+            :current-entry="eden.currentEntry"
+            :search-query="layout.searchQuery"
+            @toggle-collapse="toggle"
+            @toggle-vault-sidebar="layout.toggleVaultSidebar()"
+            @select-space="onSelectSpace"
+            @search-toggle="layout.isSearchOpen = !layout.isSearchOpen"
+            @create-root-entry="eden.createNewEntry()"
+            @open-entry="(id) => eden.navigateTo(id)"
+            @open-settings="eden.activeScreen = 'settings'"
+          />
+        </template>
+      </ResizableSidebar>
     </div>
 
     <main class="app-main">
@@ -140,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch, watchEffect } from "vue";
+import { onMounted, watch } from "vue";
 import { useEdenStore } from "@/store/eden";
 import { useLayoutStore } from "@/store/layout";
 import { useKeyboard } from "@/composables/useKeyboard";
@@ -148,6 +144,7 @@ import { usePlatform } from "@/composables/usePlatform";
 import { useSearch } from "@/composables/useSearch";
 import { useTitlebarSafeArea } from "@/composables/useTitlebarSafeArea";
 import type { SpaceId } from "@/components/sidebar/types";
+import ResizableSidebar from "@kepler/visuals/components/ResizableSidebar.vue";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import VaultSidebar from "@/components/sidebar/VaultSidebar.vue";
@@ -167,17 +164,6 @@ const { pendingQuery } = useSearch();
 
 onMounted(() => {
   void eden.initApp();
-});
-
-// Attach sidebar resize mouse listeners when dragging
-watchEffect((onCleanup) => {
-  if (!layout.activeResizePanel) return;
-  window.addEventListener("mousemove", layout.onResizeMove);
-  window.addEventListener("mouseup", layout.onResizeEnd);
-  onCleanup(() => {
-    window.removeEventListener("mousemove", layout.onResizeMove);
-    window.removeEventListener("mouseup", layout.onResizeEnd);
-  });
 });
 
 // Auto-open my-space entry when needed

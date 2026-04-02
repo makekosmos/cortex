@@ -48,8 +48,8 @@ li {
   scrollbar-gutter: stable both-edges;
 }
 
-/* Theme CSS variables from @kosmos/ui — single source of truth */
-@import "../../../../packages/kosmos-ui/theme/css-variables.css";
+/* Theme CSS variables from @kepler/visuals — single source of truth */
+@import "../../../../packages/kepler-visuals/theme/css-variables.css";
 
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
