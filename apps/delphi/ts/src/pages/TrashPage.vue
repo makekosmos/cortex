@@ -5,7 +5,7 @@ import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
-import TodoRow from "@/components/TodoRow.vue";
+import TodoRow from "@kepler/visuals/components/TodoRow.vue";
 
 const store = useTodoStore();
 const { todos } = storeToRefs(store);

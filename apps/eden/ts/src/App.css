@@ -36,19 +36,19 @@
   transition: width 0.2s linear;
 }
 
-.vault-sidebar-wrapper.collapsed,
-.widget-sidebar-wrapper.collapsed {
+.vault-sidebar-wrapper.hidden,
+.widget-sidebar-wrapper.hidden {
   width: 0 !important;
 }
 
-.vault-sidebar-wrapper.collapsed .sidebarPage,
-.widget-sidebar-wrapper.collapsed .sidebarPage {
+.vault-sidebar-wrapper.hidden .sidebarPage,
+.widget-sidebar-wrapper.hidden .sidebarPage {
   opacity: 0;
   transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.vault-sidebar-wrapper:not(.collapsed) .sidebarPage,
-.widget-sidebar-wrapper:not(.collapsed) .sidebarPage {
+.vault-sidebar-wrapper:not(.hidden) .sidebarPage,
+.widget-sidebar-wrapper:not(.hidden) .sidebarPage {
   opacity: 1;
   transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -4022,7 +4022,7 @@ span[data-wikilink]:hover {
   padding: 8px 0 8px 8px;
 }
 
-.vault-sidebar-wrapper.collapsed {
+.vault-sidebar-wrapper.hidden {
   padding: 0;
 }
 
@@ -4840,8 +4840,8 @@ span[data-wikilink]:hover {
   opacity: 1;
 }
 
-.vault-sidebar-wrapper.collapsed .vault-sidebar-resize-handle,
-.widget-sidebar-wrapper.collapsed .widget-sidebar-resize-handle {
+.vault-sidebar-wrapper.hidden .vault-sidebar-resize-handle,
+.widget-sidebar-wrapper.hidden .widget-sidebar-resize-handle {
   display: none;
 }
 

@@ -6,7 +6,7 @@ import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
 import { useQuickEntry } from "@/composables/useQuickEntry";
-import TodoRow from "@/components/TodoRow.vue";
+import TodoRow from "@kepler/visuals/components/TodoRow.vue";
 
 const { show: openQuickEntry } = useQuickEntry();
 

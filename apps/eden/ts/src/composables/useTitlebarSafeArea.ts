@@ -6,8 +6,8 @@ export function useTitlebarSafeArea() {
 
   watchEffect(() => {
     const leftArea =
-      (layout.vaultSidebarCollapsed ? 0 : layout.vaultSidebarWidth) +
-      (layout.widgetSidebarCollapsed ? 0 : layout.widgetSidebarWidth);
+      (layout.vaultSidebarHidden ? 0 : layout.vaultSidebarWidth) +
+      (layout.widgetSidebarHidden ? 0 : layout.widgetSidebarWidth);
     document.documentElement.style.setProperty("--titlebar-left-safe-area", `${leftArea}px`);
   });
 }

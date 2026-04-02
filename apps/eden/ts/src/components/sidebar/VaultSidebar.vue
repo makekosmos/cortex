@@ -21,7 +21,7 @@
             class="sidebar-head-icon withBackground"
             title="Скрыть хранилища"
             type="button"
-            @click="emit('toggleCollapsed')"
+            @click="emit('toggleHidden')"
           >
             <span aria-hidden="true" class="anytype-icon toggleVault" />
           </button>
@@ -94,11 +94,11 @@ import { ref, computed } from "vue";
 const props = defineProps<{
   vaultPath: string | null;
   recentVaultPaths: string[];
-  collapsed: boolean;
+  hidden: boolean;
 }>();
 
 const emit = defineEmits<{
-  toggleCollapsed: [];
+  toggleHidden: [];
   selectVault: [vaultPath: string];
   openVaultPicker: [];
 }>();

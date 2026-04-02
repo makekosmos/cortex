@@ -8,27 +8,27 @@ const MAX_VAULT_SIDEBAR_WIDTH = 360;
 
 export const useLayoutStore = defineStore("layout", () => {
   const widgetSidebarWidth = ref(320);
-  const widgetSidebarCollapsed = ref(false);
+  const widgetSidebarHidden = ref(false);
   const vaultSidebarWidth = ref(232);
-  const vaultSidebarCollapsed = ref(false);
+  const vaultSidebarHidden = ref(false);
   const isSearchOpen = ref(false);
   const searchQuery = ref("");
   const searchResults = ref<SearchResult[]>([]);
 
   async function toggleWidgetSidebar() {
-    widgetSidebarCollapsed.value = !widgetSidebarCollapsed.value;
+    widgetSidebarHidden.value = !widgetSidebarHidden.value;
     if (window.api) {
       await window.api.updateSidebarConfig({
-        widget: { collapsed: widgetSidebarCollapsed.value, width: widgetSidebarWidth.value },
+        widget: { hidden: widgetSidebarHidden.value, width: widgetSidebarWidth.value },
       });
     }
   }
 
   async function toggleVaultSidebar() {
-    vaultSidebarCollapsed.value = !vaultSidebarCollapsed.value;
+    vaultSidebarHidden.value = !vaultSidebarHidden.value;
     if (window.api) {
       await window.api.updateSidebarConfig({
-        vault: { collapsed: vaultSidebarCollapsed.value, width: vaultSidebarWidth.value },
+        vault: { hidden: vaultSidebarHidden.value, width: vaultSidebarWidth.value },
       });
     }
   }
@@ -43,23 +43,23 @@ export const useLayoutStore = defineStore("layout", () => {
     searchResults.value = [];
   }
 
-  async function onVaultConfigChange(config: { width: number; collapsed: boolean }) {
+  async function onVaultConfigChange(config: { width: number; hidden: boolean }) {
     vaultSidebarWidth.value = Math.max(
       MIN_VAULT_SIDEBAR_WIDTH,
       Math.min(MAX_VAULT_SIDEBAR_WIDTH, config.width),
     );
-    vaultSidebarCollapsed.value = config.collapsed;
+    vaultSidebarHidden.value = config.hidden;
     if (window.api) {
       await window.api.updateSidebarConfig({ vault: config });
     }
   }
 
-  async function onWidgetConfigChange(config: { width: number; collapsed: boolean }) {
+  async function onWidgetConfigChange(config: { width: number; hidden: boolean }) {
     widgetSidebarWidth.value = Math.max(
       MIN_WIDGET_SIDEBAR_WIDTH,
       Math.min(MAX_WIDGET_SIDEBAR_WIDTH, config.width),
     );
-    widgetSidebarCollapsed.value = config.collapsed;
+    widgetSidebarHidden.value = config.hidden;
     if (window.api) {
       await window.api.updateSidebarConfig({ widget: config });
     }
@@ -67,9 +67,9 @@ export const useLayoutStore = defineStore("layout", () => {
 
   return {
     widgetSidebarWidth,
-    widgetSidebarCollapsed,
+    widgetSidebarHidden,
     vaultSidebarWidth,
-    vaultSidebarCollapsed,
+    vaultSidebarHidden,
     isSearchOpen,
     searchQuery,
     searchResults,

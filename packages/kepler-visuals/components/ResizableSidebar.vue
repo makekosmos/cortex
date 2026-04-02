@@ -5,47 +5,46 @@ import "./sidebar.css";
 
 export interface SidebarConfig {
   width: number;
-  collapsed: boolean;
+  hidden: boolean;
 }
 
 interface Props {
   defaultWidth?: number;
   minWidth?: number;
   maxWidth?: number;
-  collapseThreshold?: number;
+  hiddenWidth?: number;
   toggleShortcut?: string;
   className?: string;
   initialConfig?: Partial<SidebarConfig>;
   dragRegion?: boolean;
   offsetX?: number;
-  collapsed?: boolean;
+  hidden?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   defaultWidth: 200,
   minWidth: 160,
   maxWidth: 320,
-  collapseThreshold: 60,
+  hiddenWidth: 80,
   toggleShortcut: undefined,
   className: undefined,
   initialConfig: undefined,
   dragRegion: false,
   offsetX: 0,
-  collapsed: undefined,
+  hidden: undefined,
 });
 
 const emit = defineEmits<{
   configChange: [config: SidebarConfig];
-  "update:collapsed": [collapsed: boolean];
+  "update:hidden": [hidden: boolean];
 }>();
 
 const width = shallowRef(props.initialConfig?.width ?? props.defaultWidth);
-const _collapsed = shallowRef(
-  props.collapsed !== undefined
-    ? props.collapsed
-    : (props.initialConfig?.collapsed ?? false),
+const _hidden = shallowRef(
+  props.hidden !== undefined
+    ? props.hidden
+    : (props.initialConfig?.hidden ?? false),
 );
-const _fullyHidden = shallowRef(false);
 const isResizing = shallowRef(false);
 const animating = shallowRef(false);
 const lineExpanded = shallowRef(false);
@@ -59,19 +58,19 @@ const isAnimatingRef = shallowRef(false);
 
 const configRef = shallowRef<SidebarConfig>({
   width: width.value,
-  collapsed: _collapsed.value,
+  hidden: _hidden.value,
 });
 
-watch([width, _collapsed], () => {
-  configRef.value = { width: width.value, collapsed: _collapsed.value };
+watch([width, _hidden], () => {
+  configRef.value = { width: width.value, hidden: _hidden.value };
 });
 
 watch(
-  () => props.collapsed,
+  () => props.hidden,
   (val) => {
-    if (val !== undefined && val !== _collapsed.value) {
+    if (val !== undefined && val !== _hidden.value) {
       startAnimation();
-      _collapsed.value = val;
+      _hidden.value = val;
     }
   },
 );
@@ -94,12 +93,10 @@ function startAnimation() {
 }
 
 function toggle() {
-  const next = !_fullyHidden.value;
-  _fullyHidden.value = next;
-  if (!next && _collapsed.value) {
-    _collapsed.value = false;
-    emit("update:collapsed", false);
-  }
+  startAnimation();
+  _hidden.value = !_hidden.value;
+  emit("update:hidden", _hidden.value);
+  notifyConfigChange({ width: width.value, hidden: _hidden.value });
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -131,7 +128,7 @@ function handleResizeStart(e: MouseEvent) {
 }
 
 function handleResizeMove(e: MouseEvent) {
-  if (isAnimatingRef.value || _fullyHidden.value) return;
+  if (isAnimatingRef.value || _hidden.value) return;
 
   if (resizeRaf.value) {
     cancelAnimationFrame(resizeRaf.value);
@@ -141,26 +138,6 @@ function handleResizeMove(e: MouseEvent) {
     if (isAnimatingRef.value) return;
 
     const newWidth = e.clientX - (props.offsetX ?? 0);
-
-    if (newWidth <= props.collapseThreshold) {
-      if (!_collapsed.value) {
-        startAnimation();
-        _collapsed.value = true;
-        configRef.value = { ...configRef.value, collapsed: true };
-        emit("update:collapsed", true);
-      }
-      return;
-    }
-
-    if (_collapsed.value) {
-      startAnimation();
-      _collapsed.value = false;
-      width.value = props.minWidth;
-      configRef.value = { width: props.minWidth, collapsed: false };
-      emit("update:collapsed", false);
-      return;
-    }
-
     const clamped = Math.max(
       props.minWidth,
       Math.min(props.maxWidth, newWidth),
@@ -216,16 +193,14 @@ onUnmounted(() => {
 });
 
 const wrapperStyle = computed(() => {
-  if (_fullyHidden.value) return { width: "6px", padding: "0" };
-  if (_collapsed.value) return {};
+  if (_hidden.value) return { width: `${props.hiddenWidth}px` };
   return { width: `${width.value}px` };
 });
 
 const wrapperClasses = computed(() =>
   [
     "kepler-sidebar-wrapper",
-    _fullyHidden.value ? "fully-hidden" : "",
-    _collapsed.value && !_fullyHidden.value ? "collapsed" : "",
+    _hidden.value ? "hidden" : "",
     animating.value ? "animating" : "",
     isResizing.value ? "is-resizing" : "",
     props.className ?? "",
@@ -238,15 +213,12 @@ const wrapperClasses = computed(() =>
 <template>
   <div :class="wrapperClasses" :style="wrapperStyle">
     <div
-      v-if="dragRegion && !_fullyHidden"
-      :style="{ WebkitAppRegion: 'drag' } as any"
-      class="kepler-sidebar-drag-region"
-    />
-    <div class="kepler-sidebar-content">
-      <slot v-if="!_collapsed" :toggle="toggle" />
-      <slot v-else-if="$slots.collapsed" name="collapsed" :toggle="toggle" />
+      class="kepler-sidebar-content"
+      :style="dragRegion ? { WebkitAppRegion: 'drag' } as any : undefined"
+    >
+      <slot v-if="!_hidden" :toggle="toggle" />
     </div>
-    <div class="kepler-sidebar-resize-handle" @mousedown="handleResizeStart">
+    <div v-if="!_hidden" class="kepler-sidebar-resize-handle" @mousedown="handleResizeStart">
       <div :class="['kepler-resize-handle-line', lineExpanded ? 'expanded' : '']" />
     </div>
   </div>

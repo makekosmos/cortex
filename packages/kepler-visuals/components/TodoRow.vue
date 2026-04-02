@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { shallowRef, computed, useTemplateRef, nextTick } from "vue";
 import { Circle, CheckCircle2 } from "lucide-vue-next";
-import type { TodoItem } from "@/types/task";
+
+export interface TodoRowItem {
+  title: string;
+  notes?: string | null;
+  isCompleted?: boolean;
+  isCancelled?: boolean;
+  isTrashed?: boolean;
+}
 
 const props = defineProps<{
-  todo: TodoItem;
+  todo: TodoRowItem;
 }>();
 
 const emit = defineEmits<{
@@ -44,6 +51,7 @@ function onEditKeyDown(e: KeyboardEvent) {
 <template>
   <div
     class="group flex items-center gap-3 px-7 py-2 hover:bg-(--secondary)"
+    style="max-width: var(--bringhurst-wide)"
     @dblclick="startEditing"
   >
     <!-- Checkbox -->

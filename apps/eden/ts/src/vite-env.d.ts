@@ -219,15 +219,15 @@ interface Window {
     lintCodeBlock: (language: string, code: string) => Promise<CodeLintResult>;
     formatCodeBlock: (language: string, code: string) => Promise<CodeFormatResult>;
     getSidebarConfig: () => Promise<{
-      widget: { width: number; collapsed: boolean };
-      vault: { width: number; collapsed: boolean };
+      widget: { width: number; hidden: boolean };
+      vault: { width: number; hidden: boolean };
     }>;
     updateSidebarConfig: (config: {
-      widget?: { width?: number; collapsed?: boolean };
-      vault?: { width?: number; collapsed?: boolean };
+      widget?: { width?: number; hidden?: boolean };
+      vault?: { width?: number; hidden?: boolean };
     }) => Promise<{
-      widget: { width: number; collapsed: boolean };
-      vault: { width: number; collapsed: boolean };
+      widget: { width: number; hidden: boolean };
+      vault: { width: number; hidden: boolean };
     }>;
     getPlatform: () => Promise<NodeJS.Platform>;
     listTrashEntries: () => Promise<Entry[]>;

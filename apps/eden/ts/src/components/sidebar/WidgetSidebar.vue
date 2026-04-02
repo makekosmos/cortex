@@ -3,7 +3,7 @@
     <div class="head">
       <div class="side left">
         <button
-          v-if="isVaultSidebarCollapsed"
+          v-if="isVaultSidebarHidden"
           class="sidebar-head-icon withBackground"
           title="Показать хранилища"
           type="button"
@@ -250,7 +250,7 @@ const ObjectIcon = (props: { entry: Entry; noteTypes: NoteType[]; size: number }
 
 const props = defineProps<{
   isSearchOpen?: boolean;
-  isVaultSidebarCollapsed: boolean;
+  isVaultSidebarHidden: boolean;
   activeSpace: SpaceId;
   entries: Entry[];
   noteTypes: NoteType[];

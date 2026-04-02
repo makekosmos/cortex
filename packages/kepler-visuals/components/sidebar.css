@@ -6,17 +6,16 @@
   flex-direction: row;
   padding: 6px;
   box-sizing: border-box;
-  transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-              padding 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .kepler-sidebar-wrapper.animating {
   transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.kepler-sidebar-wrapper.fully-hidden .kepler-sidebar-content {
-  opacity: 0;
-  pointer-events: none;
+.kepler-sidebar-wrapper.hidden .kepler-sidebar-content {
+  background: transparent;
+  border-color: transparent;
 }
 
 
@@ -25,14 +24,15 @@
   min-width: 0;
   height: 100%;
   opacity: 1;
-  transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   border-radius: 32px;
   corner-shape: squircle;
   background: var(--color-shape-highlight-light-solid);
   border: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
-
 
 .kepler-sidebar-resize-handle {
   width: 6px;
@@ -65,6 +65,14 @@
 
 .kepler-sidebar-resize-handle:hover .kepler-resize-handle-line {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* Make interactive elements inside a draggable sidebar clickable */
+.kepler-sidebar-content a,
+.kepler-sidebar-content button,
+.kepler-sidebar-content input,
+.kepler-sidebar-content [role="button"] {
+  -webkit-app-region: no-drag;
 }
 
 body.sidebar-resizing {

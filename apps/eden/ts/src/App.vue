@@ -35,20 +35,19 @@
     >
       <!-- Vault sidebar -->
       <ResizableSidebar
-        v-model:collapsed="layout.vaultSidebarCollapsed"
+        v-model:hidden="layout.vaultSidebarHidden"
         :default-width="232"
         :min-width="180"
         :max-width="360"
-        :collapse-threshold="60"
-        :initial-config="{ width: layout.vaultSidebarWidth, collapsed: layout.vaultSidebarCollapsed }"
+        :initial-config="{ width: layout.vaultSidebarWidth, hidden: layout.vaultSidebarHidden }"
         @config-change="layout.onVaultConfigChange"
       >
         <template #default="{ toggle }">
           <VaultSidebar
             :vault-path="eden.vaultPath"
             :recent-vault-paths="eden.recentVaultPaths"
-            :collapsed="layout.vaultSidebarCollapsed"
-            @toggle-collapsed="toggle"
+            :hidden="layout.vaultSidebarHidden"
+            @toggle-hidden="toggle"
             @select-vault="(path) => eden.selectVaultPath(path)"
             @open-vault-picker="eden.selectFolder()"
           />
@@ -57,19 +56,18 @@
 
       <!-- Widget sidebar -->
       <ResizableSidebar
-        v-model:collapsed="layout.widgetSidebarCollapsed"
+        v-model:hidden="layout.widgetSidebarHidden"
         :default-width="320"
         :min-width="220"
         :max-width="520"
-        :collapse-threshold="60"
-        :offset-x="layout.vaultSidebarCollapsed ? 0 : layout.vaultSidebarWidth"
-        :initial-config="{ width: layout.widgetSidebarWidth, collapsed: layout.widgetSidebarCollapsed }"
+        :offset-x="layout.vaultSidebarHidden ? 0 : layout.vaultSidebarWidth"
+        :initial-config="{ width: layout.widgetSidebarWidth, hidden: layout.widgetSidebarHidden }"
         @config-change="layout.onWidgetConfigChange"
       >
         <template #default="{ toggle }">
           <WidgetSidebar
             :is-search-open="layout.isSearchOpen"
-            :is-vault-sidebar-collapsed="layout.vaultSidebarCollapsed"
+            :is-vault-sidebar-hidden="layout.vaultSidebarHidden"
             :active-space="eden.activeSpace"
             :entries="eden.entries"
             :note-types="eden.noteTypes"
@@ -89,7 +87,7 @@
 
     <main class="app-main">
       <button
-        v-if="layout.widgetSidebarCollapsed"
+        v-if="layout.widgetSidebarHidden"
         class="sidebar-head-icon withBackground sidebar-expand-btn"
         data-testid="sidebar-toggle-external"
         type="button"

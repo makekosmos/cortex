@@ -16,7 +16,7 @@ const { show: openQuickEntry } = useQuickEntry();
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
-import TodoRow from "@/components/TodoRow.vue";
+import TodoRow from "@kepler/visuals/components/TodoRow.vue";
 import { arkSync, projectToArkChange } from "@/services/sync/ark-client";
 import { broadcastToPeers } from "@/services/sync/peer-bridge";
 
