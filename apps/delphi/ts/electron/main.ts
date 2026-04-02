@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -43,12 +43,35 @@ function getDataDir(): string {
   return dir;
 }
 
+const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+
+function loadWindowState(): { width: number; height: number; x?: number; y?: number; isMaximized?: boolean } {
+  try {
+    if (fs.existsSync(WINDOW_STATE_FILE)) {
+      return JSON.parse(fs.readFileSync(WINDOW_STATE_FILE, 'utf-8'));
+    }
+  } catch { /* ignore */ }
+  return { width: 1440, height: 1080 };
+}
+
+function saveWindowState(win: BrowserWindow) {
+  const isMaximized = win.isMaximized();
+  const bounds = isMaximized ? (win as any)._lastBounds ?? win.getBounds() : win.getBounds();
+  fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ ...bounds, isMaximized }), 'utf-8');
+}
+
 function createWindow() {
+  Menu.setApplicationMenu(null);
+
+  const saved = loadWindowState();
+
   const win = new BrowserWindow({
-    width: 800,
-    height: 600,
-    minWidth: 400,
-    minHeight: 200,
+    width: saved.width,
+    height: saved.height,
+    x: saved.x,
+    y: saved.y,
+    minWidth: 1280,
+    minHeight: 720,
     title: 'Delphi',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
@@ -59,11 +82,24 @@ function createWindow() {
     },
   });
 
+  if (saved.isMaximized) win.maximize();
+
+  // Track bounds before maximize so we can save the windowed size
+  win.on('resize', () => { if (!win.isMaximized()) (win as any)._lastBounds = win.getBounds(); });
+  win.on('move', () => { if (!win.isMaximized()) (win as any)._lastBounds = win.getBounds(); });
+  win.on('close', () => saveWindowState(win));
+
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+
+  win.webContents.on('before-input-event', (_event, input) => {
+    if (input.key === 'F12') {
+      win.webContents.toggleDevTools();
+    }
+  });
 }
 
 // --- IPC handlers for filesystem storage ---

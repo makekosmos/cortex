@@ -199,14 +199,14 @@ function handleToggleToday(todo: TodoItem) {
 <template>
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
-    <div class="flex items-center gap-2.5 px-7 pb-3 pt-6">
+    <div class="mx-auto w-full max-w-(--bringhurst-wide) flex items-center justify-center gap-2.5 px-7 pb-3 pt-6">
       <Calendar :size="24" class="text-red-500" />
       <h1 class="text-2xl font-bold text-(--foreground) select-none">Планы</h1>
     </div>
 
     <!-- Scrollable content -->
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
-      <div class="pb-20 pt-1">
+      <div class="mx-auto w-full max-w-(--bringhurst-wide) pb-20 pt-1">
         <div v-for="section in sections" :key="section.id">
           <!-- Section header -->
           <div

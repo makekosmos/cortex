@@ -75,7 +75,7 @@ function handleDisconnectArk() {
 
 <template>
   <div class="h-full min-h-0 w-full overflow-auto bg-(--background) p-4">
-    <div class="mx-auto flex w-full max-w-lg flex-col gap-4 py-6">
+    <div class="mx-auto flex w-full max-w-(--bringhurst-wide) flex-col gap-4 py-6">
       <section
         class="bg-(--background) border-(--border) w-full rounded-xl border p-5"
       >

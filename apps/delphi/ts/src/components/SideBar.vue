@@ -59,6 +59,8 @@ const store = useTodoStore();
 const { projects } = storeToRefs(store);
 const route = useRoute();
 
+const isMac = navigator.platform.startsWith("Mac");
+
 const activeProjects = computed(() =>
   projects.value
     .filter((p) => p.status === ProjectStatus.Active)
@@ -72,14 +74,14 @@ const activeProjects = computed(() =>
     :min-width="160"
     :max-width="320"
     :hidden-width="80"
-    toggle-shortcut="meta+b"
+    toggle-shortcut="meta+b|ctrl+b"
     drag-region
     :initial-config="loadConfig()"
     @config-change="saveConfig"
   >
     <template #default="{ toggle }">
       <aside class="flex min-h-0 h-full flex-col justify-between p-2">
-        <div class="flex items-center justify-end">
+        <div v-if="isMac" class="flex items-center justify-end">
           <button
             type="button"
             class="rounded-lg p-1.5 text-white/40 hover:bg-white/6 hover:text-white transition-colors"
@@ -109,7 +111,7 @@ const activeProjects = computed(() =>
               :key="project.id"
               :to="`/project/${project.id}`"
               :class="[
-                'flex h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+                'sidebar-project-link flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-sm transition-colors',
                 route.path === `/project/${project.id}`
                   ? 'bg-(--accent) text-(--foreground) font-medium'
                   : 'text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)',
@@ -134,3 +136,10 @@ const activeProjects = computed(() =>
     </template>
   </ResizableSidebar>
 </template>
+
+<style scoped>
+.sidebar-project-link {
+  border-radius: calc(var(--radius) * 1.4);
+  corner-shape: var(--corner-shape);
+}
+</style>

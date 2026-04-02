@@ -130,6 +130,17 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", handleOutsideClick);
 });
 
+function handleDrop(targetId: string, sourceId: string) {
+  if (!sourceId || sourceId === targetId) return;
+  const list = [...activeTodos.value];
+  const sourceIdx = list.findIndex((t) => t.id === sourceId);
+  const targetIdx = list.findIndex((t) => t.id === targetId);
+  if (sourceIdx === -1 || targetIdx === -1) return;
+  const [item] = list.splice(sourceIdx, 1);
+  list.splice(targetIdx, 0, item);
+  list.forEach((t, i) => store.updateTodo(t.id, { sortOrder: i }));
+}
+
 function handleDelete() {
   if (!project.value) return;
   menuOpen.value = false;
@@ -166,7 +177,7 @@ function handleArchive() {
   <!-- Project view -->
   <div v-else class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
-    <div class="flex items-center gap-2.5 px-7 pb-3 pt-6">
+    <div class="mx-auto w-full max-w-(--bringhurst-wide) relative flex items-center justify-center gap-2.5 px-7 pb-3 pt-6">
       <Circle
         :size="12"
         :class="['shrink-0 fill-current', colorTagClass(project.colorTag)]"
@@ -195,7 +206,7 @@ function handleArchive() {
       </span>
 
       <!-- Context menu -->
-      <div ref="menuRef" class="relative ml-auto">
+      <div ref="menuRef" class="absolute right-7">
         <button
           type="button"
           class="rounded p-1 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
@@ -236,7 +247,7 @@ function handleArchive() {
 
     <!-- Task list -->
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
-      <div class="pb-20 pt-1">
+      <div class="mx-auto w-full max-w-(--bringhurst-wide) pb-20 pt-1">
         <div
           v-if="activeTodos.length === 0 && completedTodos.length === 0"
           class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
@@ -251,6 +262,7 @@ function handleArchive() {
               :todo="todo"
               @complete="store.completeTodo(todo.id)"
               @trash="store.trashTodo(todo.id)"
+              @drop="handleDrop($event, todo.id)"
             />
           </div>
 

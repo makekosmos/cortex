@@ -1,6 +1,8 @@
 :root {
-  --radius: 0.65rem;
+  --radius: 0.85rem;
+  --corner-shape: squircle;
   --bringhurst-wide: 600px;
+  --accent-focus: #2563eb;
 
   --color-bg-primary: #171717;
   --color-shape-highlight-light-solid: #1e1e1e;

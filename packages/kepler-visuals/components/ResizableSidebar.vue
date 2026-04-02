@@ -99,21 +99,28 @@ function toggle() {
   notifyConfigChange({ width: width.value, hidden: _hidden.value });
 }
 
-function handleKeydown(e: KeyboardEvent) {
-  if (!props.toggleShortcut) return;
-
-  const parts = props.toggleShortcut.toLowerCase().split("+");
+function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
+  const parts = shortcut.toLowerCase().split("+");
   const key = parts[parts.length - 1];
   const needsMeta = parts.includes("meta");
   const needsCtrl = parts.includes("ctrl");
   const needsShift = parts.includes("shift");
-  const needsAlt = props.toggleShortcut.toLowerCase().includes("alt");
+  const needsAlt = parts.includes("alt");
 
-  if (needsMeta && !e.metaKey) return;
-  if (needsCtrl && !e.ctrlKey) return;
-  if (needsShift && !e.shiftKey) return;
-  if (needsAlt && !e.altKey) return;
-  if (e.key !== key && e.key.toLowerCase() !== key) return;
+  if (needsMeta && !e.metaKey) return false;
+  if (needsCtrl && !e.ctrlKey) return false;
+  if (needsShift && !e.shiftKey) return false;
+  if (needsAlt && !e.altKey) return false;
+  const codeKey = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : null;
+  if (e.key !== key && e.key.toLowerCase() !== key && codeKey !== key) return false;
+  return true;
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (!props.toggleShortcut) return;
+
+  const shortcuts = props.toggleShortcut.split("|");
+  if (!shortcuts.some((s) => matchesShortcut(e, s))) return;
 
   e.preventDefault();
   toggle();

@@ -51,6 +51,7 @@ import { useTodoStore } from "@/store/todos";
 import SideBar from "@/components/SideBar.vue";
 import QuickEntry from "@/components/QuickEntry.vue";
 import QuickOpen from "@/components/QuickOpen.vue";
+import QuickSearch from "@/components/QuickSearch.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
 
@@ -59,6 +60,15 @@ import SpaceSetup from "@/components/SpaceSetup.vue";
 // ---------------------------------------------------------------------------
 
 const store = useTodoStore();
+
+const quickSearchOpen = shallowRef(false);
+
+function handleGlobalKeydown(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
+    e.preventDefault();
+    quickSearchOpen.value = !quickSearchOpen.value;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Connection state
@@ -617,6 +627,7 @@ async function handleAuthSubmit(connectionCode: string) {
 // ---------------------------------------------------------------------------
 
 onMounted(() => {
+  window.addEventListener("keydown", handleGlobalKeydown);
   if (isElectron) {
     // Electron: P2P space mode takes priority
     const code = getActiveSpace();
@@ -688,6 +699,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("keydown", handleGlobalKeydown);
   unsubStatus?.();
   unsubChange?.();
   unsubFullSync?.();
@@ -792,6 +804,7 @@ onUnmounted(() => {
 
     <QuickEntry />
     <QuickOpen />
+    <QuickSearch v-model:open="quickSearchOpen" />
 
     <AuthOverlay
       v-if="authRequired"
