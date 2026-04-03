@@ -4,6 +4,10 @@
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
+  "peerDependencies": {
+    "lucide-vue-next": "*",
+    "vue": "^3.0.0"
+  },
   "exports": {
     ".": "./index.ts",
     "./tokens": "./tokens/index.ts",

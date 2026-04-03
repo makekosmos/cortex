@@ -43,7 +43,6 @@ const isDragging = shallowRef(false);
 let clone: HTMLElement | null = null;
 let placeholderEl: HTMLElement | null = null;
 let placeholderTimer: ReturnType<typeof setTimeout> | null = null;
-let holdTimer: ReturnType<typeof setTimeout> | null = null;
 let lastTargetId: string | null = null;
 let lastInsertBeforeNode: Node | null = null;
 let startX = 0;
@@ -68,29 +67,25 @@ function onEditKeyDown(e: KeyboardEvent) {
   if (e.key === "Escape") editing.value = false;
 }
 
-function onRowPointerDown(e: PointerEvent) {
+function onGripPointerDown(e: PointerEvent) {
   if (!props.draggable || editing.value) return;
-  const target = e.target as HTMLElement;
-  if (target.closest("button") || target.closest("input")) return;
+  e.preventDefault();
 
-  const savedEvent = { clientX: e.clientX, clientY: e.clientY, preventDefault: () => e.preventDefault() } as PointerEvent;
-  holdTimer = setTimeout(() => {
-    holdTimer = null;
-    startDrag(savedEvent);
-  }, 300);
+  const ox = e.clientX;
+  const oy = e.clientY;
+  let started = false;
 
-  const cancelHold = () => {
-    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-    document.removeEventListener("pointerup", cancelHold);
-    document.removeEventListener("pointermove", onHoldMove);
-  };
-  const onHoldMove = (me: PointerEvent) => {
-    if (Math.abs(me.clientX - e.clientX) > 5 || Math.abs(me.clientY - e.clientY) > 5) {
-      cancelHold();
+  const onMove = (me: PointerEvent) => {
+    if (!started && (Math.abs(me.clientX - ox) > 3 || Math.abs(me.clientY - oy) > 3)) {
+      started = true;
+      startDrag({ clientX: ox, clientY: oy, preventDefault: () => {} } as PointerEvent);
     }
   };
-  document.addEventListener("pointerup", cancelHold, { once: true });
-  document.addEventListener("pointermove", onHoldMove);
+  const onUp = () => {
+    document.removeEventListener("pointermove", onMove);
+  };
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp, { once: true });
 }
 
 function startDrag(e: PointerEvent) {
@@ -210,14 +205,14 @@ function onPointerUp() {
       isDragging ? 'opacity-0' : '',
     ]"
     style="max-width: var(--bringhurst-wide)"
-    @pointerdown="onRowPointerDown"
     @dblclick="editable ? startEditing() : undefined"
   >
-    <!-- Drag handle (visual hint only) -->
+    <!-- Drag handle -->
     <GripVertical
       v-if="draggable"
       :size="14"
       class="shrink-0 cursor-grab text-(--muted-foreground)/30 opacity-0 transition-opacity group-hover:opacity-100"
+      @pointerdown.stop="onGripPointerDown"
     />
 
     <!-- Checkbox -->
