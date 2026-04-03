@@ -1,0 +1,25 @@
+{
+  "name": "@arksync/core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./hlc": "./src/hlc.ts",
+    "./protocol": "./src/protocol.ts",
+    "./peer-protocol": "./src/peer-protocol.ts",
+    "./space": "./src/space.ts",
+    "./storage": "./src/storage.ts",
+    "./sync-server": "./src/sync-server.ts",
+    "./sync-client": "./src/sync-client.ts"
+  },
+  "peerDependencies": {
+    "ws": ">=8.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2",
+    "ws": "^8.18.0",
+    "@types/ws": "^8.18.0"
+  }
+}

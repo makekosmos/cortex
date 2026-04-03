@@ -141,6 +141,7 @@ enum Request {
         value: String,
     },
     ClearAll,
+    DeleteTrashed,
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +353,16 @@ fn handle_request(request: Request) -> Result<Value, String> {
                     "DELETE FROM todos; DELETE FROM projects; DELETE FROM areas; DELETE FROM tags; DELETE FROM headings; DELETE FROM sync_kv;"
                 ).map_err(|e| e.to_string())?;
                 Ok(json!(null))
+            })
+        }
+
+        Request::DeleteTrashed => {
+            with_conn(|conn| {
+                let count = conn.execute(
+                    "DELETE FROM todos WHERE is_trashed = 1",
+                    [],
+                ).map_err(|e| e.to_string())?;
+                Ok(json!(count))
             })
         }
     }

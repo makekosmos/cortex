@@ -4,14 +4,13 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PeerManager } from './peer-manager';
-import type { PeerChange } from '../src/services/sync/peer-protocol';
-import { sidecar, dbLoadAll, dbUpsertTodo, dbDeleteTodo, dbBatchUpsertTodos, dbUpsertProject, dbDeleteProject, dbGetSyncKv, dbSetSyncKv, dbClearAll, dbSwitchSpace } from './sidecar';
-import { SyncServer } from './sync-server';
-import { SyncClient } from './sync-client';
+import type { PeerChange } from '@arksync/core';
+import { sidecar, dbLoadAll, dbUpsertTodo, dbDeleteTodo, dbBatchUpsertTodos, dbUpsertProject, dbDeleteProject, dbGetSyncKv, dbSetSyncKv, dbClearAll, dbDeleteTrashed, dbSwitchSpace } from './sidecar';
+import { SyncServer, SyncClient, LAN_SYNC_PORT, mergePeerRecords } from '@arksync/core';
+import { getOwnAddresses } from '@arksync/node';
+import type { SyncEntity, PeerRecord } from '@arksync/core';
+import { DelphiStorage } from './delphi-storage';
 import { BroadcastDiscovery } from './broadcast-discovery';
-import type { SyncEntity, PeerRecord } from '../src/services/sync/lan-protocol';
-import { LAN_SYNC_PORT, mergePeerRecords } from '../src/services/sync/lan-protocol';
-import { getOwnAddresses } from '../src/services/space/space-manager';
 
 // Suppress mDNS multicast errors — these happen on networks that don't support
 // multicast (VPN, some Wi-Fi). They're non-fatal; P2P degrades to relay-only.
@@ -259,18 +258,37 @@ ipcMain.handle('db:deleteProject', (_e, id) => dbDeleteProject(id))
 ipcMain.handle('db:getSyncKv', (_e, key) => dbGetSyncKv(key))
 ipcMain.handle('db:setSyncKv', (_e, key, value) => dbSetSyncKv(key, value))
 ipcMain.handle('db:clearAll', () => dbClearAll())
+ipcMain.handle('db:deleteTrashed', () => dbDeleteTrashed())
 ipcMain.handle('db:switchSpace', (_e, spaceId: string) => dbSwitchSpace(spaceId))
 
 ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
   const spaceDir = path.join(app.getPath('userData'), 'spaces', spaceId);
-  try {
-    fs.rmSync(spaceDir, { recursive: true, force: true });
-    console.log(`[Main] Deleted space DB: ${spaceDir}`);
-    return true;
-  } catch (err) {
-    console.error(`[Main] Failed to delete space DB:`, err);
-    return false;
+
+  // If the sidecar is currently using this space's DB, release it first
+  const currentPath = sidecar.currentDbPath;
+  if (currentPath && currentPath.startsWith(spaceDir)) {
+    sidecar.releaseAndReset();
+    // Give the OS time to release file locks
+    await new Promise(r => setTimeout(r, 200));
   }
+
+  // Retry deletion in case file locks are slow to release (Windows)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      fs.rmSync(spaceDir, { recursive: true, force: true });
+      console.log(`[Main] Deleted space DB: ${spaceDir}`);
+      return true;
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EPERM' && attempt < 2) {
+        await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+      console.error(`[Main] Failed to delete space DB:`, err);
+      return false;
+    }
+  }
+  return false;
 })
 
 ipcMain.handle('peer:stop', async () => {
@@ -323,12 +341,14 @@ function startSyncClientForPeer(peer: PeerRecord, deviceId: string, deviceName: 
   if (syncClients.has(peer.device_id)) return; // already have a client
   if (syncServer?.isConnectedTo(peer.device_id)) return; // already connected inbound
 
+  const clientStorage = new DelphiStorage(deviceId);
   const client = new SyncClient({
     peer,
     deviceId,
     deviceName,
     spaceId,
     ownAddresses,
+    storage: clientStorage,
     onChange: (entity) => {
       notifyRendererSyncChange(entity);
       // Re-broadcast to other peers via sync server
@@ -373,12 +393,14 @@ function connectToSeedAddresses(addresses: string[], deviceId: string, deviceNam
   const tempId = `seed-${Date.now()}`;
   let client: SyncClient;
 
+  const seedStorage = new DelphiStorage(deviceId);
   client = new SyncClient({
     peer: { device_id: tempId, device_name: 'Bootstrap', addresses, last_seen: new Date().toISOString() },
     deviceId,
     deviceName,
     spaceId: '',
     ownAddresses,
+    storage: seedStorage,
     onChange: (entity) => {
       notifyRendererSyncChange(entity);
       syncServer?.broadcastLiveChange(entity, tempId);
@@ -439,7 +461,8 @@ async function startSync(spaceId: string | undefined, deviceId: string, deviceNa
   const ownAddresses = collectOwnAddresses();
   const name = currentDeviceName;
 
-  syncServer = new SyncServer();
+  const storage = new DelphiStorage(deviceId);
+  syncServer = new SyncServer(storage);
 
   // When a peer sends us a change, forward to all renderer windows
   syncServer.onChange((entity: SyncEntity) => {
@@ -551,14 +574,18 @@ ipcMain.handle('lan-sync:stop', async () => {
 /** IPC: get sync status. */
 ipcMain.handle('lan-sync:getStatus', async () => {
   if (!syncServer) return { active: false, peers: 0, peerNames: [] };
-  const peerNames = syncServer.getConnectedPeerNames();
-  // Also include peers connected via clients
+  // Deduplicate peers by device_id across server + client connections
+  const seen = new Map<string, string>();
+  for (const entry of syncServer.getConnectedPeerEntries()) {
+    seen.set(entry.deviceId, entry.deviceName);
+  }
   for (const client of syncClients.values()) {
-    if (client.isConnected) {
-      peerNames.push(client.peerName);
+    if (client.isConnected && client.peerDeviceId) {
+      seen.set(client.peerDeviceId, client.peerName);
     }
   }
-  return { active: true, peers: getTotalConnectedPeerCount(), peerNames };
+  const peerNames = [...seen.values()];
+  return { active: true, peers: peerNames.length, peerNames };
 });
 
 /** IPC: broadcast a local change to sync peers. */

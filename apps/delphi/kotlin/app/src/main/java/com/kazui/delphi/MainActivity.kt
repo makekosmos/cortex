@@ -13,12 +13,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.lifecycleScope
-import com.kazui.delphi.data.db.ProjectDao
-import com.kazui.delphi.data.db.TodoDao
 import com.kazui.delphi.data.space.SpaceManager
 import com.kazui.delphi.data.sync.ArkEventMapper
 import com.kazui.delphi.data.sync.ArkPeerManager
 import com.kazui.delphi.data.sync.PeerManager
+import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.ui.navigation.DelphiNavGraph
 import com.kazui.delphi.ui.theme.DelphiTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -35,8 +34,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var arkPeerManager: ArkPeerManager
     @Inject lateinit var peerManager: PeerManager
     @Inject lateinit var spaceManager: SpaceManager
-    @Inject lateinit var todoDao: TodoDao
-    @Inject lateinit var projectDao: ProjectDao
+    @Inject lateinit var databaseProvider: DatabaseProvider
     @Inject lateinit var dataStore: DataStore<Preferences>
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,19 +46,20 @@ class MainActivity : ComponentActivity() {
         arkPeerManager.onChangeReceived = { change ->
             lifecycleScope.launch {
                 try {
+                    if (!databaseProvider.isOpen) return@launch
                     when {
                         ArkEventMapper.isTaskChange(change) -> {
                             if (change.change_type == "delete") {
-                                todoDao.deleteById(change.data.source_id)
+                                databaseProvider.todoDao().deleteById(change.data.source_id)
                             } else {
-                                ArkEventMapper.arkChangeToTodoItem(change)?.let { todoDao.upsert(it) }
+                                ArkEventMapper.arkChangeToTodoItem(change)?.let { databaseProvider.todoDao().upsert(it) }
                             }
                         }
                         ArkEventMapper.isProjectChange(change) -> {
                             if (change.change_type == "delete") {
-                                projectDao.deleteProjectById(change.data.source_id)
+                                databaseProvider.projectDao().deleteProjectById(change.data.source_id)
                             } else {
-                                ArkEventMapper.arkChangeToProject(change)?.let { projectDao.upsertProject(it) }
+                                ArkEventMapper.arkChangeToProject(change)?.let { databaseProvider.projectDao().upsertProject(it) }
                             }
                         }
                     }

@@ -12,10 +12,12 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     clearMocks: true,
     restoreMocks: true,
+    fileParallelism: false,
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@arksync/core': path.resolve(__dirname, '../../../packages/arksync/index.ts'),
     },
   },
 });

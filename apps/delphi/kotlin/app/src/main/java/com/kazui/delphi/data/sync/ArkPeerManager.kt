@@ -30,8 +30,7 @@ private const val RECONNECT_DELAY_MS = 15_000L
 
 @Singleton
 class ArkPeerManager @Inject constructor(
-    private val todoDao: com.kazui.delphi.data.db.TodoDao,
-    private val projectDao: com.kazui.delphi.data.db.ProjectDao,
+    private val databaseProvider: com.kazui.delphi.di.DatabaseProvider,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -405,8 +404,8 @@ class ArkPeerManager @Inject constructor(
     private fun pushLocalState(webSocket: WebSocket) {
         scope.launch {
             try {
-                val todos = todoDao.getAllForSync()
-                val projects = projectDao.getAllForSync()
+                val todos = databaseProvider.todoDao().getAllForSync()
+                val projects = databaseProvider.projectDao().getAllForSync()
                 var seq = 0
                 todos.forEach { todo ->
                     val change = ArkEventMapper.todoToArkChange(todo, "update", deviceId)

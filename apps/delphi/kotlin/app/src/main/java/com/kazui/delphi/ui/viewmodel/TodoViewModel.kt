@@ -2,8 +2,6 @@ package com.kazui.delphi.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kazui.delphi.data.db.ProjectDao
-import com.kazui.delphi.data.db.TodoDao
 import com.kazui.delphi.data.model.Priority
 import com.kazui.delphi.data.model.Project
 import com.kazui.delphi.data.model.SmartList
@@ -11,24 +9,28 @@ import com.kazui.delphi.data.model.TodoItem
 import com.kazui.delphi.data.sync.ArkEventMapper
 import com.kazui.delphi.data.sync.ArkSyncClient
 import com.kazui.delphi.data.sync.SyncStatus
+import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.domain.filter.TodoFilterService
 import com.kazui.delphi.domain.model.SmartListCounts
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class TodoViewModel @Inject constructor(
-    private val todoDao: TodoDao,
-    private val projectDao: ProjectDao,
+    private val databaseProvider: DatabaseProvider,
     private val syncClient: ArkSyncClient,
 ) : ViewModel() {
 
@@ -37,10 +39,18 @@ class TodoViewModel @Inject constructor(
     private val _selectedList = MutableStateFlow(SmartList.TODAY)
     val selectedList: StateFlow<SmartList> = _selectedList.asStateFlow()
 
-    val allTodos = todoDao.getAll()
+    val allTodos: StateFlow<List<TodoItem>> = databaseProvider.dbGeneration
+        .flatMapLatest {
+            if (!databaseProvider.isOpen) return@flatMapLatest flowOf(emptyList())
+            databaseProvider.todoDao().getAll()
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val allProjects = projectDao.getAllProjects()
+    val allProjects: StateFlow<List<Project>> = databaseProvider.dbGeneration
+        .flatMapLatest {
+            if (!databaseProvider.isOpen) return@flatMapLatest flowOf(emptyList())
+            databaseProvider.projectDao().getAllProjects()
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredTodos: StateFlow<List<TodoItem>> = combine(allTodos, _selectedList) { todos, list ->
@@ -55,22 +65,23 @@ class TodoViewModel @Inject constructor(
         viewModelScope.launch {
             syncClient.onChange { change ->
                 viewModelScope.launch {
+                    if (!databaseProvider.isOpen) return@launch
                     when {
                         ArkEventMapper.isTaskChange(change) -> {
                             if (change.change_type == "delete") {
-                                todoDao.deleteById(change.data.source_id)
+                                databaseProvider.todoDao().deleteById(change.data.source_id)
                             } else {
                                 ArkEventMapper.arkChangeToTodoItem(change)?.let {
-                                    todoDao.upsert(it)
+                                    databaseProvider.todoDao().upsert(it)
                                 }
                             }
                         }
                         ArkEventMapper.isProjectChange(change) -> {
                             if (change.change_type == "delete") {
-                                projectDao.deleteProjectById(change.data.source_id)
+                                databaseProvider.projectDao().deleteProjectById(change.data.source_id)
                             } else {
                                 ArkEventMapper.arkChangeToProject(change)?.let {
-                                    projectDao.upsertProject(it)
+                                    databaseProvider.projectDao().upsertProject(it)
                                 }
                             }
                         }
@@ -91,7 +102,7 @@ class TodoViewModel @Inject constructor(
                 title = title,
                 createdAt = Instant.now().toString(),
             )
-            todoDao.upsert(todo)
+            databaseProvider.todoDao().upsert(todo)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(todo, "create", "")
             )
@@ -105,7 +116,7 @@ class TodoViewModel @Inject constructor(
             } else {
                 todo.copy(isCompleted = true, completedAt = Instant.now().toString())
             }
-            todoDao.upsert(updated)
+            databaseProvider.todoDao().upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -115,7 +126,7 @@ class TodoViewModel @Inject constructor(
     fun toggleToday(todo: TodoItem) {
         viewModelScope.launch {
             val updated = todo.copy(isToday = !todo.isToday)
-            todoDao.upsert(updated)
+            databaseProvider.todoDao().upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -125,7 +136,7 @@ class TodoViewModel @Inject constructor(
     fun setPriority(todo: TodoItem, priority: Priority) {
         viewModelScope.launch {
             val updated = todo.copy(priority = priority)
-            todoDao.upsert(updated)
+            databaseProvider.todoDao().upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -135,7 +146,7 @@ class TodoViewModel @Inject constructor(
     fun trashTodo(todo: TodoItem) {
         viewModelScope.launch {
             val updated = todo.copy(isTrashed = true)
-            todoDao.upsert(updated)
+            databaseProvider.todoDao().upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -144,7 +155,7 @@ class TodoViewModel @Inject constructor(
 
     fun deleteTodo(todo: TodoItem) {
         viewModelScope.launch {
-            todoDao.deleteById(todo.id)
+            databaseProvider.todoDao().deleteById(todo.id)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(todo, "delete", "")
             )

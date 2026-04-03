@@ -42,6 +42,7 @@ import {
   getActiveSpace,
   setActiveSpace,
   saveSpace,
+  getSpaces,
   formatSpaceCode,
   deriveSpaceId,
   generateQrPayload,
@@ -364,10 +365,12 @@ function handleReconnect() {
 async function activateSpace(code: string, seedAddresses: string[] = []) {
   const spaceId = await deriveSpaceId(code);
   setActiveSpace(code);
+  // Preserve existing space data (name, createdAt) if already saved
+  const existing = getSpaces().find((s) => s.code === code);
   saveSpace({
     code,
-    name: formatSpaceCode(code),
-    createdAt: new Date().toISOString(),
+    name: existing?.name ?? formatSpaceCode(code),
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
   });
   activeSpaceCode.value = code;
   spaceRequired.value = false;
@@ -382,21 +385,26 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
   // Start P2P mesh with space code as shared secret
   setupMeshFromSpaceCode(code);
 
-  // Reload data from the (now space-specific) local DB
+  // Clear ALL store state before loading new space data
   store.setTodos([]);
   store.setProjects([]);
   store.setAreas([]);
   store.setTags([]);
+  store.setHeadings([]);
+  store.setHydrated(false);
 
   if (isLocalDbAvailable()) {
-    loadAllFromLocalDb()
-      .then(({ todos, projects, areas, tags }) => {
-        if (todos.length > 0) store.setTodos(todos);
-        if (projects.length > 0) store.setProjects(projects);
-        if (areas.length > 0) store.setAreas(areas);
-        if (tags.length > 0) store.setTags(tags);
-      })
-      .catch((err) => console.warn("[App] Space DB load failed:", err));
+    try {
+      const { todos, projects, areas, tags, headings } =
+        await loadAllFromLocalDb();
+      store.setTodos(todos);
+      store.setProjects(projects);
+      store.setAreas(areas);
+      store.setTags(tags);
+      if (headings) store.setHeadings(headings as import("@/types/task").Heading[]);
+    } catch (err) {
+      console.warn("[App] Space DB load failed:", err);
+    }
   }
 
   store.setHydrated(true);

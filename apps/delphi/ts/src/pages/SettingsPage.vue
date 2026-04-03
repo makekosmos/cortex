@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { shallowRef, onMounted, onUnmounted } from "vue";
-import { Database, Link, SunMoon, Unlink } from "lucide-vue-next";
+import { shallowRef, ref, onMounted, onUnmounted } from "vue";
+import { Database, Globe, Link, SunMoon, Unlink } from "lucide-vue-next";
 import { useTheme } from "@/composables/useTheme";
 import {
   arkSync,
@@ -10,8 +10,53 @@ import {
   setArkUrl,
 } from "@/services/sync/ark-client";
 import { parseConnectionString } from "@/services/sync/pairing";
+import {
+  getSpaces,
+  getActiveSpace,
+  removeSpace,
+  renameSpace,
+  formatSpaceCode,
+  deriveSpaceId,
+  type Space,
+} from "@/services/space/space-manager";
 
 const { theme, setTheme } = useTheme();
+
+// --- Space management ---
+const spaces = ref<Space[]>(getSpaces());
+const activeSpaceCode = shallowRef<string | null>(getActiveSpace());
+const renamingCode = shallowRef<string | null>(null);
+const renameInput = shallowRef("");
+const deletingCode = shallowRef<string | null>(null);
+
+function startRename(space: Space) {
+  renamingCode.value = space.code;
+  renameInput.value = space.name;
+}
+
+function confirmRename() {
+  if (!renamingCode.value) return;
+  renameSpace(renamingCode.value, renameInput.value);
+  spaces.value = getSpaces();
+  renamingCode.value = null;
+}
+
+function cancelRename() {
+  renamingCode.value = null;
+}
+
+async function confirmDeleteSpace() {
+  if (!deletingCode.value) return;
+  const code = deletingCode.value;
+  if (window.electronAPI?.invoke) {
+    const spaceId = await deriveSpaceId(code);
+    await window.electronAPI.invoke("db:deleteSpace", spaceId).catch(() => {});
+  }
+  removeSpace(code);
+  spaces.value = getSpaces();
+  deletingCode.value = null;
+}
+
 
 const isPaired = Boolean(getArkUrl() && getArkApiKey());
 const arkConnected = shallowRef(arkSync.isConnected);
@@ -76,6 +121,111 @@ function handleDisconnectArk() {
 <template>
   <div class="h-full min-h-0 w-full overflow-auto bg-(--background) p-4">
     <div class="mx-auto flex w-full max-w-(--bringhurst-wide) flex-col gap-4 py-6">
+      <!-- Spaces section -->
+      <section
+        class="bg-(--background) border-(--border) w-full rounded-xl border p-5"
+      >
+        <h2 class="mb-3 inline-flex items-center gap-2 text-base font-semibold">
+          <Globe :size="16" />
+          Пространства
+        </h2>
+        <p class="text-(--muted-foreground) mb-4 text-sm">
+          Управление пространствами синхронизации.
+        </p>
+
+        <div v-if="spaces.length === 0" class="text-(--muted-foreground) text-sm">
+          Нет сохранённых пространств.
+        </div>
+
+        <div v-else class="space-y-2">
+          <div
+            v-for="space in spaces"
+            :key="space.code"
+            :class="[
+              'border-(--border) flex items-center justify-between rounded-lg border px-3 py-2',
+              activeSpaceCode === space.code ? 'border-emerald-500/40 bg-emerald-500/5' : '',
+            ]"
+          >
+            <!-- Delete confirmation -->
+            <template v-if="deletingCode === space.code">
+              <span class="text-xs text-rose-400">Удалить пространство и все данные?</span>
+              <div class="flex gap-2">
+                <button
+                  class="rounded px-2 py-1 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
+                  @click="confirmDeleteSpace"
+                >
+                  Да
+                </button>
+                <button
+                  class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
+                  @click="deletingCode = null"
+                >
+                  Нет
+                </button>
+              </div>
+            </template>
+            <!-- Rename mode -->
+            <template v-else-if="renamingCode === space.code">
+              <input
+                v-model="renameInput"
+                class="border-(--border) bg-(--secondary) flex-1 rounded-md border px-2 py-1 text-sm outline-none focus:border-(--foreground)"
+                @keyup.enter="confirmRename"
+                @keyup.escape="cancelRename"
+                autofocus
+              />
+              <div class="ml-2 flex gap-1">
+                <button
+                  class="rounded px-2 py-1 text-xs text-emerald-400 transition-colors hover:bg-emerald-500/10"
+                  @click="confirmRename"
+                >
+                  OK
+                </button>
+                <button
+                  class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
+                  @click="cancelRename"
+                >
+                  Отмена
+                </button>
+              </div>
+            </template>
+            <!-- Normal view -->
+            <template v-else>
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-medium">{{ space.name }}</span>
+                  <span
+                    v-if="activeSpaceCode === space.code"
+                    class="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-500"
+                  >
+                    активно
+                  </span>
+                </div>
+                <span class="text-(--muted-foreground) block font-mono text-[11px] tracking-wider">
+                  {{ formatSpaceCode(space.code) }}
+                </span>
+              </div>
+              <div class="ml-2 flex gap-1">
+                <button
+                  class="text-(--muted-foreground) rounded p-1.5 text-xs transition-colors hover:bg-(--muted) hover:text-(--foreground)"
+                  @click="startRename(space)"
+                  title="Переименовать"
+                >
+                  Переименовать
+                </button>
+                <button
+                  v-if="activeSpaceCode !== space.code"
+                  class="text-(--muted-foreground) rounded p-1.5 text-xs transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+                  @click="deletingCode = space.code"
+                  title="Удалить"
+                >
+                  Удалить
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
+
       <section
         class="bg-(--background) border-(--border) w-full rounded-xl border p-5"
       >

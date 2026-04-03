@@ -193,9 +193,20 @@ class SidecarClient {
     })
   }
 
+  /** Get the current DB path (for checking if sidecar holds a specific file). */
+  get currentDbPath(): string | null {
+    return this.dbPathOverride
+  }
+
   /** Reinitialize the sidecar with a different DB path (used for space switching). */
   reinit(dbPath: string): void {
     this.dbPathOverride = dbPath
+    this.resetChild()
+  }
+
+  /** Kill the sidecar process and reset to default DB path. */
+  releaseAndReset(): void {
+    this.dbPathOverride = null
     this.resetChild()
   }
 
@@ -361,6 +372,10 @@ export function dbSetSyncKv(key: string, value: string): Promise<void> {
 
 export async function dbClearAll(): Promise<void> {
   await sidecar.request({ operation: 'clear_all' })
+}
+
+export async function dbDeleteTrashed(): Promise<number> {
+  return sidecar.request<number>({ operation: 'delete_trashed' })
 }
 
 /**

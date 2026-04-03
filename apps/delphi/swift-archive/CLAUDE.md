@@ -1,3 +1,5 @@
+ПРОЕКТ В АРХИВЕ И НЕ РАЗВИВАЕТСЯ. НЕ ТРОГАТЬ.
+
 # Delphi macOS (Swift)
 
 GTD-менеджер для macOS. SwiftUI + SwiftData + Observation framework.

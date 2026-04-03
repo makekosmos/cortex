@@ -11,6 +11,7 @@ import {
   localDbDeleteTodo,
   localDbUpsertProject,
   localDbDeleteProject,
+  localDbDeleteTrashed,
 } from "@/services/storage/local-db";
 import type { SyncEntityType } from "@/services/sync/lan-protocol";
 import type {
@@ -520,6 +521,13 @@ export const useTodoStore = defineStore("todos", () => {
     );
   }
 
+  async function emptyTrash() {
+    // Remove trashed todos from store
+    todos.value = todos.value.filter((t) => !t.isTrashed);
+    // Permanently delete from DB
+    await localDbDeleteTrashed();
+  }
+
   return {
     // State
     todos,
@@ -561,6 +569,7 @@ export const useTodoStore = defineStore("todos", () => {
     cancelTodo,
     trashTodo,
     restoreTodo,
+    emptyTrash,
     duplicateTodo,
 
     // Checklist

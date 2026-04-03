@@ -14,7 +14,7 @@ const isWeb = process.env.BUILD_TARGET === 'web';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    vue({ features: { vaporInterop: true } }),
+    vue(),
     checker({ typescript: { tsconfigPath: './tsconfig.json' } }),
     tailwindcss(),
     ...(!isWeb
@@ -22,6 +22,14 @@ export default defineConfig({
           electron({
             main: {
               entry: 'electron/main.ts',
+              vite: {
+                resolve: {
+                  alias: {
+                    '@arksync/core': path.resolve(__dirname, '../../../packages/arksync/index.ts'),
+                    '@arksync/node': path.resolve(__dirname, '../../../packages/arksync/src/node.ts'),
+                  },
+                },
+              },
             },
             preload: {
               input: 'electron/preload.ts',
@@ -34,6 +42,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@kepler/visuals': path.resolve(__dirname, '../../../packages/kepler-visuals'),
+      // Renderer (browser) uses browser-safe barrel — no crypto/ws/os
+      '@arksync/core': path.resolve(__dirname, '../../../packages/arksync/browser.ts'),
     },
   },
   clearScreen: false,

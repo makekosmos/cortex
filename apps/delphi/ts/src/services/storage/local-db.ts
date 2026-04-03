@@ -27,6 +27,7 @@ interface ElectronDb {
   getSyncKv: (key: string) => Promise<string | null>;
   setSyncKv: (key: string, value: string) => Promise<void>;
   clearAll: () => Promise<void>;
+  deleteTrashed: () => Promise<number>;
 }
 
 export function isLocalDbAvailable(): boolean {
@@ -75,4 +76,9 @@ export async function localDbSetSyncKv(
 export async function localDbClearAll(): Promise<void> {
   if (!isLocalDbAvailable()) return;
   await db()!.db.clearAll();
+}
+
+export async function localDbDeleteTrashed(): Promise<number> {
+  if (!isLocalDbAvailable()) return 0;
+  return await db()!.db.deleteTrashed();
 }

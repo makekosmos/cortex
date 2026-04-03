@@ -14,6 +14,7 @@ import com.kazui.delphi.data.sync.LanSyncState
 import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.data.sync.SyncStatus
 import com.kazui.delphi.data.sync.parseConnectionString
+import com.kazui.delphi.di.DatabaseProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,6 +29,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val peerManager: PeerManager,
     private val spaceManager: SpaceManager,
+    private val databaseProvider: DatabaseProvider,
     private val dataStore: DataStore<Preferences>,
     // Legacy — kept for backward compat
     private val arkSyncClient: ArkSyncClient,
@@ -50,6 +52,7 @@ class SettingsViewModel @Inject constructor(
     fun leaveSpace() {
         viewModelScope.launch {
             peerManager.stop()
+            databaseProvider.close()
             spaceManager.clearActiveSpaceCode()
         }
     }

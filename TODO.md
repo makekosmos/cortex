@@ -102,4 +102,9 @@
 - [x] E2E workflow тест (pair → connect → create → verify)
 
 ### Не завершено
-(нет — все задачи выполнены!)
+
+- [ ] **P2P: event-driven discovery вместо постоянного polling**
+  - Сейчас: UDP beacon каждые 5 сек + бесконечный reconnect loop на всех платформах
+  - Идея: устройство при старте/пробуждении/смене сети шлёт burst beacon'ов и пытается подключиться ко всем известным пирам; если соединение упало — не reconnect loop, а ждать следующий beacon от пира
+  - Что нужно обдумать: стоит ли слать редкий фоновый beacon (напр. раз в 30-60 сек) чтобы новые устройства могли найти уже онлайн пиров; что делать при падении WS (0 попыток / 1-3 быстрых попытки / короткий backoff до max 5 попыток)
+  - Затронутые файлы: `broadcast-discovery.ts`, `sync-client.ts`, `peer-manager.ts`, `LanSyncClient.kt`, `BroadcastDiscovery.kt`, `PeerManager.kt`, `SyncClient.swift`

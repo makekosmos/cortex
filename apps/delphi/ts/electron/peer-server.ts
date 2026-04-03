@@ -53,7 +53,7 @@ export class PeerServer {
 
       this.wss.on('listening', () => {
         const addr = this.wss!.address();
-        this.port = typeof addr === 'object' ? addr.port : preferredPort;
+        this.port = typeof addr === 'object' && addr !== null ? addr.port : preferredPort;
         console.log(`[PeerServer] Listening on port ${this.port}`);
         resolve(this.port);
       });

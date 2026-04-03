@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kazui.delphi.data.space.SpaceManager
 import com.kazui.delphi.data.sync.PeerManager
-import com.kazui.delphi.data.sync.PeerRecord
+import com.kazui.delphi.di.DatabaseProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +22,7 @@ import javax.inject.Inject
 class SpaceSetupViewModel @Inject constructor(
     private val spaceManager: SpaceManager,
     private val peerManager: PeerManager,
+    private val databaseProvider: DatabaseProvider,
     private val dataStore: DataStore<Preferences>,
 ) : ViewModel() {
 
@@ -36,8 +37,13 @@ class SpaceSetupViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            spaceManager.activeSpaceCode.collect { _ ->
+            spaceManager.activeSpaceCode.collect { code ->
                 if (!_isInitialized.value) _isInitialized.value = true
+                // Open the per-space DB when an active space code is present
+                if (code != null) {
+                    val spaceId = spaceManager.deriveSpaceId(code)
+                    databaseProvider.switchTo(spaceId)
+                }
             }
         }
         loadSavedSpaces()
@@ -71,12 +77,14 @@ class SpaceSetupViewModel @Inject constructor(
     fun parseExtendedCode(code: String): Pair<String, List<String>>? = spaceManager.parseExtendedCode(code)
 
     /**
-     * Create a new space: save code, start PeerManager (server + clients).
+     * Create a new space: save code, switch DB, start PeerManager (server + clients).
      */
     fun createSpace(code: String) {
         val normalized = spaceManager.normalizeCode(code)
         viewModelScope.launch {
             spaceManager.setActiveSpaceCode(normalized)
+            val spaceId = spaceManager.deriveSpaceId(normalized)
+            databaseProvider.switchTo(spaceId)
 
             val deviceId = getDeviceId()
             val deviceName = getDeviceName()
@@ -85,12 +93,14 @@ class SpaceSetupViewModel @Inject constructor(
     }
 
     /**
-     * Join a space: save code, add initial peer addresses, start PeerManager.
+     * Join a space: save code, switch DB, add initial peer addresses, start PeerManager.
      */
     fun joinSpace(code: String, addresses: List<String>) {
         val normalized = spaceManager.normalizeCode(code)
         viewModelScope.launch {
             spaceManager.setActiveSpaceCode(normalized)
+            val spaceId = spaceManager.deriveSpaceId(normalized)
+            databaseProvider.switchTo(spaceId)
 
             val deviceId = getDeviceId()
             val deviceName = getDeviceName()
@@ -107,6 +117,7 @@ class SpaceSetupViewModel @Inject constructor(
     fun leaveSpace() {
         viewModelScope.launch {
             peerManager.stop()
+            databaseProvider.close()
             spaceManager.clearActiveSpaceCode()
         }
     }
@@ -116,23 +127,39 @@ class SpaceSetupViewModel @Inject constructor(
         val normalized = spaceManager.normalizeCode(code)
         viewModelScope.launch {
             spaceManager.setActiveSpaceCode(normalized)
+            val spaceId = spaceManager.deriveSpaceId(normalized)
+            databaseProvider.switchTo(spaceId)
+
             val deviceId = getDeviceId()
             val deviceName = getDeviceName()
             peerManager.start(normalized, deviceId, deviceName)
         }
     }
 
+    /** Rename a saved space. */
+    fun renameSpace(code: String, newName: String) {
+        viewModelScope.launch {
+            spaceManager.renameSpace(code, newName)
+            _savedSpaces.value = spaceManager.getSavedSpaces()
+        }
+    }
+
     /** Delete a saved space and its sync data. */
     fun deleteSpace(code: String) {
         viewModelScope.launch {
+            val normalized = spaceManager.normalizeCode(code)
             // If active, leave first
             val currentCode = spaceManager.activeSpaceCode.first()
-            if (currentCode == spaceManager.normalizeCode(code)) {
+            if (currentCode == normalized) {
                 peerManager.stop()
+                databaseProvider.close()
                 spaceManager.clearActiveSpaceCode()
             }
-            spaceManager.removeSpaceFromList(spaceManager.normalizeCode(code))
-            // Clear sync data for this space (version vector, known peers are per-space via DataStore)
+            // Delete per-space DB files
+            val spaceId = spaceManager.deriveSpaceId(normalized)
+            databaseProvider.deleteSpaceDb(spaceId)
+
+            spaceManager.removeSpaceFromList(normalized)
             _savedSpaces.value = spaceManager.getSavedSpaces()
         }
     }

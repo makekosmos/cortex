@@ -9,6 +9,7 @@ import {
   generateExtendedCode,
   getSpaces,
   removeSpace,
+  renameSpace,
   deriveSpaceId,
   type Space,
 } from "@/services/space/space-manager";
@@ -51,6 +52,26 @@ async function confirmDelete() {
 function cancelDelete() {
   deletingSpace.value = null;
 }
+// Rename state
+const renamingCode = shallowRef<string | null>(null);
+const renameInput = shallowRef("");
+
+function startRename(space: Space) {
+  renamingCode.value = space.code;
+  renameInput.value = space.name;
+}
+
+function confirmRename() {
+  if (!renamingCode.value) return;
+  renameSpace(renamingCode.value, renameInput.value);
+  savedSpaces.value = getSpaces();
+  renamingCode.value = null;
+}
+
+function cancelRename() {
+  renamingCode.value = null;
+}
+
 const generatedCode = shallowRef(""); // 12-char secret
 const displayCode = shallowRef(""); // 19-char extended (with IP) or 12-char fallback
 const joinInput = shallowRef("");
@@ -194,20 +215,56 @@ function handleJoin() {
                   </button>
                 </div>
               </template>
+              <!-- Rename mode -->
+              <template v-else-if="renamingCode === space.code">
+                <input
+                  v-model="renameInput"
+                  class="border-(--border) bg-(--secondary) flex-1 rounded-md border px-2 py-1 text-sm outline-none focus:border-(--foreground)"
+                  @keyup.enter="confirmRename"
+                  @keyup.escape="cancelRename"
+                  autofocus
+                />
+                <div class="ml-2 flex gap-1">
+                  <button
+                    class="rounded px-2 py-1 text-xs text-emerald-400 transition-colors hover:bg-emerald-500/10"
+                    @click="confirmRename"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
+                    @click="cancelRename"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </template>
               <template v-else>
                 <button
-                  class="flex-1 text-left font-mono text-sm tracking-wider transition-colors hover:text-(--foreground)"
+                  class="flex-1 text-left transition-colors hover:text-(--foreground)"
                   @click="handleRejoin(space)"
                 >
-                  {{ formatSpaceCode(space.code) }}
+                  <span class="block text-sm">{{ space.name }}</span>
+                  <span class="text-(--muted-foreground) block font-mono text-[11px] tracking-wider">
+                    {{ formatSpaceCode(space.code) }}
+                  </span>
                 </button>
-                <button
-                  class="text-(--muted-foreground) ml-2 rounded p-1 text-xs transition-colors hover:text-rose-400"
-                  @click.stop="handleDelete(space)"
-                  title="Удалить пространство"
-                >
-                  &times;
-                </button>
+                <div class="ml-2 flex gap-1">
+                  <button
+                    class="text-(--muted-foreground) rounded p-1 text-xs transition-colors hover:text-(--foreground)"
+                    @click.stop="startRename(space)"
+                    title="Переименовать"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    class="text-(--muted-foreground) rounded p-1 text-xs transition-colors hover:text-rose-400"
+                    @click.stop="handleDelete(space)"
+                    title="Удалить пространство"
+                  >
+                    &times;
+                  </button>
+                </div>
               </template>
             </div>
           </div>

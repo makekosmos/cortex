@@ -62,6 +62,22 @@ interface TodoDao {
     @Query("SELECT * FROM todos WHERE isTrashed = 0 ORDER BY createdAt ASC")
     suspend fun getAllForSync(): List<TodoItem>
 
+    /** Return IDs of all trashed todos (used to cascade-delete related rows). */
+    @Query("SELECT id FROM todos WHERE isTrashed = 1")
+    suspend fun getTrashedIds(): List<String>
+
+    /** Permanently delete all trashed todos. */
+    @Query("DELETE FROM todos WHERE isTrashed = 1")
+    suspend fun deleteTrashed()
+
+    /** Delete checklist items belonging to any of the given todo IDs. */
+    @Query("DELETE FROM checklist_items WHERE todoItemId IN (:todoIds)")
+    suspend fun deleteChecklistItemsByTodoIds(todoIds: List<String>)
+
+    /** Delete tag cross-refs belonging to any of the given todo IDs. */
+    @Query("DELETE FROM todo_tag_cross_ref WHERE todoId IN (:todoIds)")
+    suspend fun deleteTagRefsByTodoIds(todoIds: List<String>)
+
     @Query("DELETE FROM todos")
     suspend fun deleteAll()
 

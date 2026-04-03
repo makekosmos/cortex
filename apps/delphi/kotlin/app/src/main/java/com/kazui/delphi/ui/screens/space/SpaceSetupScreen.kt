@@ -102,6 +102,8 @@ fun SpaceSetupScreen(
     var error by remember { mutableStateOf("") }
     var showQr by remember { mutableStateOf(false) }
     var deletingSpaceCode by remember { mutableStateOf<String?>(null) }
+    var renamingSpaceCode by remember { mutableStateOf<String?>(null) }
+    var renameText by remember { mutableStateOf("") }
 
     // Create mode state
     var generatedCode by remember { mutableStateOf("") }
@@ -227,6 +229,29 @@ fun SpaceSetupScreen(
                                                             Text("Нет")
                                                         }
                                                     }
+                                                } else if (renamingSpaceCode == space.code) {
+                                                    OutlinedTextField(
+                                                        value = renameText,
+                                                        onValueChange = { renameText = it },
+                                                        modifier = Modifier.weight(1f),
+                                                        singleLine = true,
+                                                        label = { Text("Название") },
+                                                        keyboardActions = KeyboardActions(
+                                                            onDone = {
+                                                                viewModel.renameSpace(space.code, renameText)
+                                                                renamingSpaceCode = null
+                                                            },
+                                                        ),
+                                                        keyboardOptions = KeyboardOptions(
+                                                            imeAction = ImeAction.Done,
+                                                        ),
+                                                    )
+                                                    TextButton(onClick = {
+                                                        viewModel.renameSpace(space.code, renameText)
+                                                        renamingSpaceCode = null
+                                                    }) {
+                                                        Text("OK")
+                                                    }
                                                 } else {
                                                     TextButton(
                                                         onClick = {
@@ -235,9 +260,30 @@ fun SpaceSetupScreen(
                                                         },
                                                         modifier = Modifier.weight(1f),
                                                     ) {
+                                                        Column {
+                                                            Text(
+                                                                space.name.ifEmpty { viewModel.formatCode(space.code) },
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                            )
+                                                            Text(
+                                                                viewModel.formatCode(space.code),
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                fontFamily = FontFamily.Monospace,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            )
+                                                        }
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            renameText = space.name
+                                                            renamingSpaceCode = space.code
+                                                        },
+                                                        modifier = Modifier.size(32.dp),
+                                                    ) {
                                                         Text(
-                                                            viewModel.formatCode(space.code),
-                                                            fontFamily = FontFamily.Monospace,
+                                                            "\u270E",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                         )
                                                     }
                                                     IconButton(

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -50,6 +51,7 @@ fun SmartListScaffold(
     viewModel: SmartListViewModel,
     onBack: (() -> Unit)? = null,
     showSort: Boolean = true,
+    trashAction: (() -> Unit)? = null,
 ) {
     val todos by viewModel.todos.collectAsStateWithLifecycle()
     var showInput by remember { mutableStateOf(false) }
@@ -67,6 +69,11 @@ fun SmartListScaffold(
                     }
                 },
                 actions = {
+                    if (trashAction != null) {
+                        IconButton(onClick = trashAction) {
+                            Icon(Icons.Default.DeleteForever, contentDescription = "Очистить корзину")
+                        }
+                    }
                     if (showSort) {
                         IconButton(onClick = { /* TODO: sort */ }) {
                             Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Сортировка")

@@ -40,6 +40,7 @@ class SpaceManager @Inject constructor(
         // Base32-Crockford alphabet: no I, L, O, U
         const val ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
         const val LAN_SYNC_PORT = 21531
+        const val DEFAULT_SPACE_NAME = "Новое пространство"
     }
 
     // ---------------------------------------------------------------------------
@@ -85,8 +86,22 @@ class SpaceManager @Inject constructor(
 
     /** Save a space to the list (dedup by code). */
     private suspend fun saveSpaceToList(code: String) {
-        val spaces = getSavedSpaces().filter { it.code != code }.toMutableList()
-        spaces.add(0, SavedSpace(code, formatCode(code), java.time.Instant.now().toString()))
+        val existing = getSavedSpaces()
+        val prev = existing.find { it.code == code }
+        val rest = existing.filter { it.code != code }.toMutableList()
+        // Keep existing name if re-saving; otherwise default to "Новое пространство"
+        val name = prev?.name ?: DEFAULT_SPACE_NAME
+        rest.add(0, SavedSpace(code, name, prev?.createdAt ?: java.time.Instant.now().toString()))
+        persistSpaceList(rest)
+    }
+
+    /** Rename a saved space (display-only label; code stays unchanged). */
+    suspend fun renameSpace(code: String, newName: String) {
+        val normalized = normalizeCode(code)
+        val spaces = getSavedSpaces().map { space ->
+            if (space.code == normalized) space.copy(name = newName.trim().ifEmpty { DEFAULT_SPACE_NAME })
+            else space
+        }
         persistSpaceList(spaces)
     }
 

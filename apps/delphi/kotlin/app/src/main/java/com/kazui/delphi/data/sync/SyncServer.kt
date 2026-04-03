@@ -5,10 +5,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.kazui.delphi.data.db.ProjectDao
-import com.kazui.delphi.data.db.TodoDao
 import com.kazui.delphi.data.model.TodoItem
 import com.kazui.delphi.data.model.Project
+import com.kazui.delphi.di.DatabaseProvider
 import io.ktor.server.application.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
@@ -45,8 +44,7 @@ private const val PING_INTERVAL_MS = 15_000L
  */
 @Singleton
 class SyncServer @Inject constructor(
-    private val todoDao: TodoDao,
-    private val projectDao: ProjectDao,
+    private val databaseProvider: DatabaseProvider,
     private val dataStore: DataStore<Preferences>,
 ) {
     private val versionVectorKey = stringPreferencesKey("lan_sync.version_vector")
@@ -610,9 +608,9 @@ class SyncServer @Inject constructor(
 
             if (deleted) {
                 when (entityType) {
-                    "todo" -> todoDao.deleteById(entityId)
-                    "project" -> projectDao.deleteProjectById(entityId)
-                    "heading" -> projectDao.deleteHeadingById(entityId)
+                    "todo" -> databaseProvider.todoDao().deleteById(entityId)
+                    "project" -> databaseProvider.projectDao().deleteProjectById(entityId)
+                    "heading" -> databaseProvider.projectDao().deleteHeadingById(entityId)
                 }
                 return true
             }
@@ -622,27 +620,27 @@ class SyncServer @Inject constructor(
             when (entityType) {
                 "todo" -> {
                     val todo = SyncEntityParser.jsonToTodoItem(data, entityId) ?: return false
-                    todoDao.upsert(todo)
+                    databaseProvider.todoDao().upsert(todo)
                     return true
                 }
                 "project" -> {
                     val project = SyncEntityParser.jsonToProject(data, entityId) ?: return false
-                    projectDao.upsertProject(project)
+                    databaseProvider.projectDao().upsertProject(project)
                     return true
                 }
                 "area" -> {
                     val area = SyncEntityParser.jsonToArea(data, entityId) ?: return false
-                    projectDao.upsertArea(area)
+                    databaseProvider.projectDao().upsertArea(area)
                     return true
                 }
                 "tag" -> {
                     val tag = SyncEntityParser.jsonToTag(data, entityId) ?: return false
-                    projectDao.upsertTag(tag)
+                    databaseProvider.projectDao().upsertTag(tag)
                     return true
                 }
                 "heading" -> {
                     val heading = SyncEntityParser.jsonToHeading(data, entityId) ?: return false
-                    projectDao.upsertHeading(heading)
+                    databaseProvider.projectDao().upsertHeading(heading)
                     return true
                 }
             }
@@ -658,8 +656,8 @@ class SyncServer @Inject constructor(
 
     private suspend fun loadAllEntities(vector: JSONObject): List<JSONObject> {
         val entities = mutableListOf<JSONObject>()
-        val todos = todoDao.getAllForSync()
-        val projects = projectDao.getAllForSync()
+        val todos = databaseProvider.todoDao().getAllForSync()
+        val projects = databaseProvider.projectDao().getAllForSync()
 
         for (todo in todos) {
             val hlc = if (vector.has(todo.id)) vector.getString(todo.id) else generateHlc()

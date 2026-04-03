@@ -1,8 +1,8 @@
 /**
- * Sync WebSocket Server -- runs in Electron main process.
+ * ArkSync WebSocket Server — generic, app-agnostic sync server.
  *
  * Equal-peer model: every device runs both a WS server and WS clients.
- * This is the server half -- accepts incoming connections from other peers.
+ * This is the server half — accepts incoming connections from other peers.
  *
  * Protocol flow per connection:
  *   1. Client sends `hello` (with addresses[]) -> server validates, replies with `hello`
@@ -13,25 +13,7 @@
  *   6. Both enter live mode: mutations broadcast as `live_change` with `live_ack`
  */
 
-import { WebSocketServer, WebSocket } from 'ws';
-import {
-  dbLoadAll,
-  dbUpsertTodo,
-  dbDeleteTodo,
-  dbUpsertProject,
-  dbDeleteProject,
-  dbUpsertArea,
-  dbUpsertTag,
-  dbUpsertHeading,
-  dbDeleteHeading,
-  dbGetSyncKv,
-  dbSetSyncKv,
-  type TodoItem,
-  type Project,
-  type Area,
-  type Tag,
-  type Heading,
-} from './sidecar';
+import WebSocket, { WebSocketServer } from 'ws';
 import {
   LAN_SYNC_PORT,
   PROTOCOL_VERSION,
@@ -55,8 +37,9 @@ import {
   generateId,
   isNewerHlc,
   mergePeerRecords,
-} from '../src/services/sync/lan-protocol';
-import { HLC } from '../src/services/sync/hlc';
+} from './protocol';
+import { HLC } from './hlc';
+import type { StorageBackend } from './storage';
 
 const TAG = '[SyncServer]';
 
@@ -88,7 +71,7 @@ export class SyncServer {
   private peers: Map<WebSocket, PeerState> = new Map();
   private spaceId: string = '';
   private deviceId: string = '';
-  private deviceName: string = 'Delphi Electron';
+  private deviceName: string = 'ArkSync';
   private ownAddresses: string[] = [];
   private pingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -99,6 +82,8 @@ export class SyncServer {
   private onPeerConnectHandler: ((deviceId: string) => void) | null = null;
   private onPeerDisconnectHandler: ((deviceId: string, remaining: number) => void) | null = null;
   private onNewPeerDiscoveredHandler: ((peer: PeerRecord) => void) | null = null;
+
+  constructor(private storage: StorageBackend) {}
 
   onChange(handler: (entity: SyncEntity) => void): void {
     this.onChangeHandler = handler;
@@ -130,9 +115,24 @@ export class SyncServer {
   }
 
   getConnectedPeerNames(): string[] {
-    return [...this.peers.values()]
-      .filter(p => p.authenticated)
-      .map(p => p.deviceName);
+    const seen = new Map<string, string>();
+    for (const p of this.peers.values()) {
+      if (p.authenticated && p.deviceId) {
+        seen.set(p.deviceId, p.deviceName);
+      }
+    }
+    return [...seen.values()];
+  }
+
+  /** Return deduplicated list of connected peer entries (id + name). */
+  getConnectedPeerEntries(): Array<{ deviceId: string; deviceName: string }> {
+    const seen = new Map<string, string>();
+    for (const p of this.peers.values()) {
+      if (p.authenticated && p.deviceId) {
+        seen.set(p.deviceId, p.deviceName);
+      }
+    }
+    return [...seen.entries()].map(([deviceId, deviceName]) => ({ deviceId, deviceName }));
   }
 
   /** Start the WS server. */
@@ -573,46 +573,11 @@ export class SyncServer {
   }
 
   // ---------------------------------------------------------------------------
-  // Entity persistence
+  // Entity persistence (delegated to StorageBackend)
   // ---------------------------------------------------------------------------
 
   private async applyEntity(entity: SyncEntity): Promise<void> {
-    try {
-      if (entity.deleted) {
-        switch (entity.type) {
-          case 'todo':
-            await dbDeleteTodo(entity.id);
-            break;
-          case 'project':
-            await dbDeleteProject(entity.id);
-            break;
-          case 'heading':
-            await dbDeleteHeading(entity.id);
-            break;
-        }
-        return;
-      }
-
-      switch (entity.type) {
-        case 'todo':
-          await dbUpsertTodo(entity.data as unknown as TodoItem);
-          break;
-        case 'project':
-          await dbUpsertProject(entity.data as unknown as Project);
-          break;
-        case 'area':
-          await dbUpsertArea(entity.data as unknown as Area);
-          break;
-        case 'tag':
-          await dbUpsertTag(entity.data as unknown as Tag);
-          break;
-        case 'heading':
-          await dbUpsertHeading(entity.data as unknown as Heading);
-          break;
-      }
-    } catch (err) {
-      console.error(`${TAG} Failed to apply entity ${entity.type}/${entity.id}:`, err);
-    }
+    await this.storage.applyEntity(entity);
   }
 
   // ---------------------------------------------------------------------------
@@ -631,12 +596,12 @@ export class SyncServer {
   }
 
   // ---------------------------------------------------------------------------
-  // Version vector persistence (sync_kv)
+  // Version vector persistence (via StorageBackend)
   // ---------------------------------------------------------------------------
 
   private async loadVersionVector(): Promise<VersionVector> {
     try {
-      const raw = await dbGetSyncKv(VERSION_VECTOR_KEY);
+      const raw = await this.storage.getKv(VERSION_VECTOR_KEY);
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -644,16 +609,16 @@ export class SyncServer {
   }
 
   private async saveVersionVector(vector: VersionVector): Promise<void> {
-    await dbSetSyncKv(VERSION_VECTOR_KEY, JSON.stringify(vector));
+    await this.storage.setKv(VERSION_VECTOR_KEY, JSON.stringify(vector));
   }
 
   // ---------------------------------------------------------------------------
-  // Known peers persistence (sync_kv)
+  // Known peers persistence (via StorageBackend)
   // ---------------------------------------------------------------------------
 
   private async loadKnownPeers(): Promise<void> {
     try {
-      const raw = await dbGetSyncKv(KNOWN_PEERS_KEY);
+      const raw = await this.storage.getKv(KNOWN_PEERS_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         // Handle both old format (Record<string, {device_name, last_seen}>) and new format (PeerRecord[])
@@ -677,61 +642,15 @@ export class SyncServer {
   }
 
   private async saveKnownPeers(): Promise<void> {
-    await dbSetSyncKv(KNOWN_PEERS_KEY, JSON.stringify(this.knownPeerRecords));
+    await this.storage.setKv(KNOWN_PEERS_KEY, JSON.stringify(this.knownPeerRecords));
   }
 
   // ---------------------------------------------------------------------------
-  // Load all entities
+  // Load all entities (delegated to StorageBackend)
   // ---------------------------------------------------------------------------
 
   private async loadAllEntities(vector: VersionVector): Promise<SyncEntity[]> {
-    const data = await dbLoadAll();
-    const entities: SyncEntity[] = [];
-
-    for (const todo of data.todos) {
-      entities.push({
-        type: 'todo',
-        id: todo.id,
-        data: todo as unknown as Record<string, unknown>,
-        hlc: vector[todo.id] || HLC.now(this.deviceId).toString(),
-      });
-    }
-
-    for (const project of data.projects) {
-      entities.push({
-        type: 'project',
-        id: project.id,
-        data: project as unknown as Record<string, unknown>,
-        hlc: vector[project.id] || HLC.now(this.deviceId).toString(),
-      });
-    }
-
-    for (const area of data.areas) {
-      entities.push({
-        type: 'area',
-        id: area.id,
-        data: area as unknown as Record<string, unknown>,
-        hlc: vector[area.id] || HLC.now(this.deviceId).toString(),
-      });
-    }
-
-    for (const tag of data.tags) {
-      entities.push({
-        type: 'tag',
-        id: tag.id,
-        data: tag as unknown as Record<string, unknown>,
-        hlc: vector[tag.id] || HLC.now(this.deviceId).toString(),
-      });
-    }
-
-    for (const heading of data.headings) {
-      entities.push({
-        type: 'heading',
-        id: heading.id,
-        data: heading as unknown as Record<string, unknown>,
-        hlc: vector[heading.id] || HLC.now(this.deviceId).toString(),
-      });
-    }
+    const entities = await this.storage.loadEntities(vector);
 
     let vectorUpdated = false;
     for (const entity of entities) {
@@ -783,7 +702,7 @@ export class SyncServer {
 
   /**
    * Update the version vector for a locally-mutated entity.
-   * Called by main.ts when the renderer reports a local change.
+   * Called by the host application when a local change occurs.
    */
   async updateEntityHlc(entityId: string): Promise<string> {
     const vector = await this.loadVersionVector();

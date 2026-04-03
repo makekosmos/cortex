@@ -1,5 +1,5 @@
 /**
- * Sync WebSocket Client -- connects to a peer's WS server.
+ * ArkSync WebSocket Client -- connects to a peer's WS server.
  *
  * Equal-peer model: every device runs both a WS server and WS clients.
  * This is the client half -- connects outbound to known peers.
@@ -10,11 +10,12 @@
  * - First successful connection = active, others cancelled
  * - Same protocol as sync-server (hello, version_vector, peer_list, batch, live)
  * - On disconnect: schedule reconnect trying all addresses again
+ *
+ * Generic: uses StorageBackend interface instead of app-specific persistence.
  */
 
 import WebSocket from 'ws';
 import {
-  LAN_SYNC_PORT,
   PROTOCOL_VERSION,
   PING_INTERVAL_MS,
   MAX_RETRIES,
@@ -35,26 +36,8 @@ import {
   splitIntoBatches,
   generateId,
   isNewerHlc,
-} from '../src/services/sync/lan-protocol';
-import {
-  dbLoadAll,
-  dbUpsertTodo,
-  dbDeleteTodo,
-  dbUpsertProject,
-  dbDeleteProject,
-  dbUpsertArea,
-  dbUpsertTag,
-  dbUpsertHeading,
-  dbDeleteHeading,
-  dbGetSyncKv,
-  dbSetSyncKv,
-  type TodoItem,
-  type Project,
-  type Area,
-  type Tag,
-  type Heading,
-} from './sidecar';
-import { HLC } from '../src/services/sync/hlc';
+} from './protocol';
+import type { StorageBackend } from './storage';
 
 const TAG = '[SyncClient]';
 
@@ -69,15 +52,17 @@ export interface SyncClientOptions {
   deviceName: string;
   spaceId: string;
   ownAddresses: string[];
-  onChange: (entity: SyncEntity) => void;
-  onConnected: (deviceId: string, deviceName: string) => void;
-  onDisconnected: (deviceId: string) => void;
-  onPeerList: (peers: PeerRecord[]) => void;
+  storage: StorageBackend;
+  onChange?: (entity: SyncEntity) => void;
+  onConnected?: (peerDeviceId: string, peerDeviceName: string) => void;
+  onDisconnected?: (peerDeviceId: string) => void;
+  onPeerList?: (peers: PeerRecord[]) => void;
 }
 
 export class SyncClient {
   private ws: WebSocket | null = null;
   private options: SyncClientOptions;
+  private storage: StorageBackend;
   private authenticated = false;
   private syncComplete = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -90,6 +75,7 @@ export class SyncClient {
 
   constructor(options: SyncClientOptions) {
     this.options = options;
+    this.storage = options.storage;
   }
 
   get isConnected(): boolean {
@@ -176,8 +162,6 @@ export class SyncClient {
       return 0;
     });
 
-
-
     let connected = false;
     const candidates: WebSocket[] = [];
     let pendingCount = sorted.length;
@@ -263,7 +247,7 @@ export class SyncClient {
 
       if (wasAuthenticated) {
         console.log(`${TAG} Disconnected from ${this.peerName} (${this.peerDeviceId})`);
-        this.options.onDisconnected(this.peerDeviceId);
+        this.options.onDisconnected?.(this.peerDeviceId);
       }
 
       if (!this.stopped) {
@@ -288,7 +272,6 @@ export class SyncClient {
 
     const jitter = Math.random() * 1000;
     const delay = Math.min(this.reconnectDelay + jitter, RECONNECT_MAX_MS);
-
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -348,7 +331,7 @@ export class SyncClient {
     this.authenticated = true;
     this.peerDeviceName = msg.device_name;
     console.log(`${TAG} Authenticated with ${msg.device_name} (${msg.device_id})`);
-    this.options.onConnected(msg.device_id, msg.device_name);
+    this.options.onConnected?.(msg.device_id, msg.device_name);
 
     // Send our version vector
     this.sendVersionVector();
@@ -433,7 +416,7 @@ export class SyncClient {
         localVector[entity.id] = entity.hlc;
         accepted++;
 
-        this.options.onChange(entity);
+        this.options.onChange?.(entity);
       }
     }
 
@@ -470,7 +453,7 @@ export class SyncClient {
       localVector[msg.entity.id] = msg.entity.hlc;
       await this.saveVersionVector(localVector);
 
-      this.options.onChange(msg.entity);
+      this.options.onChange?.(msg.entity);
     }
 
     this.send({ type: 'live_ack', change_id: msg.change_id });
@@ -487,7 +470,7 @@ export class SyncClient {
 
   private handlePeerList(msg: PeerListMessage): void {
     if (!this.authenticated) return;
-    this.options.onPeerList(msg.peers);
+    this.options.onPeerList?.(msg.peers);
   }
 
   // ---------------------------------------------------------------------------
@@ -534,30 +517,11 @@ export class SyncClient {
   }
 
   // ---------------------------------------------------------------------------
-  // Entity persistence (same as sync-server)
+  // Entity persistence — delegated to StorageBackend
   // ---------------------------------------------------------------------------
 
   private async applyEntity(entity: SyncEntity): Promise<void> {
-    try {
-      if (entity.deleted) {
-        switch (entity.type) {
-          case 'todo': await dbDeleteTodo(entity.id); break;
-          case 'project': await dbDeleteProject(entity.id); break;
-          case 'heading': await dbDeleteHeading(entity.id); break;
-        }
-        return;
-      }
-
-      switch (entity.type) {
-        case 'todo': await dbUpsertTodo(entity.data as unknown as TodoItem); break;
-        case 'project': await dbUpsertProject(entity.data as unknown as Project); break;
-        case 'area': await dbUpsertArea(entity.data as unknown as Area); break;
-        case 'tag': await dbUpsertTag(entity.data as unknown as Tag); break;
-        case 'heading': await dbUpsertHeading(entity.data as unknown as Heading); break;
-      }
-    } catch (err) {
-      console.error(`${TAG} Failed to apply entity ${entity.type}/${entity.id}:`, err);
-    }
+    await this.storage.applyEntity(entity);
   }
 
   // ---------------------------------------------------------------------------
@@ -566,7 +530,7 @@ export class SyncClient {
 
   private async loadVersionVector(): Promise<VersionVector> {
     try {
-      const raw = await dbGetSyncKv(VERSION_VECTOR_KEY);
+      const raw = await this.storage.getKv(VERSION_VECTOR_KEY);
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -574,66 +538,15 @@ export class SyncClient {
   }
 
   private async saveVersionVector(vector: VersionVector): Promise<void> {
-    await dbSetSyncKv(VERSION_VECTOR_KEY, JSON.stringify(vector));
+    await this.storage.setKv(VERSION_VECTOR_KEY, JSON.stringify(vector));
   }
 
   // ---------------------------------------------------------------------------
-  // Load all entities
+  // Load all entities — delegated to StorageBackend
   // ---------------------------------------------------------------------------
 
   private async loadAllEntities(vector: VersionVector): Promise<SyncEntity[]> {
-    const data = await dbLoadAll();
-    const entities: SyncEntity[] = [];
-    const deviceId = this.options.deviceId;
-
-    for (const todo of data.todos) {
-      entities.push({
-        type: 'todo', id: todo.id,
-        data: todo as unknown as Record<string, unknown>,
-        hlc: vector[todo.id] || HLC.now(deviceId).toString(),
-      });
-    }
-    for (const project of data.projects) {
-      entities.push({
-        type: 'project', id: project.id,
-        data: project as unknown as Record<string, unknown>,
-        hlc: vector[project.id] || HLC.now(deviceId).toString(),
-      });
-    }
-    for (const area of data.areas) {
-      entities.push({
-        type: 'area', id: area.id,
-        data: area as unknown as Record<string, unknown>,
-        hlc: vector[area.id] || HLC.now(deviceId).toString(),
-      });
-    }
-    for (const tag of data.tags) {
-      entities.push({
-        type: 'tag', id: tag.id,
-        data: tag as unknown as Record<string, unknown>,
-        hlc: vector[tag.id] || HLC.now(deviceId).toString(),
-      });
-    }
-    for (const heading of data.headings) {
-      entities.push({
-        type: 'heading', id: heading.id,
-        data: heading as unknown as Record<string, unknown>,
-        hlc: vector[heading.id] || HLC.now(deviceId).toString(),
-      });
-    }
-
-    let vectorUpdated = false;
-    for (const entity of entities) {
-      if (!vector[entity.id]) {
-        vector[entity.id] = entity.hlc;
-        vectorUpdated = true;
-      }
-    }
-    if (vectorUpdated) {
-      await this.saveVersionVector(vector);
-    }
-
-    return entities;
+    return this.storage.loadEntities(vector);
   }
 
   // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, shallowRef } from "vue";
 import { Archive } from "lucide-vue-next";
 import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
@@ -10,6 +10,13 @@ import TodoRow from "@kepler/visuals/components/TodoRow.vue";
 const store = useTodoStore();
 const { todos } = storeToRefs(store);
 const filtered = computed(() => filterTodos(SmartList.Trash, todos.value));
+
+const confirmingEmpty = shallowRef(false);
+
+async function handleEmptyTrash() {
+  await store.emptyTrash();
+  confirmingEmpty.value = false;
+}
 </script>
 
 <template>
@@ -25,6 +32,33 @@ const filtered = computed(() => filterTodos(SmartList.Trash, todos.value));
       >
         {{ filtered.length }}
       </span>
+      <div v-if="filtered.length > 0" class="ml-auto">
+        <template v-if="confirmingEmpty">
+          <span class="mr-2 text-xs text-rose-400">Удалить навсегда?</span>
+          <button
+            type="button"
+            class="rounded px-2 py-1 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
+            @click="handleEmptyTrash"
+          >
+            Да
+          </button>
+          <button
+            type="button"
+            class="text-(--muted-foreground) ml-1 rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
+            @click="confirmingEmpty = false"
+          >
+            Нет
+          </button>
+        </template>
+        <button
+          v-else
+          type="button"
+          class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:text-rose-400"
+          @click="confirmingEmpty = true"
+        >
+          Очистить корзину
+        </button>
+      </div>
     </div>
 
     <div class="scrollbar-gutter flex-1 overflow-y-auto">

@@ -2,17 +2,20 @@ package com.kazui.delphi.ui.screens
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.kazui.delphi.data.db.TodoDao
 import com.kazui.delphi.data.model.SmartList
 import com.kazui.delphi.data.model.TodoItem
 import com.kazui.delphi.data.sync.ArkEventMapper
 import com.kazui.delphi.data.sync.ArkSyncClient
 import com.kazui.delphi.data.sync.PeerManager
+import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.domain.filter.TodoFilterService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -20,8 +23,9 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
 
+@OptIn(ExperimentalCoroutinesApi::class)
 abstract class SmartListViewModel(
-    protected val todoDao: TodoDao,
+    protected val databaseProvider: DatabaseProvider,
     protected val arkSyncClient: ArkSyncClient,
     protected val peerManager: PeerManager,
     private val smartList: SmartList,
@@ -29,18 +33,23 @@ abstract class SmartListViewModel(
     private val defaultIsSomeday: Boolean = false,
 ) : ViewModel() {
 
-    val todos: StateFlow<List<TodoItem>> = when (smartList) {
-        SmartList.LOGBOOK -> todoDao.getLogbook()
-            .distinctUntilChanged()
-            .flowOn(Dispatchers.Default)
-        SmartList.TRASH -> todoDao.getTrash()
-            .distinctUntilChanged()
-            .flowOn(Dispatchers.Default)
-        else -> todoDao.getAll()
-            .map { TodoFilterService.filter(smartList, it) }
-            .distinctUntilChanged()
-            .flowOn(Dispatchers.Default)
-    }
+    val todos: StateFlow<List<TodoItem>> = databaseProvider.dbGeneration
+        .flatMapLatest {
+            if (!databaseProvider.isOpen) return@flatMapLatest flowOf(emptyList())
+            val todoDao = databaseProvider.todoDao()
+            when (smartList) {
+                SmartList.LOGBOOK -> todoDao.getLogbook()
+                    .distinctUntilChanged()
+                    .flowOn(Dispatchers.Default)
+                SmartList.TRASH -> todoDao.getTrash()
+                    .distinctUntilChanged()
+                    .flowOn(Dispatchers.Default)
+                else -> todoDao.getAll()
+                    .map { TodoFilterService.filter(smartList, it) }
+                    .distinctUntilChanged()
+                    .flowOn(Dispatchers.Default)
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val isReadOnly: Boolean get() = smartList == SmartList.LOGBOOK || smartList == SmartList.TRASH
@@ -55,7 +64,7 @@ abstract class SmartListViewModel(
                 isSomeday = defaultIsSomeday,
                 createdAt = Instant.now().toString(),
             )
-            todoDao.upsert(todo)
+            databaseProvider.todoDao().upsert(todo)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(todo, "create", ""))
             peerManager.broadcastTodoChange(todo)
         }
@@ -68,7 +77,7 @@ abstract class SmartListViewModel(
             } else {
                 todo.copy(isCompleted = true, completedAt = Instant.now().toString())
             }
-            todoDao.upsert(updated)
+            databaseProvider.todoDao().upsert(updated)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
             peerManager.broadcastTodoChange(updated)
         }

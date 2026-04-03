@@ -24,7 +24,8 @@
     /* Alias */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@arksync/core": ["../../../packages/arksync/index.ts"]
     }
   },
   "include": ["src"]

@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSyncKv: (key: string) => ipcRenderer.invoke('db:getSyncKv', key),
     setSyncKv: (key: string, value: string) => ipcRenderer.invoke('db:setSyncKv', key, value),
     clearAll: () => ipcRenderer.invoke('db:clearAll'),
+    deleteTrashed: () => ipcRenderer.invoke('db:deleteTrashed'),
   },
   invoke: (channel: string, ...args: unknown[]) =>
     ipcRenderer.invoke(channel, ...args),
