@@ -24,19 +24,19 @@ async function handleEmptyTrash() {
     <div
       class="mx-auto w-full max-w-(--bringhurst-wide) flex items-center justify-center gap-2.5 px-7 pb-3 pt-6"
     >
-      <Archive :size="24" class="text-gray-500" />
+      <Archive :size="24" class="text-gray-500 select-none" />
       <h1 class="text-2xl font-bold text-(--foreground) select-none">
         Корзина
       </h1>
       <span
         v-if="filtered.length > 0"
-        class="text-sm text-(--muted-foreground)"
+        class="text-sm text-(--muted-foreground) select-none"
       >
         {{ filtered.length }}
       </span>
       <div v-if="filtered.length > 0" class="ml-auto">
         <template v-if="confirmingEmpty">
-          <span class="mr-2 text-xs text-rose-400">Удалить навсегда?</span>
+          <span class="mr-2 text-xs text-rose-400 select-none">Удалить навсегда?</span>
           <button
             type="button"
             class="rounded px-2 py-1 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
@@ -69,7 +69,7 @@ async function handleEmptyTrash() {
           v-if="filtered.length === 0"
           class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
         >
-          Корзина пуста
+          <span class="select-none">Корзина пуста</span>
         </div>
         <div v-else class="flex flex-col">
           <TodoRow v-for="todo in filtered" :key="todo.id" :todo="todo">

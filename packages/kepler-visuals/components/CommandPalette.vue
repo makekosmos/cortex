@@ -74,7 +74,8 @@ function handleListKeydown(e: KeyboardEvent) {
 
     <!-- Dialog -->
     <div
-      class="relative z-10 w-full max-w-(--bringhurst-wide) overflow-hidden rounded-xl border border-(--border) bg-(--popover) shadow-2xl"
+      class="relative z-10 w-full max-w-(--bringhurst-wide) overflow-hidden rounded-xl border border-(--border) shadow-2xl "
+      style="background: var(--color-shape-highlight-light-solid)"
     >
       <!-- Input -->
       <div class="flex items-center gap-3 px-4 py-3">

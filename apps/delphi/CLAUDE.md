@@ -412,5 +412,5 @@ Google Gemini 2.5 Live API:
 - Vue: Composition API + `<script setup lang="ts">`, без Options API
 - State: Pinia stores (`defineStore`), `shallowRef` для примитивов
 - UI-компоненты: reka-ui (headless) + Tailwind CSS 4
-- Линтер: oxlint, форматтер: prettier
+- Линтер: oxlint, форматтер: oxfmt (с sortImports)
 - Тесты: vitest (unit), playwright (e2e)

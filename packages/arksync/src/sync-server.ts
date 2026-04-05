@@ -13,7 +13,7 @@
  *   6. Both enter live mode: mutations broadcast as `live_change` with `live_ack`
  */
 
-import WebSocket, { WebSocketServer } from 'ws';
+import WebSocket, { WebSocketServer } from "ws";
 import {
   LAN_SYNC_PORT,
   PROTOCOL_VERSION,
@@ -37,14 +37,14 @@ import {
   generateId,
   isNewerHlc,
   mergePeerRecords,
-} from './protocol';
-import { HLC } from './hlc';
-import type { StorageBackend } from './storage';
+} from "./protocol";
+import { HLC } from "./hlc";
+import type { StorageBackend } from "./storage";
 
-const TAG = '[SyncServer]';
+const TAG = "[SyncServer]";
 
-const VERSION_VECTOR_KEY = 'lan_sync.version_vector';
-const KNOWN_PEERS_KEY = 'sync.peers';
+const VERSION_VECTOR_KEY = "lan_sync.version_vector";
+const KNOWN_PEERS_KEY = "sync.peers";
 
 // ---------------------------------------------------------------------------
 // Peer state (per-connection)
@@ -57,7 +57,14 @@ interface PeerState {
   addresses: string[];
   authenticated: boolean;
   syncComplete: boolean;
-  pendingAcks: Map<string, { resolve: () => void; timer: ReturnType<typeof setTimeout>; retries: number }>;
+  pendingAcks: Map<
+    string,
+    {
+      resolve: () => void;
+      timer: ReturnType<typeof setTimeout>;
+      retries: number;
+    }
+  >;
   /** Live changes queued while initial sync is in progress. */
   queuedLiveChanges: SyncEntity[];
 }
@@ -69,9 +76,9 @@ interface PeerState {
 export class SyncServer {
   private wss: WebSocketServer | null = null;
   private peers: Map<WebSocket, PeerState> = new Map();
-  private spaceId: string = '';
-  private deviceId: string = '';
-  private deviceName: string = 'ArkSync';
+  private spaceId: string = "";
+  private deviceId: string = "";
+  private deviceName: string = "ArkSync";
   private ownAddresses: string[] = [];
   private pingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -80,8 +87,11 @@ export class SyncServer {
 
   private onChangeHandler: ((entity: SyncEntity) => void) | null = null;
   private onPeerConnectHandler: ((deviceId: string) => void) | null = null;
-  private onPeerDisconnectHandler: ((deviceId: string, remaining: number) => void) | null = null;
-  private onNewPeerDiscoveredHandler: ((peer: PeerRecord) => void) | null = null;
+  private onPeerDisconnectHandler:
+    | ((deviceId: string, remaining: number) => void)
+    | null = null;
+  private onNewPeerDiscoveredHandler: ((peer: PeerRecord) => void) | null =
+    null;
 
   constructor(private storage: StorageBackend) {}
 
@@ -93,7 +103,9 @@ export class SyncServer {
     this.onPeerConnectHandler = handler;
   }
 
-  onPeerDisconnect(handler: (deviceId: string, remaining: number) => void): void {
+  onPeerDisconnect(
+    handler: (deviceId: string, remaining: number) => void,
+  ): void {
     this.onPeerDisconnectHandler = handler;
   }
 
@@ -103,7 +115,7 @@ export class SyncServer {
   }
 
   get connectedPeerCount(): number {
-    return [...this.peers.values()].filter(p => p.authenticated).length;
+    return [...this.peers.values()].filter((p) => p.authenticated).length;
   }
 
   get knownPeerCount(): number {
@@ -132,12 +144,20 @@ export class SyncServer {
         seen.set(p.deviceId, p.deviceName);
       }
     }
-    return [...seen.entries()].map(([deviceId, deviceName]) => ({ deviceId, deviceName }));
+    return [...seen.entries()].map(([deviceId, deviceName]) => ({
+      deviceId,
+      deviceName,
+    }));
   }
 
   /** Start the WS server. */
-  async start(spaceId: string | undefined, deviceId: string, deviceName?: string, ownAddresses?: string[]): Promise<void> {
-    this.spaceId = spaceId ?? '';
+  async start(
+    spaceId: string | undefined,
+    deviceId: string,
+    deviceName?: string,
+    ownAddresses?: string[],
+  ): Promise<void> {
+    this.spaceId = spaceId ?? "";
     this.deviceId = deviceId;
     if (deviceName) this.deviceName = deviceName;
     if (ownAddresses) this.ownAddresses = ownAddresses;
@@ -151,16 +171,18 @@ export class SyncServer {
 
     return new Promise((resolve, reject) => {
       this.wss = new WebSocketServer({ port: LAN_SYNC_PORT }, () => {
-        console.log(`${TAG} Server listening on port ${LAN_SYNC_PORT}, ${this.knownPeerCount} known peers`);
+        console.log(
+          `${TAG} Server listening on port ${LAN_SYNC_PORT}, ${this.knownPeerCount} known peers`,
+        );
         resolve();
       });
 
-      this.wss.on('error', (err) => {
+      this.wss.on("error", (err) => {
         console.error(`${TAG} Server error:`, err.message);
         reject(err);
       });
 
-      this.wss.on('connection', (ws) => {
+      this.wss.on("connection", (ws) => {
         this.handleConnection(ws);
       });
 
@@ -185,7 +207,11 @@ export class SyncServer {
       for (const ack of peer.pendingAcks.values()) {
         clearTimeout(ack.timer);
       }
-      try { ws.close(1000, 'server stopping'); } catch { /* ignore */ }
+      try {
+        ws.close(1000, "server stopping");
+      } catch {
+        /* ignore */
+      }
     }
     this.peers.clear();
 
@@ -205,7 +231,7 @@ export class SyncServer {
   broadcastLiveChange(entity: SyncEntity, excludeDeviceId?: string): void {
     const changeId = generateId();
     const msg: LiveChangeMessage = {
-      type: 'live_change',
+      type: "live_change",
       change_id: changeId,
       entity,
     };
@@ -225,7 +251,11 @@ export class SyncServer {
   }
 
   /** Register an externally-managed peer connection (from SyncClient). */
-  registerExternalPeer(deviceId: string, deviceName: string, addresses: string[]): void {
+  registerExternalPeer(
+    deviceId: string,
+    deviceName: string,
+    addresses: string[],
+  ): void {
     this.updatePeerRecord(deviceId, deviceName, addresses);
   }
 
@@ -244,8 +274,8 @@ export class SyncServer {
   private handleConnection(ws: WebSocket): void {
     const peer: PeerState = {
       ws,
-      deviceId: '',
-      deviceName: '',
+      deviceId: "",
+      deviceName: "",
       addresses: [],
       authenticated: false,
       syncComplete: false,
@@ -254,55 +284,61 @@ export class SyncServer {
     };
     this.peers.set(ws, peer);
 
-    ws.on('message', (raw) => {
+    ws.on("message", (raw) => {
       const msg = deserializeMessage(raw.toString());
       if (!msg) return;
       this.handleMessage(ws, peer, msg);
     });
 
-    ws.on('close', () => {
+    ws.on("close", () => {
       for (const ack of peer.pendingAcks.values()) {
         clearTimeout(ack.timer);
       }
       this.peers.delete(ws);
       if (peer.authenticated) {
-        console.log(`${TAG} Peer disconnected: ${peer.deviceName} (${peer.deviceId})`);
+        console.log(
+          `${TAG} Peer disconnected: ${peer.deviceName} (${peer.deviceId})`,
+        );
         this.onPeerDisconnectHandler?.(peer.deviceId, this.connectedPeerCount);
       }
     });
 
-    ws.on('error', (err) => {
+    ws.on("error", (err) => {
       console.warn(`${TAG} Peer error:`, err.message);
     });
   }
 
-  private handleMessage(ws: WebSocket, peer: PeerState, msg: LanSyncMessage): void {
+  private handleMessage(
+    ws: WebSocket,
+    peer: PeerState,
+    msg: LanSyncMessage,
+  ): void {
     switch (msg.type) {
-      case 'hello':
+      case "hello":
         this.handleHello(ws, peer, msg);
         break;
-      case 'version_vector':
+      case "version_vector":
         this.handleVersionVector(ws, peer, msg);
         break;
-      case 'sync_changes':
+      case "sync_changes":
         this.handleSyncChanges(ws, peer, msg);
         break;
-      case 'sync_ack':
+      case "sync_ack":
         this.handleSyncAck(peer, msg);
         break;
-      case 'live_change':
+      case "live_change":
         this.handleLiveChange(ws, peer, msg);
         break;
-      case 'live_ack':
+      case "live_ack":
         this.handleLiveAck(peer, msg);
         break;
-      case 'peer_list':
+      case "peer_list":
         this.handlePeerList(ws, peer, msg);
         break;
-      case 'pong':
+      case "pong":
         break;
-      case 'ping':
-        this.send(ws, { type: 'pong', ts: msg.ts });
+      case "ping":
+        this.send(ws, { type: "pong", ts: msg.ts });
         break;
     }
   }
@@ -313,8 +349,10 @@ export class SyncServer {
 
   private handleHello(ws: WebSocket, peer: PeerState, msg: HelloMessage): void {
     if (msg.protocol_version !== PROTOCOL_VERSION) {
-      console.warn(`${TAG} Protocol version mismatch: ${msg.protocol_version} vs ${PROTOCOL_VERSION}`);
-      ws.close(1002, 'protocol version mismatch');
+      console.warn(
+        `${TAG} Protocol version mismatch: ${msg.protocol_version} vs ${PROTOCOL_VERSION}`,
+      );
+      ws.close(1002, "protocol version mismatch");
       return;
     }
 
@@ -330,7 +368,7 @@ export class SyncServer {
 
     // Send our hello back (with our own addresses)
     this.send(ws, {
-      type: 'hello',
+      type: "hello",
       protocol_version: PROTOCOL_VERSION,
       device_id: this.deviceId,
       device_name: this.deviceName,
@@ -355,32 +393,45 @@ export class SyncServer {
 
   private sendPeerList(ws: WebSocket): void {
     const msg: PeerListMessage = {
-      type: 'peer_list',
+      type: "peer_list",
       peers: this.knownPeerRecords,
     };
     this.send(ws, msg);
   }
 
-  private handlePeerList(_ws: WebSocket, peer: PeerState, msg: PeerListMessage): void {
+  private handlePeerList(
+    _ws: WebSocket,
+    peer: PeerState,
+    msg: PeerListMessage,
+  ): void {
     if (!peer.authenticated) return;
 
-    const incomingPeers = msg.peers.filter(p => p.device_id !== this.deviceId);
-    const beforeIds = new Set(this.knownPeerRecords.map(p => p.device_id));
-    this.knownPeerRecords = mergePeerRecords(this.knownPeerRecords, incomingPeers);
+    const incomingPeers = msg.peers.filter(
+      (p) => p.device_id !== this.deviceId,
+    );
+    const beforeIds = new Set(this.knownPeerRecords.map((p) => p.device_id));
+    this.knownPeerRecords = mergePeerRecords(
+      this.knownPeerRecords,
+      incomingPeers,
+    );
     this.saveKnownPeers().catch(() => {});
 
     // Notify about newly discovered peers we should connect to
     for (const incoming of incomingPeers) {
       if (incoming.device_id === peer.deviceId) continue; // already connected to sender
       if (this.isConnectedTo(incoming.device_id)) continue;
-      const record = this.knownPeerRecords.find(p => p.device_id === incoming.device_id);
+      const record = this.knownPeerRecords.find(
+        (p) => p.device_id === incoming.device_id,
+      );
       if (record) {
         this.onNewPeerDiscoveredHandler?.(record);
       }
     }
 
     if (this.knownPeerRecords.length > beforeIds.size) {
-      console.log(`${TAG} Peer list updated: ${beforeIds.size} -> ${this.knownPeerRecords.length} known peers`);
+      console.log(
+        `${TAG} Peer list updated: ${beforeIds.size} -> ${this.knownPeerRecords.length} known peers`,
+      );
     }
   }
 
@@ -392,15 +443,18 @@ export class SyncServer {
     let vector = await this.loadVersionVector();
 
     if (Object.keys(vector).length === 0) {
-
       await this.loadAllEntities(vector);
       vector = await this.loadVersionVector();
     }
 
-    this.send(ws, { type: 'version_vector', vector });
+    this.send(ws, { type: "version_vector", vector });
   }
 
-  private async handleVersionVector(ws: WebSocket, peer: PeerState, msg: VersionVectorMessage): Promise<void> {
+  private async handleVersionVector(
+    ws: WebSocket,
+    peer: PeerState,
+    msg: VersionVectorMessage,
+  ): Promise<void> {
     if (!peer.authenticated) return;
 
     let localVector = await this.loadVersionVector();
@@ -414,7 +468,7 @@ export class SyncServer {
         await this.sendBatches(ws, peer, allEntities);
       } else {
         this.send(ws, {
-          type: 'sync_changes',
+          type: "sync_changes",
           batch_id: generateId(),
           entities: [],
           is_last: true,
@@ -422,7 +476,9 @@ export class SyncServer {
       }
 
       peer.syncComplete = true;
-      console.log(`${TAG} Sync complete with ${peer.deviceName} (sent our batches)`);
+      console.log(
+        `${TAG} Sync complete with ${peer.deviceName} (sent our batches)`,
+      );
       this.flushQueuedLiveChanges(ws, peer);
       return;
     }
@@ -440,11 +496,11 @@ export class SyncServer {
     }
 
     if (remoteNeeds.size > 0) {
-      const toSend = allEntities.filter(e => remoteNeeds.has(e.id));
+      const toSend = allEntities.filter((e) => remoteNeeds.has(e.id));
       await this.sendBatches(ws, peer, toSend);
     } else {
       this.send(ws, {
-        type: 'sync_changes',
+        type: "sync_changes",
         batch_id: generateId(),
         entities: [],
         is_last: true,
@@ -452,7 +508,9 @@ export class SyncServer {
     }
 
     peer.syncComplete = true;
-    console.log(`${TAG} Sync complete with ${peer.deviceName} (sent our batches)`);
+    console.log(
+      `${TAG} Sync complete with ${peer.deviceName} (sent our batches)`,
+    );
     this.flushQueuedLiveChanges(ws, peer);
   }
 
@@ -460,11 +518,15 @@ export class SyncServer {
   // Sync batches
   // ---------------------------------------------------------------------------
 
-  private async sendBatches(ws: WebSocket, peer: PeerState, entities: SyncEntity[]): Promise<void> {
+  private async sendBatches(
+    ws: WebSocket,
+    peer: PeerState,
+    entities: SyncEntity[],
+  ): Promise<void> {
     const batches = splitIntoBatches(entities);
     if (batches.length === 0) {
       this.send(ws, {
-        type: 'sync_changes',
+        type: "sync_changes",
         batch_id: generateId(),
         entities: [],
         is_last: true,
@@ -476,7 +538,7 @@ export class SyncServer {
       const batchId = generateId();
       const isLast = i === batches.length - 1;
       const msg: SyncChangesMessage = {
-        type: 'sync_changes',
+        type: "sync_changes",
         batch_id: batchId,
         entities: batches[i],
         is_last: isLast,
@@ -485,7 +547,11 @@ export class SyncServer {
     }
   }
 
-  private async handleSyncChanges(ws: WebSocket, peer: PeerState, msg: SyncChangesMessage): Promise<void> {
+  private async handleSyncChanges(
+    ws: WebSocket,
+    peer: PeerState,
+    msg: SyncChangesMessage,
+  ): Promise<void> {
     if (!peer.authenticated) return;
 
     const localVector = await this.loadVersionVector();
@@ -507,7 +573,7 @@ export class SyncServer {
     await this.saveVersionVector(localVector);
 
     this.send(ws, {
-      type: 'sync_ack',
+      type: "sync_ack",
       batch_id: msg.batch_id,
       accepted,
     });
@@ -536,7 +602,7 @@ export class SyncServer {
     for (const entity of peer.queuedLiveChanges) {
       const changeId = generateId();
       const msg: LiveChangeMessage = {
-        type: 'live_change',
+        type: "live_change",
         change_id: changeId,
         entity,
       };
@@ -545,7 +611,11 @@ export class SyncServer {
     peer.queuedLiveChanges = [];
   }
 
-  private async handleLiveChange(ws: WebSocket, peer: PeerState, msg: LiveChangeMessage): Promise<void> {
+  private async handleLiveChange(
+    ws: WebSocket,
+    peer: PeerState,
+    msg: LiveChangeMessage,
+  ): Promise<void> {
     if (!peer.authenticated) return;
 
     const localVector = await this.loadVersionVector();
@@ -560,7 +630,7 @@ export class SyncServer {
       this.broadcastLiveChange(msg.entity, peer.deviceId);
     }
 
-    this.send(ws, { type: 'live_ack', change_id: msg.change_id });
+    this.send(ws, { type: "live_ack", change_id: msg.change_id });
   }
 
   private handleLiveAck(peer: PeerState, msg: LiveAckMessage): void {
@@ -584,14 +654,20 @@ export class SyncServer {
   // Peer record management
   // ---------------------------------------------------------------------------
 
-  private updatePeerRecord(deviceId: string, deviceName: string, addresses: string[]): void {
+  private updatePeerRecord(
+    deviceId: string,
+    deviceName: string,
+    addresses: string[],
+  ): void {
     const newRecord: PeerRecord = {
       device_id: deviceId,
       device_name: deviceName,
       addresses,
       last_seen: new Date().toISOString(),
     };
-    this.knownPeerRecords = mergePeerRecords(this.knownPeerRecords, [newRecord]);
+    this.knownPeerRecords = mergePeerRecords(this.knownPeerRecords, [
+      newRecord,
+    ]);
     this.saveKnownPeers().catch(() => {});
   }
 
@@ -626,12 +702,14 @@ export class SyncServer {
           this.knownPeerRecords = parsed;
         } else {
           // Migrate old format
-          this.knownPeerRecords = Object.entries(parsed).map(([deviceId, info]) => ({
-            device_id: deviceId,
-            device_name: (info as { device_name: string }).device_name,
-            addresses: [],
-            last_seen: (info as { last_seen: string }).last_seen,
-          }));
+          this.knownPeerRecords = Object.entries(parsed).map(
+            ([deviceId, info]) => ({
+              device_id: deviceId,
+              device_name: (info as { device_name: string }).device_name,
+              addresses: [],
+              last_seen: (info as { last_seen: string }).last_seen,
+            }),
+          );
         }
       } else {
         this.knownPeerRecords = [];
@@ -642,7 +720,10 @@ export class SyncServer {
   }
 
   private async saveKnownPeers(): Promise<void> {
-    await this.storage.setKv(KNOWN_PEERS_KEY, JSON.stringify(this.knownPeerRecords));
+    await this.storage.setKv(
+      KNOWN_PEERS_KEY,
+      JSON.stringify(this.knownPeerRecords),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -676,23 +757,33 @@ export class SyncServer {
     }
   }
 
-  private sendWithRetry(ws: WebSocket, peer: PeerState, msg: LanSyncMessage, ackId: string): void {
+  private sendWithRetry(
+    ws: WebSocket,
+    peer: PeerState,
+    msg: LanSyncMessage,
+    ackId: string,
+  ): void {
     let retries = 0;
 
     const trySend = () => {
       if (ws.readyState !== WebSocket.OPEN) return;
       this.send(ws, msg);
 
-      const timer = setTimeout(() => {
-        retries++;
-        if (retries < MAX_RETRIES) {
-          console.warn(`${TAG} Retry ${retries}/${MAX_RETRIES} for ack ${ackId}`);
-          trySend();
-        } else {
-          peer.pendingAcks.delete(ackId);
-          console.error(`${TAG} Max retries reached for ack ${ackId}`);
-        }
-      }, msg.type === 'live_change' ? 5_000 : BATCH_ACK_TIMEOUT_MS);
+      const timer = setTimeout(
+        () => {
+          retries++;
+          if (retries < MAX_RETRIES) {
+            console.warn(
+              `${TAG} Retry ${retries}/${MAX_RETRIES} for ack ${ackId}`,
+            );
+            trySend();
+          } else {
+            peer.pendingAcks.delete(ackId);
+            console.error(`${TAG} Max retries reached for ack ${ackId}`);
+          }
+        },
+        msg.type === "live_change" ? 5_000 : BATCH_ACK_TIMEOUT_MS,
+      );
 
       peer.pendingAcks.set(ackId, { resolve: () => {}, timer, retries });
     };

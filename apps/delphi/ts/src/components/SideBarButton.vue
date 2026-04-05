@@ -19,7 +19,7 @@ const isActive = computed(() => (props.to ? route.path === props.to : false));
 
 const className = computed(() => {
   const base =
-    "sidebar-btn flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-sm font-normal text-white transition-colors";
+    "sidebar-btn flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-sm font-normal text-white transition-colors select-none";
   const active = isActive.value ? "bg-white/10" : "hover:bg-white/6";
   return `${base} ${active}`;
 });
@@ -28,11 +28,11 @@ const className = computed(() => {
 <template>
   <RouterLink v-if="to" :to="to" :class="className">
     <component :is="icon" :size="18" />
-    <span v-if="label" class="truncate">{{ label }}</span>
+    <span v-if="label" class="truncate select-none">{{ label }}</span>
   </RouterLink>
   <button v-else type="button" :class="className" @click="emit('click')">
     <component :is="icon" :size="18" />
-    <span v-if="label" class="truncate">{{ label }}</span>
+    <span v-if="label" class="truncate select-none">{{ label }}</span>
   </button>
 </template>
 

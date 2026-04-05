@@ -1,5 +1,6 @@
-import { Tabs } from 'expo-router';
-import { FloatingTabBar } from '@/components/FloatingTabBar';
+import { Tabs } from "expo-router";
+
+import { FloatingTabBar } from "@/components/FloatingTabBar";
 
 export default function TabLayout() {
   return (
@@ -7,7 +8,8 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarStyle: { display: 'none' },
+
+          tabBarStyle: { display: "none" },
         }}
       >
         <Tabs.Screen name="index" />

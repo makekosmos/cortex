@@ -1,51 +1,51 @@
 <script setup lang="ts">
 /* eslint-disable no-console */
-import { shallowRef, computed, watch, onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { RouterView } from "vue-router";
 import {
+  PopoverArrow,
+  PopoverContent,
+  PopoverPortal,
   PopoverRoot,
   PopoverTrigger,
-  PopoverPortal,
-  PopoverContent,
-  PopoverArrow,
 } from "reka-ui";
-import { Wifi, WifiOff, Loader } from "lucide-vue-next";
+import { Loader, Wifi, WifiOff } from "lucide-vue-next";
 import QRCode from "qrcode";
 import {
   type ArkChange,
-  arkChangeToTodoItem,
-  arkChangeToProject,
   arkChangeEventType,
-  todoItemToArkChange,
+  arkChangeToProject,
+  arkChangeToTodoItem,
   arkSync,
+  fetchProjectsFromArk,
+  fetchTasksFromArk,
   getArkApiKey,
   getArkUrl,
   setArkApiKey,
   setArkUrl,
-  fetchTasksFromArk,
-  fetchProjectsFromArk,
+  todoItemToArkChange,
 } from "@/services/sync/ark-client";
 import {
-  loadAllFromLocalDb,
   isLocalDbAvailable,
+  loadAllFromLocalDb,
   localDbBatchUpsertTodos,
   localDbUpsertProject,
 } from "@/services/storage/local-db";
 import { parseConnectionString } from "@/services/sync/pairing";
 import {
+  broadcastToPeers,
   setupMeshFromArkKey,
   setupMeshFromSpaceCode,
   stopMesh,
-  broadcastToPeers,
 } from "@/services/sync/peer-bridge";
 import {
-  getActiveSpace,
-  setActiveSpace,
-  saveSpace,
-  getSpaces,
-  formatSpaceCode,
   deriveSpaceId,
+  formatSpaceCode,
   generateQrPayload,
+  getActiveSpace,
+  getSpaces,
+  saveSpace,
+  setActiveSpace,
 } from "@/services/space/space-manager";
 import type { SyncEntity, SyncEntityType } from "@/services/sync/lan-protocol";
 import { useTodoStore } from "@/store/todos";

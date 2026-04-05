@@ -12,6 +12,7 @@ describe("runtime platform helpers", () => {
   it("detects electron runtime when electronAPI exists", () => {
     (window as Window & { electronAPI?: unknown }).electronAPI =
       {} as ElectronAPI;
+
     expect(isElectronRuntime()).toBe(true);
   });
 });

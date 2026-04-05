@@ -202,7 +202,7 @@ function handleToggleToday(todo: TodoItem) {
     <div
       class="mx-auto w-full max-w-(--bringhurst-wide) flex items-center justify-center gap-2.5 px-7 pb-3 pt-6"
     >
-      <Calendar :size="24" class="text-red-500" />
+      <Calendar :size="24" class="text-red-500 select-none" />
       <h1 class="text-2xl font-bold text-(--foreground) select-none">Планы</h1>
     </div>
 
@@ -214,19 +214,19 @@ function handleToggleToday(todo: TodoItem) {
           <div
             class="sticky top-0 z-10 flex items-center gap-2 bg-(--background) px-7 py-2"
           >
-            <span class="text-sm font-bold text-(--foreground)">
+            <span class="text-sm font-bold text-(--foreground) select-none">
               {{ section.title }}
             </span>
             <span
               v-if="section.todos.length > 0"
-              class="text-xs font-medium text-(--muted-foreground)"
+              class="text-xs font-medium text-(--muted-foreground) select-none"
             >
               {{ section.todos.length }}
             </span>
             <div class="flex-1" />
             <span
               v-if="section.dateLabel"
-              class="text-xs text-(--muted-foreground)/60"
+              class="text-xs text-(--muted-foreground)/60 select-none"
             >
               {{ section.dateLabel }}
             </span>
@@ -237,7 +237,7 @@ function handleToggleToday(todo: TodoItem) {
             v-if="section.todos.length === 0"
             class="px-7 py-2 text-xs text-(--muted-foreground)/50"
           >
-            Нет задач
+            <span class="select-none">Нет задач</span>
           </div>
           <div v-else class="flex flex-col">
             <div
@@ -285,7 +285,7 @@ function handleToggleToday(todo: TodoItem) {
                   ]"
                   @click="handleToggleToday(todo)"
                 >
-                  Сегодня
+                  <span class="select-none">Сегодня</span>
                 </button>
                 <button
                   type="button"
@@ -293,7 +293,7 @@ function handleToggleToday(todo: TodoItem) {
                   class="rounded px-1.5 py-0.5 text-[10px] text-(--muted-foreground) hover:bg-red-500/15 hover:text-red-500"
                   @click="store.trashTodo(todo.id)"
                 >
-                  Удалить
+                  <span class="select-none">Удалить</span>
                 </button>
               </div>
             </div>

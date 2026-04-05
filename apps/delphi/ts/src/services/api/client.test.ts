@@ -14,8 +14,11 @@ import {
 function clearAllCookies() {
   document.cookie.split(";").forEach((cookie) => {
     const [rawName] = cookie.split("=");
+
     const name = rawName?.trim();
+
     if (!name) return;
+
     document.cookie = `${name}=; path=/; max-age=0`;
   });
 }
@@ -23,8 +26,11 @@ function clearAllCookies() {
 describe("api client helpers", () => {
   beforeEach(() => {
     localStorage.clear();
+
     sessionStorage.clear();
+
     clearAllCookies();
+
     vi.unstubAllGlobals();
   });
 
@@ -40,11 +46,13 @@ describe("api client helpers", () => {
 
   it("stores and resolves API URL", () => {
     setApiUrl("http://api.example.com///");
+
     expect(getApiUrl()).toBe("http://api.example.com");
   });
 
   it("builds websocket URL", () => {
     const wsUrl = buildTasksWsUrl("http://localhost:3000/", "abc 123");
+
     expect(wsUrl).toBe("ws://localhost:3000/ws?token=abc%20123");
   });
 
@@ -52,6 +60,7 @@ describe("api client helpers", () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ token: "jwt-token", userId: "u1" }), {
         status: 200,
+
         headers: { "Content-Type": "application/json" },
       }),
     );
@@ -61,12 +70,15 @@ describe("api client helpers", () => {
     await loginWithPassphrase("  WORD one TWO  ");
 
     expect(getToken()).toBe("jwt-token");
+
     expect(getSavedPassphrase()).toBe("word one two");
 
     clearToken();
+
     clearSavedPassphrase();
 
     expect(getToken()).toBeNull();
+
     expect(getSavedPassphrase()).toBeNull();
   });
 });

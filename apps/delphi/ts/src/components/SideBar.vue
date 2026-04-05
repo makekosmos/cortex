@@ -124,7 +124,7 @@ const activeProjects = computed(() =>
                   colorTagClass(project.colorTag),
                 ]"
               />
-              <span class="truncate">{{ project.title }}</span>
+              <span class="truncate select-none">{{ project.title }}</span>
             </RouterLink>
           </template>
         </div>

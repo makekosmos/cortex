@@ -7,7 +7,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "format": "oxfmt src/",
+    "format:check": "oxfmt --check src/"
   },
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.1",
@@ -44,6 +46,7 @@
     "@types/jest": "29.5.14",
     "@types/react": "~19.1.10",
     "jest": "~29.7.0",
+    "oxfmt": "^0.7.0",
     "ts-jest": "^29.4.6",
     "typescript": "~5.9.2"
   },

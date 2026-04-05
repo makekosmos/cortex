@@ -14,7 +14,7 @@
  * Generic: uses StorageBackend interface instead of app-specific persistence.
  */
 
-import WebSocket from 'ws';
+import WebSocket from "ws";
 import {
   PROTOCOL_VERSION,
   PING_INTERVAL_MS,
@@ -36,12 +36,12 @@ import {
   splitIntoBatches,
   generateId,
   isNewerHlc,
-} from './protocol';
-import type { StorageBackend } from './storage';
+} from "./protocol";
+import type { StorageBackend } from "./storage";
 
-const TAG = '[SyncClient]';
+const TAG = "[SyncClient]";
 
-const VERSION_VECTOR_KEY = 'lan_sync.version_vector';
+const VERSION_VECTOR_KEY = "lan_sync.version_vector";
 const CONNECT_TIMEOUT_MS = 5_000;
 const RECONNECT_BASE_MS = 2_000;
 const RECONNECT_MAX_MS = 30_000;
@@ -68,10 +68,17 @@ export class SyncClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = RECONNECT_BASE_MS;
   private stopped = false;
-  private pendingAcks: Map<string, { resolve: () => void; timer: ReturnType<typeof setTimeout>; retries: number }> = new Map();
+  private pendingAcks: Map<
+    string,
+    {
+      resolve: () => void;
+      timer: ReturnType<typeof setTimeout>;
+      retries: number;
+    }
+  > = new Map();
   private queuedLiveChanges: SyncEntity[] = [];
   private pingInterval: ReturnType<typeof setInterval> | null = null;
-  private peerDeviceName: string = '';
+  private peerDeviceName: string = "";
 
   constructor(options: SyncClientOptions) {
     this.options = options;
@@ -79,7 +86,11 @@ export class SyncClient {
   }
 
   get isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === WebSocket.OPEN && this.authenticated;
+    return (
+      this.ws !== null &&
+      this.ws.readyState === WebSocket.OPEN &&
+      this.authenticated
+    );
   }
 
   get peerDeviceId(): string {
@@ -117,14 +128,23 @@ export class SyncClient {
     }
     this.pendingAcks.clear();
     if (this.ws) {
-      try { this.ws.close(1000, 'client stopping'); } catch { /* ignore */ }
+      try {
+        this.ws.close(1000, "client stopping");
+      } catch {
+        /* ignore */
+      }
       this.ws = null;
     }
   }
 
   /** Broadcast a live change through this client connection. */
   broadcastLiveChange(entity: SyncEntity): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.authenticated) return;
+    if (
+      !this.ws ||
+      this.ws.readyState !== WebSocket.OPEN ||
+      !this.authenticated
+    )
+      return;
 
     if (!this.syncComplete) {
       this.queuedLiveChanges.push(entity);
@@ -133,7 +153,7 @@ export class SyncClient {
 
     const changeId = generateId();
     const msg: LiveChangeMessage = {
-      type: 'live_change',
+      type: "live_change",
       change_id: changeId,
       entity,
     };
@@ -149,7 +169,9 @@ export class SyncClient {
 
     const addresses = this.options.peer.addresses;
     if (addresses.length === 0) {
-      console.warn(`${TAG} No addresses for peer ${this.options.peer.device_name}, scheduling reconnect`);
+      console.warn(
+        `${TAG} No addresses for peer ${this.options.peer.device_name}, scheduling reconnect`,
+      );
       this.scheduleReconnect();
       return;
     }
@@ -175,14 +197,20 @@ export class SyncClient {
         });
         candidates.push(candidate);
 
-        candidate.on('open', () => {
+        candidate.on("open", () => {
           if (connected) {
             // Another candidate won the race
-            try { candidate.close(); } catch { /* ignore */ }
+            try {
+              candidate.close();
+            } catch {
+              /* ignore */
+            }
             return;
           }
           connected = true;
-          console.log(`${TAG} Connected to ${this.options.peer.device_name} via ${addr}`);
+          console.log(
+            `${TAG} Connected to ${this.options.peer.device_name} via ${addr}`,
+          );
 
           // Update last_address
           this.options.peer.last_address = addr;
@@ -190,7 +218,11 @@ export class SyncClient {
           // Cancel other candidates
           for (const other of candidates) {
             if (other !== candidate) {
-              try { other.close(); } catch { /* ignore */ }
+              try {
+                other.close();
+              } catch {
+                /* ignore */
+              }
             }
           }
 
@@ -200,15 +232,17 @@ export class SyncClient {
           this.sendHello();
         });
 
-        candidate.on('error', () => {
+        candidate.on("error", () => {
           pendingCount--;
           if (!connected && pendingCount === 0) {
-            console.warn(`${TAG} All addresses failed for ${this.options.peer.device_name}`);
+            console.warn(
+              `${TAG} All addresses failed for ${this.options.peer.device_name}`,
+            );
             this.scheduleReconnect();
           }
         });
 
-        candidate.on('close', () => {
+        candidate.on("close", () => {
           if (!connected) {
             pendingCount--;
             if (pendingCount === 0) {
@@ -223,13 +257,13 @@ export class SyncClient {
   }
 
   private setupConnection(ws: WebSocket): void {
-    ws.on('message', (raw) => {
+    ws.on("message", (raw) => {
       const msg = deserializeMessage(raw.toString());
       if (!msg) return;
       this.handleMessage(msg);
     });
 
-    ws.on('close', () => {
+    ws.on("close", () => {
       const wasAuthenticated = this.authenticated;
       this.authenticated = false;
       this.syncComplete = false;
@@ -246,7 +280,9 @@ export class SyncClient {
       this.pendingAcks.clear();
 
       if (wasAuthenticated) {
-        console.log(`${TAG} Disconnected from ${this.peerName} (${this.peerDeviceId})`);
+        console.log(
+          `${TAG} Disconnected from ${this.peerName} (${this.peerDeviceId})`,
+        );
         this.options.onDisconnected?.(this.peerDeviceId);
       }
 
@@ -255,8 +291,11 @@ export class SyncClient {
       }
     });
 
-    ws.on('error', (err) => {
-      console.warn(`${TAG} Connection error with ${this.peerName}:`, err.message);
+    ws.on("error", (err) => {
+      console.warn(
+        `${TAG} Connection error with ${this.peerName}:`,
+        err.message,
+      );
     });
 
     // Send WS pings
@@ -275,7 +314,10 @@ export class SyncClient {
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, RECONNECT_MAX_MS);
+      this.reconnectDelay = Math.min(
+        this.reconnectDelay * 1.5,
+        RECONNECT_MAX_MS,
+      );
       this.connect();
     }, delay);
   }
@@ -286,7 +328,7 @@ export class SyncClient {
 
   private sendHello(): void {
     const msg: HelloMessage = {
-      type: 'hello',
+      type: "hello",
       protocol_version: PROTOCOL_VERSION,
       device_id: this.options.deviceId,
       device_name: this.options.deviceName,
@@ -298,31 +340,31 @@ export class SyncClient {
 
   private handleMessage(msg: LanSyncMessage): void {
     switch (msg.type) {
-      case 'hello':
+      case "hello":
         this.handleHello(msg);
         break;
-      case 'version_vector':
+      case "version_vector":
         this.handleVersionVector(msg);
         break;
-      case 'sync_changes':
+      case "sync_changes":
         this.handleSyncChanges(msg);
         break;
-      case 'sync_ack':
+      case "sync_ack":
         this.handleSyncAck(msg);
         break;
-      case 'live_change':
+      case "live_change":
         this.handleLiveChange(msg);
         break;
-      case 'live_ack':
+      case "live_ack":
         this.handleLiveAck(msg);
         break;
-      case 'peer_list':
+      case "peer_list":
         this.handlePeerList(msg);
         break;
-      case 'ping':
-        this.send({ type: 'pong', ts: msg.ts });
+      case "ping":
+        this.send({ type: "pong", ts: msg.ts });
         break;
-      case 'pong':
+      case "pong":
         break;
     }
   }
@@ -330,7 +372,9 @@ export class SyncClient {
   private handleHello(msg: HelloMessage): void {
     this.authenticated = true;
     this.peerDeviceName = msg.device_name;
-    console.log(`${TAG} Authenticated with ${msg.device_name} (${msg.device_id})`);
+    console.log(
+      `${TAG} Authenticated with ${msg.device_name} (${msg.device_id})`,
+    );
     this.options.onConnected?.(msg.device_id, msg.device_name);
 
     // Send our version vector
@@ -345,7 +389,7 @@ export class SyncClient {
       vector = await this.loadVersionVector();
     }
 
-    this.send({ type: 'version_vector', vector });
+    this.send({ type: "version_vector", vector });
   }
 
   private async handleVersionVector(msg: VersionVectorMessage): Promise<void> {
@@ -362,7 +406,7 @@ export class SyncClient {
         await this.sendBatches(allEntities);
       } else {
         this.send({
-          type: 'sync_changes',
+          type: "sync_changes",
           batch_id: generateId(),
           entities: [],
           is_last: true,
@@ -387,11 +431,11 @@ export class SyncClient {
     }
 
     if (remoteNeeds.size > 0) {
-      const toSend = allEntities.filter(e => remoteNeeds.has(e.id));
+      const toSend = allEntities.filter((e) => remoteNeeds.has(e.id));
       await this.sendBatches(toSend);
     } else {
       this.send({
-        type: 'sync_changes',
+        type: "sync_changes",
         batch_id: generateId(),
         entities: [],
         is_last: true,
@@ -423,7 +467,7 @@ export class SyncClient {
     await this.saveVersionVector(localVector);
 
     this.send({
-      type: 'sync_ack',
+      type: "sync_ack",
       batch_id: msg.batch_id,
       accepted,
     });
@@ -456,7 +500,7 @@ export class SyncClient {
       this.options.onChange?.(msg.entity);
     }
 
-    this.send({ type: 'live_ack', change_id: msg.change_id });
+    this.send({ type: "live_ack", change_id: msg.change_id });
   }
 
   private handleLiveAck(msg: LiveAckMessage): void {
@@ -481,7 +525,7 @@ export class SyncClient {
     const batches = splitIntoBatches(entities);
     if (batches.length === 0) {
       this.send({
-        type: 'sync_changes',
+        type: "sync_changes",
         batch_id: generateId(),
         entities: [],
         is_last: true,
@@ -493,7 +537,7 @@ export class SyncClient {
       const batchId = generateId();
       const isLast = i === batches.length - 1;
       const msg: SyncChangesMessage = {
-        type: 'sync_changes',
+        type: "sync_changes",
         batch_id: batchId,
         entities: batches[i],
         is_last: isLast,
@@ -507,7 +551,7 @@ export class SyncClient {
     for (const entity of this.queuedLiveChanges) {
       const changeId = generateId();
       const msg: LiveChangeMessage = {
-        type: 'live_change',
+        type: "live_change",
         change_id: changeId,
         entity,
       };
@@ -566,14 +610,17 @@ export class SyncClient {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
       this.send(msg);
 
-      const timer = setTimeout(() => {
-        retries++;
-        if (retries < MAX_RETRIES) {
-          trySend();
-        } else {
-          this.pendingAcks.delete(ackId);
-        }
-      }, msg.type === 'live_change' ? 5_000 : BATCH_ACK_TIMEOUT_MS);
+      const timer = setTimeout(
+        () => {
+          retries++;
+          if (retries < MAX_RETRIES) {
+            trySend();
+          } else {
+            this.pendingAcks.delete(ackId);
+          }
+        },
+        msg.type === "live_change" ? 5_000 : BATCH_ACK_TIMEOUT_MS,
+      );
 
       this.pendingAcks.set(ackId, { resolve: () => {}, timer, retries });
     };

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Star, Plus } from "lucide-vue-next";
+import { Plus, Star } from "lucide-vue-next";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 
 const { show: openQuickEntry } = useQuickEntry();
@@ -31,13 +31,13 @@ function handleDrop(targetId: string, sourceId: string) {
     <div
       class="mx-auto w-full max-w-(--bringhurst-wide) flex items-center justify-center gap-2.5 px-7 pb-3 pt-6"
     >
-      <Star :size="24" class="text-yellow-500" />
+      <Star :size="24" class="text-yellow-500 select-none" />
       <h1 class="text-2xl font-bold text-(--foreground) select-none">
         Сегодня
       </h1>
       <span
         v-if="filtered.length > 0"
-        class="text-sm text-(--muted-foreground)"
+        class="text-sm text-(--muted-foreground) select-none"
       >
         {{ filtered.length }}
       </span>
@@ -49,7 +49,7 @@ function handleDrop(targetId: string, sourceId: string) {
           v-if="filtered.length === 0"
           class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
         >
-          На сегодня задач нет
+          <span class="select-none">На сегодня задач нет</span>
         </div>
         <div v-else class="flex flex-col">
           <TodoRow
@@ -61,9 +61,7 @@ function handleDrop(targetId: string, sourceId: string) {
             @rename="store.updateTodo(todo.id, { title: $event })"
             @drop="handleDrop($event, todo.id)"
           >
-            <span v-if="todo.isEvening" class="text-[10px] text-indigo-400"
-              >Вечер</span
-            >
+            <span v-if="todo.isEvening" class="text-[10px] text-indigo-400 select-none">Вечер</span>
           </TodoRow>
         </div>
       </div>

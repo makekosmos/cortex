@@ -18,15 +18,20 @@ export {
 } from "@arksync/core";
 
 // ---------------------------------------------------------------------------
+
 // Delphi-specific: Space persistence (localStorage)
+
 // ---------------------------------------------------------------------------
 
 const SPACES_KEY = "delphi.spaces";
+
 const ACTIVE_SPACE_KEY = "delphi.active_space";
 
 export interface Space {
   code: string;
+
   name: string;
+
   createdAt: string;
 }
 
@@ -40,21 +45,29 @@ export function getSpaces(): Space[] {
 
 export function saveSpace(space: Space): void {
   const spaces = getSpaces().filter((s) => s.code !== space.code);
+
   spaces.unshift(space);
+
   localStorage.setItem(SPACES_KEY, JSON.stringify(spaces));
 }
 
 export function removeSpace(code: string): void {
   const spaces = getSpaces().filter((s) => s.code !== code);
+
   localStorage.setItem(SPACES_KEY, JSON.stringify(spaces));
 }
 
 export function renameSpace(code: string, newName: string): boolean {
   const spaces = getSpaces();
+
   const space = spaces.find((s) => s.code === code);
+
   if (!space) return false;
+
   space.name = newName.trim() || _formatSpaceCode(code);
+
   localStorage.setItem(SPACES_KEY, JSON.stringify(spaces));
+
   return true;
 }
 

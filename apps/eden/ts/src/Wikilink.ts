@@ -1,6 +1,9 @@
 import { Node, mergeAttributes } from "@tiptap/vue-3";
+
 import Suggestion from "@tiptap/suggestion";
+
 import type { Editor } from "@tiptap/vue-3";
+
 import { PluginKey } from "@tiptap/pm/state";
 
 const wikilinkSuggestionPluginKey = new PluginKey("wikilinkSuggestion");
@@ -20,17 +23,24 @@ export const Wikilink = Node.create({
     return {
       id: {
         default: null,
+
         parseHTML: (element) => element.getAttribute("data-id"),
+
         renderHTML: (attributes) => {
           if (!attributes.id) return {};
+
           return { "data-id": attributes.id };
         },
       },
+
       label: {
         default: null,
+
         parseHTML: (element) => element.getAttribute("data-label"),
+
         renderHTML: (attributes) => {
           if (!attributes.label) return {};
+
           return { "data-label": attributes.label };
         },
       },
@@ -44,7 +54,9 @@ export const Wikilink = Node.create({
   renderHTML({ node, HTMLAttributes }) {
     return [
       "span",
+
       mergeAttributes({ "data-wikilink": "" }, HTMLAttributes),
+
       `[[${node.attrs.label}]]`,
     ];
   },
@@ -53,23 +65,34 @@ export const Wikilink = Node.create({
     return {
       suggestion: {
         char: "[[",
+
         command: ({
           editor,
+
           range,
+
           props,
         }: {
           editor: Editor;
+
           range: { from: number; to: number };
+
           props: Record<string, unknown>;
         }) => {
           editor
+
             .chain()
+
             .focus()
+
             .deleteRange(range)
+
             .insertContent([
               { type: this.name, attrs: props },
+
               { type: "text", text: " " },
             ])
+
             .run();
         },
       },
@@ -80,7 +103,9 @@ export const Wikilink = Node.create({
     return [
       Suggestion({
         editor: this.editor,
+
         pluginKey: wikilinkSuggestionPluginKey,
+
         ...this.options.suggestion,
       }),
     ];

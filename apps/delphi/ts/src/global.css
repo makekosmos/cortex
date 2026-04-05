@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../../../packages/kepler-visuals/**/*.vue";
 
 @font-face {
   font-family: "Zed Mono";

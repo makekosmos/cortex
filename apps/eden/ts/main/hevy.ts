@@ -1,18 +1,26 @@
 import { BrowserWindow } from "electron";
 
 const HEVY_API_BASE = "https://api.hevyapp.com";
+
 const WEB_API_KEY = "shelobs_hevy_web";
 
 function appHeaders(authToken: string): Record<string, string> {
   return {
     Accept: "application/json, text/plain, */*",
+
     "Content-Type": "application/json",
+
     Origin: "https://hevy.com",
+
     Referer: "https://hevy.com/",
+
     "Hevy-Platform": "web",
+
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+
     authorization: `Bearer ${authToken}`,
+
     "x-api-key": WEB_API_KEY,
   };
 }
@@ -25,11 +33,16 @@ export function hevyLoginViaBrowser(): Promise<HevyLoginResponse> {
   return new Promise((resolve) => {
     const loginWindow = new BrowserWindow({
       width: 500,
+
       height: 700,
+
       title: "Войти в Hevy",
+
       autoHideMenuBar: true,
+
       webPreferences: {
         nodeIntegration: false,
+
         contextIsolation: true,
       },
     });
@@ -38,7 +51,9 @@ export function hevyLoginViaBrowser(): Promise<HevyLoginResponse> {
 
     const tryExtractToken = () => {
       if (resolved) return;
+
       loginWindow.webContents
+
         .executeJavaScript(`
         (() => {
           try {
@@ -60,34 +75,51 @@ export function hevyLoginViaBrowser(): Promise<HevyLoginResponse> {
           } catch(e) { return ''; }
         })()
       `)
+
         .then((result: string) => {
           if (resolved || !result) return;
+
           try {
-            const data = JSON.parse(result) as { token: string; username: string };
+            const data = JSON.parse(result) as {
+              token: string;
+              username: string;
+            };
+
             if (data.token) {
               resolved = true;
+
               loginWindow.close();
-              resolve({ ok: true, authToken: data.token, username: data.username });
+
+              resolve({
+                ok: true,
+                authToken: data.token,
+                username: data.username,
+              });
             }
           } catch {}
         })
+
         .catch(() => {});
     };
 
     loginWindow.webContents.on("did-navigate", () => {
       setTimeout(tryExtractToken, 1000);
+
       setTimeout(tryExtractToken, 3000);
+
       setTimeout(tryExtractToken, 5000);
     });
 
     loginWindow.webContents.on("did-navigate-in-page", () => {
       setTimeout(tryExtractToken, 1000);
+
       setTimeout(tryExtractToken, 3000);
     });
 
     loginWindow.on("closed", () => {
       if (!resolved) {
         resolved = true;
+
         resolve({ ok: false, error: "Login window closed" });
       }
     });
@@ -118,16 +150,21 @@ export async function hevyGetWorkoutCount(authToken: string): Promise<number> {
   }
 
   const data = (await res.json()) as { workout_count: number };
+
   return data.workout_count;
 }
 
 export async function hevyFetchWorkouts(
   authToken: string,
+
   username: string,
+
   offset: number = 0,
+
   limit: number = 20,
 ) {
   const url = `${HEVY_API_BASE}/user_workouts_paged?username=${encodeURIComponent(username)}&limit=${limit}&offset=${offset}`;
+
   const res = await fetch(url, { headers: appHeaders(authToken) });
 
   if (!res.ok) {
@@ -137,20 +174,34 @@ export async function hevyFetchWorkouts(
   return res.json();
 }
 
-export async function hevyFetchAllWorkouts(authToken: string, username: string) {
+export async function hevyFetchAllWorkouts(
+  authToken: string,
+  username: string,
+) {
   const allWorkouts: unknown[] = [];
+
   const limit = 20;
+
   let offset = 0;
 
   while (true) {
-    const data = (await hevyFetchWorkouts(authToken, username, offset, limit)) as Record<
-      string,
-      unknown
-    >;
-    const workouts = Array.isArray(data) ? data : ((data.workouts as unknown[]) ?? []);
+    const data = (await hevyFetchWorkouts(
+      authToken,
+      username,
+      offset,
+      limit,
+    )) as Record<string, unknown>;
+
+    const workouts = Array.isArray(data)
+      ? data
+      : ((data.workouts as unknown[]) ?? []);
+
     if (!Array.isArray(workouts) || workouts.length === 0) break;
+
     allWorkouts.push(...workouts);
+
     if (workouts.length < limit) break;
+
     offset += workouts.length;
   }
 

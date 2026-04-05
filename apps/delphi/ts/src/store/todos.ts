@@ -1,72 +1,96 @@
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+
+import { computed, ref } from "vue";
+
 import {
   arkSync,
-  todoItemToArkChange,
   projectToArkChange,
+  todoItemToArkChange,
 } from "@/services/sync/ark-client";
+
 import { broadcastToPeers } from "@/services/sync/peer-bridge";
+
 import {
-  localDbUpsertTodo,
-  localDbDeleteTodo,
-  localDbUpsertProject,
   localDbDeleteProject,
+  localDbDeleteTodo,
   localDbDeleteTrashed,
+  localDbUpsertProject,
+  localDbUpsertTodo,
 } from "@/services/storage/local-db";
+
 import type { SyncEntityType } from "@/services/sync/lan-protocol";
+
 import type {
-  TodoItem,
-  Project,
   Area,
-  Tag,
   Heading,
-  SmartList,
+  Project,
   RecurrenceData,
+  SmartList,
+  Tag,
+  TodoItem,
 } from "@/types/task";
+
 import {
+  addChecklistItem as addChecklist,
   createTodoItem,
+  markCancelled as markTodoCancelled,
   markCompleted as markTodoCompleted,
   markIncomplete as markTodoIncomplete,
-  markCancelled as markTodoCancelled,
-  moveToTrash as trashTodoItem,
-  restoreFromTrash as restoreTodoItem,
-  addChecklistItem as addChecklist,
-  toggleChecklistItem as toggleChecklist,
   removeChecklistItem as removeChecklist,
   reorderChecklistItems as reorderChecklist,
+  restoreFromTrash as restoreTodoItem,
+  toggleChecklistItem as toggleChecklist,
+  moveToTrash as trashTodoItem,
 } from "@/models/todoItem";
+
 import { createProject } from "@/models/project";
+
 import { createArea } from "@/models/area";
+
 import { createTag } from "@/models/tag";
+
 import { createHeading } from "@/models/heading";
-import { filterTodos, countAll } from "@/services/filters/todoFilterService";
+
+import { countAll, filterTodos } from "@/services/filters/todoFilterService";
+
 import {
   createNextRecurrence,
   duplicateTodo as duplicateTodoItem,
 } from "@/services/recurrence/recurrence";
+
 import type { CreateTodoParams } from "@/models/todoItem";
+
 import type { CreateProjectParams } from "@/models/project";
 
 // ---------------------------------------------------------------------------
+
 // Helper: update a single todo in-place
+
 // ---------------------------------------------------------------------------
 
 function mapTodo(
   todos: TodoItem[],
+
   id: string,
+
   fn: (t: TodoItem) => TodoItem,
 ): TodoItem[] {
   return todos.map((t) => (t.id === id ? fn(t) : t));
 }
 
 // ---------------------------------------------------------------------------
+
 // LAN Sync broadcast helper
+
 // ---------------------------------------------------------------------------
 
 function broadcastToLanSync(
   entityType: SyncEntityType,
+
   id: string,
+
   data: Record<string, unknown>,
+
   deleted?: boolean,
 ): void {
   if (
@@ -74,39 +98,60 @@ function broadcastToLanSync(
     !(window as unknown as Record<string, unknown>).electronAPI
   )
     return;
+
   const electronAPI = (
     window as unknown as Record<
       string,
       { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
     >
   ).electronAPI;
+
   if (!electronAPI?.invoke) return;
+
   // Deep-clone to strip Vue 3 reactive proxies — structured clone (Electron IPC)
+
   // cannot serialize Proxy objects.
+
   const plainData = JSON.parse(JSON.stringify(data));
+
   electronAPI
+
     .invoke("lan-sync:broadcastChange", {
       type: entityType,
+
       id,
+
       data: plainData,
+
       hlc: "",
+
       deleted,
     })
+
     .catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
+
 // Store
+
 // ---------------------------------------------------------------------------
 
 export const useTodoStore = defineStore("todos", () => {
   // ---- State ----
+
   const todos = ref<TodoItem[]>([]);
+
   const projects = ref<Project[]>([]);
+
   const areas = ref<Area[]>([]);
+
   const tags = ref<Tag[]>([]);
+
   const headings = ref<Heading[]>([]);
+
   const activeSmartList = ref<SmartList | null>(null);
+
   const hydrated = ref(false);
 
   // ---- Bulk setters (for sync / hydration) ----
@@ -114,18 +159,23 @@ export const useTodoStore = defineStore("todos", () => {
   function setTodos(value: TodoItem[]) {
     todos.value = value;
   }
+
   function setProjects(value: Project[]) {
     projects.value = value;
   }
+
   function setAreas(value: Area[]) {
     areas.value = value;
   }
+
   function setTags(value: Tag[]) {
     tags.value = value;
   }
+
   function setHeadings(value: Heading[]) {
     headings.value = value;
   }
+
   function setHydrated(v: boolean) {
     hydrated.value = v;
   }
@@ -146,13 +196,17 @@ export const useTodoStore = defineStore("todos", () => {
 
   function todosForProject(projectId: string): TodoItem[] {
     return todos.value
+
       .filter((t) => t.projectId === projectId && !t.isTrashed)
+
       .toSorted((a, b) => a.sortOrder - b.sortOrder);
   }
 
   function headingsForProject(projectId: string): Heading[] {
     return headings.value
+
       .filter((h) => h.projectId === projectId)
+
       .toSorted((a, b) => a.sortOrder - b.sortOrder);
   }
 
@@ -160,30 +214,47 @@ export const useTodoStore = defineStore("todos", () => {
 
   function addTodo(params: CreateTodoParams): TodoItem {
     const todo = createTodoItem(params);
+
     todos.value = [todo, ...todos.value];
+
     void localDbUpsertTodo(todo);
+
     const change = todoItemToArkChange(todo, "create");
+
     arkSync.sendChange(change);
+
     broadcastToPeers(change);
+
     broadcastToLanSync(
       "todo",
+
       todo.id,
+
       todo as unknown as Record<string, unknown>,
     );
+
     return todo;
   }
 
   function updateTodo(id: string, patch: Partial<TodoItem>) {
     todos.value = mapTodo(todos.value, id, (t) => ({ ...t, ...patch }));
+
     const updated = todos.value.find((t) => t.id === id);
+
     if (updated) {
       void localDbUpsertTodo(updated);
+
       const change = todoItemToArkChange(updated, "update");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync(
         "todo",
+
         updated.id,
+
         updated as unknown as Record<string, unknown>,
       );
     }
@@ -191,37 +262,51 @@ export const useTodoStore = defineStore("todos", () => {
 
   function removeTodo(id: string) {
     const todo = todos.value.find((t) => t.id === id);
+
     todos.value = todos.value.filter((t) => t.id !== id);
+
     void localDbDeleteTodo(id);
+
     if (todo) {
       const change = todoItemToArkChange(todo, "delete");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync("todo", id, {}, true);
     }
   }
 
   /** Remove from local memory + DB without sending to server (used for full sync reconciliation). */
+
   function removeTodoLocal(id: string) {
     todos.value = todos.value.filter((t) => t.id !== id);
+
     void localDbDeleteTodo(id);
   }
 
   /** Remove project from local memory + DB without broadcasting (used for incoming sync). */
+
   function removeProjectLocal(id: string) {
     projects.value = projects.value.filter((p) => p.id !== id);
+
     // Unlink todos from removed project
+
     todos.value = todos.value.map((t) =>
       t.projectId === id ? { ...t, projectId: null } : t,
     );
+
     void localDbDeleteProject(id);
   }
 
   function upsertTodo(todo: TodoItem) {
     const exists = todos.value.some((t) => t.id === todo.id);
+
     todos.value = exists
       ? todos.value.map((t) => (t.id === todo.id ? todo : t))
       : [todo, ...todos.value];
+
     void localDbUpsertTodo(todo);
   }
 
@@ -229,49 +314,75 @@ export const useTodoStore = defineStore("todos", () => {
 
   function completeTodo(id: string) {
     const todo = todos.value.find((t) => t.id === id);
+
     if (!todo) return;
 
     const completed = markTodoCompleted(todo);
+
     let newTodos = mapTodo(todos.value, id, () => completed);
 
     // If recurring, create next occurrence
+
     const next = createNextRecurrence(completed);
+
     if (next) {
       newTodos = [next, ...newTodos];
+
       void localDbUpsertTodo(next);
+
       const nextChange = todoItemToArkChange(next, "create");
+
       arkSync.sendChange(nextChange);
+
       broadcastToPeers(nextChange);
+
       broadcastToLanSync(
         "todo",
+
         next.id,
+
         next as unknown as Record<string, unknown>,
       );
     }
 
     todos.value = newTodos;
+
     void localDbUpsertTodo(completed);
+
     const completedChange = todoItemToArkChange(completed, "update");
+
     arkSync.sendChange(completedChange);
+
     broadcastToPeers(completedChange);
+
     broadcastToLanSync(
       "todo",
+
       completed.id,
+
       completed as unknown as Record<string, unknown>,
     );
   }
 
   function incompleteTodo(id: string) {
     todos.value = mapTodo(todos.value, id, markTodoIncomplete);
+
     const updated = todos.value.find((t) => t.id === id);
+
     if (updated) {
       void localDbUpsertTodo(updated);
+
       const change = todoItemToArkChange(updated, "update");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync(
         "todo",
+
         updated.id,
+
         updated as unknown as Record<string, unknown>,
       );
     }
@@ -279,15 +390,23 @@ export const useTodoStore = defineStore("todos", () => {
 
   function cancelTodo(id: string) {
     todos.value = mapTodo(todos.value, id, markTodoCancelled);
+
     const updated = todos.value.find((t) => t.id === id);
+
     if (updated) {
       void localDbUpsertTodo(updated);
+
       const change = todoItemToArkChange(updated, "update");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync(
         "todo",
+
         updated.id,
+
         updated as unknown as Record<string, unknown>,
       );
     }
@@ -295,15 +414,23 @@ export const useTodoStore = defineStore("todos", () => {
 
   function trashTodo(id: string) {
     todos.value = mapTodo(todos.value, id, trashTodoItem);
+
     const updated = todos.value.find((t) => t.id === id);
+
     if (updated) {
       void localDbUpsertTodo(updated);
+
       const change = todoItemToArkChange(updated, "update");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync(
         "todo",
+
         updated.id,
+
         updated as unknown as Record<string, unknown>,
       );
     }
@@ -311,15 +438,23 @@ export const useTodoStore = defineStore("todos", () => {
 
   function restoreTodo(id: string) {
     todos.value = mapTodo(todos.value, id, restoreTodoItem);
+
     const updated = todos.value.find((t) => t.id === id);
+
     if (updated) {
       void localDbUpsertTodo(updated);
+
       const change = todoItemToArkChange(updated, "update");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync(
         "todo",
+
         updated.id,
+
         updated as unknown as Record<string, unknown>,
       );
     }
@@ -327,17 +462,27 @@ export const useTodoStore = defineStore("todos", () => {
 
   function duplicateTodo(id: string): TodoItem | null {
     const todo = todos.value.find((t) => t.id === id);
+
     if (!todo) return null;
+
     const copy = duplicateTodoItem(todo);
+
     todos.value = [copy, ...todos.value];
+
     const change = todoItemToArkChange(copy, "create");
+
     arkSync.sendChange(change);
+
     broadcastToPeers(change);
+
     broadcastToLanSync(
       "todo",
+
       copy.id,
+
       copy as unknown as Record<string, unknown>,
     );
+
     return copy;
   }
 
@@ -370,6 +515,7 @@ export const useTodoStore = defineStore("todos", () => {
   function setRecurrence(todoId: string, rule: RecurrenceData | null) {
     todos.value = mapTodo(todos.value, todoId, (t) => ({
       ...t,
+
       recurrenceRule: rule,
     }));
   }
@@ -385,6 +531,7 @@ export const useTodoStore = defineStore("todos", () => {
   function removeTagFromTodo(todoId: string, tagId: string) {
     todos.value = mapTodo(todos.value, todoId, (t) => ({
       ...t,
+
       tagIds: t.tagIds.filter((id) => id !== tagId),
     }));
   }
@@ -393,16 +540,25 @@ export const useTodoStore = defineStore("todos", () => {
 
   function addProject(params: CreateProjectParams): Project {
     const project = createProject(params);
+
     projects.value = [project, ...projects.value];
+
     void localDbUpsertProject(project);
+
     const change = projectToArkChange(project, "create");
+
     arkSync.sendChange(change);
+
     broadcastToPeers(change);
+
     broadcastToLanSync(
       "project",
+
       project.id,
+
       project as unknown as Record<string, unknown>,
     );
+
     return project;
   }
 
@@ -410,15 +566,23 @@ export const useTodoStore = defineStore("todos", () => {
     projects.value = projects.value.map((p) =>
       p.id === id ? { ...p, ...patch } : p,
     );
+
     const updated = projects.value.find((p) => p.id === id);
+
     if (updated) {
       void localDbUpsertProject(updated);
+
       const change = projectToArkChange(updated, "update");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync(
         "project",
+
         updated.id,
+
         updated as unknown as Record<string, unknown>,
       );
     }
@@ -426,25 +590,35 @@ export const useTodoStore = defineStore("todos", () => {
 
   function removeProject(id: string) {
     const project = projects.value.find((p) => p.id === id);
+
     projects.value = projects.value.filter((p) => p.id !== id);
+
     // Unlink todos from removed project
+
     todos.value = todos.value.map((t) =>
       t.projectId === id ? { ...t, projectId: null } : t,
     );
+
     void localDbDeleteProject(id);
+
     if (project) {
       const change = projectToArkChange(project, "delete");
+
       arkSync.sendChange(change);
+
       broadcastToPeers(change);
+
       broadcastToLanSync("project", id, {}, true);
     }
   }
 
   function upsertProject(project: Project) {
     const exists = projects.value.some((p) => p.id === project.id);
+
     projects.value = exists
       ? projects.value.map((p) => (p.id === project.id ? project : p))
       : [project, ...projects.value];
+
     void localDbUpsertProject(project);
   }
 
@@ -452,7 +626,9 @@ export const useTodoStore = defineStore("todos", () => {
 
   function addArea(title: string): Area {
     const area = createArea(title);
+
     areas.value = [area, ...areas.value];
+
     return area;
   }
 
@@ -464,10 +640,13 @@ export const useTodoStore = defineStore("todos", () => {
 
   function removeArea(id: string) {
     areas.value = areas.value.filter((a) => a.id !== id);
+
     // Unlink projects & todos from removed area
+
     projects.value = projects.value.map((p) =>
       p.areaId === id ? { ...p, areaId: null } : p,
     );
+
     todos.value = todos.value.map((t) =>
       t.areaId === id ? { ...t, areaId: null } : t,
     );
@@ -477,11 +656,15 @@ export const useTodoStore = defineStore("todos", () => {
 
   function addTag(
     title: string,
+
     color?: string,
+
     shortcut?: string | null,
   ): Tag {
     const tag = createTag(title, color, shortcut);
+
     tags.value = [tag, ...tags.value];
+
     return tag;
   }
 
@@ -491,7 +674,9 @@ export const useTodoStore = defineStore("todos", () => {
 
   function removeTag(id: string) {
     tags.value = tags.value.filter((t) => t.id !== id);
+
     // Remove tag from all todos
+
     todos.value = todos.value.map((t) =>
       t.tagIds.includes(id)
         ? { ...t, tagIds: t.tagIds.filter((tid) => tid !== id) }
@@ -503,7 +688,9 @@ export const useTodoStore = defineStore("todos", () => {
 
   function addHeading(title: string, projectId?: string | null): Heading {
     const heading = createHeading(title, projectId);
+
     headings.value = [heading, ...headings.value];
+
     return heading;
   }
 
@@ -515,7 +702,9 @@ export const useTodoStore = defineStore("todos", () => {
 
   function removeHeading(id: string) {
     headings.value = headings.value.filter((h) => h.id !== id);
+
     // Clear headingId from todos that referenced it
+
     todos.value = todos.value.map((t) =>
       t.headingId === id ? { ...t, headingId: null } : t,
     );
@@ -523,87 +712,141 @@ export const useTodoStore = defineStore("todos", () => {
 
   async function emptyTrash() {
     // Remove trashed todos from store
+
     todos.value = todos.value.filter((t) => !t.isTrashed);
+
     // Permanently delete from DB
+
     await localDbDeleteTrashed();
   }
 
   return {
     // State
+
     todos,
+
     projects,
+
     areas,
+
     tags,
+
     headings,
+
     activeSmartList,
+
     hydrated,
 
     // Bulk setters
+
     setTodos,
+
     setProjects,
+
     setAreas,
+
     setTags,
+
     setHeadings,
+
     setHydrated,
 
     // Navigation
+
     setActiveSmartList,
 
     // Derived
+
     filteredTodos,
+
     smartListCounts,
+
     todosForProject,
+
     headingsForProject,
 
     // Todo CRUD
+
     addTodo,
+
     updateTodo,
+
     removeTodo,
+
     removeTodoLocal,
+
     removeProjectLocal,
+
     upsertTodo,
 
     // State transitions
+
     completeTodo,
+
     incompleteTodo,
+
     cancelTodo,
+
     trashTodo,
+
     restoreTodo,
+
     emptyTrash,
+
     duplicateTodo,
 
     // Checklist
+
     addChecklistItem,
+
     toggleChecklistItem,
+
     removeChecklistItem,
+
     reorderChecklistItems,
 
     // Recurrence
+
     setRecurrence,
 
     // Tags on todos
+
     addTagToTodo,
+
     removeTagFromTodo,
 
     // Project CRUD
+
     addProject,
+
     updateProject,
+
     removeProject,
+
     upsertProject,
 
     // Area CRUD
+
     addArea,
+
     updateArea,
+
     removeArea,
 
     // Tag CRUD
+
     addTag,
+
     updateTag,
+
     removeTag,
 
     // Heading CRUD
+
     addHeading,
+
     updateHeading,
+
     removeHeading,
   };
 });

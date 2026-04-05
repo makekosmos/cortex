@@ -8,7 +8,8 @@
     "dev": "cargo build --manifest-path heart/Cargo.toml && vite",
     "build": "cargo build --release --manifest-path heart/Cargo.toml && tsc && vite build",
     "lint": "oxlint . --ignore-pattern dist --ignore-pattern dist-electron --ignore-pattern release --ignore-pattern src/components/sidebar-anytype --ignore-pattern src-anytype --deny-warnings",
-    "format": "oxfmt --check .",
+    "format": "oxfmt src/ main/",
+    "format:check": "oxfmt --check src/ main/",
     "package": "bun run build && electron-builder",
     "preview": "vite preview",
     "test:e2e": "bun run build && playwright test --config playwright.config.ts"
@@ -37,7 +38,7 @@
     "electron": "^38.8.4",
     "electron-builder": "^26.8.1",
     "jsdom": "^28.1.0",
-    "oxfmt": "^0.36.0",
+    "oxfmt": "^0.7.0",
     "oxlint": "^1.57.0",
     "playwright": "^1.58.2",
     "typescript": "~5.8.3",

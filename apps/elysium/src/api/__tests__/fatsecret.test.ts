@@ -1,6 +1,7 @@
-import { searchFatSecret } from '../fatsecret';
+import { searchFatSecret } from "../fatsecret";
 
 // Sample HTML that mimics FatSecret search results page structure
+
 const SAMPLE_HTML = `
 <html>
 <body>
@@ -33,6 +34,7 @@ const SAMPLE_HTML = `
 `;
 
 // HTML with no valid results (missing calorie info)
+
 const EMPTY_HTML = `
 <html><body>
   <a class="prominent" href="/test">Test Food</a>
@@ -41,6 +43,7 @@ const EMPTY_HTML = `
 `;
 
 // HTML with edge-case number formats
+
 const EDGE_CASE_HTML = `
 <html><body>
 <table>
@@ -55,6 +58,7 @@ const EDGE_CASE_HTML = `
 `;
 
 // HTML with HTML entities in name
+
 const ENTITIES_HTML = `
 <html><body>
 <table>
@@ -75,93 +79,131 @@ beforeEach(() => {
 function mockFetch(html: string, ok = true) {
   (globalThis as Record<string, unknown>).fetch = jest.fn().mockResolvedValue({
     ok,
+
     text: () => Promise.resolve(html),
   });
 }
 
-describe('searchFatSecret', () => {
-  it('parses multiple results from search page HTML', async () => {
+describe("searchFatSecret", () => {
+  it("parses multiple results from search page HTML", async () => {
     mockFetch(SAMPLE_HTML);
-    const results = await searchFatSecret('курица');
+
+    const results = await searchFatSecret("курица");
 
     expect(results).toHaveLength(3);
 
     // First result: Куриная Грудка (Мираторг)
-    expect(results[0].name).toBe('Куриная Грудка');
-    expect(results[0].brand).toBe('Мираторг');
+
+    expect(results[0].name).toBe("Куриная Грудка");
+
+    expect(results[0].brand).toBe("Мираторг");
+
     expect(results[0].macros.calories).toBe(165);
+
     expect(results[0].macros.protein).toBe(31);
+
     expect(results[0].macros.fat).toBe(3.6);
+
     expect(results[0].macros.carbs).toBe(0);
+
     expect(results[0].servingSize).toBe(100);
-    expect(results[0].servingUnit).toBe('г');
+
+    expect(results[0].servingUnit).toBe("г");
 
     // Second result: no brand
-    expect(results[1].name).toBe('Рис Белый');
+
+    expect(results[1].name).toBe("Рис Белый");
+
     expect(results[1].brand).toBeUndefined();
+
     expect(results[1].macros.calories).toBe(130);
+
     expect(results[1].macros.carbs).toBe(28.2);
   });
 
-  it('parses serving size other than 100g', async () => {
+  it("parses serving size other than 100g", async () => {
     mockFetch(SAMPLE_HTML);
-    const results = await searchFatSecret('молоко');
+
+    const results = await searchFatSecret("молоко");
 
     const milk = results[2];
+
     expect(milk.servingSize).toBe(1);
-    expect(milk.servingUnit).toBe('стакан');
+
+    expect(milk.servingUnit).toBe("стакан");
   });
 
-  it('returns empty array when no calorie data found', async () => {
+  it("returns empty array when no calorie data found", async () => {
     mockFetch(EMPTY_HTML);
-    const results = await searchFatSecret('nothing');
+
+    const results = await searchFatSecret("nothing");
+
     expect(results).toEqual([]);
   });
 
-  it('returns empty array on HTTP error', async () => {
-    mockFetch('', false);
-    const results = await searchFatSecret('test');
+  it("returns empty array on HTTP error", async () => {
+    mockFetch("", false);
+
+    const results = await searchFatSecret("test");
+
     expect(results).toEqual([]);
   });
 
-  it('returns empty array on network failure', async () => {
-    (globalThis as Record<string, unknown>).fetch = jest.fn().mockRejectedValue(new Error('Network error'));
-    const results = await searchFatSecret('test');
+  it("returns empty array on network failure", async () => {
+    (globalThis as Record<string, unknown>).fetch = jest
+      .fn()
+      .mockRejectedValue(new Error("Network error"));
+
+    const results = await searchFatSecret("test");
+
     expect(results).toEqual([]);
   });
 
-  it('parses high-value macros correctly', async () => {
+  it("parses high-value macros correctly", async () => {
     mockFetch(EDGE_CASE_HTML);
-    const results = await searchFatSecret('масло');
+
+    const results = await searchFatSecret("масло");
 
     expect(results).toHaveLength(1);
+
     expect(results[0].macros.calories).toBe(717);
+
     expect(results[0].macros.fat).toBe(81.1);
+
     expect(results[0].macros.carbs).toBe(0.1);
+
     expect(results[0].macros.protein).toBe(0.9);
   });
 
-  it('decodes HTML entities in food names', async () => {
+  it("decodes HTML entities in food names", async () => {
     mockFetch(ENTITIES_HTML);
-    const results = await searchFatSecret('сыр');
+
+    const results = await searchFatSecret("сыр");
 
     expect(results).toHaveLength(1);
-    expect(results[0].name).toBe('Сыр & Крекеры');
+
+    expect(results[0].name).toBe("Сыр & Крекеры");
   });
 
-  it('generates ID with fs- prefix from href', async () => {
+  it("generates ID with fs- prefix from href", async () => {
     mockFetch(SAMPLE_HTML);
-    const results = await searchFatSecret('test');
+
+    const results = await searchFatSecret("test");
 
     expect(results[0].id).toMatch(/^fs-/);
-    expect(results[0].id).toContain(encodeURIComponent('/калории-питание/общий/куриная-грудка'));
+
+    expect(results[0].id).toContain(
+      encodeURIComponent("/калории-питание/общий/куриная-грудка"),
+    );
   });
 
-  it('passes page parameter correctly', async () => {
+  it("passes page parameter correctly", async () => {
     mockFetch(SAMPLE_HTML);
-    await searchFatSecret('test', 3);
+
+    await searchFatSecret("test", 3);
 
     const calledUrl = (globalThis.fetch as jest.Mock).mock.calls[0][0];
-    expect(calledUrl).toContain('pg=2'); // page 3 → pg=2 (0-indexed)
+
+    expect(calledUrl).toContain("pg=2"); // page 3 → pg=2 (0-indexed)
   });
 });

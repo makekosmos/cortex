@@ -1,18 +1,18 @@
 <script setup lang="ts">
 /* eslint-disable no-console */
 import {
-  shallowRef,
   computed,
-  useTemplateRef,
+  nextTick,
   onMounted,
   onUnmounted,
-  nextTick,
+  shallowRef,
+  useTemplateRef,
   watch,
 } from "vue";
 import { CheckCircle, Folder, Search, Tag } from "lucide-vue-next";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
-import type { TodoItem, Project, Tag as TagType } from "@/types/task";
+import type { Project, Tag as TagType, TodoItem } from "@/types/task";
 
 // ---------------------------------------------------------------------------
 // Result types

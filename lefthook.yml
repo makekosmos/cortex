@@ -8,14 +8,14 @@ pre-commit:
       glob: "apps/delphi/ts/**/*.{ts,tsx}"
       run: cd apps/delphi/ts && bun run lint
     delphi-ts-format:
-      glob: "apps/delphi/ts/**/*.{ts,tsx,css}"
+      glob: "apps/delphi/ts/**/*.{ts,tsx,vue,css}"
       run: cd apps/delphi/ts && bun run format:check
     eden-ts-lint:
       glob: "apps/eden/ts/**/*.{ts,tsx}"
       run: cd apps/eden/ts && bun run lint
     eden-ts-format:
-      glob: "apps/eden/ts/**/*.{ts,tsx}"
-      run: cd apps/eden/ts && bun run format
+      glob: "apps/eden/ts/**/*.{ts,tsx,vue}"
+      run: cd apps/eden/ts && bun run format:check
     eden-heart-fmt:
       glob: "apps/eden/ts/heart/**/*.rs"
       run: cd apps/eden/ts/heart && cargo fmt --check

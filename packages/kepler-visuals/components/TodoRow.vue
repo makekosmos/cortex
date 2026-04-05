@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, computed, useTemplateRef, nextTick, ref } from "vue";
-import { Circle, CheckCircle2, GripVertical } from "lucide-vue-next";
+import { GripVertical } from "lucide-vue-next";
 
 export interface TodoRowItem {
   id: string;
@@ -67,22 +67,22 @@ function onEditKeyDown(e: KeyboardEvent) {
   if (e.key === "Escape") editing.value = false;
 }
 
-function onGripPointerDown(e: PointerEvent) {
+function onRowPointerDown(e: PointerEvent) {
   if (!props.draggable || editing.value) return;
-  e.preventDefault();
 
   const ox = e.clientX;
   const oy = e.clientY;
   let started = false;
 
   const onMove = (me: PointerEvent) => {
-    if (!started && (Math.abs(me.clientX - ox) > 3 || Math.abs(me.clientY - oy) > 3)) {
+    if (!started && (Math.abs(me.clientX - ox) > 4 || Math.abs(me.clientY - oy) > 4)) {
       started = true;
       startDrag({ clientX: ox, clientY: oy, preventDefault: () => {} } as PointerEvent);
     }
   };
   const onUp = () => {
     document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
   };
   document.addEventListener("pointermove", onMove);
   document.addEventListener("pointerup", onUp, { once: true });
@@ -107,7 +107,9 @@ function startDrag(e: PointerEvent) {
     pointerEvents: "none",
     zIndex: "9999",
     backgroundColor: "var(--secondary)",
-    transform: "rotate(2.5deg)",
+    translate: "0px 0px",
+    rotate: "2.5deg",
+    transition: "rotate 0.18s ease",
   });
   document.body.appendChild(clone);
   document.body.style.cursor = "grabbing";
@@ -123,7 +125,8 @@ function onPointerMove(e: PointerEvent) {
   const dx = e.clientX - startX;
   const dy = e.clientY - startY;
   const angle = dx >= 0 ? 2.5 : -2.5;
-  clone.style.transform = `translate(${dx}px, ${dy}px) rotate(${angle}deg)`;
+  clone.style.translate = `${dx}px ${dy}px`;
+  clone.style.rotate = `${angle}deg`;
 
   updatePlaceholder(e);
 }
@@ -201,32 +204,26 @@ function onPointerUp() {
     ref="rowRef"
     :data-todo-id="todo.id"
     :class="[
-      'todo-row group flex h-10 cursor-pointer items-center gap-3 px-7 hover:bg-(--secondary)',
+      'todo-row group flex h-10 items-center gap-3 px-7 hover:bg-(--secondary)',
       isDragging ? 'opacity-0' : '',
+      draggable && !editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
     ]"
     style="max-width: var(--bringhurst-wide)"
+    @pointerdown="onRowPointerDown"
     @dblclick="editable ? startEditing() : undefined"
   >
-    <!-- Drag handle -->
+    <!-- Drag handle (visual indicator only) -->
     <GripVertical
       v-if="draggable"
       :size="14"
-      class="shrink-0 cursor-grab text-(--muted-foreground)/30 opacity-0 transition-opacity group-hover:opacity-100"
-      @pointerdown.stop="onGripPointerDown"
+      class="shrink-0 text-(--muted-foreground)/30 opacity-0 transition-opacity group-hover:opacity-100"
     />
 
     <!-- Checkbox -->
-    <button type="button" class="check-btn shrink-0" @click.stop="emit('complete')">
-      <CheckCircle2
-        v-if="isCompleted"
-        :size="18"
-        class="text-(--muted-foreground)"
-      />
-      <Circle
-        v-else
-        :size="18"
-        class="text-(--ring) transition-colors"
-      />
+    <button type="button" class="check-btn shrink-0" @pointerdown.stop @click.stop="emit('complete')">
+      <span :class="['check-box', isCompleted ? 'check-box--done' : '']">
+        <span v-if="isCompleted" class="check-box__inner" />
+      </span>
     </button>
 
     <!-- Content -->
@@ -243,7 +240,7 @@ function onPointerUp() {
       <template v-else>
         <div
           :class="[
-            'truncate text-sm leading-5 px-1 py-0.5',
+            'truncate text-sm leading-5 px-1 py-0.5 select-none',
             isCompleted
               ? 'text-(--muted-foreground) line-through'
               : 'text-(--foreground)',
@@ -253,7 +250,7 @@ function onPointerUp() {
         </div>
         <div
           v-if="todo.notes"
-          class="truncate text-xs text-(--muted-foreground)/70"
+          class="truncate text-xs text-(--muted-foreground)/70 select-none"
         >
           {{ todo.notes }}
         </div>
@@ -270,7 +267,8 @@ function onPointerUp() {
       <button
         type="button"
         title="В корзину"
-        class="rounded px-1.5 py-0.5 text-[10px] text-(--muted-foreground) hover:bg-red-500/15 hover:text-red-500"
+        class="rounded px-1.5 py-0.5 text-[10px] text-(--muted-foreground) hover:bg-red-500/15 hover:text-red-500 select-none"
+        @pointerdown.stop
         @click.stop="emit('trash')"
       >
         Удалить
@@ -280,9 +278,38 @@ function onPointerUp() {
 </template>
 
 <style scoped>
-.check-btn:hover svg {
-  color: rgb(239 68 68);
-  fill: rgb(239 68 68 / 0.2);
+.check-box {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 2px solid var(--ring);
+  transition: border-color 0.15s, background-color 0.15s;
+  position: relative;
+}
+
+.check-box--done {
+  border-color: #C13332;
+}
+
+.check-box__inner {
+  display: block;
+  position: absolute;
+  inset: 2px;
+  border-radius: 2px;
+  background-color: #C13332;
+}
+
+.check-btn:hover .check-box:not(.check-box--done) {
+  border-color: rgb(239 68 68);
+}
+
+.check-btn:hover .check-box--done {
+  border-color: rgb(220 38 38);
+}
+
+.check-btn:hover .check-box--done .check-box__inner {
+  background-color: rgb(220 38 38);
 }
 
 .todo-row {

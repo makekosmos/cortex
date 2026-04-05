@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, ref, onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { Database, Globe, Link, SunMoon, Unlink } from "lucide-vue-next";
 import { useTheme } from "@/composables/useTheme";
 import {
@@ -11,13 +11,13 @@ import {
 } from "@/services/sync/ark-client";
 import { parseConnectionString } from "@/services/sync/pairing";
 import {
-  getSpaces,
+  type Space,
+  deriveSpaceId,
+  formatSpaceCode,
   getActiveSpace,
+  getSpaces,
   removeSpace,
   renameSpace,
-  formatSpaceCode,
-  deriveSpaceId,
-  type Space,
 } from "@/services/space/space-manager";
 
 const { theme, setTheme } = useTheme();

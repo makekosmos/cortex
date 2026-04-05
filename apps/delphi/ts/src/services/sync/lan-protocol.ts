@@ -1,6 +1,7 @@
 /**
  * Re-export LAN protocol types and functions from @arksync/core.
  */
+
 export {
   LAN_SYNC_PORT,
   PROTOCOL_VERSION,

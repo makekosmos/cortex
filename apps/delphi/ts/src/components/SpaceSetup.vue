@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { shallowRef, ref } from "vue";
+import { ref, shallowRef } from "vue";
 import {
-  generateSpaceCode,
+  type Space,
+  deriveSpaceId,
   formatSpaceCode,
-  parseSpaceCode,
-  generateQrPayload,
-  parseQrPayload,
   generateExtendedCode,
+  generateQrPayload,
+  generateSpaceCode,
   getSpaces,
+  parseQrPayload,
+  parseSpaceCode,
   removeSpace,
   renameSpace,
-  deriveSpaceId,
-  type Space,
 } from "@/services/space/space-manager";
 import QRCode from "qrcode";
 

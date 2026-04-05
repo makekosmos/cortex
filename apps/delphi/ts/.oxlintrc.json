@@ -9,7 +9,8 @@
 	"rules": {
 		"no-unused-vars": "warn",
 		"no-console": "warn",
-		"react/react-in-jsx-scope": "off"
+		"react/react-in-jsx-scope": "off",
+		"sort-imports": ["warn", { "ignoreDeclarationSort": true, "memberSyntaxSortOrder": ["none", "all", "multiple", "single"] }]
 	},
 	"settings": {
 		"react": {

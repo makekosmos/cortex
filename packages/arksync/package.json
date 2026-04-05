@@ -17,7 +17,12 @@
   "peerDependencies": {
     "ws": ">=8.0.0"
   },
+  "scripts": {
+    "format": "oxfmt src/ __tests__/ *.ts",
+    "format:check": "oxfmt --check src/ __tests__/ *.ts"
+  },
   "devDependencies": {
+    "oxfmt": "^0.7.0",
     "vitest": "^4.1.2",
     "ws": "^8.18.0",
     "@types/ws": "^8.18.0"
