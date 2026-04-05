@@ -401,7 +401,8 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
       store.setProjects(projects);
       store.setAreas(areas);
       store.setTags(tags);
-      if (headings) store.setHeadings(headings as import("@/types/task").Heading[]);
+      if (headings)
+        store.setHeadings(headings as import("@/types/task").Heading[]);
     } catch (err) {
       console.warn("[App] Space DB load failed:", err);
     }

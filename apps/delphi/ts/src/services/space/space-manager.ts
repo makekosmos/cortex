@@ -6,8 +6,14 @@
 import { formatSpaceCode as _formatSpaceCode } from "@arksync/core";
 
 export {
-  generateSpaceCode, encodeIpv4, decodeIpv4, generateExtendedCode,
-  formatSpaceCode, parseSpaceCode, generateQrPayload, parseQrPayload,
+  generateSpaceCode,
+  encodeIpv4,
+  decodeIpv4,
+  generateExtendedCode,
+  formatSpaceCode,
+  parseSpaceCode,
+  generateQrPayload,
+  parseQrPayload,
   deriveSpaceId,
 } from "@arksync/core";
 

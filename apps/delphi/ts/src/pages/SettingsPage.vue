@@ -57,7 +57,6 @@ async function confirmDeleteSpace() {
   deletingCode.value = null;
 }
 
-
 const isPaired = Boolean(getArkUrl() && getArkApiKey());
 const arkConnected = shallowRef(arkSync.isConnected);
 const arkMessage = shallowRef("");
@@ -120,7 +119,9 @@ function handleDisconnectArk() {
 
 <template>
   <div class="h-full min-h-0 w-full overflow-auto bg-(--background) p-4">
-    <div class="mx-auto flex w-full max-w-(--bringhurst-wide) flex-col gap-4 py-6">
+    <div
+      class="mx-auto flex w-full max-w-(--bringhurst-wide) flex-col gap-4 py-6"
+    >
       <!-- Spaces section -->
       <section
         class="bg-(--background) border-(--border) w-full rounded-xl border p-5"
@@ -133,7 +134,10 @@ function handleDisconnectArk() {
           Управление пространствами синхронизации.
         </p>
 
-        <div v-if="spaces.length === 0" class="text-(--muted-foreground) text-sm">
+        <div
+          v-if="spaces.length === 0"
+          class="text-(--muted-foreground) text-sm"
+        >
           Нет сохранённых пространств.
         </div>
 
@@ -143,12 +147,16 @@ function handleDisconnectArk() {
             :key="space.code"
             :class="[
               'border-(--border) flex items-center justify-between rounded-lg border px-3 py-2',
-              activeSpaceCode === space.code ? 'border-emerald-500/40 bg-emerald-500/5' : '',
+              activeSpaceCode === space.code
+                ? 'border-emerald-500/40 bg-emerald-500/5'
+                : '',
             ]"
           >
             <!-- Delete confirmation -->
             <template v-if="deletingCode === space.code">
-              <span class="text-xs text-rose-400">Удалить пространство и все данные?</span>
+              <span class="text-xs text-rose-400"
+                >Удалить пространство и все данные?</span
+              >
               <div class="flex gap-2">
                 <button
                   class="rounded px-2 py-1 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
@@ -200,7 +208,9 @@ function handleDisconnectArk() {
                     активно
                   </span>
                 </div>
-                <span class="text-(--muted-foreground) block font-mono text-[11px] tracking-wider">
+                <span
+                  class="text-(--muted-foreground) block font-mono text-[11px] tracking-wider"
+                >
                   {{ formatSpaceCode(space.code) }}
                 </span>
               </div>

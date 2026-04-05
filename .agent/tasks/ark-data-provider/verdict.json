@@ -1,0 +1,78 @@
+{
+  "task_id": "ark-data-provider",
+  "overall_verdict": "PASS",
+  "verified_at": "2026-04-04",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "apps/ark-data/ exists with app/build.gradle.kts (applicationId='com.kepler.ark.data', minSdk=28), source in app/src/main/java/com/kepler/ark/data/, own settings.gradle.kts."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "AndroidManifest.xml contains no <activity> element and no LAUNCHER category. Confirmed by reading manifest directly."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "AndroidManifest has <provider authorities='com.kepler.ark.data' exported='true'>, permission 'com.kepler.ark.data.READ_WRITE' with protectionLevel='signature', readPermission and writePermission both set."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "ArkDatabase.kt entities=[TodoItem, ChecklistItem, Project, Area, Tag, Heading, TodoTagCrossRef, Note]. TodoItem.kt contains all required columns (id, title, notes, priority, scheduledDate, deadline, reminderDate, isToday, isEvening, isSomeday, isCompleted, completedAt, isCancelled, cancelledAt, isTrashed, sortOrder, headingId, projectId, areaId, recurrenceData, createdAt)."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "Note.kt has @Entity(tableName='notes') with id (TEXT PK), title, body, createdAt, updatedAt, isTrashed (Int default 0). All required columns present."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "ArkDataProvider.kt registers 16 URI patterns in UriMatcher covering todos, todos/#, projects, projects/#, areas, areas/#, tags, tags/#, headings, headings/#, checklist_items, checklist_items/#, todo_tag_cross_ref, todo_tag_cross_ref/#. query/insert/update/delete all implemented. insert returns URI with id."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "notes and notes/# URI patterns registered. Full CRUD (query, insert, update, delete) implemented for notes in ArkDataProvider.kt."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "reason": "ArkDataRepository.kt created in delphi/data/repository/. DatabaseProvider.kt has arkDataRepository field, no todoDao()/projectDao() methods. DelphiDatabase.kt contains only PendingChange::class (version 2). All ViewModels (TodoViewModel, SmartListViewModel, MoreViewModel, ProjectViewModel, TrashViewModel) use databaseProvider.arkDataRepository. grep for todoDao() in UI directory returns no matches."
+    },
+    {
+      "id": "AC9",
+      "status": "PASS",
+      "reason": "ArkDataRepository.isAvailable() checks PackageManager.getPackageInfo for 'com.kepler.ark.data'. DatabaseProvider.isArkDataAvailable delegates to it. NavGraph.kt line 139-140 checks todoViewModel.isArkDataAvailable and renders ArkDataMissingScreen() (defined at line 92) when false."
+    },
+    {
+      "id": "AC10",
+      "status": "PASS",
+      "reason": "cd apps/ark-data && ./gradlew assembleDebug -> BUILD SUCCESSFUL in 3s, 38 tasks all UP-TO-DATE. APK exists at app/build/outputs/apk/debug/app-debug.apk."
+    },
+    {
+      "id": "AC11",
+      "status": "PASS",
+      "reason": "cd apps/delphi/kotlin && ./gradlew assembleDebug -> BUILD SUCCESSFUL in 4s, 40 tasks all UP-TO-DATE. Only deprecation warnings, no compilation errors."
+    }
+  ],
+  "commands_run": [
+    "cd /Users/kirill/Documents/projects/kosmos/apps/ark-data && ./gradlew assembleDebug",
+    "cd /Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin && ./gradlew assembleDebug"
+  ],
+  "artifacts_used": [
+    "apps/ark-data/app/build.gradle.kts",
+    "apps/ark-data/app/src/main/AndroidManifest.xml",
+    "apps/ark-data/app/src/main/java/com/kepler/ark/data/db/ArkDatabase.kt",
+    "apps/ark-data/app/src/main/java/com/kepler/ark/data/model/TodoItem.kt",
+    "apps/ark-data/app/src/main/java/com/kepler/ark/data/model/Note.kt",
+    "apps/ark-data/app/src/main/java/com/kepler/ark/data/provider/ArkDataProvider.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/db/DelphiDatabase.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/di/DatabaseModule.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/repository/ArkDataRepository.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/ui/navigation/NavGraph.kt"
+  ]
+}

@@ -177,7 +177,9 @@ function handleArchive() {
   <!-- Project view -->
   <div v-else class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
-    <div class="mx-auto w-full max-w-(--bringhurst-wide) relative flex items-center justify-center gap-2.5 px-7 pb-3 pt-6">
+    <div
+      class="mx-auto w-full max-w-(--bringhurst-wide) relative flex items-center justify-center gap-2.5 px-7 pb-3 pt-6"
+    >
       <Circle
         :size="12"
         :class="['shrink-0 fill-current', colorTagClass(project.colorTag)]"

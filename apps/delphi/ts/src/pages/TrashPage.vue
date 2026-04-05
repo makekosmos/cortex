@@ -21,7 +21,9 @@ async function handleEmptyTrash() {
 
 <template>
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-    <div class="mx-auto w-full max-w-(--bringhurst-wide) flex items-center justify-center gap-2.5 px-7 pb-3 pt-6">
+    <div
+      class="mx-auto w-full max-w-(--bringhurst-wide) flex items-center justify-center gap-2.5 px-7 pb-3 pt-6"
+    >
       <Archive :size="24" class="text-gray-500" />
       <h1 class="text-2xl font-bold text-(--foreground) select-none">
         Корзина

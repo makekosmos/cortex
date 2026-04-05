@@ -245,7 +245,9 @@ function handleJoin() {
                   @click="handleRejoin(space)"
                 >
                   <span class="block text-sm">{{ space.name }}</span>
-                  <span class="text-(--muted-foreground) block font-mono text-[11px] tracking-wider">
+                  <span
+                    class="text-(--muted-foreground) block font-mono text-[11px] tracking-wider"
+                  >
                     {{ formatSpaceCode(space.code) }}
                   </span>
                 </button>

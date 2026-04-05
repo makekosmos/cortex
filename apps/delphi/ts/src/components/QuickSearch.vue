@@ -29,23 +29,30 @@ function matchProjects(query: string) {
     .slice(0, 5);
 }
 
-async function selectTodo(todo: { id: string; projectId?: string | null }, close: () => void) {
+async function selectTodo(
+  todo: { id: string; projectId?: string | null },
+  close: () => void,
+) {
   close();
   const target = todo.projectId ? `/project/${todo.projectId}` : "/";
   await router.push(target);
   setTimeout(() => {
-    const el = document.querySelector(`[data-todo-id="${todo.id}"]`) as HTMLElement | null;
+    const el = document.querySelector(
+      `[data-todo-id="${todo.id}"]`,
+    ) as HTMLElement | null;
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    const siblings = el.parentElement?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [];
+    const siblings =
+      el.parentElement?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [];
     for (const sib of siblings) {
       sib.style.transition = "opacity 0.5s ease, box-shadow 0.5s ease";
       sib.style.opacity = sib === el ? "1" : "0.25";
     }
     el.style.position = "relative";
     el.style.zIndex = "10";
-    el.style.boxShadow = "0 0 0 1px var(--accent-focus), 0 0 8px 0 var(--accent-focus)";
+    el.style.boxShadow =
+      "0 0 0 1px var(--accent-focus), 0 0 8px 0 var(--accent-focus)";
     el.style.borderRadius = "var(--radius)";
 
     setTimeout(() => {
@@ -90,7 +97,9 @@ function selectProject(project: { id: string }, close: () => void) {
 
       <!-- No results -->
       <div
-        v-else-if="matchTodos(query).length === 0 && matchProjects(query).length === 0"
+        v-else-if="
+          matchTodos(query).length === 0 && matchProjects(query).length === 0
+        "
         class="px-4 py-8 text-center text-sm text-(--muted-foreground) select-none"
       >
         Ничего не найдено по «{{ query }}»
@@ -113,7 +122,9 @@ function selectProject(project: { id: string }, close: () => void) {
 
         <!-- Projects -->
         <template v-if="matchProjects(query).length > 0">
-          <div class="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-(--muted-foreground)/60 select-none">
+          <div
+            class="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-(--muted-foreground)/60 select-none"
+          >
             Проекты
           </div>
           <button
