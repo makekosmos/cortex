@@ -7,5 +7,9 @@
     "apps/eden/ts",
     "packages/*"
   ],
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "vue": "^3.5.31",
+    "vue-router": "^4.6.4"
+  }
 }

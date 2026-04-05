@@ -9,10 +9,6 @@
     "vue": "^3.0.0",
     "vue-router": "^4.0.0"
   },
-  "devDependencies": {
-    "vue": "^3.0.0",
-    "vue-router": "^4.0.0"
-  },
   "exports": {
     ".": "./index.ts",
     "./tokens": "./tokens/index.ts",
