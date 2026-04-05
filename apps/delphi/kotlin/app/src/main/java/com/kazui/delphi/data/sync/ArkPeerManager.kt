@@ -404,8 +404,9 @@ class ArkPeerManager @Inject constructor(
     private fun pushLocalState(webSocket: WebSocket) {
         scope.launch {
             try {
-                val todos = databaseProvider.todoDao().getAllForSync()
-                val projects = databaseProvider.projectDao().getAllForSync()
+                val repo = databaseProvider.arkDataRepository
+                val todos = repo.getAllForSync()
+                val projects = repo.getAllProjectsForSync()
                 var seq = 0
                 todos.forEach { todo ->
                     val change = ArkEventMapper.todoToArkChange(todo, "update", deviceId)

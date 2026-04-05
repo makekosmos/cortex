@@ -553,11 +553,12 @@ class LanSyncClient @Inject constructor(
                 return false // Our version is the same or newer
             }
 
+            val repo = databaseProvider.arkDataRepository
             if (deleted) {
                 when (entityType) {
-                    "todo" -> databaseProvider.todoDao().deleteById(entityId)
-                    "project" -> databaseProvider.projectDao().deleteProjectById(entityId)
-                    "heading" -> databaseProvider.projectDao().deleteHeadingById(entityId)
+                    "todo" -> repo.deleteById(entityId)
+                    "project" -> repo.deleteProjectById(entityId)
+                    "heading" -> repo.deleteHeadingById(entityId)
                 }
                 versionVector[entityId] = hlc.ifEmpty { generateHlc() }
                 return true
@@ -568,31 +569,31 @@ class LanSyncClient @Inject constructor(
             when (entityType) {
                 "todo" -> {
                     val todo = SyncEntityParser.jsonToTodoItem(data, entityId) ?: return false
-                    databaseProvider.todoDao().upsert(todo)
+                    repo.upsert(todo)
                     versionVector[entityId] = hlc.ifEmpty { generateHlc() }
                     return true
                 }
                 "project" -> {
                     val project = SyncEntityParser.jsonToProject(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertProject(project)
+                    repo.upsertProject(project)
                     versionVector[entityId] = hlc.ifEmpty { generateHlc() }
                     return true
                 }
                 "area" -> {
                     val area = SyncEntityParser.jsonToArea(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertArea(area)
+                    repo.upsertArea(area)
                     versionVector[entityId] = hlc.ifEmpty { generateHlc() }
                     return true
                 }
                 "tag" -> {
                     val tag = SyncEntityParser.jsonToTag(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertTag(tag)
+                    repo.upsertTag(tag)
                     versionVector[entityId] = hlc.ifEmpty { generateHlc() }
                     return true
                 }
                 "heading" -> {
                     val heading = SyncEntityParser.jsonToHeading(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertHeading(heading)
+                    repo.upsertHeading(heading)
                     versionVector[entityId] = hlc.ifEmpty { generateHlc() }
                     return true
                 }
@@ -608,8 +609,9 @@ class LanSyncClient @Inject constructor(
             loadPersistedVersionVector()
         }
 
-        val todos = databaseProvider.todoDao().getAllForSync()
-        val projects = databaseProvider.projectDao().getAllForSync()
+        val repo = databaseProvider.arkDataRepository
+        val todos = repo.getAllForSync()
+        val projects = repo.getAllProjectsForSync()
 
         var updated = false
         todos.forEach { todo ->
@@ -657,8 +659,9 @@ class LanSyncClient @Inject constructor(
     }
 
     private suspend fun loadEntityById(entityId: String): JSONObject? {
+        val repo = databaseProvider.arkDataRepository
         // Try todo first
-        databaseProvider.todoDao().getById(entityId)?.let { todo ->
+        repo.getTodoById(entityId)?.let { todo ->
             return JSONObject().apply {
                 put("type", "todo")
                 put("id", todo.id)
@@ -667,7 +670,7 @@ class LanSyncClient @Inject constructor(
             }
         }
         // Try project
-        databaseProvider.projectDao().getProjectById(entityId)?.let { project ->
+        repo.getProjectById(entityId)?.let { project ->
             return JSONObject().apply {
                 put("type", "project")
                 put("id", project.id)

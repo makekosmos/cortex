@@ -374,26 +374,27 @@ class ArkSyncClient @Inject constructor(
                         }
                     }
 
+                    val repo = databaseProvider.arkDataRepository
                     if (projectsToUpsert.isNotEmpty()) {
-                        try { databaseProvider.projectDao().upsertProjects(projectsToUpsert) }
+                        try { repo.upsertProjects(projectsToUpsert) }
                         catch (e: Exception) { Log.e(tag, "upsertProjects failed: ${e.message}") }
                     }
                     projectIdsToDelete.forEach { id ->
-                        try { databaseProvider.projectDao().deleteProjectById(id) }
+                        try { repo.deleteProjectById(id) }
                         catch (e: Exception) { Log.e(tag, "deleteProject failed: ${e.message}") }
                     }
                     if (todosToUpsert.isNotEmpty()) {
-                        try { databaseProvider.todoDao().upsertAll(todosToUpsert) }
+                        try { repo.upsertAll(todosToUpsert) }
                         catch (e: Exception) {
                             Log.w(tag, "Batch upsert failed, falling back to per-item: ${e.message}")
                             todosToUpsert.forEach { todo ->
-                                try { databaseProvider.todoDao().upsert(todo) }
+                                try { repo.upsert(todo) }
                                 catch (ex: Exception) { Log.w(tag, "Skipping todo ${todo.id}: ${ex.message}") }
                             }
                         }
                     }
                     taskIdsToDelete.forEach { id ->
-                        try { databaseProvider.todoDao().deleteById(id) }
+                        try { repo.deleteById(id) }
                         catch (e: Exception) { Log.e(tag, "deleteTodo failed: ${e.message}") }
                     }
 
@@ -404,19 +405,20 @@ class ArkSyncClient @Inject constructor(
                         // Zombie cleanup ONLY when epoch matches — on server wipe we push
                         // local data rather than deleting it (client is the authority then).
                         if (isFullSync && !epochChanged) {
+                            val syncRepo = databaseProvider.arkDataRepository
                             val outboxIds = databaseProvider.pendingChangeDao().getAll()
                                 .mapNotNull { pending ->
                                     try { json.decodeFromString<ArkChange>(pending.payload).data.source_id.lowercase().ifBlank { null } }
                                     catch (_: Exception) { null }
                                 }.toSet()
-                            val allLocal = databaseProvider.todoDao().getAll().first()
+                            val allLocal = syncRepo.getAllForSync()
                             val zombies = allLocal.filter {
                                 it.id.lowercase() !in serverTaskIds && it.id.lowercase() !in outboxIds
                             }
                             if (zombies.isNotEmpty()) {
                                 Log.i(tag, "Removing ${zombies.size} zombie tasks after full sync")
                                 zombies.forEach { zombie ->
-                                    try { databaseProvider.todoDao().deleteById(zombie.id) }
+                                    try { syncRepo.deleteById(zombie.id) }
                                     catch (e: Exception) { Log.w(tag, "Failed to delete zombie ${zombie.id}: ${e.message}") }
                                 }
                             }
@@ -455,19 +457,20 @@ class ArkSyncClient @Inject constructor(
 
     private suspend fun applyChangeToDb(change: ArkChange) {
         try {
+            val repo = databaseProvider.arkDataRepository
             when {
                 ArkEventMapper.isTaskChange(change) -> {
                     if (change.change_type == "delete") {
-                        databaseProvider.todoDao().deleteById(change.data.source_id)
+                        repo.deleteById(change.data.source_id)
                     } else {
-                        ArkEventMapper.arkChangeToTodoItem(change)?.let { databaseProvider.todoDao().upsert(it) }
+                        ArkEventMapper.arkChangeToTodoItem(change)?.let { repo.upsert(it) }
                     }
                 }
                 ArkEventMapper.isProjectChange(change) -> {
                     if (change.change_type == "delete") {
-                        databaseProvider.projectDao().deleteProjectById(change.data.source_id)
+                        repo.deleteProjectById(change.data.source_id)
                     } else {
-                        ArkEventMapper.arkChangeToProject(change)?.let { databaseProvider.projectDao().upsertProject(it) }
+                        ArkEventMapper.arkChangeToProject(change)?.let { repo.upsertProject(it) }
                     }
                 }
             }
@@ -523,7 +526,7 @@ class ArkSyncClient @Inject constructor(
                 // we must send the current state, not the old cached payload.
                 val currentChange = if (change.change_type != "delete" && change.data.event_type == "task") {
                     val taskId = change.data.source_id.ifBlank { change.event_id }
-                    databaseProvider.todoDao().getById(taskId)?.let { ArkEventMapper.todoToArkChange(it, change.change_type, deviceId) }
+                    databaseProvider.arkDataRepository.getTodoById(taskId)?.let { ArkEventMapper.todoToArkChange(it, change.change_type, deviceId) }
                         ?: change
                 } else {
                     change
@@ -542,7 +545,7 @@ class ArkSyncClient @Inject constructor(
 
     private suspend fun sendMissingToServer(serverKnownIds: Set<String>, deviceId: String) {
         val ws = currentWs ?: return
-        val allTasks = databaseProvider.todoDao().getAll().first()
+        val allTasks = databaseProvider.arkDataRepository.getAllForSync()
         val missing = allTasks.filter { it.id.lowercase() !in serverKnownIds }
         if (missing.isEmpty()) {
             Log.d(tag, "No missing tasks to send to server")
@@ -571,14 +574,15 @@ class ArkSyncClient @Inject constructor(
             reconnectJob?.cancel()
             _status.value = SyncStatus.OFFLINE
 
-            // Clear all local DB tables
-            databaseProvider.todoDao().deleteAll()
-            databaseProvider.todoDao().deleteAllChecklistItems()
-            databaseProvider.todoDao().deleteAllTagRefs()
-            databaseProvider.projectDao().deleteAllProjects()
-            databaseProvider.projectDao().deleteAllAreas()
-            databaseProvider.projectDao().deleteAllTags()
-            databaseProvider.projectDao().deleteAllHeadings()
+            // Clear all local DB tables (via ContentProvider)
+            val clearRepo = databaseProvider.arkDataRepository
+            clearRepo.deleteAll()
+            clearRepo.deleteAllChecklistItems()
+            clearRepo.deleteAllTagRefs()
+            clearRepo.deleteAllProjects()
+            clearRepo.deleteAllAreas()
+            clearRepo.deleteAllTags()
+            clearRepo.deleteAllHeadings()
             databaseProvider.pendingChangeDao().deleteAll()
 
             // Reset sync state

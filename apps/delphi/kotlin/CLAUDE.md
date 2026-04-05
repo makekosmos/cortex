@@ -101,6 +101,67 @@ cd apps/delphi/kotlin
 ./gradlew test             # unit тесты
 ```
 
+## Ark Data (ContentProvider)
+
+Данные (todos, projects, areas, tags, headings, notes) хранятся в отдельном headless APK `com.kepler.ark.data`. Delphi обращается через `ArkDataRepository` (ContentResolver).
+
+### Ключевые файлы
+
+| Файл | Роль |
+|------|------|
+| `data/repository/ArkDataRepository.kt` | ContentResolver CRUD, Flow через ContentObserver |
+| `di/DatabaseModule.kt` | DatabaseProvider — PendingChange (своя Room DB) + ArkDataRepository |
+
+### Gotchas
+
+- **UriMatcher: `*` не `#`** — UUID содержит буквы и тире, `#` матчит только числа. Всегда `addURI(authority, "table/*", CODE)`.
+- **getDatabasePath() не поддерживает подпапки** — `context.getDatabasePath("spaces/id/db")` крашит. Строй путь через `File(context.getDatabasePath("x").parentFile, "spaces/id/db")`.
+- **ContentObserver на main thread** — `onChange()` вызывается на main thread. `queryAllTodos()` (IPC) нельзя вызывать напрямую — делай `ioScope.launch { query(); trySend(result) }`.
+- **Не дублируй ContentProvider потоки** — каждый `getTodosFlow()` создаёт отдельный ContentObserver + IPC. Не создавай несколько ViewModel с одинаковыми потоками.
+
+## Edge-to-Edge и клавиатура (IME)
+
+**Рабочая конфигурация (проверена на Android 15, Nothing Phone 2a):**
+
+```
+Activity: enableEdgeToEdge() + adjustResize
+```
+
+### Архитектура insets
+
+```
+NavGraph Scaffold(contentWindowInsets = WindowInsets(0)):
+  bottomBar = NavigationBar (потребляет navigationBars сама)
+              СКРЫВАЕТСЯ когда WindowInsets.isImeVisible == true
+  { paddingValues →
+    NavHost(Modifier.padding(paddingValues))
+      SmartListScaffold Scaffold(contentWindowInsets = WindowInsets(0)):
+        topBar = TopAppBar (потребляет statusBars по умолчанию)
+        { paddingValues →
+          Column(Modifier.padding(paddingValues).imePadding()) {
+            LazyColumn(Modifier.weight(1f))
+            QuickAddBar()  // БЕЗ insets modifier
+          }
+        }
+  }
+```
+
+### Правила
+
+1. **adjustResize** в манифесте — нужен для `WindowInsets.ime`
+2. **Внешний Scaffold**: `contentWindowInsets = WindowInsets(0)` — не потребляет insets сам
+3. **NavigationBar** скрывается при `isImeVisible` — иначе таб-бар + imePadding = двойной отступ
+4. **TopAppBar** потребляет statusBars по умолчанию — НЕ обнулять `windowInsets`
+5. **imePadding()** — на Column, который содержит И контент И input bar
+6. **QuickAddBar** — никаких `imePadding`, `navigationBarsPadding`, `windowInsetsPadding`
+7. **Не вычитай nav из ime вручную** — с adjustResize + скрытым таб-баром imePadding() работает корректно
+
+### Замеры (справочно)
+
+```
+ime=825px (клавиатура открыта), nav=63px, paddingBottom=0dp
+```
+
 ## Конвенции
 
 - Hilt DI везде, `@Inject constructor`

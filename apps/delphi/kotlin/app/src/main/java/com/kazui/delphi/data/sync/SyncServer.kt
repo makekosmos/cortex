@@ -606,11 +606,12 @@ class SyncServer @Inject constructor(
 
             if (entityId.isEmpty()) return false
 
+            val repo = databaseProvider.arkDataRepository
             if (deleted) {
                 when (entityType) {
-                    "todo" -> databaseProvider.todoDao().deleteById(entityId)
-                    "project" -> databaseProvider.projectDao().deleteProjectById(entityId)
-                    "heading" -> databaseProvider.projectDao().deleteHeadingById(entityId)
+                    "todo" -> repo.deleteById(entityId)
+                    "project" -> repo.deleteProjectById(entityId)
+                    "heading" -> repo.deleteHeadingById(entityId)
                 }
                 return true
             }
@@ -620,27 +621,27 @@ class SyncServer @Inject constructor(
             when (entityType) {
                 "todo" -> {
                     val todo = SyncEntityParser.jsonToTodoItem(data, entityId) ?: return false
-                    databaseProvider.todoDao().upsert(todo)
+                    repo.upsert(todo)
                     return true
                 }
                 "project" -> {
                     val project = SyncEntityParser.jsonToProject(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertProject(project)
+                    repo.upsertProject(project)
                     return true
                 }
                 "area" -> {
                     val area = SyncEntityParser.jsonToArea(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertArea(area)
+                    repo.upsertArea(area)
                     return true
                 }
                 "tag" -> {
                     val tag = SyncEntityParser.jsonToTag(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertTag(tag)
+                    repo.upsertTag(tag)
                     return true
                 }
                 "heading" -> {
                     val heading = SyncEntityParser.jsonToHeading(data, entityId) ?: return false
-                    databaseProvider.projectDao().upsertHeading(heading)
+                    repo.upsertHeading(heading)
                     return true
                 }
             }
@@ -656,8 +657,9 @@ class SyncServer @Inject constructor(
 
     private suspend fun loadAllEntities(vector: JSONObject): List<JSONObject> {
         val entities = mutableListOf<JSONObject>()
-        val todos = databaseProvider.todoDao().getAllForSync()
-        val projects = databaseProvider.projectDao().getAllForSync()
+        val repo = databaseProvider.arkDataRepository
+        val todos = repo.getAllForSync()
+        val projects = repo.getAllProjectsForSync()
 
         for (todo in todos) {
             val hlc = if (vector.has(todo.id)) vector.getString(todo.id) else generateHlc()

@@ -13,44 +13,37 @@ import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.domain.filter.TodoFilterService
 import com.kazui.delphi.domain.model.SmartListCounts
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class TodoViewModel @Inject constructor(
     private val databaseProvider: DatabaseProvider,
     private val syncClient: ArkSyncClient,
 ) : ViewModel() {
 
+    private val repo = databaseProvider.arkDataRepository
+
+    /** True if the ark-data ContentProvider package is installed. */
+    val isArkDataAvailable: Boolean get() = databaseProvider.isArkDataAvailable
+
     val syncStatus: StateFlow<SyncStatus> = syncClient.status
 
     private val _selectedList = MutableStateFlow(SmartList.TODAY)
     val selectedList: StateFlow<SmartList> = _selectedList.asStateFlow()
 
-    val allTodos: StateFlow<List<TodoItem>> = databaseProvider.dbGeneration
-        .flatMapLatest {
-            if (!databaseProvider.isOpen) return@flatMapLatest flowOf(emptyList())
-            databaseProvider.todoDao().getAll()
-        }
+    val allTodos: StateFlow<List<TodoItem>> = repo.getTodosFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val allProjects: StateFlow<List<Project>> = databaseProvider.dbGeneration
-        .flatMapLatest {
-            if (!databaseProvider.isOpen) return@flatMapLatest flowOf(emptyList())
-            databaseProvider.projectDao().getAllProjects()
-        }
+    val allProjects: StateFlow<List<Project>> = repo.getProjectsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredTodos: StateFlow<List<TodoItem>> = combine(allTodos, _selectedList) { todos, list ->
@@ -65,23 +58,22 @@ class TodoViewModel @Inject constructor(
         viewModelScope.launch {
             syncClient.onChange { change ->
                 viewModelScope.launch {
-                    if (!databaseProvider.isOpen) return@launch
                     when {
                         ArkEventMapper.isTaskChange(change) -> {
                             if (change.change_type == "delete") {
-                                databaseProvider.todoDao().deleteById(change.data.source_id)
+                                repo.deleteById(change.data.source_id)
                             } else {
                                 ArkEventMapper.arkChangeToTodoItem(change)?.let {
-                                    databaseProvider.todoDao().upsert(it)
+                                    repo.upsert(it)
                                 }
                             }
                         }
                         ArkEventMapper.isProjectChange(change) -> {
                             if (change.change_type == "delete") {
-                                databaseProvider.projectDao().deleteProjectById(change.data.source_id)
+                                repo.deleteProjectById(change.data.source_id)
                             } else {
                                 ArkEventMapper.arkChangeToProject(change)?.let {
-                                    databaseProvider.projectDao().upsertProject(it)
+                                    repo.upsertProject(it)
                                 }
                             }
                         }
@@ -102,7 +94,7 @@ class TodoViewModel @Inject constructor(
                 title = title,
                 createdAt = Instant.now().toString(),
             )
-            databaseProvider.todoDao().upsert(todo)
+            repo.upsert(todo)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(todo, "create", "")
             )
@@ -116,7 +108,7 @@ class TodoViewModel @Inject constructor(
             } else {
                 todo.copy(isCompleted = true, completedAt = Instant.now().toString())
             }
-            databaseProvider.todoDao().upsert(updated)
+            repo.upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -126,7 +118,7 @@ class TodoViewModel @Inject constructor(
     fun toggleToday(todo: TodoItem) {
         viewModelScope.launch {
             val updated = todo.copy(isToday = !todo.isToday)
-            databaseProvider.todoDao().upsert(updated)
+            repo.upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -136,7 +128,7 @@ class TodoViewModel @Inject constructor(
     fun setPriority(todo: TodoItem, priority: Priority) {
         viewModelScope.launch {
             val updated = todo.copy(priority = priority)
-            databaseProvider.todoDao().upsert(updated)
+            repo.upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -146,7 +138,7 @@ class TodoViewModel @Inject constructor(
     fun trashTodo(todo: TodoItem) {
         viewModelScope.launch {
             val updated = todo.copy(isTrashed = true)
-            databaseProvider.todoDao().upsert(updated)
+            repo.upsert(updated)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(updated, "update", "")
             )
@@ -155,7 +147,7 @@ class TodoViewModel @Inject constructor(
 
     fun deleteTodo(todo: TodoItem) {
         viewModelScope.launch {
-            databaseProvider.todoDao().deleteById(todo.id)
+            repo.deleteById(todo.id)
             syncClient.sendChange(
                 ArkEventMapper.todoToArkChange(todo, "delete", "")
             )

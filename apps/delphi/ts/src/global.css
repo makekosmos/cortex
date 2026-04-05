@@ -52,10 +52,12 @@ li {
 @import "../../../../packages/kepler-visuals/theme/css-variables.css";
 
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter,
+    Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 24px;
-  font-weight: 400;
+  font-weight: 500;
 
   color: var(--foreground);
   background-color: var(--background);

@@ -20,14 +20,13 @@ class TrashViewModel @Inject constructor(
     /** Permanently delete all trashed todos and their related checklist items / tag cross-refs. */
     fun emptyTrash() {
         viewModelScope.launch {
-            val todoDao = databaseProvider.todoDao()
-            // Gather IDs first so we can cascade-delete related rows
-            val trashedIds = todoDao.getTrashedIds()
+            val repo = databaseProvider.arkDataRepository
+            val trashedIds = repo.getTrashedIds()
             if (trashedIds.isNotEmpty()) {
-                todoDao.deleteChecklistItemsByTodoIds(trashedIds)
-                todoDao.deleteTagRefsByTodoIds(trashedIds)
+                repo.deleteChecklistItemsByTodoIds(trashedIds)
+                repo.deleteTagRefsByTodoIds(trashedIds)
             }
-            todoDao.deleteTrashed()
+            repo.deleteTrashed()
         }
     }
 }

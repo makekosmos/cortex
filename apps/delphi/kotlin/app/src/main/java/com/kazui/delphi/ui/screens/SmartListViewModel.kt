@@ -14,8 +14,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -33,24 +31,20 @@ abstract class SmartListViewModel(
     private val defaultIsSomeday: Boolean = false,
 ) : ViewModel() {
 
-    val todos: StateFlow<List<TodoItem>> = databaseProvider.dbGeneration
-        .flatMapLatest {
-            if (!databaseProvider.isOpen) return@flatMapLatest flowOf(emptyList())
-            val todoDao = databaseProvider.todoDao()
-            when (smartList) {
-                SmartList.LOGBOOK -> todoDao.getLogbook()
-                    .distinctUntilChanged()
-                    .flowOn(Dispatchers.Default)
-                SmartList.TRASH -> todoDao.getTrash()
-                    .distinctUntilChanged()
-                    .flowOn(Dispatchers.Default)
-                else -> todoDao.getAll()
-                    .map { TodoFilterService.filter(smartList, it) }
-                    .distinctUntilChanged()
-                    .flowOn(Dispatchers.Default)
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val repo = databaseProvider.arkDataRepository
+
+    val todos: StateFlow<List<TodoItem>> = when (smartList) {
+        SmartList.LOGBOOK -> repo.getLogbookFlow()
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+        SmartList.TRASH -> repo.getTrashFlow()
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+        else -> repo.getTodosFlow()
+            .map { TodoFilterService.filter(smartList, it) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val isReadOnly: Boolean get() = smartList == SmartList.LOGBOOK || smartList == SmartList.TRASH
 
@@ -64,7 +58,7 @@ abstract class SmartListViewModel(
                 isSomeday = defaultIsSomeday,
                 createdAt = Instant.now().toString(),
             )
-            databaseProvider.todoDao().upsert(todo)
+            repo.upsert(todo)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(todo, "create", ""))
             peerManager.broadcastTodoChange(todo)
         }
@@ -77,7 +71,16 @@ abstract class SmartListViewModel(
             } else {
                 todo.copy(isCompleted = true, completedAt = Instant.now().toString())
             }
-            databaseProvider.todoDao().upsert(updated)
+            repo.upsert(updated)
+            arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
+            peerManager.broadcastTodoChange(updated)
+        }
+    }
+
+    fun trashTodo(todo: TodoItem) {
+        viewModelScope.launch {
+            val updated = todo.copy(isTrashed = true)
+            repo.upsert(updated)
             arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
             peerManager.broadcastTodoChange(updated)
         }

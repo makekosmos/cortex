@@ -32,6 +32,8 @@ class SpaceSetupViewModel @Inject constructor(
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
+    val isArkDataAvailable: Boolean get() = databaseProvider.isArkDataAvailable
+
     private val _savedSpaces = MutableStateFlow<List<SpaceManager.SavedSpace>>(emptyList())
     val savedSpaces: StateFlow<List<SpaceManager.SavedSpace>> = _savedSpaces.asStateFlow()
 

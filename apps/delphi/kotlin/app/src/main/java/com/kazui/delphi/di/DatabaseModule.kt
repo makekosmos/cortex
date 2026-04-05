@@ -4,8 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.kazui.delphi.data.db.DelphiDatabase
 import com.kazui.delphi.data.db.PendingChangeDao
-import com.kazui.delphi.data.db.ProjectDao
-import com.kazui.delphi.data.db.TodoDao
+import com.kazui.delphi.data.repository.ArkDataRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +14,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Manages per-space Room database instances.
+ * Manages per-space Room database instances (PendingChange only).
+ *
+ * Todo/Project data now lives in ark-data ContentProvider, accessed via [ArkDataRepository].
  *
  * Each space gets its own SQLite file at `databases/spaces/<spaceId>/delphi.db`.
  * When the active space changes, the old DB is closed and a new one is opened.
@@ -25,6 +26,7 @@ import javax.inject.Singleton
 @Singleton
 class DatabaseProvider @Inject constructor(
     @ApplicationContext private val context: Context,
+    val arkDataRepository: ArkDataRepository,
 ) {
     private var currentDb: DelphiDatabase? = null
     private var currentSpaceId: String? = null
@@ -38,11 +40,11 @@ class DatabaseProvider @Inject constructor(
     fun switchTo(spaceId: String) {
         if (spaceId == currentSpaceId && currentDb?.isOpen == true) return
         closeCurrentDb()
-        val dbPath = "spaces/$spaceId/delphi.db"
-        // Ensure parent directory exists
-        val dbFile = context.getDatabasePath(dbPath)
+        // getDatabasePath() doesn't support subdirectories — build the path manually
+        val databasesDir = context.getDatabasePath("x").parentFile!!
+        val dbFile = File(databasesDir, "spaces/$spaceId/delphi.db")
         dbFile.parentFile?.mkdirs()
-        currentDb = Room.databaseBuilder(context, DelphiDatabase::class.java, dbPath)
+        currentDb = Room.databaseBuilder(context, DelphiDatabase::class.java, dbFile.absolutePath)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
         currentSpaceId = spaceId
@@ -64,17 +66,14 @@ class DatabaseProvider @Inject constructor(
         currentDb = null
     }
 
-    /** Returns the current [TodoDao], or throws if no DB is open. */
-    fun todoDao(): TodoDao = requireDb().todoDao()
-
-    /** Returns the current [ProjectDao], or throws if no DB is open. */
-    fun projectDao(): ProjectDao = requireDb().projectDao()
-
     /** Returns the current [PendingChangeDao], or throws if no DB is open. */
     fun pendingChangeDao(): PendingChangeDao = requireDb().pendingChangeDao()
 
     /** Whether a database is currently open. */
     val isOpen: Boolean get() = currentDb?.isOpen == true
+
+    /** Whether the ark-data ContentProvider is available. */
+    val isArkDataAvailable: Boolean get() = arkDataRepository.isAvailable()
 
     private fun requireDb(): DelphiDatabase =
         currentDb ?: throw IllegalStateException("No space database is open. Call switchTo(spaceId) first.")
@@ -82,8 +81,8 @@ class DatabaseProvider @Inject constructor(
     /** Delete the database files for a given [spaceId]. */
     fun deleteSpaceDb(spaceId: String) {
         if (spaceId == currentSpaceId) close()
-        val dbPath = "spaces/$spaceId/delphi.db"
-        val dbFile = context.getDatabasePath(dbPath)
+        val databasesDir = context.getDatabasePath("x").parentFile!!
+        val dbFile = File(databasesDir, "spaces/$spaceId/delphi.db")
         // Room creates main db + WAL + SHM files
         listOf(dbFile, File("${dbFile.path}-wal"), File("${dbFile.path}-shm")).forEach { f ->
             f.delete()

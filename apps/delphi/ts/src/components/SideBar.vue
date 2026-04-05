@@ -11,7 +11,7 @@ import {
   Settings,
   Star,
 } from "lucide-vue-next";
-import SideBarButton from "@/components/SideBarButton.vue";
+import { SidebarButton as SideBarButton } from "@kepler/visuals/components";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";

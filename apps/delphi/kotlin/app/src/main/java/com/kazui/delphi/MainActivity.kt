@@ -46,20 +46,20 @@ class MainActivity : ComponentActivity() {
         arkPeerManager.onChangeReceived = { change ->
             lifecycleScope.launch {
                 try {
-                    if (!databaseProvider.isOpen) return@launch
+                    val repo = databaseProvider.arkDataRepository
                     when {
                         ArkEventMapper.isTaskChange(change) -> {
                             if (change.change_type == "delete") {
-                                databaseProvider.todoDao().deleteById(change.data.source_id)
+                                repo.deleteById(change.data.source_id)
                             } else {
-                                ArkEventMapper.arkChangeToTodoItem(change)?.let { databaseProvider.todoDao().upsert(it) }
+                                ArkEventMapper.arkChangeToTodoItem(change)?.let { repo.upsert(it) }
                             }
                         }
                         ArkEventMapper.isProjectChange(change) -> {
                             if (change.change_type == "delete") {
-                                databaseProvider.projectDao().deleteProjectById(change.data.source_id)
+                                repo.deleteProjectById(change.data.source_id)
                             } else {
-                                ArkEventMapper.arkChangeToProject(change)?.let { databaseProvider.projectDao().upsertProject(it) }
+                                ArkEventMapper.arkChangeToProject(change)?.let { repo.upsertProject(it) }
                             }
                         }
                     }

@@ -1,6 +1,6 @@
 export const typography = {
   fontFamily: {
-    sans: 'Inter, Avenir, Helvetica, Arial, sans-serif',
+    sans: '-apple-system, BlinkMacSystemFont, SF Pro Display, SF Pro Text, Inter, Avenir, Helvetica, Arial, sans-serif',
     mono: "'Zed Mono', monospace",
   },
   fontSize: {
