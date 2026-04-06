@@ -253,6 +253,54 @@ ipcMain.handle('peer:getServerAddress', async () => {
   return `localhost:${port}`;
 });
 
+// --- IPC handlers for space persistence (file-based, survives localStorage wipe) ---
+
+const spacesFile = path.join(getDataDir(), 'spaces.json');
+
+function readSpacesFile(): { active: string | null; spaces: Array<{ code: string; name: string; createdAt: string }> } {
+  try {
+    if (fs.existsSync(spacesFile)) {
+      return JSON.parse(fs.readFileSync(spacesFile, 'utf-8'));
+    }
+  } catch {}
+  return { active: null, spaces: [] };
+}
+
+function writeSpacesFile(data: { active: string | null; spaces: Array<{ code: string; name: string; createdAt: string }> }): void {
+  fs.writeFileSync(spacesFile, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+ipcMain.handle('space:getActive', () => readSpacesFile().active);
+ipcMain.handle('space:setActive', (_e, code: string | null) => {
+  const data = readSpacesFile();
+  data.active = code;
+  writeSpacesFile(data);
+});
+ipcMain.handle('space:getAll', () => readSpacesFile().spaces);
+ipcMain.handle('space:save', (_e, space: { code: string; name: string; createdAt: string }) => {
+  const data = readSpacesFile();
+  data.spaces = data.spaces.filter(s => s.code !== space.code);
+  data.spaces.unshift(space);
+  writeSpacesFile(data);
+});
+ipcMain.handle('space:remove', (_e, code: string) => {
+  const data = readSpacesFile();
+  data.spaces = data.spaces.filter(s => s.code !== code);
+  if (data.active === code) data.active = null;
+  writeSpacesFile(data);
+});
+ipcMain.handle('space:rename', (_e, code: string, newName: string) => {
+  const data = readSpacesFile();
+  const space = data.spaces.find(s => s.code === code);
+  if (space) {
+    space.name = newName;
+    writeSpacesFile(data);
+    return true;
+  }
+  return false;
+});
+ipcMain.handle('space:getDbPath', () => app.getPath('userData'));
+
 // --- IPC handlers for local DB ---
 
 ipcMain.handle('db:loadAll', () => dbLoadAll())

@@ -279,7 +279,7 @@ function handleToggleToday(todo: TodoItem) {
                     'rounded px-1.5 py-0.5 text-[10px] transition-colors',
                     todo.isToday
                       ? 'bg-yellow-500/15 text-yellow-500'
-                      : 'text-(--muted-foreground) hover:bg-(--accent)',
+                      : 'text-(--muted-foreground) hover:bg-(--surface)',
                   ]"
                   @click="handleToggleToday(todo)"
                 >

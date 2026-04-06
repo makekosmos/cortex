@@ -144,7 +144,7 @@ function beginDrag(cx: number, cy: number) {
     overflow: "hidden",
     transition: "height 0.15s ease",
     borderRadius: "var(--radius)",
-    backgroundColor: "var(--accent)",
+    backgroundColor: "var(--surface)",
     pointerEvents: "none",
   });
 
@@ -326,34 +326,34 @@ function onDragEnd() {
   display: block;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: 6px;
   border: 2px solid var(--ring);
   transition: border-color 0.15s, background-color 0.15s;
   position: relative;
 }
 
 .check-box--done {
-  border-color: #C13332;
+  border-color: var(--accent);
 }
 
 .check-box__inner {
   display: block;
   position: absolute;
   inset: 2px;
-  border-radius: 2px;
-  background-color: #C13332;
+  border-radius: 3px;
+  background-color: var(--accent);
 }
 
 .check-btn:hover .check-box:not(.check-box--done) {
-  border-color: rgb(239 68 68);
+  border-color: var(--accent);
 }
 
 .check-btn:hover .check-box--done {
-  border-color: rgb(220 38 38);
+  border-color: var(--accent);
 }
 
 .check-btn:hover .check-box--done .check-box__inner {
-  background-color: rgb(220 38 38);
+  background-color: var(--accent);
 }
 
 .todo-row {

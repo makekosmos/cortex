@@ -23,8 +23,8 @@ import {
 const { theme, setTheme } = useTheme();
 
 // --- Space management ---
-const spaces = ref<Space[]>(getSpaces());
-const activeSpaceCode = shallowRef<string | null>(getActiveSpace());
+const spaces = ref<Space[]>([]);
+const activeSpaceCode = shallowRef<string | null>(null);
 const renamingCode = shallowRef<string | null>(null);
 const renameInput = shallowRef("");
 const deletingCode = shallowRef<string | null>(null);
@@ -34,10 +34,10 @@ function startRename(space: Space) {
   renameInput.value = space.name;
 }
 
-function confirmRename() {
+async function confirmRename() {
   if (!renamingCode.value) return;
-  renameSpace(renamingCode.value, renameInput.value);
-  spaces.value = getSpaces();
+  await renameSpace(renamingCode.value, renameInput.value);
+  spaces.value = await getSpaces();
   renamingCode.value = null;
 }
 
@@ -52,8 +52,8 @@ async function confirmDeleteSpace() {
     const spaceId = await deriveSpaceId(code);
     await window.electronAPI.invoke("db:deleteSpace", spaceId).catch(() => {});
   }
-  removeSpace(code);
-  spaces.value = getSpaces();
+  await removeSpace(code);
+  spaces.value = await getSpaces();
   deletingCode.value = null;
 }
 
@@ -65,7 +65,9 @@ const paired = shallowRef(isPaired);
 
 // Status listener with cleanup
 let unsub: (() => void) | undefined;
-onMounted(() => {
+onMounted(async () => {
+  spaces.value = await getSpaces();
+  activeSpaceCode.value = await getActiveSpace();
   unsub = arkSync.onStatus((connected: boolean) => {
     arkConnected.value = connected;
   });

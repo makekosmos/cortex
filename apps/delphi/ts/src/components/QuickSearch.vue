@@ -52,7 +52,7 @@ async function selectTodo(
     el.style.position = "relative";
     el.style.zIndex = "10";
     el.style.boxShadow =
-      "0 0 0 1px var(--accent-focus), 0 0 8px 0 var(--accent-focus)";
+      "0 0 0 1px var(--accent), 0 0 8px 0 var(--accent)";
     el.style.borderRadius = "var(--radius)";
 
     setTimeout(() => {
@@ -131,7 +131,7 @@ function selectProject(project: { id: string }, close: () => void) {
             v-for="project in matchProjects(query)"
             :key="project.id"
             data-cmd-item
-            class="flex w-full items-center gap-3 px-3 py-2 text-sm text-(--foreground) outline-none hover:bg-(--accent) focus:bg-(--accent)"
+            class="flex w-full items-center gap-3 px-3 py-2 text-sm text-(--foreground) outline-none hover:bg-(--surface) focus:bg-(--surface)"
             @click="selectProject(project, close)"
           >
             <FolderOpen :size="14" class="shrink-0 text-(--muted-foreground)" />

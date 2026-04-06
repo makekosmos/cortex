@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, shallowRef } from "vue";
+import { onMounted, ref, shallowRef } from "vue";
 import {
   type Space,
   deriveSpaceId,
@@ -22,7 +22,10 @@ const emit = defineEmits<{
 
 type Mode = "choose" | "create" | "join";
 const mode = shallowRef<Mode>("choose");
-const savedSpaces = ref<Space[]>(getSpaces());
+const savedSpaces = ref<Space[]>([]);
+onMounted(async () => {
+  savedSpaces.value = await getSpaces();
+});
 const deletingSpace = shallowRef<string | null>(null);
 
 function handleRejoin(space: Space) {
@@ -43,8 +46,8 @@ async function confirmDelete() {
     await window.electronAPI.invoke("db:deleteSpace", spaceId).catch(() => {});
   }
 
-  removeSpace(code);
-  savedSpaces.value = getSpaces();
+  await removeSpace(code);
+  savedSpaces.value = await getSpaces();
   emit("spaceDeleted", code);
   deletingSpace.value = null;
 }
@@ -61,10 +64,10 @@ function startRename(space: Space) {
   renameInput.value = space.name;
 }
 
-function confirmRename() {
+async function confirmRename() {
   if (!renamingCode.value) return;
-  renameSpace(renamingCode.value, renameInput.value);
-  savedSpaces.value = getSpaces();
+  await renameSpace(renamingCode.value, renameInput.value);
+  savedSpaces.value = await getSpaces();
   renamingCode.value = null;
 }
 

@@ -2,7 +2,7 @@
   --radius: 0.85rem;
   --corner-shape: squircle;
   --bringhurst-wide: 600px;
-  --accent-focus: oklch(0.546 0.229 264.1);
+  --accent: oklch(0.546 0.229 264.1);
 
   --color-bg-primary: oklch(0.145 0 0);
   --color-shape-highlight-light-solid: oklch(0.18 0 0);
@@ -25,26 +25,27 @@
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
 
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --surface: oklch(0.97 0 0);
+  --surface-foreground: oklch(0.205 0 0);
 
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
 
-  --sidebar: var(--background);
+  --sidebar-bg: var(--background);
+  --sidebar: var(--sidebar-bg);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-surface: oklch(0.97 0 0);
+  --sidebar-surface-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
-  --background: oklch(0.08 0.004 251);
+  --background: oklch(0.173 0 0);
   --foreground: oklch(0.985 0 0);
 
   --card: oklch(0.205 0 0);
@@ -62,8 +63,8 @@
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
 
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --surface: oklch(0.269 0 0);
+  --surface-foreground: oklch(0.985 0 0);
 
   --destructive: oklch(0.704 0.191 22.216);
 
@@ -73,12 +74,13 @@
 
   --color-shape-highlight-light-solid: oklch(0.17 0.003 251);
 
-  --sidebar: var(--background);
+  --sidebar-bg: oklch(0.22 0 0);
+  --sidebar: var(--sidebar-bg);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.58 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.32 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-surface: oklch(0.32 0 0);
+  --sidebar-surface-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }

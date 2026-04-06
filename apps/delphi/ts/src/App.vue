@@ -370,10 +370,10 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
   cleanupLanSyncListener = null;
 
   const spaceId = await deriveSpaceId(code);
-  setActiveSpace(code);
+  await setActiveSpace(code);
   // Preserve existing space data (name, createdAt) if already saved
-  const existing = getSpaces().find((s) => s.code === code);
-  saveSpace({
+  const existing = (await getSpaces()).find((s) => s.code === code);
+  await saveSpace({
     code,
     name: existing?.name ?? formatSpaceCode(code),
     createdAt: existing?.createdAt ?? new Date().toISOString(),
@@ -446,12 +446,12 @@ function handleSpaceDeleted(code: string) {
   }
 }
 
-function handleLeaveSpace() {
+async function handleLeaveSpace() {
   stopMesh();
   if (window.electronAPI?.invoke) {
     window.electronAPI.invoke("lan-sync:stop").catch(() => {});
   }
-  setActiveSpace(null);
+  await setActiveSpace(null);
   activeSpaceCode.value = null;
   connectedPeerCount.value = 0;
   connectedPeerNames.value = [];
@@ -645,11 +645,11 @@ async function handleAuthSubmit(connectionCode: string) {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("keydown", handleGlobalKeydown);
   if (isElectron) {
     // Electron: P2P space mode takes priority
-    const code = getActiveSpace();
+    const code = await getActiveSpace();
     if (code) {
       // Resume existing space
       activeSpaceCode.value = code;

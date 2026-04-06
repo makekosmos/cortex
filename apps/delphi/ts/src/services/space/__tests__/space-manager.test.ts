@@ -53,22 +53,22 @@ describe("Space Manager", () => {
   // -------------------------------------------------------------------------
 
   describe("getSpaces", () => {
-    it("returns [] on empty storage", () => {
-      expect(getSpaces()).toEqual([]);
+    it("returns [] on empty storage", async () => {
+      expect(await getSpaces()).toEqual([]);
     });
 
-    it("returns [] when storage contains invalid JSON", () => {
+    it("returns [] when storage contains invalid JSON", async () => {
       localStorage.setItem("delphi.spaces", "{broken json!");
 
-      expect(getSpaces()).toEqual([]);
+      expect(await getSpaces()).toEqual([]);
     });
 
-    it("returns stored spaces", () => {
+    it("returns stored spaces", async () => {
       const spaces = [makeSpace("AAAA11112222")];
 
       localStorage.setItem("delphi.spaces", JSON.stringify(spaces));
 
-      expect(getSpaces()).toEqual(spaces);
+      expect(await getSpaces()).toEqual(spaces);
     });
   });
 
@@ -79,10 +79,10 @@ describe("Space Manager", () => {
   // -------------------------------------------------------------------------
 
   describe("saveSpace", () => {
-    it("persists a new space to delphi.spaces key", () => {
+    it("persists a new space to delphi.spaces key", async () => {
       const space = makeSpace("AAAA11112222");
 
-      saveSpace(space);
+      await saveSpace(space);
 
       const stored = JSON.parse(localStorage.getItem("delphi.spaces")!);
 
@@ -91,24 +91,24 @@ describe("Space Manager", () => {
       expect(stored[0].code).toBe("AAAA11112222");
     });
 
-    it("prepends new space", () => {
-      saveSpace(makeSpace("AAAA11112222", "First"));
+    it("prepends new space", async () => {
+      await saveSpace(makeSpace("AAAA11112222", "First"));
 
-      saveSpace(makeSpace("BBBB33334444", "Second"));
+      await saveSpace(makeSpace("BBBB33334444", "Second"));
 
-      const stored = getSpaces();
+      const stored = await getSpaces();
 
       expect(stored[0].code).toBe("BBBB33334444");
 
       expect(stored[1].code).toBe("AAAA11112222");
     });
 
-    it("deduplicates by code", () => {
-      saveSpace(makeSpace("AAAA11112222", "Original"));
+    it("deduplicates by code", async () => {
+      await saveSpace(makeSpace("AAAA11112222", "Original"));
 
-      saveSpace(makeSpace("AAAA11112222", "Updated"));
+      await saveSpace(makeSpace("AAAA11112222", "Updated"));
 
-      const stored = getSpaces();
+      const stored = await getSpaces();
 
       expect(stored).toHaveLength(1);
 
@@ -123,26 +123,26 @@ describe("Space Manager", () => {
   // -------------------------------------------------------------------------
 
   describe("removeSpace", () => {
-    it("removes matching code and persists the rest", () => {
-      saveSpace(makeSpace("AAAA11112222"));
+    it("removes matching code and persists the rest", async () => {
+      await saveSpace(makeSpace("AAAA11112222"));
 
-      saveSpace(makeSpace("BBBB33334444"));
+      await saveSpace(makeSpace("BBBB33334444"));
 
-      removeSpace("AAAA11112222");
+      await removeSpace("AAAA11112222");
 
-      const stored = getSpaces();
+      const stored = await getSpaces();
 
       expect(stored).toHaveLength(1);
 
       expect(stored[0].code).toBe("BBBB33334444");
     });
 
-    it("no-op when code does not exist", () => {
-      saveSpace(makeSpace("AAAA11112222"));
+    it("no-op when code does not exist", async () => {
+      await saveSpace(makeSpace("AAAA11112222"));
 
-      removeSpace("NONEXISTENT0");
+      await removeSpace("NONEXISTENT0");
 
-      expect(getSpaces()).toHaveLength(1);
+      expect(await getSpaces()).toHaveLength(1);
     });
   });
 
@@ -153,26 +153,26 @@ describe("Space Manager", () => {
   // -------------------------------------------------------------------------
 
   describe("renameSpace", () => {
-    it("updates name in-place", () => {
-      saveSpace(makeSpace("AAAA11112222", "Old"));
+    it("updates name in-place", async () => {
+      await saveSpace(makeSpace("AAAA11112222", "Old"));
 
-      const result = renameSpace("AAAA11112222", "New Name");
+      const result = await renameSpace("AAAA11112222", "New Name");
 
       expect(result).toBe(true);
 
-      expect(getSpaces()[0].name).toBe("New Name");
+      expect((await getSpaces())[0].name).toBe("New Name");
     });
 
-    it("returns false for unknown code", () => {
-      expect(renameSpace("NONEXISTENT0", "Name")).toBe(false);
+    it("returns false for unknown code", async () => {
+      expect(await renameSpace("NONEXISTENT0", "Name")).toBe(false);
     });
 
-    it("falls back to formatted code when name is blank", () => {
-      saveSpace(makeSpace("AAAA11112222", "Old"));
+    it("falls back to formatted code when name is blank", async () => {
+      await saveSpace(makeSpace("AAAA11112222", "Old"));
 
-      renameSpace("AAAA11112222", "   ");
+      await renameSpace("AAAA11112222", "   ");
 
-      expect(getSpaces()[0].name).toBe(formatSpaceCode("AAAA11112222"));
+      expect((await getSpaces())[0].name).toBe(formatSpaceCode("AAAA11112222"));
     });
   });
 
@@ -183,28 +183,28 @@ describe("Space Manager", () => {
   // -------------------------------------------------------------------------
 
   describe("getActiveSpace", () => {
-    it("returns null when unset", () => {
-      expect(getActiveSpace()).toBeNull();
+    it("returns null when unset", async () => {
+      expect(await getActiveSpace()).toBeNull();
     });
 
-    it("returns stored code", () => {
-      setActiveSpace("AAAA11112222");
+    it("returns stored code", async () => {
+      await setActiveSpace("AAAA11112222");
 
-      expect(getActiveSpace()).toBe("AAAA11112222");
+      expect(await getActiveSpace()).toBe("AAAA11112222");
     });
   });
 
   describe("setActiveSpace", () => {
-    it("stores the code", () => {
-      setActiveSpace("AAAA11112222");
+    it("stores the code", async () => {
+      await setActiveSpace("AAAA11112222");
 
       expect(localStorage.getItem("delphi.active_space")).toBe("AAAA11112222");
     });
 
-    it("removes the key when code is null", () => {
-      setActiveSpace("AAAA11112222");
+    it("removes the key when code is null", async () => {
+      await setActiveSpace("AAAA11112222");
 
-      setActiveSpace(null);
+      await setActiveSpace(null);
 
       expect(localStorage.getItem("delphi.active_space")).toBeNull();
     });
@@ -267,20 +267,20 @@ describe("Space Manager", () => {
   // -------------------------------------------------------------------------
 
   describe("edge cases", () => {
-    it("getSpaces with empty string in storage returns []", () => {
+    it("getSpaces with empty string in storage returns []", async () => {
       localStorage.setItem("delphi.spaces", "");
 
-      expect(getSpaces()).toEqual([]);
+      expect(await getSpaces()).toEqual([]);
     });
 
-    it("saveSpace on corrupt storage recovers", () => {
+    it("saveSpace on corrupt storage recovers", async () => {
       localStorage.setItem("delphi.spaces", "NOT_JSON");
 
       // saveSpace calls getSpaces() internally which returns [] on corrupt data
 
-      saveSpace(makeSpace("AAAA11112222"));
+      await saveSpace(makeSpace("AAAA11112222"));
 
-      expect(getSpaces()).toHaveLength(1);
+      expect(await getSpaces()).toHaveLength(1);
     });
   });
 });

@@ -114,25 +114,7 @@ function syncTargetFromFocus() {
   }
 
   const found = findTarget(focused);
-  if (found) {
-    setActiveTarget(found.el, found.kind);
-  } else {
-    // Also check Selection API for contenteditable
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const node = sel.anchorNode;
-      if (node) {
-        const el =
-          node instanceof HTMLElement ? node : node.parentElement;
-        const editable = el?.closest("[contenteditable='true']");
-        if (editable instanceof HTMLElement) {
-          setActiveTarget(editable, "editable");
-          return;
-        }
-      }
-    }
-    setActiveTarget(null, null);
-  }
+  setActiveTarget(found?.el ?? null, found?.kind ?? null);
 }
 
 // ---------------------------------------------------------------------------
@@ -487,7 +469,7 @@ onUnmounted(() => {
   position: fixed;
   z-index: 9999;
   pointer-events: none;
-  background: var(--foreground, #d4d4d4);
+  background: var(--accent);
   border-radius: 1px;
   will-change: left, top, height;
 }

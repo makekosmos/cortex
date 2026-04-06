@@ -152,7 +152,7 @@ watch(showProjectMenu, (val) => {
         <div class="flex flex-wrap items-center gap-2">
           <!-- Schedule date -->
           <label
-            class="flex cursor-pointer items-center gap-1.5 rounded-full bg-(--secondary) px-3 py-1.5 text-xs transition-colors hover:bg-(--accent)"
+            class="flex cursor-pointer items-center gap-1.5 rounded-full bg-(--secondary) px-3 py-1.5 text-xs transition-colors hover:bg-(--surface)"
           >
             <Calendar
               :size="12"
@@ -173,7 +173,7 @@ watch(showProjectMenu, (val) => {
               'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors',
               isToday
                 ? 'bg-yellow-500/15 text-yellow-500'
-                : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)',
+                : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
             ]"
             @click="toggleToday"
           >
@@ -188,7 +188,7 @@ watch(showProjectMenu, (val) => {
               'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors',
               isEvening
                 ? 'bg-indigo-500/15 text-indigo-400'
-                : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)',
+                : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
             ]"
             @click="toggleEvening"
           >
@@ -206,7 +206,7 @@ watch(showProjectMenu, (val) => {
                 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors',
                 selectedProject()
                   ? 'bg-blue-500/15 text-blue-500'
-                  : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--accent)',
+                  : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
               ]"
               @click="showProjectMenu = !showProjectMenu"
             >
@@ -221,7 +221,7 @@ watch(showProjectMenu, (val) => {
             >
               <button
                 type="button"
-                class="w-full px-3 py-1.5 text-left text-xs text-(--foreground) hover:bg-(--accent)"
+                class="w-full px-3 py-1.5 text-left text-xs text-(--foreground) hover:bg-(--surface)"
                 @click="selectedProjectId = null; showProjectMenu = false"
               >
                 Входящие
@@ -230,7 +230,7 @@ watch(showProjectMenu, (val) => {
                 v-for="project in projects"
                 :key="project.id"
                 type="button"
-                class="w-full px-3 py-1.5 text-left text-xs text-(--foreground) hover:bg-(--accent)"
+                class="w-full px-3 py-1.5 text-left text-xs text-(--foreground) hover:bg-(--surface)"
                 @click="selectedProjectId = project.id; showProjectMenu = false"
               >
                 {{ project.title }}
@@ -243,7 +243,7 @@ watch(showProjectMenu, (val) => {
       <!-- Close button -->
       <button
         type="button"
-        class="absolute right-2.5 top-2.5 rounded-md p-1 text-(--muted-foreground) hover:bg-(--accent) hover:text-(--foreground)"
+        class="absolute right-2.5 top-2.5 rounded-md p-1 text-(--muted-foreground) hover:bg-(--surface) hover:text-(--foreground)"
         @click="close"
       >
         <X :size="14" />

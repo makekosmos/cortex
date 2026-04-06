@@ -29,7 +29,7 @@
               border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   border-radius: 32px;
   corner-shape: squircle;
-  background: var(--color-shape-highlight-light-solid);
+  background: var(--sidebar-bg);
   border: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
