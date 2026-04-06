@@ -299,7 +299,53 @@ ipcMain.handle('space:rename', (_e, code: string, newName: string) => {
   }
   return false;
 });
-ipcMain.handle('space:getDbPath', () => app.getPath('userData'));
+ipcMain.handle('space:getDbPath', () => path.join(getDataDir(), 'spaces'));
+
+// Scan spaces/ directory for orphaned DBs not in spaces.json
+ipcMain.handle('space:scanOrphaned', () => {
+  const spacesDir = path.join(getDataDir(), 'spaces');
+  if (!fs.existsSync(spacesDir)) return [];
+  const known = readSpacesFile().spaces.map(s => {
+    // Derive spaceId from code — SHA-256(normalized)[:16]
+    const crypto = require('node:crypto');
+    const normalized = s.code.replace(/-/g, '').replace(/ /g, '').toUpperCase();
+    return crypto.createHash('sha256').update(normalized, 'utf-8').digest('hex').slice(0, 16);
+  });
+  const knownSet = new Set(known);
+  const orphaned: string[] = [];
+  for (const entry of fs.readdirSync(spacesDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && !knownSet.has(entry.name)) {
+      const dbFile = path.join(spacesDir, entry.name, 'delphi.db');
+      if (fs.existsSync(dbFile)) {
+        orphaned.push(entry.name);
+      }
+    }
+  }
+  return orphaned;
+});
+
+// --- Migrate old spaces from userData to appData ---
+{
+  const oldSpacesDir = path.join(app.getPath('userData'), 'spaces');
+  const newSpacesDir = path.join(getDataDir(), 'spaces');
+  if (fs.existsSync(oldSpacesDir) && oldSpacesDir !== newSpacesDir) {
+    try {
+      fs.mkdirSync(newSpacesDir, { recursive: true });
+      for (const entry of fs.readdirSync(oldSpacesDir, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          const src = path.join(oldSpacesDir, entry.name);
+          const dst = path.join(newSpacesDir, entry.name);
+          if (!fs.existsSync(dst)) {
+            fs.cpSync(src, dst, { recursive: true });
+            console.log(`[Main] Migrated space DB: ${entry.name}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Main] Failed to migrate old spaces:', err);
+    }
+  }
+}
 
 // --- IPC handlers for local DB ---
 
@@ -316,7 +362,7 @@ ipcMain.handle('db:deleteTrashed', () => dbDeleteTrashed())
 ipcMain.handle('db:switchSpace', (_e, spaceId: string) => dbSwitchSpace(spaceId))
 
 ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
-  const spaceDir = path.join(app.getPath('userData'), 'spaces', spaceId);
+  const spaceDir = path.join(getDataDir(), 'spaces', spaceId);
 
   // If the sidecar is currently using this space's DB, release it first
   const currentPath = sidecar.currentDbPath;

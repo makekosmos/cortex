@@ -405,7 +405,9 @@ export async function dbDeleteTrashed(): Promise<number> {
  * The old sidecar process is killed and a new one is started with the space DB path.
  */
 export async function dbSwitchSpace(spaceId: string): Promise<void> {
-  const newDbPath = path.join(app.getPath('userData'), 'spaces', spaceId, 'delphi.db')
+  const dataDir = path.join(app.getPath('appData'), 'delphi', 'data')
+  fs.mkdirSync(path.join(dataDir, 'spaces', spaceId), { recursive: true })
+  const newDbPath = path.join(dataDir, 'spaces', spaceId, 'delphi.db')
   sidecar.reinit(newDbPath)
   // Trigger initialization by doing a lightweight operation
   await dbGetSyncKv('__init__').catch(() => {})
