@@ -34,11 +34,14 @@ export interface Space {
 // Electron IPC persistence (primary — file-backed, survives localStorage wipe)
 // ---------------------------------------------------------------------------
 
-const isElectron = !!(window as unknown as Record<string, unknown>).electronAPI;
+const isElectron =
+  typeof window !== "undefined" &&
+  !!(window as unknown as Record<string, unknown>).electronAPI;
 
 function ipc(): {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
 } | null {
+  if (typeof window === "undefined") return null;
   return (window as unknown as Record<string, unknown>)
     .electronAPI as ReturnType<typeof ipc>;
 }
