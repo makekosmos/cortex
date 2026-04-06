@@ -362,6 +362,12 @@ function handleReconnect() {
 // ---------------------------------------------------------------------------
 
 async function activateSpace(code: string, seedAddresses: string[] = []) {
+  // Clean up existing listeners before setting up new ones (prevents leak on space switch)
+  cleanupPeerListener?.();
+  cleanupPeerListener = null;
+  cleanupLanSyncListener?.();
+  cleanupLanSyncListener = null;
+
   const spaceId = await deriveSpaceId(code);
   setActiveSpace(code);
   // Preserve existing space data (name, createdAt) if already saved
@@ -419,6 +425,10 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
       })
       .catch(() => {});
   }
+
+  // Re-setup IPC bridges after cleanup
+  setupPeerBridge();
+  setupLanSyncBridge();
 
   // Start sync server
   startSyncServer(spaceId, seedAddresses).catch(console.warn);

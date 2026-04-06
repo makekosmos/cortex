@@ -84,9 +84,15 @@ function createWindow() {
   if (saved.isMaximized) win.maximize();
 
   // Track bounds before maximize so we can save the windowed size
-  win.on('resize', () => { if (!win.isMaximized()) (win as any)._lastBounds = win.getBounds(); });
-  win.on('move', () => { if (!win.isMaximized()) (win as any)._lastBounds = win.getBounds(); });
-  win.on('close', () => saveWindowState(win));
+  const onResize = () => { if (!win.isMaximized()) (win as any)._lastBounds = win.getBounds(); };
+  const onMove = () => { if (!win.isMaximized()) (win as any)._lastBounds = win.getBounds(); };
+  win.on('resize', onResize);
+  win.on('move', onMove);
+  win.on('close', () => {
+    win.removeListener('resize', onResize);
+    win.removeListener('move', onMove);
+    saveWindowState(win);
+  });
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);

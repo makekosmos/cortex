@@ -36,9 +36,12 @@ function getSidecarBinaryPath() {
   return path.join(appRoot, 'sidecar', 'target', 'debug', binaryName)
 }
 
+const MAX_QUEUE_SIZE = 500
+
 class SidecarClient {
   private child: ChildProcessWithoutNullStreams | null = null
-  private stdoutBuffer = ''
+  private stdoutChunks: Buffer[] = []
+  private stdoutLength = 0
   private stderrBuffer = ''
   private requestQueue: Array<PendingRequest<unknown>> = []
   private activeRequest: PendingRequest<unknown> | null = null
@@ -55,11 +58,12 @@ class SidecarClient {
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 
-    child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
 
-    child.stdout.on('data', (chunk: string) => {
-      this.stdoutBuffer += chunk
+    child.stdout.on('data', (chunk: Buffer | string) => {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      this.stdoutChunks.push(buf)
+      this.stdoutLength += buf.length
       this.flushStdout()
     })
 
@@ -77,7 +81,8 @@ class SidecarClient {
     })
 
     this.child = child
-    this.stdoutBuffer = ''
+    this.stdoutChunks = []
+    this.stdoutLength = 0
     this.stderrBuffer = ''
 
     if (!this.initialized) {
@@ -93,14 +98,26 @@ class SidecarClient {
   }
 
   private flushStdout() {
+    // Merge chunks into a single buffer to find newlines
+    const merged = Buffer.concat(this.stdoutChunks, this.stdoutLength)
+    this.stdoutChunks = []
+    this.stdoutLength = 0
+
+    let searchFrom = 0
     while (true) {
-      const newlineIndex = this.stdoutBuffer.indexOf('\n')
+      const newlineIndex = merged.indexOf(0x0a, searchFrom) // '\n'
       if (newlineIndex === -1) {
+        // Put remaining data back as a single chunk
+        if (searchFrom < merged.length) {
+          const remaining = merged.subarray(searchFrom)
+          this.stdoutChunks.push(remaining)
+          this.stdoutLength = remaining.length
+        }
         return
       }
 
-      const rawLine = this.stdoutBuffer.slice(0, newlineIndex).trim()
-      this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1)
+      const rawLine = merged.subarray(searchFrom, newlineIndex).toString('utf8').trim()
+      searchFrom = newlineIndex + 1
 
       if (!rawLine) {
         continue
@@ -167,9 +184,9 @@ class SidecarClient {
 
   private resetChild() {
     if (this.child) {
-      this.child.removeAllListeners()
       this.child.stdout.removeAllListeners()
       this.child.stderr.removeAllListeners()
+      this.child.removeAllListeners()
 
       if (!this.child.killed) {
         this.child.kill()
@@ -177,13 +194,18 @@ class SidecarClient {
     }
 
     this.child = null
-    this.stdoutBuffer = ''
+    this.stdoutChunks = []
+    this.stdoutLength = 0
     this.stderrBuffer = ''
     this.initialized = false
   }
 
   request<T>(request: SidecarRequest): Promise<T> {
     return new Promise<T>((resolve, reject) => {
+      if (this.requestQueue.length >= MAX_QUEUE_SIZE) {
+        reject(new Error(`delphi-db request queue overflow (${MAX_QUEUE_SIZE})`))
+        return
+      }
       this.requestQueue.push({
         request,
         resolve: resolve as (value: unknown) => void,

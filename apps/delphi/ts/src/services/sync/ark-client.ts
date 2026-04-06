@@ -880,6 +880,10 @@ export class ArkSyncClient {
 
     if (this.ws) {
       try {
+        this.ws.removeEventListener("open", this.handleWsOpen);
+        this.ws.removeEventListener("message", this.handleWsMessage);
+        this.ws.removeEventListener("error", this.handleWsError);
+        this.ws.removeEventListener("close", this.handleWsClose);
         this.ws.close(1000, "user disconnect");
       } catch {
         // ignore
@@ -1079,6 +1083,20 @@ export class ArkSyncClient {
   private doConnect() {
     this.cancelReconnect();
 
+    // Clean up old WebSocket listeners before creating a new one
+    if (this.ws) {
+      try {
+        this.ws.removeEventListener("open", this.handleWsOpen);
+        this.ws.removeEventListener("message", this.handleWsMessage);
+        this.ws.removeEventListener("error", this.handleWsError);
+        this.ws.removeEventListener("close", this.handleWsClose);
+        this.ws.close(1000, "reconnecting");
+      } catch {
+        // ignore
+      }
+      this.ws = null;
+    }
+
     const wsBase = this.serverUrl.replace(/^http/, "ws");
 
     const url = `${wsBase}/ws/sync?key=${encodeURIComponent(this.apiKey)}`;
@@ -1095,60 +1113,65 @@ export class ArkSyncClient {
       return;
     }
 
-    this.ws.addEventListener("open", () => {
-      this.backoff = 1000;
-
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        console.warn("[ArkSync] onopen fired but socket not OPEN, skipping");
-
-        return;
-      }
-
-      console.log("[ArkSync] WebSocket opened, sending sync_start");
-
-      this.ws.send(
-        JSON.stringify({
-          type: "sync_start",
-
-          device_id: this.deviceId,
-
-          device_name: "Delphi Web",
-
-          platform: "web",
-
-          vector: this.vector,
-        }),
-      );
-    });
-
-    this.ws.addEventListener("message", (event) => {
-      let msg: Record<string, unknown>;
-
-      try {
-        msg = JSON.parse(typeof event.data === "string" ? event.data : "");
-      } catch {
-        return;
-      }
-
-      this.handleMessage(msg);
-    });
-
-    this.ws.addEventListener("error", (e) => {
-      console.error("[ArkSync] WebSocket error:", e);
-    });
-
-    this.ws.addEventListener("close", (e) => {
-      console.log("[ArkSync] WebSocket closed:", e.code, e.reason);
-
-      this.ws = null;
-
-      this.setConnected(false);
-
-      this._synced = false;
-
-      this.scheduleReconnect();
-    });
+    this.ws.addEventListener("open", this.handleWsOpen);
+    this.ws.addEventListener("message", this.handleWsMessage);
+    this.ws.addEventListener("error", this.handleWsError);
+    this.ws.addEventListener("close", this.handleWsClose);
   }
+
+  private handleWsOpen = () => {
+    this.backoff = 1000;
+
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.warn("[ArkSync] onopen fired but socket not OPEN, skipping");
+
+      return;
+    }
+
+    console.log("[ArkSync] WebSocket opened, sending sync_start");
+
+    this.ws.send(
+      JSON.stringify({
+        type: "sync_start",
+
+        device_id: this.deviceId,
+
+        device_name: "Delphi Web",
+
+        platform: "web",
+
+        vector: this.vector,
+      }),
+    );
+  };
+
+  private handleWsMessage = (event: MessageEvent) => {
+    let msg: Record<string, unknown>;
+
+    try {
+      msg = JSON.parse(typeof event.data === "string" ? event.data : "");
+    } catch {
+      return;
+    }
+
+    this.handleMessage(msg);
+  };
+
+  private handleWsError = (e: Event) => {
+    console.error("[ArkSync] WebSocket error:", e);
+  };
+
+  private handleWsClose = (e: CloseEvent) => {
+    console.log("[ArkSync] WebSocket closed:", e.code, e.reason);
+
+    this.ws = null;
+
+    this.setConnected(false);
+
+    this._synced = false;
+
+    this.scheduleReconnect();
+  };
 
   private handleMessage(msg: Record<string, unknown>) {
     const type = msg.type as string;

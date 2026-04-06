@@ -21,15 +21,19 @@ function onSave(payload: QuickEntrySavePayload) {
   });
 }
 
+const handler = (e: KeyboardEvent) => {
+  if (e.metaKey && e.key === "n" && !e.shiftKey && !e.altKey) {
+    e.preventDefault();
+    if (open.value) { hide(); } else { open.value = true; }
+  }
+};
+
 onMounted(() => {
-  const handler = (e: KeyboardEvent) => {
-    if (e.metaKey && e.key === "n" && !e.shiftKey && !e.altKey) {
-      e.preventDefault();
-      if (open.value) { hide(); } else { open.value = true; }
-    }
-  };
   window.addEventListener("keydown", handler);
-  onUnmounted(() => window.removeEventListener("keydown", handler));
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handler);
 });
 </script>
 
