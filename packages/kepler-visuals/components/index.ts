@@ -1,3 +1,5 @@
+export { default as CustomCaret } from "./CustomCaret.vue";
+
 export { default as CommandPalette } from "./CommandPalette.vue";
 
 export { default as ResizableSidebar } from "./ResizableSidebar.vue";

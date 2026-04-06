@@ -98,16 +98,43 @@ const sections = computed<UpcomingSection[]>(() => {
   const today = startOfDay(new Date());
   const result: UpcomingSection[] = [];
 
-  // Next 7 days individually
+  // Single pass: bucket todos by date key
+  const day8 = addDays(today, 8);
+  const day29 = addDays(today, 29);
+  const yearEnd = addDays(today, 365);
+
+  // Buckets: day-1..day-7, week-2..week-4, month-YYYY-MM
+  const buckets = new Map<string, TodoItem[]>();
+
+  for (const todo of upcomingTodos.value) {
+    if (!todo.scheduledDate) continue;
+    const d = new Date(todo.scheduledDate);
+    if (d < addDays(today, 1) || d >= yearEnd) continue;
+
+    let key: string;
+    if (d < day8) {
+      // Days 1-7
+      const offset = Math.round((d.getTime() - today.getTime()) / 86400000);
+      key = `day-${offset}`;
+    } else if (d < day29) {
+      // Weeks 2-4
+      const weekOffset = 2 + Math.floor((d.getTime() - day8.getTime()) / (7 * 86400000));
+      key = `week-${weekOffset}`;
+    } else {
+      // Months
+      key = `month-${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+    }
+
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(todo);
+  }
+
+  // Build sections from buckets: days 1-7
   for (let offset = 1; offset <= 7; offset++) {
     const date = addDays(today, offset);
-    const dayTodos = upcomingTodos.value
-      .filter((t) => {
-        if (!t.scheduledDate) return false;
-        return isSameDay(new Date(t.scheduledDate), date);
-      })
-      .toSorted((a, b) => a.sortOrder - b.sortOrder);
-
+    const dayTodos = (buckets.get(`day-${offset}`) ?? []).toSorted(
+      (a, b) => a.sortOrder - b.sortOrder,
+    );
     result.push({
       id: `day-${offset}`,
       title: dayTitle(date, offset),
@@ -116,68 +143,39 @@ const sections = computed<UpcomingSection[]>(() => {
     });
   }
 
-  // Weeks 2-4 beyond the first 7 days
-  const weekBoundary = addDays(today, 8);
+  // Weeks 2-4
   for (let weekOffset = 2; weekOffset <= 4; weekOffset++) {
-    const weekStart = addDays(weekBoundary, (weekOffset - 2) * 7);
-    const weekEnd = addDays(weekStart, 7);
-
-    const weekTodos = upcomingTodos.value
-      .filter((t) => {
-        if (!t.scheduledDate) return false;
-        const d = new Date(t.scheduledDate);
-        return d >= weekStart && d < weekEnd;
-      })
-      .toSorted((a, b) => {
-        const da = a.scheduledDate ?? "";
-        const db = b.scheduledDate ?? "";
-        return da.localeCompare(db);
-      });
-
+    const weekStart = addDays(day8, (weekOffset - 2) * 7);
+    const weekTodos = (buckets.get(`week-${weekOffset}`) ?? []).toSorted(
+      (a, b) => (a.scheduledDate ?? "").localeCompare(b.scheduledDate ?? ""),
+    );
     if (weekTodos.length > 0) {
-      const wn = weekOfYear(weekStart);
       result.push({
-        id: `week-${wn}`,
-        title: `Неделя ${wn}`,
+        id: `week-${weekOfYear(weekStart)}`,
+        title: `Неделя ${weekOfYear(weekStart)}`,
         dateLabel: shortDateFmt.format(weekStart),
         todos: weekTodos,
       });
     }
   }
 
-  // Months beyond that, up to 1 year
-  const monthBoundary = addDays(today, 30);
-  const yearBoundary = addDays(today, 365);
-  let cursor = new Date(
-    monthBoundary.getFullYear(),
-    monthBoundary.getMonth(),
-    1,
-  );
-
-  while (cursor < yearBoundary) {
-    const nextMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-    const monthTodos = upcomingTodos.value
-      .filter((t) => {
-        if (!t.scheduledDate) return false;
-        const d = new Date(t.scheduledDate);
-        return d >= cursor && d < nextMonth;
-      })
-      .toSorted((a, b) => {
-        const da = a.scheduledDate ?? "";
-        const db = b.scheduledDate ?? "";
-        return da.localeCompare(db);
-      });
-
-    if (monthTodos.length > 0) {
-      const label = capitalize(monthFmt.format(cursor));
-      result.push({
-        id: `month-${label}`,
-        title: label,
-        dateLabel: "",
-        todos: monthTodos,
-      });
-    }
-    cursor = nextMonth;
+  // Months
+  const monthKeys = [...buckets.keys()]
+    .filter((k) => k.startsWith("month-"))
+    .sort();
+  for (const key of monthKeys) {
+    const [, year, month] = key.split("-");
+    const cursor = new Date(Number(year), Number(month), 1);
+    const monthTodos = buckets.get(key)!.toSorted(
+      (a, b) => (a.scheduledDate ?? "").localeCompare(b.scheduledDate ?? ""),
+    );
+    const label = capitalize(monthFmt.format(cursor));
+    result.push({
+      id: key,
+      title: label,
+      dateLabel: "",
+      todos: monthTodos,
+    });
   }
 
   return result;

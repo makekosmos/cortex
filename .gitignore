@@ -77,3 +77,4 @@ release/
 !*.env.example
 *.docx
 .turbo/
+sample

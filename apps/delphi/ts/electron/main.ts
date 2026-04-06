@@ -393,7 +393,8 @@ function connectToSeedAddresses(addresses: string[], deviceId: string, deviceNam
 
   // Skip if these addresses belong to an already-known peer
   const knownPeers = syncServer.getKnownPeers();
-  const alreadyKnown = knownPeers.some(p => p.addresses.some(a => addresses.includes(a)));
+  const addrSet = new Set(addresses);
+  const alreadyKnown = knownPeers.some(p => p.addresses.some(a => addrSet.has(a)));
   if (alreadyKnown) return;
 
   const tempId = `seed-${Date.now()}`;

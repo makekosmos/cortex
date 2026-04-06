@@ -9,6 +9,7 @@ export { type ThemeMode, type ColorToken, getColor } from "./theme";
 // Components
 
 export {
+  CustomCaret,
   ResizableSidebar,
   type SidebarConfig,
   CommandPalette,
