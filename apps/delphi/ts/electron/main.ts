@@ -37,7 +37,7 @@ let currentDeviceId = '';
 let currentDeviceName = 'Delphi Electron';
 
 function getDataDir(): string {
-  const dir = path.join(app.getPath('appData'), 'delphi', 'data');
+  const dir = path.join(app.getPath('appData'), 'Kepler');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -324,25 +324,42 @@ ipcMain.handle('space:scanOrphaned', () => {
   return orphaned;
 });
 
-// --- Migrate old spaces from userData to appData ---
+// --- Migrate old spaces from legacy locations to Kepler ---
 {
-  const oldSpacesDir = path.join(app.getPath('userData'), 'spaces');
   const newSpacesDir = path.join(getDataDir(), 'spaces');
-  if (fs.existsSync(oldSpacesDir) && oldSpacesDir !== newSpacesDir) {
-    try {
-      fs.mkdirSync(newSpacesDir, { recursive: true });
-      for (const entry of fs.readdirSync(oldSpacesDir, { withFileTypes: true })) {
-        if (entry.isDirectory()) {
-          const src = path.join(oldSpacesDir, entry.name);
-          const dst = path.join(newSpacesDir, entry.name);
-          if (!fs.existsSync(dst)) {
-            fs.cpSync(src, dst, { recursive: true });
-            console.log(`[Main] Migrated space DB: ${entry.name}`);
+  const legacyDirs = [
+    path.join(app.getPath('userData'), 'spaces'),           // old userData/spaces
+    path.join(app.getPath('appData'), 'delphi', 'data', 'spaces'), // old delphi/data/spaces
+  ];
+  for (const oldDir of legacyDirs) {
+    if (fs.existsSync(oldDir) && oldDir !== newSpacesDir) {
+      try {
+        fs.mkdirSync(newSpacesDir, { recursive: true });
+        for (const entry of fs.readdirSync(oldDir, { withFileTypes: true })) {
+          if (entry.isDirectory()) {
+            const src = path.join(oldDir, entry.name);
+            const dst = path.join(newSpacesDir, entry.name);
+            if (!fs.existsSync(dst)) {
+              fs.cpSync(src, dst, { recursive: true });
+              console.log(`[Main] Migrated space DB from ${oldDir}: ${entry.name}`);
+            }
           }
         }
+      } catch (err) {
+        console.error('[Main] Failed to migrate old spaces:', err);
       }
-    } catch (err) {
-      console.error('[Main] Failed to migrate old spaces:', err);
+    }
+  }
+  // Also migrate mesh_credentials.json and spaces.json from old delphi/data
+  const oldDataDir = path.join(app.getPath('appData'), 'delphi', 'data');
+  if (fs.existsSync(oldDataDir) && oldDataDir !== getDataDir()) {
+    for (const file of ['mesh_credentials.json', 'spaces.json']) {
+      const src = path.join(oldDataDir, file);
+      const dst = path.join(getDataDir(), file);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) {
+        fs.cpSync(src, dst);
+        console.log(`[Main] Migrated ${file} to Kepler`);
+      }
     }
   }
 }
