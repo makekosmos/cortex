@@ -103,12 +103,12 @@ fun ArkDataMissingScreen() {
             modifier = Modifier.padding(32.dp),
         ) {
             Text(
-                text = "Ark Data не установлен",
+                text = "Ark Service не установлен",
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = "Приложение ark-data (com.kepler.ark.data) не найдено. " +
+                text = "Приложение ark-service (com.kepler.ark.data) не найдено. " +
                     "Установите его для работы Delphi.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
@@ -137,7 +137,7 @@ fun DelphiNavGraph(
         return
     }
 
-    // ark-data not installed → show error screen
+    // ark-service not installed → show error screen
     if (!spaceViewModel.isArkDataAvailable) {
         ArkDataMissingScreen()
         return

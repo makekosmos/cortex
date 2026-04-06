@@ -1,0 +1,5 @@
+[bindings]
+[bindings.kotlin]
+package_name = "com.kepler.ark.core"
+[bindings.swift]
+module_name = "ArkCore"

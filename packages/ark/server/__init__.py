@@ -1,1 +1,0 @@
-"""VPS API server (FastAPI)."""

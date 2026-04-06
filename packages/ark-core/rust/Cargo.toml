@@ -1,0 +1,31 @@
+[package]
+name = "ark-core"
+version = "0.1.0"
+edition = "2021"
+description = "Unified DB + sync engine for Kosmos/Delphi"
+
+[lib]
+name = "ark_core"
+path = "src/lib.rs"
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+name = "ark-core-rpc"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+rand = "0.8"
+async-trait = "0.1"
+uniffi = { version = "0.28", features = ["cli"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
