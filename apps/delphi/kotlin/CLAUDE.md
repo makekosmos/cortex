@@ -81,7 +81,22 @@ Android — равноправный пир: запускает WS-сервер 
 |------|------|
 | `data/sync/SyncServer.kt` | Ktor CIO embedded WS-сервер (порт 21531, fallback 21531-21541) |
 | `data/sync/LanSyncClient.kt` | OkHttp WS-клиент |
-| `data/sync/PeerManager.kt` | Координатор: server + client + peer list exchange |
+| `data/sync/PeerManager.kt` | Координатор: server + client + peer list exchange + broadcast helpers |
+| `data/sync/SyncEntityParser.kt` | Сериализация/десериализация сущностей для sync (включая checklist items, tags) |
+
+### Синхронизируемые сущности
+
+Все 7 типов: `todo`, `project`, `area`, `tag`, `heading`, `checklist_item`, `todo_tag_cross_ref`.
+
+- `SyncServer.loadAllEntities()` и `LanSyncClient.buildVersionVector()` обрабатывают все типы
+- `SyncEntityParser.todoToJson()` включает вложенные checklist items и tag IDs
+- `SyncEntityParser.applyChecklistAndTags()` применяет вложенные данные при получении
+- Trashed items включены в sync — фильтрация `isTrashed` НЕ применяется при `getAllForSync()`
+
+### Hard delete (очистка корзины)
+
+- `TrashViewModel.emptyTrash()` вызывает `peerManager.broadcastTodoDelete(id)` для каждой удалённой задачи
+- При получении `deleted: true` — запись удаляется из БД, `versionVector.remove(entityId)`
 
 ### Version vector
 Персистится в DataStore. **MUST NOT** регенерироваться с `Instant.now()` при reconnect.
@@ -91,6 +106,20 @@ Android — равноправный пир: запускает WS-сервер 
 
 ### Удаление данных
 Нет кнопки "Очистить данные" в UI — данные удаляются только через системные настройки (Settings → Apps → Delphi → Clear Data).
+
+### Android Auto Backup
+- `allowBackup="true"` + `fullBackupContent="@xml/backup_rules"` в обоих APK (delphi + ark-data)
+- Backup rules покрывают DataStore prefs + Room DB
+- Данные переживают переустановку приложения
+
+### Space code persistence
+- DataStore (`ark.space.activeCode`) — основное хранилище
+- SharedPreferences fallback (`ark_space_backup`) — зеркало; авто-восстановление если DataStore вернул null
+- Пространство не слетает при перезапуске
+
+### PendingChangeDao safety
+- `ArkSyncClient` всегда проверяет `databaseProvider.isOpen` перед обращением к `pendingChangeDao()`
+- Без проверки — краш `attempt to re-open an already-closed object`
 
 ## Команды
 

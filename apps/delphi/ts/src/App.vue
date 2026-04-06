@@ -51,7 +51,6 @@ import type { SyncEntity, SyncEntityType } from "@/services/sync/lan-protocol";
 import { useTodoStore } from "@/store/todos";
 import SideBar from "@/components/SideBar.vue";
 import QuickEntry from "@/components/QuickEntry.vue";
-import QuickOpen from "@/components/QuickOpen.vue";
 import QuickSearch from "@/components/QuickSearch.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
@@ -812,7 +811,6 @@ onUnmounted(() => {
     </main>
 
     <QuickEntry />
-    <QuickOpen />
     <QuickSearch v-model:open="quickSearchOpen" />
 
     <AuthOverlay

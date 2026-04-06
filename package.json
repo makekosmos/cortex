@@ -9,6 +9,7 @@
   ],
   "dependencies": {},
   "devDependencies": {
+    "oxfmt": "^0.43.0",
     "vue": "^3.5.31",
     "vue-router": "^4.6.4"
   }

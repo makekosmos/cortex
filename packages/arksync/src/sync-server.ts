@@ -562,7 +562,12 @@ export class SyncServer {
 
       if (!localHlc || isNewerHlc(entity.hlc, localHlc)) {
         await this.applyEntity(entity);
-        localVector[entity.id] = entity.hlc;
+        if (entity.deleted) {
+          // Remove from version vector so future syncs don't reference non-existent entity
+          delete localVector[entity.id];
+        } else {
+          localVector[entity.id] = entity.hlc;
+        }
         accepted++;
 
         this.onChangeHandler?.(entity);
@@ -623,7 +628,11 @@ export class SyncServer {
 
     if (!localHlc || isNewerHlc(msg.entity.hlc, localHlc)) {
       await this.applyEntity(msg.entity);
-      localVector[msg.entity.id] = msg.entity.hlc;
+      if (msg.entity.deleted) {
+        delete localVector[msg.entity.id];
+      } else {
+        localVector[msg.entity.id] = msg.entity.hlc;
+      }
       await this.saveVersionVector(localVector);
 
       this.onChangeHandler?.(msg.entity);

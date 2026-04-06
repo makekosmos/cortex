@@ -711,12 +711,16 @@ export const useTodoStore = defineStore("todos", () => {
   }
 
   async function emptyTrash() {
-    // Remove trashed todos from store
+    // Broadcast hard-delete for each trashed todo to sync peers BEFORE local removal
+    const trashedTodos = todos.value.filter((t) => t.isTrashed);
+    for (const t of trashedTodos) {
+      broadcastToLanSync("todo", t.id, {}, true);
+    }
 
+    // Remove trashed todos from store
     todos.value = todos.value.filter((t) => !t.isTrashed);
 
     // Permanently delete from DB
-
     await localDbDeleteTrashed();
   }
 

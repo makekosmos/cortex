@@ -294,6 +294,30 @@ class PeerManager @Inject constructor(
         broadcastChange("project", id, JSONObject(), deleted = true)
     }
 
+    fun broadcastAreaChange(area: com.kazui.delphi.data.model.Area) {
+        broadcastChange("area", area.id, SyncEntityParser.areaToJson(area))
+    }
+
+    fun broadcastAreaDelete(id: String) {
+        broadcastChange("area", id, JSONObject(), deleted = true)
+    }
+
+    fun broadcastTagChange(tag: com.kazui.delphi.data.model.Tag) {
+        broadcastChange("tag", tag.id, SyncEntityParser.tagToJson(tag))
+    }
+
+    fun broadcastTagDelete(id: String) {
+        broadcastChange("tag", id, JSONObject(), deleted = true)
+    }
+
+    fun broadcastHeadingChange(heading: com.kazui.delphi.data.model.Heading) {
+        broadcastChange("heading", heading.id, SyncEntityParser.headingToJson(heading))
+    }
+
+    fun broadcastHeadingDelete(id: String) {
+        broadcastChange("heading", id, JSONObject(), deleted = true)
+    }
+
     // ---------------------------------------------------------------------------
     // Peer list handling
     // ---------------------------------------------------------------------------

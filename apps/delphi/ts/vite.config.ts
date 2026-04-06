@@ -45,6 +45,7 @@ export default defineConfig({
       // Renderer (browser) uses browser-safe barrel — no crypto/ws/os
       '@arksync/core': path.resolve(__dirname, '../../../packages/arksync/browser.ts'),
     },
+    dedupe: ['vue', 'vue-router'],
   },
   clearScreen: false,
 });

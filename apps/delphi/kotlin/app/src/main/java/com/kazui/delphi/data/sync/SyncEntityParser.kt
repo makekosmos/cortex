@@ -1,14 +1,18 @@
 package com.kazui.delphi.data.sync
 
 import android.util.Log
+import com.kazui.delphi.data.model.ChecklistItem
 import com.kazui.delphi.data.model.TodoItem
 import com.kazui.delphi.data.model.Project
 import com.kazui.delphi.data.model.Area
 import com.kazui.delphi.data.model.Heading
 import com.kazui.delphi.data.model.Tag
+import com.kazui.delphi.data.model.TodoTagCrossRef
+import com.kazui.delphi.data.repository.ArkDataRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
+import java.util.UUID
 
 private const val TAG = "SyncEntityParser"
 
@@ -18,7 +22,11 @@ private const val TAG = "SyncEntityParser"
  */
 object SyncEntityParser {
 
-    fun todoToJson(todo: TodoItem): JSONObject {
+    fun todoToJson(
+        todo: TodoItem,
+        tagIds: List<String> = emptyList(),
+        checklistItems: List<ChecklistItem> = emptyList(),
+    ): JSONObject {
         return JSONObject().apply {
             put("id", todo.id)
             put("title", todo.title)
@@ -40,8 +48,87 @@ object SyncEntityParser {
             todo.projectId?.let { put("projectId", it) }
             todo.areaId?.let { put("areaId", it) }
             put("createdAt", todo.createdAt)
-            put("tagIds", JSONArray())
-            put("checklistItems", JSONArray())
+            put("tagIds", JSONArray(tagIds))
+            put("checklistItems", JSONArray().apply {
+                for (item in checklistItems) {
+                    put(JSONObject().apply {
+                        put("id", item.id)
+                        put("title", item.title)
+                        put("isCompleted", item.isCompleted)
+                        put("sortOrder", item.sortOrder)
+                    })
+                }
+            })
+        }
+    }
+
+    fun areaToJson(area: Area): JSONObject {
+        return JSONObject().apply {
+            put("id", area.id)
+            put("title", area.title)
+            put("sortOrder", area.sortOrder)
+            put("createdAt", area.createdAt)
+        }
+    }
+
+    fun tagToJson(tag: Tag): JSONObject {
+        return JSONObject().apply {
+            put("id", tag.id)
+            put("title", tag.title)
+            tag.color?.let { put("color", it) }
+            put("createdAt", tag.createdAt)
+        }
+    }
+
+    fun headingToJson(heading: Heading): JSONObject {
+        return JSONObject().apply {
+            put("id", heading.id)
+            put("title", heading.title)
+            put("sortOrder", heading.sortOrder)
+            put("projectId", heading.projectId)
+        }
+    }
+
+    /**
+     * Apply checklist items and tag cross-refs from incoming sync JSON data.
+     * Replaces existing checklist items for this todo and syncs tag refs.
+     */
+    suspend fun applyChecklistAndTags(data: JSONObject, todoId: String, repo: ArkDataRepository) {
+        try {
+            // Apply checklist items
+            val checklistArr = data.optJSONArray("checklistItems")
+            if (checklistArr != null && checklistArr.length() > 0) {
+                // Delete existing checklist items for this todo first
+                repo.deleteChecklistItemsByTodoIds(listOf(todoId))
+                for (i in 0 until checklistArr.length()) {
+                    val itemJson = checklistArr.optJSONObject(i) ?: continue
+                    val item = ChecklistItem(
+                        id = itemJson.optString("id", UUID.randomUUID().toString()).lowercase(),
+                        title = itemJson.optString("title", ""),
+                        isCompleted = itemJson.optBoolean("isCompleted", false),
+                        sortOrder = itemJson.optInt("sortOrder", i),
+                        todoItemId = todoId,
+                    )
+                    if (item.title.isNotEmpty()) {
+                        repo.upsertChecklistItem(item)
+                    }
+                }
+            }
+
+            // Apply tag cross-refs
+            val tagIdsArr = data.optJSONArray("tagIds")
+            if (tagIdsArr != null && tagIdsArr.length() > 0) {
+                // Delete existing tag refs for this todo first
+                repo.deleteTagRefsByTodoIds(listOf(todoId))
+                for (i in 0 until tagIdsArr.length()) {
+                    val tagId = tagIdsArr.optString(i, "") .lowercase()
+                    if (tagId.isNotEmpty()) {
+                        repo.upsertCrossRef(TodoTagCrossRef(todoId = todoId, tagId = tagId))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply checklist/tags for $todoId: ${e.message}")
         }
     }
 

@@ -681,8 +681,7 @@ class LiveVoiceTaskSession {
     const responses: ToolResponsePayload[] = [];
 
     for (const call of functionCalls) {
-      // eslint-disable-next-line no-await-in-loop
-
+      // eslint-disable-next-line no-await-in-loop -- sequential tool execution required
       responses.push(await this.executeToolCall(call));
     }
 

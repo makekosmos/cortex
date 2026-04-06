@@ -41,6 +41,7 @@ const filtered = computed(() => filterTodos(SmartList.Logbook, todos.value));
             :key="todo.id"
             :todo="todo"
             @complete="store.incompleteTodo(todo.id)"
+            @trash="store.trashTodo(todo.id)"
           />
         </div>
       </div>

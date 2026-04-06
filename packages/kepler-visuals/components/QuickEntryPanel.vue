@@ -115,21 +115,21 @@ watch(showProjectMenu, (val) => {
     class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
   >
     <!-- Backdrop -->
-    <div class="absolute inset-0 bg-black/40" @click="close" />
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close" />
 
     <!-- Panel -->
     <div
-      class="relative z-10 w-120 rounded-2xl border border-(--border) shadow-2xl"
+      class="relative z-10 w-full max-w-(--bringhurst-wide) overflow-hidden rounded-xl border border-(--border) shadow-2xl"
       style="background: var(--color-shape-highlight-light-solid)"
     >
-      <div class="flex flex-col gap-3 p-5">
+      <div class="flex flex-col gap-3 px-4 pt-3">
         <!-- Title -->
         <input
           ref="titleInput"
           type="text"
           placeholder="Новая задача"
           :value="title"
-          class="w-full bg-transparent text-lg font-semibold text-(--foreground) placeholder:text-(--muted-foreground) outline-none"
+          class="w-full bg-transparent text-sm font-semibold text-(--foreground) placeholder:text-(--muted-foreground) outline-none"
           @input="title = ($event.target as HTMLInputElement).value"
           @keydown="onTitleKeyDown"
         />
@@ -139,15 +139,16 @@ watch(showProjectMenu, (val) => {
           placeholder="Заметки"
           :value="notes"
           :rows="2"
-          class="w-full resize-none bg-transparent text-sm text-(--muted-foreground) placeholder:text-(--muted-foreground)/60 outline-none"
+          class="w-full resize-none bg-transparent text-xs text-(--muted-foreground) placeholder:text-(--muted-foreground)/60 outline-none"
           @input="notes = ($event.target as HTMLTextAreaElement).value"
           @keydown="onNotesKeyDown"
         />
+      </div>
 
-        <!-- Divider -->
-        <div class="h-px bg-(--border) opacity-50" />
+      <div class="h-px bg-(--border)" />
 
-        <!-- Metadata row -->
+      <!-- Metadata row -->
+      <div class="px-4 py-2">
         <div class="flex flex-wrap items-center gap-2">
           <!-- Schedule date -->
           <label
@@ -242,7 +243,7 @@ watch(showProjectMenu, (val) => {
       <!-- Close button -->
       <button
         type="button"
-        class="absolute right-3 top-3 rounded-md p-1 text-(--muted-foreground) hover:bg-(--accent) hover:text-(--foreground)"
+        class="absolute right-2.5 top-2.5 rounded-md p-1 text-(--muted-foreground) hover:bg-(--accent) hover:text-(--foreground)"
         @click="close"
       >
         <X :size="14" />

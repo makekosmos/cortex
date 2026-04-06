@@ -1,5 +1,8 @@
 package com.kazui.delphi.ui.screens.space
 
+import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -9,6 +12,7 @@ import com.kazui.delphi.data.space.SpaceManager
 import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.di.DatabaseProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,13 +22,22 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private const val TAG = "SpaceSetupViewModel"
+private const val BACKUP_PREFS_NAME = "ark_space_backup"
+private const val BACKUP_CODE_KEY = "active_space_code"
+
 @HiltViewModel
 class SpaceSetupViewModel @Inject constructor(
     private val spaceManager: SpaceManager,
     private val peerManager: PeerManager,
     private val databaseProvider: DatabaseProvider,
     private val dataStore: DataStore<Preferences>,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    /** SharedPreferences fallback for space code persistence across DataStore failures. */
+    private val backupPrefs: SharedPreferences =
+        context.getSharedPreferences(BACKUP_PREFS_NAME, Context.MODE_PRIVATE)
 
     val activeSpaceCode: StateFlow<String?> = spaceManager.activeSpaceCode
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -40,11 +53,26 @@ class SpaceSetupViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             spaceManager.activeSpaceCode.collect { code ->
-                if (!_isInitialized.value) _isInitialized.value = true
-                // Open the per-space DB when an active space code is present
+                if (!_isInitialized.value) {
+                    // On first emission, if DataStore returned null, check SharedPreferences fallback
+                    if (code == null) {
+                        val fallbackCode = backupPrefs.getString(BACKUP_CODE_KEY, null)
+                        if (!fallbackCode.isNullOrBlank()) {
+                            Log.w(TAG, "DataStore returned null but SharedPreferences has code, restoring: $fallbackCode")
+                            spaceManager.setActiveSpaceCode(fallbackCode)
+                            // Don't set initialized yet -- the restored code will trigger another collect
+                            return@collect
+                        }
+                    }
+                    _isInitialized.value = true
+                }
+                // Keep SharedPreferences in sync as a backup
                 if (code != null) {
+                    backupPrefs.edit().putString(BACKUP_CODE_KEY, code).apply()
                     val spaceId = spaceManager.deriveSpaceId(code)
                     databaseProvider.switchTo(spaceId)
+                } else {
+                    backupPrefs.edit().remove(BACKUP_CODE_KEY).apply()
                 }
             }
         }

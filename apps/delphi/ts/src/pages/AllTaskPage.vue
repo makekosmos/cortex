@@ -14,14 +14,15 @@ const store = useTodoStore();
 const { todos } = storeToRefs(store);
 const filtered = computed(() => filterTodos(SmartList.Inbox, todos.value));
 
-function handleDrop(targetId: string, sourceId: string) {
-  if (!sourceId || sourceId === targetId) return;
+function handleDrop(payload: { targetId: string; after: boolean }, sourceId: string) {
+  if (sourceId === payload.targetId) return;
   const list = [...filtered.value];
-  const sourceIdx = list.findIndex((t) => t.id === sourceId);
-  const targetIdx = list.findIndex((t) => t.id === targetId);
-  if (sourceIdx === -1 || targetIdx === -1) return;
-  const [item] = list.splice(sourceIdx, 1);
-  list.splice(targetIdx, 0, item);
+  const srcIdx = list.findIndex((t) => t.id === sourceId);
+  if (srcIdx === -1) return;
+  const [item] = list.splice(srcIdx, 1);
+  const tgtIdx = list.findIndex((t) => t.id === payload.targetId);
+  if (tgtIdx === -1) return;
+  list.splice(payload.after ? tgtIdx + 1 : tgtIdx, 0, item);
   list.forEach((t, i) => store.updateTodo(t.id, { sortOrder: i }));
 }
 </script>

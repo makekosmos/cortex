@@ -406,7 +406,7 @@ class ArkSyncClient @Inject constructor(
                         // local data rather than deleting it (client is the authority then).
                         if (isFullSync && !epochChanged) {
                             val syncRepo = databaseProvider.arkDataRepository
-                            val outboxIds = databaseProvider.pendingChangeDao().getAll()
+                            val outboxIds = if (databaseProvider.isOpen) databaseProvider.pendingChangeDao().getAll() else emptyList<PendingChange>()
                                 .mapNotNull { pending ->
                                     try { json.decodeFromString<ArkChange>(pending.payload).data.source_id.lowercase().ifBlank { null } }
                                     catch (_: Exception) { null }
@@ -508,15 +508,21 @@ class ArkSyncClient @Inject constructor(
     }
 
     private suspend fun queueChange(change: ArkChange) {
-        databaseProvider.pendingChangeDao().insert(
-            PendingChange(
-                payload = json.encodeToString(change),
-                createdAt = Instant.now().toString(),
+        if (!databaseProvider.isOpen) return
+        try {
+            databaseProvider.pendingChangeDao().insert(
+                PendingChange(
+                    payload = json.encodeToString(change),
+                    createdAt = Instant.now().toString(),
+                )
             )
-        )
+        } catch (e: Exception) {
+            Log.w(tag, "queueChange failed (DB closed?): ${e.message}")
+        }
     }
 
     private suspend fun flushOutbox(deviceId: String) {
+        if (!databaseProvider.isOpen) return
         val pending = databaseProvider.pendingChangeDao().getAll()
         pending.forEach { pendingChange ->
             try {
@@ -583,7 +589,9 @@ class ArkSyncClient @Inject constructor(
             clearRepo.deleteAllAreas()
             clearRepo.deleteAllTags()
             clearRepo.deleteAllHeadings()
-            databaseProvider.pendingChangeDao().deleteAll()
+            if (databaseProvider.isOpen) {
+                try { databaseProvider.pendingChangeDao().deleteAll() } catch (_: Exception) {}
+            }
 
             // Reset sync state
             dataStore.edit { prefs ->

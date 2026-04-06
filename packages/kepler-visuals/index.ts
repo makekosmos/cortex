@@ -15,6 +15,7 @@ export {
   SidebarButton,
   TodoRow,
   type TodoRowItem,
+  type TodoDropPayload,
   QuickEntryPanel,
   type QuickEntryProject,
   type QuickEntrySavePayload,

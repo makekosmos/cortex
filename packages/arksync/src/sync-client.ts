@@ -457,7 +457,11 @@ export class SyncClient {
 
       if (!localHlc || isNewerHlc(entity.hlc, localHlc)) {
         await this.applyEntity(entity);
-        localVector[entity.id] = entity.hlc;
+        if (entity.deleted) {
+          delete localVector[entity.id];
+        } else {
+          localVector[entity.id] = entity.hlc;
+        }
         accepted++;
 
         this.options.onChange?.(entity);
@@ -494,7 +498,11 @@ export class SyncClient {
 
     if (!localHlc || isNewerHlc(msg.entity.hlc, localHlc)) {
       await this.applyEntity(msg.entity);
-      localVector[msg.entity.id] = msg.entity.hlc;
+      if (msg.entity.deleted) {
+        delete localVector[msg.entity.id];
+      } else {
+        localVector[msg.entity.id] = msg.entity.hlc;
+      }
       await this.saveVersionVector(localVector);
 
       this.options.onChange?.(msg.entity);

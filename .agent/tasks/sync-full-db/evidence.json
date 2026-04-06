@@ -1,0 +1,120 @@
+{
+  "task_id": "sync-full-db",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "All entity types included in initial sync (all platforms)",
+      "status": "PASS",
+      "proof": [
+        "SyncServer.loadAllEntities() loads todos, projects, areas, tags, headings",
+        "LanSyncClient.buildVersionVector() includes all 5 entity types",
+        "LanSyncClient.loadEntityById() tries all 5 entity types",
+        "ArkDataRepository has getAllAreasForSync/getAllTagsForSync/getAllHeadingsForSync",
+        "Electron DelphiStorage.loadEntities() already handles all 5 types"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "Trashed items included in initial sync",
+      "status": "PASS",
+      "proof": [
+        "ArkDataRepository.getAllForSync() no longer filters out isTrashed"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "Empty-trash broadcasts hard-delete events to peers",
+      "status": "PASS",
+      "proof": [
+        "Electron emptyTrash() calls broadcastToLanSync('todo', id, {}, true) per trashed todo",
+        "Android TrashViewModel.emptyTrash() calls peerManager.broadcastTodoDelete(id) per trashed todo"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Hard-delete removes entry from version vector",
+      "status": "PASS",
+      "proof": [
+        "arksync sync-server.ts: delete localVector[entity.id] when entity.deleted in handleSyncChanges and handleLiveChange",
+        "arksync sync-client.ts: delete localVector[entity.id] when entity.deleted in handleSyncChanges and handleLiveChange",
+        "Android SyncServer.kt: localVector.remove(entityId) when deleted in handleSyncChanges and handleLiveChange",
+        "Android LanSyncClient.kt: versionVector.remove(entityId) when deleted in applySyncEntity"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC5",
+      "text": "Android space code persistence is robust",
+      "status": "PASS",
+      "proof": [
+        "SpaceSetupViewModel now has SharedPreferences fallback (ark_space_backup)",
+        "On cold start if DataStore returns null, checks SharedPreferences and restores",
+        "Every DataStore update mirrors to SharedPreferences"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC6",
+      "text": "Android data survives app reinstall",
+      "status": "PASS",
+      "proof": [
+        "ark-data AndroidManifest: allowBackup=true, fullBackupContent, dataExtractionRules",
+        "Delphi AndroidManifest: fullBackupContent, dataExtractionRules",
+        "backup_rules.xml and data_extraction_rules.xml created for both modules"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC7",
+      "text": "Checklist items and tag cross-refs sync",
+      "status": "PASS",
+      "proof": [
+        "SyncEntityParser.todoToJson() now accepts and serializes tagIds and checklistItems",
+        "SyncEntityParser.applyChecklistAndTags() applies incoming checklist/tag data",
+        "ArkDataRepository has upsertChecklistItem, upsertCrossRef, getChecklistItemsByTodoId, getTagIdsForTodo"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC8",
+      "text": "All platforms compile and existing tests pass",
+      "status": "PASS",
+      "proof": [
+        "Android Delphi: ./gradlew compileDebugKotlin BUILD SUCCESSFUL",
+        "Android ark-data: ./gradlew compileDebugKotlin BUILD SUCCESSFUL",
+        "arksync: npx tsc --noEmit clean",
+        "Electron lint on todos.ts: 0 errors"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "apps/ark-data/app/src/main/AndroidManifest.xml",
+    "apps/ark-data/app/src/main/res/xml/backup_rules.xml",
+    "apps/ark-data/app/src/main/res/xml/data_extraction_rules.xml",
+    "apps/delphi/kotlin/app/src/main/AndroidManifest.xml",
+    "apps/delphi/kotlin/app/src/main/res/xml/backup_rules.xml",
+    "apps/delphi/kotlin/app/src/main/res/xml/data_extraction_rules.xml",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/repository/ArkDataRepository.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/SyncServer.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/LanSyncClient.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/PeerManager.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/SyncEntityParser.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/ui/screens/space/SpaceSetupViewModel.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/ui/screens/trash/TrashViewModel.kt",
+    "apps/delphi/ts/src/store/todos.ts",
+    "packages/arksync/src/sync-server.ts",
+    "packages/arksync/src/sync-client.ts"
+  ],
+  "commands_for_fresh_verifier": [
+    "cd apps/delphi/kotlin && ./gradlew compileDebugKotlin",
+    "cd apps/ark-data && ./gradlew compileDebugKotlin",
+    "cd apps/delphi/ts && bunx oxlint -c .oxlintrc.json src/store/todos.ts",
+    "cd packages/arksync && npx tsc --noEmit"
+  ],
+  "known_gaps": []
+}

@@ -81,15 +81,15 @@ function byCompletionDesc(a: TodoItem, b: TodoItem): number {
 }
 
 const sorters: Record<SmartList, (a: TodoItem, b: TodoItem) => number> = {
-  [SmartList.Inbox]: byCreatedAtDesc,
+  [SmartList.Inbox]: bySortOrderAsc,
 
   [SmartList.Today]: bySortOrderAsc,
 
   [SmartList.Upcoming]: byScheduledDateAsc,
 
-  [SmartList.Anytime]: byCreatedAtDesc,
+  [SmartList.Anytime]: bySortOrderAsc,
 
-  [SmartList.Someday]: byCreatedAtDesc,
+  [SmartList.Someday]: bySortOrderAsc,
 
   [SmartList.Logbook]: byCompletionDesc,
 

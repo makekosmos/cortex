@@ -11,6 +11,11 @@ export interface TodoRowItem {
   isTrashed?: boolean;
 }
 
+export interface TodoDropPayload {
+  targetId: string;
+  after: boolean;
+}
+
 const props = withDefaults(
   defineProps<{
     todo: TodoRowItem;
@@ -27,7 +32,7 @@ const emit = defineEmits<{
   complete: [];
   trash: [];
   rename: [newTitle: string];
-  drop: [targetId: string];
+  drop: [payload: TodoDropPayload];
 }>();
 
 const isCompleted = computed(
@@ -39,14 +44,6 @@ const draft = shallowRef(props.todo.title);
 const inputRef = useTemplateRef<HTMLInputElement>("editInput");
 const rowRef = ref<HTMLElement>();
 const isDragging = shallowRef(false);
-
-let clone: HTMLElement | null = null;
-let placeholderEl: HTMLElement | null = null;
-let placeholderTimer: ReturnType<typeof setTimeout> | null = null;
-let lastTargetId: string | null = null;
-let lastInsertBeforeNode: Node | null = null;
-let startX = 0;
-let startY = 0;
 
 function startEditing() {
   draft.value = props.todo.title;
@@ -67,6 +64,21 @@ function onEditKeyDown(e: KeyboardEvent) {
   if (e.key === "Escape") editing.value = false;
 }
 
+// ---------------------------------------------------------------------------
+// Drag & Drop
+// ---------------------------------------------------------------------------
+
+const ROW_HEIGHT = 40;
+
+let clone: HTMLElement | null = null;
+let ghost: HTMLElement | null = null;
+let startX = 0;
+let startY = 0;
+let lastTarget: TodoDropPayload | null = null;
+
+// Snapshot of row positions taken once at drag start (before ghost distorts layout)
+let rowSnapshot: { id: string; top: number; bottom: number; mid: number }[] = [];
+
 function onRowPointerDown(e: PointerEvent) {
   if (!props.draggable || editing.value) return;
 
@@ -77,26 +89,35 @@ function onRowPointerDown(e: PointerEvent) {
   const onMove = (me: PointerEvent) => {
     if (!started && (Math.abs(me.clientX - ox) > 4 || Math.abs(me.clientY - oy) > 4)) {
       started = true;
-      startDrag({ clientX: ox, clientY: oy, preventDefault: () => {} } as PointerEvent);
+      beginDrag(ox, oy);
     }
+    if (started) onDragMove(me);
   };
   const onUp = () => {
     document.removeEventListener("pointermove", onMove);
-    document.removeEventListener("pointerup", onUp);
+    if (started) onDragEnd();
   };
   document.addEventListener("pointermove", onMove);
   document.addEventListener("pointerup", onUp, { once: true });
 }
 
-function startDrag(e: PointerEvent) {
+function beginDrag(cx: number, cy: number) {
   if (!rowRef.value) return;
-  e.preventDefault();
 
   const rect = rowRef.value.getBoundingClientRect();
-  startX = e.clientX;
-  startY = e.clientY;
+  startX = cx;
+  startY = cy;
+  lastTarget = null;
 
+  // Snapshot sibling positions BEFORE any DOM changes
+  rowSnapshot = getSiblingRows().map((el) => {
+    const r = el.getBoundingClientRect();
+    return { id: el.dataset.todoId!, top: r.top, bottom: r.bottom, mid: r.top + r.height / 2 };
+  });
+
+  // Floating clone
   clone = rowRef.value.cloneNode(true) as HTMLElement;
+  clone.dataset.dragClone = "";
   Object.assign(clone.style, {
     position: "fixed",
     top: `${rect.top}px`,
@@ -110,91 +131,114 @@ function startDrag(e: PointerEvent) {
     translate: "0px 0px",
     rotate: "2.5deg",
     transition: "rotate 0.18s ease",
+    opacity: "0.9",
   });
   document.body.appendChild(clone);
   document.body.style.cursor = "grabbing";
-  isDragging.value = true;
 
-  document.addEventListener("pointermove", onPointerMove);
-  document.addEventListener("pointerup", onPointerUp, { once: true });
+  // Ghost placeholder
+  ghost = document.createElement("div");
+  ghost.dataset.dropGhost = "";
+  Object.assign(ghost.style, {
+    height: "0px",
+    overflow: "hidden",
+    transition: "height 0.15s ease",
+    borderRadius: "var(--radius)",
+    backgroundColor: "var(--accent)",
+    pointerEvents: "none",
+  });
+
+  isDragging.value = true;
 }
 
-function onPointerMove(e: PointerEvent) {
+function getSiblingRows(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>("[data-todo-id]"),
+  ).filter(
+    (el) =>
+      el.dataset.todoId !== props.todo.id &&
+      !el.hasAttribute("data-drag-clone"),
+  );
+}
+
+/** Use the frozen snapshot to find the drop target — immune to ghost layout shifts. */
+function findDropTarget(clientY: number): TodoDropPayload | null {
+  if (rowSnapshot.length === 0) return null;
+
+  for (const snap of rowSnapshot) {
+    if (clientY < snap.mid) {
+      return { targetId: snap.id, after: false };
+    }
+  }
+
+  return { targetId: rowSnapshot[rowSnapshot.length - 1].id, after: true };
+}
+
+function positionGhost(target: TodoDropPayload) {
+  if (!ghost) return;
+
+  const rows = getSiblingRows();
+  const targetEl = rows.find((el) => el.dataset.todoId === target.targetId);
+  if (!targetEl?.parentElement) return;
+
+  const refNode = target.after ? targetEl.nextSibling : targetEl;
+  const parent = targetEl.parentElement;
+
+  // Only move if position actually changed
+  if (ghost.parentElement === parent && ghost.nextSibling === refNode) return;
+
+  // Remove from old position
+  if (ghost.parentElement) {
+    ghost.style.transition = "none";
+    ghost.style.height = "0px";
+    ghost.parentElement.removeChild(ghost);
+  }
+
+  // Insert at new position with height animation
+  parent.insertBefore(ghost, refNode as Node | null);
+  ghost.offsetHeight; // force reflow
+  ghost.style.transition = "height 0.15s ease";
+  ghost.style.height = `${ROW_HEIGHT}px`;
+}
+
+function onDragMove(e: PointerEvent) {
   if (!clone) return;
 
   const dx = e.clientX - startX;
   const dy = e.clientY - startY;
-  const angle = dx >= 0 ? 2.5 : -2.5;
   clone.style.translate = `${dx}px ${dy}px`;
-  clone.style.rotate = `${angle}deg`;
+  clone.style.rotate = `${dx >= 0 ? 2.5 : -2.5}deg`;
 
-  updatePlaceholder(e);
-}
+  const target = findDropTarget(e.clientY);
+  if (!target) return;
 
-function updatePlaceholder(e: PointerEvent) {
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  const targetRow = el?.closest("[data-todo-id]") as HTMLElement | null;
-  if (!targetRow || targetRow.dataset.todoId === props.todo.id) return;
-
-  lastTargetId = targetRow.dataset.todoId ?? null;
-
-  const rect = targetRow.getBoundingClientRect();
-  const insertBefore = e.clientY < rect.top + rect.height * 0.4;
-  const insertBeforeNode = insertBefore ? targetRow : targetRow.nextSibling;
-
-  if (insertBeforeNode === lastInsertBeforeNode) return;
-  lastInsertBeforeNode = insertBeforeNode;
-
-  if (placeholderTimer) clearTimeout(placeholderTimer);
-
-  if (!placeholderEl) {
-    placeholderEl = document.createElement("div");
-    placeholderEl.style.height = "0px";
-    placeholderEl.style.overflow = "hidden";
-    placeholderEl.style.transition = "height 0.12s ease";
-    placeholderEl.style.pointerEvents = "none";
-    placeholderTimer = setTimeout(() => {
-      if (!placeholderEl) return;
-      targetRow.parentElement?.insertBefore(placeholderEl!, insertBeforeNode as Node | null);
-      requestAnimationFrame(() => { if (placeholderEl) placeholderEl.style.height = "40px"; });
-    }, 80);
-  } else {
-    placeholderEl.style.height = "0px";
-    placeholderTimer = setTimeout(() => {
-      if (!placeholderEl) return;
-      targetRow.parentElement?.insertBefore(placeholderEl, insertBeforeNode as Node | null);
-      requestAnimationFrame(() => { if (placeholderEl) placeholderEl.style.height = "40px"; });
-    }, 120);
+  // Only update ghost if target changed
+  if (!lastTarget || lastTarget.targetId !== target.targetId || lastTarget.after !== target.after) {
+    lastTarget = target;
+    positionGhost(target);
   }
 }
 
-function removePlaceholder() {
-  if (placeholderTimer) clearTimeout(placeholderTimer);
-  placeholderTimer = null;
-  if (placeholderEl?.parentElement) {
-    placeholderEl.parentElement.removeChild(placeholderEl);
-  }
-  placeholderEl = null;
-  lastInsertBeforeNode = null;
-}
-
-function onPointerUp() {
-  document.removeEventListener("pointermove", onPointerMove);
+function onDragEnd() {
   document.body.style.cursor = "";
 
-  const dropTargetId = lastTargetId;
-  lastTargetId = null;
-
-  removePlaceholder();
-
-  if (clone) {
-    document.body.removeChild(clone);
+  if (clone?.parentElement) {
+    clone.parentElement.removeChild(clone);
     clone = null;
   }
-  isDragging.value = false;
 
-  if (dropTargetId && dropTargetId !== props.todo.id) {
-    emit("drop", dropTargetId);
+  if (ghost?.parentElement) {
+    ghost.parentElement.removeChild(ghost);
+  }
+  ghost = null;
+
+  isDragging.value = false;
+  rowSnapshot = [];
+
+  if (lastTarget) {
+    const payload = lastTarget;
+    lastTarget = null;
+    emit("drop", payload);
   }
 }
 </script>
@@ -313,6 +357,7 @@ function onPointerUp() {
 }
 
 .todo-row {
+  position: relative;
   border-radius: var(--radius);
   corner-shape: var(--corner-shape);
   will-change: transform;

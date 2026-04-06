@@ -25,6 +25,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "@kepler/visuals": ["../../../packages/kepler-visuals/index.ts"],
+      "@kepler/visuals/*": ["../../../packages/kepler-visuals/*"],
       "@arksync/core": ["../../../packages/arksync/index.ts"]
     }
   },

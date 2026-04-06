@@ -25,7 +25,7 @@ onMounted(() => {
   const handler = (e: KeyboardEvent) => {
     if (e.metaKey && e.key === "n" && !e.shiftKey && !e.altKey) {
       e.preventDefault();
-      open.value ? hide() : (open.value = true);
+      if (open.value) { hide(); } else { open.value = true; }
     }
   };
   window.addEventListener("keydown", handler);

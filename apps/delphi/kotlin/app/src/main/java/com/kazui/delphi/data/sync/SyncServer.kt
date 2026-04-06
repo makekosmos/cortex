@@ -491,11 +491,16 @@ class SyncServer @Inject constructor(
             val entity = entities.optJSONObject(i) ?: continue
             val entityId = entity.optString("id", "")
             val hlc = entity.optString("hlc", "")
+            val deleted = entity.optBoolean("deleted", false)
             val localHlc = localVector.optString(entityId, "")
 
             if (localHlc.isEmpty() || isNewerHlc(hlc, localHlc)) {
                 if (applySyncEntity(entity)) {
-                    localVector.put(entityId, hlc)
+                    if (deleted) {
+                        localVector.remove(entityId)
+                    } else {
+                        localVector.put(entityId, hlc)
+                    }
                     accepted++
                     onChangeReceived?.invoke(entity)
                     broadcastLiveChange(entity, peer.deviceId)
@@ -574,12 +579,17 @@ class SyncServer @Inject constructor(
         val entityId = entity.optString("id", "")
         val hlc = entity.optString("hlc", "")
 
+        val deleted = entity.optBoolean("deleted", false)
         val localVector = loadVersionVector()
         val localHlc = localVector.optString(entityId, "")
 
         if (localHlc.isEmpty() || isNewerHlc(hlc, localHlc)) {
             if (applySyncEntity(entity)) {
-                localVector.put(entityId, hlc)
+                if (deleted) {
+                    localVector.remove(entityId)
+                } else {
+                    localVector.put(entityId, hlc)
+                }
                 saveVersionVector(localVector)
                 onChangeReceived?.invoke(entity)
                 broadcastLiveChange(entity, peer.deviceId)
@@ -612,6 +622,8 @@ class SyncServer @Inject constructor(
                     "todo" -> repo.deleteById(entityId)
                     "project" -> repo.deleteProjectById(entityId)
                     "heading" -> repo.deleteHeadingById(entityId)
+                    "area" -> repo.deleteAreaById(entityId)
+                    "tag" -> repo.deleteTagById(entityId)
                 }
                 return true
             }
@@ -622,6 +634,8 @@ class SyncServer @Inject constructor(
                 "todo" -> {
                     val todo = SyncEntityParser.jsonToTodoItem(data, entityId) ?: return false
                     repo.upsert(todo)
+                    // Apply checklist items and tag cross-refs from sync data
+                    SyncEntityParser.applyChecklistAndTags(data, entityId, repo)
                     return true
                 }
                 "project" -> {
@@ -660,13 +674,18 @@ class SyncServer @Inject constructor(
         val repo = databaseProvider.arkDataRepository
         val todos = repo.getAllForSync()
         val projects = repo.getAllProjectsForSync()
+        val areas = repo.getAllAreasForSync()
+        val tags = repo.getAllTagsForSync()
+        val headings = repo.getAllHeadingsForSync()
 
         for (todo in todos) {
             val hlc = if (vector.has(todo.id)) vector.getString(todo.id) else generateHlc()
+            val checklistItems = repo.getChecklistItemsByTodoId(todo.id)
+            val tagIds = repo.getTagIdsForTodo(todo.id)
             entities.add(JSONObject().apply {
                 put("type", "todo")
                 put("id", todo.id)
-                put("data", SyncEntityParser.todoToJson(todo))
+                put("data", SyncEntityParser.todoToJson(todo, tagIds, checklistItems))
                 put("hlc", hlc)
             })
             if (!vector.has(todo.id)) vector.put(todo.id, hlc)
@@ -681,6 +700,39 @@ class SyncServer @Inject constructor(
                 put("hlc", hlc)
             })
             if (!vector.has(project.id)) vector.put(project.id, hlc)
+        }
+
+        for (area in areas) {
+            val hlc = if (vector.has(area.id)) vector.getString(area.id) else generateHlc()
+            entities.add(JSONObject().apply {
+                put("type", "area")
+                put("id", area.id)
+                put("data", SyncEntityParser.areaToJson(area))
+                put("hlc", hlc)
+            })
+            if (!vector.has(area.id)) vector.put(area.id, hlc)
+        }
+
+        for (tag in tags) {
+            val hlc = if (vector.has(tag.id)) vector.getString(tag.id) else generateHlc()
+            entities.add(JSONObject().apply {
+                put("type", "tag")
+                put("id", tag.id)
+                put("data", SyncEntityParser.tagToJson(tag))
+                put("hlc", hlc)
+            })
+            if (!vector.has(tag.id)) vector.put(tag.id, hlc)
+        }
+
+        for (heading in headings) {
+            val hlc = if (vector.has(heading.id)) vector.getString(heading.id) else generateHlc()
+            entities.add(JSONObject().apply {
+                put("type", "heading")
+                put("id", heading.id)
+                put("data", SyncEntityParser.headingToJson(heading))
+                put("hlc", hlc)
+            })
+            if (!vector.has(heading.id)) vector.put(heading.id, hlc)
         }
 
         saveVersionVector(vector)

@@ -1,0 +1,72 @@
+{
+  "task_id": "sync-full-db",
+  "overall_verdict": "PASS",
+  "verified_at": "2026-04-04",
+  "verifier": "task-verifier (Claude Opus 4.6)",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "SyncServer.loadAllEntities() loads all 5 entity types (todo, project, area, tag, heading) plus checklist items and tag cross-refs. LanSyncClient.buildVersionVector() includes all 5 types. LanSyncClient.loadEntityById() tries all 5 types. ArkDataRepository exposes getAllAreasForSync(), getAllTagsForSync(), getAllHeadingsForSync(), getAreaById(), getTagById(), getHeadingById()."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "ArkDataRepository.getAllForSync() calls queryAllTodos() without any isTrashed filter. Trashed items are included in sync."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Electron emptyTrash() broadcasts broadcastToLanSync('todo', t.id, {}, true) for each trashed todo before local removal. Android TrashViewModel.emptyTrash() calls peerManager.broadcastTodoDelete(id) for each trashed ID before local deletion."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "arksync sync-server.ts: delete localVector[entity.id] in handleSyncChanges (line 567) and handleLiveChange (line 632). arksync sync-client.ts: delete localVector[entity.id] in handleSyncChanges (line 461) and handleLiveChange (line 502). Android SyncServer.kt: localVector.remove(entityId) at line 499. Android LanSyncClient.kt: versionVector.remove(entityId) at line 566."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "SpaceSetupViewModel uses SharedPreferences fallback (ark_space_backup). On cold start if DataStore returns null but SharedPreferences has code, it restores automatically. SharedPreferences is kept in sync on every code change."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "Both AndroidManifest.xml files (delphi and ark-data) have allowBackup=true, fullBackupContent=@xml/backup_rules, dataExtractionRules=@xml/data_extraction_rules. All 4 XML rule files exist with correct include directives for databases, datastore, and sharedpref domains."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "SyncEntityParser.todoToJson() serializes actual tagIds and checklistItems (not empty arrays). applyChecklistAndTags() applies incoming checklist/tag data. ArkDataRepository has upsertChecklistItem(), upsertCrossRef(), getChecklistItemsByTodoId(), getTagIdsForTodo(), deleteChecklistItemsByTodoIds(), deleteTagRefsByTodoIds()."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "reason": "Both Kotlin builds succeed: delphi/kotlin ./gradlew compileDebugKotlin BUILD SUCCESSFUL, ark-data ./gradlew compileDebugKotlin BUILD SUCCESSFUL."
+    }
+  ],
+  "commands_run": [
+    "cd apps/delphi/kotlin && ./gradlew compileDebugKotlin",
+    "cd apps/ark-data && ./gradlew compileDebugKotlin"
+  ],
+  "artifacts_used": [
+    "spec.md",
+    "evidence.md",
+    "SyncServer.kt",
+    "LanSyncClient.kt",
+    "ArkDataRepository.kt",
+    "SyncEntityParser.kt",
+    "SpaceSetupViewModel.kt",
+    "TrashViewModel.kt",
+    "PeerManager.kt",
+    "delphi/kotlin/AndroidManifest.xml",
+    "ark-data/AndroidManifest.xml",
+    "delphi/kotlin/res/xml/backup_rules.xml",
+    "delphi/kotlin/res/xml/data_extraction_rules.xml",
+    "ark-data/res/xml/backup_rules.xml",
+    "ark-data/res/xml/data_extraction_rules.xml",
+    "packages/arksync/src/sync-server.ts",
+    "packages/arksync/src/sync-client.ts",
+    "apps/delphi/ts/src/store/todos.ts"
+  ]
+}

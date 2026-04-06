@@ -126,7 +126,7 @@ class ArkDataRepository @Inject constructor(
     }
 
     suspend fun getAllForSync(): List<TodoItem> = withContext(Dispatchers.IO) {
-        queryAllTodos().filter { !it.isTrashed }
+        queryAllTodos()
     }
 
     suspend fun getTrashedIds(): List<String> = withContext(Dispatchers.IO) {
@@ -225,6 +225,26 @@ class ArkDataRepository @Inject constructor(
 
     suspend fun getAllProjectsForSync(): List<Project> = withContext(Dispatchers.IO) {
         queryAllProjects()
+    }
+
+    suspend fun getAllAreasForSync(): List<Area> = withContext(Dispatchers.IO) {
+        queryAllAreas()
+    }
+
+    suspend fun getAllTagsForSync(): List<Tag> = withContext(Dispatchers.IO) {
+        queryAllTags()
+    }
+
+    suspend fun getAllHeadingsForSync(): List<Heading> = withContext(Dispatchers.IO) {
+        queryAllHeadings()
+    }
+
+    suspend fun getAllChecklistItemsForSync(): List<ChecklistItem> = withContext(Dispatchers.IO) {
+        queryAllChecklistItems()
+    }
+
+    suspend fun getAllCrossRefsForSync(): List<TodoTagCrossRef> = withContext(Dispatchers.IO) {
+        queryAllCrossRefs()
     }
 
     suspend fun getProjectById(id: String): Project? = withContext(Dispatchers.IO) {
@@ -371,6 +391,76 @@ class ArkDataRepository @Inject constructor(
 
     suspend fun deleteHeadingById(id: String) = withContext(Dispatchers.IO) {
         contentResolver.delete(itemUri("headings", id), null, null)
+    }
+
+    suspend fun getAreaById(id: String): Area? = withContext(Dispatchers.IO) {
+        val cursor = contentResolver.query(itemUri("areas", id), null, null, null, null)
+            ?: return@withContext null
+        cursor.use { if (it.moveToFirst()) parseArea(it) else null }
+    }
+
+    suspend fun deleteAreaById(id: String) = withContext(Dispatchers.IO) {
+        contentResolver.delete(itemUri("areas", id), null, null)
+    }
+
+    suspend fun getTagById(id: String): Tag? = withContext(Dispatchers.IO) {
+        val cursor = contentResolver.query(itemUri("tags", id), null, null, null, null)
+            ?: return@withContext null
+        cursor.use { if (it.moveToFirst()) parseTag(it) else null }
+    }
+
+    suspend fun deleteTagById(id: String) = withContext(Dispatchers.IO) {
+        contentResolver.delete(itemUri("tags", id), null, null)
+    }
+
+    suspend fun getHeadingById(id: String): Heading? = withContext(Dispatchers.IO) {
+        val cursor = contentResolver.query(itemUri("headings", id), null, null, null, null)
+            ?: return@withContext null
+        cursor.use { if (it.moveToFirst()) parseHeading(it) else null }
+    }
+
+    suspend fun upsertChecklistItem(item: ChecklistItem) = withContext(Dispatchers.IO) {
+        val cv = checklistItemToValues(item)
+        val existingCursor = contentResolver.query(itemUri("checklist_items", item.id), null, null, null, null)
+        val exists = existingCursor?.use { it.count > 0 } ?: false
+        if (exists) {
+            contentResolver.update(itemUri("checklist_items", item.id), cv, null, null)
+        } else {
+            contentResolver.insert(tableUri("checklist_items"), cv)
+        }
+    }
+
+    suspend fun deleteChecklistItemById(id: String) = withContext(Dispatchers.IO) {
+        contentResolver.delete(itemUri("checklist_items", id), null, null)
+    }
+
+    suspend fun upsertCrossRef(ref: TodoTagCrossRef) = withContext(Dispatchers.IO) {
+        val cv = ContentValues().apply {
+            put("todoId", ref.todoId)
+            put("tagId", ref.tagId)
+        }
+        val compositeId = "${ref.todoId}:${ref.tagId}"
+        val existingCursor = contentResolver.query(itemUri("todo_tag_cross_ref", compositeId), null, null, null, null)
+        val exists = existingCursor?.use { it.count > 0 } ?: false
+        if (exists) {
+            contentResolver.update(itemUri("todo_tag_cross_ref", compositeId), cv, null, null)
+        } else {
+            contentResolver.insert(tableUri("todo_tag_cross_ref"), cv)
+        }
+    }
+
+    suspend fun deleteCrossRef(todoId: String, tagId: String) = withContext(Dispatchers.IO) {
+        contentResolver.delete(itemUri("todo_tag_cross_ref", "$todoId:$tagId"), null, null)
+    }
+
+    /** Get checklist items for a specific todo. */
+    suspend fun getChecklistItemsByTodoId(todoId: String): List<ChecklistItem> = withContext(Dispatchers.IO) {
+        queryAllChecklistItems().filter { it.todoItemId == todoId }
+    }
+
+    /** Get tag IDs for a specific todo. */
+    suspend fun getTagIdsForTodo(todoId: String): List<String> = withContext(Dispatchers.IO) {
+        queryAllCrossRefs().filter { it.todoId == todoId }.map { it.tagId }
     }
 
     // -----------------------------------------------------------------------
@@ -557,5 +647,13 @@ class ArkDataRepository @Inject constructor(
         put("title", h.title)
         put("sortOrder", h.sortOrder)
         put("projectId", h.projectId)
+    }
+
+    private fun checklistItemToValues(item: ChecklistItem): ContentValues = ContentValues().apply {
+        put("id", item.id)
+        put("title", item.title)
+        put("isCompleted", if (item.isCompleted) 1 else 0)
+        put("sortOrder", item.sortOrder)
+        put("todoItemId", item.todoItemId)
     }
 }

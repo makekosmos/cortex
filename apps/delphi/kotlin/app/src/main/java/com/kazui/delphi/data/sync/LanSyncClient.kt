@@ -559,8 +559,11 @@ class LanSyncClient @Inject constructor(
                     "todo" -> repo.deleteById(entityId)
                     "project" -> repo.deleteProjectById(entityId)
                     "heading" -> repo.deleteHeadingById(entityId)
+                    "area" -> repo.deleteAreaById(entityId)
+                    "tag" -> repo.deleteTagById(entityId)
                 }
-                versionVector[entityId] = hlc.ifEmpty { generateHlc() }
+                // Remove from version vector so future syncs don't reference non-existent entity
+                versionVector.remove(entityId)
                 return true
             }
 
@@ -570,6 +573,8 @@ class LanSyncClient @Inject constructor(
                 "todo" -> {
                     val todo = SyncEntityParser.jsonToTodoItem(data, entityId) ?: return false
                     repo.upsert(todo)
+                    // Apply checklist items and tag cross-refs from sync data
+                    SyncEntityParser.applyChecklistAndTags(data, entityId, repo)
                     versionVector[entityId] = hlc.ifEmpty { generateHlc() }
                     return true
                 }
@@ -612,6 +617,9 @@ class LanSyncClient @Inject constructor(
         val repo = databaseProvider.arkDataRepository
         val todos = repo.getAllForSync()
         val projects = repo.getAllProjectsForSync()
+        val areas = repo.getAllAreasForSync()
+        val tags = repo.getAllTagsForSync()
+        val headings = repo.getAllHeadingsForSync()
 
         var updated = false
         todos.forEach { todo ->
@@ -623,6 +631,24 @@ class LanSyncClient @Inject constructor(
         projects.forEach { project ->
             if (!versionVector.containsKey(project.id)) {
                 versionVector[project.id] = generateHlc()
+                updated = true
+            }
+        }
+        areas.forEach { area ->
+            if (!versionVector.containsKey(area.id)) {
+                versionVector[area.id] = generateHlc()
+                updated = true
+            }
+        }
+        tags.forEach { tag ->
+            if (!versionVector.containsKey(tag.id)) {
+                versionVector[tag.id] = generateHlc()
+                updated = true
+            }
+        }
+        headings.forEach { heading ->
+            if (!versionVector.containsKey(heading.id)) {
+                versionVector[heading.id] = generateHlc()
                 updated = true
             }
         }
@@ -662,10 +688,12 @@ class LanSyncClient @Inject constructor(
         val repo = databaseProvider.arkDataRepository
         // Try todo first
         repo.getTodoById(entityId)?.let { todo ->
+            val checklistItems = repo.getChecklistItemsByTodoId(todo.id)
+            val tagIds = repo.getTagIdsForTodo(todo.id)
             return JSONObject().apply {
                 put("type", "todo")
                 put("id", todo.id)
-                put("data", SyncEntityParser.todoToJson(todo))
+                put("data", SyncEntityParser.todoToJson(todo, tagIds, checklistItems))
                 put("hlc", versionVector[todo.id] ?: generateHlc())
             }
         }
@@ -676,6 +704,33 @@ class LanSyncClient @Inject constructor(
                 put("id", project.id)
                 put("data", SyncEntityParser.projectToJson(project))
                 put("hlc", versionVector[project.id] ?: generateHlc())
+            }
+        }
+        // Try area
+        repo.getAreaById(entityId)?.let { area ->
+            return JSONObject().apply {
+                put("type", "area")
+                put("id", area.id)
+                put("data", SyncEntityParser.areaToJson(area))
+                put("hlc", versionVector[area.id] ?: generateHlc())
+            }
+        }
+        // Try tag
+        repo.getTagById(entityId)?.let { tag ->
+            return JSONObject().apply {
+                put("type", "tag")
+                put("id", tag.id)
+                put("data", SyncEntityParser.tagToJson(tag))
+                put("hlc", versionVector[tag.id] ?: generateHlc())
+            }
+        }
+        // Try heading
+        repo.getHeadingById(entityId)?.let { heading ->
+            return JSONObject().apply {
+                put("type", "heading")
+                put("id", heading.id)
+                put("data", SyncEntityParser.headingToJson(heading))
+                put("hlc", versionVector[heading.id] ?: generateHlc())
             }
         }
         return null

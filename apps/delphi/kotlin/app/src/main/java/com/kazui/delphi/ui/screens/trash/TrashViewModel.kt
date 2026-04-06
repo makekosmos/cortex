@@ -23,6 +23,10 @@ class TrashViewModel @Inject constructor(
             val repo = databaseProvider.arkDataRepository
             val trashedIds = repo.getTrashedIds()
             if (trashedIds.isNotEmpty()) {
+                // Broadcast hard-delete to all peers BEFORE local deletion
+                trashedIds.forEach { id ->
+                    peerManager.broadcastTodoDelete(id)
+                }
                 repo.deleteChecklistItemsByTodoIds(trashedIds)
                 repo.deleteTagRefsByTodoIds(trashedIds)
             }

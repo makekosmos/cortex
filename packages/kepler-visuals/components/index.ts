@@ -8,7 +8,7 @@ export { default as SidebarButton } from "./SidebarButton.vue";
 
 export { default as TodoRow } from "./TodoRow.vue";
 
-export type { TodoRowItem } from "./TodoRow.vue";
+export type { TodoRowItem, TodoDropPayload } from "./TodoRow.vue";
 
 export { default as QuickEntryPanel } from "./QuickEntryPanel.vue";
 
