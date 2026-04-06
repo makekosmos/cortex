@@ -54,6 +54,7 @@ import QuickEntry from "@/components/QuickEntry.vue";
 import QuickSearch from "@/components/QuickSearch.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
+import { CustomCaret } from "@kepler/visuals/components";
 
 // ---------------------------------------------------------------------------
 // Store
@@ -822,6 +823,7 @@ onUnmounted(() => {
 
     <QuickEntry />
     <QuickSearch v-model:open="quickSearchOpen" />
+    <CustomCaret />
 
     <AuthOverlay
       v-if="authRequired"

@@ -15,28 +15,52 @@ const BLINK_SPEED = 1000;
 
 const caretRef = ref<HTMLElement>();
 
-let activeTarget: HTMLElement | null = null;
+let activeTarget: HTMLElement | HTMLInputElement | HTMLTextAreaElement | null = null;
+let targetKind: "editable" | "input" | null = null;
 let isComposing = false;
 let isIdle = false;
 let idleTimer: number | null = null;
 let rafId: number | null = null;
 const disposers: Array<() => void> = [];
 
+// Mirror element for measuring input/textarea caret position
+let mirror: HTMLDivElement | null = null;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function findEditable(node: Node | null): HTMLElement | null {
-  if (!node) return null;
-  const el = node instanceof HTMLElement ? node : node.parentElement;
-  if (!el) return null;
-  const editable = el.closest("[contenteditable='true']");
-  return editable instanceof HTMLElement ? editable : null;
+function isInputLike(el: Element): el is HTMLInputElement | HTMLTextAreaElement {
+  const tag = el.tagName;
+  return (
+    (tag === "INPUT" && (el as HTMLInputElement).type === "text") ||
+    tag === "TEXTAREA"
+  );
 }
 
-function listen<K extends keyof DocumentEventMap>(
+function findTarget(eventTarget: EventTarget | null): {
+  el: HTMLElement;
+  kind: "editable" | "input";
+} | null {
+  if (!eventTarget || !(eventTarget instanceof HTMLElement)) return null;
+
+  // Check input/textarea first
+  if (isInputLike(eventTarget)) {
+    return { el: eventTarget, kind: "input" };
+  }
+
+  // Then contenteditable
+  const editable = eventTarget.closest("[contenteditable='true']");
+  if (editable instanceof HTMLElement) {
+    return { el: editable, kind: "editable" };
+  }
+
+  return null;
+}
+
+function listen(
   target: EventTarget,
-  event: K | string,
+  event: string,
   handler: EventListener,
   opts?: boolean | AddEventListenerOptions,
 ) {
@@ -56,17 +80,14 @@ function restoreNativeCaret(el: HTMLElement) {
   el.style.removeProperty("caret-color");
 }
 
-function showNativeCaretForIME() {
-  if (activeTarget) {
-    activeTarget.style.setProperty("caret-color", "auto", "important");
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Active target management
 // ---------------------------------------------------------------------------
 
-function setActiveTarget(next: HTMLElement | null) {
+function setActiveTarget(
+  next: HTMLElement | null,
+  kind: "editable" | "input" | null,
+) {
   if (activeTarget === next) return;
 
   if (activeTarget) {
@@ -74,6 +95,7 @@ function setActiveTarget(next: HTMLElement | null) {
   }
 
   activeTarget = next;
+  targetKind = kind;
   isComposing = false;
   isIdle = false;
 
@@ -84,13 +106,33 @@ function setActiveTarget(next: HTMLElement | null) {
   scheduleIdleCheck();
 }
 
-function syncTargetFromSelection() {
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) {
-    setActiveTarget(null);
+function syncTargetFromFocus() {
+  const focused = document.activeElement;
+  if (!focused || focused === document.body) {
+    setActiveTarget(null, null);
     return;
   }
-  setActiveTarget(findEditable(sel.anchorNode));
+
+  const found = findTarget(focused);
+  if (found) {
+    setActiveTarget(found.el, found.kind);
+  } else {
+    // Also check Selection API for contenteditable
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const node = sel.anchorNode;
+      if (node) {
+        const el =
+          node instanceof HTMLElement ? node : node.parentElement;
+        const editable = el?.closest("[contenteditable='true']");
+        if (editable instanceof HTMLElement) {
+          setActiveTarget(editable, "editable");
+          return;
+        }
+      }
+    }
+    setActiveTarget(null, null);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -129,17 +171,16 @@ function markActivity() {
 }
 
 // ---------------------------------------------------------------------------
-// Caret rect (Selection API)
+// Caret rect — contenteditable (Selection API)
 // ---------------------------------------------------------------------------
 
-function getCaretRect(): DOMRect | null {
+function getEditableCaretRect(): DOMRect | null {
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
 
   const range = sel.getRangeAt(0);
   if (!activeTarget?.contains(range.startContainer)) return null;
 
-  // Primary: getClientRects on collapsed range
   const collapsed = range.cloneRange();
   collapsed.collapse(true);
 
@@ -149,21 +190,20 @@ function getCaretRect(): DOMRect | null {
     if (r.height > 0) return r;
   }
 
-  // Fallback: getBoundingClientRect
   const bounding = collapsed.getBoundingClientRect();
   if (bounding.height > 0) return bounding;
 
-  // Last resort: zero-width marker (for empty elements / Android WebView)
+  // Fallback: zero-width marker
   const marker = document.createElement("span");
   marker.textContent = "\u200b";
-  marker.style.cssText = "font-size:inherit;line-height:inherit;position:static;";
+  marker.style.cssText =
+    "font-size:inherit;line-height:inherit;position:static;";
 
   try {
     collapsed.insertNode(marker);
     const markerRect = marker.getBoundingClientRect();
     marker.remove();
 
-    // Restore selection after DOM mutation
     const restored = document.createRange();
     restored.setStart(range.startContainer, range.startOffset);
     restored.collapse(true);
@@ -176,6 +216,119 @@ function getCaretRect(): DOMRect | null {
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Caret rect — input/textarea (mirror technique)
+// ---------------------------------------------------------------------------
+
+const MIRROR_COPY_PROPS = [
+  "boxSizing",
+  "width",
+  "height",
+  "overflowX",
+  "overflowY",
+  "borderTopWidth",
+  "borderRightWidth",
+  "borderBottomWidth",
+  "borderLeftWidth",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "fontStyle",
+  "fontVariant",
+  "fontWeight",
+  "fontStretch",
+  "fontSize",
+  "fontSizeAdjust",
+  "lineHeight",
+  "fontFamily",
+  "textAlign",
+  "textTransform",
+  "textIndent",
+  "textDecoration",
+  "letterSpacing",
+  "wordSpacing",
+  "tabSize",
+  "whiteSpace",
+  "wordWrap",
+  "wordBreak",
+  "direction",
+] as const;
+
+function ensureMirror(): HTMLDivElement {
+  if (mirror) return mirror;
+  mirror = document.createElement("div");
+  mirror.setAttribute("aria-hidden", "true");
+  Object.assign(mirror.style, {
+    position: "absolute",
+    top: "0",
+    left: "-9999px",
+    visibility: "hidden",
+    whiteSpace: "pre-wrap",
+    wordWrap: "break-word",
+  });
+  document.body.appendChild(mirror);
+  return mirror;
+}
+
+function getInputCaretRect(): DOMRect | null {
+  const input = activeTarget as HTMLInputElement | HTMLTextAreaElement;
+  if (input.selectionStart == null) return null;
+  const pos = input.selectionStart;
+
+  const isTextarea = input.tagName === "TEXTAREA";
+  const computed = window.getComputedStyle(input);
+  const m = ensureMirror();
+
+  // Copy styles from input to mirror
+  for (const prop of MIRROR_COPY_PROPS) {
+    m.style[prop as any] = computed[prop as any];
+  }
+
+  if (!isTextarea) {
+    m.style.whiteSpace = "pre";
+    m.style.overflowX = "hidden";
+    m.style.height = "auto";
+  }
+
+  // Set content up to caret position
+  const text = input.value.substring(0, pos);
+  // Replace spaces with nbsp to preserve whitespace in div
+  m.textContent = text.replace(/ /g, "\u00a0");
+
+  // Add a marker span at caret position
+  const span = document.createElement("span");
+  span.textContent = "\u200b";
+  m.appendChild(span);
+
+  const inputRect = input.getBoundingClientRect();
+  const spanRect = span.getBoundingClientRect();
+  const mirrorRect = m.getBoundingClientRect();
+
+  // offsetX/Y already includes border+padding (mirror has same styles)
+  const offsetX = spanRect.left - mirrorRect.left;
+  const offsetY = spanRect.top - mirrorRect.top;
+
+  const scrollLeft = input.scrollLeft || 0;
+  const scrollTop = input.scrollTop || 0;
+
+  const left = inputRect.left + offsetX - scrollLeft;
+  const top = inputRect.top + offsetY - scrollTop;
+  const height = spanRect.height || parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) * 1.2;
+
+  return new DOMRect(left, top, CARET_WIDTH, height);
+}
+
+// ---------------------------------------------------------------------------
+// Unified caret rect
+// ---------------------------------------------------------------------------
+
+function getCaretRect(): DOMRect | null {
+  if (!activeTarget) return null;
+  if (targetKind === "input") return getInputCaretRect();
+  return getEditableCaretRect();
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +347,9 @@ function render() {
   const el = caretRef.value;
   if (!el) return;
 
-  if (!activeTarget || (isComposing && !isIMEAndroid())) {
+  const isAndroid = /android/i.test(navigator.userAgent);
+
+  if (!activeTarget || (isComposing && !isAndroid)) {
     el.classList.add("kepler-caret--hidden");
     return;
   }
@@ -214,34 +369,29 @@ function render() {
   el.classList.toggle("kepler-caret--blink", isIdle);
 }
 
-function isIMEAndroid(): boolean {
-  return /android/i.test(navigator.userAgent);
-}
-
 // ---------------------------------------------------------------------------
 // Event handlers
 // ---------------------------------------------------------------------------
 
 function onFocusIn(e: Event) {
-  const target = findEditable(e.target as Node);
-  if (target) {
-    setActiveTarget(target);
+  const found = findTarget(e.target as HTMLElement);
+  if (found) {
+    setActiveTarget(found.el, found.kind);
     markActivity();
     requestRender();
   }
 }
 
 function onFocusOut() {
-  // Defer to let new focus settle
   window.setTimeout(() => {
-    syncTargetFromSelection();
+    syncTargetFromFocus();
     requestRender();
   }, 0);
 }
 
 function onSelectionChange() {
   const prev = activeTarget;
-  syncTargetFromSelection();
+  syncTargetFromFocus();
 
   if (activeTarget && prev === activeTarget) {
     markActivity();
@@ -256,27 +406,29 @@ function onActivity() {
 }
 
 function onCompositionStart(e: Event) {
-  if (isIMEAndroid()) return;
-  const target = findEditable(e.target as Node);
-  if (!target) return;
+  if (/android/i.test(navigator.userAgent)) return;
+  const found = findTarget(e.target as HTMLElement);
+  if (!found) return;
 
-  setActiveTarget(target);
+  setActiveTarget(found.el, found.kind);
   isComposing = true;
   clearIdleTimer();
   if (isIdle) isIdle = false;
 
-  showNativeCaretForIME();
+  if (activeTarget) {
+    activeTarget.style.setProperty("caret-color", "auto", "important");
+  }
   requestRender();
 }
 
 function onCompositionEnd(e: Event) {
-  if (isIMEAndroid()) return;
-  const target = findEditable(e.target as Node);
-  if (!target) return;
+  if (/android/i.test(navigator.userAgent)) return;
+  const found = findTarget(e.target as HTMLElement);
+  if (!found) return;
 
-  setActiveTarget(target);
+  setActiveTarget(found.el, found.kind);
   isComposing = false;
-  hideNativeCaret(target);
+  hideNativeCaret(found.el);
   markActivity();
   requestRender();
 }
@@ -294,11 +446,10 @@ onMounted(() => {
   listen(document, "pointerdown", onActivity, true);
   listen(document, "compositionstart", onCompositionStart, true);
   listen(document, "compositionend", onCompositionEnd, true);
-  listen(window as unknown as EventTarget, "resize", requestRender);
-  listen(window as unknown as EventTarget, "scroll", requestRender, true);
+  listen(window, "resize", requestRender);
+  listen(window, "scroll", requestRender, true);
 
-  // Initial sync
-  syncTargetFromSelection();
+  syncTargetFromFocus();
   requestRender();
 });
 
@@ -311,6 +462,10 @@ onUnmounted(() => {
   if (activeTarget) {
     restoreNativeCaret(activeTarget);
     activeTarget = null;
+  }
+  if (mirror?.parentElement) {
+    mirror.parentElement.removeChild(mirror);
+    mirror = null;
   }
   for (const dispose of disposers) dispose();
   disposers.length = 0;
@@ -335,7 +490,6 @@ onUnmounted(() => {
   background: var(--foreground, #d4d4d4);
   border-radius: 1px;
   will-change: left, top, height;
-  transition: left 0.02s ease, top 0.02s ease;
 }
 
 .kepler-caret--hidden {
