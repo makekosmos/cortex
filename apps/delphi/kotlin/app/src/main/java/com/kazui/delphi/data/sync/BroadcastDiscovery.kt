@@ -31,7 +31,8 @@ class BroadcastDiscovery(
     data class BeaconPeer(
         val deviceId: String,
         val deviceName: String,
-        val address: String,  // "ip:wsPort"
+        val address: String,  // primary "ip:wsPort" (sender IP)
+        val addresses: List<String> = listOf(), // all known addresses (WiFi, VPN, IPv6)
     )
 
     private var sendSocket: DatagramSocket? = null
@@ -113,12 +114,34 @@ class BroadcastDiscovery(
     }
 
     private fun sendBeacon() {
+        // Include ALL device addresses in beacon (WiFi, VPN, IPv6)
+        val allAddresses = org.json.JSONArray()
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            if (interfaces != null) {
+                for (iface in interfaces) {
+                    if (iface.isLoopback || !iface.isUp) continue
+                    for (addr in iface.inetAddresses) {
+                        if (addr.isLoopbackAddress) continue
+                        val host = addr.hostAddress ?: continue
+                        if (addr is java.net.Inet4Address) {
+                            allAddresses.put("$host:$wsPort")
+                        } else if (addr is java.net.Inet6Address) {
+                            val clean = host.substringBefore('%')
+                            allAddresses.put("[$clean]:$wsPort")
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+
         val beacon = JSONObject().apply {
             put("t", BEACON_TYPE)
             put("s", spaceId)
             put("d", deviceId)
             put("n", deviceName)
             put("p", wsPort)
+            put("a", allAddresses) // all addresses
         }.toString()
 
         val data = beacon.toByteArray()
@@ -143,10 +166,26 @@ class BroadcastDiscovery(
             if (data.optString("d") == deviceId) return  // from self
 
             val port = data.optInt("p", 21531)
+
+            // Collect all addresses: from beacon payload + sender IP
+            val addresses = mutableListOf<String>()
+            val addrArray = data.optJSONArray("a")
+            if (addrArray != null) {
+                for (i in 0 until addrArray.length()) {
+                    addresses.add(addrArray.getString(i))
+                }
+            }
+            // Always add sender IP as first priority (direct route works)
+            val senderAddr = "$senderIp:$port"
+            if (senderAddr !in addresses) {
+                addresses.add(0, senderAddr)
+            }
+
             val peer = BeaconPeer(
                 deviceId = data.optString("d"),
                 deviceName = data.optString("n", "Unknown"),
-                address = "$senderIp:$port",
+                address = senderAddr,
+                addresses = addresses,
             )
 
             onPeerDiscovered?.invoke(peer)

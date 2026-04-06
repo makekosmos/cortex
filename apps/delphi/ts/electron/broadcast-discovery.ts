@@ -23,7 +23,8 @@ const BEACON_TYPE = 'delphi';
 export interface BeaconPeer {
   deviceId: string;
   deviceName: string;
-  address: string; // "ip:wsPort"
+  address: string; // primary "ip:wsPort" (sender IP)
+  addresses: string[]; // all known addresses (WiFi, VPN, IPv6)
 }
 
 export interface BroadcastDiscoveryOptions {
@@ -97,12 +98,28 @@ export class BroadcastDiscovery {
   private sendBeacon(): void {
     if (this.stopped || !this.socket) return;
 
+    // Include ALL device addresses in beacon (WiFi, VPN, IPv6)
+    const os = require('node:os');
+    const allAddresses: string[] = [];
+    const interfaces = os.networkInterfaces();
+    for (const [name, nets] of Object.entries(interfaces)) {
+      for (const net of (nets as Array<{ internal: boolean; family: string; address: string }>) ?? []) {
+        if (net.internal) continue;
+        if (net.family === 'IPv4') {
+          allAddresses.push(`${net.address}:${this.options.wsPort}`);
+        } else if (net.family === 'IPv6') {
+          allAddresses.push(`[${net.address}%${name}]:${this.options.wsPort}`);
+        }
+      }
+    }
+
     const beacon = JSON.stringify({
       t: BEACON_TYPE,
       s: this.options.spaceId,
       d: this.options.deviceId,
       n: this.options.deviceName,
       p: this.options.wsPort,
+      a: allAddresses,
     });
 
     const buf = Buffer.from(beacon);
@@ -125,10 +142,16 @@ export class BroadcastDiscovery {
       if (data.s !== this.options.spaceId) return; // different space
       if (data.d === this.options.deviceId) return; // from self
 
+      const senderAddr = `${rinfo.address}:${data.p || LAN_SYNC_PORT}`;
+      const beaconAddrs: string[] = Array.isArray(data.a) ? data.a : [];
+      // Merge: sender IP first, then beacon-provided addresses
+      const allAddrs = [senderAddr, ...beaconAddrs.filter((a: string) => a !== senderAddr)];
+
       const peer: BeaconPeer = {
         deviceId: data.d,
         deviceName: data.n || 'Unknown',
-        address: `${rinfo.address}:${data.p || LAN_SYNC_PORT}`,
+        address: senderAddr,
+        addresses: allAddrs,
       };
 
       this.options.onPeerDiscovered(peer);

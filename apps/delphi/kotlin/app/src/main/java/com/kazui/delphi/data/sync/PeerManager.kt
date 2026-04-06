@@ -152,17 +152,18 @@ class PeerManager @Inject constructor(
         // Start UDP broadcast discovery for automatic peer re-discovery
         val actualPort = syncServer.actualPort.takeIf { it > 0 } ?: SpaceManager.LAN_SYNC_PORT
         broadcastDiscovery.onPeerDiscovered = { beaconPeer ->
-            Log.i(TAG, "Beacon from ${beaconPeer.deviceName} at ${beaconPeer.address}")
+            val allAddrs = beaconPeer.addresses.ifEmpty { listOf(beaconPeer.address) }
+            Log.i(TAG, "Beacon from ${beaconPeer.deviceName}: ${allAddrs.size} addresses")
             scope.launch {
-                // Update peer record with fresh address
-                syncServer.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, listOf(beaconPeer.address))
+                // Update peer record with ALL addresses
+                syncServer.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, allAddrs)
 
-                // Connect if not already connected
+                // Connect if not already connected — try all addresses
                 if (!syncServer.isConnectedTo(beaconPeer.deviceId)) {
                     val record = PeerRecord(
                         deviceId = beaconPeer.deviceId,
                         deviceName = beaconPeer.deviceName,
-                        addresses = listOf(beaconPeer.address),
+                        addresses = allAddrs,
                         lastSeen = Instant.now().toString(),
                     )
                     connectToPeer(record)

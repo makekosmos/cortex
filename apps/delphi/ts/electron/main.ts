@@ -628,17 +628,17 @@ async function startSync(spaceId: string | undefined, deviceId: string, deviceNa
         deviceName: name,
         wsPort: LAN_SYNC_PORT,
         onPeerDiscovered: (beaconPeer) => {
-          // Update peer record with fresh address
-          syncServer?.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, [beaconPeer.address]);
+          const allAddrs = beaconPeer.addresses.length > 0 ? beaconPeer.addresses : [beaconPeer.address];
+          // Update peer record with ALL addresses
+          syncServer?.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, allAddrs);
 
           const existingClient = syncClients.get(beaconPeer.deviceId);
           if (existingClient) {
-            // Update existing client with fresh addresses (in case IP changed)
             if (!existingClient.isConnected) {
               existingClient.updatePeer({
                 device_id: beaconPeer.deviceId,
                 device_name: beaconPeer.deviceName,
-                addresses: [beaconPeer.address],
+                addresses: allAddrs,
                 last_seen: new Date().toISOString(),
               });
             }
@@ -648,12 +648,12 @@ async function startSync(spaceId: string | undefined, deviceId: string, deviceNa
           // Already connected inbound via server
           if (syncServer?.isConnectedTo(beaconPeer.deviceId)) return;
 
-          // Start new client connection
-          console.log(`[Main] Beacon: connecting to ${beaconPeer.deviceName} at ${beaconPeer.address}`);
+          // Start new client connection — try all addresses
+          console.log(`[Main] Beacon: connecting to ${beaconPeer.deviceName} (${allAddrs.length} addresses)`);
           const freshPeer: PeerRecord = {
             device_id: beaconPeer.deviceId,
             device_name: beaconPeer.deviceName,
-            addresses: [beaconPeer.address],
+            addresses: allAddrs,
             last_seen: new Date().toISOString(),
           };
           startSyncClientForPeer(freshPeer, deviceId, name, '', collectOwnAddresses());
