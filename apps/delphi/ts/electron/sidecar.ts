@@ -21,19 +21,28 @@ interface PendingRequest<T> {
 }
 
 function getSidecarBinaryPath() {
-  const appRoot = process.env.APP_ROOT ?? process.cwd()
-  const binaryName = process.platform === 'win32' ? 'delphi-db.exe' : 'delphi-db'
+  const binaryName = process.platform === 'win32' ? 'ark-core-rpc.exe' : 'ark-core-rpc'
 
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'delphi-db', binaryName)
+    return path.join(process.resourcesPath, 'ark-core', binaryName)
   }
 
-  const releasePath = path.join(appRoot, 'sidecar', 'target', 'release', binaryName)
-  if (fs.existsSync(releasePath)) {
-    return releasePath
+  // Try ark-core (new unified crate) first, then legacy delphi-db
+  const repoRoot = path.resolve(process.env.APP_ROOT ?? process.cwd(), '..', '..', '..')
+  const arkCorePaths = [
+    path.join(repoRoot, 'packages', 'ark-core', 'rust', 'target', 'release', binaryName),
+    path.join(repoRoot, 'packages', 'ark-core', 'rust', 'target', 'debug', binaryName),
+  ]
+  for (const p of arkCorePaths) {
+    if (fs.existsSync(p)) return p
   }
 
-  return path.join(appRoot, 'sidecar', 'target', 'debug', binaryName)
+  // Legacy fallback
+  const appRoot = process.env.APP_ROOT ?? process.cwd()
+  const legacyName = process.platform === 'win32' ? 'delphi-db.exe' : 'delphi-db'
+  const legacyRelease = path.join(appRoot, 'sidecar', 'target', 'release', legacyName)
+  if (fs.existsSync(legacyRelease)) return legacyRelease
+  return path.join(appRoot, 'sidecar', 'target', 'debug', legacyName)
 }
 
 const MAX_QUEUE_SIZE = 500
