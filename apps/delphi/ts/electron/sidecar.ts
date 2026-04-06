@@ -87,7 +87,7 @@ class SidecarClient {
 
     if (!this.initialized) {
       this.initialized = true
-      const dbPath = this.dbPathOverride ?? path.join(app.getPath('userData'), 'delphi.db')
+      const dbPath = this.dbPathOverride ?? path.join(app.getPath('appData'), 'Kepler', 'ark.db')
       // Ensure parent directory exists (for per-space paths)
       fs.mkdirSync(path.dirname(dbPath), { recursive: true })
       const initMsg = JSON.stringify({ operation: 'init', dbPath })
@@ -405,9 +405,21 @@ export async function dbDeleteTrashed(): Promise<number> {
  * The old sidecar process is killed and a new one is started with the space DB path.
  */
 export async function dbSwitchSpace(spaceId: string): Promise<void> {
-  const dataDir = path.join(app.getPath('appData'), 'delphi', 'data')
-  fs.mkdirSync(path.join(dataDir, 'spaces', spaceId), { recursive: true })
-  const newDbPath = path.join(dataDir, 'spaces', spaceId, 'delphi.db')
+  const dataDir = path.join(app.getPath('appData'), 'Kepler')
+  const spaceDir = path.join(dataDir, 'spaces', spaceId)
+  fs.mkdirSync(spaceDir, { recursive: true })
+  const newDbPath = path.join(spaceDir, 'ark.db')
+  // Auto-migrate legacy delphi.db → ark.db
+  const legacyPath = path.join(spaceDir, 'delphi.db')
+  if (!fs.existsSync(newDbPath) && fs.existsSync(legacyPath)) {
+    fs.renameSync(legacyPath, newDbPath)
+    // Also rename WAL/SHM if present
+    for (const suffix of ['-wal', '-shm']) {
+      const src = legacyPath + suffix
+      if (fs.existsSync(src)) fs.renameSync(src, newDbPath + suffix)
+    }
+    console.log(`[Sidecar] Migrated delphi.db → ark.db for space ${spaceId}`)
+  }
   sidecar.reinit(newDbPath)
   // Trigger initialization by doing a lightweight operation
   await dbGetSyncKv('__init__').catch(() => {})

@@ -315,8 +315,9 @@ ipcMain.handle('space:scanOrphaned', () => {
   const orphaned: string[] = [];
   for (const entry of fs.readdirSync(spacesDir, { withFileTypes: true })) {
     if (entry.isDirectory() && !knownSet.has(entry.name)) {
-      const dbFile = path.join(spacesDir, entry.name, 'delphi.db');
-      if (fs.existsSync(dbFile)) {
+      const dbFile = path.join(spacesDir, entry.name, 'ark.db');
+      const legacyDbFile = path.join(spacesDir, entry.name, 'delphi.db');
+      if (fs.existsSync(dbFile) || fs.existsSync(legacyDbFile)) {
         orphaned.push(entry.name);
       }
     }
