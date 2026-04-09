@@ -4,13 +4,33 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PeerManager } from './peer-manager';
-import type { PeerChange } from '@arksync/core';
-import { sidecar, dbLoadAll, dbUpsertTodo, dbDeleteTodo, dbBatchUpsertTodos, dbUpsertProject, dbDeleteProject, dbGetSyncKv, dbSetSyncKv, dbClearAll, dbDeleteTrashed, dbSwitchSpace } from './sidecar';
-import { SyncServer, SyncClient, LAN_SYNC_PORT, mergePeerRecords } from '@arksync/core';
-import { getOwnAddresses } from '@arksync/node';
-import type { SyncEntity, PeerRecord } from '@arksync/core';
-import { DelphiStorage } from './delphi-storage';
-import { BroadcastDiscovery } from './broadcast-discovery';
+import type { PeerChange, SyncEntity } from '@arksync/core';
+import {
+  sidecar,
+  dbLoadAll,
+  dbUpsertTodo,
+  dbDeleteTodo,
+  dbBatchUpsertTodos,
+  dbUpsertProject,
+  dbDeleteProject,
+  dbGetSyncKv,
+  dbSetSyncKv,
+  dbClearAll,
+  dbDeleteTrashed,
+  dbSwitchSpace,
+  syncStart,
+  syncStop,
+  syncLeaveSpace,
+  syncBroadcastChange,
+  syncGetConnectedPeers,
+  syncAddSeedPeer,
+  syncGetOwnAddresses,
+  type SidecarEvent,
+  type SyncEntityPayload,
+} from './sidecar';
+
+/** WebSocket port used by the ark-core sync server. */
+const LAN_SYNC_PORT = 21531;
 
 // Suppress mDNS multicast errors — these happen on networks that don't support
 // multicast (VPN, some Wi-Fi). They're non-fatal; P2P degrades to relay-only.
@@ -30,11 +50,31 @@ const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
 
 let peerManager: PeerManager | null = null;
-let syncServer: SyncServer | null = null;
-let broadcastDiscovery: BroadcastDiscovery | null = null;
-const syncClients: Map<string, SyncClient> = new Map(); // device_id -> SyncClient
+/** True once start_sync has been issued to the sidecar — used as a cheap
+ *  `active` probe for `lan-sync:getStatus` without a round-trip. */
+let syncActive = false;
+/** Track peer names per device_id as reported by sidecar events. */
+const syncPeerNames: Map<string, string> = new Map();
 let currentDeviceId = '';
-let currentDeviceName = 'Delphi Electron';
+
+/**
+ * Human-readable host name for this device. Prefers the OS host name
+ * ("Kirill's MacBook Pro") over any renderer-supplied label so peers see
+ * meaningful names instead of the Electron app name.
+ *
+ * `.local` suffix (Bonjour) is stripped for display cleanliness.
+ */
+function getHostDeviceName(): string {
+  try {
+    const raw = os.hostname() || '';
+    const cleaned = raw.replace(/\.local$/i, '').trim();
+    return cleaned || 'Delphi Electron';
+  } catch {
+    return 'Delphi Electron';
+  }
+}
+
+let currentDeviceName = getHostDeviceName();
 
 function getDataDir(): string {
   const dir = path.join(app.getPath('appData'), 'Kepler');
@@ -153,7 +193,7 @@ function loadMeshCredentials(): { meshSecret: string; deviceId: string; deviceNa
     return {
       meshSecret: raw.meshSecret,
       deviceId: raw.deviceId,
-      deviceName: raw.deviceName || 'Delphi Electron',
+      deviceName: raw.deviceName || getHostDeviceName(),
     };
   } catch {
     return null;
@@ -220,7 +260,9 @@ ipcMain.handle(
   'peer:setMeshCredentials',
   async (_event, meshSecret: string, deviceId: string, deviceName: string) => {
     const credsPath = path.join(getDataDir(), 'mesh_credentials.json');
-    fs.writeFileSync(credsPath, JSON.stringify({ meshSecret, deviceId, deviceName }), 'utf-8');
+    // Always persist the real host name — renderers pass empty / placeholder values.
+    const persistName = deviceName?.trim() ? deviceName : getHostDeviceName();
+    fs.writeFileSync(credsPath, JSON.stringify({ meshSecret, deviceId, deviceName: persistName }), 'utf-8');
 
     // Restart peer manager with new credentials
     if (peerManager) {
@@ -417,12 +459,15 @@ ipcMain.handle('peer:stop', async () => {
   return true;
 })
 
-// --- Sync IPC ---
-
-/** Collect own addresses from network interfaces. */
-function collectOwnAddresses(): string[] {
-  return getOwnAddresses(LAN_SYNC_PORT);
-}
+// --- Sync IPC (backed by ark-core-rpc sidecar) ---
+//
+// Runtime imports from `@arksync/core` and `@arksync/node` have been removed.
+// The Electron main process no longer instantiates `SyncServer`,
+// `SyncClient`, `BroadcastDiscovery`, or calls `getOwnAddresses`. Every
+// sync operation is forwarded to the Rust sidecar via typed JSON-RPC, and
+// async sync events (peer connect/disconnect, entity changes) arrive on the
+// sidecar event stream and are forwarded to the renderer over the existing
+// IPC channels (`lan-sync:change`, `lan-sync:peerConnected`, etc.).
 
 /** Forward a sync entity change to all renderer windows. */
 function notifyRendererSyncChange(entity: SyncEntity): void {
@@ -431,7 +476,6 @@ function notifyRendererSyncChange(entity: SyncEntity): void {
   }
 }
 
-/** Notify renderers about peer connect/disconnect. */
 function notifyRendererPeerConnect(deviceId: string): void {
   for (const win of BrowserWindow.getAllWindows()) {
     win.webContents.send('lan-sync:peerConnected', deviceId);
@@ -444,300 +488,198 @@ function notifyRendererPeerDisconnect(deviceId: string, remaining: number): void
   }
 }
 
-/** Get total connected peer count (server + client connections). */
-function getTotalConnectedPeerCount(): number {
-  let count = syncServer?.connectedPeerCount ?? 0;
-  for (const client of syncClients.values()) {
-    if (client.isConnected) count++;
-  }
-  return count;
-}
-
-/** Start a SyncClient for a peer record. */
-function startSyncClientForPeer(peer: PeerRecord, deviceId: string, deviceName: string, spaceId: string, ownAddresses: string[]): void {
-  if (peer.device_id === deviceId) return; // don't connect to self
-  if (syncClients.has(peer.device_id)) return; // already have a client
-  if (syncServer?.isConnectedTo(peer.device_id)) return; // already connected inbound
-
-  const clientStorage = new DelphiStorage(deviceId);
-  const client = new SyncClient({
-    peer,
-    deviceId,
-    deviceName,
-    spaceId,
-    ownAddresses,
-    storage: clientStorage,
-    onChange: (entity) => {
-      notifyRendererSyncChange(entity);
-      // Re-broadcast to other peers via sync server
-      syncServer?.broadcastLiveChange(entity, peer.device_id);
-    },
-    onConnected: (peerDeviceId, peerDeviceName) => {
-      console.log(`[Main] SyncClient connected to ${peerDeviceName} (${peerDeviceId})`);
-      syncServer?.registerExternalPeer(peerDeviceId, peerDeviceName, peer.addresses);
-      notifyRendererPeerConnect(peerDeviceId);
-    },
-    onDisconnected: (peerDeviceId) => {
-      console.log(`[Main] SyncClient disconnected from ${peerDeviceId}`);
-      notifyRendererPeerDisconnect(peerDeviceId, getTotalConnectedPeerCount());
-    },
-    onPeerList: (peers) => {
-      if (!syncServer) return;
-      // Merge into our known peers
-      const knownPeers = syncServer.getKnownPeers();
-      const merged = mergePeerRecords(knownPeers, peers.filter(p => p.device_id !== deviceId));
-      // Start clients for any newly discovered peers
-      for (const newPeer of merged) {
-        if (!syncClients.has(newPeer.device_id) && !syncServer.isConnectedTo(newPeer.device_id)) {
-          startSyncClientForPeer(newPeer, deviceId, deviceName, spaceId, ownAddresses);
-        }
+/**
+ * Subscribe once to the sidecar event stream and fan events out to the
+ * renderer via the same IPC channels the old in-process `SyncServer` used.
+ * The subscription persists for the lifetime of the Electron process so
+ * re-calls to `start_sync` don't need to re-subscribe.
+ */
+sidecar.onEvent((event: SidecarEvent) => {
+  switch (event.event) {
+    case 'entity_changed': {
+      const entity = event.entity as unknown as SyncEntity;
+      if (entity) notifyRendererSyncChange(entity);
+      break;
+    }
+    case 'peer_connected': {
+      const deviceId = String(event.device_id ?? '');
+      const deviceName = String(event.device_name ?? '');
+      if (deviceId) {
+        if (deviceName) syncPeerNames.set(deviceId, deviceName);
+        notifyRendererPeerConnect(deviceId);
       }
-    },
-  });
-
-  syncClients.set(peer.device_id, client);
-  client.start();
-}
-
-/** Connect to seed addresses from QR payload — used on first join when no known peers exist. */
-function connectToSeedAddresses(addresses: string[], deviceId: string, deviceName: string, ownAddresses: string[]): void {
-  if (!syncServer || addresses.length === 0) return;
-
-  // Skip if these addresses belong to an already-known peer
-  const knownPeers = syncServer.getKnownPeers();
-  const addrSet = new Set(addresses);
-  const alreadyKnown = knownPeers.some(p => p.addresses.some(a => addrSet.has(a)));
-  if (alreadyKnown) return;
-
-  const tempId = `seed-${Date.now()}`;
-  let client: SyncClient;
-
-  const seedStorage = new DelphiStorage(deviceId);
-  client = new SyncClient({
-    peer: { device_id: tempId, device_name: 'Bootstrap', addresses, last_seen: new Date().toISOString() },
-    deviceId,
-    deviceName,
-    spaceId: '',
-    ownAddresses,
-    storage: seedStorage,
-    onChange: (entity) => {
-      notifyRendererSyncChange(entity);
-      syncServer?.broadcastLiveChange(entity, tempId);
-    },
-    onConnected: (peerDeviceId, peerDeviceName) => {
-      // Re-key from temp ID to real device ID
-      syncClients.delete(tempId);
-      if (!syncClients.has(peerDeviceId)) {
-        syncClients.set(peerDeviceId, client);
+      break;
+    }
+    case 'peer_disconnected': {
+      const deviceId = String(event.device_id ?? '');
+      const remaining = typeof event.remaining === 'number' ? event.remaining : 0;
+      if (deviceId) {
+        syncPeerNames.delete(deviceId);
+        notifyRendererPeerDisconnect(deviceId, remaining);
       }
-      syncServer?.registerExternalPeer(peerDeviceId, peerDeviceName, addresses);
-      notifyRendererPeerConnect(peerDeviceId);
-    },
-    onDisconnected: (peerDeviceId) => {
-      syncClients.delete(peerDeviceId);
-      syncClients.delete(tempId);
-      notifyRendererPeerDisconnect(peerDeviceId, getTotalConnectedPeerCount());
-    },
-    onPeerList: (peers) => {
-      if (!syncServer) return;
-      const knownPeers = syncServer.getKnownPeers();
-      const merged = mergePeerRecords(knownPeers, peers.filter(p => p.device_id !== deviceId));
-      for (const newPeer of merged) {
-        if (!syncClients.has(newPeer.device_id) && !syncServer.isConnectedTo(newPeer.device_id)) {
-          startSyncClientForPeer(newPeer, deviceId, deviceName, '', ownAddresses);
-        }
+      break;
+    }
+    case 'peer_list_updated': {
+      const peers = Array.isArray(event.peers) ? (event.peers as Array<{ device_id?: string; device_name?: string }>) : [];
+      const next = new Map<string, string>();
+      for (const p of peers) {
+        if (p?.device_id) next.set(p.device_id, p.device_name ?? '');
       }
-    },
-  });
-
-  syncClients.set(tempId, client);
-  client.start();
-  console.log(`[Main] Connecting to seed addresses: ${addresses.join(', ')}`);
-}
-
-/** Start the sync server and connect to known peers. */
-async function startSync(spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]): Promise<void> {
-  if (syncServer) {
-    syncServer.stop();
-    syncServer = null;
+      // Keep the name cache in sync with the latest snapshot; don't
+      // emit renderer events on this path — it's advisory metadata.
+      syncPeerNames.clear();
+      for (const [id, name] of next) syncPeerNames.set(id, name);
+      break;
+    }
+    default:
+      // Unknown event — log but don't crash.
+      console.debug('[Main] Unknown sidecar event:', event);
   }
+});
 
-  // Stop broadcast discovery
-  if (broadcastDiscovery) {
-    broadcastDiscovery.stop();
-    broadcastDiscovery = null;
+/** IPC: start sync via sidecar. */
+ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
+  if (!spaceId) {
+    console.warn('[Main] lan-sync:start called without spaceId, ignoring');
+    return false;
   }
-
-  // Stop existing clients
-  for (const client of syncClients.values()) {
-    client.stop();
-  }
-  syncClients.clear();
-
   currentDeviceId = deviceId;
-  currentDeviceName = deviceName ?? 'Delphi Electron';
-
-  const ownAddresses = collectOwnAddresses();
-  const name = currentDeviceName;
-
-  const storage = new DelphiStorage(deviceId);
-  syncServer = new SyncServer(storage);
-
-  // When a peer sends us a change, forward to all renderer windows
-  syncServer.onChange((entity: SyncEntity) => {
-    notifyRendererSyncChange(entity);
-  });
-
-  syncServer.onPeerConnect((peerDeviceId) => {
-    notifyRendererPeerConnect(peerDeviceId);
-  });
-
-  syncServer.onPeerDisconnect((peerDeviceId, _remaining) => {
-    notifyRendererPeerDisconnect(peerDeviceId, getTotalConnectedPeerCount());
-  });
-
-  // When we learn about new peers via peer_list, start clients for them
-  syncServer.onNewPeerDiscovered((peer) => {
-    startSyncClientForPeer(peer, deviceId, name, '', ownAddresses);
-  });
+  const name = getHostDeviceName();
+  currentDeviceName = name;
+  void deviceName;
 
   try {
-    await syncServer.start(spaceId, deviceId, name, ownAddresses);
-    console.log('[Main] Sync server started');
-
-    // Connect to known peers from previous sessions (skip self)
-    const knownPeers = syncServer.getKnownPeers();
-    for (const peer of knownPeers) {
-      if (peer.device_name === name && peer.addresses.some(a => ownAddresses.includes(a))) {
-        console.log(`[Main] Skipping self-connect to ${peer.device_name} (${peer.device_id})`);
-        continue;
-      }
-      startSyncClientForPeer(peer, deviceId, name, '', ownAddresses);
-    }
-
-    // Connect to seed addresses from QR payload (first join, no known peers)
-    if (seedAddresses && seedAddresses.length > 0) {
-      connectToSeedAddresses(seedAddresses, deviceId, name, ownAddresses);
-    }
-
-    // Start UDP broadcast discovery for automatic peer re-discovery
-    if (spaceId) {
-      broadcastDiscovery = new BroadcastDiscovery({
-        spaceId,
-        deviceId,
-        deviceName: name,
-        wsPort: LAN_SYNC_PORT,
-        onPeerDiscovered: (beaconPeer) => {
-          const allAddrs = beaconPeer.addresses.length > 0 ? beaconPeer.addresses : [beaconPeer.address];
-          // Update peer record with ALL addresses
-          syncServer?.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, allAddrs);
-
-          const existingClient = syncClients.get(beaconPeer.deviceId);
-          if (existingClient) {
-            if (!existingClient.isConnected) {
-              existingClient.updatePeer({
-                device_id: beaconPeer.deviceId,
-                device_name: beaconPeer.deviceName,
-                addresses: allAddrs,
-                last_seen: new Date().toISOString(),
-              });
-            }
-            return;
-          }
-
-          // Already connected inbound via server
-          if (syncServer?.isConnectedTo(beaconPeer.deviceId)) return;
-
-          // Start new client connection — try all addresses
-          console.log(`[Main] Beacon: connecting to ${beaconPeer.deviceName} (${allAddrs.length} addresses)`);
-          const freshPeer: PeerRecord = {
-            device_id: beaconPeer.deviceId,
-            device_name: beaconPeer.deviceName,
-            addresses: allAddrs,
-            last_seen: new Date().toISOString(),
-          };
-          startSyncClientForPeer(freshPeer, deviceId, name, '', collectOwnAddresses());
-        },
-      });
-      broadcastDiscovery.start();
-    }
+    await syncStart({
+      spaceId,
+      deviceId,
+      deviceName: name,
+      port: LAN_SYNC_PORT,
+      seedAddresses,
+    });
+    syncActive = true;
+    syncPeerNames.clear();
+    console.log(`[Main] Sync started via sidecar (device=${name})`);
+    return true;
   } catch (err) {
-    console.error('[Main] Failed to start sync server:', err);
-    syncServer = null;
+    console.error('[Main] start_sync via sidecar failed:', err);
+    syncActive = false;
+    return false;
   }
-}
-
-/** IPC: start sync. */
-ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
-  await startSync(spaceId, deviceId, deviceName, seedAddresses);
-  return syncServer !== null;
 });
 
-/** IPC: stop sync. */
+/** IPC: stop sync via sidecar. */
 ipcMain.handle('lan-sync:stop', async () => {
-  if (broadcastDiscovery) {
-    broadcastDiscovery.stop();
-    broadcastDiscovery = null;
+  try {
+    await syncStop();
+  } catch (err) {
+    console.warn('[Main] stop_sync via sidecar failed:', err);
   }
-  for (const client of syncClients.values()) {
-    client.stop();
-  }
-  syncClients.clear();
-  if (syncServer) {
-    syncServer.stop();
-    syncServer = null;
-  }
+  syncActive = false;
+  syncPeerNames.clear();
   return true;
 });
 
-/** IPC: get sync status. */
+/** IPC: get sync status from sidecar. */
 ipcMain.handle('lan-sync:getStatus', async () => {
-  if (!syncServer) return { active: false, peers: 0, peerNames: [] };
-  // Deduplicate peers by device_id across server + client connections
-  const seen = new Map<string, string>();
-  for (const entry of syncServer.getConnectedPeerEntries()) {
-    seen.set(entry.deviceId, entry.deviceName);
-  }
-  for (const client of syncClients.values()) {
-    if (client.isConnected && client.peerDeviceId) {
-      seen.set(client.peerDeviceId, client.peerName);
+  if (!syncActive) return { active: false, peers: 0, peerNames: [] };
+  try {
+    const peers = await syncGetConnectedPeers();
+    // Dedup on the Electron side as well — the Rust side already dedups but
+    // we want to be defensive in case a future race leaks duplicates.
+    const seen = new Map<string, string>();
+    for (const p of peers) {
+      seen.set(p.device_id, p.device_name);
     }
+    return {
+      active: true,
+      peers: seen.size,
+      peerNames: [...seen.values()],
+    };
+  } catch (err) {
+    console.warn('[Main] get_connected_peers failed:', err);
+    return { active: true, peers: 0, peerNames: [] };
   }
-  const peerNames = [...seen.values()];
-  return { active: true, peers: peerNames.length, peerNames };
 });
 
-/** IPC: broadcast a local change to sync peers. */
+/** IPC: broadcast a local change to sync peers via sidecar. */
 ipcMain.handle('lan-sync:broadcastChange', async (_e, entity: SyncEntity) => {
-  if (!syncServer) return false;
-  // Update HLC for this entity
-  const hlc = await syncServer.updateEntityHlc(entity.id);
-  entity.hlc = hlc;
-  // Broadcast via server (to inbound peers)
-  syncServer.broadcastLiveChange(entity);
-  // Broadcast via clients (to outbound peers)
-  for (const client of syncClients.values()) {
-    client.broadcastLiveChange(entity);
+  if (!syncActive) return false;
+  try {
+    // Deep clone to strip Vue proxies before IPC -> sidecar.
+    const cloned = JSON.parse(JSON.stringify(entity)) as SyncEntityPayload;
+    await syncBroadcastChange(cloned);
+    return true;
+  } catch (err) {
+    console.warn('[Main] broadcast_change via sidecar failed:', err);
+    return false;
   }
-  return true;
 });
 
 /** IPC: get own addresses for QR generation. */
 ipcMain.handle('sync:getOwnAddresses', async () => {
-  return collectOwnAddresses();
+  try {
+    return await syncGetOwnAddresses(LAN_SYNC_PORT);
+  } catch (err) {
+    console.warn('[Main] get_own_addresses via sidecar failed, falling back to os:', err);
+    // Cheap fallback: enumerate via os.networkInterfaces() without importing
+    // @arksync/node at runtime.
+    const addrs: string[] = [];
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] ?? []) {
+        if (net.internal) continue;
+        if (net.family === 'IPv4') addrs.push(`${net.address}:${LAN_SYNC_PORT}`);
+      }
+    }
+    return addrs;
+  }
 });
 
 /** IPC: get QR payload (code + addresses). */
 ipcMain.handle('sync:getQrPayload', async (_e, code: string) => {
   const { generateQrPayload } = await import('../src/services/space/space-manager');
-  const addresses = collectOwnAddresses();
+  const addresses = await syncGetOwnAddresses(LAN_SYNC_PORT).catch(() => [] as string[]);
   return generateQrPayload(code, addresses);
 });
 
-/** IPC: get known peers list. */
+/** IPC: get known peers list (currently just the connected peers). */
 ipcMain.handle('sync:getPeers', async () => {
-  if (!syncServer) return [];
-  return syncServer.getKnownPeers();
+  if (!syncActive) return [];
+  try {
+    const peers = await syncGetConnectedPeers();
+    return peers.map((p) => ({
+      device_id: p.device_id,
+      device_name: p.device_name,
+      addresses: [] as string[],
+      last_seen: new Date().toISOString(),
+    }));
+  } catch {
+    return [];
+  }
+});
+
+/** IPC: leave the current space (tears down sync runtime). */
+ipcMain.handle('lan-sync:leaveSpace', async () => {
+  try {
+    await syncLeaveSpace();
+  } catch (err) {
+    console.warn('[Main] leave_space failed:', err);
+  }
+  syncActive = false;
+  syncPeerNames.clear();
+  return true;
+});
+
+/** IPC: add a seed peer (used on QR-code bootstrap). */
+ipcMain.handle('lan-sync:addSeedPeer', async (_e, addresses: string[]) => {
+  if (!syncActive) return false;
+  try {
+    await syncAddSeedPeer(addresses);
+    return true;
+  } catch (err) {
+    console.warn('[Main] add_seed_peer failed:', err);
+    return false;
+  }
 });
 
 // --- App lifecycle ---
@@ -754,19 +696,11 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  // Stop broadcast discovery
-  if (broadcastDiscovery) {
-    broadcastDiscovery.stop();
-    broadcastDiscovery = null;
-  }
-  // Stop sync clients
-  for (const client of syncClients.values()) {
-    client.stop();
-  }
-  syncClients.clear();
-  if (syncServer) {
-    syncServer.stop();
-    syncServer = null;
+  // Sync is owned by the sidecar — shut it down along with the DB.
+  if (syncActive) {
+    // Best-effort; we don't await the promise because Electron is quitting.
+    syncStop().catch(() => {});
+    syncActive = false;
   }
   sidecar.shutdown();
 });

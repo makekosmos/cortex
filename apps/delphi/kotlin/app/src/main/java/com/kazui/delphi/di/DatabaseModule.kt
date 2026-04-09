@@ -78,6 +78,18 @@ class DatabaseProvider @Inject constructor(
     private fun requireDb(): DelphiDatabase =
         currentDb ?: throw IllegalStateException("No space database is open. Call switchTo(spaceId) first.")
 
+    /**
+     * Absolute path to the SQLite file used by the ark-core Rust sync engine
+     * (UniFFI `start_sync`). Lives alongside the Room DBs but is owned by
+     * Rust — Kotlin only hands the path over.
+     */
+    fun arkDbPath(spaceId: String? = currentSpaceId): String {
+        val databasesDir = context.getDatabasePath("x").parentFile!!
+        val dir = File(databasesDir, "ark-core/${spaceId ?: "default"}")
+        dir.mkdirs()
+        return File(dir, "ark.db").absolutePath
+    }
+
     /** Delete the database files for a given [spaceId]. */
     fun deleteSpaceDb(spaceId: String) {
         if (spaceId == currentSpaceId) close()

@@ -72,7 +72,7 @@ export function setupMeshFromArkKey(apiKey: string): void {
 
   window.electronAPI
 
-    .invoke("peer:setMeshCredentials", apiKey, deviceId, "Delphi Electron")
+    .invoke("peer:setMeshCredentials", apiKey, deviceId, "")
 
     .catch((err) => {
       console.warn("[PeerBridge] Failed to set mesh credentials:", err);
@@ -95,7 +95,7 @@ export function setupMeshFromSpaceCode(code: string): void {
 
   window.electronAPI
 
-    .invoke("peer:setMeshCredentials", meshSecret, deviceId, "Delphi Electron")
+    .invoke("peer:setMeshCredentials", meshSecret, deviceId, "")
 
     .catch((err) => {
       console.warn(

@@ -1,0 +1,3 @@
+   Compiling ark-core v0.1.0 (/Users/kirill/Documents/projects/kosmos/packages/ark-core/rust)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.75s
+EXIT_CODE=0

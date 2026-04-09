@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 
+use crate::hlc::HLC;
 use crate::schema::CREATE_TABLES;
 use crate::sync_server::StorageBackend;
 use crate::types::*;
@@ -38,7 +39,7 @@ pub fn upsert_todo(conn: &Connection, todo: &TodoItem) -> Result<(), String> {
     let recurrence_json: Option<String> = todo
         .recurrence_rule
         .as_ref()
-        .map(|v| serde_json::to_string(v))
+        .map(serde_json::to_string)
         .transpose()
         .map_err(|e| e.to_string())?;
 
@@ -411,25 +412,45 @@ pub fn delete_tag(conn: &Connection, id: &str) -> Result<(), String> {
 
 // ---------------------------------------------------------------------------
 // SqliteStorageBackend
+//
+// Wraps a shared rusqlite::Connection behind `Arc<Mutex<_>>` and implements
+// the async `StorageBackend` trait expected by `sync_server::SyncServer`
+// and `sync_client::SyncClient`. Blocking rusqlite work is wrapped in
+// `tokio::task::spawn_blocking` so it doesn't stall the async runtime.
 // ---------------------------------------------------------------------------
 
 pub struct SqliteStorageBackend {
     conn: Arc<Mutex<rusqlite::Connection>>,
+    device_id: Arc<Mutex<String>>,
 }
 
 impl SqliteStorageBackend {
     pub fn new(conn: Arc<Mutex<rusqlite::Connection>>) -> Self {
-        Self { conn }
+        Self {
+            conn,
+            device_id: Arc::new(Mutex::new(String::new())),
+        }
     }
-}
 
-#[async_trait::async_trait]
-impl StorageBackend for SqliteStorageBackend {
-    async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
-        let conn = self.conn.lock().unwrap();
+    /// Set the device id used to stamp HLCs on entities that don't yet carry
+    /// one in the version vector. Matches the TS `DelphiStorage` behaviour
+    /// (`HLC.now(deviceId)` when `vector[id]` is missing).
+    pub fn set_device_id(&self, device_id: &str) {
+        *self.device_id.lock().unwrap() = device_id.to_string();
+    }
+
+    pub fn device_id(&self) -> String {
+        self.device_id.lock().unwrap().clone()
+    }
+
+    fn collect_entities_blocking(
+        conn: &Connection,
+        vector: &VersionVector,
+        device_id: &str,
+    ) -> Vec<SyncEntity> {
         let mut entities = Vec::new();
 
-        // Helper: convert a Serialize value to serde_json::Map, stripping the "id" key
+        // Helper: convert a Serialize value to serde_json::Map, stripping the "id" key.
         fn to_data_map<T: serde::Serialize>(item: &T) -> serde_json::Map<String, Value> {
             match serde_json::to_value(item) {
                 Ok(Value::Object(mut map)) => {
@@ -440,66 +461,73 @@ impl StorageBackend for SqliteStorageBackend {
             }
         }
 
-        // Todos
-        if let Ok(todos) = load_all_todos(&conn) {
+        // Use the HLC already stored in the version vector if present;
+        // otherwise stamp a fresh `HLC::now(device_id)` so the initial sync
+        // has a defined ordering. This mirrors `DelphiStorage.loadEntities`
+        // (`vector[todo.id] || HLC.now(this.deviceId).toString()`).
+        let hlc_for = |id: &str| -> String {
+            if let Some(existing) = vector.get(id) {
+                existing.clone()
+            } else {
+                HLC::now(device_id).to_string()
+            }
+        };
+
+        if let Ok(todos) = load_all_todos(conn) {
             for todo in &todos {
                 entities.push(SyncEntity {
                     entity_type: "todo".to_string(),
                     id: todo.id.clone(),
                     data: to_data_map(todo),
-                    hlc: String::new(),
+                    hlc: hlc_for(&todo.id),
                     deleted: None,
                 });
             }
         }
 
-        // Projects
-        if let Ok(projects) = load_all_projects(&conn) {
+        if let Ok(projects) = load_all_projects(conn) {
             for project in &projects {
                 entities.push(SyncEntity {
                     entity_type: "project".to_string(),
                     id: project.id.clone(),
                     data: to_data_map(project),
-                    hlc: String::new(),
+                    hlc: hlc_for(&project.id),
                     deleted: None,
                 });
             }
         }
 
-        // Areas
-        if let Ok(areas) = load_all_areas(&conn) {
+        if let Ok(areas) = load_all_areas(conn) {
             for area in &areas {
                 entities.push(SyncEntity {
                     entity_type: "area".to_string(),
                     id: area.id.clone(),
                     data: to_data_map(area),
-                    hlc: String::new(),
+                    hlc: hlc_for(&area.id),
                     deleted: None,
                 });
             }
         }
 
-        // Tags
-        if let Ok(tags) = load_all_tags(&conn) {
+        if let Ok(tags) = load_all_tags(conn) {
             for tag in &tags {
                 entities.push(SyncEntity {
                     entity_type: "tag".to_string(),
                     id: tag.id.clone(),
                     data: to_data_map(tag),
-                    hlc: String::new(),
+                    hlc: hlc_for(&tag.id),
                     deleted: None,
                 });
             }
         }
 
-        // Headings
-        if let Ok(headings) = load_all_headings(&conn) {
+        if let Ok(headings) = load_all_headings(conn) {
             for heading in &headings {
                 entities.push(SyncEntity {
                     entity_type: "heading".to_string(),
                     id: heading.id.clone(),
                     data: to_data_map(heading),
-                    hlc: String::new(),
+                    hlc: hlc_for(&heading.id),
                     deleted: None,
                 });
             }
@@ -508,65 +536,88 @@ impl StorageBackend for SqliteStorageBackend {
         entities
     }
 
-    async fn apply_entity(&self, entity: &SyncEntity) {
-        let conn = self.conn.lock().unwrap();
-
-        // If deleted, just remove from the appropriate table
+    fn apply_entity_blocking(conn: &Connection, entity: &SyncEntity) {
         if entity.deleted == Some(true) {
             let _ = match entity.entity_type.as_str() {
-                "todo" => delete_todo(&conn, &entity.id),
-                "project" => delete_project(&conn, &entity.id),
-                "area" => delete_area(&conn, &entity.id),
-                "tag" => delete_tag(&conn, &entity.id),
-                "heading" => delete_heading(&conn, &entity.id),
+                "todo" => delete_todo(conn, &entity.id),
+                "project" => delete_project(conn, &entity.id),
+                "area" => delete_area(conn, &entity.id),
+                "tag" => delete_tag(conn, &entity.id),
+                "heading" => delete_heading(conn, &entity.id),
                 _ => Ok(()),
             };
             return;
         }
 
-        // Reconstruct the full data map with id included, then deserialize
         let mut full_data = entity.data.clone();
         full_data.insert("id".to_string(), Value::String(entity.id.clone()));
         let value = Value::Object(full_data);
 
         let _ = match entity.entity_type.as_str() {
-            "todo" => {
-                serde_json::from_value::<TodoItem>(value)
-                    .map_err(|e| e.to_string())
-                    .and_then(|todo| upsert_todo(&conn, &todo))
-            }
-            "project" => {
-                serde_json::from_value::<Project>(value)
-                    .map_err(|e| e.to_string())
-                    .and_then(|project| upsert_project(&conn, &project))
-            }
-            "area" => {
-                serde_json::from_value::<Area>(value)
-                    .map_err(|e| e.to_string())
-                    .and_then(|area| upsert_area(&conn, &area))
-            }
-            "tag" => {
-                serde_json::from_value::<Tag>(value)
-                    .map_err(|e| e.to_string())
-                    .and_then(|tag| upsert_tag(&conn, &tag))
-            }
-            "heading" => {
-                serde_json::from_value::<Heading>(value)
-                    .map_err(|e| e.to_string())
-                    .and_then(|heading| upsert_heading(&conn, &heading))
-            }
+            "todo" => serde_json::from_value::<TodoItem>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|todo| upsert_todo(conn, &todo)),
+            "project" => serde_json::from_value::<Project>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|project| upsert_project(conn, &project)),
+            "area" => serde_json::from_value::<Area>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|area| upsert_area(conn, &area)),
+            "tag" => serde_json::from_value::<Tag>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|tag| upsert_tag(conn, &tag)),
+            "heading" => serde_json::from_value::<Heading>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|heading| upsert_heading(conn, &heading)),
             _ => Ok(()),
         };
     }
+}
+
+#[async_trait::async_trait]
+impl StorageBackend for SqliteStorageBackend {
+    async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity> {
+        let conn = self.conn.clone();
+        let vector = vector.clone();
+        let device_id = self.device_id();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap();
+            Self::collect_entities_blocking(&guard, &vector, &device_id)
+        })
+        .await
+        .unwrap_or_default()
+    }
+
+    async fn apply_entity(&self, entity: &SyncEntity) {
+        let conn = self.conn.clone();
+        let entity = entity.clone();
+        let _ = tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap();
+            Self::apply_entity_blocking(&guard, &entity);
+        })
+        .await;
+    }
 
     async fn get_kv(&self, key: &str) -> Option<String> {
-        let conn = self.conn.lock().unwrap();
-        get_sync_kv(&conn, key).unwrap_or(None)
+        let conn = self.conn.clone();
+        let key = key.to_string();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap();
+            get_sync_kv(&guard, &key).unwrap_or(None)
+        })
+        .await
+        .unwrap_or(None)
     }
 
     async fn set_kv(&self, key: &str, value: &str) {
-        let conn = self.conn.lock().unwrap();
-        let _ = set_sync_kv(&conn, key, value);
+        let conn = self.conn.clone();
+        let key = key.to_string();
+        let value = value.to_string();
+        let _ = tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap();
+            let _ = set_sync_kv(&guard, &key, &value);
+        })
+        .await;
     }
 }
 
@@ -783,5 +834,106 @@ mod tests {
         assert_eq!(data.todos[0].tag_ids, vec!["tag1", "tag2"]);
         assert!(data.todos[0].checklist_items.is_array());
         assert!(data.todos[0].recurrence_rule.is_some());
+    }
+
+    // -----------------------------------------------------------------------
+    // SqliteStorageBackend roundtrip tests (AC3)
+    // -----------------------------------------------------------------------
+
+    fn make_backend() -> SqliteStorageBackend {
+        let conn = setup_db();
+        let shared = Arc::new(Mutex::new(conn));
+        let backend = SqliteStorageBackend::new(shared);
+        backend.set_device_id("device-under-test");
+        backend
+    }
+
+    fn sync_todo(id: &str, title: &str) -> SyncEntity {
+        let todo = make_todo(id, title);
+        let value = serde_json::to_value(&todo).unwrap();
+        let mut map = match value {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+        map.remove("id");
+        SyncEntity {
+            entity_type: "todo".to_string(),
+            id: id.to_string(),
+            data: map,
+            hlc: "2026-01-01T00:00:00.000Z:000001:peer-a".to_string(),
+            deleted: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn storage_backend_roundtrip_todo() {
+        let backend = make_backend();
+        let entity = sync_todo("tbk1", "Roundtrip");
+        backend.apply_entity(&entity).await;
+
+        let empty_vector: VersionVector = std::collections::HashMap::new();
+        let loaded = backend.load_entities(&empty_vector).await;
+        let found = loaded
+            .iter()
+            .find(|e| e.id == "tbk1")
+            .expect("inserted todo should be loaded");
+        assert_eq!(found.entity_type, "todo");
+        assert_eq!(found.data.get("title").and_then(|v| v.as_str()), Some("Roundtrip"));
+    }
+
+    #[tokio::test]
+    async fn storage_backend_delete_removes_entity() {
+        let backend = make_backend();
+        let entity = sync_todo("tbk2", "To delete");
+        backend.apply_entity(&entity).await;
+
+        // Now apply a tombstone.
+        let tombstone = SyncEntity {
+            entity_type: "todo".to_string(),
+            id: "tbk2".to_string(),
+            data: serde_json::Map::new(),
+            hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
+            deleted: Some(true),
+        };
+        backend.apply_entity(&tombstone).await;
+
+        let empty_vector: VersionVector = std::collections::HashMap::new();
+        let loaded = backend.load_entities(&empty_vector).await;
+        assert!(
+            loaded.iter().all(|e| e.id != "tbk2"),
+            "deleted entity should be absent from load_entities",
+        );
+    }
+
+    #[tokio::test]
+    async fn storage_backend_kv_roundtrip() {
+        let backend = make_backend();
+        assert_eq!(backend.get_kv("foo").await, None);
+        backend.set_kv("foo", "bar").await;
+        assert_eq!(backend.get_kv("foo").await, Some("bar".to_string()));
+    }
+
+    #[tokio::test]
+    async fn storage_backend_uses_stored_hlc_when_present() {
+        let backend = make_backend();
+        let entity = sync_todo("tbk3", "With HLC");
+        backend.apply_entity(&entity).await;
+
+        let mut vector: VersionVector = std::collections::HashMap::new();
+        vector.insert(
+            "tbk3".to_string(),
+            "2026-03-01T00:00:00.000Z:000005:peer-b".to_string(),
+        );
+
+        let loaded = backend.load_entities(&vector).await;
+        let found = loaded
+            .iter()
+            .find(|e| e.id == "tbk3")
+            .expect("entity present");
+        assert_eq!(
+            found.hlc,
+            "2026-03-01T00:00:00.000Z:000005:peer-b".to_string(),
+            "load_entities should prefer HLC from the passed version vector",
+        );
     }
 }

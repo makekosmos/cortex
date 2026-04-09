@@ -1,5 +1,9 @@
+pub mod beacon;
 pub mod db;
+pub mod ffi;
 pub mod hlc;
+pub mod host;
+pub mod net;
 pub mod protocol;
 pub mod schema;
 pub mod space;
@@ -10,7 +14,13 @@ pub mod types;
 uniffi::setup_scaffolding!();
 
 // Re-export key types
+pub use beacon::{
+    BeaconPayload, BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions,
+    BEACON_PORT, BEACON_TYPE, PEER_TTL_MS,
+};
+pub use db::SqliteStorageBackend;
 pub use hlc::HLC;
+pub use host::{get_host_device_name, get_own_addresses};
 pub use protocol::{
     compute_local_excess, compute_vector_diff, generate_id, merge_peer_records,
     serialize_message, deserialize_message, split_into_batches,

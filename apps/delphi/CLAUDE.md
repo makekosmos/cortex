@@ -50,6 +50,43 @@ ark://join?code=XXXX-XXXX-XXXX&addrs=192.168.1.70:21531,10.0.0.5:21531
 
 После `hello` пиры обмениваются списками известных пиров с их адресами. Это позволяет обнаруживать пиры транзитивно без mDNS.
 
+### UDP Beacon discovery (Syncthing-style)
+
+Primary discovery — UDP broadcast на порт `LAN_SYNC_PORT + 1` (21532). Каждый пир каждые 5 сек шлёт beacon `{t, s=space_id, d=device_id, n=device_name, p=ws_port, a=[routable_addresses]}` во все широковещательные адреса IPv4-подсетей. mDNS не используется — блокируется AP isolation на многих роутерах.
+
+**Дедупликация входящих beacon'ов — обязательна.** Receiver держит `Map<device_id, SeenPeer>` и вызывает `onPeerDiscovered` только когда (а) device_id новый, или (б) список адресов изменился. TTL 30 с (2× beacon interval) — stale-записи вычищаются, чтобы peer мог переанонсироваться. **Без дедупа** каждый beacon (каждые 5 с) триггерил reconnect → бесконечный спам `[SyncClient] All addresses failed`.
+
+### Фильтрация адресов (Syncthing-style)
+
+Beacon'ы и `ownAddresses` (в `hello`/`peer_list`) **MUST** содержать только маршрутизируемые адреса. Фильтры:
+
+- loopback (`internal=true`, `127.0.0.0/8`, `::1`)
+- IPv4 link-local `169.254.0.0/16`
+- IPv6 link-local `fe80::/10` и unique-local `fc00::/7`
+- виртуальные интерфейсы по префиксу имени: `utun*`, `awdl*`, `llw*`, `bridge*`, `anpi*`, `docker*`, `br-*`, `veth*`, `virbr*`, `vboxnet*`, `vmnet*`, `tun*`, `tap*`, `wg*`, `tailscale*`, `vEthernet*`, `VMware*`, `VirtualBox*`, `rmnet*`, `dummy*`
+
+Реализация: `packages/arksync/src/node.ts` (`getOwnAddresses`), `ts/electron/broadcast-discovery.ts` (`collectLocalAddresses`), `kotlin/.../BroadcastDiscovery.kt` (`sendBeacon`). **Если добавляешь новый способ анонсирования адресов — фильтруй там же.**
+
+### Device name = host name, не process name
+
+Все платформы анонсируют **реальное имя устройства ОС**, а не имя приложения:
+
+| Платформа | Источник | Пример |
+|-----------|----------|--------|
+| **Electron** | `os.hostname()` с trim `.local` | `Kirill-MacBook-Pro-437` |
+| **Android** | `${Build.MANUFACTURER} ${Build.MODEL}` | `Nothing A063` |
+| **macOS** | `Host.current().localizedName` | `Kirill's MacBook Pro` |
+
+Хелпер в Electron: `getHostDeviceName()` в `ts/electron/main.ts`. Renderer-процесс передаёт пустую строку в `lan-sync:start` / `peer:setMeshCredentials`, main-процесс всегда подставляет host name. **Никогда** не захардкоживай `"Delphi Electron"` или имя процесса.
+
+### Single-session-per-device на SyncServer
+
+`SyncServer.peers` внутри хранит сессии ключом по WS-соединению, но **внешне видимо** должно быть **одно устройство = одна запись**:
+
+1. В `handleHello`: после аутентификации новой сессии — закрыть все прочие authenticated-сессии с тем же `device_id` (`CloseReason.NORMAL`, reason `superseded`). Предварительно снять флаг `authenticated` на stale-сессиях, чтобы их `close` handler не дёрнул лишний `onPeerDisconnected`.
+2. `getConnectedPeers()` **MUST** дедупить по `device_id` (`LinkedHashMap<device_id, name>`) — защита на случай гонки между handshake и eviction.
+3. В координаторе (`PeerManager.updatePeerCounts`): мерж inbound-сессий (`SyncServer`) и outbound-клиента (`LanSyncClient`) дедупится по `device_id`. Для этого `LanSyncClient.ServerInfo` хранит `deviceId` сервера. Физическое устройство, подключённое в обе стороны, = одна запись.
+
 ### Протокол синхронизации
 
 1. **hello** — клиент отправляет при подключении, сервер отвечает `hello_ack`
@@ -66,13 +103,17 @@ ark://join?code=XXXX-XXXX-XXXX&addrs=192.168.1.70:21531,10.0.0.5:21531
 
 | Файл | Роль |
 |------|------|
-| `ts/electron/sync-server.ts` | Electron WS-сервер |
-| `ts/electron/sync-client.ts` | Electron WS-клиент |
+| `packages/arksync/src/sync-server.ts` | Generic WS-сервер (используется Electron через `@arksync/core`) |
+| `packages/arksync/src/sync-client.ts` | Generic WS-клиент с race_connect |
+| `packages/arksync/src/node.ts` | `getOwnAddresses()` с фильтрацией non-routable |
+| `ts/electron/main.ts` | Electron main: `getHostDeviceName`, `startSync`, beacon wiring |
+| `ts/electron/broadcast-discovery.ts` | Electron UDP beacon (отправка + дедуп приёма) |
 | `ts/src/services/sync/lan-protocol.ts` | Общие типы, HLC, diff, batch splitting |
 | `ts/src/store/todos.ts` | `broadcastToLanSync()` на каждой мутации |
-| `kotlin/.../data/sync/SyncServer.kt` | Android Ktor WS-сервер |
-| `kotlin/.../data/sync/LanSyncClient.kt` | Android WS-клиент |
-| `kotlin/.../data/sync/PeerManager.kt` | Android координатор пиров |
+| `kotlin/.../data/sync/SyncServer.kt` | Android Ktor WS-сервер (handleHello evict + dedup) |
+| `kotlin/.../data/sync/LanSyncClient.kt` | Android WS-клиент (`ServerInfo` содержит `deviceId`) |
+| `kotlin/.../data/sync/BroadcastDiscovery.kt` | Android UDP beacon (отправка + дедуп приёма) |
+| `kotlin/.../data/sync/PeerManager.kt` | Android координатор: `updatePeerCounts` дедупит inbound+outbound |
 | `swift/Delphi/Sync/SyncServer.swift` | macOS NWListener WS-сервер |
 | `swift/Delphi/Sync/SyncClient.swift` | macOS URLSession WS-клиент |
 | `swift/Delphi/Sync/PeerManager.swift` | macOS координатор пиров |

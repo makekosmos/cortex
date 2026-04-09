@@ -120,10 +120,8 @@ pub fn format_space_code(code: &str) -> String {
 /// Parse user input -- accepts 7-char and 12-char codes. Returns raw uppercase code or None.
 pub fn parse_space_code(input: &str) -> Option<String> {
     let clean: String = input.replace(['-', ' '], "").to_uppercase();
-    if clean.len() == 7 || clean.len() == 12 {
-        if clean.bytes().all(|c| is_crockford_char(c)) {
-            return Some(clean);
-        }
+    if (clean.len() == 7 || clean.len() == 12) && clean.bytes().all(is_crockford_char) {
+        return Some(clean);
     }
     None
 }
@@ -157,8 +155,7 @@ pub fn generate_qr_payload(code: &str, addresses: &[String]) -> String {
 /// Parse a QR payload, extended code, or bare code.
 pub fn parse_qr_payload(payload: &str) -> Option<(String, Vec<String>)> {
     // URI format
-    if payload.starts_with("ark://join?") {
-        let query_string = &payload["ark://join?".len()..];
+    if let Some(query_string) = payload.strip_prefix("ark://join?") {
         let mut code_raw = None;
         let mut addrs_raw = None;
 
@@ -181,7 +178,7 @@ pub fn parse_qr_payload(payload: &str) -> Option<(String, Vec<String>)> {
 
     // Extended 19-char code
     let clean: String = payload.replace(['-', ' '], "").to_uppercase();
-    if clean.len() == 19 && clean.bytes().all(|c| is_crockford_char(c)) {
+    if clean.len() == 19 && clean.bytes().all(is_crockford_char) {
         let code = clean[..12].to_string();
         let addresses = match decode_ipv4(&clean[12..]) {
             Some(ip) => vec![format!("{ip}:{LAN_PORT}")],
@@ -229,7 +226,7 @@ mod tests {
     fn test_generate_space_code_length() {
         let code = generate_space_code();
         assert_eq!(code.len(), 12);
-        assert!(code.bytes().all(|c| is_crockford_char(c)));
+        assert!(code.bytes().all(is_crockford_char));
     }
 
     #[test]

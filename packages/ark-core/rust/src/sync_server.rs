@@ -116,13 +116,115 @@ impl SyncServer {
         self.known_peer_records.lock().await.clone()
     }
 
-    /// Start the WS server.
+    /// Dedup connected peers by device_id. Matches the `getConnectedPeerEntries`
+    /// semantics of the TS sync server. Order: LinkedHashMap insertion order.
+    pub async fn get_connected_peer_entries(&self) -> Vec<(String, String)> {
+        let peers = self.peers.lock().await;
+        let mut seen: HashMap<String, String> = HashMap::new();
+        let mut order: Vec<String> = Vec::new();
+        for peer in peers.values() {
+            if !peer.authenticated {
+                continue;
+            }
+            if peer.device_id.is_empty() {
+                continue;
+            }
+            if !seen.contains_key(&peer.device_id) {
+                order.push(peer.device_id.clone());
+            }
+            seen.insert(peer.device_id.clone(), peer.device_name.clone());
+        }
+        order
+            .into_iter()
+            .map(|id| {
+                let name = seen.remove(&id).unwrap_or_default();
+                (id, name)
+            })
+            .collect()
+    }
+
+    /// True if any authenticated session matches the given `device_id`.
+    pub async fn is_connected_to(&self, device_id: &str) -> bool {
+        let peers = self.peers.lock().await;
+        peers
+            .values()
+            .any(|p| p.authenticated && p.device_id == device_id)
+    }
+
+    /// Record an externally-connected peer (e.g. a `SyncClient` we just dialled
+    /// out to) so `get_known_peers` reflects the merged set. Mirrors the
+    /// TS `registerExternalPeer` helper.
+    pub async fn register_external_peer(
+        &self,
+        device_id: &str,
+        device_name: &str,
+        addresses: Vec<String>,
+    ) {
+        let my_device_id = self.device_id.read().await.clone();
+        let my_addresses = self.own_addresses.read().await.clone();
+
+        if device_id == my_device_id {
+            return;
+        }
+        if !addresses.is_empty() && addresses.iter().all(|a| my_addresses.contains(a)) {
+            return;
+        }
+
+        let new_record = PeerRecord {
+            device_id: device_id.to_string(),
+            device_name: device_name.to_string(),
+            addresses,
+            last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            last_address: None,
+        };
+        let mut known = self.known_peer_records.lock().await;
+        *known = merge_peer_records(&known, &[new_record]);
+        save_known_peers(&self.storage, &known).await;
+    }
+
+    /// Replace the current own-addresses snapshot. Used when the host network
+    /// changes between `start_sync` calls or when an embedder wants to refresh
+    /// the routable set.
+    pub async fn set_own_addresses(&self, addresses: Vec<String>) {
+        *self.own_addresses.write().await = addresses;
+    }
+
+    pub async fn get_device_id(&self) -> String {
+        self.device_id.read().await.clone()
+    }
+
+    pub async fn get_device_name(&self) -> String {
+        self.device_name.read().await.clone()
+    }
+
+    /// Start the WS server on the default LAN sync port.
     pub async fn start(
         &self,
         space_id: &str,
         device_id: &str,
         device_name: Option<&str>,
         own_addresses: Option<Vec<String>>,
+    ) -> Result<(), String> {
+        self.start_with_addr(
+            space_id,
+            device_id,
+            device_name,
+            own_addresses,
+            &format!("0.0.0.0:{LAN_SYNC_PORT}"),
+        )
+        .await
+    }
+
+    /// Start the WS server on an explicit bind address. Used by integration
+    /// tests that need to avoid port conflicts and by embedders that want a
+    /// loopback-only listener.
+    pub async fn start_with_addr(
+        &self,
+        space_id: &str,
+        device_id: &str,
+        device_name: Option<&str>,
+        own_addresses: Option<Vec<String>>,
+        bind_addr: &str,
     ) -> Result<(), String> {
         *self.space_id.write().await = space_id.to_string();
         *self.device_id.write().await = device_id.to_string();
@@ -133,15 +235,15 @@ impl SyncServer {
             *self.own_addresses.write().await = addrs;
         }
 
-        // Load known peers
+        // Load known peers and evict stale self-references.
         self.load_known_peers().await;
+        self.purge_self_peers().await;
 
-        let addr = format!("0.0.0.0:{LAN_SYNC_PORT}");
-        let listener = TcpListener::bind(&addr)
+        let listener = TcpListener::bind(bind_addr)
             .await
-            .map_err(|e| format!("Failed to bind: {e}"))?;
+            .map_err(|e| format!("Failed to bind {bind_addr}: {e}"))?;
 
-        eprintln!("{TAG} Server listening on port {LAN_SYNC_PORT}");
+        eprintln!("{TAG} Server listening on {bind_addr}");
 
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         *self.shutdown_tx.lock().await = Some(shutdown_tx);
@@ -339,6 +441,33 @@ impl SyncServer {
             }
         }
     }
+
+    /// Purge stale self-referencing peer records. A record is "self" if:
+    ///   - its device_id matches our current device_id, OR
+    ///   - every address in its list is one of our own addresses (prior-run
+    ///     phantom with a different device_id).
+    ///
+    /// Called on start after loading known peers. Prevents self-connect loops
+    /// where stale records from dev iterations fire SyncClients that connect
+    /// to our own SyncServer.
+    pub async fn purge_self_peers(&self) -> usize {
+        let my_device_id = self.device_id.read().await.clone();
+        let my_addresses = self.own_addresses.read().await.clone();
+        let mut known = self.known_peer_records.lock().await;
+        let before = known.len();
+        known.retain(|p| {
+            if p.device_id == my_device_id { return false; }
+            if p.addresses.is_empty() { return true; }
+            let all_ours = p.addresses.iter().all(|a| my_addresses.contains(a));
+            !all_ours
+        });
+        let removed = before - known.len();
+        if removed > 0 {
+            eprintln!("{TAG} Purged {removed} stale self-peer records");
+            save_known_peers(&self.storage, &known).await;
+        }
+        removed
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +533,41 @@ async fn handle_message(
             let my_space_id = space_id.read().await.clone();
             let my_addresses = own_addresses.read().await.clone();
 
+            // Reject self-connect: a client claiming our own device_id is us
+            // (stale phantom peer in storage or address looping back to us).
+            if !peer_device_id.is_empty() && peer_device_id == my_device_id {
+                eprintln!("{TAG} Rejecting self-connect: client claims our device_id {peer_device_id}");
+                let mut peers_guard = peers.lock().await;
+                peers_guard.remove(&peer_id);
+                return;
+            }
+
+            // Evict any prior authenticated sessions from the same device — a
+            // new hello means a fresh connection, and the old session is stale.
+            // Mark stale sessions unauthenticated so their close handler
+            // doesn't fire an extra on_peer_disconnected.
+            {
+                let mut peers_guard = peers.lock().await;
+                let stale_ids: Vec<usize> = peers_guard
+                    .iter()
+                    .filter_map(|(id, p)| {
+                        if *id != peer_id && p.authenticated && p.device_id == peer_device_id {
+                            Some(*id)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                for stale_id in stale_ids {
+                    if let Some(stale) = peers_guard.get_mut(&stale_id) {
+                        eprintln!("{TAG} Evicting stale session for {} (superseded by new hello)", stale.device_name);
+                        stale.authenticated = false;
+                        let _ = stale.tx.send(Message::Close(None));
+                    }
+                    peers_guard.remove(&stale_id);
+                }
+            }
+
             let tx = {
                 let mut peers_guard = peers.lock().await;
                 if let Some(peer) = peers_guard.get_mut(&peer_id) {
@@ -419,18 +583,25 @@ async fn handle_message(
 
             eprintln!("{TAG} Peer authenticated: {peer_device_name}");
 
-            // Update known peer record
+            // Update known peer record — skip if it's a self-reference
+            // (device_id match or all-self address list).
             {
-                let new_record = PeerRecord {
-                    device_id: peer_device_id.clone(),
-                    device_name: peer_device_name,
-                    addresses: addresses.unwrap_or_default(),
-                    last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-                    last_address: None,
-                };
-                let mut known = known_peer_records.lock().await;
-                *known = merge_peer_records(&known, &[new_record]);
-                save_known_peers(storage, &known).await;
+                let peer_addresses = addresses.clone().unwrap_or_default();
+                let is_self = peer_device_id == my_device_id
+                    || (!peer_addresses.is_empty()
+                        && peer_addresses.iter().all(|a| my_addresses.contains(a)));
+                if !is_self {
+                    let new_record = PeerRecord {
+                        device_id: peer_device_id.clone(),
+                        device_name: peer_device_name,
+                        addresses: peer_addresses,
+                        last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                        last_address: None,
+                    };
+                    let mut known = known_peer_records.lock().await;
+                    *known = merge_peer_records(&known, &[new_record]);
+                    save_known_peers(storage, &known).await;
+                }
             }
 
             // Reply hello
@@ -643,9 +814,19 @@ async fn handle_message(
             }
 
             let my_device_id = device_id.read().await.clone();
+            let my_addresses = own_addresses.read().await.clone();
+            // Filter self-references: our own device_id, or any record whose
+            // addresses are all ours (stale phantom from prior runs).
             let filtered: Vec<PeerRecord> = incoming_peers
                 .into_iter()
-                .filter(|p| p.device_id != my_device_id)
+                .filter(|p| {
+                    if p.device_id == my_device_id { return false; }
+                    if !p.addresses.is_empty()
+                        && p.addresses.iter().all(|a| my_addresses.contains(a)) {
+                        return false;
+                    }
+                    true
+                })
                 .collect();
 
             let mut known = known_peer_records.lock().await;
@@ -704,5 +885,183 @@ async fn broadcast_to_others(
             }
         }
         let _ = peer.tx.send(Message::Text(json.clone()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex as StdMutex;
+
+    // Minimal in-memory backend for unit tests.
+    struct MemBackend {
+        kv: StdMutex<HashMap<String, String>>,
+        entities: StdMutex<HashMap<String, SyncEntity>>,
+    }
+
+    impl MemBackend {
+        fn new() -> Self {
+            Self {
+                kv: StdMutex::new(HashMap::new()),
+                entities: StdMutex::new(HashMap::new()),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl StorageBackend for MemBackend {
+        async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
+            self.entities.lock().unwrap().values().cloned().collect()
+        }
+        async fn apply_entity(&self, entity: &SyncEntity) {
+            if entity.deleted == Some(true) {
+                self.entities.lock().unwrap().remove(&entity.id);
+            } else {
+                self.entities
+                    .lock()
+                    .unwrap()
+                    .insert(entity.id.clone(), entity.clone());
+            }
+        }
+        async fn get_kv(&self, key: &str) -> Option<String> {
+            self.kv.lock().unwrap().get(key).cloned()
+        }
+        async fn set_kv(&self, key: &str, value: &str) {
+            self.kv
+                .lock()
+                .unwrap()
+                .insert(key.to_string(), value.to_string());
+        }
+    }
+
+    fn peer_rec(device_id: &str, addrs: &[&str]) -> PeerRecord {
+        PeerRecord {
+            device_id: device_id.to_string(),
+            device_name: format!("{device_id}-name"),
+            addresses: addrs.iter().map(|s| s.to_string()).collect(),
+            last_seen: "2026-04-01T00:00:00.000Z".to_string(),
+            last_address: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn purge_self_peers_drops_our_device_id() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+        *server.device_id.write().await = "me".to_string();
+        *server.own_addresses.write().await = vec!["192.168.1.10:21531".to_string()];
+
+        *server.known_peer_records.lock().await = vec![
+            peer_rec("me", &["192.168.1.10:21531"]),
+            peer_rec("other", &["192.168.1.20:21531"]),
+        ];
+
+        let removed = server.purge_self_peers().await;
+        assert_eq!(removed, 1);
+        let known = server.get_known_peers().await;
+        assert_eq!(known.len(), 1);
+        assert_eq!(known[0].device_id, "other");
+    }
+
+    #[tokio::test]
+    async fn purge_self_peers_drops_records_with_all_our_addresses() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+        *server.device_id.write().await = "me".to_string();
+        *server.own_addresses.write().await = vec![
+            "192.168.1.10:21531".to_string(),
+            "10.0.0.5:21531".to_string(),
+        ];
+
+        *server.known_peer_records.lock().await = vec![
+            // Different device_id, but every address is ours -> phantom self.
+            peer_rec("phantom", &["192.168.1.10:21531", "10.0.0.5:21531"]),
+            // Keep: one of the addresses is not ours.
+            peer_rec("real", &["192.168.1.10:21531", "192.168.1.99:21531"]),
+        ];
+
+        let removed = server.purge_self_peers().await;
+        assert_eq!(removed, 1);
+        let ids: Vec<String> = server
+            .get_known_peers()
+            .await
+            .into_iter()
+            .map(|p| p.device_id)
+            .collect();
+        assert_eq!(ids, vec!["real".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn register_external_peer_rejects_self() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+        *server.device_id.write().await = "me".to_string();
+        *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
+
+        server
+            .register_external_peer("me", "Me", vec!["10.0.0.1:21531".to_string()])
+            .await;
+        // Also: all-self addresses under a different device_id.
+        server
+            .register_external_peer("phantom", "Phantom", vec!["10.0.0.1:21531".to_string()])
+            .await;
+
+        assert!(
+            server.get_known_peers().await.is_empty(),
+            "register_external_peer must drop self and all-self-address records",
+        );
+    }
+
+    #[tokio::test]
+    async fn register_external_peer_stores_routable_peer() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+        *server.device_id.write().await = "me".to_string();
+        *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
+
+        server
+            .register_external_peer(
+                "other",
+                "Other",
+                vec!["192.168.1.20:21531".to_string()],
+            )
+            .await;
+
+        let known = server.get_known_peers().await;
+        assert_eq!(known.len(), 1);
+        assert_eq!(known[0].device_id, "other");
+        assert_eq!(known[0].addresses, vec!["192.168.1.20:21531".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn get_connected_peer_entries_dedup_by_device_id() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let server = SyncServer::new(storage.clone());
+        // Simulate two authenticated sessions from the same device_id (a race
+        // between old + new sessions before eviction settles).
+        let (tx, _rx) = mpsc::unbounded_channel::<Message>();
+        let state = |device_id: &str| PeerState {
+            device_id: device_id.to_string(),
+            device_name: "DupDevice".to_string(),
+            addresses: vec![],
+            authenticated: true,
+            sync_complete: true,
+            queued_live_changes: vec![],
+            tx: tx.clone(),
+        };
+        server.peers.lock().await.insert(1, state("dup"));
+        server.peers.lock().await.insert(2, state("dup"));
+
+        let entries = server.get_connected_peer_entries().await;
+        assert_eq!(
+            entries.len(),
+            1,
+            "duplicate device_id sessions should collapse to one entry",
+        );
+        assert_eq!(entries[0].0, "dup");
     }
 }

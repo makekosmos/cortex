@@ -370,6 +370,27 @@ export class SyncClient {
   }
 
   private handleHello(msg: HelloMessage): void {
+    // Reject self-connect: if the server's hello claims our own device_id,
+    // we accidentally connected to our own SyncServer (stale phantom peer
+    // record pointing at our own LAN address, or a loopback). Close and
+    // never retry — this peer record is a self-reference and should be
+    // evicted by the caller.
+    if (msg.device_id && msg.device_id === this.options.deviceId) {
+      console.warn(
+        `${TAG} Rejecting self-connect to ${msg.device_name || "self"} (${msg.device_id})`,
+      );
+      this.stopped = true;
+      if (this.ws) {
+        try {
+          this.ws.close(1008, "self-connect rejected");
+        } catch {
+          /* ignore */
+        }
+        this.ws = null;
+      }
+      return;
+    }
+
     this.authenticated = true;
     this.peerDeviceName = msg.device_name;
     console.log(

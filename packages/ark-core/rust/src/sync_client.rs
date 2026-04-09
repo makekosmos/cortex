@@ -38,6 +38,7 @@ pub struct SyncClient {
     space_id: String,
     own_addresses: Vec<String>,
     stopped: Arc<std::sync::atomic::AtomicBool>,
+    authenticated_tx: Arc<Mutex<Option<mpsc::UnboundedSender<Message>>>>,
     on_change: Arc<Mutex<Option<ClientOnChangeCallback>>>,
     on_connected: Arc<Mutex<Option<ClientOnConnectedCallback>>>,
     on_disconnected: Arc<Mutex<Option<ClientOnDisconnectedCallback>>>,
@@ -61,10 +62,24 @@ impl SyncClient {
             space_id,
             own_addresses,
             stopped: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            authenticated_tx: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_connected: Arc::new(Mutex::new(None)),
             on_disconnected: Arc::new(Mutex::new(None)),
             on_peer_list: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Send a live change to the currently connected peer, if any. The
+    /// message is dropped silently if the WS connection is not up or not
+    /// authenticated — the sender on the server side is expected to keep
+    /// state.
+    pub async fn broadcast_live_change(&self, entity: SyncEntity) {
+        let guard = self.authenticated_tx.lock().await;
+        if let Some(tx) = guard.as_ref() {
+            let change_id = generate_id();
+            let msg = LanSyncMessage::LiveChange { change_id, entity };
+            let _ = tx.send(Message::Text(serialize_message(&msg)));
         }
     }
 
@@ -100,6 +115,7 @@ impl SyncClient {
         let space_id = self.space_id.clone();
         let own_addresses = self.own_addresses.clone();
         let stopped = self.stopped.clone();
+        let authenticated_tx = self.authenticated_tx.clone();
         let on_change = self.on_change.clone();
         let on_connected = self.on_connected.clone();
         let on_disconnected = self.on_disconnected.clone();
@@ -180,8 +196,21 @@ impl SyncClient {
                                                 device_name: server_device_name,
                                                 ..
                                             } => {
+                                                // Reject self-connect: if the server's hello
+                                                // claims our own device_id, we accidentally
+                                                // connected to our own SyncServer (stale phantom
+                                                // peer record pointing at our own LAN IP). Close
+                                                // and stop retrying — this peer record is a
+                                                // self-reference and should be evicted.
+                                                if !server_device_id.is_empty() && server_device_id == device_id {
+                                                    eprintln!("{TAG} Rejecting self-connect to {server_device_name} ({server_device_id})");
+                                                    stopped.store(true, std::sync::atomic::Ordering::Relaxed);
+                                                    break;
+                                                }
+
                                                 authenticated = true;
                                                 peer_device_id_actual = server_device_id.clone();
+                                                *authenticated_tx.lock().await = Some(tx.clone());
                                                 eprintln!("{TAG} Authenticated with {server_device_name} ({server_device_id})");
                                                 if let Some(handler) = on_connected.lock().await.as_ref() {
                                                     handler(server_device_id, server_device_name);
@@ -327,6 +356,7 @@ impl SyncClient {
 
                         // Connection closed
                         writer.abort();
+                        *authenticated_tx.lock().await = None;
 
                         if authenticated {
                             eprintln!("{TAG} Disconnected from peer");
@@ -356,6 +386,21 @@ impl SyncClient {
     /// Stop the client and don't reconnect.
     pub fn stop(&self) {
         self.stopped.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Replace the current peer record (typically used when the beacon
+    /// discovers updated addresses for a known device).
+    pub async fn update_peer(&self, peer: PeerRecord) {
+        *self.peer.write().await = peer;
+    }
+
+    /// Snapshot of the peer this client is dialling.
+    pub async fn current_peer(&self) -> PeerRecord {
+        self.peer.read().await.clone()
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.stopped.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -404,14 +449,14 @@ async fn race_connect(
 
         let handle = tokio::spawn(async move {
             let connect_future = connect_async(&url);
-            match tokio::time::timeout(Duration::from_millis(CONNECT_TIMEOUT_MS), connect_future).await {
-                Ok(Ok((ws_stream, _))) => {
-                    let mut guard = result_tx.lock().await;
-                    if let Some(tx) = guard.take() {
-                        let _ = tx.send((ws_stream, addr_clone));
-                    }
+            if let Ok(Ok((ws_stream, _))) =
+                tokio::time::timeout(Duration::from_millis(CONNECT_TIMEOUT_MS), connect_future)
+                    .await
+            {
+                let mut guard = result_tx.lock().await;
+                if let Some(tx) = guard.take() {
+                    let _ = tx.send((ws_stream, addr_clone));
                 }
-                _ => {}
             }
         });
         handles.push(handle);

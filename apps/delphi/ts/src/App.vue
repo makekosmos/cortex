@@ -531,7 +531,10 @@ async function startSyncServer(spaceId?: string, seedAddresses: string[] = []) {
   if (!window.electronAPI?.invoke) return;
 
   const deviceId = localStorage.getItem("delphi.sync_device_id") ?? "unknown";
-  const deviceName = "Delphi Electron";
+  // Main process computes the real host name (os.hostname()) and ignores
+  // whatever we pass here — send an empty string so we don't pollute logs
+  // with the old "Delphi Electron" placeholder.
+  const deviceName = "";
 
   try {
     await window.electronAPI.invoke(

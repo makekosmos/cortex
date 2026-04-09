@@ -1,0 +1,28 @@
+=== @arksync/core runtime imports in electron/ (post-fix) ===
+$ rg -n "from ['\"]@arksync/(core|node)['\"]" apps/delphi/ts/electron/
+apps/delphi/ts/electron/main.ts:7:import type { PeerChange, SyncEntity } from '@arksync/core';
+EXIT_CODE=0
+
+(only match is the pure `import type` in main.ts; delphi-storage.ts has been deleted)
+
+=== @arksync/core all references in electron/main.ts ===
+$ rg -n "@arksync/core" apps/delphi/ts/electron/main.ts
+7:import type { PeerChange, SyncEntity } from '@arksync/core';
+464:// Runtime imports from `@arksync/core` and `@arksync/node` have been removed.
+625:    // @arksync/node at runtime.
+EXIT_CODE=0
+
+=== Non-type runtime imports filter (should be empty) ===
+$ rg -n "from ['\"]@arksync/(core|node)['\"]" apps/delphi/ts/electron/ | grep -v "import type"
+(no output)
+EXIT_CODE=1
+
+=== Kotlin banned class declarations ===
+$ rg -n "class (SyncServer|LanSyncClient|BroadcastDiscovery)" apps/delphi/kotlin/app/src/main/java/
+(no output)
+EXIT_CODE=1
+
+=== Confirmation the orphaned file is gone ===
+$ ls apps/delphi/ts/electron/delphi-storage.ts
+ls: apps/delphi/ts/electron/delphi-storage.ts: No such file or directory
+EXIT_CODE=1

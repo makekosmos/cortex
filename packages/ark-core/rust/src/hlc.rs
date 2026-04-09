@@ -95,6 +95,7 @@ impl HLC {
     }
 
     /// Serialize to string format: `<ISO8601>:<counter:06d>:<device_id>`
+    #[allow(clippy::inherent_to_string_shadow_display)]
     pub fn to_string(&self) -> String {
         format!("{}:{:06}:{}", self.wall_time, self.counter, self.device_id)
     }

@@ -166,8 +166,9 @@ export class SyncServer {
       this.stop();
     }
 
-    // Load known peers from previous sessions
+    // Load known peers from previous sessions and evict stale self-references.
     await this.loadKnownPeers();
+    this.purgeSelfPeers();
 
     return new Promise((resolve, reject) => {
       this.wss = new WebSocketServer({ port: LAN_SYNC_PORT }, () => {
@@ -257,6 +258,33 @@ export class SyncServer {
     addresses: string[],
   ): void {
     this.updatePeerRecord(deviceId, deviceName, addresses);
+  }
+
+  /**
+   * Purge stale self-referencing peer records. A record is "self" if:
+   *   - its device_id matches our current device_id, OR
+   *   - every address in its list is one of our own addresses (prior-run
+   *     phantom with a different device_id).
+   *
+   * Called on start after loading known peers. Prevents the self-connect
+   * loop where stale records from dev iterations keep firing SyncClients
+   * that connect to our own SyncServer.
+   */
+  purgeSelfPeers(): number {
+    const ownSet = new Set(this.ownAddresses);
+    const before = this.knownPeerRecords.length;
+    this.knownPeerRecords = this.knownPeerRecords.filter((p) => {
+      if (p.device_id === this.deviceId) return false;
+      if (p.addresses.length === 0) return true; // keep, will get addresses later
+      const allOurs = p.addresses.every((a) => ownSet.has(a));
+      return !allOurs;
+    });
+    const removed = before - this.knownPeerRecords.length;
+    if (removed > 0) {
+      console.log(`${TAG} Purged ${removed} stale self-peer records`);
+      this.saveKnownPeers().catch(() => {});
+    }
+    return removed;
   }
 
   /** Check if we have a connected peer with the given device_id. */
@@ -356,12 +384,60 @@ export class SyncServer {
       return;
     }
 
+    // Reject self-connect: a client claiming our own device_id is us (stale
+    // phantom peer in storage, beacon loopback, or seed address listing own
+    // LAN IP). Accepting it causes an infinite hello/evict/reconnect loop.
+    if (msg.device_id && msg.device_id === this.deviceId) {
+      console.warn(
+        `${TAG} Rejecting self-connect: client claims our device_id ${msg.device_id}`,
+      );
+      this.peers.delete(ws);
+      try {
+        ws.close(1008, "self-connect rejected");
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
     peer.deviceId = msg.device_id;
     peer.deviceName = msg.device_name;
     peer.addresses = msg.addresses ?? [];
     peer.authenticated = true;
 
     console.log(`${TAG} Peer authenticated: ${peer.deviceName}`);
+
+    // Close any previous authenticated sessions from the same device. A new
+    // hello means the client has a fresh connection, so any prior session for
+    // the same device_id is stale and should be evicted — otherwise the peer
+    // list accumulates "ghost" duplicates until WebSocket ping timeout.
+    if (peer.deviceId) {
+      const stale: Array<[WebSocket, PeerState]> = [];
+      for (const entry of this.peers) {
+        const [staleWs, stalePeer] = entry;
+        if (staleWs === ws) continue;
+        if (!stalePeer.authenticated) continue;
+        if (stalePeer.deviceId !== peer.deviceId) continue;
+        stale.push(entry);
+      }
+      for (const [staleWs, stalePeer] of stale) {
+        console.log(
+          `${TAG} Evicting stale session for ${stalePeer.deviceName} (superseded by new hello)`,
+        );
+        // Prevent the close handler from firing onPeerDisconnect for this
+        // device — the new session is already authenticated and replacing it.
+        stalePeer.authenticated = false;
+        for (const ack of stalePeer.pendingAcks.values()) {
+          clearTimeout(ack.timer);
+        }
+        this.peers.delete(staleWs);
+        try {
+          staleWs.close(1000, "superseded");
+        } catch {
+          /* ignore */
+        }
+      }
+    }
 
     // Merge announced addresses into our known peer records
     this.updatePeerRecord(peer.deviceId, peer.deviceName, peer.addresses);
@@ -406,9 +482,16 @@ export class SyncServer {
   ): void {
     if (!peer.authenticated) return;
 
-    const incomingPeers = msg.peers.filter(
-      (p) => p.device_id !== this.deviceId,
-    );
+    // Filter self-references from incoming peer list: our own device_id, or
+    // any record whose addresses are all ours (stale phantom from prior runs).
+    const ownSet = new Set(this.ownAddresses);
+    const incomingPeers = msg.peers.filter((p) => {
+      if (p.device_id === this.deviceId) return false;
+      if (p.addresses.length > 0 && p.addresses.every((a) => ownSet.has(a))) {
+        return false;
+      }
+      return true;
+    });
     const beforeIds = new Set(this.knownPeerRecords.map((p) => p.device_id));
     this.knownPeerRecords = mergePeerRecords(
       this.knownPeerRecords,
@@ -668,6 +751,15 @@ export class SyncServer {
     deviceName: string,
     addresses: string[],
   ): void {
+    // Never store records for ourselves — neither by device_id nor by
+    // an all-self address list. Prevents phantom self-references from
+    // accumulating in persisted storage.
+    if (deviceId === this.deviceId) return;
+    if (addresses.length > 0) {
+      const ownSet = new Set(this.ownAddresses);
+      if (addresses.every((a) => ownSet.has(a))) return;
+    }
+
     const newRecord: PeerRecord = {
       device_id: deviceId,
       device_name: deviceName,

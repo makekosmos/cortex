@@ -80,9 +80,19 @@ Android — равноправный пир: запускает WS-сервер 
 | Файл | Роль |
 |------|------|
 | `data/sync/SyncServer.kt` | Ktor CIO embedded WS-сервер (порт 21531, fallback 21531-21541) |
-| `data/sync/LanSyncClient.kt` | OkHttp WS-клиент |
+| `data/sync/LanSyncClient.kt` | OkHttp WS-клиент (`ServerInfo` хранит `deviceId` сервера) |
+| `data/sync/BroadcastDiscovery.kt` | UDP beacon (port 21532) отправка + приём с дедупом по `deviceId` |
 | `data/sync/PeerManager.kt` | Координатор: server + client + peer list exchange + broadcast helpers |
 | `data/sync/SyncEntityParser.kt` | Сериализация/десериализация сущностей для sync (включая checklist items, tags) |
+
+### Discovery + дедуп пиров
+
+- **BroadcastDiscovery**: UDP broadcast (port 21532) каждые 5 с. mDNS не используется — блокируется AP isolation.
+- **Дедуп beacon'ов**: `ConcurrentHashMap<deviceId, SeenPeer>`, TTL 30 с. `onPeerDiscovered` зовётся только при новом `deviceId` или изменении списка адресов. Без этого — бесконечный reconnect-спам.
+- **Фильтрация анонсируемых адресов**: skip link-local (`169.254/16`, `fe80::/10`), unique-local (`fc00::/7`), loopback, виртуальные интерфейсы (`utun*`, `wg*`, `tailscale*`, `docker*`, `rmnet*`, `dummy*`, `bridge*`, `vmnet*` и т.д.). Правило применяется в `BroadcastDiscovery.sendBeacon()`.
+- **Device name**: `${Build.MANUFACTURER} ${Build.MODEL}` (`MainActivity.getDeviceName()`, `SpaceSetupViewModel.getDeviceName()`). Не захардкоживать process name.
+- **Single-session-per-device (SyncServer)**: `handleHello` закрывает все предыдущие authenticated-сессии с тем же `deviceId` (предварительно снимая `authenticated` флаг, чтобы не дёрнуть лишний `onPeerDisconnected`). `getConnectedPeers()` дедупит через `LinkedHashMap<deviceId, name>`.
+- **Inbound + outbound = 1 запись в UI**: `PeerManager.updatePeerCounts()` мержит `syncServer.getConnectedPeers()` и `lanSyncClient.serverInfo` дедупом по `deviceId`. Если Android подключен к Electron в обе стороны — в списке одна запись.
 
 ### Синхронизируемые сущности
 

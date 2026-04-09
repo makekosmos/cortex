@@ -20,6 +20,13 @@ interface PendingRequest<T> {
   reject: (error: Error) => void;
 }
 
+/** Event payloads pushed asynchronously by the ark-core-rpc sidecar. */
+export interface SidecarEvent {
+  event: string;
+  [key: string]: unknown;
+}
+export type SidecarEventListener = (event: SidecarEvent) => void;
+
 function getSidecarBinaryPath() {
   const binaryName = process.platform === 'win32' ? 'ark-core-rpc.exe' : 'ark-core-rpc'
 
@@ -56,6 +63,25 @@ class SidecarClient {
   private activeRequest: PendingRequest<unknown> | null = null
   private initialized = false
   private dbPathOverride: string | null = null
+  private eventListeners: Set<SidecarEventListener> = new Set()
+
+  /** Subscribe to async events pushed by the ark-core-rpc sidecar. */
+  onEvent(listener: SidecarEventListener): () => void {
+    this.eventListeners.add(listener)
+    return () => {
+      this.eventListeners.delete(listener)
+    }
+  }
+
+  private dispatchEvent(event: SidecarEvent): void {
+    for (const listener of this.eventListeners) {
+      try {
+        listener(event)
+      } catch (err) {
+        console.warn('[Sidecar] event listener threw:', err)
+      }
+    }
+  }
 
   private ensureChild() {
     if (this.child) {
@@ -132,22 +158,42 @@ class SidecarClient {
         continue
       }
 
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(rawLine)
+      } catch (error) {
+        // If we're mid-request, fail it; otherwise drop the garbage line.
+        const pending = this.activeRequest
+        this.activeRequest = null
+        if (pending) {
+          pending.reject(error instanceof Error ? error : new Error(String(error)))
+          this.dispatchNext()
+        }
+        continue
+      }
+
+      // Event frames are distinguished by having an `event` field (and no `ok`
+      // field). They flow on the same stdout stream as responses but must not
+      // consume the activeRequest slot.
+      if (parsed && typeof parsed === 'object' && 'event' in (parsed as Record<string, unknown>) && !('ok' in (parsed as Record<string, unknown>))) {
+        this.dispatchEvent(parsed as SidecarEvent)
+        continue
+      }
+
       const pending = this.activeRequest
       this.activeRequest = null
 
       if (!pending) {
+        // Spurious response — no caller is waiting. Drop it quietly to
+        // avoid wedging the queue.
         continue
       }
 
-      try {
-        const response = JSON.parse(rawLine) as SidecarResponse<unknown>
-        if (!response.ok) {
-          pending.reject(new Error(response.error || 'delphi-db request failed'))
-        } else {
-          pending.resolve(response.data)
-        }
-      } catch (error) {
-        pending.reject(error instanceof Error ? error : new Error(String(error)))
+      const response = parsed as SidecarResponse<unknown>
+      if (!response.ok) {
+        pending.reject(new Error(response.error || 'ark-core-rpc request failed'))
+      } else {
+        pending.resolve(response.data)
       }
 
       this.dispatchNext()
@@ -243,11 +289,11 @@ class SidecarClient {
 
   shutdown() {
     this.requestQueue.splice(0).forEach(request => {
-      request.reject(new Error('delphi-db client shut down'))
+      request.reject(new Error('ark-core-rpc client shut down'))
     })
 
     if (this.activeRequest) {
-      this.activeRequest.reject(new Error('delphi-db client shut down'))
+      this.activeRequest.reject(new Error('ark-core-rpc client shut down'))
       this.activeRequest = null
     }
 
@@ -256,6 +302,7 @@ class SidecarClient {
     }
 
     this.resetChild()
+    this.eventListeners.clear()
   }
 }
 
@@ -407,6 +454,71 @@ export async function dbClearAll(): Promise<void> {
 
 export async function dbDeleteTrashed(): Promise<number> {
   return sidecar.request<number>({ operation: 'delete_trashed' })
+}
+
+// ---------------------------------------------------------------------------
+// Sync wrapper functions (new in ark-core-rpc runtime)
+// ---------------------------------------------------------------------------
+
+/** Minimal sync entity shape matching the Rust SyncEntity on the wire. */
+export interface SyncEntityPayload {
+  type: string;
+  id: string;
+  data: Record<string, unknown>;
+  hlc: string;
+  deleted?: boolean;
+}
+
+export interface ConnectedPeer {
+  device_id: string;
+  device_name: string;
+}
+
+export interface StartSyncParams {
+  spaceId: string;
+  deviceId: string;
+  deviceName?: string;
+  port?: number;
+  seedAddresses?: string[];
+}
+
+export function syncStart(params: StartSyncParams): Promise<boolean> {
+  return sidecar.request<boolean>({
+    operation: 'start_sync',
+    space_id: params.spaceId,
+    device_id: params.deviceId,
+    device_name: params.deviceName ?? null,
+    port: params.port ?? null,
+    seed_addresses: params.seedAddresses ?? null,
+  })
+}
+
+export function syncStop(): Promise<boolean> {
+  return sidecar.request<boolean>({ operation: 'stop_sync' })
+}
+
+export function syncLeaveSpace(): Promise<boolean> {
+  return sidecar.request<boolean>({ operation: 'leave_space' })
+}
+
+export function syncBroadcastChange(entity: SyncEntityPayload): Promise<boolean> {
+  return sidecar.request<boolean>({ operation: 'broadcast_change', entity })
+}
+
+export function syncGetConnectedPeers(): Promise<ConnectedPeer[]> {
+  return sidecar.request<ConnectedPeer[]>({ operation: 'get_connected_peers' })
+}
+
+export function syncAddSeedPeer(addresses: string[]): Promise<boolean> {
+  return sidecar.request<boolean>({ operation: 'add_seed_peer', addresses })
+}
+
+export function syncGetOwnAddresses(port?: number): Promise<string[]> {
+  return sidecar.request<string[]>({ operation: 'get_own_addresses', port: port ?? null })
+}
+
+export function syncGetHostDeviceName(): Promise<string> {
+  return sidecar.request<string>({ operation: 'get_host_device_name' })
 }
 
 /**

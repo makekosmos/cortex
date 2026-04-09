@@ -19,6 +19,14 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The ark-core Rust cdylib is pre-built via `cargo ndk` and dropped
+        // into `app/src/main/jniLibs/<abi>/libark_core.so`. Limit the APK
+        // payload to the ABIs we actually ship so a missing build doesn't
+        // silently produce a crash-on-launch APK.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -120,5 +128,9 @@ dependencies {
 
     // DataStore
     implementation(libs.datastore.preferences)
+
+    // UniFFI Kotlin bindings require JNA (for the ark-core Rust sync engine).
+    // Use the @aar classifier so the native bits ship with the APK.
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
 
 }

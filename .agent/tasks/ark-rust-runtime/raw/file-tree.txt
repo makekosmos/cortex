@@ -1,0 +1,47 @@
+=== packages/ark-core/rust/src/ ===
+total 512
+drwxr-xr-x@ 17 kirill  staff    544 Apr  9 13:52 .
+drwxr-xr-x@  8 kirill  staff    256 Apr  9 13:38 ..
+-rw-r--r--@  1 kirill  staff  23792 Apr  9 13:10 beacon.rs
+drwxr-xr-x@  3 kirill  staff     96 Apr  9 13:38 bin
+-rw-r--r--@  1 kirill  staff  31528 Apr  9 13:20 db.rs
+-rw-r--r--@  1 kirill  staff  31818 Apr  9 13:48 ffi.rs
+-rw-r--r--@  1 kirill  staff   7683 Apr  9 13:20 hlc.rs
+-rw-r--r--@  1 kirill  staff   6281 Apr  9 13:38 host.rs
+-rw-r--r--@  1 kirill  staff    898 Apr  9 13:56 lib.rs
+-rw-r--r--@  1 kirill  staff  25919 Apr  9 13:48 main.rs
+-rw-r--r--@  1 kirill  staff   5805 Apr  9 13:03 net.rs
+-rw-r--r--@  1 kirill  staff  20742 Apr  6 16:52 protocol.rs
+-rw-r--r--@  1 kirill  staff   1764 Apr  6 16:49 schema.rs
+-rw-r--r--@  1 kirill  staff  11472 Apr  9 13:52 space.rs
+-rw-r--r--@  1 kirill  staff  22933 Apr  9 13:20 sync_client.rs
+-rw-r--r--@  1 kirill  staff  42480 Apr  9 13:23 sync_server.rs
+-rw-r--r--@  1 kirill  staff   3720 Apr  6 16:49 types.rs
+
+=== apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/ ===
+total 216
+drwxr-xr-x@ 13 kirill  staff    416 Apr  9 13:42 .
+drwxr-xr-x@  7 kirill  staff    224 Apr  4 03:35 ..
+-rw-r--r--@  1 kirill  staff   5721 Mar 29 23:43 ArkDiscovery.kt
+-rw-r--r--@  1 kirill  staff   7381 Mar 30 17:28 ArkEventMapper.kt
+-rw-r--r--@  1 kirill  staff  17653 Apr  4 03:42 ArkPeerManager.kt
+-rw-r--r--@  1 kirill  staff   1405 Mar 31 03:14 ArkPeerProtocol.kt
+-rw-r--r--@  1 kirill  staff  28326 Apr  6 12:07 ArkSyncClient.kt
+-rw-r--r--@  1 kirill  staff   1865 Mar 29 12:09 HLC.kt
+-rw-r--r--@  1 kirill  staff    423 Apr  9 13:42 LanSyncState.kt
+-rw-r--r--@  1 kirill  staff    840 Mar 29 12:10 Pairing.kt
+-rw-r--r--@  1 kirill  staff  10320 Apr  9 13:41 PeerManager.kt
+-rw-r--r--@  1 kirill  staff   2701 Apr  1 14:10 PeerRecord.kt
+-rw-r--r--@  1 kirill  staff  10384 Apr  6 11:48 SyncEntityParser.kt
+
+=== apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ ===
+total 184
+drwxr-xr-x@ 3 kirill  staff     96 Apr  9 13:39 .
+drwxr-xr-x@ 3 kirill  staff     96 Apr  9 13:39 ..
+-rw-r--r--@ 1 kirill  staff  90164 Apr  9 13:39 ark_core.kt
+
+=== apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/ ===
+total 12072
+drwxr-xr-x@ 3 kirill  staff       96 Apr  9 13:39 .
+drwxr-xr-x@ 3 kirill  staff       96 Apr  9 13:39 ..
+-rwxr-xr-x@ 1 kirill  staff  6179144 Apr  9 13:51 libark_core.so

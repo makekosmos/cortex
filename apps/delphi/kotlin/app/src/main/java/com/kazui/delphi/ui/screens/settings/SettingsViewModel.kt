@@ -9,7 +9,6 @@ import androidx.lifecycle.viewModelScope
 import com.kazui.delphi.data.space.SpaceManager
 import com.kazui.delphi.data.sync.ArkPeerManager
 import com.kazui.delphi.data.sync.ArkSyncClient
-import com.kazui.delphi.data.sync.LanSyncClient
 import com.kazui.delphi.data.sync.LanSyncState
 import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.data.sync.SyncStatus

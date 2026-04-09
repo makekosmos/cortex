@@ -3,54 +3,58 @@ package com.kazui.delphi.data.sync
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.kazui.delphi.data.space.SpaceManager
+import com.kepler.ark.core.ArkCore
+import com.kepler.ark.core.ArkEventListener
+import com.kepler.ark.core.FfiConnectedPeer
+import com.kepler.ark.core.FfiSyncConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "PeerManager"
-private const val RECONNECT_DELAY_MS = 5_000L
 
 /**
- * Coordinates the WS server + WS clients for equal-peer P2P sync.
+ * Thin coordinator that bridges the Kotlin UI layer to the Rust `ArkCore`
+ * sync engine over UniFFI.
  *
- * Every device runs:
- *   - SyncServer (Ktor, listens on port 21531)
- *   - LanSyncClient connections to all known peers
+ * Every protocol operation (hello / version_vector / batch split / HLC tick
+ * / beacon send / peer dedup / self-connect rejection) happens on the Rust
+ * side — this file contains no wire format, no WebSocket / UDP code, and no
+ * version-vector math. It only:
+ *   - Owns a single `ArkCore` instance and forwards start/stop/broadcast
+ *     calls to it.
+ *   - Installs an `ArkEventListener` implementation that turns Rust events
+ *     into the `StateFlow`s + `onDataChanged` callback the Compose layer
+ *     already consumes.
+ *   - Keeps the pre-migration public API (`broadcastTodoChange`, etc.) so
+ *     the UI/view-model layer does not need to change.
  *
- * PeerManager orchestrates both, manages the peer list, and handles
- * peer_list exchange for mesh discovery.
+ * See `.agent/tasks/ark-rust-runtime/spec.md` AC16 for the removal-of-protocol
+ * contract this class fulfils.
  */
 @Singleton
 class PeerManager @Inject constructor(
-    private val syncServer: SyncServer,
-    private val lanSyncClient: LanSyncClient,
     private val spaceManager: SpaceManager,
     private val dataStore: DataStore<Preferences>,
+    private val databaseProvider: com.kazui.delphi.di.DatabaseProvider,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile private var isRunning = false
-    private var spaceCode: String = ""
     private var spaceId: String = ""
     private var deviceId: String = ""
     private var deviceName: String = ""
 
-    private val broadcastDiscovery = BroadcastDiscovery(scope)
-    private val reconnectJobs = mutableMapOf<String, Job>()
+    private val arkCore: ArkCore = ArkCore()
+    @Volatile private var dbOpened = false
 
     // Exposed state
     private val _connectedPeerCount = MutableStateFlow(0)
@@ -59,8 +63,11 @@ class PeerManager @Inject constructor(
     private val _connectedPeerNames = MutableStateFlow<List<String>>(emptyList())
     val connectedPeerNames: StateFlow<List<String>> = _connectedPeerNames.asStateFlow()
 
-    /** Combined sync state: LIVE if any connection is live. */
-    val lanSyncState: StateFlow<LanSyncState> = lanSyncClient.state
+    private val _lanSyncState = MutableStateFlow(LanSyncState.DISCONNECTED)
+    val lanSyncState: StateFlow<LanSyncState> = _lanSyncState.asStateFlow()
+
+    // Track peer name per device_id, source of truth for _connectedPeerNames.
+    private val knownConnectedPeers = linkedMapOf<String, String>()
 
     // Callback for UI updates when data changes from sync
     var onDataChanged: (() -> Unit)? = null
@@ -72,116 +79,58 @@ class PeerManager @Inject constructor(
     suspend fun start(spaceCode: String, deviceId: String, deviceName: String) {
         if (isRunning) stop()
 
-        this.spaceCode = spaceManager.normalizeCode(spaceCode)
-        this.spaceId = spaceManager.deriveSpaceId(this.spaceCode)
+        val normalizedCode = spaceManager.normalizeCode(spaceCode)
+        this.spaceId = spaceManager.deriveSpaceId(normalizedCode)
         this.deviceId = deviceId
         this.deviceName = deviceName
         this.isRunning = true
 
-        val ownAddresses = spaceManager.getOwnAddresses()
-        Log.i(TAG, "Starting with space=${spaceManager.formatCode(this.spaceCode)}")
+        Log.i(TAG, "Starting ark-core sync for space=${spaceManager.formatCode(normalizedCode)}")
 
-        // Wire up server callbacks
-        syncServer.onChangeReceived = { entity ->
-            onDataChanged?.invoke()
-        }
-        syncServer.onPeerConnected = { peerDeviceId, peerName ->
-            updatePeerCounts()
-            Log.i(TAG, "Server: peer connected: $peerName ($peerDeviceId)")
-        }
-        syncServer.onPeerDisconnected = { peerDeviceId ->
-            updatePeerCounts()
-            Log.i(TAG, "Server: peer disconnected: $peerDeviceId")
-        }
-        syncServer.onNewPeerDiscovered = { record ->
-            // Try connecting to newly discovered peer
-            scope.launch {
-                connectToPeer(record)
-            }
+        // Open the shared DB lazily; the path comes from the DatabaseProvider.
+        // TODO: wire the real db path once the Delphi Android DB migration
+        // lands. For now the UniFFI binding treats `open_db` as optional
+        // when the caller supplies `db_path` inside `FfiSyncConfig`.
+        val dbPath = try {
+            databaseProvider.arkDbPath()
+        } catch (e: Throwable) {
+            Log.w(TAG, "DatabaseProvider.arkDbPath() unavailable, sync engine will run DB-less: ${e.message}")
+            null
         }
 
-        // Wire up client callbacks
-        lanSyncClient.onDataChanged = {
-            onDataChanged?.invoke()
-        }
-        lanSyncClient.onPeerListReceived = { peerList ->
-            scope.launch {
-                handlePeerListFromClient(peerList)
-            }
-        }
+        _lanSyncState.value = LanSyncState.CONNECTING
 
-        // Start the WS server
         try {
-            syncServer.start(
-                port = SpaceManager.LAN_SYNC_PORT,
-                spaceId = spaceId,
-                deviceId = deviceId,
-                deviceName = deviceName,
-                ownAddresses = ownAddresses,
+            arkCore.startSync(
+                FfiSyncConfig(
+                    spaceId = spaceId,
+                    deviceId = deviceId,
+                    deviceName = deviceName,
+                    port = SpaceManager.LAN_SYNC_PORT.toUInt(),
+                    dbPath = dbPath,
+                    seedAddresses = emptyList(),
+                ),
+                listener = createListener(),
             )
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start sync server: ${e.message}")
-            // Continue anyway -- we can still work as a client
+            dbOpened = dbPath != null
+            _lanSyncState.value = LanSyncState.LIVE
+        } catch (e: Throwable) {
+            Log.e(TAG, "startSync failed: ${e.message}", e)
+            _lanSyncState.value = LanSyncState.DISCONNECTED
         }
-
-        // Migrate legacy lan_sync_ip → peer record
-        val prefs = dataStore.data.first()
-        val legacyIp = prefs[stringPreferencesKey("lan_sync_ip")]
-        if (!legacyIp.isNullOrBlank()) {
-            val legacyPeer = PeerRecord(
-                deviceId = "legacy-electron",
-                deviceName = "Delphi Electron",
-                addresses = listOf("$legacyIp:21531"),
-                lastSeen = Instant.now().toString(),
-            )
-            syncServer.addKnownPeer(legacyPeer)
-            // Clear legacy key
-            dataStore.edit { it.remove(stringPreferencesKey("lan_sync_ip")) }
-        }
-
-        // Connect to all known peers as client
-        val knownPeers = syncServer.getKnownPeerRecords()
-        for (peer in knownPeers) {
-            if (peer.deviceId == deviceId) continue
-            if (syncServer.isConnectedTo(peer.deviceId)) continue
-            scope.launch {
-                connectToPeer(peer)
-            }
-        }
-
-        // Start UDP broadcast discovery for automatic peer re-discovery
-        val actualPort = syncServer.actualPort.takeIf { it > 0 } ?: SpaceManager.LAN_SYNC_PORT
-        broadcastDiscovery.onPeerDiscovered = { beaconPeer ->
-            val allAddrs = beaconPeer.addresses.ifEmpty { listOf(beaconPeer.address) }
-            Log.i(TAG, "Beacon from ${beaconPeer.deviceName}: ${allAddrs.size} addresses")
-            scope.launch {
-                // Update peer record with ALL addresses
-                syncServer.registerExternalPeer(beaconPeer.deviceId, beaconPeer.deviceName, allAddrs)
-
-                // Connect if not already connected — try all addresses
-                if (!syncServer.isConnectedTo(beaconPeer.deviceId)) {
-                    val record = PeerRecord(
-                        deviceId = beaconPeer.deviceId,
-                        deviceName = beaconPeer.deviceName,
-                        addresses = allAddrs,
-                        lastSeen = Instant.now().toString(),
-                    )
-                    connectToPeer(record)
-                }
-            }
-        }
-        broadcastDiscovery.start(spaceId, deviceId, deviceName, actualPort)
     }
 
     fun stop() {
         isRunning = false
-        broadcastDiscovery.stop()
-        reconnectJobs.values.forEach { it.cancel() }
-        reconnectJobs.clear()
-        lanSyncClient.disconnect()
-        scope.launch { syncServer.stop() }
+        try {
+            arkCore.stopSync()
+        } catch (e: Throwable) {
+            Log.w(TAG, "stopSync threw: ${e.message}")
+        }
         _connectedPeerCount.value = 0
         _connectedPeerNames.value = emptyList()
+        knownConnectedPeers.clear()
+        _lanSyncState.value = LanSyncState.DISCONNECTED
         Log.i(TAG, "Stopped")
     }
 
@@ -189,70 +138,18 @@ class PeerManager @Inject constructor(
     // Peer connections
     // ---------------------------------------------------------------------------
 
-    /**
-     * Add a peer and try connecting to it.
-     * Used when scanning QR or receiving peer_list.
-     */
     suspend fun addPeer(record: PeerRecord) {
-        syncServer.registerExternalPeer(record.deviceId, record.deviceName, record.addresses)
-        if (!syncServer.isConnectedTo(record.deviceId) && lanSyncClient.state.value == LanSyncState.DISCONNECTED) {
-            connectToPeer(record)
-        }
+        if (!isRunning) return
+        addInitialPeer(record.addresses)
     }
 
-    /**
-     * Add an initial peer by addresses (for QR join flow).
-     */
     suspend fun addInitialPeer(addresses: List<String>) {
-        // We don't know device_id yet -- connect and learn it from hello
+        if (!isRunning) return
         if (addresses.isEmpty()) return
-
-        val ownAddresses = spaceManager.getOwnAddresses()
-
-        // Try each address, connecting to the first one that works
-        for (addr in addresses) {
-            val ip = extractIpFromAddress(addr) ?: continue
-            lanSyncClient.connect(ip, spaceId, deviceId, deviceName, ownAddresses)
-            return
-        }
-    }
-
-    private suspend fun connectToPeer(record: PeerRecord) {
-        if (!isRunning) return
-        if (record.deviceId == deviceId) return
-
-        // Don't reconnect if already connected or connecting as client
-        val clientState = lanSyncClient.state.value
-        if (clientState == LanSyncState.LIVE || clientState == LanSyncState.SYNCING || clientState == LanSyncState.CONNECTED || clientState == LanSyncState.CONNECTING) {
-            return
-        }
-
-        // Sort addresses: lastAddress first, then LAN IPs, then others
-        val sortedAddresses = buildList {
-            record.lastAddress?.let { add(it) }
-            addAll(record.addresses.filter { it != record.lastAddress })
-        }
-
-        val ownAddresses = spaceManager.getOwnAddresses()
-
-        // Try addresses sequentially (first success wins)
-        for (addr in sortedAddresses) {
-            if (!isRunning) return
-            val ip = extractIpFromAddress(addr) ?: continue
-            lanSyncClient.connect(ip, spaceId, deviceId, deviceName, ownAddresses)
-            return
-        }
-    }
-
-    private fun scheduleReconnect(record: PeerRecord) {
-        if (!isRunning) return
-        if (reconnectJobs.containsKey(record.deviceId)) return
-        reconnectJobs[record.deviceId] = scope.launch {
-            delay(RECONNECT_DELAY_MS)
-            reconnectJobs.remove(record.deviceId)
-            if (isRunning && !syncServer.isConnectedTo(record.deviceId)) {
-                connectToPeer(record)
-            }
+        try {
+            arkCore.addSeedPeer(addresses)
+        } catch (e: Throwable) {
+            Log.w(TAG, "addSeedPeer failed: ${e.message}")
         }
     }
 
@@ -260,136 +157,115 @@ class PeerManager @Inject constructor(
     // Broadcast changes
     // ---------------------------------------------------------------------------
 
-    /** Broadcast a local entity change to all connected peers. */
-    fun broadcastChange(entityType: String, entityId: String, data: JSONObject, deleted: Boolean = false) {
-        // Broadcast via client (if connected as client to a server)
-        lanSyncClient.sendLiveChange(entityType, entityId, data, deleted)
-
-        // Broadcast via server (to all connected clients)
+    fun broadcastChange(
+        entityType: String,
+        entityId: String,
+        data: JSONObject,
+        deleted: Boolean = false,
+    ) {
+        if (!isRunning) return
+        val entity = JSONObject().apply {
+            put("type", entityType)
+            put("id", entityId)
+            put("data", data)
+            // HLC is stamped on the Rust side.
+            put("hlc", "")
+            if (deleted) put("deleted", true)
+        }
         scope.launch {
-            val hlc = syncServer.updateEntityHlc(entityId)
-            val entity = JSONObject().apply {
-                put("type", entityType)
-                put("id", entityId)
-                put("data", data)
-                put("hlc", hlc)
-                if (deleted) put("deleted", true)
+            try {
+                arkCore.broadcastChangeJson(entity.toString())
+            } catch (e: Throwable) {
+                Log.w(TAG, "broadcastChange failed: ${e.message}")
             }
-            syncServer.broadcastLiveChange(entity)
         }
     }
 
-    fun broadcastTodoChange(todo: com.kazui.delphi.data.model.TodoItem) {
+    fun broadcastTodoChange(todo: com.kazui.delphi.data.model.TodoItem) =
         broadcastChange("todo", todo.id, SyncEntityParser.todoToJson(todo))
-    }
 
-    fun broadcastTodoDelete(id: String) {
+    fun broadcastTodoDelete(id: String) =
         broadcastChange("todo", id, JSONObject(), deleted = true)
-    }
 
-    fun broadcastProjectChange(project: com.kazui.delphi.data.model.Project) {
+    fun broadcastProjectChange(project: com.kazui.delphi.data.model.Project) =
         broadcastChange("project", project.id, SyncEntityParser.projectToJson(project))
-    }
 
-    fun broadcastProjectDelete(id: String) {
+    fun broadcastProjectDelete(id: String) =
         broadcastChange("project", id, JSONObject(), deleted = true)
-    }
 
-    fun broadcastAreaChange(area: com.kazui.delphi.data.model.Area) {
+    fun broadcastAreaChange(area: com.kazui.delphi.data.model.Area) =
         broadcastChange("area", area.id, SyncEntityParser.areaToJson(area))
-    }
 
-    fun broadcastAreaDelete(id: String) {
+    fun broadcastAreaDelete(id: String) =
         broadcastChange("area", id, JSONObject(), deleted = true)
-    }
 
-    fun broadcastTagChange(tag: com.kazui.delphi.data.model.Tag) {
+    fun broadcastTagChange(tag: com.kazui.delphi.data.model.Tag) =
         broadcastChange("tag", tag.id, SyncEntityParser.tagToJson(tag))
-    }
 
-    fun broadcastTagDelete(id: String) {
+    fun broadcastTagDelete(id: String) =
         broadcastChange("tag", id, JSONObject(), deleted = true)
-    }
 
-    fun broadcastHeadingChange(heading: com.kazui.delphi.data.model.Heading) {
+    fun broadcastHeadingChange(heading: com.kazui.delphi.data.model.Heading) =
         broadcastChange("heading", heading.id, SyncEntityParser.headingToJson(heading))
-    }
 
-    fun broadcastHeadingDelete(id: String) {
+    fun broadcastHeadingDelete(id: String) =
         broadcastChange("heading", id, JSONObject(), deleted = true)
-    }
-
-    // ---------------------------------------------------------------------------
-    // Peer list handling
-    // ---------------------------------------------------------------------------
-
-    private suspend fun handlePeerListFromClient(peerList: List<PeerRecord>) {
-        for (record in peerList) {
-            if (record.deviceId == deviceId) continue
-            syncServer.registerExternalPeer(record.deviceId, record.deviceName, record.addresses)
-
-            // Try connecting to newly discovered peers
-            if (!syncServer.isConnectedTo(record.deviceId)) {
-                scope.launch {
-                    connectToPeer(record)
-                }
-            }
-        }
-    }
 
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
-    fun getKnownPeers(): List<PeerRecord> = syncServer.getKnownPeerRecords()
+    fun getKnownPeers(): List<PeerRecord> {
+        if (!isRunning) return emptyList()
+        return try {
+            arkCore.getConnectedPeers().map { fp: FfiConnectedPeer ->
+                PeerRecord(
+                    deviceId = fp.deviceId,
+                    deviceName = fp.deviceName,
+                    addresses = emptyList(),
+                    lastSeen = java.time.Instant.now().toString(),
+                )
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "getConnectedPeers failed: ${e.message}")
+            emptyList()
+        }
+    }
 
-    private fun updatePeerCounts() {
-        val serverPeers = syncServer.getConnectedPeers()
-        val clientState = lanSyncClient.state.value
-        val clientConnected = clientState == LanSyncState.LIVE || clientState == LanSyncState.SYNCING || clientState == LanSyncState.CONNECTED
-        val totalConnected = serverPeers.size + (if (clientConnected) 1 else 0)
+    private fun createListener(): ArkEventListener = object : ArkEventListener {
+        override fun onEntityChanged(entityJson: String) {
+            // UI bridge: a change means the local DB has been updated on the
+            // Rust side; ask the view-model layer to re-query.
+            onDataChanged?.invoke()
+        }
 
-        _connectedPeerCount.value = totalConnected
-        _connectedPeerNames.value = buildList {
-            addAll(serverPeers.map { it.second })
-            if (clientConnected) {
-                val serverInfo = lanSyncClient.serverInfo.value
-                if (serverInfo != null && serverInfo.deviceName.isNotEmpty()) {
-                    add(serverInfo.deviceName)
+        override fun onPeerConnected(deviceId: String, deviceName: String) {
+            if (deviceId.isEmpty()) return
+            synchronized(knownConnectedPeers) {
+                knownConnectedPeers[deviceId] = deviceName
+                pushPeerFlowsLocked()
+            }
+            if (_lanSyncState.value == LanSyncState.CONNECTING ||
+                _lanSyncState.value == LanSyncState.DISCONNECTED
+            ) {
+                _lanSyncState.value = LanSyncState.LIVE
+            }
+        }
+
+        override fun onPeerDisconnected(deviceId: String, remaining: UInt) {
+            synchronized(knownConnectedPeers) {
+                knownConnectedPeers.remove(deviceId)
+                pushPeerFlowsLocked()
+                if (knownConnectedPeers.isEmpty()) {
+                    _lanSyncState.value =
+                        if (isRunning) LanSyncState.CONNECTING else LanSyncState.DISCONNECTED
                 }
             }
         }
     }
 
-    /**
-     * Extract IP (host) from an address string like "192.168.1.70:21531" or "[fe80::1%en0]:21531"
-     * Also handles bare IPv6 without brackets: "fe80::1%en0:21531"
-     */
-    private fun extractIpFromAddress(addr: String): String? {
-        val trimmed = addr.trim()
-        if (trimmed.startsWith("[")) {
-            // Bracketed IPv6: [fe80::1%en0]:21531
-            val closeBracket = trimmed.indexOf(']')
-            if (closeBracket < 0) return null
-            return trimmed.substring(1, closeBracket)
-        }
-        // Check if this looks like IPv6 (contains multiple colons)
-        val colonCount = trimmed.count { it == ':' }
-        if (colonCount > 1) {
-            // Bare IPv6 with port: "fe80::1%en0:21531"
-            // The port is after the last colon, but only if what follows is a pure number
-            val lastColon = trimmed.lastIndexOf(':')
-            val afterLastColon = trimmed.substring(lastColon + 1)
-            return if (afterLastColon.all { it.isDigit() } && afterLastColon.isNotEmpty()) {
-                // Strip the port part
-                trimmed.substring(0, lastColon)
-            } else {
-                // No port, entire string is the IPv6 address
-                trimmed
-            }
-        }
-        // IPv4: 192.168.1.70:21531
-        val colonIdx = trimmed.lastIndexOf(':')
-        return if (colonIdx < 0) trimmed else trimmed.substring(0, colonIdx)
+    private fun pushPeerFlowsLocked() {
+        _connectedPeerCount.value = knownConnectedPeers.size
+        _connectedPeerNames.value = knownConnectedPeers.values.toList()
     }
 }

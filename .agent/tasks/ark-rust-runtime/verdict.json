@@ -1,0 +1,148 @@
+{
+  "task_id": "ark-rust-runtime",
+  "overall_verdict": "UNKNOWN",
+  "timestamp": "2026-04-08",
+  "summary": "Fresh second-pass verification after the targeted AC13 fix (deletion of apps/delphi/ts/electron/delphi-storage.ts). All 19 locally-verifiable acceptance criteria PASS: the Rust crate builds warning-free (cargo build, cargo build --release), cargo test passes 92 unit tests + 2 integration tests (round_trip_sync_between_two_servers + self_connect_is_rejected), cargo clippy --all-targets -- -D warnings is clean, bunx tsc --noEmit is clean with zero output, ./gradlew :app:assembleDebug is BUILD SUCCESSFUL and the APK bundles lib/arm64-v8a/libark_core.so (6181384 bytes). Grep guards now satisfy AC13: the only @arksync/* reference in apps/delphi/ts/electron/ is a single `import type { PeerChange, SyncEntity } from '@arksync/core'` in main.ts line 7, which is explicitly permitted. No class (SyncServer|LanSyncClient|BroadcastDiscovery) declarations remain under apps/delphi/kotlin/app/src/main/java/. delphi-storage.ts is confirmed deleted. AC12 (Electron dev run) and AC18 (Android on-device sync) remain UNKNOWN per spec Assumption A6 because dual-device runtime verification is outside this sandbox. Because the only non-PASS verdicts are the two deferred-runtime UNKNOWNs (with zero FAILs), overall verdict is UNKNOWN per the rubric; from a code standpoint there is nothing left to fix.",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "packages/ark-core/rust/src/beacon.rs exists, `pub mod beacon;` declared in lib.rs. BeaconPayload{t,s,d,n,p,a}, BEACON_PORT=21532, PEER_TTL_MS=30_000, BEACON_INTERVAL_MS=5_000, self-reject on d==own_device_id, dedup by device_id via HashMap<String, SeenPeer>, stale-eviction sweep, per-interface broadcast enumeration with is_virtual_interface + is_routable_v4 filters. Tests self_reject_by_device_id, dedup_repeat_unchanged_beacon, re_fire_when_addresses_change, stale_eviction_after_ttl, non_routable_addresses_are_dropped_from_merged all PASS in cargo test (verified fresh)."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "host.rs `get_own_addresses(port)` uses if-addrs, drops loopback/link-local/unique-local/virtual interfaces, strips IPv6 %zone suffix, formats IPv4 a.b.c.d:port and IPv6 [addr]:port. net::VIRTUAL_IFACE_PREFIXES covers the spec's required interface-name prefixes. Tests own_addresses_are_all_routable, own_addresses_reject_loopback, own_addresses_strip_ipv6_zone, strip_ipv6_zone_works all PASS (verified fresh)."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "SqliteStorageBackend in db.rs implements `#[async_trait] StorageBackend` from sync_server, wrapping rusqlite calls in tokio::task::spawn_blocking. load_entities honours the passed vector (returns missing-or-newer), apply_entity hard-deletes on deleted==Some(true), upserts otherwise. get_kv/set_kv delegate to db::get_sync_kv / set_sync_kv. Tests storage_backend_roundtrip_todo, storage_backend_delete_removes_entity, storage_backend_kv_roundtrip, storage_backend_uses_stored_hlc_when_present all PASS (verified fresh)."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "host.rs `get_host_device_name()`: macOS/Unix paths use hostname::get(), strip case-insensitive `.local`, trim whitespace, fall back to \"Ark Device\"; Android cfg branch returns \"Android device\". Tests host_name_is_non_empty, host_name_has_no_dot_local_suffix, strip_dot_local_case_insensitive all PASS (verified fresh)."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "main.rs Request enum exposes StartSync{space_id, device_id, device_name?, port?, seed_addresses?}, StopSync, BroadcastChange{entity}, GetConnectedPeers, LeaveSpace, plus AddSeedPeer/GetOwnAddresses/GetHostDeviceName. All pre-existing DB operations preserved with unchanged wire format. handle_start_sync is idempotent (calls stop first), spawns SyncServer (21531) + BroadcastDiscovery (21532) + outbound SyncClients for known peers, backed by SqliteStorageBackend. handle_leave_space stops sync and clears in-memory state."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "main.rs uses STDOUT_LOCK around write_line so responses and events never interleave. Events emitted: entity_changed, peer_connected, peer_disconnected, peer_list_updated. Distinguishable from responses by presence of `event` field and absence of `ok`. One JSON object per line."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "apps/delphi/ts/electron/sidecar.ts onEvent(listener) returns unsubscribe fn, flushStdout dispatches lines with `event` field without touching activeRequest, MAX_QUEUE_SIZE=500 and failAll/resetChild still enforced, dbLoadAll/dbUpsertTodo/etc. wrappers unchanged."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "reason": "apps/delphi/ts/electron/main.ts has exactly ONE @arksync/core import at line 7: `import type { PeerChange, SyncEntity } from '@arksync/core';` — type-only. No runtime imports of SyncServer/SyncClient/BroadcastDiscovery/getOwnAddresses/mergePeerRecords. Module-level variables syncServer/syncClients/broadcastDiscovery removed. broadcast-discovery.ts holds only exported interface types."
+    },
+    {
+      "id": "AC9",
+      "status": "PASS",
+      "reason": "main.ts `lan-sync:start` delegates to syncStart (sidecar request 'start_sync') with deviceName resolved via getHostDeviceName when caller passes empty string; `lan-sync:stop` → syncStop; `lan-sync:getStatus` → syncGetConnectedPeers with device_id dedup; `lan-sync:leaveSpace` → syncLeaveSpace. All IPC paths route through sidecar.request wrappers in sidecar.ts."
+    },
+    {
+      "id": "AC10",
+      "status": "PASS",
+      "reason": "main.ts `lan-sync:broadcastChange` deep-clones via JSON.parse(JSON.stringify()) and calls syncBroadcastChange (sidecar 'broadcast_change'). No TS SyncServer/SyncClient broadcastLiveChange calls remain. HLC assignment happens Rust-side: main.rs stamps entity.hlc from runtime.server.update_entity_hlc before broadcasting; ffi.rs mirrors the same path for Android."
+    },
+    {
+      "id": "AC11",
+      "status": "PASS",
+      "reason": "main.ts subscribes to sidecar.onEvent. entity_changed → webContents.send('lan-sync:change', entity); peer_connected → webContents.send('lan-sync:peerConnected', {deviceId}); peer_disconnected → webContents.send('lan-sync:peerDisconnected', {deviceId, remaining}). IPC channel names and payload shapes unchanged from the TS-era."
+    },
+    {
+      "id": "AC12",
+      "status": "UNKNOWN",
+      "reason": "Electron dev run with a live Android peer on the same LAN is not feasible from this sandbox. Spec Assumption A6 explicitly allows UNKNOWN for runtime device verification. All static prerequisites — ark-core-rpc binary builds, sidecar spawn/demux logic, beacon + server + client lifecycle, get_connected_peers IPC — are code-inspectable as correct and covered by unit + integration tests."
+    },
+    {
+      "id": "AC13",
+      "status": "PASS",
+      "reason": "Previous blocker resolved. `ls apps/delphi/ts/electron/delphi-storage.ts` → No such file or directory (confirmed). `rg 'from [\\'\"]@arksync/(core|node)[\\'\"]' apps/delphi/ts/electron/` now returns exactly ONE match: apps/delphi/ts/electron/main.ts:7 `import type { PeerChange, SyncEntity } from '@arksync/core';` — a pure type-only import, which the AC explicitly permits. Wider grep of apps/delphi/ts/ shows other @arksync/core references only in src/services/* and test/config files, which are out of scope per Assumption A9 and spec §350. `cd apps/delphi/ts && bunx tsc --noEmit` exits 0 with zero output (verified fresh)."
+    },
+    {
+      "id": "AC14",
+      "status": "PASS",
+      "reason": "packages/ark-core/rust/src/ffi.rs defines #[derive(uniffi::Object)] ArkCore with #[uniffi::export] impl exposing open_db, load_all_json, upsert/delete methods for todo/project/area/tag/heading, batch_upsert_todos_json, get/set_sync_kv, clear_all, delete_trashed, host_device_name, own_addresses, start_sync(config: FfiSyncConfig), stop_sync, leave_space, broadcast_change_json, get_connected_peers, add_seed_peer. ArkEventListener callback interface declared with #[uniffi::export(callback_interface)]. cargo build compiles cdylib + uniffi scaffolding cleanly."
+    },
+    {
+      "id": "AC15",
+      "status": "PASS",
+      "reason": "apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ark_core.kt is the UniFFI-generated Kotlin binding (open class ArkCore, FfiSyncConfig, FfiConnectedPeer, ArkEventListener interface, ArkCoreException sealed class). libark_core.so present at apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so (5.9 MB, `file` reports ELF 64-bit LSB shared object, ARM aarch64, dynamically linked)."
+    },
+    {
+      "id": "AC16",
+      "status": "PASS",
+      "reason": "SyncServer.kt / LanSyncClient.kt / BroadcastDiscovery.kt are deleted. Fresh grep `class (SyncServer|LanSyncClient|BroadcastDiscovery)` in apps/delphi/kotlin/app/src/main/java/ returns zero matches. PeerManager.kt imports com.kepler.ark.core.{ArkCore, ArkEventListener, FfiConnectedPeer, FfiSyncConfig} and delegates start/stop/broadcastChange/addSeedPeer to ArkCore; the Kotlin side contains zero wire-format code, zero HLC computation, zero version-vector math, zero beacon logic."
+    },
+    {
+      "id": "AC17",
+      "status": "PASS",
+      "reason": "`cd apps/delphi/kotlin && ./gradlew :app:assembleDebug` → BUILD SUCCESSFUL in 1s, 40 tasks up-to-date (verified fresh). APK produced at app/build/outputs/apk/debug/app-debug.apk. `unzip -l app-debug.apk | grep libark_core` → `lib/arm64-v8a/libark_core.so 6181384`."
+    },
+    {
+      "id": "AC18",
+      "status": "UNKNOWN",
+      "reason": "Real-device sync verification (Nothing A063 + MacBook Electron on same Wi-Fi) is not feasible from this sandbox. Spec A6 allows accepting AC15 + AC17 + AC21 as a combined proof with an UNKNOWN (deferred-device-test) verdict. All three preconditions PASS. sync_round_trip::round_trip_sync_between_two_servers integration test exercises the event callback path through a real SyncServer+SyncClient hello→VV→sync_changes→live_change sequence."
+    },
+    {
+      "id": "AC19",
+      "status": "PASS",
+      "reason": "(a) Self-reject: sync_server.rs handle_hello has `if device_id == my_device_id` guard at line 166, plus further guards at 538/590; sync_client.rs line 205 mirrors the rejection; beacon.rs drops payload.d == own_device_id. Tests: self_connect_is_rejected (integration), beacon::tests::self_reject_by_device_id. (b) Single-session eviction: sync_server.rs:538-569 enumerates peers with matching device_id, unauth+close old sessions. (c) purge_self_peers called from start() at line 240; tests purge_self_peers_drops_our_device_id, purge_self_peers_drops_records_with_all_our_addresses PASS. (d) Beacon dedup: PASS via beacon.rs tests. (e) Routable addresses: net::filter_routable_addresses used at every outbound assembly point in main.rs, ffi.rs, beacon.rs. Tests filters_mixed_list, non_routable_addresses_are_dropped_from_merged PASS. (f) Device name from OS host via get_host_device_name; main.rs uses it as the default when the caller doesn't pass one."
+    },
+    {
+      "id": "AC20",
+      "status": "PASS",
+      "reason": "packages/ark-core/rust/tests/sync_round_trip.rs contains round_trip_sync_between_two_servers (real TCP loopback, real SqliteStorageBackend, hello → VV → sync_changes → live_change, asserts entity arrival on the receiver side, prints INTEGRATION OK) and self_connect_is_rejected (client with device_id == server_device_id, asserts connected_peer_count == 0 and no peer_connected). Both tests PASS in the fresh cargo test run."
+    },
+    {
+      "id": "AC21",
+      "status": "PASS",
+      "reason": "`cargo build` (fresh) → Finished dev profile, no warnings. `cargo test` (fresh) → 92 unit tests + 2 integration tests passed, 0 failed, 0 ignored. `cargo clippy --all-targets -- -D warnings` (fresh) → exit 0, no warnings. Test count comfortably exceeds the prior 59-test baseline."
+    }
+  ],
+  "commands_run": [
+    {"cmd": "cd packages/ark-core/rust && cargo build", "exit": 0, "notes": "Finished dev profile, no warnings"},
+    {"cmd": "cd packages/ark-core/rust && cargo test", "exit": 0, "notes": "92 unit tests + 2 integration tests (round_trip_sync_between_two_servers, self_connect_is_rejected) passed, 0 failed, 0 ignored"},
+    {"cmd": "cd packages/ark-core/rust && cargo clippy --all-targets -- -D warnings", "exit": 0, "notes": "clean, zero warnings"},
+    {"cmd": "cd apps/delphi/ts && bunx tsc --noEmit", "exit": 0, "notes": "zero output"},
+    {"cmd": "cd apps/delphi/kotlin && ./gradlew :app:assembleDebug", "exit": 0, "notes": "BUILD SUCCESSFUL in 1s, 40 tasks up-to-date"},
+    {"cmd": "unzip -l apps/delphi/kotlin/app/build/outputs/apk/debug/app-debug.apk | grep libark_core", "exit": 0, "notes": "lib/arm64-v8a/libark_core.so 6181384"},
+    {"cmd": "ls apps/delphi/ts/electron/delphi-storage.ts", "exit": 1, "notes": "No such file or directory — confirmed deleted"},
+    {"cmd": "rg 'from [\"']@arksync/(core|node)[\"']' apps/delphi/ts/electron/", "exit": 0, "notes": "1 match: main.ts:7 `import type { PeerChange, SyncEntity } from '@arksync/core';` (pure type-only)"},
+    {"cmd": "rg 'class (SyncServer|LanSyncClient|BroadcastDiscovery)' apps/delphi/kotlin/app/src/main/java/", "exit": 1, "notes": "zero matches"},
+    {"cmd": "rg '@arksync/core|@arksync/node' apps/delphi/ts/", "exit": 0, "notes": "remaining refs only in src/services/* and test/config files (out of scope per Assumption A9)"},
+    {"cmd": "file apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so", "exit": 0, "notes": "ELF 64-bit LSB shared object, ARM aarch64, dynamically linked"}
+  ],
+  "artifacts_used": [
+    ".agent/tasks/ark-rust-runtime/spec.md",
+    "packages/ark-core/rust/src/lib.rs",
+    "packages/ark-core/rust/src/beacon.rs",
+    "packages/ark-core/rust/src/host.rs",
+    "packages/ark-core/rust/src/net.rs",
+    "packages/ark-core/rust/src/db.rs",
+    "packages/ark-core/rust/src/sync_server.rs",
+    "packages/ark-core/rust/src/sync_client.rs",
+    "packages/ark-core/rust/src/main.rs",
+    "packages/ark-core/rust/src/ffi.rs",
+    "packages/ark-core/rust/Cargo.toml",
+    "packages/ark-core/rust/tests/sync_round_trip.rs",
+    "apps/delphi/ts/electron/main.ts",
+    "apps/delphi/ts/electron/sidecar.ts",
+    "apps/delphi/ts/electron/broadcast-discovery.ts",
+    "apps/delphi/kotlin/app/build.gradle.kts",
+    "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/PeerManager.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ark_core.kt",
+    "apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so",
+    "apps/delphi/kotlin/app/build/outputs/apk/debug/app-debug.apk"
+  ]
+}
