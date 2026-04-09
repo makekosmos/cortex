@@ -2,7 +2,6 @@ package com.kazui.delphi.ui.screens.trash
 
 import androidx.lifecycle.viewModelScope
 import com.kazui.delphi.data.model.SmartList
-import com.kazui.delphi.data.sync.ArkSyncClient
 import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.ui.screens.SmartListViewModel
@@ -13,9 +12,8 @@ import javax.inject.Inject
 @HiltViewModel
 class TrashViewModel @Inject constructor(
     databaseProvider: DatabaseProvider,
-    arkSyncClient: ArkSyncClient,
     peerManager: PeerManager,
-) : SmartListViewModel(databaseProvider, arkSyncClient, peerManager, SmartList.TRASH) {
+) : SmartListViewModel(databaseProvider, peerManager, SmartList.TRASH) {
 
     /** Permanently delete all trashed todos and their related checklist items / tag cross-refs. */
     fun emptyTrash() {

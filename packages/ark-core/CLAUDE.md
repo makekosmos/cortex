@@ -5,24 +5,31 @@ Unified Rust crate providing DB layer (SQLite) + sync layer (WebSocket P2P) for 
 ## Runtime status (2026-04-09)
 
 - **DB layer** — **LIVE**. Electron spawns `ark-core-rpc` as sidecar, all CRUD/KV ops go through it (`apps/delphi/ts/electron/sidecar.ts`).
-- **Sync layer (`sync_server.rs`, `sync_client.rs`)** — **LIBRARY-ONLY**. The Rust types exist and are wire-compatible with TS `@arksync/core`, but `main.rs` Request enum does NOT expose `start_sync_server` / `start_sync_client` yet. Electron still imports `SyncServer` / `SyncClient` from TS `packages/arksync` at runtime. Android runs its own Kotlin sync.
-- **Beacon discovery** — **NOT IN RUST**. Currently lives in `apps/delphi/ts/electron/broadcast-discovery.ts` and `apps/delphi/kotlin/.../BroadcastDiscovery.kt`. TODO: port to `rust/src/beacon.rs` when the sync layer goes live.
+- **Sync layer** — **LIVE**. `main.rs` exposes `start_sync`, `stop_sync`, `broadcast_change`, `get_connected_peers`, `add_seed_peer`. Electron uses `@arksync/node` → `ArkClient` → sidecar IPC. Android uses UniFFI `ArkCore::start_sync()`. The TS `packages/arksync` package has been removed.
+- **Beacon discovery** — **IN RUST** (`beacon.rs`). UDP broadcast port 21532, Syncthing-style dedup.
+- **Relay transport** — **LIVE** (`relay_transport.rs`, `mesh.rs`). Outbound WebSocket client with exponential backoff reconnect and offline outbox. Activated via `FfiSyncConfig.relay_url`.
+- **Relay server** — `packages/ark-relay-server/` standalone binary. Deploy on VPS.
 
 ## Architecture
 
 ```
 rust/src/
-  main.rs          -- stdin/stdout JSON-RPC binary (Electron sidecar); DB ops only
-  lib.rs           -- library entry point, re-exports
-  types.rs         -- shared data types (TodoItem, Project, Area, Tag, Heading, SyncEntity, PeerRecord)
-  schema.rs        -- CREATE TABLE statements (identical to delphi-db sidecar)
-  db.rs            -- SQLite CRUD operations (rusqlite, WAL mode)
-  hlc.rs           -- Hybrid Logical Clock (tick, merge, compare, format)
-  net.rs           -- Syncthing-style address filters (link-local / virtual iface rejection)
-  protocol.rs      -- sync message types, constants, vector diff, batch splitting
-  space.rs         -- space codes (Base32-Crockford), IPv4 encoding, QR payloads
-  sync_server.rs   -- tokio + tungstenite WebSocket server [library-only]
-  sync_client.rs   -- tokio + tungstenite WebSocket client with address racing [library-only]
+  main.rs             -- stdin/stdout JSON-RPC binary (Electron sidecar); DB + sync ops
+  ffi.rs              -- UniFFI facade (ArkCore, FfiSyncConfig, ArkEventListener) for Android/Swift
+  lib.rs              -- library entry point, re-exports
+  types.rs            -- shared data types (TodoItem, Project, Area, Tag, Heading, SyncEntity, PeerRecord)
+  schema.rs           -- CREATE TABLE statements
+  db.rs               -- SQLite CRUD operations (rusqlite, WAL mode)
+  hlc.rs              -- Hybrid Logical Clock (tick, merge, compare, format)
+  net.rs              -- Syncthing-style address filters (link-local / virtual iface rejection)
+  protocol.rs         -- sync message types, constants, vector diff, batch splitting
+  space.rs            -- space codes (Base32-Crockford), IPv4 encoding, QR payloads
+  sync_server.rs      -- tokio + tungstenite WebSocket server [LIVE]
+  sync_client.rs      -- tokio + tungstenite WebSocket client with address racing [LIVE]
+  beacon.rs           -- UDP broadcast discovery (Syncthing-style, port 21532) [LIVE]
+  relay_transport.rs  -- outbound WebSocket relay client (exponential backoff, offline outbox) [LIVE]
+  mesh.rs             -- MeshCoordinator: LAN + relay transport, change deduplication [LIVE]
+  host.rs             -- OS hostname + interface address enumeration
 ```
 
 ## Build
@@ -98,10 +105,11 @@ Wire-compatible with TS arksync (`packages/arksync/`). Snake_case field names in
 - **Filter self in `update_peer_record` + `handle_peer_list`**: никогда не сохраняем запись, которая соответствует нам по `device_id` или по "все адреса — наши".
 - **Routable addresses only**: `net::filter_routable_addresses` (и `is_address_routable`) отбрасывают link-local (`169.254/16`, `fe80::/10`), unique-local (`fc00::/7`), loopback, и интерфейсы с префиксами `utun*`, `docker*`, `tailscale*`, `bridge*` и т.д. Вызывающая сторона (главный процесс хоста или будущий `beacon.rs`) **MUST** прогонять собранные адреса через этот фильтр перед тем, как положить их в `own_addresses` для `hello` / `peer_list` / beacon-анонсов.
 
-## TODO для runtime-перехода на Rust sync
+## Runtime transition — COMPLETE
 
-1. Добавить в `main.rs` Request enum операции `StartSyncServer { space_id, device_id, device_name, own_addresses }`, `StartSyncClient { peer, ... }`, `BroadcastLiveChange { entity }`, `StopSync`, `GetConnectedPeers`.
-2. Создать `rust/src/beacon.rs` с `BroadcastDiscovery` — port из `apps/delphi/ts/electron/broadcast-discovery.ts`: UDP :21532, dedup `HashMap<device_id, SeenPeer>` с TTL 30 с, `net::filter_routable_addresses` в `collect_local_addresses`, фильтрация self в receiver.
-3. Добавить `if-addrs = "0.13"` в `Cargo.toml` для `beacon::collect_local_addresses`.
-4. Переключить `apps/delphi/ts/electron/main.ts` на JSON-RPC вызовы к sidecar'у вместо прямого импорта `@arksync/core`.
-5. Uniffi bindings для Kotlin/Swift: добавить `#[uniffi::export]` на ключевые API в `sync_server`, `sync_client`, `beacon`.
+All items above were completed as part of `ark-p2p-rust-backend` (2026-04-09):
+- `main.rs` exposes `start_sync`, `stop_sync`, `broadcast_change`, `get_connected_peers`, `add_seed_peer`
+- `beacon.rs` provides `BroadcastDiscovery` (UDP :21532)
+- UniFFI bindings are in `ffi.rs` — `ArkCore`, `FfiSyncConfig`, `ArkEventListener`
+- Electron uses `@arksync/node` → `ArkClient` → sidecar IPC
+- Relay transport: `relay_transport.rs` + `mesh.rs`; relay server: `packages/ark-relay-server/`

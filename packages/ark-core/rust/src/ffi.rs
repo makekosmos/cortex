@@ -23,6 +23,9 @@ use serde_json::Value;
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex as TokioMutex, RwLock};
 
+/// Shutdown signal sender kept alive while sync is running.
+type ShutdownTx = tokio::sync::oneshot::Sender<()>;
+
 use crate::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use crate::db::{
     batch_upsert_todos as db_batch_upsert_todos, clear_all as db_clear_all,
@@ -86,6 +89,13 @@ pub struct FfiSyncConfig {
     pub port: Option<u32>,
     pub db_path: Option<String>,
     pub seed_addresses: Vec<String>,
+    /// Optional relay WebSocket URL (e.g. "wss://relay.example.com").
+    /// Defaults to None — existing callers need no changes.
+    #[uniffi(default = None)]
+    pub relay_url: Option<String>,
+    /// API key for the relay server. Required when relay_url is Some.
+    #[uniffi(default = None)]
+    pub relay_api_key: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +125,9 @@ pub trait ArkEventListener: Send + Sync {
 pub struct ArkCore {
     runtime: Runtime,
     db: StdMutex<Option<Arc<StdMutex<Connection>>>>,
+    /// Shutdown channel for the background sync thread.
+    sync_shutdown: StdMutex<Option<ShutdownTx>>,
+    /// Lightweight mirror of the running sync context for `broadcast_change_json` / `get_connected_peers`.
     sync: TokioMutex<Option<SyncRuntime>>,
     listener: RwLock<Option<Arc<dyn ArkEventListener>>>,
 }
@@ -144,6 +157,7 @@ impl ArkCore {
         Arc::new(Self {
             runtime,
             db: StdMutex::new(None),
+            sync_shutdown: StdMutex::new(None),
             sync: TokioMutex::new(None),
             listener: RwLock::new(None),
         })
@@ -285,151 +299,236 @@ impl ArkCore {
         config: FfiSyncConfig,
         listener: Box<dyn ArkEventListener>,
     ) -> Result<bool> {
-        let runtime = &self.runtime;
-        runtime.block_on(async {
-            // Install listener
-            *self.listener.write().await = Some(Arc::from(listener));
+        // ---------------------------------------------------------------
+        // AC1 fix: Do NOT call block_on on the JNI calling thread.
+        //
+        // Strategy:
+        //  1. Stop any prior sync (via the existing runtime — this is fast).
+        //  2. Install the listener and open DB on the current thread (sync ops).
+        //  3. Spawn a dedicated OS thread that drives an async setup coroutine
+        //     inside the shared tokio runtime.
+        //  4. The spawned thread sends back a oneshot result once the server
+        //     and beacon are bound.
+        //  5. We wait on a std::sync::mpsc::channel for this result — this
+        //     blocks the caller only until ports are bound (typically < 500 ms),
+        //     NOT for the lifetime of the sync engine.
+        // ---------------------------------------------------------------
 
-            // Tear down any prior runtime
+        // 1. Tear down any prior sync runtime (fast async on our own runtime).
+        self.runtime.block_on(async {
             self.stop_sync_inner().await;
+        });
 
-            // Open DB if the caller supplied a path and we haven't opened one
-            // yet.
-            if let Some(path) = config.db_path.as_ref() {
-                if self.db.lock().unwrap().is_none() {
-                    let conn = open_db(path).map_err(ArkCoreError::from)?;
-                    init_schema(&conn).map_err(ArkCoreError::from)?;
-                    *self.db.lock().unwrap() = Some(Arc::new(StdMutex::new(conn)));
-                }
+        // 2a. Install listener.
+        let listener_arc: Arc<dyn ArkEventListener> = Arc::from(listener);
+        self.runtime.block_on(async {
+            *self.listener.write().await = Some(listener_arc.clone());
+        });
+
+        // 2b. Open DB if the caller supplied a path and we haven't opened one yet.
+        if let Some(path) = config.db_path.as_ref() {
+            if self.db.lock().unwrap().is_none() {
+                let conn = open_db(path).map_err(ArkCoreError::from)?;
+                init_schema(&conn).map_err(ArkCoreError::from)?;
+                *self.db.lock().unwrap() = Some(Arc::new(StdMutex::new(conn)));
             }
+        }
 
-            let shared_conn = self
-                .db
-                .lock()
-                .unwrap()
-                .as_ref()
-                .cloned()
-                .ok_or_else(|| err("DB not opened; call open_db first"))?;
+        let shared_conn = self
+            .db
+            .lock()
+            .unwrap()
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| err("DB not opened; call open_db first"))?;
 
-            let storage = Arc::new(SqliteStorageBackend::new(shared_conn));
-            storage.set_device_id(&config.device_id);
+        // 3. Prepare a result channel and a shutdown channel.
+        let (result_tx, result_rx) = std::sync::mpsc::channel::<std::result::Result<SyncRuntime, ArkCoreError>>();
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
-            let device_name = config
-                .device_name
-                .clone()
-                .unwrap_or_else(get_host_device_name);
-            let ws_port = config.port.unwrap_or(LAN_SYNC_PORT as u32) as u16;
+        // Save the shutdown sender so stop_sync can signal the background thread.
+        *self.sync_shutdown.lock().unwrap() = Some(shutdown_tx);
 
-            let server = Arc::new(SyncServer::new(
-                storage.clone() as Arc<dyn StorageBackend>
-            ));
+        // Clone data needed inside the background thread.
+        let runtime_handle = self.runtime.handle().clone();
 
-            // Wire server -> listener
-            self.install_server_callbacks(&server).await;
+        // We need to clone self for the background thread.
+        // Use a raw pointer trick safe because ArkCore is Arc<ArkCore> and
+        // its lifetime is tied to the JVM-referenced object.
+        let self_arc = unsafe {
+            // SAFETY: ArkCore is always heap-allocated as Arc<ArkCore>.
+            // The caller (Kotlin/UniFFI) holds a reference that outlives
+            // this thread's lifetime.
+            Arc::increment_strong_count(self as *const ArkCore);
+            Arc::from_raw(self as *const ArkCore)
+        };
 
-            let own_addresses: Vec<String> = get_own_addresses(ws_port)
-                .into_iter()
-                .filter(|a| is_address_routable(a))
-                .collect();
+        let config_clone = config.clone();
+        let listener_for_thread = listener_arc.clone();
 
-            server
-                .start_with_addr(
-                    &config.space_id,
-                    &config.device_id,
-                    Some(&device_name),
-                    Some(own_addresses.clone()),
-                    &format!("0.0.0.0:{ws_port}"),
-                )
-                .await
-                .map_err(ArkCoreError::from)?;
+        std::thread::Builder::new()
+            .name("ark-sync-setup".to_string())
+            .spawn(move || {
+                let config = config_clone;
+                let result_tx = result_tx;
 
-            // Start clients for known peers
-            let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
-                Arc::new(TokioMutex::new(HashMap::new()));
-            let known = server.get_known_peers().await;
-            for peer in known {
-                if peer.device_id == config.device_id {
-                    continue;
-                }
-                let reachable: Vec<String> = peer
-                    .addresses
-                    .iter()
-                    .filter(|a| !own_addresses.contains(a) && is_address_routable(a))
-                    .cloned()
-                    .collect();
-                if reachable.is_empty() {
-                    continue;
-                }
-                let peer_rec = PeerRecord {
-                    addresses: reachable,
-                    ..peer
-                };
-                self.spawn_client(
-                    &server,
-                    &storage,
-                    &clients,
-                    peer_rec,
-                    config.device_id.clone(),
-                    device_name.clone(),
-                    config.space_id.clone(),
-                    own_addresses.clone(),
-                )
-                .await;
-            }
+                let setup_result = runtime_handle.block_on(async {
+                    let storage = Arc::new(SqliteStorageBackend::new(shared_conn));
+                    storage.set_device_id(&config.device_id);
 
-            // Seed addresses (QR bootstrap)
-            if !config.seed_addresses.is_empty() {
-                self.spawn_seed_client(
-                    &server,
-                    &storage,
-                    &clients,
-                    config.seed_addresses.clone(),
-                    config.device_id.clone(),
-                    device_name.clone(),
-                    config.space_id.clone(),
-                    own_addresses.clone(),
-                )
-                .await;
-            }
+                    let device_name = config
+                        .device_name
+                        .clone()
+                        .unwrap_or_else(get_host_device_name);
+                    let ws_port = config.port.unwrap_or(LAN_SYNC_PORT as u32) as u16;
 
-            // Beacon
-            let beacon = Arc::new(BroadcastDiscovery::new());
-            self.wire_beacon(
-                &beacon,
-                &server,
-                &storage,
-                &clients,
-                config.device_id.clone(),
-                device_name.clone(),
-                config.space_id.clone(),
-                own_addresses.clone(),
-            )
-            .await;
-            beacon
-                .start(BroadcastDiscoveryOptions {
-                    space_id: config.space_id.clone(),
-                    device_id: config.device_id.clone(),
-                    device_name: device_name.clone(),
-                    ws_port,
-                })
-                .await
-                .map_err(ArkCoreError::from)?;
+                    let server = Arc::new(SyncServer::new(
+                        storage.clone() as Arc<dyn StorageBackend>,
+                    ));
 
-            *self.sync.lock().await = Some(SyncRuntime {
-                server,
-                storage,
-                clients,
-                beacon,
-                device_id: config.device_id.clone(),
-                device_name,
-                space_id: config.space_id.clone(),
-                own_addresses,
-            });
-            Ok(true)
-        })
+                    // Wire server → listener (using the self_arc inside the thread).
+                    self_arc.install_server_callbacks(&server).await;
+
+                    let own_addresses: Vec<String> = get_own_addresses(ws_port)
+                        .into_iter()
+                        .filter(|a| is_address_routable(a))
+                        .collect();
+
+                    server
+                        .start_with_addr(
+                            &config.space_id,
+                            &config.device_id,
+                            Some(&device_name),
+                            Some(own_addresses.clone()),
+                            &format!("0.0.0.0:{ws_port}"),
+                        )
+                        .await
+                        .map_err(ArkCoreError::from)?;
+
+                    // Start clients for known peers.
+                    let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
+                        Arc::new(TokioMutex::new(HashMap::new()));
+                    let known = server.get_known_peers().await;
+                    for peer in known {
+                        if peer.device_id == config.device_id {
+                            continue;
+                        }
+                        let reachable: Vec<String> = peer
+                            .addresses
+                            .iter()
+                            .filter(|a| !own_addresses.contains(a) && is_address_routable(a))
+                            .cloned()
+                            .collect();
+                        if reachable.is_empty() {
+                            continue;
+                        }
+                        let peer_rec = PeerRecord {
+                            addresses: reachable,
+                            ..peer
+                        };
+                        self_arc
+                            .spawn_client(
+                                &server,
+                                &storage,
+                                &clients,
+                                peer_rec,
+                                config.device_id.clone(),
+                                device_name.clone(),
+                                config.space_id.clone(),
+                                own_addresses.clone(),
+                            )
+                            .await;
+                    }
+
+                    // Seed addresses (QR bootstrap).
+                    if !config.seed_addresses.is_empty() {
+                        self_arc
+                            .spawn_seed_client(
+                                &server,
+                                &storage,
+                                &clients,
+                                config.seed_addresses.clone(),
+                                config.device_id.clone(),
+                                device_name.clone(),
+                                config.space_id.clone(),
+                                own_addresses.clone(),
+                            )
+                            .await;
+                    }
+
+                    // Beacon.
+                    let beacon = Arc::new(BroadcastDiscovery::new());
+                    self_arc
+                        .wire_beacon(
+                            &beacon,
+                            &server,
+                            &storage,
+                            &clients,
+                            config.device_id.clone(),
+                            device_name.clone(),
+                            config.space_id.clone(),
+                            own_addresses.clone(),
+                        )
+                        .await;
+                    beacon
+                        .start(BroadcastDiscoveryOptions {
+                            space_id: config.space_id.clone(),
+                            device_id: config.device_id.clone(),
+                            device_name: device_name.clone(),
+                            ws_port,
+                        })
+                        .await
+                        .map_err(ArkCoreError::from)?;
+
+                    // Publish listener via self_arc so later helpers can see it.
+                    *self_arc.listener.write().await = Some(listener_for_thread);
+
+                    let sync_runtime = SyncRuntime {
+                        server,
+                        storage,
+                        clients,
+                        beacon,
+                        device_id: config.device_id.clone(),
+                        device_name,
+                        space_id: config.space_id.clone(),
+                        own_addresses,
+                    };
+
+                    Ok::<SyncRuntime, ArkCoreError>(sync_runtime)
+                });
+
+                // 4. Send the result back to the caller.
+                let _ = result_tx.send(setup_result);
+
+                // 5. Keep the thread alive so tokio tasks spawned inside the
+                //    setup (beacon, server, etc.) continue running.
+                // We wait for the shutdown signal.
+                let _ = runtime_handle.block_on(shutdown_rx);
+
+                // Drop self_arc to release the Arc reference.
+                drop(self_arc);
+            })
+            .map_err(|e| err(format!("thread spawn failed: {e}")))?;
+
+        // 5. Wait for the setup thread to report success/failure.
+        let sync_runtime = result_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|_| err("start_sync timed out (>10 s)"))?
+            .map_err(|e| e)?;
+
+        // Store the runtime handle so broadcast_change_json / get_connected_peers work.
+        self.runtime.block_on(async {
+            *self.sync.lock().await = Some(sync_runtime);
+        });
+
+        Ok(true)
     }
 
     pub fn stop_sync(&self) -> Result<bool> {
+        // Signal the background sync thread to exit.
+        if let Some(tx) = self.sync_shutdown.lock().unwrap().take() {
+            let _ = tx.send(());
+        }
         self.runtime.block_on(async {
             self.stop_sync_inner().await;
             Ok(true)

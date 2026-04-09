@@ -85,20 +85,17 @@ class PeerManager @Inject constructor(
         this.deviceName = deviceName
         this.isRunning = true
 
-        Log.i(TAG, "Starting ark-core sync for space=${spaceManager.formatCode(normalizedCode)}")
+        Log.i(TAG, "Starting ark-core sync for space=${spaceManager.formatCode(normalizedCode)} thread=${Thread.currentThread().name}")
 
-        // Open the shared DB lazily; the path comes from the DatabaseProvider.
-        // TODO: wire the real db path once the Delphi Android DB migration
-        // lands. For now the UniFFI binding treats `open_db` as optional
-        // when the caller supplies `db_path` inside `FfiSyncConfig`.
         val dbPath = try {
-            databaseProvider.arkDbPath()
+            databaseProvider.arkDbPath().also { Log.d(TAG, "DB path: $it") }
         } catch (e: Throwable) {
             Log.w(TAG, "DatabaseProvider.arkDbPath() unavailable, sync engine will run DB-less: ${e.message}")
             null
         }
 
         _lanSyncState.value = LanSyncState.CONNECTING
+        Log.d(TAG, "Calling arkCore.startSync() ...")
 
         try {
             arkCore.startSync(
@@ -112,6 +109,7 @@ class PeerManager @Inject constructor(
                 ),
                 listener = createListener(),
             )
+            Log.i(TAG, "startSync returned OK — sync is LIVE")
             dbOpened = dbPath != null
             _lanSyncState.value = LanSyncState.LIVE
         } catch (e: Throwable) {

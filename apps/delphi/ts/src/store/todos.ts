@@ -6,7 +6,7 @@ import {
   arkSync,
   projectToArkChange,
   todoItemToArkChange,
-} from "@/services/sync/ark-client";
+} from "@/services/sync/ark-types";
 
 import { broadcastToPeers } from "@/services/sync/peer-bridge";
 

@@ -24,7 +24,7 @@ import {
   setArkApiKey,
   setArkUrl,
   todoItemToArkChange,
-} from "@/services/sync/ark-client";
+} from "@/services/sync/ark-types";
 import {
   isLocalDbAvailable,
   loadAllFromLocalDb,

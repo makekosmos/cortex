@@ -23,6 +23,7 @@
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@arksync/node": "workspace:*",
     "@google/genai": "^1.42.0",
     "@tailwindcss/vite": "^4.2.2",
     "@types/qrcode": "^1.5.6",

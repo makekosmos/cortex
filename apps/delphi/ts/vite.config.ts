@@ -22,14 +22,7 @@ export default defineConfig({
           electron({
             main: {
               entry: 'electron/main.ts',
-              vite: {
-                resolve: {
-                  alias: {
-                    '@arksync/core': path.resolve(__dirname, '../../../packages/arksync/index.ts'),
-                    '@arksync/node': path.resolve(__dirname, '../../../packages/arksync/src/node.ts'),
-                  },
-                },
-              },
+              vite: {},
             },
             preload: {
               input: 'electron/preload.ts',
@@ -42,8 +35,6 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@kepler/visuals': path.resolve(__dirname, '../../../packages/kepler-visuals'),
-      // Renderer (browser) uses browser-safe barrel — no crypto/ws/os
-      '@arksync/core': path.resolve(__dirname, '../../../packages/arksync/browser.ts'),
     },
     dedupe: ['vue', 'vue-router'],
   },

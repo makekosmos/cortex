@@ -14,15 +14,15 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.lifecycleScope
 import com.kazui.delphi.data.space.SpaceManager
-import com.kazui.delphi.data.sync.ArkEventMapper
-import com.kazui.delphi.data.sync.ArkPeerManager
 import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.ui.navigation.DelphiNavGraph
 import com.kazui.delphi.ui.theme.DelphiTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 private const val TAG = "MainActivity"
@@ -31,7 +31,6 @@ private val DEVICE_ID_KEY = stringPreferencesKey("ark_device_id")
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var arkPeerManager: ArkPeerManager
     @Inject lateinit var peerManager: PeerManager
     @Inject lateinit var spaceManager: SpaceManager
     @Inject lateinit var databaseProvider: DatabaseProvider
@@ -42,34 +41,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestHighRefreshRate()
 
-        // Wire up the incoming-change handler for legacy P2P mesh
-        arkPeerManager.onChangeReceived = { change ->
-            lifecycleScope.launch {
-                try {
-                    val repo = databaseProvider.arkDataRepository
-                    when {
-                        ArkEventMapper.isTaskChange(change) -> {
-                            if (change.change_type == "delete") {
-                                repo.deleteById(change.data.source_id)
-                            } else {
-                                ArkEventMapper.arkChangeToTodoItem(change)?.let { repo.upsert(it) }
-                            }
-                        }
-                        ArkEventMapper.isProjectChange(change) -> {
-                            if (change.change_type == "delete") {
-                                repo.deleteProjectById(change.data.source_id)
-                            } else {
-                                ArkEventMapper.arkChangeToProject(change)?.let { repo.upsertProject(it) }
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to apply incoming P2P change: ${e.message}")
-                }
-            }
-        }
-
-        // Observe active space code and start/stop services accordingly
+        // Observe active space code and start/stop PeerManager accordingly
         var lastSpaceCode: String? = null
         lifecycleScope.launch {
             spaceManager.activeSpaceCode.collect { spaceCode ->
@@ -79,19 +51,13 @@ class MainActivity : ComponentActivity() {
                     val deviceId = getOrCreateDeviceId()
                     val deviceName = getDeviceName()
 
-                    // Start legacy P2P mesh
-                    arkPeerManager.start(
-                        context = this@MainActivity,
-                        meshSecret = spaceCode,
-                        deviceId = deviceId,
-                        deviceName = deviceName,
-                    )
-
-                    // Start PeerManager (WS server + client connections)
+                    // Start PeerManager on IO dispatcher — startSync is a blocking JNI call
+                    // that must NOT run on the main thread (triggers ANR after 5s).
                     peerManager.onDataChanged = { }
-                    peerManager.start(spaceCode, deviceId, deviceName)
+                    withContext(Dispatchers.IO) {
+                        peerManager.start(spaceCode, deviceId, deviceName)
+                    }
                 } else {
-                    arkPeerManager.stop()
                     peerManager.stop()
                 }
             }
@@ -106,7 +72,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        arkPeerManager.stop()
         peerManager.stop()
     }
 

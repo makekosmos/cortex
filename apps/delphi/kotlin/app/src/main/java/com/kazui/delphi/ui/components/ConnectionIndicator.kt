@@ -21,26 +21,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.kazui.delphi.data.sync.SyncStatus
+import com.kazui.delphi.data.sync.LanSyncState
 import com.kazui.delphi.ui.theme.AccentGreen
 import com.kazui.delphi.ui.theme.AccentOrange
 import com.kazui.delphi.ui.theme.AccentRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ConnectionIndicator(status: SyncStatus, modifier: Modifier = Modifier) {
-    val color = when (status) {
-        SyncStatus.ONLINE -> AccentGreen
-        SyncStatus.SYNCING -> AccentOrange
-        SyncStatus.OFFLINE -> AccentRed
+fun ConnectionIndicator(status: LanSyncState, modifier: Modifier = Modifier) {
+    val isSyncing = status == LanSyncState.CONNECTING || status == LanSyncState.SYNCING
+    val color = when {
+        status == LanSyncState.LIVE || status == LanSyncState.CONNECTED -> AccentGreen
+        isSyncing -> AccentOrange
+        else -> AccentRed
     }
     val label = when (status) {
-        SyncStatus.ONLINE -> "Синхронизировано"
-        SyncStatus.SYNCING -> "Подключение..."
-        SyncStatus.OFFLINE -> "Не подключено"
+        LanSyncState.LIVE, LanSyncState.CONNECTED -> "Синхронизировано"
+        LanSyncState.CONNECTING, LanSyncState.SYNCING -> "Подключение..."
+        LanSyncState.DISCONNECTED -> "Не подключено"
     }
 
-    val alpha by if (status == SyncStatus.SYNCING) {
+    val alpha by if (isSyncing) {
         val infiniteTransition = rememberInfiniteTransition(label = "pulse")
         infiniteTransition.animateFloat(
             initialValue = 0.4f,

@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 
 import { ref } from "vue";
 
-import { arkSync, taskToArkChange } from "@/services/sync/ark-client";
+import { arkSync, taskToArkChange } from "@/services/sync/ark-types";
 
 import { broadcastToPeers } from "@/services/sync/peer-bridge";
 

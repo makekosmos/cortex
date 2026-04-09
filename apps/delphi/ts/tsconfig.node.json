@@ -5,11 +5,7 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "target": "ES2020",
-    "noEmit": true,
-    "baseUrl": ".",
-    "paths": {
-      "@arksync/core": ["../../../packages/arksync/index.ts"]
-    }
+    "noEmit": true
   },
   "include": ["vite.config.ts", "electron/**/*.ts", "src/services/sync/peer-protocol.ts"]
 }

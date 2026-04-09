@@ -7,7 +7,7 @@
  * Only active when running inside Electron (window.electronAPI is available).
  */
 
-import type { ArkChange } from "./ark-client";
+import type { ArkChange } from "./ark-types";
 
 import { HLC } from "./hlc";
 

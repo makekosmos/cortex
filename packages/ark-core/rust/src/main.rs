@@ -127,6 +127,12 @@ enum Request {
         port: Option<u16>,
         #[serde(default)]
         seed_addresses: Option<Vec<String>>,
+        /// Optional relay server WebSocket URL (e.g. "wss://relay.example.com").
+        #[serde(default)]
+        relay_url: Option<String>,
+        /// API key for the relay server.
+        #[serde(default)]
+        relay_api_key: Option<String>,
     },
     StopSync,
     BroadcastChange {
@@ -334,6 +340,8 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             device_name,
             port,
             seed_addresses,
+            relay_url: _,
+            relay_api_key: _,
         } => handle_start_sync(space_id, device_id, device_name, port, seed_addresses).await,
 
         Request::StopSync => {

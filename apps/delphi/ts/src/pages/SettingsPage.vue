@@ -8,7 +8,7 @@ import {
   getArkUrl,
   setArkApiKey,
   setArkUrl,
-} from "@/services/sync/ark-client";
+} from "@/services/sync/ark-types";
 import { parseConnectionString } from "@/services/sync/pairing";
 import {
   type Space,

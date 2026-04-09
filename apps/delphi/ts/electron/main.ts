@@ -3,8 +3,16 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { PeerManager } from './peer-manager';
-import type { PeerChange, SyncEntity } from '@arksync/core';
+import { ArkClient } from '@arksync/node';
+
+/** Minimal sync entity type (matches Rust SyncEntity wire format). */
+interface SyncEntity {
+  type: string;
+  id: string;
+  data: Record<string, unknown>;
+  hlc: string;
+  deleted?: boolean;
+}
 import {
   sidecar,
   dbLoadAll,
@@ -18,8 +26,6 @@ import {
   dbClearAll,
   dbDeleteTrashed,
   dbSwitchSpace,
-  syncStart,
-  syncStop,
   syncLeaveSpace,
   syncBroadcastChange,
   syncGetConnectedPeers,
@@ -49,7 +55,13 @@ const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
 
-let peerManager: PeerManager | null = null;
+/**
+ * ArkClient instance from @arksync/node. Created lazily when sync starts.
+ * Wraps the sync lifecycle (start/stop/broadcastChange) while DB operations
+ * remain in sidecar.ts.
+ */
+let arkClient: ArkClient | null = null;
+
 /** True once start_sync has been issued to the sidecar — used as a cheap
  *  `active` probe for `lan-sync:getStatus` without a round-trip. */
 let syncActive = false;
@@ -181,119 +193,15 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
   fs.mkdirSync(safePath(dirPath), { recursive: true });
 });
 
-// --- P2P Peer Sync IPC ---
+// --- P2P Peer Sync IPC (legacy mesh-credentials helpers removed) ---
+// Sync lifecycle is now handled by ArkClient from @arksync/node.
+// The IPC channels (lan-sync:start, lan-sync:stop, etc.) are retained below.
 
-/** Read mesh credentials from the data directory. */
-function loadMeshCredentials(): { meshSecret: string; deviceId: string; deviceName: string } | null {
-  try {
-    const credsPath = path.join(getDataDir(), 'mesh_credentials.json');
-    if (!fs.existsSync(credsPath)) return null;
-    const raw = JSON.parse(fs.readFileSync(credsPath, 'utf-8'));
-    if (!raw.meshSecret || !raw.deviceId) return null;
-    return {
-      meshSecret: raw.meshSecret,
-      deviceId: raw.deviceId,
-      deviceName: raw.deviceName || getHostDeviceName(),
-    };
-  } catch {
-    return null;
-  }
-}
+/** IPC: stub for legacy renderer calls that asked for peer:isActive. */
+ipcMain.handle('peer:isActive', async () => syncActive);
 
-/** Start the P2P peer manager if mesh credentials are available. */
-async function startPeerManager(): Promise<void> {
-  if (peerManager) return;
-
-  const creds = loadMeshCredentials();
-  if (!creds) {
-    console.log('[Main] No mesh credentials found, P2P sync disabled');
-    return;
-  }
-
-  peerManager = new PeerManager({
-    meshSecret: creds.meshSecret,
-    deviceId: creds.deviceId,
-    deviceName: creds.deviceName,
-    platform: 'electron',
-  });
-
-  peerManager.onChange((change, _fromDevice) => {
-    // Forward incoming peer changes to all renderer windows
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send('peer:change', change);
-    }
-  });
-
-  peerManager.onPeerConnect((deviceId) => {
-    // Notify renderer that a new peer connected — renderer will push its local state
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send('peer:peerConnected', deviceId);
-    }
-  });
-
-  peerManager.onPeerDisconnect((deviceId, remaining) => {
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send('peer:peerDisconnected', deviceId, remaining);
-    }
-  });
-
-  try {
-    await peerManager.start();
-    console.log('[Main] P2P peer manager started');
-  } catch (err) {
-    console.error('[Main] Failed to start peer manager:', err);
-    peerManager = null;
-  }
-}
-
-/** IPC: send a change to all connected peers. */
-ipcMain.handle('peer:broadcastChange', async (_event, change: PeerChange) => {
-  if (peerManager) {
-    peerManager.broadcastChange(change);
-    return true;
-  }
-  return false;
-});
-
-/** IPC: save mesh credentials and (re)start peer manager. */
-ipcMain.handle(
-  'peer:setMeshCredentials',
-  async (_event, meshSecret: string, deviceId: string, deviceName: string) => {
-    const credsPath = path.join(getDataDir(), 'mesh_credentials.json');
-    // Always persist the real host name — renderers pass empty / placeholder values.
-    const persistName = deviceName?.trim() ? deviceName : getHostDeviceName();
-    fs.writeFileSync(credsPath, JSON.stringify({ meshSecret, deviceId, deviceName: persistName }), 'utf-8');
-
-    // Restart peer manager with new credentials
-    if (peerManager) {
-      peerManager.stop();
-      peerManager = null;
-    }
-    await startPeerManager();
-    return true;
-  },
-);
-
-/** IPC: check if P2P is active. */
-ipcMain.handle('peer:isActive', async () => {
-  return peerManager !== null;
-});
-
-/** IPC: get the peer server address for manual connect. */
-ipcMain.handle('peer:getServerAddress', async () => {
-  if (!peerManager) return null;
-  const port = peerManager.getPort();
-  if (!port) return null;
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] ?? []) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return `${net.address}:${port}`;
-      }
-    }
-  }
-  return `localhost:${port}`;
-});
+/** IPC: stub — server address is now reported via sidecar get_own_addresses. */
+ipcMain.handle('peer:getServerAddress', async () => null);
 
 // --- IPC handlers for space persistence (file-based, survives localStorage wipe) ---
 
@@ -452,22 +360,16 @@ ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
 })
 
 ipcMain.handle('peer:stop', async () => {
-  if (peerManager) {
-    peerManager.stop();
-    peerManager = null;
-  }
+  // Legacy handler — no-op now that PeerManager is removed.
   return true;
 })
 
-// --- Sync IPC (backed by ark-core-rpc sidecar) ---
+// --- Sync IPC (backed by ArkClient from @arksync/node → ark-core-rpc sidecar) ---
 //
-// Runtime imports from `@arksync/core` and `@arksync/node` have been removed.
-// The Electron main process no longer instantiates `SyncServer`,
-// `SyncClient`, `BroadcastDiscovery`, or calls `getOwnAddresses`. Every
-// sync operation is forwarded to the Rust sidecar via typed JSON-RPC, and
-// async sync events (peer connect/disconnect, entity changes) arrive on the
-// sidecar event stream and are forwarded to the renderer over the existing
-// IPC channels (`lan-sync:change`, `lan-sync:peerConnected`, etc.).
+// Sync lifecycle (start/stop/broadcast) is delegated to ArkClient (@arksync/node).
+// ArkClient is wired to the existing sidecar via requestFn + onEventFn injection
+// so that DB ops and sync ops share the same ark-core-rpc process.
+// DB operations (dbLoadAll, dbUpsertTodo, …) remain in sidecar.ts.
 
 /** Forward a sync entity change to all renderer windows. */
 function notifyRendererSyncChange(entity: SyncEntity): void {
@@ -537,7 +439,7 @@ sidecar.onEvent((event: SidecarEvent) => {
   }
 });
 
-/** IPC: start sync via sidecar. */
+/** IPC: start sync via ArkClient (@arksync/node). */
 ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
   if (!spaceId) {
     console.warn('[Main] lan-sync:start called without spaceId, ignoring');
@@ -548,31 +450,46 @@ ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceI
   currentDeviceName = name;
   void deviceName;
 
+  // Stop any existing client before creating a new one.
+  if (arkClient) {
+    try { await arkClient.stop(); } catch { /* ignore */ }
+    arkClient = null;
+  }
+
+  // Create ArkClient wired to the existing sidecar (DB + sync share one process).
+  arkClient = new ArkClient({
+    spaceId,
+    deviceId,
+    deviceName: name,
+    port: LAN_SYNC_PORT,
+    // Inject the sidecar's request function so no second process is spawned.
+    requestFn: <T>(req: Record<string, unknown>) => sidecar.request<T>(req as Parameters<typeof sidecar.request>[0]),
+    onEventFn: (listener) => sidecar.onEvent(listener as Parameters<typeof sidecar.onEvent>[0]),
+  });
+
+  // Seed peers are added after start via addSeedPeer.
   try {
-    await syncStart({
-      spaceId,
-      deviceId,
-      deviceName: name,
-      port: LAN_SYNC_PORT,
-      seedAddresses,
-    });
+    await arkClient.start();
+    if (seedAddresses?.length) {
+      await syncAddSeedPeer(seedAddresses);
+    }
     syncActive = true;
     syncPeerNames.clear();
-    console.log(`[Main] Sync started via sidecar (device=${name})`);
+    console.log(`[Main] Sync started via ArkClient (device=${name})`);
     return true;
   } catch (err) {
-    console.error('[Main] start_sync via sidecar failed:', err);
+    console.error('[Main] start_sync via ArkClient failed:', err);
     syncActive = false;
+    arkClient = null;
     return false;
   }
 });
 
-/** IPC: stop sync via sidecar. */
+/** IPC: stop sync via ArkClient. */
 ipcMain.handle('lan-sync:stop', async () => {
-  try {
-    await syncStop();
-  } catch (err) {
-    console.warn('[Main] stop_sync via sidecar failed:', err);
+  if (arkClient) {
+    try { await arkClient.stop(); } catch (err) { console.warn('[Main] stop_sync failed:', err); }
+    arkClient = null;
   }
   syncActive = false;
   syncPeerNames.clear();
@@ -686,7 +603,6 @@ ipcMain.handle('lan-sync:addSeedPeer', async (_e, addresses: string[]) => {
 
 app.whenReady().then(async () => {
   createWindow();
-  await startPeerManager();
 });
 
 app.on('window-all-closed', () => {
@@ -696,12 +612,12 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  // Sync is owned by the sidecar — shut it down along with the DB.
-  if (syncActive) {
-    // Best-effort; we don't await the promise because Electron is quitting.
-    syncStop().catch(() => {});
-    syncActive = false;
+  // Best-effort: stop ArkClient and shut down the sidecar.
+  if (arkClient) {
+    arkClient.stop().catch(() => {});
+    arkClient = null;
   }
+  syncActive = false;
   sidecar.shutdown();
 });
 

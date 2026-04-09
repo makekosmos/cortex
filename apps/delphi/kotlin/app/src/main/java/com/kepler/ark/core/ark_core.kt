@@ -2026,7 +2026,16 @@ data class FfiSyncConfig (
     var `deviceName`: kotlin.String?, 
     var `port`: kotlin.UInt?, 
     var `dbPath`: kotlin.String?, 
-    var `seedAddresses`: List<kotlin.String>
+    var `seedAddresses`: List<kotlin.String>, 
+    /**
+     * Optional relay WebSocket URL (e.g. "wss://relay.example.com").
+     * Defaults to None — existing callers need no changes.
+     */
+    var `relayUrl`: kotlin.String? = null, 
+    /**
+     * API key for the relay server. Required when relay_url is Some.
+     */
+    var `relayApiKey`: kotlin.String? = null
 ) {
     
     companion object
@@ -2044,6 +2053,8 @@ public object FfiConverterTypeFfiSyncConfig: FfiConverterRustBuffer<FfiSyncConfi
             FfiConverterOptionalUInt.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
     }
 
@@ -2053,7 +2064,9 @@ public object FfiConverterTypeFfiSyncConfig: FfiConverterRustBuffer<FfiSyncConfi
             FfiConverterOptionalString.allocationSize(value.`deviceName`) +
             FfiConverterOptionalUInt.allocationSize(value.`port`) +
             FfiConverterOptionalString.allocationSize(value.`dbPath`) +
-            FfiConverterSequenceString.allocationSize(value.`seedAddresses`)
+            FfiConverterSequenceString.allocationSize(value.`seedAddresses`) +
+            FfiConverterOptionalString.allocationSize(value.`relayUrl`) +
+            FfiConverterOptionalString.allocationSize(value.`relayApiKey`)
     )
 
     override fun write(value: FfiSyncConfig, buf: ByteBuffer) {
@@ -2063,6 +2076,8 @@ public object FfiConverterTypeFfiSyncConfig: FfiConverterRustBuffer<FfiSyncConfi
             FfiConverterOptionalUInt.write(value.`port`, buf)
             FfiConverterOptionalString.write(value.`dbPath`, buf)
             FfiConverterSequenceString.write(value.`seedAddresses`, buf)
+            FfiConverterOptionalString.write(value.`relayUrl`, buf)
+            FfiConverterOptionalString.write(value.`relayApiKey`, buf)
     }
 }
 

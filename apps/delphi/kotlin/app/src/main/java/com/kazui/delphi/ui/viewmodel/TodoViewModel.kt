@@ -6,9 +6,7 @@ import com.kazui.delphi.data.model.Priority
 import com.kazui.delphi.data.model.Project
 import com.kazui.delphi.data.model.SmartList
 import com.kazui.delphi.data.model.TodoItem
-import com.kazui.delphi.data.sync.ArkEventMapper
-import com.kazui.delphi.data.sync.ArkSyncClient
-import com.kazui.delphi.data.sync.SyncStatus
+import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.domain.filter.TodoFilterService
 import com.kazui.delphi.domain.model.SmartListCounts
@@ -27,15 +25,13 @@ import javax.inject.Inject
 @HiltViewModel
 class TodoViewModel @Inject constructor(
     private val databaseProvider: DatabaseProvider,
-    private val syncClient: ArkSyncClient,
+    private val peerManager: PeerManager,
 ) : ViewModel() {
 
     private val repo = databaseProvider.arkDataRepository
 
     /** True if the ark-data ContentProvider package is installed. */
     val isArkDataAvailable: Boolean get() = databaseProvider.isArkDataAvailable
-
-    val syncStatus: StateFlow<SyncStatus> = syncClient.status
 
     private val _selectedList = MutableStateFlow(SmartList.TODAY)
     val selectedList: StateFlow<SmartList> = _selectedList.asStateFlow()
@@ -54,35 +50,6 @@ class TodoViewModel @Inject constructor(
         SmartListCounts(TodoFilterService.countAll(todos))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SmartListCounts())
 
-    init {
-        viewModelScope.launch {
-            syncClient.onChange { change ->
-                viewModelScope.launch {
-                    when {
-                        ArkEventMapper.isTaskChange(change) -> {
-                            if (change.change_type == "delete") {
-                                repo.deleteById(change.data.source_id)
-                            } else {
-                                ArkEventMapper.arkChangeToTodoItem(change)?.let {
-                                    repo.upsert(it)
-                                }
-                            }
-                        }
-                        ArkEventMapper.isProjectChange(change) -> {
-                            if (change.change_type == "delete") {
-                                repo.deleteProjectById(change.data.source_id)
-                            } else {
-                                ArkEventMapper.arkChangeToProject(change)?.let {
-                                    repo.upsertProject(it)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     fun selectList(list: SmartList) {
         _selectedList.value = list
     }
@@ -95,9 +62,7 @@ class TodoViewModel @Inject constructor(
                 createdAt = Instant.now().toString(),
             )
             repo.upsert(todo)
-            syncClient.sendChange(
-                ArkEventMapper.todoToArkChange(todo, "create", "")
-            )
+            peerManager.broadcastTodoChange(todo)
         }
     }
 
@@ -109,9 +74,7 @@ class TodoViewModel @Inject constructor(
                 todo.copy(isCompleted = true, completedAt = Instant.now().toString())
             }
             repo.upsert(updated)
-            syncClient.sendChange(
-                ArkEventMapper.todoToArkChange(updated, "update", "")
-            )
+            peerManager.broadcastTodoChange(updated)
         }
     }
 
@@ -119,9 +82,7 @@ class TodoViewModel @Inject constructor(
         viewModelScope.launch {
             val updated = todo.copy(isToday = !todo.isToday)
             repo.upsert(updated)
-            syncClient.sendChange(
-                ArkEventMapper.todoToArkChange(updated, "update", "")
-            )
+            peerManager.broadcastTodoChange(updated)
         }
     }
 
@@ -129,9 +90,7 @@ class TodoViewModel @Inject constructor(
         viewModelScope.launch {
             val updated = todo.copy(priority = priority)
             repo.upsert(updated)
-            syncClient.sendChange(
-                ArkEventMapper.todoToArkChange(updated, "update", "")
-            )
+            peerManager.broadcastTodoChange(updated)
         }
     }
 
@@ -139,18 +98,14 @@ class TodoViewModel @Inject constructor(
         viewModelScope.launch {
             val updated = todo.copy(isTrashed = true)
             repo.upsert(updated)
-            syncClient.sendChange(
-                ArkEventMapper.todoToArkChange(updated, "update", "")
-            )
+            peerManager.broadcastTodoChange(updated)
         }
     }
 
     fun deleteTodo(todo: TodoItem) {
         viewModelScope.launch {
             repo.deleteById(todo.id)
-            syncClient.sendChange(
-                ArkEventMapper.todoToArkChange(todo, "delete", "")
-            )
+            peerManager.broadcastTodoDelete(todo.id)
         }
     }
 }

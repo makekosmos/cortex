@@ -1,0 +1,22 @@
+[package]
+name = "ark-relay-server"
+version = "0.1.0"
+edition = "2021"
+description = "Relay server for Kosmos/Delphi P2P mesh — forwards LanSyncMessage frames between devices sharing a space_id"
+
+[[bin]]
+name = "ark-relay-server"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

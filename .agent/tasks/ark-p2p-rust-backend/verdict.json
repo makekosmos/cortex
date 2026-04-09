@@ -1,0 +1,104 @@
+{
+  "task_id": "ark-p2p-rust-backend",
+  "verified_at": "2026-04-09",
+  "verifier": "task-verifier (fresh pass)",
+  "overall": "PASS",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "notes": "start_sync() uses std::thread::Builder::new().spawn() at line 369 containing runtime_handle.block_on() for the heavy async setup. Two brief block_on calls on the calling thread (teardown + listener install, sub-millisecond) are acceptable per spec assumption A1. cargo build --release: 0 errors. gradlew compileDebugKotlin: BUILD SUCCESS."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "notes": "packages/ark-core/rust/src/relay_transport.rs exists. Implements RelayTransport with VecDeque<LanSyncMessage> outbox, tokio_tungstenite WS client, ArkEventListener callbacks, exponential backoff reconnect. lib.rs includes pub mod relay_transport. cargo build --release: 0 errors."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "notes": "packages/ark-core/rust/src/mesh.rs exists with MeshConfig { lan_enabled, relay_url, relay_api_key }. FfiSyncConfig in ffi.rs has relay_url: Option<String> and relay_api_key: Option<String> with #[uniffi(default = None)]. StartSync enum in main.rs has matching optional fields. cargo build --release: 0 errors."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "notes": "packages/ark-relay-server/ exists. Cargo.toml declares [[bin]] named ark-relay-server with tokio, axum/warp/tokio-tungstenite, rusqlite, serde_json deps. src/main.rs implements WS endpoint GET /ws with api_key validation, LanSyncMessage routing, SQLite persistence, catch-up replay. cargo build --release: exit 0. cargo test: exit 0."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "notes": "packages/ark-core/swift/ contains ArkCoreExample.swift and generated/ directory with ark_core.swift and ark_coreFFI.h. No .xcodeproj or .xcworkspace present."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "notes": "packages/ark-core/rust/tests/relay_round_trip.rs exists. cargo test --test relay_round_trip: 1 test passed."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "notes": "packages/arksync-node/package.json exists declaring name @arksync/node with build script (tsc)."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "notes": "bun run build in packages/arksync-node exits 0 with 0 TypeScript errors. ArkClient class exported from src/ark-client.ts with all required constructor params and methods per spec."
+    },
+    {
+      "id": "AC9",
+      "status": "PASS",
+      "notes": "apps/delphi/ts/electron/main.ts imports ArkClient from @arksync/node. No imports from ./peer-manager, ./sync-server, ./sync-client, ./peer-discovery, ./broadcast-discovery, or @arksync/core. bun run build exits 0."
+    },
+    {
+      "id": "AC10",
+      "status": "PASS",
+      "notes": "peer-manager.ts, peer-server.ts, peer-discovery.ts, broadcast-discovery.ts all absent from apps/delphi/ts/electron/. No ark-client.ts found anywhere under apps/delphi/ts/. No remaining imports of these paths in apps/delphi/ts/src/."
+    },
+    {
+      "id": "AC11",
+      "status": "PASS",
+      "notes": "ArkSyncClient.kt, ArkPeerManager.kt absent from apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/. Only PeerManager.kt, ArkDiscovery.kt, HLC.kt, LanSyncState.kt, Pairing.kt, PeerRecord.kt, SyncEntityParser.kt remain. References in build/ generated files are artifacts, not source. ./gradlew compileDebugKotlin: BUILD SUCCESS."
+    },
+    {
+      "id": "AC12",
+      "status": "PASS",
+      "notes": "packages/arksync/ does not exist. grep for @arksync/core in apps/ and packages/ returns empty."
+    },
+    {
+      "id": "AC13",
+      "status": "UNKNOWN",
+      "notes": "Requires manual runtime test (bun run dev + ps aux). Build succeeds which is a strong positive signal, but runtime Electron window + sidecar spawn cannot be verified without executing the app."
+    },
+    {
+      "id": "AC14",
+      "status": "PASS",
+      "notes": "./gradlew compileDebugKotlin: BUILD SUCCESS. Real-device adb port-bind check (proc/net/tcp showing 5403/5404) requires Nothing A063 hardware and is UNKNOWN for that sub-check only."
+    },
+    {
+      "id": "AC15",
+      "status": "UNKNOWN",
+      "notes": "Requires real LAN hardware: Electron (MacBook) + Android (Nothing A063) simultaneously. Cannot verify locally."
+    },
+    {
+      "id": "AC16",
+      "status": "UNKNOWN",
+      "notes": "Requires real LAN hardware: Android (Nothing A063) + Electron (MacBook) simultaneously. Cannot verify locally."
+    },
+    {
+      "id": "AC17",
+      "status": "PASS",
+      "notes": "packages/ark-core/CLAUDE.md Runtime status section marks Sync layer LIVE, Beacon IN RUST, Relay transport LIVE with relay_transport.rs and mesh.rs. Runtime transition section marked COMPLETE. TODO block removed."
+    },
+    {
+      "id": "AC18",
+      "status": "PASS",
+      "notes": "apps/delphi/CLAUDE.md key-files tables reference packages/arksync-node/src/ark-client.ts (new location), relay_transport.rs, mesh.rs. No references to peer-manager.ts, peer-discovery.ts, broadcast-discovery.ts, or peer-server.ts remain. apps/delphi/kotlin/CLAUDE.md line 131 correctly states legacy ArkSyncClient/ArkPeerManager/ArkPeerProtocol/ArkEventMapper have been deleted."
+    }
+  ],
+  "summary": {
+    "PASS": 14,
+    "FAIL": 0,
+    "UNKNOWN": 4,
+    "note": "All statically verifiable criteria pass. The 4 UNKNOWN criteria (AC13, AC15, AC16, and the adb runtime half of AC14) require real hardware (Nothing A063 + MacBook running Electron). No problems.md needed."
+  }
+}

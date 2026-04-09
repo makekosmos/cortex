@@ -65,7 +65,7 @@ Beacon'ы и `ownAddresses` (в `hello`/`peer_list`) **MUST** содержать
 - IPv6 link-local `fe80::/10` и unique-local `fc00::/7`
 - виртуальные интерфейсы по префиксу имени: `utun*`, `awdl*`, `llw*`, `bridge*`, `anpi*`, `docker*`, `br-*`, `veth*`, `virbr*`, `vboxnet*`, `vmnet*`, `tun*`, `tap*`, `wg*`, `tailscale*`, `vEthernet*`, `VMware*`, `VirtualBox*`, `rmnet*`, `dummy*`
 
-Реализация: `packages/arksync/src/node.ts` (`getOwnAddresses`), `ts/electron/broadcast-discovery.ts` (`collectLocalAddresses`), `kotlin/.../BroadcastDiscovery.kt` (`sendBeacon`). **Если добавляешь новый способ анонсирования адресов — фильтруй там же.**
+Реализация: `packages/ark-core/rust/src/beacon.rs` (Rust beacon), `kotlin/.../BroadcastDiscovery.kt` (`sendBeacon`). **Если добавляешь новый способ анонсирования адресов — фильтруй там же.**
 
 ### Device name = host name, не process name
 
@@ -103,20 +103,18 @@ Beacon'ы и `ownAddresses` (в `hello`/`peer_list`) **MUST** содержать
 
 | Файл | Роль |
 |------|------|
-| `packages/arksync/src/sync-server.ts` | Generic WS-сервер (используется Electron через `@arksync/core`) |
-| `packages/arksync/src/sync-client.ts` | Generic WS-клиент с race_connect |
-| `packages/arksync/src/node.ts` | `getOwnAddresses()` с фильтрацией non-routable |
-| `ts/electron/main.ts` | Electron main: `getHostDeviceName`, `startSync`, beacon wiring |
-| `ts/electron/broadcast-discovery.ts` | Electron UDP beacon (отправка + дедуп приёма) |
-| `ts/src/services/sync/lan-protocol.ts` | Общие типы, HLC, diff, batch splitting |
-| `ts/src/store/todos.ts` | `broadcastToLanSync()` на каждой мутации |
-| `kotlin/.../data/sync/SyncServer.kt` | Android Ktor WS-сервер (handleHello evict + dedup) |
-| `kotlin/.../data/sync/LanSyncClient.kt` | Android WS-клиент (`ServerInfo` содержит `deviceId`) |
-| `kotlin/.../data/sync/BroadcastDiscovery.kt` | Android UDP beacon (отправка + дедуп приёма) |
-| `kotlin/.../data/sync/PeerManager.kt` | Android координатор: `updatePeerCounts` дедупит inbound+outbound |
-| `swift/Delphi/Sync/SyncServer.swift` | macOS NWListener WS-сервер |
-| `swift/Delphi/Sync/SyncClient.swift` | macOS URLSession WS-клиент |
-| `swift/Delphi/Sync/PeerManager.swift` | macOS координатор пиров |
+| `packages/ark-core/rust/src/sync_server.rs` | Rust WS-сервер (все платформы через UniFFI / sidecar) |
+| `packages/ark-core/rust/src/sync_client.rs` | Rust WS-клиент с address racing |
+| `packages/ark-core/rust/src/beacon.rs` | UDP Beacon discovery (порт 21532) |
+| `packages/ark-core/rust/src/relay_transport.rs` | Outbound relay WebSocket клиент (backoff, offline outbox) |
+| `packages/ark-core/rust/src/mesh.rs` | MeshCoordinator: LAN + relay, дедупликация изменений |
+| `packages/ark-core/rust/src/ffi.rs` | UniFFI facade (ArkCore, FfiSyncConfig, ArkEventListener) |
+| `packages/arksync-node/src/ark-client.ts` | `@arksync/node` ArkClient — TypeScript обёртка над sidecar IPC |
+| `ts/electron/main.ts` | Electron main: использует ArkClient из @arksync/node |
+| `ts/electron/sidecar.ts` | SidecarClient: только DB ops |
+| `ts/src/services/sync/lan-protocol.ts` | Общие типы, HLC, diff, batch splitting (standalone) |
+| `ts/src/store/todos.ts` | CRUD + `broadcastToLanSync()` на каждой мутации |
+| `kotlin/.../data/sync/PeerManager.kt` | Android координатор: UniFFI `ArkCore.startSync()` |
 
 ### Важные правила реализации
 
@@ -296,12 +294,7 @@ ts/
 │   └── src/main.rs        — stdin/stdout JSON RPC + SQLite (WAL)
 ├── electron/              — Electron main process
 │   ├── main.ts            — точка входа, IPC-хендлеры (db:*, fs:*, lan-sync:*)
-│   ├── sidecar.ts         — SidecarClient: spawn delphi-db, JSON queue, dbLoadAll/upsertTodo/…
-│   ├── sync-server.ts     — WS-сервер (порт 21531), sync protocol
-│   ├── sync-client.ts     — WS-клиент, подключение к другим пирам
-│   ├── peer-manager.ts    — координатор пиров, mesh discovery
-│   ├── peer-discovery.ts  — mDNS (bonjour-service), _ark-peer._tcp (legacy)
-│   └── peer-protocol.ts   — типы протокола P2P-сообщений
+│   └── sidecar.ts         — SidecarClient: spawn delphi-db, JSON queue, dbLoadAll/upsertTodo/…
 ├── src/
 │   ├── App.vue            — корневой layout, connection bootstrap, P2P sync bridge
 │   ├── main.ts            — createApp, router, Pinia
@@ -312,7 +305,7 @@ ts/
 │   │   ├── todos.ts       — Pinia store: задачи, проекты, CRUD → localDb + lanSync
 │   │   └── tasks.ts       — вспомогательные утилиты для задач
 │   ├── services/
-│   │   ├── sync/          — lan-protocol, hlc, ark-client (legacy), peer-bridge
+│   │   ├── sync/          — lan-protocol, hlc, ark-types, peer-bridge
 │   │   ├── api/           — HTTP helpers
 │   │   ├── filters/       — smart list фильтры
 │   │   ├── gemini/        — голосовой ввод (Gemini Live API)
@@ -380,11 +373,6 @@ reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Ta
 - Подключается к другим пирам по известным адресам
 - Пробует все адреса пира параллельно (LAN, WAN, IPv6)
 
-### Legacy: ArkSyncClient
-
-Код остаётся, но не используется:
-- `ark-client.ts` — WS relay через Ark-сервер
-
 ## Сервисы
 
 ### TodoFilterService
@@ -410,10 +398,11 @@ reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Ta
 
 | Файл | Роль |
 |------|------|
-| `electron/sync-server.ts` | WS-сервер (порт 21531), sync protocol |
-| `electron/sync-client.ts` | WS-клиент, подключение к другим пирам |
-| `electron/peer-manager.ts` | Координатор пиров, mesh discovery |
-| `src/services/sync/lan-protocol.ts` | Типы, HLC, diff, batch splitting |
+| `packages/arksync-node/src/ark-client.ts` | `@arksync/node` ArkClient — TypeScript обёртка над sidecar IPC |
+| `electron/main.ts` | ArkClient из @arksync/node, IPC-хендлеры |
+| `electron/sidecar.ts` | SidecarClient: только DB ops |
+| `src/services/sync/ark-types.ts` | Типы ArkChange, маппинг сущностей, settings helpers |
+| `src/services/sync/lan-protocol.ts` | Общие типы, HLC, diff, batch splitting |
 | `store/todos.ts` | CRUD + `broadcastToLanSync()` на каждой мутации |
 | `App.vue` | Bootstrap sync, обработка входящих изменений |
 
@@ -432,9 +421,9 @@ reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Ta
 
 Операция `clear_all` в Rust sidecar delphi-db — удаляет все строки из таблиц `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`.
 
-### Ark WebSocket relay (legacy/отключён)
+### Relay транспорт (@arksync/node / Rust)
 
-Старая синхронизация через Ark-сервер по WebSocket (`ws://ark-server/ws/sync?key=API_KEY`). Код остаётся в `services/sync/ark-client.ts`, но не используется при активном LAN sync.
+Relay WebSocket транспорт реализован в `packages/ark-core/rust/src/relay_transport.rs` и координируется через `mesh.rs`. `@arksync/node` ArkClient принимает опциональные `relayUrl` и `relayApiKey` — без них работает только LAN.
 
 ## Голосовой ввод (Web)
 

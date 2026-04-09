@@ -19,7 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 private const val TAG = "SpaceSetupViewModel"
@@ -118,7 +120,9 @@ class SpaceSetupViewModel @Inject constructor(
 
             val deviceId = getDeviceId()
             val deviceName = getDeviceName()
-            peerManager.start(normalized, deviceId, deviceName)
+            withContext(Dispatchers.IO) {
+                peerManager.start(normalized, deviceId, deviceName)
+            }
         }
     }
 
@@ -162,7 +166,9 @@ class SpaceSetupViewModel @Inject constructor(
 
             val deviceId = getDeviceId()
             val deviceName = getDeviceName()
-            peerManager.start(normalized, deviceId, deviceName)
+            withContext(Dispatchers.IO) {
+                peerManager.start(normalized, deviceId, deviceName)
+            }
         }
     }
 

@@ -10,7 +10,7 @@ app/src/main/java/com/kazui/delphi/
 │   ├── db/              — Room DAO: TodoDao, ProjectDao, PendingChangeDao
 │   ├── model/           — Модели данных (TodoItem, Project, Area, Tag, …)
 │   ├── space/           — SpaceManager (Ark Space)
-│   └── sync/            — SyncServer, LanSyncClient, PeerManager, ArkEventMapper, HLC
+│   └── sync/            — PeerManager (UniFFI ArkCore), HLC
 ├── di/                  — Hilt модули (AppModule, DatabaseModule)
 ├── domain/
 │   └── filter/          — TodoFilterService
@@ -112,7 +112,7 @@ Android — равноправный пир: запускает WS-сервер 
 Персистится в DataStore. **MUST NOT** регенерироваться с `Instant.now()` при reconnect.
 
 ### UUID normalization
-Все `source_id`/`event_id` MUST be lowercase: `.lowercase()` при получении из ArkEventMapper.
+Все `source_id`/`event_id` MUST be lowercase: `.lowercase()` при сохранении в Room.
 
 ### Удаление данных
 Нет кнопки "Очистить данные" в UI — данные удаляются только через системные настройки (Settings → Apps → Delphi → Clear Data).
@@ -128,8 +128,7 @@ Android — равноправный пир: запускает WS-сервер 
 - Пространство не слетает при перезапуске
 
 ### PendingChangeDao safety
-- `ArkSyncClient` всегда проверяет `databaseProvider.isOpen` перед обращением к `pendingChangeDao()`
-- Без проверки — краш `attempt to re-open an already-closed object`
+- Kotlin sync uses UniFFI `ArkCore.startSync()` via `PeerManager.kt`. Legacy `ArkSyncClient`, `ArkPeerManager`, `ArkPeerProtocol`, `ArkEventMapper` have been deleted.
 
 ## Команды
 

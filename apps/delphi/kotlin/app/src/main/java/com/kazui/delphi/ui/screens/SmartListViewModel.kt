@@ -4,8 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kazui.delphi.data.model.SmartList
 import com.kazui.delphi.data.model.TodoItem
-import com.kazui.delphi.data.sync.ArkEventMapper
-import com.kazui.delphi.data.sync.ArkSyncClient
 import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.di.DatabaseProvider
 import com.kazui.delphi.domain.filter.TodoFilterService
@@ -24,7 +22,6 @@ import java.util.UUID
 @OptIn(ExperimentalCoroutinesApi::class)
 abstract class SmartListViewModel(
     protected val databaseProvider: DatabaseProvider,
-    protected val arkSyncClient: ArkSyncClient,
     protected val peerManager: PeerManager,
     private val smartList: SmartList,
     private val defaultIsToday: Boolean = false,
@@ -59,7 +56,6 @@ abstract class SmartListViewModel(
                 createdAt = Instant.now().toString(),
             )
             repo.upsert(todo)
-            arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(todo, "create", ""))
             peerManager.broadcastTodoChange(todo)
         }
     }
@@ -72,7 +68,6 @@ abstract class SmartListViewModel(
                 todo.copy(isCompleted = true, completedAt = Instant.now().toString())
             }
             repo.upsert(updated)
-            arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
             peerManager.broadcastTodoChange(updated)
         }
     }
@@ -81,7 +76,6 @@ abstract class SmartListViewModel(
         viewModelScope.launch {
             val updated = todo.copy(isTrashed = true)
             repo.upsert(updated)
-            arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
             peerManager.broadcastTodoChange(updated)
         }
     }

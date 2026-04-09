@@ -1,24 +1,148 @@
 /**
- * Delphi Space Manager — re-exports generic space functions from @arksync/core
- * and adds Delphi-specific persistence.
+ * Delphi Space Manager — space code generation, encoding, QR payloads,
+ * and Delphi-specific persistence.
  *
  * On Electron: persists via IPC to main process (JSON file in appData — survives localStorage wipe).
  * On Web: falls back to localStorage.
+ *
+ * Space functions are now inlined (arksync package removed).
  */
 
-import { formatSpaceCode as _formatSpaceCode } from "@arksync/core";
+// ---------------------------------------------------------------------------
+// Space code utilities (inlined from arksync/src/space.ts)
+// ---------------------------------------------------------------------------
 
-export {
-  generateSpaceCode,
-  encodeIpv4,
-  decodeIpv4,
-  generateExtendedCode,
-  formatSpaceCode,
-  parseSpaceCode,
-  generateQrPayload,
-  parseQrPayload,
-  deriveSpaceId,
-} from "@arksync/core";
+const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // no I, L, O, U
+const LAN_PORT = 21531;
+
+export function generateSpaceCode(): string {
+  const arr = new Uint8Array(12);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, (b) => CROCKFORD[b % 32]).join("");
+}
+
+export function encodeIpv4(ipv4: string): string | null {
+  const m = ipv4.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!m) return null;
+  const parts = [+m[1], +m[2], +m[3], +m[4]];
+  if (parts.some((n) => n < 0 || n > 255)) return null;
+  const n = BigInt(
+    ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0,
+  );
+  const shifted = n << 3n;
+  let result = "";
+  for (let i = 6; i >= 0; i--) {
+    result = CROCKFORD[Number((shifted >> BigInt(i * 5)) & 0x1fn)] + result;
+  }
+  return result;
+}
+
+export function decodeIpv4(encoded: string): string | null {
+  const clean = encoded.toUpperCase();
+  if (clean.length !== 7) return null;
+  if (![...clean].every((c) => CROCKFORD.includes(c))) return null;
+  let value = 0n;
+  for (const c of clean) {
+    value = (value << 5n) | BigInt(CROCKFORD.indexOf(c));
+  }
+  value = value >> 3n;
+  const parts = [
+    Number((value >> 24n) & 0xffn),
+    Number((value >> 16n) & 0xffn),
+    Number((value >> 8n) & 0xffn),
+    Number(value & 0xffn),
+  ];
+  return `${parts[0]}.${parts[1]}.${parts[2]}.${parts[3]}`;
+}
+
+export function generateExtendedCode(
+  code: string,
+  primaryIpv4: string,
+): string | null {
+  const encoded = encodeIpv4(primaryIpv4);
+  if (!encoded) return null;
+  return code.replace(/[-\s]/g, "").toUpperCase().slice(0, 12) + encoded;
+}
+
+export function formatSpaceCode(code: string): string {
+  const clean = code.replace(/[-\s]/g, "").toUpperCase();
+  if (clean.length === 7) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 7)}`;
+  }
+  if (clean.length === 12) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}`;
+  }
+  if (clean.length === 19) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 8)}-${clean.slice(8, 12)}-${clean.slice(12, 16)}-${clean.slice(16, 19)}`;
+  }
+  return code;
+}
+
+export function parseSpaceCode(input: string): string | null {
+  const clean = input.replace(/[-\s]/g, "").toUpperCase();
+  if (clean.length === 7 || clean.length === 12) {
+    if (![...clean].every((c) => CROCKFORD.includes(c))) return null;
+    return clean;
+  }
+  return null;
+}
+
+export function generateQrPayload(code: string, addresses: string[]): string {
+  const formatted = formatSpaceCode(code);
+  const addrs = addresses.join(",");
+  return `ark://join?code=${formatted}&addrs=${addrs}`;
+}
+
+export function parseQrPayload(
+  payload: string,
+): { code: string; addresses: string[] } | null {
+  if (payload.startsWith("ark://join?")) {
+    try {
+      const queryString = payload.slice("ark://join?".length);
+      const params = new URLSearchParams(queryString);
+      const rawCode = params.get("code");
+      const rawAddrs = params.get("addrs");
+
+      if (!rawCode) return null;
+      const code = parseSpaceCode(rawCode);
+      if (!code) return null;
+
+      const addresses = rawAddrs
+        ? rawAddrs.split(",").filter((a) => a.length > 0)
+        : [];
+
+      return { code, addresses };
+    } catch {
+      return null;
+    }
+  }
+
+  // Extended 19-char code
+  const clean = payload.replace(/[-\s]/g, "").toUpperCase();
+  if (clean.length === 19 && [...clean].every((c) => CROCKFORD.includes(c))) {
+    const code = clean.slice(0, 12);
+    const ipv4 = decodeIpv4(clean.slice(12));
+    const addresses = ipv4 ? [`${ipv4}:${LAN_PORT}`] : [];
+    return { code, addresses };
+  }
+
+  const code = parseSpaceCode(payload);
+  if (code) return { code, addresses: [] };
+
+  return null;
+}
+
+export async function deriveSpaceId(code: string): Promise<string> {
+  const raw = code.replace(/[-\s]/g, "").toUpperCase();
+  const data = new TextEncoder().encode(raw);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hex.slice(0, 16);
+}
+
+/** Internal alias used by renameSpace below */
+const _formatSpaceCode = formatSpaceCode;
 
 // ---------------------------------------------------------------------------
 // Types

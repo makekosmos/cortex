@@ -5,8 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kazui.delphi.data.model.Project
 import com.kazui.delphi.data.model.TodoItem
-import com.kazui.delphi.data.sync.ArkEventMapper
-import com.kazui.delphi.data.sync.ArkSyncClient
 import com.kazui.delphi.data.sync.PeerManager
 import com.kazui.delphi.di.DatabaseProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +21,6 @@ import javax.inject.Inject
 class ProjectViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val databaseProvider: DatabaseProvider,
-    private val arkSyncClient: ArkSyncClient,
     private val peerManager: PeerManager,
 ) : ViewModel() {
 
@@ -47,7 +44,6 @@ class ProjectViewModel @Inject constructor(
                 createdAt = Instant.now().toString(),
             )
             repo.upsert(todo)
-            arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(todo, "create", ""))
             peerManager.broadcastTodoChange(todo)
         }
     }
@@ -60,7 +56,6 @@ class ProjectViewModel @Inject constructor(
                 todo.copy(isCompleted = true, completedAt = Instant.now().toString())
             }
             repo.upsert(updated)
-            arkSyncClient.sendChange(ArkEventMapper.todoToArkChange(updated, "update", ""))
             peerManager.broadcastTodoChange(updated)
         }
     }
