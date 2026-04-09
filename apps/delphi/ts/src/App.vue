@@ -35,7 +35,7 @@ import { parseConnectionString } from "@/services/sync/pairing";
 import {
   broadcastToPeers,
   setupMeshFromArkKey,
-  setupMeshFromSpaceCode,
+  // setupMeshFromSpaceCode — removed, sync handled via lan-sync:start / ArkClient
   stopMesh,
 } from "@/services/sync/peer-bridge";
 import {
@@ -388,8 +388,7 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
       .catch(console.warn);
   }
 
-  // Start P2P mesh with space code as shared secret
-  setupMeshFromSpaceCode(code);
+  // Sync is started via lan-sync:start → ArkClient (see startSyncServer below)
 
   // Clear ALL store state before loading new space data
   store.setTodos([]);
