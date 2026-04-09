@@ -240,14 +240,15 @@ export function mergePeerRecords(
 
     // Merge addresses (union, deduplicated)
     const addrSet = new Set([...current.addresses, ...inc.addresses]);
+    const useIncoming = inc.last_seen >= current.last_seen;
     const merged: PeerRecord = {
       ...current,
       addresses: [...addrSet],
-      last_seen:
-        current.last_seen > inc.last_seen ? current.last_seen : inc.last_seen,
+      last_seen: useIncoming ? inc.last_seen : current.last_seen,
+      device_name: useIncoming ? inc.device_name : current.device_name,
     };
 
-    if (inc.last_address && inc.last_seen >= current.last_seen) {
+    if (inc.last_address && useIncoming) {
       merged.last_address = inc.last_address;
     }
 
