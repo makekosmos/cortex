@@ -362,16 +362,12 @@ reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Ta
 
 ### P2P Sync (Electron main process)
 
-`sync-server.ts` — WebSocket-сервер на порту 21531:
-- Принимает подключения от Android/macOS пиров
-- Протокол: hello → peer_list → version_vector → batch sync (max 100/batch) → ACK → live mode
-- HLC-based LWW конфликт-резолюция
-- Version vector персистится в sidecar (`sync_kv`)
-- IPC bridge `lan-sync:change` → renderer обрабатывает входящие изменения
+Electron использует `@arksync/node` → `ArkClient` → IPC к Rust sidecar `ark-core-rpc`. TS-уровень не содержит WebSocket-кода — весь P2P в Rust:
 
-`sync-client.ts` — WebSocket-клиент:
-- Подключается к другим пирам по известным адресам
-- Пробует все адреса пира параллельно (LAN, WAN, IPv6)
+- **`packages/arksync-node/src/ark-client.ts`** — `ArkClient`: `start()`, `stop()`, `broadcastChange()`, `onPeerConnected`, `onEntityChanged`
+- **Sidecar IPC** через `electron/main.ts` → `lan-sync:start`, `lan-sync:change`, `lan-sync:broadcast`
+- **Version vector**: персистируется в sidecar `sync_kv` (SQLite)
+- **Incoming changes**: IPC `lan-sync:change` → renderer → Pinia store
 
 ## Сервисы
 

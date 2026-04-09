@@ -79,40 +79,47 @@ Android — равноправный пир: запускает WS-сервер 
 
 | Файл | Роль |
 |------|------|
-| `data/sync/SyncServer.kt` | Ktor CIO embedded WS-сервер (порт 21531, fallback 21531-21541) |
-| `data/sync/LanSyncClient.kt` | OkHttp WS-клиент (`ServerInfo` хранит `deviceId` сервера) |
-| `data/sync/BroadcastDiscovery.kt` | UDP beacon (port 21532) отправка + приём с дедупом по `deviceId` |
-| `data/sync/PeerManager.kt` | Координатор: server + client + peer list exchange + broadcast helpers |
-| `data/sync/SyncEntityParser.kt` | Сериализация/десериализация сущностей для sync (включая checklist items, tags) |
+| `data/sync/PeerManager.kt` | Координатор: UniFFI `ArkCore.startSync()` — запускает в отдельном потоке, слушает `ArkEventListener` |
+| `data/sync/SyncEntityParser.kt` | Сериализация/десериализация сущностей для `broadcastChange` через Rust |
+| `data/sync/PeerRecord.kt` | Типы `PeerRecord`, `LanSyncState` |
+| `jniLibs/arm64-v8a/libark_core.so` | Rust `.so` — пересобирать через `cargo ndk` при изменениях `ffi.rs` |
+| `com/kepler/ark/core/ark_core.kt` | UniFFI биндинги — регенерировать через `uniffi-bindgen generate --library` |
 
-### Discovery + дедуп пиров
+### Discovery + подключение к пирам
 
-- **BroadcastDiscovery**: UDP broadcast (port 21532) каждые 5 с. mDNS не используется — блокируется AP isolation.
-- **Дедуп beacon'ов**: `ConcurrentHashMap<deviceId, SeenPeer>`, TTL 30 с. `onPeerDiscovered` зовётся только при новом `deviceId` или изменении списка адресов. Без этого — бесконечный reconnect-спам.
-- **Фильтрация анонсируемых адресов**: skip link-local (`169.254/16`, `fe80::/10`), unique-local (`fc00::/7`), loopback, виртуальные интерфейсы (`utun*`, `wg*`, `tailscale*`, `docker*`, `rmnet*`, `dummy*`, `bridge*`, `vmnet*` и т.д.). Правило применяется в `BroadcastDiscovery.sendBeacon()`.
-- **Device name**: `${Build.MANUFACTURER} ${Build.MODEL}` (`MainActivity.getDeviceName()`, `SpaceSetupViewModel.getDeviceName()`). Не захардкоживать process name.
-- **Single-session-per-device (SyncServer)**: `handleHello` закрывает все предыдущие authenticated-сессии с тем же `deviceId` (предварительно снимая `authenticated` флаг, чтобы не дёрнуть лишний `onPeerDisconnected`). `getConnectedPeers()` дедупит через `LinkedHashMap<deviceId, name>`.
-- **Inbound + outbound = 1 запись в UI**: `PeerManager.updatePeerCounts()` мержит `syncServer.getConnectedPeers()` и `lanSyncClient.serverInfo` дедупом по `deviceId`. Если Android подключен к Electron в обе стороны — в списке одна запись.
+Вся логика (UDP beacon discovery, WS-сервер, WS-клиент, дедуп пиров) живёт в Rust `ark-core`:
+- **Beacon**: `beacon.rs` UDP broadcast порт 21532, Syncthing-style дедуп по `device_id`
+- **Сервер**: `sync_server.rs` tokio/tungstenite на порту 21531
+- **Клиент**: `sync_client.rs` address racing — все адреса пира параллельно
+- **Всё через UniFFI**: `PeerManager.kt` только вызывает `arkCore.startSync()` и обрабатывает `ArkEventListener`
 
-### Синхронизируемые сущности
+**Device name**: `${Build.MANUFACTURER} ${Build.MODEL}` (`MainActivity.getDeviceName()`, `SpaceSetupViewModel.getDeviceName()`). Не захардкоживать process name.
 
-Все 7 типов: `todo`, `project`, `area`, `tag`, `heading`, `checklist_item`, `todo_tag_cross_ref`.
+### Dispatchers.IO — обязательно для startSync
 
-- `SyncServer.loadAllEntities()` и `LanSyncClient.buildVersionVector()` обрабатывают все типы
-- `SyncEntityParser.todoToJson()` включает вложенные checklist items и tag IDs
-- `SyncEntityParser.applyChecklistAndTags()` применяет вложенные данные при получении
-- Trashed items включены в sync — фильтрация `isTrashed` НЕ применяется при `getAllForSync()`
+`peerManager.start()` вызывает `arkCore.startSync()` — blocking JNI call. Запускать ТОЛЬКО в `Dispatchers.IO`:
+
+```kotlin
+// MainActivity.kt
+withContext(Dispatchers.IO) {
+    peerManager.start(spaceCode, deviceId, deviceName)
+}
+
+// SpaceSetupViewModel.kt
+withContext(Dispatchers.IO) {
+    peerManager.start(normalized, deviceId, deviceName)
+}
+```
+
+Без `Dispatchers.IO`: main thread блокируется → Android ANR после 5 с → синк молча не стартует.
 
 ### Hard delete (очистка корзины)
 
 - `TrashViewModel.emptyTrash()` вызывает `peerManager.broadcastTodoDelete(id)` для каждой удалённой задачи
-- При получении `deleted: true` — запись удаляется из БД, `versionVector.remove(entityId)`
-
-### Version vector
-Персистится в DataStore. **MUST NOT** регенерироваться с `Instant.now()` при reconnect.
+- Rust-сторона транслирует `deleted: true` всем пирам
 
 ### UUID normalization
-Все `source_id`/`event_id` MUST be lowercase: `.lowercase()` при сохранении в Room.
+Все UUID MUST be lowercase: `.lowercase()` при сохранении в Room.
 
 ### Удаление данных
 Нет кнопки "Очистить данные" в UI — данные удаляются только через системные настройки (Settings → Apps → Delphi → Clear Data).
@@ -127,8 +134,29 @@ Android — равноправный пир: запускает WS-сервер 
 - SharedPreferences fallback (`ark_space_backup`) — зеркало; авто-восстановление если DataStore вернул null
 - Пространство не слетает при перезапуске
 
-### PendingChangeDao safety
-- Kotlin sync uses UniFFI `ArkCore.startSync()` via `PeerManager.kt`. Legacy `ArkSyncClient`, `ArkPeerManager`, `ArkPeerProtocol`, `ArkEventMapper` have been deleted.
+### Пересборка Rust артефактов
+
+При изменениях в `packages/ark-core/rust/src/ffi.rs`:
+
+```bash
+# 1. Пересобрать .so для Android ARM64
+cd packages/ark-core/rust
+cargo ndk -t arm64-v8a --platform 24 \
+  -o ../../../apps/delphi/kotlin/app/src/main/jniLibs \
+  build --release --lib
+
+# 2. Регенерировать UniFFI биндинги из собранного .so
+cargo run --bin uniffi-bindgen generate \
+  --library target/aarch64-linux-android/release/libark_core.so \
+  --language kotlin \
+  --out-dir /tmp/ark-kotlin-bindings/
+
+# 3. Скопировать ark_core.kt в проект
+cp /tmp/ark-kotlin-bindings/com/kepler/ark/core/ark_core.kt \
+   ../../../apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ark_core.kt
+```
+
+**ВАЖНО**: `ark_core.kt` должен быть сгенерирован из ТОГО ЖЕ `.so`, который лежит в `jniLibs/`. Рассинхрон вызывает `not enough bytes remaining in buffer` при старте.
 
 ## Команды
 
