@@ -1,0 +1,2 @@
+lrwxrwxrwx 1 node node 17 Apr 10 12:33 .claude/agents -> ../.agents/agents
+lrwxrwxrwx 1 node node 17 Apr 10 12:33 .claude/skills -> ../.agents/skills

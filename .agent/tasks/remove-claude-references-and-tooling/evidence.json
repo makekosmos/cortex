@@ -1,0 +1,39 @@
+{
+  "task_id": "remove-claude-references-and-tooling",
+  "status": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "details": "Active docs now use AGENTS.md as the project guide filename; only an intentional anti-regression mention of CLAUDE.md remains in root AGENTS.md.",
+      "raw_artifacts": [
+        ".agent/tasks/remove-claude-references-and-tooling/raw/post-stale-claude-search.txt"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "details": "repo-task-proof-loop tooling now treats AGENTS.md as canonical and installs project agents into .agents/agents.",
+      "raw_artifacts": [
+        ".agent/tasks/remove-claude-references-and-tooling/raw/verify-package.txt"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "details": "Skill, template, and reference docs were updated from CLAUDE.md maintenance guidance to AGENTS.md guidance.",
+      "raw_artifacts": [
+        ".agent/tasks/remove-claude-references-and-tooling/raw/post-stale-claude-search.txt"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "details": "repo-task-proof-loop smoke tests still pass after the AGENTS.md canonicalization changes.",
+      "raw_artifacts": [
+        ".agent/tasks/remove-claude-references-and-tooling/raw/verify-package.txt"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "details": "Historical task artifacts under .agent/tasks were left untouched except for this new task folder.",
+      "raw_artifacts": []
+    }
+  }
+}

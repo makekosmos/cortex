@@ -252,16 +252,9 @@ function onDragEnd() {
       isDragging ? 'opacity-0' : '',
       draggable && !editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
     ]"
-    style="max-width: var(--bringhurst-wide)"
-    @pointerdown="onRowPointerDown"
+@pointerdown="onRowPointerDown"
     @dblclick="editable ? startEditing() : undefined"
   >
-    <!-- Drag handle (visual indicator only) -->
-    <GripVertical
-      v-if="draggable"
-      :size="14"
-      class="shrink-0 text-(--muted-foreground)/30 opacity-0 transition-opacity group-hover:opacity-100"
-    />
 
     <!-- Checkbox -->
     <button type="button" class="check-btn shrink-0" @pointerdown.stop @click.stop="emit('complete')">

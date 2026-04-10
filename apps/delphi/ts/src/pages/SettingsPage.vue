@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { Database, Globe, Link, SunMoon, Unlink } from "lucide-vue-next";
 import { useTheme } from "@/composables/useTheme";
+import { useSidebarState } from "@/composables/useSidebarState";
 import {
   arkSync,
   getArkApiKey,
@@ -21,6 +22,7 @@ import {
 } from "@/services/space/space-manager";
 
 const { theme, setTheme } = useTheme();
+const { wrapClass, wrapStyle } = useSidebarState();
 
 // --- Space management ---
 const spaces = ref<Space[]>([]);
@@ -122,7 +124,8 @@ function handleDisconnectArk() {
 <template>
   <div class="h-full min-h-0 w-full overflow-auto bg-(--background) p-4">
     <div
-      class="mx-auto flex w-full max-w-(--bringhurst-wide) flex-col gap-4 py-6"
+      :class="[wrapClass, 'flex flex-col gap-4 py-6']"
+      :style="wrapStyle"
     >
       <!-- Spaces section -->
       <section

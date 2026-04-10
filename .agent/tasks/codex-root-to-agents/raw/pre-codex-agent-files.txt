@@ -1,0 +1,4 @@
+task-builder.toml
+task-fixer.toml
+task-spec-freezer.toml
+task-verifier.toml

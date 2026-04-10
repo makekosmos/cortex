@@ -78,3 +78,7 @@ release/
 *.docx
 .turbo/
 sample
+
+.npm-global
+.pi
+.pi-data

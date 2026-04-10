@@ -130,7 +130,9 @@ async function copyQrLink() {
   try {
     await navigator.clipboard.writeText(qrOverlayPayload.value);
     qrLinkCopied.value = true;
-    setTimeout(() => (qrLinkCopied.value = false), 2000);
+    setTimeout(() => {
+      qrLinkCopied.value = false;
+    }, 2000);
   } catch {
     /* clipboard blocked */
   }
@@ -263,7 +265,9 @@ function bootstrap() {
       console.log(
         `[App] Removing ${zombies.length} zombie tasks after full sync`,
       );
-      zombies.forEach((t) => store.removeTodoLocal(t.id));
+      zombies.forEach((t) => {
+        store.removeTodoLocal(t.id);
+      });
     }
   });
 
@@ -536,15 +540,21 @@ async function startSyncServer(spaceId?: string, seedAddresses: string[] = []) {
   const deviceName = "";
 
   try {
-    await window.electronAPI.invoke(
+    const started = await window.electronAPI.invoke(
       "lan-sync:start",
       spaceId,
       deviceId,
       deviceName,
       seedAddresses,
     );
+    if (!started) {
+      connectionState.value = "offline";
+      console.warn("[App] Sync server failed to start");
+      return;
+    }
     console.log("[App] Sync server started");
   } catch (err) {
+    connectionState.value = "offline";
     console.warn("[App] Failed to start sync server:", err);
   }
 }

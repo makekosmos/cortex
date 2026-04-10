@@ -1,0 +1,9 @@
+AGENTS.md
+apps/delphi/AGENTS.md
+apps/delphi/kotlin/AGENTS.md
+apps/delphi/swift-archive/AGENTS.md
+apps/eden/AGENTS.md
+apps/eden/ts/AGENTS.md
+apps/elysium/AGENTS.md
+apps/olympia/AGENTS.md
+packages/ark-core/AGENTS.md

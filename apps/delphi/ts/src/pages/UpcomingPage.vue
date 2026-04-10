@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Calendar, Plus } from "lucide-vue-next";
+import { Plus } from "lucide-vue-next";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 
 const { show: openQuickEntry } = useQuickEntry();
@@ -79,6 +79,9 @@ function weekOfYear(date: Date): number {
 // Store
 // ---------------------------------------------------------------------------
 
+import { useSidebarState } from "@/composables/useSidebarState";
+
+const { wrapClass, wrapStyle } = useSidebarState();
 const store = useTodoStore();
 const { todos, projects } = storeToRefs(store);
 
@@ -198,15 +201,15 @@ function handleToggleToday(todo: TodoItem) {
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
     <div
-      class="mx-auto w-full max-w-(--bringhurst-wide) flex items-center justify-center gap-2.5 px-7 pb-3 pt-6"
+      :class="[wrapClass, 'flex items-center gap-2.5 px-7 pb-3 pt-6']"
+      :style="wrapStyle"
     >
-      <Calendar :size="24" class="text-red-500 select-none" />
-      <h1 class="text-2xl font-bold text-(--foreground) select-none">Планы</h1>
+<h1 class="text-2xl font-bold text-(--foreground) select-none">Планы</h1>
     </div>
 
     <!-- Scrollable content -->
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
-      <div class="mx-auto w-full max-w-(--bringhurst-wide) pb-20 pt-1">
+      <div :class="[wrapClass, 'pb-20 pt-1']" :style="wrapStyle">
         <div v-for="section in sections" :key="section.id">
           <!-- Section header -->
           <div

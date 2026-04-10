@@ -7,6 +7,8 @@ export const routes: RouteRecordRaw[] = [
 
   { path: "/upcoming", component: () => import("../pages/UpcomingPage.vue") },
 
+  { path: "/week", component: () => import("../pages/WeekPage.vue") },
+
   { path: "/logbook", component: () => import("../pages/LogbookPage.vue") },
 
   { path: "/trash", component: () => import("../pages/TrashPage.vue") },

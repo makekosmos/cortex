@@ -68,6 +68,9 @@ let syncActive = false;
 /** Track peer names per device_id as reported by sidecar events. */
 const syncPeerNames: Map<string, string> = new Map();
 let currentDeviceId = '';
+let currentSpaceId: string | null = null;
+let syncStartInFlight: Promise<boolean> | null = null;
+let syncStartRequest: { spaceId: string; deviceId: string } | null = null;
 
 /**
  * Human-readable host name for this device. Prefers the OS host name
@@ -445,6 +448,17 @@ ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceI
     console.warn('[Main] lan-sync:start called without spaceId, ignoring');
     return false;
   }
+  while (syncStartInFlight) {
+    if (syncStartRequest?.spaceId === spaceId && syncStartRequest.deviceId === deviceId) {
+      return syncStartInFlight;
+    }
+    await syncStartInFlight;
+  }
+  if (syncActive && currentSpaceId === spaceId && currentDeviceId === deviceId) {
+    return true;
+  }
+  syncStartRequest = { spaceId, deviceId };
+  syncStartInFlight = (async () => {
   currentDeviceId = deviceId;
   const name = getHostDeviceName();
   currentDeviceName = name;
@@ -474,15 +488,22 @@ ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceI
       await syncAddSeedPeer(seedAddresses);
     }
     syncActive = true;
+    currentSpaceId = spaceId;
     syncPeerNames.clear();
     console.log(`[Main] Sync started via ArkClient (device=${name})`);
     return true;
   } catch (err) {
     console.error('[Main] start_sync via ArkClient failed:', err);
     syncActive = false;
+    currentSpaceId = null;
     arkClient = null;
     return false;
+  } finally {
+    syncStartInFlight = null;
+    syncStartRequest = null;
   }
+  })();
+  return syncStartInFlight;
 });
 
 /** IPC: stop sync via ArkClient. */
@@ -492,6 +513,7 @@ ipcMain.handle('lan-sync:stop', async () => {
     arkClient = null;
   }
   syncActive = false;
+  currentSpaceId = null;
   syncPeerNames.clear();
   return true;
 });
@@ -583,6 +605,7 @@ ipcMain.handle('lan-sync:leaveSpace', async () => {
     console.warn('[Main] leave_space failed:', err);
   }
   syncActive = false;
+  currentSpaceId = null;
   syncPeerNames.clear();
   return true;
 });

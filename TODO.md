@@ -20,7 +20,7 @@
 - [x] Тесты для pairing.py (16 тестов)
 - [x] Connection pooling в Ark class (keep_alive + threading.local, 8 тестов)
 - [x] E2E workflow тест (4 теста: pair→sync→broadcast)
-- [x] CLAUDE.md документация
+- [x] AGENTS.md документация
 
 ### Не завершено
 - [ ] UI — решить нужен ли (Кирилл сказал "кривой, смысла нет")
@@ -86,7 +86,7 @@
 ## Olympia (apps/olympia/)
 
 ### Готово
-- [x] CLAUDE.md документация
+- [x] AGENTS.md документация
 - [x] Ark sync интеграция (lib/sync/: ark-client, mapper, sync-store, pairing)
 - [x] Sync UI в профиле (pairing flow, connect/disconnect, status)
 - [x] Auto-connect при запуске если paired

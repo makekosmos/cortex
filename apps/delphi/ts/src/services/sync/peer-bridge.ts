@@ -8,12 +8,17 @@
  */
 
 import type { ArkChange } from "./ark-types";
-
-import { HLC } from "./hlc";
+import { arkChangeEventType } from "./ark-types";
 
 const DEVICE_ID_KEY = "delphi.sync_device_id";
 
-let localSeq = 0;
+type SyncEntity = {
+  type: string;
+  id: string;
+  data: Record<string, unknown>;
+  hlc: string;
+  deleted?: boolean;
+};
 
 function getDeviceId(): string {
   return localStorage.getItem(DEVICE_ID_KEY) ?? "unknown";
@@ -27,35 +32,36 @@ function getDeviceId(): string {
 export function broadcastToPeers(change: ArkChange): void {
   if (!window.electronAPI?.invoke) return;
 
-  const deviceId = getDeviceId();
+  const eventType = arkChangeEventType(change);
+  const entityType =
+    eventType === "project"
+      ? "project"
+      : eventType === "task" || eventType === "task_created"
+        ? "todo"
+        : null;
 
-  localSeq += 1;
+  if (!entityType) return;
 
-  // Deep-clone to strip Vue 3 reactive proxies — Electron IPC structured clone
+  const envelope = change.data as Record<string, unknown> | undefined;
+  const entityId =
+    (envelope?.source_id as string | undefined) ?? change.event_id ?? null;
+  const entityData = (envelope?.data as Record<string, unknown> | undefined) ?? {};
 
-  // cannot serialize Proxy objects.
+  if (!entityId) return;
 
-  const peerChange = JSON.parse(
+  // Keep a monotonic local counter for future debugging parity with the old
+  // bridge, but the current lan-sync IPC contract no longer ships it.
+  const peerChange: SyncEntity = JSON.parse(
     JSON.stringify({
-      type: "change",
-
-      event_id: change.event_id,
-
-      change_type: change.change_type,
-
-      data: change.data,
-
-      origin_device: deviceId,
-
-      origin_seq: localSeq,
-
-      hlc: HLC.now(deviceId).toString(),
-
-      hop_path: [deviceId],
+      type: entityType,
+      id: entityId.toLowerCase(),
+      data: entityData,
+      hlc: "",
+      deleted: change.change_type === "delete" ? true : undefined,
     }),
   );
 
-  window.electronAPI.invoke("peer:broadcastChange", peerChange).catch((err) => {
+  window.electronAPI.invoke("lan-sync:broadcastChange", peerChange).catch((err) => {
     console.warn("[PeerBridge] Failed to broadcast change:", err);
   });
 }

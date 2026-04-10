@@ -11,8 +11,10 @@ import {
 import { useRoute, useRouter } from "vue-router";
 import { Circle, MoreHorizontal, Plus } from "lucide-vue-next";
 import { useQuickEntry } from "@/composables/useQuickEntry";
+import { useSidebarState } from "@/composables/useSidebarState";
 
 const { show: openQuickEntry } = useQuickEntry();
+const { wrapClass, wrapStyle } = useSidebarState();
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
@@ -179,7 +181,8 @@ function handleArchive() {
   <div v-else class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
     <div
-      class="mx-auto w-full max-w-(--bringhurst-wide) relative flex items-center justify-center gap-2.5 px-7 pb-3 pt-6"
+      :class="[wrapClass, 'relative flex items-center gap-2.5 px-7 pb-3 pt-6']"
+      :style="wrapStyle"
     >
       <Circle
         :size="12"
@@ -250,7 +253,7 @@ function handleArchive() {
 
     <!-- Task list -->
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
-      <div class="mx-auto w-full max-w-(--bringhurst-wide) pb-20 pt-1">
+      <div :class="[wrapClass, 'pb-20 pt-1']" :style="wrapStyle">
         <div
           v-if="activeTodos.length === 0 && completedTodos.length === 0"
           class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"

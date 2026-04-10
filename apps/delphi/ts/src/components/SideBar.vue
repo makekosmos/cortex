@@ -7,6 +7,7 @@ import {
   Calendar,
   Circle,
   Inbox,
+  Kanban,
   PanelLeftClose,
   Settings,
   Star,
@@ -17,6 +18,7 @@ import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
 import ResizableSidebar from "@kepler/visuals/components/ResizableSidebar.vue";
 import type { SidebarConfig } from "@kepler/visuals/components/ResizableSidebar.vue";
+import { setSidebarHidden } from "@/composables/useSidebarState";
 
 const STORAGE_KEY = "delphi-sidebar-config";
 
@@ -32,6 +34,7 @@ function loadConfig(): Partial<SidebarConfig> {
 
 function saveConfig(config: SidebarConfig) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  setSidebarHidden(config.hidden);
 }
 
 function colorTagClass(colorTag?: string | null): string {
@@ -96,6 +99,7 @@ const activeProjects = computed(() =>
           <SideBarButton :icon="Inbox" to="/" label="Входящие" />
           <SideBarButton :icon="Star" to="/today" label="Сегодня" />
           <SideBarButton :icon="Calendar" to="/upcoming" label="Планы" />
+          <SideBarButton :icon="Kanban" to="/week" label="Неделя" />
           <SideBarButton :icon="Book" to="/logbook" label="Журнал" />
           <SideBarButton :icon="Archive" to="/trash" label="Корзина" />
 

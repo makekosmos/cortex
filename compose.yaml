@@ -1,0 +1,16 @@
+services:
+  pi:
+    image: node:20-bookworm
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    user: node
+    environment:
+      HOME: /home/node
+      NPM_CONFIG_PREFIX: /home/node/.npm-global
+      PATH: /home/node/.npm-global/bin:/home/node/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    volumes:
+      - .:/workspace
+      - ./.pi:/home/node/.pi
+      - ./.npm-global:/home/node/.npm-global
+    command: bash -lc "npm install -g @mariozechner/pi-coding-agent && /home/node/.npm-global/bin/pi"

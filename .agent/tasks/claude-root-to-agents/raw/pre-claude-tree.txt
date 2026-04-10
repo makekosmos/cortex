@@ -1,0 +1,4 @@
+.claude
+.claude/agents
+.claude/skills
+.claude/worktrees
