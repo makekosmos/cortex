@@ -1,0 +1,56 @@
+{
+  "task_id": "fix-sync-not-running-delete",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "When the sidecar reports `Sync not running` during `lan-sync:broadcastChange`, Electron main must treat it as a benign stale-sync-state condition, avoid noisy warning spam, and return `false` to the renderer.",
+      "status": "PASS",
+      "proof": [
+        "apps/delphi/ts/electron/main.ts uses handleStaleSyncRuntime(...) in lan-sync:broadcastChange before warning",
+        "handleStaleSyncRuntime(...) matches Error messages containing 'Sync not running' and logs console.info instead of console.warn",
+        "raw/code-locations.txt and raw/main.diff capture the changed path"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "When Electron main detects `Sync not running` from sidecar sync operations, it must reset its in-memory sync state (`syncActive` and related peer/runtime cache) so subsequent status checks do not continue to report sync as active.",
+      "status": "PASS",
+      "proof": [
+        "apps/delphi/ts/electron/main.ts defines resetSyncRuntimeState()",
+        "handleStaleSyncRuntime(...) calls resetSyncRuntimeState()",
+        "stop and leave-space handlers also reuse resetSyncRuntimeState()"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "`lan-sync:getStatus` must return `{ active: false, peers: 0, peerNames: [] }` after a stale runtime is detected instead of claiming sync is still active with zero peers.",
+      "status": "PASS",
+      "proof": [
+        "apps/delphi/ts/electron/main.ts catch block in lan-sync:getStatus checks handleStaleSyncRuntime('get_connected_peers failed', err)",
+        "the stale-runtime branch returns inactive status with zero peers"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "The Delphi Electron TypeScript code must still type-check after the change.",
+      "status": "PASS",
+      "proof": [
+        "Command `cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc -p tsconfig.node.json` exited with code 0",
+        "Artifacts: raw/tsc-node.meta, raw/tsc-node.txt"
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "apps/delphi/ts/electron/main.ts"
+  ],
+  "commands_for_fresh_verifier": [
+    "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc -p tsconfig.node.json",
+    "cd /workspace && rg -n \"isSyncNotRunningError|resetSyncRuntimeState|handleStaleSyncRuntime|lan-sync:getStatus|lan-sync:broadcastChange|return \\\{ active: false, peers: 0, peerNames: \\\[\\\] \\\}\" apps/delphi/ts/electron/main.ts"
+  ],
+  "known_gaps": []
+}

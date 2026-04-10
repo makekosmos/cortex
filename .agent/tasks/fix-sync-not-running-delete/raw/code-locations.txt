@@ -1,0 +1,14 @@
+66: *  `active` probe for `lan-sync:getStatus` without a round-trip. */
+75:function isSyncNotRunningError(err: unknown): boolean {
+79:function resetSyncRuntimeState(): void {
+86:function handleStaleSyncRuntime(context: string, err: unknown): boolean {
+87:  if (!isSyncNotRunningError(err)) {
+90:  resetSyncRuntimeState();
+535:  resetSyncRuntimeState();
+540:ipcMain.handle('lan-sync:getStatus', async () => {
+541:  if (!syncActive) return { active: false, peers: 0, peerNames: [] };
+556:    if (handleStaleSyncRuntime('get_connected_peers failed', err)) {
+557:      return { active: false, peers: 0, peerNames: [] };
+565:ipcMain.handle('lan-sync:broadcastChange', async (_e, entity: SyncEntity) => {
+573:    if (handleStaleSyncRuntime('broadcast_change via sidecar failed', err)) {
+631:  resetSyncRuntimeState();

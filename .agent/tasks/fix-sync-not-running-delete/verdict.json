@@ -1,0 +1,42 @@
+{
+  "task_id": "fix-sync-not-running-delete",
+  "overall_verdict": "PASS",
+  "verified_at": "2026-04-10",
+  "verifier": "pi",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "lan-sync:broadcastChange now calls handleStaleSyncRuntime('broadcast_change via sidecar failed', err) and returns false for the stale-runtime case instead of emitting the prior warning spam."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "resetSyncRuntimeState() now clears syncActive, currentSpaceId, arkClient, and syncPeerNames, and stale-runtime detection routes through that helper."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "lan-sync:getStatus now returns inactive status when get_connected_peers fails with 'Sync not running'."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Fresh verification command `cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc -p tsconfig.node.json` completed successfully with exit code 0."
+    }
+  ],
+  "commands_run": [
+    "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc -p tsconfig.node.json",
+    "cd /workspace && rg -n \"isSyncNotRunningError|resetSyncRuntimeState|handleStaleSyncRuntime|lan-sync:getStatus|lan-sync:broadcastChange|return \\\{ active: false, peers: 0, peerNames: \\\[\\\] \\\}\" apps/delphi/ts/electron/main.ts"
+  ],
+  "artifacts_used": [
+    "spec.md",
+    "evidence.md",
+    "evidence.json",
+    "raw/tsc-node.meta",
+    "raw/tsc-node.txt",
+    "raw/code-locations.txt",
+    "raw/main.diff",
+    "apps/delphi/ts/electron/main.ts"
+  ]
+}

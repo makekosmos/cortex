@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -72,6 +72,26 @@ let currentSpaceId: string | null = null;
 let syncStartInFlight: Promise<boolean> | null = null;
 let syncStartRequest: { spaceId: string; deviceId: string } | null = null;
 
+function isSyncNotRunningError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes('Sync not running');
+}
+
+function resetSyncRuntimeState(): void {
+  syncActive = false;
+  currentSpaceId = null;
+  arkClient = null;
+  syncPeerNames.clear();
+}
+
+function handleStaleSyncRuntime(context: string, err: unknown): boolean {
+  if (!isSyncNotRunningError(err)) {
+    return false;
+  }
+  resetSyncRuntimeState();
+  console.info(`[Main] ${context}: sync runtime is no longer running; marked local state inactive`);
+  return true;
+}
+
 /**
  * Human-readable host name for this device. Prefers the OS host name
  * ("Kirill's MacBook Pro") over any renderer-supplied label so peers see
@@ -114,8 +134,82 @@ function saveWindowState(win: BrowserWindow) {
   fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ ...bounds, isMaximized }), 'utf-8');
 }
 
+function setupApplicationMenu(): void {
+  const template: MenuItemConstructorOptions[] = [];
+
+  if (process.platform === 'darwin') {
+    template.push({
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    });
+  }
+
+  const editSubmenu: MenuItemConstructorOptions[] = [
+    { role: 'undo' },
+    { role: 'redo' },
+    { type: 'separator' },
+    { role: 'cut' },
+    { role: 'copy' },
+    { role: 'paste' },
+  ];
+  if (process.platform === 'darwin') {
+    editSubmenu.push(
+      { role: 'pasteAndMatchStyle' },
+      { role: 'delete' },
+      { role: 'selectAll' },
+    );
+  } else {
+    editSubmenu.push(
+      { role: 'delete' },
+      { type: 'separator' },
+      { role: 'selectAll' },
+    );
+  }
+  template.push({ label: 'Edit', submenu: editSubmenu });
+
+  template.push({
+    label: 'View',
+    submenu: [
+      { role: 'reload' },
+      { role: 'forceReload' },
+      { role: 'toggleDevTools' },
+      { type: 'separator' },
+      { role: 'resetZoom' },
+      { role: 'zoomIn' },
+      { role: 'zoomOut' },
+      { type: 'separator' },
+      { role: 'togglefullscreen' },
+    ],
+  });
+
+  const windowSubmenu: MenuItemConstructorOptions[] = [
+    { role: 'minimize' },
+    { role: 'close' },
+  ];
+  if (process.platform === 'darwin') {
+    windowSubmenu.push(
+      { type: 'separator' },
+      { role: 'front' },
+      { role: 'window' },
+    );
+  }
+  template.push({ label: 'Window', submenu: windowSubmenu });
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
-  Menu.setApplicationMenu(null);
+  setupApplicationMenu();
 
   const saved = loadWindowState();
 
@@ -512,9 +606,7 @@ ipcMain.handle('lan-sync:stop', async () => {
     try { await arkClient.stop(); } catch (err) { console.warn('[Main] stop_sync failed:', err); }
     arkClient = null;
   }
-  syncActive = false;
-  currentSpaceId = null;
-  syncPeerNames.clear();
+  resetSyncRuntimeState();
   return true;
 });
 
@@ -535,6 +627,9 @@ ipcMain.handle('lan-sync:getStatus', async () => {
       peerNames: [...seen.values()],
     };
   } catch (err) {
+    if (handleStaleSyncRuntime('get_connected_peers failed', err)) {
+      return { active: false, peers: 0, peerNames: [] };
+    }
     console.warn('[Main] get_connected_peers failed:', err);
     return { active: true, peers: 0, peerNames: [] };
   }
@@ -549,6 +644,9 @@ ipcMain.handle('lan-sync:broadcastChange', async (_e, entity: SyncEntity) => {
     await syncBroadcastChange(cloned);
     return true;
   } catch (err) {
+    if (handleStaleSyncRuntime('broadcast_change via sidecar failed', err)) {
+      return false;
+    }
     console.warn('[Main] broadcast_change via sidecar failed:', err);
     return false;
   }
@@ -604,9 +702,7 @@ ipcMain.handle('lan-sync:leaveSpace', async () => {
   } catch (err) {
     console.warn('[Main] leave_space failed:', err);
   }
-  syncActive = false;
-  currentSpaceId = null;
-  syncPeerNames.clear();
+  resetSyncRuntimeState();
   return true;
 });
 

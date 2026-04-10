@@ -110,7 +110,7 @@ Beacon'ы и `ownAddresses` (в `hello`/`peer_list`) **MUST** содержать
 | `packages/ark-core/rust/src/mesh.rs` | MeshCoordinator: LAN + relay, дедупликация изменений |
 | `packages/ark-core/rust/src/ffi.rs` | UniFFI facade (ArkCore, FfiSyncConfig, ArkEventListener) |
 | `packages/arksync-node/src/ark-client.ts` | `@arksync/node` ArkClient — TypeScript обёртка над sidecar IPC |
-| `ts/electron/main.ts` | Electron main: использует ArkClient из @arksync/node |
+| `ts/electron/main.ts` | Electron main: ArkClient из @arksync/node, stale-sync reset, macOS application menu |
 | `ts/electron/sidecar.ts` | SidecarClient: только DB ops |
 | `ts/src/services/sync/lan-protocol.ts` | Общие типы, HLC, diff, batch splitting (standalone) |
 | `ts/src/store/todos.ts` | CRUD + `broadcastToLanSync()` на каждой мутации |
@@ -119,6 +119,8 @@ Beacon'ы и `ownAddresses` (в `hello`/`peer_list`) **MUST** содержать
 ### Важные правила реализации
 
 - Vue 3 reactive proxies **MUST** быть deep-cloned через `JSON.parse(JSON.stringify())` перед Electron IPC (structured clone не может сериализовать Proxy-объекты)
+- Electron main **MUST** сбрасывать локальное sync-state (`syncActive`, peer cache, текущий runtime), если sidecar возвращает `Sync not running`; иначе UI продолжит слать `broadcast_change` в мёртвый runtime и спамить warnings
+- macOS/Electron: **НЕ** ставить `Menu.setApplicationMenu(null)` в Delphi; используй нормальный application menu template, иначе возможен Cocoa warning `representedObject is not a WeakPtrToElectronMenuModelAsNSObject`
 - Android version vector **MUST** персиститься в DataStore, **НЕ** регенерироваться с `Instant.now()` при reconnect
 - OkHttp WebSocket: без `pingInterval` (сервер шлёт WS-level pings), `readTimeout=0`
 - **Нет кнопки "Очистить данные"** — данные удаляются только через системные настройки (Settings → Apps)
