@@ -77,7 +77,7 @@ Beacon'ы и `ownAddresses` (в `hello`/`peer_list`) **MUST** содержать
 | **Android** | `${Build.MANUFACTURER} ${Build.MODEL}` | `Nothing A063` |
 | **macOS** | `Host.current().localizedName` | `Kirill's MacBook Pro` |
 
-Хелпер в Electron: `getHostDeviceName()` в `ts/electron/main.ts`. Renderer-процесс передаёт пустую строку в `lan-sync:start` / `peer:setMeshCredentials`, main-процесс всегда подставляет host name. **Никогда** не захардкоживай `"Delphi Electron"` или имя процесса.
+Хелпер в Electron: `getHostDeviceName()` в `ts/electron/main.ts`. Renderer-процесс передаёт пустую строку в `lan-sync:start`, main-процесс всегда подставляет host name. **Никогда** не захардкоживай `"Delphi Electron"` или имя процесса.
 
 ### Single-session-per-device на SyncServer
 
@@ -307,7 +307,7 @@ ts/
 │   │   ├── todos.ts       — Pinia store: задачи, проекты, CRUD → localDb + lanSync
 │   │   └── tasks.ts       — вспомогательные утилиты для задач
 │   ├── services/
-│   │   ├── sync/          — lan-protocol, hlc, ark-types, peer-bridge
+│   │   ├── sync/          — lan-protocol, hlc, ark-types
 │   │   ├── api/           — HTTP helpers
 │   │   ├── filters/       — smart list фильтры
 │   │   ├── gemini/        — голосовой ввод (Gemini Live API)
@@ -333,7 +333,6 @@ ts/
 ```
 App.vue → isLocalDbAvailable()
   true  → loadAllFromLocalDb() → IPC db:loadAll → sidecar → SQLite  (мгновенно, offline)
-  false → fetchTasksFromArk()  → HTTP /events                       (web режим, fallback)
 ```
 
 **Каждая мутация (store/todos.ts)**:

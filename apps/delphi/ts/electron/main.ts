@@ -34,6 +34,7 @@ import {
   type SidecarEvent,
   type SyncEntityPayload,
 } from './sidecar';
+import { registerGoogleCalendarIpc } from './google-calendar';
 
 /** WebSocket port used by the ark-core sync server. */
 const LAN_SYNC_PORT = 21531;
@@ -290,15 +291,8 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
   fs.mkdirSync(safePath(dirPath), { recursive: true });
 });
 
-// --- P2P Peer Sync IPC (legacy mesh-credentials helpers removed) ---
-// Sync lifecycle is now handled by ArkClient from @arksync/node.
-// The IPC channels (lan-sync:start, lan-sync:stop, etc.) are retained below.
-
-/** IPC: stub for legacy renderer calls that asked for peer:isActive. */
-ipcMain.handle('peer:isActive', async () => syncActive);
-
-/** IPC: stub — server address is now reported via sidecar get_own_addresses. */
-ipcMain.handle('peer:getServerAddress', async () => null);
+// --- Sync lifecycle is handled by ArkClient from @arksync/node. ---
+// The active renderer contract is `lan-sync:*`.
 
 // --- IPC handlers for space persistence (file-based, survives localStorage wipe) ---
 
@@ -454,11 +448,6 @@ ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
     }
   }
   return false;
-})
-
-ipcMain.handle('peer:stop', async () => {
-  // Legacy handler — no-op now that PeerManager is removed.
-  return true;
 })
 
 // --- Sync IPC (backed by ArkClient from @arksync/node → ark-core-rpc sidecar) ---
@@ -717,6 +706,8 @@ ipcMain.handle('lan-sync:addSeedPeer', async (_e, addresses: string[]) => {
     return false;
   }
 });
+
+registerGoogleCalendarIpc(getDataDir);
 
 // --- App lifecycle ---
 

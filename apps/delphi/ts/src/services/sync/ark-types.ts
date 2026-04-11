@@ -1,16 +1,12 @@
 /* eslint-disable no-console */
 
 /**
- * Ark sync types and data-conversion utilities.
+ * Sync entity types and data-conversion utilities for Delphi TS.
  *
- * This file contains pure type definitions and entity mappers used by the
- * renderer (Vue) side.  The legacy relay WebSocket client (ArkSyncClient) and
- * its singleton `arkSync` have been removed — sync is now handled by the Rust
- * sidecar via @arksync/node in the Electron main process.
- *
- * Settings helpers (getArkUrl / setArkUrl / getArkApiKey / setArkApiKey) are
- * kept here because SettingsPage.vue still exposes the legacy Ark relay
- * configuration UI that may be used in web (non-Electron) mode.
+ * The active Electron sync runtime lives in the Rust sidecar and is accessed
+ * through `lan-sync:*` IPC. This file only keeps pure mapping helpers shared by
+ * the renderer. Browser builds also reuse the lightweight Ark HTTP helpers
+ * below for initial bootstrap.
  */
 
 import { normalizeApiUrl } from "@/helpers/normalize";
@@ -35,12 +31,7 @@ export interface ArkChange {
   device_seq?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Ark settings persistence (localStorage)
-// ---------------------------------------------------------------------------
-
 const ARK_URL_KEY = "delphi.ark_url";
-
 const ARK_KEY_KEY = "delphi.ark_api_key";
 
 export function getArkUrl(): string {
@@ -433,13 +424,8 @@ export function arkChangeEventType(change: ArkChange): string | undefined {
   return outerData?.event_type as string | undefined;
 }
 
-// ---------------------------------------------------------------------------
-// Fetch tasks from Ark via HTTP (for initial load in web mode)
-// ---------------------------------------------------------------------------
-
 export async function fetchTasksFromArk(): Promise<TodoItem[]> {
   const url = getArkUrl();
-
   const key = getArkApiKey();
 
   if (!url || !key) return [];
@@ -449,97 +435,71 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
       headers: { "X-API-Key": key },
     });
 
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      throw new Error(`Ark HTTP ${resp.status} while loading tasks`);
+    }
 
     const events: Record<string, unknown>[] = await resp.json();
-
     const todoMap = new Map<string, TodoItem>();
 
     for (const event of events) {
       const evtType = event.event_type as string | undefined;
-
       if (evtType && evtType !== "task" && evtType !== "task_created") continue;
 
       const dataRaw = event.data as Record<string, unknown> | undefined;
-
       if (!dataRaw || typeof dataRaw !== "object") continue;
 
       const sourceId = event.source_id as string | undefined;
-
       const id = (dataRaw.id as string) || sourceId || (event.id as string);
-
       const title = (dataRaw.title as string) ?? (event.summary as string);
 
       if (!id || typeof title !== "string") continue;
 
       const todo: TodoItem = {
         id,
-
         title,
-
         notes:
           (dataRaw.notes as string | null) ??
           (dataRaw.description as string | null) ??
           null,
-
         priority: Number(dataRaw.priority ?? Priority.None) as Priority,
-
         scheduledDate: (dataRaw.scheduledDate as string | null) ?? null,
-
         deadline:
           (dataRaw.deadline as string | null) ??
           (dataRaw.due_date as string | null) ??
           null,
-
         reminderDate: (dataRaw.reminderDate as string | null) ?? null,
-
         isToday: Boolean(dataRaw.isToday ?? false),
-
         isEvening: Boolean(dataRaw.isEvening ?? false),
-
         isSomeday: Boolean(dataRaw.isSomeday ?? false),
-
         isCompleted: Boolean(dataRaw.isCompleted ?? dataRaw.completed ?? false),
-
         completedAt: (dataRaw.completedAt as string | null) ?? null,
-
         isCancelled: Boolean(dataRaw.isCancelled ?? false),
-
         cancelledAt: (dataRaw.cancelledAt as string | null) ?? null,
-
         isTrashed: Boolean(dataRaw.isTrashed ?? false),
-
         sortOrder: Number(dataRaw.sortOrder ?? 0),
-
         createdAt:
           (dataRaw.createdAt as string) ??
           (dataRaw.created_at as string) ??
           (event.occurred_at as string) ??
           new Date().toISOString(),
-
         headingId: (dataRaw.headingId as string | null) ?? null,
-
         projectId:
           (dataRaw.projectId as string | null) ??
           (dataRaw.list_id as string | null) ??
           null,
-
         areaId: (dataRaw.areaId as string | null) ?? null,
-
         tagIds: Array.isArray(dataRaw.tagIds)
           ? (dataRaw.tagIds as string[])
           : [],
-
         checklistItems: Array.isArray(dataRaw.checklistItems)
           ? (dataRaw.checklistItems as TodoItem["checklistItems"])
           : [],
-
         recurrenceRule:
           (dataRaw.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
       };
 
       const dedupeKey = id.toLowerCase();
-
       const existing = todoMap.get(dedupeKey);
 
       if (!existing || todo.isCompleted || todo.isCancelled) {
@@ -547,27 +507,15 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
       }
     }
 
-    const todos = Array.from(todoMap.values());
-
-    console.log(
-      `[ArkSync] Fetched ${todos.length} unique tasks from Ark HTTP API`,
-    );
-
-    return todos;
+    return Array.from(todoMap.values());
   } catch (e) {
     console.warn("[ArkSync] Failed to fetch tasks from Ark:", e);
-
     return [];
   }
 }
 
-// ---------------------------------------------------------------------------
-// Fetch projects from Ark via HTTP (for initial load in web mode)
-// ---------------------------------------------------------------------------
-
 export async function fetchProjectsFromArk(): Promise<Project[]> {
   const url = getArkUrl();
-
   const key = getArkApiKey();
 
   if (!url || !key) return [];
@@ -577,116 +525,46 @@ export async function fetchProjectsFromArk(): Promise<Project[]> {
       headers: { "X-API-Key": key },
     });
 
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      throw new Error(`Ark HTTP ${resp.status} while loading projects`);
+    }
 
     const events: Record<string, unknown>[] = await resp.json();
-
     const projects: Project[] = [];
 
     for (const event of events) {
       const evtType = event.event_type as string | undefined;
-
       if (evtType !== "project") continue;
 
       const dataRaw = event.data as Record<string, unknown> | undefined;
-
       if (!dataRaw || typeof dataRaw !== "object") continue;
 
       const sourceId = event.source_id as string | undefined;
-
       const id = (dataRaw.id as string) || sourceId || (event.id as string);
-
       const title = (dataRaw.title as string) ?? (event.summary as string);
 
       if (!id || typeof title !== "string") continue;
 
       projects.push({
         id,
-
         title,
-
         notes: (dataRaw.notes as string | null) ?? null,
-
         status: (dataRaw.status as ProjectStatus) ?? ProjectStatus.Active,
-
         scheduledDate: (dataRaw.scheduledDate as string | null) ?? null,
-
         deadline: (dataRaw.deadline as string | null) ?? null,
-
         sortOrder: Number(dataRaw.sortOrder ?? 0),
-
         colorTag: (dataRaw.colorTag as string | null) ?? null,
-
         createdAt:
           (dataRaw.createdAt as string) ??
           (event.occurred_at as string) ??
           new Date().toISOString(),
-
         areaId: (dataRaw.areaId as string | null) ?? null,
       });
     }
 
-    console.log(
-      `[ArkSync] Fetched ${projects.length} projects from Ark HTTP API`,
-    );
-
     return projects;
   } catch (e) {
     console.warn("[ArkSync] Failed to fetch projects from Ark:", e);
-
     return [];
   }
 }
-
-// ---------------------------------------------------------------------------
-// Legacy relay sync stub
-//
-// The relay WebSocket (ArkSyncClient) has been removed.  Components that
-// previously used `arkSync` now receive a no-op stub so they compile and run
-// without changes while the Electron P2P / Rust backend handles all real sync.
-// ---------------------------------------------------------------------------
-
-type MessageHandler = (change: ArkChange) => void;
-type StatusHandler = (connected: boolean) => void;
-type FullSyncHandler = (
-  serverTaskIds: Set<string>,
-  outboxTaskIds: Set<string>,
-) => void;
-
-/** No-op stub replacing the removed ArkSyncClient relay WebSocket. */
-class ArkSyncStub {
-  get isConnected(): boolean {
-    return false;
-  }
-
-  get isSynced(): boolean {
-    return false;
-  }
-
-  onChange(_handler: MessageHandler): () => void {
-    return () => {};
-  }
-
-  onStatus(_handler: StatusHandler): () => void {
-    return () => {};
-  }
-
-  onFullSync(_handler: FullSyncHandler): () => void {
-    return () => {};
-  }
-
-  setTodoResolver(_resolver: (id: string) => TodoItem | undefined): void {}
-
-  setAllTodosResolver(_resolver: () => TodoItem[]): void {}
-
-  connect(_serverUrl: string, _apiKey: string): void {}
-
-  disconnect(): void {}
-
-  sendChange(_change: ArkChange): boolean {
-    return false;
-  }
-}
-
-/** Singleton stub — drop-in replacement for the removed arkSync relay client. */
-export const arkSync = new ArkSyncStub();

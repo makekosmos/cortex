@@ -1,0 +1,13 @@
+apps/delphi/ts/src/services/sync/pairing.ts:12:export function parseConnectionString(
+apps/delphi/ts/src/App.vue:15:  fetchProjectsFromArk,
+apps/delphi/ts/src/App.vue:16:  fetchTasksFromArk,
+apps/delphi/ts/src/App.vue:22:import { parseConnectionString } from "@/services/sync/pairing";
+apps/delphi/ts/src/App.vue:37:import AuthOverlay from "@/components/AuthOverlay.vue";
+apps/delphi/ts/src/App.vue:201:      fetchTasksFromArk(),
+apps/delphi/ts/src/App.vue:202:      fetchProjectsFromArk(),
+apps/delphi/ts/src/App.vue:228:  const parsed = parseConnectionString(connectionCode);
+apps/delphi/ts/src/App.vue:584:    <AuthOverlay
+apps/delphi/ts/src/services/sync/ark-types.ts:34:const ARK_URL_KEY = "delphi.ark_url";
+apps/delphi/ts/src/services/sync/ark-types.ts:35:const ARK_KEY_KEY = "delphi.ark_api_key";
+apps/delphi/ts/src/services/sync/ark-types.ts:427:export async function fetchTasksFromArk(): Promise<TodoItem[]> {
+apps/delphi/ts/src/services/sync/ark-types.ts:517:export async function fetchProjectsFromArk(): Promise<Project[]> {

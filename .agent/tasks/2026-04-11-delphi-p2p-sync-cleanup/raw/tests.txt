@@ -1,0 +1,9 @@
+
+ RUN  v4.1.2 /Users/kirill/Documents/projects/kepler/apps/delphi/ts
+
+
+ Test Files  2 passed (2)
+      Tests  66 passed (66)
+   Start at  19:38:18
+   Duration  1.47s (transform 78ms, setup 0ms, import 113ms, tests 38ms, environment 939ms)
+

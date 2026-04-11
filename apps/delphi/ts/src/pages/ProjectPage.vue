@@ -27,8 +27,6 @@ import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
 import { TodoRow } from "@kepler/visuals";
-import { arkSync, projectToArkChange } from "@/services/sync/ark-types";
-import { broadcastToPeers } from "@/services/sync/peer-bridge";
 
 // ---------------------------------------------------------------------------
 // Color tag helper
@@ -106,12 +104,6 @@ function commitRename() {
   const trimmed = editTitle.value.trim();
   if (project.value && trimmed && trimmed !== project.value.title) {
     store.updateProject(project.value.id, { title: trimmed });
-    const change = projectToArkChange(
-      { ...project.value, title: trimmed },
-      "update",
-    );
-    arkSync.sendChange(change);
-    broadcastToPeers(change);
   }
 }
 
@@ -156,9 +148,6 @@ function handleDelete() {
   if (!project.value) return;
   menuOpen.value = false;
   store.removeProject(project.value.id);
-  const change = projectToArkChange(project.value, "delete");
-  arkSync.sendChange(change);
-  broadcastToPeers(change);
   router.push("/");
 }
 
@@ -166,12 +155,6 @@ function handleArchive() {
   if (!project.value) return;
   menuOpen.value = false;
   store.updateProject(project.value.id, { status: ProjectStatus.Completed });
-  const change = projectToArkChange(
-    { ...project.value, status: ProjectStatus.Completed },
-    "update",
-  );
-  arkSync.sendChange(change);
-  broadcastToPeers(change);
   router.push("/");
 }
 </script>

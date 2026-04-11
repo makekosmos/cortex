@@ -2,10 +2,6 @@ import { defineStore } from "pinia";
 
 import { ref } from "vue";
 
-import { arkSync, taskToArkChange } from "@/services/sync/ark-types";
-
-import { broadcastToPeers } from "@/services/sync/peer-bridge";
-
 import type { Task } from "@/types/task";
 
 export const useTaskStore = defineStore("tasks", () => {
@@ -48,23 +44,11 @@ export const useTaskStore = defineStore("tasks", () => {
 
     tasks.value = [task, ...tasks.value];
 
-    const change = taskToArkChange(task, "create");
-
-    arkSync.sendChange(change);
-
-    broadcastToPeers(change);
-
     return task;
   }
 
   function removeTask(task: Task) {
     tasks.value = tasks.value.filter((item) => item.id !== task.id);
-
-    const change = taskToArkChange(task, "delete");
-
-    arkSync.sendChange(change);
-
-    broadcastToPeers(change);
   }
 
   function removeAllTasks() {
@@ -83,12 +67,6 @@ export const useTaskStore = defineStore("tasks", () => {
     tasks.value = tasks.value.map((item) =>
       item.id === task.id ? updated : item,
     );
-
-    const change = taskToArkChange(updated, "update");
-
-    arkSync.sendChange(change);
-
-    broadcastToPeers(change);
   }
 
   function editTask(task: Task) {
@@ -103,12 +81,6 @@ export const useTaskStore = defineStore("tasks", () => {
     tasks.value = tasks.value.map((item) =>
       item.id === task.id ? updated : item,
     );
-
-    const change = taskToArkChange(updated, "update");
-
-    arkSync.sendChange(change);
-
-    broadcastToPeers(change);
   }
 
   function upsertTask(task: Task) {

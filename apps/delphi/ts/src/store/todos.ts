@@ -3,14 +3,6 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 
 import {
-  arkSync,
-  projectToArkChange,
-  todoItemToArkChange,
-} from "@/services/sync/ark-types";
-
-import { broadcastToPeers } from "@/services/sync/peer-bridge";
-
-import {
   localDbDeleteProject,
   localDbDeleteTodo,
   localDbDeleteTrashed,
@@ -219,12 +211,6 @@ export const useTodoStore = defineStore("todos", () => {
 
     void localDbUpsertTodo(todo);
 
-    const change = todoItemToArkChange(todo, "create");
-
-    arkSync.sendChange(change);
-
-    broadcastToPeers(change);
-
     broadcastToLanSync(
       "todo",
 
@@ -244,12 +230,6 @@ export const useTodoStore = defineStore("todos", () => {
     if (updated) {
       void localDbUpsertTodo(updated);
 
-      const change = todoItemToArkChange(updated, "update");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
-
       broadcastToLanSync(
         "todo",
 
@@ -268,12 +248,6 @@ export const useTodoStore = defineStore("todos", () => {
     void localDbDeleteTodo(id);
 
     if (todo) {
-      const change = todoItemToArkChange(todo, "delete");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
-
       broadcastToLanSync("todo", id, {}, true);
     }
   }
@@ -330,12 +304,6 @@ export const useTodoStore = defineStore("todos", () => {
 
       void localDbUpsertTodo(next);
 
-      const nextChange = todoItemToArkChange(next, "create");
-
-      arkSync.sendChange(nextChange);
-
-      broadcastToPeers(nextChange);
-
       broadcastToLanSync(
         "todo",
 
@@ -348,12 +316,6 @@ export const useTodoStore = defineStore("todos", () => {
     todos.value = newTodos;
 
     void localDbUpsertTodo(completed);
-
-    const completedChange = todoItemToArkChange(completed, "update");
-
-    arkSync.sendChange(completedChange);
-
-    broadcastToPeers(completedChange);
 
     broadcastToLanSync(
       "todo",
@@ -371,12 +333,6 @@ export const useTodoStore = defineStore("todos", () => {
 
     if (updated) {
       void localDbUpsertTodo(updated);
-
-      const change = todoItemToArkChange(updated, "update");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
 
       broadcastToLanSync(
         "todo",
@@ -396,12 +352,6 @@ export const useTodoStore = defineStore("todos", () => {
     if (updated) {
       void localDbUpsertTodo(updated);
 
-      const change = todoItemToArkChange(updated, "update");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
-
       broadcastToLanSync(
         "todo",
 
@@ -419,12 +369,6 @@ export const useTodoStore = defineStore("todos", () => {
 
     if (updated) {
       void localDbUpsertTodo(updated);
-
-      const change = todoItemToArkChange(updated, "update");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
 
       broadcastToLanSync(
         "todo",
@@ -444,12 +388,6 @@ export const useTodoStore = defineStore("todos", () => {
     if (updated) {
       void localDbUpsertTodo(updated);
 
-      const change = todoItemToArkChange(updated, "update");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
-
       broadcastToLanSync(
         "todo",
 
@@ -468,12 +406,6 @@ export const useTodoStore = defineStore("todos", () => {
     const copy = duplicateTodoItem(todo);
 
     todos.value = [copy, ...todos.value];
-
-    const change = todoItemToArkChange(copy, "create");
-
-    arkSync.sendChange(change);
-
-    broadcastToPeers(change);
 
     broadcastToLanSync(
       "todo",
@@ -545,12 +477,6 @@ export const useTodoStore = defineStore("todos", () => {
 
     void localDbUpsertProject(project);
 
-    const change = projectToArkChange(project, "create");
-
-    arkSync.sendChange(change);
-
-    broadcastToPeers(change);
-
     broadcastToLanSync(
       "project",
 
@@ -571,12 +497,6 @@ export const useTodoStore = defineStore("todos", () => {
 
     if (updated) {
       void localDbUpsertProject(updated);
-
-      const change = projectToArkChange(updated, "update");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
 
       broadcastToLanSync(
         "project",
@@ -602,12 +522,6 @@ export const useTodoStore = defineStore("todos", () => {
     void localDbDeleteProject(id);
 
     if (project) {
-      const change = projectToArkChange(project, "delete");
-
-      arkSync.sendChange(change);
-
-      broadcastToPeers(change);
-
       broadcastToLanSync("project", id, {}, true);
     }
   }
