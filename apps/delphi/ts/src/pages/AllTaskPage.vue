@@ -7,16 +7,27 @@ import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 import { useSidebarState } from "@/composables/useSidebarState";
-import TodoRow from "@kepler/visuals/components/TodoRow.vue";
+import { TodoRow } from "@kepler/visuals";
 
 const { show: openQuickEntry } = useQuickEntry();
-const { wrapClass, wrapStyle } = useSidebarState();
+const {
+  wrapClass,
+  wrapStyle,
+  titleWrapRef,
+  titleGroupRef,
+  titleGroupClass,
+  titleGroupStyle,
+  titleClass,
+} = useSidebarState();
 
 const store = useTodoStore();
 const { todos } = storeToRefs(store);
 const filtered = computed(() => filterTodos(SmartList.Inbox, todos.value));
 
-function handleDrop(payload: { targetId: string; after: boolean }, sourceId: string) {
+function handleDrop(
+  payload: { targetId: string; after: boolean },
+  sourceId: string,
+) {
   if (sourceId === payload.targetId) return;
   const list = [...filtered.value];
   const srcIdx = list.findIndex((t) => t.id === sourceId);
@@ -32,18 +43,21 @@ function handleDrop(payload: { targetId: string; after: boolean }, sourceId: str
 <template>
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <div
-      :class="[wrapClass, 'flex items-center gap-2.5 px-7 pb-3 pt-6']"
+      ref="titleWrapRef"
+      :class="[wrapClass, 'flex min-h-8 items-center gap-2.5 px-7 pb-3 pt-6']"
       :style="wrapStyle"
     >
-<h1 class="text-2xl font-bold text-(--foreground) select-none">
-        Входящие
-      </h1>
-      <span
-        v-if="filtered.length > 0"
-        class="text-sm text-(--muted-foreground) select-none"
-      >
-        {{ filtered.length }}
-      </span>
+      <div ref="titleGroupRef" :class="titleGroupClass" :style="titleGroupStyle">
+        <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">
+          Входящие
+        </h1>
+        <span
+          v-if="filtered.length > 0"
+          class="text-sm text-(--muted-foreground) select-none"
+        >
+          {{ filtered.length }}
+        </span>
+      </div>
     </div>
 
     <div class="scrollbar-gutter flex-1 overflow-y-auto">

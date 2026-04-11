@@ -81,7 +81,15 @@ function weekOfYear(date: Date): number {
 
 import { useSidebarState } from "@/composables/useSidebarState";
 
-const { wrapClass, wrapStyle } = useSidebarState();
+const {
+  wrapClass,
+  wrapStyle,
+  titleWrapRef,
+  titleGroupRef,
+  titleGroupClass,
+  titleGroupStyle,
+  titleClass,
+} = useSidebarState();
 const store = useTodoStore();
 const { todos, projects } = storeToRefs(store);
 
@@ -201,10 +209,13 @@ function handleToggleToday(todo: TodoItem) {
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
     <div
-      :class="[wrapClass, 'flex items-center gap-2.5 px-7 pb-3 pt-6']"
+      ref="titleWrapRef"
+      :class="[wrapClass, 'flex min-h-8 items-center gap-2.5 px-7 pb-3 pt-6']"
       :style="wrapStyle"
     >
-<h1 class="text-2xl font-bold text-(--foreground) select-none">Планы</h1>
+      <div ref="titleGroupRef" :class="titleGroupClass" :style="titleGroupStyle">
+        <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">Планы</h1>
+      </div>
     </div>
 
     <!-- Scrollable content -->

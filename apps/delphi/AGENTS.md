@@ -300,7 +300,7 @@ ts/
 ├── src/
 │   ├── App.vue            — корневой layout, connection bootstrap, P2P sync bridge
 │   ├── main.ts            — createApp, router, Pinia
-│   ├── components/        — UI-компоненты (SideBar, QuickEntry, QuickOpen, TodoRow, …)
+│   ├── components/        — app-level composition/components (SideBar adapter, QuickEntry wrapper, QuickOpen, …); shared visuals come from `@kepler/visuals`
 │   ├── pages/             — route views (TodayPage, AllTaskPage, WeekPage, ProjectPage, …)
 │   ├── composables/       — useSmartList, useQuickEntry, useTheme, useSidebarState
 │   ├── store/
@@ -352,6 +352,8 @@ bun run dev                 # build sidecar:dev + vite
 ### UI-библиотека
 
 reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Tailwind CSS 4 с CSS-переменными (`--background`, `--foreground`, `--border`, `--popover`, `--muted-foreground`).
+
+**Shared UI single source of truth:** Delphi TS **MUST** брать общие визуальные компоненты из workspace-пакета `@kepler/visuals` через его public API. Не держи локальные копии вроде `src/components/SideBarButton.vue`; app-level компоненты в `src/components/` должны быть только адаптерами/композицией над shared package.
 
 ### Sidebar zen-mode width
 

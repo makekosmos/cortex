@@ -1,0 +1,114 @@
+{
+  "task_id": "delphi-sidebar-kepler",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "text": "packages/kepler-visuals contains a reusable Vue sidebar component that encapsulates the Delphi sidebar shell/layout and exposes typed props/slots needed to render primary links, project links, and footer actions without Delphi-specific store logic inside the package.",
+      "status": "PASS",
+      "proof": [
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/components/Sidebar.vue",
+          "summary": "New reusable sidebar component added with typed interfaces SidebarNavItem and SidebarProjectItem plus props for primaryItems, projectItems, footerItems, isMac, toggleTitle, and ResizableSidebar config passthrough."
+        },
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/components/index.ts",
+          "summary": "Sidebar and its types are exported from the components entrypoint."
+        },
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/index.ts",
+          "summary": "Sidebar and its types are re-exported from the package root entrypoint."
+        },
+        {
+          "type": "command",
+          "path": ".agent/tasks/delphi-sidebar-kepler/raw/inspection.txt",
+          "command": "cd /workspace && rg -n \"export \\{ default as Sidebar \\}|type SidebarNavItem|type SidebarProjectItem|Sidebar as KeplerSidebar|config-change|projectItems\" packages/kepler-visuals apps/delphi/ts/src/components/SideBar.vue -g '*.ts' -g '*.vue'",
+          "exit_code": 0,
+          "summary": "Inspection confirms the new package exports and the reusable sidebar implementation are wired in the codebase."
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC2",
+      "text": "apps/delphi/ts/src/components/SideBar.vue is reduced to Delphi-specific composition/orchestration: it derives navigation/project data from the store/router and renders the reusable sidebar component from @kepler/visuals instead of hand-assembling the sidebar UI with ResizableSidebar and SidebarButton directly.",
+      "status": "PASS",
+      "proof": [
+        {
+          "type": "file",
+          "path": "apps/delphi/ts/src/components/SideBar.vue",
+          "summary": "The Delphi sidebar now imports Sidebar as KeplerSidebar and only handles persisted config, store/router-based item derivation, and project color mapping."
+        },
+        {
+          "type": "command",
+          "path": ".agent/tasks/delphi-sidebar-kepler/raw/git-diff.txt",
+          "command": "cd /workspace && git diff -- packages/kepler-visuals/components/Sidebar.vue packages/kepler-visuals/components/index.ts packages/kepler-visuals/index.ts apps/delphi/ts/src/components/SideBar.vue",
+          "exit_code": 0,
+          "summary": "Diff shows Delphi's previous inline sidebar shell was replaced by composition around the package Sidebar component."
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC3",
+      "text": "The Delphi sidebar keeps the current behavior: persisted width/hidden state via delphi-sidebar-config, macOS toggle button, smart-list links, project list with active highlighting and color dots, settings action, and sidebar hidden-state sync via setSidebarHidden.",
+      "status": "PASS",
+      "proof": [
+        {
+          "type": "file",
+          "path": "apps/delphi/ts/src/components/SideBar.vue",
+          "summary": "STORAGE_KEY remains delphi-sidebar-config; saveConfig still writes localStorage and calls setSidebarHidden(config.hidden); Delphi passes existing widths, hidden width, shortcut, drag-region, nav items, settings item, and route-based active project mapping into KeplerSidebar."
+        },
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/components/Sidebar.vue",
+          "summary": "Reusable component renders the macOS toggle button, primary links, project section with active styling and color dots, and footer actions while preserving the sidebar visual shell."
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "id": "AC4",
+      "text": "Relevant package/app exports and TypeScript/Vue checks pass for the touched code paths.",
+      "status": "PASS",
+      "proof": [
+        {
+          "type": "command",
+          "path": ".agent/tasks/delphi-sidebar-kepler/raw/build.txt",
+          "command": "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc --noEmit",
+          "exit_code": 0,
+          "summary": "TypeScript compilation check for the Delphi app passed with the new kepler-visuals Sidebar integration."
+        },
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/components/index.ts",
+          "summary": "Touched package entrypoint exports Sidebar, SidebarNavItem, and SidebarProjectItem."
+        },
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/index.ts",
+          "summary": "Package root entrypoint re-exports Sidebar and the related types."
+        }
+      ],
+      "gaps": []
+    }
+  ],
+  "changed_files": [
+    "packages/kepler-visuals/components/Sidebar.vue",
+    "packages/kepler-visuals/components/index.ts",
+    "packages/kepler-visuals/index.ts",
+    "apps/delphi/ts/src/components/SideBar.vue"
+  ],
+  "commands_for_fresh_verifier": [
+    "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc --noEmit",
+    "cd /workspace && rg -n \"export \\{ default as Sidebar \\}|type SidebarNavItem|type SidebarProjectItem|Sidebar as KeplerSidebar|config-change|projectItems\" packages/kepler-visuals apps/delphi/ts/src/components/SideBar.vue -g '*.ts' -g '*.vue'",
+    "cd /workspace && git diff -- packages/kepler-visuals/components/Sidebar.vue packages/kepler-visuals/components/index.ts packages/kepler-visuals/index.ts apps/delphi/ts/src/components/SideBar.vue"
+  ],
+  "known_gaps": [
+    "oxlint could not run in this container because the optional native binding package is missing; see .agent/tasks/delphi-sidebar-kepler/raw/lint.txt.",
+    "oxfmt --check could not run in this container because the optional native binary package is missing; see .agent/tasks/delphi-sidebar-kepler/raw/format.txt."
+  ]
+}

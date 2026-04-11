@@ -2,8 +2,7 @@
 import { useRouter } from "vue-router";
 import { FolderOpen } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
-import CommandPalette from "@kepler/visuals/components/CommandPalette.vue";
-import TodoRow from "@kepler/visuals/components/TodoRow.vue";
+import { CommandPalette, TodoRow } from "@kepler/visuals";
 import { useTodoStore } from "@/store/todos";
 
 const props = defineProps<{ open: boolean }>();

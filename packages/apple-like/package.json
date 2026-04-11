@@ -1,0 +1,27 @@
+{
+  "name": "@kepler/visuals",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "format": "oxfmt components/ tokens/ *.ts",
+    "format:check": "oxfmt --check components/ tokens/ *.ts"
+  },
+  "devDependencies": {
+    "oxfmt": "^0.7.0"
+  },
+  "peerDependencies": {
+    "lucide-vue-next": "*",
+    "vue": "^3.0.0",
+    "vue-router": "^4.0.0 || ^5.0.0"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./tokens": "./tokens/index.ts",
+    "./theme": "./theme/index.ts",
+    "./components": "./components/index.ts",
+    "./theme/css": "./theme/css-variables.css",
+    "./components/sidebar.css": "./components/sidebar.css"
+  }
+}

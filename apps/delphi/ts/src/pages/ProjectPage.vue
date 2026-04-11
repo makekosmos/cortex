@@ -14,11 +14,19 @@ import { useQuickEntry } from "@/composables/useQuickEntry";
 import { useSidebarState } from "@/composables/useSidebarState";
 
 const { show: openQuickEntry } = useQuickEntry();
-const { wrapClass, wrapStyle } = useSidebarState();
+const {
+  wrapClass,
+  wrapStyle,
+  titleWrapRef,
+  titleGroupRef,
+  titleGroupClass,
+  titleGroupStyle,
+  titleClass,
+} = useSidebarState();
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
-import TodoRow from "@kepler/visuals/components/TodoRow.vue";
+import { TodoRow } from "@kepler/visuals";
 import { arkSync, projectToArkChange } from "@/services/sync/ark-types";
 import { broadcastToPeers } from "@/services/sync/peer-bridge";
 
@@ -181,7 +189,8 @@ function handleArchive() {
   <div v-else class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <!-- Header -->
     <div
-      :class="[wrapClass, 'relative flex items-center gap-2.5 px-7 pb-3 pt-6']"
+      ref="titleWrapRef"
+      :class="[wrapClass, 'flex min-h-8 items-center gap-2.5 px-7 pb-3 pt-6']"
       :style="wrapStyle"
     >
       <Circle
@@ -189,27 +198,29 @@ function handleArchive() {
         :class="['shrink-0 fill-current', colorTagClass(project.colorTag)]"
       />
 
-      <input
-        v-if="editing"
-        ref="inputRef"
-        v-model="editTitle"
-        type="text"
-        class="flex-1 bg-transparent text-2xl font-bold text-(--foreground) outline-none"
-        @blur="commitRename"
-        @keydown.enter="commitRename"
-        @keydown.escape="editing = false"
-      />
-      <h1
-        v-else
-        class="text-2xl font-bold text-(--foreground) select-none cursor-pointer"
-        @dblclick="startRename"
-      >
-        {{ project.title }}
-      </h1>
+      <div ref="titleGroupRef" :class="titleGroupClass" :style="titleGroupStyle">
+        <input
+          v-if="editing"
+          ref="inputRef"
+          v-model="editTitle"
+          :class="[titleClass, 'bg-transparent text-2xl font-bold text-(--foreground) outline-none']"
+          type="text"
+          @blur="commitRename"
+          @keydown.enter="commitRename"
+          @keydown.escape="editing = false"
+        />
+        <h1
+          v-else
+          :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none cursor-pointer']"
+          @dblclick="startRename"
+        >
+          {{ project.title }}
+        </h1>
 
-      <span v-if="todos.length > 0" class="text-sm text-(--muted-foreground)">
-        {{ activeTodos.length }}
-      </span>
+        <span v-if="todos.length > 0" class="text-sm text-(--muted-foreground)">
+          {{ activeTodos.length }}
+        </span>
+      </div>
 
       <!-- Context menu -->
       <div ref="menuRef" class="absolute right-7">

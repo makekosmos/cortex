@@ -1,0 +1,46 @@
+{
+  "task_id": "delphi-sidebar-kepler",
+  "overall_verdict": "PASS",
+  "verified_at": "2026-04-10",
+  "verifier": "task-verifier",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "packages/kepler-visuals/components/Sidebar.vue now provides a reusable, typed sidebar shell over ResizableSidebar and SidebarButton. The package exports are wired in both components/index.ts and the package root index.ts."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "apps/delphi/ts/src/components/SideBar.vue now only derives Delphi-specific navigation/project/footer arrays plus persisted config and renders <KeplerSidebar /> from @kepler/visuals/components instead of hand-building the sidebar structure."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "The persisted config key delphi-sidebar-config, setSidebarHidden sync, macOS toggle, smart-list links, project links with active highlighting and color dots, settings action, and existing width/shortcut/drag-region values are all still present in the new composition."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "TypeScript compilation passed with ./node_modules/.bin/tsc --noEmit from apps/delphi/ts (exit code 0). Export wiring for the new package component is present in the touched kepler-visuals entrypoints."
+    }
+  ],
+  "commands_run": [
+    "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc --noEmit",
+    "cd /workspace && rg -n \"export \\{ default as Sidebar \\}|type SidebarNavItem|type SidebarProjectItem|Sidebar as KeplerSidebar|config-change|projectItems\" packages/kepler-visuals apps/delphi/ts/src/components/SideBar.vue -g '*.ts' -g '*.vue'",
+    "cd /workspace && git diff -- packages/kepler-visuals/components/Sidebar.vue packages/kepler-visuals/components/index.ts packages/kepler-visuals/index.ts apps/delphi/ts/src/components/SideBar.vue"
+  ],
+  "artifacts_used": [
+    "spec.md",
+    "evidence.md",
+    ".agent/tasks/delphi-sidebar-kepler/raw/build.txt",
+    ".agent/tasks/delphi-sidebar-kepler/raw/inspection.txt",
+    ".agent/tasks/delphi-sidebar-kepler/raw/git-diff.txt",
+    ".agent/tasks/delphi-sidebar-kepler/raw/lint.txt",
+    ".agent/tasks/delphi-sidebar-kepler/raw/format.txt",
+    "packages/kepler-visuals/components/Sidebar.vue",
+    "packages/kepler-visuals/components/index.ts",
+    "packages/kepler-visuals/index.ts",
+    "apps/delphi/ts/src/components/SideBar.vue"
+  ]
+}

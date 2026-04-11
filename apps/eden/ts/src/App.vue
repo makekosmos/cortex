@@ -142,7 +142,7 @@ import { usePlatform } from "@/composables/usePlatform";
 import { useSearch } from "@/composables/useSearch";
 import { useTitlebarSafeArea } from "@/composables/useTitlebarSafeArea";
 import type { SpaceId } from "@/components/sidebar/types";
-import ResizableSidebar from "@kepler/visuals/components/ResizableSidebar.vue";
+import { ResizableSidebar } from "@kepler/visuals";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import VaultSidebar from "@/components/sidebar/VaultSidebar.vue";

@@ -8,10 +8,18 @@ import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
-import TodoRow from "@kepler/visuals/components/TodoRow.vue";
+import { TodoRow } from "@kepler/visuals";
 import { useSidebarState } from "@/composables/useSidebarState";
 
-const { wrapClass, wrapStyle } = useSidebarState();
+const {
+  wrapClass,
+  wrapStyle,
+  titleWrapRef,
+  titleGroupRef,
+  titleGroupClass,
+  titleGroupStyle,
+  titleClass,
+} = useSidebarState();
 const store = useTodoStore();
 const { todos } = storeToRefs(store);
 const filtered = computed(() => filterTodos(SmartList.Today, todos.value));
@@ -32,18 +40,21 @@ function handleDrop(payload: { targetId: string; after: boolean }, sourceId: str
 <template>
   <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col">
     <div
-      :class="[wrapClass, 'flex items-center gap-2.5 px-7 pb-3 pt-6']"
+      ref="titleWrapRef"
+      :class="[wrapClass, 'flex min-h-8 items-center gap-2.5 px-7 pb-3 pt-6']"
       :style="wrapStyle"
     >
-<h1 class="text-2xl font-bold text-(--foreground) select-none">
-        Сегодня
-      </h1>
-      <span
-        v-if="filtered.length > 0"
-        class="text-sm text-(--muted-foreground) select-none"
-      >
-        {{ filtered.length }}
-      </span>
+      <div ref="titleGroupRef" :class="titleGroupClass" :style="titleGroupStyle">
+        <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">
+          Сегодня
+        </h1>
+        <span
+          v-if="filtered.length > 0"
+          class="text-sm text-(--muted-foreground) select-none"
+        >
+          {{ filtered.length }}
+        </span>
+      </div>
     </div>
 
     <div class="scrollbar-gutter flex-1 overflow-y-auto">

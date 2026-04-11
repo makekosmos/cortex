@@ -16,7 +16,7 @@
 └─────────────────────────────────┘
 ```
 
-- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes
+- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals берутся из `@kepler/visuals`
 - **main/** — Electron main process: IPC handlers, SQLite storage (store.ts), heart integration, Hevy sync
 - **heart/** — Rust binary: полнотекстовый поиск через Tantivy, работает как stdin/stdout sidecar
 
@@ -87,6 +87,7 @@ bun run package    # Создать DMG/installer
 - **Storage hardening**: в `main/store.ts` есть защита для save/move/delete — не упрощать
 - **Дизайн**: macOS-native feel, системный шрифт, SwiftUI/Tahoe эстетика
 - **Alias**: `@/` → `src/` для импортов
+- **Shared visuals**: если компонент уже есть в workspace-пакете `@kepler/visuals`, Eden должен импортировать его через public API пакета, а не через deep import path. Локальные `src/components/sidebar/*` в Eden — это app-specific контейнеры, не дубли shared UI.
 - **preload**: vite-plugin-electron генерирует `preload.mjs` (не `.js`) — в main.ts путь к preload
 
 ## Workspace

@@ -19,7 +19,7 @@ const isActive = computed(() => (props.to ? route.path === props.to : false));
 
 const className = computed(() => {
   const base =
-    "kepler-sidebar-btn flex h-10 w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-sm text-white transition-colors select-none";
+    "kepler-sidebar-btn flex h-9 w-full cursor-pointer items-center gap-2.5 px-3 text-sm text-white transition-colors select-none ";
   const active = isActive.value ? "bg-white/10" : "hover:bg-white/6";
   return `${base} ${active}`;
 });

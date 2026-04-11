@@ -4,6 +4,7 @@
   height: 100%;
   display: flex;
   flex-direction: row;
+  padding: 6px;
   box-sizing: border-box;
   transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -26,9 +27,10 @@
   transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
               background 0.2s cubic-bezier(0.22, 1, 0.36, 1),
               border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-
+  border-radius: 32px;
+  corner-shape: squircle;
   background: var(--sidebar-bg);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
 

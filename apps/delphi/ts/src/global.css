@@ -46,7 +46,7 @@ li {
 
 /* Кастомные стили */
 .scrollbar-gutter {
-  scrollbar-gutter: stable both-edges;
+  scrollbar-gutter: stable;
 }
 
 /* Theme CSS variables from @kepler/visuals — single source of truth */

@@ -1,5 +1,5 @@
 ---
-name: kotlin-android-compose-perf
+name: android-120fps
 description: Диагностика и оптимизация производительности прокрутки в Android-приложениях на Kotlin + Jetpack Compose. Используй когда пользователь жалуется на лаги при скролле, dropped frames, jank, или хочет достичь 120fps на 120Hz дисплеях.
 ---
 

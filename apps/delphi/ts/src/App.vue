@@ -54,7 +54,7 @@ import QuickEntry from "@/components/QuickEntry.vue";
 import QuickSearch from "@/components/QuickSearch.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
-import { CustomCaret } from "@kepler/visuals/components";
+import { CustomCaret } from "@kepler/visuals";
 
 // ---------------------------------------------------------------------------
 // Store

@@ -8,10 +8,6 @@ export type { SidebarConfig } from "./ResizableSidebar.vue";
 
 export { default as SidebarButton } from "./SidebarButton.vue";
 
-export { default as Sidebar } from "./Sidebar.vue";
-
-export type { SidebarNavItem, SidebarProjectItem } from "./Sidebar.vue";
-
 export { default as TodoRow } from "./TodoRow.vue";
 
 export type { TodoRowItem, TodoDropPayload } from "./TodoRow.vue";

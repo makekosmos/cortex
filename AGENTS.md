@@ -19,24 +19,12 @@ Hard rules:
 - Fixers should make the smallest defensible diff.
 
 Installed workflow agents:
-- `.agents/agents/task-spec-freezer.md`
-- `.agents/agents/task-builder.md`
-- `.agents/agents/task-verifier.md`
-- `.agents/agents/task-fixer.md`
 - `.agents/agents/task-spec-freezer.toml`
 - `.agents/agents/task-builder.toml`
 - `.agents/agents/task-verifier.toml`
 - `.agents/agents/task-fixer.toml`
-
-## AGENTS.md usage
-
-- `AGENTS.md` is the canonical agent-instructions filename in this repository.
-- Agents should use the nearest relevant `AGENTS.md` for the part of the repo they are working in, in addition to this root file.
-- If a subproject has its own `AGENTS.md` (for example under `apps/` or `packages/`), treat it as project-specific guidance for that subtree so work can proceed more effectively.
-- Prefer updating and maintaining `AGENTS.md` files rather than reintroducing `CLAUDE.md` files.
-
-Agent session note:
-- If agent config files were just created or refreshed during a running session, start a new agent session before relying on the updated agent list.
-- Use the agent listing command/tool of your environment to inspect available agents.
-- Keep this block in the root `AGENTS.md`. If the workflow needs longer repo guidance, prefer path imports or dedicated project docs instead of expanding this block indefinitely.
+- `.agents/agents/task-spec-freezer.md`
+- `.agents/agents/task-builder.md`
+- `.agents/agents/task-verifier.md`
+- `.agents/agents/task-fixer.md`
 <!-- repo-task-proof-loop:end -->
