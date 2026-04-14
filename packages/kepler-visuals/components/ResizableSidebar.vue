@@ -207,7 +207,7 @@ const wrapperStyle = computed(() => {
 const wrapperClasses = computed(() =>
   [
     "kepler-sidebar-wrapper",
-    _hidden.value ? "hidden" : "",
+    _hidden.value ? "hidden collapsed" : "",
     animating.value ? "animating" : "",
     isResizing.value ? "is-resizing" : "",
     props.className ?? "",

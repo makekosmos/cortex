@@ -36,6 +36,7 @@
       <!-- Vault sidebar -->
       <ResizableSidebar
         v-model:hidden="layout.vaultSidebarHidden"
+        class-name="vault-sidebar-wrapper"
         :default-width="232"
         :min-width="180"
         :max-width="360"
@@ -57,17 +58,20 @@
       <!-- Widget sidebar -->
       <ResizableSidebar
         v-model:hidden="layout.widgetSidebarHidden"
+        class-name="widget-sidebar-wrapper"
         :default-width="320"
         :min-width="220"
         :max-width="520"
         :offset-x="layout.vaultSidebarHidden ? 0 : layout.vaultSidebarWidth"
+        drag-region
         :initial-config="{ width: layout.widgetSidebarWidth, hidden: layout.widgetSidebarHidden }"
         @config-change="layout.onWidgetConfigChange"
       >
         <template #default="{ toggle }">
-          <WidgetSidebar
+          <MainSidebar
             :is-search-open="layout.isSearchOpen"
             :is-vault-sidebar-hidden="layout.vaultSidebarHidden"
+            :active-screen="eden.activeScreen"
             :active-space="eden.activeSpace"
             :entries="eden.entries"
             :note-types="eden.noteTypes"
@@ -146,7 +150,7 @@ import { ResizableSidebar } from "@kepler/visuals";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import VaultSidebar from "@/components/sidebar/VaultSidebar.vue";
-import WidgetSidebar from "@/components/sidebar/WidgetSidebar.vue";
+import MainSidebar from "@/components/sidebar/MainSidebar.vue";
 import Editor from "./Editor.vue";
 import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
@@ -201,7 +205,9 @@ async function onResultSelect(entryId: string) {
   }
 }
 
-function onSelectSpace(spaceId: SpaceId) {
+async function onSelectSpace(spaceId: SpaceId) {
+  await eden.refreshData();
+
   if (spaceId === "my-space") {
     void eden.openMySpace();
     return;

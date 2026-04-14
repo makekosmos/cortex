@@ -1,6 +1,6 @@
 .titlebar {
   position: absolute;
-  inset: 0 0 auto 0;
+  inset: 0 0 auto var(--titlebar-left-safe-area, 0px);
   height: var(--titlebar-height);
   box-sizing: border-box;
   z-index: 140;
@@ -20,5 +20,10 @@
 .platform-mac .titlebar {
   background: transparent;
   border-bottom: none;
-  z-index: -1;
+  height: 38px;
+  z-index: 60;
+}
+
+.platform-mac .titlebar-drag-region {
+  border-top-left-radius: 12px;
 }

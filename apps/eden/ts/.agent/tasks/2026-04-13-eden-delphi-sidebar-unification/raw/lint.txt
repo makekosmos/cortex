@@ -1,0 +1,3 @@
+$ oxlint . --ignore-pattern dist --ignore-pattern dist-electron --ignore-pattern release --ignore-pattern src/components/sidebar-anytype --ignore-pattern src-anytype --deny-warnings
+Found 0 warnings and 0 errors.
+Finished in 269ms on 51 files with 93 rules using 16 threads.

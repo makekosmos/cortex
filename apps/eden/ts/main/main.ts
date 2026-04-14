@@ -107,13 +107,13 @@ function createWindow() {
 
     minHeight: 600,
 
-    frame: !(isMac || isWindows),
+    frame: !isWindows,
 
     ...(isMac
       ? {
-          titleBarStyle: "hidden" as const,
+          titleBarStyle: "hiddenInset" as const,
 
-          trafficLightPosition: { x: 12, y: 19 },
+          trafficLightPosition: { x: 18, y: 18 },
         }
       : {}),
 

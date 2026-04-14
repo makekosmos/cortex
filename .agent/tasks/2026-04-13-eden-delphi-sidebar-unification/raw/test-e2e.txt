@@ -1,0 +1,360 @@
+$ bun run build && playwright test --config playwright.config.ts
+$ cargo build --release --manifest-path heart/Cargo.toml && tsc && vite build
+    Finished `release` profile [optimized] target(s) in 0.47s
+vite v8.0.3 building client environment for production...
+[2Ktransforming...✓ 2165 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.45 kB │ gzip:   0.29 kB
+dist/assets/index-CYWNo5sa.css    102.57 kB │ gzip:  16.39 kB
+dist/assets/index-SvkXBOTu.js   1,635.10 kB │ gzip: 532.56 kB
+
+✓ built in 2.26s
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+vite v8.0.3 building client environment for production...
+[2Ktransforming...✓ 85 modules transformed.
+rendering chunks...
+computing gzip size...
+dist-electron/main.js  117.37 kB │ gzip: 29.10 kB
+
+✓ built in 53ms
+vite v8.0.3 building client environment for production...
+
+ WARN  inlineDynamicImports option is deprecated, please use codeSplitting: false instead.
+
+[2Ktransforming...✓ 2 modules transformed.
+rendering chunks...
+computing gzip size...
+dist-electron/preload.mjs  2.74 kB │ gzip: 0.73 kB
+
+✓ built in 15ms
+
+Running 13 tests using 1 worker
+
+[1A[2K(node:30388) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:30388) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K[1/13] tests/app.spec.ts:183:3 › Electron App › should open an existing note from the list without blank screen
+[1A[2Ktests/app.spec.ts:183:3 › Electron App › should open an existing note from the list without blank screen
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[2/13] tests/app.spec.ts:233:3 › Electron App › should support spaces, settings screen, and focus mode flows
+[1A[2Ktests/app.spec.ts:233:3 › Electron App › should support spaces, settings screen, and focus mode flows
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2K[3/13] tests/app.spec.ts:298:3 › Electron App › should create a custom note type and render a typed note header
+[1A[2Ktests/app.spec.ts:298:3 › Electron App › should create a custom note type and render a typed note header
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[4/13] tests/app.spec.ts:412:3 › Electron App › should show vault name in sidebar header and support collapse/expand
+[1A[2Ktests/app.spec.ts:412:3 › Electron App › should show vault name in sidebar header and support collapse/expand
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[5/13] tests/app.spec.ts:458:3 › Electron App › should keep recent vaults in the left rail and switch between them
+[1A[2Ktests/app.spec.ts:458:3 › Electron App › should keep recent vaults in the left rail and switch between them
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[6/13] tests/app.spec.ts:502:3 › Electron App › should open search overlay via search button and search for notes
+[1A[2Ktests/app.spec.ts:502:3 › Electron App › should open search overlay via search button and search for notes
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2KAutofocus processing was blocked because a document already has a focused element.
+
+[1A[2K[7/13] tests/hevy.spec.ts:78:3 › Hevy Integration › should expose hevy API methods on window.api
+[1A[2Ktests/hevy.spec.ts:78:3 › Hevy Integration › should expose hevy API methods on window.api
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[8/13] tests/hevy.spec.ts:113:3 › Hevy Integration › should return not logged in status initially
+[1A[2Ktests/hevy.spec.ts:113:3 › Hevy Integration › should return not logged in status initially
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[9/13] tests/hevy.spec.ts:134:3 › Hevy Integration › should return error when fetching workouts without login
+[1A[2Ktests/hevy.spec.ts:134:3 › Hevy Integration › should return error when fetching workouts without login
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[10/13] tests/hevy.spec.ts:155:3 › Hevy Integration › should show connected apps settings page with Hevy card
+[1A[2Ktests/hevy.spec.ts:155:3 › Hevy Integration › should show connected apps settings page with Hevy card
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[11/13] tests/hevy.spec.ts:192:3 › Hevy Integration › should show system types (Тренировка, Упражнение) in object types settings
+[1A[2Ktests/hevy.spec.ts:192:3 › Hevy Integration › should show system types (Тренировка, Упражнение) in object types settings
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2K[12/13] tests/hevy.spec.ts:232:3 › Hevy Integration › should show diary space with today section and history
+[1A[2Ktests/hevy.spec.ts:232:3 › Hevy Integration › should show diary space with today section and history
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K[13/13] tests/hevy.spec.ts:272:3 › Hevy Integration › should show system types in all-properties space
+[1A[2Ktests/hevy.spec.ts:272:3 › Hevy Integration › should show system types in all-properties space
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2K  13 passed (1.9m)
