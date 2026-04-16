@@ -40,7 +40,8 @@ Common tasks
    - Treat Ark DB as the source of truth.
    - Do not reintroduce an in-process tracker, window polling loop, or Arrancador-owned usage SQLite.
 4. Legacy cleanup
-   - `src-tauri/` and `example/` may still contain historical code; verify current call paths before deleting or reusing anything.
+   - `src-tauri/` still contains historical code; verify current call paths before deleting or reusing anything.
+   - `.zenflow/` and other workflow/task artifacts do not belong to runtime paths and should not be reintroduced as product dependencies.
 
 Testing
 - `bun run typecheck`

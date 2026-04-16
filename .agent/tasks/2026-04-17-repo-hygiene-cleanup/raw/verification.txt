@@ -1,0 +1,777 @@
+== git diff --stat ==
+ .gitignore                           | 11 +++++++++++
+ apps/arrancador/AGENTS.md            |  3 ++-
+ apps/arrancador/package.json         |  1 -
+ apps/arrancador/playwright.config.ts |  2 +-
+ apps/eden/ts/AGENTS.md               |  6 +++---
+ package.json                         |  1 +
+ 6 files changed, 18 insertions(+), 6 deletions(-)
+
+== git status --short ==
+ M .gitignore
+D  apps/arrancador/.zenflow/tasks/better-design-0050/plan.md
+D  apps/arrancador/.zenflow/tasks/better-design-0050/report.md
+D  apps/arrancador/.zenflow/tasks/better-design-0050/spec.md
+D  apps/arrancador/.zenflow/tasks/new-task-cfe1/plan.md
+D  apps/arrancador/.zenflow/tasks/new-task-cfe1/spec.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/benchmarks.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/plan.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/requirements.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/spec.md
+ M apps/arrancador/AGENTS.md
+D  apps/arrancador/example/ludusavi-manifest-master/.editorconfig
+D  apps/arrancador/example/ludusavi-manifest-master/.gitattributes
+D  apps/arrancador/example/ludusavi-manifest-master/.github/workflows/import.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/.github/workflows/set-timestamp.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/.github/workflows/view-cache.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/.gitignore
+D  apps/arrancador/example/ludusavi-manifest-master/.pre-commit-config.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/CONTRIBUTING.md
+D  apps/arrancador/example/ludusavi-manifest-master/Cargo.toml
+D  apps/arrancador/example/ludusavi-manifest-master/LICENSE
+D  apps/arrancador/example/ludusavi-manifest-master/README.md
+D  apps/arrancador/example/ludusavi-manifest-master/data/manifest-override.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/manifest.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/missing.md
+D  apps/arrancador/example/ludusavi-manifest-master/data/schema.strict.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/schema.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/steam-game-cache.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/wiki-game-cache.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/wiki-malformed.md
+D  apps/arrancador/example/ludusavi-manifest-master/rustfmt.toml
+D  apps/arrancador/example/ludusavi-manifest-master/scripts/get-steam-app-info.py
+D  apps/arrancador/example/ludusavi-manifest-master/src/cli.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/main.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/manifest.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/missing.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/path.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/registry.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/resource.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/schema.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/steam.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/wiki.rs
+D  apps/arrancador/example/ludusavi-master/.cargo/config.toml
+D  apps/arrancador/example/ludusavi-master/.editorconfig
+D  apps/arrancador/example/ludusavi-master/.gitattributes
+D  apps/arrancador/example/ludusavi-master/.github/ISSUE_TEMPLATE/bug.yaml
+D  apps/arrancador/example/ludusavi-master/.github/ISSUE_TEMPLATE/feature.yaml
+D  apps/arrancador/example/ludusavi-master/.github/ISSUE_TEMPLATE/question.yaml
+D  apps/arrancador/example/ludusavi-master/.github/workflows/main.yaml
+D  apps/arrancador/example/ludusavi-master/.gitignore
+D  apps/arrancador/example/ludusavi-master/.pre-commit-config.yaml
+D  apps/arrancador/example/ludusavi-master/CHANGELOG.md
+D  apps/arrancador/example/ludusavi-master/CONTRIBUTING.md
+D  apps/arrancador/example/ludusavi-master/Cargo.toml
+D  apps/arrancador/example/ludusavi-master/LICENSE
+D  apps/arrancador/example/ludusavi-master/README.md
+D  apps/arrancador/example/ludusavi-master/assets/MaterialIcons-Regular.ttf
+D  apps/arrancador/example/ludusavi-master/assets/NotoSans-Regular.ttf
+D  apps/arrancador/example/ludusavi-master/assets/flatpak/com.github.mtkennerly.ludusavi.desktop
+D  apps/arrancador/example/ludusavi-master/assets/flatpak/com.github.mtkennerly.ludusavi.metainfo.xml
+D  apps/arrancador/example/ludusavi-master/assets/icon.ico
+D  apps/arrancador/example/ludusavi-master/assets/icon.kra
+D  apps/arrancador/example/ludusavi-master/assets/icon.png
+D  apps/arrancador/example/ludusavi-master/assets/icon.svg
+D  apps/arrancador/example/ludusavi-master/assets/linux/com.mtkennerly.ludusavi.desktop
+D  apps/arrancador/example/ludusavi-master/assets/linux/com.mtkennerly.ludusavi.metainfo.xml
+D  apps/arrancador/example/ludusavi-master/assets/windows/manifest.rc
+D  apps/arrancador/example/ludusavi-master/assets/windows/manifest.xml
+D  apps/arrancador/example/ludusavi-master/build.rs
+D  apps/arrancador/example/ludusavi-master/clippy.toml
+D  apps/arrancador/example/ludusavi-master/crowdin.yml
+D  apps/arrancador/example/ludusavi-master/docs/cli.md
+D  apps/arrancador/example/ludusavi-master/docs/demo-cli.gif
+D  apps/arrancador/example/ludusavi-master/docs/demo-gui.gif
+D  apps/arrancador/example/ludusavi-master/docs/help/application-folder.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-automation.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-exclusions.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-retention.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-structure.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-validation.md
+D  apps/arrancador/example/ludusavi-master/docs/help/cloud-backup.md
+D  apps/arrancador/example/ludusavi-master/docs/help/command-line.md
+D  apps/arrancador/example/ludusavi-master/docs/help/configuration-file.md
+D  apps/arrancador/example/ludusavi-master/docs/help/custom-games.md
+D  apps/arrancador/example/ludusavi-master/docs/help/duplicates.md
+D  apps/arrancador/example/ludusavi-master/docs/help/environment-variables.md
+D  apps/arrancador/example/ludusavi-master/docs/help/filter.md
+D  apps/arrancador/example/ludusavi-master/docs/help/game-launch-wrapping.md
+D  apps/arrancador/example/ludusavi-master/docs/help/installation.md
+D  apps/arrancador/example/ludusavi-master/docs/help/logging.md
+D  apps/arrancador/example/ludusavi-master/docs/help/missing-saves.md
+D  apps/arrancador/example/ludusavi-master/docs/help/redirects.md
+D  apps/arrancador/example/ludusavi-master/docs/help/roots.md
+D  apps/arrancador/example/ludusavi-master/docs/help/selective-scanning.md
+D  apps/arrancador/example/ludusavi-master/docs/help/transfer-between-operating-systems.md
+D  apps/arrancador/example/ludusavi-master/docs/help/troubleshooting.md
+D  apps/arrancador/example/ludusavi-master/docs/sample-gui-linux.png
+D  apps/arrancador/example/ludusavi-master/docs/schema/api-input.yaml
+D  apps/arrancador/example/ludusavi-master/docs/schema/api-output.yaml
+D  apps/arrancador/example/ludusavi-master/docs/schema/config.yaml
+D  apps/arrancador/example/ludusavi-master/docs/schema/general-output.yaml
+D  apps/arrancador/example/ludusavi-master/lang/ar-SA.ftl
+D  apps/arrancador/example/ludusavi-master/lang/cs-CZ.ftl
+D  apps/arrancador/example/ludusavi-master/lang/de-DE.ftl
+D  apps/arrancador/example/ludusavi-master/lang/en-US.ftl
+D  apps/arrancador/example/ludusavi-master/lang/eo-UY.ftl
+D  apps/arrancador/example/ludusavi-master/lang/es-ES.ftl
+D  apps/arrancador/example/ludusavi-master/lang/fi-FI.ftl
+D  apps/arrancador/example/ludusavi-master/lang/fil-PH.ftl
+D  apps/arrancador/example/ludusavi-master/lang/fr-FR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/it-IT.ftl
+D  apps/arrancador/example/ludusavi-master/lang/ja-JP.ftl
+D  apps/arrancador/example/ludusavi-master/lang/ko-KR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/nl-NL.ftl
+D  apps/arrancador/example/ludusavi-master/lang/no-NO.ftl
+D  apps/arrancador/example/ludusavi-master/lang/pl-PL.ftl
+D  apps/arrancador/example/ludusavi-master/lang/pt-BR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/ru-RU.ftl
+D  apps/arrancador/example/ludusavi-master/lang/sv-SE.ftl
+D  apps/arrancador/example/ludusavi-master/lang/th-TH.ftl
+D  apps/arrancador/example/ludusavi-master/lang/tr-TR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/uk-UA.ftl
+D  apps/arrancador/example/ludusavi-master/lang/vi-VN.ftl
+D  apps/arrancador/example/ludusavi-master/lang/zh-CN.ftl
+D  apps/arrancador/example/ludusavi-master/lang/zh-TW.ftl
+D  apps/arrancador/example/ludusavi-master/rustfmt.toml
+D  apps/arrancador/example/ludusavi-master/src/api.rs
+D  apps/arrancador/example/ludusavi-master/src/cli.rs
+D  apps/arrancador/example/ludusavi-master/src/cli/api.rs
+D  apps/arrancador/example/ludusavi-master/src/cli/parse.rs
+D  apps/arrancador/example/ludusavi-master/src/cli/ui.rs
+D  apps/arrancador/example/ludusavi-master/src/cloud.rs
+D  apps/arrancador/example/ludusavi-master/src/gui.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/app.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/badge.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/button.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/common.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/editor.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/file_tree.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/font.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/game_list.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/icon.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/modal.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/notification.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/popup_menu.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/screen.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/search.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/shortcuts.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/style.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/undoable.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/widget.rs
+D  apps/arrancador/example/ludusavi-master/src/lang.rs
+D  apps/arrancador/example/ludusavi-master/src/lib.rs
+D  apps/arrancador/example/ludusavi-master/src/main.rs
+D  apps/arrancador/example/ludusavi-master/src/metadata.rs
+D  apps/arrancador/example/ludusavi-master/src/path.rs
+D  apps/arrancador/example/ludusavi-master/src/prelude.rs
+D  apps/arrancador/example/ludusavi-master/src/report.rs
+D  apps/arrancador/example/ludusavi-master/src/resource.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/cache.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/config.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/config/root.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/manifest.rs
+D  apps/arrancador/example/ludusavi-master/src/scan.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/backup.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/change.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/duplicate.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/game_filter.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/generic.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/gog.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/legendary.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/nile.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/sideload.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/legendary.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/lutris.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/layout.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/preview.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/registry.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/registry/win.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/saves.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/steam.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/title.rs
+D  apps/arrancador/example/ludusavi-master/src/serialization.rs
+D  apps/arrancador/example/ludusavi-master/src/testing.rs
+D  apps/arrancador/example/ludusavi-master/src/wrap.rs
+D  apps/arrancador/example/ludusavi-master/src/wrap/heroic.rs
+D  apps/arrancador/example/ludusavi-master/tasks.py
+D  apps/arrancador/example/ludusavi-master/tests/.editorconfig
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1-zipped/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1-zipped/test.zip
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1/drive-X/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1/drive-X/file2.txt
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/game3-renamed/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/game3-renamed/registry.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/ignored-invalid-mapping/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/ignored-no-mapping/.keep
+D  apps/arrancador/example/ludusavi-master/tests/backup/migrate-legacy-backup/drive-X/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/backup/migrate-legacy-backup/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/home/.config/xdgConfig.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/AppData/Local/winLocalAppData.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/AppData/Roaming/winAppData.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/Documents/winDocuments.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/data.txt
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-with-store-cache/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-with-store-cache/gog_store/installed.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-with-store-cache/store_cache/gog_library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-without-store-cache/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-without-store-cache/gog_store/installed.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-without-store-cache/gog_store/library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-legendary/GamesConfig/app-2.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-legendary/store_cache/legendary_library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-nile/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-nile/store_cache/nile_library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-sideload/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-sideload/sideload_apps/library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/legendary/installed.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-db/pga.db
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-merged/games/windows-game-1683516078.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-merged/games/windows-game-1683516079.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-merged/pga.db
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-spec/games/windows-game.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-split/config/games/windows-game-1683516078.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-split/config/games/windows-game-1683516079.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-split/data/pga.db
+D  apps/arrancador/example/ludusavi-master/tests/ludusavi.reg
+D  apps/arrancador/example/ludusavi-master/tests/root-[not]-glob/game-[not]-glob/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root-[not]-glob/game-[not]-glob/file2.txt
+D  apps/arrancador/example/ludusavi-master/tests/root1/game1/ignored.txt
+D  apps/arrancador/example/ludusavi-master/tests/root1/game1/subdir/file2.txt
+D  apps/arrancador/example/ludusavi-master/tests/root2/game1/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root2/game2/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root3/game5/data/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root3/game_2/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/wine-prefix/drive_c/users/anyone/data.txt
+D  apps/arrancador/example/ludusavi-master/tests/wine-prefix/user.reg
+ M apps/arrancador/package.json
+ M apps/arrancador/playwright.config.ts
+D  apps/delphi/ts/bun.lock
+ M apps/eden/ts/AGENTS.md
+D  apps/eden/ts/bun.lock
+D  apps/olympia/package-lock.json
+ M package.json
+D  test-results/.last-run.json
+?? .agent/tasks/2026-04-17-repo-hygiene-cleanup/
+
+== git ls-files removed paths ==
+
+== git check-ignore ==
+.gitignore:30:test-results/	test-results/.last-run.json
+.gitignore:37:.bun_tmp/	.bun_tmp
+.gitignore:80:apps/arrancador/example/	apps/arrancador/example
+.gitignore:86:apps/delphi/ts/bun.lock	apps/delphi/ts/bun.lock
+.gitignore:87:apps/eden/ts/bun.lock	apps/eden/ts/bun.lock
+.gitignore:88:apps/olympia/package-lock.json	apps/olympia/package-lock.json
+
+== rg policy scan ==
+.gitignore:80:apps/arrancador/example/
+.gitignore:81:apps/arrancador/.zenflow/
+apps/arrancador/AGENTS.md:44:   - `.zenflow/` and other workflow/task artifacts do not belong to runtime paths and should not be reintroduced as product dependencies.
+package.json:4:  "packageManager": "bun@1.3.5",
+
+== git diff --cached --stat ==
+ .../.zenflow/tasks/better-design-0050/plan.md      |     67 -
+ .../.zenflow/tasks/better-design-0050/report.md    |      9 -
+ .../.zenflow/tasks/better-design-0050/spec.md      |     58 -
+ .../.zenflow/tasks/new-task-cfe1/plan.md           |     66 -
+ .../.zenflow/tasks/new-task-cfe1/spec.md           |     73 -
+ .../tasks/tests-architecture-ffd6/benchmarks.md    |     22 -
+ .../.zenflow/tasks/tests-architecture-ffd6/plan.md |    217 -
+ .../tasks/tests-architecture-ffd6/requirements.md  |    139 -
+ .../.zenflow/tasks/tests-architecture-ffd6/spec.md |    256 -
+ .../example/ludusavi-manifest-master/.editorconfig |     13 -
+ .../ludusavi-manifest-master/.gitattributes        |      1 -
+ .../.github/workflows/import.yaml                  |     33 -
+ .../.github/workflows/set-timestamp.yaml           |     33 -
+ .../.github/workflows/view-cache.yaml              |     21 -
+ .../example/ludusavi-manifest-master/.gitignore    |      5 -
+ .../.pre-commit-config.yaml                        |     15 -
+ .../ludusavi-manifest-master/CONTRIBUTING.md       |     37 -
+ .../example/ludusavi-manifest-master/Cargo.toml    |     25 -
+ .../example/ludusavi-manifest-master/LICENSE       |     21 -
+ .../example/ludusavi-manifest-master/README.md     |    132 -
+ .../data/manifest-override.yaml                    |     45 -
+ .../ludusavi-manifest-master/data/manifest.yaml    | 847548 ------------------
+ .../ludusavi-manifest-master/data/missing.md       |  31860 -
+ .../data/schema.strict.yaml                        |    146 -
+ .../ludusavi-manifest-master/data/schema.yaml      |    131 -
+ .../data/steam-game-cache.yaml                     | 640363 -------------
+ .../data/wiki-game-cache.yaml                      | 274440 ------
+ .../data/wiki-malformed.md                         |     22 -
+ .../example/ludusavi-manifest-master/rustfmt.toml  |      1 -
+ .../scripts/get-steam-app-info.py                  |     18 -
+ .../example/ludusavi-manifest-master/src/cli.rs    |    256 -
+ .../example/ludusavi-manifest-master/src/main.rs   |    146 -
+ .../ludusavi-manifest-master/src/manifest.rs       |    650 -
+ .../ludusavi-manifest-master/src/missing.rs        |     33 -
+ .../example/ludusavi-manifest-master/src/path.rs   |    157 -
+ .../ludusavi-manifest-master/src/registry.rs       |     56 -
+ .../ludusavi-manifest-master/src/resource.rs       |     63 -
+ .../example/ludusavi-manifest-master/src/schema.rs |     32 -
+ .../example/ludusavi-manifest-master/src/steam.rs  |    561 -
+ .../example/ludusavi-manifest-master/src/wiki.rs   |   1159 -
+ .../example/ludusavi-master/.cargo/config.toml     |      5 -
+ .../example/ludusavi-master/.editorconfig          |     10 -
+ .../example/ludusavi-master/.gitattributes         |      1 -
+ .../.github/ISSUE_TEMPLATE/bug.yaml                |     58 -
+ .../.github/ISSUE_TEMPLATE/feature.yaml            |      9 -
+ .../.github/ISSUE_TEMPLATE/question.yaml           |      9 -
+ .../ludusavi-master/.github/workflows/main.yaml    |    112 -
+ apps/arrancador/example/ludusavi-master/.gitignore |      6 -
+ .../ludusavi-master/.pre-commit-config.yaml        |     16 -
+ .../example/ludusavi-master/CHANGELOG.md           |   1400 -
+ .../example/ludusavi-master/CONTRIBUTING.md        |     79 -
+ apps/arrancador/example/ludusavi-master/Cargo.toml |    123 -
+ apps/arrancador/example/ludusavi-master/LICENSE    |     21 -
+ apps/arrancador/example/ludusavi-master/README.md  |    157 -
+ .../assets/MaterialIcons-Regular.ttf               |    Bin 356840 -> 0 bytes
+ .../ludusavi-master/assets/NotoSans-Regular.ttf    |    Bin 556216 -> 0 bytes
+ .../flatpak/com.github.mtkennerly.ludusavi.desktop |     10 -
+ .../com.github.mtkennerly.ludusavi.metainfo.xml    |     95 -
+ .../example/ludusavi-master/assets/icon.ico        |    Bin 16958 -> 0 bytes
+ .../example/ludusavi-master/assets/icon.kra        |    Bin 470972 -> 0 bytes
+ .../example/ludusavi-master/assets/icon.png        |    Bin 1567 -> 0 bytes
+ .../example/ludusavi-master/assets/icon.svg        |     13 -
+ .../assets/linux/com.mtkennerly.ludusavi.desktop   |     10 -
+ .../linux/com.mtkennerly.ludusavi.metainfo.xml     |    101 -
+ .../ludusavi-master/assets/windows/manifest.rc     |      3 -
+ .../ludusavi-master/assets/windows/manifest.xml    |     21 -
+ apps/arrancador/example/ludusavi-master/build.rs   |     14 -
+ .../arrancador/example/ludusavi-master/clippy.toml |      1 -
+ .../arrancador/example/ludusavi-master/crowdin.yml |     10 -
+ .../arrancador/example/ludusavi-master/docs/cli.md |    490 -
+ .../example/ludusavi-master/docs/demo-cli.gif      |    Bin 133334 -> 0 bytes
+ .../example/ludusavi-master/docs/demo-gui.gif      |    Bin 1323258 -> 0 bytes
+ .../docs/help/application-folder.md                |     16 -
+ .../ludusavi-master/docs/help/backup-automation.md |     71 -
+ .../ludusavi-master/docs/help/backup-exclusions.md |      8 -
+ .../ludusavi-master/docs/help/backup-retention.md  |     27 -
+ .../ludusavi-master/docs/help/backup-structure.md  |     47 -
+ .../ludusavi-master/docs/help/backup-validation.md |     12 -
+ .../ludusavi-master/docs/help/cloud-backup.md      |     49 -
+ .../ludusavi-master/docs/help/command-line.md      |     72 -
+ .../docs/help/configuration-file.md                |     23 -
+ .../ludusavi-master/docs/help/custom-games.md      |     23 -
+ .../ludusavi-master/docs/help/duplicates.md        |     10 -
+ .../docs/help/environment-variables.md             |     14 -
+ .../example/ludusavi-master/docs/help/filter.md    |     26 -
+ .../docs/help/game-launch-wrapping.md              |     92 -
+ .../ludusavi-master/docs/help/installation.md      |     52 -
+ .../example/ludusavi-master/docs/help/logging.md   |     15 -
+ .../ludusavi-master/docs/help/missing-saves.md     |     36 -
+ .../example/ludusavi-master/docs/help/redirects.md |     49 -
+ .../example/ludusavi-master/docs/help/roots.md     |     66 -
+ .../docs/help/selective-scanning.md                |     13 -
+ .../help/transfer-between-operating-systems.md     |     20 -
+ .../ludusavi-master/docs/help/troubleshooting.md   |     51 -
+ .../ludusavi-master/docs/sample-gui-linux.png      |    Bin 40366 -> 0 bytes
+ .../ludusavi-master/docs/schema/api-input.yaml     |    144 -
+ .../ludusavi-master/docs/schema/api-output.yaml    |     92 -
+ .../ludusavi-master/docs/schema/config.yaml        |   1099 -
+ .../docs/schema/general-output.yaml                |    330 -
+ .../example/ludusavi-master/lang/ar-SA.ftl         |    261 -
+ .../example/ludusavi-master/lang/cs-CZ.ftl         |    261 -
+ .../example/ludusavi-master/lang/de-DE.ftl         |    261 -
+ .../example/ludusavi-master/lang/en-US.ftl         |    298 -
+ .../example/ludusavi-master/lang/eo-UY.ftl         |    261 -
+ .../example/ludusavi-master/lang/es-ES.ftl         |    261 -
+ .../example/ludusavi-master/lang/fi-FI.ftl         |    261 -
+ .../example/ludusavi-master/lang/fil-PH.ftl        |    261 -
+ .../example/ludusavi-master/lang/fr-FR.ftl         |    259 -
+ .../example/ludusavi-master/lang/it-IT.ftl         |    261 -
+ .../example/ludusavi-master/lang/ja-JP.ftl         |    259 -
+ .../example/ludusavi-master/lang/ko-KR.ftl         |    259 -
+ .../example/ludusavi-master/lang/nl-NL.ftl         |    259 -
+ .../example/ludusavi-master/lang/no-NO.ftl         |    257 -
+ .../example/ludusavi-master/lang/pl-PL.ftl         |    259 -
+ .../example/ludusavi-master/lang/pt-BR.ftl         |    261 -
+ .../example/ludusavi-master/lang/ru-RU.ftl         |    261 -
+ .../example/ludusavi-master/lang/sv-SE.ftl         |    261 -
+ .../example/ludusavi-master/lang/th-TH.ftl         |    261 -
+ .../example/ludusavi-master/lang/tr-TR.ftl         |    261 -
+ .../example/ludusavi-master/lang/uk-UA.ftl         |    261 -
+ .../example/ludusavi-master/lang/vi-VN.ftl         |    261 -
+ .../example/ludusavi-master/lang/zh-CN.ftl         |    251 -
+ .../example/ludusavi-master/lang/zh-TW.ftl         |    259 -
+ .../example/ludusavi-master/rustfmt.toml           |      1 -
+ apps/arrancador/example/ludusavi-master/src/api.rs |    619 -
+ apps/arrancador/example/ludusavi-master/src/cli.rs |   1431 -
+ .../example/ludusavi-master/src/cli/api.rs         |    366 -
+ .../example/ludusavi-master/src/cli/parse.rs       |   1550 -
+ .../example/ludusavi-master/src/cli/ui.rs          |    215 -
+ .../example/ludusavi-master/src/cloud.rs           |    815 -
+ apps/arrancador/example/ludusavi-master/src/gui.rs |     67 -
+ .../example/ludusavi-master/src/gui/app.rs         |   3052 -
+ .../example/ludusavi-master/src/gui/badge.rs       |    158 -
+ .../example/ludusavi-master/src/gui/button.rs      |    593 -
+ .../example/ludusavi-master/src/gui/common.rs      |    937 -
+ .../example/ludusavi-master/src/gui/editor.rs      |    692 -
+ .../example/ludusavi-master/src/gui/file_tree.rs   |    615 -
+ .../example/ludusavi-master/src/gui/font.rs        |     17 -
+ .../example/ludusavi-master/src/gui/game_list.rs   |    922 -
+ .../example/ludusavi-master/src/gui/icon.rs        |    113 -
+ .../example/ludusavi-master/src/gui/modal.rs       |    783 -
+ .../ludusavi-master/src/gui/notification.rs        |     47 -
+ .../example/ludusavi-master/src/gui/popup_menu.rs  |    355 -
+ .../example/ludusavi-master/src/gui/screen.rs      |    727 -
+ .../example/ludusavi-master/src/gui/search.rs      |    293 -
+ .../example/ludusavi-master/src/gui/shortcuts.rs   |    580 -
+ .../example/ludusavi-master/src/gui/style.rs       |    695 -
+ .../example/ludusavi-master/src/gui/undoable.rs    |    169 -
+ .../example/ludusavi-master/src/gui/widget.rs      |    420 -
+ .../arrancador/example/ludusavi-master/src/lang.rs |   1515 -
+ apps/arrancador/example/ludusavi-master/src/lib.rs |     24 -
+ .../arrancador/example/ludusavi-master/src/main.rs |    283 -
+ .../example/ludusavi-master/src/metadata.rs        |     73 -
+ .../arrancador/example/ludusavi-master/src/path.rs |   1807 -
+ .../example/ludusavi-master/src/prelude.rs         |    421 -
+ .../example/ludusavi-master/src/report.rs          |   1489 -
+ .../example/ludusavi-master/src/resource.rs        |     70 -
+ .../example/ludusavi-master/src/resource/cache.rs  |    150 -
+ .../example/ludusavi-master/src/resource/config.rs |   2955 -
+ .../ludusavi-master/src/resource/config/root.rs    |    365 -
+ .../ludusavi-master/src/resource/manifest.rs       |   1208 -
+ .../arrancador/example/ludusavi-master/src/scan.rs |   1900 -
+ .../example/ludusavi-master/src/scan/backup.rs     |    125 -
+ .../example/ludusavi-master/src/scan/change.rs     |    168 -
+ .../example/ludusavi-master/src/scan/duplicate.rs  |    618 -
+ .../ludusavi-master/src/scan/game_filter.rs        |    157 -
+ .../example/ludusavi-master/src/scan/launchers.rs  |     87 -
+ .../ludusavi-master/src/scan/launchers/generic.rs  |    215 -
+ .../ludusavi-master/src/scan/launchers/heroic.rs   |    163 -
+ .../src/scan/launchers/heroic/gog.rs               |    202 -
+ .../src/scan/launchers/heroic/legendary.rs         |    220 -
+ .../src/scan/launchers/heroic/nile.rs              |    139 -
+ .../src/scan/launchers/heroic/sideload.rs          |    139 -
+ .../src/scan/launchers/legendary.rs                |    134 -
+ .../ludusavi-master/src/scan/launchers/lutris.rs   |    536 -
+ .../example/ludusavi-master/src/scan/layout.rs     |   3867 -
+ .../example/ludusavi-master/src/scan/preview.rs    |    688 -
+ .../example/ludusavi-master/src/scan/registry.rs   |    551 -
+ .../ludusavi-master/src/scan/registry/win.rs       |    488 -
+ .../example/ludusavi-master/src/scan/saves.rs      |    261 -
+ .../example/ludusavi-master/src/scan/steam.rs      |     66 -
+ .../example/ludusavi-master/src/scan/title.rs      |    674 -
+ .../example/ludusavi-master/src/serialization.rs   |      3 -
+ .../example/ludusavi-master/src/testing.rs         |     79 -
+ .../arrancador/example/ludusavi-master/src/wrap.rs |     99 -
+ .../example/ludusavi-master/src/wrap/heroic.rs     |     77 -
+ apps/arrancador/example/ludusavi-master/tasks.py   |    280 -
+ .../example/ludusavi-master/tests/.editorconfig    |      1 -
+ .../tests/backup/game1-zipped/mapping.yaml         |     17 -
+ .../tests/backup/game1-zipped/test.zip             |    Bin 245 -> 0 bytes
+ .../tests/backup/game1/drive-X/file1.txt           |      1 -
+ .../tests/backup/game1/drive-X/file2.txt           |      1 -
+ .../tests/backup/game1/mapping.yaml                |     17 -
+ .../tests/backup/game3-renamed/mapping.yaml        |     10 -
+ .../tests/backup/game3-renamed/registry.yaml       |     16 -
+ .../backup/ignored-invalid-mapping/mapping.yaml    |      2 -
+ .../tests/backup/ignored-no-mapping/.keep          |      0
+ .../backup/migrate-legacy-backup/drive-X/file1.txt |      1 -
+ .../backup/migrate-legacy-backup/mapping.yaml      |      4 -
+ .../tests/home/.config/xdgConfig.txt               |      0
+ .../tests/home/AppData/Local/winLocalAppData.txt   |      0
+ .../tests/home/AppData/Roaming/winAppData.txt      |      0
+ .../tests/home/Documents/winDocuments.txt          |      0
+ .../example/ludusavi-master/tests/home/data.txt    |      0
+ .../GamesConfig/app-1.json                         |     14 -
+ .../gog_store/installed.json                       |     17 -
+ .../store_cache/gog_library.json                   |     40 -
+ .../GamesConfig/app-1.json                         |     14 -
+ .../gog_store/installed.json                       |     17 -
+ .../gog_store/library.json                         |     40 -
+ .../heroic-legendary/GamesConfig/app-2.json        |     14 -
+ .../store_cache/legendary_library.json             |      8 -
+ .../launchers/heroic-nile/GamesConfig/app-1.json   |     14 -
+ .../heroic-nile/store_cache/nile_library.json      |     14 -
+ .../heroic-sideload/GamesConfig/app-1.json         |     14 -
+ .../heroic-sideload/sideload_apps/library.json     |     15 -
+ .../tests/launchers/legendary/installed.json       |     24 -
+ .../tests/launchers/lutris-db/pga.db               |    Bin 32768 -> 0 bytes
+ .../games/windows-game-1683516078.yaml             |     34 -
+ .../games/windows-game-1683516079.yaml             |      5 -
+ .../tests/launchers/lutris-merged/pga.db           |    Bin 32768 -> 0 bytes
+ .../launchers/lutris-spec/games/windows-game.yaml  |     34 -
+ .../config/games/windows-game-1683516078.yaml      |     34 -
+ .../config/games/windows-game-1683516079.yaml      |      5 -
+ .../tests/launchers/lutris-split/data/pga.db       |    Bin 32768 -> 0 bytes
+ .../example/ludusavi-master/tests/ludusavi.reg     |     19 -
+ .../root-[not]-glob/game-[not]-glob/file1.txt      |      0
+ .../root-[not]-glob/game-[not]-glob/file2.txt      |      0
+ .../ludusavi-master/tests/root1/game1/ignored.txt  |      0
+ .../tests/root1/game1/subdir/file2.txt             |      1 -
+ .../ludusavi-master/tests/root2/game1/file1.txt    |      1 -
+ .../ludusavi-master/tests/root2/game2/file1.txt    |      1 -
+ .../tests/root3/game5/data/file1.txt               |      1 -
+ .../ludusavi-master/tests/root3/game_2/file1.txt   |      1 -
+ .../wine-prefix/drive_c/users/anyone/data.txt      |      0
+ .../ludusavi-master/tests/wine-prefix/user.reg     |      1 -
+ apps/delphi/ts/bun.lock                            |   1389 -
+ apps/eden/ts/bun.lock                              |   1523 -
+ apps/olympia/package-lock.json                     |   9419 -
+ test-results/.last-run.json                        |      4 -
+ 240 files changed, 1861751 deletions(-)
+
+== git check-ignore zenflow sample ==
+.gitignore:81:apps/arrancador/.zenflow/	apps/arrancador/.zenflow/tasks/better-design-0050/spec.md
+
+== final git status --short ==
+ M .gitignore
+D  apps/arrancador/.zenflow/tasks/better-design-0050/plan.md
+D  apps/arrancador/.zenflow/tasks/better-design-0050/report.md
+D  apps/arrancador/.zenflow/tasks/better-design-0050/spec.md
+D  apps/arrancador/.zenflow/tasks/new-task-cfe1/plan.md
+D  apps/arrancador/.zenflow/tasks/new-task-cfe1/spec.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/benchmarks.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/plan.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/requirements.md
+D  apps/arrancador/.zenflow/tasks/tests-architecture-ffd6/spec.md
+ M apps/arrancador/AGENTS.md
+D  apps/arrancador/example/ludusavi-manifest-master/.editorconfig
+D  apps/arrancador/example/ludusavi-manifest-master/.gitattributes
+D  apps/arrancador/example/ludusavi-manifest-master/.github/workflows/import.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/.github/workflows/set-timestamp.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/.github/workflows/view-cache.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/.gitignore
+D  apps/arrancador/example/ludusavi-manifest-master/.pre-commit-config.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/CONTRIBUTING.md
+D  apps/arrancador/example/ludusavi-manifest-master/Cargo.toml
+D  apps/arrancador/example/ludusavi-manifest-master/LICENSE
+D  apps/arrancador/example/ludusavi-manifest-master/README.md
+D  apps/arrancador/example/ludusavi-manifest-master/data/manifest-override.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/manifest.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/missing.md
+D  apps/arrancador/example/ludusavi-manifest-master/data/schema.strict.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/schema.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/steam-game-cache.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/wiki-game-cache.yaml
+D  apps/arrancador/example/ludusavi-manifest-master/data/wiki-malformed.md
+D  apps/arrancador/example/ludusavi-manifest-master/rustfmt.toml
+D  apps/arrancador/example/ludusavi-manifest-master/scripts/get-steam-app-info.py
+D  apps/arrancador/example/ludusavi-manifest-master/src/cli.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/main.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/manifest.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/missing.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/path.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/registry.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/resource.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/schema.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/steam.rs
+D  apps/arrancador/example/ludusavi-manifest-master/src/wiki.rs
+D  apps/arrancador/example/ludusavi-master/.cargo/config.toml
+D  apps/arrancador/example/ludusavi-master/.editorconfig
+D  apps/arrancador/example/ludusavi-master/.gitattributes
+D  apps/arrancador/example/ludusavi-master/.github/ISSUE_TEMPLATE/bug.yaml
+D  apps/arrancador/example/ludusavi-master/.github/ISSUE_TEMPLATE/feature.yaml
+D  apps/arrancador/example/ludusavi-master/.github/ISSUE_TEMPLATE/question.yaml
+D  apps/arrancador/example/ludusavi-master/.github/workflows/main.yaml
+D  apps/arrancador/example/ludusavi-master/.gitignore
+D  apps/arrancador/example/ludusavi-master/.pre-commit-config.yaml
+D  apps/arrancador/example/ludusavi-master/CHANGELOG.md
+D  apps/arrancador/example/ludusavi-master/CONTRIBUTING.md
+D  apps/arrancador/example/ludusavi-master/Cargo.toml
+D  apps/arrancador/example/ludusavi-master/LICENSE
+D  apps/arrancador/example/ludusavi-master/README.md
+D  apps/arrancador/example/ludusavi-master/assets/MaterialIcons-Regular.ttf
+D  apps/arrancador/example/ludusavi-master/assets/NotoSans-Regular.ttf
+D  apps/arrancador/example/ludusavi-master/assets/flatpak/com.github.mtkennerly.ludusavi.desktop
+D  apps/arrancador/example/ludusavi-master/assets/flatpak/com.github.mtkennerly.ludusavi.metainfo.xml
+D  apps/arrancador/example/ludusavi-master/assets/icon.ico
+D  apps/arrancador/example/ludusavi-master/assets/icon.kra
+D  apps/arrancador/example/ludusavi-master/assets/icon.png
+D  apps/arrancador/example/ludusavi-master/assets/icon.svg
+D  apps/arrancador/example/ludusavi-master/assets/linux/com.mtkennerly.ludusavi.desktop
+D  apps/arrancador/example/ludusavi-master/assets/linux/com.mtkennerly.ludusavi.metainfo.xml
+D  apps/arrancador/example/ludusavi-master/assets/windows/manifest.rc
+D  apps/arrancador/example/ludusavi-master/assets/windows/manifest.xml
+D  apps/arrancador/example/ludusavi-master/build.rs
+D  apps/arrancador/example/ludusavi-master/clippy.toml
+D  apps/arrancador/example/ludusavi-master/crowdin.yml
+D  apps/arrancador/example/ludusavi-master/docs/cli.md
+D  apps/arrancador/example/ludusavi-master/docs/demo-cli.gif
+D  apps/arrancador/example/ludusavi-master/docs/demo-gui.gif
+D  apps/arrancador/example/ludusavi-master/docs/help/application-folder.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-automation.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-exclusions.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-retention.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-structure.md
+D  apps/arrancador/example/ludusavi-master/docs/help/backup-validation.md
+D  apps/arrancador/example/ludusavi-master/docs/help/cloud-backup.md
+D  apps/arrancador/example/ludusavi-master/docs/help/command-line.md
+D  apps/arrancador/example/ludusavi-master/docs/help/configuration-file.md
+D  apps/arrancador/example/ludusavi-master/docs/help/custom-games.md
+D  apps/arrancador/example/ludusavi-master/docs/help/duplicates.md
+D  apps/arrancador/example/ludusavi-master/docs/help/environment-variables.md
+D  apps/arrancador/example/ludusavi-master/docs/help/filter.md
+D  apps/arrancador/example/ludusavi-master/docs/help/game-launch-wrapping.md
+D  apps/arrancador/example/ludusavi-master/docs/help/installation.md
+D  apps/arrancador/example/ludusavi-master/docs/help/logging.md
+D  apps/arrancador/example/ludusavi-master/docs/help/missing-saves.md
+D  apps/arrancador/example/ludusavi-master/docs/help/redirects.md
+D  apps/arrancador/example/ludusavi-master/docs/help/roots.md
+D  apps/arrancador/example/ludusavi-master/docs/help/selective-scanning.md
+D  apps/arrancador/example/ludusavi-master/docs/help/transfer-between-operating-systems.md
+D  apps/arrancador/example/ludusavi-master/docs/help/troubleshooting.md
+D  apps/arrancador/example/ludusavi-master/docs/sample-gui-linux.png
+D  apps/arrancador/example/ludusavi-master/docs/schema/api-input.yaml
+D  apps/arrancador/example/ludusavi-master/docs/schema/api-output.yaml
+D  apps/arrancador/example/ludusavi-master/docs/schema/config.yaml
+D  apps/arrancador/example/ludusavi-master/docs/schema/general-output.yaml
+D  apps/arrancador/example/ludusavi-master/lang/ar-SA.ftl
+D  apps/arrancador/example/ludusavi-master/lang/cs-CZ.ftl
+D  apps/arrancador/example/ludusavi-master/lang/de-DE.ftl
+D  apps/arrancador/example/ludusavi-master/lang/en-US.ftl
+D  apps/arrancador/example/ludusavi-master/lang/eo-UY.ftl
+D  apps/arrancador/example/ludusavi-master/lang/es-ES.ftl
+D  apps/arrancador/example/ludusavi-master/lang/fi-FI.ftl
+D  apps/arrancador/example/ludusavi-master/lang/fil-PH.ftl
+D  apps/arrancador/example/ludusavi-master/lang/fr-FR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/it-IT.ftl
+D  apps/arrancador/example/ludusavi-master/lang/ja-JP.ftl
+D  apps/arrancador/example/ludusavi-master/lang/ko-KR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/nl-NL.ftl
+D  apps/arrancador/example/ludusavi-master/lang/no-NO.ftl
+D  apps/arrancador/example/ludusavi-master/lang/pl-PL.ftl
+D  apps/arrancador/example/ludusavi-master/lang/pt-BR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/ru-RU.ftl
+D  apps/arrancador/example/ludusavi-master/lang/sv-SE.ftl
+D  apps/arrancador/example/ludusavi-master/lang/th-TH.ftl
+D  apps/arrancador/example/ludusavi-master/lang/tr-TR.ftl
+D  apps/arrancador/example/ludusavi-master/lang/uk-UA.ftl
+D  apps/arrancador/example/ludusavi-master/lang/vi-VN.ftl
+D  apps/arrancador/example/ludusavi-master/lang/zh-CN.ftl
+D  apps/arrancador/example/ludusavi-master/lang/zh-TW.ftl
+D  apps/arrancador/example/ludusavi-master/rustfmt.toml
+D  apps/arrancador/example/ludusavi-master/src/api.rs
+D  apps/arrancador/example/ludusavi-master/src/cli.rs
+D  apps/arrancador/example/ludusavi-master/src/cli/api.rs
+D  apps/arrancador/example/ludusavi-master/src/cli/parse.rs
+D  apps/arrancador/example/ludusavi-master/src/cli/ui.rs
+D  apps/arrancador/example/ludusavi-master/src/cloud.rs
+D  apps/arrancador/example/ludusavi-master/src/gui.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/app.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/badge.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/button.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/common.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/editor.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/file_tree.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/font.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/game_list.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/icon.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/modal.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/notification.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/popup_menu.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/screen.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/search.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/shortcuts.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/style.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/undoable.rs
+D  apps/arrancador/example/ludusavi-master/src/gui/widget.rs
+D  apps/arrancador/example/ludusavi-master/src/lang.rs
+D  apps/arrancador/example/ludusavi-master/src/lib.rs
+D  apps/arrancador/example/ludusavi-master/src/main.rs
+D  apps/arrancador/example/ludusavi-master/src/metadata.rs
+D  apps/arrancador/example/ludusavi-master/src/path.rs
+D  apps/arrancador/example/ludusavi-master/src/prelude.rs
+D  apps/arrancador/example/ludusavi-master/src/report.rs
+D  apps/arrancador/example/ludusavi-master/src/resource.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/cache.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/config.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/config/root.rs
+D  apps/arrancador/example/ludusavi-master/src/resource/manifest.rs
+D  apps/arrancador/example/ludusavi-master/src/scan.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/backup.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/change.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/duplicate.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/game_filter.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/generic.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/gog.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/legendary.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/nile.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/heroic/sideload.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/legendary.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/launchers/lutris.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/layout.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/preview.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/registry.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/registry/win.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/saves.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/steam.rs
+D  apps/arrancador/example/ludusavi-master/src/scan/title.rs
+D  apps/arrancador/example/ludusavi-master/src/serialization.rs
+D  apps/arrancador/example/ludusavi-master/src/testing.rs
+D  apps/arrancador/example/ludusavi-master/src/wrap.rs
+D  apps/arrancador/example/ludusavi-master/src/wrap/heroic.rs
+D  apps/arrancador/example/ludusavi-master/tasks.py
+D  apps/arrancador/example/ludusavi-master/tests/.editorconfig
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1-zipped/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1-zipped/test.zip
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1/drive-X/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1/drive-X/file2.txt
+D  apps/arrancador/example/ludusavi-master/tests/backup/game1/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/game3-renamed/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/game3-renamed/registry.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/ignored-invalid-mapping/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/backup/ignored-no-mapping/.keep
+D  apps/arrancador/example/ludusavi-master/tests/backup/migrate-legacy-backup/drive-X/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/backup/migrate-legacy-backup/mapping.yaml
+D  apps/arrancador/example/ludusavi-master/tests/home/.config/xdgConfig.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/AppData/Local/winLocalAppData.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/AppData/Roaming/winAppData.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/Documents/winDocuments.txt
+D  apps/arrancador/example/ludusavi-master/tests/home/data.txt
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-with-store-cache/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-with-store-cache/gog_store/installed.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-with-store-cache/store_cache/gog_library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-without-store-cache/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-without-store-cache/gog_store/installed.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-gog-without-store-cache/gog_store/library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-legendary/GamesConfig/app-2.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-legendary/store_cache/legendary_library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-nile/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-nile/store_cache/nile_library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-sideload/GamesConfig/app-1.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/heroic-sideload/sideload_apps/library.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/legendary/installed.json
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-db/pga.db
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-merged/games/windows-game-1683516078.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-merged/games/windows-game-1683516079.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-merged/pga.db
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-spec/games/windows-game.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-split/config/games/windows-game-1683516078.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-split/config/games/windows-game-1683516079.yaml
+D  apps/arrancador/example/ludusavi-master/tests/launchers/lutris-split/data/pga.db
+D  apps/arrancador/example/ludusavi-master/tests/ludusavi.reg
+D  apps/arrancador/example/ludusavi-master/tests/root-[not]-glob/game-[not]-glob/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root-[not]-glob/game-[not]-glob/file2.txt
+D  apps/arrancador/example/ludusavi-master/tests/root1/game1/ignored.txt
+D  apps/arrancador/example/ludusavi-master/tests/root1/game1/subdir/file2.txt
+D  apps/arrancador/example/ludusavi-master/tests/root2/game1/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root2/game2/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root3/game5/data/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/root3/game_2/file1.txt
+D  apps/arrancador/example/ludusavi-master/tests/wine-prefix/drive_c/users/anyone/data.txt
+D  apps/arrancador/example/ludusavi-master/tests/wine-prefix/user.reg
+ M apps/arrancador/package.json
+ M apps/arrancador/playwright.config.ts
+D  apps/delphi/ts/bun.lock
+ M apps/eden/ts/AGENTS.md
+D  apps/eden/ts/bun.lock
+D  apps/olympia/package-lock.json
+ M package.json
+D  test-results/.last-run.json
+?? .agent/tasks/2026-04-17-repo-hygiene-cleanup/
+
+== final agents/doc scan ==
+apps/eden/ts/AGENTS.md:5:- Перед отдачей задачи пользователю всегда проверяй, что приложение успешно собирается без ошибок через `bun run build`.
+apps/eden/ts/AGENTS.md:6:- Перед отдачей задачи пользователю всегда запускай e2e тесты через `bun run test:e2e` и убеждайся, что они проходят.
+apps/eden/ts/AGENTS.md:7:- Если менялась только типизация или локальная логика без UI, все равно прогоняй хотя бы `bun run lint` и `bun x tsc --noEmit`, но финальный стандарт для сдачи остается `bun run build` + `bun run test:e2e`.
+apps/arrancador/AGENTS.md:44:   - `.zenflow/` and other workflow/task artifacts do not belong to runtime paths and should not be reintroduced as product dependencies.
+apps/arrancador/AGENTS.md:48:- `bun run build:renderer`
+apps/arrancador/AGENTS.md:49:- `bun run build:main`
+apps/arrancador/AGENTS.md:50:- `bun run build:preload`

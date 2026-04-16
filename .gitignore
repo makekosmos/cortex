@@ -27,10 +27,14 @@ dist-*/
 *.tsbuildinfo
 .cache/
 playwright-report/
+test-results/
+coverage/
+blob-report/
 
 # === Bun ===
 bun.lockb
 .bun_cache/
+.bun_tmp/
 .tmp/
 
 # === Rust ===
@@ -73,8 +77,15 @@ __pycache__/
 # === Electron Builder ===
 release/
 apps/arrancador/out/
+apps/arrancador/example/
+apps/arrancador/.zenflow/
 apps/dashboard/.e2e/
 apps/dashboard/.tmp/
+
+# === Workspace policy ===
+apps/delphi/ts/bun.lock
+apps/eden/ts/bun.lock
+apps/olympia/package-lock.json
 
 # === Общее ===
 *.log

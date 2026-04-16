@@ -1,0 +1,57 @@
+{
+  "task_id": "2026-04-17-repo-hygiene-cleanup",
+  "result": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "Root package.json declares packageManager bun@1.3.5",
+        "git ls-files for removed workspace-local lockfiles returns empty"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "git rm removed test-results/.last-run.json",
+        "removed-path git ls-files check returns empty"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        ".gitignore contains test-results/ and .bun_tmp/",
+        "git check-ignore -v confirms both ignore rules"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/example removed from git",
+        "apps/arrancador/.zenflow removed from git",
+        "git diff --cached --stat reports 240 files changed and 1861751 deletions"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/AGENTS.md updated for removed workflow/runtime tails",
+        "apps/eden/ts/AGENTS.md updated from npm commands to bun commands"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        "git status --short contains only intended cleanup modifications/deletions plus task artifacts"
+      ]
+    }
+  ],
+  "raw_artifacts": [
+    ".agent/tasks/2026-04-17-repo-hygiene-cleanup/raw/verification.txt"
+  ]
+}
