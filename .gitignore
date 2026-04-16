@@ -26,9 +26,12 @@ dist-*/
 .expo/
 *.tsbuildinfo
 .cache/
+playwright-report/
 
 # === Bun ===
 bun.lockb
+.bun_cache/
+.tmp/
 
 # === Rust ===
 target/
@@ -69,6 +72,9 @@ __pycache__/
 
 # === Electron Builder ===
 release/
+apps/arrancador/out/
+apps/dashboard/.e2e/
+apps/dashboard/.tmp/
 
 # === Общее ===
 *.log
