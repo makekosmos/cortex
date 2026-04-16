@@ -1,0 +1,5 @@
+Command: Set-Location apps/dashboard; bun run typecheck
+Workdir: D:\Personal\Hobby\Coding\kepler
+Result: PASS
+Output:
+$ tsc --noEmit

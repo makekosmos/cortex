@@ -34,8 +34,7 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
 
 pub fn upsert_todo(conn: &Connection, todo: &TodoItem) -> Result<(), String> {
     let tag_ids_json = serde_json::to_string(&todo.tag_ids).map_err(|e| e.to_string())?;
-    let checklist_json =
-        serde_json::to_string(&todo.checklist_items).map_err(|e| e.to_string())?;
+    let checklist_json = serde_json::to_string(&todo.checklist_items).map_err(|e| e.to_string())?;
     let recurrence_json: Option<String> = todo
         .recurrence_rule
         .as_ref()
@@ -190,6 +189,115 @@ pub fn delete_heading(conn: &Connection, id: &str) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Usage tracking CRUD
+// ---------------------------------------------------------------------------
+
+pub fn upsert_tracked_app(conn: &Connection, tracked_app: &TrackedApp) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO tracked_apps
+            (id, platform, exe_path, normalized_exe_path, process_name,
+             display_name, publisher, icon_ref, first_seen_at, last_seen_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            tracked_app.id,
+            tracked_app.platform,
+            tracked_app.exe_path,
+            tracked_app.normalized_exe_path,
+            tracked_app.process_name,
+            tracked_app.display_name,
+            tracked_app.publisher,
+            tracked_app.icon_ref,
+            tracked_app.first_seen_at,
+            tracked_app.last_seen_at,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_tracked_app(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM tracked_apps WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn upsert_usage_session(conn: &Connection, session: &UsageSession) -> Result<(), String> {
+    let meta_json = serde_json::to_string(&session.meta_json).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO usage_sessions
+            (id, tracked_app_id, device_id, device_name, platform, started_at, ended_at,
+             foreground_ms, idle_ms, window_title, process_name, exe_path,
+             pid_start, pid_end, meta_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
+                 ?8, ?9, ?10, ?11, ?12,
+                 ?13, ?14, ?15)",
+        params![
+            session.id,
+            session.tracked_app_id,
+            session.device_id,
+            session.device_name,
+            session.platform,
+            session.started_at,
+            session.ended_at,
+            session.foreground_ms,
+            session.idle_ms,
+            session.window_title,
+            session.process_name,
+            session.exe_path,
+            session.pid_start,
+            session.pid_end,
+            meta_json,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_usage_session(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM usage_sessions WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn upsert_usage_event(conn: &Connection, event: &UsageEvent) -> Result<(), String> {
+    let meta_json = serde_json::to_string(&event.meta_json).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO usage_events
+            (id, tracked_app_id, usage_session_id, device_id, device_name, platform,
+             occurred_at, kind, window_title, process_name, exe_path, pid,
+             is_foreground, is_idle, meta_json)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6,
+                 ?7, ?8, ?9, ?10, ?11, ?12,
+                 ?13, ?14, ?15)",
+        params![
+            event.id,
+            event.tracked_app_id,
+            event.usage_session_id,
+            event.device_id,
+            event.device_name,
+            event.platform,
+            event.occurred_at,
+            event.kind,
+            event.window_title,
+            event.process_name,
+            event.exe_path,
+            event.pid,
+            event.is_foreground as i64,
+            event.is_idle as i64,
+            meta_json,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_usage_event(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM usage_events WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // sync_kv
 // ---------------------------------------------------------------------------
 
@@ -218,7 +326,7 @@ pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), Stri
 
 pub fn clear_all(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
-        "DELETE FROM todos; DELETE FROM projects; DELETE FROM areas; DELETE FROM tags; DELETE FROM headings; DELETE FROM sync_kv;",
+        "DELETE FROM usage_events; DELETE FROM usage_sessions; DELETE FROM tracked_apps; DELETE FROM todos; DELETE FROM projects; DELETE FROM areas; DELETE FROM tags; DELETE FROM headings; DELETE FROM sync_kv;",
     )
     .map_err(|e| e.to_string())
 }
@@ -238,12 +346,18 @@ pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
     let areas = load_all_areas(conn)?;
     let tags = load_all_tags(conn)?;
     let headings = load_all_headings(conn)?;
+    let tracked_apps = load_all_tracked_apps(conn)?;
+    let usage_sessions = load_all_usage_sessions(conn)?;
+    let usage_events = load_all_usage_events(conn)?;
     Ok(LoadAllData {
         todos,
         projects,
         areas,
         tags,
         headings,
+        tracked_apps,
+        usage_sessions,
+        usage_events,
     })
 }
 
@@ -266,8 +380,7 @@ fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
             let recurrence_str: Option<String> = row.get(21)?;
 
             let tag_ids: Vec<String> = serde_json::from_str(&tag_ids_str).unwrap_or_default();
-            let checklist_items: Value =
-                serde_json::from_str(&checklist_str).unwrap_or(json!([]));
+            let checklist_items: Value = serde_json::from_str(&checklist_str).unwrap_or(json!([]));
             let recurrence_rule: Option<Value> = recurrence_str
                 .as_deref()
                 .and_then(|s| serde_json::from_str(s).ok());
@@ -386,6 +499,115 @@ fn load_all_headings(conn: &Connection) -> Result<Vec<Heading>, String> {
                 title: row.get(1)?,
                 sort_order: row.get(2)?,
                 project_id: row.get(3)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+fn load_all_tracked_apps(conn: &Connection) -> Result<Vec<TrackedApp>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, platform, exe_path, normalized_exe_path, process_name,
+                    display_name, publisher, icon_ref, first_seen_at, last_seen_at
+             FROM tracked_apps
+             ORDER BY last_seen_at DESC, id ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(TrackedApp {
+                id: row.get(0)?,
+                platform: row.get(1)?,
+                exe_path: row.get(2)?,
+                normalized_exe_path: row.get(3)?,
+                process_name: row.get(4)?,
+                display_name: row.get(5)?,
+                publisher: row.get(6)?,
+                icon_ref: row.get(7)?,
+                first_seen_at: row.get(8)?,
+                last_seen_at: row.get(9)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, tracked_app_id, device_id, device_name, platform, started_at,
+                    ended_at, foreground_ms, idle_ms, window_title, process_name,
+                    exe_path, pid_start, pid_end, meta_json
+             FROM usage_sessions
+             ORDER BY started_at DESC, id ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            let meta_json_str: String = row.get(14)?;
+            let meta_json: Value = serde_json::from_str(&meta_json_str).unwrap_or(json!({}));
+            Ok(UsageSession {
+                id: row.get(0)?,
+                tracked_app_id: row.get(1)?,
+                device_id: row.get(2)?,
+                device_name: row.get(3)?,
+                platform: row.get(4)?,
+                started_at: row.get(5)?,
+                ended_at: row.get(6)?,
+                foreground_ms: row.get(7)?,
+                idle_ms: row.get(8)?,
+                window_title: row.get(9)?,
+                process_name: row.get(10)?,
+                exe_path: row.get(11)?,
+                pid_start: row.get(12)?,
+                pid_end: row.get(13)?,
+                meta_json,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+fn load_all_usage_events(conn: &Connection) -> Result<Vec<UsageEvent>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, tracked_app_id, usage_session_id, device_id, device_name, platform,
+                    occurred_at, kind, window_title, process_name, exe_path, pid,
+                    is_foreground, is_idle, meta_json
+             FROM usage_events
+             ORDER BY occurred_at DESC, id ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            let meta_json_str: String = row.get(14)?;
+            let meta_json: Value = serde_json::from_str(&meta_json_str).unwrap_or(json!({}));
+            Ok(UsageEvent {
+                id: row.get(0)?,
+                tracked_app_id: row.get(1)?,
+                usage_session_id: row.get(2)?,
+                device_id: row.get(3)?,
+                device_name: row.get(4)?,
+                platform: row.get(5)?,
+                occurred_at: row.get(6)?,
+                kind: row.get(7)?,
+                window_title: row.get(8)?,
+                process_name: row.get(9)?,
+                exe_path: row.get(10)?,
+                pid: row.get(11)?,
+                is_foreground: row.get::<_, i64>(12)? != 0,
+                is_idle: row.get::<_, i64>(13)? != 0,
+                meta_json,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -533,6 +755,42 @@ impl SqliteStorageBackend {
             }
         }
 
+        if let Ok(tracked_apps) = load_all_tracked_apps(conn) {
+            for tracked_app in &tracked_apps {
+                entities.push(SyncEntity {
+                    entity_type: "tracked_app".to_string(),
+                    id: tracked_app.id.clone(),
+                    data: to_data_map(tracked_app),
+                    hlc: hlc_for(&tracked_app.id),
+                    deleted: None,
+                });
+            }
+        }
+
+        if let Ok(usage_sessions) = load_all_usage_sessions(conn) {
+            for session in &usage_sessions {
+                entities.push(SyncEntity {
+                    entity_type: "usage_session".to_string(),
+                    id: session.id.clone(),
+                    data: to_data_map(session),
+                    hlc: hlc_for(&session.id),
+                    deleted: None,
+                });
+            }
+        }
+
+        if let Ok(usage_events) = load_all_usage_events(conn) {
+            for event in &usage_events {
+                entities.push(SyncEntity {
+                    entity_type: "usage_event".to_string(),
+                    id: event.id.clone(),
+                    data: to_data_map(event),
+                    hlc: hlc_for(&event.id),
+                    deleted: None,
+                });
+            }
+        }
+
         entities
     }
 
@@ -544,6 +802,9 @@ impl SqliteStorageBackend {
                 "area" => delete_area(conn, &entity.id),
                 "tag" => delete_tag(conn, &entity.id),
                 "heading" => delete_heading(conn, &entity.id),
+                "tracked_app" => delete_tracked_app(conn, &entity.id),
+                "usage_session" => delete_usage_session(conn, &entity.id),
+                "usage_event" => delete_usage_event(conn, &entity.id),
                 _ => Ok(()),
             };
             return;
@@ -569,6 +830,15 @@ impl SqliteStorageBackend {
             "heading" => serde_json::from_value::<Heading>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|heading| upsert_heading(conn, &heading)),
+            "tracked_app" => serde_json::from_value::<TrackedApp>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|tracked_app| upsert_tracked_app(conn, &tracked_app)),
+            "usage_session" => serde_json::from_value::<UsageSession>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|session| upsert_usage_session(conn, &session)),
+            "usage_event" => serde_json::from_value::<UsageEvent>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|event| upsert_usage_event(conn, &event)),
             _ => Ok(()),
         };
     }
@@ -671,18 +941,168 @@ mod tests {
         }
     }
 
+    fn make_tracked_app(id: &str) -> TrackedApp {
+        TrackedApp {
+            id: id.to_string(),
+            platform: "windows".to_string(),
+            exe_path: r"C:\\Apps\\Demo\\demo.exe".to_string(),
+            normalized_exe_path: r"c:\\apps\\demo\\demo.exe".to_string(),
+            process_name: "demo.exe".to_string(),
+            display_name: Some("Demo App".to_string()),
+            publisher: Some("Demo Corp".to_string()),
+            icon_ref: None,
+            first_seen_at: "2026-01-01T00:00:00.000Z".to_string(),
+            last_seen_at: "2026-01-01T00:00:00.000Z".to_string(),
+        }
+    }
+
+    fn make_usage_session(id: &str, tracked_app_id: &str) -> UsageSession {
+        UsageSession {
+            id: id.to_string(),
+            tracked_app_id: tracked_app_id.to_string(),
+            device_id: "device-1".to_string(),
+            device_name: "Test Device".to_string(),
+            platform: "windows".to_string(),
+            started_at: "2026-01-01T00:00:00.000Z".to_string(),
+            ended_at: Some("2026-01-01T00:10:00.000Z".to_string()),
+            foreground_ms: 600_000,
+            idle_ms: 0,
+            window_title: Some("Demo Window".to_string()),
+            process_name: "demo.exe".to_string(),
+            exe_path: r"C:\\Apps\\Demo\\demo.exe".to_string(),
+            pid_start: Some(1234),
+            pid_end: Some(1234),
+            meta_json: json!({"note": "session"}),
+        }
+    }
+
+    fn make_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) -> UsageEvent {
+        UsageEvent {
+            id: id.to_string(),
+            tracked_app_id: tracked_app_id.to_string(),
+            usage_session_id: session_id.map(|value| value.to_string()),
+            device_id: "device-1".to_string(),
+            device_name: "Test Device".to_string(),
+            platform: "windows".to_string(),
+            occurred_at: "2026-01-01T00:05:00.000Z".to_string(),
+            kind: "foreground".to_string(),
+            window_title: Some("Demo Window".to_string()),
+            process_name: "demo.exe".to_string(),
+            exe_path: r"C:\\Apps\\Demo\\demo.exe".to_string(),
+            pid: Some(1234),
+            is_foreground: true,
+            is_idle: false,
+            meta_json: json!({"note": "event"}),
+        }
+    }
+
     #[test]
     fn test_schema_creation() {
         let conn = setup_db();
         // Verify tables exist
         let count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos','projects','areas','tags','headings','sync_kv')",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos','projects','areas','tags','headings','tracked_apps','usage_sessions','usage_events','sync_kv')",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 6);
+        assert_eq!(count, 9);
+    }
+
+    #[test]
+    fn test_init_schema_migrates_existing_db_without_destroying_data() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE todos (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                notes TEXT,
+                priority INTEGER NOT NULL DEFAULT 0,
+                scheduled_date TEXT,
+                deadline TEXT,
+                reminder_date TEXT,
+                is_today INTEGER NOT NULL DEFAULT 0,
+                is_evening INTEGER NOT NULL DEFAULT 0,
+                is_someday INTEGER NOT NULL DEFAULT 0,
+                is_completed INTEGER NOT NULL DEFAULT 0,
+                completed_at TEXT,
+                is_cancelled INTEGER NOT NULL DEFAULT 0,
+                cancelled_at TEXT,
+                is_trashed INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                heading_id TEXT,
+                project_id TEXT,
+                area_id TEXT,
+                tag_ids TEXT NOT NULL DEFAULT '[]',
+                checklist_items TEXT NOT NULL DEFAULT '[]',
+                recurrence_rule TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE projects (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                notes TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                scheduled_date TEXT,
+                deadline TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                color_tag TEXT,
+                area_id TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE areas (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE tags (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                color TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE headings (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                project_id TEXT NOT NULL
+            );
+            CREATE TABLE sync_kv (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            ",
+        )
+        .unwrap();
+
+        let todo = make_todo("legacy-todo", "Keep me");
+        upsert_todo(&conn, &todo).unwrap();
+        set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
+
+        init_schema(&conn).unwrap();
+
+        let data = load_all(&conn).unwrap();
+        assert_eq!(data.todos.len(), 1);
+        assert_eq!(data.todos[0].id, "legacy-todo");
+        assert_eq!(data.todos[0].title, "Keep me");
+        assert_eq!(
+            get_sync_kv(&conn, "legacy-key").unwrap(),
+            Some("legacy-value".to_string())
+        );
+
+        let usage_table_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type='table'
+                   AND name IN ('tracked_apps', 'usage_sessions', 'usage_events')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(usage_table_count, 3);
     }
 
     #[test]
@@ -783,6 +1203,34 @@ mod tests {
     }
 
     #[test]
+    fn test_usage_tracking_crud() {
+        let conn = setup_db();
+        let tracked_app = make_tracked_app("app-1");
+        let session = make_usage_session("session-1", &tracked_app.id);
+        let event = make_usage_event("event-1", &tracked_app.id, Some(&session.id));
+
+        upsert_tracked_app(&conn, &tracked_app).unwrap();
+        upsert_usage_session(&conn, &session).unwrap();
+        upsert_usage_event(&conn, &event).unwrap();
+
+        let data = load_all(&conn).unwrap();
+        assert_eq!(data.tracked_apps.len(), 1);
+        assert_eq!(data.usage_sessions.len(), 1);
+        assert_eq!(data.usage_events.len(), 1);
+        assert_eq!(data.tracked_apps[0].platform, "windows");
+        assert_eq!(data.usage_sessions[0].tracked_app_id, "app-1");
+        assert_eq!(data.usage_events[0].kind, "foreground");
+
+        delete_usage_event(&conn, "event-1").unwrap();
+        delete_usage_session(&conn, "session-1").unwrap();
+        delete_tracked_app(&conn, "app-1").unwrap();
+        let data = load_all(&conn).unwrap();
+        assert_eq!(data.tracked_apps.len(), 0);
+        assert_eq!(data.usage_sessions.len(), 0);
+        assert_eq!(data.usage_events.len(), 0);
+    }
+
+    #[test]
     fn test_sync_kv() {
         let conn = setup_db();
         assert_eq!(get_sync_kv(&conn, "foo").unwrap(), None);
@@ -794,10 +1242,20 @@ mod tests {
     fn test_clear_all() {
         let conn = setup_db();
         upsert_todo(&conn, &make_todo("t1", "X")).unwrap();
+        upsert_tracked_app(&conn, &make_tracked_app("app-clear")).unwrap();
+        upsert_usage_session(&conn, &make_usage_session("session-clear", "app-clear")).unwrap();
+        upsert_usage_event(
+            &conn,
+            &make_usage_event("event-clear", "app-clear", Some("session-clear")),
+        )
+        .unwrap();
         set_sync_kv(&conn, "k", "v").unwrap();
         clear_all(&conn).unwrap();
         let data = load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 0);
+        assert_eq!(data.tracked_apps.len(), 0);
+        assert_eq!(data.usage_sessions.len(), 0);
+        assert_eq!(data.usage_events.len(), 0);
         assert_eq!(get_sync_kv(&conn, "k").unwrap(), None);
     }
 
@@ -865,6 +1323,57 @@ mod tests {
         }
     }
 
+    fn sync_tracked_app(id: &str) -> SyncEntity {
+        let tracked_app = make_tracked_app(id);
+        let value = serde_json::to_value(&tracked_app).unwrap();
+        let mut map = match value {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+        map.remove("id");
+        SyncEntity {
+            entity_type: "tracked_app".to_string(),
+            id: id.to_string(),
+            data: map,
+            hlc: "2026-01-01T00:00:00.000Z:000001:peer-a".to_string(),
+            deleted: None,
+        }
+    }
+
+    fn sync_usage_session(id: &str, tracked_app_id: &str) -> SyncEntity {
+        let session = make_usage_session(id, tracked_app_id);
+        let value = serde_json::to_value(&session).unwrap();
+        let mut map = match value {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+        map.remove("id");
+        SyncEntity {
+            entity_type: "usage_session".to_string(),
+            id: id.to_string(),
+            data: map,
+            hlc: "2026-01-01T00:00:00.000Z:000002:peer-a".to_string(),
+            deleted: None,
+        }
+    }
+
+    fn sync_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) -> SyncEntity {
+        let event = make_usage_event(id, tracked_app_id, session_id);
+        let value = serde_json::to_value(&event).unwrap();
+        let mut map = match value {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+        map.remove("id");
+        SyncEntity {
+            entity_type: "usage_event".to_string(),
+            id: id.to_string(),
+            data: map,
+            hlc: "2026-01-01T00:00:00.000Z:000003:peer-a".to_string(),
+            deleted: None,
+        }
+    }
+
     #[tokio::test]
     async fn storage_backend_roundtrip_todo() {
         let backend = make_backend();
@@ -878,7 +1387,56 @@ mod tests {
             .find(|e| e.id == "tbk1")
             .expect("inserted todo should be loaded");
         assert_eq!(found.entity_type, "todo");
-        assert_eq!(found.data.get("title").and_then(|v| v.as_str()), Some("Roundtrip"));
+        assert_eq!(
+            found.data.get("title").and_then(|v| v.as_str()),
+            Some("Roundtrip")
+        );
+    }
+
+    #[tokio::test]
+    async fn storage_backend_roundtrip_usage_entities() {
+        let backend = make_backend();
+        backend.apply_entity(&sync_tracked_app("app-sync")).await;
+        backend
+            .apply_entity(&sync_usage_session("session-sync", "app-sync"))
+            .await;
+        backend
+            .apply_entity(&sync_usage_event(
+                "event-sync",
+                "app-sync",
+                Some("session-sync"),
+            ))
+            .await;
+
+        let empty_vector: VersionVector = std::collections::HashMap::new();
+        let loaded = backend.load_entities(&empty_vector).await;
+
+        let tracked_app = loaded
+            .iter()
+            .find(|e| e.entity_type == "tracked_app" && e.id == "app-sync")
+            .expect("inserted tracked app should be loaded");
+        assert_eq!(
+            tracked_app.data.get("displayName").and_then(|v| v.as_str()),
+            Some("Demo App")
+        );
+
+        let session = loaded
+            .iter()
+            .find(|e| e.entity_type == "usage_session" && e.id == "session-sync")
+            .expect("inserted usage session should be loaded");
+        assert_eq!(
+            session.data.get("trackedAppId").and_then(|v| v.as_str()),
+            Some("app-sync")
+        );
+
+        let event = loaded
+            .iter()
+            .find(|e| e.entity_type == "usage_event" && e.id == "event-sync")
+            .expect("inserted usage event should be loaded");
+        assert_eq!(
+            event.data.get("kind").and_then(|v| v.as_str()),
+            Some("foreground")
+        );
     }
 
     #[tokio::test]
@@ -902,6 +1460,38 @@ mod tests {
         assert!(
             loaded.iter().all(|e| e.id != "tbk2"),
             "deleted entity should be absent from load_entities",
+        );
+    }
+
+    #[tokio::test]
+    async fn storage_backend_delete_usage_entity_removes_entity() {
+        let backend = make_backend();
+        backend.apply_entity(&sync_tracked_app("app-del")).await;
+        backend
+            .apply_entity(&sync_usage_session("session-del", "app-del"))
+            .await;
+        backend
+            .apply_entity(&sync_usage_event(
+                "event-del",
+                "app-del",
+                Some("session-del"),
+            ))
+            .await;
+
+        let tombstone = SyncEntity {
+            entity_type: "usage_event".to_string(),
+            id: "event-del".to_string(),
+            data: serde_json::Map::new(),
+            hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
+            deleted: Some(true),
+        };
+        backend.apply_entity(&tombstone).await;
+
+        let empty_vector: VersionVector = std::collections::HashMap::new();
+        let loaded = backend.load_entities(&empty_vector).await;
+        assert!(
+            loaded.iter().all(|e| e.id != "event-del"),
+            "deleted usage event should be absent from load_entities",
         );
     }
 

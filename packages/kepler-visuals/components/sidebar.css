@@ -1,15 +1,18 @@
 .kepler-sidebar-wrapper {
   position: relative;
   flex-shrink: 0;
+  align-self: stretch;
   height: 100%;
-  display: flex;
-  flex-direction: row;
+  min-height: 100%;
+  display: block;
   box-sizing: border-box;
-  transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: visible;
+  z-index: 2;
+  transition: width 0.375s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .kepler-sidebar-wrapper.animating {
-  transition: width 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 0.33s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .kepler-sidebar-wrapper.hidden .kepler-sidebar-content {
@@ -19,50 +22,58 @@
 
 
 .kepler-sidebar-content {
-  flex: 1;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-height: 0;
   min-width: 0;
-  height: 100%;
   opacity: 1;
-  transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-              background 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 
   background: var(--sidebar-bg);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
 
 .kepler-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
   width: 6px;
   flex-shrink: 0;
   height: 100%;
-  cursor: col-resize;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.kepler-sidebar-wrapper:hover .kepler-sidebar-resize-handle,
-.kepler-sidebar-wrapper.is-resizing .kepler-sidebar-resize-handle {
-  opacity: 1;
+  cursor: ew-resize;
+  padding: 0;
+  display: block;
+  pointer-events: auto;
+  z-index: 80;
+  touch-action: none;
+  background: transparent;
+  -webkit-app-region: no-drag;
 }
 
 .kepler-resize-handle-line {
-  width: 4px;
-  height: 32px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
-  transition: height 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--kepler-resize-handle-thickness, 2px);
+  height: var(--kepler-resize-handle-height, 32px);
+  background: var(
+    --kepler-resize-handle-color,
+    color-mix(in oklab, var(--sidebar-foreground, var(--foreground, currentColor)) 60%, transparent),
+  );
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 0.15s ease);
+  pointer-events: none;
 }
 
-.kepler-resize-handle-line.expanded {
-  height: 42px;
-}
-
-.kepler-sidebar-resize-handle:hover .kepler-resize-handle-line {
-  background: rgba(255, 255, 255, 0.2);
+.kepler-resize-handle-line.expanded,
+.kepler-sidebar-wrapper:hover .kepler-resize-handle-line,
+.kepler-sidebar-wrapper.is-resizing .kepler-resize-handle-line {
+  opacity: 1;
 }
 
 /* Make interactive elements inside a draggable sidebar clickable */

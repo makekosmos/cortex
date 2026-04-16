@@ -1,0 +1,87 @@
+{
+  "task_id": "2026-04-16-usage-dashboard-product",
+  "result": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/db.rs",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/ark-core-tests.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/tests/sync_round_trip.rs",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/ark-core-tests.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "services/usage-tracker/scripts/build-installer.ps1",
+        "services/usage-tracker/dist/KeplerUsageTrackerInstaller",
+        "services/usage-tracker/dist/KeplerUsageTrackerInstaller.zip",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/usage-tracker-installer.txt"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/package.json",
+        "apps/dashboard/vite.config.mjs",
+        "apps/dashboard/src"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/package.json",
+        "apps/dashboard/src/components/dashboard/DashboardShell.vue",
+        "apps/dashboard/src/global.css"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/electron/preload.ts",
+        "apps/dashboard/electron/services/analytics.ts",
+        "apps/dashboard/src/composables/useDashboardData.ts",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/dashboard-smoke-analytics.txt"
+      ]
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/bun-install.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/ark-core-tests.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/usage-tracker-tests.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/dashboard-typecheck.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/dashboard-build.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/usage-tracker-once.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/dashboard-smoke-seed.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/dashboard-smoke-analytics.txt",
+        ".agent/tasks/2026-04-16-usage-dashboard-product/raw/usage-tracker-installer.txt",
+        "apps/dashboard/e2e/dashboard.spec.ts",
+        "apps/dashboard/scripts/runE2ESmoke.ts"
+      ]
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/AGENTS.md",
+        "apps/arrancador/AGENTS.md",
+        "services/usage-tracker/AGENTS.md",
+        "apps/dashboard/AGENTS.md"
+      ]
+    }
+  ]
+}

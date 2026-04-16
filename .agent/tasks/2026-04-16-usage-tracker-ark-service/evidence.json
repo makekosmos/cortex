@@ -1,0 +1,98 @@
+{
+  "task_id": "2026-04-16-usage-tracker-ark-service",
+  "scope": [
+    "packages/ark-core/rust/**",
+    "services/usage-tracker/**",
+    "apps/arrancador/**",
+    "package.json"
+  ],
+  "status": "pass",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/types.rs",
+        "packages/ark-core/rust/src/schema.rs",
+        "packages/ark-core/rust/src/db.rs"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/db.rs",
+        "services/usage-tracker/src/main.rs"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": [
+        "services/usage-tracker/Cargo.toml",
+        "services/usage-tracker/src/main.rs",
+        "services/usage-tracker/src/windows_capture.rs"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/backend.ts",
+        "apps/arrancador/package.json"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/services/ark-usage.ts",
+        "apps/arrancador/electron/main/services/playtime-stats.ts",
+        "apps/arrancador/electron/main/services/games.ts",
+        "apps/arrancador/src/lib/api.ts",
+        "apps/arrancador/src/types/ipc.ts"
+      ]
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/README.md",
+        "apps/arrancador/TEST_STRATEGY.md",
+        "apps/arrancador/electron/main/backend.ts"
+      ]
+    },
+    "AC7": {
+      "status": "PASS",
+      "evidence": [
+        "package.json",
+        "bun.lock",
+        "packages/apple-like/package.json"
+      ]
+    },
+    "AC8": {
+      "status": "PASS",
+      "evidence": [
+        "services/usage-tracker/README.md",
+        "apps/arrancador/README.md",
+        "apps/arrancador/TEST_STRATEGY.md",
+        ".agent/tasks/2026-04-16-usage-tracker-ark-service/evidence.md",
+        ".agent/tasks/2026-04-16-usage-tracker-ark-service/problems.md"
+      ]
+    }
+  },
+  "verification": {
+    "passed": [
+      "cargo test --manifest-path packages/ark-core/rust/Cargo.toml",
+      "cargo test --manifest-path services/usage-tracker/Cargo.toml",
+      "bun run typecheck (apps/arrancador)",
+      "bun run build:main (apps/arrancador)",
+      "bun run build:preload (apps/arrancador)",
+      "bun run build:renderer (apps/arrancador)",
+      "bun install --ignore-scripts"
+    ],
+    "non_blocking_failures": [
+      "bun run test (apps/arrancador): existing UI/provider test failures unrelated to usage tracking",
+      "bun run check:rust (apps/arrancador): existing cargo fmt --check drift under src-tauri/**"
+    ]
+  },
+  "notes": [
+    "Arrancador now reads usage from Ark DB while keeping renderer IPC contracts stable.",
+    "usage-tracker writes directly to Ark DB and updates lan_sync.version_vector for sync readiness.",
+    "apps/arrancador is currently an untracked subtree in the root repo after nested git removal."
+  ]
+}

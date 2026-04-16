@@ -1,0 +1,39 @@
+{
+  "task_id": "2026-04-16-dashboard-sidebar-vars-focus-refresh",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "packages/kepler-visuals/components/SidebarButton.vue",
+        "packages/kepler-visuals/components/Sidebar.vue"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/src/composables/useDashboardData.ts"
+      ],
+      "details": {
+        "interval_ms": 5000,
+        "active_when": [
+          "window focus",
+          "document.visibilityState === 'visible'"
+        ],
+        "stops_when": [
+          "window blur",
+          "document hidden"
+        ]
+      }
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "commands": [
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\tsc.exe",
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\vite.exe build --configLoader native"
+      ]
+    }
+  ]
+}

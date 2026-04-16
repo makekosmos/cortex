@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 // ---------------------------------------------------------------------------
 // DB entity types (camelCase JSON for sidecar compatibility)
@@ -75,6 +75,67 @@ pub struct Heading {
     pub project_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackedApp {
+    pub id: String,
+    pub platform: String,
+    pub exe_path: String,
+    pub normalized_exe_path: String,
+    pub process_name: String,
+    pub display_name: Option<String>,
+    pub publisher: Option<String>,
+    pub icon_ref: Option<String>,
+    pub first_seen_at: String,
+    pub last_seen_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageSession {
+    pub id: String,
+    pub tracked_app_id: String,
+    pub device_id: String,
+    pub device_name: String,
+    pub platform: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub foreground_ms: i64,
+    pub idle_ms: i64,
+    pub window_title: Option<String>,
+    pub process_name: String,
+    pub exe_path: String,
+    pub pid_start: Option<i64>,
+    pub pid_end: Option<i64>,
+    #[serde(default = "default_meta_json")]
+    pub meta_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageEvent {
+    pub id: String,
+    pub tracked_app_id: String,
+    pub usage_session_id: Option<String>,
+    pub device_id: String,
+    pub device_name: String,
+    pub platform: String,
+    pub occurred_at: String,
+    pub kind: String,
+    pub window_title: Option<String>,
+    pub process_name: String,
+    pub exe_path: String,
+    pub pid: Option<i64>,
+    pub is_foreground: bool,
+    pub is_idle: bool,
+    #[serde(default = "default_meta_json")]
+    pub meta_json: Value,
+}
+
+fn default_meta_json() -> Value {
+    json!({})
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadAllData {
@@ -83,6 +144,9 @@ pub struct LoadAllData {
     pub areas: Vec<Area>,
     pub tags: Vec<Tag>,
     pub headings: Vec<Heading>,
+    pub tracked_apps: Vec<TrackedApp>,
+    pub usage_sessions: Vec<UsageSession>,
+    pub usage_events: Vec<UsageEvent>,
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +155,8 @@ pub struct LoadAllData {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SyncEntity {
-    /// Entity type: "todo", "project", "area", "tag", "heading"
+    /// Entity type: "todo", "project", "area", "tag", "heading",
+    /// "tracked_app", "usage_session", or "usage_event".
     #[serde(rename = "type")]
     pub entity_type: String,
     pub id: String,

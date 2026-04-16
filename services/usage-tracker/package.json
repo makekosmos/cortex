@@ -1,0 +1,12 @@
+{
+  "name": "usage-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "cargo run --manifest-path Cargo.toml",
+    "build": "cargo build --manifest-path Cargo.toml",
+    "build:release": "cargo build --release --manifest-path Cargo.toml",
+    "package:installer": "powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
+    "check": "cargo fmt --check && cargo test"
+  }
+}

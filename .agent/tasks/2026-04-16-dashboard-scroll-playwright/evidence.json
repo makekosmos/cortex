@@ -1,0 +1,46 @@
+{
+  "task_id": "2026-04-16-dashboard-scroll-playwright",
+  "status": "PARTIAL",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "DashboardShell.vue line 230 exposes data-testid=dashboard-scroll-pane on DesktopContentSurface",
+        "DesktopContentSurface.vue lines 38-42 support scrollable shared content surfaces",
+        "DesktopChrome.vue makes .kepler-desktop-chrome__content a flex column so the surface is height-bounded"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "FAIL",
+      "evidence": [
+        "dashboard.spec.ts lines 71-99 add the overview scroll assertion",
+        "Playwright CLI was blocked before worker test execution by spawn EPERM"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "FAIL",
+      "evidence": [
+        "Playwright globalSetup seeded smoke DB successfully via Python",
+        "playwright cli test run aborted on worker spawn EPERM in the sandbox"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\bin\\tsc --noEmit -p D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard\\tsconfig.json",
+      "status": "PASS"
+    },
+    {
+      "command": "Push-Location 'D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard'; node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\vite@8.0.8+cac867131b98ca75\\node_modules\\vite\\bin\\vite.js build --configLoader native; Pop-Location",
+      "status": "PASS"
+    },
+    {
+      "command": "Push-Location 'D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard'; node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\playwright@1.58.2\\node_modules\\playwright\\cli.js test; Pop-Location",
+      "status": "FAIL_ENVIRONMENT",
+      "error": "spawn EPERM while Playwright runner tried to fork a worker process"
+    }
+  ]
+}

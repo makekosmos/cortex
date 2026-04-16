@@ -9,7 +9,6 @@
       :max-width="300"
       :hidden-width="80"
       :is-mac="isMac"
-      drag-region
       :show-toggle="false"
       :top-item="backItem"
       :initial-config="loadSidebarConfig()"

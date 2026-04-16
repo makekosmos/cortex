@@ -1,0 +1,37 @@
+cargo test --manifest-path packages/ark-core/rust/Cargo.toml
+PASS
+
+cargo test --manifest-path services/usage-tracker/Cargo.toml
+PASS
+
+bun run typecheck
+workdir: apps/arrancador
+PASS
+
+bun run build:main
+workdir: apps/arrancador
+PASS
+
+bun run build:preload
+workdir: apps/arrancador
+PASS
+
+bun run build:renderer
+workdir: apps/arrancador
+PASS
+
+bun run test
+workdir: apps/arrancador
+NON-BLOCKING FAIL
+- src/test/ui-primitives.test.tsx: missing sheet-close
+- src/test/ui-sidebar.test.tsx: missing sidebar-trigger
+- src/test/ui-sidebar.test.tsx: mobile sidebar assertion failure
+
+bun run check:rust
+workdir: apps/arrancador
+NON-BLOCKING FAIL
+- cargo fmt --check reports existing formatting drift under src-tauri/**
+
+bun install --ignore-scripts
+workdir: repo root
+PASS

@@ -1,0 +1,46 @@
+{
+  "task_id": "2026-04-16-shared-status-dot-dashboard",
+  "summary": {
+    "component": "packages/kepler-visuals/components/StatusDot.vue",
+    "consumer": "apps/dashboard/src/components/dashboard/DashboardShell.vue",
+    "windows_safe_area_px": 156
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "Shared StatusDot component added to @kepler/visuals",
+        "Hover background implemented",
+        "Click popover implemented with outside-click and Escape close"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "DashboardShell migrated to shared StatusDot",
+        "Dashboard passes custom popover content with status message and path"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "Success tone darkened to #4f9a75",
+        "Windows titlebar safe area increased to 156px"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "bun run typecheck passed",
+        "Direct Node-invoked Vite build passed"
+      ]
+    }
+  ],
+  "verification": {
+    "status": "PASS"
+  }
+}

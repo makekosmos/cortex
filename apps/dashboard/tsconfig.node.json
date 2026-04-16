@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2020",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "vite.config.mjs",
+    "electron/**/*.ts",
+    "scripts/**/*.ts",
+    "shared/**/*.ts",
+    "playwright.config.ts",
+    "playwright.globalSetup.ts",
+    "e2e/**/*.ts"
+  ]
+}

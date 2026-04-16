@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  Menu,
+  type MenuItemConstructorOptions,
+} from "electron";
 
 import { execFile } from "node:child_process";
 
@@ -77,6 +84,63 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null;
 
+function setupApplicationMenu() {
+  const template: MenuItemConstructorOptions[] = [];
+
+  if (process.platform === "darwin") {
+    template.push({
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    });
+  } else {
+    template.push({
+      label: "File",
+      submenu: [{ role: "quit" }],
+    });
+  }
+
+  template.push({
+    label: "View",
+    submenu: [
+      { role: "reload" },
+      { role: "forceReload" },
+      { role: "toggleDevTools" },
+      { type: "separator" },
+      { role: "resetZoom" },
+      { role: "zoomIn" },
+      { role: "zoomOut" },
+      { type: "separator" },
+      { role: "togglefullscreen" },
+    ],
+  });
+
+  template.push({
+    label: "Window",
+    submenu:
+      process.platform === "darwin"
+        ? [
+            { role: "minimize" },
+            { role: "close" },
+            { type: "separator" },
+            { role: "front" },
+            { role: "window" },
+          ]
+        : [{ role: "minimize" }, { role: "close" }],
+  });
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function isDevRenderer() {
   return Boolean(ELECTRON_RENDERER_URL ?? VITE_DEV_SERVER_URL);
 }
@@ -93,11 +157,7 @@ function createWindow() {
 
   const isWindows = process.platform === "win32";
 
-  const overlayHeight = 28;
-
-  const titleBarOverlay = isWindows
-    ? { color: "#232323", symbolColor: "#a3a3a3", height: overlayHeight }
-    : undefined;
+  setupApplicationMenu();
 
   win = new BrowserWindow({
     width: 1100,
@@ -113,16 +173,17 @@ function createWindow() {
     ...(isMac
       ? {
           titleBarStyle: "hiddenInset" as const,
-
-          trafficLightPosition: { x: 18, y: 18 },
         }
       : {}),
 
     ...(isWindows
-      ? {
+        ? {
           titleBarStyle: "hidden" as const,
-
-          titleBarOverlay,
+          titleBarOverlay: {
+            color: "#00000000",
+            symbolColor: "#e5e7eb",
+            height: 32,
+          },
         }
       : {}),
 
@@ -161,6 +222,21 @@ function createWindow() {
   } else {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
+
+  win.webContents.on("before-input-event", (event, input) => {
+    const isToggleDevTools =
+      input.key === "F12" ||
+      ((input.control || input.meta) &&
+        input.shift &&
+        input.key.toLowerCase() === "i");
+
+    if (!isToggleDevTools) {
+      return;
+    }
+
+    event.preventDefault();
+    win?.webContents.toggleDevTools();
+  });
 }
 
 app.on("window-all-closed", () => {

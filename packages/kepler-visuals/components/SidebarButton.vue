@@ -51,6 +51,7 @@ function className(active: boolean) {
   cursor: pointer;
   user-select: none;
   text-decoration: none;
+  -webkit-app-region: no-drag;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),
     color 120ms cubic-bezier(0.2, 0, 0, 1);

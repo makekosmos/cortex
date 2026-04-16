@@ -35,7 +35,7 @@
 }
 
 .kepler-sidebar-resize-handle {
-  width: 6px;
+  width: 0px;
   flex-shrink: 0;
   height: 100%;
   cursor: col-resize;
@@ -52,7 +52,7 @@
 }
 
 .kepler-resize-handle-line {
-  width: 4px;
+  width: 0px;
   height: 32px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.08);

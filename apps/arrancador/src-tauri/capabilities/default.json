@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:app:default",
+    "core:event:default",
+    "core:path:default",
+    "core:window:default",
+
+    "dialog:allow-open",
+    "dialog:allow-message",
+    "autostart:default",
+    "core:webview:allow-internal-toggle-devtools",
+
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }]
+    }
+  ]
+}

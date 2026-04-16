@@ -61,6 +61,55 @@ CREATE TABLE IF NOT EXISTS headings (
     project_id TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tracked_apps (
+    id TEXT PRIMARY KEY,
+    platform TEXT NOT NULL,
+    exe_path TEXT NOT NULL,
+    normalized_exe_path TEXT NOT NULL,
+    process_name TEXT NOT NULL,
+    display_name TEXT,
+    publisher TEXT,
+    icon_ref TEXT,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS usage_sessions (
+    id TEXT PRIMARY KEY,
+    tracked_app_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    device_name TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    foreground_ms INTEGER NOT NULL DEFAULT 0,
+    idle_ms INTEGER NOT NULL DEFAULT 0,
+    window_title TEXT,
+    process_name TEXT NOT NULL,
+    exe_path TEXT NOT NULL,
+    pid_start INTEGER,
+    pid_end INTEGER,
+    meta_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS usage_events (
+    id TEXT PRIMARY KEY,
+    tracked_app_id TEXT NOT NULL,
+    usage_session_id TEXT,
+    device_id TEXT NOT NULL,
+    device_name TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    occurred_at TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    window_title TEXT,
+    process_name TEXT NOT NULL,
+    exe_path TEXT NOT NULL,
+    pid INTEGER,
+    is_foreground INTEGER NOT NULL DEFAULT 0,
+    is_idle INTEGER NOT NULL DEFAULT 0,
+    meta_json TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE TABLE IF NOT EXISTS sync_kv (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL

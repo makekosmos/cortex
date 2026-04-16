@@ -1,0 +1,37 @@
+{
+  "task_id": "2026-04-16-dashboard-linear-visual-pass",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/src/global.css",
+        "apps/dashboard/src/components/dashboard/DashboardShell.vue",
+        "apps/dashboard/src/components/dashboard/MetricCard.vue",
+        "apps/dashboard/src/components/dashboard/SectionPanel.vue",
+        "apps/dashboard/src/components/dashboard/TopAppsList.vue",
+        "apps/dashboard/src/components/dashboard/RecentSessionsTable.vue",
+        "apps/dashboard/src/components/dashboard/RangePills.vue",
+        "apps/dashboard/src/components/dashboard/TrendChart.vue",
+        "apps/dashboard/src/components/dashboard/UsageHeatmap.vue"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/global.css",
+        "apps/eden/ts/src/index.css",
+        "apps/dashboard/src/global.css"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "commands": [
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\tsc.exe",
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\vite.exe build --configLoader native"
+      ]
+    }
+  ]
+}

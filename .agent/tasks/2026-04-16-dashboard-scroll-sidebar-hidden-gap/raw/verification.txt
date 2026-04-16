@@ -1,0 +1,31 @@
+Command: Set-Location apps/dashboard; bun run typecheck
+Workdir: D:\Personal\Hobby\Coding\kepler
+Result: PASS
+Output:
+$ tsc --noEmit
+
+Command: Push-Location apps/dashboard; node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\vite@8.0.8+cac867131b98ca75\node_modules\vite\bin\vite.js build --configLoader native; Pop-Location
+Workdir: D:\Personal\Hobby\Coding\kepler
+Result: PASS
+Output:
+vite v8.0.8 building client environment for production...
+transforming...✓ 3391 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.39 kB │ gzip:  0.26 kB
+dist/assets/index-CARpKUC1.css   24.39 kB │ gzip:  4.88 kB
+dist/assets/index-Db1o0aps.js   156.05 kB │ gzip: 56.22 kB
+✓ built in 652ms
+vite v8.0.8 building client environment for production...
+transforming...✓ 4 modules transformed.
+rendering chunks...
+computing gzip size...
+dist-electron/main.js  9.98 kB │ gzip: 3.45 kB
+✓ built in 18ms
+vite v8.0.8 building client environment for production...
+transforming...✓ 2 modules transformed.
+rendering chunks...
+computing gzip size...
+dist-electron/preload.mjs  0.56 kB │ gzip: 0.24 kB
+✓ built in 13ms
+WARN  inlineDynamicImports option is deprecated, please use codeSplitting: false instead.

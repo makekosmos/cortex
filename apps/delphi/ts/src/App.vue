@@ -2,14 +2,7 @@
 /* eslint-disable no-console */
 import { computed, onMounted, onUnmounted, shallowRef } from "vue";
 import { RouterView } from "vue-router";
-import {
-  PopoverArrow,
-  PopoverContent,
-  PopoverPortal,
-  PopoverRoot,
-  PopoverTrigger,
-} from "reka-ui";
-import { Loader, Wifi, WifiOff } from "lucide-vue-next";
+import { Loader, PanelLeft, Wifi, WifiOff } from "lucide-vue-next";
 import QRCode from "qrcode";
 import {
   fetchProjectsFromArk,
@@ -36,7 +29,15 @@ import QuickEntry from "@/components/QuickEntry.vue";
 import QuickSearch from "@/components/QuickSearch.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
-import { CustomCaret } from "@kepler/visuals";
+import {
+  CustomCaret,
+  DesktopChrome,
+  DesktopContentSurface,
+  StatusDot,
+  type StatusDotTone,
+  type TitlebarPlatform,
+} from "@kepler/visuals";
+import { setSidebarHidden, useSidebarState } from "@/composables/useSidebarState";
 
 // ---------------------------------------------------------------------------
 // Store
@@ -45,6 +46,7 @@ import { CustomCaret } from "@kepler/visuals";
 const store = useTodoStore();
 
 const quickSearchOpen = shallowRef(false);
+const { sidebarHidden } = useSidebarState();
 
 function handleGlobalKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
@@ -115,17 +117,6 @@ async function copyQrLink() {
   }
 }
 
-const connectionDotClass = computed(() => {
-  switch (connectionState.value) {
-    case "online":
-      return "bg-emerald-500";
-    case "syncing":
-      return "bg-amber-500 animate-pulse";
-    case "offline":
-      return "bg-rose-500";
-  }
-});
-
 const connectionIconBg = computed(() => {
   switch (connectionState.value) {
     case "online":
@@ -172,6 +163,40 @@ const connectionSubtext = computed(() => {
       return "Соединение отсутствует";
   }
 });
+
+const connectionStatusTone = computed<StatusDotTone>(() => {
+  switch (connectionState.value) {
+    case "online":
+      return "success";
+    case "syncing":
+      return "warning";
+    case "offline":
+    default:
+      return "danger";
+  }
+});
+
+const connectionStatusLabel = computed(() => {
+  switch (connectionState.value) {
+    case "online":
+      return "P2P соединение активно";
+    case "syncing":
+      return "P2P соединение синхронизируется";
+    case "offline":
+    default:
+      return "P2P соединение недоступно";
+  }
+});
+
+const chromePlatform = computed<TitlebarPlatform>(() => {
+  if (navigator.platform.startsWith("Mac")) return "mac";
+  if (navigator.platform.startsWith("Linux")) return "linux";
+  return "windows";
+});
+
+function toggleSidebar() {
+  setSidebarHidden(!sidebarHidden.value);
+}
 
 // ---------------------------------------------------------------------------
 // Cleanup registry
@@ -489,6 +514,7 @@ onUnmounted(() => {
   <div
     class="flex h-screen w-screen overflow-hidden bg-(--background) text-(--foreground)"
   >
+    <!-- Legacy fixed popover replaced by shared titlebar status dot.
     <PopoverRoot>
       <PopoverTrigger as-child>
         <button
@@ -570,12 +596,114 @@ onUnmounted(() => {
         </PopoverContent>
       </PopoverPortal>
     </PopoverRoot>
+    -->
 
-    <SideBar />
+    <DesktopChrome :platform="chromePlatform" class="flex min-h-0 min-w-0 flex-1">
+      <template #titlebar-leading>
+        <button
+          type="button"
+          class="inline-flex h-8 min-w-8 items-center justify-center rounded-[10px] px-2 text-(--muted-foreground) transition-colors hover:bg-white/8 hover:text-(--foreground)"
+          :title="sidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
+          @click="toggleSidebar"
+        >
+          <PanelLeft :size="16" />
+        </button>
+      </template>
 
-    <main class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <RouterView />
-    </main>
+      <template #titlebar-trailing>
+        <StatusDot
+          :tone="connectionStatusTone"
+          :label="connectionStatusLabel"
+        >
+          <div class="w-64 text-xs text-(--popover-foreground)">
+            <div class="flex items-center gap-2.5">
+              <div
+                :class="connectionIconBg"
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+              >
+                <component
+                  :is="connectionIcon"
+                  :class="[
+                    connectionIconColor,
+                    connectionState === 'syncing' && 'animate-spin',
+                  ]"
+                  :size="16"
+                />
+              </div>
+              <div class="min-w-0">
+                <p class="font-bold">P2P СЃРѕРµРґРёРЅРµРЅРёРµ</p>
+                <p class="text-(--muted-foreground)">{{ connectionSubtext }}</p>
+              </div>
+            </div>
+            <p
+              v-if="activeSpaceCode && connectionState === 'offline'"
+              class="mt-2 text-center text-xs text-(--muted-foreground)"
+            >
+              РћР¶РёРґР°РЅРёРµ РїРёСЂРѕРІ РІ СЃРµС‚Рё...
+            </p>
+            <div
+              v-if="activeSpaceCode"
+              class="mt-3 border-t border-(--border) pt-3"
+            >
+              <p class="mb-1 text-xs text-(--muted-foreground)">РџСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ</p>
+              <p class="break-all font-mono text-sm font-bold tracking-wide">
+                {{ formatSpaceCode(activeSpaceCode) }}
+              </p>
+              <button
+                class="mt-2 w-full rounded-md border border-(--border) px-2 py-1.5 text-xs font-medium transition-colors hover:bg-(--muted)"
+                @click="openQrOverlay"
+              >
+                РџРѕРєР°Р·Р°С‚СЊ QR-РєРѕРґ
+              </button>
+              <div v-if="connectedPeerNames.length > 0" class="mt-2">
+                <p class="mb-1 text-xs text-(--muted-foreground)">
+                  РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ РїРёСЂС‹
+                </p>
+                <ul class="text-xs">
+                  <li v-for="name in connectedPeerNames" :key="name">
+                    {{ name }}
+                  </li>
+                </ul>
+              </div>
+              <button
+                class="mt-2 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
+                @click="handleLeaveSpace"
+              >
+                РџРѕРєРёРЅСѓС‚СЊ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ
+              </button>
+            </div>
+            <button
+              v-else-if="!isElectron && connectionState === 'offline'"
+              class="mt-3 w-full rounded-md bg-(--foreground) px-2 py-1.5 text-xs font-medium text-(--background) transition-opacity hover:opacity-80"
+              @click="handleReconnect"
+            >
+              РџРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ
+            </button>
+          </div>
+        </StatusDot>
+      </template>
+
+      <template #sidebar>
+        <SideBar
+          :hidden="sidebarHidden"
+          :show-toggle="false"
+          :reserve-top-inset="false"
+        />
+      </template>
+
+      <DesktopContentSurface
+        class="flex min-h-0 min-w-0 flex-1"
+        padding-top="0"
+        padding-inline="0"
+        padding-bottom="0"
+        :show-left-border="!sidebarHidden"
+        :radius-top-left="sidebarHidden ? '0px' : '16px'"
+      >
+        <main class="flex min-h-0 min-w-0 flex-1 flex-col">
+          <RouterView />
+        </main>
+      </DesktopContentSurface>
+    </DesktopChrome>
 
     <QuickEntry />
     <QuickSearch v-model:open="quickSearchOpen" />

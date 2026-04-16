@@ -17,6 +17,145 @@
 
   <!-- Main app -->
   <div v-else :class="['app-container', { 'focus-mode-active': layout.isZenMode }]">
+    <SearchOverlay
+      v-if="!layout.isZenMode"
+      :is-open="layout.isSearchOpen"
+      :query="pendingQuery"
+      :results="layout.searchResults"
+      :entry-titles="entryTitlesById"
+      @query-change="pendingQuery = $event"
+      @close="onSearchClose"
+      @result-select="onResultSelect"
+    />
+
+    <DesktopChrome
+      v-if="!layout.isZenMode"
+      class="app-shell"
+      :platform="chromePlatform"
+    >
+      <template #titlebar-leading>
+        <button
+          type="button"
+          class="sidebar-head-icon withBackground eden-titlebar-toggle"
+          :title="layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
+          @click="layout.toggleWidgetSidebar()"
+        >
+          <PanelLeft :size="16" />
+        </button>
+      </template>
+
+      <template
+        v-if="showSidebarChrome"
+        #sidebar
+      >
+        <div class="sidebar-layout">
+          <EdenSidebar
+            class="widget-sidebar-wrapper"
+            :hidden="layout.widgetSidebarHidden"
+            :initial-config="{ width: layout.widgetSidebarWidth, hidden: layout.widgetSidebarHidden }"
+            :is-search-open="layout.isSearchOpen"
+            :search-query="layout.searchQuery"
+            :recent-entries="recentSidebarEntries"
+            :current-entry="eden.currentEntry"
+            @config-change="layout.onWidgetConfigChange"
+            @update:hidden="layout.widgetSidebarHidden = $event"
+            @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
+            @create-entry="eden.createNewEntry()"
+            @open-entry="(id) => eden.navigateTo(id)"
+            @open-settings="eden.activeScreen = 'settings'"
+          />
+        </div>
+      </template>
+
+      <DesktopContentSurface
+        class="eden-content-surface"
+        padding-top="0"
+        padding-inline="0"
+        padding-bottom="0"
+        :show-left-border="showSidebarChrome && !layout.widgetSidebarHidden"
+        :radius-top-left="showSidebarChrome && !layout.widgetSidebarHidden ? '16px' : '0px'"
+      >
+        <main class="app-main">
+          <SettingsPage
+            v-if="eden.activeScreen === 'settings'"
+            :settings="eden.codeToolsSettings"
+            :vault-path="eden.vaultPath"
+            :note-types="eden.noteTypes"
+            :active-space="eden.activeSpace"
+            :on-note-type-save="eden.saveNoteType"
+            :on-note-type-delete="eden.deleteNoteType"
+            @back="eden.activeScreen = 'notes'"
+            @select-vault="eden.selectFolder()"
+            @select-space="onSelectSpace"
+            @settings-change="eden.updateCodeToolsSettings"
+            @refresh-data="eden.refreshData()"
+          />
+          <Editor
+            v-else-if="eden.currentEntry"
+            :key="eden.currentEntry.id"
+            :entry="eden.currentEntry"
+            :all-entries="eden.entries"
+            :note-types="eden.noteTypes"
+            :code-tools-settings="eden.codeToolsSettings"
+            :zen-mode="layout.isZenMode"
+            :on-save="eden.handleSave"
+            :on-navigate="eden.navigateTo"
+            @exit-zen="layout.disableZenMode()"
+          />
+          <SpacesView
+            v-else
+            :active-space="eden.activeSpace"
+            :entries="eden.entries"
+            :note-types="eden.noteTypes"
+            :sort-mode="eden.sortMode"
+            @sort-mode-change="eden.sortMode = $event"
+            @create-entry="eden.createNewEntry()"
+            @open-entry="(id) => eden.navigateTo(id)"
+          />
+        </main>
+      </DesktopContentSurface>
+    </DesktopChrome>
+
+    <main v-else class="app-main app-main--zen">
+      <SettingsPage
+        v-if="eden.activeScreen === 'settings'"
+        :settings="eden.codeToolsSettings"
+        :vault-path="eden.vaultPath"
+        :note-types="eden.noteTypes"
+        :active-space="eden.activeSpace"
+        :on-note-type-save="eden.saveNoteType"
+        :on-note-type-delete="eden.deleteNoteType"
+        @back="eden.activeScreen = 'notes'"
+        @select-vault="eden.selectFolder()"
+        @select-space="onSelectSpace"
+        @settings-change="eden.updateCodeToolsSettings"
+        @refresh-data="eden.refreshData()"
+      />
+      <Editor
+        v-else-if="eden.currentEntry"
+        :key="eden.currentEntry.id"
+        :entry="eden.currentEntry"
+        :all-entries="eden.entries"
+        :note-types="eden.noteTypes"
+        :code-tools-settings="eden.codeToolsSettings"
+        :zen-mode="layout.isZenMode"
+        :on-save="eden.handleSave"
+        :on-navigate="eden.navigateTo"
+        @exit-zen="layout.disableZenMode()"
+      />
+      <SpacesView
+        v-else
+        :active-space="eden.activeSpace"
+        :entries="eden.entries"
+        :note-types="eden.noteTypes"
+        :sort-mode="eden.sortMode"
+        @sort-mode-change="eden.sortMode = $event"
+        @create-entry="eden.createNewEntry()"
+        @open-entry="(id) => eden.navigateTo(id)"
+      />
+    </main>
+
+    <!-- Legacy layout disabled after shared DesktopChrome/DesktopContentSurface migration.
     <Titlebar v-if="!layout.isZenMode" />
 
     <SearchOverlay
@@ -112,19 +251,25 @@
         @open-entry="(id) => eden.navigateTo(id)"
       />
     </main>
+    -->
     <CustomCaret />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue";
-import { CustomCaret } from "@kepler/visuals";
+import {
+  CustomCaret,
+  DesktopChrome,
+  DesktopContentSurface,
+  type TitlebarPlatform,
+} from "@kepler/visuals";
+import { PanelLeft } from "lucide-vue-next";
 import { useEdenStore } from "@/store/eden";
 import { useLayoutStore } from "@/store/layout";
 import { useKeyboard } from "@/composables/useKeyboard";
 import { usePlatform } from "@/composables/usePlatform";
 import { useSearch } from "@/composables/useSearch";
-import { useTitlebarSafeArea } from "@/composables/useTitlebarSafeArea";
 import type { SpaceId } from "@/components/sidebar/types";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
@@ -139,7 +284,6 @@ const layout = useLayoutStore();
 
 usePlatform();
 useKeyboard();
-useTitlebarSafeArea();
 const { pendingQuery } = useSearch();
 
 function pickRecentEntries(entries: Entry[], limit: number) {
@@ -174,6 +318,14 @@ const entryTitlesById = computed<Record<string, string>>(() =>
     eden.entries.map((entry) => [entry.id, entry.title || "Без названия"]),
   ),
 );
+
+const chromePlatform = computed<TitlebarPlatform>(() => {
+  if (navigator.platform.startsWith("Mac")) return "mac";
+  if (navigator.platform.startsWith("Linux")) return "linux";
+  return "windows";
+});
+
+const showSidebarChrome = computed(() => eden.activeScreen !== "settings");
 
 onMounted(() => {
   void eden.initApp();

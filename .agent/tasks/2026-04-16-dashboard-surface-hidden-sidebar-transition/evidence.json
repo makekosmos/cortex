@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-04-16-dashboard-surface-hidden-sidebar-transition",
+  "summary": {
+    "shared_surface_component": "packages/kepler-visuals/components/DesktopContentSurface.vue",
+    "driven_by": "sidebarConfig.hidden"
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "DesktopContentSurface exposes showLeftBorder",
+        "Left divider color is variable-driven",
+        "Radius and divider transitions are animated"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "DashboardShell binds show-left-border to !sidebarConfig.hidden",
+        "DashboardShell binds radius-top-left to 0px/16px based on hidden state"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "bun run typecheck passed"
+      ]
+    }
+  ],
+  "verification": {
+    "status": "PASS"
+  }
+}

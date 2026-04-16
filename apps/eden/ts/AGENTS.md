@@ -8,7 +8,7 @@
 
 ## Текущий стек проекта
 
-- UI: `Electron + React + TipTap`
+- UI: `Electron + Vue 3 + TipTap`
 - Сборка: `electron-vite`, `vite 7`
 - Язык: `TypeScript`
 - Локальное хранилище: `SQLite` через `better-sqlite3`
@@ -20,6 +20,9 @@
 
 - Проект больше не использует `vite-plugin-electron`; текущий конфиг лежит в `electron.vite.config.ts`.
 - Основная Electron-логика находится в `main/main.ts`, `main/preload.ts`, `main/store.ts`.
+- Desktop shell строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`; это основной контракт для оконного chrome, sidebar и content surface.
+- Native controls и safe-area поведение задаются через `BrowserWindow` chrome config и shared visual components, а не через ручные offsets в основном shell.
+- Не возвращай в shell старые manual titlebar offsets вроде локальных `--titlebar-height` / `--titlebar-left-safe-area` костылей, если их можно выразить через shared chrome contract.
 - Typed notes уже начаты:
   - есть `note_types`
   - у `entries` есть `type_id`, `header_layout`, `header_props_json`, `schema_version`
@@ -43,10 +46,11 @@
 
 ## UI / стиль
 
-- Это личное macOS-приложение, не generic web app.
-- Держись системного macOS-шрифта, не тяни веб-шрифты.
-- Ориентир по визуалу: чистый SwiftUI / macOS / Tahoe-like liquid glass, но без тяжелых эффектов ради эффекта.
+- Это личное desktop-приложение, не generic web app.
+- Держись системного desktop-ощущения, не тяни веб-шрифты без необходимости.
+- Ориентир по визуалу: чистый native desktop shell, аккуратный chrome, без тяжелых эффектов ради эффекта.
 - При изменении UI сохраняй ощущение нативного приложения и хорошую адаптивность на узких окнах.
+- Если меняешь shell, сначала думай в терминах `DesktopChrome` / `DesktopContentSurface`, а не через ручные padding/margin offset hacks.
 
 ## Кодстайл
 

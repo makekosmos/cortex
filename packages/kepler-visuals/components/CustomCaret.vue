@@ -18,6 +18,7 @@ const caretRef = ref<HTMLElement>();
 let activeTarget: HTMLElement | HTMLInputElement | HTMLTextAreaElement | null = null;
 let targetKind: "editable" | "input" | null = null;
 let isComposing = false;
+let isPointerSelecting = false;
 let isIdle = false;
 let idleTimer: number | null = null;
 let rafId: number | null = null;
@@ -84,6 +85,39 @@ function restoreNativeCaret(el: HTMLElement) {
   el.style.removeProperty("caret-color");
 }
 
+function hasExpandedSelection(): boolean {
+  if (!activeTarget) return false;
+
+  if (targetKind === "input") {
+    const input = activeTarget as HTMLInputElement | HTMLTextAreaElement;
+    return (
+      input.selectionStart != null &&
+      input.selectionEnd != null &&
+      input.selectionStart !== input.selectionEnd
+    );
+  }
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+
+  const range = sel.getRangeAt(0);
+  return (
+    activeTarget.contains(range.startContainer) ||
+    activeTarget.contains(range.endContainer)
+  );
+}
+
+function syncNativeCaretVisibility() {
+  if (!activeTarget) return;
+
+  if (isComposing || isPointerSelecting || hasExpandedSelection()) {
+    restoreNativeCaret(activeTarget);
+    return;
+  }
+
+  hideNativeCaret(activeTarget);
+}
+
 // ---------------------------------------------------------------------------
 // Active target management
 // ---------------------------------------------------------------------------
@@ -101,10 +135,11 @@ function setActiveTarget(
   activeTarget = next;
   targetKind = kind;
   isComposing = false;
+  isPointerSelecting = false;
   isIdle = false;
 
   if (activeTarget) {
-    hideNativeCaret(activeTarget);
+    syncNativeCaretVisibility();
   }
 
   scheduleIdleCheck();
@@ -261,7 +296,13 @@ function ensureMirror(): HTMLDivElement {
 
 function getInputCaretRect(): DOMRect | null {
   const input = activeTarget as HTMLInputElement | HTMLTextAreaElement;
-  if (input.selectionStart == null) return null;
+  if (
+    input.selectionStart == null ||
+    input.selectionEnd == null ||
+    input.selectionStart !== input.selectionEnd
+  ) {
+    return null;
+  }
   const pos = input.selectionStart;
 
   const isTextarea = input.tagName === "TEXTAREA";
@@ -340,6 +381,8 @@ function render() {
     return;
   }
 
+  syncNativeCaretVisibility();
+
   const rect = getCaretRect();
   if (!rect) {
     el.classList.add("kepler-caret--hidden");
@@ -379,6 +422,10 @@ function onSelectionChange() {
   const prev = activeTarget;
   syncTargetFromFocus();
 
+  if (activeTarget) {
+    syncNativeCaretVisibility();
+  }
+
   if (activeTarget && prev === activeTarget) {
     markActivity();
   }
@@ -388,6 +435,30 @@ function onSelectionChange() {
 function onActivity() {
   if (!activeTarget || isComposing) return;
   markActivity();
+  requestRender();
+}
+
+function onPointerDown(e: Event) {
+  const found = findTarget(e.target as HTMLElement);
+
+  if (!found) {
+    isPointerSelecting = false;
+    onActivity();
+    return;
+  }
+
+  setActiveTarget(found.el, found.kind);
+  isPointerSelecting = true;
+  syncNativeCaretVisibility();
+  markActivity();
+  requestRender();
+}
+
+function onPointerUp() {
+  if (!isPointerSelecting) return;
+  isPointerSelecting = false;
+  syncTargetFromFocus();
+  syncNativeCaretVisibility();
   requestRender();
 }
 
@@ -429,7 +500,9 @@ onMounted(() => {
   listen(document, "selectionchange", onSelectionChange);
   listen(document, "keydown", onActivity, true);
   listen(document, "input", onActivity, true);
-  listen(document, "pointerdown", onActivity, true);
+  listen(document, "pointerdown", onPointerDown, true);
+  listen(window, "pointerup", onPointerUp, true);
+  listen(window, "pointercancel", onPointerUp, true);
   listen(document, "compositionstart", onCompositionStart, true);
   listen(document, "compositionend", onCompositionEnd, true);
   listen(window, "resize", requestRender);

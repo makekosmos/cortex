@@ -1,0 +1,77 @@
+{
+  "task_id": "2026-04-16-delphi-eden-shared-chrome",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/App.vue uses DesktopChrome",
+        "apps/delphi/ts/src/App.vue wraps RouterView in DesktopContentSurface"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/App.vue uses DesktopChrome for the non-zen shell",
+        "apps/eden/ts/src/App.vue wraps main shell content in DesktopContentSurface"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": [
+        "Delphi continues to read/write sidebar hidden state via useSidebarState",
+        "Eden continues to read/write sidebar hidden state via layout.widgetSidebarHidden",
+        "apps/eden/ts/src/components/sidebar/EdenSidebar.vue disables internal toggle and top inset"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/electron/main.ts configures shared-titlebar-compatible BrowserWindow options",
+        "apps/eden/ts/main/main.ts configures shared-titlebar-compatible BrowserWindow options"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/AGENTS.md updated",
+        "apps/eden/ts/AGENTS.md updated"
+      ]
+    },
+    "AC6": {
+      "status": "FAIL",
+      "evidence": [
+        "TypeScript noEmit check passes for Delphi",
+        "TypeScript noEmit check passes for Eden",
+        "Vite build fails in sandbox before app bundling due spawn EPERM and native dependency loading"
+      ]
+    }
+  },
+  "verification": {
+    "typescript": [
+      {
+        "app": "delphi",
+        "command": "node ...typescript/lib/tsc.js --noEmit -p apps/delphi/ts/tsconfig.json",
+        "status": "PASS"
+      },
+      {
+        "app": "eden",
+        "command": "node ...typescript/lib/tsc.js --noEmit -p apps/eden/ts/tsconfig.json",
+        "status": "PASS"
+      }
+    ],
+    "build": [
+      {
+        "app": "delphi",
+        "command": "bun run build",
+        "status": "FAIL",
+        "reason": "spawn EPERM in Vite externalize-deps and Tailwind oxide native dependency load failure inside sandbox"
+      },
+      {
+        "app": "eden",
+        "command": "bun run build",
+        "status": "FAIL",
+        "reason": "spawn EPERM in Vite externalize-deps inside sandbox"
+      }
+    ]
+  }
+}

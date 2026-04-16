@@ -30,18 +30,24 @@ use crate::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use crate::db::{
     batch_upsert_todos as db_batch_upsert_todos, clear_all as db_clear_all,
     delete_heading as db_delete_heading, delete_project as db_delete_project,
-    delete_todo as db_delete_todo, delete_trashed as db_delete_trashed, get_sync_kv as db_get_kv,
-    init_schema, load_all as db_load_all, open_db, set_sync_kv as db_set_kv,
-    upsert_area as db_upsert_area, upsert_heading as db_upsert_heading,
-    upsert_project as db_upsert_project, upsert_tag as db_upsert_tag,
-    upsert_todo as db_upsert_todo, SqliteStorageBackend,
+    delete_todo as db_delete_todo, delete_tracked_app as db_delete_tracked_app,
+    delete_trashed as db_delete_trashed, delete_usage_event as db_delete_usage_event,
+    delete_usage_session as db_delete_usage_session, get_sync_kv as db_get_kv, init_schema,
+    load_all as db_load_all, open_db, set_sync_kv as db_set_kv, upsert_area as db_upsert_area,
+    upsert_heading as db_upsert_heading, upsert_project as db_upsert_project,
+    upsert_tag as db_upsert_tag, upsert_todo as db_upsert_todo,
+    upsert_tracked_app as db_upsert_tracked_app, upsert_usage_event as db_upsert_usage_event,
+    upsert_usage_session as db_upsert_usage_session, SqliteStorageBackend,
 };
 use crate::host::{get_host_device_name, get_own_addresses};
 use crate::net::is_address_routable;
 use crate::protocol::LAN_SYNC_PORT;
 use crate::sync_client::SyncClient;
 use crate::sync_server::{StorageBackend, SyncServer};
-use crate::types::{Area, Heading, LoadAllData, PeerRecord, Project, SyncEntity, Tag, TodoItem};
+use crate::types::{
+    Area, Heading, LoadAllData, PeerRecord, Project, SyncEntity, Tag, TodoItem, TrackedApp,
+    UsageEvent, UsageSession,
+};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -253,6 +259,54 @@ impl ArkCore {
         })
     }
 
+    pub fn upsert_tracked_app_json(&self, tracked_app_json: String) -> Result<bool> {
+        let tracked_app: TrackedApp =
+            serde_json::from_str(&tracked_app_json).map_err(|e| err(e.to_string()))?;
+        self.with_conn(|conn| {
+            db_upsert_tracked_app(conn, &tracked_app).map_err(ArkCoreError::from)?;
+            Ok(true)
+        })
+    }
+
+    pub fn delete_tracked_app(&self, id: String) -> Result<bool> {
+        self.with_conn(|conn| {
+            db_delete_tracked_app(conn, &id).map_err(ArkCoreError::from)?;
+            Ok(true)
+        })
+    }
+
+    pub fn upsert_usage_session_json(&self, usage_session_json: String) -> Result<bool> {
+        let usage_session: UsageSession =
+            serde_json::from_str(&usage_session_json).map_err(|e| err(e.to_string()))?;
+        self.with_conn(|conn| {
+            db_upsert_usage_session(conn, &usage_session).map_err(ArkCoreError::from)?;
+            Ok(true)
+        })
+    }
+
+    pub fn delete_usage_session(&self, id: String) -> Result<bool> {
+        self.with_conn(|conn| {
+            db_delete_usage_session(conn, &id).map_err(ArkCoreError::from)?;
+            Ok(true)
+        })
+    }
+
+    pub fn upsert_usage_event_json(&self, usage_event_json: String) -> Result<bool> {
+        let usage_event: UsageEvent =
+            serde_json::from_str(&usage_event_json).map_err(|e| err(e.to_string()))?;
+        self.with_conn(|conn| {
+            db_upsert_usage_event(conn, &usage_event).map_err(ArkCoreError::from)?;
+            Ok(true)
+        })
+    }
+
+    pub fn delete_usage_event(&self, id: String) -> Result<bool> {
+        self.with_conn(|conn| {
+            db_delete_usage_event(conn, &id).map_err(ArkCoreError::from)?;
+            Ok(true)
+        })
+    }
+
     pub fn get_sync_kv(&self, key: String) -> Result<Option<String>> {
         self.with_conn(|conn| db_get_kv(conn, &key).map_err(ArkCoreError::from))
     }
@@ -343,7 +397,8 @@ impl ArkCore {
             .ok_or_else(|| err("DB not opened; call open_db first"))?;
 
         // 3. Prepare a result channel and a shutdown channel.
-        let (result_tx, result_rx) = std::sync::mpsc::channel::<std::result::Result<SyncRuntime, ArkCoreError>>();
+        let (result_tx, result_rx) =
+            std::sync::mpsc::channel::<std::result::Result<SyncRuntime, ArkCoreError>>();
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
         // Save the shutdown sender so stop_sync can signal the background thread.
@@ -382,9 +437,8 @@ impl ArkCore {
                         .unwrap_or_else(get_host_device_name);
                     let ws_port = config.port.unwrap_or(LAN_SYNC_PORT as u32) as u16;
 
-                    let server = Arc::new(SyncServer::new(
-                        storage.clone() as Arc<dyn StorageBackend>,
-                    ));
+                    let server =
+                        Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
 
                     // Wire server → listener (using the self_arc inside the thread).
                     self_arc.install_server_callbacks(&server).await;
@@ -956,10 +1010,7 @@ struct CloneSyncRuntime {
 // `storage`/`clients` being unreachable through the field syntax.
 #[allow(dead_code)]
 fn _touch(r: &CloneSyncRuntime) -> Value {
-    Value::String(format!(
-        "{} {} {}",
-        r.device_id, r.device_name, r.space_id
-    ))
+    Value::String(format!("{} {} {}", r.device_id, r.device_name, r.space_id))
 }
 
 // ---------------------------------------------------------------------------

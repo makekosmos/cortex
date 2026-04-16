@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-04-16-eden-overlay-inline-caret",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": [
+        "InlineCaret renders .pm-inline-caret-overlay for collapsed focused editor selection"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": [
+        "Overlay hides during pointer drag selection",
+        "Native selection behavior remains active for non-collapsed selection"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": [
+        "Visible caret no longer uses an in-flow widget anchor"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": [
+        "Eden app test updated to assert overlay caret visibility/hiding"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": [
+        "TypeScript noEmit passes for apps/eden/ts"
+      ]
+    }
+  }
+}

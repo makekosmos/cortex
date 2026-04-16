@@ -107,6 +107,24 @@ enum Request {
     DeleteHeading {
         id: String,
     },
+    UpsertTrackedApp {
+        tracked_app: TrackedApp,
+    },
+    DeleteTrackedApp {
+        id: String,
+    },
+    UpsertUsageSession {
+        usage_session: UsageSession,
+    },
+    DeleteUsageSession {
+        id: String,
+    },
+    UpsertUsageEvent {
+        usage_event: UsageEvent,
+    },
+    DeleteUsageEvent {
+        id: String,
+    },
     GetSyncKv {
         key: String,
     },
@@ -311,6 +329,36 @@ async fn handle_request(request: Request) -> Result<Value, String> {
 
         Request::DeleteHeading { id } => with_conn(|conn| {
             db::delete_heading(conn, &id)?;
+            Ok(json!(true))
+        }),
+
+        Request::UpsertTrackedApp { tracked_app } => with_conn(|conn| {
+            db::upsert_tracked_app(conn, &tracked_app)?;
+            Ok(json!(true))
+        }),
+
+        Request::DeleteTrackedApp { id } => with_conn(|conn| {
+            db::delete_tracked_app(conn, &id)?;
+            Ok(json!(true))
+        }),
+
+        Request::UpsertUsageSession { usage_session } => with_conn(|conn| {
+            db::upsert_usage_session(conn, &usage_session)?;
+            Ok(json!(true))
+        }),
+
+        Request::DeleteUsageSession { id } => with_conn(|conn| {
+            db::delete_usage_session(conn, &id)?;
+            Ok(json!(true))
+        }),
+
+        Request::UpsertUsageEvent { usage_event } => with_conn(|conn| {
+            db::upsert_usage_event(conn, &usage_event)?;
+            Ok(json!(true))
+        }),
+
+        Request::DeleteUsageEvent { id } => with_conn(|conn| {
+            db::delete_usage_event(conn, &id)?;
             Ok(json!(true))
         }),
 

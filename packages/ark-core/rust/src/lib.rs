@@ -17,18 +17,19 @@ uniffi::setup_scaffolding!();
 
 // Re-export key types
 pub use beacon::{
-    BeaconPayload, BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions,
-    BEACON_PORT, BEACON_TYPE, PEER_TTL_MS,
+    BeaconPayload, BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions, BEACON_PORT,
+    BEACON_TYPE, PEER_TTL_MS,
 };
 pub use db::SqliteStorageBackend;
 pub use hlc::HLC;
 pub use host::{get_host_device_name, get_own_addresses};
 pub use protocol::{
-    compute_local_excess, compute_vector_diff, generate_id, merge_peer_records,
-    serialize_message, deserialize_message, split_into_batches,
-    LanSyncMessage, LAN_SYNC_PORT, PROTOCOL_VERSION, MAX_BATCH_SIZE, MAX_BATCH_BYTES,
+    compute_local_excess, compute_vector_diff, deserialize_message, generate_id,
+    merge_peer_records, serialize_message, split_into_batches, LanSyncMessage, LAN_SYNC_PORT,
+    MAX_BATCH_BYTES, MAX_BATCH_SIZE, PROTOCOL_VERSION,
 };
 pub use sync_server::StorageBackend;
 pub use types::{
-    Area, Heading, LoadAllData, PeerRecord, Project, SyncEntity, Tag, TodoItem, VersionVector,
+    Area, Heading, LoadAllData, PeerRecord, Project, SyncEntity, Tag, TodoItem, TrackedApp,
+    UsageEvent, UsageSession, VersionVector,
 };

@@ -1,0 +1,21 @@
+{
+  "task_id": "2026-04-16-dashboard-delphi-sidebar-button-reset",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/src/global.css",
+        "apps/delphi/ts/src/global.css"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "commands": [
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\tsc.exe",
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\vite.exe build --configLoader native"
+      ]
+    }
+  ]
+}

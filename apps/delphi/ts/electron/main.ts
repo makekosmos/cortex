@@ -213,7 +213,12 @@ function createWindow() {
   setupApplicationMenu();
 
   const saved = loadWindowState();
+  const isMac = process.platform === 'darwin';
+  const isWindows = process.platform === 'win32';
 
+  // Shared desktop chrome contract:
+  // macOS uses hiddenInset so the shared visuals can render into the titlebar inset,
+  // Windows uses native overlay controls aligned to the right.
   const win = new BrowserWindow({
     width: saved.width,
     height: saved.height,
@@ -222,8 +227,23 @@ function createWindow() {
     minWidth: 1280,
     minHeight: 720,
     title: 'Delphi',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 18, y: 18 },
+    frame: !isWindows,
+    ...(isMac
+      ? {
+          titleBarStyle: 'hiddenInset' as const,
+          trafficLightPosition: { x: 18, y: 18 },
+        }
+      : {}),
+    ...(isWindows
+        ? {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            color: '#00000000',
+            symbolColor: '#e5e7eb',
+            height: 32,
+          },
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,

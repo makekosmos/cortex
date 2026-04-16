@@ -1,0 +1,1 @@
+import{invoke as e}from"./core-CU_7XIAG.js";async function t(){return await e(`plugin:autostart|is_enabled`)}async function n(){await e(`plugin:autostart|enable`)}async function r(){await e(`plugin:autostart|disable`)}export{r as disable,n as enable,t as isEnabled};

@@ -14,7 +14,7 @@ use std::time::Duration;
 use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::sync_client::SyncClient;
 use ark_core::sync_server::{StorageBackend, SyncServer};
-use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
+use ark_core::types::{PeerRecord, SyncEntity, TrackedApp, UsageEvent, UsageSession, VersionVector};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
@@ -60,6 +60,113 @@ fn todo_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEnti
         hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
         deleted: None,
     }
+}
+
+fn sync_entity_from_value(
+    entity_type: &str,
+    id: &str,
+    value: Value,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let data = value
+        .as_object()
+        .cloned()
+        .expect("usage sync entity value should be an object");
+    SyncEntity {
+        entity_type: entity_type.to_string(),
+        id: id.to_string(),
+        data,
+        hlc: format!("2026-04-01T00:00:00.000Z:{counter:06}:{device_id}"),
+        deleted: None,
+    }
+}
+
+fn tracked_app_entity(id: &str, device_id: &str, counter: u64) -> SyncEntity {
+    let tracked_app = TrackedApp {
+        id: id.to_string(),
+        platform: "windows".to_string(),
+        exe_path: r"C:\\Games\\Atlas\\atlas.exe".to_string(),
+        normalized_exe_path: r"c:\\games\\atlas\\atlas.exe".to_string(),
+        process_name: "atlas.exe".to_string(),
+        display_name: Some("Atlas".to_string()),
+        publisher: Some("Kepler".to_string()),
+        icon_ref: None,
+        first_seen_at: "2026-04-01T00:00:00.000Z".to_string(),
+        last_seen_at: "2026-04-01T00:05:00.000Z".to_string(),
+    };
+    sync_entity_from_value(
+        "tracked_app",
+        &tracked_app.id,
+        serde_json::to_value(&tracked_app).unwrap(),
+        device_id,
+        counter,
+    )
+}
+
+fn usage_session_entity(
+    id: &str,
+    tracked_app_id: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let session = UsageSession {
+        id: id.to_string(),
+        tracked_app_id: tracked_app_id.to_string(),
+        device_id: device_id.to_string(),
+        device_name: "Alpha".to_string(),
+        platform: "windows".to_string(),
+        started_at: "2026-04-01T00:00:00.000Z".to_string(),
+        ended_at: Some("2026-04-01T00:45:00.000Z".to_string()),
+        foreground_ms: 2_400_000,
+        idle_ms: 300_000,
+        window_title: Some("Atlas Launcher".to_string()),
+        process_name: "atlas.exe".to_string(),
+        exe_path: r"C:\\Games\\Atlas\\atlas.exe".to_string(),
+        pid_start: Some(501),
+        pid_end: Some(501),
+        meta_json: json!({"source": "integration-test"}),
+    };
+    sync_entity_from_value(
+        "usage_session",
+        &session.id,
+        serde_json::to_value(&session).unwrap(),
+        device_id,
+        counter,
+    )
+}
+
+fn usage_event_entity(
+    id: &str,
+    tracked_app_id: &str,
+    usage_session_id: &str,
+    device_id: &str,
+    counter: u64,
+) -> SyncEntity {
+    let event = UsageEvent {
+        id: id.to_string(),
+        tracked_app_id: tracked_app_id.to_string(),
+        usage_session_id: Some(usage_session_id.to_string()),
+        device_id: device_id.to_string(),
+        device_name: "Alpha".to_string(),
+        platform: "windows".to_string(),
+        occurred_at: "2026-04-01T00:15:00.000Z".to_string(),
+        kind: "window_changed".to_string(),
+        window_title: Some("Atlas Match".to_string()),
+        process_name: "atlas.exe".to_string(),
+        exe_path: r"C:\\Games\\Atlas\\atlas.exe".to_string(),
+        pid: Some(501),
+        is_foreground: true,
+        is_idle: false,
+        meta_json: json!({"source": "integration-test", "windowTitle": "Atlas Match"}),
+    };
+    sync_entity_from_value(
+        "usage_event",
+        &event.id,
+        serde_json::to_value(&event).unwrap(),
+        device_id,
+        counter,
+    )
 }
 
 async fn pick_port() -> u16 {
@@ -288,4 +395,142 @@ async fn self_connect_is_rejected() {
 
     client.stop();
     server.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn usage_entities_sync_between_two_servers() {
+    let storage_a = make_storage("device-a");
+    let storage_b = make_storage("device-b");
+
+    let tracked_app = tracked_app_entity("tracked-app-a", "device-a", 1);
+    let session = usage_session_entity("usage-session-a", "tracked-app-a", "device-a", 2);
+    let event = usage_event_entity(
+        "usage-event-a",
+        "tracked-app-a",
+        "usage-session-a",
+        "device-a",
+        3,
+    );
+
+    storage_a.apply_entity(&tracked_app).await;
+    storage_a.apply_entity(&session).await;
+    storage_a.apply_entity(&event).await;
+
+    let mut vector_a: VersionVector = HashMap::new();
+    vector_a.insert(tracked_app.id.clone(), tracked_app.hlc.clone());
+    vector_a.insert(session.id.clone(), session.hlc.clone());
+    vector_a.insert(event.id.clone(), event.hlc.clone());
+    storage_a
+        .set_kv(
+            "lan_sync.version_vector",
+            &serde_json::to_string(&vector_a).unwrap(),
+        )
+        .await;
+
+    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
+    let server_b = Arc::new(SyncServer::new(storage_b.clone() as Arc<dyn StorageBackend>));
+
+    let port_a = pick_port().await;
+    let port_b = pick_port().await;
+
+    server_a
+        .start_with_addr(
+            "space-usage",
+            "device-a",
+            Some("Alpha"),
+            Some(vec![format!("127.0.0.1:{port_a}")]),
+            &format!("127.0.0.1:{port_a}"),
+        )
+        .await
+        .expect("server A start");
+
+    server_b
+        .start_with_addr(
+            "space-usage",
+            "device-b",
+            Some("Beta"),
+            Some(vec![format!("127.0.0.1:{port_b}")]),
+            &format!("127.0.0.1:{port_b}"),
+        )
+        .await
+        .expect("server B start");
+
+    let peer = PeerRecord {
+        device_id: "device-a".to_string(),
+        device_name: "Alpha".to_string(),
+        addresses: vec![format!("127.0.0.1:{port_a}")],
+        last_seen: chrono::Utc::now().to_rfc3339(),
+        last_address: None,
+    };
+    let client = Arc::new(SyncClient::new(
+        storage_b.clone() as Arc<dyn StorageBackend>,
+        peer,
+        "device-b".to_string(),
+        "Beta".to_string(),
+        "space-usage".to_string(),
+        vec![format!("127.0.0.1:{port_b}")],
+    ));
+    client.start();
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+    assert!(
+        loaded_b
+            .iter()
+            .any(|entity| entity.entity_type == "tracked_app" && entity.id == "tracked-app-a"),
+        "side B should receive tracked_app during initial sync; got {:?}",
+        loaded_b
+            .iter()
+            .map(|entity| (&entity.entity_type, &entity.id))
+            .collect::<Vec<_>>(),
+    );
+    assert!(
+        loaded_b
+            .iter()
+            .any(|entity| entity.entity_type == "usage_session" && entity.id == "usage-session-a"),
+        "side B should receive usage_session during initial sync; got {:?}",
+        loaded_b
+            .iter()
+            .map(|entity| (&entity.entity_type, &entity.id))
+            .collect::<Vec<_>>(),
+    );
+    assert!(
+        loaded_b
+            .iter()
+            .any(|entity| entity.entity_type == "usage_event" && entity.id == "usage-event-a"),
+        "side B should receive usage_event during initial sync; got {:?}",
+        loaded_b
+            .iter()
+            .map(|entity| (&entity.entity_type, &entity.id))
+            .collect::<Vec<_>>(),
+    );
+
+    let live_event = usage_event_entity(
+        "usage-event-live",
+        "tracked-app-a",
+        "usage-session-a",
+        "device-a",
+        4,
+    );
+    storage_a.apply_entity(&live_event).await;
+    server_a.broadcast_live_change(live_event.clone(), None).await;
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let loaded_b_after = storage_b.load_entities(&HashMap::new()).await;
+    assert!(
+        loaded_b_after
+            .iter()
+            .any(|entity| entity.entity_type == "usage_event" && entity.id == "usage-event-live"),
+        "side B should receive live usage_event; got {:?}",
+        loaded_b_after
+            .iter()
+            .map(|entity| (&entity.entity_type, &entity.id))
+            .collect::<Vec<_>>(),
+    );
+
+    client.stop();
+    server_a.stop().await;
+    server_b.stop().await;
 }

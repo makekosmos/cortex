@@ -1,10 +1,20 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { computed } from "vue";
+import {
+  computed,
+  shallowRef,
+  onMounted,
+  onUnmounted,
+  watch,
+} from "vue";
 import { RouterLink } from "vue-router";
 import { PanelLeftClose } from "lucide-vue-next";
-import ResizableSidebar, { type SidebarConfig } from "./ResizableSidebar.vue";
 import SidebarButton from "./SidebarButton.vue";
+
+export interface SidebarConfig {
+    width: number;
+    hidden: boolean;
+}
 
 export interface SidebarNavItem {
   id: string;
@@ -43,9 +53,9 @@ interface Props {
   maxWidth?: number;
   hiddenWidth?: number;
   toggleShortcut?: string;
-  dragRegion?: boolean;
   initialConfig?: Partial<SidebarConfig>;
   showToggle?: boolean;
+  reserveTopInset?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -63,9 +73,9 @@ const props = withDefaults(defineProps<Props>(), {
   maxWidth: 320,
   hiddenWidth: 80,
   toggleShortcut: undefined,
-  dragRegion: false,
   initialConfig: undefined,
   showToggle: true,
+  reserveTopInset: true,
 });
 
 const emit = defineEmits<{
@@ -73,32 +83,197 @@ const emit = defineEmits<{
   "update:hidden": [hidden: boolean];
 }>();
 
+const width = shallowRef(props.initialConfig?.width ?? props.defaultWidth);
+const _hidden = shallowRef(
+    props.hidden !== undefined
+        ? props.hidden
+        : (props.initialConfig?.hidden ?? false),
+);
+const isResizing = shallowRef(false);
+const animating = shallowRef(false);
+const lineExpanded = shallowRef(false);
+
+let mouseDownX = 0;
+let mouseDownY = 0;
+
+const resizeRaf = shallowRef<number | null>(null);
+const animTimer = shallowRef<number | null>(null);
+const isAnimatingRef = shallowRef(false);
+
+const configRef = shallowRef<SidebarConfig>({
+    width: width.value,
+    hidden: _hidden.value,
+});
+
 const hasProjects = computed(() => props.projectItems.length > 0);
+const hasTopBar = computed(() => props.showToggle || Boolean(props.topItem));
 const shellClasses = computed(() => [
-  "kepler-sidebar-shell",
-  { "kepler-sidebar-shell--mac": props.isMac },
-  { "kepler-sidebar-shell--with-toggle": props.showToggle },
+    "kepler-sidebar-shell",
+    { "kepler-sidebar-shell--mac-safe-top": props.isMac && props.reserveTopInset },
+    { "kepler-sidebar-shell--with-top-bar": hasTopBar.value },
 ]);
+
+watch([width, _hidden], () => {
+    configRef.value = { width: width.value, hidden: _hidden.value };
+});
+
+watch(
+    () => props.hidden,
+    (val) => {
+        if (val !== undefined && val !== _hidden.value) {
+            startAnimation();
+            _hidden.value = val;
+        }
+    },
+);
+
+function notifyConfigChange(config: SidebarConfig) {
+    emit("configChange", config);
+}
+
+function startAnimation() {
+    if (animTimer.value) {
+        window.clearTimeout(animTimer.value);
+    }
+    isAnimatingRef.value = true;
+    animating.value = true;
+    animTimer.value = window.setTimeout(() => {
+        isAnimatingRef.value = false;
+        animating.value = false;
+        animTimer.value = null;
+    }, 330);
+}
+
+function toggle() {
+    startAnimation();
+    _hidden.value = !_hidden.value;
+    emit("update:hidden", _hidden.value);
+    notifyConfigChange({ width: width.value, hidden: _hidden.value });
+}
+
+function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
+    const parts = shortcut.toLowerCase().split("+");
+    const key = parts[parts.length - 1];
+    const needsMeta = parts.includes("meta");
+    const needsCtrl = parts.includes("ctrl");
+    const needsShift = parts.includes("shift");
+    const needsAlt = parts.includes("alt");
+
+    if (needsMeta && !e.metaKey) return false;
+    if (needsCtrl && !e.ctrlKey) return false;
+    if (needsShift && !e.shiftKey) return false;
+    if (needsAlt && !e.altKey) return false;
+    const codeKey = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : null;
+    if (e.key !== key && e.key.toLowerCase() !== key && codeKey !== key) return false;
+    return true;
+}
+
+function handleKeydown(e: KeyboardEvent) {
+    if (!props.toggleShortcut) return;
+
+    const shortcuts = props.toggleShortcut.split("|");
+    if (!shortcuts.some((s) => matchesShortcut(e, s))) return;
+
+    e.preventDefault();
+    toggle();
+}
+
+function handleResizeStart(e: MouseEvent) {
+    e.preventDefault();
+    mouseDownX = e.clientX;
+    mouseDownY = e.clientY;
+    isResizing.value = true;
+    document.body.classList.add("sidebar-resizing");
+}
+
+function handleResizeMove(e: MouseEvent) {
+    if (isAnimatingRef.value || _hidden.value) return;
+
+    if (resizeRaf.value) {
+        cancelAnimationFrame(resizeRaf.value);
+    }
+
+    resizeRaf.value = requestAnimationFrame(() => {
+        if (isAnimatingRef.value) return;
+
+        const newWidth = e.clientX - (props.offsetX ?? 0);
+        const clamped = Math.max(
+            props.minWidth,
+            Math.min(props.maxWidth, newWidth),
+        );
+        width.value = clamped;
+        configRef.value = { ...configRef.value, width: clamped };
+    });
+}
+
+function handleResizeEnd(e: MouseEvent) {
+    if (resizeRaf.value) {
+        cancelAnimationFrame(resizeRaf.value);
+        resizeRaf.value = null;
+    }
+    isResizing.value = false;
+    document.body.classList.remove("sidebar-resizing");
+
+    const dx = Math.abs(e.clientX - mouseDownX);
+    const dy = Math.abs(e.clientY - mouseDownY);
+    if (dx < 4 && dy < 4) {
+        lineExpanded.value = true;
+        window.setTimeout(() => {
+            lineExpanded.value = false;
+            toggle();
+        }, 180);
+        return;
+    }
+
+    notifyConfigChange(configRef.value);
+}
+
+watch(isResizing, (resizing) => {
+    if (resizing) {
+        window.addEventListener("mousemove", handleResizeMove);
+        window.addEventListener("mouseup", handleResizeEnd);
+    } else {
+        window.removeEventListener("mousemove", handleResizeMove);
+        window.removeEventListener("mouseup", handleResizeEnd);
+    }
+});
+
+onMounted(() => {
+    window.addEventListener("keydown", handleKeydown);
+});
+
+onUnmounted(() => {
+    window.removeEventListener("keydown", handleKeydown);
+    window.removeEventListener("mousemove", handleResizeMove);
+    window.removeEventListener("mouseup", handleResizeEnd);
+    if (animTimer.value) window.clearTimeout(animTimer.value);
+    if (resizeRaf.value) cancelAnimationFrame(resizeRaf.value);
+    document.body.classList.remove("sidebar-resizing");
+});
+
+const wrapperStyle = computed(() => {
+    if (_hidden.value) return { width: `${props.hiddenWidth}px` };
+    return { width: `${width.value}px` };
+});
+
+const wrapperClasses = computed(() =>
+    [
+        "kepler-sidebar-wrapper",
+        _hidden.value ? "hidden collapsed" : "",
+        animating.value ? "animating" : "",
+        isResizing.value ? "is-resizing" : "",
+        props.className ?? "",
+    ]
+        .filter(Boolean)
+        .join(" "),
+);
 </script>
 
 <template>
-  <ResizableSidebar
-    :default-width="defaultWidth"
-    :min-width="minWidth"
-    :max-width="maxWidth"
-    :hidden-width="hiddenWidth"
-    :toggle-shortcut="toggleShortcut"
-    :class-name="className"
-    :drag-region="dragRegion"
-    :offset-x="offsetX"
-    :hidden="hidden"
-    :initial-config="initialConfig"
-    @config-change="emit('configChange', $event)"
-    @update:hidden="emit('update:hidden', $event)"
-  >
-    <template #default="{ toggle }">
-      <aside :class="shellClasses">
-        <div class="kepler-sidebar-top">
+  <div :class="wrapperClasses" :style="wrapperStyle" data-testid="kepler-sidebar">
+    <div class="kepler-sidebar-content">
+      <aside v-if="!_hidden" :class="shellClasses">
+        <div v-if="hasTopBar" class="kepler-sidebar-top">
           <button
             v-if="props.topItem"
             type="button"
@@ -199,26 +374,55 @@ const shellClasses = computed(() => [
           />
         </div>
       </aside>
-    </template>
-  </ResizableSidebar>
+    </div>
+
+    <div
+      v-if="!_hidden"
+      class="kepler-sidebar-resize-handle"
+      data-testid="kepler-sidebar-resize-handle"
+      @mousedown="handleResizeStart"
+    >
+      <div :class="['kepler-resize-handle-line', lineExpanded ? 'expanded' : '']" />
+    </div>
+  </div>
 </template>
 
 <style scoped>
 .kepler-sidebar-shell {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 0;
-  height: 100%;
   padding: 0.5rem;
+  background: var(--sidebar-bg);
 }
 
-.kepler-sidebar-shell--mac {
+.kepler-sidebar-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* -webkit-app-region: drag; */
+}
+
+.kepler-sidebar-top,
+.kepler-sidebar-body,
+.kepler-sidebar-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.kepler-sidebar-shell--mac-safe-top {
   padding-top: var(--kepler-mac-sidebar-top-safe-area, 52px);
 }
 
-.kepler-sidebar-shell--mac.kepler-sidebar-shell--with-toggle {
+.kepler-sidebar-shell--mac-safe-top.kepler-sidebar-shell--with-top-bar {
   padding-top: 0.5rem;
 }
 
@@ -229,7 +433,7 @@ const shellClasses = computed(() => [
   padding-bottom: 0.75rem;
 }
 
-.kepler-sidebar-shell--mac .kepler-sidebar-top {
+.kepler-sidebar-shell--mac-safe-top .kepler-sidebar-top {
   position: absolute;
   top: 12px;
   left: auto;
@@ -247,6 +451,7 @@ const shellClasses = computed(() => [
   padding: 0.375rem;
   border-radius: 0.5rem;
   color: color-mix(in srgb, var(--sidebar-foreground) 40%, transparent);
+  -webkit-app-region: no-drag;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),
     color 120ms cubic-bezier(0.2, 0, 0, 1);
@@ -266,7 +471,7 @@ const shellClasses = computed(() => [
   overflow-y: auto;
 }
 
-.kepler-sidebar-shell--mac.kepler-sidebar-shell--with-toggle .kepler-sidebar-body {
+.kepler-sidebar-shell--mac-safe-top.kepler-sidebar-shell--with-top-bar .kepler-sidebar-body {
   padding-top: 2.5rem;
 }
 
@@ -298,6 +503,7 @@ const shellClasses = computed(() => [
   cursor: pointer;
   text-decoration: none;
   text-align: left;
+  -webkit-app-region: no-drag;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),
     color 120ms cubic-bezier(0.2, 0, 0, 1);

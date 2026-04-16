@@ -512,6 +512,159 @@ test.describe("Electron App", () => {
     }
   });
 
+  test("should restore native selection mode while text is selected in title input", async () => {
+    test.setTimeout(60000);
+
+    const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-caret-selection-"));
+    const noteTitle = "Selection handoff note";
+    const noteContent = "Custom caret should not break text selection.";
+
+    let launch: LaunchedApp | null = null;
+
+    try {
+      launch = await launchApp();
+      launch = await ensureVault(launch, vaultPath);
+      launch = await createNote(launch, noteTitle, noteContent);
+
+      const savedNote = launch.window.locator(".widget-nav-item", { hasText: noteTitle }).first();
+      await expect(savedNote).toBeVisible();
+      await savedNote.click();
+
+      const titleInput = launch.window.locator(".title-input");
+      await expect(titleInput).toBeVisible();
+      await titleInput.click();
+
+      await expect
+        .poll(
+          async () =>
+            launch?.window.evaluate(() => {
+              const caret = document.querySelector(".kepler-caret");
+              return caret instanceof HTMLElement && !caret.classList.contains("kepler-caret--hidden");
+            }),
+          { timeout: 5000 },
+        )
+        .toBe(true);
+
+      const pointerSelectionMode = await titleInput.evaluate((node) => {
+        if (!(node instanceof HTMLInputElement)) {
+          return null;
+        }
+
+        node.focus();
+        node.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            button: 0,
+            buttons: 1,
+            pointerId: 1,
+          }),
+        );
+
+        return {
+          caretColor: node.style.getPropertyValue("caret-color"),
+        };
+      });
+
+      expect(pointerSelectionMode).toMatchObject({
+        caretColor: "",
+      });
+
+      const expandedSelection = await titleInput.evaluate((node) => {
+        if (!(node instanceof HTMLInputElement)) {
+          return null;
+        }
+
+        node.focus();
+        node.setSelectionRange(0, Math.min(5, node.value.length));
+        document.dispatchEvent(new Event("selectionchange"));
+
+        return {
+          start: node.selectionStart,
+          end: node.selectionEnd,
+          caretColor: node.style.getPropertyValue("caret-color"),
+        };
+      });
+
+      expect(expandedSelection).toMatchObject({
+        start: 0,
+        end: 5,
+        caretColor: "",
+      });
+
+      await expect
+        .poll(
+          async () =>
+            launch?.window.evaluate(() => {
+              const caret = document.querySelector(".kepler-caret");
+              return caret instanceof HTMLElement && caret.classList.contains("kepler-caret--hidden");
+            }),
+          { timeout: 5000 },
+        )
+        .toBe(true);
+
+      const collapsedSelection = await titleInput.evaluate((node) => {
+        if (!(node instanceof HTMLInputElement)) {
+          return null;
+        }
+
+        const nextPos = node.value.length;
+        node.focus();
+        node.setSelectionRange(nextPos, nextPos);
+        node.dispatchEvent(
+          new PointerEvent("pointerup", {
+            bubbles: true,
+            button: 0,
+            buttons: 0,
+            pointerId: 1,
+          }),
+        );
+        document.dispatchEvent(new Event("selectionchange"));
+
+        return {
+          start: node.selectionStart,
+          end: node.selectionEnd,
+        };
+      });
+
+      expect(collapsedSelection).toMatchObject({
+        start: noteTitle.length,
+        end: noteTitle.length,
+      });
+
+      await expect
+        .poll(
+          async () =>
+            launch?.window.evaluate(() => {
+              const caret = document.querySelector(".kepler-caret");
+              const input = document.querySelector(".title-input");
+
+              return {
+                customVisible:
+                  caret instanceof HTMLElement && !caret.classList.contains("kepler-caret--hidden"),
+                caretColor:
+                  input instanceof HTMLInputElement
+                    ? input.style.getPropertyValue("caret-color")
+                    : null,
+              };
+            }),
+          { timeout: 5000 },
+        )
+        .toEqual({
+          customVisible: true,
+          caretColor: "transparent",
+        });
+
+      expect(launch.pageErrors).toEqual([]);
+    } finally {
+      if (launch) {
+        await launch.electronApp.close();
+        fs.rmSync(launch.homePath, { recursive: true, force: true });
+      }
+
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
   test("should tolerate composition-like input events without renderer errors", async () => {
     test.setTimeout(90000);
 

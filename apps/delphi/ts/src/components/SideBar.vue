@@ -63,8 +63,22 @@ function colorTagClass(colorTag?: string | null): string {
 const store = useTodoStore();
 const { projects } = storeToRefs(store);
 const route = useRoute();
+const initialConfig = loadConfig();
 
 const isMac = navigator.platform.startsWith("Mac");
+
+const props = withDefaults(
+  defineProps<{
+    hidden?: boolean;
+    showToggle?: boolean;
+    reserveTopInset?: boolean;
+  }>(),
+  {
+    hidden: undefined,
+    showToggle: true,
+    reserveTopInset: true,
+  },
+);
 
 const primaryItems = computed<SidebarNavItem[]>(() => [
   { id: "inbox", icon: Inbox, to: "/", label: "Входящие" },
@@ -105,8 +119,10 @@ const projectItems = computed<SidebarProjectItem[]>(() =>
     :max-width="320"
     :hidden-width="80"
     toggle-shortcut="meta+b|ctrl+b"
-    drag-region
-    :initial-config="loadConfig()"
+    :initial-config="initialConfig"
+    :hidden="props.hidden"
+    :show-toggle="props.showToggle"
+    :reserve-top-inset="props.reserveTopInset"
     @config-change="saveConfig"
   />
 </template>

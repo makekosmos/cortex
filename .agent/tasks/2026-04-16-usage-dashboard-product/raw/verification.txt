@@ -1,0 +1,43 @@
+Verification run for `2026-04-16-usage-dashboard-product`
+
+PASS - `bun install --ignore-scripts`
+  log: `raw/bun-install.txt`
+
+PASS - `cargo test --manifest-path packages/ark-core/rust/Cargo.toml`
+  Includes migration coverage and usage sync round-trip coverage.
+  log: `raw/ark-core-tests.txt`
+
+PASS - `cargo test --manifest-path services/usage-tracker/Cargo.toml`
+  log: `raw/usage-tracker-tests.txt`
+
+PASS - `apps/dashboard`: `bun run typecheck`
+  log: `raw/dashboard-typecheck.txt`
+
+PASS - `apps/dashboard`: `bun run build`
+  log: `raw/dashboard-build.txt`
+
+PASS - `services/usage-tracker`: `bun run package:installer`
+  artifact: `services/usage-tracker/dist/KeplerUsageTrackerInstaller/`
+  archive: `services/usage-tracker/dist/KeplerUsageTrackerInstaller.zip`
+  log: `raw/usage-tracker-installer.txt`
+
+PASS - `cargo run --manifest-path services/usage-tracker/Cargo.toml -- --db-path ... --once`
+  Created/migrated Ark-compatible workspace DB.
+  log: `raw/usage-tracker-once.txt`
+
+PASS - `node --experimental-strip-types apps/dashboard/scripts/seedSmokeDb.ts --db-path ...`
+  Seeded workspace smoke DB.
+  log: `raw/dashboard-smoke-seed.txt`
+
+PASS - `node --experimental-strip-types apps/dashboard/scripts/smokeAnalytics.ts --db-path ...`
+  Snapshot summary reported non-zero usage data (`sessions=32`, `recentSessions=10`, `topApp="Odyssey Browser"`).
+  log: `raw/dashboard-smoke-analytics.txt`
+
+ADDED - `apps/dashboard/e2e/dashboard.spec.ts`
+  Playwright Electron specs cover overview and sessions routing against a seeded Ark DB.
+
+ADDED - `apps/dashboard/scripts/runE2ESmoke.ts`
+  Direct Playwright-library smoke runner for restricted environments.
+
+BLOCKED IN SANDBOX - `bun run test:e2e` / `bun run test:e2e:smoke`
+  Electron launch is denied here with `spawn EPERM`, so final Playwright execution must be run on a normal local Windows machine.

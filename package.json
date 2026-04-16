@@ -5,6 +5,7 @@
     "apps/*",
     "apps/delphi/ts",
     "apps/eden/ts",
+    "services/*",
     "packages/*"
   ],
   "dependencies": {},

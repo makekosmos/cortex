@@ -1,0 +1,45 @@
+{
+  "task_id": "2026-04-16-dashboard-status-dot-content-surface",
+  "summary": {
+    "status_indicator": "Delphi-style dot",
+    "shared_surface_component": "packages/kepler-visuals/components/DesktopContentSurface.vue",
+    "consumer": "apps/dashboard/src/components/dashboard/DashboardShell.vue"
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "DashboardShell replaced the text status pill with a minimal dot button",
+        "The dot still reflects readable/warn/error state via color"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "DesktopContentSurface component added to @kepler/visuals",
+        "Shared padding and radius props exported for reuse"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "DashboardShell now uses DesktopContentSurface",
+        "DesktopChrome content pane no longer owns border/radius/padding styling"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "bun run typecheck passed in apps/dashboard",
+        "bun x vite build --configLoader native passed in apps/dashboard"
+      ]
+    }
+  ],
+  "verification": {
+    "status": "PASS"
+  }
+}

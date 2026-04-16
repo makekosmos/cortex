@@ -1,0 +1,39 @@
+Command: Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\tsc.exe
+Result: PASS
+
+Command: Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
+Result: PASS
+Note: renderer, electron main, and preload bundles built successfully.
+
+Command: Get-Process | Where-Object { $_.ProcessName -like 'usage-tracker*' } | Select-Object ProcessName, Id, StartTime, Path | Format-List
+Result:
+ProcessName : usage-tracker
+Id          : 37500
+StartTime   : 4/16/2026 3:25:04 PM
+Path        : C:\Users\Kazui\AppData\Local\Kepler\UsageTracker\usage-tracker.exe
+
+Command: python sqlite query against %APPDATA%\Kepler\ark.db
+Result:
+{
+  "db": "C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\ark.db",
+  "counts": {
+    "tracked_apps": 6,
+    "usage_sessions": 37,
+    "usage_events": 86
+  },
+  "latest_session": [
+    "Codex.exe",
+    "Codex",
+    "2026-04-16T12:47:09.947Z",
+    null,
+    65000,
+    250000
+  ],
+  "latest_event": [
+    "idle_started",
+    "2026-04-16T12:48:14.956Z",
+    "Codex.exe",
+    "Codex",
+    1
+  ]
+}
