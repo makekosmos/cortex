@@ -126,10 +126,6 @@ export const useEdenStore = defineStore("eden", () => {
 
     layout.widgetSidebarHidden = sidebarConfig.widget.hidden;
 
-    layout.vaultSidebarWidth = sidebarConfig.vault.width;
-
-    layout.vaultSidebarHidden = sidebarConfig.vault.hidden;
-
     if (path) {
       const [entriesData, noteTypesData] = await Promise.all([
         window.api.listEntries(),

@@ -6,20 +6,14 @@ const MIN_WIDGET_SIDEBAR_WIDTH = 220;
 
 const MAX_WIDGET_SIDEBAR_WIDTH = 520;
 
-const MIN_VAULT_SIDEBAR_WIDTH = 180;
-
-const MAX_VAULT_SIDEBAR_WIDTH = 360;
-
 export const useLayoutStore = defineStore("layout", () => {
   const widgetSidebarWidth = ref(320);
 
   const widgetSidebarHidden = ref(false);
 
-  const vaultSidebarWidth = ref(232);
-
-  const vaultSidebarHidden = ref(false);
-
   const isSearchOpen = ref(false);
+
+  const isZenMode = ref(false);
 
   const searchQuery = ref("");
 
@@ -38,19 +32,6 @@ export const useLayoutStore = defineStore("layout", () => {
     }
   }
 
-  async function toggleVaultSidebar() {
-    vaultSidebarHidden.value = !vaultSidebarHidden.value;
-
-    if (window.api) {
-      await window.api.updateSidebarConfig({
-        vault: {
-          hidden: vaultSidebarHidden.value,
-          width: vaultSidebarWidth.value,
-        },
-      });
-    }
-  }
-
   function openSearch() {
     isSearchOpen.value = true;
   }
@@ -63,21 +44,22 @@ export const useLayoutStore = defineStore("layout", () => {
     searchResults.value = [];
   }
 
-  async function onVaultConfigChange(config: {
-    width: number;
-    hidden: boolean;
-  }) {
-    vaultSidebarWidth.value = Math.max(
-      MIN_VAULT_SIDEBAR_WIDTH,
+  function enableZenMode() {
+    isZenMode.value = true;
+    closeSearch();
+  }
 
-      Math.min(MAX_VAULT_SIDEBAR_WIDTH, config.width),
-    );
+  function disableZenMode() {
+    isZenMode.value = false;
+  }
 
-    vaultSidebarHidden.value = config.hidden;
-
-    if (window.api) {
-      await window.api.updateSidebarConfig({ vault: config });
+  function toggleZenMode() {
+    if (isZenMode.value) {
+      disableZenMode();
+      return;
     }
+
+    enableZenMode();
   }
 
   async function onWidgetConfigChange(config: {
@@ -102,11 +84,9 @@ export const useLayoutStore = defineStore("layout", () => {
 
     widgetSidebarHidden,
 
-    vaultSidebarWidth,
-
-    vaultSidebarHidden,
-
     isSearchOpen,
+
+    isZenMode,
 
     searchQuery,
 
@@ -114,13 +94,15 @@ export const useLayoutStore = defineStore("layout", () => {
 
     toggleWidgetSidebar,
 
-    toggleVaultSidebar,
-
     openSearch,
 
     closeSearch,
 
-    onVaultConfigChange,
+    enableZenMode,
+
+    disableZenMode,
+
+    toggleZenMode,
 
     onWidgetConfigChange,
   };

@@ -1,5 +1,7 @@
 import { onMounted, onUnmounted } from "vue";
 
+import { useEdenStore } from "@/store/eden";
+
 import { useLayoutStore } from "@/store/layout";
 
 const ZOOM_STEP = 0.1;
@@ -9,6 +11,8 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2.0;
 
 export function useKeyboard() {
+  const eden = useEdenStore();
+
   const layout = useLayoutStore();
 
   async function restoreZoom() {
@@ -53,6 +57,10 @@ export function useKeyboard() {
     // Cmd+K — toggle search
 
     if (mod && e.key === "k") {
+      if (layout.isZenMode) {
+        return;
+      }
+
       e.preventDefault();
 
       if (layout.isSearchOpen) {
@@ -64,10 +72,28 @@ export function useKeyboard() {
       return;
     }
 
-    // Escape — close search
+    // Cmd/Ctrl+Alt+Z — toggle zen mode
 
-    if (e.key === "Escape" && layout.isSearchOpen) {
-      layout.closeSearch();
+    if (mod && e.altKey && e.key.toLowerCase() === "z") {
+      if (eden.activeScreen !== "notes" || !eden.currentEntry) {
+        return;
+      }
+
+      e.preventDefault();
+      layout.toggleZenMode();
+      return;
+    }
+
+    // Escape — close search / exit zen
+
+    if (e.key === "Escape") {
+      if (layout.isSearchOpen) {
+        layout.closeSearch();
+      }
+
+      if (layout.isZenMode) {
+        layout.disableZenMode();
+      }
     }
   }
 

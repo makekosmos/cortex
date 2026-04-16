@@ -1,0 +1,31 @@
+{
+  "taskId": "2026-04-14-eden-writer-performance",
+  "status": "PASS",
+  "artifacts": {
+    "spec": ".agent/tasks/2026-04-14-eden-writer-performance/spec.md",
+    "evidence": ".agent/tasks/2026-04-14-eden-writer-performance/evidence.md",
+    "lint": ".agent/tasks/2026-04-14-eden-writer-performance/artifacts/lint.txt",
+    "testE2E": ".agent/tasks/2026-04-14-eden-writer-performance/artifacts/test-e2e.txt",
+    "perf": ".agent/tasks/2026-04-14-eden-writer-performance/artifacts/typing-perf-playwright.json"
+  },
+  "checks": {
+    "lint": "PASS",
+    "build": "PASS",
+    "testE2E": "PASS",
+    "architectReview": "PASS"
+  },
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS",
+    "AC7": "PASS"
+  },
+  "notes": [
+    "test:e2e includes bun run build and passed with 17/17 tests",
+    "composition coverage is smoke-level rather than full OS IME integration",
+    "plain npx tsc --noEmit remains blocked by duplicate workspace package names outside the app package"
+  ]
+}

@@ -1,0 +1,92 @@
+
+Running 4 tests using 1 worker
+
+[1A[2K(node:7687) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:7687) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K[1/4] tests/app.spec.ts:253:3 › Electron App › should support spaces, settings screen, and focus mode flows
+[1A[2Ktests/app.spec.ts:253:3 › Electron App › should support spaces, settings screen, and focus mode flows
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2KFailed to load resource: net::ERR_FILE_NOT_FOUND
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K  1) tests/app.spec.ts:253:3 › Electron App › should support spaces, settings screen, and focus mode flows 
+
+    [31mTest timeout of 60000ms exceeded.[39m
+
+
+[1A[2K[2/4] tests/app.spec.ts:721:3 › Electron App › should show vault name in sidebar header and support collapse/expand
+[1A[2K[3/4] tests/app.spec.ts:880:3 › Electron App › should show slash command menu and apply heading formatting
+[1A[2K(node:19152) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:19152) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K[4/4] tests/hevy.spec.ts:154:3 › Hevy Integration › should show connected apps settings page with Hevy card
+[1A[2Ktests/hevy.spec.ts:154:3 › Hevy Integration › should show connected apps settings page with Hevy card
+%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security
+  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
+  this app to unnecessary security risks.
+
+For more information and help, consult
+https://electronjs.org/docs/tutorial/security.
+This warning will not show up
+once the app is packaged.
+
+[1A[2K  1 failed
+    tests/app.spec.ts:253:3 › Electron App › should support spaces, settings screen, and focus mode flows 
+  2 did not run
+  1 passed (16.1m)

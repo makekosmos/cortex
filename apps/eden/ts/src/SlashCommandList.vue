@@ -19,7 +19,7 @@
   </div>
 </template>
 
-<script setup vapor lang="ts">
+<script setup lang="ts">
 import { ref, watch } from "vue";
 import type { Editor, Range } from "@tiptap/vue-3";
 

@@ -6,8 +6,6 @@
   position: relative;
   border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: var(--shadow-window);
-  transition: background-color var(--transition-normal);
 }
 
 .sidebar-layout {
@@ -17,12 +15,10 @@
 }
 
 .sidebar-layout.is-resizing,
-.vault-sidebar-wrapper.is-resizing,
 .widget-sidebar-wrapper.is-resizing {
   user-select: none;
 }
 
-.vault-sidebar-wrapper,
 .widget-sidebar-wrapper {
   position: relative;
   flex-shrink: 0;
@@ -31,111 +27,22 @@
   background: var(--color-bg-primary);
 }
 
-.vault-sidebar-wrapper.sidebarAnimation,
 .widget-sidebar-wrapper.sidebarAnimation {
   transition: width 0.2s linear;
 }
 
-.vault-sidebar-wrapper.hidden,
 .widget-sidebar-wrapper.hidden {
   width: 0 !important;
 }
 
-.vault-sidebar-wrapper.hidden .sidebarPage,
 .widget-sidebar-wrapper.hidden .sidebarPage {
   opacity: 0;
   transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.vault-sidebar-wrapper:not(.hidden) .sidebarPage,
 .widget-sidebar-wrapper:not(.hidden) .sidebarPage {
   opacity: 1;
   transition: opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.vault-sidebar {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  min-width: 0;
-  background: var(--color-bg-primary);
-}
-
-.vault-rail {
-  width: 64px;
-  flex-shrink: 0;
-  height: 100%;
-  padding: calc(var(--titlebar-height) + 8px) 8px 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--color-bg-primary);
-  border-right: 1px solid var(--color-shape-secondary);
-  position: relative;
-}
-
-.vault-rail-list,
-.vault-rail-actions {
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-}
-
-.vault-rail-item,
-.vault-rail-switcher,
-.sidebar-nav-search {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: all 0.15s ease;
-}
-
-.vault-rail-item {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.vault-rail-item:hover,
-.vault-rail-item.is-active,
-.vault-rail-switcher:hover,
-.sidebar-nav-search:hover,
-.sidebar-nav-search.is-active {
-  background: var(--color-shape-highlight-medium, rgba(255, 255, 255, 0.08));
-  color: var(--text-primary);
-}
-
-.vault-rail-switcher-lines {
-  position: relative;
-  display: block;
-  width: 14px;
-  height: 10px;
-}
-
-.vault-rail-switcher-lines::before,
-.vault-rail-switcher-lines::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  width: 14px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.vault-rail-switcher-lines::before {
-  top: 1px;
-  box-shadow: 0 4px 0 currentColor;
-}
-
-.vault-rail-switcher-lines::after {
-  bottom: 1px;
 }
 
 .vault-browser {
@@ -327,10 +234,14 @@
 .sidebar-expand-btn {
   position: absolute;
   top: 12px;
-  left: 12px;
+  left: 0;
   z-index: 20;
   pointer-events: auto;
   -webkit-app-region: no-drag;
+}
+
+.sidebar-expand-icon {
+  transform: scaleX(-1);
 }
 
 .vault-sidebar-resize-handle,
@@ -1940,21 +1851,10 @@
   display: flex;
   flex-direction: column;
   background-color: var(--color-bg-primary);
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
   position: relative;
   padding-top: 0;
   margin-top: var(--titlebar-height);
   z-index: 5;
-  transition: padding-top var(--transition-normal);
-}
-
-.app-main::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015) 0%, transparent 20%);
-  pointer-events: none;
 }
 
 .focus-mode-active {
@@ -4012,25 +3912,15 @@ span[data-wikilink]:hover {
   background: var(--color-bg-primary);
 }
 
-.vault-sidebar-wrapper,
 .widget-sidebar-wrapper {
   height: 100%;
   background: var(--color-bg-primary);
 }
 
-.vault-sidebar-wrapper {
-  padding: 8px 0 8px 8px;
-}
-
-.vault-sidebar-wrapper.hidden {
+.widget-sidebar-wrapper {
   padding: 0;
 }
 
-.widget-sidebar-wrapper {
-  padding: 0 0 8px 0;
-}
-
-.vault-sidebar,
 .widget-sidebar {
   position: relative;
   display: flex;
@@ -4107,45 +3997,6 @@ span[data-wikilink]:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.pageVault {
-  background: var(--color-shape-highlight-light-solid);
-  border-radius: 16px;
-}
-
-.pageVault.isMinimal {
-  border-radius: 16px;
-  background: var(--color-bg-primary);
-}
-
-.pageVaultSingle {
-  border-radius: 16px;
-}
-
-.vault-browser {
-  padding: 0;
-}
-
-.vault-browser > .head {
-  height: 52px;
-  padding: 0 12px;
-}
-
-.vault-browser > .head .name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.filterWrapper {
-  padding: 0 12px 8px;
-  overflow: hidden;
-}
-
-.scrollArea {
-  min-height: 0;
-  overflow-y: auto;
 }
 
 .sidebar-head-icon,
@@ -4871,7 +4722,7 @@ span[data-wikilink]:hover {
 
 .sidebar-expand-btn {
   top: 12px;
-  left: 12px;
+  left: 0;
 }
 
 .vault-sidebar-wrapper,
@@ -4903,6 +4754,11 @@ span[data-wikilink]:hover {
 }
 
 /* macOS: no titlebar background, content goes to top edge */
+.platform-mac .sidebar-layout {
+  height: 100%;
+  margin-top: 0;
+}
+
 .platform-mac .app-main {
   margin-top: 0;
 }
@@ -4913,5 +4769,10 @@ span[data-wikilink]:hover {
 }
 
 .platform-mac .sidebar-expand-btn {
-  top: 52px;
+  top: 12px;
+  left: var(--kepler-mac-traffic-light-left-safe-area);
+}
+
+.platform-windows .sidebar-expand-btn {
+  left: 0;
 }

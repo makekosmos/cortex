@@ -1,0 +1,29 @@
+{
+  "taskId": "2026-04-15-eden-sidebar-perf-shell-cleanup",
+  "status": "PASS",
+  "checks": {
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "testE2E": "PASS"
+  },
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS"
+  },
+  "artifacts": {
+    "context": ".omx/context/eden-sidebar-perf-shell-cleanup-20260415T142952Z.md",
+    "spec": ".agent/tasks/2026-04-15-eden-sidebar-perf-shell-cleanup/spec.md",
+    "evidence": ".agent/tasks/2026-04-15-eden-sidebar-perf-shell-cleanup/evidence.md",
+    "prd": ".omx/plans/prd-eden-sidebar-perf-shell-cleanup.md",
+    "testSpec": ".omx/plans/test-spec-eden-sidebar-perf-shell-cleanup.md"
+  },
+  "notes": [
+    "Removed heavy app-main shell effects near the sidebar",
+    "Removed renderer-side legacy vault sidebar state from the active UI path",
+    "Reduced reactive work for recent sidebar entries and search overlay title lookup",
+    "Full E2E suite passed with 19/19 tests"
+  ]
+}

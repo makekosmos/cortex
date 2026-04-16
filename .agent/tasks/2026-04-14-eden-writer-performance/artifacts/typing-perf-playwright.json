@@ -1,0 +1,64 @@
+{
+  "normalSummary": {
+    "inputToNextPaint": {
+      "count": 168,
+      "minMs": 1.8,
+      "maxMs": 19.4,
+      "avgMs": 10.17,
+      "p50Ms": 9.4,
+      "p95Ms": 16.2,
+      "p99Ms": 18.1
+    },
+    "updateToNextPaint": {
+      "count": 168,
+      "minMs": 0.3,
+      "maxMs": 16.4,
+      "avgMs": 8.19,
+      "p50Ms": 6.7,
+      "p95Ms": 14.3,
+      "p99Ms": 15.6
+    },
+    "saveDuration": {
+      "count": 0,
+      "minMs": 0,
+      "maxMs": 0,
+      "avgMs": 0,
+      "p50Ms": 0,
+      "p95Ms": 0,
+      "p99Ms": 0
+    },
+    "longTaskCount": 0,
+    "longTaskMaxDurationMs": 0
+  },
+  "zenSummary": {
+    "inputToNextPaint": {
+      "count": 216,
+      "minMs": 2,
+      "maxMs": 18.6,
+      "avgMs": 9.75,
+      "p50Ms": 9,
+      "p95Ms": 15.7,
+      "p99Ms": 16.9
+    },
+    "updateToNextPaint": {
+      "count": 216,
+      "minMs": 0.2,
+      "maxMs": 16.8,
+      "avgMs": 7.75,
+      "p50Ms": 7.1,
+      "p95Ms": 13.9,
+      "p99Ms": 15.3
+    },
+    "saveDuration": {
+      "count": 0,
+      "minMs": 0,
+      "maxMs": 0,
+      "avgMs": 0,
+      "p50Ms": 0,
+      "p95Ms": 0,
+      "p99Ms": 0
+    },
+    "longTaskCount": 0,
+    "longTaskMaxDurationMs": 0
+  }
+}

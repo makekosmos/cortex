@@ -1292,3 +1292,55 @@
   color: var(--text-secondary);
   margin: 0 0 4px;
 }
+
+.settings-content-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 20px;
+  background: var(--color-bg-primary);
+}
+
+
+.settings-content .settings-tab {
+  max-width: 680px;
+}
+
+.settings-space-row {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.settings-space-row:hover,
+.settings-space-row.active {
+  background: var(--color-shape-highlight-medium);
+}
+
+.settings-row-desc-plain {
+  font-family: var(--font-sans);
+  word-break: normal;
+}
+
+.settings-space-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+
+.settings-page--mac .settings-content-header {
+  min-height: calc(52px + var(--kepler-mac-traffic-light-top-safe-area));
+  padding-top: var(--kepler-mac-traffic-light-top-safe-area);
+  padding-left: var(--kepler-mac-traffic-light-left-safe-area);
+}

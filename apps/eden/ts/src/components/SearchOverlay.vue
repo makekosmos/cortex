@@ -59,7 +59,7 @@
               @mouseenter="selectedIndex = index"
             >
               <div class="entry-title">
-                {{ entries.find((e) => e.id === result.entryId)?.title || "Без названия" }}
+                {{ entryTitles[result.entryId] || "Без названия" }}
               </div>
               <div class="search-result-text">{{ result.text }}</div>
             </div>
@@ -94,7 +94,7 @@ const props = defineProps<{
   isOpen: boolean;
   query: string;
   results: SearchResult[];
-  entries: Entry[];
+  entryTitles: Record<string, string>;
 }>();
 
 const emit = defineEmits<{

@@ -109,18 +109,12 @@ contextBridge.exposeInMainWorld("api", {
 
   getSidebarConfig: (): Promise<{
     widget: { width: number; collapsed: boolean };
-
-    vault: { width: number; collapsed: boolean };
   }> => ipcRenderer.invoke("get-sidebar-config"),
 
   updateSidebarConfig: (config: {
     widget?: { width?: number; collapsed?: boolean };
-
-    vault?: { width?: number; collapsed?: boolean };
   }): Promise<{
     widget: { width: number; collapsed: boolean };
-
-    vault: { width: number; collapsed: boolean };
   }> => ipcRenderer.invoke("update-sidebar-config", config),
 
   listTrashEntries: (): Promise<Entry[]> =>

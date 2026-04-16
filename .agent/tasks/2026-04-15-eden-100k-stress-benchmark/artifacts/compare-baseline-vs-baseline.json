@@ -1,0 +1,38 @@
+{
+  "baseline": "/Users/kirill/Documents/projects/kepler/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/baseline-typing-stress-120000.json",
+  "current": "/Users/kirill/Documents/projects/kepler/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/baseline-typing-stress-120000.json",
+  "comparedAt": "2026-04-15T00:16:09.840Z",
+  "scenario": {
+    "baselineChars": 120372,
+    "currentChars": 120372,
+    "baselineStructure": {
+      "paragraphs": 348,
+      "headings": 15,
+      "blockquotes": 15,
+      "bulletLists": 14,
+      "codeBlocks": 14,
+      "wikilinkParagraphs": 35
+    },
+    "currentStructure": {
+      "paragraphs": 348,
+      "headings": 15,
+      "blockquotes": 15,
+      "bulletLists": 14,
+      "codeBlocks": 14,
+      "wikilinkParagraphs": 35
+    }
+  },
+  "deltas": {
+    "openMs": 0,
+    "normalInputP95": 0,
+    "normalInputP99": 0,
+    "normalUpdateP95": 0,
+    "normalUpdateP99": 0,
+    "zenInputP95": 0,
+    "zenInputP99": 0,
+    "zenUpdateP95": 0,
+    "zenUpdateP99": 0,
+    "normalLongTasks": 0,
+    "zenLongTasks": 0
+  }
+}

@@ -88,6 +88,7 @@ function shouldShowWindowInBackground() {
 }
 
 function createWindow() {
+  const launchInBackground = shouldShowWindowInBackground();
   const isMac = process.platform === "darwin";
 
   const isWindows = process.platform === "win32";
@@ -132,6 +133,7 @@ function createWindow() {
     show: false,
 
     webPreferences: {
+      backgroundThrottling: !launchInBackground,
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
@@ -141,7 +143,11 @@ function createWindow() {
       return;
     }
 
-    if (shouldShowWindowInBackground() || isDevRenderer()) {
+    if (launchInBackground) {
+      return;
+    }
+
+    if (isDevRenderer()) {
       win.showInactive();
 
       return;

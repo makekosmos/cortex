@@ -5,7 +5,7 @@ import { ref, onMounted, onUnmounted } from "vue";
 // Hardcoded settings — adjust here, not via props
 // ---------------------------------------------------------------------------
 
-const CARET_WIDTH = 2;
+const CARET_WIDTH = 3;
 const IDLE_DELAY = 530;
 const BLINK_SPEED = 1000;
 
@@ -43,6 +43,10 @@ function findTarget(eventTarget: EventTarget | null): {
   kind: "editable" | "input";
 } | null {
   if (!eventTarget || !(eventTarget instanceof HTMLElement)) return null;
+
+  if (eventTarget.closest(".ProseMirror")) {
+    return null;
+  }
 
   // Check input/textarea first
   if (isInputLike(eventTarget)) {

@@ -206,10 +206,6 @@ interface AppConfig {
 
   widgetSidebarCollapsed?: boolean;
 
-  vaultSidebarWidth?: number;
-
-  vaultSidebarCollapsed?: boolean;
-
   hevyAuthToken?: string;
 
   hevyUsername?: string;
@@ -436,14 +432,10 @@ export interface SidebarPanelConfig {
 
 export interface SidebarConfig {
   widget: SidebarPanelConfig;
-
-  vault: SidebarPanelConfig;
 }
 
 export interface SidebarConfigPatch {
   widget?: Partial<SidebarPanelConfig>;
-
-  vault?: Partial<SidebarPanelConfig>;
 }
 
 const DEFAULT_WIDGET_SIDEBAR_WIDTH = 320;
@@ -451,12 +443,6 @@ const DEFAULT_WIDGET_SIDEBAR_WIDTH = 320;
 const MIN_WIDGET_SIDEBAR_WIDTH = 220;
 
 const MAX_WIDGET_SIDEBAR_WIDTH = 520;
-
-const DEFAULT_VAULT_SIDEBAR_WIDTH = 232;
-
-const MIN_VAULT_SIDEBAR_WIDTH = 180;
-
-const MAX_VAULT_SIDEBAR_WIDTH = 360;
 
 const COLLAPSE_THRESHOLD = 60;
 
@@ -480,19 +466,6 @@ export function getSidebarConfig(): SidebarConfig {
       collapsed:
         config.widgetSidebarCollapsed ?? config.sidebarCollapsed ?? false,
     },
-
-    vault: {
-      width: Math.max(
-        MIN_VAULT_SIDEBAR_WIDTH,
-
-        Math.min(
-          MAX_VAULT_SIDEBAR_WIDTH,
-          config.vaultSidebarWidth ?? DEFAULT_VAULT_SIDEBAR_WIDTH,
-        ),
-      ),
-
-      collapsed: config.vaultSidebarCollapsed ?? false,
-    },
   };
 }
 
@@ -503,8 +476,6 @@ export function updateSidebarConfig(
 
   const updated: SidebarConfig = {
     widget: { ...current.widget, ...partial.widget },
-
-    vault: { ...current.vault, ...partial.vault },
   };
 
   const config = readAppConfig();
@@ -515,10 +486,6 @@ export function updateSidebarConfig(
     widgetSidebarWidth: updated.widget.width,
 
     widgetSidebarCollapsed: updated.widget.collapsed,
-
-    vaultSidebarWidth: updated.vault.width,
-
-    vaultSidebarCollapsed: updated.vault.collapsed,
   });
 
   return updated;
@@ -527,8 +494,6 @@ export function updateSidebarConfig(
 export {
   MIN_WIDGET_SIDEBAR_WIDTH,
   MAX_WIDGET_SIDEBAR_WIDTH,
-  MIN_VAULT_SIDEBAR_WIDTH,
-  MAX_VAULT_SIDEBAR_WIDTH,
   COLLAPSE_THRESHOLD,
 };
 

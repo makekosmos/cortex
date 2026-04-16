@@ -281,6 +281,40 @@ interface VaultStorageInfo {
   trashCount: number;
 }
 
+interface EdenPerfMetricSummary {
+  count: number;
+
+  minMs: number;
+
+  maxMs: number;
+
+  avgMs: number;
+
+  p50Ms: number;
+
+  p95Ms: number;
+
+  p99Ms: number;
+}
+
+interface EdenPerfSummary {
+  inputToNextPaint: EdenPerfMetricSummary;
+
+  updateToNextPaint: EdenPerfMetricSummary;
+
+  saveDuration: EdenPerfMetricSummary;
+
+  longTaskCount: number;
+
+  longTaskMaxDurationMs: number;
+}
+
+interface EdenPerfTracker {
+  reset: () => void;
+
+  getSummary: () => EdenPerfSummary;
+}
+
 interface Window {
   api: {
     saveEntry: (entry: Entry) => Promise<SaveEntryResult>;
@@ -346,18 +380,12 @@ interface Window {
 
     getSidebarConfig: () => Promise<{
       widget: { width: number; hidden: boolean };
-
-      vault: { width: number; hidden: boolean };
     }>;
 
     updateSidebarConfig: (config: {
       widget?: { width?: number; hidden?: boolean };
-
-      vault?: { width?: number; hidden?: boolean };
     }) => Promise<{
       widget: { width: number; hidden: boolean };
-
-      vault: { width: number; hidden: boolean };
     }>;
 
     getPlatform: () => Promise<NodeJS.Platform>;
@@ -388,4 +416,6 @@ interface Window {
 
     close: () => void;
   };
+
+  __edenPerf?: EdenPerfTracker;
 }

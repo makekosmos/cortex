@@ -26,23 +26,22 @@ async function launchApp(
     },
   });
 
-  const window = await electronApp.firstWindow();
-  const pageErrors: string[] = [];
-
-  window.on("console", (msg) => console.log(msg.text()));
-  window.on("pageerror", (error) => {
-    pageErrors.push(error.message);
-    console.log("Page error:", error);
-  });
-
-  await window.waitForLoadState("domcontentloaded");
-
   try {
+    const window = await electronApp.firstWindow({ timeout: 45000 });
+    const pageErrors: string[] = [];
+
+    window.on("console", (msg) => console.log(msg.text()));
+    window.on("pageerror", (error) => {
+      pageErrors.push(error.message);
+      console.log("Page error:", error);
+    });
+
+    await window.waitForLoadState("domcontentloaded");
     await window.waitForSelector(".app-container", { timeout: 10000 });
     return { electronApp, window, pageErrors, homePath };
   } catch (error) {
     await electronApp.close();
-    if (attempt >= 1) throw error;
+    if (attempt >= 2) throw error;
     return launchApp(homePath, attempt + 1);
   }
 }
@@ -59,7 +58,6 @@ async function ensureVault(launch: LaunchedApp, vaultPath: string): Promise<Laun
       const updateSidebarConfig = Reflect.get(api, "updateSidebarConfig");
       if (typeof updateSidebarConfig === "function") {
         await updateSidebarConfig({
-          vault: { width: 232, collapsed: false },
           widget: { width: 320, collapsed: false },
         });
       }
@@ -166,7 +164,7 @@ test.describe("Hevy Integration", () => {
       await expect(launch.window.locator(".settings-page")).toBeVisible();
 
       // Navigate to Connected Apps tab
-      await launch.window.locator(".settings-nav-item", { hasText: "Связанные программы" }).click();
+      await launch.window.locator('[data-testid="settings-nav-connected-apps"]').click();
       await expect(launch.window.locator('[data-testid="connected-apps-settings"]')).toBeVisible();
 
       // Hevy card should be visible
@@ -203,7 +201,7 @@ test.describe("Hevy Integration", () => {
       await expect(launch.window.locator(".settings-page")).toBeVisible();
 
       // Navigate to Object Types tab
-      await launch.window.locator(".settings-nav-item", { hasText: "Типы объектов" }).click();
+      await launch.window.locator('[data-testid="settings-nav-object-types"]').click();
       await expect(launch.window.locator(".object-types-layout")).toBeVisible();
 
       // System types should be listed as built-in (non-editable)
@@ -237,9 +235,10 @@ test.describe("Hevy Integration", () => {
       launch = await launchApp();
       launch = await ensureVault(launch, vaultPath);
 
-      // Click diary in sidebar
-      await launch.window.locator('[data-testid="widget-link-diary"]').scrollIntoViewIfNeeded();
-      await launch.window.locator('[data-testid="widget-link-diary"]').click();
+      await launch.window.locator('[data-testid="open-settings-btn"]').click({ force: true });
+      await expect(launch.window.locator(".settings-page")).toBeVisible();
+      await launch.window.locator('[data-testid="settings-nav-spaces"]').click();
+      await launch.window.locator('[data-testid="settings-space-diary"]').click();
       await expect(launch.window.locator('[data-testid="space-view-diary"]')).toBeVisible();
 
       // Today section should be visible
@@ -277,7 +276,10 @@ test.describe("Hevy Integration", () => {
       launch = await launchApp();
       launch = await ensureVault(launch, vaultPath);
 
-      await launch.window.locator('[data-testid="widget-link-all-properties"]').click();
+      await launch.window.locator('[data-testid="open-settings-btn"]').click({ force: true });
+      await expect(launch.window.locator(".settings-page")).toBeVisible();
+      await launch.window.locator('[data-testid="settings-nav-spaces"]').click();
+      await launch.window.locator('[data-testid="settings-space-all-properties"]').click();
       await expect(
         launch.window.locator('[data-testid="space-view-all-properties"]'),
       ).toBeVisible();

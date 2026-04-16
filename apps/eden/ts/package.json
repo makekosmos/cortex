@@ -12,7 +12,9 @@
     "format:check": "oxfmt --check src/ main/",
     "package": "bun run build && electron-builder",
     "preview": "vite preview",
-    "test:e2e": "bun run build && playwright test --config playwright.config.ts"
+    "test:e2e": "bun run build && playwright test --config playwright.config.ts",
+    "benchmark:typing-stress": "EDEN_RUN_STRESS_BENCHMARK=1 playwright test --config playwright.stress.config.ts",
+    "benchmark:typing-stress:compare": "bun run scripts/compareTypingStress.ts"
   },
   "dependencies": {
     "@tiptap/extension-code-block-lowlight": "^3.20.1",

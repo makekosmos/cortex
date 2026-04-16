@@ -1,0 +1,28 @@
+{
+  "taskId": "2026-04-15-eden-shared-caret",
+  "status": "PASS",
+  "checks": {
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "targetedPlaywright": "PASS",
+    "testE2E": "PASS"
+  },
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS"
+  },
+  "artifacts": {
+    "context": ".omx/context/eden-shared-caret-20260415T000000Z.md",
+    "spec": ".agent/tasks/2026-04-15-eden-shared-caret/spec.md",
+    "evidence": ".agent/tasks/2026-04-15-eden-shared-caret/evidence.md",
+    "prd": ".omx/plans/prd-eden-shared-caret.md",
+    "testSpec": ".omx/plans/test-spec-eden-shared-caret.md"
+  },
+  "notes": [
+    "Implemented editor-scoped inline caret via ProseMirror Decoration.widget",
+    "Added focused regression coverage for inline caret visibility",
+    "Full E2E suite passed with 20/20 tests"
+  ]
+}
