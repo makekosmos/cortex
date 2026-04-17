@@ -9,6 +9,8 @@ import {
 } from "vue";
 import { RouterLink } from "vue-router";
 import { PanelLeftClose } from "lucide-vue-next";
+// eslint-disable-next-line import/no-unassigned-import
+import "./sidebar.css";
 import SidebarButton from "./SidebarButton.vue";
 
 export interface SidebarConfig {
@@ -53,6 +55,7 @@ interface Props {
   maxWidth?: number;
   hiddenWidth?: number;
   toggleShortcut?: string;
+  dragRegion?: boolean;
   initialConfig?: Partial<SidebarConfig>;
   showToggle?: boolean;
   reserveTopInset?: boolean;
@@ -72,7 +75,8 @@ const props = withDefaults(defineProps<Props>(), {
   minWidth: 160,
   maxWidth: 320,
   hiddenWidth: 80,
-  toggleShortcut: undefined,
+  toggleShortcut: "meta+b|ctrl+b",
+  dragRegion: true,
   initialConfig: undefined,
   showToggle: true,
   reserveTopInset: true,
@@ -82,6 +86,47 @@ const emit = defineEmits<{
   configChange: [config: SidebarConfig];
   "update:hidden": [hidden: boolean];
 }>();
+
+const keyLayoutAliases: Record<string, string> = {
+    q: "й",
+    w: "ц",
+    e: "у",
+    r: "к",
+    t: "е",
+    y: "н",
+    u: "г",
+    i: "ш",
+    o: "щ",
+    p: "з",
+    "[": "х",
+    "]": "ъ",
+    a: "ф",
+    s: "ы",
+    d: "в",
+    f: "а",
+    g: "п",
+    h: "р",
+    j: "о",
+    k: "л",
+    l: "д",
+    ";": "ж",
+    "'": "э",
+    z: "я",
+    x: "ч",
+    c: "с",
+    v: "м",
+    b: "и",
+    n: "т",
+    m: "ь",
+    ",": "б",
+    ".": "ю",
+};
+const reverseKeyLayoutAliases = Object.fromEntries(
+    Object.entries(keyLayoutAliases).map(([latinKey, localizedKey]) => [
+        localizedKey,
+        latinKey,
+    ]),
+) as Record<string, string>;
 
 const width = shallowRef(props.initialConfig?.width ?? props.defaultWidth);
 const _hidden = shallowRef(
@@ -111,6 +156,7 @@ const shellClasses = computed(() => [
     "kepler-sidebar-shell",
     { "kepler-sidebar-shell--mac-safe-top": props.isMac && props.reserveTopInset },
     { "kepler-sidebar-shell--with-top-bar": hasTopBar.value },
+    { "kepler-sidebar-shell--drag-region": props.dragRegion },
 ]);
 
 watch([width, _hidden], () => {
@@ -151,6 +197,26 @@ function toggle() {
     notifyConfigChange({ width: width.value, hidden: _hidden.value });
 }
 
+function expandKeyVariants(key: string | null | undefined): Set<string> {
+    const variants = new Set<string>();
+    if (!key) return variants;
+
+    const normalized = key.toLowerCase();
+    variants.add(normalized);
+
+    const alias = keyLayoutAliases[normalized];
+    if (alias) {
+        variants.add(alias);
+    }
+
+    const reverseAlias = reverseKeyLayoutAliases[normalized];
+    if (reverseAlias) {
+        variants.add(reverseAlias);
+    }
+
+    return variants;
+}
+
 function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
     const parts = shortcut.toLowerCase().split("+");
     const key = parts[parts.length - 1];
@@ -163,9 +229,15 @@ function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
     if (needsCtrl && !e.ctrlKey) return false;
     if (needsShift && !e.shiftKey) return false;
     if (needsAlt && !e.altKey) return false;
+
+    const shortcutKeys = expandKeyVariants(key);
+    const eventKeys = expandKeyVariants(e.key);
     const codeKey = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : null;
-    if (e.key !== key && e.key.toLowerCase() !== key && codeKey !== key) return false;
-    return true;
+    for (const codeVariant of expandKeyVariants(codeKey)) {
+        eventKeys.add(codeVariant);
+    }
+
+    return [...shortcutKeys].some((shortcutKey) => eventKeys.has(shortcutKey));
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -255,7 +327,6 @@ const wrapperStyle = computed(() => {
     if (_hidden.value) return { width: `${props.hiddenWidth}px` };
     return { width: `${width.value}px` };
 });
-
 const wrapperClasses = computed(() =>
     [
         "kepler-sidebar-wrapper",
@@ -408,7 +479,10 @@ const wrapperClasses = computed(() =>
   position: absolute;
   inset: 0;
   z-index: 0;
-  /* -webkit-app-region: drag; */
+}
+
+.kepler-sidebar-shell--drag-region::before {
+  -webkit-app-region: drag;
 }
 
 .kepler-sidebar-top,

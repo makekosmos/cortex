@@ -40,8 +40,17 @@
           :title="layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
           @click="layout.toggleWidgetSidebar()"
         >
-          <PanelLeft :size="16" />
+          <PanelLeft :size="14" />
         </button>
+
+        <TitlebarHistoryControls
+          :back-disabled="!canGoBack"
+          :forward-disabled="!canGoForward"
+          back-title="Назад"
+          forward-title="Вперёд"
+          @back="navigateBack"
+          @forward="navigateForward"
+        />
       </template>
 
       <template
@@ -257,11 +266,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, nextTick, onMounted, shallowRef, watch } from "vue";
 import {
   CustomCaret,
   DesktopChrome,
   DesktopContentSurface,
+  TitlebarHistoryControls,
   type TitlebarPlatform,
 } from "@kepler/visuals";
 import { PanelLeft } from "lucide-vue-next";
@@ -282,9 +292,19 @@ import "@/App.css";
 const eden = useEdenStore();
 const layout = useLayoutStore();
 
+type EdenHistorySnapshot = {
+  activeScreen: "notes" | "settings";
+  currentEntryId: string | null;
+  activeSpace: SpaceId;
+};
+
 usePlatform();
 useKeyboard();
 const { pendingQuery } = useSearch();
+const backStack = shallowRef<EdenHistorySnapshot[]>([]);
+const forwardStack = shallowRef<EdenHistorySnapshot[]>([]);
+const historyReady = shallowRef(false);
+const suppressHistoryRecording = shallowRef(false);
 
 function pickRecentEntries(entries: Entry[], limit: number) {
   const topEntries: Entry[] = [];
@@ -326,9 +346,98 @@ const chromePlatform = computed<TitlebarPlatform>(() => {
 });
 
 const showSidebarChrome = computed(() => eden.activeScreen !== "settings");
+const currentHistorySnapshot = computed<EdenHistorySnapshot | null>(() => {
+  if (eden.isInitializing || !eden.vaultPath) return null;
+
+  return {
+    activeScreen: eden.activeScreen,
+    currentEntryId: eden.currentEntry?.id ?? null,
+    activeSpace: eden.activeSpace,
+  };
+});
+
+const canGoBack = computed(() => backStack.value.length > 0);
+const canGoForward = computed(() => forwardStack.value.length > 0);
+
+function snapshotsEqual(a: EdenHistorySnapshot | null, b: EdenHistorySnapshot | null) {
+  if (!a || !b) return a === b;
+
+  return (
+    a.activeScreen === b.activeScreen &&
+    a.currentEntryId === b.currentEntryId &&
+    a.activeSpace === b.activeSpace
+  );
+}
+
+async function applyHistorySnapshot(snapshot: EdenHistorySnapshot) {
+  suppressHistoryRecording.value = true;
+
+  try {
+    eden.activeSpace = snapshot.activeSpace;
+    eden.activeScreen = snapshot.activeScreen;
+
+    if (!snapshot.currentEntryId) {
+      eden.currentEntry = null;
+      return;
+    }
+
+    const existingEntry = eden.entries.find((entry) => entry.id === snapshot.currentEntryId);
+    if (existingEntry) {
+      eden.currentEntry = existingEntry;
+      return;
+    }
+
+    if (!window.api) {
+      eden.currentEntry = null;
+      return;
+    }
+
+    const loadedEntry = await window.api.loadEntry(snapshot.currentEntryId);
+    eden.currentEntry = loadedEntry ?? null;
+  } finally {
+    await nextTick();
+    suppressHistoryRecording.value = false;
+  }
+}
+
+async function navigateBack() {
+  const targetSnapshot = backStack.value.at(-1);
+  const currentSnapshot = currentHistorySnapshot.value;
+  if (!targetSnapshot || !currentSnapshot) return;
+
+  backStack.value = backStack.value.slice(0, -1);
+  forwardStack.value = [...forwardStack.value, currentSnapshot];
+  await applyHistorySnapshot(targetSnapshot);
+}
+
+async function navigateForward() {
+  const targetSnapshot = forwardStack.value.at(-1);
+  const currentSnapshot = currentHistorySnapshot.value;
+  if (!targetSnapshot || !currentSnapshot) return;
+
+  forwardStack.value = forwardStack.value.slice(0, -1);
+  backStack.value = [...backStack.value, currentSnapshot];
+  await applyHistorySnapshot(targetSnapshot);
+}
 
 onMounted(() => {
   void eden.initApp();
+});
+
+watch(currentHistorySnapshot, (nextSnapshot, previousSnapshot) => {
+  if (!nextSnapshot) return;
+
+  if (!historyReady.value) {
+    historyReady.value = true;
+    return;
+  }
+
+  if (suppressHistoryRecording.value || !previousSnapshot || snapshotsEqual(nextSnapshot, previousSnapshot)) {
+    return;
+  }
+
+  backStack.value = [...backStack.value, previousSnapshot];
+  forwardStack.value = [];
 });
 
 // Auto-open my-space entry when needed

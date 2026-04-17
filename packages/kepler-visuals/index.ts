@@ -18,6 +18,7 @@ export {
   type SidebarProjectItem,
   Titlebar,
   type TitlebarPlatform,
+  TitlebarHistoryControls,
   DesktopChrome,
   DesktopContentSurface,
   StatusDot,

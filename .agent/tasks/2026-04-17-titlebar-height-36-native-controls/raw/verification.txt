@@ -1,0 +1,22 @@
+Titlebar 36px / native controls verification
+Date: 2026-04-17
+
+Commands
+1. node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\dashboard\tsconfig.json
+   Exit: 0
+2. node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\delphi\ts\tsconfig.json
+   Exit: 0
+3. node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\eden\ts\tsconfig.json
+   Exit: 0
+
+Code evidence
+- packages/kepler-visuals/components/Titlebar.vue:42
+  --kepler-titlebar-height: 36px;
+- packages/kepler-visuals/components/Titlebar.vue:43
+  --kepler-titlebar-control-size: 32px;
+- apps/dashboard/electron/main.ts:70
+  height: 36,
+- apps/delphi/ts/electron/main.ts:243
+  height: 36,
+- apps/eden/ts/main/main.ts:185
+  height: 36,

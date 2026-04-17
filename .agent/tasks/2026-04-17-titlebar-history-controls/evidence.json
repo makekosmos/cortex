@@ -1,0 +1,67 @@
+{
+  "task_id": "2026-04-17-titlebar-history-controls",
+  "result": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "Shared component added at packages/kepler-visuals/components/TitlebarHistoryControls.vue",
+        "Component exported through public package entrypoints"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "Component accepts backDisabled and forwardDisabled props",
+        "Buttons use disabled styling and disabled attribute"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "DashboardShell reads router.options.history.state",
+        "DashboardShell wires shared controls into titlebar-leading"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "Delphi App.vue reads router.options.history.state",
+        "Delphi App.vue wires shared controls into titlebar-leading"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "Eden App.vue maintains a local back/forward stack for activeScreen/currentEntryId/activeSpace",
+        "Eden wires shared controls into DesktopChrome titlebar-leading"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        "Dashboard tsc --noEmit passed",
+        "Delphi tsc --noEmit passed",
+        "Eden tsc --noEmit passed"
+      ]
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "evidence": [
+        "Dashboard AGENTS updated",
+        "Delphi AGENTS updated",
+        "Eden AGENTS updated"
+      ]
+    }
+  ],
+  "raw_artifacts": [
+    ".agent/tasks/2026-04-17-titlebar-history-controls/raw/verification.txt"
+  ]
+}

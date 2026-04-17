@@ -353,6 +353,7 @@ bun run dev                 # build sidecar:dev + vite
 reka-ui (headless Vue 3 components): Tooltip, Dialog Рё С‚.Рґ. РЎС‚РёР»Рё вЂ” Tailwind CSS 4 СЃ CSS-РїРµСЂРµРјРµРЅРЅС‹РјРё (`--background`, `--foreground`, `--border`, `--popover`, `--muted-foreground`).
 
 **Shared UI single source of truth:** Delphi TS **MUST** брать общие визуальные компоненты из workspace-пакета `@kepler/visuals` через его public API. Desktop app shell uses `DesktopChrome` for the window frame and `DesktopContentSurface` for the inner content area. Не держи локальные копии вроде `src/components/SideBarButton.vue`; app-level компоненты в `src/components/` должны быть только адаптерами/композицией над shared package.
+Titlebar navigation for routed desktop pages should use shared `TitlebarHistoryControls` from `@kepler/visuals`; disabled-state must come from the current Vue Router history state instead of local guessed counters.
 
 ### Sidebar zen-mode width
 

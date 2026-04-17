@@ -1,0 +1,22 @@
+{
+  "task_id": "2026-04-17-sidebar-default-shortcut",
+  "overall_status": "PASS",
+  "verified_at": "2026-04-17",
+  "criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "basis": "Sidebar now defaults toggleShortcut to meta+b|ctrl+b in shared code."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "basis": "Eden consumer continues to omit toggle-shortcut and therefore now inherits the shared default automatically."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "basis": "Focused type checks passed for dashboard, Delphi, and Eden."
+    }
+  ]
+}

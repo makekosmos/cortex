@@ -39,7 +39,9 @@ const titlebarClasses = computed(() => [
 
 <style scoped>
 .kepler-titlebar {
-    --kepler-titlebar-height: 31px;
+    --kepler-titlebar-height: 36px;
+    --kepler-titlebar-control-size: 32px;
+    --kepler-titlebar-control-radius: 10px;
     position: relative;
     z-index: 20;
     display: grid;
@@ -69,6 +71,7 @@ const titlebarClasses = computed(() => [
     min-width: 0;
     display: flex;
     align-items: center;
+    min-height: 100%;
     gap: 0.5rem;
 }
 

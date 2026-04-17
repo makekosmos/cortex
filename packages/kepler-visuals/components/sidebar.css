@@ -15,6 +15,10 @@
   transition: width 0.33s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.kepler-sidebar-wrapper.is-resizing {
+  transition: none;
+}
+
 .kepler-sidebar-wrapper.hidden .kepler-sidebar-content {
   background: transparent;
   border-color: transparent;

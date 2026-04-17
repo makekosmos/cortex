@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /* eslint-disable no-console */
 import { computed, onMounted, onUnmounted, shallowRef } from "vue";
-import { RouterView } from "vue-router";
+import { RouterView, useRoute, useRouter } from "vue-router";
 import { Loader, PanelLeft, Wifi, WifiOff } from "lucide-vue-next";
 import QRCode from "qrcode";
 import {
@@ -34,6 +34,7 @@ import {
   DesktopChrome,
   DesktopContentSurface,
   StatusDot,
+  TitlebarHistoryControls,
   type StatusDotTone,
   type TitlebarPlatform,
 } from "@kepler/visuals";
@@ -44,9 +45,16 @@ import { setSidebarHidden, useSidebarState } from "@/composables/useSidebarState
 // ---------------------------------------------------------------------------
 
 const store = useTodoStore();
+const route = useRoute();
+const router = useRouter();
 
 const quickSearchOpen = shallowRef(false);
 const { sidebarHidden } = useSidebarState();
+
+type RouterHistoryStateLike = {
+  back?: string | null;
+  forward?: string | null;
+};
 
 function handleGlobalKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
@@ -196,6 +204,30 @@ const chromePlatform = computed<TitlebarPlatform>(() => {
 
 function toggleSidebar() {
   setSidebarHidden(!sidebarHidden.value);
+}
+
+const historyState = computed(
+  () => (router.options.history.state as RouterHistoryStateLike | undefined) ?? undefined,
+);
+
+const canGoBack = computed(() => {
+  void route.fullPath;
+  return Boolean(historyState.value?.back);
+});
+
+const canGoForward = computed(() => {
+  void route.fullPath;
+  return Boolean(historyState.value?.forward);
+});
+
+function navigateBack() {
+  if (!canGoBack.value) return;
+  router.back();
+}
+
+function navigateForward() {
+  if (!canGoForward.value) return;
+  router.forward();
 }
 
 // ---------------------------------------------------------------------------
@@ -606,8 +638,17 @@ onUnmounted(() => {
           :title="sidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
           @click="toggleSidebar"
         >
-          <PanelLeft :size="16" />
+          <PanelLeft :size="14" />
         </button>
+
+        <TitlebarHistoryControls
+          :back-disabled="!canGoBack"
+          :forward-disabled="!canGoForward"
+          back-title="Назад"
+          forward-title="Вперёд"
+          @back="navigateBack"
+          @forward="navigateForward"
+        />
       </template>
 
       <template #titlebar-trailing>

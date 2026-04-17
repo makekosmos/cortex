@@ -15,12 +15,18 @@ import {
   DesktopContentSurface,
   Sidebar as KeplerSidebar,
   StatusDot,
+  TitlebarHistoryControls,
   type SidebarConfig,
   type SidebarNavItem,
   type StatusDotTone,
   type TitlebarPlatform,
 } from "@kepler/visuals";
 import { useDashboardData } from "@/composables/useDashboardData";
+
+type RouterHistoryStateLike = {
+  back?: string | null;
+  forward?: string | null;
+};
 
 const STORAGE_KEY = "dashboard-sidebar-config";
 
@@ -71,6 +77,24 @@ function setSidebarHidden(hidden: boolean) {
 
 function toggleSidebar() {
   setSidebarHidden(!sidebarConfig.value.hidden);
+}
+
+const historyState = computed(() => {
+  void route.fullPath;
+  return (router.options.history.state as RouterHistoryStateLike | undefined) ?? undefined;
+});
+
+const canGoBack = computed(() => Boolean(historyState.value?.back));
+const canGoForward = computed(() => Boolean(historyState.value?.forward));
+
+function navigateBack() {
+  if (!canGoBack.value) return;
+  router.back();
+}
+
+function navigateForward() {
+  if (!canGoForward.value) return;
+  router.forward();
 }
 
 onMounted(() => {
@@ -156,8 +180,17 @@ const statusPopoverCopy = computed(() => {
         :title="sidebarConfig.hidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
         @click="toggleSidebar()"
       >
-        <PanelLeft :size="16" />
+        <PanelLeft :size="14" />
       </button>
+
+      <TitlebarHistoryControls
+        :back-disabled="!canGoBack"
+        :forward-disabled="!canGoForward"
+        back-title="Назад"
+        forward-title="Вперёд"
+        @back="navigateBack"
+        @forward="navigateForward"
+      />
 
       <button
         type="button"
@@ -165,7 +198,7 @@ const statusPopoverCopy = computed(() => {
         data-testid="choose-database-button"
         @click="dashboard.chooseDatabase()"
       >
-        <Database :size="16" />
+        <Database :size="14" />
         <span>Выбрать Ark DB</span>
       </button>
 
@@ -176,7 +209,7 @@ const statusPopoverCopy = computed(() => {
         title="Обновить данные"
         @click="dashboard.loadSnapshot()"
       >
-        <RefreshCw :size="16" />
+        <RefreshCw :size="14" />
       </button>
 
       <button
@@ -186,7 +219,7 @@ const statusPopoverCopy = computed(() => {
         title="Сбросить выбранную базу"
         @click="dashboard.resetDatabase()"
       >
-        <RotateCcw :size="16" />
+        <RotateCcw :size="14" />
       </button>
     </template>
 
@@ -280,10 +313,10 @@ const statusPopoverCopy = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-width: 32px;
-  height: 32px;
+  min-width: var(--kepler-titlebar-control-size, 32px);
+  height: var(--kepler-titlebar-control-size, 32px);
   padding: 0 0.625rem;
-  border-radius: 10px;
+  border-radius: var(--kepler-titlebar-control-radius, 10px);
   color: var(--dashboard-text-soft);
   transition:
     background-color 120ms ease,

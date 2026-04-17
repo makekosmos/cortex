@@ -1,0 +1,91 @@
+{
+  "task_id": "2026-04-17-sidebar-resizable-parity",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Sidebar now imports the shared resizable sidebar stylesheet itself.",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/components/Sidebar.vue"
+        },
+        {
+          "type": "artifact",
+          "path": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-dist-css-grep.txt"
+        }
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Sidebar again exposes the optional drag-region behavior and keeps interactive descendants no-drag.",
+      "evidence": [
+        {
+          "type": "file",
+          "path": "packages/kepler-visuals/components/Sidebar.vue"
+        },
+        {
+          "type": "artifact",
+          "path": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-dist-js-grep.txt"
+        },
+        {
+          "type": "artifact",
+          "path": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-dist-css-grep.txt"
+        }
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "Current sidebar consumers still typecheck and the dashboard rebuild includes the restored sidebar implementation.",
+      "evidence": [
+        {
+          "type": "artifact",
+          "path": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-tsc.txt"
+        },
+        {
+          "type": "artifact",
+          "path": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/delphi-tsc.txt"
+        },
+        {
+          "type": "artifact",
+          "path": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-vite-build.txt"
+        },
+        {
+          "type": "artifact",
+          "path": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-runtime-smoke.txt",
+          "note": "Runtime smoke attempted but blocked by environment-level spawn EPERM."
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "command": "bun run --cwd packages/kepler-visuals format",
+      "status": "PASS"
+    },
+    {
+      "command": "apps/dashboard/node_modules/.bin/tsc.exe --noEmit -p apps/dashboard/tsconfig.json",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-tsc.txt"
+    },
+    {
+      "command": "apps/dashboard/node_modules/.bin/tsc.exe --noEmit -p apps/delphi/ts/tsconfig.json",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/delphi-tsc.txt"
+    },
+    {
+      "command": "Push-Location apps/dashboard; vite build --configLoader native",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-vite-build.txt"
+    },
+    {
+      "command": "Push-Location apps/dashboard; node --experimental-strip-types scripts/runE2ESmoke.ts",
+      "status": "BLOCKED",
+      "artifact": ".agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-runtime-smoke.txt",
+      "reason": "Environment blocked Electron launch with spawn EPERM."
+    }
+  ]
+}

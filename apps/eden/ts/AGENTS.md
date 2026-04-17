@@ -21,6 +21,7 @@
 - Проект больше не использует `vite-plugin-electron`; текущий конфиг лежит в `electron.vite.config.ts`.
 - Основная Electron-логика находится в `main/main.ts`, `main/preload.ts`, `main/store.ts`.
 - Desktop shell строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`; это основной контракт для оконного chrome, sidebar и content surface.
+- Titlebar navigation в desktop-shell должна использовать shared `TitlebarHistoryControls` из `@kepler/visuals`, но в Eden её состояние берётся из локальной истории экранов/записей, а не из `vue-router`.
 - Native controls и safe-area поведение задаются через `BrowserWindow` chrome config и shared visual components, а не через ручные offsets в основном shell.
 - Не возвращай в shell старые manual titlebar offsets вроде локальных `--titlebar-height` / `--titlebar-left-safe-area` костылей, если их можно выразить через shared chrome contract.
 - Typed notes уже начаты:

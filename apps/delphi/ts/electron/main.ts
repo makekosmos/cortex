@@ -119,6 +119,8 @@ function getDataDir(): string {
 }
 
 const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+const WINDOWS_TITLEBAR_BASE_HEIGHT = 36;
+const WINDOWS_TITLEBAR_SYMBOL_COLOR = '#e5e7eb';
 
 function loadWindowState(): { width: number; height: number; x?: number; y?: number; isMaximized?: boolean } {
   try {
@@ -133,6 +135,20 @@ function saveWindowState(win: BrowserWindow) {
   const isMaximized = win.isMaximized();
   const bounds = isMaximized ? (win as any)._lastBounds ?? win.getBounds() : win.getBounds();
   fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ ...bounds, isMaximized }), 'utf-8');
+}
+
+function applyWindowsTitlebarOverlay(win: BrowserWindow) {
+  if (process.platform !== 'win32' || win.isDestroyed()) {
+    return;
+  }
+
+  const zoomFactor = Math.max(0.5, Math.min(2, win.webContents.getZoomFactor() || 1));
+
+  win.setTitleBarOverlay({
+    color: '#00000000',
+    symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+    height: Math.round(WINDOWS_TITLEBAR_BASE_HEIGHT * zoomFactor),
+  });
 }
 
 function setupApplicationMenu(): void {
@@ -239,8 +255,8 @@ function createWindow() {
           titleBarStyle: 'hidden' as const,
           titleBarOverlay: {
             color: '#00000000',
-            symbolColor: '#e5e7eb',
-            height: 32,
+            symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+            height: WINDOWS_TITLEBAR_BASE_HEIGHT,
           },
         }
       : {}),
@@ -252,6 +268,13 @@ function createWindow() {
   });
 
   if (saved.isMaximized) win.maximize();
+
+  if (isWindows) {
+    const syncOverlay = () => applyWindowsTitlebarOverlay(win);
+    win.webContents.on('did-finish-load', syncOverlay);
+    win.webContents.on('zoom-changed', syncOverlay);
+    syncOverlay();
+  }
 
   // Track bounds before maximize so we can save the windowed size
   const onResize = () => { if (!win.isMaximized()) (win as any)._lastBounds = win.getBounds(); };

@@ -12,6 +12,8 @@ process.env.APP_ROOT = path.join(__dirname, "..");
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const ELECTRON_RENDERER_URL = process.env.ELECTRON_RENDERER_URL;
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
+const WINDOWS_TITLEBAR_BASE_HEIGHT = 36;
+const WINDOWS_TITLEBAR_SYMBOL_COLOR = "#f4efe7";
 
 let win: BrowserWindow | null = null;
 
@@ -44,6 +46,20 @@ function currentDbPath() {
   return readPreferences().dbPath;
 }
 
+function applyWindowsTitlebarOverlay(window: BrowserWindow) {
+  if (process.platform !== "win32" || window.isDestroyed()) {
+    return;
+  }
+
+  const zoomFactor = Math.max(0.5, Math.min(2, window.webContents.getZoomFactor() || 1));
+
+  window.setTitleBarOverlay({
+    color: "#00000000",
+    symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+    height: Math.round(WINDOWS_TITLEBAR_BASE_HEIGHT * zoomFactor),
+  });
+}
+
 function createWindow() {
   const isMac = process.platform === "darwin";
   const isWindows = process.platform === "win32";
@@ -66,8 +82,8 @@ function createWindow() {
           titleBarStyle: "hidden" as const,
           titleBarOverlay: {
             color: "#00000000",
-            symbolColor: "#f4efe7",
-            height: 32,
+            symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+            height: WINDOWS_TITLEBAR_BASE_HEIGHT,
           },
         }
       : {}),
@@ -80,6 +96,18 @@ function createWindow() {
   win.once("ready-to-show", () => {
     win?.show();
   });
+
+  if (isWindows) {
+    const syncOverlay = () => {
+      if (win) {
+        applyWindowsTitlebarOverlay(win);
+      }
+    };
+
+    win.webContents.on("did-finish-load", syncOverlay);
+    win.webContents.on("zoom-changed", syncOverlay);
+    syncOverlay();
+  }
 
   if (ELECTRON_RENDERER_URL ?? VITE_DEV_SERVER_URL) {
     win.loadURL(ELECTRON_RENDERER_URL ?? VITE_DEV_SERVER_URL!);

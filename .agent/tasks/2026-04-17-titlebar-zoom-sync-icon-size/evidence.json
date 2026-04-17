@@ -1,0 +1,50 @@
+{
+  "task_id": "2026-04-17-titlebar-zoom-sync-icon-size",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "packages/kepler-visuals/components/Titlebar.vue sets --kepler-titlebar-height: 36px."
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/electron/main.ts applies setTitleBarOverlay(height: round(36 * zoomFactor)).",
+        "apps/delphi/ts/electron/main.ts applies setTitleBarOverlay(height: round(36 * zoomFactor)).",
+        "apps/eden/ts/main/main.ts applies setTitleBarOverlay(height: round(36 * zoomFactor))."
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "packages/kepler-visuals/components/TitlebarHistoryControls.vue now renders 14px chevrons."
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/dashboard/src/components/dashboard/DashboardShell.vue uses 14px titlebar icons.",
+        "apps/delphi/ts/src/App.vue uses a 14px sidebar toggle icon in titlebar-leading.",
+        "apps/eden/ts/src/App.vue uses a 14px sidebar toggle icon in titlebar-leading."
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "TypeScript checks passed for apps/dashboard, apps/delphi/ts, and apps/eden/ts."
+      ]
+    }
+  ],
+  "commands": [
+    "node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard\\tsconfig.json",
+    "node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kepler\\apps\\delphi\\ts\\tsconfig.json",
+    "node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\tsconfig.json"
+  ]
+}

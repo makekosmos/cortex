@@ -83,6 +83,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+const WINDOWS_TITLEBAR_BASE_HEIGHT = 36;
+const WINDOWS_TITLEBAR_SYMBOL_COLOR = "#e5e7eb";
 
 function setupApplicationMenu() {
   const template: MenuItemConstructorOptions[] = [];
@@ -129,12 +131,12 @@ function setupApplicationMenu() {
     submenu:
       process.platform === "darwin"
         ? [
-            { role: "minimize" },
-            { role: "close" },
-            { type: "separator" },
-            { role: "front" },
-            { role: "window" },
-          ]
+          { role: "minimize" },
+          { role: "close" },
+          { type: "separator" },
+          { role: "front" },
+          { role: "window" },
+        ]
         : [{ role: "minimize" }, { role: "close" }],
   });
 
@@ -149,6 +151,20 @@ function shouldShowWindowInBackground() {
   return (
     process.env.EDEN_BACKGROUND_LAUNCH === "1" || process.env.PLAYWRIGHT === "1"
   );
+}
+
+function applyWindowsTitlebarOverlay(window: BrowserWindow) {
+  if (process.platform !== "win32" || window.isDestroyed()) {
+    return;
+  }
+
+  const zoomFactor = Math.max(0.5, Math.min(2, window.webContents.getZoomFactor() || 1));
+
+  window.setTitleBarOverlay({
+    color: "#00000000",
+    symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+    height: Math.round(WINDOWS_TITLEBAR_BASE_HEIGHT * zoomFactor),
+  });
 }
 
 function createWindow() {
@@ -172,19 +188,19 @@ function createWindow() {
 
     ...(isMac
       ? {
-          titleBarStyle: "hiddenInset" as const,
-        }
+        titleBarStyle: "hiddenInset" as const,
+      }
       : {}),
 
     ...(isWindows
-        ? {
-          titleBarStyle: "hidden" as const,
-          titleBarOverlay: {
-            color: "#00000000",
-            symbolColor: "#e5e7eb",
-            height: 32,
-          },
-        }
+      ? {
+        titleBarStyle: "hidden" as const,
+        titleBarOverlay: {
+          color: "#00000000",
+          symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+          height: WINDOWS_TITLEBAR_BASE_HEIGHT,
+        },
+      }
       : {}),
 
     backgroundColor: "#171717",
@@ -216,6 +232,18 @@ function createWindow() {
 
     win.show();
   });
+
+  if (isWindows) {
+    const syncOverlay = () => {
+      if (win) {
+        applyWindowsTitlebarOverlay(win);
+      }
+    };
+
+    win.webContents.on("did-finish-load", syncOverlay);
+    win.webContents.on("zoom-changed", syncOverlay);
+    syncOverlay();
+  }
 
   if (ELECTRON_RENDERER_URL ?? VITE_DEV_SERVER_URL) {
     win.loadURL(ELECTRON_RENDERER_URL ?? VITE_DEV_SERVER_URL!);
@@ -413,6 +441,7 @@ app.whenReady().then(async () => {
       const clamped = Math.max(0.5, Math.min(2.0, factor));
 
       win.webContents.setZoomFactor(clamped);
+      applyWindowsTitlebarOverlay(win);
 
       return clamped;
     }
@@ -627,11 +656,11 @@ app.whenReady().then(async () => {
 
   // Purge expired trash on startup and daily
 
-  void purgeExpiredTrash().catch(() => {});
+  void purgeExpiredTrash().catch(() => { });
 
   setInterval(
     () => {
-      void purgeExpiredTrash().catch(() => {});
+      void purgeExpiredTrash().catch(() => { });
     },
 
     24 * 60 * 60 * 1000,

@@ -4791,6 +4791,9 @@ span[data-wikilink]:hover {
 }
 
 .eden-titlebar-toggle {
+  width: var(--kepler-titlebar-control-size, 32px);
+  height: var(--kepler-titlebar-control-size, 32px);
+  border-radius: var(--kepler-titlebar-control-radius, 10px);
   -webkit-app-region: no-drag;
 }
 

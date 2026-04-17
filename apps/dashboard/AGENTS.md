@@ -32,6 +32,7 @@ Rules
 - `electron/services/analytics.ts` is the single source of truth for dashboard SQL; do not duplicate analytics queries inside Vue components.
 - Use `@kepler/visuals` by import/alias only; never copy shared sidebar or tokens into `apps/dashboard`.
 - Desktop window chrome should stay aligned with shared visuals components; wire actions in dashboard, but keep titlebar/sidebar layout primitives in `@kepler/visuals`.
+- Router-driven titlebar navigation should use the shared `TitlebarHistoryControls` from `@kepler/visuals`, while disabled-state is derived from the actual Vue Router history state inside dashboard.
 - Keep route components thin: they compose sections, but data fetching stays in `useDashboardData`.
 - Prefer presentational leaf components for charts/cards; keep side effects in composables or Electron main.
 - Keep router navigation hash-based so deep-linking and Electron e2e navigation remain stable.
