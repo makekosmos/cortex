@@ -1,0 +1,4 @@
+bun run predev
+[native] native rebuild is up to date, skipping
+DURATION_MS=119
+EXIT_CODE=0

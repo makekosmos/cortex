@@ -1,0 +1,235 @@
+diff --git a/apps/delphi/ts/src/pages/WeekPage.vue b/apps/delphi/ts/src/pages/WeekPage.vue
+index cd10bd0..b7ac086 100644
+--- a/apps/delphi/ts/src/pages/WeekPage.vue
++++ b/apps/delphi/ts/src/pages/WeekPage.vue
+@@ -143,21 +143,41 @@ const draggingId = shallowRef<string | null>(null);
+ const overColDate = shallowRef<string | null>(null);
+ const overCardId = shallowRef<string | null>(null);
+ const dropAfterCard = shallowRef(false);
++let dragPreviewEl: HTMLElement | null = null;
+ 
+ function onCardDragStart(todoId: string, e: DragEvent) {
++  const dragSource = e.currentTarget as HTMLElement | null;
+   draggingId.value = todoId;
+   e.dataTransfer!.effectAllowed = "move";
+   e.dataTransfer!.setData("text/plain", todoId);
+-  // Defer opacity so the ghost captures the full card
+-  requestAnimationFrame(() => {
+-    draggingId.value = todoId;
+-  });
++
++  if (dragSource) {
++    const rect = dragSource.getBoundingClientRect();
++    dragPreviewEl = dragSource.cloneNode(true) as HTMLElement;
++    Object.assign(dragPreviewEl.style, {
++      position: "fixed",
++      top: "-10000px",
++      left: "-10000px",
++      width: `${rect.width}px`,
++      pointerEvents: "none",
++      margin: "0",
++      transform: "rotate(2.5deg)",
++    });
++    document.body.appendChild(dragPreviewEl);
++    e.dataTransfer!.setDragImage(
++      dragPreviewEl,
++      e.clientX - rect.left,
++      e.clientY - rect.top,
++    );
++  }
+ }
+ 
+ function onCardDragEnd() {
+   draggingId.value = null;
+   overColDate.value = null;
+   overCardId.value = null;
++  dragPreviewEl?.remove();
++  dragPreviewEl = null;
+ }
+ 
+ function onColDragOver(colDateStr: string, e: DragEvent) {
+@@ -325,11 +345,11 @@ function onColDrop(col: DayColumn, e: DragEvent) {
+                 :data-card-id="todo.id"
+                 draggable="true"
+                 class="group rounded-lg bg-(--background) p-2.5 transition-all"
+-                :class="[
++                :class="
+                   draggingId === todo.id
+-                    ? 'opacity-40 scale-95'
+-                    : 'cursor-grab hover:shadow-sm active:cursor-grabbing',
+-                ]"
++                    ? 'pointer-events-none opacity-0'
++                    : 'cursor-grab hover:shadow-sm active:cursor-grabbing'
++                "
+                 @dragstart="onCardDragStart(todo.id, $event)"
+                 @dragend="onCardDragEnd"
+               >
+diff --git a/packages/kepler-visuals/components/TodoRow.vue b/packages/kepler-visuals/components/TodoRow.vue
+index 1ed4488..dc89617 100644
+--- a/packages/kepler-visuals/components/TodoRow.vue
++++ b/packages/kepler-visuals/components/TodoRow.vue
+@@ -1,6 +1,5 @@
+ <script setup lang="ts">
+ import { shallowRef, computed, useTemplateRef, nextTick, ref } from "vue";
+-import { GripVertical } from "lucide-vue-next";
+ 
+ export interface TodoRowItem {
+   id: string;
+@@ -68,13 +67,12 @@ function onEditKeyDown(e: KeyboardEvent) {
+ // Drag & Drop
+ // ---------------------------------------------------------------------------
+ 
+-const ROW_HEIGHT = 40;
+-
+ let clone: HTMLElement | null = null;
+-let ghost: HTMLElement | null = null;
+ let startX = 0;
+ let startY = 0;
+ let lastTarget: TodoDropPayload | null = null;
++let indicatorEl: HTMLElement | null = null;
++let indicatorPosition: "before" | "after" | null = null;
+ 
+ // Snapshot of row positions taken once at drag start (before ghost distorts layout)
+ let rowSnapshot: { id: string; top: number; bottom: number; mid: number }[] = [];
+@@ -136,18 +134,6 @@ function beginDrag(cx: number, cy: number) {
+   document.body.appendChild(clone);
+   document.body.style.cursor = "grabbing";
+ 
+-  // Ghost placeholder
+-  ghost = document.createElement("div");
+-  ghost.dataset.dropGhost = "";
+-  Object.assign(ghost.style, {
+-    height: "0px",
+-    overflow: "hidden",
+-    transition: "height 0.15s ease",
+-    borderRadius: "var(--radius)",
+-    backgroundColor: "var(--surface)",
+-    pointerEvents: "none",
+-  });
+-
+   isDragging.value = true;
+ }
+ 
+@@ -174,31 +160,33 @@ function findDropTarget(clientY: number): TodoDropPayload | null {
+   return { targetId: rowSnapshot[rowSnapshot.length - 1].id, after: true };
+ }
+ 
+-function positionGhost(target: TodoDropPayload) {
+-  if (!ghost) return;
++function clearDropIndicator() {
++  if (!indicatorEl || !indicatorPosition) return;
++  indicatorEl.classList.remove(
++    indicatorPosition === "before"
++      ? "todo-row--drop-before"
++      : "todo-row--drop-after",
++  );
++  indicatorEl = null;
++  indicatorPosition = null;
++}
+ 
++function positionIndicator(target: TodoDropPayload) {
+   const rows = getSiblingRows();
+   const targetEl = rows.find((el) => el.dataset.todoId === target.targetId);
+-  if (!targetEl?.parentElement) return;
+-
+-  const refNode = target.after ? targetEl.nextSibling : targetEl;
+-  const parent = targetEl.parentElement;
++  if (!targetEl) return;
+ 
+-  // Only move if position actually changed
+-  if (ghost.parentElement === parent && ghost.nextSibling === refNode) return;
++  const nextPosition = target.after ? "after" : "before";
++  if (indicatorEl === targetEl && indicatorPosition === nextPosition) return;
+ 
+-  // Remove from old position
+-  if (ghost.parentElement) {
+-    ghost.style.transition = "none";
+-    ghost.style.height = "0px";
+-    ghost.parentElement.removeChild(ghost);
+-  }
+-
+-  // Insert at new position with height animation
+-  parent.insertBefore(ghost, refNode as Node | null);
+-  ghost.offsetHeight; // force reflow
+-  ghost.style.transition = "height 0.15s ease";
+-  ghost.style.height = `${ROW_HEIGHT}px`;
++  clearDropIndicator();
++  targetEl.classList.add(
++    nextPosition === "before"
++      ? "todo-row--drop-before"
++      : "todo-row--drop-after",
++  );
++  indicatorEl = targetEl;
++  indicatorPosition = nextPosition;
+ }
+ 
+ function onDragMove(e: PointerEvent) {
+@@ -212,10 +200,10 @@ function onDragMove(e: PointerEvent) {
+   const target = findDropTarget(e.clientY);
+   if (!target) return;
+ 
+-  // Only update ghost if target changed
++  // Only update indicator if target changed
+   if (!lastTarget || lastTarget.targetId !== target.targetId || lastTarget.after !== target.after) {
+     lastTarget = target;
+-    positionGhost(target);
++    positionIndicator(target);
+   }
+ }
+ 
+@@ -227,10 +215,7 @@ function onDragEnd() {
+     clone = null;
+   }
+ 
+-  if (ghost?.parentElement) {
+-    ghost.parentElement.removeChild(ghost);
+-  }
+-  ghost = null;
++  clearDropIndicator();
+ 
+   isDragging.value = false;
+   rowSnapshot = [];
+@@ -249,10 +234,10 @@ function onDragEnd() {
+     :data-todo-id="todo.id"
+     :class="[
+       'todo-row group flex h-10 items-center gap-3 px-7 hover:bg-(--secondary)',
+-      isDragging ? 'opacity-0' : '',
++      isDragging ? 'todo-row--drag-source' : '',
+       draggable && !editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+     ]"
+-@pointerdown="onRowPointerDown"
++    @pointerdown="onRowPointerDown"
+     @dblclick="editable ? startEditing() : undefined"
+   >
+ 
+@@ -356,6 +341,30 @@ function onDragEnd() {
+   will-change: transform;
+ }
+ 
++.todo-row--drag-source {
++  opacity: 0;
++  pointer-events: none;
++}
++
++.todo-row--drop-before::before,
++.todo-row--drop-after::after {
++  content: "";
++  position: absolute;
++  left: 0.75rem;
++  right: 0.75rem;
++  height: 2px;
++  border-radius: 999px;
++  background: rgb(59 130 246 / 0.7);
++}
++
++.todo-row--drop-before::before {
++  top: 0;
++}
++
++.todo-row--drop-after::after {
++  bottom: 0;
++}
++
+ .todo-focus-pulse {
+   animation: focus-pulse 1.2s ease;
+ }

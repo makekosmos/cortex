@@ -1,99 +1,129 @@
 <template>
-  <div class="settings-section" data-testid="connected-apps-settings">
-    <h2>Связанные программы</h2>
-    <p class="settings-description">Импорт данных из внешних приложений в Eden.</p>
+  <div class="settings-tab" data-testid="connected-apps-settings">
+    <h1 class="settings-tab-title">Связанные программы</h1>
+    <p class="settings-tab-subtitle">
+      Интеграции и импорт данных из внешних приложений в Eden.
+    </p>
 
-    <div class="connected-app-card" data-testid="hevy-card">
-      <div class="connected-app-header">
-        <div class="connected-app-icon">
-          <img
-            src="/anytype/icon/type/default/barbell.svg"
-            alt="Hevy"
-            width="24"
-            height="24"
-            draggable="false"
-          />
+    <div class="settings-sections">
+      <section class="settings-section" data-testid="hevy-card">
+        <div class="settings-section-header">
+          <h2>Hevy</h2>
         </div>
-        <div class="connected-app-info">
-          <h3>Hevy</h3>
-          <p>Трекер тренировок — импорт тренировок и упражнений</p>
-        </div>
-        <div class="connected-app-badge">
-          <span
-            v-if="hevyStatus.loggedIn"
-            class="badge badge-connected"
-            data-testid="hevy-status-connected"
-            >Подключено</span
-          >
-          <span v-else class="badge badge-disconnected" data-testid="hevy-status-disconnected"
-            >Не подключено</span
-          >
-        </div>
-      </div>
 
-      <div v-if="hevyStatus.loggedIn" class="connected-app-body">
-        <p data-testid="hevy-username">
-          Аккаунт: <strong>{{ hevyStatus.username || "—" }}</strong>
-        </p>
-        <div class="connected-app-actions">
-          <button
-            class="settings-btn-primary"
-            :disabled="syncing"
-            data-testid="hevy-sync-btn"
-            type="button"
-            @click="handleSync"
-          >
-            {{ syncing ? "Синхронизация..." : "Синхронизировать тренировки" }}
-          </button>
-          <button
-            class="settings-btn-secondary"
-            data-testid="hevy-logout-btn"
-            type="button"
-            @click="handleLogout"
-          >
-            Отключить
-          </button>
-        </div>
-        <div v-if="syncResult" class="sync-result" data-testid="hevy-sync-result">
-          <p>
-            Добавлено тренировок: <strong>{{ syncResult.workoutsCreated }}</strong>
-          </p>
-          <p>
-            Пропущено (уже есть): <strong>{{ syncResult.workoutsSkipped }}</strong>
-          </p>
-          <p>
-            Добавлено упражнений: <strong>{{ syncResult.exerciseEntriesCreated }}</strong>
-          </p>
-        </div>
-        <div v-if="syncError" class="dialog-error" data-testid="hevy-sync-error">
-          {{ syncError }}
-        </div>
-      </div>
+        <div class="settings-section-body">
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="settings-row-title">Статус подключения</div>
+              <div class="settings-row-desc settings-row-desc-plain">
+                Трекер тренировок — импорт тренировок и упражнений.
+              </div>
+            </div>
+            <div class="settings-row-right">
+              <span
+                v-if="hevyStatus.loggedIn"
+                class="badge badge-connected"
+                data-testid="hevy-status-connected"
+              >
+                Подключено
+              </span>
+              <span
+                v-else
+                class="badge badge-disconnected"
+                data-testid="hevy-status-disconnected"
+              >
+                Не подключено
+              </span>
+            </div>
+          </div>
 
-      <div v-else class="connected-app-body">
-        <p>
-          Войдите в аккаунт Hevy через браузер. Откроется окно hevy.com, где вы сможете
-          авторизоваться.
-        </p>
-        <button
-          class="settings-btn-primary"
-          :disabled="loginLoading"
-          data-testid="hevy-login-btn"
-          type="button"
-          @click="handleLogin"
-        >
-          {{ loginLoading ? "Открываю окно..." : "Войти через Hevy" }}
-        </button>
-        <div v-if="loginError" class="dialog-error" data-testid="hevy-login-error">
-          {{ loginError }}
+          <div class="settings-row">
+            <div class="settings-row-left">
+              <div class="settings-row-title">
+                {{ hevyStatus.loggedIn ? "Аккаунт" : "Авторизация" }}
+              </div>
+              <div
+                v-if="hevyStatus.loggedIn"
+                class="settings-row-desc settings-row-desc-plain"
+                data-testid="hevy-username"
+              >
+                Подключен аккаунт:
+                <strong>{{ hevyStatus.username || "—" }}</strong>
+              </div>
+              <div v-else class="settings-row-desc settings-row-desc-plain">
+                Войдите через браузер. Откроется окно hevy.com, где можно авторизоваться и дать
+                Eden доступ к данным тренировок.
+              </div>
+            </div>
+          </div>
+
+          <div v-if="hevyStatus.loggedIn" class="settings-row-actions">
+            <button
+              class="settings-btn-primary"
+              :disabled="syncing"
+              data-testid="hevy-sync-btn"
+              type="button"
+              @click="handleSync"
+            >
+              {{ syncing ? "Синхронизация..." : "Синхронизировать тренировки" }}
+            </button>
+            <button
+              class="settings-btn-secondary"
+              data-testid="hevy-logout-btn"
+              type="button"
+              @click="handleLogout"
+            >
+              Отключить
+            </button>
+          </div>
+
+          <div v-else class="settings-row-actions">
+            <button
+              class="settings-btn-primary"
+              :disabled="loginLoading"
+              data-testid="hevy-login-btn"
+              type="button"
+              @click="handleLogin"
+            >
+              {{ loginLoading ? "Открываю окно..." : "Войти через Hevy" }}
+            </button>
+          </div>
+
+          <div v-if="syncResult" class="settings-row">
+            <div class="settings-row-left">
+              <div class="sync-result" data-testid="hevy-sync-result">
+                <p>
+                  Добавлено тренировок: <strong>{{ syncResult.workoutsCreated }}</strong>
+                </p>
+                <p>
+                  Пропущено как уже существующие: <strong>{{ syncResult.workoutsSkipped }}</strong>
+                </p>
+                <p>
+                  Добавлено упражнений: <strong>{{ syncResult.exerciseEntriesCreated }}</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="syncError" class="settings-row">
+            <div class="settings-row-left">
+              <div class="dialog-error" data-testid="hevy-sync-error">{{ syncError }}</div>
+            </div>
+          </div>
+
+          <div v-if="loginError" class="settings-row">
+            <div class="settings-row-left">
+              <div class="dialog-error" data-testid="hevy-login-error">{{ loginError }}</div>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { onMounted, ref } from "vue";
 
 const emit = defineEmits<{ refreshData: [] }>();
 
@@ -101,6 +131,7 @@ interface HevyStatus {
   loggedIn: boolean;
   username: string | null;
 }
+
 interface SyncStats {
   workoutsCreated: number;
   workoutsSkipped: number;
@@ -121,37 +152,45 @@ async function checkStatus() {
 
 async function handleLogin() {
   if (!window.api?.hevyLogin) return;
+
   loginLoading.value = true;
   loginError.value = null;
   const result = await window.api.hevyLogin();
   loginLoading.value = false;
+
   if (result.ok) {
     void checkStatus();
-  } else {
-    loginError.value = result.error;
+    return;
   }
+
+  loginError.value = result.error;
 }
 
 async function handleLogout() {
   if (!window.api?.hevyLogout) return;
+
   await window.api.hevyLogout();
   hevyStatus.value = { loggedIn: false, username: null };
   syncResult.value = null;
+  syncError.value = null;
 }
 
 async function handleSync() {
   if (!window.api?.hevySyncWorkouts) return;
+
   syncing.value = true;
   syncError.value = null;
   syncResult.value = null;
   const result = await window.api.hevySyncWorkouts();
   syncing.value = false;
+
   if (result.ok) {
     syncResult.value = result.stats;
     emit("refreshData");
-  } else {
-    syncError.value = result.error;
+    return;
   }
+
+  syncError.value = result.error;
 }
 
 onMounted(() => {

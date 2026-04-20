@@ -43,7 +43,9 @@ type NoteFieldKind =
   | "date"
   | "boolean"
   | "select"
-  | "image";
+  | "multi_select"
+  | "image"
+  | "relation";
 
 type HeaderLayoutKind = "default" | "centered_profile";
 
@@ -59,6 +61,12 @@ interface NoteTypeField {
   options?: string[];
 
   placeholder?: string;
+
+  visible?: boolean;
+
+  read_only?: boolean;
+
+  link_type?: string;
 }
 
 interface HeaderTemplateDefinition {
@@ -86,9 +94,23 @@ interface NoteType {
 
   header_template_json: string;
 
+  ui_schema_json?: string;
+
   created_at: number;
 
   updated_at: number;
+}
+
+interface NoteTypeUiSchema {
+  featured_fields?: string[];
+  visible_fields?: string[];
+  hidden_fields?: string[];
+  read_only_fields?: string[];
+  field_order?: string[];
+  header_layout?: "inline" | "column";
+  default_layout?: "page" | "list" | "gallery" | "board";
+  default_template_id?: string | null;
+  collection_name?: string;
 }
 
 interface SearchResult {

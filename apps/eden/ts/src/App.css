@@ -852,7 +852,9 @@
 
 .editor-header-main {
   display: grid;
-  gap: var(--space-3);
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
 }
 
 .typed-note-shell {
@@ -988,6 +990,10 @@
   color: var(--text-secondary);
 }
 
+.typed-note-field-readonly {
+  opacity: 0.86;
+}
+
 .typed-note-field-wide {
   grid-column: 1 / -1;
 }
@@ -1001,6 +1007,28 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.typed-note-relation-select {
+  min-height: 112px;
+}
+
+.typed-note-relation-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.typed-note-relation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-size: 12px;
 }
 
 .typed-note-error {
@@ -2183,11 +2211,14 @@
   min-width: 0;
   animation: fadeIn 0.25s ease;
   position: relative;
+  overflow-y: auto;
+  scroll-padding-top: 30vh;
+  scroll-padding-bottom: 30vh;
 }
 
 .editor-rail {
-  max-width: 700px;
   width: 100%;
+  max-width: var(--kepler-page-max-width, 700px);
   margin: 0 auto;
   padding-inline: var(--editor-inline-gutter, 48px);
 }
@@ -2213,9 +2244,10 @@
 
 .editor-header-rail {
   display: grid;
-  grid-template-columns: minmax(0, var(--editor-rail-max, 860px)) auto;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: var(--space-4);
+  width: 100%;
 }
 
 .title-input {
@@ -2223,32 +2255,36 @@
   border: none;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--kepler-text-page-title-size);
+  font-weight: var(--kepler-text-page-title-weight);
   width: 100%;
   min-width: 0;
   outline: none;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
+  padding: 0;
+  letter-spacing: var(--kepler-text-page-title-letter-spacing);
+  line-height: var(--kepler-text-page-title-line-height);
 }
 
 .title-input::placeholder {
-  color: var(--text-quaternary);
+  color: color-mix(in srgb, var(--text-primary) 36%, transparent);
 }
 
 .note-type-inline {
   position: relative;
   display: flex;
   align-items: center;
-  margin-top: 4px;
+  min-height: 22px;
 }
 
 .note-type-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--note-type-accent, var(--text-tertiary));
-  font-size: 13px;
+  color: var(--text-secondary);
+  font-size: 15px;
   font-weight: 500;
   line-height: 1.4;
   transition:
@@ -2259,7 +2295,7 @@
 
 .note-type-trigger:hover {
   opacity: 1;
-  color: color-mix(in srgb, var(--note-type-accent, var(--text-primary)) 88%, white);
+  color: var(--text-primary);
 }
 
 .note-type-menu {
@@ -2341,19 +2377,19 @@
 }
 
 .editor-content-area {
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
+  width: 100%;
   padding: 0 0 var(--space-10);
-  overflow-y: auto;
+  overflow: visible;
   cursor: text;
-  scroll-padding-top: 30vh;
-  scroll-padding-bottom: 30vh;
   position: relative;
 }
 
 .editor-content-rail {
-  min-height: 100%;
+  min-height: 0;
   min-width: 0;
+  width: 100%;
 }
 
 .focus-exit-btn {
@@ -2395,18 +2431,17 @@
 
 .focus-mode .editor-content-area {
   padding-bottom: 42vh;
-  scroll-padding-top: 42vh;
-  scroll-padding-bottom: 42vh;
 }
 
 .focus-mode .editor-content-rail {
-  min-height: 100%;
+  min-height: 0;
 }
 
 .ProseMirror {
   outline: none;
   min-height: 500px;
   height: 100%;
+  width: 100%;
   font-size: 16px;
   line-height: 1.65;
   color: var(--text-primary);
@@ -2469,7 +2504,7 @@
 }
 
 .editor-content-rail {
-  min-height: 100%;
+  min-height: 0;
 }
 
 .focus-exit-btn {
@@ -2510,12 +2545,10 @@
 
 .focus-mode .editor-content-area {
   padding-bottom: 42vh;
-  scroll-padding-top: 42vh;
-  scroll-padding-bottom: 42vh;
 }
 
 .focus-mode .editor-content-rail {
-  min-height: 100%;
+  min-height: 0;
 }
 
 .ProseMirror {
@@ -3220,8 +3253,9 @@ span[data-wikilink]:hover {
 
 .command-info {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   min-width: 0;
+  min-height: 26px;
 }
 
 .command-title {
@@ -3314,6 +3348,16 @@ span[data-wikilink]:hover {
   background-color: var(--bg-app);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
+}
+
+.app-main-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 @media (max-width: 900px) {
@@ -3701,20 +3745,20 @@ span[data-wikilink]:hover {
 }
 
 .title-input {
-  font-size: 36px;
-  line-height: 1.12;
-  letter-spacing: -0.64px;
-  font-weight: 700;
+  font-size: var(--kepler-text-page-title-size);
+  line-height: var(--kepler-text-page-title-line-height);
+  letter-spacing: var(--kepler-text-page-title-letter-spacing);
+  font-weight: var(--kepler-text-page-title-weight);
 }
 
 .title-input::placeholder,
 .ProseMirror p.is-editor-empty:first-child::before {
-  color: var(--text-tertiary);
+  color: color-mix(in srgb, var(--text-primary) 36%, transparent);
 }
 
 .note-type-trigger {
   color: var(--text-secondary);
-  opacity: 1;
+  opacity: 0.8;
 }
 
 .note-type-trigger:hover {

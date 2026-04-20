@@ -132,7 +132,55 @@ pub struct UsageEvent {
     pub meta_json: Value,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArkObject {
+    pub id: String,
+    pub type_id: String,
+    pub title: String,
+    #[serde(default = "default_content_json")]
+    pub content_json: Value,
+    #[serde(default = "default_props_json")]
+    pub props_json: Value,
+    pub created_at: String,
+    pub updated_at: String,
+    pub deleted_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectType {
+    pub id: String,
+    pub name: String,
+    pub schema_json: String,
+    pub ui_schema_json: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub system_locked: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectLink {
+    pub id: String,
+    pub source_object_id: String,
+    pub target_object_id: String,
+    pub link_type: String,
+    pub created_at: String,
+}
+
 fn default_meta_json() -> Value {
+    json!({})
+}
+
+fn default_content_json() -> Value {
+    json!({
+        "type": "doc",
+        "content": [{ "type": "paragraph" }]
+    })
+}
+
+fn default_props_json() -> Value {
     json!({})
 }
 
@@ -147,6 +195,9 @@ pub struct LoadAllData {
     pub tracked_apps: Vec<TrackedApp>,
     pub usage_sessions: Vec<UsageSession>,
     pub usage_events: Vec<UsageEvent>,
+    pub objects: Vec<ArkObject>,
+    pub object_types: Vec<ObjectType>,
+    pub object_links: Vec<ObjectLink>,
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,12 @@
 .titlebar {
   position: absolute;
-  inset: 0 0 auto var(--titlebar-left-safe-area, 0px);
-  height: var(--titlebar-height);
+  inset: 0 0 auto 0;
+  height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--titlebar-height))
+  );
+  min-height: calc(
+    env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--titlebar-height))
+  );
   box-sizing: border-box;
   z-index: 140;
   pointer-events: none;

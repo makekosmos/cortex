@@ -102,6 +102,7 @@ describe("CataloguePage", () => {
     );
 
     expect(await screen.findByText("Arcadia")).toBeInTheDocument();
+    expect(screen.getByText("2024 | Экшен")).toBeInTheDocument();
 
     const user = userEvent.setup();
     await user.type(screen.getByRole("textbox"), "Bastion{enter}");

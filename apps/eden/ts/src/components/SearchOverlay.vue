@@ -59,7 +59,7 @@
               @mouseenter="selectedIndex = index"
             >
               <div class="entry-title">
-                {{ entryTitles[result.entryId] || "Без названия" }}
+                {{ entryTitles[result.entryId] ?? "Без названия" }}
               </div>
               <div class="search-result-text">{{ result.text }}</div>
             </div>

@@ -1,0 +1,44 @@
+{
+  "task_id": "2026-04-20-kepler-sidebar-groups",
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "bun run build",
+      "status": "PASS",
+      "cwd": "apps/eden/ts"
+    },
+    {
+      "name": "utf8_source_spot_check",
+      "status": "PASS",
+      "files": [
+        "packages/kepler-visuals/components/Sidebar.vue",
+        "apps/eden/ts/src/components/sidebar/EdenSidebar.vue"
+      ]
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS"
+    },
+    {
+      "id": "AC2",
+      "status": "PASS"
+    },
+    {
+      "id": "AC3",
+      "status": "PASS"
+    },
+    {
+      "id": "AC4",
+      "status": "PASS"
+    },
+    {
+      "id": "AC5",
+      "status": "PASS"
+    }
+  ],
+  "limitations": [
+    "Electron and Playwright browser processes are blocked in this sandbox with spawn EPERM, so live UI screenshot proof was not captured."
+  ]
+}

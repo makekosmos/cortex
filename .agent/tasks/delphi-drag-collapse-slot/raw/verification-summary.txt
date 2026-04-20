@@ -1,0 +1,4 @@
+todo_row_uses_invisible_drag_source=True
+todo_row_uses_line_indicator=True
+week_page_uses_custom_drag_image=True
+week_page_hides_source_in_place=True

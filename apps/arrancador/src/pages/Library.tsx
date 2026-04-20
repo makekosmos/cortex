@@ -7,7 +7,6 @@
   List,
   SortAsc,
   Play,
-  Search,
   Star,
   Filter,
   X,
@@ -334,7 +333,7 @@ export default function Library() {
   const { addGames, refreshGames, updateGame } = useGamesActions();
   const { notify } = useToast();
   const initialFilters = useMemo(() => loadLibraryFilterPreset(), []);
-  const [searchQuery, setSearchQuery] = useState(initialFilters.searchQuery);
+  const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>(initialFilters.viewMode);
   const [sortBy, setSortBy] = useState<SortBy>(initialFilters.sortBy);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(
@@ -523,6 +522,7 @@ export default function Library() {
   }, [games]);
 
   const clearAdvancedFilters = () => {
+    setSearchQuery("");
     setSelectedGenres([]);
     setSelectedPlatforms([]);
     setPlayedState("all");
@@ -787,17 +787,6 @@ export default function Library() {
       });
     }
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (game) =>
-          game.name.toLowerCase().includes(query) ||
-          game.exe_name.toLowerCase().includes(query) ||
-          (game.genres?.toLowerCase().includes(query) ?? false) ||
-          (game.platforms?.toLowerCase().includes(query) ?? false),
-      );
-    }
-
     return result.sort((a, b) => {
       switch (sortBy) {
         case "playtime":
@@ -823,7 +812,6 @@ export default function Library() {
   }, [
     games,
     favorites,
-    searchQuery,
     sortBy,
     showFavoritesOnly,
     selectedGenres,
@@ -886,52 +874,59 @@ export default function Library() {
             </p>
           </div>
 
-          {/* Search and filters */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 md:flex-none">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Поиск игр..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-full md:w-64"
-              />
+          <div className="flex flex-col gap-4 ">
+            <div className="flex items-center justify-center overflow-x-auto no-scrollbar pb-2 sm:pb-0">
+              <div className="flex items-center gap-1 rounded-full border border-border/70 bg-background/75 p-1">
+                <Button
+                  variant={viewMode === "grid" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="w-8 h-8 rounded-full"
+                  onClick={() => setViewMode("grid")}
+                  aria-label="Сетка"
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "secondary" : "ghost"}
+                  size="icon"
+                  className="w-8 h-8 rounded-full"
+                  onClick={() => setViewMode("list")}
+                  aria-label="Список"
+                >
+                  <List className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 sm:pb-0">
+          <div className="flex items-center gap-2 self-start md:self-auto">
             <Button
-              variant={showFavoritesOnly ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className="gap-2 flex-shrink-0"
+              variant={showAdvancedFilters ? "secondary" : "outline"}
+              size="icon"
+              onClick={() => setShowAdvancedFilters((value) => !value)}
+              className="relative h-9 w-9 rounded-full"
+              aria-label="Фильтры"
             >
-              <Star
-                className={cn(
-                  "w-4 h-4",
-                  showFavoritesOnly && "fill-yellow-500 text-yellow-500",
-                )}
-              />
-              Избранное
+              <Filter className="w-4 h-4" />
+              {hasActiveAdvancedFilters ? (
+                <span className="absolute -right-1 -top-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[11px] text-primary">
+                  {activeFilterCount}
+                </span>
+              ) : null}
             </Button>
-
-            <div className="h-4 w-px bg-border flex-shrink-0" />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="gap-2 flex-shrink-0"
+                  size="icon"
+                  className="h-9 w-9 rounded-full"
+                  aria-label="Сортировка"
                 >
                   <SortAsc className="w-4 h-4" />
-                  <span>Сортировка: {sortByLabel[sortBy]}</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
+              <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Сортировка</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuRadioGroup
@@ -946,55 +941,41 @@ export default function Library() {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Button
-              variant={showAdvancedFilters ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowAdvancedFilters((value) => !value)}
-              className="gap-2 flex-shrink-0"
-            >
-              <Filter className="w-4 h-4" />
-              <span>Фильтры</span>
-              {hasActiveAdvancedFilters ? (
-                <span className="ml-1 rounded-full bg-primary/15 text-primary text-[11px] px-1.5 py-0.5">
-                  {activeFilterCount}
-                </span>
-              ) : null}
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={clearAdvancedFilters}
-              className="gap-2 flex-shrink-0"
-            >
-              <X className="w-4 h-4" />
-              <span>Сбросить</span>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-1 justify-end">
-            <Button
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              size="icon"
-              className="w-8 h-8"
-              onClick={() => setViewMode("grid")}
-            >
-              <Grid3X3 className="w-4 h-4" />
-            </Button>
-            <Button
-              variant={viewMode === "list" ? "secondary" : "ghost"}
-              size="icon"
-              className="w-8 h-8"
-              onClick={() => setViewMode("list")}
-            >
-              <List className="w-4 h-4" />
-            </Button>
           </div>
         </div>
 
+        {/* Toolbar */}
+
+
         {showAdvancedFilters ? (
           <div className="rounded-lg border border-border/70 bg-card/40 p-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={showFavoritesOnly ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                className="gap-2"
+              >
+                <Star
+                  className={cn(
+                    "w-4 h-4",
+                    showFavoritesOnly && "fill-yellow-500 text-yellow-500",
+                  )}
+                />
+                Избранное
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAdvancedFilters}
+                className="gap-2"
+              >
+                <X className="w-4 h-4" />
+                <span>Сбросить</span>
+              </Button>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
               <div>
                 <div className="text-xs text-muted-foreground mb-1.5">
@@ -1261,42 +1242,42 @@ export default function Library() {
                           </DropdownMenuRadioItem>
                         ),
                       )}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div>
-              <div className="text-xs text-muted-foreground mb-1.5">
-                Статус прохождения
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-between"
-                  >
-                    <span>{playStatusLabel[playStatusState]}</span>
-                    <Check className="w-3.5 h-3.5 opacity-70" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuRadioGroup
-                    value={playStatusState}
-                    onValueChange={(value) =>
-                      setPlayStatusState(value as PlayStatusState)
-                    }
-                  >
-                    {Object.entries(playStatusLabel).map(([value, label]) => (
-                      <DropdownMenuRadioItem key={value} value={value}>
-                        {label}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+
+              <div>
+                <div className="text-xs text-muted-foreground mb-1.5">
+                  Статус прохождения
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-between"
+                    >
+                      <span>{playStatusLabel[playStatusState]}</span>
+                      <Check className="w-3.5 h-3.5 opacity-70" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuRadioGroup
+                      value={playStatusState}
+                      onValueChange={(value) =>
+                        setPlayStatusState(value as PlayStatusState)
+                      }
+                    >
+                      {Object.entries(playStatusLabel).map(([value, label]) => (
+                        <DropdownMenuRadioItem key={value} value={value}>
+                          {label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
               <div className="flex items-end">
                 <Button
@@ -1344,7 +1325,7 @@ export default function Library() {
 
         {/* Game Grid/List */}
         {viewMode === "grid" ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
             {filteredGames.map((game) => (
               <GameCard key={game.id} game={game} />
             ))}
@@ -1461,7 +1442,3 @@ function GameListItem({ game }: { game: Game }) {
     </Link>
   );
 }
-
-
-
-

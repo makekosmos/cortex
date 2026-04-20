@@ -1,6 +1,5 @@
-import type { DragEvent as ReactDragEvent } from "react";
-
 type FileLikeWithPath = File & { path?: string };
+type DragTransferEvent = { dataTransfer?: DataTransfer | null };
 
 type PickOptions = {
   directory?: boolean;
@@ -390,7 +389,7 @@ export async function setAutoStartState(enabled: boolean) {
   }
 }
 
-export function extractDroppedPaths(event: DragEvent | ReactDragEvent) {
+export function extractDroppedPaths(event: DragTransferEvent) {
   const files = event.dataTransfer?.files;
   if (!files || files.length === 0) return [];
 

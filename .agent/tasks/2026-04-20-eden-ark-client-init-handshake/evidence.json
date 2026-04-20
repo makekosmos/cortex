@@ -1,0 +1,26 @@
+{
+  "task_id": "2026-04-20-eden-ark-client-init-handshake",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": "ArkClient now keeps initialized=false until settleInit() receives a successful init response."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": "The first non-event stdout response is consumed by settleInit() rather than by the first queued user request."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": "Event lines are filtered by isArkEventMessage() before request resolution."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": "TypeScript and bun run build succeeded after the fix."
+    }
+  ]
+}

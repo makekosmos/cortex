@@ -15,8 +15,8 @@ export function useTitlebarSafeArea() {
       () => layout.widgetSidebarHidden,
       () => layout.widgetSidebarWidth,
     ],
-    ([isInitializing, vaultPath, activeScreen, widgetSidebarHidden, widgetSidebarWidth]) => {
-      if (isInitializing || !vaultPath || activeScreen === "settings") {
+    ([isInitializing, vaultPath, _activeScreen, widgetSidebarHidden, widgetSidebarWidth]) => {
+      if (isInitializing || !vaultPath) {
         document.documentElement.style.setProperty("--titlebar-left-safe-area", "0px");
         return;
       }

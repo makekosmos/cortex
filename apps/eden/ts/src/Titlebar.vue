@@ -4,4 +4,6 @@
   </div>
 </template>
 
-<script setup vapor lang="ts"></script>
+<script setup vapor lang="ts">
+import "./Titlebar.css";
+</script>

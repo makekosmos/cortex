@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { GoogleCalendarViewMode } from "@/services/google-calendar/contracts";
+import type { CalendarViewMode } from "@/services/calendar/contracts";
 
-const viewMode = defineModel<GoogleCalendarViewMode>({
+const viewMode = defineModel<CalendarViewMode>({
   required: true,
 });
 
-const options: Array<{ id: GoogleCalendarViewMode; label: string }> = [
+const options: Array<{ id: CalendarViewMode; label: string }> = [
   { id: "day", label: "День" },
   { id: "four-days", label: "4 дня" },
   { id: "week", label: "Неделя" },

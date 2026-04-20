@@ -1,0 +1,52 @@
+{
+  "task_id": "2026-04-20-arrancador-library-toolbar-refresh",
+  "result": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src/pages/Library.tsx:877-913"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src/pages/Library.tsx:886",
+        "apps/arrancador/src/pages/Library.tsx:902"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src/pages/Library.tsx:922-944",
+        "apps/arrancador/src/pages/Library.tsx:932",
+        "apps/arrancador/src/pages/Library.tsx:941"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src/test/library.test.tsx:22-26",
+        "apps/arrancador/src/test/library.test.tsx:104-131",
+        "raw/typecheck.txt",
+        "raw/library-vitest.txt"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "command": "bun run typecheck",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "status": "PASS"
+    },
+    {
+      "command": "bunx vitest run --configLoader native --config vitest.config.mjs src/test/library.test.tsx",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "status": "PASS"
+    }
+  ]
+}

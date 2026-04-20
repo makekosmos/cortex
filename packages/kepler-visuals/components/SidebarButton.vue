@@ -38,10 +38,11 @@ function className(active: boolean) {
 .kepler-sidebar-btn {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.625rem;
   width: 100%;
-  min-height: 2.25rem;
-  padding: 0 0.75rem;
+  min-height: 2.125rem;
+  padding: 0 0.625rem;
   border-radius: calc(var(--radius) * 1.4);
   corner-shape: var(--corner-shape);
   font-weight: 500;
@@ -51,6 +52,7 @@ function className(active: boolean) {
   cursor: pointer;
   user-select: none;
   text-decoration: none;
+  text-align: left;
   -webkit-app-region: no-drag;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),
@@ -70,6 +72,11 @@ function className(active: boolean) {
 }
 
 .kepler-sidebar-btn span {
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 </style>

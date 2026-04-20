@@ -1,0 +1,8 @@
+Command:
+`cargo test --manifest-path packages/ark-core/rust/Cargo.toml test_init_schema_migrates_existing_db_without_destroying_data -- --nocapture`
+
+Result:
+PASS
+
+Key output:
+`test db::tests::test_init_schema_migrates_existing_db_without_destroying_data ... ok`

@@ -1,0 +1,11 @@
+FILE apps/eden/ts/src/components/settings/ConnectedAppsSettings.vue
+  OK Связанные программы
+  OK Интеграции и импорт данных из внешних приложений в Eden.
+  OK Статус подключения
+  OK Аккаунт
+  OK Авторизация
+  OK Войти через Hevy
+  OK Синхронизировать тренировки
+FILE apps/eden/ts/src/Editor.css
+FILE apps/eden/ts/src/components/settings/SettingsPage.css
+FILE packages/kepler-visuals/components/SidebarButton.vue

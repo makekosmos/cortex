@@ -187,7 +187,7 @@ test.describe("Hevy Integration", () => {
     }
   });
 
-  test("should show system types (Тренировка, Упражнение) in object types settings", async () => {
+  test("should show editable system types in object types settings", async () => {
     test.setTimeout(60000);
     const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-hevy-types-"));
     let launch: LaunchedApp | null = null;
@@ -204,11 +204,14 @@ test.describe("Hevy Integration", () => {
       await launch.window.locator('[data-testid="settings-nav-object-types"]').click();
       await expect(launch.window.locator(".object-types-layout")).toBeVisible();
 
-      // System types should be listed as built-in (non-editable)
+      // System types should be listed as built-in and openable in the editor
       const builtinItems = launch.window.locator(".object-types-item.builtin");
-      await expect(builtinItems).toHaveCount(3); // Страница, Тренировка, Упражнение
+      await expect(builtinItems).toHaveCount(4);
       await expect(
-        launch.window.locator(".object-types-item.builtin", { hasText: "Страница" }),
+        launch.window.locator(".object-types-item.builtin", { hasText: "Заметка" }),
+      ).toBeVisible();
+      await expect(
+        launch.window.locator(".object-types-item.builtin", { hasText: "Игра" }),
       ).toBeVisible();
       await expect(
         launch.window.locator(".object-types-item.builtin", { hasText: "Тренировка" }),
@@ -216,6 +219,8 @@ test.describe("Hevy Integration", () => {
       await expect(
         launch.window.locator(".object-types-item.builtin", { hasText: "Упражнение" }),
       ).toBeVisible();
+      await launch.window.locator(".object-types-item.builtin", { hasText: "Игра" }).click();
+      await expect(launch.window.locator(".type-editor-chip")).toContainText("Контракт защищён кодом");
 
       expect(launch.pageErrors).toEqual([]);
     } finally {

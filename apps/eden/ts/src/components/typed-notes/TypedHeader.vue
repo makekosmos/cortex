@@ -1,158 +1,418 @@
-<template>
-  <div class="typed-note-shell">
-    <div
-      v-if="activeNoteType && noteTypeDefinition"
-      class="typed-note-hero"
-      :class="`typed-note-hero-${headerTemplate?.kind ?? 'default'}`"
-      data-testid="typed-note-header"
-    >
-      <!-- Centered profile layout -->
-      <template v-if="headerTemplate?.kind === 'centered_profile'">
-        <div class="typed-note-avatar-wrap">
-          <img
-            v-if="imageSrc"
-            class="typed-note-avatar"
-            data-testid="typed-note-avatar"
-            :src="imageSrc"
-            :alt="title || activeNoteType.name"
-          />
-          <div v-else class="typed-note-avatar typed-note-avatar-placeholder">
-            {{ activeNoteType.icon ?? "✦" }}
-          </div>
-        </div>
-        <div class="typed-note-hero-text">
-          <h2 class="typed-note-hero-title" data-testid="typed-note-primary">
-            {{ primaryText || title || activeNoteType.name }}
-          </h2>
-          <p v-if="secondaryText" class="typed-note-hero-subtitle">{{ secondaryText }}</p>
-        </div>
-      </template>
-
-      <!-- Default layout -->
-      <div v-else-if="headerTemplate?.kind === 'default'" class="typed-note-hero-default">
-        <h2 class="typed-note-hero-title">{{ title || primaryText || activeNoteType.name }}</h2>
-        <p v-if="secondaryText" class="typed-note-hero-subtitle">{{ secondaryText }}</p>
-      </div>
-
-      <!-- Fields grid -->
-      <div class="typed-note-fields-grid">
-        <template v-for="field in noteTypeDefinition.fields" :key="field.id">
-          <!-- Boolean -->
-          <label v-if="field.kind === 'boolean'" class="typed-note-field">
-            <span>{{ field.label }}</span>
-            <label class="typed-note-checkbox">
-              <input
-                type="checkbox"
-                :checked="headerProps[field.id] === true"
-                @change="
-                  emit('headerPropChange', field.id, ($event.target as HTMLInputElement).checked)
-                "
-              />
-              <span>{{ headerProps[field.id] === true ? "Да" : "Нет" }}</span>
-            </label>
-          </label>
-
-          <!-- Long text -->
-          <label
-            v-else-if="field.kind === 'long_text'"
-            class="typed-note-field typed-note-field-wide"
-          >
-            <span>{{ field.label }}</span>
-            <textarea
-              class="typed-note-input typed-note-textarea"
-              :value="String(headerProps[field.id] ?? '')"
-              :placeholder="field.placeholder ?? ''"
-              @input="
-                emit('headerPropChange', field.id, ($event.target as HTMLTextAreaElement).value)
-              "
-            />
-          </label>
-
-          <!-- Select -->
-          <label v-else-if="field.kind === 'select'" class="typed-note-field">
-            <span>{{ field.label }}</span>
-            <select
-              class="typed-note-input"
-              :value="String(headerProps[field.id] ?? '')"
-              @change="
-                emit('headerPropChange', field.id, ($event.target as HTMLSelectElement).value)
-              "
-            >
-              <option value="">Не выбрано</option>
-              <option v-for="option in field.options ?? []" :key="option" :value="option">
-                {{ option }}
-              </option>
-            </select>
-          </label>
-
-          <!-- Generic input -->
-          <label v-else class="typed-note-field">
-            <span>{{ field.label }}</span>
-            <input
-              class="typed-note-input"
-              :data-testid="`typed-note-field-${field.id}`"
-              :type="
-                field.kind === 'number'
-                  ? 'number'
-                  : field.kind === 'date'
-                    ? 'date'
-                    : field.kind === 'image'
-                      ? 'url'
-                      : 'text'
-              "
-              :value="String(headerProps[field.id] ?? '')"
-              :placeholder="field.placeholder ?? ''"
-              @input="emit('headerPropChange', field.id, ($event.target as HTMLInputElement).value)"
-            />
-          </label>
-        </template>
-      </div>
-
-      <div v-if="validationError" class="typed-note-error">{{ validationError }}</div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed } from "vue";
-import { parseHeaderTemplate, parseNoteTypeDefinition } from "@/lib/typedNotes";
+import ObjectPropertyField from "./ObjectPropertyField.vue";
+import { UNTITLED_ENTRY_PLACEHOLDER } from "@/lib/entryTitles";
+import { getNoteTypePresentation } from "@/lib/typedNotes";
+import { SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   activeNoteType: NoteType | null;
   title: string;
   headerProps: Record<string, unknown>;
   validationError: string | null;
-}>();
+  allEntries: Entry[];
+  currentEntryId: string;
+  readonly?: boolean;
+  showTitle?: boolean;
+  showTypeRow?: boolean;
+}>(), {
+  showTitle: false,
+  showTypeRow: true,
+});
 
 const emit = defineEmits<{
   headerPropChange: [fieldId: string, value: unknown];
+  relationNavigate: [entryId: string];
 }>();
 
-const noteTypeDefinition = computed(() =>
-  props.activeNoteType ? parseNoteTypeDefinition(props.activeNoteType.schema_json) : null,
+const presentation = computed(() => getNoteTypePresentation(props.activeNoteType));
+const entriesById = computed(
+  () => new Map(props.allEntries.map((entry) => [entry.id, entry] satisfies [string, Entry])),
 );
-const headerTemplate = computed(() =>
-  props.activeNoteType ? parseHeaderTemplate(props.activeNoteType.header_template_json) : null,
+const relationCandidates = computed(() =>
+  props.allEntries.filter((entry) => entry.id !== props.currentEntryId),
 );
 
-const primaryText = computed(() => {
-  const ids = headerTemplate.value?.primaryFieldIds ?? [];
-  return ids
-    .map((id) => String(props.headerProps[id] ?? "").trim())
-    .filter(Boolean)
-    .join(" ");
+const descriptionValue = computed(() => {
+  const fieldId = presentation.value.descriptionField?.id;
+  return fieldId ? String(props.headerProps[fieldId] ?? "") : "";
 });
 
-const secondaryText = computed(() => {
-  const ids = headerTemplate.value?.secondaryFieldIds ?? [];
-  return ids
-    .map((id) => String(props.headerProps[id] ?? "").trim())
-    .filter(Boolean)
-    .join(" · ");
+function hasMeaningfulValue(fieldId: string) {
+  const value = props.headerProps[fieldId];
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+
+  return String(value ?? "").trim().length > 0;
+}
+
+const coverImageSrc = computed(() => {
+  const imageFieldId = presentation.value.imageFieldId;
+  if (!imageFieldId) {
+    return "";
+  }
+
+  return String(props.headerProps[imageFieldId] ?? "").trim();
 });
 
-const imageSrc = computed(() => {
-  const id = headerTemplate.value?.imageFieldId ?? null;
-  return id ? String(props.headerProps[id] ?? "").trim() : "";
+const backgroundImageSrc = computed(() => String(props.headerProps.background_image ?? "").trim());
+const typeIconSrc = computed(() =>
+  props.activeNoteType?.icon ? `/anytype/icon/type/default/${props.activeNoteType.icon}.svg` : "",
+);
+const titleText = computed(() => props.title.trim() || props.activeNoteType?.name || UNTITLED_ENTRY_PLACEHOLDER);
+const isPlainNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_NOTE_ID);
+const shouldShowDescription = computed(() => {
+  if (!presentation.value.descriptionField) {
+    return false;
+  }
+
+  if (props.readonly) {
+    return Boolean(descriptionValue.value.trim());
+  }
+
+  return !isPlainNoteType.value || Boolean(descriptionValue.value.trim());
 });
+const showFallbackIconTile = computed(() => props.showTitle);
+const showVisual = computed(
+  () => Boolean(coverImageSrc.value) || (Boolean(typeIconSrc.value) && showFallbackIconTile.value),
+);
+const allowEmptyHeaderFields = computed(() => !isPlainNoteType.value);
+const renderedFeaturedFields = computed(() =>
+  presentation.value.featuredFields.filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
+);
+const renderedSecondaryFields = computed(() =>
+  presentation.value.secondaryFields.filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
+);
+const hasFeaturedFields = computed(() => renderedFeaturedFields.value.length > 0);
+const hasSecondaryFields = computed(() => renderedSecondaryFields.value.length > 0);
+const hasHeroContent = computed(
+  () => props.showTitle || shouldShowDescription.value || hasFeaturedFields.value || showVisual.value,
+);
+const shouldRenderHeader = computed(() =>
+  Boolean(props.activeNoteType) &&
+  (
+    props.showTypeRow ||
+    hasHeroContent.value ||
+    hasSecondaryFields.value ||
+    Boolean(props.validationError) ||
+    Boolean(backgroundImageSrc.value)
+  ),
+);
+
+function updateDescription(event: Event) {
+  const fieldId = presentation.value.descriptionField?.id;
+  if (!fieldId) {
+    return;
+  }
+
+  emit("headerPropChange", fieldId, (event.target as HTMLTextAreaElement).value);
+}
 </script>
+
+<template>
+  <section
+    v-if="shouldRenderHeader && activeNoteType"
+    class="typed-object-header"
+    :class="`typed-object-header--${presentation.headerLayout}`"
+    data-testid="typed-note-header"
+  >
+    <div
+      v-if="backgroundImageSrc"
+      class="typed-object-header__background"
+      :style="{ backgroundImage: `url(${backgroundImageSrc})` }"
+      aria-hidden="true"
+    />
+
+    <div class="typed-object-header__inner">
+      <div v-if="showTypeRow" class="typed-object-header__type-row">
+        <span class="typed-object-header__type-badge">{{ activeNoteType.name }}</span>
+      </div>
+
+      <div
+        v-if="hasHeroContent"
+        class="typed-object-header__hero"
+        :class="[
+          `typed-object-header__hero--${presentation.headerLayout}`,
+          !showVisual && 'typed-object-header__hero--no-visual',
+        ]"
+      >
+        <div v-if="showVisual" class="typed-object-header__visual">
+          <img
+            v-if="coverImageSrc"
+            class="typed-object-header__cover"
+            :src="coverImageSrc"
+            :alt="titleText"
+          />
+
+          <div v-else class="typed-object-header__icon-tile" aria-hidden="true">
+            <img
+              v-if="typeIconSrc"
+              class="typed-object-header__icon"
+              :src="typeIconSrc"
+              alt=""
+              width="42"
+              height="42"
+              draggable="false"
+            />
+          </div>
+        </div>
+
+        <div class="typed-object-header__content">
+          <h2 v-if="showTitle" class="typed-object-header__title">{{ titleText }}</h2>
+
+          <div v-if="shouldShowDescription" class="typed-object-header__description-wrap">
+            <p v-if="readonly" class="typed-object-header__description typed-object-header__description--readonly">
+              {{ descriptionValue }}
+            </p>
+
+            <textarea
+              v-else
+              class="typed-object-header__description"
+              :value="descriptionValue"
+              :placeholder="presentation.descriptionField.placeholder ?? 'Краткое описание объекта'"
+              :disabled="presentation.descriptionField.read_only"
+              @input="updateDescription"
+            />
+          </div>
+
+          <div
+            v-if="hasFeaturedFields"
+            class="typed-object-header__featured"
+            :class="`typed-object-header__featured--${presentation.headerLayout}`"
+          >
+            <ObjectPropertyField
+              v-for="field in renderedFeaturedFields"
+              :key="field.id"
+              :field="field"
+              :model-value="headerProps[field.id]"
+              :layout="presentation.headerLayout"
+              :variant="presentation.headerLayout === 'column' ? 'featured-column' : 'featured-inline'"
+              :relation-candidates="relationCandidates"
+              :entries-by-id="entriesById"
+              :readonly="readonly"
+              @update:model-value="emit('headerPropChange', field.id, $event)"
+              @relation-navigate="emit('relationNavigate', $event)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div v-if="hasSecondaryFields" class="typed-object-header__secondary">
+        <div class="typed-object-header__secondary-list">
+          <ObjectPropertyField
+            v-for="field in renderedSecondaryFields"
+            :key="field.id"
+            :field="field"
+            :model-value="headerProps[field.id]"
+            layout="column"
+            variant="secondary"
+            :relation-candidates="relationCandidates"
+            :entries-by-id="entriesById"
+            :readonly="readonly"
+            @update:model-value="emit('headerPropChange', field.id, $event)"
+            @relation-navigate="emit('relationNavigate', $event)"
+          />
+        </div>
+      </div>
+
+      <div v-if="validationError" class="typed-object-header__error">
+        {{ validationError }}
+      </div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.typed-object-header {
+  position: relative;
+  margin: 6px 0 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.typed-object-header__background {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  opacity: 0.08;
+  filter: saturate(0.9) blur(2px);
+}
+
+.typed-object-header__inner {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding: 2px 0 4px;
+}
+
+.typed-object-header__type-row {
+  display: flex;
+  align-items: center;
+}
+
+.typed-object-header__type-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.typed-object-header__hero {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+}
+
+.typed-object-header__hero--column {
+  grid-template-columns: 104px minmax(0, 1fr);
+  align-items: start;
+}
+
+.typed-object-header__hero--inline {
+  grid-template-columns: minmax(88px, 96px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.typed-object-header__hero--no-visual {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.typed-object-header__visual {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.typed-object-header__cover,
+.typed-object-header__icon-tile {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 20px;
+}
+
+.typed-object-header__cover {
+  display: block;
+  object-fit: cover;
+}
+
+.typed-object-header__icon-tile {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.typed-object-header__icon {
+  filter: invert(1);
+  opacity: 0.9;
+}
+
+.typed-object-header__content {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.typed-object-header__title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 36px;
+  line-height: 1.02;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+}
+
+.typed-object-header__description-wrap {
+  max-width: 680px;
+}
+
+.typed-object-header__description {
+  width: 100%;
+  min-height: 52px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.68;
+  resize: vertical;
+}
+
+.typed-object-header__description:focus {
+  outline: none;
+}
+
+.typed-object-header__description--readonly {
+  margin: 0;
+}
+
+.typed-object-header__featured--inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-left: -8px;
+}
+
+.typed-object-header__featured--column {
+  display: grid;
+  gap: 10px;
+  max-width: 680px;
+  padding-top: 10px;
+}
+
+.typed-object-header__secondary {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.typed-object-header__secondary-list {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  max-width: 760px;
+}
+
+.typed-object-header__error {
+  padding: 12px 14px;
+  border: 1px solid var(--destructive);
+  border-radius: 12px;
+  color: var(--destructive);
+  font-size: 13px;
+}
+
+@media (max-width: 960px) {
+  .typed-object-header__hero--column,
+  .typed-object-header__hero--inline {
+    grid-template-columns: 1fr;
+  }
+
+  .typed-object-header__visual {
+    max-width: 120px;
+  }
+}
+</style>

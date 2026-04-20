@@ -34,7 +34,6 @@ import {
   type SidecarEvent,
   type SyncEntityPayload,
 } from './sidecar';
-import { registerGoogleCalendarIpc } from './google-calendar';
 
 /** WebSocket port used by the ark-core sync server. */
 const LAN_SYNC_PORT = 21531;
@@ -119,8 +118,10 @@ function getDataDir(): string {
 }
 
 const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
-const WINDOWS_TITLEBAR_BASE_HEIGHT = 36;
 const WINDOWS_TITLEBAR_SYMBOL_COLOR = '#e5e7eb';
+const ZOOM_LEVEL_STEP = 0.5;
+const MIN_ZOOM_LEVEL = -3;
+const MAX_ZOOM_LEVEL = 3;
 
 function loadWindowState(): { width: number; height: number; x?: number; y?: number; isMaximized?: boolean } {
   try {
@@ -142,13 +143,46 @@ function applyWindowsTitlebarOverlay(win: BrowserWindow) {
     return;
   }
 
-  const zoomFactor = Math.max(0.5, Math.min(2, win.webContents.getZoomFactor() || 1));
-
   win.setTitleBarOverlay({
     color: '#00000000',
     symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
-    height: Math.round(WINDOWS_TITLEBAR_BASE_HEIGHT * zoomFactor),
   });
+}
+
+function clampZoomLevel(zoomLevel: number): number {
+  return Math.max(MIN_ZOOM_LEVEL, Math.min(MAX_ZOOM_LEVEL, zoomLevel));
+}
+
+function adjustWindowZoom(win: BrowserWindow, direction: 'in' | 'out' | 'reset'): void {
+  const { webContents } = win;
+  const currentZoomLevel = webContents.getZoomLevel();
+
+  if (direction === 'reset') {
+    webContents.setZoomLevel(0);
+    return;
+  }
+
+  const delta = direction === 'in' ? ZOOM_LEVEL_STEP : -ZOOM_LEVEL_STEP;
+  const nextZoomLevel = clampZoomLevel(currentZoomLevel + delta);
+
+  if (nextZoomLevel !== currentZoomLevel) {
+    webContents.setZoomLevel(nextZoomLevel);
+  }
+}
+
+function isZoomShortcut(input: Electron.Input): boolean {
+  if (input.type !== 'keyDown' || input.alt || !(input.control || input.meta)) {
+    return false;
+  }
+
+  return [
+    'Minus',
+    'Equal',
+    'NumpadAdd',
+    'NumpadSubtract',
+    'Digit0',
+    'Numpad0',
+  ].includes(input.code);
 }
 
 function setupApplicationMenu(): void {
@@ -246,19 +280,18 @@ function createWindow() {
     frame: !isWindows,
     ...(isMac
       ? {
-          titleBarStyle: 'hiddenInset' as const,
-          trafficLightPosition: { x: 18, y: 18 },
-        }
+        titleBarStyle: 'hiddenInset' as const,
+        trafficLightPosition: { x: 18, y: 18 },
+      }
       : {}),
     ...(isWindows
-        ? {
-          titleBarStyle: 'hidden' as const,
-          titleBarOverlay: {
-            color: '#00000000',
-            symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
-            height: WINDOWS_TITLEBAR_BASE_HEIGHT,
-          },
-        }
+      ? {
+        titleBarStyle: 'hidden' as const,
+        titleBarOverlay: {
+          color: '#00000000',
+          symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+        },
+      }
       : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
@@ -293,7 +326,28 @@ function createWindow() {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  win.webContents.on('before-input-event', (_event, input) => {
+  win.webContents.on('before-input-event', (event, input) => {
+    if (isZoomShortcut(input)) {
+      event.preventDefault();
+
+      switch (input.code) {
+        case 'Minus':
+        case 'NumpadSubtract':
+          adjustWindowZoom(win, 'out');
+          return;
+        case 'Equal':
+        case 'NumpadAdd':
+          adjustWindowZoom(win, 'in');
+          return;
+        case 'Digit0':
+        case 'Numpad0':
+          adjustWindowZoom(win, 'reset');
+          return;
+        default:
+          return;
+      }
+    }
+
     if (input.key === 'F12') {
       win.webContents.toggleDevTools();
     }
@@ -346,7 +400,7 @@ function readSpacesFile(): { active: string | null; spaces: Array<{ code: string
     if (fs.existsSync(spacesFile)) {
       return JSON.parse(fs.readFileSync(spacesFile, 'utf-8'));
     }
-  } catch {}
+  } catch { }
   return { active: null, spaces: [] };
 }
 
@@ -585,49 +639,49 @@ ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceI
   }
   syncStartRequest = { spaceId, deviceId };
   syncStartInFlight = (async () => {
-  currentDeviceId = deviceId;
-  const name = getHostDeviceName();
-  currentDeviceName = name;
-  void deviceName;
+    currentDeviceId = deviceId;
+    const name = getHostDeviceName();
+    currentDeviceName = name;
+    void deviceName;
 
-  // Stop any existing client before creating a new one.
-  if (arkClient) {
-    try { await arkClient.stop(); } catch { /* ignore */ }
-    arkClient = null;
-  }
-
-  // Create ArkClient wired to the existing sidecar (DB + sync share one process).
-  arkClient = new ArkClient({
-    spaceId,
-    deviceId,
-    deviceName: name,
-    port: LAN_SYNC_PORT,
-    // Inject the sidecar's request function so no second process is spawned.
-    requestFn: <T>(req: Record<string, unknown>) => sidecar.request<T>(req as Parameters<typeof sidecar.request>[0]),
-    onEventFn: (listener) => sidecar.onEvent(listener as Parameters<typeof sidecar.onEvent>[0]),
-  });
-
-  // Seed peers are added after start via addSeedPeer.
-  try {
-    await arkClient.start();
-    if (seedAddresses?.length) {
-      await syncAddSeedPeer(seedAddresses);
+    // Stop any existing client before creating a new one.
+    if (arkClient) {
+      try { await arkClient.stop(); } catch { /* ignore */ }
+      arkClient = null;
     }
-    syncActive = true;
-    currentSpaceId = spaceId;
-    syncPeerNames.clear();
-    console.log(`[Main] Sync started via ArkClient (device=${name})`);
-    return true;
-  } catch (err) {
-    console.error('[Main] start_sync via ArkClient failed:', err);
-    syncActive = false;
-    currentSpaceId = null;
-    arkClient = null;
-    return false;
-  } finally {
-    syncStartInFlight = null;
-    syncStartRequest = null;
-  }
+
+    // Create ArkClient wired to the existing sidecar (DB + sync share one process).
+    arkClient = new ArkClient({
+      spaceId,
+      deviceId,
+      deviceName: name,
+      port: LAN_SYNC_PORT,
+      // Inject the sidecar's request function so no second process is spawned.
+      requestFn: <T>(req: Record<string, unknown>) => sidecar.request<T>(req as Parameters<typeof sidecar.request>[0]),
+      onEventFn: (listener) => sidecar.onEvent(listener as Parameters<typeof sidecar.onEvent>[0]),
+    });
+
+    // Seed peers are added after start via addSeedPeer.
+    try {
+      await arkClient.start();
+      if (seedAddresses?.length) {
+        await syncAddSeedPeer(seedAddresses);
+      }
+      syncActive = true;
+      currentSpaceId = spaceId;
+      syncPeerNames.clear();
+      console.log(`[Main] Sync started via ArkClient (device=${name})`);
+      return true;
+    } catch (err) {
+      console.error('[Main] start_sync via ArkClient failed:', err);
+      syncActive = false;
+      currentSpaceId = null;
+      arkClient = null;
+      return false;
+    } finally {
+      syncStartInFlight = null;
+      syncStartRequest = null;
+    }
   })();
   return syncStartInFlight;
 });
@@ -750,8 +804,6 @@ ipcMain.handle('lan-sync:addSeedPeer', async (_e, addresses: string[]) => {
   }
 });
 
-registerGoogleCalendarIpc(getDataDir);
-
 // --- App lifecycle ---
 
 app.whenReady().then(async () => {
@@ -767,7 +819,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   // Best-effort: stop ArkClient and shut down the sidecar.
   if (arkClient) {
-    arkClient.stop().catch(() => {});
+    arkClient.stop().catch(() => { });
     arkClient = null;
   }
   syncActive = false;

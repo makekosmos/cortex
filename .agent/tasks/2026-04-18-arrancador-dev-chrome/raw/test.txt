@@ -1,0 +1,11 @@
+bun run test
+
+RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+Test Files  31 passed (31)
+Tests  133 passed | 2 expected fail (135)
+Duration  14.50s
+EXIT_CODE=0
+
+Note:
+- Direct interactive invocation passes.
+- Redirecting stdout/stderr from Bun/Vitest in this workspace causes a false startup failure in Vite (`spawn EPERM` while loading `@tailwindcss/oxide`), so the verification status above is taken from the direct command result, not from redirected shell logs.

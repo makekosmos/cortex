@@ -1,0 +1,25 @@
+{
+  "taskId": "2026-04-19-arrancador-spotlight-titlebar-scroll",
+  "status": "PASS",
+  "artifacts": {
+    "spec": ".agent/tasks/2026-04-19-arrancador-spotlight-titlebar-scroll/spec.md",
+    "evidence": ".agent/tasks/2026-04-19-arrancador-spotlight-titlebar-scroll/evidence.md",
+    "typecheck": ".agent/tasks/2026-04-19-arrancador-spotlight-titlebar-scroll/typecheck.clean.log",
+    "test": ".agent/tasks/2026-04-19-arrancador-spotlight-titlebar-scroll/test.clean.log"
+  },
+  "checks": {
+    "typecheck": "PASS",
+    "test": "PASS"
+  },
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS"
+  },
+  "notes": [
+    "Desktop titlebar no longer renders spotlight search; remaining search triggers are in the sidebar and mobile top bar.",
+    "Spotlight now scrolls the active option into view on keyboard navigation.",
+    "Vitest run passed with 31 files passed and 143 tests passed plus 2 expected failures."
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "taskId": "2026-04-20-arrancador-hero-visual-refresh",
+  "status": "PASS",
+  "artifacts": {
+    "spec": ".agent/tasks/2026-04-20-arrancador-hero-visual-refresh/spec.md",
+    "evidence": ".agent/tasks/2026-04-20-arrancador-hero-visual-refresh/evidence.md",
+    "typecheck": ".agent/tasks/2026-04-20-arrancador-hero-visual-refresh/typecheck.log",
+    "gameDetailVitest": ".agent/tasks/2026-04-20-arrancador-hero-visual-refresh/game-detail-vitest.log",
+    "buildRenderer": ".agent/tasks/2026-04-20-arrancador-hero-visual-refresh/build-renderer.log"
+  },
+  "checks": {
+    "typecheck": "PASS",
+    "gameDetailVitest": "PASS",
+    "buildRenderer": "BLOCKED_ENVIRONMENT"
+  },
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS"
+  },
+  "notes": [
+    "The game detail hero now uses an 80vh rounded-bottom treatment and places title plus genres inside the hero footer.",
+    "The visual language of the hero copy now reuses kepler-visuals game-poster pattern classes.",
+    "Targeted verification passed through typecheck and the focused game-detail vitest file.",
+    "Renderer build is currently blocked by local native dependency loading for @tailwindcss/oxide plus spawn EPERM in the environment."
+  ]
+}

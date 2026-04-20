@@ -1,0 +1,47 @@
+{
+  "taskId": "delphi-titlebar-settings-back-fallback",
+  "verifiedAt": "2026-04-17",
+  "status": "PASS",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/App.vue:221",
+        "apps/delphi/ts/src/App.vue:223"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/App.vue:233"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/App.vue:237",
+        "apps/delphi/ts/src/App.vue:256"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "bunx tsc --noEmit"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\delphi\\ts",
+      "status": "PASS"
+    }
+  ],
+  "notes": [
+    "Interactive Electron runtime validation was not performed in the sandbox."
+  ]
+}

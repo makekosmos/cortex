@@ -125,6 +125,33 @@ enum Request {
     DeleteUsageEvent {
         id: String,
     },
+    ListObjects,
+    GetObject {
+        id: String,
+    },
+    UpsertObject {
+        object: ArkObject,
+    },
+    DeleteObject {
+        id: String,
+    },
+    ListObjectTypes,
+    GetObjectType {
+        id: String,
+    },
+    UpsertObjectType {
+        object_type: ObjectType,
+    },
+    DeleteObjectType {
+        id: String,
+    },
+    ListObjectLinks,
+    UpsertObjectLink {
+        object_link: ObjectLink,
+    },
+    DeleteObjectLink {
+        id: String,
+    },
     GetSyncKv {
         key: String,
     },
@@ -359,6 +386,50 @@ async fn handle_request(request: Request) -> Result<Value, String> {
 
         Request::DeleteUsageEvent { id } => with_conn(|conn| {
             db::delete_usage_event(conn, &id)?;
+            Ok(json!(true))
+        }),
+        Request::ListObjects => with_conn(|conn| {
+            let objects = db::list_objects(conn)?;
+            serde_json::to_value(objects).map_err(|e| e.to_string())
+        }),
+        Request::GetObject { id } => with_conn(|conn| {
+            let object = db::get_object(conn, &id)?;
+            serde_json::to_value(object).map_err(|e| e.to_string())
+        }),
+        Request::UpsertObject { object } => with_conn(|conn| {
+            db::upsert_object(conn, &object)?;
+            Ok(json!(true))
+        }),
+        Request::DeleteObject { id } => with_conn(|conn| {
+            db::delete_object(conn, &id)?;
+            Ok(json!(true))
+        }),
+        Request::ListObjectTypes => with_conn(|conn| {
+            let object_types = db::list_object_types(conn)?;
+            serde_json::to_value(object_types).map_err(|e| e.to_string())
+        }),
+        Request::GetObjectType { id } => with_conn(|conn| {
+            let object_type = db::get_object_type(conn, &id)?;
+            serde_json::to_value(object_type).map_err(|e| e.to_string())
+        }),
+        Request::UpsertObjectType { object_type } => with_conn(|conn| {
+            db::upsert_object_type(conn, &object_type)?;
+            Ok(json!(true))
+        }),
+        Request::DeleteObjectType { id } => with_conn(|conn| {
+            db::delete_object_type(conn, &id)?;
+            Ok(json!(true))
+        }),
+        Request::ListObjectLinks => with_conn(|conn| {
+            let object_links = db::list_object_links(conn)?;
+            serde_json::to_value(object_links).map_err(|e| e.to_string())
+        }),
+        Request::UpsertObjectLink { object_link } => with_conn(|conn| {
+            db::upsert_object_link(conn, &object_link)?;
+            Ok(json!(true))
+        }),
+        Request::DeleteObjectLink { id } => with_conn(|conn| {
+            db::delete_object_link(conn, &id)?;
             Ok(json!(true))
         }),
 

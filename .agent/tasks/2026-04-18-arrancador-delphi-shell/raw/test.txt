@@ -1,0 +1,6 @@
+bun run test
+RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+Test Files  31 passed (31)
+Tests  131 passed | 2 expected fail (133)
+Duration  15.18s
+EXIT_CODE=0

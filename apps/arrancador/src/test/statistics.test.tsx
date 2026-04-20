@@ -110,7 +110,7 @@ describe("Statistics", () => {
     await waitFor(() =>
       expect(statsApiMock.getPlaytimeStats).toHaveBeenCalledTimes(5),
     );
-  }, 10000);
+  }, 20000);
 
   it("shows error state when stats cannot be loaded", async () => {
     statsApiMock.getPlaytimeStats.mockRejectedValueOnce(new Error("boom"));

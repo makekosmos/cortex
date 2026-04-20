@@ -123,7 +123,9 @@ describe("GamesContext", () => {
     );
 
     // getGame helper.
-    expect(latestContext?.getGame(testGameFixture.id)).toEqual(testGameFixture);
+    await waitFor(() =>
+      expect(latestContext?.getGame(testGameFixture.id)).toEqual(testGameFixture),
+    );
     expect(latestContext?.getGame("missing")).toBeUndefined();
   });
 

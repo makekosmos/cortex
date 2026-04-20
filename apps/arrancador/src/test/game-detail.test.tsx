@@ -111,6 +111,68 @@ describe("GameDetail", () => {
     expect(toggleFavoriteMock).toHaveBeenCalledWith("game-1");
   });
 
+  it("renders the hero copy, shows the compact description, and opens the full description modal", async () => {
+    const game = createTestGame({
+      id: "game-hero",
+      name: "Night Runner",
+      background_image: "https://example.test/night-runner-wide.jpg",
+      description:
+        "A precision shooter about impossible angles, split-second reactions, and late-night ranked matches.",
+      released: "2020-06-02",
+      total_playtime: 19800,
+      genres: "Action, RPG, Indie",
+    });
+
+    useGamesStateMock.mockReturnValue({
+      games: [game],
+      favorites: [],
+      loading: false,
+      error: null,
+      getGame: vi.fn(),
+    });
+    useGamesActionsMock.mockReturnValue({
+      refreshGames: refreshGamesMock,
+      addGame: vi.fn(),
+      addGames: vi.fn(),
+      updateGame: vi.fn(),
+      deleteGame: deleteGameMock,
+      toggleFavorite: toggleFavoriteMock,
+      searchGames: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/game/game-hero"]}>
+        <Routes>
+          <Route path="/game/:id" element={<GameDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const hero = await screen.findByTestId("game-detail-hero");
+    const heroCopy = screen.getByTestId("game-detail-hero-copy");
+    const heroActions = screen.getByTestId("game-detail-hero-actions");
+    const description = screen.getByTestId("game-detail-hero-description");
+    const descriptionButton = screen.getByTestId("game-detail-description-button");
+    const playButton = screen.getByRole("button", { name: "Играть" });
+
+    expect(hero.className).toContain("h-[80vh]");
+    expect(hero.className).toContain("rounded-b-[32px]");
+    expect(hero).toContainElement(screen.getByRole("heading", { name: game.name }));
+    expect(hero).toContainElement(playButton);
+    expect(heroCopy).toHaveTextContent("Экшен · RPG · Инди");
+    expect(description.className).toContain("truncate-2");
+    expect(heroCopy).toHaveTextContent(
+      "A precision shooter about impossible angles, split-second reactions, and late-night ranked matches.",
+    );
+    expect(heroCopy).toHaveTextContent("2020 · 5 ч");
+    expect(heroActions).toContainElement(playButton);
+
+    await userEvent.click(descriptionButton);
+
+    expect(await screen.findByTestId("game-detail-description-modal")).toBeInTheDocument();
+    expect(screen.getByText("Описание игры")).toBeInTheDocument();
+  });
+
   it.fails(
     "waits for backup completion before launching when backup is required",
     async () => {

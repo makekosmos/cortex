@@ -1,0 +1,46 @@
+{
+  "task": "eden-native-titlebar-overlay",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/main/main.ts",
+        ".agent/tasks/eden-native-titlebar-overlay/raw/verification-summary.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/Titlebar.css",
+        "apps/eden/ts/src/Titlebar.vue",
+        ".agent/tasks/eden-native-titlebar-overlay/raw/verification-summary.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/main/main.ts",
+        "apps/eden/ts/src/Titlebar.vue",
+        ".agent/tasks/eden-native-titlebar-overlay/raw/eden-titlebar-diff.txt"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/eden-native-titlebar-overlay/raw/tsc-noemit.txt"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/eden/ts",
+      "status": "PASS"
+    }
+  ]
+}

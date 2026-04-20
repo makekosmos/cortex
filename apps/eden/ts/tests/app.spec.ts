@@ -855,6 +855,16 @@ test.describe("Electron App", () => {
             secondaryFieldIds: [],
             imageFieldId: "photo",
           }),
+          ui_schema_json: JSON.stringify({
+            featured_fields: ["name", "photo"],
+            visible_fields: ["name", "photo"],
+            hidden_fields: ["created_at", "updated_at", "deleted_at"],
+            read_only_fields: [],
+            field_order: ["name", "photo"],
+            header_layout: "column",
+            default_layout: "page",
+            default_template_id: null,
+          }),
           created_at: now,
           updated_at: now,
         });
@@ -877,9 +887,7 @@ test.describe("Electron App", () => {
           'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="%2390caf9"/></svg>',
         );
       await expect(launch.window.locator('[data-testid="typed-note-header"]')).toBeVisible();
-      await expect(launch.window.locator('[data-testid="typed-note-primary"]')).toContainText(
-        "Ada Lovelace",
-      );
+      await expect(launch.window.locator(".title-input")).toHaveValue("Ada Lovelace");
       await launch.window.locator(".ProseMirror").click();
       await launch.window.keyboard.insertText("First programmer note");
       await launch.window.waitForTimeout(1200);
@@ -921,7 +929,7 @@ test.describe("Electron App", () => {
       expect(typedEntry.entry).not.toBeNull();
       expect(typedEntry.noteTypeId).not.toBeNull();
       expect(typedEntry.entry?.type_id).toBe(typedEntry.noteTypeId);
-      expect(typedEntry.entry?.header_layout).toBe("centered_profile");
+      expect(typedEntry.entry?.header_layout).toBe("column");
       expect(typedEntry.entry?.header_props_json).toContain("Ada Lovelace");
       expect(launch.pageErrors).toEqual([]);
     } finally {

@@ -1,0 +1,14 @@
+Command:
+`npx playwright test tests/app.spec.ts -g "should create a custom note type and render a typed note header" --config playwright.config.ts`
+
+Result:
+BLOCKED
+
+Key output:
+- Playwright starts test discovery
+- worker process creation fails immediately
+- error: `Error: spawn EPERM`
+
+Impact:
+- Object-page and Settings UI flows could not be verified in a browser-run harness.
+

@@ -9,7 +9,7 @@
     "types": ["node"]
   },
   "include": [
-    "vite.config.ts",
+    "vite.config.mjs",
     "scripts/**/*.ts"
   ]
 }

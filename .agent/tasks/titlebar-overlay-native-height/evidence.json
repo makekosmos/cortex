@@ -1,0 +1,41 @@
+{
+  "task_id": "titlebar-overlay-native-height",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Shared Titlebar no longer measures or sends overlay height to main.",
+      "artifacts": [
+        ".agent/tasks/titlebar-overlay-native-height/raw/native-titlebar-diff.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Electron main no longer sets a custom titleBarOverlay.height and relies on native overlay sizing.",
+      "artifacts": [
+        ".agent/tasks/titlebar-overlay-native-height/raw/native-titlebar-diff.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "TypeScript verification passed for apps/delphi/ts.",
+      "artifacts": [
+        ".agent/tasks/titlebar-overlay-native-height/raw/tsc-noemit.txt"
+      ]
+    }
+  ],
+  "files_changed": [
+    "packages/kepler-visuals/components/Titlebar.vue",
+    "apps/delphi/ts/electron/main.ts"
+  ],
+  "verifications": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "apps/delphi/ts",
+      "status": "PASS"
+    }
+  ]
+}

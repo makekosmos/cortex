@@ -25,7 +25,283 @@ pub fn open_db(path: &str) -> Result<Connection, String> {
 }
 
 pub fn init_schema(conn: &Connection) -> Result<(), String> {
-    conn.execute_batch(CREATE_TABLES).map_err(|e| e.to_string())
+    conn.execute_batch(CREATE_TABLES).map_err(|e| e.to_string())?;
+    seed_builtin_object_types(conn)
+}
+
+#[allow(dead_code)]
+fn builtin_note_object_type() -> ObjectType {
+    ObjectType {
+        id: "note_obj".to_string(),
+        name: "Заметка".to_string(),
+        schema_json: json!({
+            "fields": [
+                {
+                    "id": "description",
+                    "label": "Описание",
+                    "kind": "long_text",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                },
+                {
+                    "id": "related_notes",
+                    "label": "Связанные заметки",
+                    "kind": "relation",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                    "link_type": "related",
+                }
+            ]
+        })
+        .to_string(),
+        ui_schema_json: json!({
+            "visible_fields": ["description", "related_notes"],
+            "hidden_fields": ["created_at", "updated_at", "deleted_at"],
+            "read_only_fields": [],
+        })
+        .to_string(),
+        created_at: "1970-01-01T00:00:00.000Z".to_string(),
+        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
+        system_locked: true,
+    }
+}
+
+#[allow(dead_code)]
+fn builtin_game_object_type() -> ObjectType {
+    ObjectType {
+        id: "game_obj".to_string(),
+        name: "Игра".to_string(),
+        schema_json: json!({
+            "fields": [
+                { "id": "description", "label": "Описание", "kind": "long_text", "required": false, "visible": true, "read_only": false },
+                { "id": "user_rating", "label": "Оценка", "kind": "number", "required": false, "visible": true, "read_only": false },
+                {
+                    "id": "play_status",
+                    "label": "Статус",
+                    "kind": "select",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                    "options": ["not_started", "in_progress", "completed", "abandoned"]
+                },
+                { "id": "genres", "label": "Жанры", "kind": "text", "required": false, "visible": true, "read_only": false },
+                { "id": "cover_image", "label": "Обложка", "kind": "image", "required": false, "visible": true, "read_only": false },
+                { "id": "background_image", "label": "Фон", "kind": "image", "required": false, "visible": true, "read_only": false },
+                {
+                    "id": "related_notes",
+                    "label": "Связанные заметки",
+                    "kind": "relation",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                    "link_type": "related"
+                },
+                { "id": "exe_path", "label": "Путь к игре", "kind": "text", "required": false, "visible": true, "read_only": false },
+                { "id": "save_path", "label": "Путь к сейвам", "kind": "text", "required": false, "visible": true, "read_only": false },
+                { "id": "total_playtime_seconds", "label": "Время игры", "kind": "number", "required": false, "visible": true, "read_only": true },
+                { "id": "last_played_at", "label": "Последний запуск", "kind": "date", "required": false, "visible": true, "read_only": true },
+                { "id": "play_count", "label": "Запусков", "kind": "number", "required": false, "visible": true, "read_only": true },
+                { "id": "save_exists", "label": "Сейв найден", "kind": "boolean", "required": false, "visible": true, "read_only": true },
+                { "id": "rawg_id", "label": "RAWG ID", "kind": "text", "required": false, "visible": false, "read_only": true },
+                { "id": "exe_name", "label": "Имя exe", "kind": "text", "required": false, "visible": false, "read_only": true }
+            ]
+        })
+        .to_string(),
+        ui_schema_json: json!({
+            "visible_fields": [
+                "description",
+                "user_rating",
+                "play_status",
+                "genres",
+                "cover_image",
+                "background_image",
+                "related_notes",
+                "exe_path",
+                "save_path",
+                "total_playtime_seconds",
+                "last_played_at",
+                "play_count",
+                "save_exists"
+            ],
+            "hidden_fields": ["created_at", "updated_at", "deleted_at", "rawg_id", "exe_name", "sync_source"],
+            "read_only_fields": ["total_playtime_seconds", "last_played_at", "play_count", "save_exists", "rawg_id", "exe_name"],
+        })
+        .to_string(),
+        created_at: "1970-01-01T00:00:00.000Z".to_string(),
+        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
+        system_locked: true,
+    }
+}
+
+fn builtin_note_object_type_v2() -> ObjectType {
+    ObjectType {
+        id: "note_obj".to_string(),
+        name: "Заметка".to_string(),
+        schema_json: json!({
+            "fields": [
+                {
+                    "id": "description",
+                    "label": "Описание",
+                    "kind": "long_text",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                    "system": false
+                },
+                {
+                    "id": "related_notes",
+                    "label": "Связанные заметки",
+                    "kind": "relation",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                    "link_type": "related",
+                    "system": false
+                }
+            ]
+        })
+        .to_string(),
+        ui_schema_json: json!({
+            "featured_fields": ["description"],
+            "visible_fields": ["description", "related_notes"],
+            "hidden_fields": ["created_at", "updated_at", "deleted_at"],
+            "read_only_fields": [],
+            "field_order": ["description", "related_notes"],
+            "header_layout": "inline",
+            "default_layout": "page",
+            "default_template_id": null,
+        })
+        .to_string(),
+        created_at: "1970-01-01T00:00:00.000Z".to_string(),
+        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
+        system_locked: true,
+    }
+}
+
+fn builtin_game_object_type_v2() -> ObjectType {
+    ObjectType {
+        id: "game_obj".to_string(),
+        name: "Игра".to_string(),
+        schema_json: json!({
+            "fields": [
+                { "id": "description", "label": "Описание", "kind": "long_text", "required": false, "visible": true, "read_only": false, "system": false },
+                { "id": "user_rating", "label": "Оценка", "kind": "number", "required": false, "visible": true, "read_only": false, "system": false },
+                {
+                    "id": "play_status",
+                    "label": "Статус",
+                    "kind": "select",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                    "options": ["not_started", "in_progress", "completed", "abandoned"],
+                    "system": false
+                },
+                { "id": "genres", "label": "Жанры", "kind": "text", "required": false, "visible": true, "read_only": false, "system": false },
+                { "id": "cover_image", "label": "Обложка", "kind": "image", "required": false, "visible": true, "read_only": false, "system": false },
+                { "id": "background_image", "label": "Фон", "kind": "image", "required": false, "visible": true, "read_only": false, "system": false },
+                {
+                    "id": "related_notes",
+                    "label": "Связанные заметки",
+                    "kind": "relation",
+                    "required": false,
+                    "visible": true,
+                    "read_only": false,
+                    "link_type": "related",
+                    "system": false
+                },
+                { "id": "exe_path", "label": "Путь к игре", "kind": "text", "required": false, "visible": true, "read_only": false, "system": true },
+                { "id": "save_path", "label": "Путь к сейвам", "kind": "text", "required": false, "visible": true, "read_only": false, "system": true },
+                { "id": "total_playtime_seconds", "label": "Время игры", "kind": "number", "required": false, "visible": true, "read_only": true, "system": true },
+                { "id": "last_played_at", "label": "Последний запуск", "kind": "date", "required": false, "visible": true, "read_only": true, "system": true },
+                { "id": "play_count", "label": "Запусков", "kind": "number", "required": false, "visible": true, "read_only": true, "system": true },
+                { "id": "save_exists", "label": "Сейв найден", "kind": "boolean", "required": false, "visible": true, "read_only": true, "system": true },
+                { "id": "rawg_id", "label": "RAWG ID", "kind": "text", "required": false, "visible": false, "read_only": true, "system": true },
+                { "id": "exe_name", "label": "Имя exe", "kind": "text", "required": false, "visible": false, "read_only": true, "system": true }
+            ]
+        })
+        .to_string(),
+        ui_schema_json: json!({
+            "featured_fields": [
+                "play_status",
+                "genres",
+                "user_rating",
+                "total_playtime_seconds",
+                "last_played_at",
+                "play_count",
+                "save_exists"
+            ],
+            "visible_fields": [
+                "description",
+                "play_status",
+                "genres",
+                "user_rating",
+                "cover_image",
+                "background_image",
+                "related_notes",
+                "exe_path",
+                "save_path",
+                "total_playtime_seconds",
+                "last_played_at",
+                "play_count",
+                "save_exists"
+            ],
+            "hidden_fields": ["created_at", "updated_at", "deleted_at", "rawg_id", "exe_name", "sync_source"],
+            "read_only_fields": ["total_playtime_seconds", "last_played_at", "play_count", "save_exists", "rawg_id", "exe_name"],
+            "field_order": [
+                "description",
+                "play_status",
+                "genres",
+                "user_rating",
+                "total_playtime_seconds",
+                "last_played_at",
+                "play_count",
+                "save_exists",
+                "cover_image",
+                "background_image",
+                "related_notes",
+                "exe_path",
+                "save_path",
+                "rawg_id",
+                "exe_name"
+            ],
+            "header_layout": "column",
+            "default_layout": "page",
+            "default_template_id": null,
+        })
+        .to_string(),
+        created_at: "1970-01-01T00:00:00.000Z".to_string(),
+        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
+        system_locked: true,
+    }
+}
+
+fn seed_builtin_object_types(conn: &Connection) -> Result<(), String> {
+    for object_type in [builtin_note_object_type_v2(), builtin_game_object_type_v2()] {
+        seed_builtin_object_type(conn, &object_type)?;
+    }
+    Ok(())
+}
+
+fn seed_builtin_object_type(conn: &Connection, builtin: &ObjectType) -> Result<(), String> {
+    let existing = get_object_type(conn, &builtin.id)?;
+
+    let merged = if let Some(existing) = existing {
+        ObjectType {
+            id: builtin.id.clone(),
+            name: builtin.name.clone(),
+            schema_json: builtin.schema_json.clone(),
+            ui_schema_json: existing.ui_schema_json,
+            created_at: existing.created_at,
+            updated_at: builtin.updated_at.clone(),
+            system_locked: true,
+        }
+    } else {
+        builtin.clone()
+    };
+
+    upsert_object_type(conn, &merged)
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +465,211 @@ pub fn delete_heading(conn: &Connection, id: &str) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// Generic object model CRUD
+// ---------------------------------------------------------------------------
+
+fn serialize_json(value: &Value) -> Result<String, String> {
+    serde_json::to_string(value).map_err(|e| e.to_string())
+}
+
+fn parse_json_or_default(raw: String) -> Value {
+    serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))
+}
+
+pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO object_types
+            (id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            object_type.id,
+            object_type.name,
+            object_type.schema_json,
+            object_type.ui_schema_json,
+            object_type.created_at,
+            object_type.updated_at,
+            object_type.system_locked as i64,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_object_type(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM object_types WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_object_types(conn: &Connection) -> Result<Vec<ObjectType>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked
+             FROM object_types
+             ORDER BY system_locked DESC, name ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ObjectType {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                schema_json: row.get(2)?,
+                ui_schema_json: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+                system_locked: row.get::<_, i64>(6)? != 0,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>, String> {
+    conn.query_row(
+        "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked
+         FROM object_types
+         WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(ObjectType {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                schema_json: row.get(2)?,
+                ui_schema_json: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+                system_locked: row.get::<_, i64>(6)? != 0,
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO objects
+            (id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            object.id,
+            object.type_id,
+            object.title,
+            serialize_json(&object.content_json)?,
+            serialize_json(&object.props_json)?,
+            object.created_at,
+            object.updated_at,
+            object.deleted_at,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_object(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+             FROM objects
+             ORDER BY updated_at DESC, created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ArkObject {
+                id: row.get(0)?,
+                type_id: row.get(1)?,
+                title: row.get(2)?,
+                content_json: parse_json_or_default(row.get(3)?),
+                props_json: parse_json_or_default(row.get(4)?),
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+                deleted_at: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn get_object(conn: &Connection, id: &str) -> Result<Option<ArkObject>, String> {
+    conn.query_row(
+        "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+         FROM objects
+         WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(ArkObject {
+                id: row.get(0)?,
+                type_id: row.get(1)?,
+                title: row.get(2)?,
+                content_json: parse_json_or_default(row.get(3)?),
+                props_json: parse_json_or_default(row.get(4)?),
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+                deleted_at: row.get(7)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+pub fn upsert_object_link(conn: &Connection, link: &ObjectLink) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR REPLACE INTO object_links
+            (id, source_object_id, target_object_id, link_type, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            link.id,
+            link.source_object_id,
+            link.target_object_id,
+            link.link_type,
+            link.created_at,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn delete_object_link(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM object_links WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn list_object_links(conn: &Connection) -> Result<Vec<ObjectLink>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, source_object_id, target_object_id, link_type, created_at
+             FROM object_links
+             ORDER BY created_at ASC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ObjectLink {
+                id: row.get(0)?,
+                source_object_id: row.get(1)?,
+                target_object_id: row.get(2)?,
+                link_type: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Usage tracking CRUD
 // ---------------------------------------------------------------------------
 
@@ -326,7 +807,18 @@ pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), Stri
 
 pub fn clear_all(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
-        "DELETE FROM usage_events; DELETE FROM usage_sessions; DELETE FROM tracked_apps; DELETE FROM todos; DELETE FROM projects; DELETE FROM areas; DELETE FROM tags; DELETE FROM headings; DELETE FROM sync_kv;",
+        "DELETE FROM object_links;
+         DELETE FROM objects;
+         DELETE FROM object_types WHERE system_locked = 0;
+         DELETE FROM usage_events;
+         DELETE FROM usage_sessions;
+         DELETE FROM tracked_apps;
+         DELETE FROM todos;
+         DELETE FROM projects;
+         DELETE FROM areas;
+         DELETE FROM tags;
+         DELETE FROM headings;
+         DELETE FROM sync_kv;",
     )
     .map_err(|e| e.to_string())
 }
@@ -349,6 +841,9 @@ pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
     let tracked_apps = load_all_tracked_apps(conn)?;
     let usage_sessions = load_all_usage_sessions(conn)?;
     let usage_events = load_all_usage_events(conn)?;
+    let objects = list_objects(conn)?;
+    let object_types = list_object_types(conn)?;
+    let object_links = list_object_links(conn)?;
     Ok(LoadAllData {
         todos,
         projects,
@@ -358,6 +853,9 @@ pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
         tracked_apps,
         usage_sessions,
         usage_events,
+        objects,
+        object_types,
+        object_links,
     })
 }
 
@@ -791,6 +1289,42 @@ impl SqliteStorageBackend {
             }
         }
 
+        if let Ok(object_types) = list_object_types(conn) {
+            for object_type in &object_types {
+                entities.push(SyncEntity {
+                    entity_type: "object_type".to_string(),
+                    id: object_type.id.clone(),
+                    data: to_data_map(object_type),
+                    hlc: hlc_for(&object_type.id),
+                    deleted: None,
+                });
+            }
+        }
+
+        if let Ok(objects) = list_objects(conn) {
+            for object in &objects {
+                entities.push(SyncEntity {
+                    entity_type: "object".to_string(),
+                    id: object.id.clone(),
+                    data: to_data_map(object),
+                    hlc: hlc_for(&object.id),
+                    deleted: None,
+                });
+            }
+        }
+
+        if let Ok(object_links) = list_object_links(conn) {
+            for object_link in &object_links {
+                entities.push(SyncEntity {
+                    entity_type: "object_link".to_string(),
+                    id: object_link.id.clone(),
+                    data: to_data_map(object_link),
+                    hlc: hlc_for(&object_link.id),
+                    deleted: None,
+                });
+            }
+        }
+
         entities
     }
 
@@ -805,6 +1339,9 @@ impl SqliteStorageBackend {
                 "tracked_app" => delete_tracked_app(conn, &entity.id),
                 "usage_session" => delete_usage_session(conn, &entity.id),
                 "usage_event" => delete_usage_event(conn, &entity.id),
+                "object_type" => delete_object_type(conn, &entity.id),
+                "object" => delete_object(conn, &entity.id),
+                "object_link" => delete_object_link(conn, &entity.id),
                 _ => Ok(()),
             };
             return;
@@ -839,6 +1376,15 @@ impl SqliteStorageBackend {
             "usage_event" => serde_json::from_value::<UsageEvent>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|event| upsert_usage_event(conn, &event)),
+            "object_type" => serde_json::from_value::<ObjectType>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|object_type| upsert_object_type(conn, &object_type)),
+            "object" => serde_json::from_value::<ArkObject>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|object| upsert_object(conn, &object)),
+            "object_link" => serde_json::from_value::<ObjectLink>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|link| upsert_object_link(conn, &link)),
             _ => Ok(()),
         };
     }
@@ -996,6 +1542,56 @@ mod tests {
         }
     }
 
+    fn make_object(id: &str, type_id: &str, title: &str) -> ArkObject {
+        ArkObject {
+            id: id.to_string(),
+            type_id: type_id.to_string(),
+            title: title.to_string(),
+            content_json: json!({
+                "type": "doc",
+                "content": [{ "type": "paragraph" }]
+            }),
+            props_json: json!({
+                "description": format!("Description for {title}")
+            }),
+            created_at: "2026-01-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-01-01T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        }
+    }
+
+    fn make_object_type(id: &str, name: &str) -> ObjectType {
+        ObjectType {
+            id: id.to_string(),
+            name: name.to_string(),
+            schema_json: json!({
+                "fields": [
+                    { "id": "description", "label": "Описание", "kind": "long_text", "required": false, "visible": true, "read_only": false }
+                ]
+            })
+            .to_string(),
+            ui_schema_json: json!({
+                "visible_fields": ["description"],
+                "hidden_fields": ["created_at", "updated_at", "deleted_at"],
+                "read_only_fields": [],
+            })
+            .to_string(),
+            created_at: "2026-01-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-01-01T00:00:00.000Z".to_string(),
+            system_locked: false,
+        }
+    }
+
+    fn make_object_link(id: &str, source_object_id: &str, target_object_id: &str) -> ObjectLink {
+        ObjectLink {
+            id: id.to_string(),
+            source_object_id: source_object_id.to_string(),
+            target_object_id: target_object_id.to_string(),
+            link_type: "related".to_string(),
+            created_at: "2026-01-01T00:00:00.000Z".to_string(),
+        }
+    }
+
     #[test]
     fn test_schema_creation() {
         let conn = setup_db();
@@ -1008,6 +1604,14 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 9);
+        let object_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('object_types', 'objects', 'object_links')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(object_count, 3);
     }
 
     #[test]
@@ -1103,6 +1707,19 @@ mod tests {
             )
             .unwrap();
         assert_eq!(usage_table_count, 3);
+        let object_table_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type='table'
+                   AND name IN ('object_types', 'objects', 'object_links')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(object_table_count, 3);
+        let object_types = list_object_types(&conn).unwrap();
+        assert!(object_types.iter().any(|item| item.id == "note_obj"));
+        assert!(object_types.iter().any(|item| item.id == "game_obj"));
     }
 
     #[test]
@@ -1231,6 +1848,37 @@ mod tests {
     }
 
     #[test]
+    fn test_object_model_crud() {
+        let conn = setup_db();
+        let object_type = make_object_type("book_obj", "Книга");
+        upsert_object_type(&conn, &object_type).unwrap();
+
+        let note = make_object("obj-1", "note_obj", "Первая заметка");
+        let book = make_object("obj-2", "book_obj", "Clean Code");
+        upsert_object(&conn, &note).unwrap();
+        upsert_object(&conn, &book).unwrap();
+
+        let link = make_object_link("link-1", "obj-1", "obj-2");
+        upsert_object_link(&conn, &link).unwrap();
+
+        let data = load_all(&conn).unwrap();
+        assert!(data.object_types.iter().any(|item| item.id == "note_obj"));
+        assert!(data.object_types.iter().any(|item| item.id == "game_obj"));
+        assert!(data.object_types.iter().any(|item| item.id == "book_obj"));
+        assert_eq!(data.objects.len(), 2);
+        assert_eq!(data.object_links.len(), 1);
+        assert_eq!(data.object_links[0].source_object_id, "obj-1");
+
+        delete_object_link(&conn, "link-1").unwrap();
+        delete_object(&conn, "obj-2").unwrap();
+        delete_object_type(&conn, "book_obj").unwrap();
+        let data = load_all(&conn).unwrap();
+        assert_eq!(data.object_links.len(), 0);
+        assert_eq!(data.objects.len(), 1);
+        assert!(!data.object_types.iter().any(|item| item.id == "book_obj"));
+    }
+
+    #[test]
     fn test_sync_kv() {
         let conn = setup_db();
         assert_eq!(get_sync_kv(&conn, "foo").unwrap(), None);
@@ -1256,6 +1904,10 @@ mod tests {
         assert_eq!(data.tracked_apps.len(), 0);
         assert_eq!(data.usage_sessions.len(), 0);
         assert_eq!(data.usage_events.len(), 0);
+        assert_eq!(data.objects.len(), 0);
+        assert_eq!(data.object_links.len(), 0);
+        assert!(data.object_types.iter().any(|item| item.id == "note_obj"));
+        assert!(data.object_types.iter().any(|item| item.id == "game_obj"));
         assert_eq!(get_sync_kv(&conn, "k").unwrap(), None);
     }
 
@@ -1374,6 +2026,40 @@ mod tests {
         }
     }
 
+    fn sync_object(id: &str, type_id: &str, title: &str) -> SyncEntity {
+        let object = make_object(id, type_id, title);
+        let value = serde_json::to_value(&object).unwrap();
+        let mut map = match value {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+        map.remove("id");
+        SyncEntity {
+            entity_type: "object".to_string(),
+            id: id.to_string(),
+            data: map,
+            hlc: "2026-01-01T00:00:00.000Z:000010:peer-a".to_string(),
+            deleted: None,
+        }
+    }
+
+    fn sync_object_link(id: &str, source_object_id: &str, target_object_id: &str) -> SyncEntity {
+        let object_link = make_object_link(id, source_object_id, target_object_id);
+        let value = serde_json::to_value(&object_link).unwrap();
+        let mut map = match value {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+        map.remove("id");
+        SyncEntity {
+            entity_type: "object_link".to_string(),
+            id: id.to_string(),
+            data: map,
+            hlc: "2026-01-01T00:00:00.000Z:000011:peer-a".to_string(),
+            deleted: None,
+        }
+    }
+
     #[tokio::test]
     async fn storage_backend_roundtrip_todo() {
         let backend = make_backend();
@@ -1436,6 +2122,41 @@ mod tests {
         assert_eq!(
             event.data.get("kind").and_then(|v| v.as_str()),
             Some("foreground")
+        );
+    }
+
+    #[tokio::test]
+    async fn storage_backend_roundtrip_object_entities() {
+        let backend = make_backend();
+        backend
+            .apply_entity(&sync_object("obj-sync-a", "note_obj", "Ark note"))
+            .await;
+        backend
+            .apply_entity(&sync_object("obj-sync-b", "game_obj", "Ark game"))
+            .await;
+        backend
+            .apply_entity(&sync_object_link("link-sync", "obj-sync-a", "obj-sync-b"))
+            .await;
+
+        let empty_vector: VersionVector = std::collections::HashMap::new();
+        let loaded = backend.load_entities(&empty_vector).await;
+
+        let note = loaded
+            .iter()
+            .find(|e| e.entity_type == "object" && e.id == "obj-sync-a")
+            .expect("inserted object should be loaded");
+        assert_eq!(
+            note.data.get("title").and_then(|v| v.as_str()),
+            Some("Ark note")
+        );
+
+        let link = loaded
+            .iter()
+            .find(|e| e.entity_type == "object_link" && e.id == "link-sync")
+            .expect("inserted object link should be loaded");
+        assert_eq!(
+            link.data.get("sourceObjectId").and_then(|v| v.as_str()),
+            Some("obj-sync-a")
         );
     }
 

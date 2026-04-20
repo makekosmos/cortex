@@ -1,0 +1,22 @@
+Command:
+`node -e "const { spawnSync } = require('node:child_process'); spawnSync(process.execPath, ['-v'])"`
+
+Result:
+BLOCKED
+
+Observed result:
+```json
+{
+  "status": null,
+  "error": {
+    "code": "EPERM",
+    "syscall": "spawnSync C:\\Users\\Kazui\\AppData\\Local\\Volta\\tools\\image\\node\\22.16.0\\node.exe"
+  },
+  "stdout": "",
+  "stderr": ""
+}
+```
+
+Interpretation:
+- The environment is blocking Node child-process creation directly, which explains both Vite and Playwright failures.
+

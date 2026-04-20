@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /* eslint-disable no-console */
-import { computed, onMounted, onUnmounted, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import { Loader, PanelLeft, Wifi, WifiOff } from "lucide-vue-next";
 import QRCode from "qrcode";
@@ -50,6 +50,10 @@ const router = useRouter();
 
 const quickSearchOpen = shallowRef(false);
 const { sidebarHidden } = useSidebarState();
+const backStack = shallowRef<string[]>([]);
+const forwardStack = shallowRef<string[]>([]);
+const historyReady = shallowRef(false);
+const suppressHistoryRecording = shallowRef(false);
 
 type RouterHistoryStateLike = {
   back?: string | null;
@@ -206,29 +210,96 @@ function toggleSidebar() {
   setSidebarHidden(!sidebarHidden.value);
 }
 
-const historyState = computed(
-  () => (router.options.history.state as RouterHistoryStateLike | undefined) ?? undefined,
-);
+const browserHistoryState = computed(() => {
+  void route.fullPath;
+
+  if (typeof window === "undefined") return undefined;
+
+  return (window.history.state as RouterHistoryStateLike | null) ?? undefined;
+});
+
+const canExitSettingsViaBack = computed(() => route.path === "/settings");
 
 const canGoBack = computed(() => {
-  void route.fullPath;
-  return Boolean(historyState.value?.back);
+  if (isElectron) return backStack.value.length > 0 || canExitSettingsViaBack.value;
+  return Boolean(browserHistoryState.value?.back) || canExitSettingsViaBack.value;
 });
 
 const canGoForward = computed(() => {
-  void route.fullPath;
-  return Boolean(historyState.value?.forward);
+  if (isElectron) return forwardStack.value.length > 0;
+  return Boolean(browserHistoryState.value?.forward);
 });
 
-function navigateBack() {
-  if (!canGoBack.value) return;
+async function navigateBack() {
+  if (isElectron) {
+    const targetPath = backStack.value.at(-1);
+    if (!targetPath) {
+      if (!canExitSettingsViaBack.value) return;
+      await router.push("/");
+      return;
+    }
+
+    suppressHistoryRecording.value = true;
+    backStack.value = backStack.value.slice(0, -1);
+    forwardStack.value = [...forwardStack.value, route.fullPath];
+
+    try {
+      await router.push(targetPath);
+    } finally {
+      suppressHistoryRecording.value = false;
+    }
+
+    return;
+  }
+
+  if (!browserHistoryState.value?.back) {
+    if (!canExitSettingsViaBack.value) return;
+    await router.push("/");
+    return;
+  }
   router.back();
 }
 
-function navigateForward() {
-  if (!canGoForward.value) return;
+async function navigateForward() {
+  if (isElectron) {
+    const targetPath = forwardStack.value.at(-1);
+    if (!targetPath) return;
+
+    suppressHistoryRecording.value = true;
+    forwardStack.value = forwardStack.value.slice(0, -1);
+    backStack.value = [...backStack.value, route.fullPath];
+
+    try {
+      await router.push(targetPath);
+    } finally {
+      suppressHistoryRecording.value = false;
+    }
+
+    return;
+  }
+
+  if (!browserHistoryState.value?.forward) return;
   router.forward();
 }
+
+watch(
+  () => route.fullPath,
+  (nextPath, previousPath) => {
+    if (!isElectron) return;
+
+    if (!historyReady.value) {
+      historyReady.value = true;
+      return;
+    }
+
+    if (suppressHistoryRecording.value || !previousPath || nextPath === previousPath) {
+      return;
+    }
+
+    backStack.value = [...backStack.value, previousPath];
+    forwardStack.value = [];
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Cleanup registry
@@ -672,7 +743,7 @@ onUnmounted(() => {
                 />
               </div>
               <div class="min-w-0">
-                <p class="font-bold">P2P СЃРѕРµРґРёРЅРµРЅРёРµ</p>
+                <p class="font-bold">P2P соединение</p>
                 <p class="text-(--muted-foreground)">{{ connectionSubtext }}</p>
               </div>
             </div>
@@ -680,13 +751,13 @@ onUnmounted(() => {
               v-if="activeSpaceCode && connectionState === 'offline'"
               class="mt-2 text-center text-xs text-(--muted-foreground)"
             >
-              РћР¶РёРґР°РЅРёРµ РїРёСЂРѕРІ РІ СЃРµС‚Рё...
+              Ожидание пиров в сети...
             </p>
             <div
               v-if="activeSpaceCode"
               class="mt-3 border-t border-(--border) pt-3"
             >
-              <p class="mb-1 text-xs text-(--muted-foreground)">РџСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ</p>
+              <p class="mb-1 text-xs text-(--muted-foreground)">Пространство</p>
               <p class="break-all font-mono text-sm font-bold tracking-wide">
                 {{ formatSpaceCode(activeSpaceCode) }}
               </p>
@@ -694,11 +765,11 @@ onUnmounted(() => {
                 class="mt-2 w-full rounded-md border border-(--border) px-2 py-1.5 text-xs font-medium transition-colors hover:bg-(--muted)"
                 @click="openQrOverlay"
               >
-                РџРѕРєР°Р·Р°С‚СЊ QR-РєРѕРґ
+                Показать QR-код
               </button>
               <div v-if="connectedPeerNames.length > 0" class="mt-2">
                 <p class="mb-1 text-xs text-(--muted-foreground)">
-                  РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ РїРёСЂС‹
+                  Подключённые пиры
                 </p>
                 <ul class="text-xs">
                   <li v-for="name in connectedPeerNames" :key="name">
@@ -710,7 +781,7 @@ onUnmounted(() => {
                 class="mt-2 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
                 @click="handleLeaveSpace"
               >
-                РџРѕРєРёРЅСѓС‚СЊ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ
+                Покинуть пространство
               </button>
             </div>
             <button
@@ -718,7 +789,7 @@ onUnmounted(() => {
               class="mt-3 w-full rounded-md bg-(--foreground) px-2 py-1.5 text-xs font-medium text-(--background) transition-opacity hover:opacity-80"
               @click="handleReconnect"
             >
-              РџРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ
+              Подключиться
             </button>
           </div>
         </StatusDot>

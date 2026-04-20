@@ -43,6 +43,27 @@
   --sidebar-surface-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  --kepler-text-heading-size: 28px;
+  --kepler-text-heading-line-height: 1.02;
+  --kepler-text-heading-letter-spacing: -0.4px;
+  --kepler-text-heading-weight: 700;
+
+  --kepler-text-subheading-size: 15px;
+  --kepler-text-subheading-line-height: 1.4;
+  --kepler-text-subheading-letter-spacing: -0.1px;
+  --kepler-text-subheading-weight: 500;
+
+  --kepler-text-page-title-size: 34px;
+  --kepler-text-page-title-line-height: 1.02;
+  --kepler-text-page-title-letter-spacing: -0.5px;
+  --kepler-text-page-title-weight: 700;
+
+  --kepler-type-title-1-size: var(--kepler-text-heading-size);
+  --kepler-type-title-1-line-height: var(--kepler-text-heading-line-height);
+  --kepler-type-title-1-letter-spacing: var(--kepler-text-heading-letter-spacing);
+  --kepler-type-title-1-weight: var(--kepler-text-heading-weight);
+  --kepler-page-max-width: 700px;
 }
 
 .dark {
@@ -85,4 +106,51 @@
   --sidebar-surface-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+.kepler-game-poster-card {
+  isolation: isolate;
+  aspect-ratio: 16 / 9;
+}
+
+.kepler-game-poster-card__media-stack {
+  isolation: isolate;
+}
+
+.kepler-game-poster-card__media {
+  z-index: 0;
+}
+
+.kepler-game-poster-card__scrim {
+  height: 62%;
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 82%) 0%,
+    rgb(0 0 0 / 48%) 52%,
+    transparent 100%
+  );
+}
+
+.kepler-game-poster-card__overlay {
+  background: var(--background);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.kepler-game-poster-card__eyebrow {
+  color: #fff;
+}
+
+.kepler-game-poster-card__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.38);
+}
+
+.kepler-game-poster-card:hover .kepler-game-poster-card__overlay,
+.kepler-game-poster-card:focus-visible .kepler-game-poster-card__overlay {
+  opacity: 0.4;
 }

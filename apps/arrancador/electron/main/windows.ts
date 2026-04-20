@@ -1,6 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { BrowserWindow, type NativeImage, nativeImage, shell } from "electron";
+import {
+  BrowserWindow,
+  type NativeImage,
+  nativeImage,
+  nativeTheme,
+  shell,
+} from "electron";
 
 export interface MainWindowOptions {
   appPath: string;
@@ -16,6 +22,10 @@ export interface MainWindowOptions {
 
 export interface IconResolutionOptions {
   resourcesPath: string;
+}
+
+function getWindowsTitlebarSymbolColor() {
+  return nativeTheme.shouldUseDarkColors ? "#e5e7eb" : "#111827";
 }
 
 function createFallbackIcon(): NativeImage {
@@ -71,6 +81,8 @@ export async function resolveWindowIcon(
 
 export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   const isDev = Boolean(options.rendererUrl);
+  const isMac = process.platform === "darwin";
+  const isWindows = process.platform === "win32";
   const window = new BrowserWindow({
     width: options.width,
     height: options.height,
@@ -78,9 +90,25 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     minHeight: options.minHeight,
     title: options.title,
     show: isDev,
+    frame: !isWindows,
     autoHideMenuBar: true,
     backgroundColor: "#0f131a",
     icon: options.icon,
+    ...(isMac
+      ? {
+          titleBarStyle: "hiddenInset" as const,
+          trafficLightPosition: { x: 18, y: 18 },
+        }
+      : {}),
+    ...(isWindows
+      ? {
+          titleBarStyle: "hidden" as const,
+          titleBarOverlay: {
+            color: "#00000000",
+            symbolColor: getWindowsTitlebarSymbolColor(),
+          },
+        }
+      : {}),
     webPreferences: {
       preload: options.preloadPath,
       contextIsolation: true,
@@ -88,6 +116,28 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
       sandbox: false,
     },
   });
+
+  if (isWindows) {
+    const syncOverlay = () => {
+      if (window.isDestroyed()) {
+        return;
+      }
+
+      window.setTitleBarOverlay({
+        color: "#00000000",
+        symbolColor: getWindowsTitlebarSymbolColor(),
+      });
+    };
+
+    window.webContents.on("did-finish-load", syncOverlay);
+    window.webContents.on("zoom-changed", syncOverlay);
+    nativeTheme.on("updated", syncOverlay);
+    syncOverlay();
+
+    window.once("closed", () => {
+      nativeTheme.off("updated", syncOverlay);
+    });
+  }
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) {

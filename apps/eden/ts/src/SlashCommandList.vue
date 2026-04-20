@@ -11,7 +11,6 @@
         <span class="command-icon">{{ item.icon }}</span>
         <div class="command-info">
           <span class="command-title">{{ item.title }}</span>
-          <span class="command-description">{{ item.description }}</span>
         </div>
       </button>
     </template>
@@ -25,7 +24,7 @@ import type { Editor, Range } from "@tiptap/vue-3";
 
 export interface SlashCommandItem {
   title: string;
-  description: string;
+  description?: string;
   icon: string;
   command: (props: { editor: Editor; range: Range }) => void;
 }

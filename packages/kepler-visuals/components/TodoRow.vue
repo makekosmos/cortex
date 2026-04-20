@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { shallowRef, computed, useTemplateRef, nextTick, ref } from "vue";
-import { GripVertical } from "lucide-vue-next";
 
 export interface TodoRowItem {
   id: string;
@@ -68,8 +67,6 @@ function onEditKeyDown(e: KeyboardEvent) {
 // Drag & Drop
 // ---------------------------------------------------------------------------
 
-const ROW_HEIGHT = 40;
-
 let clone: HTMLElement | null = null;
 let ghost: HTMLElement | null = null;
 let startX = 0;
@@ -136,17 +133,20 @@ function beginDrag(cx: number, cy: number) {
   document.body.appendChild(clone);
   document.body.style.cursor = "grabbing";
 
-  // Ghost placeholder
+  // Invisible placeholder that occupies the target slot.
   ghost = document.createElement("div");
   ghost.dataset.dropGhost = "";
   Object.assign(ghost.style, {
-    height: "0px",
-    overflow: "hidden",
-    transition: "height 0.15s ease",
+    height: `${rect.height}px`,
+    flex: "0 0 auto",
     borderRadius: "var(--radius)",
-    backgroundColor: "var(--surface)",
+    border: "1px dashed color-mix(in srgb, var(--ring) 70%, transparent)",
+    backgroundColor: "color-mix(in srgb, var(--secondary) 65%, transparent)",
+    boxSizing: "border-box",
     pointerEvents: "none",
   });
+  rowRef.value.parentElement?.insertBefore(ghost, rowRef.value);
+  rowRef.value.style.display = "none";
 
   isDragging.value = true;
 }
@@ -179,26 +179,13 @@ function positionGhost(target: TodoDropPayload) {
 
   const rows = getSiblingRows();
   const targetEl = rows.find((el) => el.dataset.todoId === target.targetId);
-  if (!targetEl?.parentElement) return;
+  if (!targetEl) return;
 
   const refNode = target.after ? targetEl.nextSibling : targetEl;
   const parent = targetEl.parentElement;
-
-  // Only move if position actually changed
+  if (!parent) return;
   if (ghost.parentElement === parent && ghost.nextSibling === refNode) return;
-
-  // Remove from old position
-  if (ghost.parentElement) {
-    ghost.style.transition = "none";
-    ghost.style.height = "0px";
-    ghost.parentElement.removeChild(ghost);
-  }
-
-  // Insert at new position with height animation
   parent.insertBefore(ghost, refNode as Node | null);
-  ghost.offsetHeight; // force reflow
-  ghost.style.transition = "height 0.15s ease";
-  ghost.style.height = `${ROW_HEIGHT}px`;
 }
 
 function onDragMove(e: PointerEvent) {
@@ -212,7 +199,7 @@ function onDragMove(e: PointerEvent) {
   const target = findDropTarget(e.clientY);
   if (!target) return;
 
-  // Only update ghost if target changed
+  // Only update placeholder if target changed
   if (!lastTarget || lastTarget.targetId !== target.targetId || lastTarget.after !== target.after) {
     lastTarget = target;
     positionGhost(target);
@@ -227,6 +214,7 @@ function onDragEnd() {
     clone = null;
   }
 
+  rowRef.value?.style.removeProperty("display");
   if (ghost?.parentElement) {
     ghost.parentElement.removeChild(ghost);
   }
@@ -249,10 +237,10 @@ function onDragEnd() {
     :data-todo-id="todo.id"
     :class="[
       'todo-row group flex h-10 items-center gap-3 px-7 hover:bg-(--secondary)',
-      isDragging ? 'opacity-0' : '',
+      isDragging ? 'todo-row--drag-source' : '',
       draggable && !editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
     ]"
-@pointerdown="onRowPointerDown"
+    @pointerdown="onRowPointerDown"
     @dblclick="editable ? startEditing() : undefined"
   >
 
@@ -354,6 +342,11 @@ function onDragEnd() {
   border-radius: var(--radius);
   corner-shape: var(--corner-shape);
   will-change: transform;
+}
+
+.todo-row--drag-source {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .todo-focus-pulse {

@@ -1,0 +1,51 @@
+$ cargo build --release --manifest-path heart/Cargo.toml && cargo build --release --manifest-path ../../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc && tsc && vite build -c vite.config.mjs --configLoader native
+    Finished `release` profile [optimized] target(s) in 0.22s
+warning: fields `relay_url` and `relay_api_key` are never read
+   --> src\main.rs:177:9
+    |
+166 |     StartSync {
+    |     --------- fields in this variant
+...
+177 |         relay_url: Option<String>,
+    |         ^^^^^^^^^
+...
+180 |         relay_api_key: Option<String>,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `Request` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `ark-core` (bin "ark-core-rpc") generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.22s
+[36mvite v8.0.3 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 2140 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.46 kB │ gzip:   0.29 kB
+dist/assets/index-Dmnlw8FB.css    139.37 kB │ gzip:  21.98 kB
+dist/assets/index-D5lWrI_9.js   1,655.15 kB │ gzip: 536.65 kB
+
+[33m[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 1.95s[39m
+[36mvite v8.0.8 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 86 modules transformed.
+rendering chunks...
+computing gzip size...
+dist-electron/main.js  129.91 kB │ gzip: 32.25 kB
+
+[32m✓ built in 46ms[39m
+[36mvite v8.0.8 [32mbuilding client environment for production...[36m[39m
+
+[43m[30m WARN [39m[49m [36minlineDynamicImports[39m option is deprecated, please use [36mcodeSplitting: false[39m instead.
+
+[2Ktransforming...✓ 2 modules transformed.
+rendering chunks...
+computing gzip size...
+dist-electron/preload.mjs  2.74 kB │ gzip: 0.73 kB
+
+[32m✓ built in 11ms[39m
+EXIT:0 

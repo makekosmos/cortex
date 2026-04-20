@@ -1,5 +1,5 @@
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -232,18 +232,21 @@ describe("UI primitives", () => {
     expect(screen.getByText("Body")).toBeInTheDocument();
     expect(screen.getByText("Top")).toBeInTheDocument();
     expect(screen.getByText("Bottom")).toBeInTheDocument();
-    const close = document.querySelector('[data-slot="sheet-close"]');
+    const close = screen.getAllByRole("button", { name: "Close", hidden: true })[0];
     if (!close) throw new Error("missing sheet-close");
     // Radix may apply pointer-events during transitions; `fireEvent` avoids
     // user-event's strict pointer-events checks while still executing handlers.
     fireEvent.click(close);
+    await waitFor(() =>
+      expect(screen.queryByText("Body")).not.toBeInTheDocument(),
+    );
   });
 
   it("renders DropdownMenu primitives (items, checkbox, radio, sub)", async () => {
     const onSelect = vi.fn();
 
     render(
-      <DropdownMenu open>
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button type="button">Trigger</button>
         </DropdownMenuTrigger>
@@ -272,13 +275,16 @@ describe("UI primitives", () => {
       </DropdownMenu>,
     );
 
-    expect(screen.getByText("Label")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("menuitem", { name: "Item" }));
-    expect(onSelect).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Trigger" }));
+    expect(await screen.findByText("Label")).toBeInTheDocument();
     expect(screen.getByText("Check")).toBeInTheDocument();
     expect(screen.getByText("⌘K")).toBeInTheDocument();
     expect(screen.getByText("A")).toBeInTheDocument();
     expect(screen.getByText("B")).toBeInTheDocument();
     expect(screen.getByText("More")).toBeInTheDocument();
+    await userEvent.hover(screen.getByText("More"));
+    expect(await screen.findByText("SubItem")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("menuitem", { name: "Item" }));
+    expect(onSelect).toHaveBeenCalled();
   });
 });

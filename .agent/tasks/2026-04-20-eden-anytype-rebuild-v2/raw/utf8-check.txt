@@ -1,0 +1,37 @@
+[
+  {
+    "file": "apps/eden/ts/src/Editor.vue",
+    "hasReplacement": false,
+    "hasMojibake": false
+  },
+  {
+    "file": "apps/eden/ts/src/lib/entryTitles.ts",
+    "hasReplacement": false,
+    "hasMojibake": false
+  },
+  {
+    "file": "apps/eden/ts/src/components/typed-notes/TypedHeader.vue",
+    "hasReplacement": false,
+    "hasMojibake": false
+  },
+  {
+    "file": "apps/eden/ts/src/lib/systemTypes.ts",
+    "hasReplacement": false,
+    "hasMojibake": false
+  },
+  {
+    "file": "apps/eden/ts/src/components/sidebar/EdenSidebar.vue",
+    "hasReplacement": false,
+    "hasMojibake": false
+  },
+  {
+    "file": "apps/eden/ts/src/components/spaces/SpacesView.vue",
+    "hasReplacement": false,
+    "hasMojibake": false
+  },
+  {
+    "file": "apps/eden/ts/src/components/settings/TrashSettings.vue",
+    "hasReplacement": false,
+    "hasMojibake": false
+  }
+]

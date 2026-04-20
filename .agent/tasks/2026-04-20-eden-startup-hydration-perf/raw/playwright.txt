@@ -1,0 +1,20 @@
+﻿
+Running 1 test using 1 worker
+
+node:internal/child_process:420
+    throw new ErrnoException(err, 'spawn');
+          ^
+System.Management.Automation.RemoteException
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at spawn (node:child_process:753:9)
+    at Object.fork (node:child_process:171:10)
+    at WorkerHost.startRunner (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\processHost.js:54:49)
+    at WorkerHost.start (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\workerHost.js:69:23)
+    at Dispatcher._runJobInWorker (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\dispatcher.js:103:20) {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'spawn'
+}
+System.Management.Automation.RemoteException
+Node.js v22.16.0

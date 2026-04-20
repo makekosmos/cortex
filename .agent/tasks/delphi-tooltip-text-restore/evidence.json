@@ -1,0 +1,44 @@
+{
+  "task_id": "delphi-tooltip-text-restore",
+  "status": "PASS",
+  "source_of_truth": {
+    "commit": "0abe11d",
+    "path": "apps/delphi/ts/src/App.vue"
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Active StatusDot tooltip strings in App.vue were restored from mojibake to readable Russian.",
+      "artifacts": [
+        ".agent/tasks/delphi-tooltip-text-restore/raw/app-vue-diff.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Restored wording matches the last known good wording from git history.",
+      "artifacts": [
+        ".agent/tasks/delphi-tooltip-text-restore/raw/app-vue-good-0abe11d.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "TypeScript verification passed for apps/delphi/ts.",
+      "artifacts": [
+        ".agent/tasks/delphi-tooltip-text-restore/raw/tsc-noemit.txt"
+      ]
+    }
+  ],
+  "files_changed": [
+    "apps/delphi/ts/src/App.vue"
+  ],
+  "verifications": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "apps/delphi/ts",
+      "status": "PASS"
+    }
+  ]
+}

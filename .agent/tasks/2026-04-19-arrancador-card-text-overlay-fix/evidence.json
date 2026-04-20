@@ -1,0 +1,25 @@
+{
+  "task_id": "2026-04-19-arrancador-card-text-overlay-fix",
+  "verification": {
+    "overall": "PASS",
+    "commands": [
+      {
+        "command": "bunx tsc --noEmit",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "status": "PASS"
+      },
+      {
+        "command": "rg --line-number \"�\" .\\packages\\kepler-visuals\\react\\GamePosterCard.tsx .\\packages\\kepler-visuals\\theme\\css-variables.css .\\packages\\kepler-visuals\\patterns\\gamePosterCard.ts .\\.agent\\tasks\\2026-04-19-arrancador-card-text-overlay-fix",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+        "status": "PASS"
+      }
+    ]
+  },
+  "acceptance_criteria": [
+    { "id": "AC1", "status": "PASS" },
+    { "id": "AC2", "status": "PASS" },
+    { "id": "AC3", "status": "PASS" },
+    { "id": "AC4", "status": "PASS" },
+    { "id": "AC5", "status": "PASS" }
+  ]
+}

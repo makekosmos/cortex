@@ -1,0 +1,10 @@
+Command:
+`cargo build --manifest-path packages/ark-core/rust/Cargo.toml --bin ark-core-rpc`
+
+Result:
+PASS
+
+Notes:
+- Build completed successfully.
+- Existing warning remains in `src/main.rs` for unused `relay_url` / `relay_api_key` fields.
+

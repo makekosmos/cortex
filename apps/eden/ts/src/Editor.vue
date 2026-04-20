@@ -5,51 +5,91 @@
       class="focus-exit-btn is-visible"
       data-testid="zen-mode-exit"
       type="button"
-      title="Выйти из zen mode (⌘/Ctrl+Alt+Z или Esc)"
+      title="Выйти из режима фокуса (⌘/Ctrl+Alt+Z или Esc)"
       @click.stop="emit('exitZen')"
     >
-      Exit zen
+      Выйти из фокус-режима
     </button>
     <div class="editor-header">
       <div class="editor-rail editor-header-rail">
         <div class="editor-header-main">
-          <TypedHeader
-            :active-note-type="activeNoteType"
-            :title="title"
-            :header-props="headerProps"
-            :validation-error="headerValidationError"
-            @header-prop-change="handleHeaderPropChange"
+          <input
+            ref="titleInput"
+            v-model="title"
+            class="title-input"
+            :placeholder="UNTITLED_ENTRY_PLACEHOLDER"
           />
-          <input v-model="title" class="title-input" placeholder="Заголовок" />
-          <div ref="noteTypeMenuRef" class="note-type-inline">
+          <div ref="noteTypeMenu" class="note-type-inline">
             <button
               class="note-type-trigger"
               data-testid="typed-note-trigger"
               type="button"
               :style="{ '--note-type-accent': activeNoteType?.color ?? 'var(--text-tertiary)' }"
-              @click="isNoteTypeMenuOpen = !isNoteTypeMenuOpen"
+              @click="toggleNoteTypeMenu"
             >
-              {{ activeNoteType?.name ?? "Обычная заметка" }}
+              {{ activeNoteType?.name ?? "Заметка" }}
             </button>
             <div v-if="isNoteTypeMenuOpen" class="note-type-menu" data-testid="typed-note-menu">
               <button
-                :class="['note-type-menu-item', !noteTypeId && 'is-active']"
+                class="note-type-menu-item"
                 type="button"
-                @click="handleNoteTypeChange('')"
+                @mouseenter="isTypePickerOpen = false"
+                @click="openActiveTypeSettings"
               >
-                Обычная заметка
+                Открыть объект
               </button>
-              <button
-                v-for="noteType in noteTypes"
-                :key="noteType.id"
-                :class="['note-type-menu-item', noteType.id === noteTypeId && 'is-active']"
-                type="button"
-                @click="handleNoteTypeChange(noteType.id)"
+              <div class="note-type-menu-divider" aria-hidden="true"></div>
+              <div
+                class="note-type-menu-submenu"
+                @mouseenter="isTypePickerOpen = true"
               >
-                {{ noteType.name }}
-              </button>
+                <button
+                  class="note-type-menu-item note-type-menu-item--submenu"
+                  type="button"
+                  @click="toggleTypePicker"
+                >
+                  <span>Изменить тип</span>
+                  <span class="note-type-menu-chevron" aria-hidden="true">›</span>
+                </button>
+                <div v-if="isTypePickerOpen" class="note-type-submenu">
+                  <button
+                    v-for="noteType in typePickerOptions"
+                    :key="noteType.id"
+                    :class="['note-type-submenu-item', noteType.id === noteTypeId && 'is-active']"
+                    type="button"
+                    @click="handleNoteTypeChange(noteType.id)"
+                  >
+                    <span
+                      class="note-type-submenu-item__swatch"
+                      :style="{
+                        '--note-type-item-color': noteType.color ?? 'var(--text-secondary)',
+                        '--note-type-item-icon-src': `url(${getNoteTypeIconSrc(noteType)})`,
+                      }"
+                    >
+                      <span
+                        v-if="getNoteTypeIconSrc(noteType)"
+                        class="note-type-submenu-item__icon"
+                        aria-hidden="true"
+                      ></span>
+                      <span v-else class="note-type-submenu-item__dot"></span>
+                    </span>
+                    <span class="note-type-submenu-item__label">{{ noteType.name }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+          <TypedHeader
+            :active-note-type="activeNoteType"
+            :title="title"
+            :header-props="headerProps"
+            :validation-error="headerValidationError"
+            :all-entries="allEntries"
+            :current-entry-id="entry.id"
+            :show-type-row="false"
+            @header-prop-change="handleHeaderPropChange"
+            @relation-navigate="props.onNavigate"
+          />
         </div>
         <div class="editor-header-actions">
           <span v-if="saveConflict" class="save-conflict-badge">{{ saveConflict }}</span>
@@ -65,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch, watchEffect } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch, watchEffect } from "vue";
 import { useEditor, EditorContent, VueRenderer, VueNodeViewRenderer } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -78,16 +118,22 @@ import { Wikilink } from "./Wikilink";
 import WikilinkList from "./WikilinkList.vue";
 import { SlashCommand } from "./SlashCommand";
 import SlashCommandList from "./SlashCommandList.vue";
-import { InlineCaret } from "./InlineCaret";
 import TypedHeader from "@/components/typed-notes/TypedHeader.vue";
 import CodeBlockView from "@/components/CodeBlockView.vue";
 import {
   createDefaultHeaderProps,
-  parseHeaderTemplate,
+  resolveNoteTypeHeaderLayout,
   safeParseHeaderProps,
   validateHeaderProps,
 } from "@/lib/typedNotes";
+import { SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 import { resolveLanguageId } from "@/lib/codeBlocks";
+import {
+  getEditableEntryTitle,
+  resolveStoredEntryTitle,
+  syncUntitledEntryTitleFlag,
+  UNTITLED_ENTRY_PLACEHOLDER,
+} from "@/lib/entryTitles";
 import "./Editor.css";
 
 const DEFAULT_DOCUMENT = {
@@ -116,22 +162,28 @@ const props = defineProps<{
   zenMode?: boolean;
   onSave: (entry: Entry) => Promise<SaveEntryResult | null>;
   onNavigate: (entryId: string) => void;
+  onOpenTypeSettings: (noteTypeId: string) => void;
 }>();
 
 const emit = defineEmits<{
   exitZen: [];
 }>();
 
-const title = ref(props.entry.title);
-const noteTypeId = ref<string | null>(props.entry.type_id);
+const title = ref(getEditableEntryTitle(props.entry.title, props.entry.header_props_json));
+const noteTypeId = ref<string>(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
 const headerLayout = ref<string | null>(props.entry.header_layout);
 const headerProps = ref<Record<string, unknown>>(
-  safeParseHeaderProps(null, props.entry.header_props_json),
+  safeParseHeaderProps(
+    props.noteTypes.find((noteType) => noteType.id === (props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID)) ?? null,
+    props.entry.header_props_json,
+  ),
 );
 const saveConflict = ref<string | null>(null);
 const headerValidationError = ref<string | null>(null);
 const isNoteTypeMenuOpen = ref(false);
-const noteTypeMenuRef = ref<HTMLDivElement | null>(null);
+const isTypePickerOpen = ref(false);
+const noteTypeMenuRef = useTemplateRef<HTMLDivElement>("noteTypeMenu");
+const titleInputRef = useTemplateRef<HTMLInputElement>("titleInput");
 
 let saveRunId = 0;
 let lintRunId = 0;
@@ -146,8 +198,8 @@ let reconcileTimer: number | null = null;
 let lastPersistedContentJson = normalizeContentJson(props.entry.content_json);
 let lastPersistedMarkdown = "";
 let lastPersistedTitle = props.entry.title;
-let lastPersistedNoteTypeId = props.entry.type_id;
-let lastPersistedHeaderLayout = props.entry.header_layout;
+let lastPersistedNoteTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+let lastPersistedHeaderLayout = props.entry.header_layout ?? "default";
 let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
 
 const perfTracker = createPerfTracker();
@@ -164,6 +216,12 @@ watch(
 const activeNoteType = computed(
   () => props.noteTypes.find((noteType) => noteType.id === noteTypeId.value) ?? null,
 );
+
+const typePickerOptions = computed(() => props.noteTypes.filter((noteType) => Boolean(noteType.id)));
+
+function getNoteTypeIconSrc(noteType: NoteType | null) {
+  return noteType?.icon ? `/anytype/icon/type/default/${noteType.icon}.svg` : "";
+}
 
 const lowlight = createLowlight(all);
 
@@ -196,7 +254,6 @@ const extensions = [
     defaultLanguage: null,
   }),
   Typography,
-  InlineCaret,
   Wikilink.configure({
     suggestion: {
       items: ({ query }: { query: string }) =>
@@ -243,43 +300,37 @@ const extensions = [
       items: ({ query }: { query: string }) =>
         [
           {
-            title: "Заголовок 1",
-            description: "Большой заголовок раздела",
+            title: "Заголовок",
             icon: "H1",
             command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
               editor.chain().focus().deleteRange(range).setNode("heading", { level: 1 }).run(),
           },
           {
-            title: "Заголовок 2",
-            description: "Средний заголовок",
+            title: "Подзаголовок",
             icon: "H2",
             command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
               editor.chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run(),
           },
           {
             title: "Текст",
-            description: "Обычный абзац",
             icon: "P",
             command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
               editor.chain().focus().deleteRange(range).setNode("paragraph").run(),
           },
           {
             title: "Список",
-            description: "Маркированный список",
             icon: "•",
             command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
               editor.chain().focus().deleteRange(range).toggleBulletList().run(),
           },
           {
             title: "Код",
-            description: "Блок кода с подсветкой",
             icon: "{}",
             command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
               editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
           },
           {
             title: "Цитата",
-            description: "Блок цитирования",
             icon: '"',
             command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
               editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
@@ -325,7 +376,6 @@ const extensions = [
 const editor = useEditor({
   extensions,
   content: parseContentJson(lastPersistedContentJson),
-  autofocus: "end",
   editable: true,
   onUpdate: () => {
     const startedAt = performance.now();
@@ -538,8 +588,21 @@ function schedulePersistedStateReconciliation() {
 
     if (!editor.value) return;
 
-    const normalizedTitle = title.value || "Без названия";
-    const normalizedHeaderPropsJson = normalizeHeaderPropsJson(JSON.stringify(headerProps.value));
+    const normalizedTitle = resolveStoredEntryTitle(
+      title.value,
+      lastPersistedTitle,
+      lastPersistedHeaderPropsJson,
+    );
+    const normalizedHeaderPropsJson = normalizeHeaderPropsJson(
+      JSON.stringify(
+        syncUntitledEntryTitleFlag(
+          headerProps.value,
+          title.value,
+          lastPersistedTitle,
+          lastPersistedHeaderPropsJson,
+        ),
+      ),
+    );
     const contentJson = getSerializedEditorContent();
     const markdown = getSerializedEditorMarkdown();
 
@@ -633,21 +696,22 @@ function matchesPersistedState(options: {
 }
 
 function hydrateFromEntry(entry: Entry) {
-  const nextNoteType = props.noteTypes.find((noteType) => noteType.id === entry.type_id) ?? null;
+  const nextTypeId = entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
+  const nextNoteType = props.noteTypes.find((noteType) => noteType.id === nextTypeId) ?? null;
   const nextContentJson = normalizeContentJson(entry.content_json);
 
   isHydrating = true;
-  title.value = entry.title;
-  noteTypeId.value = entry.type_id;
-  headerLayout.value = entry.header_layout;
+  title.value = getEditableEntryTitle(entry.title, entry.header_props_json);
+  noteTypeId.value = nextTypeId;
+  headerLayout.value = entry.header_layout ?? "default";
   headerProps.value = safeParseHeaderProps(nextNoteType, entry.header_props_json);
   headerValidationError.value = null;
   saveConflict.value = null;
   lastPersistedContentJson = nextContentJson;
   updatePersistedMetadataBaseline({
     title: entry.title,
-    noteTypeId: entry.type_id,
-    headerLayout: entry.header_layout,
+    noteTypeId: nextTypeId,
+    headerLayout: entry.header_layout ?? "default",
     headerPropsJson: normalizeHeaderPropsJson(entry.header_props_json),
   });
   resetRevisionBaseline();
@@ -724,7 +788,7 @@ async function save() {
 
   const headerValidation = validateHeaderProps(activeNoteType.value, headerProps.value);
   if (!headerValidation.success) {
-    headerValidationError.value = "Проверьте поля верхушки заметки";
+    headerValidationError.value = "Проверьте поля верхней части заметки";
     return;
   }
 
@@ -736,8 +800,19 @@ async function save() {
   if (props.codeToolsSettings?.formatOnSave) await formatAllCodeBlocks();
   if (props.codeToolsSettings?.lintTrigger === "on_save") await lintAllCodeBlocks();
 
-  const normalizedTitle = title.value || "Без названия";
-  const normalizedHeaderPropsJson = JSON.stringify(headerValidation.data);
+  const normalizedTitle = resolveStoredEntryTitle(
+    title.value,
+    lastPersistedTitle,
+    lastPersistedHeaderPropsJson,
+  );
+  const normalizedHeaderPropsJson = JSON.stringify(
+    syncUntitledEntryTitleFlag(
+      headerValidation.data,
+      title.value,
+      lastPersistedTitle,
+      lastPersistedHeaderPropsJson,
+    ),
+  );
   const content_json = getSerializedEditorContent();
   const markdown = getSerializedEditorMarkdown();
 
@@ -795,18 +870,45 @@ async function save() {
 }
 
 function handleNoteTypeChange(nextTypeId: string) {
-  const nextNoteType = props.noteTypes.find((noteType) => noteType.id === nextTypeId) ?? null;
-  noteTypeId.value = nextTypeId || null;
-  headerLayout.value = nextNoteType
-    ? parseHeaderTemplate(nextNoteType.header_template_json).kind
-    : null;
+  const normalizedTypeId = nextTypeId || SYSTEM_TYPE_NOTE_ID;
+  const nextNoteType = props.noteTypes.find((noteType) => noteType.id === normalizedTypeId) ?? null;
+  noteTypeId.value = normalizedTypeId;
+  headerLayout.value = nextNoteType ? resolveNoteTypeHeaderLayout(nextNoteType) : "inline";
   headerProps.value = createDefaultHeaderProps(nextNoteType);
   headerValidationError.value = null;
   isNoteTypeMenuOpen.value = false;
+  isTypePickerOpen.value = false;
+}
+
+function toggleNoteTypeMenu() {
+  isNoteTypeMenuOpen.value = !isNoteTypeMenuOpen.value;
+  if (!isNoteTypeMenuOpen.value) {
+    isTypePickerOpen.value = false;
+  }
+}
+
+function toggleTypePicker() {
+  isTypePickerOpen.value = !isTypePickerOpen.value;
+}
+
+function openActiveTypeSettings() {
+  props.onOpenTypeSettings(noteTypeId.value || SYSTEM_TYPE_NOTE_ID);
+  isNoteTypeMenuOpen.value = false;
+  isTypePickerOpen.value = false;
 }
 
 function handleHeaderPropChange(fieldId: string, value: unknown) {
   headerProps.value = { ...headerProps.value, [fieldId]: value };
+}
+
+function focusPrimarySurface() {
+  if (!title.value.trim()) {
+    titleInputRef.value?.focus();
+    titleInputRef.value?.setSelectionRange(0, 0);
+    return;
+  }
+
+  editor.value?.commands.focus("end");
 }
 
 function shouldTrackTypingEvent(event: KeyboardEvent) {
@@ -822,7 +924,7 @@ watch(
   () => {
     markMetadataDirty();
   },
-  { deep: true, flush: "sync" },
+  { deep: true, flush: "post" },
 );
 
 watch(
@@ -836,6 +938,7 @@ watch(
     }
 
     isNoteTypeMenuOpen.value = false;
+    isTypePickerOpen.value = false;
   },
 );
 
@@ -843,7 +946,11 @@ watch(
   () => props.entry.id,
   () => {
     hydrateFromEntry(props.entry);
-    nextTick(() => editor.value?.commands.focus("end"));
+    nextTick(() => {
+      window.requestAnimationFrame(() => {
+        focusPrimarySurface();
+      });
+    });
   },
   { immediate: true },
 );
@@ -889,19 +996,20 @@ watch(
   ([nextTitle, nextTypeId, nextHeaderLayout, nextHeaderPropsJson]) => {
     if (isDirty()) return;
 
-    const nextNoteType = props.noteTypes.find((noteType) => noteType.id === nextTypeId) ?? null;
+    const normalizedTypeId = nextTypeId ?? SYSTEM_TYPE_NOTE_ID;
+    const nextNoteType = props.noteTypes.find((noteType) => noteType.id === normalizedTypeId) ?? null;
     const normalizedHeaderPropsJson = normalizeHeaderPropsJson(nextHeaderPropsJson);
 
     isHydrating = true;
-    title.value = nextTitle;
-    noteTypeId.value = nextTypeId;
-    headerLayout.value = nextHeaderLayout;
+    title.value = getEditableEntryTitle(nextTitle, nextHeaderPropsJson);
+    noteTypeId.value = normalizedTypeId;
+    headerLayout.value = nextHeaderLayout ?? resolveNoteTypeHeaderLayout(nextNoteType);
     headerProps.value = safeParseHeaderProps(nextNoteType, nextHeaderPropsJson);
     headerValidationError.value = null;
     updatePersistedMetadataBaseline({
       title: nextTitle,
-      noteTypeId: nextTypeId,
-      headerLayout: nextHeaderLayout,
+      noteTypeId: normalizedTypeId,
+      headerLayout: nextHeaderLayout ?? "default",
       headerPropsJson: normalizedHeaderPropsJson,
     });
 
@@ -989,10 +1097,14 @@ watchEffect((onCleanup) => {
   const handlePointerDown = (event: MouseEvent) => {
     if (noteTypeMenuRef.value?.contains(event.target as Node)) return;
     isNoteTypeMenuOpen.value = false;
+    isTypePickerOpen.value = false;
   };
 
   const handleEscape = (event: KeyboardEvent) => {
-    if (event.key === "Escape") isNoteTypeMenuOpen.value = false;
+    if (event.key === "Escape") {
+      isNoteTypeMenuOpen.value = false;
+      isTypePickerOpen.value = false;
+    }
   };
 
   window.addEventListener("mousedown", handlePointerDown);

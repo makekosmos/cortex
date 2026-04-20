@@ -1,0 +1,10 @@
+Command:
+`cargo test --manifest-path apps/eden/ts/heart/Cargo.toml -- --nocapture`
+
+Result:
+PASS
+
+Notes:
+- No failing tests.
+- Test target compiles successfully with the updated note type persistence model.
+

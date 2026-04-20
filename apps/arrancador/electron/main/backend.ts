@@ -13,6 +13,7 @@ import { openGameDatabase, openSqliteDatabase } from "./db";
 import { execute, queryAll, queryOne, runInTransaction } from "./helpers/db";
 import type { DbLike, DbValue, GameSnapshot } from "./helpers/shared";
 import { createAchievementsService } from "./services/achievements";
+import { createArkGameObjectService } from "./services/ark-game-objects";
 import { createCatalogueService } from "./services/catalogue";
 import type {
   AppSettings,
@@ -261,15 +262,21 @@ function createRuntimeServices(db: DbLike) {
     },
   };
 
+  const arkGameObjects = createArkGameObjectService({ arkDbPath });
   const usageReadModel = createGameUsageReadModel({
     legacyDb: db,
     arkDbPath,
+    arkGameObjects,
   });
-  const playtimeRepository = createPlaytimeStatsRepository(db, arkDbPath);
+  const playtimeRepository = createPlaytimeStatsRepository({
+    legacyDb: db,
+    arkDbPath,
+  });
 
   const games = createGamesService({
     db,
     usageReadModel,
+    arkGameObjectSync: arkGameObjects,
   });
   const settings = createSettingsService(settingsRepository);
   const stats = createStatsService(playtimeRepository);
@@ -678,6 +685,26 @@ function registerIpcHandlers() {
       return result.filePaths;
     }
     return result.filePaths[0] ?? null;
+  }));
+  ipcMain.handle("get_window_platform", withRuntime(async () => process.platform));
+  ipcMain.handle("window_minimize", withRuntime(async () => {
+    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    window?.minimize();
+  }));
+  ipcMain.handle("window_toggle_maximize", withRuntime(async () => {
+    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!window) {
+      return;
+    }
+    if (window.isMaximized()) {
+      window.unmaximize();
+      return;
+    }
+    window.maximize();
+  }));
+  ipcMain.handle("window_close", withRuntime(async () => {
+    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    window?.close();
   }));
   ipcMain.handle("shell_open_path", withRuntime(async (_runtime, payload: { path: string }) => await shell.openPath(payload.path)));
   ipcMain.handle("shell_open_external", withRuntime(async (_runtime, payload: { url: string }) => {

@@ -110,8 +110,47 @@ CREATE TABLE IF NOT EXISTS usage_events (
     meta_json TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS object_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    schema_json TEXT NOT NULL,
+    ui_schema_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    system_locked INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS objects (
+    id TEXT PRIMARY KEY,
+    type_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content_json TEXT NOT NULL DEFAULT '{}',
+    props_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT,
+    FOREIGN KEY(type_id) REFERENCES object_types(id)
+);
+
+CREATE TABLE IF NOT EXISTS object_links (
+    id TEXT PRIMARY KEY,
+    source_object_id TEXT NOT NULL,
+    target_object_id TEXT NOT NULL,
+    link_type TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(source_object_id) REFERENCES objects(id) ON DELETE CASCADE,
+    FOREIGN KEY(target_object_id) REFERENCES objects(id) ON DELETE CASCADE,
+    UNIQUE(source_object_id, target_object_id, link_type)
+);
+
 CREATE TABLE IF NOT EXISTS sync_kv (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_objects_type_id ON objects(type_id);
+CREATE INDEX IF NOT EXISTS idx_objects_updated_at ON objects(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_objects_deleted_at ON objects(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_object_links_source ON object_links(source_object_id);
+CREATE INDEX IF NOT EXISTS idx_object_links_target ON object_links(target_object_id);
 ";

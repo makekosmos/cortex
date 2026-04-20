@@ -50,6 +50,7 @@ struct NoteType {
     color: Option<String>,
     schema_json: String,
     header_template_json: String,
+    ui_schema_json: Option<String>,
     created_at: i64,
     updated_at: i64,
 }
@@ -490,6 +491,7 @@ fn bootstrap_schema(connection: &Connection) -> Result<(), String> {
               color TEXT,
               schema_json TEXT NOT NULL,
               header_template_json TEXT NOT NULL,
+              ui_schema_json TEXT,
               created_at INTEGER NOT NULL,
               updated_at INTEGER NOT NULL
             );
@@ -497,6 +499,12 @@ fn bootstrap_schema(connection: &Connection) -> Result<(), String> {
         )
         .map_err(|error| error.to_string())?;
 
+    add_column_if_missing(
+        connection,
+        "note_types",
+        "ui_schema_json",
+        "ALTER TABLE note_types ADD COLUMN ui_schema_json TEXT",
+    )?;
     add_column_if_missing(
         connection,
         "entries",
@@ -648,8 +656,9 @@ fn row_to_note_type(row: &rusqlite::Row<'_>) -> Result<NoteType, rusqlite::Error
         color: row.get(4)?,
         schema_json: row.get(5)?,
         header_template_json: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        ui_schema_json: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
 
@@ -707,7 +716,7 @@ fn get_note_type_by_id(
 ) -> Result<Option<NoteType>, String> {
     connection
         .query_row(
-            "SELECT id, name, slug, icon, color, schema_json, header_template_json, created_at, updated_at FROM note_types WHERE id = ?1 LIMIT 1",
+            "SELECT id, name, slug, icon, color, schema_json, header_template_json, ui_schema_json, created_at, updated_at FROM note_types WHERE id = ?1 LIMIT 1",
             [note_type_id],
             row_to_note_type,
         )
@@ -718,7 +727,7 @@ fn get_note_type_by_id(
 fn list_note_types(connection: &Connection) -> Result<Vec<NoteType>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT id, name, slug, icon, color, schema_json, header_template_json, created_at, updated_at FROM note_types ORDER BY name ASC",
+            "SELECT id, name, slug, icon, color, schema_json, header_template_json, ui_schema_json, created_at, updated_at FROM note_types ORDER BY name ASC",
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
@@ -896,8 +905,8 @@ fn save_note_type(connection: &mut Connection, note_type: NoteType) -> Result<Va
     connection
         .execute(
             r#"
-            INSERT INTO note_types (id, name, slug, icon, color, schema_json, header_template_json, created_at, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            INSERT INTO note_types (id, name, slug, icon, color, schema_json, header_template_json, ui_schema_json, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
             ON CONFLICT(id) DO UPDATE SET
               name = excluded.name,
               slug = excluded.slug,
@@ -905,6 +914,7 @@ fn save_note_type(connection: &mut Connection, note_type: NoteType) -> Result<Va
               color = excluded.color,
               schema_json = excluded.schema_json,
               header_template_json = excluded.header_template_json,
+              ui_schema_json = excluded.ui_schema_json,
               updated_at = excluded.updated_at
             "#,
             params![
@@ -915,6 +925,7 @@ fn save_note_type(connection: &mut Connection, note_type: NoteType) -> Result<Va
                 note_type.color,
                 note_type.schema_json,
                 note_type.header_template_json,
+                note_type.ui_schema_json,
                 note_type.created_at,
                 note_type.updated_at,
             ],

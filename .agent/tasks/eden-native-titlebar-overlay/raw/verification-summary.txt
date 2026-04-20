@@ -1,0 +1,5 @@
+setTitleBarOverlay_has_height=False
+constructor_titleBarOverlay_has_height=False
+css_uses_titlebar_area_y=True
+css_uses_titlebar_area_height=True
+vue_imports_titlebar_css=True

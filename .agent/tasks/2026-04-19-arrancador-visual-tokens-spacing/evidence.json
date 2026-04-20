@@ -1,0 +1,44 @@
+{
+  "task_id": "2026-04-19-arrancador-visual-tokens-spacing",
+  "result": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src/index.css:3",
+        "apps/arrancador/src/index.css:40"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src/index.css:71",
+        "apps/arrancador/src/pages/Layout.tsx:188",
+        "apps/arrancador/src/index.css:516"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src/index.css:42",
+        "apps/arrancador/src/index.css:678",
+        "apps/arrancador/src/pages/Layout.tsx:258"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-19-arrancador-visual-tokens-spacing/raw/typecheck.log",
+        ".agent/tasks/2026-04-19-arrancador-visual-tokens-spacing/raw/test.log"
+      ]
+    }
+  ],
+  "verification": {
+    "typecheck": "PASS",
+    "tests": "PASS"
+  }
+}

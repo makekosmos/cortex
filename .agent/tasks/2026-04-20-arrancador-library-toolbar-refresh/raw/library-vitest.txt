@@ -1,0 +1,8 @@
+$ bunx vitest run --configLoader native --config vitest.config.mjs src/test/library.test.tsx
+
+RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+
+Test Files  1 passed (1)
+Tests  6 passed (6)
+Start at  02:12:08
+Duration  2.67s (transform 147ms, setup 160ms, import 681ms, tests 707ms, environment 915ms)

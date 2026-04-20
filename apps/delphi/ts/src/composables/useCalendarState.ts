@@ -3,16 +3,14 @@ import {
   buildMonthGridDays,
   buildVisibleDays,
   formatRangeLabel,
-  getVisibleRange,
   shiftAnchorDate,
   startOfDay,
-  toRange,
-} from "@/services/google-calendar/date";
-import type { GoogleCalendarViewMode } from "@/services/google-calendar/contracts";
+} from "@/services/calendar/date";
+import type { CalendarViewMode } from "@/services/calendar/contracts";
 
 const STORAGE_KEY = "delphi-calendar-view-mode";
 
-function loadInitialViewMode(): GoogleCalendarViewMode {
+function loadInitialViewMode(): CalendarViewMode {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (
@@ -30,7 +28,7 @@ function loadInitialViewMode(): GoogleCalendarViewMode {
 }
 
 export function useCalendarState() {
-  const viewMode = shallowRef<GoogleCalendarViewMode>(loadInitialViewMode());
+  const viewMode = shallowRef<CalendarViewMode>(loadInitialViewMode());
   const anchorDate = shallowRef(startOfDay(new Date()));
 
   const visibleDays = computed(() =>
@@ -39,19 +37,11 @@ export function useCalendarState() {
       : buildVisibleDays(viewMode.value, anchorDate.value),
   );
 
-  const visibleRange = computed(() => {
-    const range = getVisibleRange(viewMode.value, anchorDate.value);
-    return {
-      ...range,
-      request: toRange(range.start, range.end),
-    };
-  });
-
   const rangeLabel = computed(() =>
     formatRangeLabel(viewMode.value, anchorDate.value),
   );
 
-  function setViewMode(next: GoogleCalendarViewMode) {
+  function setViewMode(next: CalendarViewMode) {
     viewMode.value = next;
     try {
       localStorage.setItem(STORAGE_KEY, next);
@@ -80,7 +70,6 @@ export function useCalendarState() {
     viewMode,
     anchorDate,
     visibleDays,
-    visibleRange,
     rangeLabel,
     setViewMode,
     goToday,

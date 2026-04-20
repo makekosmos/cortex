@@ -5,13 +5,15 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "cargo build --manifest-path heart/Cargo.toml && vite",
-    "build": "cargo build --release --manifest-path heart/Cargo.toml && tsc && vite build",
+    "dev": "cargo build --manifest-path heart/Cargo.toml && cargo build --manifest-path ../../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc && vite -c vite.config.mjs --configLoader native",
+    "dev:web": "vite -c vite.web.config.mjs --configLoader native",
+    "build": "cargo build --release --manifest-path heart/Cargo.toml && cargo build --release --manifest-path ../../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc && tsc && vite build -c vite.config.mjs --configLoader native",
     "lint": "oxlint . --ignore-pattern dist --ignore-pattern dist-electron --ignore-pattern release --ignore-pattern src/components/sidebar-anytype --ignore-pattern src-anytype --deny-warnings",
     "format": "oxfmt src/ main/",
     "format:check": "oxfmt --check src/ main/",
     "package": "bun run build && electron-builder",
-    "preview": "vite preview",
+    "preview": "vite preview -c vite.config.mjs --configLoader native",
+    "seed:ark-demo": "bun run scripts/seedArkObjectDemo.ts",
     "test:e2e": "bun run build && playwright test --config playwright.config.ts",
     "benchmark:typing-stress": "EDEN_RUN_STRESS_BENCHMARK=1 playwright test --config playwright.stress.config.ts",
     "benchmark:typing-stress:compare": "bun run scripts/compareTypingStress.ts"

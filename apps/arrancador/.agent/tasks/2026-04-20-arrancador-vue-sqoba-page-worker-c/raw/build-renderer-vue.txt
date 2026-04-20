@@ -1,0 +1,9 @@
+$ VITE_HTML_ENTRY=index-vue.html vite build
+failed to load config from D:\Personal\Hobby\Coding\kepler\apps\arrancador\vite.config.ts
+error during build:
+Error: Build failed with 2 errors:
+
+[UNLOADABLE_DEPENDENCY] Could not load @tailwindcss/oxide-win32-x64-msvc
+[plugin externalize-deps] Error: spawn EPERM
+
+error: script "build:renderer:vue" exited with code 1

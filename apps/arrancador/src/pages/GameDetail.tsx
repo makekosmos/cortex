@@ -1,7 +1,6 @@
 ﻿import {
   Activity,
   ArrowLeft,
-  Clock,
   Download,
   File as FileIcon,
   FolderOpen,
@@ -28,6 +27,8 @@
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import { gamePosterCardClasses } from "../../../../packages/kepler-visuals/patterns";
 import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ import {
   subscribeAppEvent,
 } from "@/lib/browser";
 import { backupApi, gamesApi, metadataApi } from "@/lib/api";
+import { translateGenreListToRu } from "@/lib/genres";
 import { cn } from "@/lib/utils";
 import { useGamesActions, useGamesState } from "@/store/GamesContext";
 import type {
@@ -71,6 +73,22 @@ function formatPlaytime(seconds: number) {
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours > 0) return `${hours} ч ${minutes} мин`;
   return `${minutes} мин`;
+}
+
+function normalizeDescription(value: string | null) {
+  if (!value) return null;
+  const plain = value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!plain) return null;
+  return plain;
+}
+
+function formatPlayedHours(seconds: number) {
+  if (seconds <= 0) return "0 ч";
+  if (seconds < 3600) return "<1 ч";
+  return `${Math.floor(seconds / 3600)} ч`;
 }
 
 export default function GameDetail() {
@@ -143,6 +161,7 @@ export default function GameDetail() {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [ratingDraft, setRatingDraft] = useState(4);
   const [showGameSettings, setShowGameSettings] = useState(false);
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
 
   const { notify } = useToast();
 
@@ -182,42 +201,17 @@ export default function GameDetail() {
   void ratingLevels;
 
   const displayRating = showRatingModal ? ratingDraft : userRating;
-
-  const getRatingTone = (value: number | null) => {
-    const t = value ? Math.min(Math.max((value - 1) / 6, 0), 1) : 0.25;
-    const r = Math.round(100 + (236 - 100) * t);
-    const g = Math.round(112 + (86 - 112) * t);
-    const b = Math.round(210 + (176 - 210) * t);
-    return { r, g, b };
-  };
-
-  const getRatingSurfaceStyle = (value: number | null) => {
-    const { r, g, b } = getRatingTone(value);
-    return {
-      backgroundImage: `radial-gradient(120% 160% at 0% 0%, rgba(${r}, ${g}, ${b}, 0.25), transparent 60%)`,
-      borderColor: `rgba(${r}, ${g}, ${b}, 0.25)`,
-    };
-  };
-
-  const getRatingBadgeStyle = (value: number | null) => {
-    const { r, g, b } = getRatingTone(value);
-    return {
-      backgroundImage: `radial-gradient(circle at 30% 30%, rgba(${r}, ${g}, ${b}, 0.85), rgba(${r}, ${g}, ${b}, 0.35))`,
-      boxShadow: `0 10px 24px rgba(${r}, ${g}, ${b}, 0.35)`,
-      borderColor: `rgba(${r}, ${g}, ${b}, 0.45)`,
-    };
-  };
-
-  const getRatingBarStyle = (value: number | null) => {
-    const { r, g, b } = getRatingTone(value);
-    return {
-      backgroundImage: `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.9), rgba(${r}, ${g}, ${b}, 0.35))`,
-    };
-  };
-
-  const ratingGlowTone = getRatingTone(displayRating);
   const isRunning = runningCount > 0;
   const isMissing = !isInstalled && !checkingInstalled;
+  const heroImage = game?.background_image || game?.cover_image || null;
+  const heroGenres = translateGenreListToRu(game?.genres, 3).join(" · ") || null;
+  const heroDescription = normalizeDescription(game?.description ?? null);
+  const heroReleaseYear = game?.released
+    ? new Date(game.released).getFullYear().toString()
+    : null;
+  const heroMeta = [heroReleaseYear, formatPlayedHours(game?.total_playtime ?? 0)]
+    .filter(Boolean)
+    .join(" · ");
   const playState = isMissing ? "missing" : isRunning ? "running" : "ready";
   const playLabel = isMissing
     ? "Не установлена"
@@ -255,6 +249,19 @@ export default function GameDetail() {
       loadBackups();
     }
   }, [game?.id]);
+
+  useEffect(() => {
+    if (!showDescriptionModal) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowDescriptionModal(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showDescriptionModal]);
 
   useEffect(() => {
     if (!game) return;
@@ -757,34 +764,23 @@ export default function GameDetail() {
           }}
         />
         <div
-          className="absolute top-24 left-[-180px] h-80 w-80 rounded-full opacity-50 blur-3xl"
-          style={{
-            background: `radial-gradient(circle, rgba(${ratingGlowTone.r}, ${ratingGlowTone.g}, ${ratingGlowTone.b}, 0.45), rgba(${ratingGlowTone.r}, ${ratingGlowTone.g}, ${ratingGlowTone.b}, 0))`,
-          }}
-        />
-        <div
-          className="absolute bottom-[-160px] left-1/3 h-[420px] w-[420px] rounded-full opacity-45 blur-3xl"
+          className="absolute top-24 left-[-180px] h-80 w-80 rounded-full opacity-40 blur-3xl"
           style={{
             background:
-              "radial-gradient(circle, rgba(56, 189, 248, 0.4), rgba(56, 189, 248, 0))",
-          }}
-        />
-        <div
-          className="absolute inset-0 opacity-[0.06] dark:opacity-[0.12]"
-          style={{
-            backgroundImage:
-              "radial-gradient(rgba(255,255,255,0.35) 1px, transparent 1px)",
-            backgroundSize: "3px 3px",
+              "radial-gradient(circle, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0))",
           }}
         />
       </div>
       {/* Hero Section */}
-      <div className="relative h-72 overflow-hidden group">
-        {game.background_image ? (
+      <div
+        data-testid="game-detail-hero"
+        className="relative h-[80vh] min-h-[420px] max-h-[880px] overflow-hidden rounded-b-[32px] group sm:rounded-b-[40px]"
+      >
+        {heroImage ? (
           <img
-            src={game.background_image}
+            src={heroImage}
             alt={game.name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-105 duration-700"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-secondary to-muted" />
@@ -812,6 +808,96 @@ export default function GameDetail() {
                 "radial-gradient(circle, rgba(255,255,255,0.8), rgba(255,255,255,0))",
             }}
           />
+        </div>
+        <div className="absolute inset-x-0 bottom-0 z-30 px-6 pb-8 sm:px-8 sm:pb-10 lg:px-10 lg:pb-12">
+          <div className="flex flex-wrap items-end justify-between gap-4 lg:gap-6">
+            <div
+              data-testid="game-detail-hero-copy"
+              className={cn(
+                gamePosterCardClasses.content,
+                "pointer-events-auto static inset-auto min-w-0 flex-1 gap-3 p-0",
+              )}
+            >
+              <h1
+                className={cn(
+                  gamePosterCardClasses.title,
+                  "max-w-[min(18ch,100%)] text-4xl font-semibold leading-[0.92] text-white drop-shadow-[0_10px_32px_rgba(0,0,0,0.45)] sm:text-5xl lg:text-6xl",
+                )}
+              >
+                {game.name}
+              </h1>
+              {heroGenres ? (
+                <p
+                  className={cn(
+                    gamePosterCardClasses.eyebrow,
+                    "max-w-[min(70ch,100%)] text-white/80 text-sm font-medium sm:text-base",
+                  )}
+                >
+                  {heroGenres}
+                </p>
+              ) : null}
+              {heroDescription ? (
+                <div className="flex max-w-[400px] items-end justify-between gap-3">
+                  <p
+                    data-testid="game-detail-hero-description"
+                    className="truncate-2 min-w-0 flex-1 text-sm leading-6 text-white/72 sm:text-[15px]"
+                  >
+                    {heroDescription}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    data-testid="game-detail-description-button"
+                    className="h-auto shrink-0 self-end rounded-full border border-white/10 bg-background/50 px-2.5 py-1 text-xs text-white hover:bg-background/65 sm:text-[13px]"
+                    onClick={() => setShowDescriptionModal(true)}
+                  >
+                    Еще
+                  </Button>
+                </div>
+              ) : null}
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/58 sm:text-[13px]">
+                {heroMeta}
+              </p>
+            </div>
+            <div
+              data-testid="game-detail-hero-actions"
+              className="flex max-w-[320px] flex-col items-end gap-2 self-end"
+            >
+              <Button
+                size="lg"
+                className={cn(
+                  "h-14 gap-2 rounded-full px-8 text-lg shadow-none transition-all hover:shadow-none",
+                  playState === "running" &&
+                    "border border-white/10 bg-gradient-to-br from-rose-500/90 via-red-500/85 to-orange-500/80 text-white hover:text-white",
+                  playState === "ready" &&
+                    "border border-foreground/20 bg-foreground text-background hover:border-accent hover:bg-accent hover:text-white",
+                  playState === "missing" &&
+                    "bg-muted text-muted-foreground border border-border/60 shadow-none disabled:opacity-100",
+                )}
+                onClick={handleLaunch}
+                disabled={isMissing || restoring || (launching && !isRunning)}
+              >
+                {isMissing ? (
+                  <HardDrive className="w-5 h-5 opacity-70" />
+                ) : isRunning ? (
+                  <Activity className="w-5 h-5 animate-pulse" />
+                ) : launching || checkingRunning ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Play className="w-5 h-5 fill-current" />
+                )}
+                {playLabel}
+              </Button>
+              {isMissing ? (
+                <div className="max-w-[280px] text-right text-xs text-white/72">
+                  {
+                    "Игра не установлена, но карточка остаётся в библиотеке — как IMDb для своих игр. Можно снова скачать, смотреть статистику и вернуться к бэкапам."
+                  }
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         {/* Back button */}
@@ -885,91 +971,18 @@ export default function GameDetail() {
       </div>
 
       {/* Content */}
-      <div className="px-6 pb-6 -mt-20 relative z-10">
-        {/* Title and Play */}
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-          <div className="min-w-0 flex items-end gap-4 flex-1">
-            <div className="shrink-0">
-              <div className="w-28 md:w-32 aspect-[2/3] rounded-xl border border-white/20 bg-background/60 backdrop-blur-md overflow-hidden flex items-center justify-center">
-                {game.cover_image ? (
-                  <img
-                    src={game.cover_image}
-                    alt={`${game.name} cover`}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs text-center px-2">
-                    Нет обложки
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-4xl font-bold text-white drop-shadow-lg mb-2">
-                {game.name}
-              </h1>
-
-              {game.genres && (
-                <p className="text-white/80 font-medium">{game.genres}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end gap-2">
-            <Button
-              size="lg"
-              className={cn(
-                "gap-2 h-14 px-8 text-lg transition-all",
-                playState === "running" &&
-                  "text-white bg-gradient-to-br from-rose-500/90 via-red-500/85 to-orange-500/80 border border-white/10 shadow-[0_12px_30px_rgba(239,68,68,0.35)]",
-                playState === "ready" &&
-                  "bg-foreground text-background border border-foreground/20 shadow-[0_12px_30px_rgba(15,23,42,0.25)] hover:shadow-[0_16px_40px_rgba(15,23,42,0.35)]",
-                playState === "missing" &&
-                  "bg-muted text-muted-foreground border border-border/60 shadow-none disabled:opacity-100",
-              )}
-              onClick={handleLaunch}
-              disabled={isMissing || restoring || (launching && !isRunning)}
-            >
-              {isMissing ? (
-                <HardDrive className="w-5 h-5 opacity-70" />
-              ) : isRunning ? (
-                <Activity className="w-5 h-5 animate-pulse" />
-              ) : launching || checkingRunning ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Play className="w-5 h-5 fill-current" />
-              )}
-              {playLabel}
-            </Button>
-            {isMissing && (
-              <div className="max-w-[280px] text-xs text-muted-foreground text-right">
-                {
-                  "Игра не установлена, но карточка остаётся в библиотеке — как IMDb для своих игр. Можно снова скачать, смотреть статистику и вернуться к бэкапам."
-                }
-              </div>
-            )}
-          </div>
-        </div>
-
+      <div className="relative z-10 px-6 pb-6 pt-6 sm:px-8">
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <button
             type="button"
-            className="group relative w-full rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xl p-4 text-left transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_18px_45px_rgba(8,10,25,0.45)] min-h-[130px]"
-            style={getRatingSurfaceStyle(displayRating)}
+            className="group relative w-full rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xl p-4 text-left transition-all hover:border-foreground/20 hover:shadow-[0_18px_45px_rgba(8,10,25,0.45)] min-h-[130px]"
             onClick={() => {
               setRatingDraft(userRating ?? 4);
               setShowRatingModal(true);
             }}
             aria-label={"Оценка"}
           >
-            <div
-              className="absolute inset-0 rounded-2xl opacity-70 pointer-events-none"
-              style={{
-                backgroundImage:
-                  "linear-gradient(135deg, rgba(255,255,255,0.08), transparent 60%)",
-              }}
-            />
             <div className="relative flex h-full flex-col justify-between gap-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -984,18 +997,16 @@ export default function GameDetail() {
                   </div>
                 </div>
                 <div
-                  className="h-11 w-11 rounded-full border border-white/10 flex items-center justify-center text-white/90"
-                  style={getRatingBadgeStyle(displayRating)}
+                  className="h-11 w-11 rounded-full border border-white/10 bg-white/8 flex items-center justify-center text-white/90 shadow-[0_10px_24px_rgba(0,0,0,0.22)]"
                 >
                   <Star className="w-4 h-4" />
                 </div>
               </div>
               <div className="h-1.5 w-full rounded-full bg-muted/40">
                 <div
-                  className="h-full rounded-full transition-all duration-300"
+                  className="h-full rounded-full bg-foreground/90 transition-all duration-300"
                   style={{
                     width: `${displayRating ? (displayRating / 7) * 100 : 0}%`,
-                    ...getRatingBarStyle(displayRating),
                   }}
                 />
               </div>
@@ -1010,22 +1021,6 @@ export default function GameDetail() {
               <Timer className="w-5 h-5" />
               {formatPlaytime(game.total_playtime)}
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xl p-4 shadow-[0_12px_30px_rgba(8,12,24,0.35)]">
-            <div className="text-sm text-muted-foreground mb-1">
-              {"Последний запуск"}
-            </div>
-            {game.last_played ? (
-              <div className="text-lg font-medium flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                {new Date(game.last_played).toLocaleDateString()}
-              </div>
-            ) : (
-              <div className="text-lg font-medium text-muted-foreground">
-                {"Не запускалось"}
-              </div>
-            )}
           </div>
 
           <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xl p-4 shadow-[0_12px_30px_rgba(8,12,24,0.35)] space-y-3">
@@ -1488,12 +1483,10 @@ export default function GameDetail() {
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div
             className="bg-card/90 backdrop-blur-xl rounded-2xl border border-border/60 w-full max-w-sm p-6 shadow-[0_30px_80px_rgba(8,12,24,0.55)]"
-            style={getRatingSurfaceStyle(ratingDraft)}
           >
             <div className="flex items-center justify-between mb-6">
               <div
-                className="w-12 h-12 rounded-full border flex items-center justify-center text-2xl font-bold text-white"
-                style={getRatingBadgeStyle(ratingDraft)}
+                className="w-12 h-12 rounded-full border border-white/10 bg-white/8 shadow-[0_10px_24px_rgba(0,0,0,0.22)] flex items-center justify-center text-2xl font-bold text-white"
               >
                 {ratingDraft}
               </div>
@@ -1545,6 +1538,41 @@ export default function GameDetail() {
                 )}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showDescriptionModal && heroDescription && (
+        <div
+          className="fixed inset-y-0 left-1/2 z-[120] flex w-full max-w-[1520px] -translate-x-1/2 items-center justify-center bg-black/78 backdrop-blur-sm p-4"
+          onMouseDown={(event: ReactMouseEvent<HTMLDivElement>) => {
+            if (event.target === event.currentTarget) {
+              setShowDescriptionModal(false);
+            }
+          }}
+        >
+          <div
+            data-testid="game-detail-description-modal"
+            className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border/60 bg-card/92 shadow-[0_30px_80px_rgba(8,12,24,0.55)] backdrop-blur-xl"
+          >
+            <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">Описание игры</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowDescriptionModal(false)}
+                aria-label="Закрыть описание"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <ScrollArea className="max-h-[70vh]">
+              <div className="px-5 py-4">
+                <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/88 sm:text-[15px]">
+                  {heroDescription}
+                </p>
+              </div>
+            </ScrollArea>
           </div>
         </div>
       )}

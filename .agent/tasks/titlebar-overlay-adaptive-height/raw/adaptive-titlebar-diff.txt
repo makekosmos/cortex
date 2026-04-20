@@ -1,0 +1,219 @@
+﻿diff --git a/apps/delphi/ts/electron/main.ts b/apps/delphi/ts/electron/main.ts
+index da3c378..332ed71 100644
+--- a/apps/delphi/ts/electron/main.ts
++++ b/apps/delphi/ts/electron/main.ts
+@@ -121,6 +121,10 @@ function getDataDir(): string {
+ const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+ const WINDOWS_TITLEBAR_BASE_HEIGHT = 36;
+ const WINDOWS_TITLEBAR_SYMBOL_COLOR = '#e5e7eb';
++const ZOOM_LEVEL_STEP = 0.5;
++const MIN_ZOOM_LEVEL = -3;
++const MAX_ZOOM_LEVEL = 3;
++const windowsTitlebarHeights = new WeakMap<BrowserWindow, number>();
+ 
+ function loadWindowState(): { width: number; height: number; x?: number; y?: number; isMaximized?: boolean } {
+   try {
+@@ -137,20 +141,60 @@ function saveWindowState(win: BrowserWindow) {
+   fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ ...bounds, isMaximized }), 'utf-8');
+ }
+ 
++function getWindowsTitlebarOverlayHeight(win: BrowserWindow): number {
++  const measuredCssHeight = windowsTitlebarHeights.get(win) ?? WINDOWS_TITLEBAR_BASE_HEIGHT;
++  const zoomFactor = Math.max(0.5, Math.min(2, win.webContents.getZoomFactor() || 1));
++  return Math.max(1, Math.round(measuredCssHeight * zoomFactor));
++}
++
+ function applyWindowsTitlebarOverlay(win: BrowserWindow) {
+   if (process.platform !== 'win32' || win.isDestroyed()) {
+     return;
+   }
+ 
+-  const zoomFactor = Math.max(0.5, Math.min(2, win.webContents.getZoomFactor() || 1));
+-
+   win.setTitleBarOverlay({
+     color: '#00000000',
+     symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+-    height: Math.round(WINDOWS_TITLEBAR_BASE_HEIGHT * zoomFactor),
++    height: getWindowsTitlebarOverlayHeight(win),
+   });
+ }
+ 
++function clampZoomLevel(zoomLevel: number): number {
++  return Math.max(MIN_ZOOM_LEVEL, Math.min(MAX_ZOOM_LEVEL, zoomLevel));
++}
++
++function adjustWindowZoom(win: BrowserWindow, direction: 'in' | 'out' | 'reset'): void {
++  const { webContents } = win;
++  const currentZoomLevel = webContents.getZoomLevel();
++
++  if (direction === 'reset') {
++    webContents.setZoomLevel(0);
++    return;
++  }
++
++  const delta = direction === 'in' ? ZOOM_LEVEL_STEP : -ZOOM_LEVEL_STEP;
++  const nextZoomLevel = clampZoomLevel(currentZoomLevel + delta);
++
++  if (nextZoomLevel !== currentZoomLevel) {
++    webContents.setZoomLevel(nextZoomLevel);
++  }
++}
++
++function isZoomShortcut(input: Electron.Input): boolean {
++  if (input.type !== 'keyDown' || input.alt || !(input.control || input.meta)) {
++    return false;
++  }
++
++  return [
++    'Minus',
++    'Equal',
++    'NumpadAdd',
++    'NumpadSubtract',
++    'Digit0',
++    'Numpad0',
++  ].includes(input.code);
++}
++
+ function setupApplicationMenu(): void {
+   const template: MenuItemConstructorOptions[] = [];
+ 
+@@ -293,7 +337,28 @@ function createWindow() {
+     win.loadFile(path.join(__dirname, '../dist/index.html'));
+   }
+ 
+-  win.webContents.on('before-input-event', (_event, input) => {
++  win.webContents.on('before-input-event', (event, input) => {
++    if (isZoomShortcut(input)) {
++      event.preventDefault();
++
++      switch (input.code) {
++        case 'Minus':
++        case 'NumpadSubtract':
++          adjustWindowZoom(win, 'out');
++          return;
++        case 'Equal':
++        case 'NumpadAdd':
++          adjustWindowZoom(win, 'in');
++          return;
++        case 'Digit0':
++        case 'Numpad0':
++          adjustWindowZoom(win, 'reset');
++          return;
++        default:
++          return;
++      }
++    }
++
+     if (input.key === 'F12') {
+       win.webContents.toggleDevTools();
+     }
+@@ -334,6 +399,17 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
+   fs.mkdirSync(safePath(dirPath), { recursive: true });
+ });
+ 
++ipcMain.handle('titlebar:setOverlayHeight', async (event, height: number) => {
++  const win = BrowserWindow.fromWebContents(event.sender);
++  if (!win || process.platform !== 'win32' || !Number.isFinite(height) || height <= 0) {
++    return false;
++  }
++
++  windowsTitlebarHeights.set(win, height);
++  applyWindowsTitlebarOverlay(win);
++  return true;
++});
++
+ // --- Sync lifecycle is handled by ArkClient from @arksync/node. ---
+ // The active renderer contract is `lan-sync:*`.
+ 
+diff --git a/packages/kepler-visuals/components/Titlebar.vue b/packages/kepler-visuals/components/Titlebar.vue
+index 59a994c..2fd8a72 100644
+--- a/packages/kepler-visuals/components/Titlebar.vue
++++ b/packages/kepler-visuals/components/Titlebar.vue
+@@ -1,5 +1,10 @@
+ <script setup lang="ts">
+-import { computed } from "vue";
++import {
++    computed,
++    onMounted,
++    onUnmounted,
++    useTemplateRef,
++} from "vue";
+ 
+ export type TitlebarPlatform = "mac" | "windows" | "linux";
+ 
+@@ -17,10 +22,65 @@ const titlebarClasses = computed(() => [
+     "kepler-titlebar",
+     `kepler-titlebar--${props.platform}`,
+ ]);
++
++const rootRef = useTemplateRef<HTMLElement>("root");
++let resizeObserver: ResizeObserver | null = null;
++let syncFrame: number | null = null;
++let lastReportedHeight = -1;
++
++function syncOverlayHeight() {
++    if (props.platform !== "windows" || !window.electronAPI?.invoke) {
++        return;
++    }
++
++    const measuredHeight = Math.round(
++        rootRef.value?.getBoundingClientRect().height ?? 0,
++    );
++
++    if (measuredHeight <= 0 || measuredHeight === lastReportedHeight) {
++        return;
++    }
++
++    lastReportedHeight = measuredHeight;
++    void window.electronAPI.invoke("titlebar:setOverlayHeight", measuredHeight);
++}
++
++function scheduleOverlaySync() {
++    if (syncFrame !== null) {
++        cancelAnimationFrame(syncFrame);
++    }
++
++    syncFrame = requestAnimationFrame(() => {
++        syncFrame = null;
++        syncOverlayHeight();
++    });
++}
++
++onMounted(() => {
++    scheduleOverlaySync();
++
++    resizeObserver = new ResizeObserver(() => {
++        scheduleOverlaySync();
++    });
++
++    if (rootRef.value) {
++        resizeObserver.observe(rootRef.value);
++    }
++});
++
++onUnmounted(() => {
++    resizeObserver?.disconnect();
++    resizeObserver = null;
++
++    if (syncFrame !== null) {
++        cancelAnimationFrame(syncFrame);
++        syncFrame = null;
++    }
++});
+ </script>
+ 
+ <template>
+-    <header :class="titlebarClasses">
++    <header ref="root" :class="titlebarClasses">
+         <div class="kepler-titlebar__leading">
+             <slot name="leading" />
+         </div>
+@@ -62,7 +122,7 @@ const titlebarClasses = computed(() => [
+ }
+ 
+ .kepler-titlebar--windows {
+-    padding-right: var(--kepler-windows-controls-safe-area, 156px);
++    padding-right: var(--kepler-windows-controls-safe-area, 11%);
+ }
+ 
+ .kepler-titlebar__leading,

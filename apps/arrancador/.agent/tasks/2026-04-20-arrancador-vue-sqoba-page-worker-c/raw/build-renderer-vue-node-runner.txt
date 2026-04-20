@@ -1,0 +1,3 @@
+failed to load config from D:\Personal\Hobby\Coding\kepler\apps\arrancador\vite.config.ts
+error during build:
+ReferenceError: require is not defined

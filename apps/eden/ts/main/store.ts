@@ -13,9 +13,16 @@ import {
   noteTypeSchema,
   parseHeaderTemplate,
   parseNoteTypeDefinition,
+  parseNoteTypeUiSchema,
   validateHeaderProps,
   type NoteType,
 } from "@/lib/typedNotes";
+import {
+  runArkRequest,
+  type ArkObjectLinkRecord,
+  type ArkObjectRecord,
+  type ArkObjectTypeRecord,
+} from "./ark";
 
 export interface Entry {
   id: string;
@@ -261,6 +268,234 @@ function mergeCodeToolsSettings(
   };
 }
 
+const DEFAULT_ARK_TYPE_ID = "note_obj";
+const ARK_OBJECT_TYPE_IDS = new Set(["note_obj", "game_obj"]);
+
+function arkTimestampToMillis(value?: string | null) {
+  if (!value) {
+    return Date.now();
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
+function millisToArkTimestamp(value: number | null | undefined) {
+  const timestamp = typeof value === "number" ? value : Date.now();
+  return new Date(timestamp).toISOString();
+}
+
+function parseHeaderPropsJson(raw: string | null | undefined) {
+  if (!raw?.trim()) {
+    return {} as Record<string, unknown>;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringifyHeaderProps(props: Record<string, unknown>) {
+  return JSON.stringify(props);
+}
+
+function ensureArkList<T>(value: unknown): T[] {
+  if (Array.isArray(value)) {
+    return value as T[];
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+
+    if (Array.isArray(record.items)) {
+      return record.items as T[];
+    }
+
+    if (Array.isArray(record.objects)) {
+      return record.objects as T[];
+    }
+
+    if (Array.isArray(record.links)) {
+      return record.links as T[];
+    }
+
+    if (Array.isArray(record.types)) {
+      return record.types as T[];
+    }
+  }
+
+  return [];
+}
+
+function mapArkObjectToEntry(
+  object: ArkObjectRecord,
+  links: ArkObjectLinkRecord[],
+): Entry {
+  const headerProps = {
+    ...object.propsJson,
+    related_notes: links
+      .filter((link) => link.sourceObjectId === object.id && link.linkType === "related")
+      .map((link) => link.targetObjectId),
+  };
+
+  return normalizeEntry({
+    id: object.id,
+    title: object.title,
+    content_json: JSON.stringify(object.contentJson ?? { type: "doc", content: [{ type: "paragraph" }] }),
+    created_at: arkTimestampToMillis(object.createdAt),
+    updated_at: arkTimestampToMillis(object.updatedAt),
+    folder_id: null,
+    type_id: object.typeId,
+    header_layout: "default",
+    header_props_json: stringifyHeaderProps(headerProps),
+    schema_version: 1,
+    deleted_at: object.deletedAt ? arkTimestampToMillis(object.deletedAt) : null,
+  });
+}
+
+function mapEntryToArkObject(entry: Entry): ArkObjectRecord {
+  const headerProps = parseHeaderPropsJson(entry.header_props_json);
+  const { related_notes: _relatedNotes, ...propsJson } = headerProps;
+  let contentJson: unknown = { type: "doc", content: [{ type: "paragraph" }] };
+  try {
+    contentJson = JSON.parse(entry.content_json || JSON.stringify(contentJson));
+  } catch {}
+
+  return {
+    id: entry.id,
+    typeId: entry.type_id ?? DEFAULT_ARK_TYPE_ID,
+    title: entry.title,
+    contentJson,
+    propsJson,
+    createdAt: millisToArkTimestamp(entry.created_at),
+    updatedAt: millisToArkTimestamp(entry.updated_at),
+    deletedAt: entry.deleted_at ? millisToArkTimestamp(entry.deleted_at) : null,
+  };
+}
+
+function mapArkObjectTypeToNoteType(objectType: ArkObjectTypeRecord): NoteType {
+  const uiSchema = parseNoteTypeUiSchema(objectType.uiSchemaJson);
+  const headerTemplate = {
+    kind: uiSchema.header_layout === "column" ? "centered_profile" : "default",
+    primaryFieldIds: uiSchema.featured_fields ?? [],
+    secondaryFieldIds: uiSchema.visible_fields ?? [],
+    imageFieldId: null,
+  };
+
+  return normalizeNoteType({
+    id: objectType.id,
+    name: objectType.name,
+    slug: normalizeSlug(objectType.id),
+    icon: objectType.id === "game_obj" ? "game-controller" : "document-text",
+    color: objectType.id === "game_obj" ? "#ef4444" : "#2aa7ee",
+    schema_json: objectType.schemaJson,
+    header_template_json: JSON.stringify(headerTemplate),
+    ui_schema_json: objectType.uiSchemaJson,
+    created_at: arkTimestampToMillis(objectType.createdAt),
+    updated_at: arkTimestampToMillis(objectType.updatedAt),
+  });
+}
+
+function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
+  const uiSchema = parseNoteTypeUiSchema(noteType.ui_schema_json);
+  const definition = parseNoteTypeDefinition(noteType.schema_json);
+  const featuredFromUi = uiSchema.featured_fields ?? [];
+  const visibleFromFields = definition.fields
+    .filter((field) => field.visible !== false)
+    .map((field) => field.id);
+  const readOnlyFromFields = definition.fields
+    .filter((field) => field.read_only === true)
+    .map((field) => field.id);
+
+  return {
+    id: noteType.id,
+    name: noteType.name,
+    schemaJson: noteType.schema_json,
+    uiSchemaJson: JSON.stringify({
+      featured_fields: featuredFromUi,
+      visible_fields: uiSchema.visible_fields?.length ? uiSchema.visible_fields : visibleFromFields,
+      hidden_fields: uiSchema.hidden_fields ?? ["created_at", "updated_at", "deleted_at"],
+      read_only_fields: uiSchema.read_only_fields?.length
+        ? uiSchema.read_only_fields
+        : readOnlyFromFields,
+      field_order:
+        uiSchema.field_order?.length ? uiSchema.field_order : definition.fields.map((field) => field.id),
+      header_layout: uiSchema.header_layout ?? "inline",
+      default_layout: uiSchema.default_layout ?? "page",
+      default_template_id: uiSchema.default_template_id ?? null,
+    }),
+    createdAt: millisToArkTimestamp(noteType.created_at),
+    updatedAt: millisToArkTimestamp(noteType.updated_at),
+    systemLocked: noteType.id === "note_obj" || noteType.id === "game_obj",
+  };
+}
+
+async function listArkObjects(): Promise<Entry[]> {
+  const [objects, links] = await Promise.all([
+    runArkRequest<ArkObjectRecord[] | { items?: ArkObjectRecord[]; objects?: ArkObjectRecord[] }>({
+      operation: "list_objects",
+    }),
+    runArkRequest<ArkObjectLinkRecord[] | { items?: ArkObjectLinkRecord[]; links?: ArkObjectLinkRecord[] }>({
+      operation: "list_object_links",
+    }),
+  ]);
+
+  const normalizedLinks = ensureArkList<ArkObjectLinkRecord>(links);
+
+  return ensureArkList<ArkObjectRecord>(objects).map((object) => mapArkObjectToEntry(object, normalizedLinks));
+}
+
+async function getArkEntry(id: string): Promise<Entry | undefined> {
+  const [object, links] = await Promise.all([
+    runArkRequest<ArkObjectRecord | null>({ operation: "get_object", id }),
+    runArkRequest<ArkObjectLinkRecord[]>({ operation: "list_object_links" }),
+  ]);
+
+  return object ? mapArkObjectToEntry(object, links) : undefined;
+}
+
+async function syncArkObjectLinks(entry: Entry) {
+  const headerProps = parseHeaderPropsJson(entry.header_props_json);
+  const relatedNotes = Array.isArray(headerProps.related_notes)
+    ? headerProps.related_notes.filter((value): value is string => typeof value === "string")
+    : [];
+
+  const existingLinks = await runArkRequest<ArkObjectLinkRecord[]>({
+    operation: "list_object_links",
+  });
+
+  const ownedLinks = existingLinks.filter(
+    (link) => link.sourceObjectId === entry.id && link.linkType === "related",
+  );
+
+  for (const link of ownedLinks) {
+    if (!relatedNotes.includes(link.targetObjectId)) {
+      await runArkRequest<boolean>({ operation: "delete_object_link", id: link.id });
+    }
+  }
+
+  for (const targetObjectId of relatedNotes) {
+    const existing = ownedLinks.find((link) => link.targetObjectId === targetObjectId);
+    if (existing) {
+      continue;
+    }
+
+    await runArkRequest<boolean>({
+      operation: "upsert_object_link",
+      object_link: {
+        id: `${entry.id}:related:${targetObjectId}`,
+        sourceObjectId: entry.id,
+        targetObjectId: targetObjectId,
+        linkType: "related",
+        createdAt: millisToArkTimestamp(entry.updated_at),
+      },
+    });
+  }
+}
+
 function requireVaultPath() {
   const vaultPath = currentVaultPath ?? getVaultPath();
 
@@ -290,10 +525,22 @@ function normalizeEntry(entry: Entry): Entry {
 }
 
 function normalizeNoteType(noteType: NoteType) {
-  return noteTypeSchema.parse(noteType);
+  return noteTypeSchema.parse({
+    ...noteType,
+    ui_schema_json: noteType.ui_schema_json ?? JSON.stringify({}),
+  });
 }
 
 async function getNoteTypeById(noteTypeId: string) {
+  if (ARK_OBJECT_TYPE_IDS.has(noteTypeId)) {
+    const objectType = await runArkRequest<ArkObjectTypeRecord | null>({
+      operation: "get_object_type",
+      id: noteTypeId,
+    });
+
+    return objectType ? mapArkObjectTypeToNoteType(objectType) : null;
+  }
+
   const vaultPath = requireVaultPath();
 
   return runHeartRequest<NoteType | null>({
@@ -500,12 +747,39 @@ export {
 export async function saveEntry(entry: Entry): Promise<SaveEntryResult> {
   const vaultPath = requireVaultPath();
 
-  const normalizedEntry = normalizeEntry(entry);
+  const normalizedEntry = normalizeEntry({
+    ...entry,
+    type_id: entry.type_id ?? DEFAULT_ARK_TYPE_ID,
+    header_layout: entry.header_layout ?? "default",
+  });
 
   const validationResult = await validateEntryTypeMetadata(normalizedEntry);
 
   if (validationResult) {
     return validationResult;
+  }
+
+  if (ARK_OBJECT_TYPE_IDS.has(normalizedEntry.type_id ?? DEFAULT_ARK_TYPE_ID)) {
+    const arkObject = mapEntryToArkObject(normalizedEntry);
+    await runArkRequest<boolean>({
+      operation: "upsert_object",
+      object: {
+        id: arkObject.id,
+        typeId: arkObject.typeId,
+        title: arkObject.title,
+        contentJson: arkObject.contentJson,
+        propsJson: arkObject.propsJson,
+        createdAt: arkObject.createdAt,
+        updatedAt: arkObject.updatedAt,
+        deletedAt: arkObject.deletedAt ?? null,
+      },
+    });
+    await syncArkObjectLinks(normalizedEntry);
+
+    return {
+      ok: true,
+      entryId: normalizedEntry.id,
+    };
   }
 
   return runHeartRequest<SaveEntryResult>({
@@ -534,6 +808,11 @@ export async function exportMarkdownVault(
 export async function loadEntry(id: string): Promise<Entry | undefined> {
   const vaultPath = currentVaultPath ?? getVaultPath();
 
+  const arkEntry = await getArkEntry(id);
+  if (arkEntry) {
+    return arkEntry;
+  }
+
   if (!vaultPath) {
     return undefined;
   }
@@ -552,17 +831,24 @@ export async function loadEntry(id: string): Promise<Entry | undefined> {
 export async function listEntries(): Promise<Entry[]> {
   const vaultPath = currentVaultPath ?? getVaultPath();
 
-  if (!vaultPath) {
-    return [];
+  const [arkEntries, heartEntries] = await Promise.all([
+    listArkObjects(),
+    vaultPath
+      ? runHeartRequest<Entry[]>({
+        operation: "list_entries",
+        vaultPath,
+      }).then((entries) => entries.map(normalizeEntry))
+      : Promise.resolve([]),
+  ]);
+
+  const byId = new Map<string, Entry>();
+  for (const entry of heartEntries) {
+    byId.set(entry.id, entry);
   }
-
-  const entries = await runHeartRequest<Entry[]>({
-    operation: "list_entries",
-
-    vaultPath,
-  });
-
-  return entries.map(normalizeEntry);
+  for (const entry of arkEntries) {
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()].sort((a, b) => b.updated_at - a.updated_at);
 }
 
 export async function searchEntries(query: string): Promise<SearchResult[]> {
@@ -620,17 +906,28 @@ export async function listFolders(): Promise<Folder[]> {
 export async function listNoteTypes(): Promise<NoteType[]> {
   const vaultPath = currentVaultPath ?? getVaultPath();
 
-  if (!vaultPath) {
-    return [];
+  const [arkTypes, heartTypes] = await Promise.all([
+    runArkRequest<ArkObjectTypeRecord[] | { items?: ArkObjectTypeRecord[]; types?: ArkObjectTypeRecord[] }>({
+      operation: "list_object_types",
+    }).then((types) =>
+      ensureArkList<ArkObjectTypeRecord>(types).map(mapArkObjectTypeToNoteType)
+    ),
+    vaultPath
+      ? runHeartRequest<NoteType[]>({
+        operation: "list_note_types",
+        vaultPath,
+      }).then((types) => types.map(normalizeNoteType))
+      : Promise.resolve([]),
+  ]);
+
+  const byId = new Map<string, NoteType>();
+  for (const noteType of heartTypes) {
+    byId.set(noteType.id, noteType);
   }
-
-  const noteTypes = await runHeartRequest<NoteType[]>({
-    operation: "list_note_types",
-
-    vaultPath,
-  });
-
-  return noteTypes.map(normalizeNoteType);
+  for (const noteType of arkTypes) {
+    byId.set(noteType.id, noteType);
+  }
+  return [...byId.values()];
 }
 
 export async function saveNoteType(
@@ -640,8 +937,8 @@ export async function saveNoteType(
 
   try {
     parseNoteTypeDefinition(noteType.schema_json);
-
     parseHeaderTemplate(noteType.header_template_json);
+    parseNoteTypeUiSchema(noteType.ui_schema_json);
   } catch {
     return {
       ok: false,
@@ -658,17 +955,45 @@ export async function saveNoteType(
     slug: normalizeSlug(noteType.slug || noteType.name),
   });
 
+  const arkObjectType = mapNoteTypeToArkObjectType(normalizedNoteType);
+  await runArkRequest<boolean>({
+    operation: "upsert_object_type",
+    object_type: {
+      id: arkObjectType.id,
+      name: arkObjectType.name,
+      schemaJson: arkObjectType.schemaJson,
+      uiSchemaJson: arkObjectType.uiSchemaJson,
+      createdAt: arkObjectType.createdAt,
+      updatedAt: arkObjectType.updatedAt,
+      systemLocked: arkObjectType.systemLocked,
+    },
+  });
+
+  if (ARK_OBJECT_TYPE_IDS.has(normalizedNoteType.id)) {
+    return {
+      ok: true,
+      noteType: normalizedNoteType,
+    };
+  }
+
   return runHeartRequest<SaveNoteTypeResult>({
     operation: "save_note_type",
-
     vaultPath,
-
     note_type: normalizedNoteType,
   });
 }
 
 export async function deleteNoteType(noteTypeId: string) {
   const vaultPath = requireVaultPath();
+
+  await runArkRequest<boolean>({
+    operation: "delete_object_type",
+    id: noteTypeId,
+  });
+
+  if (ARK_OBJECT_TYPE_IDS.has(noteTypeId)) {
+    return true;
+  }
 
   return runHeartRequest<boolean>({
     operation: "delete_note_type",
@@ -703,6 +1028,19 @@ export async function moveEntryToFolder(
 }
 
 export async function deleteEntry(entryId: string): Promise<DeleteEntryResult> {
+  const arkEntry = await getArkEntry(entryId);
+  if (arkEntry) {
+    await runArkRequest<boolean>({
+      operation: "delete_object",
+      id: entryId,
+    });
+
+    return {
+      ok: true,
+      entryId,
+    };
+  }
+
   const vaultPath = requireVaultPath();
 
   return runHeartRequest<DeleteEntryResult>({

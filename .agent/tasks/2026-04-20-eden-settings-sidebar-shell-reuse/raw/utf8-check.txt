@@ -1,0 +1,11 @@
+FILE apps/eden/ts/src/components/sidebar/EdenSidebar.vue
+  OK Новая заметка
+  OK Поиск
+  OK Настройки
+  OK Типы объектов
+  OK Назад к заметкам
+  OK Назад к настройкам
+  OK Новый тип
+FILE apps/eden/ts/src/components/settings/SettingsPage.vue
+FILE apps/eden/ts/src/components/settings/ObjectTypesSettings.vue
+  OK Не удалось сохранить тип

@@ -1,0 +1,63 @@
+{
+  "taskId": "delphi-settings-sidebar-reuse",
+  "verifiedAt": "2026-04-17",
+  "status": "PASS",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/App.vue:788",
+        "apps/delphi/ts/src/components/SideBar.vue:89"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/components/SideBar.vue:117",
+        "apps/delphi/ts/src/components/SideBar.vue:182"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/pages/SettingsPage.vue:1"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/App.vue:788",
+        "apps/delphi/ts/src/App.vue:796"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/pages/SettingsPage.vue:18",
+        "apps/delphi/ts/src/pages/SettingsPage.vue:29"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        "bunx tsc --noEmit"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\delphi\\ts",
+      "status": "PASS"
+    }
+  ],
+  "notes": [
+    "Interactive Electron runtime validation was not performed in the sandbox."
+  ]
+}

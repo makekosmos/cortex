@@ -1,0 +1,46 @@
+{
+  "task": "delphi-drag-collapse-slot",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "packages/kepler-visuals/components/TodoRow.vue",
+        ".agent/tasks/delphi-drag-collapse-slot/raw/verification-summary.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/src/pages/WeekPage.vue",
+        ".agent/tasks/delphi-drag-collapse-slot/raw/verification-summary.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "packages/kepler-visuals/components/TodoRow.vue",
+        "apps/delphi/ts/src/pages/WeekPage.vue",
+        ".agent/tasks/delphi-drag-collapse-slot/raw/verification-summary.txt",
+        ".agent/tasks/delphi-drag-collapse-slot/raw/drag-collapse-diff.txt"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/delphi-drag-collapse-slot/raw/tsc-noemit.txt"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/delphi/ts",
+      "status": "PASS"
+    }
+  ]
+}

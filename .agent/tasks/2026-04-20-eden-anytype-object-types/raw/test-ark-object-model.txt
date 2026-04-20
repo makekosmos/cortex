@@ -1,0 +1,9 @@
+Command:
+`cargo test --manifest-path packages/ark-core/rust/Cargo.toml object_model_crud -- --nocapture`
+
+Result:
+PASS
+
+Key output:
+`test db::tests::test_object_model_crud ... ok`
+

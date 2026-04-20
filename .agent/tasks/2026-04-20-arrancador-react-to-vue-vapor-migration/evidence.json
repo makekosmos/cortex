@@ -1,0 +1,87 @@
+{
+  "task_id": "2026-04-20-arrancador-react-to-vue-vapor-migration",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/index.html",
+        "apps/arrancador/src-vue/main.ts",
+        "apps/arrancador/src-vue/router.ts"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/pages/LibraryPage.vue",
+        "apps/arrancador/src-vue/pages/CataloguePage.vue",
+        "apps/arrancador/src-vue/pages/AchievementsPage.vue",
+        "apps/arrancador/src-vue/pages/GameDetailPage.vue",
+        "apps/arrancador/src-vue/pages/ScanPage.vue",
+        "apps/arrancador/src-vue/pages/SqobaPage.vue",
+        "apps/arrancador/src-vue/pages/StatisticsPage.vue",
+        "apps/arrancador/src-vue/pages/SystemInfoPage.vue",
+        "apps/arrancador/src-vue/pages/SettingsPage.vue",
+        "apps/arrancador/src-vue/components/AppSidebar.vue",
+        "apps/arrancador/src-vue/components/AppSpotlight.vue",
+        "apps/arrancador/src-vue/components/AppTitlebar.vue",
+        "apps/arrancador/src-vue/components/GameCard.vue",
+        "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/stores/games.ts",
+        "apps/arrancador/src-vue/composables/useTheme.ts",
+        "apps/arrancador/src-vue/composables/useLanguage.ts",
+        "apps/arrancador/src-vue/composables/useToast.ts",
+        "apps/arrancador/src-vue/composables/useSidebarConfig.ts",
+        "apps/arrancador/src-vue/composables/useDropZone.ts",
+        "apps/arrancador/src-vue/composables/useGameStatus.ts",
+        "apps/arrancador/src-vue/composables/useSettingsPageState.ts",
+        "apps/arrancador/src-vue/composables/useSqobaPageState.ts",
+        "apps/arrancador/src-vue/composables/useStatisticsRange.ts"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/vite.config.mjs",
+        "apps/arrancador/package.json",
+        "apps/arrancador/src-vue/test/setup.ts"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/package.json",
+        "apps/arrancador/vite.config.mjs",
+        "apps/arrancador/tsconfig.json",
+        "apps/arrancador/src/lib/browser.ts",
+        ".agent/tasks/2026-04-20-arrancador-react-to-vue-vapor-migration/raw/react-residue-check.txt"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-20-arrancador-react-to-vue-vapor-migration/raw/typecheck.txt",
+        ".agent/tasks/2026-04-20-arrancador-react-to-vue-vapor-migration/raw/test.txt",
+        ".agent/tasks/2026-04-20-arrancador-react-to-vue-vapor-migration/raw/build-renderer.txt",
+        ".agent/tasks/2026-04-20-arrancador-react-to-vue-vapor-migration/raw/build-main.txt",
+        ".agent/tasks/2026-04-20-arrancador-react-to-vue-vapor-migration/raw/build-preload.txt",
+        ".agent/tasks/2026-04-20-arrancador-react-to-vue-vapor-migration/raw/build.txt"
+      ],
+      "notes": [
+        "Direct renderer/main/preload build commands pass.",
+        "The composite `bun run build` wrapper still fails in the local Bun/Windows/Tailwind tooling path and is documented in problems.md."
+      ]
+    }
+  ]
+}

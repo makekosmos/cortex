@@ -1,0 +1,3 @@
+6:import GameDetailPage from "./pages/GameDetailPage.vue";
+33:        component: GameDetailPage,
+

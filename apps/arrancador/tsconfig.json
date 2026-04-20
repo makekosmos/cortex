@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
 
     /* Linting */
     "strict": true,
@@ -22,9 +22,21 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@vue-app/*": ["./src-vue/*"],
+      "@kepler/visuals": ["../../packages/kepler-visuals/index.ts"],
+      "@kepler/visuals/*": ["../../packages/kepler-visuals/*"]
     }
   },
-  "include": ["src"],
+  "include": [
+    "src/electron.d.ts",
+    "src-vue",
+    "src-vue/**/*.d.ts",
+    "src/lib/**/*.ts",
+    "src/types/**/*.ts"
+    ,
+    "src/vite-env.d.ts",
+    "src/vitest.d.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

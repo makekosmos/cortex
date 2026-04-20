@@ -42,6 +42,8 @@ const titlebarClasses = computed(() => [
     --kepler-titlebar-height: 36px;
     --kepler-titlebar-control-size: 32px;
     --kepler-titlebar-control-radius: 10px;
+    --kepler-titlebar-inline-padding: 0.75rem;
+    box-sizing: border-box;
     position: relative;
     z-index: 20;
     display: grid;
@@ -50,7 +52,7 @@ const titlebarClasses = computed(() => [
     gap: 0.75rem;
     height: var(--kepler-titlebar-height);
     min-height: var(--kepler-titlebar-height);
-    padding: 0 0.75rem;
+    padding: 0 var(--kepler-titlebar-inline-padding);
     background: var(--sidebar-bg);
     color: var(--sidebar-foreground);
     -webkit-app-region: drag;
@@ -62,7 +64,24 @@ const titlebarClasses = computed(() => [
 }
 
 .kepler-titlebar--windows {
-    padding-right: var(--kepler-windows-controls-safe-area, 156px);
+    height: calc(
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
+    );
+    min-height: calc(
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
+    );
+    padding-top: env(titlebar-area-y, 0px);
+    padding-left: max(
+        var(--kepler-titlebar-inline-padding),
+        calc(env(titlebar-area-x, 0px) + var(--kepler-titlebar-inline-padding))
+    );
+    padding-right: max(
+        var(--kepler-titlebar-inline-padding),
+        calc(
+            100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) +
+                var(--kepler-titlebar-inline-padding)
+        )
+    );
 }
 
 .kepler-titlebar__leading,

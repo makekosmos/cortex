@@ -1,5 +1,6 @@
 export interface Game {
   id: string;
+  ark_object_id: string | null;
   name: string;
   exe_path: string;
   exe_name: string;
@@ -41,6 +42,7 @@ export interface NewGame {
 
 export interface UpdateGame {
   id: string;
+  ark_object_id?: string | null;
   name?: string | null;
   exe_path?: string | null;
   description?: string | null;

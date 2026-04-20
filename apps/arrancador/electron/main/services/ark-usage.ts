@@ -2,6 +2,7 @@ import { queryAll } from "../helpers/db";
 import type { DbLike } from "../helpers/shared";
 import { openSqliteDatabase } from "../db";
 import type { PlaytimeStatsRepository } from "./contracts";
+import type { ArkGameObjectService } from "./ark-game-objects";
 import type { Game } from "./games/types";
 
 type GamePathRow = {
@@ -34,6 +35,7 @@ export interface GameUsageReadModel {
 interface ArkUsageOptions {
   legacyDb: DbLike;
   arkDbPath: string;
+  arkGameObjects?: ArkGameObjectService;
 }
 
 function normalizeExePath(exePath: string): string {
@@ -217,6 +219,7 @@ async function queryPerGameTotals(
 export function createGameUsageReadModel({
   legacyDb,
   arkDbPath,
+  arkGameObjects,
 }: ArkUsageOptions): GameUsageReadModel {
   const hydrateGames = async (games: Game[]): Promise<Game[]> => {
     if (games.length === 0) {
@@ -234,7 +237,7 @@ export function createGameUsageReadModel({
         games.map((game) => normalizeExePath(game.exe_path)),
       );
 
-      return games.map((game) => {
+      const hydrated = games.map((game) => {
         const metrics = metricsByPath.get(normalizeExePath(game.exe_path));
         if (!metrics) {
           return game;
@@ -246,8 +249,14 @@ export function createGameUsageReadModel({
           last_played: metrics.lastPlayed,
         };
       });
+
+      return arkGameObjects
+        ? await arkGameObjects.hydrateGames(hydrated)
+        : hydrated;
     } catch {
-      return games;
+      return arkGameObjects
+        ? await arkGameObjects.hydrateGames(games).catch(() => games)
+        : games;
     }
   };
 

@@ -1,29 +1,46 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter } from "react-router-dom";
-import Achievements from "@/pages/Achievements";
-import Catalogue from "@/pages/Catalogue";
-import GameDetail from "@/pages/GameDetail";
 import Layout from "@/pages/Layout";
-import Library from "@/pages/Library";
-import Scan from "@/pages/Scan";
-import Settings from "@/pages/Settings";
-import Sqoba from "@/pages/Sqoba";
-import Statistics from "@/pages/Statistics";
-import SystemInfo from "@/pages/SystemInfo";
+
+const Library = lazy(() => import("@/pages/Library"));
+const Catalogue = lazy(() => import("@/pages/Catalogue"));
+const Achievements = lazy(() => import("@/pages/Achievements"));
+const GameDetail = lazy(() => import("@/pages/GameDetail"));
+const Scan = lazy(() => import("@/pages/Scan"));
+const Sqoba = lazy(() => import("@/pages/Sqoba"));
+const Statistics = lazy(() => import("@/pages/Statistics"));
+const SystemInfo = lazy(() => import("@/pages/SystemInfo"));
+const Settings = lazy(() => import("@/pages/Settings"));
+
+function withRouteSuspense(node: ReactNode) {
+  return (
+    <Suspense
+      fallback={
+        <div
+          data-testid="route-fallback"
+          className="min-h-[320px] rounded-2xl border border-border/60 bg-card/50"
+        />
+      }
+    >
+      {node}
+    </Suspense>
+  );
+}
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
     children: [
-      { index: true, element: <Library /> },
-      { path: "catalogue", element: <Catalogue /> },
-      { path: "achievements", element: <Achievements /> },
-      { path: "game/:id", element: <GameDetail /> },
-      { path: "scan", element: <Scan /> },
-      { path: "sqoba", element: <Sqoba /> },
-      { path: "statistics", element: <Statistics /> },
-      { path: "system", element: <SystemInfo /> },
-      { path: "settings", element: <Settings /> },
+      { index: true, element: withRouteSuspense(<Library />) },
+      { path: "catalogue", element: withRouteSuspense(<Catalogue />) },
+      { path: "achievements", element: withRouteSuspense(<Achievements />) },
+      { path: "game/:id", element: withRouteSuspense(<GameDetail />) },
+      { path: "scan", element: withRouteSuspense(<Scan />) },
+      { path: "sqoba", element: withRouteSuspense(<Sqoba />) },
+      { path: "statistics", element: withRouteSuspense(<Statistics />) },
+      { path: "system", element: withRouteSuspense(<SystemInfo />) },
+      { path: "settings", element: withRouteSuspense(<Settings />) },
     ],
   },
 ]);

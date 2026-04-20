@@ -1,0 +1,40 @@
+{
+  "task_id": "titlebar-env-layout",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Windows titlebar height now uses env(titlebar-area-height, ...).",
+      "artifacts": [
+        ".agent/tasks/titlebar-env-layout/raw/titlebar-env-diff.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Windows titlebar safe-area now derives from titlebar-area-x and titlebar-area-width instead of percentage padding.",
+      "artifacts": [
+        ".agent/tasks/titlebar-env-layout/raw/titlebar-env-diff.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "TypeScript verification passed for apps/delphi/ts.",
+      "artifacts": [
+        ".agent/tasks/titlebar-env-layout/raw/tsc-noemit.txt"
+      ]
+    }
+  ],
+  "files_changed": [
+    "packages/kepler-visuals/components/Titlebar.vue"
+  ],
+  "verifications": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "apps/delphi/ts",
+      "status": "PASS"
+    }
+  ]
+}

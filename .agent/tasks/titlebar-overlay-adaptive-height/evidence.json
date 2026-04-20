@@ -1,0 +1,45 @@
+{
+  "task_id": "titlebar-overlay-adaptive-height",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Shared Titlebar measures header height and sends updates to main via IPC.",
+      "artifacts": [
+        ".agent/tasks/titlebar-overlay-adaptive-height/raw/adaptive-titlebar-diff.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Main process updates titleBarOverlay.height from measured titlebar height and reapplies it on zoom changes.",
+      "artifacts": [
+        ".agent/tasks/titlebar-overlay-adaptive-height/raw/adaptive-titlebar-diff.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "TypeScript verification passed for apps/delphi/ts.",
+      "artifacts": [
+        ".agent/tasks/titlebar-overlay-adaptive-height/raw/tsc-noemit.txt"
+      ]
+    }
+  ],
+  "files_changed": [
+    "packages/kepler-visuals/components/Titlebar.vue",
+    "apps/delphi/ts/electron/main.ts"
+  ],
+  "verifications": [
+    {
+      "command": "bunx tsc --noEmit",
+      "cwd": "apps/delphi/ts",
+      "status": "PASS"
+    }
+  ],
+  "runtime_verification": {
+    "status": "NOT_RUN",
+    "reason": "Sandbox does not allow live verification of native caption button rendering."
+  }
+}

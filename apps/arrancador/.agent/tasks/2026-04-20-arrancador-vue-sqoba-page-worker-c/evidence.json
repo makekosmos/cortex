@@ -1,0 +1,98 @@
+{
+  "taskId": "2026-04-20-arrancador-vue-sqoba-page-worker-c",
+  "acceptanceCriteriaStatus": "PASS",
+  "verificationStatus": "BLOCKED",
+  "changedFiles": [
+    "src-vue/router.ts",
+    "src-vue/pages/SqobaPage.vue",
+    "src-vue/composables/useSqobaPageState.ts",
+    "src-vue/components/sqoba/types.ts",
+    "src-vue/components/sqoba/SqobaSettingsPanel.vue",
+    "src-vue/components/sqoba/SqobaSavesPanel.vue",
+    "src-vue/components/sqoba/SqobaGameCard.vue",
+    "src-vue/components/sqoba/SqobaAboutModal.vue"
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "src-vue/router.ts routes /sqoba to SqobaPage"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "src-vue/composables/useSqobaPageState.ts derives filtered game lists from the Vue games store"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "src-vue/pages/SqobaPage.vue composes a settings panel backed by the existing Vue settings composable"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "loadSavePaths() calls backupApi.findGameSavePaths() and records per-game lookup state"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "loadSaveFiles() calls backupApi.findGameSaves() and SqobaGameCard.vue renders file count, total size, and a bounded file list"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        "saveGameSavePath(), selectSaveFolder(), selectSaveFile(), and insertGamePathToken() implement inline save-path editing with picker helpers and persistence through the games store"
+      ]
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "evidence": [
+        "SqobaAboutModal.vue provides the about surface and the page keeps the existing Tailwind-based look"
+      ]
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "evidence": [
+        "Production edits remain under apps/arrancador/src-vue/** and all new Vue files use <script setup lang=\"ts\">"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "bun run typecheck",
+      "status": "PASS",
+      "artifact": "raw/typecheck.txt"
+    },
+    {
+      "command": "bun run build:renderer:vue",
+      "status": "FAIL",
+      "artifact": "raw/build-renderer-vue.txt",
+      "reason": "Vite config load fails before app bundling because @tailwindcss/oxide-win32-x64-msvc cannot be loaded and the process reports spawn EPERM."
+    },
+    {
+      "command": "node .\\\\node_modules\\\\vite\\\\bin\\\\vite.js build --configLoader runner",
+      "status": "FAIL",
+      "artifact": "raw/build-renderer-vue-node-runner.txt",
+      "reason": "Alternate config loading still fails before bundling with ReferenceError: require is not defined while evaluating Vite-config dependencies."
+    },
+    {
+      "command": "node .\\\\node_modules\\\\vite\\\\bin\\\\vite.js build --configLoader native",
+      "status": "FAIL",
+      "artifact": "raw/build-renderer-vue-node-native.txt",
+      "reason": "Native config loading cannot execute vite.config.ts in this environment because Node reports ERR_UNKNOWN_FILE_EXTENSION for .ts."
+    }
+  ]
+}

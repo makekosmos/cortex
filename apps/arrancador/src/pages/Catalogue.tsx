@@ -5,6 +5,7 @@ import { useToast } from "@/components/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { gamesApi, metadataApi } from "@/lib/api";
+import { translateGenreListToRu } from "@/lib/genres";
 import { cn } from "@/lib/utils";
 import { useGamesActions, useGamesState } from "@/store/GamesContext";
 import type { RawgGame } from "@/types";
@@ -232,7 +233,11 @@ export default function CataloguePage() {
           {items.map((item) => {
             const inLibrary = isInLibrary(item);
             const libraryLink = getLibraryGameLink(item);
-            const genres = item.genres?.map((g) => g.name).slice(0, 2).join(", ");
+            const genres = item.genres
+              ?.map((g) => g.name)
+              .slice(0, 2)
+              .map((genre) => translateGenreListToRu(genre, 1)[0] ?? genre)
+              .join(", ");
             const releaseYear = item.released?.slice(0, 4) || "----";
             const isAdding = addingId === item.id;
 

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   Sidebar,
@@ -83,11 +83,11 @@ describe("ui/sidebar", () => {
     );
 
     expect(screen.getByTestId("state")).toHaveTextContent("expanded");
-    const trigger = document.querySelector('[data-slot="sidebar-trigger"]');
-    if (!trigger) throw new Error("missing sidebar-trigger");
-    await userEvent.click(trigger);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /переключить боковую панель/i })[0],
+    );
     expect(screen.getByTestId("state")).toHaveTextContent("collapsed");
-    expect(document.cookie).toContain("sidebar_state=");
+    expect(document.cookie).toContain("sidebar_state=false");
 
     // Cover setOpen functional updater path explicitly.
     await userEvent.click(screen.getByRole("button", { name: "flip" }));
@@ -160,11 +160,9 @@ describe("ui/sidebar", () => {
       screen.getByRole("button", { name: /переключить боковую панель/i }),
     );
 
-    await waitFor(() => {
-      expect(
-        document.querySelector('[data-slot="sidebar"][data-mobile="true"]'),
-      ).toBeTruthy();
-    });
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAttribute("data-slot", "sidebar");
+    expect(dialog).toHaveAttribute("data-mobile", "true");
   });
 
   it("renders menu primitives including tooltips and skeleton", async () => {
@@ -214,6 +212,18 @@ describe("ui/sidebar", () => {
 
     await userEvent.click(screen.getByLabelText("menu-button"));
     expect(onMenuClick).toHaveBeenCalled();
+    const stringTooltipButton = screen.getByLabelText("menu-button");
+    fireEvent.focus(stringTooltipButton);
+    await waitFor(() =>
+      expect(stringTooltipButton).toHaveAttribute("aria-describedby"),
+    );
+    fireEvent.blur(stringTooltipButton);
+
+    const objectTooltipButton = screen.getByLabelText("menu-button-tip-obj");
+    fireEvent.focus(objectTooltipButton);
+    await waitFor(() =>
+      expect(objectTooltipButton).toHaveAttribute("aria-describedby"),
+    );
     expect(screen.getByLabelText("menu-button-tip-obj")).toBeInTheDocument();
     expect(screen.getByText("9")).toBeInTheDocument();
     expect(screen.getByText("GroupContent")).toBeInTheDocument();
@@ -234,6 +244,18 @@ describe("ui/sidebar", () => {
 
     expect(screen.getByText("FloatingRight")).toBeInTheDocument();
     expect(screen.getByText("InsetLeft")).toBeInTheDocument();
+    expect(
+      screen.getByText("FloatingRight").closest('[data-slot="sidebar"]'),
+    ).toHaveAttribute("data-variant", "floating");
+    expect(
+      screen.getByText("FloatingRight").closest('[data-slot="sidebar"]'),
+    ).toHaveAttribute("data-side", "right");
+    expect(
+      screen.getByText("InsetLeft").closest('[data-slot="sidebar"]'),
+    ).toHaveAttribute("data-variant", "inset");
+    expect(
+      screen.getByText("InsetLeft").closest('[data-slot="sidebar"]'),
+    ).toHaveAttribute("data-side", "left");
   });
 
   it("supports SidebarMenuAction asChild + showOnHover and SidebarMenuSubButton variants", () => {

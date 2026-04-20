@@ -55,6 +55,7 @@ import type { Entry } from "./store";
 import { formatCode, lintCode } from "./codeTools";
 
 import { shutdownHeart } from "./heart";
+import { shutdownArk } from "./ark";
 
 import {
   hevyLoginViaBrowser,
@@ -83,7 +84,6 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
-const WINDOWS_TITLEBAR_BASE_HEIGHT = 36;
 const WINDOWS_TITLEBAR_SYMBOL_COLOR = "#e5e7eb";
 
 function setupApplicationMenu() {
@@ -158,12 +158,9 @@ function applyWindowsTitlebarOverlay(window: BrowserWindow) {
     return;
   }
 
-  const zoomFactor = Math.max(0.5, Math.min(2, window.webContents.getZoomFactor() || 1));
-
   window.setTitleBarOverlay({
     color: "#00000000",
     symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
-    height: Math.round(WINDOWS_TITLEBAR_BASE_HEIGHT * zoomFactor),
   });
 }
 
@@ -198,7 +195,6 @@ function createWindow() {
         titleBarOverlay: {
           color: "#00000000",
           symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
-          height: WINDOWS_TITLEBAR_BASE_HEIGHT,
         },
       }
       : {}),
@@ -241,7 +237,6 @@ function createWindow() {
     };
 
     win.webContents.on("did-finish-load", syncOverlay);
-    win.webContents.on("zoom-changed", syncOverlay);
     syncOverlay();
   }
 
@@ -269,6 +264,7 @@ function createWindow() {
 
 app.on("window-all-closed", () => {
   shutdownHeart();
+  shutdownArk();
 
   if (process.platform !== "darwin") {
     app.quit();
@@ -279,6 +275,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   shutdownHeart();
+  shutdownArk();
 });
 
 app.on("activate", () => {
@@ -441,7 +438,6 @@ app.whenReady().then(async () => {
       const clamped = Math.max(0.5, Math.min(2.0, factor));
 
       win.webContents.setZoomFactor(clamped);
-      applyWindowsTitlebarOverlay(win);
 
       return clamped;
     }

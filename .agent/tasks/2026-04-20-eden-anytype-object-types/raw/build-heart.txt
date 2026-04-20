@@ -1,0 +1,9 @@
+Command:
+`cargo build --manifest-path apps/eden/ts/heart/Cargo.toml`
+
+Result:
+PASS
+
+Output:
+`Finished 'dev' profile [unoptimized + debuginfo] target(s) in 0.79s`
+

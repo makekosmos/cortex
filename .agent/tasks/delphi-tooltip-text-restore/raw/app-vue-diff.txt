@@ -1,0 +1,61 @@
+﻿diff --git a/apps/delphi/ts/src/App.vue b/apps/delphi/ts/src/App.vue
+index 535c2f5..85b5e0f 100644
+--- a/apps/delphi/ts/src/App.vue
++++ b/apps/delphi/ts/src/App.vue
+@@ -672,7 +672,7 @@ onUnmounted(() => {
+                 />
+               </div>
+               <div class="min-w-0">
+-                <p class="font-bold">P2P СЃРѕРµРґРёРЅРµРЅРёРµ</p>
++                <p class="font-bold">P2P соединение</p>
+                 <p class="text-(--muted-foreground)">{{ connectionSubtext }}</p>
+               </div>
+             </div>
+@@ -680,13 +680,13 @@ onUnmounted(() => {
+               v-if="activeSpaceCode && connectionState === 'offline'"
+               class="mt-2 text-center text-xs text-(--muted-foreground)"
+             >
+-              РћР¶РёРґР°РЅРёРµ РїРёСЂРѕРІ РІ СЃРµС‚Рё...
++              Ожидание пиров в сети...
+             </p>
+             <div
+               v-if="activeSpaceCode"
+               class="mt-3 border-t border-(--border) pt-3"
+             >
+-              <p class="mb-1 text-xs text-(--muted-foreground)">РџСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ</p>
++              <p class="mb-1 text-xs text-(--muted-foreground)">Пространство</p>
+               <p class="break-all font-mono text-sm font-bold tracking-wide">
+                 {{ formatSpaceCode(activeSpaceCode) }}
+               </p>
+@@ -694,11 +694,11 @@ onUnmounted(() => {
+                 class="mt-2 w-full rounded-md border border-(--border) px-2 py-1.5 text-xs font-medium transition-colors hover:bg-(--muted)"
+                 @click="openQrOverlay"
+               >
+-                РџРѕРєР°Р·Р°С‚СЊ QR-РєРѕРґ
++                Показать QR-код
+               </button>
+               <div v-if="connectedPeerNames.length > 0" class="mt-2">
+                 <p class="mb-1 text-xs text-(--muted-foreground)">
+-                  РџРѕРґРєР»СЋС‡С‘РЅРЅС‹Рµ РїРёСЂС‹
++                  Подключённые пиры
+                 </p>
+                 <ul class="text-xs">
+                   <li v-for="name in connectedPeerNames" :key="name">
+@@ -710,7 +710,7 @@ onUnmounted(() => {
+                 class="mt-2 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
+                 @click="handleLeaveSpace"
+               >
+-                РџРѕРєРёРЅСѓС‚СЊ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ
++                Покинуть пространство
+               </button>
+             </div>
+             <button
+@@ -718,7 +718,7 @@ onUnmounted(() => {
+               class="mt-3 w-full rounded-md bg-(--foreground) px-2 py-1.5 text-xs font-medium text-(--background) transition-opacity hover:opacity-80"
+               @click="handleReconnect"
+             >
+-              РџРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ
++              Подключиться
+             </button>
+           </div>
+         </StatusDot>

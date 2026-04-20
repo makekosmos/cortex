@@ -18,6 +18,11 @@ vi.mock("@/store/GamesContext", () => ({
   useGamesState: vi.fn(),
   useGamesActions: vi.fn(),
 }));
+vi.mock("@/components/GameCard", () => ({
+  GameCard: (props: { game: { id: string; name: string } }) => (
+    <a href={`/games/${props.game.id}`}>{props.game.name}</a>
+  ),
+}));
 vi.mock("@/components/ToastProvider", () => ({
   useToast: () => ({ notify: notifyMock }),
 }));
@@ -96,7 +101,7 @@ describe("Library", () => {
     });
   });
 
-  it("filters games by search query", async () => {
+  it("renders icon header controls and centered view mode toggle", async () => {
     useGamesStateMock.mockReturnValue({
       games: [testGameFixture, testFavoriteGameFixture],
       favorites: [testFavoriteGameFixture],
@@ -107,25 +112,32 @@ describe("Library", () => {
 
     renderLibrary();
 
+    expect(screen.queryByPlaceholderText(/поиск игр/i)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: testGameFixture.name }),
+      screen.getByRole("button", { name: "Фильтры" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: testFavoriteGameFixture.name }),
+      screen.getByRole("button", { name: "Сортировка" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Сетка" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Список" }),
     ).toBeInTheDocument();
 
-    const searchInput = screen.getByPlaceholderText(/поиск игр/i);
-    await userEvent.type(searchInput, testFavoriteGameFixture.name);
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
 
+    expect(screen.getByText("Жанры")).toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: testGameFixture.name }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Избранное" }),
+    ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: testFavoriteGameFixture.name }),
+      screen.getByRole("button", { name: "Сбросить" }),
     ).toBeInTheDocument();
   });
 
-  it("shows favorites when toggled", async () => {
+  it("shows favorites when toggled from the filters panel", async () => {
     useGamesStateMock.mockReturnValue({
       games: [testGameFixture, testFavoriteGameFixture],
       favorites: [testFavoriteGameFixture],
@@ -136,8 +148,8 @@ describe("Library", () => {
 
     renderLibrary();
 
-    const favoritesButton = screen.getByRole("button", { name: "Избранное" });
-    await userEvent.click(favoritesButton);
+    await userEvent.click(screen.getByRole("button", { name: "Фильтры" }));
+    await userEvent.click(screen.getByRole("button", { name: "Избранное" }));
 
     expect(
       screen.queryByRole("link", { name: testGameFixture.name }),
@@ -163,22 +175,20 @@ describe("Library", () => {
       dataTransfer: { types: ["Files"] },
     });
     expect(
-      await screen.findByText(/Отпустите, чтобы добавить игру/),
+      await screen.findByText(/отпустите, чтобы добавить игру/i),
     ).toBeInTheDocument();
 
     fireEvent.dragOver(dropTarget, {
       dataTransfer: { types: ["Files"] },
     });
-    expect(
-      screen.getByText(/Отпустите, чтобы добавить игру/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/отпустите, чтобы добавить игру/i)).toBeInTheDocument();
 
     fireEvent.dragLeave(dropTarget, {
       dataTransfer: { types: ["Files"] },
     });
     await waitFor(() =>
       expect(
-        screen.queryByText(/Отпустите, чтобы добавить игру/),
+        screen.queryByText(/отпустите, чтобы добавить игру/i),
       ).not.toBeInTheDocument(),
     );
   });

@@ -6,7 +6,9 @@ import { v4 as uuidv4 } from "uuid";
 
 import { normalizeSlug } from "@/lib/typedNotes";
 
-import { SYSTEM_TYPES, isSystemType } from "@/lib/systemTypes";
+import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
+
+import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPES, isSystemType } from "@/lib/systemTypes";
 
 import type { SpaceId } from "@/components/sidebar/types";
 
@@ -14,7 +16,18 @@ import type { SortMode } from "@/components/sidebar/types";
 
 import { useLayoutStore } from "./layout";
 
-type ActiveScreen = "notes" | "settings";
+type ActiveScreen = "notes" | "settings" | "object-types" | "type-collection";
+
+function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
+  const byId = new Map<string, NoteType>();
+  for (const systemType of SYSTEM_TYPES) {
+    byId.set(systemType.id, systemType);
+  }
+  for (const noteType of noteTypesData) {
+    byId.set(noteType.id, noteType);
+  }
+  return [...byId.values()];
+}
 
 const MY_SPACE_TITLE = "Мое пространство";
 
@@ -46,10 +59,13 @@ export const useEdenStore = defineStore("eden", () => {
   const recentVaultPaths = ref<string[]>([]);
 
   const isInitializing = ref(true);
+  const isHydratingVault = ref(false);
 
   const activeScreen = ref<ActiveScreen>("notes");
 
   const activeSpace = ref<SpaceId>("my-space");
+
+  const activeNoteTypeId = ref<string | null>(null);
 
   const codeToolsSettings = ref<CodeToolsSettings | null>(null);
 
@@ -67,20 +83,6 @@ export const useEdenStore = defineStore("eden", () => {
     return vaultPath.value.split("/").pop() ?? vaultPath.value;
   });
 
-  const uniqueDraftTitle = computed(() => {
-    const baseTitle = "Новая заметка";
-
-    const siblingTitles = new Set(entries.value.map((e) => e.title));
-
-    if (!siblingTitles.has(baseTitle)) return baseTitle;
-
-    let suffix = 2;
-
-    while (siblingTitles.has(`${baseTitle} ${suffix}`)) suffix++;
-
-    return `${baseTitle} ${suffix}`;
-  });
-
   async function refreshData() {
     if (!window.api) return;
 
@@ -92,12 +94,59 @@ export const useEdenStore = defineStore("eden", () => {
 
     entries.value = entriesData;
 
-    noteTypes.value = [...SYSTEM_TYPES, ...noteTypesData];
+    noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
 
     if (currentEntry.value) {
       currentEntry.value =
         entriesData.find((e) => e.id === currentEntry.value!.id) ??
         currentEntry.value;
+    }
+  }
+
+  async function hydrateVaultData() {
+    if (!window.api || !vaultPath.value) return;
+
+    isHydratingVault.value = true;
+
+    try {
+      const [entriesData, noteTypesData] = await Promise.all([
+        window.api.listEntries(),
+        window.api.listNoteTypes(),
+      ]);
+
+      entries.value = entriesData;
+      noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
+
+      const existingMySpace =
+        entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
+
+      if (existingMySpace) {
+        currentEntry.value = existingMySpace;
+        return;
+      }
+
+      const mySpaceEntry: Entry = {
+        id: uuidv4(),
+        title: MY_SPACE_TITLE,
+        content_json: JSON.stringify({
+          type: "doc",
+          content: [{ type: "paragraph" }],
+        }),
+        created_at: Date.now(),
+        updated_at: Date.now(),
+        folder_id: null,
+        type_id: SYSTEM_TYPE_NOTE_ID,
+        header_layout: null,
+        header_props_json: "{}",
+        schema_version: 1,
+        deleted_at: null,
+      };
+
+      entries.value = [mySpaceEntry, ...entries.value];
+      void window.api.saveEntry(mySpaceEntry);
+      currentEntry.value = mySpaceEntry;
+    } finally {
+      isHydratingVault.value = false;
     }
   }
 
@@ -126,62 +175,14 @@ export const useEdenStore = defineStore("eden", () => {
 
     layout.widgetSidebarHidden = sidebarConfig.widget.hidden;
 
-    if (path) {
-      const [entriesData, noteTypesData] = await Promise.all([
-        window.api.listEntries(),
-
-        window.api.listNoteTypes(),
-      ]);
-
-      entries.value = entriesData;
-
-      noteTypes.value = [...SYSTEM_TYPES, ...noteTypesData];
-
-      const existingMySpace =
-        entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
-
-      if (existingMySpace) {
-        currentEntry.value = existingMySpace;
-      } else {
-        const mySpaceEntry: Entry = {
-          id: uuidv4(),
-
-          title: MY_SPACE_TITLE,
-
-          content_json: JSON.stringify({
-            type: "doc",
-            content: [{ type: "paragraph" }],
-          }),
-
-          created_at: Date.now(),
-
-          updated_at: Date.now(),
-
-          folder_id: null,
-
-          type_id: null,
-
-          header_layout: null,
-
-          header_props_json: "{}",
-
-          schema_version: 1,
-
-          deleted_at: null,
-        };
-
-        entries.value = [mySpaceEntry, ...entries.value];
-
-        void window.api.saveEntry(mySpaceEntry);
-
-        currentEntry.value = mySpaceEntry;
-      }
-    }
-
     isInitializing.value = false;
+
+    if (path) {
+      void hydrateVaultData();
+    }
   }
 
-  function createEntry(title: string): Entry {
+  function createEntry(title: string, noteTypeId: string = SYSTEM_TYPE_NOTE_ID): Entry {
     const newEntry: Entry = {
       id: uuidv4(),
 
@@ -198,11 +199,11 @@ export const useEdenStore = defineStore("eden", () => {
 
       folder_id: null,
 
-      type_id: null,
+      type_id: noteTypeId,
 
       header_layout: null,
 
-      header_props_json: "{}",
+      header_props_json: JSON.stringify(createUntitledEntryHeaderProps()),
 
       schema_version: 1,
 
@@ -232,6 +233,7 @@ export const useEdenStore = defineStore("eden", () => {
     activeScreen.value = "notes";
 
     activeSpace.value = "my-space";
+    activeNoteTypeId.value = null;
 
     const existing = findMySpaceEntry();
 
@@ -244,12 +246,27 @@ export const useEdenStore = defineStore("eden", () => {
     currentEntry.value = createEntry(MY_SPACE_TITLE);
   }
 
-  async function createNewEntry() {
+  async function createNewEntry(noteTypeId: string = SYSTEM_TYPE_NOTE_ID) {
     activeScreen.value = "notes";
 
-    const newEntry = createEntry(uniqueDraftTitle.value);
+    activeNoteTypeId.value = null;
+
+    const newEntry = createEntry("", noteTypeId);
 
     currentEntry.value = newEntry;
+  }
+
+  function openTypeCollection(noteTypeId: string) {
+    activeScreen.value = "type-collection";
+    activeNoteTypeId.value = noteTypeId;
+    activeSpace.value = "all-objects";
+    currentEntry.value = null;
+  }
+
+  function openObjectTypes(noteTypeId: string | null = null) {
+    activeScreen.value = "object-types";
+    activeNoteTypeId.value = noteTypeId ?? activeNoteTypeId.value ?? noteTypes.value[0]?.id ?? null;
+    currentEntry.value = null;
   }
 
   async function selectFolder() {
@@ -268,6 +285,7 @@ export const useEdenStore = defineStore("eden", () => {
     currentEntry.value = null;
 
     activeSpace.value = "my-space";
+    activeNoteTypeId.value = null;
 
     await refreshData();
   }
@@ -286,6 +304,7 @@ export const useEdenStore = defineStore("eden", () => {
     activeSpace.value = "my-space";
 
     activeScreen.value = "notes";
+    activeNoteTypeId.value = null;
 
     await refreshData();
   }
@@ -297,6 +316,7 @@ export const useEdenStore = defineStore("eden", () => {
 
     if (entry) {
       activeScreen.value = "notes";
+      activeNoteTypeId.value = null;
 
       currentEntry.value = entry;
     }
@@ -336,6 +356,8 @@ export const useEdenStore = defineStore("eden", () => {
       schema_json: draft.schema_json,
 
       header_template_json: draft.header_template_json,
+
+      ui_schema_json: draft.ui_schema_json,
 
       created_at: draft.id
         ? (noteTypes.value.find((t) => t.id === draft.id)?.created_at ?? now)
@@ -466,17 +488,19 @@ export const useEdenStore = defineStore("eden", () => {
 
     isInitializing,
 
+    isHydratingVault,
+
     activeScreen,
 
     activeSpace,
+
+    activeNoteTypeId,
 
     codeToolsSettings,
 
     sortMode,
 
     vaultName,
-
-    uniqueDraftTitle,
 
     refreshData,
 
@@ -487,6 +511,10 @@ export const useEdenStore = defineStore("eden", () => {
     openMySpace,
 
     createNewEntry,
+
+    openTypeCollection,
+
+    openObjectTypes,
 
     selectFolder,
 

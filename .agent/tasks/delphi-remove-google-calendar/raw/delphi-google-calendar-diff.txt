@@ -1,0 +1,2432 @@
+diff --git a/apps/delphi/ts/electron/google-calendar.ts b/apps/delphi/ts/electron/google-calendar.ts
+deleted file mode 100644
+index 470e869..0000000
+--- a/apps/delphi/ts/electron/google-calendar.ts
++++ /dev/null
+@@ -1,814 +0,0 @@
+-import fs from "node:fs";
+-import http from "node:http";
+-import path from "node:path";
+-import crypto from "node:crypto";
+-import { ipcMain, safeStorage, shell } from "electron";
+-import {
+-  expandRequestedRange,
+-  shouldRefreshCoverage,
+-} from "../src/services/google-calendar/cache";
+-import {
+-  addDays,
+-  startOfDay,
+-  toRange,
+-} from "../src/services/google-calendar/date";
+-import {
+-  canRestoreGoogleSession,
+-  isAccessTokenExpired,
+-} from "../src/services/google-calendar/session";
+-import type {
+-  GoogleCalendarAccount,
+-  GoogleCalendarCalendar,
+-  GoogleCalendarConfigState,
+-  GoogleCalendarEvent,
+-  GoogleCalendarRange,
+-  GoogleCalendarSnapshot,
+-} from "../src/services/google-calendar/contracts";
+-
+-type SavedGoogleConfig = {
+-  clientId: string;
+-  clientSecret: string | null;
+-};
+-
+-type SavedGoogleSession = {
+-  refreshToken: string | null;
+-  accessToken: string | null;
+-  accessTokenExpiresAt: string | null;
+-  scope: string | null;
+-  tokenType: string | null;
+-};
+-
+-type SavedGoogleCache = {
+-  account: GoogleCalendarAccount | null;
+-  calendars: GoogleCalendarCalendar[];
+-  events: GoogleCalendarEvent[];
+-  lastSyncAt: string | null;
+-  lastSyncError: string | null;
+-  coverageStart: string | null;
+-  coverageEnd: string | null;
+-};
+-
+-type GoogleTokenResponse = {
+-  access_token: string;
+-  expires_in: number;
+-  refresh_token?: string;
+-  scope?: string;
+-  token_type?: string;
+-  error?: string;
+-  error_description?: string;
+-};
+-
+-type GoogleCalendarListResponse = {
+-  items?: Array<Record<string, unknown>>;
+-  nextPageToken?: string;
+-};
+-
+-type GoogleEventsResponse = {
+-  items?: Array<Record<string, unknown>>;
+-  nextPageToken?: string;
+-};
+-
+-type GoogleCalendarContext = {
+-  configPath: string;
+-  sessionPath: string;
+-  cachePath: string;
+-};
+-
+-const GOOGLE_AUTH_SCOPES = [
+-  "openid",
+-  "email",
+-  "profile",
+-  "https://www.googleapis.com/auth/calendar.readonly",
+-].join(" ");
+-
+-const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+-const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+-const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+-const GOOGLE_CALENDAR_LIST_URL =
+-  "https://www.googleapis.com/calendar/v3/users/me/calendarList";
+-const GOOGLE_EVENTS_BASE_URL =
+-  "https://www.googleapis.com/calendar/v3/calendars";
+-const CALLBACK_PATH = "/oauth2callback";
+-
+-const EMPTY_CACHE: SavedGoogleCache = {
+-  account: null,
+-  calendars: [],
+-  events: [],
+-  lastSyncAt: null,
+-  lastSyncError: null,
+-  coverageStart: null,
+-  coverageEnd: null,
+-};
+-
+-let syncInFlight: Promise<GoogleCalendarSnapshot> | null = null;
+-let syncBusy = false;
+-let queuedSyncRequest: {
+-  range?: GoogleCalendarRange;
+-  force: boolean;
+-} | null = null;
+-let queuedSyncPromise: Promise<GoogleCalendarSnapshot> | null = null;
+-
+-function ensureDir(filePath: string) {
+-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+-}
+-
+-function readProtectedJson<T>(filePath: string, fallback: T): T {
+-  try {
+-    if (!fs.existsSync(filePath)) return fallback;
+-    const raw = JSON.parse(fs.readFileSync(filePath, "utf-8")) as {
+-      encrypted?: boolean;
+-      payload?: string;
+-    };
+-    if (typeof raw.payload !== "string") return fallback;
+-
+-    const decoded =
+-      raw.encrypted && safeStorage.isEncryptionAvailable()
+-        ? safeStorage.decryptString(Buffer.from(raw.payload, "base64"))
+-        : raw.payload;
+-
+-    return JSON.parse(decoded) as T;
+-  } catch {
+-    return fallback;
+-  }
+-}
+-
+-function writeProtectedJson<T>(filePath: string, value: T): void {
+-  ensureDir(filePath);
+-
+-  const payload = JSON.stringify(value);
+-  const encrypted = safeStorage.isEncryptionAvailable();
+-
+-  fs.writeFileSync(
+-    filePath,
+-    JSON.stringify(
+-      {
+-        encrypted,
+-        payload: encrypted
+-          ? safeStorage.encryptString(payload).toString("base64")
+-          : payload,
+-      },
+-      null,
+-      2,
+-    ),
+-    "utf-8",
+-  );
+-}
+-
+-function deleteIfExists(filePath: string): void {
+-  try {
+-    fs.rmSync(filePath, { force: true });
+-  } catch {
+-    // ignore
+-  }
+-}
+-
+-function readCache(context: GoogleCalendarContext): SavedGoogleCache {
+-  try {
+-    if (!fs.existsSync(context.cachePath)) return EMPTY_CACHE;
+-    const raw = JSON.parse(fs.readFileSync(context.cachePath, "utf-8"));
+-    return {
+-      ...EMPTY_CACHE,
+-      ...raw,
+-      calendars: Array.isArray(raw?.calendars) ? raw.calendars : [],
+-      events: Array.isArray(raw?.events) ? raw.events : [],
+-    } as SavedGoogleCache;
+-  } catch {
+-    return EMPTY_CACHE;
+-  }
+-}
+-
+-function writeCache(context: GoogleCalendarContext, cache: SavedGoogleCache): void {
+-  ensureDir(context.cachePath);
+-  fs.writeFileSync(context.cachePath, JSON.stringify(cache, null, 2), "utf-8");
+-}
+-
+-function readSavedConfig(context: GoogleCalendarContext): SavedGoogleConfig {
+-  return readProtectedJson<SavedGoogleConfig>(context.configPath, {
+-    clientId: "",
+-    clientSecret: null,
+-  });
+-}
+-
+-function writeSavedConfig(
+-  context: GoogleCalendarContext,
+-  config: SavedGoogleConfig,
+-): void {
+-  if (!config.clientId.trim()) {
+-    deleteIfExists(context.configPath);
+-    return;
+-  }
+-  writeProtectedJson(context.configPath, config);
+-}
+-
+-function readSavedSession(context: GoogleCalendarContext): SavedGoogleSession {
+-  return readProtectedJson<SavedGoogleSession>(context.sessionPath, {
+-    refreshToken: null,
+-    accessToken: null,
+-    accessTokenExpiresAt: null,
+-    scope: null,
+-    tokenType: null,
+-  });
+-}
+-
+-function writeSavedSession(
+-  context: GoogleCalendarContext,
+-  session: SavedGoogleSession,
+-): void {
+-  if (!session.refreshToken && !session.accessToken) {
+-    deleteIfExists(context.sessionPath);
+-    return;
+-  }
+-  writeProtectedJson(context.sessionPath, session);
+-}
+-
+-function getResolvedConfig(
+-  context: GoogleCalendarContext,
+-): SavedGoogleConfig & { state: GoogleCalendarConfigState } {
+-  const envClientId = process.env.GOOGLE_CALENDAR_CLIENT_ID?.trim() ?? "";
+-  const envClientSecret =
+-    process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim() ?? "";
+-  const savedConfig = readSavedConfig(context);
+-
+-  if (envClientId) {
+-    return {
+-      clientId: envClientId,
+-      clientSecret: envClientSecret || null,
+-      state: {
+-        clientId: envClientId,
+-        hasClientSecret: Boolean(envClientSecret),
+-        source: "env",
+-      },
+-    };
+-  }
+-
+-  return {
+-    clientId: savedConfig.clientId.trim(),
+-    clientSecret: savedConfig.clientSecret?.trim() || null,
+-    state: {
+-      clientId: savedConfig.clientId.trim(),
+-      hasClientSecret: Boolean(savedConfig.clientSecret?.trim()),
+-      source: savedConfig.clientId ? "saved" : "none",
+-    },
+-  };
+-}
+-
+-function buildSnapshot(context: GoogleCalendarContext): GoogleCalendarSnapshot {
+-  const cache = readCache(context);
+-  const config = getResolvedConfig(context);
+-  const session = readSavedSession(context);
+-  const connected = canRestoreGoogleSession({
+-    refreshToken: session.refreshToken,
+-    clientId: config.clientId,
+-  });
+-
+-  return {
+-    config: config.state,
+-    account: cache.account,
+-    status: {
+-      available: true,
+-      configured: Boolean(config.clientId),
+-      connected,
+-      syncing: syncBusy,
+-      accountEmail: cache.account?.email ?? null,
+-      lastSyncAt: cache.lastSyncAt,
+-      lastSyncError: cache.lastSyncError,
+-      coverageStart: cache.coverageStart,
+-      coverageEnd: cache.coverageEnd,
+-    },
+-    calendars: cache.calendars,
+-    events: cache.events,
+-  };
+-}
+-
+-function defaultRefreshRange(): GoogleCalendarRange {
+-  const today = startOfDay(new Date());
+-  return toRange(addDays(today, -30), addDays(today, 180));
+-}
+-
+-function createPkceVerifier(): string {
+-  return crypto.randomBytes(48).toString("base64url");
+-}
+-
+-function createPkceChallenge(verifier: string): string {
+-  return crypto
+-    .createHash("sha256")
+-    .update(verifier)
+-    .digest("base64url");
+-}
+-
+-async function startInteractiveAuth(
+-  clientId: string,
+-  clientSecret: string | null,
+-): Promise<{
+-  accessToken: string;
+-  refreshToken: string | null;
+-  accessTokenExpiresAt: string;
+-  scope: string | null;
+-  tokenType: string | null;
+-}> {
+-  const verifier = createPkceVerifier();
+-  const challenge = createPkceChallenge(verifier);
+-  const state = crypto.randomBytes(16).toString("hex");
+-
+-  const baseAuthUrl = new URL(GOOGLE_AUTH_URL);
+-  baseAuthUrl.searchParams.set("client_id", clientId);
+-  baseAuthUrl.searchParams.set("response_type", "code");
+-  baseAuthUrl.searchParams.set("scope", GOOGLE_AUTH_SCOPES);
+-  baseAuthUrl.searchParams.set("access_type", "offline");
+-  baseAuthUrl.searchParams.set("include_granted_scopes", "true");
+-  baseAuthUrl.searchParams.set("prompt", "consent select_account");
+-  baseAuthUrl.searchParams.set("state", state);
+-  baseAuthUrl.searchParams.set("code_challenge", challenge);
+-  baseAuthUrl.searchParams.set("code_challenge_method", "S256");
+-
+-  const authResult = await new Promise<{
+-    code: string;
+-    redirectUri: string;
+-  }>((resolve, reject) => {
+-    let timeout: NodeJS.Timeout | null = null;
+-    const server = http.createServer((req, res) => {
+-      try {
+-        if (!req.url) throw new Error("Missing OAuth callback URL.");
+-        const callbackUrl = new URL(req.url, "http://127.0.0.1");
+-        if (callbackUrl.pathname !== CALLBACK_PATH) {
+-          res.writeHead(404);
+-          res.end("Not found");
+-          return;
+-        }
+-
+-        const returnedState = callbackUrl.searchParams.get("state");
+-        const code = callbackUrl.searchParams.get("code");
+-        const error = callbackUrl.searchParams.get("error");
+-
+-        if (returnedState !== state) throw new Error("OAuth state mismatch.");
+-        if (error) throw new Error(`Google OAuth error: ${error}`);
+-        if (!code) throw new Error("Google OAuth callback did not contain a code.");
+-
+-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+-        res.end(
+-          "<html><body style=\"font-family: system-ui; padding: 24px;\">Вход завершён. Можно закрыть это окно и вернуться в Delphi.</body></html>",
+-        );
+-
+-        if (timeout) clearTimeout(timeout);
+-        const redirectUri = `http://127.0.0.1:${(server.address() as http.AddressInfo).port}${CALLBACK_PATH}`;
+-        server.close();
+-        resolve({ code, redirectUri });
+-      } catch (error) {
+-        res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+-        res.end(
+-          "<html><body style=\"font-family: system-ui; padding: 24px;\">Не удалось завершить вход. Вернитесь в Delphi и попробуйте снова.</body></html>",
+-        );
+-        if (timeout) clearTimeout(timeout);
+-        server.close();
+-        reject(error);
+-      }
+-    });
+-
+-    server.listen(0, "127.0.0.1", async () => {
+-      const address = server.address() as http.AddressInfo;
+-      const redirectUri = `http://127.0.0.1:${address.port}${CALLBACK_PATH}`;
+-      baseAuthUrl.searchParams.set("redirect_uri", redirectUri);
+-
+-      timeout = setTimeout(() => {
+-        server.close();
+-        reject(new Error("OAuth timed out."));
+-      }, 2 * 60 * 1000);
+-
+-      try {
+-        await shell.openExternal(baseAuthUrl.toString());
+-      } catch (error) {
+-        if (timeout) clearTimeout(timeout);
+-        server.close();
+-        reject(error);
+-      }
+-    });
+-  });
+-
+-  const body = new URLSearchParams({
+-    code: authResult.code,
+-    client_id: clientId,
+-    code_verifier: verifier,
+-    grant_type: "authorization_code",
+-    redirect_uri: authResult.redirectUri,
+-  });
+-
+-  if (clientSecret) {
+-    body.set("client_secret", clientSecret);
+-  }
+-
+-  const response = await fetch(GOOGLE_TOKEN_URL, {
+-    method: "POST",
+-    headers: {
+-      "Content-Type": "application/x-www-form-urlencoded",
+-    },
+-    body,
+-  });
+-
+-  const data = (await response.json()) as GoogleTokenResponse;
+-
+-  if (!response.ok || !data.access_token) {
+-    throw new Error(data.error_description || data.error || "Google token exchange failed.");
+-  }
+-
+-  return {
+-    accessToken: data.access_token,
+-    refreshToken: data.refresh_token ?? null,
+-    accessTokenExpiresAt: new Date(
+-      Date.now() + data.expires_in * 1000,
+-    ).toISOString(),
+-    scope: data.scope ?? null,
+-    tokenType: data.token_type ?? null,
+-  };
+-}
+-
+-async function fetchJson<T>(
+-  url: string,
+-  accessToken: string,
+-): Promise<T> {
+-  const response = await fetch(url, {
+-    headers: {
+-      Authorization: `Bearer ${accessToken}`,
+-    },
+-  });
+-
+-  if (!response.ok) {
+-    const message = await response.text();
+-    throw new Error(message || `Google request failed (${response.status})`);
+-  }
+-
+-  return (await response.json()) as T;
+-}
+-
+-async function refreshAccessToken(
+-  context: GoogleCalendarContext,
+-  config: SavedGoogleConfig,
+-  session: SavedGoogleSession,
+-): Promise<SavedGoogleSession> {
+-  if (!session.refreshToken) {
+-    throw new Error("Google refresh token is missing.");
+-  }
+-
+-  const body = new URLSearchParams({
+-    client_id: config.clientId,
+-    grant_type: "refresh_token",
+-    refresh_token: session.refreshToken,
+-  });
+-
+-  if (config.clientSecret) {
+-    body.set("client_secret", config.clientSecret);
+-  }
+-
+-  const response = await fetch(GOOGLE_TOKEN_URL, {
+-    method: "POST",
+-    headers: {
+-      "Content-Type": "application/x-www-form-urlencoded",
+-    },
+-    body,
+-  });
+-
+-  const data = (await response.json()) as GoogleTokenResponse;
+-  if (!response.ok || !data.access_token) {
+-    if (data.error === "invalid_grant") {
+-      writeSavedSession(context, {
+-        refreshToken: null,
+-        accessToken: null,
+-        accessTokenExpiresAt: null,
+-        scope: null,
+-        tokenType: null,
+-      });
+-    }
+-    throw new Error(data.error_description || data.error || "Google token refresh failed.");
+-  }
+-
+-  const nextSession: SavedGoogleSession = {
+-    ...session,
+-    accessToken: data.access_token,
+-    accessTokenExpiresAt: new Date(
+-      Date.now() + data.expires_in * 1000,
+-    ).toISOString(),
+-    tokenType: data.token_type ?? session.tokenType,
+-    scope: data.scope ?? session.scope,
+-  };
+-  writeSavedSession(context, nextSession);
+-  return nextSession;
+-}
+-
+-async function ensureAccessToken(
+-  context: GoogleCalendarContext,
+-  config: SavedGoogleConfig,
+-  session: SavedGoogleSession,
+-): Promise<SavedGoogleSession> {
+-  if (
+-    session.accessToken &&
+-    !isAccessTokenExpired(session.accessTokenExpiresAt)
+-  ) {
+-    return session;
+-  }
+-  return refreshAccessToken(context, config, session);
+-}
+-
+-async function fetchGoogleProfile(accessToken: string): Promise<GoogleCalendarAccount> {
+-  const data = (await fetchJson<Record<string, unknown>>(
+-    GOOGLE_USERINFO_URL,
+-    accessToken,
+-  )) as Record<string, unknown>;
+-
+-  return {
+-    email: String(data.email ?? ""),
+-    name: typeof data.name === "string" ? data.name : null,
+-    pictureUrl: typeof data.picture === "string" ? data.picture : null,
+-  };
+-}
+-
+-function normalizeCalendar(item: Record<string, unknown>): GoogleCalendarCalendar {
+-  return {
+-    id: String(item.id ?? ""),
+-    summary: String(item.summary ?? item.id ?? "Без названия"),
+-    primary: Boolean(item.primary),
+-    selected: item.selected !== false,
+-    accessRole: typeof item.accessRole === "string" ? item.accessRole : null,
+-    backgroundColor:
+-      typeof item.backgroundColor === "string" ? item.backgroundColor : null,
+-    foregroundColor:
+-      typeof item.foregroundColor === "string" ? item.foregroundColor : null,
+-  };
+-}
+-
+-function normalizeEvent(
+-  item: Record<string, unknown>,
+-  calendar: GoogleCalendarCalendar,
+-): GoogleCalendarEvent | null {
+-  const start = item.start as Record<string, unknown> | undefined;
+-  const end = item.end as Record<string, unknown> | undefined;
+-  const startValue =
+-    (typeof start?.dateTime === "string" ? start.dateTime : null) ??
+-    (typeof start?.date === "string" ? start.date : null);
+-  const endValue =
+-    (typeof end?.dateTime === "string" ? end.dateTime : null) ??
+-    (typeof end?.date === "string" ? end.date : null);
+-
+-  if (!startValue || !endValue) return null;
+-
+-  return {
+-    id: String(item.id ?? crypto.randomUUID()),
+-    calendarId: calendar.id,
+-    calendarSummary: calendar.summary,
+-    title: String(item.summary ?? "Без названия"),
+-    description:
+-      typeof item.description === "string" ? item.description : null,
+-    location: typeof item.location === "string" ? item.location : null,
+-    status: typeof item.status === "string" ? item.status : "confirmed",
+-    htmlLink: typeof item.htmlLink === "string" ? item.htmlLink : null,
+-    start: startValue,
+-    end: endValue,
+-    isAllDay:
+-      typeof start?.date === "string" && typeof end?.date === "string",
+-    color:
+-      typeof item.backgroundColor === "string"
+-        ? item.backgroundColor
+-        : calendar.backgroundColor,
+-  };
+-}
+-
+-async function fetchAllCalendars(accessToken: string): Promise<GoogleCalendarCalendar[]> {
+-  const calendars: GoogleCalendarCalendar[] = [];
+-  let pageToken = "";
+-
+-  do {
+-    const url = new URL(GOOGLE_CALENDAR_LIST_URL);
+-    if (pageToken) {
+-      url.searchParams.set("pageToken", pageToken);
+-    }
+-
+-    const data = await fetchJson<GoogleCalendarListResponse>(
+-      url.toString(),
+-      accessToken,
+-    );
+-    for (const item of data.items ?? []) {
+-      calendars.push(normalizeCalendar(item));
+-    }
+-    pageToken = data.nextPageToken ?? "";
+-  } while (pageToken);
+-
+-  return calendars.filter((calendar) => calendar.selected);
+-}
+-
+-async function fetchCalendarEvents(
+-  accessToken: string,
+-  calendar: GoogleCalendarCalendar,
+-  range: GoogleCalendarRange,
+-): Promise<GoogleCalendarEvent[]> {
+-  const events: GoogleCalendarEvent[] = [];
+-  let pageToken = "";
+-
+-  do {
+-    const url = new URL(
+-      `${GOOGLE_EVENTS_BASE_URL}/${encodeURIComponent(calendar.id)}/events`,
+-    );
+-    url.searchParams.set("singleEvents", "true");
+-    url.searchParams.set("orderBy", "startTime");
+-    url.searchParams.set("timeMin", range.start);
+-    url.searchParams.set("timeMax", range.end);
+-    url.searchParams.set("showDeleted", "false");
+-    url.searchParams.set("maxResults", "500");
+-    if (pageToken) {
+-      url.searchParams.set("pageToken", pageToken);
+-    }
+-
+-    const data = await fetchJson<GoogleEventsResponse>(url.toString(), accessToken);
+-    for (const item of data.items ?? []) {
+-      const normalized = normalizeEvent(item, calendar);
+-      if (normalized) events.push(normalized);
+-    }
+-    pageToken = data.nextPageToken ?? "";
+-  } while (pageToken);
+-
+-  return events;
+-}
+-
+-async function syncGoogleCalendar(
+-  context: GoogleCalendarContext,
+-  requestedRange?: GoogleCalendarRange,
+-  force = false,
+-): Promise<GoogleCalendarSnapshot> {
+-  if (syncInFlight) {
+-    if (!requestedRange && !force) {
+-      return syncInFlight;
+-    }
+-
+-    queuedSyncRequest = {
+-      range: requestedRange ?? queuedSyncRequest?.range,
+-      force: queuedSyncRequest?.force === true || force,
+-    };
+-
+-    if (!queuedSyncPromise) {
+-      queuedSyncPromise = syncInFlight.then(() => {
+-        const nextRequest = queuedSyncRequest;
+-        queuedSyncRequest = null;
+-        queuedSyncPromise = null;
+-
+-        if (!nextRequest) {
+-          return buildSnapshot(context);
+-        }
+-
+-        return syncGoogleCalendar(context, nextRequest.range, nextRequest.force);
+-      });
+-    }
+-
+-    return queuedSyncPromise;
+-  }
+-
+-  const run = async () => {
+-    syncBusy = true;
+-    try {
+-      const resolvedConfig = getResolvedConfig(context);
+-      const session = readSavedSession(context);
+-      const cache = readCache(context);
+-
+-      if (!canRestoreGoogleSession({
+-        refreshToken: session.refreshToken,
+-        clientId: resolvedConfig.clientId,
+-      })) {
+-        return buildSnapshot(context);
+-      }
+-
+-      const range = requestedRange ?? defaultRefreshRange();
+-      const expandedRange = expandRequestedRange(range.start, range.end, 14);
+-
+-      if (
+-        !force &&
+-        !shouldRefreshCoverage({
+-          coverageStart: cache.coverageStart,
+-          coverageEnd: cache.coverageEnd,
+-          lastSyncAt: cache.lastSyncAt,
+-          requestedStart: expandedRange.start,
+-          requestedEnd: expandedRange.end,
+-        })
+-      ) {
+-        return buildSnapshot(context);
+-      }
+-
+-      const refreshedSession = await ensureAccessToken(
+-        context,
+-        resolvedConfig,
+-        session,
+-      );
+-
+-      if (!refreshedSession.accessToken) {
+-        throw new Error("Google access token is missing after refresh.");
+-      }
+-
+-      const [account, calendars] = await Promise.all([
+-        fetchGoogleProfile(refreshedSession.accessToken),
+-        fetchAllCalendars(refreshedSession.accessToken),
+-      ]);
+-
+-      const eventLists = await Promise.all(
+-        calendars.map((calendar) =>
+-          fetchCalendarEvents(
+-            refreshedSession.accessToken!,
+-            calendar,
+-            expandedRange,
+-          ),
+-        ),
+-      );
+-
+-      const nextCache: SavedGoogleCache = {
+-        account,
+-        calendars,
+-        events: eventLists.flat(),
+-        lastSyncAt: new Date().toISOString(),
+-        lastSyncError: null,
+-        coverageStart: expandedRange.start,
+-        coverageEnd: expandedRange.end,
+-      };
+-      writeCache(context, nextCache);
+-      return buildSnapshot(context);
+-    } catch (error) {
+-      const cache = readCache(context);
+-      writeCache(context, {
+-        ...cache,
+-        lastSyncError:
+-          error instanceof Error ? error.message : "Google sync failed.",
+-      });
+-      return buildSnapshot(context);
+-    } finally {
+-      syncBusy = false;
+-      syncInFlight = null;
+-    }
+-  };
+-
+-  syncInFlight = run();
+-  return syncInFlight;
+-}
+-
+-export function registerGoogleCalendarIpc(getDataDir: () => string): void {
+-  const context: GoogleCalendarContext = {
+-    configPath: path.join(getDataDir(), "google-calendar", "oauth-config.json"),
+-    sessionPath: path.join(getDataDir(), "google-calendar", "session.json"),
+-    cachePath: path.join(getDataDir(), "google-calendar", "cache.json"),
+-  };
+-
+-  ipcMain.handle("google-calendar:getSnapshot", async () => buildSnapshot(context));
+-
+-  ipcMain.handle(
+-    "google-calendar:setConfig",
+-    async (_event, payload: { clientId?: string; clientSecret?: string }) => {
+-      const current = readSavedConfig(context);
+-      const clientId = payload.clientId?.trim() ?? "";
+-      const nextConfig: SavedGoogleConfig = {
+-        clientId,
+-        clientSecret:
+-          payload.clientSecret?.trim() ||
+-          (clientId && current.clientId === clientId ? current.clientSecret : null),
+-      };
+-
+-      writeSavedConfig(context, nextConfig);
+-      return buildSnapshot(context);
+-    },
+-  );
+-
+-  ipcMain.handle("google-calendar:signOut", async () => {
+-    writeSavedSession(context, {
+-      refreshToken: null,
+-      accessToken: null,
+-      accessTokenExpiresAt: null,
+-      scope: null,
+-      tokenType: null,
+-    });
+-    writeCache(context, EMPTY_CACHE);
+-    return buildSnapshot(context);
+-  });
+-
+-  ipcMain.handle("google-calendar:signIn", async () => {
+-    const resolvedConfig = getResolvedConfig(context);
+-    if (!resolvedConfig.clientId) {
+-      throw new Error("Google OAuth Client ID is not configured.");
+-    }
+-
+-    syncBusy = true;
+-    try {
+-      const auth = await startInteractiveAuth(
+-        resolvedConfig.clientId,
+-        resolvedConfig.clientSecret,
+-      );
+-      writeSavedSession(context, {
+-        refreshToken: auth.refreshToken,
+-        accessToken: auth.accessToken,
+-        accessTokenExpiresAt: auth.accessTokenExpiresAt,
+-        scope: auth.scope,
+-        tokenType: auth.tokenType,
+-      });
+-    } finally {
+-      syncBusy = false;
+-    }
+-
+-    return syncGoogleCalendar(context, defaultRefreshRange(), true);
+-  });
+-
+-  ipcMain.handle(
+-    "google-calendar:refresh",
+-    async (_event, range?: GoogleCalendarRange, force?: boolean) =>
+-      syncGoogleCalendar(context, range, force ?? false),
+-  );
+-}
+diff --git a/apps/delphi/ts/electron/main.ts b/apps/delphi/ts/electron/main.ts
+index da3c378..9696461 100644
+--- a/apps/delphi/ts/electron/main.ts
++++ b/apps/delphi/ts/electron/main.ts
+@@ -34,7 +34,6 @@ import {
+   type SidecarEvent,
+   type SyncEntityPayload,
+ } from './sidecar';
+-import { registerGoogleCalendarIpc } from './google-calendar';
+ 
+ /** WebSocket port used by the ark-core sync server. */
+ const LAN_SYNC_PORT = 21531;
+@@ -119,8 +118,10 @@ function getDataDir(): string {
+ }
+ 
+ const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+-const WINDOWS_TITLEBAR_BASE_HEIGHT = 36;
+ const WINDOWS_TITLEBAR_SYMBOL_COLOR = '#e5e7eb';
++const ZOOM_LEVEL_STEP = 0.5;
++const MIN_ZOOM_LEVEL = -3;
++const MAX_ZOOM_LEVEL = 3;
+ 
+ function loadWindowState(): { width: number; height: number; x?: number; y?: number; isMaximized?: boolean } {
+   try {
+@@ -142,15 +143,48 @@ function applyWindowsTitlebarOverlay(win: BrowserWindow) {
+     return;
+   }
+ 
+-  const zoomFactor = Math.max(0.5, Math.min(2, win.webContents.getZoomFactor() || 1));
+-
+   win.setTitleBarOverlay({
+     color: '#00000000',
+     symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+-    height: Math.round(WINDOWS_TITLEBAR_BASE_HEIGHT * zoomFactor),
+   });
+ }
+ 
++function clampZoomLevel(zoomLevel: number): number {
++  return Math.max(MIN_ZOOM_LEVEL, Math.min(MAX_ZOOM_LEVEL, zoomLevel));
++}
++
++function adjustWindowZoom(win: BrowserWindow, direction: 'in' | 'out' | 'reset'): void {
++  const { webContents } = win;
++  const currentZoomLevel = webContents.getZoomLevel();
++
++  if (direction === 'reset') {
++    webContents.setZoomLevel(0);
++    return;
++  }
++
++  const delta = direction === 'in' ? ZOOM_LEVEL_STEP : -ZOOM_LEVEL_STEP;
++  const nextZoomLevel = clampZoomLevel(currentZoomLevel + delta);
++
++  if (nextZoomLevel !== currentZoomLevel) {
++    webContents.setZoomLevel(nextZoomLevel);
++  }
++}
++
++function isZoomShortcut(input: Electron.Input): boolean {
++  if (input.type !== 'keyDown' || input.alt || !(input.control || input.meta)) {
++    return false;
++  }
++
++  return [
++    'Minus',
++    'Equal',
++    'NumpadAdd',
++    'NumpadSubtract',
++    'Digit0',
++    'Numpad0',
++  ].includes(input.code);
++}
++
+ function setupApplicationMenu(): void {
+   const template: MenuItemConstructorOptions[] = [];
+ 
+@@ -246,19 +280,18 @@ function createWindow() {
+     frame: !isWindows,
+     ...(isMac
+       ? {
+-          titleBarStyle: 'hiddenInset' as const,
+-          trafficLightPosition: { x: 18, y: 18 },
+-        }
++        titleBarStyle: 'hiddenInset' as const,
++        trafficLightPosition: { x: 18, y: 18 },
++      }
+       : {}),
+     ...(isWindows
+-        ? {
+-          titleBarStyle: 'hidden' as const,
+-          titleBarOverlay: {
+-            color: '#00000000',
+-            symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
+-            height: WINDOWS_TITLEBAR_BASE_HEIGHT,
+-          },
+-        }
++      ? {
++        titleBarStyle: 'hidden' as const,
++        titleBarOverlay: {
++          color: '#00000000',
++          symbolColor: WINDOWS_TITLEBAR_SYMBOL_COLOR,
++        },
++      }
+       : {}),
+     webPreferences: {
+       preload: path.join(__dirname, 'preload.mjs'),
+@@ -293,7 +326,28 @@ function createWindow() {
+     win.loadFile(path.join(__dirname, '../dist/index.html'));
+   }
+ 
+-  win.webContents.on('before-input-event', (_event, input) => {
++  win.webContents.on('before-input-event', (event, input) => {
++    if (isZoomShortcut(input)) {
++      event.preventDefault();
++
++      switch (input.code) {
++        case 'Minus':
++        case 'NumpadSubtract':
++          adjustWindowZoom(win, 'out');
++          return;
++        case 'Equal':
++        case 'NumpadAdd':
++          adjustWindowZoom(win, 'in');
++          return;
++        case 'Digit0':
++        case 'Numpad0':
++          adjustWindowZoom(win, 'reset');
++          return;
++        default:
++          return;
++      }
++    }
++
+     if (input.key === 'F12') {
+       win.webContents.toggleDevTools();
+     }
+@@ -346,7 +400,7 @@ function readSpacesFile(): { active: string | null; spaces: Array<{ code: string
+     if (fs.existsSync(spacesFile)) {
+       return JSON.parse(fs.readFileSync(spacesFile, 'utf-8'));
+     }
+-  } catch {}
++  } catch { }
+   return { active: null, spaces: [] };
+ }
+ 
+@@ -585,49 +639,49 @@ ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceI
+   }
+   syncStartRequest = { spaceId, deviceId };
+   syncStartInFlight = (async () => {
+-  currentDeviceId = deviceId;
+-  const name = getHostDeviceName();
+-  currentDeviceName = name;
+-  void deviceName;
+-
+-  // Stop any existing client before creating a new one.
+-  if (arkClient) {
+-    try { await arkClient.stop(); } catch { /* ignore */ }
+-    arkClient = null;
+-  }
++    currentDeviceId = deviceId;
++    const name = getHostDeviceName();
++    currentDeviceName = name;
++    void deviceName;
++
++    // Stop any existing client before creating a new one.
++    if (arkClient) {
++      try { await arkClient.stop(); } catch { /* ignore */ }
++      arkClient = null;
++    }
+ 
+-  // Create ArkClient wired to the existing sidecar (DB + sync share one process).
+-  arkClient = new ArkClient({
+-    spaceId,
+-    deviceId,
+-    deviceName: name,
+-    port: LAN_SYNC_PORT,
+-    // Inject the sidecar's request function so no second process is spawned.
+-    requestFn: <T>(req: Record<string, unknown>) => sidecar.request<T>(req as Parameters<typeof sidecar.request>[0]),
+-    onEventFn: (listener) => sidecar.onEvent(listener as Parameters<typeof sidecar.onEvent>[0]),
+-  });
++    // Create ArkClient wired to the existing sidecar (DB + sync share one process).
++    arkClient = new ArkClient({
++      spaceId,
++      deviceId,
++      deviceName: name,
++      port: LAN_SYNC_PORT,
++      // Inject the sidecar's request function so no second process is spawned.
++      requestFn: <T>(req: Record<string, unknown>) => sidecar.request<T>(req as Parameters<typeof sidecar.request>[0]),
++      onEventFn: (listener) => sidecar.onEvent(listener as Parameters<typeof sidecar.onEvent>[0]),
++    });
+ 
+-  // Seed peers are added after start via addSeedPeer.
+-  try {
+-    await arkClient.start();
+-    if (seedAddresses?.length) {
+-      await syncAddSeedPeer(seedAddresses);
++    // Seed peers are added after start via addSeedPeer.
++    try {
++      await arkClient.start();
++      if (seedAddresses?.length) {
++        await syncAddSeedPeer(seedAddresses);
++      }
++      syncActive = true;
++      currentSpaceId = spaceId;
++      syncPeerNames.clear();
++      console.log(`[Main] Sync started via ArkClient (device=${name})`);
++      return true;
++    } catch (err) {
++      console.error('[Main] start_sync via ArkClient failed:', err);
++      syncActive = false;
++      currentSpaceId = null;
++      arkClient = null;
++      return false;
++    } finally {
++      syncStartInFlight = null;
++      syncStartRequest = null;
+     }
+-    syncActive = true;
+-    currentSpaceId = spaceId;
+-    syncPeerNames.clear();
+-    console.log(`[Main] Sync started via ArkClient (device=${name})`);
+-    return true;
+-  } catch (err) {
+-    console.error('[Main] start_sync via ArkClient failed:', err);
+-    syncActive = false;
+-    currentSpaceId = null;
+-    arkClient = null;
+-    return false;
+-  } finally {
+-    syncStartInFlight = null;
+-    syncStartRequest = null;
+-  }
+   })();
+   return syncStartInFlight;
+ });
+@@ -750,8 +804,6 @@ ipcMain.handle('lan-sync:addSeedPeer', async (_e, addresses: string[]) => {
+   }
+ });
+ 
+-registerGoogleCalendarIpc(getDataDir);
+-
+ // --- App lifecycle ---
+ 
+ app.whenReady().then(async () => {
+@@ -767,7 +819,7 @@ app.on('window-all-closed', () => {
+ app.on('before-quit', () => {
+   // Best-effort: stop ArkClient and shut down the sidecar.
+   if (arkClient) {
+-    arkClient.stop().catch(() => {});
++    arkClient.stop().catch(() => { });
+     arkClient = null;
+   }
+   syncActive = false;
+diff --git a/apps/delphi/ts/src/components/calendar/CalendarMonthGrid.vue b/apps/delphi/ts/src/components/calendar/CalendarMonthGrid.vue
+index dd0af67..38ba79f 100644
+--- a/apps/delphi/ts/src/components/calendar/CalendarMonthGrid.vue
++++ b/apps/delphi/ts/src/components/calendar/CalendarMonthGrid.vue
+@@ -1,6 +1,6 @@
+ <script setup lang="ts">
+ import { computed } from "vue";
+-import type { CalendarSurfaceEntry } from "@/services/google-calendar/contracts";
++import type { CalendarSurfaceEntry } from "@/services/calendar/contracts";
+ import {
+   capitalize,
+   entryIntersectsDay,
+@@ -9,7 +9,7 @@ import {
+   startOfMonth,
+   toDayKey,
+   weekdayShortLabel,
+-} from "@/services/google-calendar/date";
++} from "@/services/calendar/date";
+ 
+ const props = defineProps<{
+   anchorDate: Date;
+@@ -44,7 +44,7 @@ function dayEntries(day: Date) {
+ 
+ function chipStyle(entry: CalendarSurfaceEntry) {
+   return {
+-    borderColor: entry.color ?? (entry.source === "task" ? "#2563eb" : "#16a34a"),
++    borderColor: entry.color ?? "#2563eb",
+   };
+ }
+ 
+diff --git a/apps/delphi/ts/src/components/calendar/CalendarShell.vue b/apps/delphi/ts/src/components/calendar/CalendarShell.vue
+index f7fab67..5db0c07 100644
+--- a/apps/delphi/ts/src/components/calendar/CalendarShell.vue
++++ b/apps/delphi/ts/src/components/calendar/CalendarShell.vue
+@@ -1,31 +1,22 @@
+ <script setup lang="ts">
+-import { computed, onMounted, shallowRef, watch } from "vue";
++import { computed } from "vue";
+ import { RouterLink } from "vue-router";
+-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-vue-next";
++import { ChevronLeft, ChevronRight } from "lucide-vue-next";
+ import { storeToRefs } from "pinia";
+ import CalendarMonthGrid from "@/components/calendar/CalendarMonthGrid.vue";
+ import CalendarTimeGrid from "@/components/calendar/CalendarTimeGrid.vue";
+ import { useSidebarState } from "@/composables/useSidebarState";
+ import { useTodoStore } from "@/store/todos";
+-import { useGoogleCalendar } from "@/composables/useGoogleCalendar";
+ import type {
+   CalendarSurfaceEntry,
+-  GoogleCalendarViewMode,
+-} from "@/services/google-calendar/contracts";
+-import { addDays, toDayKey } from "@/services/google-calendar/date";
++  CalendarViewMode,
++} from "@/services/calendar/contracts";
++import { addDays, toDayKey } from "@/services/calendar/date";
+ 
+ const props = defineProps<{
+-  viewMode: GoogleCalendarViewMode;
++  viewMode: CalendarViewMode;
+   anchorDate: Date;
+   visibleDays: Date[];
+-  visibleRange: {
+-    start: Date;
+-    end: Date;
+-    request: {
+-      start: string;
+-      end: string;
+-    };
+-  };
+   rangeLabel: string;
+ }>();
+ 
+@@ -38,8 +29,6 @@ const emit = defineEmits<{
+ const { wrapClass, wrapStyle } = useSidebarState();
+ const store = useTodoStore();
+ const { todos, projects } = storeToRefs(store);
+-const googleCalendar = useGoogleCalendar();
+-const initialLoadDone = shallowRef(false);
+ 
+ const projectTitles = computed(() => {
+   const map = new Map<string, string>();
+@@ -49,7 +38,7 @@ const projectTitles = computed(() => {
+   return map;
+ });
+ 
+-const taskEntries = computed<CalendarSurfaceEntry[]>(() => {
++const surfaceEntries = computed<CalendarSurfaceEntry[]>(() => {
+   const todayKey = toDayKey(new Date());
+ 
+   return todos.value
+@@ -59,7 +48,6 @@ const taskEntries = computed<CalendarSurfaceEntry[]>(() => {
+       const dayKey = todo.scheduledDate ?? todayKey;
+       return {
+         id: `task:${todo.id}`,
+-        source: "task" as const,
+         title: todo.title,
+         subtitle: todo.projectId ? projectTitles.value.get(todo.projectId) ?? null : null,
+         link: null,
+@@ -68,91 +56,11 @@ const taskEntries = computed<CalendarSurfaceEntry[]>(() => {
+         end: toDayKey(addDays(new Date(`${dayKey}T00:00:00`), 1)),
+         isAllDay: true,
+       };
+-    });
++    })
++    .toSorted((left, right) => left.title.localeCompare(right.title, "ru"));
+ });
+ 
+-const googleEntries = computed<CalendarSurfaceEntry[]>(() =>
+-  googleCalendar.events.value.map((event) => ({
+-    id: `google:${event.calendarId}:${event.id}`,
+-    source: "google" as const,
+-    title: event.title,
+-    subtitle: event.calendarSummary || event.location,
+-    link: event.htmlLink,
+-    color: event.color,
+-    start: event.start,
+-    end: event.end,
+-    isAllDay: event.isAllDay,
+-  })),
+-);
+-
+-const surfaceEntries = computed(() =>
+-  [...taskEntries.value, ...googleEntries.value].toSorted((left, right) =>
+-    left.title.localeCompare(right.title, "ru"),
+-  ),
+-);
+-
+-const connectionMessage = computed(() => {
+-  if (!googleCalendar.isSupported()) {
+-    return "Google Calendar доступен только в Electron-сборке.";
+-  }
+-
+-  if (!googleCalendar.status.value.configured) {
+-    return "Google OAuth не настроен в этой сборке.";
+-  }
+-
+-  if (!googleCalendar.status.value.connected) {
+-    return "Google Calendar не подключен. Войдите через OAuth в настройках.";
+-  }
+-
+-  if (googleCalendar.status.value.lastSyncError) {
+-    return googleCalendar.status.value.lastSyncError;
+-  }
+-
+-  if (googleCalendar.status.value.lastSyncAt) {
+-    return `Последняя синхронизация: ${new Date(
+-      googleCalendar.status.value.lastSyncAt,
+-    ).toLocaleString("ru-RU")}`;
+-  }
+-
+-  return "Календарь подключен.";
+-});
+-
+-async function refreshForVisibleRange() {
+-  if (!googleCalendar.status.value.connected) return;
+-  await googleCalendar.refresh(props.visibleRange.request, true);
+-}
+-
+-async function syncVisibleRangeIfNeeded() {
+-  if (!googleCalendar.status.value.connected) return;
+-  await googleCalendar.refresh(props.visibleRange.request);
+-}
+-
+-onMounted(async () => {
+-  await googleCalendar.load();
+-  initialLoadDone.value = true;
+-  if (googleCalendar.status.value.connected) {
+-    await syncVisibleRangeIfNeeded();
+-  }
+-});
+-
+-watch(
+-  () => [
+-    props.visibleRange.request.start,
+-    props.visibleRange.request.end,
+-    googleCalendar.status.value.connected,
+-  ],
+-  async ([start, end, connected], [prevStart, prevEnd, prevConnected]) => {
+-    if (!initialLoadDone.value || !connected) return;
+-    if (
+-      start === prevStart &&
+-      end === prevEnd &&
+-      connected === prevConnected
+-    ) {
+-      return;
+-    }
+-    await syncVisibleRangeIfNeeded();
+-  },
+-);
++const connectionMessage = "Показываются только локальные задачи Delphi.";
+ </script>
+ 
+ <template>
+@@ -195,19 +103,6 @@ watch(
+         </div>
+ 
+         <div class="flex items-center gap-2">
+-          <button
+-            type="button"
+-            class="inline-flex items-center gap-2 rounded-xl border border-(--border) px-3 py-2 text-sm font-medium text-(--foreground) transition-colors hover:bg-(--secondary)"
+-            :disabled="googleCalendar.loading.value"
+-            @click="refreshForVisibleRange"
+-          >
+-            <RefreshCw
+-              :size="15"
+-              :class="googleCalendar.loading.value ? 'animate-spin' : ''"
+-            />
+-            Обновить
+-          </button>
+-
+           <RouterLink
+             to="/settings"
+             class="rounded-xl border border-(--border) px-3 py-2 text-sm font-medium text-(--foreground) transition-colors hover:bg-(--secondary)"
+@@ -217,13 +112,6 @@ watch(
+         </div>
+       </div>
+ 
+-      <div
+-        v-if="!googleCalendar.status.value.configured"
+-        class="rounded-2xl border border-amber-500/30 bg-amber-500/8 px-5 py-4 text-sm text-(--foreground)"
+-      >
+-        В этой сборке Google OAuth не настроен. Когда конфиг встроен, здесь останется только вход через Google.
+-      </div>
+-
+       <component
+         :is="viewMode === 'month' ? CalendarMonthGrid : CalendarTimeGrid"
+         :anchor-date="anchorDate"
+diff --git a/apps/delphi/ts/src/components/calendar/CalendarTimeGrid.vue b/apps/delphi/ts/src/components/calendar/CalendarTimeGrid.vue
+index c564736..7869a72 100644
+--- a/apps/delphi/ts/src/components/calendar/CalendarTimeGrid.vue
++++ b/apps/delphi/ts/src/components/calendar/CalendarTimeGrid.vue
+@@ -1,6 +1,6 @@
+ <script setup lang="ts">
+ import { computed } from "vue";
+-import type { CalendarSurfaceEntry } from "@/services/google-calendar/contracts";
++import type { CalendarSurfaceEntry } from "@/services/calendar/contracts";
+ import {
+   DAY_MS,
+   addDays,
+@@ -11,7 +11,7 @@ import {
+   startOfDay,
+   toDayKey,
+   weekdayLongLabel,
+-} from "@/services/google-calendar/date";
++} from "@/services/calendar/date";
+ 
+ const props = defineProps<{
+   days: Date[];
+@@ -32,7 +32,7 @@ function formatHourLabel(hour: number): string {
+ }
+ 
+ function entryAccent(entry: CalendarSurfaceEntry): string | undefined {
+-  return entry.color ?? (entry.source === "task" ? "#2563eb" : "#16a34a");
++  return entry.color ?? "#2563eb";
+ }
+ 
+ const entriesByDay = computed(() => {
+diff --git a/apps/delphi/ts/src/components/calendar/CalendarViewSwitch.vue b/apps/delphi/ts/src/components/calendar/CalendarViewSwitch.vue
+index 73e365b..5d829f3 100644
+--- a/apps/delphi/ts/src/components/calendar/CalendarViewSwitch.vue
++++ b/apps/delphi/ts/src/components/calendar/CalendarViewSwitch.vue
+@@ -1,11 +1,11 @@
+ <script setup lang="ts">
+-import type { GoogleCalendarViewMode } from "@/services/google-calendar/contracts";
++import type { CalendarViewMode } from "@/services/calendar/contracts";
+ 
+-const viewMode = defineModel<GoogleCalendarViewMode>({
++const viewMode = defineModel<CalendarViewMode>({
+   required: true,
+ });
+ 
+-const options: Array<{ id: GoogleCalendarViewMode; label: string }> = [
++const options: Array<{ id: CalendarViewMode; label: string }> = [
+   { id: "day", label: "День" },
+   { id: "four-days", label: "4 дня" },
+   { id: "week", label: "Неделя" },
+diff --git a/apps/delphi/ts/src/composables/useCalendarState.ts b/apps/delphi/ts/src/composables/useCalendarState.ts
+index de6237d..d7293a4 100644
+--- a/apps/delphi/ts/src/composables/useCalendarState.ts
++++ b/apps/delphi/ts/src/composables/useCalendarState.ts
+@@ -3,16 +3,14 @@ import {
+   buildMonthGridDays,
+   buildVisibleDays,
+   formatRangeLabel,
+-  getVisibleRange,
+   shiftAnchorDate,
+   startOfDay,
+-  toRange,
+-} from "@/services/google-calendar/date";
+-import type { GoogleCalendarViewMode } from "@/services/google-calendar/contracts";
++} from "@/services/calendar/date";
++import type { CalendarViewMode } from "@/services/calendar/contracts";
+ 
+ const STORAGE_KEY = "delphi-calendar-view-mode";
+ 
+-function loadInitialViewMode(): GoogleCalendarViewMode {
++function loadInitialViewMode(): CalendarViewMode {
+   try {
+     const raw = localStorage.getItem(STORAGE_KEY);
+     if (
+@@ -30,7 +28,7 @@ function loadInitialViewMode(): GoogleCalendarViewMode {
+ }
+ 
+ export function useCalendarState() {
+-  const viewMode = shallowRef<GoogleCalendarViewMode>(loadInitialViewMode());
++  const viewMode = shallowRef<CalendarViewMode>(loadInitialViewMode());
+   const anchorDate = shallowRef(startOfDay(new Date()));
+ 
+   const visibleDays = computed(() =>
+@@ -39,19 +37,11 @@ export function useCalendarState() {
+       : buildVisibleDays(viewMode.value, anchorDate.value),
+   );
+ 
+-  const visibleRange = computed(() => {
+-    const range = getVisibleRange(viewMode.value, anchorDate.value);
+-    return {
+-      ...range,
+-      request: toRange(range.start, range.end),
+-    };
+-  });
+-
+   const rangeLabel = computed(() =>
+     formatRangeLabel(viewMode.value, anchorDate.value),
+   );
+ 
+-  function setViewMode(next: GoogleCalendarViewMode) {
++  function setViewMode(next: CalendarViewMode) {
+     viewMode.value = next;
+     try {
+       localStorage.setItem(STORAGE_KEY, next);
+@@ -80,7 +70,6 @@ export function useCalendarState() {
+     viewMode,
+     anchorDate,
+     visibleDays,
+-    visibleRange,
+     rangeLabel,
+     setViewMode,
+     goToday,
+diff --git a/apps/delphi/ts/src/composables/useGoogleCalendar.ts b/apps/delphi/ts/src/composables/useGoogleCalendar.ts
+deleted file mode 100644
+index deeecc0..0000000
+--- a/apps/delphi/ts/src/composables/useGoogleCalendar.ts
++++ /dev/null
+@@ -1,79 +0,0 @@
+-import { computed, readonly, shallowRef } from "vue";
+-import {
+-  connectGoogleCalendar,
+-  disconnectGoogleCalendar,
+-  getGoogleCalendarSnapshot,
+-  isGoogleCalendarSupported,
+-  refreshGoogleCalendar,
+-  saveGoogleCalendarConfig,
+-} from "@/services/google-calendar/electron";
+-import {
+-  EMPTY_GOOGLE_CALENDAR_SNAPSHOT,
+-  type GoogleCalendarRange,
+-} from "@/services/google-calendar/contracts";
+-
+-const snapshot = shallowRef(EMPTY_GOOGLE_CALENDAR_SNAPSHOT);
+-const loading = shallowRef(false);
+-const loadError = shallowRef<string | null>(null);
+-let inFlightLoad: Promise<typeof EMPTY_GOOGLE_CALENDAR_SNAPSHOT> | null = null;
+-
+-async function runAndStore(
+-  action: () => Promise<typeof EMPTY_GOOGLE_CALENDAR_SNAPSHOT>,
+-): Promise<typeof EMPTY_GOOGLE_CALENDAR_SNAPSHOT> {
+-  loading.value = true;
+-  loadError.value = null;
+-
+-  try {
+-    const next = await action();
+-    snapshot.value = next;
+-    return next;
+-  } catch (error) {
+-    loadError.value =
+-      error instanceof Error ? error.message : "Не удалось обновить календарь.";
+-    throw error;
+-  } finally {
+-    loading.value = false;
+-  }
+-}
+-
+-async function load() {
+-  if (!isGoogleCalendarSupported()) {
+-    snapshot.value = {
+-      ...EMPTY_GOOGLE_CALENDAR_SNAPSHOT,
+-      status: {
+-        ...EMPTY_GOOGLE_CALENDAR_SNAPSHOT.status,
+-        available: false,
+-      },
+-    };
+-    return;
+-  }
+-
+-  if (!inFlightLoad) {
+-    inFlightLoad = runAndStore(() => getGoogleCalendarSnapshot()).finally(() => {
+-      inFlightLoad = null;
+-    });
+-  }
+-
+-  return inFlightLoad;
+-}
+-
+-export function useGoogleCalendar() {
+-  return {
+-    snapshot: readonly(snapshot),
+-    status: computed(() => snapshot.value.status),
+-    account: computed(() => snapshot.value.account),
+-    calendars: computed(() => snapshot.value.calendars),
+-    events: computed(() => snapshot.value.events),
+-    config: computed(() => snapshot.value.config),
+-    loading: readonly(loading),
+-    loadError: readonly(loadError),
+-    isSupported: isGoogleCalendarSupported,
+-    load,
+-    saveConfig: (config: { clientId: string; clientSecret: string }) =>
+-      runAndStore(() => saveGoogleCalendarConfig(config)),
+-    connect: () => runAndStore(() => connectGoogleCalendar()),
+-    disconnect: () => runAndStore(() => disconnectGoogleCalendar()),
+-    refresh: (range?: GoogleCalendarRange, force = false) =>
+-      runAndStore(() => refreshGoogleCalendar(range, force)),
+-  };
+-}
+diff --git a/apps/delphi/ts/src/pages/CalendarPage.vue b/apps/delphi/ts/src/pages/CalendarPage.vue
+index ca83888..1e0670c 100644
+--- a/apps/delphi/ts/src/pages/CalendarPage.vue
++++ b/apps/delphi/ts/src/pages/CalendarPage.vue
+@@ -41,7 +41,6 @@ const calendarState = useCalendarState();
+       :view-mode="calendarState.viewMode.value"
+       :anchor-date="calendarState.anchorDate.value"
+       :visible-days="calendarState.visibleDays.value"
+-      :visible-range="calendarState.visibleRange.value"
+       :range-label="calendarState.rangeLabel.value"
+       @previous="calendarState.goPrevious"
+       @next="calendarState.goNext"
+diff --git a/apps/delphi/ts/src/pages/SettingsPage.vue b/apps/delphi/ts/src/pages/SettingsPage.vue
+index 18b5ec7..db2e217 100644
+--- a/apps/delphi/ts/src/pages/SettingsPage.vue
++++ b/apps/delphi/ts/src/pages/SettingsPage.vue
+@@ -1,14 +1,6 @@
+ <script setup lang="ts">
+-import { computed, onMounted, ref, shallowRef } from "vue";
+-import {
+-  CalendarDays,
+-  Globe,
+-  LogIn,
+-  LogOut,
+-  RefreshCw,
+-  SunMoon,
+-} from "lucide-vue-next";
+-import { useGoogleCalendar } from "@/composables/useGoogleCalendar";
++import { onMounted, ref, shallowRef } from "vue";
++import { Globe, SunMoon } from "lucide-vue-next";
+ import { useTheme } from "@/composables/useTheme";
+ import { useSidebarState } from "@/composables/useSidebarState";
+ import {
+@@ -23,13 +15,7 @@ import {
+ 
+ const { theme, setTheme } = useTheme();
+ const { wrapClass, wrapStyle } = useSidebarState();
+-const googleCalendar = useGoogleCalendar();
+-const googleActionError = shallowRef<string | null>(null);
+-const googleConfigMessage = shallowRef<string | null>(null);
+-const googleClientId = shallowRef("");
+-const googleClientSecret = shallowRef("");
+ 
+-// --- Space management ---
+ const spaces = ref<Space[]>([]);
+ const activeSpaceCode = shallowRef<string | null>(null);
+ const renamingCode = shallowRef<string | null>(null);
+@@ -64,138 +50,10 @@ async function confirmDeleteSpace() {
+   deletingCode.value = null;
+ }
+ 
+-function syncGoogleConfigForm() {
+-  if (googleCalendar.config.value.source === "env") {
+-    googleClientId.value = googleCalendar.config.value.clientId;
+-    googleClientSecret.value = "";
+-    return;
+-  }
+-
+-  googleClientId.value = googleCalendar.config.value.clientId;
+-  googleClientSecret.value = "";
+-}
+-
+ onMounted(async () => {
+   spaces.value = await getSpaces();
+   activeSpaceCode.value = await getActiveSpace();
+-  await googleCalendar.load();
+-  syncGoogleConfigForm();
+-});
+-
+-const googleStatusMessage = computed(() => {
+-  if (!googleCalendar.isSupported()) {
+-    return "Google Calendar доступен только в Electron.";
+-  }
+-
+-  if (!googleCalendar.status.value.configured) {
+-    return "Google OAuth не настроен в этой сборке.";
+-  }
+-
+-  if (googleCalendar.status.value.lastSyncError) {
+-    return googleCalendar.status.value.lastSyncError;
+-  }
+-
+-  if (googleCalendar.status.value.connected) {
+-    if (googleCalendar.status.value.lastSyncAt) {
+-      return `Последняя синхронизация: ${new Date(
+-        googleCalendar.status.value.lastSyncAt,
+-      ).toLocaleString("ru-RU")}`;
+-    }
+-    return "Аккаунт подключен.";
+-  }
+-
+-  return "Аккаунт не подключен.";
+-});
+-
+-const showGoogleConfigEditor = computed(
+-  () => googleCalendar.isSupported() && googleCalendar.config.value.source !== "env",
+-);
+-
+-const googleConfigHint = computed(() => {
+-  if (!googleCalendar.isSupported()) {
+-    return "Google Calendar доступен только в Electron.";
+-  }
+-
+-  if (googleCalendar.config.value.source === "env") {
+-    return "OAuth config приходит из переменных окружения этой сборки.";
+-  }
+-
+-  if (googleCalendar.config.value.hasClientSecret) {
+-    return "Client secret уже сохранён локально. Оставьте поле пустым, чтобы не менять его.";
+-  }
+-
+-  return "Укажите OAuth Client ID и при необходимости Client Secret для этой сборки.";
+ });
+-
+-async function handleSaveGoogleConfig() {
+-  googleActionError.value = null;
+-  googleConfigMessage.value = null;
+-
+-  try {
+-    if (!googleCalendar.isSupported()) {
+-      throw new Error("Google Calendar доступен только в Electron.");
+-    }
+-
+-    const clientId = googleClientId.value.trim();
+-    if (!clientId) {
+-      throw new Error("Нужен Google OAuth Client ID.");
+-    }
+-
+-    await googleCalendar.saveConfig({
+-      clientId,
+-      clientSecret: googleClientSecret.value.trim(),
+-    });
+-    syncGoogleConfigForm();
+-    googleConfigMessage.value = "Google OAuth config сохранён.";
+-  } catch (error) {
+-    googleActionError.value =
+-      error instanceof Error ? error.message : "Не удалось сохранить Google OAuth config.";
+-  }
+-}
+-
+-async function handleConnectGoogle() {
+-  googleActionError.value = null;
+-  googleConfigMessage.value = null;
+-  try {
+-    await googleCalendar.load();
+-    syncGoogleConfigForm();
+-
+-    if (!googleCalendar.isSupported()) {
+-      throw new Error("Google Calendar доступен только в Electron.");
+-    }
+-
+-    if (!googleCalendar.status.value.configured) {
+-      throw new Error("Сначала сохраните Google OAuth Client ID в настройках ниже.");
+-    }
+-
+-    await googleCalendar.connect();
+-  } catch (error) {
+-    googleActionError.value =
+-      error instanceof Error ? error.message : "Не удалось подключить Google Calendar.";
+-  }
+-}
+-
+-async function handleRefreshGoogle() {
+-  googleActionError.value = null;
+-  googleConfigMessage.value = null;
+-  try {
+-    await googleCalendar.refresh(undefined, true);
+-  } catch (error) {
+-    googleActionError.value =
+-      error instanceof Error ? error.message : "Не удалось обновить Google Calendar.";
+-  }
+-}
+-
+-async function handleDisconnectGoogle() {
+-  googleActionError.value = null;
+-  googleConfigMessage.value = null;
+-  try {
+-    await googleCalendar.disconnect();
+-  } catch (error) {
+-    googleActionError.value =
+-      error instanceof Error ? error.message : "Не удалось отвязать Google Calendar.";
+-  }
+-}
+ </script>
+ 
+ <template>
+@@ -204,7 +62,6 @@ async function handleDisconnectGoogle() {
+       :class="[wrapClass, 'flex flex-col gap-4 py-6']"
+       :style="wrapStyle"
+     >
+-      <!-- Spaces section -->
+       <section
+         class="bg-(--background) border-(--border) w-full rounded-xl border p-5"
+       >
+@@ -234,7 +91,6 @@ async function handleDisconnectGoogle() {
+                 : '',
+             ]"
+           >
+-            <!-- Delete confirmation -->
+             <template v-if="deletingCode === space.code">
+               <span class="text-xs text-rose-400"
+                 >Удалить пространство и все данные?</span
+@@ -254,14 +110,14 @@ async function handleDisconnectGoogle() {
+                 </button>
+               </div>
+             </template>
+-            <!-- Rename mode -->
++
+             <template v-else-if="renamingCode === space.code">
+               <input
+                 v-model="renameInput"
+                 class="border-(--border) bg-(--secondary) flex-1 rounded-md border px-2 py-1 text-sm outline-none focus:border-(--foreground)"
++                autofocus
+                 @keyup.enter="confirmRename"
+                 @keyup.escape="cancelRename"
+-                autofocus
+               />
+               <div class="ml-2 flex gap-1">
+                 <button
+@@ -278,7 +134,7 @@ async function handleDisconnectGoogle() {
+                 </button>
+               </div>
+             </template>
+-            <!-- Normal view -->
++
+             <template v-else>
+               <div class="flex-1">
+                 <div class="flex items-center gap-2">
+@@ -299,16 +155,16 @@ async function handleDisconnectGoogle() {
+               <div class="ml-2 flex gap-1">
+                 <button
+                   class="text-(--muted-foreground) rounded p-1.5 text-xs transition-colors hover:bg-(--muted) hover:text-(--foreground)"
+-                  @click="startRename(space)"
+                   title="Переименовать"
++                  @click="startRename(space)"
+                 >
+                   Переименовать
+                 </button>
+                 <button
+                   v-if="activeSpaceCode !== space.code"
+                   class="text-(--muted-foreground) rounded p-1.5 text-xs transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+-                  @click="deletingCode = space.code"
+                   title="Удалить"
++                  @click="deletingCode = space.code"
+                 >
+                   Удалить
+                 </button>
+@@ -318,143 +174,6 @@ async function handleDisconnectGoogle() {
+         </div>
+       </section>
+ 
+-      <section
+-        class="bg-(--background) border-(--border) w-full rounded-xl border p-5"
+-      >
+-        <h2 class="mb-3 inline-flex items-center gap-2 text-base font-semibold">
+-          <CalendarDays :size="16" />
+-          Google Calendar
+-        </h2>
+-        <p class="text-(--muted-foreground) mb-4 text-sm">
+-          Просто войдите через Google. Сессия и кэш календаря сохраняются локально и переживают перезапуск приложения.
+-        </p>
+-
+-        <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+-          <span
+-            class="rounded-full px-2.5 py-1"
+-            :class="
+-              googleCalendar.status.value.connected
+-                ? 'bg-emerald-500/10 text-emerald-500'
+-                : 'bg-(--secondary) text-(--muted-foreground)'
+-            "
+-          >
+-            {{
+-              googleCalendar.status.value.connected
+-                ? 'Подключено'
+-                : 'Не подключено'
+-            }}
+-          </span>
+-
+-          <span
+-            v-if="googleCalendar.account.value?.email"
+-            class="text-(--muted-foreground)"
+-          >
+-            {{ googleCalendar.account.value.email }}
+-          </span>
+-        </div>
+-
+-        <p class="text-(--muted-foreground) mt-3 text-sm">
+-          {{ googleStatusMessage }}
+-        </p>
+-
+-        <div class="mt-4 space-y-3">
+-          <div>
+-            <p class="text-(--muted-foreground) text-sm">
+-              {{ googleConfigHint }}
+-            </p>
+-          </div>
+-
+-          <template v-if="showGoogleConfigEditor">
+-            <div class="space-y-2">
+-              <label class="block text-sm font-medium">OAuth Client ID</label>
+-              <input
+-                v-model="googleClientId"
+-                class="border-(--border) bg-(--secondary) w-full rounded-md border px-3 py-2 text-sm"
+-                autocomplete="off"
+-                autocapitalize="off"
+-                spellcheck="false"
+-                placeholder="1234567890-abcdef.apps.googleusercontent.com"
+-              />
+-            </div>
+-
+-            <div class="space-y-2">
+-              <label class="block text-sm font-medium">
+-                OAuth Client Secret
+-              </label>
+-              <input
+-                v-model="googleClientSecret"
+-                class="border-(--border) bg-(--secondary) w-full rounded-md border px-3 py-2 text-sm"
+-                type="password"
+-                autocomplete="off"
+-                autocapitalize="off"
+-                spellcheck="false"
+-                :placeholder="
+-                  googleCalendar.config.value.hasClientSecret
+-                    ? 'Оставьте пустым, чтобы сохранить текущий secret'
+-                    : 'Опционально'
+-                "
+-              />
+-            </div>
+-
+-            <div class="flex flex-wrap items-center gap-2">
+-              <button
+-                type="button"
+-                class="bg-(--secondary) text-(--secondary-foreground) inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+-                :disabled="googleCalendar.loading.value"
+-                @click="handleSaveGoogleConfig"
+-              >
+-                Сохранить OAuth config
+-              </button>
+-              <p
+-                v-if="googleConfigMessage"
+-                class="text-sm text-emerald-500"
+-              >
+-                {{ googleConfigMessage }}
+-              </p>
+-            </div>
+-          </template>
+-        </div>
+-
+-        <p v-if="googleActionError" class="mt-2 text-sm text-rose-400">
+-          {{ googleActionError }}
+-        </p>
+-
+-        <div class="mt-4 flex flex-wrap items-center gap-2">
+-          <button
+-            type="button"
+-            class="bg-(--primary) text-(--primary-foreground) inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+-            :disabled="googleCalendar.loading.value"
+-            @click="handleConnectGoogle"
+-          >
+-            <LogIn :size="16" />
+-            Войти через Google
+-          </button>
+-
+-          <button
+-            type="button"
+-            class="bg-(--secondary) text-(--secondary-foreground) inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+-            :disabled="googleCalendar.loading.value || !googleCalendar.status.value.connected"
+-            @click="handleRefreshGoogle"
+-          >
+-            <RefreshCw
+-              :size="16"
+-              :class="googleCalendar.loading.value ? 'animate-spin' : ''"
+-            />
+-            Обновить кэш
+-          </button>
+-
+-          <button
+-            type="button"
+-            class="text-(--destructive) inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm"
+-            :disabled="googleCalendar.loading.value || !googleCalendar.status.value.connected"
+-            @click="handleDisconnectGoogle"
+-          >
+-            <LogOut :size="16" />
+-            Выйти
+-          </button>
+-        </div>
+-      </section>
+-
+       <section
+         class="bg-(--background) border-(--border) w-full rounded-xl border p-5"
+       >
+diff --git a/apps/delphi/ts/src/services/google-calendar/cache.test.ts b/apps/delphi/ts/src/services/google-calendar/cache.test.ts
+deleted file mode 100644
+index 7f4f2c4..0000000
+--- a/apps/delphi/ts/src/services/google-calendar/cache.test.ts
++++ /dev/null
+@@ -1,45 +0,0 @@
+-import {
+-  expandRequestedRange,
+-  isRangeCovered,
+-  shouldRefreshCoverage,
+-} from "@/services/google-calendar/cache";
+-
+-describe("google calendar cache coverage", () => {
+-  it("detects when a requested range is already covered", () => {
+-    expect(
+-      isRangeCovered(
+-        "2026-04-01T00:00:00.000Z",
+-        "2026-05-01T00:00:00.000Z",
+-        "2026-04-10T00:00:00.000Z",
+-        "2026-04-20T00:00:00.000Z",
+-      ),
+-    ).toBe(true);
+-  });
+-
+-  it("expands requests to add padding around the visible range", () => {
+-    expect(
+-      expandRequestedRange(
+-        "2026-04-10T00:00:00.000Z",
+-        "2026-04-20T00:00:00.000Z",
+-        7,
+-      ),
+-    ).toEqual({
+-      start: "2026-04-03T00:00:00.000Z",
+-      end: "2026-04-27T00:00:00.000Z",
+-    });
+-  });
+-
+-  it("requests refresh when cache is stale even if range is covered", () => {
+-    expect(
+-      shouldRefreshCoverage({
+-        coverageStart: "2026-04-01T00:00:00.000Z",
+-        coverageEnd: "2026-05-01T00:00:00.000Z",
+-        requestedStart: "2026-04-10T00:00:00.000Z",
+-        requestedEnd: "2026-04-20T00:00:00.000Z",
+-        lastSyncAt: "2026-04-10T08:00:00.000Z",
+-        now: Date.parse("2026-04-10T08:16:00.000Z"),
+-        staleAfterMs: 15 * 60 * 1000,
+-      }),
+-    ).toBe(true);
+-  });
+-});
+diff --git a/apps/delphi/ts/src/services/google-calendar/cache.ts b/apps/delphi/ts/src/services/google-calendar/cache.ts
+deleted file mode 100644
+index bdde4d3..0000000
+--- a/apps/delphi/ts/src/services/google-calendar/cache.ts
++++ /dev/null
+@@ -1,60 +0,0 @@
+-type CoverageRange = {
+-  coverageStart: string | null;
+-  coverageEnd: string | null;
+-  lastSyncAt: string | null;
+-};
+-
+-type RefreshDecisionArgs = CoverageRange & {
+-  requestedStart: string;
+-  requestedEnd: string;
+-  now?: number;
+-  staleAfterMs?: number;
+-};
+-
+-export function isRangeCovered(
+-  coverageStart: string | null,
+-  coverageEnd: string | null,
+-  requestedStart: string,
+-  requestedEnd: string,
+-): boolean {
+-  if (!coverageStart || !coverageEnd) return false;
+-  return coverageStart <= requestedStart && coverageEnd >= requestedEnd;
+-}
+-
+-export function expandRequestedRange(
+-  requestedStart: string,
+-  requestedEnd: string,
+-  paddingDays = 14,
+-) {
+-  const start = new Date(requestedStart);
+-  const end = new Date(requestedEnd);
+-
+-  start.setDate(start.getDate() - paddingDays);
+-  end.setDate(end.getDate() + paddingDays);
+-
+-  return {
+-    start: start.toISOString(),
+-    end: end.toISOString(),
+-  };
+-}
+-
+-export function shouldRefreshCoverage({
+-  coverageStart,
+-  coverageEnd,
+-  requestedStart,
+-  requestedEnd,
+-  lastSyncAt,
+-  now = Date.now(),
+-  staleAfterMs = 15 * 60 * 1000,
+-}: RefreshDecisionArgs): boolean {
+-  if (!isRangeCovered(coverageStart, coverageEnd, requestedStart, requestedEnd)) {
+-    return true;
+-  }
+-
+-  if (!lastSyncAt) return true;
+-
+-  const syncedAt = Date.parse(lastSyncAt);
+-  if (!Number.isFinite(syncedAt)) return true;
+-
+-  return now - syncedAt > staleAfterMs;
+-}
+diff --git a/apps/delphi/ts/src/services/google-calendar/contracts.ts b/apps/delphi/ts/src/services/google-calendar/contracts.ts
+deleted file mode 100644
+index b117959..0000000
+--- a/apps/delphi/ts/src/services/google-calendar/contracts.ts
++++ /dev/null
+@@ -1,99 +0,0 @@
+-export type GoogleCalendarViewMode = "day" | "four-days" | "week" | "month";
+-
+-export type GoogleCalendarRange = {
+-  start: string;
+-  end: string;
+-};
+-
+-export type GoogleCalendarConfigSource = "none" | "saved" | "env";
+-
+-export type GoogleCalendarConfigState = {
+-  clientId: string;
+-  hasClientSecret: boolean;
+-  source: GoogleCalendarConfigSource;
+-};
+-
+-export type GoogleCalendarAccount = {
+-  email: string;
+-  name: string | null;
+-  pictureUrl: string | null;
+-};
+-
+-export type GoogleCalendarStatus = {
+-  available: boolean;
+-  configured: boolean;
+-  connected: boolean;
+-  syncing: boolean;
+-  accountEmail: string | null;
+-  lastSyncAt: string | null;
+-  lastSyncError: string | null;
+-  coverageStart: string | null;
+-  coverageEnd: string | null;
+-};
+-
+-export type GoogleCalendarCalendar = {
+-  id: string;
+-  summary: string;
+-  primary: boolean;
+-  selected: boolean;
+-  accessRole: string | null;
+-  backgroundColor: string | null;
+-  foregroundColor: string | null;
+-};
+-
+-export type GoogleCalendarEvent = {
+-  id: string;
+-  calendarId: string;
+-  calendarSummary: string;
+-  title: string;
+-  description: string | null;
+-  location: string | null;
+-  status: string;
+-  htmlLink: string | null;
+-  start: string;
+-  end: string;
+-  isAllDay: boolean;
+-  color: string | null;
+-};
+-
+-export type GoogleCalendarSnapshot = {
+-  config: GoogleCalendarConfigState;
+-  account: GoogleCalendarAccount | null;
+-  status: GoogleCalendarStatus;
+-  calendars: GoogleCalendarCalendar[];
+-  events: GoogleCalendarEvent[];
+-};
+-
+-export type CalendarSurfaceEntry = {
+-  id: string;
+-  source: "task" | "google";
+-  title: string;
+-  subtitle: string | null;
+-  link: string | null;
+-  color: string | null;
+-  start: string;
+-  end: string;
+-  isAllDay: boolean;
+-};
+-
+-export const EMPTY_GOOGLE_CALENDAR_SNAPSHOT: GoogleCalendarSnapshot = {
+-  config: {
+-    clientId: "",
+-    hasClientSecret: false,
+-    source: "none",
+-  },
+-  account: null,
+-  status: {
+-    available: false,
+-    configured: false,
+-    connected: false,
+-    syncing: false,
+-    accountEmail: null,
+-    lastSyncAt: null,
+-    lastSyncError: null,
+-    coverageStart: null,
+-    coverageEnd: null,
+-  },
+-  calendars: [],
+-  events: [],
+-};
+diff --git a/apps/delphi/ts/src/services/google-calendar/date.ts b/apps/delphi/ts/src/services/google-calendar/date.ts
+deleted file mode 100644
+index 3991a24..0000000
+--- a/apps/delphi/ts/src/services/google-calendar/date.ts
++++ /dev/null
+@@ -1,205 +0,0 @@
+-import type {
+-  CalendarSurfaceEntry,
+-  GoogleCalendarRange,
+-  GoogleCalendarViewMode,
+-} from "@/services/google-calendar/contracts";
+-
+-export const DAY_MS = 24 * 60 * 60 * 1000;
+-
+-const weekdayLongFormatter = new Intl.DateTimeFormat("ru-RU", {
+-  weekday: "long",
+-});
+-const weekdayShortFormatter = new Intl.DateTimeFormat("ru-RU", {
+-  weekday: "short",
+-});
+-const monthDayFormatter = new Intl.DateTimeFormat("ru-RU", {
+-  day: "numeric",
+-  month: "short",
+-});
+-const monthFormatter = new Intl.DateTimeFormat("ru-RU", {
+-  month: "long",
+-  year: "numeric",
+-});
+-const dayFormatter = new Intl.DateTimeFormat("ru-RU", {
+-  day: "numeric",
+-  month: "long",
+-  year: "numeric",
+-});
+-const timeFormatter = new Intl.DateTimeFormat("ru-RU", {
+-  hour: "2-digit",
+-  minute: "2-digit",
+-});
+-
+-export function startOfDay(date: Date): Date {
+-  const next = new Date(date);
+-  next.setHours(0, 0, 0, 0);
+-  return next;
+-}
+-
+-export function addDays(date: Date, days: number): Date {
+-  const next = new Date(date);
+-  next.setDate(next.getDate() + days);
+-  return next;
+-}
+-
+-export function startOfWeek(date: Date): Date {
+-  const next = startOfDay(date);
+-  const day = next.getDay();
+-  const mondayOffset = day === 0 ? -6 : 1 - day;
+-  next.setDate(next.getDate() + mondayOffset);
+-  return next;
+-}
+-
+-export function startOfMonth(date: Date): Date {
+-  return new Date(date.getFullYear(), date.getMonth(), 1);
+-}
+-
+-export function endOfMonth(date: Date): Date {
+-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
+-}
+-
+-export function toDayKey(date: Date): string {
+-  const year = date.getFullYear();
+-  const month = String(date.getMonth() + 1).padStart(2, "0");
+-  const day = String(date.getDate()).padStart(2, "0");
+-  return `${year}-${month}-${day}`;
+-}
+-
+-export function fromDayKey(dayKey: string): Date {
+-  const [year, month, day] = dayKey.split("-").map(Number);
+-  return new Date(year, month - 1, day);
+-}
+-
+-export function toRange(rangeStart: Date, rangeEndExclusive: Date): GoogleCalendarRange {
+-  return {
+-    start: rangeStart.toISOString(),
+-    end: rangeEndExclusive.toISOString(),
+-  };
+-}
+-
+-export function buildVisibleDays(
+-  viewMode: Exclude<GoogleCalendarViewMode, "month">,
+-  anchorDate: Date,
+-): Date[] {
+-  if (viewMode === "day") {
+-    return [startOfDay(anchorDate)];
+-  }
+-
+-  if (viewMode === "four-days") {
+-    const start = startOfDay(anchorDate);
+-    return Array.from({ length: 4 }, (_, index) => addDays(start, index));
+-  }
+-
+-  const start = startOfWeek(anchorDate);
+-  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+-}
+-
+-export function buildMonthGridDays(anchorDate: Date): Date[] {
+-  const monthStart = startOfMonth(anchorDate);
+-  const gridStart = startOfWeek(monthStart);
+-  return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
+-}
+-
+-export function getVisibleRange(viewMode: GoogleCalendarViewMode, anchorDate: Date) {
+-  if (viewMode === "month") {
+-    const days = buildMonthGridDays(anchorDate);
+-    return {
+-      start: startOfDay(days[0]),
+-      end: startOfDay(addDays(days[days.length - 1], 1)),
+-    };
+-  }
+-
+-  const days = buildVisibleDays(viewMode, anchorDate);
+-  return {
+-    start: startOfDay(days[0]),
+-    end: startOfDay(addDays(days[days.length - 1], 1)),
+-  };
+-}
+-
+-export function shiftAnchorDate(
+-  anchorDate: Date,
+-  viewMode: GoogleCalendarViewMode,
+-  direction: -1 | 1,
+-): Date {
+-  if (viewMode === "day") return addDays(anchorDate, direction);
+-  if (viewMode === "four-days") return addDays(anchorDate, direction * 4);
+-  if (viewMode === "week") return addDays(anchorDate, direction * 7);
+-  return new Date(anchorDate.getFullYear(), anchorDate.getMonth() + direction, 1);
+-}
+-
+-export function formatRangeLabel(viewMode: GoogleCalendarViewMode, anchorDate: Date): string {
+-  if (viewMode === "month") {
+-    return capitalize(monthFormatter.format(anchorDate));
+-  }
+-
+-  if (viewMode === "day") {
+-    return capitalize(dayFormatter.format(anchorDate));
+-  }
+-
+-  const days = buildVisibleDays(viewMode, anchorDate);
+-  const first = days[0];
+-  const last = days[days.length - 1];
+-
+-  if (first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear()) {
+-    return `${monthDayFormatter.format(first)} - ${last.getDate()} ${capitalize(monthFormatter.format(last).split(" ")[0] ?? "")}`;
+-  }
+-
+-  return `${monthDayFormatter.format(first)} - ${monthDayFormatter.format(last)}`;
+-}
+-
+-export function weekdayShortLabel(date: Date): string {
+-  return capitalize(weekdayShortFormatter.format(date));
+-}
+-
+-export function weekdayLongLabel(date: Date): string {
+-  return capitalize(weekdayLongFormatter.format(date));
+-}
+-
+-export function isSameDay(left: Date, right: Date): boolean {
+-  return toDayKey(left) === toDayKey(right);
+-}
+-
+-export function parseEntryBoundary(value: string, isAllDay: boolean): Date {
+-  if (!isAllDay) {
+-    return new Date(value);
+-  }
+-  return fromDayKey(value);
+-}
+-
+-export function entryIntersectsDay(entry: CalendarSurfaceEntry, day: Date): boolean {
+-  const dayStart = startOfDay(day);
+-  const dayEnd = addDays(dayStart, 1);
+-  const entryStart = parseEntryBoundary(entry.start, entry.isAllDay);
+-  const entryEnd = parseEntryBoundary(entry.end, entry.isAllDay);
+-  return entryStart < dayEnd && entryEnd > dayStart;
+-}
+-
+-export function getEntryDaySpan(entry: CalendarSurfaceEntry, day: Date) {
+-  const dayStart = startOfDay(day);
+-  const dayEnd = addDays(dayStart, 1);
+-  const entryStart = parseEntryBoundary(entry.start, entry.isAllDay);
+-  const entryEnd = parseEntryBoundary(entry.end, entry.isAllDay);
+-  return {
+-    start: new Date(Math.max(entryStart.getTime(), dayStart.getTime())),
+-    end: new Date(Math.min(entryEnd.getTime(), dayEnd.getTime())),
+-  };
+-}
+-
+-export function formatEntryTime(entry: CalendarSurfaceEntry, day?: Date): string {
+-  if (entry.isAllDay) return "Весь день";
+-
+-  const start = new Date(entry.start);
+-  const end = new Date(entry.end);
+-
+-  if (!day) {
+-    return `${timeFormatter.format(start)} - ${timeFormatter.format(end)}`;
+-  }
+-
+-  const span = getEntryDaySpan(entry, day);
+-  return `${timeFormatter.format(span.start)} - ${timeFormatter.format(span.end)}`;
+-}
+-
+-export function capitalize(value: string): string {
+-  if (!value) return value;
+-  return value.charAt(0).toUpperCase() + value.slice(1);
+-}
+diff --git a/apps/delphi/ts/src/services/google-calendar/electron.ts b/apps/delphi/ts/src/services/google-calendar/electron.ts
+deleted file mode 100644
+index e45c023..0000000
+--- a/apps/delphi/ts/src/services/google-calendar/electron.ts
++++ /dev/null
+@@ -1,42 +0,0 @@
+-import type {
+-  GoogleCalendarRange,
+-  GoogleCalendarSnapshot,
+-} from "@/services/google-calendar/contracts";
+-
+-function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
+-  if (!window.electronAPI?.invoke) {
+-    throw new Error("Google Calendar integration is available only in Electron.");
+-  }
+-
+-  return window.electronAPI.invoke(channel, ...args) as Promise<T>;
+-}
+-
+-export function isGoogleCalendarSupported(): boolean {
+-  return Boolean(window.electronAPI?.invoke);
+-}
+-
+-export async function getGoogleCalendarSnapshot(): Promise<GoogleCalendarSnapshot> {
+-  return invoke<GoogleCalendarSnapshot>("google-calendar:getSnapshot");
+-}
+-
+-export async function saveGoogleCalendarConfig(config: {
+-  clientId: string;
+-  clientSecret: string;
+-}): Promise<GoogleCalendarSnapshot> {
+-  return invoke<GoogleCalendarSnapshot>("google-calendar:setConfig", config);
+-}
+-
+-export async function connectGoogleCalendar(): Promise<GoogleCalendarSnapshot> {
+-  return invoke<GoogleCalendarSnapshot>("google-calendar:signIn");
+-}
+-
+-export async function disconnectGoogleCalendar(): Promise<GoogleCalendarSnapshot> {
+-  return invoke<GoogleCalendarSnapshot>("google-calendar:signOut");
+-}
+-
+-export async function refreshGoogleCalendar(
+-  range?: GoogleCalendarRange,
+-  force = false,
+-): Promise<GoogleCalendarSnapshot> {
+-  return invoke<GoogleCalendarSnapshot>("google-calendar:refresh", range, force);
+-}
+diff --git a/apps/delphi/ts/src/services/google-calendar/session.test.ts b/apps/delphi/ts/src/services/google-calendar/session.test.ts
+deleted file mode 100644
+index 3554f35..0000000
+--- a/apps/delphi/ts/src/services/google-calendar/session.test.ts
++++ /dev/null
+@@ -1,33 +0,0 @@
+-import {
+-  canRestoreGoogleSession,
+-  isAccessTokenExpired,
+-  TOKEN_REFRESH_SKEW_MS,
+-} from "@/services/google-calendar/session";
+-
+-describe("google calendar session helpers", () => {
+-  it("treats tokens near expiry as expired to leave refresh headroom", () => {
+-    expect(
+-      isAccessTokenExpired(
+-        "2026-04-10T10:01:00.000Z",
+-        Date.parse("2026-04-10T10:00:30.000Z"),
+-        TOKEN_REFRESH_SKEW_MS,
+-      ),
+-    ).toBe(true);
+-  });
+-
+-  it("accepts active sessions only when both refresh token and client id exist", () => {
+-    expect(
+-      canRestoreGoogleSession({
+-        refreshToken: "refresh-token",
+-        clientId: "client-id",
+-      }),
+-    ).toBe(true);
+-
+-    expect(
+-      canRestoreGoogleSession({
+-        refreshToken: "refresh-token",
+-        clientId: "",
+-      }),
+-    ).toBe(false);
+-  });
+-});
+diff --git a/apps/delphi/ts/src/services/google-calendar/session.ts b/apps/delphi/ts/src/services/google-calendar/session.ts
+deleted file mode 100644
+index 1ccdc89..0000000
+--- a/apps/delphi/ts/src/services/google-calendar/session.ts
++++ /dev/null
+@@ -1,19 +0,0 @@
+-export const TOKEN_REFRESH_SKEW_MS = 60_000;
+-
+-export function isAccessTokenExpired(
+-  expiresAt: string | null | undefined,
+-  now = Date.now(),
+-  skewMs = TOKEN_REFRESH_SKEW_MS,
+-): boolean {
+-  if (!expiresAt) return true;
+-  const expiry = Date.parse(expiresAt);
+-  if (!Number.isFinite(expiry)) return true;
+-  return expiry - skewMs <= now;
+-}
+-
+-export function canRestoreGoogleSession(params: {
+-  refreshToken?: string | null;
+-  clientId?: string | null;
+-}): boolean {
+-  return Boolean(params.refreshToken?.trim() && params.clientId?.trim());
+-}

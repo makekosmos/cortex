@@ -143,21 +143,47 @@ const draggingId = shallowRef<string | null>(null);
 const overColDate = shallowRef<string | null>(null);
 const overCardId = shallowRef<string | null>(null);
 const dropAfterCard = shallowRef(false);
+const dragPlaceholderHeight = shallowRef<number | null>(null);
+let dragPreviewEl: HTMLElement | null = null;
 
-function onCardDragStart(todoId: string, e: DragEvent) {
+function onCardDragStart(todoId: string, colDateStr: string, e: DragEvent) {
+  const dragSource = e.currentTarget as HTMLElement | null;
   draggingId.value = todoId;
+  overColDate.value = colDateStr;
+  overCardId.value = todoId;
+  dropAfterCard.value = false;
   e.dataTransfer!.effectAllowed = "move";
   e.dataTransfer!.setData("text/plain", todoId);
-  // Defer opacity so the ghost captures the full card
-  requestAnimationFrame(() => {
-    draggingId.value = todoId;
-  });
+
+  if (dragSource) {
+    const rect = dragSource.getBoundingClientRect();
+    dragPlaceholderHeight.value = rect.height;
+    dragPreviewEl = dragSource.cloneNode(true) as HTMLElement;
+    Object.assign(dragPreviewEl.style, {
+      position: "fixed",
+      top: "-10000px",
+      left: "-10000px",
+      width: `${rect.width}px`,
+      pointerEvents: "none",
+      margin: "0",
+      transform: "rotate(2.5deg)",
+    });
+    document.body.appendChild(dragPreviewEl);
+    e.dataTransfer!.setDragImage(
+      dragPreviewEl,
+      e.clientX - rect.left,
+      e.clientY - rect.top,
+    );
+  }
 }
 
 function onCardDragEnd() {
   draggingId.value = null;
   overColDate.value = null;
   overCardId.value = null;
+  dragPlaceholderHeight.value = null;
+  dragPreviewEl?.remove();
+  dragPreviewEl = null;
 }
 
 function onColDragOver(colDateStr: string, e: DragEvent) {
@@ -317,20 +343,18 @@ function onColDrop(col: DayColumn, e: DragEvent) {
                   overCardId === todo.id &&
                   !dropAfterCard
                 "
-                class="mx-1 h-0.5 rounded-full bg-blue-500/70"
+                class="mx-1 rounded-lg border border-dashed border-(--ring)/70 bg-(--secondary)/60"
+                :style="{ height: `${dragPlaceholderHeight ?? 0}px` }"
               />
 
               <!-- Task card -->
               <div
+                v-if="draggingId !== todo.id"
                 :data-card-id="todo.id"
                 draggable="true"
                 class="group rounded-lg bg-(--background) p-2.5 transition-all"
-                :class="[
-                  draggingId === todo.id
-                    ? 'opacity-40 scale-95'
-                    : 'cursor-grab hover:shadow-sm active:cursor-grabbing',
-                ]"
-                @dragstart="onCardDragStart(todo.id, $event)"
+                :class="'cursor-grab hover:shadow-sm active:cursor-grabbing'"
+                @dragstart="onCardDragStart(todo.id, col.dateStr, $event)"
                 @dragend="onCardDragEnd"
               >
                 <div class="flex items-start gap-2">
@@ -388,14 +412,16 @@ function onColDrop(col: DayColumn, e: DragEvent) {
                   overCardId === todo.id &&
                   dropAfterCard
                 "
-                class="mx-1 h-0.5 rounded-full bg-blue-500/70"
+                class="mx-1 rounded-lg border border-dashed border-(--ring)/70 bg-(--secondary)/60"
+                :style="{ height: `${dragPlaceholderHeight ?? 0}px` }"
               />
             </template>
 
             <!-- Drop indicator at end when column is empty or no card hovered -->
             <div
               v-if="overColDate === col.dateStr && !overCardId"
-              class="mx-1 h-0.5 rounded-full bg-blue-500/70"
+              class="mx-1 rounded-lg border border-dashed border-(--ring)/70 bg-(--secondary)/60"
+              :style="{ height: `${dragPlaceholderHeight ?? 0}px` }"
             />
           </div>
         </div>

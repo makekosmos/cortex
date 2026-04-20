@@ -1,0 +1,72 @@
+{
+  "task_id": "2026-04-20-arrancador-ark-game-sync",
+  "status": "PASS",
+  "verification": [
+    {
+      "command": "apps/arrancador/node_modules/.bin/tsc.cmd --noEmit",
+      "result": "PASS",
+      "raw_artifact": ".agent/tasks/2026-04-20-arrancador-ark-game-sync/raw/typecheck.txt"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/db/database.ts:8",
+        "apps/arrancador/electron/main/db/database.ts:187"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/services/ark-game-objects.ts:341",
+        "apps/arrancador/electron/main/services/ark-usage.ts:219"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/services/games.ts:338",
+        "apps/arrancador/electron/main/backend.ts:265"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/backend.ts",
+        "apps/arrancador/electron/main/db/database.ts",
+        "apps/arrancador/electron/main/services/ark-game-objects.ts",
+        "apps/arrancador/electron/main/services/ark-usage.ts",
+        "apps/arrancador/electron/main/services/games.ts",
+        "apps/arrancador/electron/main/services/games/types.ts",
+        "apps/arrancador/electron/main/helpers/shared.ts"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-20-arrancador-ark-game-sync/evidence.md"
+      ]
+    }
+  ],
+  "changed_files": [
+    "apps/arrancador/electron/main/backend.ts",
+    "apps/arrancador/electron/main/db/database.ts",
+    "apps/arrancador/electron/main/helpers/shared.ts",
+    "apps/arrancador/electron/main/services/ark-game-objects.ts",
+    "apps/arrancador/electron/main/services/ark-usage.ts",
+    "apps/arrancador/electron/main/services/games.ts",
+    "apps/arrancador/electron/main/services/games/types.ts"
+  ],
+  "unresolved_issues": [
+    "Existing games are not bulk-backfilled with persisted ark_object_id; ids are stored on later Arrancador writes.",
+    "Deleting a game locally does not soft-delete the linked Ark object.",
+    "Arrancador does not read remote exe_path changes from Ark to avoid machine-specific launch regressions.",
+    "Ark game object sync bypasses ark-core-rpc and depends on current SQLite schema stability."
+  ]
+}

@@ -139,7 +139,7 @@
         type="button"
         @click="emit('openEntry', entry.id)"
       >
-        <span>{{ entry.title || "Без названия" }}</span>
+        <span>{{ getEntryDisplayTitle(entry.title, entry.header_props_json) }}</span>
         <span>{{ entry.type_id ? "С объектным свойством" : "Обычная заметка" }}</span>
         <time>{{ formatDate(entry.updated_at) }}</time>
       </button>
@@ -252,6 +252,7 @@
 import { computed, h } from "vue";
 import type { SpaceId } from "@/components/sidebar/types";
 import { sortEntries, type SortMode } from "@/components/sidebar/types";
+import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { SYSTEM_TYPE_WORKOUT_ID, SYSTEM_TYPE_EXERCISE_ID } from "@/lib/systemTypes";
 
 // Inline empty-block helper using render function (no runtime compiler needed)
@@ -309,7 +310,7 @@ const allObjects = computed(() =>
       const noteType = entry.type_id ? props.noteTypes.find((nt) => nt.id === entry.type_id) : null;
       return {
         id: entry.id,
-        title: entry.title || "Без названия",
+        title: getEntryDisplayTitle(entry.title, entry.header_props_json),
         subtitle: noteType?.name ?? "Страница",
         updatedAt: entry.updated_at,
       };

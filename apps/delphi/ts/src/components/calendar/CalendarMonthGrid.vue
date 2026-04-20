@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { CalendarSurfaceEntry } from "@/services/google-calendar/contracts";
+import type { CalendarSurfaceEntry } from "@/services/calendar/contracts";
 import {
   capitalize,
   entryIntersectsDay,
@@ -9,7 +9,7 @@ import {
   startOfMonth,
   toDayKey,
   weekdayShortLabel,
-} from "@/services/google-calendar/date";
+} from "@/services/calendar/date";
 
 const props = defineProps<{
   anchorDate: Date;
@@ -44,7 +44,7 @@ function dayEntries(day: Date) {
 
 function chipStyle(entry: CalendarSurfaceEntry) {
   return {
-    borderColor: entry.color ?? (entry.source === "task" ? "#2563eb" : "#16a34a"),
+    borderColor: entry.color ?? "#2563eb",
   };
 }
 

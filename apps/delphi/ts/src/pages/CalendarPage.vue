@@ -41,7 +41,6 @@ const calendarState = useCalendarState();
       :view-mode="calendarState.viewMode.value"
       :anchor-date="calendarState.anchorDate.value"
       :visible-days="calendarState.visibleDays.value"
-      :visible-range="calendarState.visibleRange.value"
       :range-label="calendarState.rangeLabel.value"
       @previous="calendarState.goPrevious"
       @next="calendarState.goNext"

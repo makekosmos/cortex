@@ -13,7 +13,7 @@ import {
 } from "./games/process";
 
 const GAME_SELECT = `SELECT
-  id, name, exe_path, exe_name, rawg_id, description, released,
+  id, ark_object_id, name, exe_path, exe_name, rawg_id, description, released,
   background_image, metacritic, rating, genres, platforms, developers, publishers,
   cover_image, icon_image, is_favorite, play_count, total_playtime, last_played, date_added,
   backup_enabled, last_backup, backup_count, save_path, user_rating, user_note, play_status
@@ -26,6 +26,9 @@ export interface GamesServiceDeps {
   usageReadModel?: {
     hydrateGame(game: Game): Promise<Game>;
     hydrateGames(games: Game[]): Promise<Game[]>;
+  };
+  arkGameObjectSync?: {
+    syncGame(game: Game): Promise<string | null>;
   };
   now?: () => Date;
   fileExists?: (filePath: string) => boolean;
@@ -89,6 +92,7 @@ function readBoolean(row: DbRow, key: string): boolean {
 function mapGameRow(row: DbRow): Game {
   return {
     id: readString(row, "id"),
+    ark_object_id: readStringOrNull(row, "ark_object_id"),
     name: readString(row, "name"),
     exe_path: readString(row, "exe_path"),
     exe_name: readString(row, "exe_name"),
@@ -225,6 +229,9 @@ async function buildUpdateClause(
     push("exe_path", normalized);
     push("exe_name", exeName);
   }
+  if (update.ark_object_id !== undefined) {
+    push("ark_object_id", update.ark_object_id);
+  }
 
   if (update.description !== undefined) {
     push("description", update.description);
@@ -303,6 +310,7 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 export function createGamesService(deps: GamesServiceDeps): GamesService {
   const usageReadModel = deps.usageReadModel;
+  const arkGameObjectSync = deps.arkGameObjectSync;
   const now = deps.now ?? (() => new Date());
   const log = deps.log ?? console;
   const exists = deps.fileExists ?? fs.existsSync;
@@ -323,7 +331,30 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
     if (!fetched) {
       throw new Error("Game not found");
     }
-    return usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+    const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+    return await syncArkGameIfNeeded(hydrated);
+  };
+
+  const syncArkGameIfNeeded = async (game: Game): Promise<Game> => {
+    if (!arkGameObjectSync) {
+      return game;
+    }
+
+    const arkObjectId = await arkGameObjectSync.syncGame(game);
+    if (!arkObjectId || arkObjectId === game.ark_object_id) {
+      return game;
+    }
+
+    await execute(
+      deps.db,
+      "UPDATE games SET ark_object_id = ?1 WHERE id = ?2",
+      [arkObjectId, game.id],
+    );
+
+    return {
+      ...game,
+      ark_object_id: arkObjectId,
+    };
   };
 
   return {
@@ -343,7 +374,8 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
       if (!fetched) {
         throw new Error("Failed to fetch inserted game");
       }
-      return usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+      const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+      return await syncArkGameIfNeeded(hydrated);
     },
 
     async addGamesBatch(games: NewGame[]): Promise<Game[]> {
@@ -371,7 +403,8 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
       for (const item of inserted) {
         const fetched = await getRowById(deps.db, item.id);
         if (fetched) {
-          result.push(usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched);
+          const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+          result.push(await syncArkGameIfNeeded(hydrated));
         } else {
           log.error?.(`Error fetching new game ${item.id}:`, item.name);
         }
@@ -405,7 +438,8 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
       if (!fetched) {
         throw new Error("Game not found");
       }
-      return usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+      const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+      return await syncArkGameIfNeeded(hydrated);
     },
 
     async toggleFavorite(id: string): Promise<Game> {

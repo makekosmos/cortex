@@ -1,0 +1,1 @@
+export { gamePosterCardClasses } from "./gamePosterCard";

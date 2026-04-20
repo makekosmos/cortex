@@ -30,6 +30,6 @@ pub use protocol::{
 };
 pub use sync_server::StorageBackend;
 pub use types::{
-    Area, Heading, LoadAllData, PeerRecord, Project, SyncEntity, Tag, TodoItem, TrackedApp,
-    UsageEvent, UsageSession, VersionVector,
+    Area, ArkObject, Heading, LoadAllData, ObjectLink, ObjectType, PeerRecord, Project,
+    SyncEntity, Tag, TodoItem, TrackedApp, UsageEvent, UsageSession, VersionVector,
 };

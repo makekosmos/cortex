@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { CalendarSurfaceEntry } from "@/services/google-calendar/contracts";
+import type { CalendarSurfaceEntry } from "@/services/calendar/contracts";
 import {
   DAY_MS,
   addDays,
@@ -11,7 +11,7 @@ import {
   startOfDay,
   toDayKey,
   weekdayLongLabel,
-} from "@/services/google-calendar/date";
+} from "@/services/calendar/date";
 
 const props = defineProps<{
   days: Date[];
@@ -32,7 +32,7 @@ function formatHourLabel(hour: number): string {
 }
 
 function entryAccent(entry: CalendarSurfaceEntry): string | undefined {
-  return entry.color ?? (entry.source === "task" ? "#2563eb" : "#16a34a");
+  return entry.color ?? "#2563eb";
 }
 
 const entriesByDay = computed(() => {

@@ -1,0 +1,149 @@
+{
+  "task_id": "2026-04-20-eden-anytype-rebuild-v2",
+  "result": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Object types screen rebuilt as a two-pane Anytype-like workspace with dedicated preview rail.",
+      "evidence": [
+        "apps/eden/ts/src/components/settings/ObjectTypesSettings.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypeEditor.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypeIdentitySection.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypeFieldsSection.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypePreviewRail.vue"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Rebuilt object type UI now uses Kepler visuals tokens instead of custom gray color-mix surfaces.",
+      "evidence": [
+        "apps/eden/ts/src/components/settings/ObjectTypesSettings.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypeEditor.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypeIdentitySection.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypeFieldsSection.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypePreviewRail.vue",
+        "packages/kepler-visuals/theme/css-variables.css"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "Rows now have clearer Anytype-inspired interaction states, properties are split into visible buckets, and reorder supports drag-and-drop.",
+      "evidence": [
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue",
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypeFieldsSection.vue"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "summary": "Preview is now a dedicated rail and mirrors typed header presentation more closely.",
+      "evidence": [
+        "apps/eden/ts/src/components/settings/object-types/ObjectTypePreviewRail.vue",
+        "apps/eden/ts/src/components/typed-notes/TypedHeader.vue",
+        "apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "summary": "Typed header and property renderer were simplified toward Anytype-like metadata presentation, relation pickers now honor relation type constraints, and ordinary note pages now use an untitled-title flow closer to Anytype.",
+      "evidence": [
+        "apps/eden/ts/src/Editor.vue",
+        "apps/eden/ts/src/lib/entryTitles.ts",
+        "apps/eden/ts/src/store/eden.ts",
+        "apps/eden/ts/src/components/typed-notes/TypedHeader.vue",
+        "apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue",
+        "apps/eden/ts/src/lib/systemTypes.ts",
+        "apps/eden/ts/src/components/sidebar/EdenSidebar.vue",
+        "apps/eden/ts/src/App.vue",
+        "apps/eden/ts/src/components/spaces/SpacesView.vue",
+        "apps/eden/ts/src/components/settings/TrashSettings.vue"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "summary": "Touched files were verified through UTF-8-aware reads and no mojibake was introduced in the rebuilt object type path.",
+      "evidence": [
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/utf8-check.txt"
+      ]
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "summary": "Seeded demo Ark databases contain note, game, and custom object type fixtures.",
+      "evidence": [
+        "apps/eden/ts/scripts/seedArkObjectDemo.ts",
+        "apps/eden/ts/dev-data/ark-demo-mixed.db",
+        "apps/eden/ts/dev-data/ark-demo-secondary.db",
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed.txt",
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed-secondary.txt"
+      ]
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "summary": "Typecheck and production build pass after the rebuild.",
+      "evidence": [
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/tsc.txt",
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/build.txt"
+      ]
+    },
+    {
+      "id": "AC9",
+      "status": "PASS",
+      "summary": "Dev-mode investigation was recorded, a web-only dev path was added, and Ark RPC list reads were hardened against mismatched payload shapes.",
+      "evidence": [
+        "apps/eden/ts/src/Editor.vue",
+        "apps/eden/ts/src/lib/entryTitles.ts",
+        "apps/eden/ts/src/store/eden.ts",
+        "apps/eden/ts/vite.web.config.mjs",
+        "apps/eden/ts/package.json",
+        "apps/eden/ts/main/store.ts",
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/dev-web.txt",
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/dev.txt",
+        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/playwright-note-page.txt"
+      ]
+    }
+  ],
+  "verification": {
+    "commands": [
+      {
+        "command": "bun x tsc --noEmit",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/tsc.txt"
+      },
+      {
+        "command": "bun run build",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/build.txt"
+      },
+      {
+        "command": "bun run seed:ark-demo",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed.txt"
+      },
+      {
+        "command": "bun run seed:ark-demo -- --db D:\\\\Personal\\\\Hobby\\\\Coding\\\\kepler\\\\apps\\\\eden\\\\ts\\\\dev-data\\\\ark-demo-secondary.db",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed-secondary.txt"
+      },
+      {
+        "command": "bun run dev",
+        "status": "BLOCKED",
+        "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/dev.txt",
+        "reason": "This environment blocks Electron child-process startup with spawn EPERM."
+      },
+      {
+        "command": "bun run dev:web",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/dev-web.txt"
+      }
+    ]
+  }
+}

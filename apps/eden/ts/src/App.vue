@@ -40,7 +40,20 @@
           :title="layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
           @click="layout.toggleWidgetSidebar()"
         >
-          <PanelLeft :size="14" />
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M9 3v18" />
+          </svg>
         </button>
 
         <TitlebarHistoryControls
@@ -65,13 +78,22 @@
             :is-search-open="layout.isSearchOpen"
             :search-query="layout.searchQuery"
             :recent-entries="recentSidebarEntries"
+            :all-entries="eden.entries"
+            :note-types="eden.noteTypes"
             :current-entry="eden.currentEntry"
+            :active-screen="eden.activeScreen"
+            :active-settings-tab="settingsInitialTab"
+            :selected-object-type-id="eden.activeNoteTypeId"
             @config-change="layout.onWidgetConfigChange"
             @update:hidden="layout.widgetSidebarHidden = $event"
             @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
             @create-entry="eden.createNewEntry()"
             @open-entry="(id) => eden.navigateTo(id)"
-            @open-settings="eden.activeScreen = 'settings'"
+            @open-settings-tab="openSettingsTab"
+            @open-object-types="openObjectTypes()"
+            @open-object-type="eden.openTypeCollection($event)"
+            @create-object-type="createObjectType()"
+            @back="handleSidebarBack"
           />
         </div>
       </template>
@@ -85,15 +107,35 @@
         :radius-top-left="showSidebarChrome && !layout.widgetSidebarHidden ? '16px' : '0px'"
       >
         <main class="app-main">
-          <SettingsPage
-            v-if="eden.activeScreen === 'settings'"
-            :settings="eden.codeToolsSettings"
-            :vault-path="eden.vaultPath"
+          <div
+            v-if="eden.isHydratingVault && eden.activeScreen !== 'settings' && eden.activeScreen !== 'object-types' && !eden.currentEntry"
+            class="app-main-loading"
+          >
+            Загрузка данных...
+          </div>
+          <ObjectTypesSettings
+            v-else-if="eden.activeScreen === 'object-types'"
             :note-types="eden.noteTypes"
-            :active-space="eden.activeSpace"
+            :initial-selected-type-id="eden.activeNoteTypeId"
+            :create-draft-token="objectTypeCreateToken"
             :on-note-type-save="eden.saveNoteType"
             :on-note-type-delete="eden.deleteNoteType"
-            @back="eden.activeScreen = 'notes'"
+            @selected-type-change="onSelectedTypeChange"
+          />
+          <TypeObjectsView
+            v-else-if="eden.activeScreen === 'type-collection' && activeCollectionType"
+            :note-type="activeCollectionType"
+            :entries="eden.entries"
+            @open-entry="(id) => eden.navigateTo(id)"
+            @create-entry="eden.createNewEntry(activeCollectionType.id)"
+            @edit-type="openTypeSettings(activeCollectionType.id)"
+          />
+          <SettingsPage
+            v-else-if="eden.activeScreen === 'settings'"
+            :settings="eden.codeToolsSettings"
+            :vault-path="eden.vaultPath"
+            :active-space="eden.activeSpace"
+            :initial-tab="settingsInitialTab"
             @select-vault="eden.selectFolder()"
             @select-space="onSelectSpace"
             @settings-change="eden.updateCodeToolsSettings"
@@ -109,6 +151,7 @@
             :zen-mode="layout.isZenMode"
             :on-save="eden.handleSave"
             :on-navigate="eden.navigateTo"
+            :on-open-type-settings="openTypeSettings"
             @exit-zen="layout.disableZenMode()"
           />
           <SpacesView
@@ -126,15 +169,35 @@
     </DesktopChrome>
 
     <main v-else class="app-main app-main--zen">
-      <SettingsPage
-        v-if="eden.activeScreen === 'settings'"
-        :settings="eden.codeToolsSettings"
-        :vault-path="eden.vaultPath"
+      <div
+        v-if="eden.isHydratingVault && eden.activeScreen !== 'settings' && eden.activeScreen !== 'object-types' && !eden.currentEntry"
+        class="app-main-loading"
+      >
+        Загрузка данных...
+      </div>
+      <ObjectTypesSettings
+        v-else-if="eden.activeScreen === 'object-types'"
         :note-types="eden.noteTypes"
-        :active-space="eden.activeSpace"
+        :initial-selected-type-id="eden.activeNoteTypeId"
+        :create-draft-token="objectTypeCreateToken"
         :on-note-type-save="eden.saveNoteType"
         :on-note-type-delete="eden.deleteNoteType"
-        @back="eden.activeScreen = 'notes'"
+        @selected-type-change="onSelectedTypeChange"
+      />
+      <TypeObjectsView
+        v-else-if="eden.activeScreen === 'type-collection' && activeCollectionType"
+        :note-type="activeCollectionType"
+        :entries="eden.entries"
+        @open-entry="(id) => eden.navigateTo(id)"
+        @create-entry="eden.createNewEntry(activeCollectionType.id)"
+        @edit-type="openTypeSettings(activeCollectionType.id)"
+      />
+      <SettingsPage
+        v-else-if="eden.activeScreen === 'settings'"
+        :settings="eden.codeToolsSettings"
+        :vault-path="eden.vaultPath"
+        :active-space="eden.activeSpace"
+        :initial-tab="settingsInitialTab"
         @select-vault="eden.selectFolder()"
         @select-space="onSelectSpace"
         @settings-change="eden.updateCodeToolsSettings"
@@ -150,6 +213,7 @@
         :zen-mode="layout.isZenMode"
         :on-save="eden.handleSave"
         :on-navigate="eden.navigateTo"
+        :on-open-type-settings="openTypeSettings"
         @exit-zen="layout.disableZenMode()"
       />
       <SpacesView
@@ -261,42 +325,45 @@
       />
     </main>
     -->
-    <CustomCaret />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, shallowRef, watch } from "vue";
 import {
-  CustomCaret,
   DesktopChrome,
   DesktopContentSurface,
   TitlebarHistoryControls,
   type TitlebarPlatform,
 } from "@kepler/visuals";
-import { PanelLeft } from "lucide-vue-next";
 import { useEdenStore } from "@/store/eden";
 import { useLayoutStore } from "@/store/layout";
 import { useKeyboard } from "@/composables/useKeyboard";
 import { usePlatform } from "@/composables/usePlatform";
 import { useSearch } from "@/composables/useSearch";
 import type { SpaceId } from "@/components/sidebar/types";
+import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
 import Editor from "./Editor.vue";
 import SpacesView from "@/components/spaces/SpacesView.vue";
 import SettingsPage from "@/components/settings/SettingsPage.vue";
+import ObjectTypesSettings from "@/components/settings/ObjectTypesSettings.vue";
+import TypeObjectsView from "@/components/objects/TypeObjectsView.vue";
 import "@/App.css";
 
 const eden = useEdenStore();
 const layout = useLayoutStore();
 
 type EdenHistorySnapshot = {
-  activeScreen: "notes" | "settings";
+  activeScreen: "notes" | "settings" | "object-types" | "type-collection";
   currentEntryId: string | null;
   activeSpace: SpaceId;
+  activeNoteTypeId: string | null;
 };
+
+type SettingsTab = "general" | "trash" | "storage" | "connected-apps" | "spaces";
 
 usePlatform();
 useKeyboard();
@@ -305,6 +372,8 @@ const backStack = shallowRef<EdenHistorySnapshot[]>([]);
 const forwardStack = shallowRef<EdenHistorySnapshot[]>([]);
 const historyReady = shallowRef(false);
 const suppressHistoryRecording = shallowRef(false);
+const settingsInitialTab = shallowRef<SettingsTab>("general");
+const objectTypeCreateToken = shallowRef(0);
 
 function pickRecentEntries(entries: Entry[], limit: number) {
   const topEntries: Entry[] = [];
@@ -335,7 +404,7 @@ const recentSidebarEntries = computed(() =>
 
 const entryTitlesById = computed<Record<string, string>>(() =>
   Object.fromEntries(
-    eden.entries.map((entry) => [entry.id, entry.title || "Без названия"]),
+    eden.entries.map((entry) => [entry.id, getEntryDisplayTitle(entry.title, entry.header_props_json)]),
   ),
 );
 
@@ -345,7 +414,10 @@ const chromePlatform = computed<TitlebarPlatform>(() => {
   return "windows";
 });
 
-const showSidebarChrome = computed(() => eden.activeScreen !== "settings");
+const showSidebarChrome = computed(() => true);
+const activeCollectionType = computed(
+  () => eden.noteTypes.find((noteType) => noteType.id === eden.activeNoteTypeId) ?? null,
+);
 const currentHistorySnapshot = computed<EdenHistorySnapshot | null>(() => {
   if (eden.isInitializing || !eden.vaultPath) return null;
 
@@ -353,6 +425,7 @@ const currentHistorySnapshot = computed<EdenHistorySnapshot | null>(() => {
     activeScreen: eden.activeScreen,
     currentEntryId: eden.currentEntry?.id ?? null,
     activeSpace: eden.activeSpace,
+    activeNoteTypeId: eden.activeNoteTypeId,
   };
 });
 
@@ -365,8 +438,43 @@ function snapshotsEqual(a: EdenHistorySnapshot | null, b: EdenHistorySnapshot | 
   return (
     a.activeScreen === b.activeScreen &&
     a.currentEntryId === b.currentEntryId &&
-    a.activeSpace === b.activeSpace
+    a.activeSpace === b.activeSpace &&
+    a.activeNoteTypeId === b.activeNoteTypeId
   );
+}
+
+function openSettingsTab(tab: SettingsTab = "general") {
+  settingsInitialTab.value = tab;
+  eden.activeScreen = "settings";
+}
+
+function openObjectTypes(noteTypeId: string | null = null) {
+  eden.openObjectTypes(noteTypeId);
+}
+
+function createObjectType() {
+  eden.activeNoteTypeId = null;
+  objectTypeCreateToken.value += 1;
+  eden.activeScreen = "object-types";
+}
+
+function openTypeSettings(noteTypeId: string) {
+  openObjectTypes(noteTypeId);
+}
+
+function handleSidebarBack() {
+  if (eden.activeScreen === "object-types") {
+    eden.activeScreen = "settings";
+    return;
+  }
+
+  if (eden.activeScreen === "settings") {
+    eden.activeScreen = "notes";
+  }
+}
+
+function onSelectedTypeChange(noteTypeId: string | null) {
+  eden.activeNoteTypeId = noteTypeId;
 }
 
 async function applyHistorySnapshot(snapshot: EdenHistorySnapshot) {
@@ -375,6 +483,7 @@ async function applyHistorySnapshot(snapshot: EdenHistorySnapshot) {
   try {
     eden.activeSpace = snapshot.activeSpace;
     eden.activeScreen = snapshot.activeScreen;
+    eden.activeNoteTypeId = snapshot.activeNoteTypeId;
 
     if (!snapshot.currentEntryId) {
       eden.currentEntry = null;
@@ -450,7 +559,7 @@ watch(
     () => eden.currentEntry,
   ],
   () => {
-    if (eden.isInitializing || !eden.vaultPath || eden.activeScreen !== "notes") return;
+    if (eden.isInitializing || eden.isHydratingVault || !eden.vaultPath || eden.activeScreen !== "notes") return;
     if (eden.activeSpace === "my-space" && !eden.currentEntry) {
       void eden.openMySpace();
     }
@@ -486,10 +595,11 @@ async function onResultSelect(entryId: string) {
   const found = await window.api.loadEntry(entryId);
   if (found) {
     eden.activeScreen = "notes";
-    eden.currentEntry = found;
-    pendingQuery.value = "";
-    layout.searchQuery = "";
-    layout.searchResults = [];
+      eden.currentEntry = found;
+      eden.activeNoteTypeId = null;
+      pendingQuery.value = "";
+      layout.searchQuery = "";
+      layout.searchResults = [];
     layout.isSearchOpen = false;
   }
 }
@@ -503,6 +613,7 @@ async function onSelectSpace(spaceId: SpaceId) {
   }
   eden.activeScreen = "notes";
   eden.activeSpace = spaceId;
+  eden.activeNoteTypeId = null;
   eden.currentEntry = null;
 }
 </script>

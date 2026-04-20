@@ -1,3 +1,5 @@
+import { getEntryDisplayTitle } from "@/lib/entryTitles";
+
 export type SpaceId =
   | "my-space"
   | "all-objects"
@@ -12,8 +14,8 @@ export type DragPayload = { type: "entry"; id: string };
 export function sortEntries(entries: Entry[], sortMode: SortMode) {
   return [...entries].sort((entryA, entryB) => {
     if (sortMode === "title") {
-      return (entryA.title || "Без названия").localeCompare(
-        entryB.title || "Без названия",
+      return getEntryDisplayTitle(entryA.title, entryA.header_props_json).localeCompare(
+        getEntryDisplayTitle(entryB.title, entryB.header_props_json),
         "ru",
       );
     }

@@ -1,0 +1,10 @@
+Root cause summary
+
+Before this change, `apps/arrancador/package.json` ran:
+- `predev`: `bun run rebuild:native`
+
+That meant every `bun run dev` paid the cost of `electron-rebuild -f -w better-sqlite3` before the fast renderer/main watchers even started.
+
+Current state:
+- `predev`: `bun run scripts/rebuild-native-if-needed.ts`
+- Rebuild is skipped when the cached native artifact stamp still matches platform, arch, Electron version, better-sqlite3 version, artifact path, artifact size, and artifact mtime.

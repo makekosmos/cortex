@@ -171,3 +171,10 @@ export const catalogueApi = {
   syncLibrary: () =>
     invoke<CatalogueSyncResult>("sync_library_to_catalogue"),
 };
+
+export const windowApi = {
+  getPlatform: () => invoke<string>("get_window_platform"),
+  minimize: () => invoke<void>("window_minimize"),
+  toggleMaximize: () => invoke<void>("window_toggle_maximize"),
+  close: () => invoke<void>("window_close"),
+};

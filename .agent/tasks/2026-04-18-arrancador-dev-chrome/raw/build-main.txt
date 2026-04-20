@@ -1,0 +1,4 @@
+bun run build:main
+Bundled 41 modules in 16ms
+index.js  153.21 KB  (entry point)
+EXIT_CODE=0

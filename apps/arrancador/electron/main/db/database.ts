@@ -5,6 +5,7 @@ import { enableForeignKeys } from "./sqlite";
 const CREATE_GAMES_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS games (
   id TEXT PRIMARY KEY,
+  ark_object_id TEXT,
   name TEXT NOT NULL,
   exe_path TEXT NOT NULL UNIQUE,
   exe_name TEXT NOT NULL,
@@ -108,6 +109,7 @@ CREATE TABLE IF NOT EXISTS catalogue_items (
 const GAME_INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_games_name ON games(name)",
   "CREATE INDEX IF NOT EXISTS idx_games_favorite_name ON games(is_favorite, name)",
+  "CREATE INDEX IF NOT EXISTS idx_games_ark_object_id ON games(ark_object_id)",
 ];
 
 const PLAYTIME_INDEXES = [
@@ -182,6 +184,7 @@ async function ensureDefaultSettings(db: DbLike): Promise<void> {
 export async function ensureGameColumns(db: DbLike): Promise<void> {
   const columns = await getTableColumns(db, "games");
 
+  await addColumnIfMissing(db, columns, "ark_object_id", "ALTER TABLE games ADD COLUMN ark_object_id TEXT");
   await addColumnIfMissing(db, columns, "user_rating", "ALTER TABLE games ADD COLUMN user_rating INTEGER");
   await addColumnIfMissing(db, columns, "user_note", "ALTER TABLE games ADD COLUMN user_note TEXT");
   await addColumnIfMissing(db, columns, "save_path", "ALTER TABLE games ADD COLUMN save_path TEXT");

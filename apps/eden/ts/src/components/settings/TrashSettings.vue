@@ -32,7 +32,7 @@
               draggable="false"
             />
             <div class="trash-item-text">
-              <span class="trash-item-title">{{ entry.title || "Без названия" }}</span>
+              <span class="trash-item-title">{{ getEntryDisplayTitle(entry.title, entry.header_props_json) }}</span>
               <span class="trash-item-meta">
                 Удалено {{ formatTimeAgo(entry.deleted_at!) }} · осталось
                 {{ daysRemaining(entry.deleted_at!) }} дн.
@@ -59,6 +59,7 @@
 
 <script setup vapor lang="ts">
 import { ref, onMounted } from "vue";
+import { getEntryDisplayTitle } from "@/lib/entryTitles";
 
 const emit = defineEmits<{ refreshData: [] }>();
 

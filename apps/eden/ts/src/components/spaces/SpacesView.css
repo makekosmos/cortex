@@ -35,9 +35,10 @@
 .space-hero h1,
 .space-page-header h1 {
   font-family: var(--font-display);
-  font-size: 30px;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-size: var(--kepler-text-page-title-size);
+  line-height: var(--kepler-text-page-title-line-height);
+  letter-spacing: var(--kepler-text-page-title-letter-spacing);
+  font-weight: var(--kepler-text-page-title-weight);
   color: var(--text-primary);
   margin-bottom: 10px;
 }

@@ -1,0 +1,23 @@
+{
+  "taskId": "2026-04-20-arrancador-description-modal",
+  "status": "PASS",
+  "artifacts": {
+    "spec": ".agent/tasks/2026-04-20-arrancador-description-modal/spec.md",
+    "evidence": ".agent/tasks/2026-04-20-arrancador-description-modal/evidence.md"
+  },
+  "checks": {
+    "typecheck": "PASS",
+    "gameDetailVitest": "PASS"
+  },
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS"
+  },
+  "notes": [
+    "The hero description is now line-clamped to two rows while keeping the full normalized description text available.",
+    "A darkened description modal now opens from the hero-side button.",
+    "Targeted verification passed through typecheck and the focused game-detail vitest file."
+  ]
+}

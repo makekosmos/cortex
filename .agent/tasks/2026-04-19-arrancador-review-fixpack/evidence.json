@@ -1,0 +1,91 @@
+{
+  "task_id": "2026-04-19-arrancador-review-fixpack",
+  "verification": {
+    "overall": "PASS",
+    "commands": [
+      {
+        "command": "bun run typecheck",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-19-arrancador-review-fixpack/raw/typecheck.log"
+      },
+      {
+        "command": "bun run test",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-19-arrancador-review-fixpack/raw/test.log",
+        "notes": [
+          "suite summary: 31 passed files, 142 passed tests, 2 expected fail",
+          "stdout/stderr includes expected provider-guard traces from intentional negative-path tests",
+          "test runner uses vitest.config.mjs with native config loading and pool=threads to avoid Windows sandbox spawn EPERM failures"
+        ]
+      }
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Titlebar history controls now use real browser/router history semantics, and /settings no longer fakes back navigation.",
+      "evidence": [
+        "apps/arrancador/src/pages/Layout.tsx",
+        "apps/arrancador/src/test/layout.test.tsx"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Mobile sidebar now behaves as a real sheet/dialog, keeps hidden content out of the focus path, and exposes an in-panel dismiss control.",
+      "evidence": [
+        "apps/arrancador/src/pages/Layout.tsx",
+        "apps/arrancador/src/components/ui/sidebar.tsx",
+        "apps/arrancador/src/test/layout.test.tsx",
+        "apps/arrancador/src/test/ui-sidebar.test.tsx"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "Search stays reachable when the sidebar is hidden, and spotlight resets correctly across dismiss/reopen and route changes.",
+      "evidence": [
+        "apps/arrancador/src/components/Spotlight.tsx",
+        "apps/arrancador/src/components/AppTitlebar.tsx",
+        "apps/arrancador/src/components/Sidebar.tsx",
+        "apps/arrancador/src/pages/Layout.tsx",
+        "apps/arrancador/src/test/spotlight.test.tsx",
+        "apps/arrancador/src/test/layout.test.tsx"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "summary": "Windows frameless mode keeps usable fallback controls and the desktop sidebar keeps reachable resize/collapse interactions.",
+      "evidence": [
+        "apps/arrancador/electron/main/windows.ts",
+        "apps/arrancador/src/components/AppTitlebar.tsx",
+        "apps/arrancador/src/components/Sidebar.tsx",
+        "apps/arrancador/src/index.css",
+        "apps/arrancador/src/test/app-titlebar.test.tsx",
+        "apps/arrancador/src/test/sidebar-component.test.tsx"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "summary": "Regression tests were expanded for the reviewed shell/sidebar/search/native-rebuild paths and fresh typecheck/test verification now passes.",
+      "evidence": [
+        "apps/arrancador/src/test/layout.test.tsx",
+        "apps/arrancador/src/test/app-titlebar.test.tsx",
+        "apps/arrancador/src/test/spotlight.test.tsx",
+        "apps/arrancador/src/test/sidebar-component.test.tsx",
+        "apps/arrancador/src/test/ui-sidebar.test.tsx",
+        "apps/arrancador/src/test/ui-primitives.test.tsx",
+        "apps/arrancador/src/test/rebuild-native-if-needed.test.ts",
+        "apps/arrancador/package.json",
+        "apps/arrancador/vitest.config.mjs",
+        ".agent/tasks/2026-04-19-arrancador-review-fixpack/raw/typecheck.log",
+        ".agent/tasks/2026-04-19-arrancador-review-fixpack/raw/test.log"
+      ]
+    }
+  ]
+}

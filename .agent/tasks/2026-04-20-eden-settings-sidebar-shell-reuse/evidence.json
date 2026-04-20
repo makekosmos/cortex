@@ -1,0 +1,105 @@
+{
+  "task_id": "2026-04-20-eden-settings-sidebar-shell-reuse",
+  "status": "PASS",
+  "summary": "Reused the shared DesktopChrome sidebar for notes, settings, and object types; removed nested content sidebars; restored back navigation and type-icon sidebar rows.",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/App.vue",
+        "apps/eden/ts/src/components/sidebar/EdenSidebar.vue"
+      ],
+      "notes": "DesktopChrome still hosts a single EdenSidebar, now mode-switched by active screen."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/components/settings/SettingsPage.vue",
+        "apps/eden/ts/src/components/settings/ObjectTypesSettings.vue",
+        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/sidebar-shell-check.txt"
+      ],
+      "notes": "SettingsPage and ObjectTypesSettings no longer render nested sidebars."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/App.vue"
+      ],
+      "notes": "Width and hidden state remain owned by layout store values passed into the same outer sidebar instance."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/App.vue",
+        "apps/eden/ts/src/components/sidebar/EdenSidebar.vue"
+      ],
+      "notes": "Shared sidebar top back action returns from object types to settings and from settings to notes."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/components/sidebar/EdenSidebar.vue",
+        "packages/kepler-visuals/components/Sidebar.vue"
+      ],
+      "notes": "Object type rows use the shared icon-mask project item rendering tinted with type color."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/src/components/settings/ObjectTypesSettings.vue"
+      ],
+      "notes": "Existing type selection and new draft creation both remain wired after removing the inner object-types sidebar."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/utf8-check.txt"
+      ],
+      "notes": "Touched Russian labels were verified from UTF-8 file reads."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/tsc.txt",
+        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/tsc-rerun.txt",
+        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/build.txt",
+        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/build-rerun.txt",
+        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/dev-web.txt"
+      ],
+      "notes": "Typecheck and build passed; dev:web reached Vite ready state."
+    }
+  ],
+  "verification": {
+    "typecheck": {
+      "command": "bun x tsc --noEmit",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/tsc.txt",
+      "rerun_artifact": ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/tsc-rerun.txt"
+    },
+    "build": {
+      "command": "bun run build",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/build.txt",
+      "rerun_artifact": ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/build-rerun.txt"
+    },
+    "dev_web": {
+      "command": "bun run dev:web",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/dev-web.txt"
+    },
+    "playwright_smoke": {
+      "command": "Playwright headless smoke against http://127.0.0.1:5174/",
+      "status": "BLOCKED",
+      "artifact": ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/playwright-smoke.txt",
+      "notes": "Chromium launch failed in this environment with spawn EPERM."
+    }
+  }
+}

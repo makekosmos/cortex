@@ -117,6 +117,10 @@ export interface IpcRequestMap {
     title?: string;
     filters?: Array<{ name: string; extensions: string[] }>;
   };
+  get_window_platform: undefined;
+  window_minimize: undefined;
+  window_toggle_maximize: undefined;
+  window_close: undefined;
   shell_open_path: { path: string };
   shell_open_external: { url: string };
   get_autostart_state: undefined;
@@ -197,6 +201,10 @@ export interface IpcResultMap {
   sync_library_to_catalogue: CatalogueSyncResult;
 
   dialog_open: string | string[] | null;
+  get_window_platform: string;
+  window_minimize: void;
+  window_toggle_maximize: void;
+  window_close: void;
   shell_open_path: string;
   shell_open_external: void;
   get_autostart_state: boolean;

@@ -1,6 +1,6 @@
 import { Clock, Search, X } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useLanguage } from "@/components/language-provider";
 import { cn } from "@/lib/utils";
@@ -10,17 +10,17 @@ import type { Game } from "@/types";
 const MAX_RESULTS = 12;
 
 function formatPlaytime(seconds: number, language: "ru" | "en") {
-  if (!seconds) return language === "ru" ? "0 ч" : "0 h";
+  if (!seconds) return language === "ru" ? "0 \u0447" : "0 h";
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
 
   if (hours > 0) {
     return language === "ru"
-      ? `${hours} ч ${minutes} мин`
+      ? `${hours} \u0447 ${minutes} \u043c\u0438\u043d`
       : `${hours} h ${minutes} m`;
   }
 
-  return language === "ru" ? `${minutes} мин` : `${minutes} m`;
+  return language === "ru" ? `${minutes} \u043c\u0438\u043d` : `${minutes} m`;
 }
 
 function makeMatchScore(game: Game, query: string) {
@@ -37,12 +37,17 @@ function makeMatchScore(game: Game, query: string) {
 type SpotlightProps = {
   triggerClassName?: string;
   showTrigger?: boolean;
+  triggerVariant?: "default" | "sidebar";
+  enableShortcut?: boolean;
 };
 
 export default function Spotlight({
   triggerClassName,
   showTrigger = true,
+  triggerVariant = "default",
+  enableShortcut = true,
 }: SpotlightProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const { games, loading } = useGamesState();
   const { language } = useLanguage();
@@ -54,19 +59,25 @@ export default function Spotlight({
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const previousRouteRef = useRef(
+    `${location.pathname}${location.search}${location.hash}`,
+  );
   const instanceId = useId();
 
   const labels = useMemo(
     () =>
       language === "ru"
         ? {
-            button: "Поиск",
-            placeholder: "Поиск игр...",
-            close: "Закрыть",
-            title: "Быстрый поиск",
-            loading: "Загрузка библиотеки...",
-            noQuery: "В библиотеке пока нет игр",
-            noMatch: "Нет подходящих игр",
+            button: "\u041f\u043e\u0438\u0441\u043a",
+            placeholder: "\u041f\u043e\u0438\u0441\u043a \u0438\u0433\u0440...",
+            close: "\u0417\u0430\u043a\u0440\u044b\u0442\u044c",
+            title: "\u0411\u044b\u0441\u0442\u0440\u044b\u0439 \u043f\u043e\u0438\u0441\u043a",
+            loading: "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0438...",
+            noQuery:
+              "\u0412 \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0435 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0438\u0433\u0440",
+            noMatch:
+              "\u041d\u0435\u0442 \u043f\u043e\u0434\u0445\u043e\u0434\u044f\u0449\u0438\u0445 \u0438\u0433\u0440",
           }
         : {
             button: "Search",
@@ -87,6 +98,8 @@ export default function Spotlight({
   }, []);
 
   const openPanel = useCallback(() => {
+    setSearchQuery("");
+    setActiveIndex(0);
     setOpen(true);
   }, []);
 
@@ -132,10 +145,32 @@ export default function Spotlight({
   }, [activeIndex, filteredGames.length]);
 
   useEffect(() => {
+    if (!open || filteredGames.length === 0) {
+      return;
+    }
+
+    optionRefs.current[activeIndex]?.scrollIntoView({
+      block: "nearest",
+    });
+  }, [activeIndex, filteredGames.length, open]);
+
+  useEffect(() => {
     if (!open) return;
     const handle = window.setTimeout(() => inputRef.current?.focus(), 0);
     return () => window.clearTimeout(handle);
   }, [open]);
+
+  useEffect(() => {
+    const nextRoute = `${location.pathname}${location.search}${location.hash}`;
+    const previousRoute = previousRouteRef.current;
+    previousRouteRef.current = nextRoute;
+
+    if (!open || previousRoute === nextRoute) {
+      return;
+    }
+
+    close();
+  }, [close, location.hash, location.pathname, location.search, open]);
 
   useEffect(() => {
     const getFocusableElements = () =>
@@ -146,9 +181,17 @@ export default function Spotlight({
       );
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.code === "KeyK") {
+      if (
+        enableShortcut &&
+        (event.ctrlKey || event.metaKey) &&
+        event.code === "KeyK"
+      ) {
         event.preventDefault();
-        setOpen((value) => !value);
+        if (open) {
+          close();
+        } else {
+          openPanel();
+        }
         return;
       }
 
@@ -201,7 +244,7 @@ export default function Spotlight({
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [activeIndex, close, filteredGames, navigate, open]);
+  }, [activeIndex, close, enableShortcut, filteredGames, navigate, open, openPanel]);
 
   const handleSelect = useCallback(
     (game: Game) => {
@@ -222,12 +265,20 @@ export default function Spotlight({
         aria-expanded={open}
         aria-controls={`spotlight-${instanceId}`}
         className={cn(
-          "inline-flex h-9 items-center gap-2 rounded-md border border-border/70 bg-card/70 px-3 text-xs font-[510] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.02)] backdrop-blur-md transition-colors hover:border-border hover:bg-card hover:text-foreground",
+          triggerVariant === "sidebar"
+            ? "kepler-sidebar-btn"
+            : "inline-flex h-9 items-center gap-2 rounded-md border border-border/70 bg-card/70 px-3 text-xs font-[510] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.02)] backdrop-blur-md transition-colors hover:border-border hover:bg-card hover:text-foreground",
           triggerClassName,
         )}
       >
         <Search className="h-4 w-4" />
-        <span className="hidden sm:inline">{labels.button}</span>
+        <span
+          className={cn(
+            triggerVariant === "sidebar" ? "inline truncate" : "hidden sm:inline",
+          )}
+        >
+          {labels.button}
+        </span>
       </button>
     );
   }
@@ -293,8 +344,12 @@ export default function Spotlight({
               {filteredGames.map((game, index) => (
                 <li key={game.id}>
                   <button
+                    ref={(node) => {
+                      optionRefs.current[index] = node;
+                    }}
                     type="button"
                     role="option"
+                    data-spotlight-option-index={index}
                     aria-selected={index === activeIndex}
                     onClick={() => handleSelect(game)}
                     onMouseEnter={() => setActiveIndex(index)}

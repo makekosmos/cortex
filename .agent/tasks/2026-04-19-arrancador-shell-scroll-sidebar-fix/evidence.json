@@ -1,0 +1,54 @@
+{
+  "task_id": "2026-04-19-arrancador-shell-scroll-sidebar-fix",
+  "verification": {
+    "overall": "PASS",
+    "commands": [
+      {
+        "command": "bun run typecheck",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-19-arrancador-shell-scroll-sidebar-fix/raw/typecheck.log"
+      },
+      {
+        "command": "bun run test",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "status": "PASS",
+        "artifact": ".agent/tasks/2026-04-19-arrancador-shell-scroll-sidebar-fix/raw/test.log",
+        "notes": [
+          "suite summary: 31 passed files, 134 passed tests, 2 expected fail",
+          "stdout/stderr includes expected provider-guard traces from intentional negative-path tests"
+        ]
+      }
+    ]
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Desktop scroll is confined to inner app containers instead of the document/page level.",
+      "evidence": [
+        "apps/arrancador/src/index.css",
+        "apps/arrancador/src/pages/Layout.tsx"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Sidebar width is sanitized on load so the desktop sidebar cannot start visually empty or practically unreachable.",
+      "evidence": [
+        "apps/arrancador/src/components/Sidebar.tsx",
+        "apps/arrancador/src/pages/Layout.tsx",
+        "apps/arrancador/src/test/sidebar-component.test.tsx"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "Fresh typecheck and test runs pass and tests cover sidebar width recovery.",
+      "evidence": [
+        ".agent/tasks/2026-04-19-arrancador-shell-scroll-sidebar-fix/raw/typecheck.log",
+        ".agent/tasks/2026-04-19-arrancador-shell-scroll-sidebar-fix/raw/test.log"
+      ]
+    }
+  ]
+}

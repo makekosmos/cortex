@@ -8,14 +8,14 @@ import {
   watch,
 } from "vue";
 import { RouterLink } from "vue-router";
-import { PanelLeftClose } from "lucide-vue-next";
+import { ChevronRight, PanelLeftClose } from "lucide-vue-next";
 // eslint-disable-next-line import/no-unassigned-import
 import "./sidebar.css";
 import SidebarButton from "./SidebarButton.vue";
 
 export interface SidebarConfig {
-    width: number;
-    hidden: boolean;
+  width: number;
+  hidden: boolean;
 }
 
 export interface SidebarNavItem {
@@ -35,14 +35,26 @@ export interface SidebarProjectItem {
   active?: boolean;
   colorClass?: string;
   color?: string;
+  iconSrc?: string;
+  iconColor?: string;
   testId?: string;
   onClick?: () => void;
+}
+
+export interface SidebarProjectGroup {
+  id: string;
+  label: string;
+  items: SidebarProjectItem[];
+  defaultCollapsed?: boolean;
 }
 
 interface Props {
   primaryItems: SidebarNavItem[];
   projectItems?: SidebarProjectItem[];
   projectSectionLabel?: string;
+  secondaryProjectItems?: SidebarProjectItem[];
+  secondaryProjectSectionLabel?: string;
+  projectGroups?: SidebarProjectGroup[];
   footerItems?: SidebarNavItem[];
   topItem?: SidebarNavItem;
   isMac?: boolean;
@@ -53,7 +65,6 @@ interface Props {
   defaultWidth?: number;
   minWidth?: number;
   maxWidth?: number;
-  hiddenWidth?: number;
   toggleShortcut?: string;
   dragRegion?: boolean;
   initialConfig?: Partial<SidebarConfig>;
@@ -64,6 +75,9 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   projectItems: () => [],
   projectSectionLabel: "Проекты",
+  secondaryProjectItems: () => [],
+  secondaryProjectSectionLabel: "Ещё",
+  projectGroups: () => [],
   footerItems: () => [],
   topItem: undefined,
   isMac: false,
@@ -74,7 +88,6 @@ const props = withDefaults(defineProps<Props>(), {
   defaultWidth: 200,
   minWidth: 160,
   maxWidth: 320,
-  hiddenWidth: 80,
   toggleShortcut: "meta+b|ctrl+b",
   dragRegion: true,
   initialConfig: undefined,
@@ -88,55 +101,51 @@ const emit = defineEmits<{
 }>();
 
 const keyLayoutAliases: Record<string, string> = {
-    q: "й",
-    w: "ц",
-    e: "у",
-    r: "к",
-    t: "е",
-    y: "н",
-    u: "г",
-    i: "ш",
-    o: "щ",
-    p: "з",
-    "[": "х",
-    "]": "ъ",
-    a: "ф",
-    s: "ы",
-    d: "в",
-    f: "а",
-    g: "п",
-    h: "р",
-    j: "о",
-    k: "л",
-    l: "д",
-    ";": "ж",
-    "'": "э",
-    z: "я",
-    x: "ч",
-    c: "с",
-    v: "м",
-    b: "и",
-    n: "т",
-    m: "ь",
-    ",": "б",
-    ".": "ю",
+  q: "й",
+  w: "ц",
+  e: "у",
+  r: "к",
+  t: "е",
+  y: "н",
+  u: "г",
+  i: "ш",
+  o: "щ",
+  p: "з",
+  "[": "х",
+  "]": "ъ",
+  a: "ф",
+  s: "ы",
+  d: "в",
+  f: "а",
+  g: "п",
+  h: "р",
+  j: "о",
+  k: "л",
+  l: "д",
+  ";": "ж",
+  "'": "э",
+  z: "я",
+  x: "ч",
+  c: "с",
+  v: "м",
+  b: "и",
+  n: "т",
+  m: "ь",
+  ",": "б",
+  ".": "ю",
 };
 const reverseKeyLayoutAliases = Object.fromEntries(
-    Object.entries(keyLayoutAliases).map(([latinKey, localizedKey]) => [
-        localizedKey,
-        latinKey,
-    ]),
+  Object.entries(keyLayoutAliases).map(([latinKey, localizedKey]) => [localizedKey, latinKey]),
 ) as Record<string, string>;
 
 const width = shallowRef(props.initialConfig?.width ?? props.defaultWidth);
 const _hidden = shallowRef(
-    props.hidden !== undefined
-        ? props.hidden
-        : (props.initialConfig?.hidden ?? false),
+  props.hidden !== undefined ? props.hidden : (props.initialConfig?.hidden ?? false),
 );
 const isResizing = shallowRef(false);
 const animating = shallowRef(false);
 const lineExpanded = shallowRef(false);
+const collapsedGroups = shallowRef<Record<string, boolean>>({});
 
 let mouseDownX = 0;
 let mouseDownY = 0;
@@ -146,197 +155,244 @@ const animTimer = shallowRef<number | null>(null);
 const isAnimatingRef = shallowRef(false);
 
 const configRef = shallowRef<SidebarConfig>({
-    width: width.value,
-    hidden: _hidden.value,
+  width: width.value,
+  hidden: _hidden.value,
 });
 
-const hasProjects = computed(() => props.projectItems.length > 0);
+const groupedProjectSections = computed<SidebarProjectGroup[]>(() => {
+  if (props.projectGroups.length > 0) {
+    return props.projectGroups.filter((group) => group.items.length > 0);
+  }
+
+  const groups: SidebarProjectGroup[] = [];
+
+  if (props.projectItems.length > 0) {
+    groups.push({
+      id: "legacy-primary-project-group",
+      label: props.projectSectionLabel,
+      items: props.projectItems,
+    });
+  }
+
+  if (props.secondaryProjectItems.length > 0) {
+    groups.push({
+      id: "legacy-secondary-project-group",
+      label: props.secondaryProjectSectionLabel,
+      items: props.secondaryProjectItems,
+    });
+  }
+
+  return groups;
+});
+
+const hasProjectGroups = computed(() => groupedProjectSections.value.length > 0);
 const hasTopBar = computed(() => props.showToggle || Boolean(props.topItem));
 const shellClasses = computed(() => [
-    "kepler-sidebar-shell",
-    { "kepler-sidebar-shell--mac-safe-top": props.isMac && props.reserveTopInset },
-    { "kepler-sidebar-shell--with-top-bar": hasTopBar.value },
-    { "kepler-sidebar-shell--drag-region": props.dragRegion },
+  "kepler-sidebar-shell",
+  { "kepler-sidebar-shell--mac-safe-top": props.isMac && props.reserveTopInset },
+  { "kepler-sidebar-shell--with-top-bar": hasTopBar.value },
+  { "kepler-sidebar-shell--drag-region": props.dragRegion },
 ]);
 
 watch([width, _hidden], () => {
-    configRef.value = { width: width.value, hidden: _hidden.value };
+  configRef.value = { width: width.value, hidden: _hidden.value };
 });
 
 watch(
-    () => props.hidden,
-    (val) => {
-        if (val !== undefined && val !== _hidden.value) {
-            startAnimation();
-            _hidden.value = val;
-        }
-    },
+  groupedProjectSections,
+  (groups) => {
+    const nextState: Record<string, boolean> = {};
+    for (const group of groups) {
+      nextState[group.id] = collapsedGroups.value[group.id] ?? !!group.defaultCollapsed;
+    }
+    collapsedGroups.value = nextState;
+  },
+  { immediate: true, deep: true },
+);
+
+watch(
+  () => props.hidden,
+  (val) => {
+    if (val !== undefined && val !== _hidden.value) {
+      startAnimation();
+      _hidden.value = val;
+    }
+  },
 );
 
 function notifyConfigChange(config: SidebarConfig) {
-    emit("configChange", config);
+  emit("configChange", config);
 }
 
 function startAnimation() {
-    if (animTimer.value) {
-        window.clearTimeout(animTimer.value);
-    }
-    isAnimatingRef.value = true;
-    animating.value = true;
-    animTimer.value = window.setTimeout(() => {
-        isAnimatingRef.value = false;
-        animating.value = false;
-        animTimer.value = null;
-    }, 330);
+  if (animTimer.value) {
+    window.clearTimeout(animTimer.value);
+  }
+  isAnimatingRef.value = true;
+  animating.value = true;
+  animTimer.value = window.setTimeout(() => {
+    isAnimatingRef.value = false;
+    animating.value = false;
+    animTimer.value = null;
+  }, 330);
 }
 
 function toggle() {
-    startAnimation();
-    _hidden.value = !_hidden.value;
-    emit("update:hidden", _hidden.value);
-    notifyConfigChange({ width: width.value, hidden: _hidden.value });
+  startAnimation();
+  _hidden.value = !_hidden.value;
+  emit("update:hidden", _hidden.value);
+  notifyConfigChange({ width: width.value, hidden: _hidden.value });
 }
 
 function expandKeyVariants(key: string | null | undefined): Set<string> {
-    const variants = new Set<string>();
-    if (!key) return variants;
+  const variants = new Set<string>();
+  if (!key) return variants;
 
-    const normalized = key.toLowerCase();
-    variants.add(normalized);
+  const normalized = key.toLowerCase();
+  variants.add(normalized);
 
-    const alias = keyLayoutAliases[normalized];
-    if (alias) {
-        variants.add(alias);
-    }
+  const alias = keyLayoutAliases[normalized];
+  if (alias) {
+    variants.add(alias);
+  }
 
-    const reverseAlias = reverseKeyLayoutAliases[normalized];
-    if (reverseAlias) {
-        variants.add(reverseAlias);
-    }
+  const reverseAlias = reverseKeyLayoutAliases[normalized];
+  if (reverseAlias) {
+    variants.add(reverseAlias);
+  }
 
-    return variants;
+  return variants;
 }
 
 function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
-    const parts = shortcut.toLowerCase().split("+");
-    const key = parts[parts.length - 1];
-    const needsMeta = parts.includes("meta");
-    const needsCtrl = parts.includes("ctrl");
-    const needsShift = parts.includes("shift");
-    const needsAlt = parts.includes("alt");
+  const parts = shortcut.toLowerCase().split("+");
+  const key = parts[parts.length - 1];
+  const needsMeta = parts.includes("meta");
+  const needsCtrl = parts.includes("ctrl");
+  const needsShift = parts.includes("shift");
+  const needsAlt = parts.includes("alt");
 
-    if (needsMeta && !e.metaKey) return false;
-    if (needsCtrl && !e.ctrlKey) return false;
-    if (needsShift && !e.shiftKey) return false;
-    if (needsAlt && !e.altKey) return false;
+  if (needsMeta && !e.metaKey) return false;
+  if (needsCtrl && !e.ctrlKey) return false;
+  if (needsShift && !e.shiftKey) return false;
+  if (needsAlt && !e.altKey) return false;
 
-    const shortcutKeys = expandKeyVariants(key);
-    const eventKeys = expandKeyVariants(e.key);
-    const codeKey = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : null;
-    for (const codeVariant of expandKeyVariants(codeKey)) {
-        eventKeys.add(codeVariant);
-    }
+  const shortcutKeys = expandKeyVariants(key);
+  const eventKeys = expandKeyVariants(e.key);
+  const codeKey = e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : null;
+  for (const codeVariant of expandKeyVariants(codeKey)) {
+    eventKeys.add(codeVariant);
+  }
 
-    return [...shortcutKeys].some((shortcutKey) => eventKeys.has(shortcutKey));
+  return [...shortcutKeys].some((shortcutKey) => eventKeys.has(shortcutKey));
 }
 
 function handleKeydown(e: KeyboardEvent) {
-    if (!props.toggleShortcut) return;
+  if (!props.toggleShortcut) return;
 
-    const shortcuts = props.toggleShortcut.split("|");
-    if (!shortcuts.some((s) => matchesShortcut(e, s))) return;
+  const shortcuts = props.toggleShortcut.split("|");
+  if (!shortcuts.some((shortcut) => matchesShortcut(e, shortcut))) return;
 
-    e.preventDefault();
-    toggle();
+  e.preventDefault();
+  toggle();
 }
 
 function handleResizeStart(e: MouseEvent) {
-    e.preventDefault();
-    mouseDownX = e.clientX;
-    mouseDownY = e.clientY;
-    isResizing.value = true;
-    document.body.classList.add("sidebar-resizing");
+  e.preventDefault();
+  mouseDownX = e.clientX;
+  mouseDownY = e.clientY;
+  isResizing.value = true;
+  document.body.classList.add("sidebar-resizing");
 }
 
 function handleResizeMove(e: MouseEvent) {
-    if (isAnimatingRef.value || _hidden.value) return;
+  if (isAnimatingRef.value || _hidden.value) return;
 
-    if (resizeRaf.value) {
-        cancelAnimationFrame(resizeRaf.value);
-    }
+  if (resizeRaf.value) {
+    cancelAnimationFrame(resizeRaf.value);
+  }
 
-    resizeRaf.value = requestAnimationFrame(() => {
-        if (isAnimatingRef.value) return;
+  resizeRaf.value = requestAnimationFrame(() => {
+    if (isAnimatingRef.value) return;
 
-        const newWidth = e.clientX - (props.offsetX ?? 0);
-        const clamped = Math.max(
-            props.minWidth,
-            Math.min(props.maxWidth, newWidth),
-        );
-        width.value = clamped;
-        configRef.value = { ...configRef.value, width: clamped };
-    });
+    const newWidth = e.clientX - (props.offsetX ?? 0);
+    const clamped = Math.max(props.minWidth, Math.min(props.maxWidth, newWidth));
+    width.value = clamped;
+    configRef.value = { ...configRef.value, width: clamped };
+  });
 }
 
 function handleResizeEnd(e: MouseEvent) {
-    if (resizeRaf.value) {
-        cancelAnimationFrame(resizeRaf.value);
-        resizeRaf.value = null;
-    }
-    isResizing.value = false;
-    document.body.classList.remove("sidebar-resizing");
+  if (resizeRaf.value) {
+    cancelAnimationFrame(resizeRaf.value);
+    resizeRaf.value = null;
+  }
+  isResizing.value = false;
+  document.body.classList.remove("sidebar-resizing");
 
-    const dx = Math.abs(e.clientX - mouseDownX);
-    const dy = Math.abs(e.clientY - mouseDownY);
-    if (dx < 4 && dy < 4) {
-        lineExpanded.value = true;
-        window.setTimeout(() => {
-            lineExpanded.value = false;
-            toggle();
-        }, 180);
-        return;
-    }
+  const dx = Math.abs(e.clientX - mouseDownX);
+  const dy = Math.abs(e.clientY - mouseDownY);
+  if (dx < 4 && dy < 4) {
+    lineExpanded.value = true;
+    window.setTimeout(() => {
+      lineExpanded.value = false;
+      toggle();
+    }, 180);
+    return;
+  }
 
-    notifyConfigChange(configRef.value);
+  notifyConfigChange(configRef.value);
+}
+
+function isGroupCollapsed(groupId: string): boolean {
+  return collapsedGroups.value[groupId] ?? false;
+}
+
+function toggleGroup(groupId: string) {
+  collapsedGroups.value = {
+    ...collapsedGroups.value,
+    [groupId]: !isGroupCollapsed(groupId),
+  };
 }
 
 watch(isResizing, (resizing) => {
-    if (resizing) {
-        window.addEventListener("mousemove", handleResizeMove);
-        window.addEventListener("mouseup", handleResizeEnd);
-    } else {
-        window.removeEventListener("mousemove", handleResizeMove);
-        window.removeEventListener("mouseup", handleResizeEnd);
-    }
+  if (resizing) {
+    window.addEventListener("mousemove", handleResizeMove);
+    window.addEventListener("mouseup", handleResizeEnd);
+  } else {
+    window.removeEventListener("mousemove", handleResizeMove);
+    window.removeEventListener("mouseup", handleResizeEnd);
+  }
 });
 
 onMounted(() => {
-    window.addEventListener("keydown", handleKeydown);
+  window.addEventListener("keydown", handleKeydown);
 });
 
 onUnmounted(() => {
-    window.removeEventListener("keydown", handleKeydown);
-    window.removeEventListener("mousemove", handleResizeMove);
-    window.removeEventListener("mouseup", handleResizeEnd);
-    if (animTimer.value) window.clearTimeout(animTimer.value);
-    if (resizeRaf.value) cancelAnimationFrame(resizeRaf.value);
-    document.body.classList.remove("sidebar-resizing");
+  window.removeEventListener("keydown", handleKeydown);
+  window.removeEventListener("mousemove", handleResizeMove);
+  window.removeEventListener("mouseup", handleResizeEnd);
+  if (animTimer.value) window.clearTimeout(animTimer.value);
+  if (resizeRaf.value) cancelAnimationFrame(resizeRaf.value);
+  document.body.classList.remove("sidebar-resizing");
 });
 
 const wrapperStyle = computed(() => {
-    if (_hidden.value) return { width: `${props.hiddenWidth}px` };
-    return { width: `${width.value}px` };
+  if (_hidden.value) return { width: "0px" };
+  return { width: `${width.value}px` };
 });
+
 const wrapperClasses = computed(() =>
-    [
-        "kepler-sidebar-wrapper",
-        _hidden.value ? "hidden collapsed" : "",
-        animating.value ? "animating" : "",
-        isResizing.value ? "is-resizing" : "",
-        props.className ?? "",
-    ]
-        .filter(Boolean)
-        .join(" "),
+  [
+    "kepler-sidebar-wrapper",
+    _hidden.value ? "hidden collapsed" : "",
+    animating.value ? "animating" : "",
+    isResizing.value ? "is-resizing" : "",
+    props.className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" "),
 );
 </script>
 
@@ -379,56 +435,102 @@ const wrapperClasses = computed(() =>
             @click="'onClick' in item && typeof item.onClick === 'function' ? item.onClick() : undefined"
           />
 
-          <template v-if="hasProjects">
-            <div class="kepler-sidebar-divider" />
-            <div class="kepler-sidebar-section-label">
-              {{ projectSectionLabel }}
+          <template v-if="hasProjectGroups">
+            <div class="kepler-sidebar-groups">
+              <section
+                v-for="group in groupedProjectSections"
+                :key="group.id"
+                class="kepler-sidebar-group"
+              >
+                <button
+                  type="button"
+                  class="kepler-sidebar-group-header"
+                  :data-testid="`sidebar-group-${group.id}`"
+                  @click="toggleGroup(group.id)"
+                >
+                  <ChevronRight
+                    :size="14"
+                    :class="[
+                      'kepler-sidebar-group-chevron',
+                      isGroupCollapsed(group.id) ? '' : 'kepler-sidebar-group-chevron--expanded',
+                    ]"
+                  />
+                  <span>{{ group.label }}</span>
+                </button>
+
+                <div
+                  v-if="!isGroupCollapsed(group.id)"
+                  class="kepler-sidebar-group-surface"
+                >
+                  <template v-for="project in group.items" :key="project.id">
+                    <RouterLink
+                      v-if="project.to"
+                      :to="project.to"
+                      :data-testid="project.testId"
+                      :class="[
+                        'kepler-sidebar-project-link',
+                        'widget-nav-item',
+                        project.active ? 'kepler-sidebar-project-link--active' : '',
+                      ]"
+                    >
+                      <span
+                        v-if="project.iconSrc"
+                        class="kepler-sidebar-project-icon-wrap"
+                        :style="{ '--kepler-project-icon-color': project.iconColor ?? project.color ?? 'var(--muted-foreground)' }"
+                      >
+                        <span
+                          class="kepler-sidebar-project-icon"
+                          :style="{ '--kepler-project-icon-src': `url(${project.iconSrc})` }"
+                          aria-hidden="true"
+                        />
+                      </span>
+                      <span
+                        v-else
+                        :class="[
+                          'kepler-sidebar-project-dot',
+                          project.colorClass ?? 'bg-(--muted-foreground)',
+                        ]"
+                        :style="project.color ? { backgroundColor: project.color } : undefined"
+                      />
+                      <span class="kepler-sidebar-project-label">{{ project.label }}</span>
+                    </RouterLink>
+
+                    <button
+                      v-else
+                      type="button"
+                      :data-testid="project.testId"
+                      :class="[
+                        'kepler-sidebar-project-link',
+                        'widget-nav-item',
+                        project.active ? 'kepler-sidebar-project-link--active' : '',
+                      ]"
+                      @click="'onClick' in project && typeof project.onClick === 'function' ? project.onClick() : undefined"
+                    >
+                      <span
+                        v-if="project.iconSrc"
+                        class="kepler-sidebar-project-icon-wrap"
+                        :style="{ '--kepler-project-icon-color': project.iconColor ?? project.color ?? 'var(--muted-foreground)' }"
+                      >
+                        <span
+                          class="kepler-sidebar-project-icon"
+                          :style="{ '--kepler-project-icon-src': `url(${project.iconSrc})` }"
+                          aria-hidden="true"
+                        />
+                      </span>
+                      <span
+                        v-else
+                        :class="[
+                          'kepler-sidebar-project-dot',
+                          project.colorClass ?? 'bg-(--muted-foreground)',
+                        ]"
+                        :style="project.color ? { backgroundColor: project.color } : undefined"
+                      />
+                      <span class="kepler-sidebar-project-label">{{ project.label }}</span>
+                    </button>
+                  </template>
+                </div>
+              </section>
             </div>
-            <template v-for="project in projectItems" :key="project.id">
-              <RouterLink
-                v-if="project.to"
-                :to="project.to"
-                :data-testid="project.testId"
-                :class="[
-                  'kepler-sidebar-project-link',
-                  'widget-nav-item',
-                  project.active
-                    ? 'kepler-sidebar-project-link--active'
-                    : '',
-                ]"
-              >
-                <span
-                  :class="[
-                    'kepler-sidebar-project-dot',
-                    project.colorClass ?? 'bg-(--muted-foreground)',
-                  ]"
-                  :style="project.color ? { backgroundColor: project.color } : undefined"
-                />
-                <span class="kepler-sidebar-project-label">{{ project.label }}</span>
-              </RouterLink>
-              <button
-                v-else
-                type="button"
-                :data-testid="project.testId"
-                :class="[
-                  'kepler-sidebar-project-link',
-                  'widget-nav-item',
-                  project.active
-                    ? 'kepler-sidebar-project-link--active'
-                    : '',
-                ]"
-                @click="'onClick' in project && typeof project.onClick === 'function' ? project.onClick() : undefined"
-              >
-                <span
-                  :class="[
-                    'kepler-sidebar-project-dot',
-                    project.colorClass ?? 'bg-(--muted-foreground)',
-                  ]"
-                  :style="project.color ? { backgroundColor: project.color } : undefined"
-                />
-                <span class="kepler-sidebar-project-label">{{ project.label }}</span>
-              </button>
-            </template>
           </template>
         </div>
 
@@ -510,7 +612,6 @@ const wrapperClasses = computed(() =>
 .kepler-sidebar-shell--mac-safe-top .kepler-sidebar-top {
   position: absolute;
   top: 12px;
-  left: auto;
   right: 0.5rem;
   min-height: 28px;
   justify-content: flex-end;
@@ -554,26 +655,64 @@ const wrapperClasses = computed(() =>
   border-top: 1px solid var(--border);
 }
 
-.kepler-sidebar-section-label {
-  padding: 0.5rem 0.75rem 0.25rem;
-  color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
-  font-size: 10px;
+.kepler-sidebar-groups {
+  display: grid;
+  margin-top: 0.875rem;
+  gap: 1.25rem;
+}
+
+.kepler-sidebar-group {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.kepler-sidebar-group-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0 0.375rem;
+  color: color-mix(in srgb, var(--muted-foreground) 88%, transparent);
+  font-size: 0.8125rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  user-select: none;
+  text-align: left;
+}
+
+.kepler-sidebar-group-header:hover {
+  color: var(--foreground);
+}
+
+.kepler-sidebar-group-chevron {
+  flex-shrink: 0;
+  transition: transform 140ms ease;
+}
+
+.kepler-sidebar-group-chevron--expanded {
+  transform: rotate(90deg);
+}
+
+.kepler-sidebar-group-surface {
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.375rem;
+  border-radius: 1.125rem;
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
 }
 
 .kepler-sidebar-project-link {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.625rem;
   width: 100%;
-  min-height: 2.5rem;
-  padding: 0.5rem 0.75rem;
+  min-height: 2.125rem;
+  padding: 0.375rem 0.625rem;
   border-radius: calc(var(--radius) * 1.4);
   corner-shape: var(--corner-shape);
   color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
   cursor: pointer;
   text-decoration: none;
   text-align: left;
@@ -584,12 +723,12 @@ const wrapperClasses = computed(() =>
 }
 
 .kepler-sidebar-project-link:hover {
-  background: var(--secondary);
+  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
   color: var(--foreground);
 }
 
 .kepler-sidebar-project-link--active {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
   color: var(--foreground);
   font-weight: 500;
 }
@@ -602,7 +741,33 @@ const wrapperClasses = computed(() =>
   border-radius: 999px;
 }
 
+.kepler-sidebar-project-icon-wrap {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kepler-sidebar-project-icon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+  background-color: var(--kepler-project-icon-color);
+  -webkit-mask-image: var(--kepler-project-icon-src);
+  mask-image: var(--kepler-project-icon-src);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  opacity: 0.92;
+}
+
 .kepler-sidebar-project-label {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

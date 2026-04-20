@@ -28,6 +28,7 @@ export type GamePlayStatus =
 
 export interface GameSnapshot {
   id: string;
+  ark_object_id: string | null;
   name: string;
   exe_path: string;
   exe_name: string;
