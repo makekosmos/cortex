@@ -1,24 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import {
   BarChart2,
   FolderSearch,
   Gamepad2,
-  Monitor,
   PanelLeftClose,
   Settings,
   Star,
-  Trophy,
 } from "lucide-vue-next";
+import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { RouterLink, useRoute } from "vue-router";
-import { useGamesStore } from "../stores/games";
 import { useLanguage } from "../composables/useLanguage";
-import AppSpotlight from "./AppSpotlight.vue";
 import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   type SidebarConfig,
 } from "../composables/useSidebarConfig";
+import { useGamesStore } from "../stores/games";
+import AppSpotlight from "./AppSpotlight.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -77,8 +75,6 @@ const navItems = [
   { key: "sidebar.library" as const, to: "/", icon: Gamepad2 },
   { key: "sidebar.scan" as const, to: "/scan", icon: FolderSearch },
   { key: "sidebar.statistics" as const, to: "/statistics", icon: BarChart2 },
-  { key: "sidebar.system" as const, to: "/system", icon: Monitor },
-  { key: "sidebar.achievements" as const, to: "/achievements", icon: Trophy },
 ];
 
 const wrapperStyle = computed(() => {

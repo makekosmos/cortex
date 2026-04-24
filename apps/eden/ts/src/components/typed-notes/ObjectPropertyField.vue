@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
+import { formatObjectFieldValue } from "@/lib/objectFieldFormatting";
 import type { ResolvedNoteTypeField } from "@/lib/typedNotes";
+import ObjectPropertyPicker from "./ObjectPropertyPicker.vue";
 
 const props = withDefaults(defineProps<{
   field: ResolvedNoteTypeField;
@@ -21,7 +23,13 @@ const emit = defineEmits<{
 }>();
 
 const isReadonly = computed(() => props.readonly === true || props.field.read_only);
-const isCompactMatrix = computed(() => props.variant === "secondary" || props.variant === "featured-column");
+const isSelectLike = computed(() =>
+  props.field.kind === "select" ||
+  props.field.kind === "multi_select" ||
+  props.field.kind === "relation",
+);
+const usesCustomPicker = computed(() => isSelectLike.value);
+
 const inputType = computed(() => {
   switch (props.field.kind) {
     case "number":
@@ -35,18 +43,16 @@ const inputType = computed(() => {
   }
 });
 
-const relationIds = computed(() =>
-  Array.isArray(props.modelValue)
-    ? props.modelValue.filter((value): value is string => typeof value === "string")
-    : [],
-);
-
 const selectedValues = computed(() =>
   Array.isArray(props.modelValue)
     ? props.modelValue.filter((value): value is string => typeof value === "string")
     : typeof props.modelValue === "string"
       ? [props.modelValue]
       : [],
+);
+
+const relationIds = computed(() =>
+  props.field.kind === "relation" ? selectedValues.value : [],
 );
 
 const filteredRelationCandidates = computed(() => {
@@ -60,15 +66,36 @@ const filteredRelationCandidates = computed(() => {
   );
 });
 
+const pickerOptions = computed(() => {
+  if (props.field.kind === "relation") {
+    const options = filteredRelationCandidates.value.map((entry) => ({
+      value: entry.id,
+      label: getEntryDisplayTitle(entry.title, entry.header_props_json),
+    }));
+    const knownIds = new Set(options.map((option) => option.value));
+
+    for (const relationId of relationIds.value) {
+      if (knownIds.has(relationId)) {
+        continue;
+      }
+
+      const entry = props.entriesById.get(relationId);
+      options.push({
+        value: relationId,
+        label: entry ? getEntryDisplayTitle(entry.title, entry.header_props_json) : relationId,
+      });
+    }
+
+    return options;
+  }
+
+  return (props.field.options ?? []).map((option) => ({
+    value: option,
+    label: formatOptionLabel(option),
+  }));
+});
+
 const displayValue = computed(() => {
-  if (props.field.kind === "boolean") {
-    return props.modelValue === true ? "Да" : "Нет";
-  }
-
-  if (props.field.kind === "multi_select") {
-    return Array.isArray(props.modelValue) ? props.modelValue.join(", ") : "";
-  }
-
   if (props.field.kind === "relation") {
     return relationIds.value
       .map((id) => {
@@ -78,7 +105,7 @@ const displayValue = computed(() => {
       .join(", ");
   }
 
-  return String(props.modelValue ?? "");
+  return formatObjectFieldValue(props.field, props.modelValue);
 });
 
 const inputPlaceholder = computed(() => {
@@ -92,8 +119,9 @@ const inputPlaceholder = computed(() => {
     case "date":
       return "Выберите дату";
     case "select":
-    case "multi_select":
       return "Выбрать вариант";
+    case "multi_select":
+      return "Выбрать варианты";
     case "relation":
       return "Выберите объекты";
     case "image":
@@ -115,17 +143,8 @@ function updateBooleanValue(event: Event) {
   emit("update:modelValue", (event.target as HTMLInputElement).checked);
 }
 
-function updateSelectValue(event: Event) {
-  const select = event.target as HTMLSelectElement;
-  if (props.field.kind === "multi_select" || props.field.kind === "relation") {
-    emit(
-      "update:modelValue",
-      Array.from(select.selectedOptions, (option) => option.value),
-    );
-    return;
-  }
-
-  emit("update:modelValue", select.value);
+function formatOptionLabel(option: string) {
+  return formatObjectFieldValue(props.field, option) || option;
 }
 </script>
 
@@ -135,12 +154,15 @@ function updateSelectValue(event: Event) {
     :class="[
       `object-property-field--${layout}`,
       `object-property-field--${variant}`,
-      isCompactMatrix && 'object-property-field--compact',
       isReadonly && 'object-property-field--readonly',
+      isSelectLike && 'object-property-field--selectlike',
       field.kind === 'long_text' && 'object-property-field--wide',
     ]"
   >
-    <div class="object-property-field__label">{{ field.label }}</div>
+    <div class="object-property-field__label">
+      <span class="object-property-field__label-text">{{ field.label }}</span>
+      <span v-if="isReadonly" class="object-property-field__lock" aria-hidden="true">🔒</span>
+    </div>
 
     <div class="object-property-field__value">
       <template v-if="isReadonly && field.kind !== 'relation'">
@@ -154,7 +176,7 @@ function updateSelectValue(event: Event) {
           :disabled="isReadonly"
           @change="updateBooleanValue"
         />
-        <span>{{ modelValue === true ? "Да" : "Нет" }}</span>
+        <span>{{ formatObjectFieldValue(field, modelValue) }}</span>
       </label>
 
       <textarea
@@ -167,75 +189,62 @@ function updateSelectValue(event: Event) {
         @input="updateTextareaValue"
       />
 
-      <div v-else-if="field.kind === 'relation'" class="object-property-field__chips">
-        <button
-          v-for="relationId in relationIds"
-          :key="relationId"
-          class="object-property-field__chip"
-          type="button"
-          @click="emit('relationNavigate', relationId)"
+      <div v-else-if="field.kind === 'relation'" class="object-property-field__relation">
+        <div v-if="relationIds.length > 0 && isReadonly" class="object-property-field__chips">
+          <button
+            v-for="relationId in relationIds"
+            :key="relationId"
+            class="object-property-field__chip"
+            type="button"
+            @click="emit('relationNavigate', relationId)"
+          >
+            {{
+              entriesById.has(relationId)
+                ? getEntryDisplayTitle(
+                    entriesById.get(relationId)?.title,
+                    entriesById.get(relationId)?.header_props_json,
+                  )
+                : relationId
+            }}
+          </button>
+        </div>
+
+        <div
+          v-else-if="relationIds.length === 0 && isReadonly"
+          class="object-property-field__empty"
         >
-          {{
-            entriesById.has(relationId)
-              ? getEntryDisplayTitle(
-                  entriesById.get(relationId)?.title,
-                  entriesById.get(relationId)?.header_props_json,
-                )
-              : relationId
-          }}
-        </button>
-        <div v-if="relationIds.length === 0 && isReadonly" class="object-property-field__empty">
           Нет связей
         </div>
 
-        <select
-          v-if="!isReadonly"
-          class="object-property-field__input"
+        <ObjectPropertyPicker
+          v-else
           :data-testid="`typed-note-field-${field.id}`"
+          :model-value="selectedValues"
+          :options="pickerOptions"
+          :placeholder="inputPlaceholder"
+          :variant="variant"
           multiple
-          :size="isCompactMatrix ? 1 : variant !== 'featured-inline' ? Math.min(Math.max(filteredRelationCandidates.length, 2), 6) : undefined"
-          @change="updateSelectValue"
-        >
-          <option
-            v-for="entry in filteredRelationCandidates"
-            :key="entry.id"
-            :value="entry.id"
-            :selected="selectedValues.includes(entry.id)"
-          >
-            {{ getEntryDisplayTitle(entry.title, entry.header_props_json) }}
-          </option>
-        </select>
+          empty-options-label="Нет доступных объектов"
+          @update:model-value="emit('update:modelValue', $event)"
+        />
       </div>
 
-      <select
-        v-else-if="field.kind === 'select' || field.kind === 'multi_select'"
-        class="object-property-field__input"
+      <ObjectPropertyPicker
+        v-else-if="usesCustomPicker"
         :data-testid="`typed-note-field-${field.id}`"
+        :model-value="field.kind === 'multi_select' ? selectedValues : String(modelValue ?? '')"
+        :options="pickerOptions"
+        :placeholder="inputPlaceholder"
+        :variant="variant"
         :multiple="field.kind === 'multi_select'"
         :disabled="isReadonly"
-        @change="updateSelectValue"
-      >
-        <option
-          v-if="field.kind === 'select'"
-          value=""
-          :selected="String(modelValue ?? '') === ''"
-        >
-          {{ inputPlaceholder }}
-        </option>
-
-        <option
-          v-for="option in field.options ?? []"
-          :key="option"
-          :value="option"
-          :selected="selectedValues.includes(option)"
-        >
-          {{ option }}
-        </option>
-      </select>
+        @update:model-value="emit('update:modelValue', $event)"
+      />
 
       <input
         v-else
         class="object-property-field__input"
+        :class="isSelectLike && 'object-property-field__input--textual'"
         :data-testid="`typed-note-field-${field.id}`"
         :type="inputType"
         :value="String(modelValue ?? '')"
@@ -255,10 +264,9 @@ function updateSelectValue(event: Event) {
 .object-property-field--featured-inline {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 28px;
-  position: relative;
-  padding: 2px 12px 2px 8px;
+  padding: 2px 8px;
   border-radius: 8px;
   transition: background-color 0.16s ease;
 }
@@ -267,38 +275,24 @@ function updateSelectValue(event: Event) {
   background: color-mix(in srgb, var(--secondary) 72%, transparent);
 }
 
-.object-property-field--featured-inline::after {
-  content: "";
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--muted-foreground);
-  transform: translateY(-50%);
-}
-
-.object-property-field--featured-inline:last-child::after {
-  display: none;
-}
-
 .object-property-field--featured-column,
 .object-property-field--secondary {
   display: grid;
-  grid-template-columns: minmax(136px, 168px) minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: minmax(0, 30%) minmax(0, 70%);
+  gap: 14px;
+  align-items: stretch;
+  width: 100%;
 }
 
 .object-property-field--secondary {
   position: relative;
-  padding: 4px 0;
-  border-radius: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 10px;
   transition: background-color 0.16s ease;
 }
 
-.object-property-field--compact:hover {
+.object-property-field--secondary:hover {
   background: color-mix(in srgb, var(--background) 82%, var(--secondary));
 }
 
@@ -310,24 +304,56 @@ function updateSelectValue(event: Event) {
   color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+}
+
+.object-property-field__label-text {
+  min-width: 0;
+}
+
+.object-property-field__lock {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.84;
 }
 
 .object-property-field--featured-inline .object-property-field__label {
   white-space: nowrap;
 }
 
-.object-property-field--compact .object-property-field__label {
-  padding-top: 7px;
+.object-property-field__value {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  min-height: 24px;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: left;
 }
 
-.object-property-field__value {
-  min-width: 0;
+.object-property-field--featured-column .object-property-field__label,
+.object-property-field--featured-column .object-property-field__value,
+.object-property-field--secondary .object-property-field__label,
+.object-property-field--secondary .object-property-field__value {
+  align-items: flex-start;
 }
 
 .object-property-field__read {
-  color: var(--foreground);
-  font-size: 13px;
-  line-height: 1.5;
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.object-property-field__read--placeholder {
+  color: var(--muted-foreground);
 }
 
 .object-property-field--featured-inline .object-property-field__read {
@@ -350,21 +376,19 @@ function updateSelectValue(event: Event) {
   background: color-mix(in srgb, var(--background) 82%, var(--secondary));
 }
 
-.object-property-field--compact .object-property-field__input {
-  min-height: 32px;
-  padding: 5px 8px;
+.object-property-field__input--textual {
+  min-height: 28px;
+  padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.object-property-field--compact .object-property-field__input:hover {
-  background: color-mix(in srgb, var(--background) 78%, var(--secondary));
-}
-
-.object-property-field--featured-inline .object-property-field__input {
-  min-width: 110px;
+.object-property-field__input--textual:hover {
+  background: transparent;
 }
 
 .object-property-field__input:focus {
@@ -373,9 +397,9 @@ function updateSelectValue(event: Event) {
   box-shadow: 0 0 0 1px var(--ring);
 }
 
-.object-property-field--compact .object-property-field__input:focus {
-  background: color-mix(in srgb, var(--background) 74%, var(--secondary));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+.object-property-field__input--textual:focus {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .object-property-field__textarea {
@@ -383,15 +407,18 @@ function updateSelectValue(event: Event) {
   resize: vertical;
 }
 
-.object-property-field--compact .object-property-field__textarea {
-  min-height: 36px;
-}
-
 .object-property-field__checkbox {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--foreground);
+  color: inherit;
+}
+
+.object-property-field__relation {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
 }
 
 .object-property-field__chips {
@@ -404,13 +431,13 @@ function updateSelectValue(event: Event) {
 .object-property-field__empty {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 24px;
   padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--secondary);
   color: var(--secondary-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .object-property-field__chip {

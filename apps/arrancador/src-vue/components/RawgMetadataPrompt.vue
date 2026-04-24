@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { ExternalLink, Gamepad2, Loader2, Search, X } from "lucide-vue-next";
+import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { metadataApi } from "../../src/lib/api";
 import type { Game, RawgGame } from "../../src/types";

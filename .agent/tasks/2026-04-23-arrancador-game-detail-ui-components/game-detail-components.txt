@@ -1,0 +1,9 @@
+﻿
+Name                              Lines
+----                              -----
+GameDetailBackupSection.vue         244
+GameDetailMetadataSection.vue        67
+GameProcessBindingPickerModal.vue   199
+GameProcessBindingsSection.vue      126
+
+

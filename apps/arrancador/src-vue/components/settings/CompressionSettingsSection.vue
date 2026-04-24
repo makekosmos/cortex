@@ -34,22 +34,22 @@ function handleCompressionInput(event: Event) {
   <section :id="props.sectionId" class="space-y-4">
     <div class="flex items-center gap-2">
       <HardDrive class="h-5 w-5" />
-      <h2 class="text-base font-semibold sm:text-lg">SQOBA Compression</h2>
+      <h2 class="text-base font-semibold sm:text-lg">Сжатие SQOBA</h2>
     </div>
 
     <div class="space-y-4 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm">
       <SettingsToggleRow
         id="setting-compression"
         :model-value="props.compressionEnabled"
-        label="Enable compression"
-        description="Compressed backups save space while keeping backup history manageable."
+        label="Включить сжатие"
+        description="Сжатые резервные копии занимают меньше места и помогают держать историю копий под контролем."
         @update:model-value="emit('updateCompressionEnabled', $event)"
       />
 
       <div class="space-y-3" :class="props.compressionEnabled ? '' : 'opacity-50'">
         <div class="flex items-center gap-3">
           <label class="text-xs text-muted-foreground" for="compression-level">
-            Level
+            Уровень
           </label>
           <input
             id="compression-level"
@@ -77,7 +77,7 @@ function handleCompressionInput(event: Event) {
         />
 
         <p class="text-xs text-muted-foreground">
-          Lower values are faster. Higher values are smaller. A balanced default is usually 40-70.
+          Низкие значения работают быстрее. Высокие сильнее сжимают. Сбалансированный диапазон обычно 40-70.
         </p>
       </div>
 
@@ -85,8 +85,8 @@ function handleCompressionInput(event: Event) {
         id="setting-skip-compression"
         :model-value="props.skipCompressionOnce"
         :disabled="!props.compressionEnabled"
-        label="Skip compression once"
-        description="The next backup will be created uncompressed, then this flag resets after use."
+        label="Один раз пропустить сжатие"
+        description="Следующая резервная копия будет создана без сжатия, после чего этот флаг автоматически сбросится."
         @update:model-value="emit('updateSkipCompressionOnce', $event)"
       />
     </div>

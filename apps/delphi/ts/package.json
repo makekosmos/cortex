@@ -8,7 +8,7 @@
     "build:sidecar": "cargo build --release --manifest-path sidecar/Cargo.toml",
     "build:sidecar:dev": "cargo build --manifest-path sidecar/Cargo.toml",
     "dev": "bun run build:sidecar:dev && vite --configLoader native",
-    "build": "bun run build:sidecar && tsc && vite build --configLoader native && electron-builder --mac --win",
+    "build": "bun run build:sidecar && tsc && vite build --configLoader native && node scripts/run-electron-builder.mjs",
     "build:web": "BUILD_TARGET=web tsc && BUILD_TARGET=web vite build --configLoader native",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -19,6 +19,7 @@
     "lint:fix": "oxlint -c .oxlintrc.json --fix src/",
     "format": "oxfmt src/",
     "format:check": "oxfmt --check src/",
+    "test:e2e": "playwright test",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui"
   },
@@ -62,6 +63,10 @@
   "build": {
     "appId": "com.kazui.delphi",
     "productName": "Delphi",
+    "npmRebuild": false,
+    "toolsets": {
+      "winCodeSign": "1.1.0"
+    },
     "directories": {
       "output": "release"
     },
@@ -71,15 +76,16 @@
     ],
     "extraResources": [
       {
-        "from": "sidecar/target/release/delphi-db",
-        "to": "delphi-db/delphi-db"
+        "from": "sidecar/target/release/delphi-db.exe",
+        "to": "ark-core/ark-core-rpc.exe"
       }
     ],
     "mac": {
       "target": "dmg"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "signAndEditExecutable": false
     },
     "linux": {
       "target": "AppImage"

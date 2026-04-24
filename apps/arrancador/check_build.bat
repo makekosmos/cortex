@@ -21,17 +21,5 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo Checking Rust sidecar compilation...
-cd src-tauri
-cargo check
-if %errorlevel% neq 0 (
-    echo [ERROR] Rust sidecar compilation failed!
-    pause
-    exit /b %errorlevel%
-) else (
-    echo [SUCCESS] Rust sidecar compiles successfully.
-)
-
-echo.
-echo All checks passed! Bun toolchain, Electron shell and Rust sidecar are compiling.
+echo All checks passed! Bun toolchain and Electron shell are compiling.
 pause

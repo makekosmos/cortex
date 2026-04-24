@@ -197,13 +197,11 @@ const emit = defineEmits<{
 }
 
 .object-types-sidebar__item-icon-wrap {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  background: var(--background);
-  border: 1px solid var(--sidebar-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 

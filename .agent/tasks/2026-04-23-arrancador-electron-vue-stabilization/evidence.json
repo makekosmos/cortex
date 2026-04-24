@@ -1,0 +1,70 @@
+{
+  "task_id": "2026-04-23-arrancador-electron-vue-stabilization",
+  "status": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": "Ark usage DB handles are closed in finally paths; stats service uses a single getRangeStats call for one request."
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": "AGENTS.md and README identify Electron + Vue/src-vue as active and warn against React/Tauri runtime paths."
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": "Arrancador package metadata removes Tauri deps/scripts and React-specific test/runtime entries; Tauri Rust text/config backend files removed."
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": "biome.jsonc excludes generated/build output; bun run biome:check exits 0."
+    },
+    "AC5": {
+      "status": "PASS",
+      "commands": {
+        "bun run typecheck": {
+          "status": "PASS",
+          "raw": "raw/typecheck.txt"
+        },
+        "bun run test": {
+          "status": "PASS",
+          "raw": "raw/test.txt"
+        },
+        "bun run biome:check": {
+          "status": "PASS",
+          "raw": "raw/biome-check.txt"
+        },
+        "bun run build:renderer": {
+          "status": "PASS",
+          "raw": "raw/build-renderer.txt"
+        },
+        "bun run build:main": {
+          "status": "PASS",
+          "raw": "raw/build-main.txt"
+        },
+        "bun run build:preload": {
+          "status": "PASS",
+          "raw": "raw/build-preload.txt"
+        },
+        "bun run build": {
+          "status": "PASS",
+          "raw": "raw/build.txt"
+        }
+      }
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": "evidence.md, evidence.json, problems.md, and raw command outputs exist under the task artifact directory."
+    }
+  },
+  "residual_notes": [
+    "Biome still reports non-failing source warnings, mostly Vue template usage false positives; command exit code is 0.",
+    "Binary icon/resource assets remain under apps/arrancador/src-tauri because shell deletion is blocked and apply_patch cannot delete invalid-UTF8/binary files.",
+    "bun install failed in the sandbox with tempdir AccessDenied; lockfile Arrancador workspace metadata was synchronized manually."
+  ],
+  "review_findings": {
+    "ark_sqlite_handles_leaked": "fixed",
+    "docs_said_react": "fixed",
+    "ipc_bridge_compile_time_only": "fixed",
+    "biome_checked_generated_output": "fixed"
+  }
+}

@@ -1,5 +1,5 @@
-import os from "node:os";
 import { readFile } from "node:fs/promises";
+import os from "node:os";
 
 export async function getOsName() {
   if (process.platform === "linux") {

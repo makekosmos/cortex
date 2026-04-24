@@ -1,9 +1,20 @@
+export type GameProcessBindingMatchType = "exe_path" | "process_name";
+
+export interface GameProcessBinding {
+  id: number;
+  game_id: string;
+  match_type: GameProcessBindingMatchType;
+  match_value: string;
+  created_at: string;
+}
+
 export interface Game {
   id: string;
   ark_object_id: string | null;
   name: string;
   exe_path: string;
   exe_name: string;
+  process_bindings: GameProcessBinding[];
   play_status: string;
 
   rawg_id: number | null;
@@ -63,6 +74,11 @@ export interface UpdateGame {
   play_status?: string | null;
   user_rating?: number | null;
   user_note?: string | null;
+}
+
+export interface NewGameProcessBinding {
+  match_type: GameProcessBindingMatchType;
+  match_value: string;
 }
 
 export interface RunningProcessInfo {

@@ -3,8 +3,8 @@
 ## Test layers (what goes where)
 
 - **Frontend unit**: Pure utilities and parsing in `src/lib` and `src/types` (no DOM).
-- **Frontend component**: Page and component behavior in `src/pages` and `src/components` with Testing Library; mock `window.arrancador` and local helpers.
-- **Frontend integration**: `src/store/GamesContext.tsx` and hooks that combine API + state (still mocked API/bridge).
+- **Frontend component**: Page and component behavior in `src-vue/pages` and `src-vue/components` with Vue Test Utils; mock `window.arrancador` and local helpers.
+- **Frontend integration**: Pinia stores and composables in `src-vue` that combine API + state (still mocked API/bridge).
 - **Electron main unit**: Pure logic in `electron/main/services/*` and helpers with temp files/db fixtures.
 - **Stats read-model unit**: Ark-backed playtime source wiring in `electron/main/services/playtime-stats.ts` with legacy-fallback fixtures.
 - **Electron main integration**: SQLite-backed flows in `electron/main/db/**` and service modules using temp DB/files.
@@ -14,9 +14,9 @@
 
 - **Frontend <-> Backend**: `src/lib/api.ts` is the single invoke surface. Any change to a command name, payload shape, or return type is a breaking change and must be mirrored here.
 - **Backend public API**: Electron main-process handlers are exposed through the bridge and should return `Result<T, String>` semantics at the contract layer. Playtime statistics stay behind a narrow repository adapter so the storage source can change without affecting the renderer API.
-- **Error surface**: A Rust `Err(String)` becomes a rejected `invoke` promise; contract tests should assert on error category and message prefix rather than exact wording.
+- **Error surface**: Electron main-process errors become rejected `invoke` promises; contract tests should assert on error category and message prefix rather than exact wording.
 - **Event contracts**: `scan_executables_stream` emits `scan:entry` + `scan:done`; backups emit `backup:progress` and `restore:progress` with `BackupProgressEvent`.
-- **Legacy fallback**: Direct `@tauri-apps/*` mocks stay only where renderer code still imports those APIs directly. New tests should prefer `window.arrancador` and local helpers.
+- **Runtime boundary**: Renderer tests should prefer `window.arrancador` and local helpers. Do not add Tauri mocks or Tauri runtime fallbacks.
 
 ## Contract test table
 

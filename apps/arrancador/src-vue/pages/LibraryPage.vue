@@ -11,72 +11,33 @@ import {
   Star,
   X,
 } from "lucide-vue-next";
-import { computed, onMounted, reactive, shallowRef, watch } from "vue";
+import { computed, reactive, watch } from "vue";
 import { RouterLink } from "vue-router";
-import { gamesApi } from "../../src/lib/api";
 import { translateGenreListToRu, translateGenreToRu } from "../../src/lib/genres";
-import type { Game, NewGame } from "../../src/types";
 import GameCard from "../components/GameCard.vue";
 import RawgMetadataPrompt from "../components/RawgMetadataPrompt.vue";
+import { useLibraryGameImport } from "../composables/useLibraryGameImport";
+import { useLibraryInstallStatus } from "../composables/useLibraryInstallStatus";
 import { useToast } from "../composables/useToast";
-import { useDropZone } from "../composables/useDropZone";
+import {
+  countActiveLibraryFilters,
+  createDefaultLibraryFilterPreset,
+  filterLibraryGames,
+  formatPlaytime,
+  getLibraryMetadataOptions,
+  hasActiveLibraryFilters,
+  type InstallState,
+  type LibraryFilterPreset,
+  type PlayedState,
+  type PlayStatusState,
+  type RatingMode,
+  type SortBy,
+  sanitizeLibraryFilterPreset,
+  type ViewMode,
+} from "../lib/libraryFilters";
 import { useGamesStore } from "../stores/games";
 
-type ViewMode = "grid" | "list";
-type SortBy = "name" | "lastPlayed" | "dateAdded" | "playCount" | "playtime";
-type PlayedState = "all" | "played" | "unplayed";
-type RatingMode = "user" | "metacritic";
-type PlayStatusState =
-  | "all"
-  | "not_started"
-  | "in_progress"
-  | "completed"
-  | "abandoned";
-type InstallState = "all" | "installed" | "not_installed";
-
-type LibraryFilterPreset = {
-  searchQuery: string;
-  viewMode: ViewMode;
-  sortBy: SortBy;
-  showFavoritesOnly: boolean;
-  showAdvancedFilters: boolean;
-  selectedGenres: string[];
-  selectedPlatforms: string[];
-  playedState: PlayedState;
-  installState: InstallState;
-  playStatusState: PlayStatusState;
-  ratingMode: RatingMode;
-  minRating: string;
-  maxRating: string;
-  minMetacritic: string;
-  maxMetacritic: string;
-  minPlaytimeHours: string;
-  maxPlaytimeHours: string;
-  requireMetadata: boolean;
-};
-
 const FILTER_PRESET_STORAGE_KEY = "arrancador_library_filter_preset_v1";
-
-const defaultLibraryFilterPreset: LibraryFilterPreset = {
-  searchQuery: "",
-  viewMode: "grid",
-  sortBy: "name",
-  showFavoritesOnly: false,
-  showAdvancedFilters: false,
-  selectedGenres: [],
-  selectedPlatforms: [],
-  playedState: "all",
-  installState: "all",
-  playStatusState: "all",
-  ratingMode: "user",
-  minRating: "",
-  maxRating: "",
-  minMetacritic: "",
-  maxMetacritic: "",
-  minPlaytimeHours: "",
-  maxPlaytimeHours: "",
-  requireMetadata: false,
-};
 
 const sortByLabel: Record<SortBy, string> = {
   name: "По имени",
@@ -106,112 +67,14 @@ const playStatusLabel: Record<PlayStatusState, string> = {
   abandoned: "Брошено",
 };
 
-function createDefaultFilterPreset(): LibraryFilterPreset {
-  return {
-    ...defaultLibraryFilterPreset,
-    selectedGenres: [],
-    selectedPlatforms: [],
-  };
-}
-
-function isViewMode(value: unknown): value is ViewMode {
-  return value === "grid" || value === "list";
-}
-
-function isSortBy(value: unknown): value is SortBy {
-  return (
-    value === "name" ||
-    value === "lastPlayed" ||
-    value === "dateAdded" ||
-    value === "playCount" ||
-    value === "playtime"
-  );
-}
-
-function isPlayedState(value: unknown): value is PlayedState {
-  return value === "all" || value === "played" || value === "unplayed";
-}
-
-function isInstallState(value: unknown): value is InstallState {
-  return value === "all" || value === "installed" || value === "not_installed";
-}
-
-function isPlayStatusState(value: unknown): value is PlayStatusState {
-  return (
-    value === "all" ||
-    value === "not_started" ||
-    value === "in_progress" ||
-    value === "completed" ||
-    value === "abandoned"
-  );
-}
-
-function isRatingMode(value: unknown): value is RatingMode {
-  return value === "user" || value === "metacritic";
-}
-
-function sanitizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item) => typeof item === "string");
-}
-
 function loadLibraryFilterPreset(): LibraryFilterPreset {
-  const fallback = createDefaultFilterPreset();
+  const fallback = createDefaultLibraryFilterPreset();
   if (typeof window === "undefined") return fallback;
   const stored = window.localStorage.getItem(FILTER_PRESET_STORAGE_KEY);
   if (!stored) return fallback;
 
   try {
-    const raw = JSON.parse(stored);
-    if (!raw || typeof raw !== "object") return fallback;
-
-    return {
-      ...fallback,
-      searchQuery:
-        typeof raw.searchQuery === "string" ? raw.searchQuery : fallback.searchQuery,
-      viewMode: isViewMode(raw.viewMode) ? raw.viewMode : fallback.viewMode,
-      sortBy: isSortBy(raw.sortBy) ? raw.sortBy : fallback.sortBy,
-      showFavoritesOnly:
-        typeof raw.showFavoritesOnly === "boolean"
-          ? raw.showFavoritesOnly
-          : fallback.showFavoritesOnly,
-      showAdvancedFilters:
-        typeof raw.showAdvancedFilters === "boolean"
-          ? raw.showAdvancedFilters
-          : fallback.showAdvancedFilters,
-      selectedGenres: sanitizeStringArray(raw.selectedGenres),
-      selectedPlatforms: sanitizeStringArray(raw.selectedPlatforms),
-      playedState: isPlayedState(raw.playedState) ? raw.playedState : fallback.playedState,
-      installState: isInstallState(raw.installState)
-        ? raw.installState
-        : fallback.installState,
-      playStatusState: isPlayStatusState(raw.playStatusState)
-        ? raw.playStatusState
-        : fallback.playStatusState,
-      ratingMode: isRatingMode(raw.ratingMode) ? raw.ratingMode : fallback.ratingMode,
-      minRating: typeof raw.minRating === "string" ? raw.minRating : fallback.minRating,
-      maxRating: typeof raw.maxRating === "string" ? raw.maxRating : fallback.maxRating,
-      minMetacritic:
-        typeof raw.minMetacritic === "string"
-          ? raw.minMetacritic
-          : fallback.minMetacritic,
-      maxMetacritic:
-        typeof raw.maxMetacritic === "string"
-          ? raw.maxMetacritic
-          : fallback.maxMetacritic,
-      minPlaytimeHours:
-        typeof raw.minPlaytimeHours === "string"
-          ? raw.minPlaytimeHours
-          : fallback.minPlaytimeHours,
-      maxPlaytimeHours:
-        typeof raw.maxPlaytimeHours === "string"
-          ? raw.maxPlaytimeHours
-          : fallback.maxPlaytimeHours,
-      requireMetadata:
-        typeof raw.requireMetadata === "boolean"
-          ? raw.requireMetadata
-          : fallback.requireMetadata,
-    };
+    return sanitizeLibraryFilterPreset(JSON.parse(stored));
   } catch {
     return fallback;
   }
@@ -224,94 +87,6 @@ function persistLibraryFilterPreset(preset: LibraryFilterPreset) {
   } catch {
     // Ignore persistence failures.
   }
-}
-
-function parseNumber(value: string) {
-  if (!value.trim()) return null;
-  const parsed = Number.parseFloat(value.replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function splitList(value: string | null) {
-  return value
-    ?.split(",")
-    .map((item) => item.trim())
-    .filter(Boolean) ?? [];
-}
-
-function formatPlaytime(seconds: number) {
-  if (!seconds) return "0 ч";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours} ч ${minutes} мин`;
-  return `${minutes} мин`;
-}
-
-function fileNameFromPath(filePath: string) {
-  const normalized = filePath.replace(/\\/g, "/");
-  const name = normalized.split("/").pop();
-  return name || filePath;
-}
-
-function cleanNameFromFile(fileName: string) {
-  const base = fileName.replace(/\.exe$/i, "");
-  return base.replace(/[-_]/g, " ").replace(/\s+/g, " ").trim() || base;
-}
-
-function normalizeNameForMerge(value: string) {
-  return value
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/\.exe$/i, "")
-    .replace(/\[[^\]]*\]|\([^\)]*\)|\{[^\}]*\}/g, " ")
-    .replace(/[-_./]/g, " ")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function matchMergeNames(candidate: string, incoming: string) {
-  if (!candidate || !incoming) return false;
-  if (candidate === incoming) return true;
-  if (
-    candidate.length > 4 &&
-    incoming.length > 4 &&
-    (candidate.includes(incoming) || incoming.includes(candidate))
-  ) {
-    return true;
-  }
-
-  const candidateTokens = candidate.split(" ").filter(Boolean);
-  const incomingTokens = incoming.split(" ").filter(Boolean);
-  if (candidateTokens.length <= 1 || incomingTokens.length <= 1) return false;
-
-  const tokenSet = new Set(incomingTokens);
-  const overlap = candidateTokens.filter((token) => tokenSet.has(token)).length;
-  if (overlap < 2) return false;
-
-  return overlap / Math.max(candidateTokens.length, incomingTokens.length) >= 0.67;
-}
-
-function findMergeCandidate(games: Game[], name: string): Game | undefined {
-  const normalized = normalizeNameForMerge(name);
-  if (!normalized) return undefined;
-
-  for (const game of games) {
-    const candidateNames = [game.name, game.exe_name, fileNameFromPath(game.exe_path)];
-    const exact = candidateNames.find(
-      (candidateName) => normalizeNameForMerge(candidateName) === normalized,
-    );
-    if (exact) return game;
-  }
-
-  return games.find((game) =>
-    [game.name, game.exe_name, fileNameFromPath(game.exe_path)].some(
-      (candidateName) => {
-        const normalizedCandidate = normalizeNameForMerge(candidateName);
-        return matchMergeNames(normalizedCandidate, normalized);
-      },
-    ),
-  );
 }
 
 const gamesStore = useGamesStore();
@@ -339,146 +114,34 @@ const state = reactive({
   requireMetadata: initialFilters.requireMetadata,
 });
 
-const metadataQueue = shallowRef<Game[]>([]);
-const installedById = shallowRef<Record<string, boolean>>({});
+const {
+  metadataQueue,
+  currentMetadataGame,
+  dropActive,
+  dropHandlers,
+  advanceMetadataQueue,
+  clearMetadataQueue,
+} = useLibraryGameImport({
+  games: () => gamesStore.games,
+  addGames: gamesStore.addGames,
+  updateGame: gamesStore.updateGame,
+  notify,
+});
 
-function enqueueMetadata(added: Game[]) {
-  metadataQueue.value = [
-    ...metadataQueue.value,
-    ...added.filter(
-      (candidate) => !metadataQueue.value.some((queued) => queued.id === candidate.id),
-    ),
-  ];
-}
-
-async function handleDroppedPaths(paths: string[]) {
-  if (paths.length === 0) return;
-
-  const toAdd: NewGame[] = [];
-  const seen = new Set<string>();
-  let skipped = 0;
-  let invalid = 0;
-  let merged = 0;
-
-  for (const rawPath of paths) {
-    let resolved = rawPath;
-    if (rawPath.toLowerCase().endsWith(".lnk")) {
-      try {
-        resolved = await gamesApi.resolveShortcutTarget(rawPath);
-      } catch (cause) {
-        console.error("Failed to resolve shortcut:", cause);
-        invalid += 1;
-        continue;
-      }
-    }
-
-    const lowerResolved = resolved.toLowerCase();
-    if (!lowerResolved.endsWith(".exe")) {
-      invalid += 1;
-      continue;
-    }
-
-    if (seen.has(lowerResolved)) {
-      continue;
-    }
-
-    seen.add(lowerResolved);
-    const exists = await gamesApi.existsByPath(resolved).catch(() => false);
-    if (exists) {
-      skipped += 1;
-      continue;
-    }
-
-    const exeName = fileNameFromPath(resolved);
-    const name = cleanNameFromFile(exeName);
-    const candidate = findMergeCandidate(gamesStore.games, name);
-    if (candidate) {
-      const doMerge = window.confirm(
-        `Найдена игра с похожим названием: "${candidate.name}" из библиотеки. Обновить путь для существующей записи?`,
-      );
-
-      if (doMerge) {
-        await gamesStore.updateGame(candidate.id, { exe_path: resolved });
-        merged += 1;
-        continue;
-      }
-    }
-
-    toAdd.push({
-      name,
-      exe_path: resolved,
-      exe_name: exeName,
-    });
-  }
-
-  if (toAdd.length > 0) {
-    try {
-      const added = await gamesStore.addGames(toAdd);
-      enqueueMetadata(added);
-
-      const extra: string[] = [];
-      if (skipped > 0) extra.push(`Пропущено: ${skipped}`);
-      if (invalid > 0) extra.push(`Не поддерживается: ${invalid}`);
-      if (merged > 0) extra.push(`Объединено с существующими: ${merged}`);
-
-      notify({
-        tone: "success",
-        title: `Добавлено ${added.length}`,
-        description: extra.length ? extra.join(" | ") : undefined,
-      });
-    } catch (cause) {
-      console.error("Failed to add dropped games:", cause);
-      notify({
-        tone: "error",
-        title: "Не удалось добавить игру",
-        description: "Проверьте путь к файлу.",
-      });
-    }
-    return;
-  }
-
-  if (merged > 0) {
-    notify({
-      tone: "success",
-      title: `Объединено с существующими: ${merged}`,
-      description: "Обновлены пути для игр с совпавшим названием.",
-    });
-    return;
-  }
-
-  notify({
-    tone: "warning",
-    title: "Файлы не добавлены",
-    description: "Поддерживаются .exe и .lnk.",
-  });
-}
-
-const { dropActive, dropHandlers } = useDropZone({
-  onDropPaths: handleDroppedPaths,
+const { installedById } = useLibraryInstallStatus({
+  games: () => gamesStore.games,
 });
 
 const genreOptions = computed(() => {
-  const values = new Set<string>();
-  for (const game of gamesStore.games) {
-    for (const genre of splitList(game.genres)) {
-      values.add(genre);
-    }
-  }
-  return Array.from(values).sort((left, right) => left.localeCompare(right));
+  return getLibraryMetadataOptions(gamesStore.games, "genres");
 });
 
 const platformOptions = computed(() => {
-  const values = new Set<string>();
-  for (const game of gamesStore.games) {
-    for (const platform of splitList(game.platforms)) {
-      values.add(platform);
-    }
-  }
-  return Array.from(values).sort((left, right) => left.localeCompare(right));
+  return getLibraryMetadataOptions(gamesStore.games, "platforms");
 });
 
 function clearAdvancedFilters() {
-  Object.assign(state, createDefaultFilterPreset());
+  Object.assign(state, createDefaultLibraryFilterPreset());
 }
 
 watch(
@@ -491,205 +154,14 @@ watch(
   { deep: true },
 );
 
-watch(
-  () => gamesStore.games,
-  async (games) => {
-    if (games.length === 0) {
-      installedById.value = {};
-      return;
-    }
+const hasActiveAdvancedFilters = computed(() => hasActiveLibraryFilters(state));
 
-    const resolved = await Promise.all(
-      games.map(async (game) => {
-        try {
-          const value = await gamesApi.isInstalled(game.id);
-          return [game.id, value] as const;
-        } catch (cause) {
-          console.error("Failed to check install status:", cause);
-          return [game.id, true] as const;
-        }
-      }),
-    );
+const activeFilterCount = computed(() => countActiveLibraryFilters(state));
 
-    installedById.value = Object.fromEntries(resolved);
-  },
-  { immediate: true, deep: true },
+const filteredGames = computed(() =>
+  filterLibraryGames(gamesStore.games, state, installedById.value),
 );
 
-const hasActiveAdvancedFilters = computed(() => {
-  const minRatingValue = parseNumber(state.minRating);
-  const maxRatingValue = parseNumber(state.maxRating);
-  const minMetacriticValue = parseNumber(state.minMetacritic);
-  const maxMetacriticValue = parseNumber(state.maxMetacritic);
-  const minPlaytimeValue = parseNumber(state.minPlaytimeHours);
-  const maxPlaytimeValue = parseNumber(state.maxPlaytimeHours);
-
-  return (
-    state.showFavoritesOnly ||
-    state.selectedGenres.length > 0 ||
-    state.selectedPlatforms.length > 0 ||
-    state.playedState !== "all" ||
-    state.installState !== "all" ||
-    state.playStatusState !== "all" ||
-    state.requireMetadata ||
-    minRatingValue !== null ||
-    maxRatingValue !== null ||
-    minMetacriticValue !== null ||
-    maxMetacriticValue !== null ||
-    minPlaytimeValue !== null ||
-    maxPlaytimeValue !== null
-  );
-});
-
-const activeFilterCount = computed(() => {
-  const minRatingValue = parseNumber(state.minRating);
-  const maxRatingValue = parseNumber(state.maxRating);
-  const minMetacriticValue = parseNumber(state.minMetacritic);
-  const maxMetacriticValue = parseNumber(state.maxMetacritic);
-  const minPlaytimeValue = parseNumber(state.minPlaytimeHours);
-  const maxPlaytimeValue = parseNumber(state.maxPlaytimeHours);
-
-  return (
-    (state.showFavoritesOnly ? 1 : 0) +
-    state.selectedGenres.length +
-    state.selectedPlatforms.length +
-    (state.playedState !== "all" ? 1 : 0) +
-    (state.installState !== "all" ? 1 : 0) +
-    (state.playStatusState !== "all" ? 1 : 0) +
-    (state.requireMetadata ? 1 : 0) +
-    (minRatingValue !== null ? 1 : 0) +
-    (maxRatingValue !== null ? 1 : 0) +
-    (minMetacriticValue !== null ? 1 : 0) +
-    (maxMetacriticValue !== null ? 1 : 0) +
-    (minPlaytimeValue !== null ? 1 : 0) +
-    (maxPlaytimeValue !== null ? 1 : 0)
-  );
-});
-
-const filteredGames = computed(() => {
-  let items = [...gamesStore.games];
-  const searchNeedle = state.searchQuery.trim().toLowerCase();
-
-  if (state.showFavoritesOnly) {
-    items = items.filter((game) => game.is_favorite);
-  }
-
-  if (searchNeedle) {
-    items = items.filter((game) =>
-      [
-        game.name,
-        game.exe_name,
-        game.description ?? "",
-        game.genres ?? "",
-        game.platforms ?? "",
-        game.developers ?? "",
-        game.publishers ?? "",
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(searchNeedle),
-    );
-  }
-
-  if (state.selectedGenres.length > 0) {
-    items = items.filter((game) => {
-      const genres = splitList(game.genres);
-      return state.selectedGenres.every((genre) => genres.includes(genre));
-    });
-  }
-
-  if (state.selectedPlatforms.length > 0) {
-    items = items.filter((game) => {
-      const platforms = splitList(game.platforms);
-      return state.selectedPlatforms.every((platform) => platforms.includes(platform));
-    });
-  }
-
-  if (state.playedState === "played") {
-    items = items.filter((game) => game.total_playtime > 0 || game.play_count > 0);
-  } else if (state.playedState === "unplayed") {
-    items = items.filter((game) => game.total_playtime <= 0 && game.play_count <= 0);
-  }
-
-  if (state.installState === "installed") {
-    items = items.filter((game) => installedById.value[game.id] !== false);
-  } else if (state.installState === "not_installed") {
-    items = items.filter((game) => installedById.value[game.id] === false);
-  }
-
-  if (state.playStatusState !== "all") {
-    items = items.filter((game) => game.play_status === state.playStatusState);
-  }
-
-  if (state.requireMetadata) {
-    items = items.filter((game) => Boolean(game.rawg_id || game.description || game.background_image));
-  }
-
-  const minRatingValue = parseNumber(state.minRating);
-  const maxRatingValue = parseNumber(state.maxRating);
-  const minMetacriticValue = parseNumber(state.minMetacritic);
-  const maxMetacriticValue = parseNumber(state.maxMetacritic);
-  const minPlaytimeValue = parseNumber(state.minPlaytimeHours);
-  const maxPlaytimeValue = parseNumber(state.maxPlaytimeHours);
-
-  if (minRatingValue !== null || maxRatingValue !== null) {
-    items = items.filter((game) => {
-      const ratingValue =
-        state.ratingMode === "user" ? game.user_rating : game.metacritic;
-      if (ratingValue == null) return false;
-      if (minRatingValue !== null && ratingValue < minRatingValue) return false;
-      if (maxRatingValue !== null && ratingValue > maxRatingValue) return false;
-      return true;
-    });
-  }
-
-  if (minMetacriticValue !== null || maxMetacriticValue !== null) {
-    items = items.filter((game) => {
-      if (game.metacritic == null) return false;
-      if (minMetacriticValue !== null && game.metacritic < minMetacriticValue) return false;
-      if (maxMetacriticValue !== null && game.metacritic > maxMetacriticValue) return false;
-      return true;
-    });
-  }
-
-  if (minPlaytimeValue !== null || maxPlaytimeValue !== null) {
-    items = items.filter((game) => {
-      const hours = game.total_playtime / 3600;
-      if (minPlaytimeValue !== null && hours < minPlaytimeValue) return false;
-      if (maxPlaytimeValue !== null && hours > maxPlaytimeValue) return false;
-      return true;
-    });
-  }
-
-  items.sort((left, right) => {
-    switch (state.sortBy) {
-      case "lastPlayed": {
-        const leftValue = left.last_played ? new Date(left.last_played).getTime() : 0;
-        const rightValue = right.last_played ? new Date(right.last_played).getTime() : 0;
-        return rightValue - leftValue;
-      }
-      case "dateAdded":
-        return new Date(right.date_added).getTime() - new Date(left.date_added).getTime();
-      case "playCount":
-        return right.play_count - left.play_count;
-      case "playtime":
-        return right.total_playtime - left.total_playtime;
-      case "name":
-      default:
-        return left.name.localeCompare(right.name);
-    }
-  });
-
-  return items;
-});
-
-const currentMetadataGame = computed(() => metadataQueue.value[0] ?? null);
-
-onMounted(async () => {
-  if (gamesStore.games.length === 0) {
-    await gamesStore.refreshGames();
-  }
-});
 </script>
 
 <template>
@@ -1051,8 +523,8 @@ onMounted(async () => {
       v-if="currentMetadataGame"
       :game="currentMetadataGame"
       :remaining="metadataQueue.length"
-      @next="metadataQueue = metadataQueue.slice(1)"
-      @skip-all="metadataQueue = []"
+      @next="advanceMetadataQueue"
+      @skip-all="clearMetadataQueue"
       @after-apply="void gamesStore.refreshGames()"
     />
 

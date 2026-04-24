@@ -57,29 +57,29 @@ function feedbackClass(feedback: InlineFeedback | null) {
   <section :id="props.sectionId" class="space-y-4">
     <div class="flex items-center gap-2">
       <Shield class="h-5 w-5" />
-      <h2 class="text-base font-semibold sm:text-lg">Backups</h2>
+      <h2 class="text-base font-semibold sm:text-lg">Резервные копии</h2>
     </div>
 
     <div class="space-y-4 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm">
       <div>
         <div class="mb-2 flex items-center justify-between gap-3">
-          <div class="text-sm font-medium">Backup engine</div>
+          <div class="text-sm font-medium">Движок резервного копирования</div>
           <div class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400">
             <Check class="h-3 w-3" />
-            Native
+            Встроенный
           </div>
         </div>
         <p class="text-xs text-muted-foreground">
-          Arrancador uses the built-in backup engine with Ludusavi-compatible manifest data.
+          Arrancador использует встроенный движок резервного копирования с данными манифеста, совместимыми с Ludusavi.
         </p>
       </div>
 
       <div class="rounded-xl border border-dashed border-border/70 p-3">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <div class="text-sm font-medium">SQOBA manifest</div>
+            <div class="text-sm font-medium">Манифест SQOBA</div>
             <div class="text-xs text-muted-foreground">
-              Refresh the local save-path manifest used for automatic detection.
+              Обновить локальный манифест путей сохранений, который используется для автоопределения.
             </div>
           </div>
           <button
@@ -90,7 +90,7 @@ function feedbackClass(feedback: InlineFeedback | null) {
           >
             <Loader2 v-if="props.manifestRefreshing" class="h-3.5 w-3.5 animate-spin" />
             <RefreshCw v-else class="h-3.5 w-3.5" />
-            Refresh
+            Обновить
           </button>
         </div>
         <div
@@ -104,20 +104,20 @@ function feedbackClass(feedback: InlineFeedback | null) {
 
       <div>
         <label class="mb-2 block text-sm font-medium" for="backup-directory">
-          Backup directory
+          Папка для резервных копий
         </label>
         <div class="flex gap-2">
           <input
             id="backup-directory"
             :value="props.backupDirectory"
             class="flex h-11 flex-1 rounded-xl border border-border/70 bg-card/70 px-4 text-sm outline-none"
-            placeholder="Choose a folder for backups"
+            placeholder="Выберите папку для резервных копий"
             @input="emit('updateBackupDirectory', ($event.target as HTMLInputElement).value)"
           />
           <button
             type="button"
             class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/70 bg-card/80 transition-colors hover:bg-accent/70"
-            aria-label="Choose backup directory"
+            aria-label="Выбрать папку для резервных копий"
             @click="emit('chooseBackupDirectory')"
           >
             <FolderOpen class="h-4 w-4" />
@@ -127,7 +127,7 @@ function feedbackClass(feedback: InlineFeedback | null) {
 
       <div>
         <label class="mb-2 block text-sm font-medium" for="max-backups">
-          Max backups per game
+          Максимум копий на игру
         </label>
         <input
           id="max-backups"
@@ -139,7 +139,7 @@ function feedbackClass(feedback: InlineFeedback | null) {
           @input="handleMaxBackupsInput"
         />
         <p class="mt-1 text-xs text-muted-foreground">
-          Older backups are pruned after the limit is exceeded.
+          Старые копии будут удаляться после превышения лимита.
         </p>
       </div>
 
@@ -147,13 +147,13 @@ function feedbackClass(feedback: InlineFeedback | null) {
         <SettingsToggleRow
           id="setting-auto-backup"
           :model-value="props.autoBackup"
-          label="Enable automatic backups"
+          label="Включить автоматические резервные копии"
           @update:model-value="emit('updateAutoBackup', $event)"
         />
         <SettingsToggleRow
           id="setting-backup-before-launch"
           :model-value="props.backupBeforeLaunch"
-          label="Suggest a backup before launch"
+          label="Предлагать создать копию перед запуском"
           @update:model-value="emit('updateBackupBeforeLaunch', $event)"
         />
       </div>

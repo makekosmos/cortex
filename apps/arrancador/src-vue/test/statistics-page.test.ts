@@ -1,5 +1,7 @@
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
+import { addDays, HEATMAP_RANGE_DAYS, toIsoDate } from "@vue-app/lib/statistics";
 import StatisticsPage from "@vue-app/pages/StatisticsPage.vue";
+import { nextTick } from "vue";
 import type { PlaytimeStats } from "@/types";
 
 const { statsApiMock } = vi.hoisted(() => ({
@@ -12,81 +14,107 @@ vi.mock("@/lib/api", () => ({
   statsApi: statsApiMock,
 }));
 
-const sampleStats: PlaytimeStats = {
-  range_start: "2026-01-01",
-  range_end: "2026-01-31",
-  total_seconds: 3660,
+const rangeStats: PlaytimeStats = {
+  range_start: "2025-04-22",
+  range_end: "2026-04-21",
+  total_seconds: 16200,
   daily_totals: [
-    { date: "2026-01-01", seconds: 0 },
-    { date: "2026-01-02", seconds: 60 },
-    { date: "2026-01-03", seconds: 3600 },
+    { date: "2026-04-19", seconds: 7200 },
+    { date: "2026-04-20", seconds: 1800 },
+    { date: "2026-04-21", seconds: 7200 },
   ],
-  per_game_totals: Array.from({ length: 9 }).map((_, index) => ({
-    id: `g${index}`,
-    name:
-      index === 0
-        ? "A very very long game title that must be truncated"
-        : `Game ${index}`,
-    seconds: (index + 1) * 300,
-  })),
+  per_game_totals: [
+    { id: "valorant", name: "Valorant", seconds: 8400 },
+    { id: "doom", name: "DOOM", seconds: 7800 },
+  ],
 };
 
-async function flushAsyncWork() {
-  await Promise.resolve();
-  await Promise.resolve();
+const todayStats: PlaytimeStats = {
+  range_start: "2026-04-21",
+  range_end: "2026-04-21",
+  total_seconds: 7200,
+  daily_totals: [{ date: "2026-04-21", seconds: 7200 }],
+  per_game_totals: [{ id: "valorant", name: "Valorant", seconds: 7200 }],
+};
+
+const yesterdayStats: PlaytimeStats = {
+  range_start: "2026-04-20",
+  range_end: "2026-04-20",
+  total_seconds: 1800,
+  daily_totals: [{ date: "2026-04-20", seconds: 1800 }],
+  per_game_totals: [{ id: "doom", name: "DOOM", seconds: 1800 }],
+};
+
+async function flushAsyncWork(wrapper?: { vm: { $forceUpdate: () => void; $nextTick: () => Promise<void> } }) {
+  for (let index = 0; index < 5; index += 1) {
+    await flushPromises();
+    await nextTick();
+    await vi.runAllTimersAsync();
+  }
+  await Promise.allSettled(
+    statsApiMock.getPlaytimeStats.mock.results
+      .map((result) => result.value)
+      .filter((value): value is Promise<PlaytimeStats> => Boolean(value)),
+  );
+  await flushPromises();
+  await nextTick();
+  wrapper?.vm.$forceUpdate();
+  await wrapper?.vm.$nextTick();
 }
 
 describe("StatisticsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-20T12:00:00"));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-04-21T12:00:00"));
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("renders stats and reloads when preset/month/custom ranges change", async () => {
-    statsApiMock.getPlaytimeStats.mockResolvedValue(sampleStats);
+  it("renders the heatmap, selects today by default, and reloads selected-day stats", async () => {
+    const today = new Date("2026-04-21T12:00:00");
+    const expectedStart = toIsoDate(addDays(today, -(HEATMAP_RANGE_DAYS - 1)));
+    const expectedEnd = "2026-04-21";
+
+    statsApiMock.getPlaytimeStats.mockImplementation(async (start?: string, end?: string) => {
+      if (start === expectedStart && end === expectedEnd) {
+        return rangeStats;
+      }
+      if (start === "2026-04-21" && end === "2026-04-21") {
+        return todayStats;
+      }
+      if (start === "2026-04-20" && end === "2026-04-20") {
+        return yesterdayStats;
+      }
+      throw new Error(`Unexpected range ${String(start)}..${String(end)}`);
+    });
 
     const wrapper = mount(StatisticsPage);
-    await flushAsyncWork();
-
+    await flushAsyncWork(wrapper);
     expect(wrapper.text()).toContain("Статистика");
-    expect(wrapper.text()).toContain("Топ:");
-    expect(statsApiMock.getPlaytimeStats).toHaveBeenCalledWith("2026-03-22", "2026-04-20");
+    expect(wrapper.text()).toContain("вторник, 21 апреля");
+    expect(wrapper.text()).toContain("2.0 ч");
+    expect(statsApiMock.getPlaytimeStats).toHaveBeenNthCalledWith(1, expectedStart, expectedEnd);
+    expect(statsApiMock.getPlaytimeStats).toHaveBeenNthCalledWith(2, "2026-04-21", "2026-04-21");
 
-    const presetButton = wrapper
-      .findAll("button")
-      .find((candidate) => candidate.text() === "7 дней");
-    expect(presetButton).toBeDefined();
-    await presetButton!.trigger("click");
-    await flushAsyncWork();
+    await wrapper.get('[data-date="2026-04-20"]').trigger("click");
+    await flushAsyncWork(wrapper);
 
-    expect(statsApiMock.getPlaytimeStats).toHaveBeenLastCalledWith("2026-04-14", "2026-04-20");
-
-    await wrapper.get("#stats-month").setValue("2026-03");
-    await flushAsyncWork();
-    expect(statsApiMock.getPlaytimeStats).toHaveBeenLastCalledWith("2026-03-01", "2026-03-31");
-
-    await wrapper.get("#stats-start-date").setValue("2026-04-05");
-    await flushAsyncWork();
-    expect(statsApiMock.getPlaytimeStats).toHaveBeenLastCalledWith("2026-04-05", "2026-04-05");
-
-    await wrapper.get("#stats-end-date").setValue("2026-04-18");
-    await flushAsyncWork();
-    expect(statsApiMock.getPlaytimeStats).toHaveBeenLastCalledWith("2026-04-05", "2026-04-18");
+    expect(wrapper.text()).toContain("понедельник, 20 апреля");
+    expect(wrapper.text()).toContain("DOOM");
+    expect(statsApiMock.getPlaytimeStats).toHaveBeenLastCalledWith("2026-04-20", "2026-04-20");
   });
 
-  it("shows the initial error state when stats cannot be loaded", async () => {
+  it("shows the initial error state when the heatmap cannot be loaded", async () => {
     statsApiMock.getPlaytimeStats.mockRejectedValueOnce(new Error("boom"));
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const wrapper = mount(StatisticsPage);
-    await flushAsyncWork();
+    await flushAsyncWork(wrapper);
 
-    expect(wrapper.text()).toContain("Не удалось загрузить статистику");
+    expect(wrapper.text()).toContain("Не удалось загрузить тепловую карту статистики");
 
     errorSpy.mockRestore();
   });

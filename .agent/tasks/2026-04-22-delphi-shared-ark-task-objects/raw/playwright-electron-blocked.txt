@@ -1,0 +1,22 @@
+Command:
+  bun x playwright test e2e/shared-ark-task.spec.ts --reporter=line
+
+Workdir:
+  D:\Personal\Hobby\Coding\kepler\apps\delphi\ts
+
+Observed result:
+  Playwright test discovery started, but worker launch failed before the app flow ran.
+
+Error:
+  Error: spawn EPERM
+  at WorkerHost.startRunner (...)
+  at WorkerHost.start (...)
+  at Dispatcher._runJobInWorker (...)
+
+Interpretation:
+  The Playwright runner could not fork its worker process in this execution environment.
+
+Related follow-up:
+  Direct Playwright API script (`node scripts/verifySharedArkTask.mjs`) also failed later with
+  `electron.launch: spawn EPERM`, confirming the blocker is Electron process launch in this
+  environment rather than a specific test assertion.

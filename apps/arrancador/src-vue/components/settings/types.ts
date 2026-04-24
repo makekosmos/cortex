@@ -2,6 +2,7 @@ export type SettingsSectionId =
   | "all"
   | "appearance"
   | "system"
+  | "ark"
   | "backup"
   | "compression"
   | "sqoba"
@@ -10,6 +11,7 @@ export type SettingsSectionId =
 export type SettingsSectionIcon =
   | "monitor"
   | "power"
+  | "database"
   | "shield"
   | "hardDrive"
   | "sparkles"

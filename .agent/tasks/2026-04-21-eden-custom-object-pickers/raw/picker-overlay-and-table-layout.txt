@@ -1,0 +1,7 @@
+Static markers:
+- apps/eden/ts/src/lib/typedNotes.ts: validateHeaderProps() now normalizes typed header props before schema validation.
+- apps/eden/ts/src/lib/typedNotes.ts: normalizeHeaderProps() coerces null/string/list drift from Ark/Arrancador into schema-safe values.
+- apps/eden/ts/src/components/typed-notes/ObjectPropertyPicker.vue: panel uses position: fixed with z-index 4000 and width from trigger rect.
+- apps/eden/ts/src/components/typed-notes/ObjectPropertyPicker.vue: multi-select values render as wrapped tokens via object-property-picker__tokens.
+- apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue: secondary rows keep min-height 40px and expand vertically when value content wraps.
+- apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue: read-only fields render a lock marker via object-property-field__lock.

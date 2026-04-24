@@ -1,0 +1,56 @@
+{
+  "task_id": "2026-04-23-arrancador-quality-hardening",
+  "verification": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "summary": "Added source encoding regression test and verified no active Arrancador source/doc mojibake marker offenders."
+    },
+    "AC2": {
+      "status": "PASS",
+      "summary": "Default bun run test now runs renderer and Electron main Vitest projects; Electron tests no longer import bun:test."
+    },
+    "AC3": {
+      "status": "PASS",
+      "summary": "Extracted duplicated game import/path helpers into src-vue/lib/gameImport.ts and updated LibraryPage/ScanPage consumers."
+    },
+    "AC4": {
+      "status": "PASS",
+      "summary": "Added game-import helper tests covering path support, filename/name cleanup, normalization, matching, and candidate lookup."
+    },
+    "AC5": {
+      "status": "PASS",
+      "summary": "Fresh verification artifacts recorded. E2E was attempted and blocked by local spawn EPERM after successful build."
+    }
+  },
+  "commands": [
+    {
+      "command": "bun run typecheck",
+      "status": "PASS",
+      "artifact": "raw/typecheck.txt"
+    },
+    {
+      "command": "bun run test",
+      "status": "PASS",
+      "artifact": "raw/test.txt",
+      "summary": "11 test files passed, 25 tests passed"
+    },
+    {
+      "command": "bun run biome:check",
+      "status": "PASS",
+      "artifact": "raw/biome-check.txt"
+    },
+    {
+      "command": "bun run test:e2e",
+      "status": "BLOCKED",
+      "artifact": "raw/test-e2e.txt",
+      "blocker": "Playwright worker/browser launch failed with spawn EPERM in the local environment after the app build completed."
+    }
+  ],
+  "raw_artifacts": [
+    "raw/typecheck.txt",
+    "raw/test.txt",
+    "raw/biome-check.txt",
+    "raw/test-e2e.txt"
+  ]
+}

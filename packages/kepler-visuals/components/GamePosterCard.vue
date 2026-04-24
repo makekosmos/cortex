@@ -1,0 +1,81 @@
+<script setup lang="ts">
+import { computed, type Component } from "vue";
+import { gamePosterCardClasses } from "../patterns";
+
+export interface GamePosterCardProps {
+  to: string;
+  title: string;
+  eyebrow?: string | null;
+  coverSrc?: string | null;
+  className?: string;
+  linkComponent?: string | Component;
+  linkProps?: Record<string, unknown>;
+}
+
+const props = withDefaults(defineProps<GamePosterCardProps>(), {
+  eyebrow: null,
+  coverSrc: null,
+  className: "",
+  linkComponent: "a",
+  linkProps: () => ({}),
+});
+
+const rootClassName = computed(() =>
+  [gamePosterCardClasses.root, props.className].filter(Boolean).join(" "),
+);
+
+const linkAttrs = computed(() =>
+  props.linkComponent === "a"
+    ? {
+        href: props.to,
+        title: props.title,
+        "aria-label": props.title,
+      }
+    : {
+        to: props.to,
+        title: props.title,
+        "aria-label": props.title,
+        ...props.linkProps,
+      },
+);
+</script>
+
+<template>
+  <component
+    :is="linkComponent"
+    v-bind="linkAttrs"
+    :class="rootClassName"
+  >
+    <div :class="gamePosterCardClasses.media">
+      <img
+        v-if="coverSrc"
+        :src="coverSrc"
+        :alt="title"
+        :class="gamePosterCardClasses.image"
+        loading="lazy"
+        decoding="async"
+      />
+      <div v-else :class="gamePosterCardClasses.placeholder">
+        <slot name="placeholder" />
+      </div>
+      <div :class="gamePosterCardClasses.scrim" aria-hidden="true" />
+      <div :class="gamePosterCardClasses.overlay" aria-hidden="true" />
+    </div>
+
+    <div :class="gamePosterCardClasses.content">
+      <div
+        v-if="eyebrow"
+        :class="gamePosterCardClasses.eyebrow"
+        style="color: #ffffff"
+      >
+        {{ eyebrow }}
+      </div>
+      <div
+        :class="gamePosterCardClasses.title"
+        style="color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.38)"
+      >
+        {{ title }}
+      </div>
+    </div>
+  </component>
+</template>

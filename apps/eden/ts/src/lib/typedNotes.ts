@@ -438,6 +438,128 @@ export function createDefaultHeaderProps(noteType: NoteType | null) {
   );
 }
 
+function coerceHeaderFieldValue(field: NoteTypeField, value: unknown) {
+  switch (field.kind) {
+    case "text":
+    case "long_text":
+    case "date":
+    case "image":
+      if (typeof value === "string") {
+        return value;
+      }
+
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return String(value);
+      }
+
+      return "";
+    case "number":
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        return /^$|^-?\d+(\.\d+)?$/.test(trimmed) ? trimmed : "";
+      }
+
+      return "";
+    case "boolean":
+      if (value === true || value === false) {
+        return value;
+      }
+
+      if (value === 1 || value === "1" || value === "true") {
+        return true;
+      }
+
+      if (value === 0 || value === "0" || value === "false") {
+        return false;
+      }
+
+      return false;
+    case "multi_select":
+      if (Array.isArray(value)) {
+        return value
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      if (typeof value === "string") {
+        return value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      return [];
+    case "relation":
+      if (Array.isArray(value)) {
+        return value
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        return trimmed ? [trimmed] : [];
+      }
+
+      return [];
+    case "select":
+      if (typeof value === "string") {
+        return value;
+      }
+
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return String(value);
+      }
+
+      if (Array.isArray(value)) {
+        const firstValue = value.find((item): item is string => typeof item === "string");
+        return firstValue ?? "";
+      }
+
+      return "";
+    default:
+      return value;
+  }
+}
+
+function normalizeHeaderPropsRecord(
+  noteType: NoteType | null,
+  rawProps: Record<string, unknown>,
+) {
+  if (!noteType) {
+    return rawProps;
+  }
+
+  const definition = parseNoteTypeDefinition(noteType.schema_json);
+  const normalized: Record<string, unknown> = { ...rawProps };
+
+  for (const field of definition.fields) {
+    normalized[field.id] = coerceHeaderFieldValue(field, rawProps[field.id]);
+  }
+
+  return normalized;
+}
+
+export function normalizeHeaderProps(
+  noteType: NoteType | null,
+  rawProps: unknown,
+) {
+  if (!rawProps || typeof rawProps !== "object" || Array.isArray(rawProps)) {
+    return createDefaultHeaderProps(noteType);
+  }
+
+  return {
+    ...createDefaultHeaderProps(noteType),
+    ...normalizeHeaderPropsRecord(noteType, rawProps as Record<string, unknown>),
+  };
+}
+
 export function buildHeaderPropsSchema(noteType: NoteType | null) {
   if (!noteType) {
     return z.record(z.string(), z.unknown());
@@ -475,15 +597,13 @@ export function buildHeaderPropsSchema(noteType: NoteType | null) {
 }
 
 export function validateHeaderProps(noteType: NoteType | null, rawProps: unknown) {
-  return buildHeaderPropsSchema(noteType).safeParse(rawProps);
+  return buildHeaderPropsSchema(noteType).safeParse(normalizeHeaderProps(noteType, rawProps));
 }
 
 export function safeParseHeaderProps(
   noteType: NoteType | null,
   rawJson: string | null | undefined,
 ) {
-  const defaultProps = createDefaultHeaderProps(noteType);
-
   try {
     const parsed = rawJson ? JSON.parse(rawJson) : {};
     const result = validateHeaderProps(noteType, parsed);
@@ -491,18 +611,11 @@ export function safeParseHeaderProps(
     if (result.success) {
       return result.data as Record<string, unknown>;
     }
-
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return {
-        ...defaultProps,
-        ...(parsed as Record<string, unknown>),
-      };
-    }
   } catch {
-    return defaultProps;
+    return createDefaultHeaderProps(noteType);
   }
 
-  return defaultProps;
+  return createDefaultHeaderProps(noteType);
 }
 
 export function normalizeSlug(input: string) {

@@ -1,14 +1,17 @@
 import { execFile as execFileCb, spawn } from "node:child_process";
-import { promisify } from "node:util";
-
 import fs from "node:fs";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import type { RunningProcessInfo } from "./types";
 
 const execFile = promisify(execFileCb);
 const isWindows = process.platform === "win32";
 const isLinux = process.platform === "linux";
+
+export type ProcessMatch =
+  | { matchType: "exe_path"; value: string }
+  | { matchType: "process_name"; value: string };
 
 function escapePowerShellSingleQuoted(value: string): string {
   return value.replace(/'/g, "''");
@@ -18,6 +21,10 @@ function normalizeForComparison(input: string): string {
   const resolved = fs.existsSync(input) ? fs.realpathSync.native(input) : path.resolve(input);
   const normalized = path.normalize(resolved);
   return isWindows ? normalized.toLowerCase() : normalized;
+}
+
+function normalizeProcessName(input: string): string {
+  return input.trim().toLowerCase();
 }
 
 function firstCommandToken(command: string): string {
@@ -157,6 +164,59 @@ export async function killMatchingProcesses(exePath: string): Promise<number> {
       continue;
     }
     if (normalizeForComparison(processInfo.path) !== target) {
+      continue;
+    }
+
+    try {
+      process.kill(processInfo.pid);
+      killed += 1;
+    } catch {
+      // Ignore best-effort failures.
+    }
+  }
+
+  return killed;
+}
+
+function matchesProcess(processInfo: RunningProcessInfo, matches: readonly ProcessMatch[]) {
+  for (const match of matches) {
+    if (match.matchType === "exe_path") {
+      if (!processInfo.path) {
+        continue;
+      }
+      if (normalizeForComparison(processInfo.path) === normalizeForComparison(match.value)) {
+        return true;
+      }
+      continue;
+    }
+
+    if (normalizeProcessName(processInfo.name) === normalizeProcessName(match.value)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export async function countRunningInstancesByMatches(matches: readonly ProcessMatch[]) {
+  if (matches.length === 0) {
+    return 0;
+  }
+
+  const processes = await listRunningProcesses();
+  return processes.filter((processInfo) => matchesProcess(processInfo, matches)).length;
+}
+
+export async function killMatchingProcessesByMatches(matches: readonly ProcessMatch[]) {
+  if (matches.length === 0) {
+    return 0;
+  }
+
+  const processes = await listRunningProcesses();
+  let killed = 0;
+
+  for (const processInfo of processes) {
+    if (!matchesProcess(processInfo, matches)) {
       continue;
     }
 

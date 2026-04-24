@@ -1,0 +1,64 @@
+{
+  "taskId": "2026-04-24-arrancador-rust-transition-baseline",
+  "status": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/bench/baselines/pre-rust-ts-electron-main-2026-04-24.json"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/bench/compare-baseline.ts"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/package.json scripts.bench:compare"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/docs/backend-baseline.md"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": [
+        "raw/typecheck.txt",
+        "raw/test.txt",
+        "raw/biome-check.txt",
+        "raw/bench-baseline.txt",
+        "raw/compare-current.txt"
+      ]
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": [
+        "agent-findings.md"
+      ]
+    }
+  },
+  "baseline": {
+    "path": "apps/arrancador/bench/baselines/pre-rust-ts-electron-main-2026-04-24.json",
+    "backend": "ts-electron-main",
+    "sha256": "077D6CC4731B603CF2C2BD0C11103D220464EEF388138EDE20862991A480CB12"
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "test": "PASS",
+    "biome": "PASS",
+    "benchBaseline": "PASS",
+    "benchCompare": "PASS",
+    "compareCorrectnessPass": true
+  },
+  "firstRustSlice": {
+    "operation": "scan_executables_stream",
+    "integration": "Electron main keeps IPC boundary, Rust sidecar performs scan implementation",
+    "reason": "Read-only, isolated, benchmarked, cancelable, and lower risk than backup restore/delete or central SQLite persistence"
+  }
+}

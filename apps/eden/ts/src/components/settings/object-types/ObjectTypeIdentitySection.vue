@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import type { TypeDraft } from "./shared";
-import { ICON_OPTIONS } from "./shared";
+import { COLOR_OPTIONS, ICON_OPTIONS } from "./shared";
 
 const props = defineProps<{
   draft: TypeDraft;
@@ -12,11 +12,66 @@ const emit = defineEmits<{
   patchDraft: [patch: Partial<TypeDraft>];
 }>();
 
-const iconSrc = computed(() => `/anytype/icon/type/default/${props.draft.icon || "document"}.svg`);
+const pickerOpen = ref(false);
+const pickerRoot = ref<HTMLElement | null>(null);
+
+const iconSrc = computed(
+  () => `/anytype/icon/type/default/${props.draft.icon || "document"}.svg`,
+);
+
+function updateDraftValue<K extends keyof TypeDraft>(key: K, value: TypeDraft[K]) {
+  emit("patchDraft", { [key]: value });
+}
 
 function updateDraftString(key: keyof TypeDraft, event: Event) {
-  emit("patchDraft", { [key]: (event.target as HTMLInputElement | HTMLSelectElement).value });
+  updateDraftValue(
+    key,
+    (event.target as HTMLInputElement | HTMLSelectElement).value as TypeDraft[keyof TypeDraft],
+  );
 }
+
+function togglePicker() {
+  if (props.isSystemDraft) {
+    return;
+  }
+
+  pickerOpen.value = !pickerOpen.value;
+}
+
+function selectIcon(icon: string) {
+  updateDraftValue("icon", icon);
+}
+
+function selectColor(color: string) {
+  updateDraftValue("color", color);
+}
+
+function handlePointerDown(event: MouseEvent) {
+  if (!pickerOpen.value) {
+    return;
+  }
+
+  const target = event.target;
+  if (!(target instanceof Node)) {
+    return;
+  }
+
+  if (pickerRoot.value?.contains(target)) {
+    return;
+  }
+
+  pickerOpen.value = false;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pointerdown", handlePointerDown);
+}
+
+onBeforeUnmount(() => {
+  if (typeof window !== "undefined") {
+    window.removeEventListener("pointerdown", handlePointerDown);
+  }
+});
 </script>
 
 <template>
@@ -33,16 +88,71 @@ function updateDraftString(key: keyof TypeDraft, event: Event) {
       </div>
 
       <span v-if="isSystemDraft" class="object-type-section__badge type-editor-chip">
-        Контракт защищён кодом
+        Контракт защищен кодом
       </span>
     </div>
 
     <div class="object-type-identity__hero">
       <div
-        class="object-type-identity__icon-tile"
-        :style="{ '--object-type-accent': draft.color || '#2aa7ee' }"
+        ref="pickerRoot"
+        class="object-type-identity__picker"
       >
-        <img class="object-type-identity__icon" :src="iconSrc" alt="" width="34" height="34" draggable="false" />
+        <button
+          type="button"
+          class="object-type-identity__picker-trigger"
+          :style="{ '--object-type-accent': draft.color || '#2aa7ee', '--object-type-icon-src': `url(${iconSrc})` }"
+          :disabled="isSystemDraft"
+          :aria-expanded="pickerOpen ? 'true' : 'false'"
+          @click="togglePicker"
+        >
+          <span class="object-type-identity__icon" aria-hidden="true" />
+        </button>
+
+        <div
+          v-if="pickerOpen"
+          class="object-type-identity__picker-panel"
+        >
+          <div class="object-type-identity__picker-section">
+            <div class="object-type-identity__picker-label">Иконка</div>
+            <div class="object-type-identity__icon-grid">
+              <button
+                v-for="icon in ICON_OPTIONS"
+                :key="icon"
+                type="button"
+                class="object-type-identity__icon-option"
+                :class="{ 'is-active': draft.icon === icon }"
+                :title="icon"
+                :aria-label="icon"
+                :style="{
+                  '--object-type-accent': draft.color || '#2aa7ee',
+                  '--object-type-icon-src': `url(/anytype/icon/type/default/${icon}.svg)`,
+                }"
+                @click="selectIcon(icon)"
+              >
+                <span class="object-type-identity__icon-option-glyph" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+
+          <div class="object-type-identity__picker-section">
+            <div class="object-type-identity__picker-label">Цвет</div>
+            <div class="object-type-identity__color-grid">
+              <button
+                v-for="color in COLOR_OPTIONS"
+                :key="color"
+                type="button"
+                class="object-type-identity__color-option"
+                :class="{ 'is-active': draft.color === color }"
+                :title="color"
+                :aria-label="`Цвет ${color}`"
+                :style="{ '--object-type-accent': color }"
+                @click="selectColor(color)"
+              >
+                <span class="object-type-identity__color-option-dot" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="object-type-identity__hero-copy">
@@ -88,34 +198,23 @@ function updateDraftString(key: keyof TypeDraft, event: Event) {
         />
       </label>
 
-      <label class="object-type-form-field">
-        <span>Иконка</span>
-        <select
-          class="object-type-form-input"
-          :value="draft.icon"
-          @change="updateDraftString('icon', $event)"
+      <label class="object-type-form-field object-type-form-field--wide">
+        <span>Визуал типа</span>
+        <button
+          type="button"
+          class="object-type-identity__visual-trigger"
+          :disabled="isSystemDraft"
+          @click="togglePicker"
         >
-          <option v-for="icon in ICON_OPTIONS" :key="icon" :value="icon">
-            {{ icon }}
-          </option>
-        </select>
-      </label>
-
-      <label class="object-type-form-field">
-        <span>Цвет акцента</span>
-        <div class="object-type-form-color">
-          <input
-            class="object-type-form-color-picker"
-            :value="draft.color"
-            type="color"
-            @input="updateDraftString('color', $event)"
+          <span
+            class="object-type-identity__visual-icon"
+            :style="{ '--object-type-accent': draft.color || '#2aa7ee', '--object-type-icon-src': `url(${iconSrc})` }"
+            aria-hidden="true"
           />
-          <input
-            class="object-type-form-input object-type-form-input--mono"
-            :value="draft.color"
-            @input="updateDraftString('color', $event)"
-          />
-        </div>
+          <span class="object-type-identity__visual-copy">
+            Иконка: {{ draft.icon }} · Цвет: {{ draft.color }}
+          </span>
+        </button>
       </label>
 
       <label class="object-type-form-field">
@@ -202,25 +301,115 @@ function updateDraftString(key: keyof TypeDraft, event: Event) {
   background: var(--background);
 }
 
-.object-type-identity__icon-tile {
-  display: grid;
+.object-type-identity__picker {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.object-type-identity__picker-trigger {
+  display: inline-grid;
   place-items: center;
   width: 72px;
   height: 72px;
-  border-radius: 20px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--object-type-accent) 28%, transparent),
-      color-mix(in srgb, var(--object-type-accent) 12%, transparent)
-    ),
-    var(--surface);
-  border: 1px solid color-mix(in srgb, var(--object-type-accent) 32%, var(--border));
+  border: none;
+  border-radius: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.object-type-identity__picker-trigger:disabled,
+.object-type-identity__visual-trigger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.object-type-identity__icon,
+.object-type-identity__visual-icon,
+.object-type-identity__icon-option-glyph {
+  display: inline-block;
+  background-color: var(--object-type-accent);
+  mask-image: var(--object-type-icon-src);
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: var(--object-type-icon-src);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
 }
 
 .object-type-identity__icon {
-  filter: invert(1);
-  opacity: 0.88;
+  width: 40px;
+  height: 40px;
+}
+
+.object-type-identity__picker-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 10;
+  display: grid;
+  gap: 16px;
+  min-width: 320px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--popover);
+  box-shadow: 0 20px 40px rgb(0 0 0 / 0.24);
+}
+
+.object-type-identity__picker-section {
+  display: grid;
+  gap: 10px;
+}
+
+.object-type-identity__picker-label {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.object-type-identity__icon-grid,
+.object-type-identity__color-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.object-type-identity__icon-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.object-type-identity__color-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.object-type-identity__icon-option,
+.object-type-identity__color-option {
+  display: inline-grid;
+  place-items: center;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--background);
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.object-type-identity__icon-option.is-active,
+.object-type-identity__color-option.is-active {
+  border-color: color-mix(in srgb, var(--object-type-accent) 72%, var(--ring));
+  background: color-mix(in srgb, var(--object-type-accent) 10%, transparent);
+}
+
+.object-type-identity__icon-option-glyph {
+  width: 22px;
+  height: 22px;
+}
+
+.object-type-identity__color-option-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--object-type-accent);
 }
 
 .object-type-identity__hero-copy {
@@ -287,19 +476,41 @@ function updateDraftString(key: keyof TypeDraft, event: Event) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.object-type-form-color {
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: 10px;
-}
-
-.object-type-form-color-picker {
-  width: 44px;
-  min-width: 44px;
-  height: 40px;
-  padding: 0;
+.object-type-identity__visual-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--background);
+  color: var(--foreground);
+  text-align: left;
+}
+
+.object-type-identity__visual-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.object-type-identity__visual-copy {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .object-type-identity__hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .object-type-identity__picker-panel {
+    min-width: min(320px, calc(100vw - 64px));
+  }
 }
 </style>

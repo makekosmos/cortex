@@ -1,0 +1,46 @@
+{
+  "task_id": "2026-04-21-arrancador-dev-startup-stability",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/windows.ts"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/router.ts"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/index.html",
+        "apps/arrancador/src-vue/main.ts"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/pages/LayoutPage.vue",
+        "apps/arrancador/src-vue/pages/LibraryPage.vue"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-21-arrancador-dev-startup-stability/raw/typecheck.txt",
+        ".agent/tasks/2026-04-21-arrancador-dev-startup-stability/raw/test.txt",
+        ".agent/tasks/2026-04-21-arrancador-dev-startup-stability/raw/build-renderer.txt",
+        ".agent/tasks/2026-04-21-arrancador-dev-startup-stability/raw/build-main.txt"
+      ]
+    }
+  ]
+}

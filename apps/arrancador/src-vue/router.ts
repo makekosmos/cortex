@@ -1,56 +1,46 @@
 import type { RouteRecordRaw } from "vue-router";
 import { createRouter, createWebHashHistory } from "vue-router";
-import LayoutPage from "./pages/LayoutPage.vue";
-import AchievementsPage from "./pages/AchievementsPage.vue";
-import CataloguePage from "./pages/CataloguePage.vue";
-import GameDetailPage from "./pages/GameDetailPage.vue";
-import LibraryPage from "./pages/LibraryPage.vue";
-import ScanPage from "./pages/ScanPage.vue";
-import SettingsPage from "./pages/SettingsPage.vue";
-import SqobaPage from "./pages/SqobaPage.vue";
-import StatisticsPage from "./pages/StatisticsPage.vue";
-import SystemInfoPage from "./pages/SystemInfoPage.vue";
 
 const routes: RouteRecordRaw[] = [
   {
     path: "/",
-    component: LayoutPage,
+    component: () => import("./pages/LayoutPage.vue"),
     children: [
       {
         path: "",
-        component: LibraryPage,
+        component: () => import("./pages/LibraryPage.vue"),
       },
       {
         path: "catalogue",
-        component: CataloguePage,
-      },
-      {
-        path: "achievements",
-        component: AchievementsPage,
+        component: () => import("./pages/CataloguePage.vue"),
       },
       {
         path: "game/:id",
-        component: GameDetailPage,
+        component: () => import("./pages/GameDetailPage.vue"),
       },
       {
         path: "scan",
-        component: ScanPage,
+        component: () => import("./pages/ScanPage.vue"),
       },
       {
         path: "sqoba",
-        component: SqobaPage,
+        component: () => import("./pages/SqobaPage.vue"),
       },
       {
         path: "statistics",
-        component: StatisticsPage,
+        component: () => import("./pages/StatisticsPage.vue"),
       },
       {
         path: "system",
-        component: SystemInfoPage,
+        redirect: "/",
+      },
+      {
+        path: "achievements",
+        redirect: "/",
       },
       {
         path: "settings",
-        component: SettingsPage,
+        component: () => import("./pages/SettingsPage.vue"),
       },
     ],
   },

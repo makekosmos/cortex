@@ -3,6 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { app } from "electron";
+import {
+  buildPersonalSelectedSpace,
+  readSharedSelectedSpace,
+  writeSharedSelectedSpace,
+} from "../../../../packages/shared-space/selectedSpace";
 
 import { defaultCodeToolsSettings, type CodeToolsSettings } from "./codeTools";
 
@@ -17,8 +22,10 @@ import {
   validateHeaderProps,
   type NoteType,
 } from "@/lib/typedNotes";
+import { normalizeSystemNoteType } from "@/lib/systemTypes";
 import {
   runArkRequest,
+  shutdownArk,
   type ArkObjectLinkRecord,
   type ArkObjectRecord,
   type ArkObjectTypeRecord,
@@ -220,6 +227,10 @@ interface AppConfig {
 
 let currentVaultPath: string | null = null;
 
+function getSharedSelectedSpace() {
+  return readSharedSelectedSpace(app.getPath("appData"));
+}
+
 function getConfigPath() {
   return path.join(app.getPath("userData"), "config.json");
 }
@@ -269,7 +280,7 @@ function mergeCodeToolsSettings(
 }
 
 const DEFAULT_ARK_TYPE_ID = "note_obj";
-const ARK_OBJECT_TYPE_IDS = new Set(["note_obj", "game_obj"]);
+const ARK_OBJECT_TYPE_IDS = new Set(["note_obj", "game_obj", "task_obj"]);
 
 function arkTimestampToMillis(value?: string | null) {
   if (!value) {
@@ -385,18 +396,32 @@ function mapArkObjectTypeToNoteType(objectType: ArkObjectTypeRecord): NoteType {
     imageFieldId: null,
   };
 
-  return normalizeNoteType({
+  const icon =
+    objectType.id === "game_obj"
+      ? "game-controller"
+      : objectType.id === "task_obj"
+        ? "checkmark-circle"
+        : "document-text";
+
+  const color =
+    objectType.id === "game_obj"
+      ? "#ef4444"
+      : objectType.id === "task_obj"
+        ? "#f59e0b"
+        : "#2aa7ee";
+
+  return normalizeSystemNoteType(normalizeNoteType({
     id: objectType.id,
     name: objectType.name,
     slug: normalizeSlug(objectType.id),
-    icon: objectType.id === "game_obj" ? "game-controller" : "document-text",
-    color: objectType.id === "game_obj" ? "#ef4444" : "#2aa7ee",
+    icon,
+    color,
     schema_json: objectType.schemaJson,
     header_template_json: JSON.stringify(headerTemplate),
     ui_schema_json: objectType.uiSchemaJson,
     created_at: arkTimestampToMillis(objectType.createdAt),
     updated_at: arkTimestampToMillis(objectType.updatedAt),
-  });
+  }));
 }
 
 function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
@@ -601,15 +626,18 @@ async function validateEntryTypeMetadata(
 }
 
 export function getVaultPath(): string | null {
-  return readAppConfig().vaultPath || null;
+  return readAppConfig().vaultPath || getSharedSelectedSpace()?.vaultPath || null;
 }
 
 export function getRecentVaultPaths(): string[] {
   const config = readAppConfig();
+  const sharedVaultPath = getSharedSelectedSpace()?.vaultPath ?? null;
 
   return normalizeRecentVaultPaths(
-    config.recentVaultPaths ?? [],
-    config.vaultPath ?? null,
+    sharedVaultPath
+      ? [sharedVaultPath, ...(config.recentVaultPaths ?? [])]
+      : (config.recentVaultPaths ?? []),
+    config.vaultPath ?? sharedVaultPath ?? null,
   );
 }
 
@@ -631,6 +659,7 @@ export async function initStore(vaultPath?: string) {
 
 export async function setVaultPath(newPath: string) {
   const config = readAppConfig();
+  const sharedSelection = buildPersonalSelectedSpace(newPath, "eden");
 
   writeAppConfig({
     ...config,
@@ -643,6 +672,11 @@ export async function setVaultPath(newPath: string) {
       newPath,
     ),
   });
+
+  writeSharedSelectedSpace(app.getPath("appData"), sharedSelection);
+  // The Ark RPC child keeps the DB path from its init request.
+  // Reset it so the next Ark request re-initializes against the new selected space.
+  shutdownArk();
 
   await initStore(newPath);
 }
@@ -858,12 +892,28 @@ export async function searchEntries(query: string): Promise<SearchResult[]> {
     return [];
   }
 
-  return runHeartRequest<SearchResult[]>({
-    operation: "search_entries",
+  const [heartResults, arkResults] = await Promise.all([
+    runHeartRequest<SearchResult[]>({
+      operation: "search_entries",
+      vaultPath,
+      query,
+    }),
+    runArkRequest<SearchResult[]>({
+      operation: "search_objects",
+      query,
+    }),
+  ]);
 
-    vaultPath,
+  const seen = new Set<string>();
 
-    query,
+  return [...arkResults, ...heartResults].filter((result) => {
+    const key = `${result.entryId}:${result.line}:${result.text}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
   });
 }
 

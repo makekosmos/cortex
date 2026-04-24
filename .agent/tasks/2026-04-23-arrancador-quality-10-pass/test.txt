@@ -1,0 +1,10 @@
+$ vitest run --configLoader native --config vitest.config.mjs
+
+ RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+
+
+ Test Files  16 passed (16)
+      Tests  46 passed (46)
+   Start at  22:25:03
+   Duration  6.23s (transform 4.28s, setup 4.48s, import 8.67s, tests 1.44s, environment 29.88s)
+

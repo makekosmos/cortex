@@ -28,6 +28,16 @@ interface PendingRequest<T> {
   reject: (error: Error) => void;
 }
 
+const MAX_STDERR_TAIL_CHARS = 32 * 1024;
+
+function appendTail(buffer: string, chunk: string, maxChars: number) {
+  const next = buffer + chunk;
+  if (next.length <= maxChars) {
+    return next;
+  }
+  return next.slice(next.length - maxChars);
+}
+
 function getHeartBinaryPath() {
   const appRoot = process.env.APP_ROOT ?? process.cwd();
 
@@ -86,7 +96,11 @@ class HeartClient {
     });
 
     child.stderr.on("data", (chunk: string) => {
-      this.stderrBuffer += chunk;
+      this.stderrBuffer = appendTail(
+        this.stderrBuffer,
+        chunk,
+        MAX_STDERR_TAIL_CHARS,
+      );
     });
 
     child.on("error", (error) => {

@@ -1,0 +1,2 @@
+$ biome check . "--max-diagnostics=500"
+Checked 141 files in 86ms. No fixes applied.

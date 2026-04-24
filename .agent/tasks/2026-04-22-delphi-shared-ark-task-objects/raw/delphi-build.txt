@@ -1,0 +1,17 @@
+Command:
+  cargo build --manifest-path ..\..\..\packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
+  bun x vite build --configLoader native
+
+Workdir:
+  D:\Personal\Hobby\Coding\kepler\apps\delphi\ts
+
+Observed result:
+  ark-core-rpc built successfully
+  vite production build produced:
+    dist/index.html
+    dist/assets/*
+    dist-electron/main.js
+    dist-electron/preload.mjs
+
+Notable warning:
+  rust warning in ark-core-rpc main.rs about unused relay_url / relay_api_key fields

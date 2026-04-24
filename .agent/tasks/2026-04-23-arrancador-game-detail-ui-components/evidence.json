@@ -1,0 +1,47 @@
+{
+  "task_id": "2026-04-23-arrancador-game-detail-ui-components",
+  "status": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": "apps/arrancador/src-vue/components/game-detail/GameDetailBackupSection.vue"
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": "apps/arrancador/src-vue/components/game-detail/GameDetailMetadataSection.vue"
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": "GameDetailPage.vue keeps orchestration and delegates extracted section markup."
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": "Props/events preserve the existing section behavior."
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": {
+        "typecheck": ".agent/tasks/2026-04-23-arrancador-game-detail-ui-components/typecheck.txt",
+        "test": ".agent/tasks/2026-04-23-arrancador-game-detail-ui-components/test.txt",
+        "lint": ".agent/tasks/2026-04-23-arrancador-game-detail-ui-components/lint.txt"
+      }
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-23-arrancador-game-detail-ui-components/spec.md",
+        ".agent/tasks/2026-04-23-arrancador-game-detail-ui-components/evidence.md",
+        ".agent/tasks/2026-04-23-arrancador-game-detail-ui-components/evidence.json"
+      ]
+    }
+  },
+  "checks": {
+    "bun run typecheck": "PASS",
+    "bun run test": "PASS",
+    "bun run lint": "PASS"
+  },
+  "metrics": {
+    "game_detail_page_lines": 1049,
+    "added_game_detail_components": 2
+  }
+}

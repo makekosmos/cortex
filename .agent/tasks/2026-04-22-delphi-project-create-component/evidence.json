@@ -1,0 +1,78 @@
+{
+  "task_id": "2026-04-22-delphi-project-create-component",
+  "status": "pass",
+  "summary": {
+    "implementation": "done",
+    "verification": "pass_with_supplemental_blocked_vitest"
+  },
+  "checks": [
+    {
+      "name": "delphi-tsc",
+      "status": "pass",
+      "artifact": "raw/delphi-tsc.txt"
+    },
+    {
+      "name": "delphi-build",
+      "status": "pass",
+      "artifact": "raw/delphi-build.txt"
+    },
+    {
+      "name": "eden-tsc",
+      "status": "pass",
+      "artifact": "raw/eden-tsc.txt"
+    },
+    {
+      "name": "code-inspection",
+      "status": "pass",
+      "artifact": "raw/code-inspection.txt"
+    },
+    {
+      "name": "delphi-vitest",
+      "status": "blocked",
+      "artifact": "raw/delphi-vitest-blocked.txt",
+      "reason": "environment spawn EPERM during Vite/Vitest startup"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC2",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC3",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC4",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC5",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC6",
+      "status": "pass",
+      "basis": "code_inspection_and_build"
+    },
+    {
+      "id": "AC7",
+      "status": "pass",
+      "basis": "code_inspection_and_build"
+    },
+    {
+      "id": "AC8",
+      "status": "pass",
+      "basis": "tsc_and_build"
+    }
+  ]
+}

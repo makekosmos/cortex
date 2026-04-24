@@ -12,7 +12,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "preserve",
 
     /* Linting */
     "strict": true,
@@ -33,8 +32,7 @@
     "src-vue",
     "src-vue/**/*.d.ts",
     "src/lib/**/*.ts",
-    "src/types/**/*.ts"
-    ,
+    "src/types/**/*.ts",
     "src/vite-env.d.ts",
     "src/vitest.d.ts"
   ],

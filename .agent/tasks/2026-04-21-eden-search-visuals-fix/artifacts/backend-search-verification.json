@@ -1,0 +1,58 @@
+﻿{
+    "paths":  {
+                  "vaultPath":  "C:\\Users\\Kazui\\AppData\\Local\\Temp\\eden-search-proof-cef53c82-872c-498c-968c-bd2e3d7b8f46\\vault",
+                  "arkDbPath":  "C:\\Users\\Kazui\\AppData\\Local\\Temp\\eden-search-proof-cef53c82-872c-498c-968c-bd2e3d7b8f46\\ark\\ark.db"
+              },
+    "heart":  {
+                  "init":  true,
+                  "save":  {
+                               "entryId":  "legacy-note-1",
+                               "ok":  true
+                           },
+                  "search":  [
+                                 {
+                                     "entryId":  "legacy-note-1",
+                                     "file":  "",
+                                     "line":  1,
+                                     "text":  "Sharedtoken legacy body still searchable"
+                                 }
+                             ]
+              },
+    "ark":  {
+                "init":  {
+                             "data":  true,
+                             "ok":  true
+                         },
+                "save":  {
+                             "data":  true,
+                             "ok":  true
+                         },
+                "search":  [
+                               {
+                                   "entryId":  "ark-note-1",
+                                   "file":  "",
+                                   "line":  1,
+                                   "text":  "Sharedtoken ark workflows body lives here"
+                               }
+                           ]
+            },
+    "combined":  [
+                     {
+                         "entryId":  "ark-note-1",
+                         "file":  "",
+                         "line":  1,
+                         "text":  "Sharedtoken ark workflows body lives here"
+                     },
+                     {
+                         "entryId":  "legacy-note-1",
+                         "file":  "",
+                         "line":  1,
+                         "text":  "Sharedtoken legacy body still searchable"
+                     }
+                 ],
+    "assertions":  {
+                       "heartFoundLegacy":  true,
+                       "arkFoundObject":  true,
+                       "combinedFoundBoth":  true
+                   }
+}

@@ -5,9 +5,9 @@ import path from "node:path";
 import process from "node:process";
 import {
   CURRENT_STAMP_VERSION,
-  shouldRebuildNative,
-  type NativeState,
   type NativeStamp,
+  type NativeState,
+  shouldRebuildNative,
 } from "../src/lib/native-rebuild";
 
 const ROOT = process.cwd();

@@ -106,6 +106,18 @@ CREATE TABLE IF NOT EXISTS catalogue_items (
   UNIQUE(rawg_id, source)
 )`;
 
+const CREATE_GAME_PROCESS_BINDINGS_SQL = `
+CREATE TABLE IF NOT EXISTS game_process_bindings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id TEXT NOT NULL,
+  match_type TEXT NOT NULL,
+  match_value TEXT NOT NULL,
+  normalized_value TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+  UNIQUE(match_type, normalized_value)
+)`;
+
 const GAME_INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_games_name ON games(name)",
   "CREATE INDEX IF NOT EXISTS idx_games_favorite_name ON games(is_favorite, name)",
@@ -132,6 +144,11 @@ const ACHIEVEMENT_INDEXES = [
 
 const CATALOGUE_INDEXES = [
   "CREATE INDEX IF NOT EXISTS idx_catalogue_items_rawg_id ON catalogue_items(rawg_id)",
+];
+
+const GAME_PROCESS_BINDING_INDEXES = [
+  "CREATE INDEX IF NOT EXISTS idx_game_process_bindings_game_id ON game_process_bindings(game_id)",
+  "CREATE INDEX IF NOT EXISTS idx_game_process_bindings_match ON game_process_bindings(match_type, normalized_value)",
 ];
 
 const DEFAULT_SETTINGS: ReadonlyArray<[string, string]> = [
@@ -226,6 +243,9 @@ export async function initAppDatabase(db: DbLike): Promise<void> {
 
   await execute(db, CREATE_CATALOGUE_ITEMS_SQL);
   await ensureIndexes(db, CATALOGUE_INDEXES);
+
+  await execute(db, CREATE_GAME_PROCESS_BINDINGS_SQL);
+  await ensureIndexes(db, GAME_PROCESS_BINDING_INDEXES);
 
   await ensureDefaultSettings(db);
 }

@@ -1,8 +1,37 @@
+export type GameProcessBindingMatchType = "exe_path" | "process_name";
+
+export interface GameProcessBinding {
+  id: number;
+  game_id: string;
+  match_type: GameProcessBindingMatchType;
+  match_value: string;
+  created_at: string;
+}
+
+export interface NewGameProcessBinding {
+  match_type: GameProcessBindingMatchType;
+  match_value: string;
+}
+
+export interface UsageProcessCandidate {
+  tracked_app_id: string;
+  display_name: string;
+  exe_path: string | null;
+  process_name: string | null;
+  last_seen_at: string | null;
+  session_count: number;
+  binding_match_type: GameProcessBindingMatchType;
+  binding_match_value: string;
+  binding_normalized_value: string;
+}
+
 export interface Game {
   id: string;
+  ark_object_id?: string | null;
   name: string;
   exe_path: string;
   exe_name: string;
+  process_bindings: GameProcessBinding[];
   play_status: "not_started" | "in_progress" | "completed" | "abandoned";
 
   // RAWG metadata
@@ -53,6 +82,7 @@ export const testGameFixture: Game = {
   name: "Arcadia",
   exe_path: "C:\\Games\\Arcadia\\arcadia.exe",
   exe_name: "arcadia.exe",
+  process_bindings: [],
   rawg_id: 1101,
   description: "Test game description",
   released: "2022-01-12",
@@ -333,4 +363,28 @@ export interface CatalogueItem {
 
 export interface CatalogueSyncResult {
   synced: number;
+}
+
+export interface GamesArkSyncResult {
+  total: number;
+  synced: number;
+  failed: number;
+}
+
+export interface ArkGameMigrationResult {
+  migratedTypes: number;
+  migratedObjects: number;
+  mergedObjects: number;
+  skippedObjects: number;
+}
+
+export interface ArkConnectionInfo {
+  ark_db_path: string;
+  ark_db_exists: boolean;
+  ark_db_directory: string;
+  uses_shared_selection: boolean;
+  space_code: string | null;
+  space_id: string | null;
+  selection_source: string | null;
+  vault_path: string | null;
 }

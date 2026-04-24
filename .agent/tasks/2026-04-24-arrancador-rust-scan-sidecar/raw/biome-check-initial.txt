@@ -1,0 +1,53 @@
+$ biome check .
+electron\main\services\scan.ts:1:1 assist/source/organizeImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × The imports and exports are not sorted.
+  
+  > 1 │ import { opendir } from "node:fs/promises";
+      │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    2 │ import path from "node:path";
+    3 │ import type { ExeEntry, ProcessEntry, ScanStreamOptions } from "./contracts";
+  
+  i Safe fix: Organize Imports (Biome)
+  
+      1   1 │   import { opendir } from "node:fs/promises";
+      2   2 │   import path from "node:path";
+      3     │ - import·type·{·ExeEntry,·ProcessEntry,·ScanStreamOptions·}·from·"./contracts";
+      4     │ - import·{
+      5     │ - ··isArrancadorSidecarUnavailableError,
+      6     │ - ··scanExecutablesWithSidecar,
+      7     │ - }·from·"../sidecar/arrancador-sidecar";
+          3 │ + import·{
+          4 │ + ··isArrancadorSidecarUnavailableError,
+          5 │ + ··scanExecutablesWithSidecar,
+          6 │ + }·from·"../sidecar/arrancador-sidecar";
+          7 │ + import·type·{·ExeEntry,·ProcessEntry,·ScanStreamOptions·}·from·"./contracts";
+      8   8 │   import { listRunningProcesses } from "./helpers/process";
+      9   9 │   import {
+  
+
+electron\main\sidecar\arrancador-sidecar.ts:1:1 assist/source/organizeImports  FIXABLE  ━━━━━━━━━━━━
+
+  × The imports and exports are not sorted.
+  
+  > 1 │ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+      │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    2 │ import fs from "node:fs";
+    3 │ import path from "node:path";
+  
+  i Safe fix: Organize Imports (Biome)
+  
+      1     │ - import·{·spawn,·type·ChildProcessWithoutNullStreams·}·from·"node:child_process";
+          1 │ + import·{·type·ChildProcessWithoutNullStreams,·spawn·}·from·"node:child_process";
+      2   2 │   import fs from "node:fs";
+      3   3 │   import path from "node:path";
+  
+
+Checked 195 files in 151ms. No fixes applied.
+Found 2 errors.
+check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+
+error: script "biome:check" exited with code 1

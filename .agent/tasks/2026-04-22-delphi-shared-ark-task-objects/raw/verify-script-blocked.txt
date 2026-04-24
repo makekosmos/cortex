@@ -1,0 +1,18 @@
+Command:
+  node .\scripts\verifySharedArkTask.mjs
+
+Workdir:
+  D:\Personal\Hobby\Coding\kepler\apps\delphi\ts
+
+Observed result:
+  Script started, but Playwright Electron launch failed immediately.
+
+Error:
+  VERIFY_SHARED_ARK_TASK: FAIL
+  electron.launch: spawn EPERM
+  launching electron.exe ... "D:\Personal\Hobby\Coding\kepler\apps\delphi\ts"
+
+Interpretation:
+  The repository contains the verification script, but this environment blocks `electron.exe`
+  child process launch, so the end-to-end Delphi -> Ark -> Eden runtime flow could not be
+  executed here.

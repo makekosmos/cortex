@@ -1,0 +1,47 @@
+{
+  "task_id": "2026-04-21-arrancador-usage-legacy-merge",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/services/ark-usage.ts"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/services/ark-usage.ts",
+        "apps/arrancador/electron/main/services/ark-usage.test.ts"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/services/ark-usage.ts",
+        "apps/arrancador/electron/main/services/ark-usage.test.ts"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/services/ark-usage.test.ts",
+        ".agent/tasks/2026-04-21-arrancador-usage-legacy-merge/raw/bun-ark-usage-tests.txt"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-21-arrancador-usage-legacy-merge/raw/bun-ark-usage-tests.txt",
+        ".agent/tasks/2026-04-21-arrancador-usage-legacy-merge/raw/vitest.txt",
+        ".agent/tasks/2026-04-21-arrancador-usage-legacy-merge/raw/typecheck.txt",
+        ".agent/tasks/2026-04-21-arrancador-usage-legacy-merge/raw/build-main.txt"
+      ]
+    }
+  ]
+}

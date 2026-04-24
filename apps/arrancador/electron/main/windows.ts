@@ -146,11 +146,22 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     return { action: "deny" };
   });
 
-  window.once("ready-to-show", () => {
-    if (!window.isDestroyed()) {
+  const showWindow = (focus = false) => {
+    if (window.isDestroyed()) {
+      return;
+    }
+
+    if (!window.isVisible()) {
       window.show();
+    }
+
+    if (focus) {
       window.focus();
     }
+  };
+
+  window.once("ready-to-show", () => {
+    showWindow(false);
   });
 
   window.webContents.on(
@@ -174,17 +185,12 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
         "Renderer failed to load:",
         JSON.stringify({ errorCode, errorDescription, validatedURL }),
       );
-      if (!window.isDestroyed() && !window.isVisible()) {
-        window.show();
-      }
+      showWindow(false);
     },
   );
 
   window.webContents.on("did-finish-load", () => {
-    if (!window.isDestroyed() && !window.isVisible()) {
-      window.show();
-      window.focus();
-    }
+    showWindow(false);
   });
 
   window.webContents.on("render-process-gone", (_event, details) => {
@@ -192,11 +198,8 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   });
 
   const showFallbackTimer = setTimeout(() => {
-    if (!window.isDestroyed() && !window.isVisible()) {
-      window.show();
-      window.focus();
-    }
-  }, 2000);
+    showWindow(false);
+  }, isDev ? 10_000 : 2_000);
 
   window.once("closed", () => {
     clearTimeout(showFallbackTimer);

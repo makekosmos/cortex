@@ -1,0 +1,56 @@
+{
+  "task_id": "2026-04-23-arrancador-architecture-guards",
+  "verification": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "summary": "Renderer runtime files are guarded against Electron, Node builtin, Electron main, and Tauri imports/globals."
+    },
+    "AC2": {
+      "status": "PASS",
+      "summary": "Active source is guarded against React runtime imports, bun:test, and Tauri APIs/globals."
+    },
+    "AC3": {
+      "status": "PASS",
+      "summary": "Architecture guard is included in the default Vitest renderer project."
+    },
+    "AC4": {
+      "status": "PASS",
+      "summary": "Typecheck, unit tests, and Biome passed. E2E build completed but Playwright execution was blocked by local spawn EPERM."
+    },
+    "AC5": {
+      "status": "PASS",
+      "summary": "Evidence and raw command artifacts recorded under the task directory."
+    }
+  },
+  "commands": [
+    {
+      "command": "bun run typecheck",
+      "status": "PASS",
+      "artifact": "raw/typecheck.txt"
+    },
+    {
+      "command": "bun run test",
+      "status": "PASS",
+      "artifact": "raw/test.txt",
+      "summary": "14 test files passed, 38 tests passed"
+    },
+    {
+      "command": "bun run biome:check",
+      "status": "PASS",
+      "artifact": "raw/biome-check.txt"
+    },
+    {
+      "command": "bun run test:e2e",
+      "status": "BLOCKED",
+      "artifact": "raw/test-e2e.txt",
+      "blocker": "Playwright worker/browser launch failed with spawn EPERM after the app build completed."
+    }
+  ],
+  "raw_artifacts": [
+    "raw/typecheck.txt",
+    "raw/test.txt",
+    "raw/biome-check.txt",
+    "raw/test-e2e.txt"
+  ]
+}

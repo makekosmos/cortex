@@ -6,11 +6,12 @@ import { defineConfig } from "vitest/config";
 const rootDir = fileURLToPath(new URL("../../", import.meta.url));
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue({ features: { vaporInterop: true } })],
   resolve: {
     alias: {
       "@": path.resolve(rootDir, "./src"),
       "@vue-app": path.resolve(rootDir, "./src-vue"),
+      "@kepler/visuals": path.resolve(rootDir, "../../packages/kepler-visuals"),
     },
   },
   test: {
@@ -18,7 +19,7 @@ export default defineConfig({
     globals: true,
     pool: "threads",
     setupFiles: [path.resolve(rootDir, "./src-vue/test/setup.ts")],
-    include: ["src-vue/test/**/*.{test,spec}.{ts,tsx}"],
+    include: ["src-vue/test/**/*.{test,spec}.ts"],
     exclude: ["e2e/**"],
   },
 });

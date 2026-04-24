@@ -12,104 +12,6 @@ const INPUT_ACCEPT = ".exe,.lnk";
 const isBrowser = typeof window !== "undefined";
 const electronBridge = () =>
   typeof window === "undefined" ? undefined : window.arrancador;
-const hasTauriRuntime = () => {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const runtime = window as typeof window & {
-    __TAURI_INTERNALS__?: unknown;
-    __TAURI__?: unknown;
-  };
-
-  return Boolean(runtime.__TAURI_INTERNALS__ || runtime.__TAURI__);
-};
-
-let tauriDialogOpenPromise: Promise<
-  ((options: {
-    directory?: boolean;
-    multiple?: boolean;
-    title?: string;
-    filters?: Array<{ name: string; extensions: string[] }>;
-  }) => Promise<string | string[] | null>) | null
-> | null = null;
-
-let tauriListenPromise: Promise<
-  ((eventName: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>) | null
-> | null = null;
-
-let tauriWindowPromise: Promise<
-  ({ onDragDropEvent: (handler: (event: { payload?: unknown }) => void) => Promise<() => void> }) | null
-> | null = null;
-
-let tauriAutostartPromise: Promise<
-  | {
-      enable: () => Promise<void>;
-      disable: () => Promise<void>;
-      isEnabled: () => Promise<boolean>;
-    }
-  | null
-> | null = null;
-
-const getTauriDialogOpen = async () => {
-  if (!hasTauriRuntime()) {
-    return null;
-  }
-
-  if (!tauriDialogOpenPromise) {
-    tauriDialogOpenPromise = import("@tauri-apps/plugin-dialog")
-      .then((module) => module.open)
-      .catch(() => null);
-  }
-
-  return await tauriDialogOpenPromise;
-};
-
-const getTauriListen = async () => {
-  if (!hasTauriRuntime()) {
-    return null;
-  }
-
-  if (!tauriListenPromise) {
-    tauriListenPromise = import("@tauri-apps/api/event")
-      .then((module) => module.listen)
-      .catch(() => null);
-  }
-
-  return await tauriListenPromise;
-};
-
-export const getTauriWindow = async () => {
-  if (!hasTauriRuntime()) {
-    return null;
-  }
-
-  if (!tauriWindowPromise) {
-    tauriWindowPromise = import("@tauri-apps/api/window")
-      .then((module) => module.getCurrentWindow())
-      .catch(() => null);
-  }
-
-  return await tauriWindowPromise;
-};
-
-const getTauriAutostart = async () => {
-  if (!hasTauriRuntime()) {
-    return null;
-  }
-
-  if (!tauriAutostartPromise) {
-    tauriAutostartPromise = import("@tauri-apps/plugin-autostart")
-      .then((module) => ({
-        enable: module.enable,
-        disable: module.disable,
-        isEnabled: module.isEnabled,
-      }))
-      .catch(() => null);
-  }
-
-  return await tauriAutostartPromise;
-};
 
 const filePathFromFile = (file: File): string => {
   const fileLike = file as FileLikeWithPath;
@@ -227,17 +129,7 @@ const pickFromInput = (options: PickOptions) =>
 export async function pickFilePath(options: PickOptions = {}) {
   const bridge = electronBridge();
   if (bridge) {
-    const result = await bridge.invoke("dialog_open", {
-      directory: false,
-      multiple: false,
-      title: options.title,
-    });
-    return typeof result === "string" ? result : null;
-  }
-
-  const tauriOpen = await getTauriDialogOpen();
-  if (tauriOpen) {
-    const result = await tauriOpen({
+    const result = await bridge.commands.dialog_open({
       directory: false,
       multiple: false,
       title: options.title,
@@ -253,17 +145,7 @@ export async function pickFilePath(options: PickOptions = {}) {
 export async function pickDirectoryPath(options: PickOptions = {}) {
   const bridge = electronBridge();
   if (bridge) {
-    const result = await bridge.invoke("dialog_open", {
-      directory: true,
-      multiple: false,
-      title: options.title,
-    });
-    return typeof result === "string" ? result : null;
-  }
-
-  const tauriOpen = await getTauriDialogOpen();
-  if (tauriOpen) {
-    const result = await tauriOpen({
+    const result = await bridge.commands.dialog_open({
       directory: true,
       multiple: false,
       title: options.title,
@@ -297,9 +179,9 @@ export async function openPath(target: string) {
   if (bridge) {
     const value = target.trim();
     if (/^https?:\/\//i.test(value)) {
-      await bridge.invoke("shell_open_external", { url: value });
+      await bridge.commands.shell_open_external({ url: value });
     } else {
-      await bridge.invoke("shell_open_path", { path: value });
+      await bridge.commands.shell_open_path({ path: value });
     }
     return;
   }
@@ -325,47 +207,20 @@ export function subscribeAppEvent<T>(
     return bridge.on(eventName as never, handler as never);
   }
 
-  let disposed = false;
-  let unlisten: (() => void) | null = null;
-
-  void getTauriListen().then(async (listen) => {
-    if (!listen || disposed) {
-      return;
-    }
-
-    const release = await listen(eventName, (event) => {
-      handler(event.payload as T);
-    });
-
-    if (disposed) {
-      release();
-      return;
-    }
-
-    unlisten = release;
-  });
-
   const listener = (event: Event) => {
     handler((event as CustomEvent<T>).detail);
   };
 
   window.addEventListener(eventName, listener);
   return () => {
-    disposed = true;
     window.removeEventListener(eventName, listener);
-    unlisten?.();
   };
 }
 
 export async function getAutoStartState() {
   const bridge = electronBridge();
   if (bridge) {
-    return await bridge.invoke("get_autostart_state");
-  }
-
-  const tauriAutostart = await getTauriAutostart();
-  if (tauriAutostart) {
-    return await tauriAutostart.isEnabled();
+    return await bridge.commands.get_autostart_state();
   }
 
   return false;
@@ -374,19 +229,11 @@ export async function getAutoStartState() {
 export async function setAutoStartState(enabled: boolean) {
   const bridge = electronBridge();
   if (bridge) {
-    await bridge.invoke("set_autostart_state", { enabled });
+    await bridge.commands.set_autostart_state({ enabled });
     return;
   }
 
-  const tauriAutostart = await getTauriAutostart();
-  if (tauriAutostart) {
-    if (enabled) {
-      await tauriAutostart.enable();
-      return;
-    }
-
-    await tauriAutostart.disable();
-  }
+  void enabled;
 }
 
 export function extractDroppedPaths(event: DragTransferEvent) {

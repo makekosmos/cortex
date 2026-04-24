@@ -1,6 +1,10 @@
 import { copyFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import {
+  copyBackupDirectoryWithSidecar,
+  isArrancadorSidecarUnavailableError,
+} from "../../sidecar/arrancador-sidecar";
 import { buildBackupManifest, writeBackupManifestToDirectory, writeBackupReadmeToDirectory } from "./archive";
 import type { BackupArchiveManifest, BackupFileEntry, ProgressListener, SaveDiscovery } from "./types";
 import { ensureDir, mapLimit } from "./utils";
@@ -38,6 +42,32 @@ export async function copyDiscoveryToDirectory(
   discovery: SaveDiscovery,
   options: CopyDiscoveryOptions = {},
 ): Promise<CopyDiscoveryResult> {
+  if (process.env.ARRANCADOR_BACKUP_BACKEND !== "ts") {
+    try {
+      const result = await copyBackupDirectoryWithSidecar(destination, discovery, {
+        onProgress: options.onProgress,
+      });
+      return {
+        manifest: buildBackupManifest(
+          discovery.files.map((file) => ({
+            backupPath: buildBackupRelPath(file.rootLabel, file.relativePath),
+            originalPath: file.path,
+            size: file.size,
+            mtime: null,
+          })),
+        ),
+        totalBytes: result.totalBytes,
+      };
+    } catch (error) {
+      if (!isArrancadorSidecarUnavailableError(error)) {
+        throw error;
+      }
+      console.warn(
+        "[Arrancador] Rust backup sidecar unavailable, falling back to TypeScript copy.",
+      );
+    }
+  }
+
   await ensureDir(destination);
 
   const concurrency = options.concurrency ?? Math.max(1, Math.min(8, os.cpus().length || 1));

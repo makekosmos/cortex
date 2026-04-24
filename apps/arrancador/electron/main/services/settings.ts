@@ -1,5 +1,4 @@
-import type { AppSettings } from "./contracts";
-import type { SettingsRepository } from "./contracts";
+import type { AppSettings, SettingsRepository } from "./contracts";
 import {
   getDefaultAppSettings,
   normalizeAppSettings,

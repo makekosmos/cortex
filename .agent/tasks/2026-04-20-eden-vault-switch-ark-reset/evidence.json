@@ -1,0 +1,25 @@
+{
+  "result": "PASS",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": "apps/eden/ts/main/store.ts calls shutdownArk() in setVaultPath()."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": "apps/eden/ts/main/ark.ts resolves DB path from shared selected space on next init."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": "No fallback path logic removed."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": "bun run build in apps/eden/ts passed."
+    }
+  ]
+}

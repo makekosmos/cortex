@@ -1,0 +1,77 @@
+{
+  "taskId": "2026-04-23-arrancador-backend-readability-pass",
+  "verificationStatus": "PASS",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": "Service graph moved from backend.ts into electron/main/runtime-services.ts."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": "IPC channel names unchanged; typecheck, tests, and builds pass."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": "app-handlers.ts, game-handlers.ts, and shell-scan-handlers.ts are reformatted into readable blocks."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": "architecture-boundaries.test.ts guards runtime-services/backend split and IPC line readability."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": "typecheck, test, biome, renderer build, main build, and preload build all pass."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": "spec.md, evidence.md, evidence.json, problems.md, and raw artifacts exist."
+    }
+  ],
+  "commands": [
+    {
+      "command": "bun run typecheck",
+      "status": "PASS",
+      "artifact": "raw/typecheck.txt"
+    },
+    {
+      "command": "bun run test",
+      "status": "PASS",
+      "artifact": "raw/test.txt",
+      "summary": "22 files / 66 tests passed"
+    },
+    {
+      "command": "bun run biome:check",
+      "status": "PASS",
+      "artifact": "raw/biome-check.txt"
+    },
+    {
+      "command": "bun run build:renderer",
+      "status": "PASS",
+      "artifact": "raw/build-renderer.txt"
+    },
+    {
+      "command": "bun run build:main",
+      "status": "PASS",
+      "artifact": "raw/build-main.txt"
+    },
+    {
+      "command": "bun run build:preload",
+      "status": "PASS",
+      "artifact": "raw/build-preload.txt"
+    }
+  ],
+  "changedFiles": [
+    "apps/arrancador/electron/main/backend.ts",
+    "apps/arrancador/electron/main/runtime-services.ts",
+    "apps/arrancador/electron/main/ipc/app-handlers.ts",
+    "apps/arrancador/electron/main/ipc/game-handlers.ts",
+    "apps/arrancador/electron/main/ipc/shell-scan-handlers.ts",
+    "apps/arrancador/src-vue/test/architecture-boundaries.test.ts"
+  ]
+}

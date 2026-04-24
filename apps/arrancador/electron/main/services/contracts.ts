@@ -24,9 +24,13 @@ export interface SettingsRepository {
   removeScanDirectory(path: string): Promise<void>;
 }
 
-// Read-only query surface for playtime stats. Ark-backed usage data is the
-// preferred source, with legacy local tables kept only as transitional fallback.
+// Read-only query surface for playtime stats. Arrancador consumes Ark usage
+// data only; legacy local history is imported into Ark separately.
 export interface PlaytimeStatsRepository {
+  getRangeStats(rangeStart: string, rangeEnd: string): Promise<{
+    dailyTotals: Array<{ date: string; seconds: number }>;
+    perGameTotals: Array<{ id: string; name: string; seconds: number }>;
+  }>;
   getDailyTotals(rangeStart: string, rangeEnd: string): Promise<
     Array<{ date: string; seconds: number }>
   >;

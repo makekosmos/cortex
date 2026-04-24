@@ -46,6 +46,10 @@ export interface SidebarProjectGroup {
   label: string;
   items: SidebarProjectItem[];
   defaultCollapsed?: boolean;
+  actionIcon?: Component;
+  actionLabel?: string;
+  actionTestId?: string;
+  onAction?: () => void;
 }
 
 interface Props {
@@ -161,7 +165,9 @@ const configRef = shallowRef<SidebarConfig>({
 
 const groupedProjectSections = computed<SidebarProjectGroup[]>(() => {
   if (props.projectGroups.length > 0) {
-    return props.projectGroups.filter((group) => group.items.length > 0);
+    return props.projectGroups.filter(
+      (group) => group.items.length > 0 || typeof group.onAction === "function",
+    );
   }
 
   const groups: SidebarProjectGroup[] = [];
@@ -442,24 +448,37 @@ const wrapperClasses = computed(() =>
                 :key="group.id"
                 class="kepler-sidebar-group"
               >
-                <button
-                  type="button"
-                  class="kepler-sidebar-group-header"
-                  :data-testid="`sidebar-group-${group.id}`"
-                  @click="toggleGroup(group.id)"
-                >
-                  <ChevronRight
-                    :size="14"
-                    :class="[
-                      'kepler-sidebar-group-chevron',
-                      isGroupCollapsed(group.id) ? '' : 'kepler-sidebar-group-chevron--expanded',
-                    ]"
-                  />
-                  <span>{{ group.label }}</span>
-                </button>
+                <div class="kepler-sidebar-group-header-row">
+                  <button
+                    type="button"
+                    class="kepler-sidebar-group-header"
+                    :data-testid="`sidebar-group-${group.id}`"
+                    @click="toggleGroup(group.id)"
+                  >
+                    <ChevronRight
+                      :size="14"
+                      :class="[
+                        'kepler-sidebar-group-chevron',
+                        isGroupCollapsed(group.id) ? '' : 'kepler-sidebar-group-chevron--expanded',
+                      ]"
+                    />
+                    <span>{{ group.label }}</span>
+                  </button>
+
+                  <button
+                    v-if="group.actionIcon && group.onAction"
+                    type="button"
+                    class="kepler-sidebar-group-action"
+                    :title="group.actionLabel"
+                    :data-testid="group.actionTestId"
+                    @click="group.onAction()"
+                  >
+                    <component :is="group.actionIcon" :size="14" />
+                  </button>
+                </div>
 
                 <div
-                  v-if="!isGroupCollapsed(group.id)"
+                  v-if="!isGroupCollapsed(group.id) && group.items.length > 0"
                   class="kepler-sidebar-group-surface"
                 >
                   <template v-for="project in group.items" :key="project.id">
@@ -666,11 +685,18 @@ const wrapperClasses = computed(() =>
   gap: 0.375rem;
 }
 
+.kepler-sidebar-group-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
 .kepler-sidebar-group-header {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0 0.375rem;
   color: color-mix(in srgb, var(--muted-foreground) 88%, transparent);
   font-size: 0.8125rem;
@@ -679,6 +705,25 @@ const wrapperClasses = computed(() =>
 }
 
 .kepler-sidebar-group-header:hover {
+  color: var(--foreground);
+}
+
+.kepler-sidebar-group-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--muted-foreground) 88%, transparent);
+  transition:
+    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
+    color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.kepler-sidebar-group-action:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
   color: var(--foreground);
 }
 
@@ -705,8 +750,8 @@ const wrapperClasses = computed(() =>
   justify-content: flex-start;
   gap: 0.625rem;
   width: 100%;
-  min-height: 2.125rem;
-  padding: 0.375rem 0.625rem;
+  min-height: 1.75rem;
+  padding: 0.25rem;
   border-radius: calc(var(--radius) * 1.4);
   corner-shape: var(--corner-shape);
   color: var(--muted-foreground);

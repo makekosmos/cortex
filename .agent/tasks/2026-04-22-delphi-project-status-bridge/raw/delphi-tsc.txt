@@ -1,0 +1,8 @@
+Command:
+cmd.exe /c "cd /d D:\Personal\Hobby\Coding\kepler\apps\delphi\ts && bun x tsc --noEmit"
+
+Result:
+PASS
+
+Summary:
+- TypeScript compile check completed successfully with no reported errors.

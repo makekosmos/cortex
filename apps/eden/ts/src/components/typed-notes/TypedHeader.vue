@@ -2,8 +2,8 @@
 import { computed } from "vue";
 import ObjectPropertyField from "./ObjectPropertyField.vue";
 import { UNTITLED_ENTRY_PLACEHOLDER } from "@/lib/entryTitles";
-import { getNoteTypePresentation } from "@/lib/typedNotes";
-import { SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
+import { getNoteTypePresentation, getResolvedNoteTypeField } from "@/lib/typedNotes";
+import { SYSTEM_TYPE_GAME_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 
 const props = withDefaults(defineProps<{
   activeNoteType: NoteType | null;
@@ -64,12 +64,16 @@ const coverImageSrc = computed(() => {
 
   return String(props.headerProps[imageFieldId] ?? "").trim();
 });
+const backgroundImageSrc = computed(() => {
+  const field = getResolvedNoteTypeField(props.activeNoteType, "background_image");
+  if (!field?.visible) {
+    return "";
+  }
 
-const backgroundImageSrc = computed(() => String(props.headerProps.background_image ?? "").trim());
-const typeIconSrc = computed(() =>
-  props.activeNoteType?.icon ? `/anytype/icon/type/default/${props.activeNoteType.icon}.svg` : "",
-);
+  return String(props.headerProps.background_image ?? "").trim();
+});
 const titleText = computed(() => props.title.trim() || props.activeNoteType?.name || UNTITLED_ENTRY_PLACEHOLDER);
+const isGameNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_GAME_ID);
 const isPlainNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_NOTE_ID);
 const shouldShowDescription = computed(() => {
   if (!presentation.value.descriptionField) {
@@ -82,16 +86,19 @@ const shouldShowDescription = computed(() => {
 
   return !isPlainNoteType.value || Boolean(descriptionValue.value.trim());
 });
-const showFallbackIconTile = computed(() => props.showTitle);
-const showVisual = computed(
-  () => Boolean(coverImageSrc.value) || (Boolean(typeIconSrc.value) && showFallbackIconTile.value),
-);
+const showVisual = computed(() => Boolean(coverImageSrc.value));
 const allowEmptyHeaderFields = computed(() => !isPlainNoteType.value);
 const renderedFeaturedFields = computed(() =>
-  presentation.value.featuredFields.filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
+  isGameNoteType.value
+    ? []
+    : presentation.value.featuredFields.filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
 );
 const renderedSecondaryFields = computed(() =>
-  presentation.value.secondaryFields.filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
+  (
+    isGameNoteType.value
+      ? [...presentation.value.featuredFields, ...presentation.value.secondaryFields]
+      : presentation.value.secondaryFields
+  ).filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
 );
 const hasFeaturedFields = computed(() => renderedFeaturedFields.value.length > 0);
 const hasSecondaryFields = computed(() => renderedSecondaryFields.value.length > 0);
@@ -153,18 +160,6 @@ function updateDescription(event: Event) {
             :src="coverImageSrc"
             :alt="titleText"
           />
-
-          <div v-else class="typed-object-header__icon-tile" aria-hidden="true">
-            <img
-              v-if="typeIconSrc"
-              class="typed-object-header__icon"
-              :src="typeIconSrc"
-              alt=""
-              width="42"
-              height="42"
-              draggable="false"
-            />
-          </div>
         </div>
 
         <div class="typed-object-header__content">
@@ -303,8 +298,7 @@ function updateDescription(event: Event) {
   justify-content: flex-start;
 }
 
-.typed-object-header__cover,
-.typed-object-header__icon-tile {
+.typed-object-header__cover {
   width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: 20px;
@@ -313,18 +307,6 @@ function updateDescription(event: Event) {
 .typed-object-header__cover {
   display: block;
   object-fit: cover;
-}
-
-.typed-object-header__icon-tile {
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.typed-object-header__icon {
-  filter: invert(1);
-  opacity: 0.9;
 }
 
 .typed-object-header__content {
@@ -392,9 +374,8 @@ function updateDescription(event: Event) {
 
 .typed-object-header__secondary-list {
   display: grid;
-  gap: 2px;
+  gap: 0;
   width: 100%;
-  max-width: 760px;
 }
 
 .typed-object-header__error {

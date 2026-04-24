@@ -1,5 +1,11 @@
-import type { ExeEntry, ProcessEntry } from "./contracts";
-import type { ScanStreamOptions } from "./contracts";
+import { opendir } from "node:fs/promises";
+import path from "node:path";
+import {
+  isArrancadorSidecarUnavailableError,
+  scanExecutablesWithSidecar,
+} from "../sidecar/arrancador-sidecar";
+import type { ExeEntry, ProcessEntry, ScanStreamOptions } from "./contracts";
+import { listRunningProcesses } from "./helpers/process";
 import {
   createScanAbortError,
   isExecutableFile,
@@ -7,9 +13,6 @@ import {
   isReadableDirectory,
   normalizeScanRoot,
 } from "./helpers/scan";
-import { listRunningProcesses } from "./helpers/process";
-import { opendir } from "node:fs/promises";
-import path from "node:path";
 
 export async function* scanExecutables(
   root: string,
@@ -55,7 +58,7 @@ export async function* scanExecutables(
         };
       }
     } finally {
-      await dir.close().catch(() => undefined);
+      await Promise.resolve(dir.close()).catch(() => undefined);
     }
   }
 }
@@ -64,6 +67,19 @@ export async function scanExecutablesStream(
   root: string,
   options: ScanStreamOptions = {},
 ): Promise<number> {
+  if (process.env.ARRANCADOR_SCAN_BACKEND !== "ts") {
+    try {
+      return await scanExecutablesWithSidecar(root, options);
+    } catch (error) {
+      if (!isArrancadorSidecarUnavailableError(error)) {
+        throw error;
+      }
+      console.warn(
+        "[Arrancador] Rust scan sidecar unavailable, falling back to TypeScript scanner.",
+      );
+    }
+  }
+
   let count = 0;
 
   for await (const entry of scanExecutables(root, options)) {

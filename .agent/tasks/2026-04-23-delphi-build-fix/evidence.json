@@ -1,0 +1,51 @@
+{
+  "task_id": "2026-04-23-delphi-build-fix",
+  "summary": "Fixed Delphi build script platform targeting and verified the original ajv/electron-builder dependency crash is gone. Full packaging is blocked in this sandbox by app-builder.exe spawn EPERM.",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/package.json build script calls node scripts/run-electron-builder.mjs instead of electron-builder --mac --win"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/scripts/run-electron-builder.mjs selects valid targets by process.platform",
+        "raw/build.log shows electron-builder packaging platform=win32 on this machine"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/package.json sets build.toolsets.winCodeSign to 1.1.0",
+        "apps/delphi/ts/package.json sets win.signAndEditExecutable to false",
+        "raw/build-after-win-codesign-fix.log no longer contains the legacy winCodeSign symlink extraction failure"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/delphi/ts/package.json packages sidecar/target/release/delphi-db.exe",
+        "resource destination is ark-core/ark-core-rpc.exe, matching packaged runtime lookup in electron/sidecar.ts"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "BLOCKED",
+      "evidence": [
+        "raw/build-after-win-codesign-fix.log shows build reaches electron-builder packaging stage without the reported winCodeSign failure",
+        "raw/build-after-win-codesign-fix.log ends with app-builder.exe spawn EPERM in the current sandbox"
+      ]
+    }
+  ],
+  "artifacts": {
+    "resolution": ".agent/tasks/2026-04-23-delphi-build-fix/raw/resolution.json",
+    "build_log": ".agent/tasks/2026-04-23-delphi-build-fix/raw/build.log",
+    "build_log_after_win_codesign_fix": ".agent/tasks/2026-04-23-delphi-build-fix/raw/build-after-win-codesign-fix.log"
+  }
+}

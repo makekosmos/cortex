@@ -1,13 +1,17 @@
 import type {
   Achievement,
   AppSettings,
+  ArkConnectionInfo,
+  ArkGameMigrationResult,
   Backup,
   BackupInfo,
   CatalogueItem,
   CatalogueSyncResult,
   DiskSpeedResult,
   Game,
+  GamesArkSyncResult,
   NewGame,
+  NewGameProcessBinding,
   NotificationItem,
   PlaytimeStats,
   ProcessEntry,
@@ -17,6 +21,7 @@ import type {
   SavePathLookup,
   SystemInfo,
   UpdateGame,
+  UsageProcessCandidate,
 } from "./index";
 
 export interface IpcRequestMap {
@@ -35,7 +40,16 @@ export interface IpcRequestMap {
   launch_game: { id: string };
   get_running_instances: { id: string };
   kill_game_processes: { id: string };
+  add_game_process_bindings: {
+    id: string;
+    bindings: NewGameProcessBinding[];
+  };
+  remove_game_process_binding: { id: string; bindingId: number };
   resolve_shortcut_target: { path: string };
+  list_recent_usage_processes: { limit?: number };
+  search_usage_processes: { query: string; limit?: number };
+  sync_games_to_ark: undefined;
+  migrate_ark_games: { sourceDbPath: string };
 
   search_rawg: { query: string };
   get_rawg_game_details: { rawgId: number };
@@ -77,6 +91,7 @@ export interface IpcRequestMap {
   update_settings: { settings: AppSettings };
   get_setting: { key: string };
   set_setting: { key: string; value: string };
+  get_ark_connection_info: undefined;
   add_scan_directory: { path: string };
   get_scan_directories: undefined;
   remove_scan_directory: { path: string };
@@ -135,22 +150,28 @@ export interface IpcResultMap {
   add_game: Game;
   add_games_batch: Game[];
   update_game: Game;
-  delete_game: void;
+  delete_game: undefined;
   toggle_favorite: Game;
   get_favorites: Game[];
   record_game_launch: Game;
   search_games: Game[];
   game_exists_by_path: boolean;
   is_game_installed: boolean;
-  launch_game: void;
+  launch_game: undefined;
   get_running_instances: number;
   kill_game_processes: number;
+  add_game_process_bindings: Game;
+  remove_game_process_binding: Game;
   resolve_shortcut_target: string;
+  list_recent_usage_processes: UsageProcessCandidate[];
+  search_usage_processes: UsageProcessCandidate[];
+  sync_games_to_ark: GamesArkSyncResult;
+  migrate_ark_games: ArkGameMigrationResult;
 
   search_rawg: RawgGame[];
   get_rawg_game_details: RawgGameDetails;
   apply_rawg_metadata: Game;
-  set_rawg_api_key: void;
+  set_rawg_api_key: undefined;
   get_rawg_api_key: string;
 
   get_all_achievements: Achievement[];
@@ -159,29 +180,30 @@ export interface IpcResultMap {
 
   check_ludusavi_installed: boolean;
   get_ludusavi_executable_path: string | null;
-  set_ludusavi_path: void;
-  set_backup_directory: void;
+  set_ludusavi_path: undefined;
+  set_backup_directory: undefined;
   get_backup_directory_setting: string;
-  refresh_sqoba_manifest: void;
+  refresh_sqoba_manifest: undefined;
   find_game_save_paths: SavePathLookup;
   find_game_saves: BackupInfo | null;
   create_backup: Backup;
   get_game_backups: Backup[];
-  restore_backup: void;
-  delete_backup: void;
+  restore_backup: undefined;
+  delete_backup: undefined;
   should_backup_before_launch: boolean;
   check_backup_needed: boolean;
   check_restore_needed: RestoreCheck;
   get_backup_settings: Record<string, string>;
-  update_backup_settings: void;
+  update_backup_settings: undefined;
 
   get_all_settings: AppSettings;
-  update_settings: void;
+  update_settings: undefined;
   get_setting: string | null;
-  set_setting: void;
-  add_scan_directory: void;
+  set_setting: undefined;
+  get_ark_connection_info: ArkConnectionInfo;
+  add_scan_directory: undefined;
   get_scan_directories: string[];
-  remove_scan_directory: void;
+  remove_scan_directory: undefined;
 
   get_playtime_stats: PlaytimeStats;
   get_running_processes: ProcessEntry[];
@@ -202,15 +224,15 @@ export interface IpcResultMap {
 
   dialog_open: string | string[] | null;
   get_window_platform: string;
-  window_minimize: void;
-  window_toggle_maximize: void;
-  window_close: void;
+  window_minimize: undefined;
+  window_toggle_maximize: undefined;
+  window_close: undefined;
   shell_open_path: string;
-  shell_open_external: void;
+  shell_open_external: undefined;
   get_autostart_state: boolean;
-  set_autostart_state: void;
+  set_autostart_state: undefined;
   scan_executables_stream: number;
-  cancel_scan: void;
+  cancel_scan: undefined;
 }
 
 export type IpcChannel = keyof IpcResultMap;
@@ -223,6 +245,12 @@ export type ArgIpcChannel = Exclude<IpcChannel, NoArgIpcChannel>;
 export type IpcInvoke = {
   <C extends NoArgIpcChannel>(channel: C): Promise<IpcResultMap[C]>;
   <C extends ArgIpcChannel>(channel: C, payload: IpcArgs<C>): Promise<IpcResultMap[C]>;
+};
+
+export type IpcCommandMethods = {
+  [C in NoArgIpcChannel]: () => Promise<IpcResultMap[C]>;
+} & {
+  [C in ArgIpcChannel]: (payload: IpcArgs<C>) => Promise<IpcResultMap[C]>;
 };
 
 export interface ArrancadorEventMap {
@@ -254,7 +282,7 @@ export type ArrancadorEventCallback<E extends ArrancadorEventName> = (
 ) => void;
 
 export interface ArrancadorBridge {
-  invoke: IpcInvoke;
+  commands: IpcCommandMethods;
   on<E extends ArrancadorEventName>(
     event: E,
     callback: ArrancadorEventCallback<E>,

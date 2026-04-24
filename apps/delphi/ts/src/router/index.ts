@@ -5,7 +5,7 @@ export const routes: RouteRecordRaw[] = [
 
   { path: "/today", component: () => import("../pages/TodayPage.vue") },
 
-  { path: "/upcoming", component: () => import("../pages/UpcomingPage.vue") },
+  { path: "/upcoming", redirect: "/calendar" },
 
   { path: "/calendar", component: () => import("../pages/CalendarPage.vue") },
 

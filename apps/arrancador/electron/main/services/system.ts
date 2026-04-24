@@ -1,7 +1,6 @@
-import type { DiskSpeedResult, SystemInfo } from "./contracts";
-import type { SystemServiceOptions } from "./contracts";
-import { collectElectronGpuInfo, collectElectronMonitorInfo } from "./helpers/electron";
+import type { DiskSpeedResult, SystemInfo, SystemServiceOptions } from "./contracts";
 import { collectDiskInfos, testDiskSpeed as probeDiskSpeed } from "./helpers/disk";
+import { collectElectronGpuInfo, collectElectronMonitorInfo } from "./helpers/electron";
 import {
   getCpuInfo,
   getMemoryInfo,

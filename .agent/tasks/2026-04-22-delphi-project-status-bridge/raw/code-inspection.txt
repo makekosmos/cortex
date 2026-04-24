@@ -1,0 +1,13 @@
+Relevant inspected facts:
+
+- `apps/delphi/ts/electron/sidecar.ts`
+  - app-facing `Project.status` is now numeric
+  - `WireProject.status` remains string for Rust sidecar compatibility
+  - `projectStatusToWire()` maps `0/1/2` -> `active/someday/completed`
+  - `projectStatusFromWire()` maps wire values back into numeric Delphi enum values
+  - `dbLoadAll()` maps incoming wire projects via `mapWireProject(...)`
+  - `dbUpsertProject()` sends a mapped `wireProject`
+
+Note:
+- The working-tree diff for `apps/delphi/ts/electron/sidecar.ts` also contains older unrelated hunks from previous work in the same file.
+- The facts above describe only the status-bridge changes relevant to this bugfix.

@@ -41,6 +41,19 @@ export const ICON_OPTIONS = [
   "sparkles",
 ] as const;
 
+export const COLOR_OPTIONS = [
+  "#6b7280",
+  "#facc15",
+  "#f59e0b",
+  "#f97316",
+  "#ec4899",
+  "#a855f7",
+  "#6366f1",
+  "#38bdf8",
+  "#14b8a6",
+  "#84cc16",
+] as const;
+
 export const FIELD_KIND_OPTIONS: Array<{ value: NoteFieldKind; label: string }> = [
   { value: "text", label: "Текст" },
   { value: "long_text", label: "Длинный текст" },
@@ -74,7 +87,7 @@ export function sampleValueForField(field: TypeEditorFieldDraft) {
 }
 
 export function toSchemaFields(fields: TypeEditorFieldDraft[]): NoteTypeField[] {
-  return fields.map(({ displayMode, structuralLocked, ...field }) => ({
+  return fields.map(({ displayMode, structuralLocked: _structuralLocked, ...field }) => ({
     ...field,
     visible: displayMode !== "hidden",
   }));

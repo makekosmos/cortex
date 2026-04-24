@@ -1,0 +1,1 @@
+PASS: bun x tsc --noEmit

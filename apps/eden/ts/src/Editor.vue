@@ -145,6 +145,7 @@ const DEFAULT_DOCUMENT_JSON = JSON.stringify(DEFAULT_DOCUMENT);
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 const LINT_IDLE_DEBOUNCE_MS = 1000;
+const PERF_SAMPLE_LIMIT = 120;
 const TRACKED_EDIT_KEYS = new Set(["Backspace", "Delete", "Enter", "Tab"]);
 
 type PerfMetricKey = "inputToNextPaint" | "updateToNextPaint" | "saveDuration";
@@ -399,7 +400,11 @@ function createPerfTracker(): EditorPerfTracker {
   return {
     recordMetric(metric, durationMs) {
       if (!Number.isFinite(durationMs) || durationMs < 0) return;
-      metrics[metric].push(durationMs);
+      const samples = metrics[metric];
+      samples.push(durationMs);
+      if (samples.length > PERF_SAMPLE_LIMIT) {
+        samples.splice(0, samples.length - PERF_SAMPLE_LIMIT);
+      }
     },
     recordLongTask(durationMs) {
       if (!Number.isFinite(durationMs) || durationMs < 0) return;

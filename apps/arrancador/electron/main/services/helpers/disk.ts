@@ -207,7 +207,7 @@ export async function testDiskSpeed(
 
   const resolvedMount = path.resolve(mountPoint);
   const statInfo = await stat(resolvedMount).catch(() => null);
-  if (!statInfo || !statInfo.isDirectory()) {
+  if (!statInfo?.isDirectory()) {
     throw new Error("Invalid mount point");
   }
 

@@ -13,7 +13,6 @@
   },
   "peerDependencies": {
     "lucide-vue-next": "*",
-    "react": "^18.0.0 || ^19.0.0",
     "vue": "^3.0.0",
     "vue-router": "^4.0.0 || ^5.0.0"
   },
@@ -22,7 +21,6 @@
     "./tokens": "./tokens/index.ts",
     "./theme": "./theme/index.ts",
     "./components": "./components/index.ts",
-    "./react": "./react/index.ts",
     "./patterns": "./patterns/index.ts",
     "./theme/css": "./theme/css-variables.css",
     "./components/sidebar.css": "./components/sidebar.css"

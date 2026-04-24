@@ -45,9 +45,9 @@ function feedbackClass(feedback: InlineFeedback | null) {
     <div class="space-y-4 rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm">
       <div class="flex items-center justify-between gap-3 rounded-xl bg-background/40 px-3 py-3">
         <div>
-          <div class="text-sm font-medium">SQOBA manager</div>
+          <div class="text-sm font-medium">Менеджер SQOBA</div>
           <div class="text-xs text-muted-foreground">
-            Open the legacy SQOBA page for detailed backup and save-path workflows.
+            Откройте страницу SQOBA для детальной работы с резервными копиями и путями сохранений.
           </div>
         </div>
         <RouterLink
@@ -55,16 +55,16 @@ function feedbackClass(feedback: InlineFeedback | null) {
           class="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-card/80 px-3 py-2 text-sm transition-colors hover:bg-accent/70"
         >
           <Sparkles class="h-4 w-4" />
-          Open SQOBA
+          Открыть SQOBA
         </RouterLink>
       </div>
 
       <div class="rounded-xl border border-border/70 p-3">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <div class="text-sm font-medium">Manifest refresh</div>
+            <div class="text-sm font-medium">Обновление манифеста</div>
             <div class="text-xs text-muted-foreground">
-              Pull the latest local list of games and save-path mappings.
+              Подтянуть актуальный локальный список игр и соответствий путей сохранений.
             </div>
           </div>
           <button
@@ -75,7 +75,7 @@ function feedbackClass(feedback: InlineFeedback | null) {
           >
             <Loader2 v-if="props.manifestRefreshing" class="h-3.5 w-3.5 animate-spin" />
             <RefreshCw v-else class="h-3.5 w-3.5" />
-            Refresh
+            Обновить
           </button>
         </div>
         <div

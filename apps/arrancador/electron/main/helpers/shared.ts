@@ -18,6 +18,7 @@ export interface DbLike {
   ): MaybePromise<T | undefined>;
   run(sql: string, params?: readonly DbValue[]): MaybePromise<DbRunResult>;
   transaction?<T>(fn: (tx: DbLike) => MaybePromise<T>): MaybePromise<T>;
+  close?(): MaybePromise<void>;
 }
 
 export type GamePlayStatus =

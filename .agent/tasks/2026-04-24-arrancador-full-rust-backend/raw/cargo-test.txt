@@ -1,0 +1,13 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src\main.rs (sidecar\target\debug\deps\arrancador_sidecar-9ab50d25d2c00539.exe)
+
+running 4 tests
+test tests::empty_scan_root_is_rejected ... ok
+test tests::parse_scan_request_with_escaped_windows_path ... ok
+test tests::scan_finds_exe_files_case_insensitively_and_skips_hidden_dirs ... ok
+{"event":"backup_progress","progress":{"stage":"copy","current":"C:\\Users\\Kazui\\AppData\\Local\\Temp\\arrancador-sidecar-test-1776984463830015700\\source\\save.bin","done":1,"total":1}}
+{"event":"backup_progress","progress":{"stage":"restore","current":"C:\\Users\\Kazui\\AppData\\Local\\Temp\\arrancador-sidecar-test-1776984463830015700\\restored\\save.bin","done":1,"total":1}}
+test tests::backup_copy_and_restore_round_trip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

@@ -1,28 +1,26 @@
-import type { GamePlaytime } from "@/types";
+import type { DailyPlaytime, GamePlaytime } from "@/types";
 
-export type StatisticsRangePreset = "7d" | "30d" | "90d" | "month" | "custom";
-
-export interface StatisticsRangePresetOption {
-  id: Exclude<StatisticsRangePreset, "month" | "custom">;
-  label: string;
-  days: number;
+export interface DayStatsRow extends GamePlaytime {
+  hours: number;
 }
 
-export interface DailyTrendPoint {
+export interface HeatmapCell {
   date: string;
-  hours: number;
   seconds: number;
-}
-
-export interface PerGamePoint extends GamePlaytime {
   hours: number;
+  level: 0 | 1 | 2 | 3 | 4;
+  inRange: boolean;
+  isToday: boolean;
+  isSelected: boolean;
 }
 
-export const rangePresets: StatisticsRangePresetOption[] = [
-  { id: "7d", label: "7 дней", days: 7 },
-  { id: "30d", label: "30 дней", days: 30 },
-  { id: "90d", label: "90 дней", days: 90 },
-];
+export interface HeatmapWeek {
+  key: string;
+  monthLabel: string | null;
+  cells: HeatmapCell[];
+}
+
+export const HEATMAP_RANGE_DAYS = 365;
 
 export const toHours = (seconds: number) => Math.round((seconds / 3600) * 10) / 10;
 
@@ -39,6 +37,15 @@ export const addDays = (value: Date, amount: number) => {
   return nextDate;
 };
 
+export const startOfWeek = (value: Date) => {
+  const nextDate = new Date(value);
+  const weekDay = (nextDate.getDay() + 6) % 7;
+  nextDate.setDate(nextDate.getDate() - weekDay);
+  return nextDate;
+};
+
+export const endOfWeek = (value: Date) => addDays(startOfWeek(value), 6);
+
 export const formatDuration = (seconds: number) => {
   const totalMinutes = Math.round(seconds / 60);
   const hours = Math.floor(totalMinutes / 60);
@@ -51,13 +58,7 @@ export const formatDuration = (seconds: number) => {
   return `${hours} ч ${minutes} мин`;
 };
 
-export const formatDateShort = (value: string) => {
-  const date = new Date(`${value}T00:00:00`);
-  return date.toLocaleDateString("ru-RU", {
-    day: "2-digit",
-    month: "short",
-  });
-};
+export const formatHours = (seconds: number) => `${toHours(seconds).toFixed(1)} ч`;
 
 export const formatDateLong = (value: string) => {
   const date = new Date(`${value}T00:00:00`);
@@ -67,90 +68,89 @@ export const formatDateLong = (value: string) => {
   });
 };
 
-export const formatDateMonthLabel = (value: string) => {
-  const date = new Date(`${value}-01T00:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
+export const formatDateWithWeekday = (value: string) => {
+  const date = new Date(`${value}T00:00:00`);
   return date.toLocaleDateString("ru-RU", {
-    year: "numeric",
+    weekday: "long",
+    day: "numeric",
     month: "long",
   });
 };
 
-export const formatMonthValue = (year: number, month: number) =>
-  `${year}-${String(month).padStart(2, "0")}`;
-
-export const getMonthRange = (value: string) => {
-  const [yearValue, monthValue] = value.split("-");
-  const year = Number(yearValue);
-  const month = Number(monthValue);
-
-  if (!year || !month) {
-    return null;
-  }
-
-  const start = toIsoDate(new Date(year, month - 1, 1));
-  const end = toIsoDate(new Date(year, month, 0));
-
-  return { start, end };
-};
-
-export const getMonthValueFromRange = (start: string, end: string) => {
-  const startParts = start.split("-").map(Number);
-  const endParts = end.split("-").map(Number);
-
-  if (startParts.length !== 3 || endParts.length !== 3) {
-    return "";
-  }
-
-  const [startYear, startMonth, startDay] = startParts;
-  const [endYear, endMonth, endDay] = endParts;
-
-  if (
-    !startYear ||
-    !startMonth ||
-    !startDay ||
-    !endYear ||
-    !endMonth ||
-    !endDay
-  ) {
-    return "";
-  }
-
-  if (startYear !== endYear || startMonth !== endMonth || startDay !== 1) {
-    return "";
-  }
-
-  const lastDay = new Date(startYear, startMonth, 0).getDate();
-  if (endDay !== lastDay) {
-    return "";
-  }
-
-  return formatMonthValue(startYear, startMonth);
-};
-
-export const buildRecentDateOptions = (today: Date, days: number) => {
-  const options: string[] = [];
-
-  for (let offset = 0; offset < days; offset += 1) {
-    options.push(toIsoDate(addDays(today, -offset)));
-  }
-
-  return options;
-};
-
-export const buildMonthOptions = (today: Date, months: number) => {
-  const options: string[] = [];
-
-  for (let offset = 0; offset < months; offset += 1) {
-    const date = new Date(today.getFullYear(), today.getMonth() - offset, 1);
-    options.push(formatMonthValue(date.getFullYear(), date.getMonth() + 1));
-  }
-
-  return options;
-};
+export const formatMonthShort = (value: string) =>
+  new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", {
+    month: "short",
+  });
 
 export const formatGameName = (name: string) =>
   name.length > 28 ? `${name.slice(0, 25)}…` : name;
+
+function resolveHeatLevel(seconds: number, maxSeconds: number): 0 | 1 | 2 | 3 | 4 {
+  if (seconds <= 0 || maxSeconds <= 0) {
+    return 0;
+  }
+
+  const ratio = seconds / maxSeconds;
+  if (ratio >= 0.75) {
+    return 4;
+  }
+  if (ratio >= 0.5) {
+    return 3;
+  }
+  if (ratio >= 0.25) {
+    return 2;
+  }
+  return 1;
+}
+
+export function buildHeatmapWeeks(
+  dailyTotals: DailyPlaytime[],
+  rangeStart: string,
+  rangeEnd: string,
+  selectedDate: string,
+  todayDate: string,
+): HeatmapWeek[] {
+  const entriesByDate = new Map(dailyTotals.map((entry) => [entry.date, entry.seconds]));
+  const maxSeconds = Math.max(...dailyTotals.map((entry) => entry.seconds), 0);
+  const gridStart = startOfWeek(new Date(`${rangeStart}T00:00:00`));
+  const gridEnd = endOfWeek(new Date(`${rangeEnd}T00:00:00`));
+  const weeks: HeatmapWeek[] = [];
+
+  let currentDate = new Date(gridStart);
+  let weekIndex = 0;
+
+  while (currentDate <= gridEnd) {
+    const cells: HeatmapCell[] = [];
+    let monthLabel: string | null = null;
+
+    for (let weekdayIndex = 0; weekdayIndex < 7; weekdayIndex += 1) {
+      const date = toIsoDate(currentDate);
+      const inRange = date >= rangeStart && date <= rangeEnd;
+      const seconds = inRange ? entriesByDate.get(date) ?? 0 : 0;
+
+      if (!monthLabel && date.slice(8, 10) === "01" && inRange) {
+        monthLabel = formatMonthShort(date);
+      }
+
+      cells.push({
+        date,
+        seconds,
+        hours: toHours(seconds),
+        level: resolveHeatLevel(seconds, maxSeconds),
+        inRange,
+        isToday: date === todayDate,
+        isSelected: date === selectedDate,
+      });
+      currentDate = addDays(currentDate, 1);
+    }
+
+    weeks.push({
+      key: `week-${weekIndex}`,
+      monthLabel,
+      cells,
+    });
+    weekIndex += 1;
+  }
+
+  return weeks;
+}

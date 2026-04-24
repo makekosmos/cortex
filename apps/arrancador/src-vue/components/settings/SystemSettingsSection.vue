@@ -23,7 +23,7 @@ const emit = defineEmits<{
   <section :id="props.sectionId" class="space-y-4">
     <div class="flex items-center gap-2">
       <Power class="h-5 w-5" />
-      <h2 class="text-base font-semibold sm:text-lg">System</h2>
+      <h2 class="text-base font-semibold sm:text-lg">Система</h2>
     </div>
 
     <div class="overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-sm">
@@ -31,8 +31,8 @@ const emit = defineEmits<{
         id="setting-autostart"
         :model-value="props.autoStart"
         :disabled="props.pending"
-        label="Launch on system startup"
-        description="Start Arrancador with the OS so background tracking is ready."
+        label="Запускать вместе с системой"
+        description="Запускать Arrancador вместе с ОС, чтобы фоновое отслеживание было готово сразу."
         @update:model-value="emit('updateAutoStart', $event)"
       />
     </div>
@@ -42,7 +42,7 @@ const emit = defineEmits<{
       class="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1 text-xs text-muted-foreground"
     >
       <Loader2 class="h-3.5 w-3.5 animate-spin" />
-      Applying startup preference...
+      Применение параметра автозапуска...
     </div>
   </section>
 </template>

@@ -1,0 +1,14 @@
+Command:
+  bun run test
+
+Workdir:
+  D:\Personal\Hobby\Coding\kepler\apps\delphi\ts
+
+Observed result:
+  RUN  v4.1.2 D:/Personal/Hobby/Coding/kepler/apps/delphi/ts
+  Test Files  7 passed (7)
+  Tests  93 passed (93)
+  Duration  11.59s
+
+Note:
+  This command completed successfully during implementation before artifact capture.

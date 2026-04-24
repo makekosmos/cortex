@@ -1,0 +1,30 @@
+{
+  "task_id": "2026-04-21-eden-search-visuals-fix",
+  "overall_status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Ark-backed note_obj entries are now searchable through the new Ark Rust search RPC and are included in Eden search aggregation."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "Legacy eden-heart entries still return search results and the merged SearchResult shape remains entryId/file/line/text compatible."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "Eden search UI now renders through shared @kepler/visuals CommandPalette instead of the old standalone overlay shell."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "Automated verification covers build, source integration, and direct Ark-backed backend search proof. Browser e2e was attempted separately but blocked by environment-level spawn EPERM."
+    }
+  ],
+  "notes": [
+    "Playwright could not start workers in this environment, so browser runtime automation could not be completed here.",
+    "Current code passes lint and build."
+  ]
+}

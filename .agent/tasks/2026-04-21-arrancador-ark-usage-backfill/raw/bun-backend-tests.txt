@@ -1,0 +1,25 @@
+bun test v1.3.5 (1e86cebd)
+bun : 
+строка:2 знак:11
++ $output = bun test electron/main/services/ark-usage.test.ts electron/ ...
++           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+electron\main\services\ark-usage-backfill.test.ts:
+(pass) buildLegacyUsageBackfillPlan > builds daily and residual synthetic sessions from legacy totals [15.00ms]
+(pass) backfillLegacyUsageToArk > imports legacy usage into Ark and stays idempotent on forced reruns
+
+electron\main\services\ark-usage.test.ts:
+(pass) resolveUsageTrackerDb > falls back to root ark db when the selected-space db has no usage rows
+(pass) resolveUsageTrackerDb > keeps the selected-space db when it already has tracker rows
+(pass) createPlaytimeStatsRepository > reads statistics from Ark usage rows only
+(pass) createPlaytimeStatsRepository > does not fall back to legacy stats when Ark usage data is unavailable
+(pass) createGameUsageReadModel > hydrates play_count, total_playtime, and last_played from Ark only
+(pass) createGameUsageReadModel > clears stale local usage fields when Ark has no usage rows for a game
+
+ 8 pass
+ 0 fail
+ 31 expect() calls
+Ran 8 tests across 2 files. [299.00ms]
+

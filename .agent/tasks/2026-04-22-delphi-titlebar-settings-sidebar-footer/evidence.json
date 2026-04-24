@@ -1,0 +1,62 @@
+{
+  "task_id": "2026-04-22-delphi-titlebar-settings-sidebar-footer",
+  "status": "pass",
+  "summary": {
+    "implementation": "done",
+    "verification": "pass"
+  },
+  "checks": [
+    {
+      "name": "delphi-tsc",
+      "status": "pass",
+      "artifact": "raw/delphi-tsc.txt"
+    },
+    {
+      "name": "delphi-build",
+      "status": "pass",
+      "artifact": "raw/delphi-build.txt"
+    },
+    {
+      "name": "code-inspection",
+      "status": "pass",
+      "artifact": "raw/code-inspection.txt"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC2",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC3",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC4",
+      "status": "pass",
+      "basis": "code_inspection_and_build"
+    },
+    {
+      "id": "AC5",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC6",
+      "status": "pass",
+      "basis": "tsc"
+    },
+    {
+      "id": "AC7",
+      "status": "pass",
+      "basis": "build"
+    }
+  ]
+}

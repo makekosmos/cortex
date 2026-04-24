@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import CalendarShell from "@/components/calendar/CalendarShell.vue";
-import CalendarViewSwitch from "@/components/calendar/CalendarViewSwitch.vue";
 import { useCalendarState } from "@/composables/useCalendarState";
 import { useSidebarState } from "@/composables/useSidebarState";
 
@@ -32,8 +31,6 @@ const calendarState = useCalendarState();
         <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">
           Календарь
         </h1>
-
-        <CalendarViewSwitch v-model="calendarState.viewMode.value" />
       </div>
     </div>
 
@@ -42,6 +39,7 @@ const calendarState = useCalendarState();
       :anchor-date="calendarState.anchorDate.value"
       :visible-days="calendarState.visibleDays.value"
       :range-label="calendarState.rangeLabel.value"
+      @update:view-mode="calendarState.setViewMode"
       @previous="calendarState.goPrevious"
       @next="calendarState.goNext"
       @today="calendarState.goToday"

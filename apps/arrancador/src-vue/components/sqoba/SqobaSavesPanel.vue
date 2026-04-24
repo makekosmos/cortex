@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Loader2, Search } from "lucide-vue-next";
 import type { BackupInfo, Game, SavePathLookup } from "../../../src/types";
-import type { LookupState } from "./types";
 import SqobaGameCard from "./SqobaGameCard.vue";
+import type { LookupState } from "./types";
 
 const props = defineProps<{
   games: Game[];

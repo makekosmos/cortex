@@ -1,0 +1,5 @@
+$ bun build ./electron/preload.ts --outfile=out/preload/index.js --target=node --format=esm -e electron
+Bundled 3 modules in 11ms
+
+  index.js  7.20 KB  (entry point)
+

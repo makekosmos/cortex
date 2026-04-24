@@ -1,0 +1,28 @@
+$ vitest run --configLoader native --config vitest.config.mjs
+
+ RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+
+ ❯ |electron-main| electron/main/sidecar/arrancador-sidecar.test.ts (3 tests | 1 failed) 17ms
+     × reports an unavailable sidecar for a missing binary 11ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |electron-main| electron/main/sidecar/arrancador-sidecar.test.ts > scanExecutablesWithSidecar > reports an unavailable sidecar for a missing binary
+AssertionError: expected Error: spawn EPERM { …(3) } to be an instance of ArrancadorSidecarUnavailableError
+ ❯ electron/main/sidecar/arrancador-sidecar.test.ts:48:6
+     46|         binaryPath: path.join("C:\\definitely-missing", binaryName),
+     47|       }),
+     48|     ).rejects.toBeInstanceOf(ArrancadorSidecarUnavailableError);
+       |      ^
+     49|   });
+     50| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 24 passed (25)
+      Tests  1 failed | 74 passed (75)
+   Start at  01:17:42
+   Duration  7.50s (transform 9.50s, setup 6.04s, import 17.17s, tests 2.27s, environment 33.90s)
+
+error: script "test" exited with code 1

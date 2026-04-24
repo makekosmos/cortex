@@ -2,8 +2,8 @@ import { computed, onMounted, reactive, shallowRef } from "vue";
 import { backupApi } from "../../src/lib/api";
 import { openPath, pickDirectoryPath, pickFilePath } from "../../src/lib/browser";
 import type { BackupInfo, Game, SavePathLookup } from "../../src/types";
-import { GAME_PATH_TOKEN } from "../components/sqoba/types";
 import type { LookupState } from "../components/sqoba/types";
+import { GAME_PATH_TOKEN } from "../components/sqoba/types";
 import { useGamesStore } from "../stores/games";
 import { useSettingsPageState } from "./useSettingsPageState";
 import { useToast } from "./useToast";
@@ -207,11 +207,12 @@ export function useSqobaPageState() {
       const value = trimmed.length > 0 ? trimmed : null;
       await gamesStore.updateGame(game.id, { save_path: value });
 
-      if (pathsByGameId[game.id]?.data) {
+      const existingPaths = pathsByGameId[game.id];
+      if (existingPaths?.data) {
         pathsByGameId[game.id] = {
-          ...pathsByGameId[game.id],
+          ...existingPaths,
           data: {
-            ...pathsByGameId[game.id].data!,
+            ...existingPaths.data,
             save_path: value,
           },
         };

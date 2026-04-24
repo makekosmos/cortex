@@ -15,7 +15,17 @@ export const resetArrancadorBridge = () => {
   arrancadorOnMock.mockImplementation(() => () => {});
 
   window.arrancador = {
-    invoke: arrancadorInvokeMock as unknown as ArrancadorBridge["invoke"],
+    commands: new Proxy(
+      {},
+      {
+        get: (_target, property) => {
+          if (typeof property !== "string") {
+            return undefined;
+          }
+          return (payload?: unknown) => arrancadorInvokeMock(property, payload);
+        },
+      },
+    ) as ArrancadorBridge["commands"],
     on: arrancadorOnMock as unknown as ArrancadorBridge["on"],
   };
 };

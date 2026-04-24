@@ -1,0 +1,67 @@
+{
+  "result": "PASS",
+  "task_id": "2026-04-21-arrancador-ark-connection-ui",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/backend.ts",
+        "apps/arrancador/src/lib/api.ts",
+        "apps/arrancador/src/types/ipc.ts",
+        "apps/arrancador/src/types/index.ts"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/pages/SettingsPage.vue",
+        "apps/arrancador/src-vue/components/settings/ArkSettingsSection.vue"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/components/settings/ArkSettingsSection.vue",
+        "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/components/settings/ArkSettingsSection.vue",
+        "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/test/ark-settings-section.test.ts",
+        ".agent/tasks/2026-04-21-arrancador-ark-connection-ui/artifacts/typecheck.txt",
+        ".agent/tasks/2026-04-21-arrancador-ark-connection-ui/artifacts/vitest.txt"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "bun run typecheck",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-21-arrancador-ark-connection-ui/artifacts/typecheck.txt"
+    },
+    {
+      "name": "bun run test",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-21-arrancador-ark-connection-ui/artifacts/vitest.txt"
+    },
+    {
+      "name": "bun run build:renderer",
+      "status": "WARN",
+      "artifact": ".agent/tasks/2026-04-21-arrancador-ark-connection-ui/artifacts/build-renderer.txt",
+      "details": "Environment-specific Vite/Tailwind native dependency load failure (@tailwindcss/oxide-win32-x64-msvc, spawn EPERM); not required by the acceptance criteria for this UI fix."
+    }
+  ]
+}

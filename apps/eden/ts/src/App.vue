@@ -364,6 +364,7 @@ type EdenHistorySnapshot = {
 };
 
 type SettingsTab = "general" | "trash" | "storage" | "connected-apps" | "spaces";
+const MAX_NAVIGATION_HISTORY = 30;
 
 usePlatform();
 useKeyboard();
@@ -374,6 +375,17 @@ const historyReady = shallowRef(false);
 const suppressHistoryRecording = shallowRef(false);
 const settingsInitialTab = shallowRef<SettingsTab>("general");
 const objectTypeCreateToken = shallowRef(0);
+
+function appendHistorySnapshot(
+  snapshots: EdenHistorySnapshot[],
+  snapshot: EdenHistorySnapshot,
+) {
+  const next = [...snapshots, snapshot];
+  if (next.length <= MAX_NAVIGATION_HISTORY) {
+    return next;
+  }
+  return next.slice(next.length - MAX_NAVIGATION_HISTORY);
+}
 
 function pickRecentEntries(entries: Entry[], limit: number) {
   const topEntries: Entry[] = [];
@@ -515,7 +527,7 @@ async function navigateBack() {
   if (!targetSnapshot || !currentSnapshot) return;
 
   backStack.value = backStack.value.slice(0, -1);
-  forwardStack.value = [...forwardStack.value, currentSnapshot];
+  forwardStack.value = appendHistorySnapshot(forwardStack.value, currentSnapshot);
   await applyHistorySnapshot(targetSnapshot);
 }
 
@@ -525,7 +537,7 @@ async function navigateForward() {
   if (!targetSnapshot || !currentSnapshot) return;
 
   forwardStack.value = forwardStack.value.slice(0, -1);
-  backStack.value = [...backStack.value, currentSnapshot];
+  backStack.value = appendHistorySnapshot(backStack.value, currentSnapshot);
   await applyHistorySnapshot(targetSnapshot);
 }
 
@@ -545,7 +557,7 @@ watch(currentHistorySnapshot, (nextSnapshot, previousSnapshot) => {
     return;
   }
 
-  backStack.value = [...backStack.value, previousSnapshot];
+  backStack.value = appendHistorySnapshot(backStack.value, previousSnapshot);
   forwardStack.value = [];
 });
 

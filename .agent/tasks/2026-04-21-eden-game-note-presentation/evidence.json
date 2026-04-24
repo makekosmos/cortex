@@ -1,0 +1,81 @@
+{
+  "task_id": "2026-04-21-eden-game-note-presentation",
+  "summary": "Clean up game note presentation in Eden and normalize legacy game_obj UI presets.",
+  "files_touched": [
+    "apps/eden/ts/main/store.ts",
+    "apps/eden/ts/src/store/eden.ts",
+    "apps/eden/ts/src/lib/systemTypes.ts",
+    "apps/eden/ts/src/lib/objectFieldFormatting.ts",
+    "apps/eden/ts/src/components/typed-notes/TypedHeader.vue",
+    "apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue",
+    "apps/eden/ts/src/components/objects/TypeObjectsView.vue",
+    "apps/eden/ts/scripts/seedArkObjectDemo.ts",
+    "packages/ark-core/rust/src/db.rs"
+  ],
+  "checks": [
+    {
+      "name": "cargo-check",
+      "command": "cargo check --bin ark-core-rpc",
+      "cwd": "packages/ark-core/rust",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-21-eden-game-note-presentation/artifacts/cargo-check.txt"
+    },
+    {
+      "name": "tsc-no-emit",
+      "command": "bun x tsc --noEmit",
+      "cwd": "apps/eden/ts",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-21-eden-game-note-presentation/artifacts/tsc.txt"
+    },
+    {
+      "name": "vite-build",
+      "command": "bun x vite build -c vite.config.mjs --configLoader native",
+      "cwd": "apps/eden/ts",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-21-eden-game-note-presentation/artifacts/vite-build.txt",
+      "note": "Build output completed successfully; warnings were surfaced by the shell wrapper."
+    },
+    {
+      "name": "full-build-script",
+      "command": "bun run build",
+      "cwd": "apps/eden/ts",
+      "status": "INFO",
+      "artifact": ".agent/tasks/2026-04-21-eden-game-note-presentation/artifacts/build.txt",
+      "note": "Blocked by a locked ark-core-rpc.exe file in the local environment."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS"
+    },
+    {
+      "id": "AC2",
+      "status": "PASS"
+    },
+    {
+      "id": "AC3",
+      "status": "PASS"
+    },
+    {
+      "id": "AC4",
+      "status": "PASS"
+    },
+    {
+      "id": "AC5",
+      "status": "PASS"
+    },
+    {
+      "id": "AC6",
+      "status": "PASS"
+    }
+  ],
+  "encoding": {
+    "status": "PASS",
+    "details": [
+      "proof-loop docs are ASCII",
+      "new formatter labels use unicode escapes to avoid mojibake regressions"
+    ]
+  },
+  "overall_verification": "PASS"
+}

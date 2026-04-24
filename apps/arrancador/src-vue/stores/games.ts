@@ -1,5 +1,5 @@
-import { computed, shallowRef } from "vue";
 import { defineStore } from "pinia";
+import { computed, shallowRef } from "vue";
 import { gamesApi } from "../../src/lib/api";
 import type { Game, NewGame, UpdateGame } from "../../src/types";
 

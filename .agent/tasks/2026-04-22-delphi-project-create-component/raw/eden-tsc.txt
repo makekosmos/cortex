@@ -1,0 +1,8 @@
+Command:
+cmd.exe /c "cd /d D:\Personal\Hobby\Coding\kepler\apps\eden\ts && bun x tsc --noEmit"
+
+Result:
+PASS
+
+Summary:
+- Eden TypeScript compile check completed successfully after the shared sidebar API extension.

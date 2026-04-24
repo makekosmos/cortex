@@ -1,0 +1,89 @@
+{
+  "task_id": "2026-04-22-delphi-shared-ark-task-objects",
+  "status": "partial",
+  "summary": {
+    "implementation": "done",
+    "verification": "blocked_on_electron_launch"
+  },
+  "checks": [
+    {
+      "name": "delphi-vitest",
+      "status": "pass",
+      "artifact": "raw/delphi-vitest.txt"
+    },
+    {
+      "name": "delphi-tsc",
+      "status": "pass",
+      "artifact": "raw/delphi-tsc.txt"
+    },
+    {
+      "name": "eden-tsc",
+      "status": "pass",
+      "artifact": "raw/eden-tsc.txt"
+    },
+    {
+      "name": "delphi-build",
+      "status": "pass",
+      "artifact": "raw/delphi-build.txt"
+    },
+    {
+      "name": "eden-build",
+      "status": "pass",
+      "artifact": "raw/eden-build.txt"
+    },
+    {
+      "name": "playwright-electron-e2e",
+      "status": "blocked",
+      "artifact": "raw/playwright-electron-blocked.txt",
+      "reason": "spawn EPERM while Playwright attempted to fork/launch Electron"
+    },
+    {
+      "name": "playwright-direct-script",
+      "status": "blocked",
+      "artifact": "raw/verify-script-blocked.txt",
+      "reason": "spawn EPERM on electron.launch"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC2",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC3",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC4",
+      "status": "pass",
+      "basis": "code_inspection"
+    },
+    {
+      "id": "AC5",
+      "status": "blocked",
+      "basis": "runtime_verification_blocked"
+    },
+    {
+      "id": "AC6",
+      "status": "pass",
+      "basis": "tests_and_build"
+    },
+    {
+      "id": "AC7",
+      "status": "blocked",
+      "basis": "runtime_verification_blocked"
+    },
+    {
+      "id": "AC8",
+      "status": "pass",
+      "basis": "code_inspection"
+    }
+  ]
+}

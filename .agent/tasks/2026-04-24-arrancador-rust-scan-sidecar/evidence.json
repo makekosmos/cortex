@@ -1,0 +1,90 @@
+{
+  "taskId": "2026-04-24-arrancador-rust-scan-sidecar",
+  "status": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": ["apps/arrancador/sidecar/Cargo.toml", "apps/arrancador/sidecar/src/main.rs"]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": ["raw/cargo-test.txt", "raw/sidecar-smoke.txt"]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": ["apps/arrancador/electron/main/services/scan.ts", "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": ["ArrancadorSidecarUnavailableError fallback path"]
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": ["apps/arrancador/package.json", "apps/arrancador/scripts/build.ps1", "apps/arrancador/electron-builder.yml"]
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": [
+        "raw/cargo-test.txt",
+        "raw/cargo-build-release.txt",
+        "raw/typecheck.txt",
+        "raw/test.txt",
+        "raw/biome-check.txt",
+        "raw/build-main.txt",
+        "raw/bench-baseline.txt",
+        "raw/compare-rust-scan.txt"
+      ]
+    },
+    "AC7": {
+      "status": "PASS",
+      "evidence": ["evidence.md SQLite / Ark State"]
+    }
+  },
+  "comparison": {
+    "baselineBackend": "ts-electron-main",
+    "currentBackend": "electron-main+rust-scan-sidecar",
+    "correctnessPass": true,
+    "scan": {
+      "durationMs": {
+        "baseline": 136.19,
+        "current": 134.38,
+        "deltaPct": -1.33,
+        "status": "improved"
+      },
+      "eventLoopLagP95Ms": {
+        "baseline": 0.44,
+        "current": 0.24,
+        "deltaPct": -45.45,
+        "status": "improved"
+      },
+      "filesPerSecond": {
+        "baseline": 52867.32,
+        "current": 53579.4,
+        "deltaPct": 1.35,
+        "status": "improved"
+      },
+      "timeToFirstResultMs": {
+        "baseline": 3.95,
+        "current": 7.47,
+        "deltaPct": 89.11,
+        "status": "regressed"
+      },
+      "foundExecutables": {
+        "baseline": 720,
+        "current": 720,
+        "status": "same"
+      },
+      "cancelLatencyMs": {
+        "baseline": 0.45,
+        "current": 0.39,
+        "deltaPct": -13.33,
+        "status": "improved"
+      }
+    }
+  },
+  "sqliteState": {
+    "arrancadorLocalDb": "better-sqlite3 in Electron main",
+    "arkDbCurrentAccess": "better-sqlite3 direct reads/writes from Arrancador services",
+    "rusqliteTarget": "packages/ark-core/rust via ark-core-rpc or expanded @arksync/node facade"
+  }
+}

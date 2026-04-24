@@ -2,6 +2,8 @@ export { default as CustomCaret } from "./CustomCaret.vue";
 
 export { default as CommandPalette } from "./CommandPalette.vue";
 
+export { default as GamePosterCard } from "./GamePosterCard.vue";
+
 export { default as SidebarButton } from "./SidebarButton.vue";
 
 export { default as Sidebar } from "./Sidebar.vue";
@@ -10,6 +12,7 @@ export type {
   SidebarConfig,
   SidebarNavItem,
   SidebarProjectItem,
+  SidebarProjectGroup,
 } from "./Sidebar.vue";
 
 export { default as Titlebar } from "./Titlebar.vue";

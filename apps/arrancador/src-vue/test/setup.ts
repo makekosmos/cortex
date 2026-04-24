@@ -1,28 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { resetArrancadorBridge } from "./bridge";
 
-type DragDropHandler = (event: unknown) => void;
-
-const dragDropHandlers: DragDropHandler[] = [];
-(
-  globalThis as unknown as { __arrancadorDragDropHandlers?: DragDropHandler[] }
-).__arrancadorDragDropHandlers = dragDropHandlers;
-
 resetArrancadorBridge();
-
-vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({
-    onDragDropEvent: vi.fn().mockImplementation(async (cb: DragDropHandler) => {
-      dragDropHandlers.push(cb);
-      return () => {
-        const idx = dragDropHandlers.indexOf(cb);
-        if (idx >= 0) {
-          dragDropHandlers.splice(idx, 1);
-        }
-      };
-    }),
-  }),
-}));
 
 if (!("ResizeObserver" in globalThis)) {
   class ResizeObserverMock {

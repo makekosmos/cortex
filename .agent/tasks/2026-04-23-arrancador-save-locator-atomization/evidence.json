@@ -1,0 +1,69 @@
+{
+  "taskId": "2026-04-23-arrancador-save-locator-atomization",
+  "verificationStatus": "PASS",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": "save-locator.ts reduced from 633 to 184 lines and no longer owns root-resolution internals."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": "save-root-resolver.ts owns path context, tokens, glob expansion, Steam discovery, manifest roots, and heuristics."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": "Existing public exports from save-locator.ts remain available."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": "save-locator.test.ts covers override discovery, save path lookup, and PATHTOGAME token behavior."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": "typecheck, test, biome, build:main, and build:preload pass."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": "spec.md, evidence.md, evidence.json, problems.md, and raw artifacts exist."
+    }
+  ],
+  "commands": [
+    {
+      "command": "bun run typecheck",
+      "status": "PASS",
+      "artifact": "raw/typecheck.txt"
+    },
+    {
+      "command": "bun run test",
+      "status": "PASS",
+      "artifact": "raw/test.txt",
+      "summary": "23 files / 69 tests passed"
+    },
+    {
+      "command": "bun run biome:check",
+      "status": "PASS",
+      "artifact": "raw/biome-check.txt"
+    },
+    {
+      "command": "bun run build:main",
+      "status": "PASS",
+      "artifact": "raw/build-main.txt"
+    },
+    {
+      "command": "bun run build:preload",
+      "status": "PASS",
+      "artifact": "raw/build-preload.txt"
+    }
+  ],
+  "changedFiles": [
+    "apps/arrancador/electron/main/services/backup/save-locator.ts",
+    "apps/arrancador/electron/main/services/backup/save-root-resolver.ts",
+    "apps/arrancador/electron/main/services/backup/save-locator.test.ts"
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "task_id": "2026-04-23-arrancador-game-detail-atomization",
+  "verification": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/composables/useGameBackups.ts",
+        "apps/arrancador/src-vue/pages/GameDetailPage.vue"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/composables/useGameSavePath.ts",
+        "apps/arrancador/src-vue/pages/GameDetailPage.vue"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/composables/useGameMetadataSearch.ts",
+        "apps/arrancador/src-vue/pages/GameDetailPage.vue"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/test/use-game-backups.test.ts",
+        "apps/arrancador/src-vue/test/use-game-save-path.test.ts",
+        "apps/arrancador/src-vue/test/use-game-metadata-search.test.ts"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "commands": [
+        {
+          "command": "bun run typecheck",
+          "cwd": "apps/arrancador",
+          "status": "PASS",
+          "artifact": "typecheck.txt"
+        },
+        {
+          "command": "bun run test",
+          "cwd": "apps/arrancador",
+          "status": "PASS",
+          "artifact": "test.txt"
+        }
+      ]
+    },
+    "AC6": {
+      "status": "PASS",
+      "artifacts": [
+        "spec.md",
+        "evidence.md",
+        "evidence.json",
+        "typecheck.txt",
+        "test.txt",
+        "diff.txt",
+        "metrics.txt"
+      ]
+    }
+  },
+  "test_summary": {
+    "typecheck": "PASS",
+    "vitest_files": 19,
+    "vitest_tests": 49,
+    "vitest_status": "PASS"
+  },
+  "changed_focus": [
+    "GameDetail backup composable",
+    "GameDetail save-path composable",
+    "GameDetail metadata/edit composable",
+    "Focused renderer tests"
+  ]
+}

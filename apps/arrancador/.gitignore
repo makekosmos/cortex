@@ -13,6 +13,7 @@ dist-ssr
 *.local
 build
 .cache
+.tmp
 target
 
 # Editor directories and files

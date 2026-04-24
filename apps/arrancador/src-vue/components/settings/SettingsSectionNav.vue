@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { HardDrive, Key, Monitor, Power, Shield, Sparkles } from "lucide-vue-next";
+import { Database, HardDrive, Key, Monitor, Power, Shield, Sparkles } from "lucide-vue-next";
 import type { SettingsSectionId, SettingsSectionItem } from "./types";
 
 defineProps<{
@@ -34,6 +34,11 @@ const emit = defineEmits<{
       />
       <Power
         v-else-if="item.icon === 'power'"
+        class="h-4 w-4"
+        :class="activeSection === item.id ? 'text-primary-foreground' : ''"
+      />
+      <Database
+        v-else-if="item.icon === 'database'"
         class="h-4 w-4"
         :class="activeSection === item.id ? 'text-primary-foreground' : ''"
       />

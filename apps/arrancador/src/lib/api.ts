@@ -1,15 +1,18 @@
-import { invoke } from "./ipc";
 import type {
+  Achievement,
   AppSettings,
+  ArkConnectionInfo,
+  ArkGameMigrationResult,
   Backup,
   BackupInfo,
-  DiskSpeedResult,
-  NotificationItem,
-  Game,
-  Achievement,
   CatalogueItem,
   CatalogueSyncResult,
+  DiskSpeedResult,
+  Game,
+  GamesArkSyncResult,
   NewGame,
+  NewGameProcessBinding,
+  NotificationItem,
   PlaytimeStats,
   ProcessEntry,
   RawgGame,
@@ -18,7 +21,9 @@ import type {
   SavePathLookup,
   SystemInfo,
   UpdateGame,
+  UsageProcessCandidate,
 } from "@/types";
+import { invoke } from "./ipc";
 
 // Game API
 export const gamesApi = {
@@ -39,8 +44,19 @@ export const gamesApi = {
   getRunningInstances: (id: string) =>
     invoke<number>("get_running_instances", { id }),
   killProcesses: (id: string) => invoke<number>("kill_game_processes", { id }),
+  addProcessBindings: (id: string, bindings: NewGameProcessBinding[]) =>
+    invoke<Game>("add_game_process_bindings", { id, bindings }),
+  removeProcessBinding: (id: string, bindingId: number) =>
+    invoke<Game>("remove_game_process_binding", { id, bindingId }),
   resolveShortcutTarget: (path: string) =>
     invoke<string>("resolve_shortcut_target", { path }),
+  listRecentUsageProcesses: (limit: number = 10) =>
+    invoke<UsageProcessCandidate[]>("list_recent_usage_processes", { limit }),
+  searchUsageProcesses: (query: string, limit: number = 10) =>
+    invoke<UsageProcessCandidate[]>("search_usage_processes", { query, limit }),
+  syncToArk: () => invoke<GamesArkSyncResult>("sync_games_to_ark"),
+  migrateArkGames: (sourceDbPath: string) =>
+    invoke<ArkGameMigrationResult>("migrate_ark_games", { sourceDbPath }),
 };
 
 // Metadata API (RAWG)
@@ -105,6 +121,8 @@ export const settingsApi = {
   get: (key: string) => invoke<string | null>("get_setting", { key }),
   set: (key: string, value: string) =>
     invoke<void>("set_setting", { key, value }),
+  getArkConnectionInfo: () =>
+    invoke<ArkConnectionInfo>("get_ark_connection_info"),
   addScanDirectory: (path: string) =>
     invoke<void>("add_scan_directory", { path }),
   getScanDirectories: () => invoke<string[]>("get_scan_directories"),

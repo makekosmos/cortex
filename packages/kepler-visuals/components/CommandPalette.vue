@@ -1,26 +1,43 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from "vue";
+import { nextTick, ref, watch } from "vue";
 
 const props = defineProps<{
   open: boolean;
   placeholder?: string;
+  query?: string;
+  dialogTestId?: string;
+  inputTestId?: string;
 }>();
 
 const emit = defineEmits<{
   "update:open": [boolean];
+  "update:query": [string];
 }>();
 
-const query = ref("");
+const query = ref(props.query ?? "");
 const inputRef = ref<HTMLInputElement>();
 const listRef = ref<HTMLElement>();
 
 watch(
-  () => props.open,
-  (val) => {
-    if (val) {
-      query.value = "";
-      nextTick(() => inputRef.value?.focus());
+  () => props.query,
+  (value) => {
+    if (typeof value !== "string" || value === query.value) {
+      return;
     }
+
+    query.value = value;
+  },
+);
+
+watch(
+  () => props.open,
+  (value) => {
+    if (!value) {
+      return;
+    }
+
+    query.value = props.query ?? "";
+    nextTick(() => inputRef.value?.focus());
   },
 );
 
@@ -28,37 +45,52 @@ function close() {
   emit("update:open", false);
 }
 
-function handleInputKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
+function updateQuery(value: string) {
+  query.value = value;
+  emit("update:query", value);
+}
+
+function handleInputKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
     close();
     return;
   }
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
     const items = listRef.value?.querySelectorAll<HTMLElement>("[data-cmd-item]");
-    if (items?.length) items[0].focus();
+    if (items?.length) {
+      items[0].focus();
+    }
   }
 }
 
-function handleListKeydown(e: KeyboardEvent) {
-  const items = [
-    ...(listRef.value?.querySelectorAll<HTMLElement>("[data-cmd-item]") ?? []),
-  ];
-  const idx = items.indexOf(document.activeElement as HTMLElement);
+function handleListKeydown(event: KeyboardEvent) {
+  const items = [...(listRef.value?.querySelectorAll<HTMLElement>("[data-cmd-item]") ?? [])];
+  const index = items.indexOf(document.activeElement as HTMLElement);
 
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    items[(idx + 1) % items.length]?.focus();
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    if (idx <= 0) {
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    items[(index + 1) % items.length]?.focus();
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    if (index <= 0) {
       inputRef.value?.focus();
     } else {
-      items[idx - 1].focus();
+      items[index - 1].focus();
     }
-  } else if (e.key === "Escape") {
+    return;
+  }
+
+  if (event.key === "Escape") {
     close();
-  } else if (e.key.length === 1) {
+    return;
+  }
+
+  if (event.key.length === 1) {
     inputRef.value?.focus();
   }
 }
@@ -69,15 +101,13 @@ function handleListKeydown(e: KeyboardEvent) {
     v-if="open"
     class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
   >
-    <!-- Backdrop -->
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close" />
 
-    <!-- Dialog -->
     <div
-      class="relative z-10 w-full max-w-(--bringhurst-wide) overflow-hidden rounded-xl border border-(--border) shadow-2xl "
+      class="relative z-10 w-full max-w-(--bringhurst-wide) overflow-hidden rounded-xl border border-(--border) shadow-2xl"
       style="background: var(--color-shape-highlight-light-solid)"
+      :data-testid="dialogTestId"
     >
-      <!-- Input -->
       <div class="flex items-center gap-3 px-4 py-3">
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -96,9 +126,11 @@ function handleListKeydown(e: KeyboardEvent) {
         </svg>
         <input
           ref="inputRef"
-          v-model="query"
+          :value="query"
           :placeholder="placeholder ?? 'Поиск...'"
           class="flex-1 bg-transparent text-sm text-(--foreground) outline-none placeholder:text-(--muted-foreground)"
+          :data-testid="inputTestId"
+          @input="updateQuery(($event.target as HTMLInputElement).value)"
           @keydown="handleInputKeydown"
         />
         <kbd class="hidden rounded border border-(--border) px-1.5 py-0.5 text-[10px] text-(--muted-foreground) sm:block">
@@ -108,7 +140,6 @@ function handleListKeydown(e: KeyboardEvent) {
 
       <div class="h-px bg-(--border)" />
 
-      <!-- Results -->
       <div
         ref="listRef"
         class="max-h-96 overflow-y-auto py-2"

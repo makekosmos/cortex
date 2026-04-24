@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { X } from "lucide-vue-next";
-import { useToast } from "../composables/useToast";
 import { cn } from "../../src/lib/utils";
+import { useToast } from "../composables/useToast";
 
 const { toasts, removeToast } = useToast();
 

@@ -12,8 +12,8 @@ import {
 } from "lucide-vue-next";
 import { computed } from "vue";
 import type { BackupInfo, Game, SavePathLookup } from "../../../src/types";
-import { GAME_PATH_TOKEN } from "./types";
 import type { LookupState } from "./types";
+import { GAME_PATH_TOKEN } from "./types";
 
 const props = defineProps<{
   game: Game;

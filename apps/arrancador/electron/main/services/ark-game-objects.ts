@@ -246,19 +246,6 @@ function mergeArkGameProps(game: Game, object: ArkObjectRecord): Game {
   const remoteSavePath = readOptionalString(props.save_path);
   const nextSavePath = game.save_path ?? remoteSavePath;
 
-  const remotePlayCount = readOptionalNumber(props.play_count);
-  const nextPlayCount =
-    remotePlayCount !== null ? Math.max(game.play_count, remotePlayCount) : game.play_count;
-
-  const remoteLastPlayed = readOptionalString(props.last_played_at);
-  const nextLastPlayed = game.last_played ?? remoteLastPlayed;
-
-  const remoteTotalPlaytime = readOptionalNumber(props.total_playtime_seconds);
-  const nextTotalPlaytime =
-    remoteTotalPlaytime !== null
-      ? Math.max(game.total_playtime, remoteTotalPlaytime)
-      : game.total_playtime;
-
   const remoteSaveExists = readOptionalBoolean(props.save_exists);
   const savePathFromExists =
     game.save_path ?? (remoteSaveExists === false ? null : nextSavePath);
@@ -275,9 +262,6 @@ function mergeArkGameProps(game: Game, object: ArkObjectRecord): Game {
     background_image: nextBackgroundImage,
     rawg_id: nextRawgId,
     save_path: savePathFromExists,
-    play_count: nextPlayCount,
-    last_played: nextLastPlayed,
-    total_playtime: nextTotalPlaytime,
   };
 }
 

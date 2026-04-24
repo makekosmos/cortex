@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Clock, Search, X } from "lucide-vue-next";
 import {
   computed,
   nextTick,
@@ -7,11 +8,10 @@ import {
   shallowRef,
   watch,
 } from "vue";
-import { Clock, Search, X } from "lucide-vue-next";
 import { useRoute, useRouter } from "vue-router";
 import type { Game } from "../../src/types";
-import { useGamesStore } from "../stores/games";
 import { useLanguage } from "../composables/useLanguage";
+import { useGamesStore } from "../stores/games";
 
 const MAX_RESULTS = 12;
 

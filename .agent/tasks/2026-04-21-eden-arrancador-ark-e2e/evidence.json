@@ -1,0 +1,79 @@
+{
+  "task_id": "2026-04-21-eden-arrancador-ark-e2e",
+  "summary": "Add automated verification assets for the shared Ark DB flow between Arrancador and Eden.",
+  "files_added": [
+    "apps/eden/ts/tests/arrancador-ark-sync.spec.ts",
+    "apps/eden/ts/scripts/verifyArrancadorArkSync.ts",
+    ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/spec.md",
+    ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/evidence.md",
+    ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/evidence.json",
+    ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/problems.md"
+  ],
+  "checks": [
+    {
+      "name": "eden-build",
+      "command": "bun run build",
+      "cwd": "apps/eden/ts",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/artifacts/eden-build.txt"
+    },
+    {
+      "name": "oxlint-new-test-files",
+      "command": "bun x oxlint tests/arrancador-ark-sync.spec.ts scripts/verifyArrancadorArkSync.ts --deny-warnings",
+      "cwd": "apps/eden/ts",
+      "status": "PASS",
+      "artifact": ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/artifacts/oxlint.txt"
+    },
+    {
+      "name": "playwright-runner",
+      "command": "bun x playwright test arran.*sync.spec.ts --config playwright.config.ts",
+      "cwd": "apps/eden/ts",
+      "status": "FAIL",
+      "artifact": ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/artifacts/playwright-runner.txt",
+      "failure": "spawn EPERM"
+    },
+    {
+      "name": "playwright-standalone-script",
+      "command": "node --experimental-strip-types scripts/verifyArrancadorArkSync.ts",
+      "cwd": "apps/eden/ts",
+      "status": "FAIL",
+      "artifact": ".agent/tasks/2026-04-21-eden-arrancador-ark-e2e/artifacts/playwright-script.txt",
+      "failure": "electron.launch: spawn EPERM"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": "Playwright Electron spec added at apps/eden/ts/tests/arrancador-ark-sync.spec.ts"
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": "Spec creates temp root, temp appdata/localappdata/home/vault, and temp Arrancador DB"
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": "Spec creates a game through Arrancador services and validates game_obj presence in ark.db"
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": "Spec polls Eden listEntries, asserts type_id=game_obj, and opens the entry in the editor"
+    },
+    {
+      "id": "AC5",
+      "status": "FAIL",
+      "evidence": "Cleanup is implemented, but the runtime verification run is blocked by environment-level EPERM process spawning errors"
+    }
+  ],
+  "encoding": {
+    "status": "PASS",
+    "details": [
+      "spec.md rewritten in ASCII to avoid mojibake",
+      "new TS files are ASCII-only and passed oxlint"
+    ]
+  },
+  "overall_verification": "FAIL"
+}

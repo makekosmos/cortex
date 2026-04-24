@@ -41,8 +41,8 @@ function className(active: boolean) {
   justify-content: flex-start;
   gap: 0.625rem;
   width: 100%;
-  min-height: 2.125rem;
-  padding: 0 0.625rem;
+  min-height: 1.75rem;
+  padding: 0.25rem;
   border-radius: calc(var(--radius) * 1.4);
   corner-shape: var(--corner-shape);
   font-weight: 500;

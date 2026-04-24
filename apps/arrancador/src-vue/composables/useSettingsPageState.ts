@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, shallowRef } from "vue";
-import { backupApi, metadataApi, settingsApi } from "../../src/lib/api";
-import { getAutoStartState, pickDirectoryPath, setAutoStartState } from "../../src/lib/browser";
-import type { AppSettings } from "../../src/types";
+import { backupApi, gamesApi, metadataApi, settingsApi } from "../../src/lib/api";
+import { getAutoStartState, openPath, pickDirectoryPath, setAutoStartState } from "../../src/lib/browser";
+import type { AppSettings, ArkConnectionInfo, GamesArkSyncResult } from "../../src/types";
 import type { InlineFeedback } from "../components/settings/types";
 import { useTheme } from "./useTheme";
 import { useToast } from "./useToast";
@@ -40,6 +40,10 @@ export function useSettingsPageState() {
   const saving = shallowRef(false);
   const autoStart = shallowRef(false);
   const autoStartPending = shallowRef(false);
+  const arkConnection = shallowRef<ArkConnectionInfo | null>(null);
+  const arkSyncPending = shallowRef(false);
+  const arkSyncFeedback = shallowRef<InlineFeedback | null>(null);
+  const arkSyncResult = shallowRef<GamesArkSyncResult | null>(null);
   const manifestRefreshing = shallowRef(false);
   const manifestFeedback = shallowRef<InlineFeedback | null>(null);
   const saveFeedback = shallowRef<InlineFeedback | null>(null);
@@ -90,12 +94,13 @@ export function useSettingsPageState() {
     }
 
     try {
-      const [settings, autostartEnabled] = await Promise.all([
+      const [settings, autostartEnabled, connectionInfo] = await Promise.all([
         settingsApi.getAll(),
         getAutoStartState().catch((error) => {
           console.error("Failed to load autostart state:", error);
           return false;
         }),
+        settingsApi.getArkConnectionInfo(),
       ]);
 
       if (!alive || requestId !== loadRequestId) {
@@ -105,6 +110,7 @@ export function useSettingsPageState() {
       baseSettings.value = settings;
       applySettingsToForm(form, settings);
       autoStart.value = autostartEnabled;
+      arkConnection.value = connectionInfo;
     } catch (error) {
       if (!alive || requestId !== loadRequestId) {
         return;
@@ -113,11 +119,11 @@ export function useSettingsPageState() {
       console.error("Failed to load settings:", error);
       saveFeedback.value = {
         tone: "error",
-        text: "Failed to load settings.",
+        text: "Не удалось загрузить настройки.",
       };
       notify({
         tone: "error",
-        title: "Failed to load settings",
+        title: "Не удалось загрузить настройки",
       });
     } finally {
       if (alive && requestId === loadRequestId) {
@@ -143,7 +149,7 @@ export function useSettingsPageState() {
       }
       notify({
         tone: "error",
-        title: "Failed to update startup preference",
+        title: "Не удалось обновить параметр автозапуска",
       });
     } finally {
       if (alive && requestId === autoStartRequestId) {
@@ -177,7 +183,7 @@ export function useSettingsPageState() {
 
   async function selectBackupDirectory() {
     const selectedPath = await pickDirectoryPath({
-      title: "Select backup directory",
+      title: "Выберите папку для резервных копий",
     });
 
     if (selectedPath && alive) {
@@ -197,27 +203,81 @@ export function useSettingsPageState() {
       await backupApi.refreshSqobaManifest();
       manifestFeedback.value = {
         tone: "success",
-        text: "SQOBA manifest refreshed.",
+        text: "Манифест SQOBA обновлён.",
       };
       notify({
         tone: "success",
-        title: "SQOBA manifest refreshed",
+        title: "Манифест SQOBA обновлён",
       });
     } catch (error) {
       console.error("Failed to refresh SQOBA manifest:", error);
       manifestFeedback.value = {
         tone: "error",
-        text: "Failed to refresh SQOBA manifest.",
+        text: "Не удалось обновить манифест SQOBA.",
       };
       notify({
         tone: "error",
-        title: "Failed to refresh SQOBA manifest",
+        title: "Не удалось обновить манифест SQOBA",
       });
     } finally {
       if (alive) {
         manifestRefreshing.value = false;
       }
     }
+  }
+
+  async function syncGamesToArk() {
+    if (arkSyncPending.value) {
+      return;
+    }
+
+    arkSyncPending.value = true;
+    arkSyncFeedback.value = null;
+    arkSyncResult.value = null;
+
+    try {
+      const result = await gamesApi.syncToArk();
+      arkSyncResult.value = result;
+      arkConnection.value = await settingsApi.getArkConnectionInfo();
+      arkSyncFeedback.value = {
+        tone: "success",
+        text: "Игры синхронизированы с текущей Ark-базой.",
+      };
+      notify({
+        tone: "success",
+        title: "Игры синхронизированы с Ark",
+      });
+    } catch (error) {
+      console.error("Failed to sync games to Ark:", error);
+      arkSyncFeedback.value = {
+        tone: "error",
+        text: "Не удалось синхронизировать игры с Ark.",
+      };
+      notify({
+        tone: "error",
+        title: "Не удалось синхронизировать игры с Ark",
+      });
+    } finally {
+      if (alive) {
+        arkSyncPending.value = false;
+      }
+    }
+  }
+
+  async function openArkDatabase() {
+    if (!arkConnection.value?.ark_db_path) {
+      return;
+    }
+
+    await openPath(arkConnection.value.ark_db_path);
+  }
+
+  async function openArkDirectory() {
+    if (!arkConnection.value?.ark_db_directory) {
+      return;
+    }
+
+    await openPath(arkConnection.value.ark_db_directory);
   }
 
   async function saveSettings() {
@@ -249,11 +309,11 @@ export function useSettingsPageState() {
 
       saveFeedback.value = {
         tone: "success",
-        text: "Settings saved.",
+        text: "Настройки сохранены.",
       };
       notify({
         tone: "success",
-        title: "Settings saved",
+        title: "Настройки сохранены",
       });
 
       await loadSettings({ preserveSaveFeedback: true });
@@ -261,11 +321,11 @@ export function useSettingsPageState() {
       console.error("Failed to save settings:", error);
       saveFeedback.value = {
         tone: "error",
-        text: "Failed to save settings.",
+        text: "Не удалось сохранить настройки.",
       };
       notify({
         tone: "error",
-        title: "Failed to save settings",
+        title: "Не удалось сохранить настройки",
       });
     } finally {
       if (alive) {
@@ -290,6 +350,10 @@ export function useSettingsPageState() {
     hasSettings,
     autoStart,
     autoStartPending,
+    arkConnection,
+    arkSyncPending,
+    arkSyncFeedback,
+    arkSyncResult,
     manifestRefreshing,
     manifestFeedback,
     saveFeedback,
@@ -301,6 +365,9 @@ export function useSettingsPageState() {
     setCompressionLevel,
     setMaxBackups,
     selectBackupDirectory,
+    syncGamesToArk,
+    openArkDatabase,
+    openArkDirectory,
     refreshSqobaManifest,
     saveSettings,
   };

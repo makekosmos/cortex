@@ -1,0 +1,66 @@
+{
+  "taskId": "2026-04-24-arrancador-full-rust-backend",
+  "status": "PASS_WITH_BOUNDS",
+  "currentBackend": "electron-main+rust-sidecar",
+  "correctnessPass": true,
+  "movedToRust": [
+    "scan_executables_stream",
+    "scan_executables_cancel",
+    "backup_create_directory copy path",
+    "backup_restore_directory manifest path"
+  ],
+  "notMovedYet": [
+    "save root discovery and file enumeration",
+    "zip compression and expansion",
+    "legacy mapping restore",
+    "backup listing and deletion orchestration",
+    "launcher-local arrancador.db",
+    "existing direct Ark DB access"
+  ],
+  "finalComparison": {
+    "scan_executables_stream": {
+      "durationMs": { "baseline": 136.19, "current": 105.29, "deltaPct": -22.69, "status": "improved" },
+      "eventLoopLagP95Ms": { "baseline": 0.44, "current": 0.07, "deltaPct": -84.09, "status": "improved" },
+      "filesPerSecond": { "baseline": 52867.32, "current": 68382.56, "deltaPct": 29.35, "status": "improved" },
+      "timeToFirstResultMs": { "baseline": 3.95, "current": 6.4, "deltaPct": 62.03, "status": "regressed" },
+      "foundExecutables": { "baseline": 720, "current": 720, "status": "same" }
+    },
+    "scan_executables_cancel": {
+      "durationMs": { "baseline": 5.77, "current": 5.99, "deltaPct": 3.81, "status": "regressed" },
+      "cancelLatencyMs": { "baseline": 0.45, "current": 0.34, "deltaPct": -24.44, "status": "improved" }
+    },
+    "backup_create_directory": {
+      "durationMs": { "baseline": 293.32, "current": 225.38, "deltaPct": -23.16, "status": "improved" },
+      "eventLoopLagP95Ms": { "baseline": 1.48, "current": 0.27, "deltaPct": -81.76, "status": "improved" },
+      "mbPerSecond": { "baseline": 5.59, "current": 7.28, "deltaPct": 30.23, "status": "improved" }
+    },
+    "backup_restore_directory": {
+      "durationMs": { "baseline": 260.56, "current": 192.96, "deltaPct": -25.94, "status": "improved" },
+      "eventLoopLagP95Ms": { "baseline": 0.5, "current": 0.36, "deltaPct": -28, "status": "improved" },
+      "mbPerSecond": { "baseline": 6.3, "current": 8.5, "deltaPct": 34.92, "status": "improved" },
+      "hashParity": { "baseline": true, "current": true, "status": "same" }
+    }
+  },
+  "verification": {
+    "cargoTest": "PASS",
+    "cargoBuildRelease": "PASS",
+    "sidecarSmoke": "PASS",
+    "typecheck": "PASS",
+    "test": "PASS",
+    "biome": "PASS",
+    "buildMain": "PASS",
+    "benchBaseline": "PASS",
+    "benchCompare": "PASS"
+  },
+  "nextRustApis": [
+    "backup_discover_saves",
+    "backup_zip_artifact",
+    "backup_list_artifacts",
+    "backup_delete_artifact",
+    "ark list_game_objects",
+    "ark apply_local_object",
+    "ark query_usage",
+    "ark backfill_legacy_usage",
+    "ark migrate_game_objects"
+  ]
+}

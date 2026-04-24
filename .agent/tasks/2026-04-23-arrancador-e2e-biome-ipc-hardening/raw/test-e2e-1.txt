@@ -1,0 +1,4 @@
+$ playwright test
+Error: spawn EPERM
+
+error: script "test:e2e" exited with code 1

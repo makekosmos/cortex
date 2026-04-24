@@ -1,0 +1,13 @@
+bun : $ bun build ./electron/main.ts --outfile=out/main/index.js --target=node --format=esm -e electron -e 
+better-sqlite3
+строка:2 знак:11
++ $output = bun run build:main 2>&1 | Out-String; Set-Content -Path 'D: ...
++           ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ bun build ./e... better-sqlite3:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Bundled 46 modules in 37ms
+
+  index.js  188.77 KB  (entry point)
+
+

@@ -24,7 +24,6 @@ function mapPlatform(platform: string): WindowChromePlatform {
       return "mac";
     case "linux":
       return "linux";
-    case "win32":
     default:
       return "windows";
   }

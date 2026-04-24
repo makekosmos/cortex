@@ -8,7 +8,12 @@ import { normalizeSlug } from "@/lib/typedNotes";
 
 import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 
-import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPES, isSystemType } from "@/lib/systemTypes";
+import {
+  SYSTEM_TYPE_NOTE_ID,
+  SYSTEM_TYPES,
+  isSystemType,
+  normalizeSystemNoteType,
+} from "@/lib/systemTypes";
 
 import type { SpaceId } from "@/components/sidebar/types";
 
@@ -21,10 +26,10 @@ type ActiveScreen = "notes" | "settings" | "object-types" | "type-collection";
 function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
   const byId = new Map<string, NoteType>();
   for (const systemType of SYSTEM_TYPES) {
-    byId.set(systemType.id, systemType);
+    byId.set(systemType.id, normalizeSystemNoteType(systemType));
   }
   for (const noteType of noteTypesData) {
-    byId.set(noteType.id, noteType);
+    byId.set(noteType.id, normalizeSystemNoteType(noteType));
   }
   return [...byId.values()];
 }
@@ -45,6 +50,26 @@ interface EntrySaveCoordinator {
   inFlight: boolean;
 
   queued: QueuedSaveRequest | null;
+}
+
+function pruneTransientSaveState(
+  latestSaveTimestamps: Map<string, number>,
+  saveCoordinators: Record<string, EntrySaveCoordinator>,
+  existingEntries: Entry[],
+) {
+  const validIds = new Set(existingEntries.map((entry) => entry.id));
+
+  for (const entryId of latestSaveTimestamps.keys()) {
+    if (!validIds.has(entryId)) {
+      latestSaveTimestamps.delete(entryId);
+    }
+  }
+
+  for (const entryId of Object.keys(saveCoordinators)) {
+    if (!validIds.has(entryId) && !saveCoordinators[entryId]?.inFlight) {
+      delete saveCoordinators[entryId];
+    }
+  }
 }
 
 export const useEdenStore = defineStore("eden", () => {
@@ -73,7 +98,7 @@ export const useEdenStore = defineStore("eden", () => {
 
   // Non-reactive save coordination state (mutable internal mechanism)
 
-  const latestSaveTimestamps: Record<string, number> = {};
+  const latestSaveTimestamps = new Map<string, number>();
 
   const saveCoordinators: Record<string, EntrySaveCoordinator> = {};
 
@@ -95,6 +120,7 @@ export const useEdenStore = defineStore("eden", () => {
     entries.value = entriesData;
 
     noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
+    pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, entriesData);
 
     if (currentEntry.value) {
       currentEntry.value =
@@ -116,6 +142,7 @@ export const useEdenStore = defineStore("eden", () => {
 
       entries.value = entriesData;
       noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
+      pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, entriesData);
 
       const existingMySpace =
         entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
@@ -387,13 +414,13 @@ export const useEdenStore = defineStore("eden", () => {
     const persistEntry = async (
       entryToPersist: Entry,
     ): Promise<SaveEntryResult | null> => {
-      latestSaveTimestamps[entryToPersist.id] = entryToPersist.updated_at;
+      latestSaveTimestamps.set(entryToPersist.id, entryToPersist.updated_at);
 
       const result = await window.api.saveEntry(entryToPersist);
 
       if (!result.ok) return result;
 
-      if (latestSaveTimestamps[entryToPersist.id] !== entryToPersist.updated_at)
+      if (latestSaveTimestamps.get(entryToPersist.id) !== entryToPersist.updated_at)
         return result;
 
       const idx = entries.value.findIndex((e) => e.id === entryToPersist.id);
@@ -456,6 +483,10 @@ export const useEdenStore = defineStore("eden", () => {
           coordinator.inFlight = false;
 
           delete saveCoordinators[nextEntry.id];
+
+          if (latestSaveTimestamps.get(nextEntry.id) === nextEntry.updated_at) {
+            latestSaveTimestamps.delete(nextEntry.id);
+          }
         }
       }
     };

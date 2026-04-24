@@ -4,6 +4,11 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ArkClient } from '@arksync/node';
+import {
+  buildSharedSelectedSpaceFromCode,
+  readSharedSelectedSpace,
+  writeSharedSelectedSpace,
+} from '../../../../packages/shared-space/selectedSpace';
 
 /** Minimal sync entity type (matches Rust SyncEntity wire format). */
 interface SyncEntity {
@@ -15,6 +20,11 @@ interface SyncEntity {
 }
 import {
   sidecar,
+  arkDeleteObject,
+  arkGetObjectType,
+  arkListObjects,
+  arkUpsertObject,
+  arkUpsertObjectType,
   dbLoadAll,
   dbUpsertTodo,
   dbDeleteTodo,
@@ -34,6 +44,12 @@ import {
   type SidecarEvent,
   type SyncEntityPayload,
 } from './sidecar';
+import {
+  arkTaskObjectToTodo,
+  createDelphiTaskObjectTypeRecord,
+  DELPHI_TASK_OBJECT_TYPE_ID,
+  todoToArkTaskObject,
+} from '../shared/task-ark';
 
 /** WebSocket port used by the ark-core sync server. */
 const LAN_SYNC_PORT = 21531;
@@ -117,25 +133,40 @@ function getDataDir(): string {
   return dir;
 }
 
-const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
+function getSharedSelection() {
+  return readSharedSelectedSpace(app.getPath('appData'));
+}
+
+function shouldLaunchInBackground(): boolean {
+  return process.env.DELPHI_BACKGROUND_LAUNCH === '1' || process.env.PLAYWRIGHT === '1';
+}
+
 const WINDOWS_TITLEBAR_SYMBOL_COLOR = '#e5e7eb';
 const ZOOM_LEVEL_STEP = 0.5;
 const MIN_ZOOM_LEVEL = -3;
 const MAX_ZOOM_LEVEL = 3;
 
+function getWindowStateFile(): string {
+  const userDataPath = app.getPath('userData');
+  fs.mkdirSync(userDataPath, { recursive: true });
+  return path.join(userDataPath, 'window-state.json');
+}
+
 function loadWindowState(): { width: number; height: number; x?: number; y?: number; isMaximized?: boolean } {
+  const windowStateFile = getWindowStateFile();
   try {
-    if (fs.existsSync(WINDOW_STATE_FILE)) {
-      return JSON.parse(fs.readFileSync(WINDOW_STATE_FILE, 'utf-8'));
+    if (fs.existsSync(windowStateFile)) {
+      return JSON.parse(fs.readFileSync(windowStateFile, 'utf-8'));
     }
   } catch { /* ignore */ }
   return { width: 1440, height: 1080 };
 }
 
 function saveWindowState(win: BrowserWindow) {
+  const windowStateFile = getWindowStateFile();
   const isMaximized = win.isMaximized();
   const bounds = isMaximized ? (win as any)._lastBounds ?? win.getBounds() : win.getBounds();
-  fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ ...bounds, isMaximized }), 'utf-8');
+  fs.writeFileSync(windowStateFile, JSON.stringify({ ...bounds, isMaximized }), 'utf-8');
 }
 
 function applyWindowsTitlebarOverlay(win: BrowserWindow) {
@@ -265,6 +296,7 @@ function createWindow() {
   const saved = loadWindowState();
   const isMac = process.platform === 'darwin';
   const isWindows = process.platform === 'win32';
+  const launchInBackground = shouldLaunchInBackground();
 
   // Shared desktop chrome contract:
   // macOS uses hiddenInset so the shared visuals can render into the titlebar inset,
@@ -297,10 +329,19 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: !launchInBackground,
     },
+    show: false,
   });
 
   if (saved.isMaximized) win.maximize();
+
+  win.once('ready-to-show', () => {
+    if (launchInBackground) {
+      return;
+    }
+    win.show();
+  });
 
   if (isWindows) {
     const syncOverlay = () => applyWindowsTitlebarOverlay(win);
@@ -396,12 +437,59 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
 const spacesFile = path.join(getDataDir(), 'spaces.json');
 
 function readSpacesFile(): { active: string | null; spaces: Array<{ code: string; name: string; createdAt: string }> } {
+  const shared = getSharedSelection();
+
   try {
     if (fs.existsSync(spacesFile)) {
-      return JSON.parse(fs.readFileSync(spacesFile, 'utf-8'));
+      const parsed = JSON.parse(fs.readFileSync(spacesFile, 'utf-8')) as {
+        active: string | null;
+        spaces: Array<{ code: string; name: string; createdAt: string }>;
+      };
+
+      if (!shared?.spaceCode) {
+        return parsed;
+      }
+
+      const hasShared = parsed.spaces.some((space) => space.code === shared.spaceCode);
+      return {
+        active: shared.spaceCode,
+        spaces: hasShared
+          ? parsed.spaces
+          : [
+            {
+              code: shared.spaceCode,
+              name: 'Personal',
+              createdAt: shared.updatedAt,
+            },
+            ...parsed.spaces,
+          ],
+      };
     }
   } catch { }
-  return { active: null, spaces: [] };
+
+  if (!shared?.spaceCode) {
+    return { active: null, spaces: [] };
+  }
+
+  return {
+    active: shared.spaceCode,
+    spaces: [
+      {
+        code: shared.spaceCode,
+        name: 'Personal',
+        createdAt: shared.updatedAt,
+      },
+    ],
+  };
+}
+
+async function ensureDelphiTaskObjectType(): Promise<void> {
+  const existing = await arkGetObjectType(DELPHI_TASK_OBJECT_TYPE_ID);
+  if (existing) {
+    return;
+  }
+
+  await arkUpsertObjectType(createDelphiTaskObjectTypeRecord());
 }
 
 function writeSpacesFile(data: { active: string | null; spaces: Array<{ code: string; name: string; createdAt: string }> }): void {
@@ -413,6 +501,19 @@ ipcMain.handle('space:setActive', (_e, code: string | null) => {
   const data = readSpacesFile();
   data.active = code;
   writeSpacesFile(data);
+
+  if (!code) {
+    writeSharedSelectedSpace(app.getPath('appData'), null);
+    return;
+  }
+
+  const existingShared = getSharedSelection();
+  writeSharedSelectedSpace(
+    app.getPath('appData'),
+    buildSharedSelectedSpaceFromCode(code, 'delphi-electron', {
+      vaultPath: existingShared?.vaultPath ?? null,
+    }),
+  );
 });
 ipcMain.handle('space:getAll', () => readSpacesFile().spaces);
 ipcMain.handle('space:save', (_e, space: { code: string; name: string; createdAt: string }) => {
@@ -516,6 +617,24 @@ ipcMain.handle('db:setSyncKv', (_e, key, value) => dbSetSyncKv(key, value))
 ipcMain.handle('db:clearAll', () => dbClearAll())
 ipcMain.handle('db:deleteTrashed', () => dbDeleteTrashed())
 ipcMain.handle('db:switchSpace', (_e, spaceId: string) => dbSwitchSpace(spaceId))
+
+ipcMain.handle('ark:listDelphiTasks', async () => {
+  const objects = await arkListObjects();
+  return objects
+    .filter((object) => object.typeId === DELPHI_TASK_OBJECT_TYPE_ID)
+    .map(arkTaskObjectToTodo);
+})
+
+ipcMain.handle('ark:upsertDelphiTask', async (_e, todo) => {
+  await ensureDelphiTaskObjectType();
+  await arkUpsertObject(todoToArkTaskObject(todo));
+  return true;
+})
+
+ipcMain.handle('ark:deleteDelphiTask', async (_e, id: string) => {
+  await arkDeleteObject(id);
+  return true;
+})
 
 ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
   const spaceDir = path.join(getDataDir(), 'spaces', spaceId);
@@ -807,6 +926,13 @@ ipcMain.handle('lan-sync:addSeedPeer', async (_e, addresses: string[]) => {
 // --- App lifecycle ---
 
 app.whenReady().then(async () => {
+  const shared = getSharedSelection();
+  if (shared?.spaceId) {
+    await dbSwitchSpace(shared.spaceId).catch((err) => {
+      console.warn('[Main] Failed to switch to shared selected space:', err);
+    });
+  }
+
   createWindow();
 });
 

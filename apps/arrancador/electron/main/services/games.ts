@@ -1,25 +1,33 @@
-import fs from "node:fs";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 
 import { execute, queryAll, queryOne, runInTransaction } from "../helpers/db";
-import type { DbLike, DbValue } from "../helpers/shared";
-import type { Game, NewGame, UpdateGame } from "./games/types";
+import type { DbLike } from "../helpers/shared";
 import {
-  countRunningInstances,
-  killMatchingProcesses,
+  addGameProcessBindings,
+  listGameProcessBindingsByGameId,
+  removeGameProcessBinding,
+} from "./game-process-bindings";
+import {
+  fetchExePath,
+  isUniqueConstraintError,
+  prepareGameInsert,
+} from "./games/persistence";
+import {
+  countRunningInstancesByMatches,
+  killMatchingProcessesByMatches,
+  type ProcessMatch,
   resolveShortcutTarget,
   spawnGameProcess,
 } from "./games/process";
-
-const GAME_SELECT = `SELECT
-  id, ark_object_id, name, exe_path, exe_name, rawg_id, description, released,
-  background_image, metacritic, rating, genres, platforms, developers, publishers,
-  cover_image, icon_image, is_favorite, play_count, total_playtime, last_played, date_added,
-  backup_enabled, last_backup, backup_count, save_path, user_rating, user_note, play_status
-FROM games`;
-
-const GAME_PATH_TOKEN = "{PATHTOGAME}";
+import { GAME_SELECT, type GameDbRow, mapGameRow } from "./games/rows";
+import type {
+  Game,
+  NewGame,
+  NewGameProcessBinding,
+  UpdateGame,
+} from "./games/types";
+import { buildUpdateClause } from "./games/update";
 
 export interface GamesServiceDeps {
   db: DbLike;
@@ -34,8 +42,8 @@ export interface GamesServiceDeps {
   fileExists?: (filePath: string) => boolean;
   log?: Pick<Console, "error" | "warn">;
   resolveShortcutTarget?: (inputPath: string) => Promise<string>;
-  countRunningInstances?: (exePath: string) => Promise<number>;
-  killMatchingProcesses?: (exePath: string) => Promise<number>;
+  countRunningInstances?: (matches: ProcessMatch[]) => Promise<number>;
+  killMatchingProcesses?: (matches: ProcessMatch[]) => Promise<number>;
   spawnGameProcess?: (exePath: string) => Promise<void>;
 }
 
@@ -56,256 +64,36 @@ export interface GamesService {
   getRunningInstances(id: string): Promise<number>;
   killGameProcesses(id: string): Promise<number>;
   launchGame(id: string): Promise<void>;
+  addProcessBindings(id: string, bindings: NewGameProcessBinding[]): Promise<Game>;
+  removeProcessBinding(id: string, bindingId: number): Promise<Game>;
+  syncAllGamesToArk(): Promise<GamesArkSyncResult>;
 }
 
-type DbRow = Record<string, unknown>;
-
-function readString(row: DbRow, key: string): string {
-  const value = row[key];
-  return typeof value === "string" ? value : "";
-}
-
-function readStringOrNull(row: DbRow, key: string): string | null {
-  const value = row[key];
-  return typeof value === "string" ? value : null;
-}
-
-function readNumberOrNull(row: DbRow, key: string): number | null {
-  const value = row[key];
-  if (value === null || value === undefined) {
-    return null;
-  }
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function readNumber(row: DbRow, key: string): number {
-  const value = row[key];
-  const number = Number(value ?? 0);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function readBoolean(row: DbRow, key: string): boolean {
-  return Number(row[key] ?? 0) === 1;
-}
-
-function mapGameRow(row: DbRow): Game {
-  return {
-    id: readString(row, "id"),
-    ark_object_id: readStringOrNull(row, "ark_object_id"),
-    name: readString(row, "name"),
-    exe_path: readString(row, "exe_path"),
-    exe_name: readString(row, "exe_name"),
-    play_status: readStringOrNull(row, "play_status") ?? "not_started",
-
-    rawg_id: readNumberOrNull(row, "rawg_id"),
-    description: readStringOrNull(row, "description"),
-    released: readStringOrNull(row, "released"),
-    background_image: readStringOrNull(row, "background_image"),
-    metacritic: readNumberOrNull(row, "metacritic"),
-    rating: readNumberOrNull(row, "rating"),
-    genres: readStringOrNull(row, "genres"),
-    platforms: readStringOrNull(row, "platforms"),
-    developers: readStringOrNull(row, "developers"),
-    publishers: readStringOrNull(row, "publishers"),
-
-    cover_image: readStringOrNull(row, "cover_image"),
-    icon_image: readStringOrNull(row, "icon_image"),
-    is_favorite: readBoolean(row, "is_favorite"),
-    play_count: readNumber(row, "play_count"),
-    total_playtime: readNumber(row, "total_playtime"),
-    last_played: readStringOrNull(row, "last_played"),
-    date_added: readString(row, "date_added"),
-
-    backup_enabled: readBoolean(row, "backup_enabled"),
-    last_backup: readStringOrNull(row, "last_backup"),
-    backup_count: readNumber(row, "backup_count"),
-    save_path: readStringOrNull(row, "save_path"),
-
-    user_rating: readNumberOrNull(row, "user_rating"),
-    user_note: readStringOrNull(row, "user_note"),
-  };
+export interface GamesArkSyncResult {
+  total: number;
+  synced: number;
+  failed: number;
 }
 
 async function getRowById(db: DbLike, id: string): Promise<Game | null> {
-  const row = await queryOne<DbRow>(db, `${GAME_SELECT} WHERE id = ?1`, [id]);
+  const row = await queryOne<GameDbRow>(db, `${GAME_SELECT} WHERE id = ?1`, [id]);
   return row ? mapGameRow(row) : null;
 }
 
-async function fetchExePath(db: DbLike, id: string): Promise<string> {
-  const row = await queryOne<{ exe_path: string }>(db, "SELECT exe_path FROM games WHERE id = ?1", [
-    id,
-  ]);
-  if (!row) {
-    throw new Error("Game not found");
-  }
-  return row.exe_path;
-}
-
-async function normalizeSavePathIfPossible(
-  db: DbLike,
-  gameId: string,
-  savePath: string,
-): Promise<string> {
-  if (savePath.includes(GAME_PATH_TOKEN)) {
-    return savePath;
+async function hydrateExplicitBindings(db: DbLike, games: Game[]): Promise<Game[]> {
+  if (games.length === 0) {
+    return games;
   }
 
-  const absolutePath = path.isAbsolute(savePath) ? savePath : "";
-  if (!absolutePath || !fs.existsSync(absolutePath)) {
-    return savePath;
-  }
-
-  const row = await queryOne<{ exe_path: string }>(db, "SELECT exe_path FROM games WHERE id = ?1", [
-    gameId,
-  ]);
-  if (!row) {
-    return savePath;
-  }
-
-  const gameDir = path.dirname(row.exe_path);
-  let canonicalGameDir: string;
-  let canonicalSavePath: string;
-  try {
-    canonicalGameDir = fs.realpathSync.native(gameDir);
-    canonicalSavePath = fs.realpathSync.native(absolutePath);
-  } catch {
-    return savePath;
-  }
-
-  const relative = path.relative(canonicalGameDir, canonicalSavePath);
-  if (!relative || relative === "") {
-    return GAME_PATH_TOKEN;
-  }
-
-  if (relative.startsWith("..")) {
-    return savePath;
-  }
-
-  return path.join(GAME_PATH_TOKEN, relative);
-}
-
-async function prepareGameInsert(
-  db: DbLike,
-  game: NewGame,
-  id: string,
-  dateAdded: string,
-): Promise<void> {
-  await execute(
+  const bindingsByGameId = await listGameProcessBindingsByGameId(
     db,
-    "INSERT INTO games (id, name, exe_path, exe_name, date_added) VALUES (?1, ?2, ?3, ?4, ?5)",
-    [id, game.name, game.exe_path, game.exe_name, dateAdded],
+    games.map((game) => game.id),
   );
-}
 
-async function buildUpdateClause(
-  update: UpdateGame,
-  db: DbLike,
-): Promise<{ sql: string; values: DbValue[] }> {
-  const updates: string[] = [];
-  const values: DbValue[] = [];
-
-  const push = (column: string, value: DbValue) => {
-    updates.push(`${column} = ?`);
-    values.push(value);
-  };
-
-  if (update.name !== undefined) {
-    if (update.name === null || update.name.trim() === "") {
-      throw new Error("name cannot be empty");
-    }
-    push("name", update.name);
-  }
-
-  if (update.exe_path !== undefined) {
-    if (update.exe_path === null || update.exe_path.trim() === "") {
-      throw new Error("exe_path cannot be empty");
-    }
-    const normalized = update.exe_path.trim();
-    const exeName = path.basename(normalized);
-    if (!exeName) {
-      throw new Error("Invalid exe path");
-    }
-    push("exe_path", normalized);
-    push("exe_name", exeName);
-  }
-  if (update.ark_object_id !== undefined) {
-    push("ark_object_id", update.ark_object_id);
-  }
-
-  if (update.description !== undefined) {
-    push("description", update.description);
-  }
-  if (update.cover_image !== undefined) {
-    push("cover_image", update.cover_image);
-  }
-  if (update.icon_image !== undefined) {
-    push("icon_image", update.icon_image);
-  }
-  if (update.is_favorite !== undefined) {
-    push("is_favorite", update.is_favorite ? 1 : 0);
-  }
-  if (update.backup_enabled !== undefined) {
-    push("backup_enabled", update.backup_enabled ? 1 : 0);
-  }
-  if (update.save_path !== undefined) {
-    const normalized =
-      update.save_path === null || update.save_path.trim() === ""
-        ? null
-        : await normalizeSavePathIfPossible(db, update.id, update.save_path);
-    push("save_path", normalized);
-    push("save_path_checked", normalized !== null ? 1 : 0);
-  }
-  if (update.rawg_id !== undefined) {
-    push("rawg_id", update.rawg_id);
-  }
-  if (update.released !== undefined) {
-    push("released", update.released);
-  }
-  if (update.background_image !== undefined) {
-    push("background_image", update.background_image);
-  }
-  if (update.metacritic !== undefined) {
-    push("metacritic", update.metacritic);
-  }
-  if (update.rating !== undefined) {
-    push("rating", update.rating);
-  }
-  if (update.genres !== undefined) {
-    push("genres", update.genres);
-  }
-  if (update.platforms !== undefined) {
-    push("platforms", update.platforms);
-  }
-  if (update.developers !== undefined) {
-    push("developers", update.developers);
-  }
-  if (update.publishers !== undefined) {
-    push("publishers", update.publishers);
-  }
-  if (update.user_rating !== undefined) {
-    push("user_rating", update.user_rating);
-  }
-  if (update.user_note !== undefined) {
-    push("user_note", update.user_note);
-  }
-  if (update.play_status !== undefined) {
-    push("play_status", update.play_status);
-  }
-
-  if (updates.length === 0) {
-    return { sql: "", values: [] };
-  }
-
-  values.push(update.id);
-  return {
-    sql: `UPDATE games SET ${updates.join(", ")} WHERE id = ?`,
-    values,
-  };
-}
-
-function isUniqueConstraintError(error: unknown): boolean {
-  return String(error).includes("UNIQUE constraint failed");
+  return games.map((game) => ({
+    ...game,
+    process_bindings: bindingsByGameId.get(game.id) ?? [],
+  }));
 }
 
 export function createGamesService(deps: GamesServiceDeps): GamesService {
@@ -315,41 +103,64 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
   const log = deps.log ?? console;
   const exists = deps.fileExists ?? fs.existsSync;
   const resolveShortcut = deps.resolveShortcutTarget ?? resolveShortcutTarget;
-  const countInstances = deps.countRunningInstances ?? countRunningInstances;
-  const killProcesses = deps.killMatchingProcesses ?? killMatchingProcesses;
+  const countInstances = deps.countRunningInstances ?? countRunningInstancesByMatches;
+  const killProcesses = deps.killMatchingProcesses ?? killMatchingProcessesByMatches;
   const spawnProcess = deps.spawnGameProcess ?? spawnGameProcess;
 
-  const recordGameLaunch = async (id: string): Promise<Game> => {
-    const launchedAt = now().toISOString();
-    await execute(
-      deps.db,
-      "UPDATE games SET play_count = play_count + 1, last_played = ?1 WHERE id = ?2",
-      [launchedAt, id],
-    );
-
+  const loadGame = async (id: string) => {
     const fetched = await getRowById(deps.db, id);
     if (!fetched) {
-      throw new Error("Game not found");
+      return null;
     }
-    const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
-    return await syncArkGameIfNeeded(hydrated);
+    const [withBindings] = await hydrateExplicitBindings(deps.db, [fetched]);
+    return withBindings ?? null;
   };
 
-  const syncArkGameIfNeeded = async (game: Game): Promise<Game> => {
+  const loadGames = async (rows: DbRow[]) =>
+    await hydrateExplicitBindings(deps.db, rows.map(mapGameRow));
+
+  const getProcessMatchesForGame = async (id: string): Promise<ProcessMatch[]> => {
+    const game = await loadGame(id);
+    if (!game) {
+      throw new Error("Game not found");
+    }
+
+    const matches: ProcessMatch[] = [
+      { matchType: "exe_path", value: game.exe_path },
+      ...game.process_bindings.map((binding) => ({
+        matchType: binding.match_type,
+        value: binding.match_value,
+      })),
+    ];
+
+    const deduped = new Map<string, ProcessMatch>();
+    for (const match of matches) {
+      deduped.set(`${match.matchType}:${match.value.trim().toLowerCase()}`, match);
+    }
+    return [...deduped.values()];
+  };
+
+  const persistArkObjectId = async (gameId: string, arkObjectId: string): Promise<void> => {
+    await execute(
+      deps.db,
+      "UPDATE games SET ark_object_id = ?1 WHERE id = ?2",
+      [arkObjectId, gameId],
+    );
+  };
+
+  const syncArkGame = async (game: Game): Promise<Game> => {
     if (!arkGameObjectSync) {
       return game;
     }
 
     const arkObjectId = await arkGameObjectSync.syncGame(game);
-    if (!arkObjectId || arkObjectId === game.ark_object_id) {
-      return game;
+    if (!arkObjectId) {
+      throw new Error(`Failed to sync game ${game.id} to Ark`);
     }
 
-    await execute(
-      deps.db,
-      "UPDATE games SET ark_object_id = ?1 WHERE id = ?2",
-      [arkObjectId, game.id],
-    );
+    if (arkObjectId !== game.ark_object_id) {
+      await persistArkObjectId(game.id, arkObjectId);
+    }
 
     return {
       ...game,
@@ -357,9 +168,26 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
     };
   };
 
+  const syncArkGameIfPossible = async (game: Game): Promise<Game> => {
+    try {
+      return await syncArkGame(game);
+    } catch (error) {
+      log.warn?.(`Failed to sync game ${game.id} to Ark`, error);
+      return game;
+    }
+  };
+
+  const recordGameLaunch = async (id: string): Promise<Game> => {
+    const fetched = await getRowById(deps.db, id);
+    if (!fetched) {
+      throw new Error("Game not found");
+    }
+    return usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+  };
+
   return {
     async getGame(id: string): Promise<Game | null> {
-      const game = await getRowById(deps.db, id);
+      const game = await loadGame(id);
       if (!game) {
         return null;
       }
@@ -370,12 +198,12 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
       const id = randomUUID();
       const dateAdded = now().toISOString();
       await prepareGameInsert(deps.db, game, id, dateAdded);
-      const fetched = await getRowById(deps.db, id);
+      const fetched = await loadGame(id);
       if (!fetched) {
         throw new Error("Failed to fetch inserted game");
       }
       const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
-      return await syncArkGameIfNeeded(hydrated);
+      return await syncArkGameIfPossible(hydrated);
     },
 
     async addGamesBatch(games: NewGame[]): Promise<Game[]> {
@@ -401,10 +229,10 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
 
       const result: Game[] = [];
       for (const item of inserted) {
-        const fetched = await getRowById(deps.db, item.id);
+        const fetched = await loadGame(item.id);
         if (fetched) {
           const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
-          result.push(await syncArkGameIfNeeded(hydrated));
+          result.push(await syncArkGameIfPossible(hydrated));
         } else {
           log.error?.(`Error fetching new game ${item.id}:`, item.name);
         }
@@ -415,7 +243,7 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
 
     async getAllGames(): Promise<Game[]> {
       const rows = await queryAll<DbRow>(deps.db, `${GAME_SELECT} ORDER BY name ASC`);
-      const games = rows.map(mapGameRow);
+      const games = await loadGames(rows);
       return usageReadModel ? await usageReadModel.hydrateGames(games) : games;
     },
 
@@ -424,7 +252,7 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
         deps.db,
         `${GAME_SELECT} WHERE is_favorite = 1 ORDER BY name ASC`,
       );
-      const games = rows.map(mapGameRow);
+      const games = await loadGames(rows);
       return usageReadModel ? await usageReadModel.hydrateGames(games) : games;
     },
 
@@ -434,12 +262,12 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
         await execute(deps.db, sql, values);
       }
 
-      const fetched = await getRowById(deps.db, update.id);
+      const fetched = await loadGame(update.id);
       if (!fetched) {
         throw new Error("Game not found");
       }
       const hydrated = usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
-      return await syncArkGameIfNeeded(hydrated);
+      return await syncArkGameIfPossible(hydrated);
     },
 
     async toggleFavorite(id: string): Promise<Game> {
@@ -449,7 +277,7 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
         [id],
       );
 
-      const fetched = await getRowById(deps.db, id);
+      const fetched = await loadGame(id);
       if (!fetched) {
         throw new Error("Game not found");
       }
@@ -471,15 +299,25 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
         `${GAME_SELECT} WHERE name LIKE ?1 OR exe_name LIKE ?1 ORDER BY name ASC`,
         [pattern],
       );
-      const games = rows.map(mapGameRow);
+      const games = await loadGames(rows);
       return usageReadModel ? await usageReadModel.hydrateGames(games) : games;
     },
 
     async gameExistsByPath(exePath: string): Promise<boolean> {
+      const normalizedPath = exePath.trim().replaceAll("/", "\\").toLowerCase();
       const row = await queryOne<{ count: number }>(
         deps.db,
-        "SELECT COUNT(*) AS count FROM games WHERE exe_path = ?1",
-        [exePath],
+        `SELECT (
+            SELECT COUNT(*)
+            FROM games
+            WHERE LOWER(REPLACE(exe_path, '/', '\\')) = ?1
+          ) + (
+            SELECT COUNT(*)
+            FROM game_process_bindings
+            WHERE match_type = 'exe_path'
+              AND normalized_value = ?1
+          ) AS count`,
+        [normalizedPath],
       );
       return Number(row?.count ?? 0) > 0;
     },
@@ -489,24 +327,69 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
     },
 
     async isGameInstalled(id: string): Promise<boolean> {
-      const exePath = await fetchExePath(deps.db, id);
-      return exists(exePath);
+      const matches = await getProcessMatchesForGame(id);
+      return matches.some(
+        (match) => match.matchType === "exe_path" && exists(match.value),
+      );
     },
 
     async getRunningInstances(id: string): Promise<number> {
-      const exePath = await fetchExePath(deps.db, id);
-      return await countInstances(exePath);
+      return await countInstances(await getProcessMatchesForGame(id));
     },
 
     async killGameProcesses(id: string): Promise<number> {
-      const exePath = await fetchExePath(deps.db, id);
-      return await killProcesses(exePath);
+      return await killProcesses(await getProcessMatchesForGame(id));
     },
 
     async launchGame(id: string): Promise<void> {
       const exePath = await fetchExePath(deps.db, id);
       await spawnProcess(exePath);
       await recordGameLaunch(id);
+    },
+
+    async addProcessBindings(id: string, bindings: NewGameProcessBinding[]): Promise<Game> {
+      await addGameProcessBindings(deps.db, id, bindings, now);
+      const fetched = await loadGame(id);
+      if (!fetched) {
+        throw new Error("Game not found");
+      }
+      return usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+    },
+
+    async removeProcessBinding(id: string, bindingId: number): Promise<Game> {
+      await removeGameProcessBinding(deps.db, id, bindingId);
+      const fetched = await loadGame(id);
+      if (!fetched) {
+        throw new Error("Game not found");
+      }
+      return usageReadModel ? await usageReadModel.hydrateGame(fetched) : fetched;
+    },
+
+    async syncAllGamesToArk(): Promise<GamesArkSyncResult> {
+      const rows = await queryAll<DbRow>(deps.db, `${GAME_SELECT} ORDER BY date_added ASC, name ASC`);
+      const games = await loadGames(rows);
+      const hydratedGames = usageReadModel ? await usageReadModel.hydrateGames(games) : games;
+      const result: GamesArkSyncResult = {
+        total: hydratedGames.length,
+        synced: 0,
+        failed: 0,
+      };
+
+      if (!arkGameObjectSync || hydratedGames.length === 0) {
+        return result;
+      }
+
+      for (const game of hydratedGames) {
+        try {
+          await syncArkGame(game);
+          result.synced += 1;
+        } catch (error) {
+          result.failed += 1;
+          log.warn?.(`Failed to sync game ${game.id} to Ark`, error);
+        }
+      }
+
+      return result;
     },
   };
 }

@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive } from "vue";
 import { ExternalLink, Gamepad2, Loader2, Plus, Star } from "lucide-vue-next";
+import { computed, onMounted, reactive } from "vue";
 import { RouterLink } from "vue-router";
 import { gamesApi, metadataApi } from "../../src/lib/api";
 import { translateGenreListToRu } from "../../src/lib/genres";
+import type { RawgGame } from "../../src/types";
 import { useToast } from "../composables/useToast";
 import { useGamesStore } from "../stores/games";
-import type { RawgGame } from "../../src/types";
 
 function sanitizeForExeName(value: string) {
-  return value
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+  return Array.from(value, (char) =>
+    char.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(char) ? " " : char,
+  )
+    .join("")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 80);
@@ -158,12 +160,14 @@ onMounted(async () => {
     <div class="flex flex-col gap-3 sm:flex-row">
       <input
         v-model="state.query"
+        data-testid="catalogue-search-input"
         class="flex h-11 w-full rounded-xl border border-border/70 bg-card/70 px-4 text-sm outline-none"
         placeholder="Search RAWG..."
         @keydown.enter="void loadShowcase(state.query, 'search')"
       />
       <button
         type="button"
+        data-testid="catalogue-search-button"
         class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-[510] text-primary-foreground transition-colors hover:bg-accent hover:text-white"
         :disabled="state.searching"
         @click="void loadShowcase(state.query, 'search')"
@@ -190,6 +194,7 @@ onMounted(async () => {
       <article
         v-for="item in state.items"
         :key="item.id"
+        :data-testid="`catalogue-card-${item.id}`"
         class="overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-[0_18px_40px_rgba(0,0,0,0.22)]"
       >
         <div class="relative aspect-[16/9] overflow-hidden bg-black/30">
@@ -237,6 +242,7 @@ onMounted(async () => {
             <button
               v-else
               type="button"
+              :data-testid="`catalogue-add-${item.id}`"
               class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-[510] text-primary-foreground transition-colors hover:bg-accent hover:text-white"
               :disabled="state.addingId === item.id"
               @click="void addToLibrary(item)"

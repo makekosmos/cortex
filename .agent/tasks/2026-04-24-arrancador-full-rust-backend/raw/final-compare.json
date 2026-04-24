@@ -1,0 +1,294 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-04-23T22:47:25.812Z",
+  "baselinePath": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador\\bench\\baselines\\pre-rust-ts-electron-main-2026-04-24.json",
+  "currentPath": "D:\\Personal\\Hobby\\Coding\\kepler\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\final.json",
+  "baselineBackend": "ts-electron-main",
+  "currentBackend": "electron-main+rust-sidecar",
+  "correctnessPass": true,
+  "comparisons": [
+    {
+      "operation": "scan_executables_stream",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 136.19,
+      "current": 105.29,
+      "delta": -30.9,
+      "deltaPct": -22.69
+    },
+    {
+      "operation": "scan_executables_stream",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 0.44,
+      "current": 0.07,
+      "delta": -0.37,
+      "deltaPct": -84.09
+    },
+    {
+      "operation": "scan_executables_stream",
+      "metric": "filesPerSecond",
+      "direction": "higher-is-better",
+      "status": "improved",
+      "baseline": 52867.32,
+      "current": 68382.56,
+      "delta": 15515.24,
+      "deltaPct": 29.35
+    },
+    {
+      "operation": "scan_executables_stream",
+      "metric": "timeToFirstResultMs",
+      "direction": "lower-is-better",
+      "status": "regressed",
+      "baseline": 3.95,
+      "current": 6.4,
+      "delta": 2.45,
+      "deltaPct": 62.03
+    },
+    {
+      "operation": "scan_executables_stream",
+      "metric": "foundExecutables",
+      "direction": "same",
+      "status": "same",
+      "baseline": 720,
+      "current": 720,
+      "delta": 0,
+      "deltaPct": 0
+    },
+    {
+      "operation": "scan_executables_stream",
+      "metric": "expectedExecutables",
+      "direction": "same",
+      "status": "same",
+      "baseline": 720,
+      "current": 720,
+      "delta": 0,
+      "deltaPct": 0
+    },
+    {
+      "operation": "scan_executables_cancel",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "regressed",
+      "baseline": 5.77,
+      "current": 5.99,
+      "delta": 0.22,
+      "deltaPct": 3.81
+    },
+    {
+      "operation": "scan_executables_cancel",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "same",
+      "baseline": 0,
+      "current": 0,
+      "delta": 0
+    },
+    {
+      "operation": "scan_executables_cancel",
+      "metric": "cancelLatencyMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 0.45,
+      "current": 0.34,
+      "delta": -0.11,
+      "deltaPct": -24.44
+    },
+    {
+      "operation": "backup_create_directory",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 293.32,
+      "current": 225.38,
+      "delta": -67.94,
+      "deltaPct": -23.16
+    },
+    {
+      "operation": "backup_create_directory",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 1.48,
+      "current": 0.27,
+      "delta": -1.21,
+      "deltaPct": -81.76
+    },
+    {
+      "operation": "backup_create_directory",
+      "metric": "mbPerSecond",
+      "direction": "higher-is-better",
+      "status": "improved",
+      "baseline": 5.59,
+      "current": 7.28,
+      "delta": 1.69,
+      "deltaPct": 30.23
+    },
+    {
+      "operation": "backup_restore_directory",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 260.56,
+      "current": 192.96,
+      "delta": -67.6,
+      "deltaPct": -25.94
+    },
+    {
+      "operation": "backup_restore_directory",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 0.5,
+      "current": 0.36,
+      "delta": -0.14,
+      "deltaPct": -28
+    },
+    {
+      "operation": "backup_restore_directory",
+      "metric": "mbPerSecond",
+      "direction": "higher-is-better",
+      "status": "improved",
+      "baseline": 6.3,
+      "current": 8.5,
+      "delta": 2.2,
+      "deltaPct": 34.92
+    },
+    {
+      "operation": "backup_restore_directory",
+      "metric": "hashParity",
+      "direction": "same",
+      "status": "same",
+      "baseline": true,
+      "current": true
+    },
+    {
+      "operation": "sqlite_open_init",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 125.85,
+      "current": 119.39,
+      "delta": -6.46,
+      "deltaPct": -5.13
+    },
+    {
+      "operation": "sqlite_open_init",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "same",
+      "baseline": 0,
+      "current": 0,
+      "delta": 0
+    },
+    {
+      "operation": "sqlite_insert_games",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 3621.66,
+      "current": 3056.15,
+      "delta": -565.51,
+      "deltaPct": -15.61
+    },
+    {
+      "operation": "sqlite_insert_games",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "same",
+      "baseline": 0,
+      "current": 0,
+      "delta": 0
+    },
+    {
+      "operation": "sqlite_insert_games",
+      "metric": "rowsPerSecond",
+      "direction": "higher-is-better",
+      "status": "improved",
+      "baseline": 276.12,
+      "current": 327.21,
+      "delta": 51.09,
+      "deltaPct": 18.5
+    },
+    {
+      "operation": "sqlite_insert_games",
+      "metric": "rows",
+      "direction": "same",
+      "status": "same",
+      "baseline": 1000,
+      "current": 1000,
+      "delta": 0,
+      "deltaPct": 0
+    },
+    {
+      "operation": "sqlite_games_get_all",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 8.96,
+      "current": 6.98,
+      "delta": -1.98,
+      "deltaPct": -22.1
+    },
+    {
+      "operation": "sqlite_games_get_all",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "same",
+      "baseline": 0,
+      "current": 0,
+      "delta": 0
+    },
+    {
+      "operation": "sqlite_games_get_all",
+      "metric": "rowsPerSecond",
+      "direction": "higher-is-better",
+      "status": "improved",
+      "baseline": 111607.14,
+      "current": 143266.48,
+      "delta": 31659.34,
+      "deltaPct": 28.37
+    },
+    {
+      "operation": "sqlite_games_get_all",
+      "metric": "rows",
+      "direction": "same",
+      "status": "same",
+      "baseline": 1000,
+      "current": 1000,
+      "delta": 0,
+      "deltaPct": 0
+    },
+    {
+      "operation": "sqlite_games_search",
+      "metric": "durationMs",
+      "direction": "lower-is-better",
+      "status": "improved",
+      "baseline": 0.69,
+      "current": 0.6,
+      "delta": -0.09,
+      "deltaPct": -13.04
+    },
+    {
+      "operation": "sqlite_games_search",
+      "metric": "eventLoopLag.p95Ms",
+      "direction": "lower-is-better",
+      "status": "same",
+      "baseline": 0,
+      "current": 0,
+      "delta": 0
+    },
+    {
+      "operation": "sqlite_games_search",
+      "metric": "rows",
+      "direction": "same",
+      "status": "same",
+      "baseline": 10,
+      "current": 10,
+      "delta": 0,
+      "deltaPct": 0
+    }
+  ]
+}

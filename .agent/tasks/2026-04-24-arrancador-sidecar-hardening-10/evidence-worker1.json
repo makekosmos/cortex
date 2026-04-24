@@ -1,0 +1,25 @@
+{
+  "worker": "worker-1",
+  "acceptanceCriteria": {
+    "AC2": {
+      "status": "PASS",
+      "summary": "Rust sidecar runtime requests, copy request JSONL entries, progress/events/responses, and backup manifests now use serde/serde_json structs instead of handwritten JSON parsing or serialization."
+    },
+    "AC3": {
+      "status": "PASS",
+      "summary": "Rust unit tests cover escaped Unicode request paths, copy request JSONL with non-ASCII values, escaped Unicode manifest parsing, and copy/restore with non-ASCII paths."
+    }
+  },
+  "commands": [
+    {
+      "command": "cargo test --manifest-path apps/arrancador/sidecar/Cargo.toml",
+      "cwd": ".",
+      "status": "PASS",
+      "raw": "raw/cargo-test-sidecar-worker1.txt"
+    }
+  ],
+  "changedFiles": [
+    "apps/arrancador/sidecar/Cargo.toml",
+    "apps/arrancador/sidecar/src/main.rs"
+  ]
+}

@@ -1,6 +1,34 @@
-﻿import { expect, type Page, test } from "@playwright/test";
-import type { AppSettings, testFavoriteGameFixture, testGameFixture } from "../src/types";
-import { bridgeMockInit } from "./tauri-mock";
+import { expect, test } from "@playwright/test";
+import type { AppSettings, RawgGame } from "../src/types";
+import { testFavoriteGameFixture, testGameFixture } from "../src/types";
+import { bridgeMockInit } from "./bridge-mock";
+
+const rawgItems: RawgGame[] = [
+  {
+    id: 2201,
+    name: "Sky Harbor",
+    slug: "sky-harbor",
+    released: "2024-03-12",
+    background_image: null,
+    metacritic: 84,
+    rating: 4.2,
+    ratings_count: 1200,
+    genres: [{ id: 1, name: "Adventure", slug: "adventure" }],
+    platforms: [{ platform: { id: 4, name: "PC", slug: "pc" } }],
+  },
+  {
+    id: 2202,
+    name: "Luna Forge",
+    slug: "luna-forge",
+    released: "2025-05-06",
+    background_image: null,
+    metacritic: 90,
+    rating: 4.7,
+    ratings_count: 850,
+    genres: [{ id: 2, name: "RPG", slug: "rpg" }],
+    platforms: [{ platform: { id: 4, name: "PC", slug: "pc" } }],
+  },
+];
 
 const baseConfig = {
   games: [testGameFixture, testFavoriteGameFixture],
@@ -15,6 +43,7 @@ const baseConfig = {
     backup_skip_compression_once: false,
     max_backups_per_game: 5,
     rawg_api_key: "",
+    start_minimized_in_tray: false,
   } as AppSettings,
   scanEntries: [
     {
@@ -32,28 +61,8 @@ const baseConfig = {
     },
   ],
   dialogOpenResult: "C:\\Games",
+  rawgItems,
 };
-
-const attachClipboardRecorder = async (page: Page) => {
-  await page.addInitScript(() => {
-    (window as any).__clipboardWrites = [];
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText: async (value: string) => {
-          (window as any).__clipboardWrites.push(value);
-          return Promise.resolve();
-        },
-      },
-    });
-  });
-};
-
-const getLastClipboardWrite = async (page: Page) =>
-  page.evaluate(() => {
-    const writes = (window as any).__clipboardWrites as string[] | undefined;
-    return writes?.at(-1) ?? "";
-  });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(bridgeMockInit, {
@@ -62,62 +71,31 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("catalogue page", () => {
-  test("covers full lifecycle and sync/filter", async ({ page }) => {
-    await attachClipboardRecorder(page);
+  test("loads RAWG catalogue, searches, and adds a game to the library", async ({
+    page,
+  }) => {
+    await page.goto("/#/catalogue");
 
-    page.on("dialog", (dialog) => {
-      if (dialog.type() === "confirm") {
-        void dialog.accept();
-      }
-    });
-
-    await page.goto("/catalogue");
     await expect(
-      page.getByText("No catalogue items yet. Add one using the form above."),
+      page.getByRole("heading", { name: "Game Catalogue" }),
     ).toBeVisible();
+    await expect(page.getByTestId("catalogue-card-2201")).toContainText(
+      "Sky Harbor",
+    );
 
-    await page.getByTestId("catalogue-rawg-id-input").fill("1201");
-    await page.getByTestId("catalogue-name-input").fill("Local item");
-    await page.getByTestId("catalogue-source-input").fill("manual");
-    await page.getByTestId("catalogue-payload-input").fill("{ invalid");
-    await page.getByTestId("catalogue-save-button").click();
-    await expect(page.getByText("Payload must be valid JSON")).toBeVisible();
-
-    await page.getByTestId("catalogue-payload-input").fill('{"tier":"manual"}');
-    await page.getByTestId("catalogue-save-button").click();
-    await expect(page.getByText("Local item")).toBeVisible();
-
-    const editButton = page.getByTestId(/catalogue-edit-/).first();
-    await editButton.click();
-    await expect(page.getByTestId("catalogue-name-input")).toHaveValue("Local item");
-    await page.getByTestId("catalogue-name-input").fill("Local item v2");
-    await page.getByTestId("catalogue-save-button").click();
-    await expect(page.getByText("Local item v2")).toBeVisible();
-    await expect(page.getByText("Local item")).not.toBeVisible();
-
-    const copyButton = page.getByTestId(/catalogue-copy-/).first();
-    await copyButton.click();
-    expect(await getLastClipboardWrite(page)).toContain('"tier":"manual"');
-
-    await page.getByTestId("catalogue-search-input").fill("Local");
+    await page.getByTestId("catalogue-search-input").fill("luna");
     await page.getByTestId("catalogue-search-button").click();
-    await expect(page.getByText("Local item v2")).toBeVisible();
 
-    await page.getByTestId("catalogue-sync-button").click();
-    await page.getByTestId("catalogue-source-filter").selectOption("library");
-    await page.getByTestId("catalogue-reload-button").click();
-    await expect(page.getByText("Arcadia")).toBeVisible();
-    await expect(page.getByText("Bastion")).toBeVisible();
+    await expect(page.getByTestId("catalogue-card-2202")).toContainText(
+      "Luna Forge",
+    );
+    await expect(page.getByTestId("catalogue-card-2201")).not.toBeVisible();
 
-    await page.getByTestId("catalogue-source-filter").selectOption("manual");
-    await page.getByTestId("catalogue-reload-button").click();
-    await expect(page.getByText("Local item v2")).toBeVisible();
-
-    await page.getByTestId(/catalogue-delete-/).first().click();
-    await expect(page.getByText("Local item v2")).not.toBeVisible();
-    await expect(
-      page.getByText("No catalogue items yet. Add one using the form above."),
-    ).toBeVisible();
+    await page.getByTestId("catalogue-add-2202").click();
+    await page.evaluate(() => {
+      window.location.hash = "#/";
+    });
+    await expect(page.getByText("Luna Forge").first()).toBeVisible();
   });
 });
 
@@ -127,8 +105,7 @@ test("no websocket connections are opened while using local pages", async ({ pag
     websocketCount += 1;
   });
 
-  await page.goto("/catalogue");
+  await page.goto("/#/catalogue");
 
   expect(websocketCount).toBe(0);
 });
-

@@ -1,0 +1,59 @@
+{
+  "task_id": "2026-04-23-arrancador-e2e-biome-ipc-hardening",
+  "status": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": "bun run test:e2e builds, starts Vite preview on a dynamic localhost port, and passes all 4 Playwright tests.",
+      "raw": "raw/test-e2e-final.txt"
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": "Biome warnings reduced from 310 to zero diagnostics.",
+      "raw_before": "raw/biome-before.txt",
+      "raw_final": "raw/biome-check-final.txt"
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": "Renderer bridge exposes commands methods instead of generic invoke; shared IPC validates channel, event, and sensitive payloads at runtime."
+    },
+    "AC4": {
+      "status": "PASS",
+      "commands": {
+        "bun run typecheck": {
+          "status": "PASS",
+          "raw": "raw/typecheck-final.txt"
+        },
+        "bun run test": {
+          "status": "PASS",
+          "raw": "raw/test-final.txt"
+        },
+        "bun run biome:check": {
+          "status": "PASS",
+          "raw": "raw/biome-check-final.txt"
+        },
+        "bun run build:renderer": {
+          "status": "PASS",
+          "raw": "raw/build-renderer-final.txt"
+        },
+        "bun run build:main": {
+          "status": "PASS",
+          "raw": "raw/build-main-final.txt"
+        },
+        "bun run build:preload": {
+          "status": "PASS",
+          "raw": "raw/build-preload-final.txt"
+        },
+        "bun run build": {
+          "status": "PASS",
+          "raw": "raw/build-final.txt"
+        }
+      }
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": "spec.md, problems.md, evidence.md, evidence.json, and raw outputs are present."
+    }
+  },
+  "external_blockers": []
+}

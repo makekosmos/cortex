@@ -2,6 +2,7 @@
 import { Check, Loader2, RefreshCw } from "lucide-vue-next";
 import { computed, shallowRef, useTemplateRef } from "vue";
 import AppearanceSettingsSection from "../components/settings/AppearanceSettingsSection.vue";
+import ArkSettingsSection from "../components/settings/ArkSettingsSection.vue";
 import BackupSettingsSection from "../components/settings/BackupSettingsSection.vue";
 import CompressionSettingsSection from "../components/settings/CompressionSettingsSection.vue";
 import RawgSettingsSection from "../components/settings/RawgSettingsSection.vue";
@@ -22,6 +23,10 @@ const {
   hasSettings,
   autoStart,
   autoStartPending,
+  arkConnection,
+  arkSyncPending,
+  arkSyncFeedback,
+  arkSyncResult,
   manifestRefreshing,
   manifestFeedback,
   saveFeedback,
@@ -33,16 +38,20 @@ const {
   setCompressionLevel,
   setMaxBackups,
   selectBackupDirectory,
+  syncGamesToArk,
+  openArkDatabase,
+  openArkDirectory,
   refreshSqobaManifest,
   saveSettings,
 } = useSettingsPageState();
 
 const sectionItems: SettingsSectionItem[] = [
-  { id: "all", label: "All", icon: "monitor" },
-  { id: "appearance", label: "Appearance", icon: "monitor" },
-  { id: "system", label: "System", icon: "power" },
-  { id: "backup", label: "Backups", icon: "shield" },
-  { id: "compression", label: "Compression", icon: "hardDrive" },
+  { id: "all", label: "Все", icon: "monitor" },
+  { id: "appearance", label: "Оформление", icon: "monitor" },
+  { id: "system", label: "Система", icon: "power" },
+  { id: "ark", label: "Ark", icon: "database" },
+  { id: "backup", label: "Резервные копии", icon: "shield" },
+  { id: "compression", label: "Сжатие", icon: "hardDrive" },
   { id: "sqoba", label: "SQOBA", icon: "sparkles" },
   { id: "rawg", label: "RAWG", icon: "key" },
 ];
@@ -74,9 +83,9 @@ function handleSectionSelect(sectionId: SettingsSectionId) {
 <template>
   <div ref="pageTop" class="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-6">
     <div class="mb-6 space-y-2 sm:mb-8">
-      <h1 class="text-xl font-bold tracking-tight sm:text-2xl">Settings</h1>
+      <h1 class="text-xl font-bold tracking-tight sm:text-2xl">Настройки</h1>
       <p class="text-sm text-muted-foreground">
-        Configure Arrancador backup, metadata, and system preferences.
+        Настройте резервные копии, метаданные и системные параметры Arrancador.
       </p>
     </div>
 
@@ -96,9 +105,9 @@ function handleSectionSelect(sectionId: SettingsSectionId) {
       v-else-if="!hasSettings"
       class="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm"
     >
-      <div class="font-medium text-red-200">Settings could not be loaded.</div>
+      <div class="font-medium text-red-200">Не удалось загрузить настройки.</div>
       <p class="mt-1 text-red-100/80">
-        Retry after the bridge and backend are available.
+        Повторите попытку, когда bridge и backend будут доступны.
       </p>
       <button
         type="button"
@@ -106,7 +115,7 @@ function handleSectionSelect(sectionId: SettingsSectionId) {
         @click="void loadSettings()"
       >
         <RefreshCw class="h-4 w-4" />
-        Retry
+        Повторить
       </button>
     </div>
 
@@ -122,6 +131,17 @@ function handleSectionSelect(sectionId: SettingsSectionId) {
         :auto-start="autoStart"
         :pending="autoStartPending"
         @update-auto-start="void toggleAutoStart($event)"
+      />
+
+      <ArkSettingsSection
+        section-id="settings-ark"
+        :ark-connection="arkConnection"
+        :sync-pending="arkSyncPending"
+        :sync-feedback="arkSyncFeedback"
+        :sync-result="arkSyncResult"
+        @open-database="void openArkDatabase()"
+        @open-directory="void openArkDirectory()"
+        @sync-games="void syncGamesToArk()"
       />
 
       <BackupSettingsSection
@@ -180,7 +200,7 @@ function handleSectionSelect(sectionId: SettingsSectionId) {
           >
             <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
             <Check v-else class="h-4 w-4" />
-            Save settings
+            Сохранить настройки
           </button>
         </div>
       </div>

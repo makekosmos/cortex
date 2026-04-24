@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { RouterLink } from "vue-router";
 import { ChevronLeft, ChevronRight } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
 import CalendarMonthGrid from "@/components/calendar/CalendarMonthGrid.vue";
 import CalendarTimeGrid from "@/components/calendar/CalendarTimeGrid.vue";
+import CalendarViewSwitch from "@/components/calendar/CalendarViewSwitch.vue";
 import { useSidebarState } from "@/composables/useSidebarState";
 import { useTodoStore } from "@/store/todos";
 import type {
@@ -21,6 +21,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  "update:viewMode": [viewMode: CalendarViewMode];
   previous: [];
   next: [];
   today: [];
@@ -102,14 +103,10 @@ const connectionMessage = "Показываются только локальн�
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
-          <RouterLink
-            to="/settings"
-            class="rounded-xl border border-(--border) px-3 py-2 text-sm font-medium text-(--foreground) transition-colors hover:bg-(--secondary)"
-          >
-            Настройки
-          </RouterLink>
-        </div>
+        <CalendarViewSwitch
+          :model-value="viewMode"
+          @update:model-value="emit('update:viewMode', $event)"
+        />
       </div>
 
       <component

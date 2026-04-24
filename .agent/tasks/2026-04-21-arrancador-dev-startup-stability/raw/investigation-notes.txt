@@ -1,0 +1,6 @@
+Observed likely causes:
+- dev shell showed the window too early
+- Windows dev path used custom titlebar chrome plus startup focus calls
+- routes eagerly imported all page modules
+- initial library refresh was duplicated
+- dev launcher only waited for GET / and not for module graph warm-up

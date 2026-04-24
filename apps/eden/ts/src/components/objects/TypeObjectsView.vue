@@ -2,6 +2,10 @@
 import { computed } from "vue";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import {
+  formatObjectFieldValue,
+  formatReadableRussianDate,
+} from "@/lib/objectFieldFormatting";
+import {
   getNoteTypeCollectionName,
   parseNoteTypeDefinition,
   parseNoteTypeUiSchema,
@@ -32,38 +36,11 @@ function parseHeaderProps(entry: Entry): Record<string, unknown> {
 }
 
 function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatReadableRussianDate(timestamp);
 }
 
 function formatFieldValue(field: ResolvedNoteTypeField, value: unknown): string {
-  if (value == null || value === "") {
-    return "—";
-  }
-
-  if (Array.isArray(value)) {
-    return value.length ? value.join(", ") : "—";
-  }
-
-  if (field.kind === "boolean") {
-    return value ? "Да" : "Нет";
-  }
-
-  if (field.kind === "date" && typeof value === "string") {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) {
-      return new Date(parsed).toLocaleDateString("ru-RU", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-    }
-  }
-
-  return String(value);
+  return formatObjectFieldValue(field, value) || "\u2014";
 }
 
 const collectionTitle = computed(() => getNoteTypeCollectionName(props.noteType));
@@ -121,20 +98,16 @@ const tableColumnsStyle = computed(() => ({
         </span>
 
         <div class="type-objects-title-copy">
-          <p class="type-objects-eyebrow">Объекты</p>
           <h1 class="type-objects-title">{{ collectionTitle }}</h1>
-          <p class="type-objects-meta">
-            {{ collectionEntries.length }} {{ collectionEntries.length === 1 ? "объект" : "объектов" }}
-          </p>
         </div>
       </div>
 
       <div class="type-objects-actions">
         <button class="type-objects-secondary-btn" type="button" @click="emit('editType')">
-          Редактировать тип
+          Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ С‚РёРї
         </button>
         <button class="type-objects-primary-btn" type="button" @click="emit('createEntry')">
-          Новый
+          РќРѕРІС‹Р№
         </button>
       </div>
     </header>
@@ -142,9 +115,9 @@ const tableColumnsStyle = computed(() => ({
     <section class="type-objects-panel">
       <div v-if="collectionEntries.length > 0" class="type-objects-table">
         <div class="type-objects-table-head" :style="tableColumnsStyle">
-          <span>Название</span>
+          <span>РќР°Р·РІР°РЅРёРµ</span>
           <span v-for="field in summaryFields" :key="field.id">{{ field.label }}</span>
-          <span>Обновлено</span>
+          <span>РћР±РЅРѕРІР»РµРЅРѕ</span>
         </div>
 
         <button
@@ -180,12 +153,12 @@ const tableColumnsStyle = computed(() => ({
       </div>
 
       <div v-else class="type-objects-empty">
-        <h2>Пока нет объектов этого типа</h2>
+        <h2>РџРѕРєР° РЅРµС‚ РѕР±СЉРµРєС‚РѕРІ СЌС‚РѕРіРѕ С‚РёРїР°</h2>
         <p>
-          Создай первый объект типа «{{ noteType.name }}», и здесь появится полноценная коллекция.
+          РЎРѕР·РґР°Р№ РїРµСЂРІС‹Р№ РѕР±СЉРµРєС‚ С‚РёРїР° В«{{ noteType.name }}В», Рё Р·РґРµСЃСЊ РїРѕСЏРІРёС‚СЃСЏ РїРѕР»РЅРѕС†РµРЅРЅР°СЏ РєРѕР»Р»РµРєС†РёСЏ.
         </p>
         <button class="type-objects-primary-btn" type="button" @click="emit('createEntry')">
-          Создать объект
+          РЎРѕР·РґР°С‚СЊ РѕР±СЉРµРєС‚
         </button>
       </div>
     </section>
@@ -221,19 +194,16 @@ const tableColumnsStyle = computed(() => ({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--type-accent) 18%, transparent);
 }
 
 .type-objects-icon-wrap {
-  width: 48px;
-  height: 48px;
+  width: 28px;
+  height: 28px;
 }
 
 .type-objects-row-icon-wrap {
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
+  width: 18px;
+  height: 18px;
 }
 
 .type-objects-icon,
@@ -256,23 +226,13 @@ const tableColumnsStyle = computed(() => ({
 }
 
 .type-objects-row-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .type-objects-title-copy {
   display: grid;
-  gap: 4px;
   min-width: 0;
-}
-
-.type-objects-eyebrow {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .type-objects-title {
@@ -282,12 +242,6 @@ const tableColumnsStyle = computed(() => ({
   line-height: var(--kepler-text-page-title-line-height);
   letter-spacing: var(--kepler-text-page-title-letter-spacing);
   font-weight: var(--kepler-text-page-title-weight);
-}
-
-.type-objects-meta {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: 14px;
 }
 
 .type-objects-actions {

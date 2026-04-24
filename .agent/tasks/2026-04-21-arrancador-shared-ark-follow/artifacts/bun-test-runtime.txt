@@ -1,0 +1,10 @@
+bun test v1.3.5 (1e86cebd)
+
+electron\main\ark-runtime.test.ts:
+(pass) syncArkRuntimeBinding > reuses services when selected space points to the same ark db [16.00ms]
+(pass) syncArkRuntimeBinding > recreates services when selected space changes ark db target
+
+ 2 pass
+ 0 fail
+ 6 expect() calls
+Ran 2 tests across 1 file. [168.00ms]

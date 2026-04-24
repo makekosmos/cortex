@@ -1,7 +1,7 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { createRequire } from "node:module";
+import { type ChildProcess, spawn } from "node:child_process";
 import { watch } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -72,6 +72,18 @@ async function waitForRenderer(timeoutMs = 60_000) {
   throw new Error("Vite dev server did not become ready in time");
 }
 
+async function prewarmRenderer(urls: string[]) {
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        await fetch(url, { cache: "no-store" });
+      } catch {
+        // Prewarm is best-effort in dev.
+      }
+    }),
+  );
+}
+
 async function isRendererAvailable() {
   try {
     const response = await fetch(RENDERER_URL);
@@ -123,6 +135,12 @@ async function startElectron() {
 
   electronStartPromise = (async () => {
     await waitForRenderer();
+    await prewarmRenderer([
+      `${RENDERER_URL}/src-vue/main.ts`,
+      `${RENDERER_URL}/src-vue/router.ts`,
+      `${RENDERER_URL}/src-vue/pages/LayoutPage.vue`,
+      `${RENDERER_URL}/src-vue/pages/LibraryPage.vue`,
+    ]);
     await waitForArtifacts();
 
     const child = spawn(ELECTRON_BIN, ["."], {

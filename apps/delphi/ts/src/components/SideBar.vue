@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, shallowRef } from "vue";
 import {
   Archive,
   ArrowLeft,
   Book,
-  Calendar,
   CalendarDays,
   Globe,
   Inbox,
   Kanban,
-  Settings,
+  Plus,
   Settings2,
   Star,
 } from "lucide-vue-next";
@@ -17,6 +16,7 @@ import {
   Sidebar as KeplerSidebar,
   type SidebarConfig,
   type SidebarNavItem,
+  type SidebarProjectGroup,
   type SidebarProjectItem,
 } from "@kepler/visuals";
 import { useTodoStore } from "@/store/todos";
@@ -24,6 +24,8 @@ import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
 import { setSidebarHidden } from "@/composables/useSidebarState";
 import { useRoute, useRouter } from "vue-router";
+import ProjectCreateDialog from "@/components/projects/ProjectCreateDialog.vue";
+import type { ProjectCreatePayload } from "@/components/projects/ProjectCreateDialog.vue";
 
 const STORAGE_KEY = "delphi-sidebar-config";
 
@@ -72,6 +74,7 @@ const route = useRoute();
 const router = useRouter();
 const initialConfig = loadConfig();
 const isMac = navigator.platform.startsWith("Mac");
+const projectCreateOpen = shallowRef(false);
 
 const props = withDefaults(
   defineProps<{
@@ -93,6 +96,41 @@ const activeSettingsTab = computed<SettingsTab>(() => {
   return tabValue === "spaces" ? "spaces" : "general";
 });
 
+const existingProjectTitles = computed(() => projects.value.map((project) => project.title));
+
+const activeProjectItems = computed<SidebarProjectItem[]>(() =>
+  projects.value
+    .filter((project) => project.status === ProjectStatus.Active)
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((project) => ({
+      id: project.id,
+      label: project.title,
+      to: `/project/${project.id}`,
+      active: route.path === `/project/${project.id}`,
+      colorClass: colorTagClass(project.colorTag),
+    })),
+);
+
+const projectGroups = computed<SidebarProjectGroup[]>(() => {
+  if (isSettingsRoute.value) {
+    return [];
+  }
+
+  return [
+    {
+      id: "projects",
+      label: "Проекты",
+      items: activeProjectItems.value,
+      actionIcon: Plus,
+      actionLabel: "Создать проект",
+      actionTestId: "sidebar-create-project",
+      onAction: () => {
+        projectCreateOpen.value = true;
+      },
+    },
+  ];
+});
+
 function setSettingsTab(tab: SettingsTab) {
   if (activeSettingsTab.value === tab) return;
 
@@ -111,6 +149,17 @@ function handleSettingsBack() {
   }
 
   void router.push("/");
+}
+
+function handleProjectCreate(payload: ProjectCreatePayload) {
+  const project = store.addProject({
+    title: payload.title,
+    notes: payload.notes,
+    colorTag: payload.colorTag,
+  });
+
+  projectCreateOpen.value = false;
+  void router.push(`/project/${project.id}`);
 }
 
 const primaryItems = computed<SidebarNavItem[]>(() => {
@@ -145,40 +194,25 @@ const primaryItems = computed<SidebarNavItem[]>(() => {
   return [
     { id: "inbox", icon: Inbox, to: "/", label: "Входящие" },
     { id: "today", icon: Star, to: "/today", label: "Сегодня" },
-    { id: "upcoming", icon: Calendar, to: "/upcoming", label: "Планы" },
     { id: "calendar", icon: CalendarDays, to: "/calendar", label: "Календарь" },
     { id: "week", icon: Kanban, to: "/week", label: "Неделя" },
-    { id: "logbook", icon: Book, to: "/logbook", label: "Журнал" },
-    { id: "trash", icon: Archive, to: "/trash", label: "Корзина" },
   ];
 });
 
 const footerItems = computed<SidebarNavItem[]>(() =>
   isSettingsRoute.value
     ? []
-    : [{ id: "settings", icon: Settings, to: "/settings", label: "Настройки" }],
-);
-
-const projectItems = computed<SidebarProjectItem[]>(() =>
-  isSettingsRoute.value
-    ? []
-    : projects.value
-        .filter((project) => project.status === ProjectStatus.Active)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((project) => ({
-          id: project.id,
-          label: project.title,
-          to: `/project/${project.id}`,
-          active: route.path === `/project/${project.id}`,
-          colorClass: colorTagClass(project.colorTag),
-        })),
+    : [
+        { id: "logbook", icon: Book, to: "/logbook", label: "Журнал" },
+        { id: "trash", icon: Archive, to: "/trash", label: "Корзина" },
+      ],
 );
 </script>
 
 <template>
   <KeplerSidebar
     :primary-items="primaryItems"
-    :project-items="projectItems"
+    :project-groups="projectGroups"
     :footer-items="footerItems"
     :is-mac="isMac"
     :default-width="200"
@@ -190,5 +224,11 @@ const projectItems = computed<SidebarProjectItem[]>(() =>
     :show-toggle="props.showToggle"
     :reserve-top-inset="props.reserveTopInset"
     @config-change="saveConfig"
+  />
+
+  <ProjectCreateDialog
+    v-model:open="projectCreateOpen"
+    :existing-titles="existingProjectTitles"
+    @save="handleProjectCreate"
   />
 </template>

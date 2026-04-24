@@ -1,5 +1,9 @@
 import { copyFile, readFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  isArrancadorSidecarUnavailableError,
+  restoreBackupDirectoryWithSidecar,
+} from "../../sidecar/arrancador-sidecar";
 import { expandBackupArchive, readBackupManifestFromDirectory } from "./archive";
 import type {
   BackupArchiveManifest,
@@ -214,6 +218,20 @@ export async function restoreBackupDirectory(
   backupRoot: string,
   onProgress?: ProgressListener | null,
 ): Promise<void> {
+  if (process.env.ARRANCADOR_BACKUP_BACKEND !== "ts") {
+    try {
+      await restoreBackupDirectoryWithSidecar(backupRoot, { onProgress });
+      return;
+    } catch (error) {
+      if (!isArrancadorSidecarUnavailableError(error)) {
+        throw error;
+      }
+      console.warn(
+        "[Arrancador] Rust backup sidecar unavailable, falling back to TypeScript restore.",
+      );
+    }
+  }
+
   const manifest = await readBackupManifestFromDirectory(backupRoot);
   if (manifest) {
     await restoreManifestDirectory(backupRoot, manifest, onProgress);

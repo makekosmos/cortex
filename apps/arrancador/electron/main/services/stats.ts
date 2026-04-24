@@ -14,10 +14,10 @@ export function createStatsService(
   return {
     async getPlaytimeStats(start?: string, end?: string) {
       const range = normalizeDateRange(start, end);
-      const [dailyTotals, perGameTotals] = await Promise.all([
-        repository.getDailyTotals(range.rangeStart, range.rangeEnd),
-        repository.getPerGameTotals(range.rangeStart, range.rangeEnd),
-      ]);
+      const { dailyTotals, perGameTotals } = await repository.getRangeStats(
+        range.rangeStart,
+        range.rangeEnd,
+      );
 
       const dailyMap = new Map<string, number>(
         dailyTotals.map((entry) => [entry.date, entry.seconds]),

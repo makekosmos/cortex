@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, shallowRef, watch } from "vue";
 import { Menu, X } from "lucide-vue-next";
+import { computed, onMounted, shallowRef, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import AppSidebar from "../components/AppSidebar.vue";
 import AppSpotlight from "../components/AppSpotlight.vue";

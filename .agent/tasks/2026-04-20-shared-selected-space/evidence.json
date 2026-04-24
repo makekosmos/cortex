@@ -1,0 +1,71 @@
+{
+  "result": "PASS",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": "packages/shared-space/selectedSpace.ts"
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/eden/ts/main/store.ts",
+        "apps/eden/ts/main/ark.ts"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": "apps/arrancador/electron/main/backend.ts"
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": "apps/delphi/ts/electron/main.ts"
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": "Fallback path remains appData/Kepler/ark.db when selection is absent."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": "No mojibake marker matches in touched files."
+    }
+  ],
+  "verification": {
+    "commands": [
+      {
+        "command": "bun run build",
+        "workdir": "apps/eden/ts",
+        "status": "PASS"
+      },
+      {
+        "command": "bunx tsc --noEmit",
+        "workdir": "apps/delphi/ts",
+        "status": "PASS"
+      },
+      {
+        "command": "bunx tsc --noEmit",
+        "workdir": "apps/arrancador",
+        "status": "PASS"
+      },
+      {
+        "command": "bun run build:main",
+        "workdir": "apps/arrancador",
+        "status": "PASS"
+      },
+      {
+        "command": "bun - < helper stability check",
+        "workdir": ".",
+        "status": "PASS"
+      }
+    ],
+    "environmentNotes": [
+      "apps/delphi/ts full build fails later in electron-builder due pre-existing packaging dependency issue.",
+      "apps/arrancador full build fails in renderer/native environment due pre-existing tailwindcss-oxide/spawn EPERM issue."
+    ]
+  }
+}

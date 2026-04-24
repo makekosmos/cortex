@@ -1,0 +1,351 @@
+$ biome check .
+src\lib\window-chrome.ts:27:5 lint/complexity/noUselessSwitchCase  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━
+
+  i Useless case clause.
+  
+    25 │     case "linux":
+    26 │       return "linux";
+  > 27 │     case "win32":
+       │     ^^^^^^^^^^^^^
+    28 │     default:
+    29 │       return "windows";
+  
+  i because the default clause is present:
+  
+    26 │       return "linux";
+    27 │     case "win32":
+  > 28 │     default:
+       │     ^^^^^^^^
+  > 29 │       return "windows";
+       │       ^^^^^^^^^^^^^^^^^
+    30 │   }
+    31 │ }
+  
+  i Unsafe fix: Remove the useless case.
+  
+    25 25 │       case "linux":
+    26 26 │         return "linux";
+    27    │ - ····case·"win32":
+    28 27 │       default:
+    29 28 │         return "windows";
+  
+
+electron\main\backend.ts:392:60 lint/style/noNonNullAssertion  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! Forbidden non-null assertion.
+  
+    390 │       appDataPath,
+    391 │       selection: readSharedSelectedSpace(appDataPath),
+  > 392 │       createServices: (arkDbPath) => createRuntimeServices(runtimeState!.db, arkDbPath),
+        │                                                            ^^^^^^^^^^^^^
+    393 │     },
+    394 │   );
+  
+  i Unsafe fix: Replace with optional chain operator ?. This operator includes runtime checks, so it is safer than the compile-only non-null assertion operator
+  
+    390 390 │         appDataPath,
+    391 391 │         selection: readSharedSelectedSpace(appDataPath),
+    392     │ - ······createServices:·(arkDbPath)·=>·createRuntimeServices(runtimeState!.db,·arkDbPath),
+        392 │ + ······createServices:·(arkDbPath)·=>·createRuntimeServices(runtimeState?.db,·arkDbPath),
+    393 393 │       },
+    394 394 │     );
+  
+
+electron\main\services\ark-usage-backfill.ts:139:5 lint/complexity/useOptionalChain  FIXABLE  ━━━━━━━━━━
+
+  ! Change to an optional chain.
+  
+    137 │   const defaultEnd = `${date}T21:00:00.000Z`;
+    138 │   const endedAt =
+  > 139 │     preferredEndAt && preferredEndAt.startsWith(date)
+        │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    140 │       ? preferredEndAt
+    141 │       : defaultEnd;
+  
+  i Unsafe fix: Change to an optional chain.
+  
+    137 137 │     const defaultEnd = `${date}T21:00:00.000Z`;
+    138 138 │     const endedAt =
+    139     │ - ····preferredEndAt·&&·preferredEndAt.startsWith(date)
+        139 │ + ····preferredEndAt?.startsWith(date)
+    140 140 │         ? preferredEndAt
+    141 141 │         : defaultEnd;
+  
+
+electron\main\services\helpers\disk.ts:210:7 lint/complexity/useOptionalChain  FIXABLE  ━━━━━━━━━━━━
+
+  ! Change to an optional chain.
+  
+    208 │   const resolvedMount = path.resolve(mountPoint);
+    209 │   const statInfo = await stat(resolvedMount).catch(() => null);
+  > 210 │   if (!statInfo || !statInfo.isDirectory()) {
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    211 │     throw new Error("Invalid mount point");
+    212 │   }
+  
+  i Unsafe fix: Change to an optional chain.
+  
+    208 208 │     const resolvedMount = path.resolve(mountPoint);
+    209 209 │     const statInfo = await stat(resolvedMount).catch(() => null);
+    210     │ - ··if·(!statInfo·||·!statInfo.isDirectory())·{
+        210 │ + ··if·(!statInfo?.isDirectory())·{
+    211 211 │       throw new Error("Invalid mount point");
+    212 212 │     }
+  
+
+src-vue\App.vue:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    1 │ <script setup lang="ts">
+  > 2 │ import { RouterView } from "vue-router";
+      │        ^^^^^^^^^^^^^^
+    3 │ </script>
+    4 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+    1 │ import·{·RouterView·}·from·"vue-router";
+      │ ----------------------------------------
+
+src-vue\pages\StatisticsPage.vue:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    1 │ <script setup lang="ts">
+  > 2 │ import { Loader2 } from "lucide-vue-next";
+      │        ^^^^^^^^^^^
+    3 │ import StatisticsDayDetails from "../components/statistics/StatisticsDayDetails.vue";
+    4 │ import StatisticsHeatmap from "../components/statistics/StatisticsHeatmap.vue";
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+    1 │ import·{·Loader2·}·from·"lucide-vue-next";
+      │ ------------------------------------------
+
+src-vue\pages\StatisticsPage.vue:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    1 │ <script setup lang="ts">
+    2 │ import { Loader2 } from "lucide-vue-next";
+  > 3 │ import StatisticsDayDetails from "../components/statistics/StatisticsDayDetails.vue";
+      │        ^^^^^^^^^^^^^^^^^^^^
+    4 │ import StatisticsHeatmap from "../components/statistics/StatisticsHeatmap.vue";
+    5 │ import { useStatisticsHeatmap } from "../composables/useStatisticsHeatmap";
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { Loader2 } from "lucide-vue-next";
+     2    │ - import·StatisticsDayDetails·from·"../components/statistics/StatisticsDayDetails.vue";
+     3  2 │   import StatisticsHeatmap from "../components/statistics/StatisticsHeatmap.vue";
+     4  3 │   import { useStatisticsHeatmap } from "../composables/useStatisticsHeatmap";
+  
+
+src-vue\pages\StatisticsPage.vue:4:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    2 │ import { Loader2 } from "lucide-vue-next";
+    3 │ import StatisticsDayDetails from "../components/statistics/StatisticsDayDetails.vue";
+  > 4 │ import StatisticsHeatmap from "../components/statistics/StatisticsHeatmap.vue";
+      │        ^^^^^^^^^^^^^^^^^
+    5 │ import { useStatisticsHeatmap } from "../composables/useStatisticsHeatmap";
+    6 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { Loader2 } from "lucide-vue-next";
+     2  2 │   import StatisticsDayDetails from "../components/statistics/StatisticsDayDetails.vue";
+     3    │ - import·StatisticsHeatmap·from·"../components/statistics/StatisticsHeatmap.vue";
+     4  3 │   import { useStatisticsHeatmap } from "../composables/useStatisticsHeatmap";
+     5  4 │   
+  
+
+src-vue\pages\StatisticsPage.vue:8:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable dayError is unused.
+  
+     7 │ const {
+   > 8 │   dayError,
+       │   ^^^^^^^^
+     9 │   heatmapRangeLabel,
+    10 │   heatmapTotalLabel,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:9:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable heatmapRangeLabel is unused.
+  
+     7 │ const {
+     8 │   dayError,
+   > 9 │   heatmapRangeLabel,
+       │   ^^^^^^^^^^^^^^^^^
+    10 │   heatmapTotalLabel,
+    11 │   heatmapWeeks,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:10:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable heatmapTotalLabel is unused.
+  
+     8 │   dayError,
+     9 │   heatmapRangeLabel,
+  > 10 │   heatmapTotalLabel,
+       │   ^^^^^^^^^^^^^^^^^
+    11 │   heatmapWeeks,
+    12 │   isDayLoading,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:11:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable heatmapWeeks is unused.
+  
+     9 │   heatmapRangeLabel,
+    10 │   heatmapTotalLabel,
+  > 11 │   heatmapWeeks,
+       │   ^^^^^^^^^^^^
+    12 │   isDayLoading,
+    13 │   isInitialLoading,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:12:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable isDayLoading is unused.
+  
+    10 │   heatmapTotalLabel,
+    11 │   heatmapWeeks,
+  > 12 │   isDayLoading,
+       │   ^^^^^^^^^^^^
+    13 │   isInitialLoading,
+    14 │   isRangeLoading,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:13:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable isInitialLoading is unused.
+  
+    11 │   heatmapWeeks,
+    12 │   isDayLoading,
+  > 13 │   isInitialLoading,
+       │   ^^^^^^^^^^^^^^^^
+    14 │   isRangeLoading,
+    15 │   rangeError,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:14:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable isRangeLoading is unused.
+  
+    12 │   isDayLoading,
+    13 │   isInitialLoading,
+  > 14 │   isRangeLoading,
+       │   ^^^^^^^^^^^^^^
+    15 │   rangeError,
+    16 │   selectedDate,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:15:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable rangeError is unused.
+  
+    13 │   isInitialLoading,
+    14 │   isRangeLoading,
+  > 15 │   rangeError,
+       │   ^^^^^^^^^^
+    16 │   selectedDate,
+    17 │   selectedDayDurationLabel,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:16:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable selectedDate is unused.
+  
+    14 │   isRangeLoading,
+    15 │   rangeError,
+  > 16 │   selectedDate,
+       │   ^^^^^^^^^^^^
+    17 │   selectedDayDurationLabel,
+    18 │   selectedDayLabel,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:17:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable selectedDayDurationLabel is unused.
+  
+    15 │   rangeError,
+    16 │   selectedDate,
+  > 17 │   selectedDayDurationLabel,
+       │   ^^^^^^^^^^^^^^^^^^^^^^^^
+    18 │   selectedDayLabel,
+    19 │   selectedDayRows,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:18:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable selectedDayLabel is unused.
+  
+    16 │   selectedDate,
+    17 │   selectedDayDurationLabel,
+  > 18 │   selectedDayLabel,
+       │   ^^^^^^^^^^^^^^^^
+    19 │   selectedDayRows,
+    20 │   selectedDayTotalLabel,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+src-vue\pages\StatisticsPage.vue:19:3 lint/correctness/noUnusedVariables ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This variable selectedDayRows is unused.
+  
+    17 │   selectedDayDurationLabel,
+    18 │   selectedDayLabel,
+  > 19 │   selectedDayRows,
+       │   ^^^^^^^^^^^^^^^
+    20 │   selectedDayTotalLabel,
+    21 │   selectDate,
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+
+The number of diagnostics exceeds the limit allowed. Use --max-diagnostics to increase it.
+Diagnostics not shown: 294.
+Checked 140 files in 84ms. No fixes applied.
+Found 2 errors.
+Found 310 warnings.
+Found 2 infos.
+check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+
+error: script "biome:check" exited with code 1

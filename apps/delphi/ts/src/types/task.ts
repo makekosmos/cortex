@@ -97,7 +97,7 @@ export const SmartListTitle: Record<SmartList, string> = {
 
   [SmartList.Today]: "Сегодня",
 
-  [SmartList.Upcoming]: "Планы",
+  [SmartList.Upcoming]: "Календарь",
 
   [SmartList.Anytime]: "Когда угодно",
 

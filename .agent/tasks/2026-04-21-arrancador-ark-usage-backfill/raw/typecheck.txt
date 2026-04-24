@@ -1,0 +1,8 @@
+bun : $ tsc --noEmit
+строка:2 знак:11
++ $output = bun run typecheck 2>&1 | Out-String; Set-Content -Path 'D:\ ...
++           ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ tsc --noEmit:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+

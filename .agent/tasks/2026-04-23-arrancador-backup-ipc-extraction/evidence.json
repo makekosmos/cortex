@@ -1,0 +1,55 @@
+{
+  "task_id": "2026-04-23-arrancador-backup-ipc-extraction",
+  "status": "PASS",
+  "acceptance_criteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": "apps/arrancador/electron/main/ipc/backup-handlers.ts"
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": "apps/arrancador/electron/main/services/settings-store.ts"
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": "backend.ts owns composition root responsibilities and delegates IPC registration to feature modules."
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": "Backup/save IPC handlers were moved without renderer-facing API changes."
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": "apps/arrancador/src-vue/test/architecture-boundaries.test.ts requires backup-handlers.ts and zero backend ipcMain.handle calls."
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": {
+        "typecheck": ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/typecheck.txt",
+        "test": ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/test.txt",
+        "lint": ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/lint.txt"
+      }
+    },
+    "AC7": {
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/spec.md",
+        ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/evidence.md",
+        ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/evidence.json",
+        ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/typecheck.txt",
+        ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/test.txt",
+        ".agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/lint.txt"
+      ]
+    }
+  },
+  "checks": {
+    "bun run typecheck": "PASS",
+    "bun run test": "PASS",
+    "bun run lint": "PASS"
+  },
+  "metrics": {
+    "backend_ipc_handle_count": 0,
+    "backend_line_count": 308,
+    "ipc_module_count": 5
+  }
+}

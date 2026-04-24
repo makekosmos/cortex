@@ -404,11 +404,11 @@ test.describe("Electron App", () => {
 
       const searchBtn = launch.window.locator('[data-testid="widget-link-search"]');
       await searchBtn.click();
-      await expect(launch.window.locator(".search-overlay")).toBeVisible();
+      await expect(launch.window.locator('[data-testid="eden-search-palette"]')).toBeVisible();
 
       await toggleZenMode(launch.window);
 
-      await expect(launch.window.locator(".search-overlay")).toHaveCount(0);
+      await expect(launch.window.locator('[data-testid="eden-search-palette"]')).toHaveCount(0);
       await expect(launch.window.locator(".titlebar")).toHaveCount(0);
       await expect(launch.window.locator(".widget-sidebar-wrapper")).toHaveCount(0);
       await expect(launch.window.locator('[data-testid="zen-mode-exit"]')).toBeVisible();
@@ -1046,15 +1046,27 @@ test.describe("Electron App", () => {
 
       launch = await createNote(launch, noteTitle, noteContent);
 
+      await expect
+        .poll(
+          async () => {
+            return launch?.window.evaluate(async (expectedTitle: string) => {
+              const entries = await window.api.listEntries();
+              return entries.find((entry) => entry.title === expectedTitle)?.type_id ?? null;
+            }, noteTitle);
+          },
+          { timeout: 5000 },
+        )
+        .toBe("note_obj");
+
       const searchBtn = launch.window.locator('[data-testid="widget-link-search"]');
       await expect(searchBtn).toBeVisible();
 
       await searchBtn.click();
 
-      const searchOverlay = launch.window.locator(".search-overlay");
+      const searchOverlay = launch.window.locator('[data-testid="eden-search-palette"]');
       await expect(searchOverlay).toBeVisible();
 
-      const searchInput = launch.window.locator(".search-overlay-input");
+      const searchInput = launch.window.locator('[data-testid="eden-search-input"]');
       await expect(searchInput).toBeVisible();
       await expect(searchInput).toBeFocused();
 
@@ -1062,7 +1074,7 @@ test.describe("Electron App", () => {
       await launch.window.waitForTimeout(500);
 
       const russianResult = launch.window
-        .locator(".search-overlay-result-item")
+        .locator('[data-testid="eden-search-result-item"]')
         .filter({ hasText: noteTitle })
         .first();
       await expect(russianResult).toBeVisible();
@@ -1072,7 +1084,7 @@ test.describe("Electron App", () => {
       await launch.window.waitForTimeout(500);
 
       const searchResult = launch.window
-        .locator(".search-overlay-result-item")
+        .locator('[data-testid="eden-search-result-item"]')
         .filter({ hasText: noteTitle })
         .first();
       await expect(searchResult).toBeVisible();
@@ -1083,7 +1095,7 @@ test.describe("Electron App", () => {
       await expect(launch.window.locator(".editor-wrapper")).toBeVisible();
       await expect(launch.window.locator(".title-input")).toHaveValue(noteTitle);
 
-      const overlayAfterSelect = launch.window.locator(".search-overlay");
+      const overlayAfterSelect = launch.window.locator('[data-testid="eden-search-palette"]');
       await expect(overlayAfterSelect).toHaveCount(0);
 
       expect(launch.pageErrors).toEqual([]);

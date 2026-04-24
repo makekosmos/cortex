@@ -232,7 +232,6 @@ export async function checkRestoreNeeded(
   };
 }
 
-export { findSavePath, discoverBackupInfo, findGameSaves, loadBackupManifest };
 export type {
   BackupArtifactSummary,
   BackupInfo,
@@ -250,6 +249,7 @@ export type {
   SaveDiscovery,
   SavePathLookup,
 };
+export { discoverBackupInfo, findGameSaves, findSavePath, loadBackupManifest };
 
 function sanitizeGameFolder(name: string): string {
   return name.replace(/[<>:"/\\|?*]/g, "").trim() || "game";

@@ -1,0 +1,58 @@
+{
+  "task_id": "2026-04-21-arrancador-stats-heatmap-and-poster",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/router.ts",
+        "apps/arrancador/src-vue/components/AppSidebar.vue",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/router.txt",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/sidebar.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/electron/main/backend.ts",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/build-main.txt",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/backend-playtime-proof.txt"
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "apps/arrancador/src-vue/pages/StatisticsPage.vue",
+        "apps/arrancador/src-vue/composables/useStatisticsHeatmap.ts",
+        "apps/arrancador/src-vue/components/statistics/StatisticsHeatmap.vue",
+        "apps/arrancador/src-vue/components/statistics/StatisticsDayDetails.vue",
+        "apps/arrancador/src-vue/test/statistics-page.test.ts"
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "packages/kepler-visuals/components/GamePosterCard.vue",
+        "packages/kepler-visuals/components/index.ts",
+        "packages/kepler-visuals/index.ts",
+        "apps/arrancador/src-vue/components/GameCard.vue",
+        "apps/arrancador/src-vue/test/game-card.test.ts",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/react-poster-removal.txt"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/typecheck.txt",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/test.txt",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/build-renderer.txt",
+        ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/build-main.txt"
+      ]
+    }
+  ]
+}

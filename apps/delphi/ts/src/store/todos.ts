@@ -70,6 +70,26 @@ function mapTodo(
   return todos.map((t) => (t.id === id ? fn(t) : t));
 }
 
+function getElectronInvoker():
+  | { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
+  | null {
+  if (
+    typeof window === "undefined" ||
+    !(window as unknown as Record<string, unknown>).electronAPI
+  ) {
+    return null;
+  }
+
+  const electronAPI = (
+    window as unknown as Record<
+      string,
+      { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
+    >
+  ).electronAPI;
+
+  return electronAPI ?? null;
+}
+
 // ---------------------------------------------------------------------------
 
 // LAN Sync broadcast helper
@@ -85,20 +105,8 @@ function broadcastToLanSync(
 
   deleted?: boolean,
 ): void {
-  if (
-    typeof window === "undefined" ||
-    !(window as unknown as Record<string, unknown>).electronAPI
-  )
-    return;
-
-  const electronAPI = (
-    window as unknown as Record<
-      string,
-      { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
-    >
-  ).electronAPI;
-
-  if (!electronAPI?.invoke) return;
+  const electronAPI = getElectronInvoker();
+  if (!electronAPI) return;
 
   // Deep-clone to strip Vue 3 reactive proxies — structured clone (Electron IPC)
 
@@ -121,6 +129,22 @@ function broadcastToLanSync(
     })
 
     .catch(() => {});
+}
+
+function persistTodoToArk(todo: TodoItem): void {
+  const electronAPI = getElectronInvoker();
+  if (!electronAPI) return;
+
+  electronAPI
+    .invoke("ark:upsertDelphiTask", JSON.parse(JSON.stringify(todo)))
+    .catch(() => {});
+}
+
+function deleteTodoFromArk(id: string): void {
+  const electronAPI = getElectronInvoker();
+  if (!electronAPI) return;
+
+  electronAPI.invoke("ark:deleteDelphiTask", id).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +234,7 @@ export const useTodoStore = defineStore("todos", () => {
     todos.value = [todo, ...todos.value];
 
     void localDbUpsertTodo(todo);
+    persistTodoToArk(todo);
 
     broadcastToLanSync(
       "todo",
@@ -229,6 +254,7 @@ export const useTodoStore = defineStore("todos", () => {
 
     if (updated) {
       void localDbUpsertTodo(updated);
+      persistTodoToArk(updated);
 
       broadcastToLanSync(
         "todo",
@@ -246,6 +272,7 @@ export const useTodoStore = defineStore("todos", () => {
     todos.value = todos.value.filter((t) => t.id !== id);
 
     void localDbDeleteTodo(id);
+    deleteTodoFromArk(id);
 
     if (todo) {
       broadcastToLanSync("todo", id, {}, true);
@@ -284,6 +311,11 @@ export const useTodoStore = defineStore("todos", () => {
     void localDbUpsertTodo(todo);
   }
 
+  function persistTodoLocallyAndInArk(todo: TodoItem) {
+    void localDbUpsertTodo(todo);
+    persistTodoToArk(todo);
+  }
+
   // ---- State transitions ----
 
   function completeTodo(id: string) {
@@ -302,7 +334,7 @@ export const useTodoStore = defineStore("todos", () => {
     if (next) {
       newTodos = [next, ...newTodos];
 
-      void localDbUpsertTodo(next);
+      persistTodoLocallyAndInArk(next);
 
       broadcastToLanSync(
         "todo",
@@ -315,7 +347,7 @@ export const useTodoStore = defineStore("todos", () => {
 
     todos.value = newTodos;
 
-    void localDbUpsertTodo(completed);
+    persistTodoLocallyAndInArk(completed);
 
     broadcastToLanSync(
       "todo",
@@ -332,7 +364,7 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
 
     if (updated) {
-      void localDbUpsertTodo(updated);
+      persistTodoLocallyAndInArk(updated);
 
       broadcastToLanSync(
         "todo",
@@ -350,7 +382,7 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
 
     if (updated) {
-      void localDbUpsertTodo(updated);
+      persistTodoLocallyAndInArk(updated);
 
       broadcastToLanSync(
         "todo",
@@ -368,7 +400,7 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
 
     if (updated) {
-      void localDbUpsertTodo(updated);
+      persistTodoLocallyAndInArk(updated);
 
       broadcastToLanSync(
         "todo",
@@ -386,7 +418,7 @@ export const useTodoStore = defineStore("todos", () => {
     const updated = todos.value.find((t) => t.id === id);
 
     if (updated) {
-      void localDbUpsertTodo(updated);
+      persistTodoLocallyAndInArk(updated);
 
       broadcastToLanSync(
         "todo",
@@ -406,6 +438,7 @@ export const useTodoStore = defineStore("todos", () => {
     const copy = duplicateTodoItem(todo);
 
     todos.value = [copy, ...todos.value];
+    persistTodoLocallyAndInArk(copy);
 
     broadcastToLanSync(
       "todo",
@@ -422,24 +455,40 @@ export const useTodoStore = defineStore("todos", () => {
 
   function addChecklistItem(todoId: string, title: string) {
     todos.value = mapTodo(todos.value, todoId, (t) => addChecklist(t, title));
+    const updated = todos.value.find((t) => t.id === todoId);
+    if (updated) {
+      persistTodoLocallyAndInArk(updated);
+    }
   }
 
   function toggleChecklistItem(todoId: string, itemId: string) {
     todos.value = mapTodo(todos.value, todoId, (t) =>
       toggleChecklist(t, itemId),
     );
+    const updated = todos.value.find((t) => t.id === todoId);
+    if (updated) {
+      persistTodoLocallyAndInArk(updated);
+    }
   }
 
   function removeChecklistItem(todoId: string, itemId: string) {
     todos.value = mapTodo(todos.value, todoId, (t) =>
       removeChecklist(t, itemId),
     );
+    const updated = todos.value.find((t) => t.id === todoId);
+    if (updated) {
+      persistTodoLocallyAndInArk(updated);
+    }
   }
 
   function reorderChecklistItems(todoId: string, orderedIds: string[]) {
     todos.value = mapTodo(todos.value, todoId, (t) =>
       reorderChecklist(t, orderedIds),
     );
+    const updated = todos.value.find((t) => t.id === todoId);
+    if (updated) {
+      persistTodoLocallyAndInArk(updated);
+    }
   }
 
   // ---- Recurrence ----
@@ -450,6 +499,10 @@ export const useTodoStore = defineStore("todos", () => {
 
       recurrenceRule: rule,
     }));
+    const updated = todos.value.find((t) => t.id === todoId);
+    if (updated) {
+      persistTodoLocallyAndInArk(updated);
+    }
   }
 
   // ---- Tags on todos ----
@@ -458,6 +511,10 @@ export const useTodoStore = defineStore("todos", () => {
     todos.value = mapTodo(todos.value, todoId, (t) =>
       t.tagIds.includes(tagId) ? t : { ...t, tagIds: [...t.tagIds, tagId] },
     );
+    const updated = todos.value.find((t) => t.id === todoId);
+    if (updated) {
+      persistTodoLocallyAndInArk(updated);
+    }
   }
 
   function removeTagFromTodo(todoId: string, tagId: string) {
@@ -466,6 +523,10 @@ export const useTodoStore = defineStore("todos", () => {
 
       tagIds: t.tagIds.filter((id) => id !== tagId),
     }));
+    const updated = todos.value.find((t) => t.id === todoId);
+    if (updated) {
+      persistTodoLocallyAndInArk(updated);
+    }
   }
 
   // ---- Project CRUD ----
@@ -629,6 +690,7 @@ export const useTodoStore = defineStore("todos", () => {
     const trashedTodos = todos.value.filter((t) => t.isTrashed);
     for (const t of trashedTodos) {
       broadcastToLanSync("todo", t.id, {}, true);
+      deleteTodoFromArk(t.id);
     }
 
     // Remove trashed todos from store

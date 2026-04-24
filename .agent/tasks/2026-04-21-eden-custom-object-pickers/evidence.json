@@ -1,0 +1,96 @@
+{
+  "task_id": "2026-04-21-eden-custom-object-pickers",
+  "status": "PASS",
+  "files_changed": [
+    "apps/eden/ts/src/components/typed-notes/ObjectPropertyPicker.vue",
+    "apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue",
+    "apps/eden/ts/src/lib/systemTypes.ts",
+    "apps/eden/ts/src/lib/typedNotes.ts"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "ObjectPropertyField.vue renders ObjectPropertyPicker instead of native select controls for typed property fields.",
+        "raw/no-native-select.txt"
+      ]
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "Shared component added at apps/eden/ts/src/components/typed-notes/ObjectPropertyPicker.vue."
+      ]
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "systemTypes.ts defines play_status as select and genres as multi_select with options.",
+        "normalizeSystemNoteType() upgrades stale game schema_json so stored built-in types no longer keep genres as text."
+      ]
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "ObjectPropertyPicker.vue renders a floating panel teleported to body and positioned from the trigger rect.",
+        "raw/picker-overlay-and-table-layout.txt"
+      ]
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "ObjectPropertyField.vue preserves the existing secondary two-column row structure used by the game header.",
+        "Label and value share the same 13px text size and secondary rows use a fixed vertical rhythm.",
+        "raw/picker-overlay-and-table-layout.txt"
+      ]
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "evidence": [
+        "raw/no-native-select.txt",
+        "raw/ui-strings-utf8.txt"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "command": "apps/eden/ts/node_modules/.bin/tsc.exe --noEmit -p \"D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\tsconfig.json\"",
+      "status": "PASS",
+      "raw_artifact": "raw/tsc.txt"
+    },
+    {
+      "command": "bun run lint",
+      "cwd": "apps/eden/ts",
+      "status": "PASS",
+      "raw_artifact": "raw/lint.txt"
+    },
+    {
+      "command": "rg -n \"<select\" \"D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\src\\components\\typed-notes\"",
+      "status": "PASS",
+      "raw_artifact": "raw/no-native-select.txt"
+    },
+    {
+      "command": "Select-String UTF-8 pass for new UI strings",
+      "status": "PASS",
+      "raw_artifact": "raw/ui-strings-utf8.txt"
+    },
+    {
+      "command": "Select-String overlay/table layout pass for teleport, z-index, trigger-width sync, and uniform row sizing",
+      "status": "PASS",
+      "raw_artifact": "raw/picker-overlay-and-table-layout.txt"
+    }
+  ],
+  "notes": [
+    "Legacy comma-separated genres values are normalized to arrays, and nullable Ark/Arrancador drift is coerced to schema-safe defaults before validation.",
+    "Legacy stored built-in game schemas are upgraded to the current system schema during normalizeSystemNoteType().",
+    "The picker overlay is teleported to body with fixed positioning and width derived from the trigger geometry.",
+    "Multi-select values render as wrapped tokens and secondary rows keep a stable minimum height while growing vertically when needed.",
+    "Arrancador reads and writes play_status and genres through Ark object props; see raw/arrancador-sync.txt.",
+    "Unrelated pre-existing worktree changes were left untouched."
+  ]
+}

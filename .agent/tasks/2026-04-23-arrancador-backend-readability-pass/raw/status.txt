@@ -1,0 +1,442 @@
+ M apps/arrancador/AGENTS.md
+ D apps/arrancador/ELECTRON_AUDIT_2026-04-16.md
+ M apps/arrancador/README.md
+ M apps/arrancador/TEST_STRATEGY.md
+ M apps/arrancador/biome.jsonc
+ M apps/arrancador/check_build.bat
+ D apps/arrancador/components.json
+ M apps/arrancador/e2e/feature.spec.ts
+ M apps/arrancador/e2e/smoke.spec.ts
+ D apps/arrancador/e2e/tauri-mock.ts
+ M apps/arrancador/electron/main/backend.ts
+ M apps/arrancador/electron/main/db/database.ts
+ M apps/arrancador/electron/main/db/sqlite.ts
+ M apps/arrancador/electron/main/helpers/shared.ts
+ M apps/arrancador/electron/main/index.ts
+ M apps/arrancador/electron/main/services/ark-game-objects.ts
+ M apps/arrancador/electron/main/services/ark-usage.ts
+ M apps/arrancador/electron/main/services/backup/index.ts
+ M apps/arrancador/electron/main/services/contracts.ts
+ M apps/arrancador/electron/main/services/games.ts
+ M apps/arrancador/electron/main/services/games/process.ts
+ M apps/arrancador/electron/main/services/games/types.ts
+ M apps/arrancador/electron/main/services/helpers/disk.ts
+ M apps/arrancador/electron/main/services/helpers/system.ts
+ M apps/arrancador/electron/main/services/playtime-stats.ts
+ M apps/arrancador/electron/main/services/scan.ts
+ M apps/arrancador/electron/main/services/settings.ts
+ M apps/arrancador/electron/main/services/stats.ts
+ M apps/arrancador/electron/main/services/system.ts
+ M apps/arrancador/electron/main/windows.ts
+ M apps/arrancador/electron/shared/ipc.ts
+ M apps/arrancador/index.html
+ M apps/arrancador/package.json
+ M apps/arrancador/playwright.config.ts
+ D apps/arrancador/public/tauri.svg
+ M apps/arrancador/scripts/dev.ts
+ M apps/arrancador/scripts/rebuild-native-if-needed.ts
+ D apps/arrancador/src-tauri/.gitignore
+ D apps/arrancador/src-tauri/Cargo.toml
+ D apps/arrancador/src-tauri/build.rs
+ D apps/arrancador/src-tauri/capabilities/default.json
+ D apps/arrancador/src-tauri/icons/128x128.png
+ D apps/arrancador/src-tauri/icons/128x128@2x.png
+ D apps/arrancador/src-tauri/icons/32x32.png
+ D apps/arrancador/src-tauri/icons/64x64.png
+ D apps/arrancador/src-tauri/icons/Square107x107Logo.png
+ D apps/arrancador/src-tauri/icons/Square142x142Logo.png
+ D apps/arrancador/src-tauri/icons/Square150x150Logo.png
+ D apps/arrancador/src-tauri/icons/Square284x284Logo.png
+ D apps/arrancador/src-tauri/icons/Square30x30Logo.png
+ D apps/arrancador/src-tauri/icons/Square310x310Logo.png
+ D apps/arrancador/src-tauri/icons/Square44x44Logo.png
+ D apps/arrancador/src-tauri/icons/Square71x71Logo.png
+ D apps/arrancador/src-tauri/icons/Square89x89Logo.png
+ D apps/arrancador/src-tauri/icons/StoreLogo.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-hdpi/ic_launcher.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-hdpi/ic_launcher_foreground.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-hdpi/ic_launcher_round.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-mdpi/ic_launcher.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-mdpi/ic_launcher_foreground.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-mdpi/ic_launcher_round.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xhdpi/ic_launcher.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xhdpi/ic_launcher_foreground.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xhdpi/ic_launcher_round.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_foreground.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xxhdpi/ic_launcher_round.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_foreground.png
+ D apps/arrancador/src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher_round.png
+ D apps/arrancador/src-tauri/icons/icon.icns
+ D apps/arrancador/src-tauri/icons/icon.ico
+ D apps/arrancador/src-tauri/icons/icon.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-20x20@1x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-20x20@2x-1.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-20x20@2x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-20x20@3x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-29x29@1x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-29x29@2x-1.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-29x29@2x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-29x29@3x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-40x40@1x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-40x40@2x-1.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-40x40@2x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-40x40@3x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-512@2x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-60x60@2x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-60x60@3x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-76x76@1x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-76x76@2x.png
+ D apps/arrancador/src-tauri/icons/ios/AppIcon-83.5x83.5@2x.png
+ D apps/arrancador/src-tauri/resources/sqoba_manifest.yaml.gz
+ D apps/arrancador/src-tauri/src/achievements.rs
+ D apps/arrancador/src-tauri/src/backup.rs
+ D apps/arrancador/src-tauri/src/backup/engine.rs
+ D apps/arrancador/src-tauri/src/backup/save_locator.rs
+ D apps/arrancador/src-tauri/src/backup/sqoba_manifest.rs
+ D apps/arrancador/src-tauri/src/catalogue.rs
+ D apps/arrancador/src-tauri/src/database.rs
+ D apps/arrancador/src-tauri/src/db.rs
+ D apps/arrancador/src-tauri/src/domain/games.rs
+ D apps/arrancador/src-tauri/src/domain/mod.rs
+ D apps/arrancador/src-tauri/src/games.rs
+ D apps/arrancador/src-tauri/src/lib.rs
+ D apps/arrancador/src-tauri/src/main.rs
+ D apps/arrancador/src-tauri/src/metadata.rs
+ D apps/arrancador/src-tauri/src/notifications.rs
+ D apps/arrancador/src-tauri/src/scan.rs
+ D apps/arrancador/src-tauri/src/services/fs.rs
+ D apps/arrancador/src-tauri/src/services/games.rs
+ D apps/arrancador/src-tauri/src/services/mod.rs
+ D apps/arrancador/src-tauri/src/settings.rs
+ D apps/arrancador/src-tauri/src/stats.rs
+ D apps/arrancador/src-tauri/src/system.rs
+ D apps/arrancador/src-tauri/tauri.conf.json
+ M apps/arrancador/src-vue/components/AppSidebar.vue
+ M apps/arrancador/src-vue/components/AppSpotlight.vue
+ M apps/arrancador/src-vue/components/AppTitlebar.vue
+ M apps/arrancador/src-vue/components/GameCard.vue
+ M apps/arrancador/src-vue/components/RawgMetadataPrompt.vue
+ D apps/arrancador/src-vue/components/TitlebarHistoryControls.vue
+ M apps/arrancador/src-vue/components/ToastViewport.vue
+ M apps/arrancador/src-vue/components/settings/AppearanceSettingsSection.vue
+ M apps/arrancador/src-vue/components/settings/BackupSettingsSection.vue
+ M apps/arrancador/src-vue/components/settings/CompressionSettingsSection.vue
+ M apps/arrancador/src-vue/components/settings/RawgSettingsSection.vue
+ M apps/arrancador/src-vue/components/settings/SettingsSectionNav.vue
+ M apps/arrancador/src-vue/components/settings/SqobaSettingsSection.vue
+ M apps/arrancador/src-vue/components/settings/SystemSettingsSection.vue
+ M apps/arrancador/src-vue/components/settings/types.ts
+ M apps/arrancador/src-vue/components/sqoba/SqobaGameCard.vue
+ M apps/arrancador/src-vue/components/sqoba/SqobaSavesPanel.vue
+ D apps/arrancador/src-vue/components/statistics/StatisticsDailyTrendChart.vue
+ D apps/arrancador/src-vue/components/statistics/StatisticsPerGameChart.vue
+ D apps/arrancador/src-vue/components/statistics/StatisticsRangePanel.vue
+ D apps/arrancador/src-vue/components/statistics/StatisticsSummaryCards.vue
+ M apps/arrancador/src-vue/composables/useDropZone.ts
+ M apps/arrancador/src-vue/composables/useLanguage.ts
+ M apps/arrancador/src-vue/composables/useSettingsPageState.ts
+ M apps/arrancador/src-vue/composables/useSqobaPageState.ts
+ D apps/arrancador/src-vue/composables/useStatisticsRange.ts
+ M apps/arrancador/src-vue/lib/statistics.ts
+ M apps/arrancador/src-vue/main.ts
+ D apps/arrancador/src-vue/pages/AchievementsPage.vue
+ M apps/arrancador/src-vue/pages/CataloguePage.vue
+ M apps/arrancador/src-vue/pages/GameDetailPage.vue
+ M apps/arrancador/src-vue/pages/LayoutPage.vue
+ M apps/arrancador/src-vue/pages/LibraryPage.vue
+ M apps/arrancador/src-vue/pages/ScanPage.vue
+ M apps/arrancador/src-vue/pages/SettingsPage.vue
+ M apps/arrancador/src-vue/pages/StatisticsPage.vue
+ D apps/arrancador/src-vue/pages/SystemInfoPage.vue
+ M apps/arrancador/src-vue/router.ts
+ M apps/arrancador/src-vue/stores/games.ts
+ M apps/arrancador/src-vue/test/bridge.ts
+ M apps/arrancador/src-vue/test/setup.ts
+ M apps/arrancador/src-vue/test/statistics-page.test.ts
+ M apps/arrancador/src-vue/test/vitest.config.mjs
+ D apps/arrancador/src/App.tsx
+ D apps/arrancador/src/assets/react.svg
+ D apps/arrancador/src/components/AppTitlebar.tsx
+ D apps/arrancador/src/components/GameCard.tsx
+ D apps/arrancador/src/components/RawgMetadataPrompt.tsx
+ D apps/arrancador/src/components/Sidebar.tsx
+ D apps/arrancador/src/components/Spotlight.tsx
+ D apps/arrancador/src/components/TitlebarHistoryControls.tsx
+ D apps/arrancador/src/components/ToastProvider.tsx
+ D apps/arrancador/src/components/language-provider.tsx
+ D apps/arrancador/src/components/mode-toggle.tsx
+ D apps/arrancador/src/components/theme-provider.tsx
+ D apps/arrancador/src/components/ui/button.tsx
+ D apps/arrancador/src/components/ui/card.tsx
+ D apps/arrancador/src/components/ui/dropdown-menu.tsx
+ D apps/arrancador/src/components/ui/input.tsx
+ D apps/arrancador/src/components/ui/progress.tsx
+ D apps/arrancador/src/components/ui/scroll-area.tsx
+ D apps/arrancador/src/components/ui/separator.tsx
+ D apps/arrancador/src/components/ui/sheet.tsx
+ D apps/arrancador/src/components/ui/sidebar.tsx
+ D apps/arrancador/src/components/ui/skeleton.tsx
+ D apps/arrancador/src/components/ui/switch.tsx
+ D apps/arrancador/src/components/ui/tooltip.tsx
+ M apps/arrancador/src/electron.d.ts
+ D apps/arrancador/src/hooks/use-mobile.ts
+ D apps/arrancador/src/hooks/useDropZone.ts
+ D apps/arrancador/src/hooks/useGameStatus.ts
+ D apps/arrancador/src/hooks/useSettingsState.ts
+ M apps/arrancador/src/index.css
+ M apps/arrancador/src/lib/api.ts
+ M apps/arrancador/src/lib/browser.ts
+ M apps/arrancador/src/lib/ipc.ts
+ M apps/arrancador/src/lib/window-chrome.ts
+ D apps/arrancador/src/main.tsx
+ D apps/arrancador/src/pages/Achievements.tsx
+ D apps/arrancador/src/pages/Catalogue.tsx
+ D apps/arrancador/src/pages/GameDetail.tsx
+ D apps/arrancador/src/pages/Layout.tsx
+ D apps/arrancador/src/pages/Library.tsx
+ D apps/arrancador/src/pages/Scan.tsx
+ D apps/arrancador/src/pages/Settings.tsx
+ D apps/arrancador/src/pages/Sqoba.tsx
+ D apps/arrancador/src/pages/Statistics.tsx
+ D apps/arrancador/src/pages/SystemInfo.tsx
+ D apps/arrancador/src/providers.tsx
+ D apps/arrancador/src/router.tsx
+ D apps/arrancador/src/store/GamesContext.tsx
+ D apps/arrancador/src/test/achievements.test.tsx
+ D apps/arrancador/src/test/api.test.ts
+ D apps/arrancador/src/test/app-providers.test.tsx
+ D apps/arrancador/src/test/app-titlebar.test.tsx
+ D apps/arrancador/src/test/app.test.tsx
+ D apps/arrancador/src/test/bridge.ts
+ D apps/arrancador/src/test/catalogue.test.tsx
+ D apps/arrancador/src/test/game-card.test.tsx
+ D apps/arrancador/src/test/game-detail.test.tsx
+ D apps/arrancador/src/test/games-context.test.tsx
+ D apps/arrancador/src/test/layout.test.tsx
+ D apps/arrancador/src/test/library.test.tsx
+ D apps/arrancador/src/test/main.test.tsx
+ D apps/arrancador/src/test/mode-toggle.test.tsx
+ D apps/arrancador/src/test/rawg-metadata-prompt.test.tsx
+ D apps/arrancador/src/test/rebuild-native-if-needed.test.ts
+ D apps/arrancador/src/test/router.test.ts
+ D apps/arrancador/src/test/scan.test.tsx
+ D apps/arrancador/src/test/settings.test.tsx
+ D apps/arrancador/src/test/setup.ts
+ D apps/arrancador/src/test/sidebar-component.test.tsx
+ D apps/arrancador/src/test/smoke.test.tsx
+ D apps/arrancador/src/test/spotlight.test.tsx
+ D apps/arrancador/src/test/statistics.test.tsx
+ D apps/arrancador/src/test/system-info.test.tsx
+ D apps/arrancador/src/test/theme-provider.test.tsx
+ D apps/arrancador/src/test/toast-provider.test.tsx
+ D apps/arrancador/src/test/ui-primitives.test.tsx
+ D apps/arrancador/src/test/ui-sidebar.test.tsx
+ D apps/arrancador/src/test/use-game-status.test.tsx
+ D apps/arrancador/src/test/use-mobile.test.tsx
+ D apps/arrancador/src/test/use-settings-state.test.tsx
+ D apps/arrancador/src/test/utils.test.ts
+ M apps/arrancador/src/types/index.ts
+ M apps/arrancador/src/types/ipc.ts
+ M apps/arrancador/tailwind.config.ts
+ M apps/arrancador/tsconfig.json
+ M apps/arrancador/vite.config.mjs
+ M apps/arrancador/vitest.config.mjs
+ D apps/delphi/swift-archive/.mcp.json
+ D apps/delphi/swift-archive/AGENTS.md
+ D apps/delphi/swift-archive/Delphi.xcodeproj/project.pbxproj
+ D apps/delphi/swift-archive/Delphi.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+ D apps/delphi/swift-archive/Delphi/App/ContentView.swift
+ D apps/delphi/swift-archive/Delphi/App/DelphiApp.swift
+ D apps/delphi/swift-archive/Delphi/App/DelphiCommands.swift
+ D apps/delphi/swift-archive/Delphi/Extensions/Date+Extensions.swift
+ D apps/delphi/swift-archive/Delphi/Models/Area.swift
+ D apps/delphi/swift-archive/Delphi/Models/ChecklistItem.swift
+ D apps/delphi/swift-archive/Delphi/Models/Enums.swift
+ D apps/delphi/swift-archive/Delphi/Models/Heading.swift
+ D apps/delphi/swift-archive/Delphi/Models/Project.swift
+ D apps/delphi/swift-archive/Delphi/Models/Tag.swift
+ D apps/delphi/swift-archive/Delphi/Models/TodoItem.swift
+ D apps/delphi/swift-archive/Delphi/Resources/Assets.xcassets/AccentColor.colorset/Contents.json
+ D apps/delphi/swift-archive/Delphi/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json
+ D apps/delphi/swift-archive/Delphi/Resources/Assets.xcassets/Contents.json
+ D apps/delphi/swift-archive/Delphi/Resources/Delphi.entitlements
+ D apps/delphi/swift-archive/Delphi/Resources/Info.plist
+ D apps/delphi/swift-archive/Delphi/Services/LemmaSearchService.swift
+ D apps/delphi/swift-archive/Delphi/Services/NaturalDateParser.swift
+ D apps/delphi/swift-archive/Delphi/Services/TodoFilterService.swift
+ D apps/delphi/swift-archive/Delphi/Space/SpaceManager.swift
+ D apps/delphi/swift-archive/Delphi/Space/SpaceSetupView.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkDiscovery.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkEventMapper.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkHLC.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkPairing.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkPeerManager.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkPeerProtocol.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkPeerServer.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ArkSyncClient.swift
+ D apps/delphi/swift-archive/Delphi/Sync/ConnectionCode.swift
+ D apps/delphi/swift-archive/Delphi/Sync/LanSyncClient.swift
+ D apps/delphi/swift-archive/Delphi/Sync/PeerManager.swift
+ D apps/delphi/swift-archive/Delphi/Sync/SyncClient.swift
+ D apps/delphi/swift-archive/Delphi/Sync/SyncProtocol.swift
+ D apps/delphi/swift-archive/Delphi/Sync/SyncServer.swift
+ D apps/delphi/swift-archive/Delphi/Sync/SyncSettings.swift
+ D apps/delphi/swift-archive/Delphi/Sync/SyncSettingsView.swift
+ D apps/delphi/swift-archive/Delphi/ViewModels/SidebarViewModel.swift
+ D apps/delphi/swift-archive/Delphi/ViewModels/TodoListViewModel.swift
+ D apps/delphi/swift-archive/Delphi/Views/QuickEntry/QuickEntryPanel.swift
+ D apps/delphi/swift-archive/Delphi/Views/QuickOpen/QuickOpenView.swift
+ D apps/delphi/swift-archive/Delphi/Views/Shared/MoveToDialog.swift
+ D apps/delphi/swift-archive/Delphi/Views/Shared/TagChip.swift
+ D apps/delphi/swift-archive/Delphi/Views/Sidebar/SidebarRow.swift
+ D apps/delphi/swift-archive/Delphi/Views/Sidebar/SidebarView.swift
+ D apps/delphi/swift-archive/Delphi/Views/TodoList/TodoListView.swift
+ D apps/delphi/swift-archive/Delphi/Views/TodoList/TodoRowView.swift
+ D apps/delphi/swift-archive/Delphi/Views/TodoList/UpcomingView.swift
+ D apps/delphi/swift-archive/project.yml
+ D apps/delphi/swift-archive/skills-lock.json
+ M apps/delphi/ts/electron/main.ts
+ M apps/delphi/ts/electron/sidecar.ts
+ M apps/delphi/ts/package.json
+ M apps/delphi/ts/src/App.vue
+ M apps/delphi/ts/src/components/SideBar.vue
+ M apps/delphi/ts/src/components/calendar/CalendarShell.vue
+ M apps/delphi/ts/src/pages/CalendarPage.vue
+ M apps/delphi/ts/src/router/index.ts
+ M apps/delphi/ts/src/store/todos.ts
+ M apps/delphi/ts/src/types/task.ts
+ D apps/delphi/ts/test-results/.last-run.json
+ M apps/eden/ts/main/ark.ts
+ M apps/eden/ts/main/heart.ts
+ M apps/eden/ts/main/hevy.ts
+ M apps/eden/ts/main/store.ts
+ M apps/eden/ts/scripts/seedArkObjectDemo.ts
+ M apps/eden/ts/src/App.vue
+ M apps/eden/ts/src/Editor.vue
+ M apps/eden/ts/src/components/SearchOverlay.vue
+ M apps/eden/ts/src/components/objects/TypeObjectsView.vue
+ M apps/eden/ts/src/components/settings/object-types/ObjectTypeIdentitySection.vue
+ M apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue
+ M apps/eden/ts/src/components/settings/object-types/shared.ts
+ M apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue
+ M apps/eden/ts/src/components/typed-notes/TypedHeader.vue
+ M apps/eden/ts/src/lib/systemTypes.ts
+ M apps/eden/ts/src/lib/typedNotes.ts
+ M apps/eden/ts/src/store/eden.ts
+ M apps/eden/ts/tests/app.spec.ts
+ M bun.lock
+ M packages/ark-core/rust/src/db.rs
+ M packages/ark-core/rust/src/main.rs
+ M packages/kepler-visuals/components/CommandPalette.vue
+ M packages/kepler-visuals/components/Sidebar.vue
+ M packages/kepler-visuals/components/SidebarButton.vue
+ M packages/kepler-visuals/components/Titlebar.vue
+ M packages/kepler-visuals/components/index.ts
+ M packages/kepler-visuals/index.ts
+ M packages/kepler-visuals/package.json
+ D packages/kepler-visuals/react/GamePosterCard.tsx
+ D packages/kepler-visuals/react/index.ts
+?? .agent/tasks/2026-04-20-eden-vault-switch-ark-reset/
+?? .agent/tasks/2026-04-20-object-type-icon-color-picker/
+?? .agent/tasks/2026-04-20-shared-selected-space/
+?? .agent/tasks/2026-04-21-arrancador-ark-backfill-migration/
+?? .agent/tasks/2026-04-21-arrancador-ark-connection-ui/
+?? .agent/tasks/2026-04-21-arrancador-ark-usage-backfill/
+?? .agent/tasks/2026-04-21-arrancador-dev-startup-stability/
+?? .agent/tasks/2026-04-21-arrancador-shared-ark-follow/
+?? .agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/
+?? .agent/tasks/2026-04-21-arrancador-usage-legacy-merge/
+?? .agent/tasks/2026-04-21-arrancador-usage-tracker-fallback/
+?? .agent/tasks/2026-04-21-eden-arrancador-ark-e2e/
+?? .agent/tasks/2026-04-21-eden-custom-object-pickers/
+?? .agent/tasks/2026-04-21-eden-game-note-presentation/
+?? .agent/tasks/2026-04-21-eden-memory-leak-fixes/
+?? .agent/tasks/2026-04-21-eden-search-visuals-fix/
+?? .agent/tasks/2026-04-22-delphi-calendar-toolbar-view-switch/
+?? .agent/tasks/2026-04-22-delphi-project-create-component/
+?? .agent/tasks/2026-04-22-delphi-project-status-bridge/
+?? .agent/tasks/2026-04-22-delphi-shared-ark-task-objects/
+?? .agent/tasks/2026-04-22-delphi-titlebar-settings-sidebar-footer/
+?? .agent/tasks/2026-04-22-delphi-titlebar-settings-visibility/
+?? .agent/tasks/2026-04-23-arrancador-10-final-hardening/
+?? .agent/tasks/2026-04-23-arrancador-architecture-guards/
+?? .agent/tasks/2026-04-23-arrancador-backend-ipc-atomization/
+?? .agent/tasks/2026-04-23-arrancador-backend-readability-pass/
+?? .agent/tasks/2026-04-23-arrancador-backup-ipc-extraction/
+?? .agent/tasks/2026-04-23-arrancador-backup-ipc-service-boundary/
+?? .agent/tasks/2026-04-23-arrancador-e2e-biome-ipc-hardening/
+?? .agent/tasks/2026-04-23-arrancador-electron-vue-stabilization/
+?? .agent/tasks/2026-04-23-arrancador-game-detail-atomization/
+?? .agent/tasks/2026-04-23-arrancador-game-detail-component-tests/
+?? .agent/tasks/2026-04-23-arrancador-game-detail-modal-components/
+?? .agent/tasks/2026-04-23-arrancador-game-detail-ui-components/
+?? .agent/tasks/2026-04-23-arrancador-multi-process-bindings/
+?? .agent/tasks/2026-04-23-arrancador-quality-10-pass/
+?? .agent/tasks/2026-04-23-arrancador-quality-hardening/
+?? .agent/tasks/2026-04-23-arrancador-react-tauri-cleanout/
+?? .agent/tasks/2026-04-23-arrancador-route-atomization/
+?? .agent/tasks/2026-04-23-delphi-build-fix/
+?? .agent/tmp/
+?? apps/arrancador/.agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/
+?? apps/arrancador/e2e/bridge-mock.ts
+?? apps/arrancador/electron/main/ark-runtime.test.ts
+?? apps/arrancador/electron/main/ark-runtime.ts
+?? apps/arrancador/electron/main/ipc/
+?? apps/arrancador/electron/main/runtime-services.ts
+?? apps/arrancador/electron/main/services/ark-game-migration.ts
+?? apps/arrancador/electron/main/services/ark-usage-backfill.test.ts
+?? apps/arrancador/electron/main/services/ark-usage-backfill.ts
+?? apps/arrancador/electron/main/services/ark-usage-bindings.test.ts
+?? apps/arrancador/electron/main/services/ark-usage.test.ts
+?? apps/arrancador/electron/main/services/backup-ipc-support.ts
+?? apps/arrancador/electron/main/services/game-process-bindings.test.ts
+?? apps/arrancador/electron/main/services/game-process-bindings.ts
+?? apps/arrancador/electron/main/services/settings-store.ts
+?? apps/arrancador/electron/main/services/usage-process-search.ts
+?? apps/arrancador/electron/main/shared-ipc.test.ts
+?? apps/arrancador/scripts/migrate_ark_games.py
+?? apps/arrancador/scripts/run-e2e-inline.ts
+?? apps/arrancador/scripts/run-e2e.ts
+?? apps/arrancador/src-vue/components/game-detail/
+?? apps/arrancador/src-vue/components/scan/
+?? apps/arrancador/src-vue/components/settings/ArkSettingsSection.vue
+?? apps/arrancador/src-vue/components/statistics/StatisticsDayDetails.vue
+?? apps/arrancador/src-vue/components/statistics/StatisticsHeatmap.vue
+?? apps/arrancador/src-vue/composables/useGameBackups.ts
+?? apps/arrancador/src-vue/composables/useGameMetadataSearch.ts
+?? apps/arrancador/src-vue/composables/useGameSavePath.ts
+?? apps/arrancador/src-vue/composables/useLibraryGameImport.ts
+?? apps/arrancador/src-vue/composables/useLibraryInstallStatus.ts
+?? apps/arrancador/src-vue/composables/useStatisticsHeatmap.ts
+?? apps/arrancador/src-vue/composables/useUsageProcessPicker.ts
+?? apps/arrancador/src-vue/lib/gameDetailDisplay.ts
+?? apps/arrancador/src-vue/lib/gameImport.ts
+?? apps/arrancador/src-vue/lib/libraryFilters.ts
+?? apps/arrancador/src-vue/test/architecture-boundaries.test.ts
+?? apps/arrancador/src-vue/test/ark-settings-section.test.ts
+?? apps/arrancador/src-vue/test/game-card.test.ts
+?? apps/arrancador/src-vue/test/game-detail-components.test.ts
+?? apps/arrancador/src-vue/test/game-detail-display.test.ts
+?? apps/arrancador/src-vue/test/game-import.test.ts
+?? apps/arrancador/src-vue/test/library-filters.test.ts
+?? apps/arrancador/src-vue/test/scan-results-list.test.ts
+?? apps/arrancador/src-vue/test/source-encoding.test.ts
+?? apps/arrancador/src-vue/test/use-game-backups.test.ts
+?? apps/arrancador/src-vue/test/use-game-metadata-search.test.ts
+?? apps/arrancador/src-vue/test/use-game-save-path.test.ts
+?? apps/arrancador/src-vue/test/use-library-game-import.test.ts
+?? apps/arrancador/src-vue/test/use-library-install-status.test.ts
+?? apps/arrancador/src-vue/test/use-usage-process-picker.test.ts
+?? apps/delphi/ts/.agent/
+?? apps/delphi/ts/e2e/
+?? apps/delphi/ts/scripts/
+?? apps/delphi/ts/shared/
+?? apps/delphi/ts/src/components/projects/
+?? apps/eden/ts/scripts/verifyArrancadorArkSync.ts
+?? apps/eden/ts/src/components/typed-notes/ObjectPropertyPicker.vue
+?? apps/eden/ts/src/lib/objectFieldFormatting.ts
+?? apps/eden/ts/tests/arrancador-ark-sync.spec.ts
+?? packages/kepler-visuals/components/GamePosterCard.vue
+?? packages/shared-space/

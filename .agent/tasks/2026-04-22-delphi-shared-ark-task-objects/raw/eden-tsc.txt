@@ -1,0 +1,9 @@
+Command:
+  bun x tsc --noEmit
+
+Workdir:
+  D:\Personal\Hobby\Coding\kepler\apps\eden\ts
+
+Observed result:
+  Exit code 0
+  No TypeScript errors reported.

@@ -1,0 +1,136 @@
+$ bun run build:sidecar && node bench/run-baseline.mjs "--out=..\\..\\.agent\\tasks\\2026-04-24-arrancador-rust-scan-sidecar\\raw\\rust-scan-current.json"
+$ cargo build --release --manifest-path sidecar/Cargo.toml
+    Finished `release` profile [optimized] target(s) in 0.02s
+Bundled 21 modules in 19ms
+
+  run-baseline.mjs  99.47 KB  (entry point)
+
+[Arrancador] Rust scan sidecar unavailable, falling back to TypeScript scanner.
+(node:34556) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `electron --trace-deprecation ...` to show where the warning was created)
+[Arrancador] Rust scan sidecar unavailable, falling back to TypeScript scanner.
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-04-23T22:23:39.386Z",
+  "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+  "repoRoot": "D:\\Personal\\Hobby\\Coding\\kepler",
+  "backend": "electron-main+rust-scan-sidecar",
+  "fixtureRoot": "C:\\Users\\Kazui\\AppData\\Local\\Temp\\arrancador-baseline-ysxCzP",
+  "results": [
+    {
+      "name": "scan_executables_stream",
+      "backend": "rust-sidecar",
+      "durationMs": 134.38,
+      "eventLoopLag": {
+        "samples": 13,
+        "p50Ms": 0.01,
+        "p95Ms": 0.24,
+        "p99Ms": 0.24,
+        "maxMs": 0.24
+      },
+      "totalFiles": 7200,
+      "expectedExecutables": 720,
+      "foundExecutables": 720,
+      "timeToFirstResultMs": 7.47,
+      "filesPerSecond": 53579.4
+    },
+    {
+      "name": "scan_executables_cancel",
+      "backend": "rust-sidecar",
+      "durationMs": 5.65,
+      "eventLoopLag": {
+        "samples": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0,
+        "maxMs": 0
+      },
+      "cancelLatencyMs": 0.39
+    },
+    {
+      "name": "backup_create_directory",
+      "backend": "ts-electron-main",
+      "durationMs": 333.64,
+      "eventLoopLag": {
+        "samples": 33,
+        "p50Ms": 0.01,
+        "p95Ms": 0.4,
+        "p99Ms": 1.25,
+        "maxMs": 1.25
+      },
+      "fileCount": 420,
+      "totalBytes": 1720320,
+      "mbPerSecond": 4.92,
+      "progressEvents": 11
+    },
+    {
+      "name": "backup_restore_directory",
+      "backend": "ts-electron-main",
+      "durationMs": 282.89,
+      "eventLoopLag": {
+        "samples": 28,
+        "p50Ms": 0,
+        "p95Ms": 0.59,
+        "p99Ms": 1.53,
+        "maxMs": 1.53
+      },
+      "fileCount": 420,
+      "totalBytes": 1720320,
+      "mbPerSecond": 5.8,
+      "hashParity": true
+    },
+    {
+      "name": "sqlite_open_init",
+      "backend": "ts-electron-main",
+      "durationMs": 120.89,
+      "eventLoopLag": {
+        "samples": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0,
+        "maxMs": 0
+      }
+    },
+    {
+      "name": "sqlite_insert_games",
+      "backend": "ts-electron-main",
+      "durationMs": 3904.93,
+      "eventLoopLag": {
+        "samples": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0,
+        "maxMs": 0
+      },
+      "rows": 1000,
+      "rowsPerSecond": 256.09
+    },
+    {
+      "name": "sqlite_games_get_all",
+      "backend": "ts-electron-main",
+      "durationMs": 5.81,
+      "eventLoopLag": {
+        "samples": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0,
+        "maxMs": 0
+      },
+      "rows": 1000,
+      "rowsPerSecond": 172117.04
+    },
+    {
+      "name": "sqlite_games_search",
+      "backend": "ts-electron-main",
+      "durationMs": 0.76,
+      "eventLoopLag": {
+        "samples": 0,
+        "p50Ms": 0,
+        "p95Ms": 0,
+        "p99Ms": 0,
+        "maxMs": 0
+      },
+      "rows": 10
+    }
+  ]
+}

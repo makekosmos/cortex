@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, shallowRef } from "vue";
+import { Titlebar, TitlebarHistoryControls } from "@kepler/visuals";
 import { Maximize2, Minimize2, PanelLeft, X } from "lucide-vue-next";
+import { computed, onMounted, onUnmounted, shallowRef } from "vue";
 import {
   closeWindow,
   getFallbackWindowChromePlatform,
@@ -8,7 +9,6 @@ import {
   toggleMaximizeWindow,
 } from "../../src/lib/window-chrome";
 import { useLanguage } from "../composables/useLanguage";
-import TitlebarHistoryControls from "./TitlebarHistoryControls.vue";
 
 type WindowControlsOverlayLike = {
   visible?: boolean;
@@ -122,14 +122,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <header
-    class="kepler-titlebar"
+  <Titlebar
+    :platform="platform"
     :class="{
       'app-titlebar--mac': platform === 'mac',
       'app-titlebar--windows': platform === 'windows',
     }"
   >
-    <div class="kepler-titlebar__leading">
+    <template #leading>
       <button
         type="button"
         class="arrancador-titlebar-button"
@@ -148,11 +148,11 @@ onUnmounted(() => {
         @back="emit('back')"
         @forward="emit('forward')"
       />
-    </div>
+    </template>
 
-    <div class="kepler-titlebar__center" />
+    <template #center />
 
-    <div class="kepler-titlebar__trailing">
+    <template #trailing>
       <div v-if="showFallbackWindowControls" class="arrancador-window-controls">
         <button
           type="button"
@@ -182,6 +182,6 @@ onUnmounted(() => {
           <X class="h-4 w-4" />
         </button>
       </div>
-    </div>
-  </header>
+    </template>
+  </Titlebar>
 </template>

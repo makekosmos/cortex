@@ -1,0 +1,8 @@
+Command:
+cmd.exe /c "cd /d D:\Personal\Hobby\Coding\kepler\apps\delphi\ts && bun x vite build --configLoader native"
+
+Result:
+PASS
+
+Summary:
+- Delphi renderer and Electron production builds completed successfully after the navigation layout change.

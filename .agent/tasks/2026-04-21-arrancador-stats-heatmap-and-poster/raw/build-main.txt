@@ -1,0 +1,4 @@
+﻿$ bun build ./electron/main.ts --outfile=out/main/index.js --target=node --format=esm -e electron -e better-sqlite3
+Bundled 44 modules in 53ms
+
+index.js  173.57 KB  (entry point)

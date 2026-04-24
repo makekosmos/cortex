@@ -1,0 +1,35 @@
+src-vue\pages\CataloguePage.vue:13:26 lint/suspicious/noControlCharactersInRegex ━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected control character in a regular expression.
+  
+    11 │ function sanitizeForExeName(value: string) {
+    12 │   return value
+  > 13 │     .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+       │                          ^^^^
+    14 │     .replace(/\s+/g, " ")
+    15 │     .trim()
+  
+  i Control characters are unusual and potentially incorrect inputs, so they are disallowed.
+  
+
+src-vue\pages\CataloguePage.vue:13:31 lint/suspicious/noControlCharactersInRegex ━━━━━━━━━━━━━━━━━━━
+
+  × Unexpected control character in a regular expression.
+  
+    11 │ function sanitizeForExeName(value: string) {
+    12 │   return value
+  > 13 │     .replace(/[<>:"/\\|?*\x00-\x1F]/g, " ")
+       │                               ^^^^
+    14 │     .replace(/\s+/g, " ")
+    15 │     .trim()
+  
+  i Control characters are unusual and potentially incorrect inputs, so they are disallowed.
+  
+
+Checked 140 files in 79ms. No fixes applied.
+Found 2 errors.
+check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+

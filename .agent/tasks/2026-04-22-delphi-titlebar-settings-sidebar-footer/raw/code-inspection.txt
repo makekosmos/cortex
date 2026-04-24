@@ -1,0 +1,15 @@
+Relevant inspected facts:
+
+- `apps/delphi/ts/src/App.vue`
+  - imports `Settings` icon for the titlebar
+  - defines `openSettings()`
+  - renders a titlebar button in `#titlebar-trailing` that routes to `/settings`
+
+- `apps/delphi/ts/src/components/SideBar.vue`
+  - `primaryItems` keeps `Входящие`, `Сегодня`, `Календарь`, `Неделя`
+  - `footerItems` now returns `Журнал` and `Корзина`
+  - `Настройки` is no longer returned from `footerItems`
+
+Note:
+- `git diff` for these files contains older unrelated hunks from previous work in the same files.
+- The facts above describe only the changes relevant to this task.

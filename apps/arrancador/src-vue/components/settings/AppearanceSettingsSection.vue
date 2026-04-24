@@ -27,11 +27,11 @@ function themeButtonClass(current: Theme, expected: Theme) {
   <section :id="props.sectionId" class="space-y-4">
     <div class="flex items-center gap-2">
       <Monitor class="h-5 w-5" />
-      <h2 class="text-base font-semibold sm:text-lg">Appearance</h2>
+      <h2 class="text-base font-semibold sm:text-lg">Оформление</h2>
     </div>
 
     <div class="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-sm">
-      <div class="mb-3 text-sm font-medium">Theme</div>
+      <div class="mb-3 text-sm font-medium">Тема</div>
       <div class="flex flex-wrap gap-2">
         <button
           type="button"
@@ -40,7 +40,7 @@ function themeButtonClass(current: Theme, expected: Theme) {
           @click="emit('updateTheme', 'light')"
         >
           <Sun class="h-4 w-4" />
-          Light
+          Светлая
         </button>
         <button
           type="button"
@@ -49,7 +49,7 @@ function themeButtonClass(current: Theme, expected: Theme) {
           @click="emit('updateTheme', 'dark')"
         >
           <Moon class="h-4 w-4" />
-          Dark
+          Тёмная
         </button>
         <button
           type="button"
@@ -58,7 +58,7 @@ function themeButtonClass(current: Theme, expected: Theme) {
           @click="emit('updateTheme', 'system')"
         >
           <Monitor class="h-4 w-4" />
-          System
+          Системная
         </button>
       </div>
     </div>

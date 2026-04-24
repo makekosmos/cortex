@@ -8,9 +8,7 @@ type TranslationKey =
   | "sidebar.catalogue"
   | "sidebar.sqoba"
   | "sidebar.statistics"
-  | "sidebar.system"
   | "sidebar.settings"
-  | "sidebar.achievements"
   | "sidebar.favorites"
   | "sidebar.more";
 
@@ -21,9 +19,7 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     "sidebar.catalogue": "Каталог",
     "sidebar.sqoba": "SQOBA",
     "sidebar.statistics": "Статистика",
-    "sidebar.system": "Система",
     "sidebar.settings": "Настройки",
-    "sidebar.achievements": "Ачивки",
     "sidebar.favorites": "Избранное",
     "sidebar.more": "еще",
   },
@@ -33,9 +29,7 @@ const translations: Record<Language, Record<TranslationKey, string>> = {
     "sidebar.catalogue": "Catalogue",
     "sidebar.sqoba": "SQOBA",
     "sidebar.statistics": "Statistics",
-    "sidebar.system": "System",
     "sidebar.settings": "Settings",
-    "sidebar.achievements": "Achievements",
     "sidebar.favorites": "Favorites",
     "sidebar.more": "more",
   },

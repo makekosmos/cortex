@@ -1,6 +1,9 @@
 $ErrorActionPreference = "Stop"
 
-bun run predev
+bun run build:sidecar
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+bun run prepare:native
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 bun run build:renderer

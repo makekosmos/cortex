@@ -49,7 +49,7 @@ export function openSqliteDatabase(
       : {}),
   });
 
-  const prepare = (sql: string) => nativeDb.prepare(sql.replace(/\?\d+/g, "?"));
+  const prepare = (sql: string) => nativeDb.prepare(sql);
 
   let wrapper: SqliteDatabase;
   wrapper = {
@@ -57,27 +57,30 @@ export function openSqliteDatabase(
       sql: string,
       params: readonly DbValue[] = [],
     ): T[] {
-      const statement = prepare(sql);
-      return (params.length === 0
+      const normalized = normalizeNumberedPlaceholders(sql, params);
+      const statement = prepare(normalized.sql);
+      return (normalized.params.length === 0
         ? statement.all()
-        : statement.all(params as unknown as DbValue[])) as T[];
+        : statement.all(normalized.params as unknown as DbValue[])) as T[];
     },
 
     get<T = Record<string, unknown> | undefined>(
       sql: string,
       params: readonly DbValue[] = [],
     ): T | undefined {
-      const statement = prepare(sql);
-      return (params.length === 0
+      const normalized = normalizeNumberedPlaceholders(sql, params);
+      const statement = prepare(normalized.sql);
+      return (normalized.params.length === 0
         ? statement.get()
-        : statement.get(params as unknown as DbValue[])) as T | undefined;
+        : statement.get(normalized.params as unknown as DbValue[])) as T | undefined;
     },
 
     run(sql: string, params: readonly DbValue[] = []): DbRunResult {
-      const statement = prepare(sql);
-      return (params.length === 0
+      const normalized = normalizeNumberedPlaceholders(sql, params);
+      const statement = prepare(normalized.sql);
+      return (normalized.params.length === 0
         ? statement.run()
-        : statement.run(params as unknown as DbValue[])) as DbRunResult;
+        : statement.run(normalized.params as unknown as DbValue[])) as DbRunResult;
     },
 
     async transaction<T>(fn: (tx: DbLike) => MaybePromise<T>): Promise<T> {
@@ -95,9 +98,35 @@ export function openSqliteDatabase(
         throw error;
       }
     },
+
+    close(): void {
+      nativeDb.close?.();
+    },
   };
 
   return wrapper;
+}
+
+export function normalizeNumberedPlaceholders(
+  sql: string,
+  params: readonly DbValue[] = [],
+): { sql: string; params: readonly DbValue[] } {
+  const normalizedParams: DbValue[] = [];
+  let matched = false;
+
+  const normalizedSql = sql.replace(/\?([1-9]\d*)/g, (_placeholder, indexText: string) => {
+    matched = true;
+    const index = Number(indexText) - 1;
+    if (!Number.isSafeInteger(index) || index < 0 || index >= params.length) {
+      throw new RangeError(`Missing SQLite parameter ?${indexText}`);
+    }
+    normalizedParams.push(params[index]);
+    return "?";
+  });
+
+  return matched
+    ? { sql: normalizedSql, params: normalizedParams }
+    : { sql, params };
 }
 
 export async function withTransaction<T>(

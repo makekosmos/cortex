@@ -1,6 +1,6 @@
-import vue from "@vitejs/plugin-vue";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vitest/config";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
@@ -54,13 +54,13 @@ export default defineConfig(async ({ mode }) => {
       alias: {
         "@vue-app": path.resolve(rootDir, "./src-vue"),
       },
-      include: ["src-vue/test/**/*.{test,spec}.{ts,tsx}"],
+      include: ["src-vue/test/**/*.{test,spec}.ts"],
       exclude: ["e2e/**"],
       coverage: {
         provider: "v8",
         reporter: ["text", "lcov"],
         reportsDirectory: "coverage",
-        include: ["src-vue/**/*.{ts,tsx,vue}"],
+        include: ["src-vue/**/*.{ts,vue}"],
         exclude: ["src-vue/test/**", "src-vue/**/*.d.ts", "**/*.css"],
         thresholds: {
           lines: 100,

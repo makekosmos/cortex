@@ -1,0 +1,55 @@
+{
+  "taskId": "2026-04-21-eden-memory-leak-fixes",
+  "verificationStatus": "FAIL",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "summary": "Renderer perf metrics retain only a bounded recent sample window."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "summary": "Heart and Ark stderr retention is capped to a recent tail."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "summary": "Transient save bookkeeping is released after completion and pruned on data refresh."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "summary": "Back/forward navigation history is capped to the latest 30 actions."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "summary": "Hevy login token extraction timers are tracked and cleared on resolve/close."
+    }
+  ],
+  "commands": [
+    {
+      "command": "bun run lint",
+      "status": "PASS",
+      "rawArtifact": ".agent/tasks/2026-04-21-eden-memory-leak-fixes/raw/lint.txt"
+    },
+    {
+      "command": "bun run build",
+      "status": "PASS",
+      "rawArtifact": ".agent/tasks/2026-04-21-eden-memory-leak-fixes/raw/build.txt"
+    },
+    {
+      "command": "bun run test:e2e",
+      "status": "FAIL",
+      "rawArtifact": ".agent/tasks/2026-04-21-eden-memory-leak-fixes/raw/test-e2e.txt",
+      "problem": "Playwright could not spawn its worker process in this environment: spawn EPERM."
+    }
+  ],
+  "blockedBy": [
+    {
+      "type": "environment",
+      "summary": "Fresh Playwright verification is blocked by process spawning restrictions in the current environment."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+﻿COMMAND: bun run build:main
+START: 2026-04-24T10:37:03.9349546+03:00
+cmd : $ bun build ./electron/main.ts --outfile=out/main/index.js --target=node --format=esm -e electron -e 
+better-sqlite3
+строка:7 знак:3
++   cmd /c "$command" 2>&1 | Out-File -Encoding utf8 -Append $path;
++   ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ bun build ./e... better-sqlite3:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Bundled 60 modules in 17ms
+
+  index.js  218.1 KB  (entry point)
+
+EXIT_CODE: 0
+END: 2026-04-24T10:37:04.0680227+03:00

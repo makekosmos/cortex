@@ -23,6 +23,7 @@ import {
   setActiveSpace,
 } from "@/services/space/space-manager";
 import type { SyncEntity } from "@/services/sync/lan-protocol";
+import type { TodoItem } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import SideBar from "@/components/SideBar.vue";
 import QuickEntry from "@/components/QuickEntry.vue";
@@ -210,6 +211,11 @@ function toggleSidebar() {
   setSidebarHidden(!sidebarHidden.value);
 }
 
+function openSettings() {
+  if (route.path === "/settings") return;
+  void router.push("/settings");
+}
+
 const browserHistoryState = computed(() => {
   void route.fullPath;
 
@@ -306,6 +312,23 @@ watch(
 // ---------------------------------------------------------------------------
 
 let cleanupLanSyncListener: (() => void) | null = null;
+
+function mergeTodosById(
+  localTodos: TodoItem[],
+  arkTodos: TodoItem[],
+): TodoItem[] {
+  const byId = new Map<string, TodoItem>();
+
+  for (const todo of localTodos) {
+    byId.set(todo.id, todo);
+  }
+
+  for (const todo of arkTodos) {
+    byId.set(todo.id, todo);
+  }
+
+  return [...byId.values()];
+}
 
 async function bootstrapWeb() {
   const url = getArkUrl();
@@ -414,7 +437,22 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
     try {
       const { todos, projects, areas, tags, headings } =
         await loadAllFromLocalDb();
-      store.setTodos(todos);
+      let mergedTodos = todos;
+
+      if (window.electronAPI?.invoke) {
+        try {
+          const arkTodos = (await window.electronAPI.invoke(
+            "ark:listDelphiTasks",
+          )) as TodoItem[];
+          if (Array.isArray(arkTodos) && arkTodos.length > 0) {
+            mergedTodos = mergeTodosById(todos, arkTodos);
+          }
+        } catch (err) {
+          console.warn("[App] Ark task load failed:", err);
+        }
+      }
+
+      store.setTodos(mergedTodos);
       store.setProjects(projects);
       store.setAreas(areas);
       store.setTags(tags);
@@ -720,6 +758,17 @@ onUnmounted(() => {
           @back="navigateBack"
           @forward="navigateForward"
         />
+        <button
+          type="button"
+          :class="[
+            'titlebar-settings-button',
+            route.path === '/settings' ? 'titlebar-settings-button--active' : '',
+          ]"
+          title="Настройки"
+          @click="openSettings"
+        >
+          <span>Настройки</span>
+        </button>
       </template>
 
       <template #titlebar-trailing>
@@ -880,3 +929,35 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.titlebar-settings-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 4px;
+  border-radius: calc(var(--radius) * 1.4);
+  corner-shape: var(--corner-shape);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  opacity: 0.9;
+  text-align: left;
+  transition:
+    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
+    color 120ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.titlebar-settings-button:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+}
+
+.titlebar-settings-button--active {
+  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
+  color: var(--foreground);
+  opacity: 1;
+}
+</style>

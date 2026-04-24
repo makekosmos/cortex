@@ -2,7 +2,8 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, type BrowserWindow, type Tray } from "electron";
-import { initializeBackend } from "./backend";
+import { initializeBackend, triggerStartupArkSync } from "./backend";
+import { resolveSharedUserDataPath } from "./helpers/user-data";
 import { createAppTray } from "./tray";
 import {
   createMainWindow,
@@ -10,7 +11,6 @@ import {
   resolveWindowIcon,
   showMainWindow,
 } from "./windows";
-import { resolveSharedUserDataPath } from "./helpers/user-data";
 
 const APP_NAME = "arrancador";
 const DISPLAY_NAME = "Arrancador";
@@ -157,7 +157,12 @@ export async function runApp(): Promise<void> {
   await mkdir(resolveSharedUserDataPath(APP_NAME), { recursive: true });
   await initializeBackend();
 
-  await startWindow();
+  const window = await startWindow();
+  const startArkSync = () => {
+    triggerStartupArkSync();
+  };
+  window.webContents.once("did-finish-load", startArkSync);
+  setTimeout(startArkSync, 1500);
 
   tray = createAppTray({
     icon: await resolveWindowIcon({

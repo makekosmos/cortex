@@ -43,6 +43,7 @@ const titlebarClasses = computed(() => [
     --kepler-titlebar-control-size: 32px;
     --kepler-titlebar-control-radius: 10px;
     --kepler-titlebar-inline-padding: 0.75rem;
+    --kepler-titlebar-vertical-padding: 0.375rem;
     box-sizing: border-box;
     position: relative;
     z-index: 20;
@@ -50,9 +51,11 @@ const titlebarClasses = computed(() => [
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 0.75rem;
-    height: var(--kepler-titlebar-height);
-    min-height: var(--kepler-titlebar-height);
-    padding: 0 var(--kepler-titlebar-inline-padding);
+    height: calc(var(--kepler-titlebar-height) + (var(--kepler-titlebar-vertical-padding) * 2));
+    min-height: calc(var(--kepler-titlebar-height) + (var(--kepler-titlebar-vertical-padding) * 2));
+    padding:
+        var(--kepler-titlebar-vertical-padding)
+        var(--kepler-titlebar-inline-padding);
     background: var(--sidebar-bg);
     color: var(--sidebar-foreground);
     -webkit-app-region: drag;
@@ -65,12 +68,15 @@ const titlebarClasses = computed(() => [
 
 .kepler-titlebar--windows {
     height: calc(
-        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height)) +
+            (var(--kepler-titlebar-vertical-padding) * 2)
     );
     min-height: calc(
-        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height)) +
+            (var(--kepler-titlebar-vertical-padding) * 2)
     );
-    padding-top: env(titlebar-area-y, 0px);
+    padding-top: calc(env(titlebar-area-y, 0px) + var(--kepler-titlebar-vertical-padding));
+    padding-bottom: var(--kepler-titlebar-vertical-padding);
     padding-left: max(
         var(--kepler-titlebar-inline-padding),
         calc(env(titlebar-area-x, 0px) + var(--kepler-titlebar-inline-padding))

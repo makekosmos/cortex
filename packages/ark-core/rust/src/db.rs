@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::hlc::HLC;
@@ -223,39 +224,38 @@ fn builtin_game_object_type_v2() -> ObjectType {
         })
         .to_string(),
         ui_schema_json: json!({
-            "featured_fields": [
-                "play_status",
-                "genres",
-                "user_rating",
-                "total_playtime_seconds",
-                "last_played_at",
-                "play_count",
-                "save_exists"
-            ],
+            "featured_fields": [],
             "visible_fields": [
-                "description",
                 "play_status",
                 "genres",
+                "total_playtime_seconds",
+                "last_played_at"
+            ],
+            "hidden_fields": [
+                "created_at",
+                "updated_at",
+                "deleted_at",
+                "description",
                 "user_rating",
                 "cover_image",
                 "background_image",
                 "related_notes",
                 "exe_path",
                 "save_path",
-                "total_playtime_seconds",
-                "last_played_at",
                 "play_count",
-                "save_exists"
+                "save_exists",
+                "rawg_id",
+                "exe_name",
+                "sync_source"
             ],
-            "hidden_fields": ["created_at", "updated_at", "deleted_at", "rawg_id", "exe_name", "sync_source"],
             "read_only_fields": ["total_playtime_seconds", "last_played_at", "play_count", "save_exists", "rawg_id", "exe_name"],
             "field_order": [
-                "description",
                 "play_status",
                 "genres",
-                "user_rating",
                 "total_playtime_seconds",
                 "last_played_at",
+                "description",
+                "user_rating",
                 "play_count",
                 "save_exists",
                 "cover_image",
@@ -266,7 +266,7 @@ fn builtin_game_object_type_v2() -> ObjectType {
                 "rawg_id",
                 "exe_name"
             ],
-            "header_layout": "column",
+            "header_layout": "inline",
             "default_layout": "page",
             "default_template_id": null,
         })
@@ -621,6 +621,234 @@ pub fn get_object(conn: &Connection, id: &str) -> Result<Option<ArkObject>, Stri
     )
     .optional()
     .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    pub file: String,
+    pub line: usize,
+    pub text: String,
+    pub entry_id: String,
+}
+
+pub fn search_objects(conn: &Connection, query: &str) -> Result<Vec<SearchResult>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let normalized_query = query.trim().to_lowercase();
+    let query_terms = tokenize_search_text(query);
+    let mut objects = list_objects(conn)?;
+    objects.retain(|object| object.deleted_at.is_none());
+
+    let mut matches = Vec::new();
+
+    for object in objects {
+        let body = extract_plain_text_from_value(&object.content_json);
+        let title_matches = line_matches_query(&object.title, &normalized_query, &query_terms);
+        let body_matches = body
+            .lines()
+            .any(|line| line_matches_query(line.trim(), &normalized_query, &query_terms));
+
+        if !title_matches && !body_matches {
+            continue;
+        }
+
+        let title_lower = object.title.to_lowercase();
+        let body_lower = body.to_lowercase();
+        let score = if title_lower.contains(&normalized_query) {
+            400
+        } else if title_matches {
+            300
+        } else if body_lower.contains(&normalized_query) {
+            200
+        } else {
+            100
+        };
+
+        let (line, text) = build_search_context(&object.title, &body, &normalized_query, &query_terms);
+        matches.push((
+            score,
+            SearchResult {
+                file: String::new(),
+                line,
+                text,
+                entry_id: object.id,
+            },
+        ));
+    }
+
+    matches.sort_by(|left, right| right.0.cmp(&left.0));
+    matches.truncate(30);
+
+    Ok(matches.into_iter().map(|(_, result)| result).collect())
+}
+
+fn build_search_context(
+    title: &str,
+    body: &str,
+    normalized_query: &str,
+    query_terms: &[String],
+) -> (usize, String) {
+    for (index, line) in body.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if line_matches_query(trimmed, normalized_query, query_terms) {
+            return (
+                index + 1,
+                build_snippet(trimmed, normalized_query, query_terms),
+            );
+        }
+    }
+
+    if line_matches_query(title, normalized_query, query_terms) {
+        return (
+            0,
+            format!("Название: {}", build_snippet(title.trim(), normalized_query, query_terms)),
+        );
+    }
+
+    let first_line = body
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or_default();
+
+    if !first_line.is_empty() {
+        return (1, truncate_snippet(first_line, 140));
+    }
+
+    (0, format!("Название: {}", title.trim()))
+}
+
+fn line_matches_query(line: &str, normalized_query: &str, query_terms: &[String]) -> bool {
+    if line.is_empty() {
+        return false;
+    }
+
+    let line_lower = line.to_lowercase();
+    if line_lower.contains(normalized_query) {
+        return true;
+    }
+
+    let line_terms = tokenize_search_text(line);
+    query_terms.iter().any(|query_term| {
+        line_terms
+            .iter()
+            .any(|line_term| line_term.starts_with(query_term))
+    })
+}
+
+fn build_snippet(line: &str, normalized_query: &str, query_terms: &[String]) -> String {
+    let line_lower = line.to_lowercase();
+    let direct_match = line_lower.find(normalized_query);
+    let term_match = query_terms.iter().find_map(|term| line_lower.find(term));
+    let match_start = direct_match.or(term_match).unwrap_or(0);
+    let snippet_radius = 56;
+
+    let start = char_boundary_before(line, match_start.saturating_sub(snippet_radius));
+    let end = char_boundary_after(
+        line,
+        (match_start + normalized_query.len() + snippet_radius).min(line.len()),
+    );
+    let snippet = line[start..end].trim();
+
+    if start == 0 && end == line.len() {
+        truncate_snippet(snippet, 140)
+    } else {
+        let mut result = String::new();
+        if start > 0 {
+            result.push_str("...");
+        }
+        result.push_str(snippet);
+        if end < line.len() {
+            result.push_str("...");
+        }
+        result
+    }
+}
+
+fn truncate_snippet(line: &str, max_chars: usize) -> String {
+    if line.chars().count() <= max_chars {
+        return line.to_string();
+    }
+
+    let truncated = line.chars().take(max_chars).collect::<String>();
+    format!("{}...", truncated.trim_end())
+}
+
+fn char_boundary_before(value: &str, index: usize) -> usize {
+    let mut safe_index = index.min(value.len());
+    while safe_index > 0 && !value.is_char_boundary(safe_index) {
+        safe_index -= 1;
+    }
+    safe_index
+}
+
+fn char_boundary_after(value: &str, index: usize) -> usize {
+    let mut safe_index = index.min(value.len());
+    while safe_index < value.len() && !value.is_char_boundary(safe_index) {
+        safe_index += 1;
+    }
+    safe_index.min(value.len())
+}
+
+fn tokenize_search_text(value: &str) -> Vec<String> {
+    value
+        .split(|ch: char| !ch.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_lowercase())
+        .collect()
+}
+
+fn extract_plain_text_from_value(value: &Value) -> String {
+    let mut output = String::new();
+    collect_plain_text(value, &mut output);
+    output.trim().to_string()
+}
+
+fn collect_plain_text(node: &Value, output: &mut String) {
+    if let Some(node_type) = node.get("type").and_then(|value| value.as_str()) {
+        match node_type {
+            "text" => {
+                if let Some(text) = node.get("text").and_then(|value| value.as_str()) {
+                    output.push_str(text);
+                    output.push(' ');
+                }
+            }
+            "hardBreak" => output.push('\n'),
+            _ => {}
+        }
+    }
+
+    if let Some(text) = node.as_str() {
+        output.push_str(text);
+        output.push(' ');
+        return;
+    }
+
+    if let Some(children) = node.get("content").and_then(|value| value.as_array()) {
+        for child in children {
+            collect_plain_text(child, output);
+        }
+    }
+
+    if let Some(values) = node.as_array() {
+        for value in values {
+            collect_plain_text(value, output);
+        }
+    }
+
+    if matches!(
+        node.get("type").and_then(|value| value.as_str()),
+        Some("paragraph" | "heading" | "codeBlock" | "blockquote" | "listItem")
+    ) {
+        output.push('\n');
+    }
 }
 
 pub fn upsert_object_link(conn: &Connection, link: &ObjectLink) -> Result<(), String> {

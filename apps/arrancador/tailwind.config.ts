@@ -2,8 +2,8 @@ export default {
   darkMode: ["class"],
   content: [
     "./index.html",
-    "./src/**/*.{ts,tsx}",
-    "../../packages/kepler-visuals/**/*.{ts,tsx}",
+    "./src-vue/**/*.{ts,vue}",
+    "../../packages/kepler-visuals/**/*.ts",
   ],
   theme: { extend: {} },
   plugins: [],

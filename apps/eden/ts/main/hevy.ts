@@ -48,6 +48,20 @@ export function hevyLoginViaBrowser(): Promise<HevyLoginResponse> {
     });
 
     let resolved = false;
+    const tokenTimers = new Set<ReturnType<typeof setTimeout>>();
+
+    const clearTokenTimers = () => {
+      tokenTimers.forEach((timer) => clearTimeout(timer));
+      tokenTimers.clear();
+    };
+
+    const scheduleTokenExtraction = (delayMs: number) => {
+      const timer = setTimeout(() => {
+        tokenTimers.delete(timer);
+        tryExtractToken();
+      }, delayMs);
+      tokenTimers.add(timer);
+    };
 
     const tryExtractToken = () => {
       if (resolved) return;
@@ -87,6 +101,7 @@ export function hevyLoginViaBrowser(): Promise<HevyLoginResponse> {
 
             if (data.token) {
               resolved = true;
+              clearTokenTimers();
 
               loginWindow.close();
 
@@ -103,20 +118,19 @@ export function hevyLoginViaBrowser(): Promise<HevyLoginResponse> {
     };
 
     loginWindow.webContents.on("did-navigate", () => {
-      setTimeout(tryExtractToken, 1000);
-
-      setTimeout(tryExtractToken, 3000);
-
-      setTimeout(tryExtractToken, 5000);
+      scheduleTokenExtraction(1000);
+      scheduleTokenExtraction(3000);
+      scheduleTokenExtraction(5000);
     });
 
     loginWindow.webContents.on("did-navigate-in-page", () => {
-      setTimeout(tryExtractToken, 1000);
-
-      setTimeout(tryExtractToken, 3000);
+      scheduleTokenExtraction(1000);
+      scheduleTokenExtraction(3000);
     });
 
     loginWindow.on("closed", () => {
+      clearTokenTimers();
+
       if (!resolved) {
         resolved = true;
 

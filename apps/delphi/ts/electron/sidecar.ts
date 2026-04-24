@@ -358,6 +358,19 @@ export interface Project {
   id: string;
   title: string;
   notes?: string | null;
+  status: number;
+  scheduledDate?: string | null;
+  deadline?: string | null;
+  sortOrder: number;
+  colorTag?: string | null;
+  areaId?: string | null;
+  createdAt: string;
+}
+
+interface WireProject {
+  id: string;
+  title: string;
+  notes?: string | null;
   status: string;
   scheduledDate?: string | null;
   deadline?: string | null;
@@ -396,12 +409,79 @@ export interface LoadAllData {
   headings: Heading[];
 }
 
+interface WireLoadAllData {
+  todos: TodoItem[];
+  projects: WireProject[];
+  areas: Area[];
+  tags: Tag[];
+  headings: Heading[];
+}
+
+export interface ArkObjectRecord {
+  id: string;
+  typeId: string;
+  title: string;
+  contentJson: unknown;
+  propsJson: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface ArkObjectTypeRecord {
+  id: string;
+  name: string;
+  schemaJson: string;
+  uiSchemaJson: string;
+  createdAt: string;
+  updatedAt: string;
+  systemLocked: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Wrapper functions
 // ---------------------------------------------------------------------------
 
+function projectStatusToWire(status: number): string {
+  switch (status) {
+    case 1:
+      return 'someday'
+    case 2:
+      return 'completed'
+    case 0:
+    default:
+      return 'active'
+  }
+}
+
+function projectStatusFromWire(status: string | number | null | undefined): number {
+  if (typeof status === 'number') {
+    return status
+  }
+
+  switch (status) {
+    case 'someday':
+      return 1
+    case 'completed':
+      return 2
+    case 'active':
+    default:
+      return 0
+  }
+}
+
+function mapWireProject(project: WireProject): Project {
+  return {
+    ...project,
+    status: projectStatusFromWire(project.status),
+  }
+}
+
 export function dbLoadAll(): Promise<LoadAllData> {
-  return sidecar.request<LoadAllData>({ operation: 'load_all' })
+  return sidecar.request<WireLoadAllData>({ operation: 'load_all' }).then(data => ({
+    ...data,
+    projects: data.projects.map(mapWireProject),
+  }))
 }
 
 export function dbUpsertTodo(todo: TodoItem): Promise<void> {
@@ -417,7 +497,11 @@ export function dbBatchUpsertTodos(todos: TodoItem[]): Promise<void> {
 }
 
 export function dbUpsertProject(project: Project): Promise<void> {
-  return sidecar.request<void>({ operation: 'upsert_project', project })
+  const wireProject: WireProject = {
+    ...project,
+    status: projectStatusToWire(project.status),
+  }
+  return sidecar.request<void>({ operation: 'upsert_project', project: wireProject })
 }
 
 export function dbDeleteProject(id: string): Promise<void> {
@@ -438,6 +522,26 @@ export function dbUpsertHeading(heading: Heading): Promise<void> {
 
 export function dbDeleteHeading(id: string): Promise<void> {
   return sidecar.request<void>({ operation: 'delete_heading', id })
+}
+
+export function arkListObjects(): Promise<ArkObjectRecord[]> {
+  return sidecar.request<ArkObjectRecord[]>({ operation: 'list_objects' })
+}
+
+export function arkGetObjectType(id: string): Promise<ArkObjectTypeRecord | null> {
+  return sidecar.request<ArkObjectTypeRecord | null>({ operation: 'get_object_type', id })
+}
+
+export function arkUpsertObjectType(objectType: ArkObjectTypeRecord): Promise<void> {
+  return sidecar.request<void>({ operation: 'upsert_object_type', object_type: objectType })
+}
+
+export function arkUpsertObject(object: ArkObjectRecord): Promise<void> {
+  return sidecar.request<void>({ operation: 'upsert_object', object })
+}
+
+export function arkDeleteObject(id: string): Promise<void> {
+  return sidecar.request<void>({ operation: 'delete_object', id })
 }
 
 export function dbGetSyncKv(key: string): Promise<string | null> {

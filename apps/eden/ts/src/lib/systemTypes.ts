@@ -1,4 +1,4 @@
-import type { NoteType } from "@/lib/typedNotes";
+import { parseNoteTypeDefinition, parseNoteTypeUiSchema, type NoteType } from "@/lib/typedNotes";
 
 export const SYSTEM_TYPE_NOTE_ID = "note_obj";
 export const SYSTEM_TYPE_GAME_ID = "game_obj";
@@ -81,10 +81,26 @@ const gameSchemaJson = JSON.stringify({
     {
       id: "genres",
       label: "Жанры",
-      kind: "text",
+      kind: "multi_select",
       required: false,
       visible: true,
       read_only: false,
+      options: [
+        "Action",
+        "Adventure",
+        "RPG",
+        "Strategy",
+        "Simulation",
+        "Shooter",
+        "Puzzle",
+        "Platformer",
+        "Racing",
+        "Sports",
+        "Survival",
+        "Horror",
+        "Sandbox",
+        "Indie",
+      ],
       system: false,
     },
     {
@@ -192,37 +208,71 @@ const gameSchemaJson = JSON.stringify({
 
 const gameHeaderTemplateJson = JSON.stringify({
   kind: "default",
-  primaryFieldIds: ["genres", "play_status", "user_rating"],
-  secondaryFieldIds: ["total_playtime_seconds", "last_played_at", "play_count", "save_exists"],
-  imageFieldId: "cover_image",
+  primaryFieldIds: [],
+  secondaryFieldIds: ["play_status", "genres", "total_playtime_seconds", "last_played_at"],
+  imageFieldId: null,
 });
 
+const LEGACY_GAME_FEATURED_FIELDS = [
+  "play_status",
+  "genres",
+  "user_rating",
+  "total_playtime_seconds",
+  "last_played_at",
+  "play_count",
+  "save_exists",
+] as const;
+
+const LEGACY_GAME_VISIBLE_FIELDS = [
+  "description",
+  "play_status",
+  "genres",
+  "user_rating",
+  "cover_image",
+  "background_image",
+  "related_notes",
+  "exe_path",
+  "save_path",
+  "total_playtime_seconds",
+  "last_played_at",
+  "play_count",
+  "save_exists",
+] as const;
+
+const GAME_READ_ONLY_FIELDS = [
+  "total_playtime_seconds",
+  "last_played_at",
+  "play_count",
+  "save_exists",
+  "rawg_id",
+  "exe_name",
+] as const;
+
 const gameUiSchemaJson = JSON.stringify({
-  featured_fields: [
+  featured_fields: [],
+  visible_fields: [
     "play_status",
     "genres",
-    "user_rating",
     "total_playtime_seconds",
     "last_played_at",
-    "play_count",
-    "save_exists",
   ],
-  visible_fields: [
+  hidden_fields: [
+    "created_at",
+    "updated_at",
+    "deleted_at",
     "description",
-    "play_status",
-    "genres",
     "user_rating",
     "cover_image",
     "background_image",
     "related_notes",
     "exe_path",
     "save_path",
-    "total_playtime_seconds",
-    "last_played_at",
     "play_count",
     "save_exists",
+    "rawg_id",
+    "exe_name",
+    "sync_source",
   ],
-  hidden_fields: ["created_at", "updated_at", "deleted_at", "rawg_id", "exe_name", "sync_source"],
   read_only_fields: [
     "total_playtime_seconds",
     "last_played_at",
@@ -232,12 +282,12 @@ const gameUiSchemaJson = JSON.stringify({
     "exe_name",
   ],
   field_order: [
-    "description",
     "play_status",
     "genres",
-    "user_rating",
     "total_playtime_seconds",
     "last_played_at",
+    "description",
+    "user_rating",
     "play_count",
     "save_exists",
     "cover_image",
@@ -248,11 +298,46 @@ const gameUiSchemaJson = JSON.stringify({
     "rawg_id",
     "exe_name",
   ],
-  header_layout: "column",
+  header_layout: "inline",
   default_layout: "page",
   default_template_id: null,
   collection_name: "Игры",
 });
+
+function arraysEqual(left: readonly string[] | undefined, right: readonly string[]): boolean {
+  if ((left?.length ?? 0) !== right.length) {
+    return false;
+  }
+
+  return right.every((value, index) => left?.[index] === value);
+}
+
+function shouldUpgradeLegacyGamePresentation(noteType: NoteType): boolean {
+  const uiSchema = parseNoteTypeUiSchema(noteType.ui_schema_json);
+
+  return (
+    arraysEqual(uiSchema.featured_fields, LEGACY_GAME_FEATURED_FIELDS) &&
+    arraysEqual(uiSchema.visible_fields, LEGACY_GAME_VISIBLE_FIELDS) &&
+    arraysEqual(uiSchema.read_only_fields, GAME_READ_ONLY_FIELDS) &&
+    (uiSchema.header_layout ?? "inline") === "column"
+  );
+}
+
+function shouldUpgradeLegacyGameSchema(noteType: NoteType): boolean {
+  try {
+    const definition = parseNoteTypeDefinition(noteType.schema_json);
+    const genresField = definition.fields.find((field) => field.id === "genres");
+    const playStatusField = definition.fields.find((field) => field.id === "play_status");
+
+    return (
+      genresField?.kind !== "multi_select" ||
+      (genresField.options?.length ?? 0) === 0 ||
+      playStatusField?.kind !== "select"
+    );
+  } catch {
+    return true;
+  }
+}
 
 const workoutSchemaJson = JSON.stringify({
   fields: [
@@ -400,6 +485,27 @@ export const SYSTEM_TYPES: NoteType[] = [
   SYSTEM_TYPE_WORKOUT,
   SYSTEM_TYPE_EXERCISE,
 ];
+
+export function normalizeSystemNoteType(noteType: NoteType): NoteType {
+  if (noteType.id !== SYSTEM_TYPE_GAME_ID) {
+    return noteType;
+  }
+
+  if (
+    shouldUpgradeLegacyGameSchema(noteType) ||
+    !noteType.ui_schema_json?.trim() ||
+    shouldUpgradeLegacyGamePresentation(noteType)
+  ) {
+    return {
+      ...noteType,
+      schema_json: gameSchemaJson,
+      header_template_json: gameHeaderTemplateJson,
+      ui_schema_json: gameUiSchemaJson,
+    };
+  }
+
+  return noteType;
+}
 
 export function isSystemType(noteTypeId: string): boolean {
   return (

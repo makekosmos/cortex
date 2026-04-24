@@ -126,6 +126,9 @@ enum Request {
         id: String,
     },
     ListObjects,
+    SearchObjects {
+        query: String,
+    },
     GetObject {
         id: String,
     },
@@ -391,6 +394,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         Request::ListObjects => with_conn(|conn| {
             let objects = db::list_objects(conn)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
+        }),
+        Request::SearchObjects { query } => with_conn(|conn| {
+            let results = db::search_objects(conn, &query)?;
+            serde_json::to_value(results).map_err(|e| e.to_string())
         }),
         Request::GetObject { id } => with_conn(|conn| {
             let object = db::get_object(conn, &id)?;

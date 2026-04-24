@@ -1,0 +1,14 @@
+﻿
+Name                              Lines
+----                              -----
+BackupProgressToast.vue              40
+GameDescriptionModal.vue             43
+GameDetailBackupSection.vue         244
+GameDetailMetadataSection.vue        67
+GameEditDialog.vue                  146
+GameMetadataSearchModal.vue         114
+GameProcessBindingPickerModal.vue   199
+GameProcessBindingsSection.vue      126
+GameRatingModal.vue                  69
+
+

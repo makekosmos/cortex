@@ -2,6 +2,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
+import {
+  getArkDbPathForSelectedSpace,
+  readSharedSelectedSpace,
+} from "../../../../packages/shared-space/selectedSpace";
 
 interface ArkRequest {
   operation: string;
@@ -23,6 +27,16 @@ interface PendingRequest<T> {
   request: ArkRequest;
   resolve: (value: T) => void;
   reject: (error: Error) => void;
+}
+
+const MAX_STDERR_TAIL_CHARS = 32 * 1024;
+
+function appendTail(buffer: string, chunk: string, maxChars: number) {
+  const next = buffer + chunk;
+  if (next.length <= maxChars) {
+    return next;
+  }
+  return next.slice(next.length - maxChars);
 }
 
 export interface ArkObjectRecord {
@@ -76,7 +90,10 @@ export function getArkDbPath() {
     return path.resolve(override);
   }
 
-  return path.join(app.getPath("appData"), "Kepler", "ark.db");
+  return getArkDbPathForSelectedSpace(
+    app.getPath("appData"),
+    readSharedSelectedSpace(app.getPath("appData")),
+  );
 }
 
 class ArkClient {
@@ -105,7 +122,11 @@ class ArkClient {
     });
 
     child.stderr.on("data", (chunk: string) => {
-      this.stderrBuffer += chunk;
+      this.stderrBuffer = appendTail(
+        this.stderrBuffer,
+        chunk,
+        MAX_STDERR_TAIL_CHARS,
+      );
     });
 
     child.on("error", (error) => {

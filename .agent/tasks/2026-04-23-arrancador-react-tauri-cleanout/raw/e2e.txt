@@ -1,0 +1,114 @@
+$ bun run scripts/run-e2e.ts
+$ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build.ps1
+$ bun run scripts/rebuild-native-if-needed.ts
+[native] native rebuild is up to date, skipping
+$ vite build --configLoader native
+[36mvite v8.0.8 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 3454 modules transformed.
+rendering chunks...
+computing gzip size...
+out/renderer/index.html                                    3.34 kB │ gzip:  1.24 kB
+out/renderer/assets/kepler-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
+out/renderer/assets/index--uRUBvyf.css                    92.83 kB │ gzip: 14.83 kB
+out/renderer/assets/loader-circle-DAwEm5_j.js              0.13 kB │ gzip:  0.14 kB
+out/renderer/assets/plus-CtTQLWac.js                       0.14 kB │ gzip:  0.13 kB
+out/renderer/assets/play-B9FSj7DJ.js                       0.17 kB │ gzip:  0.16 kB
+out/renderer/assets/external-link-6AgXOSDL.js              0.23 kB │ gzip:  0.18 kB
+out/renderer/assets/monitor-3xQNaQbx.js                    0.24 kB │ gzip:  0.19 kB
+out/renderer/assets/shield-Bp30UfA0.js                     0.25 kB │ gzip:  0.21 kB
+out/renderer/assets/x-B4RvuXWy.js                          0.26 kB │ gzip:  0.20 kB
+out/renderer/assets/folder-search-Cmd533-h.js              0.30 kB │ gzip:  0.23 kB
+out/renderer/assets/refresh-cw-bS-y9WLp.js                 0.30 kB │ gzip:  0.21 kB
+out/renderer/assets/folder-open-D9focQos.js                0.35 kB │ gzip:  0.24 kB
+out/renderer/assets/hard-drive-BVln6MWn.js                 0.37 kB │ gzip:  0.25 kB
+out/renderer/assets/star-D1_B3TcR.js                       0.45 kB │ gzip:  0.28 kB
+out/renderer/assets/gamepad-2-sTsu2m8-.js                  0.60 kB │ gzip:  0.37 kB
+out/renderer/assets/save-D340RCGb.js                       0.69 kB │ gzip:  0.36 kB
+out/renderer/assets/useTheme-BFuyPqqo.js                   0.70 kB │ gzip:  0.38 kB
+out/renderer/assets/genres-DuLjUMC2.js                     0.70 kB │ gzip:  0.52 kB
+out/renderer/assets/games-CCJUiZIZ.js                      1.11 kB │ gzip:  0.54 kB
+out/renderer/assets/useSidebarConfig-Ldxg99v8.js           1.50 kB │ gzip:  0.74 kB
+out/renderer/assets/useToast-DqeT-yei.js                   3.51 kB │ gzip:  1.59 kB
+out/renderer/assets/api-rJXYP5Gm.js                        4.29 kB │ gzip:  1.79 kB
+out/renderer/assets/kepler-visuals-D-UnDLKc.js             5.55 kB │ gzip:  2.36 kB
+out/renderer/assets/pinia-CEErbrLS.js                      6.00 kB │ gzip:  2.83 kB
+out/renderer/assets/CataloguePage-C_-gMZXR.js              6.19 kB │ gzip:  2.58 kB
+out/renderer/assets/useSettingsPageState-CiT0AAi9.js       7.20 kB │ gzip:  2.80 kB
+out/renderer/assets/runtime-dom.esm-bundler-zHRrim3Z.js    9.20 kB │ gzip:  4.05 kB
+out/renderer/assets/gameImport-BApkMjUU.js                10.12 kB │ gzip:  4.07 kB
+out/renderer/assets/StatisticsPage-2hg900O7.js            11.69 kB │ gzip:  4.31 kB
+out/renderer/assets/ScanPage-CPVugzWo.js                  19.83 kB │ gzip:  6.42 kB
+out/renderer/assets/LibraryPage-PxvXj3-o.js               24.50 kB │ gzip:  7.48 kB
+out/renderer/assets/vue-router-SoSIAR39.js                24.90 kB │ gzip:  9.62 kB
+out/renderer/assets/SettingsPage-_Pmgja3q.js              26.39 kB │ gzip:  7.24 kB
+out/renderer/assets/index-Br9reaHr.js                     31.67 kB │ gzip: 12.07 kB
+out/renderer/assets/SqobaPage-Cd5XZkhy.js                 33.07 kB │ gzip:  9.07 kB
+out/renderer/assets/LayoutPage-B-d9Eluj.js                47.22 kB │ gzip: 15.97 kB
+out/renderer/assets/GameDetailPage-C-sCE-rL.js            53.12 kB │ gzip: 13.78 kB
+out/renderer/assets/runtime-core.esm-bundler-OpQgh1S1.js  70.10 kB │ gzip: 27.32 kB
+
+[32m✓ built in 1.45s[39m
+$ bun build ./electron/main.ts --outfile=out/main/index.js --target=node --format=esm -e electron -e better-sqlite3
+Bundled 48 modules in 24ms
+
+  index.js  205.47 KB  (entry point)
+
+$ bun build ./electron/preload.ts --outfile=out/preload/index.js --target=node --format=esm -e electron
+Bundled 3 modules in 14ms
+
+  index.js  9.19 KB  (entry point)
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m58276[22m/[39m
+
+Running 4 tests using 2 workers
+
+node:internal/child_process:420
+    throw new ErrnoException(err, 'spawn');
+          ^
+
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at spawn (node:child_process:753:9)
+    at Object.fork (node:child_process:171:10)
+    at WorkerHost.startRunner (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\processHost.js:54:49)
+    at WorkerHost.start (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\workerHost.js:69:23)
+    at Dispatcher._runJobInWorker (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\dispatcher.js:103:20) {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'spawn'
+}
+
+Node.js v22.16.0
+[e2e] Playwright test runner failed, retrying with inline fallback: warn: C:\Users\Kazui\.bun\bin\bun.exe x playwright test exited with code 1
+      at <anonymous> (D:\Personal\Hobby\Coding\kepler\apps\arrancador\scripts\run-e2e.ts:22:18)
+      at emit (node:events:98:22)
+      at #handleOnExit (node:child_process:532:14)
+
+60 |   if (error.error.name === "TargetClosedError") {
+61 |     const e2 = new TargetClosedError(error.error.message);
+62 |     e2.stack = error.error.stack || "";
+63 |     return e2;
+64 |   }
+65 |   const e = new Error(error.error.message);
+                     ^
+error: launch: EPERM: operation not permitted, uv_spawn 'C:\Users\Kazui\AppData\Local\ms-playwright\chromium_headless_shell-1208\chrome-headless-shell-win64\chrome-headless-shell.exe'
+Call log:
+[2m  - <launching> C:\Users\Kazui\AppData\Local\ms-playwright\chromium_headless_shell-1208\chrome-headless-shell-win64\chrome-headless-shell.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=C:\Users\Kazui\AppData\Local\Temp\playwright_chromiumdev_profile-EmDqcS --remote-debugging-pipe --no-startup-window[22m
+
+      at D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright-core@1.58.2\node_modules\playwright-core\lib\client\errors.js:65:17
+
+Bun v1.3.5 (Windows x64)
+17 |     child.once("exit", (code) => {
+18 |       if (code === 0) {
+19 |         resolve();
+20 |         return;
+21 |       }
+22 |       reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
+                      ^
+error: C:\Users\Kazui\.bun\bin\bun.exe run scripts/run-e2e-inline.ts exited with code 1
+      at <anonymous> (D:\Personal\Hobby\Coding\kepler\apps\arrancador\scripts\run-e2e.ts:22:18)
+      at emit (node:events:98:22)
+      at #handleOnExit (node:child_process:532:14)
+
+Bun v1.3.5 (Windows x64)
+error: script "test:e2e" exited with code 1

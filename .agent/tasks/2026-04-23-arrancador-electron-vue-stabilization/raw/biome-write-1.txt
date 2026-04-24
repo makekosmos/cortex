@@ -1,0 +1,441 @@
+biome.jsonc:2:14 deserialize ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  i The configuration schema version does not match the CLI version 2.4.12
+  
+    1 │ {
+  > 2 │   "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+      │              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    3 │   "vcs": {
+    4 │     "enabled": true,
+  
+  i   Expected:                     2.4.12
+      Found:                        2.3.14
+  
+  
+  i Run the command biome migrate to migrate the configuration file.
+  
+
+src\lib\window-chrome.ts:27:5 lint/complexity/noUselessSwitchCase  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━
+
+  i Useless case clause.
+  
+    25 │     case "linux":
+    26 │       return "linux";
+  > 27 │     case "win32":
+       │     ^^^^^^^^^^^^^
+    28 │     default:
+    29 │       return "windows";
+  
+  i because the default clause is present:
+  
+    26 │       return "linux";
+    27 │     case "win32":
+  > 28 │     default:
+       │     ^^^^^^^^
+  > 29 │       return "windows";
+       │       ^^^^^^^^^^^^^^^^^
+    30 │   }
+    31 │ }
+  
+  i Unsafe fix: Remove the useless case.
+  
+    25 25 │       case "linux":
+    26 26 │         return "linux";
+    27    │ - ····case·"win32":
+    28 27 │       default:
+    29 28 │         return "windows";
+  
+
+electron\main\services\ark-usage-backfill.ts:139:5 lint/complexity/useOptionalChain  FIXABLE  ━━━━━━━━━━
+
+  ! Change to an optional chain.
+  
+    137 │   const defaultEnd = `${date}T21:00:00.000Z`;
+    138 │   const endedAt =
+  > 139 │     preferredEndAt && preferredEndAt.startsWith(date)
+        │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    140 │       ? preferredEndAt
+    141 │       : defaultEnd;
+  
+  i Unsafe fix: Change to an optional chain.
+  
+    137 137 │     const defaultEnd = `${date}T21:00:00.000Z`;
+    138 138 │     const endedAt =
+    139     │ - ····preferredEndAt·&&·preferredEndAt.startsWith(date)
+        139 │ + ····preferredEndAt?.startsWith(date)
+    140 140 │         ? preferredEndAt
+    141 141 │         : defaultEnd;
+  
+
+electron\main\services\helpers\disk.ts:210:7 lint/complexity/useOptionalChain  FIXABLE  ━━━━━━━━━━━━
+
+  ! Change to an optional chain.
+  
+    208 │   const resolvedMount = path.resolve(mountPoint);
+    209 │   const statInfo = await stat(resolvedMount).catch(() => null);
+  > 210 │   if (!statInfo || !statInfo.isDirectory()) {
+        │       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    211 │     throw new Error("Invalid mount point");
+    212 │   }
+  
+  i Unsafe fix: Change to an optional chain.
+  
+    208 208 │     const resolvedMount = path.resolve(mountPoint);
+    209 209 │     const statInfo = await stat(resolvedMount).catch(() => null);
+    210     │ - ··if·(!statInfo·||·!statInfo.isDirectory())·{
+        210 │ + ··if·(!statInfo?.isDirectory())·{
+    211 211 │       throw new Error("Invalid mount point");
+    212 212 │     }
+  
+
+src-vue\App.vue:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    1 │ <script setup lang="ts">
+  > 2 │ import { RouterView } from "vue-router";
+      │        ^^^^^^^^^^^^^^
+    3 │ </script>
+    4 │ 
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+    1 │ import·{·RouterView·}·from·"vue-router";
+      │ ----------------------------------------
+
+src-vue\components\GameCard.vue:2:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    1 │ <script setup lang="ts">
+  > 2 │ import { GamePosterCard } from "@kepler/visuals";
+      │        ^^^^^^^^^^^^^^^^^^
+    3 │ import { Gamepad2 } from "lucide-vue-next";
+    4 │ import { computed } from "vue";
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+    1 │ import·{·GamePosterCard·}·from·"@kepler/visuals";
+      │ -------------------------------------------------
+
+src-vue\components\GameCard.vue:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    1 │ <script setup lang="ts">
+    2 │ import { GamePosterCard } from "@kepler/visuals";
+  > 3 │ import { Gamepad2 } from "lucide-vue-next";
+      │        ^^^^^^^^^^^^
+    4 │ import { computed } from "vue";
+    5 │ import { RouterLink } from "vue-router";
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     1  1 │   import { GamePosterCard } from "@kepler/visuals";
+     2    │ - import·{·Gamepad2·}·from·"lucide-vue-next";
+     3  2 │   import { computed } from "vue";
+     4  3 │   import { RouterLink } from "vue-router";
+  
+
+src-vue\components\GameCard.vue:5:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━
+
+  ! This import is unused.
+  
+    3 │ import { Gamepad2 } from "lucide-vue-next";
+    4 │ import { computed } from "vue";
+  > 5 │ import { RouterLink } from "vue-router";
+      │        ^^^^^^^^^^^^^^
+    6 │ import { translateGenreListToRu } from "../../src/lib/genres";
+    7 │ import type { Game } from "../../src/types";
+  
+  i Unused imports might be the result of an incomplete refactoring.
+  
+  i Unsafe fix: Remove the unused imports.
+  
+     2  2 │   import { Gamepad2 } from "lucide-vue-next";
+     3  3 │   import { computed } from "vue";
+     4    │ - import·{·RouterLink·}·from·"vue-router";
+     5  4 │   import { translateGenreListToRu } from "../../src/lib/genres";
+     6  5 │   import type { Game } from "../../src/types";
+  
+
+src-vue\components\GameCard.vue:13:7 lint/correctness/noUnusedVariables  FIXABLE  ━━━━━━━━━━━━━━━━━━
+
+  ! This variable cover is unused.
+  
+    11 │ }>();
+    12 │ 
+  > 13 │ const cover = computed(
+       │       ^^^^^
+    14 │   () => props.game.background_image || props.game.cover_image,
+    15 │ );
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+  i Unsafe fix: If this is intentional, prepend cover with an underscore.
+  
+    10 10 │   }>();
+    11 11 │   
+    12    │ - const·cover·=·computed(
+       12 │ + const·_cover·=·computed(
+    13 13 │     () => props.game.background_image || props.game.cover_image,
+    14 14 │   );
+  
+
+src-vue\components\GameCard.vue:16:7 lint/correctness/noUnusedVariables  FIXABLE  ━━━━━━━━━━━━━━━━━━
+
+  ! This variable primaryGenre is unused.
+  
+    14 │   () => props.game.background_image || props.game.cover_image,
+    15 │ );
+  > 16 │ const primaryGenre = computed(
+       │       ^^^^^^^^^^^^
+    17 │   () => translateGenreListToRu(props.game.genres, 1)[0] ?? null,
+    18 │ );
+  
+  i Unused variables are often the result of typos, incomplete refactors, or other sources of bugs.
+  
+  i Unsafe fix: If this is intentional, prepend primaryGenre with an underscore.
+  
+    13 13 │     () => props.game.background_image || props.game.cover_image,
+    14 14 │   );
+    15    │ - const·primaryGenre·=·computed(
+       15 │ + const·_primaryGenre·=·computed(
+    16 16 │     () => translateGenreListToRu(props.game.genres, 1)[0] ?? null,
+    17 17 │   );
+  
+
+src\index.css:466:1 lint/style/noDescendingSpecificity ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! Descending specificity selector found. This selector specificity is (0, 1, 0)
+  
+    464 │ }
+    465 │ 
+  > 466 │ .kepler-sidebar-content {
+        │ ^^^^^^^^^^^^^^^^^^^^^^^
+    467 │     position: absolute;
+    468 │     inset: 0;
+  
+  i This selector specificity is (0, 3, 0)
+  
+    458 │ }
+    459 │ 
+  > 460 │ .kepler-sidebar-wrapper.is-hidden .kepler-sidebar-content,
+        │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    461 │ .kepler-sidebar-wrapper.hidden .kepler-sidebar-content {
+    462 │     background: transparent;
+  
+  i Descending specificity selector may not be applied. Consider rearranging the order of the selectors. See MDN web docs for more details.
+  
+
+src\types\ipc.ts:144:16 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    142 │   add_games_batch: Game[];
+    143 │   update_game: Game;
+  > 144 │   delete_game: void;
+        │                ^^^^
+    145 │   toggle_favorite: Game;
+    146 │   get_favorites: Game[];
+  
+  i Unsafe fix: Use undefined instead.
+  
+    142 142 │     add_games_batch: Game[];
+    143 143 │     update_game: Game;
+    144     │ - ··delete_game:·void;
+        144 │ + ··delete_game:·undefined;
+    145 145 │     toggle_favorite: Game;
+    146 146 │     get_favorites: Game[];
+  
+
+src\types\ipc.ts:151:16 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    149 │   game_exists_by_path: boolean;
+    150 │   is_game_installed: boolean;
+  > 151 │   launch_game: void;
+        │                ^^^^
+    152 │   get_running_instances: number;
+    153 │   kill_game_processes: number;
+  
+  i Unsafe fix: Use undefined instead.
+  
+    149 149 │     game_exists_by_path: boolean;
+    150 150 │     is_game_installed: boolean;
+    151     │ - ··launch_game:·void;
+        151 │ + ··launch_game:·undefined;
+    152 152 │     get_running_instances: number;
+    153 153 │     kill_game_processes: number;
+  
+
+src\types\ipc.ts:161:21 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    159 │   get_rawg_game_details: RawgGameDetails;
+    160 │   apply_rawg_metadata: Game;
+  > 161 │   set_rawg_api_key: void;
+        │                     ^^^^
+    162 │   get_rawg_api_key: string;
+    163 │ 
+  
+  i Unsafe fix: Use undefined instead.
+  
+    159 159 │     get_rawg_game_details: RawgGameDetails;
+    160 160 │     apply_rawg_metadata: Game;
+    161     │ - ··set_rawg_api_key:·void;
+        161 │ + ··set_rawg_api_key:·undefined;
+    162 162 │     get_rawg_api_key: string;
+    163 163 │   
+  
+
+src\types\ipc.ts:170:22 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    168 │   check_ludusavi_installed: boolean;
+    169 │   get_ludusavi_executable_path: string | null;
+  > 170 │   set_ludusavi_path: void;
+        │                      ^^^^
+    171 │   set_backup_directory: void;
+    172 │   get_backup_directory_setting: string;
+  
+  i Unsafe fix: Use undefined instead.
+  
+    168 168 │     check_ludusavi_installed: boolean;
+    169 169 │     get_ludusavi_executable_path: string | null;
+    170     │ - ··set_ludusavi_path:·void;
+        170 │ + ··set_ludusavi_path:·undefined;
+    171 171 │     set_backup_directory: void;
+    172 172 │     get_backup_directory_setting: string;
+  
+
+src\types\ipc.ts:171:25 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    169 │   get_ludusavi_executable_path: string | null;
+    170 │   set_ludusavi_path: void;
+  > 171 │   set_backup_directory: void;
+        │                         ^^^^
+    172 │   get_backup_directory_setting: string;
+    173 │   refresh_sqoba_manifest: void;
+  
+  i Unsafe fix: Use undefined instead.
+  
+    169 169 │     get_ludusavi_executable_path: string | null;
+    170 170 │     set_ludusavi_path: void;
+    171     │ - ··set_backup_directory:·void;
+        171 │ + ··set_backup_directory:·undefined;
+    172 172 │     get_backup_directory_setting: string;
+    173 173 │     refresh_sqoba_manifest: void;
+  
+
+src\types\ipc.ts:173:27 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    171 │   set_backup_directory: void;
+    172 │   get_backup_directory_setting: string;
+  > 173 │   refresh_sqoba_manifest: void;
+        │                           ^^^^
+    174 │   find_game_save_paths: SavePathLookup;
+    175 │   find_game_saves: BackupInfo | null;
+  
+  i Unsafe fix: Use undefined instead.
+  
+    171 171 │     set_backup_directory: void;
+    172 172 │     get_backup_directory_setting: string;
+    173     │ - ··refresh_sqoba_manifest:·void;
+        173 │ + ··refresh_sqoba_manifest:·undefined;
+    174 174 │     find_game_save_paths: SavePathLookup;
+    175 175 │     find_game_saves: BackupInfo | null;
+  
+
+src\types\ipc.ts:178:19 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    176 │   create_backup: Backup;
+    177 │   get_game_backups: Backup[];
+  > 178 │   restore_backup: void;
+        │                   ^^^^
+    179 │   delete_backup: void;
+    180 │   should_backup_before_launch: boolean;
+  
+  i Unsafe fix: Use undefined instead.
+  
+    176 176 │     create_backup: Backup;
+    177 177 │     get_game_backups: Backup[];
+    178     │ - ··restore_backup:·void;
+        178 │ + ··restore_backup:·undefined;
+    179 179 │     delete_backup: void;
+    180 180 │     should_backup_before_launch: boolean;
+  
+
+src\types\ipc.ts:179:18 lint/suspicious/noConfusingVoidType  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ! void is confusing outside a return type or a type parameter.
+  
+    177 │   get_game_backups: Backup[];
+    178 │   restore_backup: void;
+  > 179 │   delete_backup: void;
+        │                  ^^^^
+    180 │   should_backup_before_launch: boolean;
+    181 │   check_backup_needed: boolean;
+  
+  i Unsafe fix: Use undefined instead.
+  
+    177 177 │     get_game_backups: Backup[];
+    178 178 │     restore_backup: void;
+    179     │ - ··delete_backup:·void;
+        179 │ + ··delete_backup:·undefined;
+    180 180 │     should_backup_before_launch: boolean;
+    181 181 │     check_backup_needed: boolean;
+  
+
+src\index.css:620:5 lint/suspicious/noDuplicateProperties ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Duplicate properties can lead to unexpected behavior and may override previous declarations unintentionally.
+  
+    618 │     flex-direction: column;
+    619 │     justify-content: space-between;
+  > 620 │     min-height: 0;
+        │     ^^^^^^^^^^
+    621 │     padding: 0.5rem;
+    622 │     background: var(--sidebar-bg);
+  
+  i min-height is already defined here.
+  
+    613 │     width: 100%;
+    614 │     height: 100%;
+  > 615 │     min-height: 100%;
+        │     ^^^^^^^^^^
+    616 │     box-sizing: border-box;
+    617 │     display: flex;
+  
+  i Remove or rename the duplicate property to ensure consistent styling.
+  
+
+Skipped 447 suggested fixes.
+If you wish to apply the suggested (unsafe) fixes, use the command biome check --write --unsafe
+
+The number of diagnostics exceeds the limit allowed. Use --max-diagnostics to increase it.
+Diagnostics not shown: 296.
+Checked 140 files in 239ms. Fixed 39 files.
+Found 3 errors.
+Found 310 warnings.
+Found 3 infos.
+check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while applying fixes.
+  
+

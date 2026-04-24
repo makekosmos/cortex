@@ -1,0 +1,101 @@
+$ bun run scripts/run-e2e.ts
+$ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build.ps1
+$ bun run scripts/rebuild-native-if-needed.ts
+[native] native rebuild is up to date, skipping
+$ vite build --configLoader native
+[36mvite v8.0.8 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 3446 modules transformed.
+rendering chunks...
+computing gzip size...
+out/renderer/index.html                                    3.34 kB │ gzip:  1.24 kB
+out/renderer/assets/kepler-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
+out/renderer/assets/index-DnRcrjg8.css                    91.29 kB │ gzip: 14.71 kB
+out/renderer/assets/loader-circle-TmXmu1Op.js              0.13 kB │ gzip:  0.14 kB
+out/renderer/assets/plus-CPVk_xqI.js                       0.14 kB │ gzip:  0.13 kB
+out/renderer/assets/play-DmU35DzC.js                       0.17 kB │ gzip:  0.16 kB
+out/renderer/assets/external-link-BMH7T8Q0.js              0.23 kB │ gzip:  0.18 kB
+out/renderer/assets/monitor-BDrxx1-6.js                    0.24 kB │ gzip:  0.19 kB
+out/renderer/assets/shield-DGPcZWCe.js                     0.25 kB │ gzip:  0.21 kB
+out/renderer/assets/x-DImB8V5k.js                          0.26 kB │ gzip:  0.20 kB
+out/renderer/assets/folder-open-CgMVZFeM.js                0.27 kB │ gzip:  0.20 kB
+out/renderer/assets/folder-search-Fjhmk3le.js              0.30 kB │ gzip:  0.23 kB
+out/renderer/assets/hard-drive-CPUEbwLG.js                 0.37 kB │ gzip:  0.25 kB
+out/renderer/assets/refresh-cw-BENyxt30.js                 0.37 kB │ gzip:  0.24 kB
+out/renderer/assets/star-p4AMvuge.js                       0.45 kB │ gzip:  0.28 kB
+out/renderer/assets/gamepad-2-CwL4lQsY.js                  0.60 kB │ gzip:  0.37 kB
+out/renderer/assets/save-DMNMGtmC.js                       0.69 kB │ gzip:  0.36 kB
+out/renderer/assets/useTheme-BFuyPqqo.js                   0.70 kB │ gzip:  0.38 kB
+out/renderer/assets/genres-DuLjUMC2.js                     0.70 kB │ gzip:  0.52 kB
+out/renderer/assets/games-BT10Uens.js                      1.11 kB │ gzip:  0.54 kB
+out/renderer/assets/useSidebarConfig-Ldxg99v8.js           1.50 kB │ gzip:  0.74 kB
+out/renderer/assets/useToast-PFKvj2Si.js                   3.51 kB │ gzip:  1.59 kB
+out/renderer/assets/api-DXIJ3tcp.js                        3.98 kB │ gzip:  1.69 kB
+out/renderer/assets/kepler-visuals-6SkbbKQa.js             5.55 kB │ gzip:  2.36 kB
+out/renderer/assets/CataloguePage-DCrAZ-B0.js              5.99 kB │ gzip:  2.53 kB
+out/renderer/assets/pinia-CEErbrLS.js                      6.00 kB │ gzip:  2.83 kB
+out/renderer/assets/useSettingsPageState-BWX6D_yg.js       7.20 kB │ gzip:  2.80 kB
+out/renderer/assets/useDropZone-CL5EudHh.js                9.13 kB │ gzip:  3.64 kB
+out/renderer/assets/runtime-dom.esm-bundler-zHRrim3Z.js    9.20 kB │ gzip:  4.05 kB
+out/renderer/assets/StatisticsPage-CE8sQE3Z.js            11.69 kB │ gzip:  4.31 kB
+out/renderer/assets/ScanPage-xvghDufZ.js                  20.69 kB │ gzip:  6.71 kB
+out/renderer/assets/vue-router-SoSIAR39.js                24.90 kB │ gzip:  9.62 kB
+out/renderer/assets/LibraryPage-BHIk07oE.js               24.94 kB │ gzip:  7.71 kB
+out/renderer/assets/SettingsPage-BkZCUvr4.js              26.39 kB │ gzip:  7.24 kB
+out/renderer/assets/index-Csntvlcw.js                     31.67 kB │ gzip: 12.08 kB
+out/renderer/assets/SqobaPage-C5GSldBO.js                 33.08 kB │ gzip:  9.06 kB
+out/renderer/assets/GameDetailPage-K4VcISOn.js            41.61 kB │ gzip: 10.73 kB
+out/renderer/assets/LayoutPage-B6xA-run.js                47.22 kB │ gzip: 15.97 kB
+out/renderer/assets/runtime-core.esm-bundler-OpQgh1S1.js  70.10 kB │ gzip: 27.32 kB
+
+[33m[33m[PLUGIN_TIMINGS] Warning:[0m Your build spent significant time in plugins. Here is a breakdown:
+  - vite:vue (89%)
+  - vite:css (5%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+[39m
+[32m✓ built in 4.40s[39m
+$ bun build ./electron/main.ts --outfile=out/main/index.js --target=node --format=esm -e electron -e better-sqlite3
+Bundled 46 modules in 19ms
+
+  index.js  189.0 KB  (entry point)
+
+$ bun build ./electron/preload.ts --outfile=out/preload/index.js --target=node --format=esm -e electron
+Bundled 3 modules in 11ms
+
+  index.js  3.24 KB  (entry point)
+
+$ vite preview --configLoader native --host 127.0.0.1 --port 4174 --strictPort
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4174[22m/[39m
+
+Running 4 tests using 2 workers
+
+node:internal/child_process:420
+    throw new ErrnoException(err, 'spawn');
+          ^
+
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at spawn (node:child_process:753:9)
+    at Object.fork (node:child_process:171:10)
+    at WorkerHost.startRunner (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\processHost.js:54:49)
+    at WorkerHost.start (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\workerHost.js:69:23)
+    at Dispatcher._runJobInWorker (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\dispatcher.js:103:20) {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'spawn'
+}
+
+Node.js v22.16.0
+16 |     child.once("exit", (code) => {
+17 |       if (code === 0) {
+18 |         resolve();
+19 |         return;
+20 |       }
+21 |       reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
+                      ^
+error: C:\Users\Kazui\.bun\bin\bun.exe x playwright test exited with code 1
+      at <anonymous> (D:\Personal\Hobby\Coding\kepler\apps\arrancador\scripts\run-e2e.ts:21:18)
+      at emit (node:events:98:22)
+      at #handleOnExit (node:child_process:532:14)
+
+Bun v1.3.5 (Windows x64)
+error: script "test:e2e" exited with code 1

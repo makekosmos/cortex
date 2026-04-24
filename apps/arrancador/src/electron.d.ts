@@ -5,5 +5,3 @@ declare global {
     arrancador?: ArrancadorBridge;
   }
 }
-
-export {};
