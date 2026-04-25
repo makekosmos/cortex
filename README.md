@@ -1,19 +1,41 @@
-у меня достаточно большой опыт польщования различным по. Хочу переложить это в отдельную касту собственных решений для собственных хотелок.
+# Kepler
 
-### [Ark](./packages/ark/README.md) - данные за всю жизнь
-Хранилище всех данных. 
+Kepler is a monorepo for local-first personal software: a shared ARK data runtime plus focused desktop/mobile apps that render or capture specific workflows.
 
-### [Eden](./apps/eden/README.md) - продвинутый дневник
-Здесь писать все в дневник.
+## Core
 
-## Приложения помощники
-Суть приложений совсем не в том, чтобы выдать отдельную функциональность, которой нет в Eden. Их суть - zero intention + quick capture. То есть, с минимальным усилием максимально просто записать что-то.
+### [ARK](./packages/ark-core/README.md) - local-first data runtime
 
-### [Olympia](./apps/olympia/README.md) - приложение для тренировок 
-Здесь держать тренировки
+ARK is the shared Rust + SQLite runtime for long-lived personal data. The canonical desktop binary is `ark-core-rpc`; Electron apps should talk to it through `@kepler/ark` from Electron main/preload facades instead of writing directly into ARK SQLite tables.
 
-### [Elysium](./apps/elysium/README.md) - трекинг питания
-Здесь трекать питание
+### [Eden](./apps/eden/README.md) - journal/editor
+
+Eden is the writing and journal surface. It uses its own editor/search sidecar and integrates with ARK for shared objects/sync.
+
+## Helper Apps
+
+Helper apps are thin workflow surfaces around shared data. Their job is quick capture, focused visualization, or domain-specific interaction while ARK owns storage/sync contracts.
 
 ### [Delphi](./apps/delphi/README.md)
-Приложение для трекинга задач
+
+Task tracking UI. The Electron package uses the shared `ark-core-rpc` binary.
+
+### [Arrancador](./apps/arrancador/README.md)
+
+Game library, playtime, backups, and ARK game-object integration.
+
+### [Dashboard](./apps/dashboard/README.md)
+
+Read-only usage analytics over ARK usage data.
+
+### [Olympia](./apps/olympia/README.md)
+
+Workout tracking.
+
+### [Elysium](./apps/elysium/README.md)
+
+Nutrition tracking.
+
+## Current ARK Integration Rule
+
+New Electron integrations should use `@kepler/ark` and `ark-core-rpc`. `@arksync/node` is compatibility-only. Direct writes into ARK SQLite tables are legacy or migration-only paths; if a process must write directly, it must use `ark_core::db` helpers so sync state is updated consistently.

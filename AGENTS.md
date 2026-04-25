@@ -6,6 +6,10 @@ For substantial features, refactors, and bug fixes, use the repo-task-proof-loop
 Required artifact path:
 - Keep all task artifacts in `.agent/tasks/<TASK_ID>/` inside this repository.
 
+## Test database isolation
+
+All tests, smoke checks, Playwright runs, and migration verification MUST use isolated test databases or temporary databases. Never point automated checks at a main/user ARK database. If a test needs ARK data, create it under `.agent/tasks/<TASK_ID>/`, an app-local `.tmp`/`.e2e` folder, or an OS temp directory, and pass the path explicitly through the app/test config.
+
 Required sequence:
 1. Freeze `.agent/tasks/<TASK_ID>/spec.md` before implementation.
 2. Implement against explicit acceptance criteria (`AC1`, `AC2`, ...).

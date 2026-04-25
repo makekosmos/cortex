@@ -1,0 +1,199 @@
+warning: unused import: `std::net::SocketAddr`
+ --> tests\relay_round_trip.rs:8:5
+  |
+8 | use std::net::SocketAddr;
+  |     ^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `accept_async`
+  --> tests\relay_round_trip.rs:16:25
+   |
+16 | use tokio_tungstenite::{accept_async, connect_async};
+   |                         ^^^^^^^^^^^^
+
+warning: unused import: `PROTOCOL_VERSION`
+  --> tests\relay_round_trip.rs:19:61
+   |
+19 |     deserialize_message, serialize_message, LanSyncMessage, PROTOCOL_VERSION,
+   |                                                             ^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> tests\relay_round_trip.rs:145:10
+    |
+145 |     let (mut ws_b_tx, mut ws_b_rx) = ws_b.split();
+    |          ----^^^^^^^
+    |          |
+    |          help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `ws_b_tx`
+   --> tests\relay_round_trip.rs:145:10
+    |
+145 |     let (mut ws_b_tx, mut ws_b_rx) = ws_b.split();
+    |          ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ws_b_tx`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `ark-core` (test "relay_round_trip") generated 5 warnings (run `cargo fix --test "relay_round_trip" -p ark-core` to apply 5 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running unittests src\lib.rs (packages\ark-core\rust\target\debug\deps\ark_core-097e7d4f7f9b6265.exe)
+
+running 110 tests
+test beacon::tests::classify_beacon_name_change_refires ... ok
+test beacon::tests::classify_beacon_same_fires_false ... ok
+test beacon::tests::beacon_payload_roundtrip ... ok
+test beacon::tests::classify_beacon_new_peer_fires ... ok
+test beacon::tests::dedup_repeat_unchanged_beacon ... ok
+test beacon::tests::stale_eviction_after_ttl ... ok
+test beacon::tests::re_fire_when_addresses_change ... ok
+test beacon::tests::self_reject_by_device_id ... ok
+test db::tests::storage_backend_rejects_unknown_sync_entity_type ... ok
+test db::tests::local_sync_tombstone_is_persisted_and_can_be_cleared ... ok
+test db::tests::storage_backend_kv_roundtrip ... ok
+test db::tests::local_sync_version_bump_persists_hlc_for_entity ... ok
+test db::tests::storage_backend_rejects_invalid_sync_payload ... ok
+test db::tests::storage_backend_delete_removes_entity ... ok
+test db::tests::storage_backend_roundtrip_todo ... ok
+test db::tests::storage_backend_live_entity_clears_tombstone ... ok
+test db::tests::storage_backend_roundtrip_usage_entities ... ok
+test db::tests::storage_backend_delete_usage_entity_removes_entity ... ok
+test db::tests::storage_backend_roundtrip_object_entities ... ok
+test db::tests::test_area_crud ... ok
+test db::tests::storage_backend_tombstone_survives_backend_recreation ... ok
+test db::tests::test_batch_upsert ... ok
+test db::tests::storage_backend_uses_stored_hlc_when_present ... ok
+test db::tests::test_clear_all ... ok
+test db::tests::test_delete_trashed ... ok
+test db::tests::test_schema_creation ... ok
+test hlc::tests::test_compare_counter ... ok
+test db::tests::test_init_schema_migrates_existing_db_without_destroying_data ... ok
+test hlc::tests::test_compare_device_id ... ok
+test hlc::tests::test_compare_equal ... ok
+test hlc::tests::test_compare_str ... ok
+test hlc::tests::test_compare_wall_time ... ok
+test db::tests::test_project_crud ... ok
+test db::tests::test_heading_crud ... ok
+test hlc::tests::test_from_string_with_colons_in_device_id ... ok
+test db::tests::test_object_model_crud ... ok
+test hlc::tests::test_is_newer ... ok
+test hlc::tests::test_merge ... ok
+test hlc::tests::test_tick_advances ... ok
+test hlc::tests::test_to_from_string_roundtrip ... ok
+test host::tests::host_name_has_no_dot_local_suffix ... ok
+test host::tests::host_name_is_non_empty ... ok
+test host::tests::strip_dot_local_case_insensitive ... ok
+test net::tests::accepts_global_v6 ... ok
+test host::tests::strip_ipv6_zone_works ... ok
+test net::tests::accepts_lan_v4 ... ok
+test net::tests::detects_virtual_interfaces ... ok
+test net::tests::filters_mixed_list ... ok
+test net::tests::rejects_link_local_v4 ... ok
+test net::tests::rejects_link_local_v6 ... ok
+test net::tests::rejects_loopback ... ok
+test net::tests::rejects_unique_local_v6 ... ok
+test db::tests::test_sync_kv ... ok
+test protocol::tests::test_compute_local_excess ... ok
+test protocol::tests::test_auth_nonce_is_random_hex_64 ... ok
+test protocol::tests::test_compute_vector_diff_missing ... ok
+test db::tests::test_tag_crud ... ok
+test protocol::tests::test_compute_vector_diff_outdated ... ok
+test protocol::tests::test_compute_vector_diff_up_to_date ... ok
+test protocol::tests::test_deserialize_ts_compatible_hello ... ok
+test protocol::tests::test_deserialize_ts_compatible_sync_entity ... ok
+test protocol::tests::test_generate_id_format ... ok
+test protocol::tests::test_hello_hmac_helpers_are_deterministic_and_verify ... ok
+test db::tests::test_todo_crud ... ok
+test db::tests::test_todo_with_tags_and_checklist ... ok
+test db::tests::usage_analytics_snapshot_includes_summary_and_zero_filled_trend ... ok
+test db::tests::test_usage_tracking_crud ... ok
+test protocol::tests::test_hello_serialization ... ok
+test protocol::tests::test_live_change_serialization ... ok
+test protocol::tests::test_merge_peer_records_keeps_older_last_address ... ok
+test protocol::tests::test_merge_peer_records_new ... ok
+test protocol::tests::test_merge_peer_records_union_addresses ... ok
+test protocol::tests::test_message_roundtrip ... ok
+test protocol::tests::test_peer_list_serialization ... ok
+test protocol::tests::test_ping_pong_serialization ... ok
+test protocol::tests::test_split_into_batches_empty ... ok
+test protocol::tests::test_sync_changes_serialization ... ok
+test protocol::tests::test_sync_entity_deleted_field ... ok
+test protocol::tests::test_version_vector_serialization ... ok
+test space::tests::test_decode_ipv4_invalid ... ok
+test space::tests::test_derive_space_id ... ok
+test space::tests::test_encode_decode_ipv4_roundtrip ... ok
+test host::tests::own_addresses_are_all_routable ... ok
+test host::tests::own_addresses_reject_loopback ... ok
+test space::tests::test_encode_ipv4_invalid ... ok
+test space::tests::test_encode_ipv4_max ... ok
+test host::tests::own_addresses_strip_ipv6_zone ... ok
+test space::tests::test_encode_ipv4_zero ... ok
+test protocol::tests::test_split_into_batches_count ... ok
+test space::tests::test_format_space_code_12 ... ok
+test space::tests::test_format_space_code_19 ... ok
+test space::tests::test_format_space_code_7 ... ok
+test space::tests::test_generate_extended_code ... ok
+test space::tests::test_generate_space_code_length ... ok
+test space::tests::test_parse_qr_payload_bare_code ... ok
+test space::tests::test_parse_qr_payload_extended_code ... ok
+test space::tests::test_parse_space_code_12 ... ok
+test space::tests::test_parse_space_code_7 ... ok
+test space::tests::test_parse_space_code_invalid ... ok
+test sync_server::tests::get_connected_peer_entries_dedup_by_device_id ... ok
+test sync_server::tests::purge_self_peers_drops_our_device_id ... ok
+test space::tests::test_qr_payload_roundtrip ... ok
+test sync_server::tests::purge_self_peers_drops_records_with_all_our_addresses ... ok
+test sync_server::tests::register_external_peer_rejects_self ... ok
+test sync_server::tests::register_external_peer_stores_routable_peer ... ok
+test beacon::tests::non_routable_addresses_are_dropped_from_merged ... ok
+test protocol::tests::test_split_into_batches_bytes ... ok
+test relay_sync::tests::relay_rejects_wrong_hmac_secret ... ok
+test relay_sync::tests::relay_syncs_existing_entity_between_two_runtimes ... ok
+test relay_sync::tests::relay_propagates_live_change ... ok
+
+test result: ok. 110 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.21s
+
+     Running unittests src\main.rs (packages\ark-core\rust\target\debug\deps\ark_core_rpc-528a2c84776aba33.exe)
+
+running 7 tests
+test tests::response_echoes_request_id_on_success ... ok
+test tests::response_echoes_request_id_on_error ... ok
+test tests::request_deserialization_ignores_optional_id_field ... ok
+test tests::response_omits_id_for_legacy_request ... ok
+test tests::request_deserialization_accepts_relay_and_auth_config ... ok
+test tests::local_object_type_and_link_writes_record_sync_state ... ok
+test tests::local_object_and_usage_writes_record_sync_state ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src\bin\uniffi-bindgen.rs (packages\ark-core\rust\target\debug\deps\uniffi_bindgen-e7bcdd35b2e3a594.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\relay_round_trip.rs (packages\ark-core\rust\target\debug\deps\relay_round_trip-90c7cb2c65659211.exe)
+
+running 1 test
+test relay_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\sync_round_trip.rs (packages\ark-core\rust\target\debug\deps\sync_round_trip-32b9434ad46c6e88.exe)
+
+running 5 tests
+test self_connect_is_rejected ... ok
+test hmac_authenticated_sync_rejects_wrong_secret ... ok
+test hmac_authenticated_sync_succeeds_with_matching_secret ... ok
+test round_trip_sync_between_two_servers ... ok
+test usage_entities_sync_between_two_servers ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.04s
+
+   Doc-tests ark_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

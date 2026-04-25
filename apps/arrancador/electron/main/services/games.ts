@@ -2,12 +2,11 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 
 import { execute, queryAll, queryOne, runInTransaction } from "../helpers/db";
-import type { DbLike } from "../helpers/shared";
 import {
   addGameProcessBindings,
-  listGameProcessBindingsByGameId,
   removeGameProcessBinding,
 } from "./game-process-bindings";
+import { createGameLoaders } from "./games/loading";
 import {
   fetchExePath,
   isUniqueConstraintError,
@@ -20,7 +19,12 @@ import {
   resolveShortcutTarget,
   spawnGameProcess,
 } from "./games/process";
-import { GAME_SELECT, type GameDbRow, mapGameRow } from "./games/rows";
+import { GAME_SELECT, type GameDbRow } from "./games/rows";
+import type {
+  GamesArkSyncResult,
+  GamesService,
+  GamesServiceDeps,
+} from "./games/service-types";
 import type {
   Game,
   NewGame,
@@ -28,73 +32,6 @@ import type {
   UpdateGame,
 } from "./games/types";
 import { buildUpdateClause } from "./games/update";
-
-export interface GamesServiceDeps {
-  db: DbLike;
-  usageReadModel?: {
-    hydrateGame(game: Game): Promise<Game>;
-    hydrateGames(games: Game[]): Promise<Game[]>;
-  };
-  arkGameObjectSync?: {
-    syncGame(game: Game): Promise<string | null>;
-  };
-  now?: () => Date;
-  fileExists?: (filePath: string) => boolean;
-  log?: Pick<Console, "error" | "warn">;
-  resolveShortcutTarget?: (inputPath: string) => Promise<string>;
-  countRunningInstances?: (matches: ProcessMatch[]) => Promise<number>;
-  killMatchingProcesses?: (matches: ProcessMatch[]) => Promise<number>;
-  spawnGameProcess?: (exePath: string) => Promise<void>;
-}
-
-export interface GamesService {
-  getGame(id: string): Promise<Game | null>;
-  addGame(game: NewGame): Promise<Game>;
-  addGamesBatch(games: NewGame[]): Promise<Game[]>;
-  getAllGames(): Promise<Game[]>;
-  getFavorites(): Promise<Game[]>;
-  updateGame(update: UpdateGame): Promise<Game>;
-  toggleFavorite(id: string): Promise<Game>;
-  deleteGame(id: string): Promise<void>;
-  recordGameLaunch(id: string): Promise<Game>;
-  searchGames(query: string): Promise<Game[]>;
-  gameExistsByPath(exePath: string): Promise<boolean>;
-  resolveShortcutTarget(path: string): Promise<string>;
-  isGameInstalled(id: string): Promise<boolean>;
-  getRunningInstances(id: string): Promise<number>;
-  killGameProcesses(id: string): Promise<number>;
-  launchGame(id: string): Promise<void>;
-  addProcessBindings(id: string, bindings: NewGameProcessBinding[]): Promise<Game>;
-  removeProcessBinding(id: string, bindingId: number): Promise<Game>;
-  syncAllGamesToArk(): Promise<GamesArkSyncResult>;
-}
-
-export interface GamesArkSyncResult {
-  total: number;
-  synced: number;
-  failed: number;
-}
-
-async function getRowById(db: DbLike, id: string): Promise<Game | null> {
-  const row = await queryOne<GameDbRow>(db, `${GAME_SELECT} WHERE id = ?1`, [id]);
-  return row ? mapGameRow(row) : null;
-}
-
-async function hydrateExplicitBindings(db: DbLike, games: Game[]): Promise<Game[]> {
-  if (games.length === 0) {
-    return games;
-  }
-
-  const bindingsByGameId = await listGameProcessBindingsByGameId(
-    db,
-    games.map((game) => game.id),
-  );
-
-  return games.map((game) => ({
-    ...game,
-    process_bindings: bindingsByGameId.get(game.id) ?? [],
-  }));
-}
 
 export function createGamesService(deps: GamesServiceDeps): GamesService {
   const usageReadModel = deps.usageReadModel;
@@ -106,18 +43,7 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
   const countInstances = deps.countRunningInstances ?? countRunningInstancesByMatches;
   const killProcesses = deps.killMatchingProcesses ?? killMatchingProcessesByMatches;
   const spawnProcess = deps.spawnGameProcess ?? spawnGameProcess;
-
-  const loadGame = async (id: string) => {
-    const fetched = await getRowById(deps.db, id);
-    if (!fetched) {
-      return null;
-    }
-    const [withBindings] = await hydrateExplicitBindings(deps.db, [fetched]);
-    return withBindings ?? null;
-  };
-
-  const loadGames = async (rows: DbRow[]) =>
-    await hydrateExplicitBindings(deps.db, rows.map(mapGameRow));
+  const { loadGame, loadGames } = createGameLoaders(deps.db);
 
   const getProcessMatchesForGame = async (id: string): Promise<ProcessMatch[]> => {
     const game = await loadGame(id);
@@ -178,7 +104,7 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
   };
 
   const recordGameLaunch = async (id: string): Promise<Game> => {
-    const fetched = await getRowById(deps.db, id);
+    const fetched = await loadGame(id);
     if (!fetched) {
       throw new Error("Game not found");
     }
@@ -242,13 +168,13 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
     },
 
     async getAllGames(): Promise<Game[]> {
-      const rows = await queryAll<DbRow>(deps.db, `${GAME_SELECT} ORDER BY name ASC`);
+      const rows = await queryAll<GameDbRow>(deps.db, `${GAME_SELECT} ORDER BY name ASC`);
       const games = await loadGames(rows);
       return usageReadModel ? await usageReadModel.hydrateGames(games) : games;
     },
 
     async getFavorites(): Promise<Game[]> {
-      const rows = await queryAll<DbRow>(
+      const rows = await queryAll<GameDbRow>(
         deps.db,
         `${GAME_SELECT} WHERE is_favorite = 1 ORDER BY name ASC`,
       );
@@ -294,7 +220,7 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
 
     async searchGames(query: string): Promise<Game[]> {
       const pattern = `%${query}%`;
-      const rows = await queryAll<DbRow>(
+      const rows = await queryAll<GameDbRow>(
         deps.db,
         `${GAME_SELECT} WHERE name LIKE ?1 OR exe_name LIKE ?1 ORDER BY name ASC`,
         [pattern],
@@ -366,7 +292,7 @@ export function createGamesService(deps: GamesServiceDeps): GamesService {
     },
 
     async syncAllGamesToArk(): Promise<GamesArkSyncResult> {
-      const rows = await queryAll<DbRow>(deps.db, `${GAME_SELECT} ORDER BY date_added ASC, name ASC`);
+      const rows = await queryAll<GameDbRow>(deps.db, `${GAME_SELECT} ORDER BY date_added ASC, name ASC`);
       const games = await loadGames(rows);
       const hydratedGames = usageReadModel ? await usageReadModel.hydrateGames(games) : games;
       const result: GamesArkSyncResult = {

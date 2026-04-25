@@ -32,7 +32,9 @@ export function createSettingsService(
       return mergeSettings(await repository.listSettings());
     },
     async updateSettings(settings: AppSettings) {
-      await repository.upsertSettings(serializeAppSettings(normalizeAppSettings(settings)));
+      await repository.upsertSettings(
+        serializeAppSettings(normalizeAppSettings({ ...settings })),
+      );
     },
     getSetting: (key: string) => repository.getSetting(key),
     setSetting: (key: string, value: string) => repository.upsertSetting(key, value),

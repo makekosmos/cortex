@@ -16,7 +16,10 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::protocol::{deserialize_message, serialize_message, LanSyncMessage, PROTOCOL_VERSION};
+use crate::protocol::{
+    compute_hello_auth_hmac, deserialize_message, generate_auth_nonce, message_origin_device_id,
+    normalize_auth_secret, serialize_message, LanSyncMessage, PROTOCOL_VERSION,
+};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -30,13 +33,21 @@ pub struct RelayConfig {
     pub device_id: String,
     pub device_name: String,
     pub api_key: String,
+    pub auth_secret: Option<String>,
 }
 
 #[derive(Debug)]
 pub enum RelayEvent {
-    Connected { device_id: String },
-    Disconnected { device_id: String },
-    MessageReceived { from_device_id: String, msg: LanSyncMessage },
+    Connected {
+        device_id: String,
+    },
+    Disconnected {
+        device_id: String,
+    },
+    MessageReceived {
+        from_device_id: String,
+        msg: LanSyncMessage,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -78,10 +89,7 @@ impl RelayTransport {
 
     /// Start the relay transport. Returns immediately; background tasks drive
     /// the actual connection.  Events are forwarded through `event_tx`.
-    pub async fn start(
-        &self,
-        event_tx: mpsc::UnboundedSender<RelayEvent>,
-    ) -> Result<(), String> {
+    pub async fn start(&self, event_tx: mpsc::UnboundedSender<RelayEvent>) -> Result<(), String> {
         // Create a fresh send channel and a shutdown channel.
         let (send_tx, mut send_rx) = mpsc::unbounded_channel::<LanSyncMessage>();
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
@@ -95,6 +103,7 @@ impl RelayTransport {
         let device_id = self.config.device_id.clone();
         let device_name = self.config.device_name.clone();
         let space_id = self.config.space_id.clone();
+        let auth_secret = normalize_auth_secret(self.config.auth_secret.clone());
 
         // Drain any offline outbox into the new channel right away.
         {
@@ -112,9 +121,7 @@ impl RelayTransport {
 
                 match connect_result {
                     Err(e) => {
-                        eprintln!(
-                            "[RelayTransport] connect failed: {e}; retry in {backoff_secs}s"
-                        );
+                        eprintln!("[RelayTransport] connect failed: {e}; retry in {backoff_secs}s");
                         tokio::select! {
                             _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
                             _ = &mut stop_rx => { return; }
@@ -129,12 +136,23 @@ impl RelayTransport {
                         let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
                         // Send hello using the standard LanSyncMessage wire format.
+                        let (auth_nonce, auth_hmac) = match auth_secret.as_ref() {
+                            Some(secret) => {
+                                let nonce = generate_auth_nonce();
+                                let hmac =
+                                    compute_hello_auth_hmac(secret, &space_id, &device_id, &nonce);
+                                (Some(nonce), Some(hmac))
+                            }
+                            None => (None, None),
+                        };
                         let hello = LanSyncMessage::Hello {
                             protocol_version: PROTOCOL_VERSION,
                             device_id: device_id.clone(),
                             device_name: device_name.clone(),
                             space_id: space_id.clone(),
                             addresses: None,
+                            auth_nonce,
+                            auth_hmac,
                         };
                         let text = serialize_message(&hello);
                         let _ = ws_tx.send(Message::Text(text.into())).await;
@@ -173,12 +191,9 @@ impl RelayTransport {
                                     match inbound {
                                         Some(Ok(Message::Text(text))) => {
                                             if let Some(lan_msg) = deserialize_message(&text) {
-                                                let from = match &lan_msg {
-                                                    LanSyncMessage::Hello { device_id, .. } => {
-                                                        device_id.clone()
-                                                    }
-                                                    _ => String::new(),
-                                                };
+                                                let from =
+                                                    message_origin_device_id(&lan_msg)
+                                                        .unwrap_or_default();
                                                 let _ = event_tx.send(RelayEvent::MessageReceived {
                                                     from_device_id: from,
                                                     msg: lan_msg,

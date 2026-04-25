@@ -6,6 +6,7 @@ pub mod host;
 pub mod mesh;
 pub mod net;
 pub mod protocol;
+pub mod relay_sync;
 pub mod relay_transport;
 pub mod schema;
 pub mod space;
@@ -30,6 +31,6 @@ pub use protocol::{
 };
 pub use sync_server::StorageBackend;
 pub use types::{
-    Area, ArkObject, Heading, LoadAllData, ObjectLink, ObjectType, PeerRecord, Project,
-    SyncEntity, Tag, TodoItem, TrackedApp, UsageEvent, UsageSession, VersionVector,
+    Area, ArkObject, Heading, LoadAllData, ObjectLink, ObjectType, PeerRecord, Project, SyncEntity,
+    Tag, TodoItem, TrackedApp, UsageEvent, UsageSession, VersionVector,
 };

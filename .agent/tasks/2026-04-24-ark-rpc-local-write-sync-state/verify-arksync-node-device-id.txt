@@ -1,0 +1,1 @@
+verify-arksync-node-device-id PASS

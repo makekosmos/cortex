@@ -1,0 +1,33 @@
+Fresh verification commands run from apps/arrancador on 2026-04-24.
+
+This file summarizes the current canonical `.txt` raw logs. Older `.log` files
+in this directory are superseded intermediate artifacts and are not evidence for
+the current gate.
+
+bun run typecheck
+PASS
+
+bun run test
+PASS: 45 test files, 152 tests
+
+bun run test:coverage
+PASS: statements 80.99%, branches 71.38%, functions 77.46%, lines 82.00%
+
+bun run build:renderer
+PASS
+
+bun run build:main
+PASS
+
+bun run build:preload
+PASS
+
+cargo test --manifest-path sidecar/Cargo.toml
+PASS: 11 tests
+
+bun run test:e2e
+Sandbox attempt: BLOCKED by EPERM spawning Playwright worker.
+Escalated rerun: PASS, 4 Playwright tests.
+
+bun run lint
+PASS

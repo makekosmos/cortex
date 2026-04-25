@@ -8,6 +8,10 @@ const execFileAsync = promisify(execFile);
 const TEST_FILE_SIZE = 128 * 1024 * 1024;
 const CHUNK_SIZE = 4 * 1024 * 1024;
 
+function outputToUtf8(value: string | Buffer) {
+  return typeof value === "string" ? value : value.toString("utf8");
+}
+
 function toBigIntBytes(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return Math.max(0, Math.trunc(value));
@@ -52,7 +56,7 @@ Get-CimInstance Win32_LogicalDisk |
       { maxBuffer: 16 * 1024 * 1024, windowsHide: true },
     );
 
-    const text = stdout.toString("utf8").trim();
+    const text = outputToUtf8(stdout).trim();
     const rows = text ? (JSON.parse(text) as unknown) : [];
     const list = Array.isArray(rows) ? rows : [rows];
 
@@ -104,7 +108,7 @@ async function getFilesystemType(mountPoint: string) {
     const { stdout } = await execFileAsync("stat", args, {
       maxBuffer: 1024 * 1024,
     });
-    const value = stdout.toString("utf8").trim();
+    const value = outputToUtf8(stdout).trim();
     return value || "Unknown";
   } catch {
     return "Unknown";
@@ -117,8 +121,7 @@ async function collectPosixDisks(): Promise<SystemDiskInfo[]> {
       maxBuffer: 16 * 1024 * 1024,
     });
 
-    const lines = stdout
-      .toString("utf8")
+    const lines = outputToUtf8(stdout)
       .split(/\r?\n/)
       .slice(1)
       .map((line) => line.trim())

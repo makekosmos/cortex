@@ -16,7 +16,9 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsc --watch"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@kepler/ark": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^24.9.2",
     "typescript": "~5.8.3"

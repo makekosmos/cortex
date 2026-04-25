@@ -21,6 +21,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@kepler/ark": path.resolve(__dirname, "../../packages/kepler-ark/src/index.ts"),
       "@kepler/visuals/theme/css": path.resolve(
         __dirname,
         "../../packages/kepler-visuals/theme/css-variables.css",

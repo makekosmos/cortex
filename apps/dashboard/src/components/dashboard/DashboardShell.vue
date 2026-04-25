@@ -228,6 +228,7 @@ const statusPopoverCopy = computed(() => {
         class="dashboard-shell__status-dot"
         :tone="statusTone"
         :label="statusLabel"
+        :aria-label="statusLabel"
         data-testid="dashboard-status"
       >
         <div class="dashboard-shell__status-popover">

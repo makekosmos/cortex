@@ -1,81 +1,41 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+
+import {
+  ArkClient,
+  type ArkTrackedAppRecord,
+  type ArkUsageApi,
+  type JsonValue,
+} from "@kepler/ark";
 
 import { openSqliteDatabase } from "../db";
-import { execute, queryAll, queryOne, runInTransaction } from "../helpers/db";
+import { execute, queryAll, queryOne } from "../helpers/db";
 import type { DbLike } from "../helpers/shared";
+import { getArkCoreRpcBinaryPath } from "./ark-game-objects";
 import { resolveUsageTrackerDb } from "./ark-usage";
+import {
+  buildLegacyUsageBackfillPlan,
+  type LegacyDailyRow,
+  type LegacyGameRow,
+  type LegacyUsageBackfillTrackedApp,
+} from "./ark-usage-backfill/plan";
+
+export type {
+  LegacyDailyRow,
+  LegacyGameRow,
+  LegacyUsageBackfillPlan,
+  LegacyUsageBackfillSession,
+  LegacyUsageBackfillTrackedApp,
+  LegacyUsageSessionKind,
+} from "./ark-usage-backfill/plan";
+export { buildLegacyUsageBackfillPlan } from "./ark-usage-backfill/plan";
 
 const BACKFILL_MARKER_KEY = "arrancador.legacy_usage_backfill.v1";
 const BACKFILL_DEVICE_ID_KEY = "arrancador.legacy_usage_backfill.device_id";
-const VERSION_VECTOR_KEY = "lan_sync.version_vector";
-const PLATFORM = process.platform === "win32" ? "windows" : process.platform;
 
-type LegacyGameRow = {
-  id: string;
-  name: string;
-  exe_path: string;
-  exe_name: string;
-  date_added: string;
-  total_playtime: number;
-  last_played: string | null;
+type BackfillUsageApi = Pick<ArkUsageApi, "loadAll"> & {
+  trackedApps: Pick<ArkUsageApi["trackedApps"], "upsert">;
+  sessions: Pick<ArkUsageApi["sessions"], "upsert">;
 };
-
-type LegacyDailyRow = {
-  game_id: string;
-  date: string;
-  seconds: number;
-};
-
-type ExistingTrackedAppRow = {
-  id: string;
-  exe_path: string;
-  normalized_exe_path: string;
-  process_name: string;
-  display_name: string | null;
-  publisher: string | null;
-  icon_ref: string | null;
-  first_seen_at: string;
-  last_seen_at: string;
-};
-
-type LegacyUsageSessionKind = "daily" | "residual";
-
-export type LegacyUsageBackfillTrackedApp = {
-  id: string;
-  platform: string;
-  exePath: string;
-  normalizedExePath: string;
-  processName: string;
-  displayName: string | null;
-  publisher: string | null;
-  iconRef: string | null;
-  firstSeenAt: string;
-  lastSeenAt: string;
-};
-
-export type LegacyUsageBackfillSession = {
-  id: string;
-  trackedAppId: string;
-  deviceId: string;
-  deviceName: string;
-  platform: string;
-  startedAt: string;
-  endedAt: string;
-  foregroundMs: number;
-  idleMs: number;
-  windowTitle: string | null;
-  processName: string;
-  exePath: string;
-  pidStart: number | null;
-  pidEnd: number | null;
-  metaJson: string;
-  kind: LegacyUsageSessionKind;
-};
-
-export interface LegacyUsageBackfillPlan {
-  trackedApps: LegacyUsageBackfillTrackedApp[];
-  sessions: LegacyUsageBackfillSession[];
-}
 
 export interface LegacyUsageBackfillResult {
   targetDbPath: string | null;
@@ -91,78 +51,10 @@ export interface BackfillLegacyUsageToArkOptions {
   arkDbPath: string;
   fallbackArkDbPath?: string;
   resolveUsageDb?: () => Promise<{ db: DbLike | null; path: string | null }>;
+  arkUsage?: BackfillUsageApi;
+  arkCoreRpcPath?: string;
+  requestTimeoutMs?: number;
   force?: boolean;
-}
-
-function normalizeExePath(exePath: string): string {
-  return exePath.trim().replaceAll("/", "\\").toLowerCase();
-}
-
-function hashToHex(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
-}
-
-function createTrackedAppId(exePath: string): string {
-  return hashToHex(`${PLATFORM}:${normalizeExePath(exePath)}`);
-}
-
-function createSyntheticSessionId(
-  trackedAppId: string,
-  kind: LegacyUsageSessionKind,
-  date: string,
-  seconds: number,
-): string {
-  return hashToHex(`arrancador-legacy-usage:${trackedAppId}:${kind}:${date}:${seconds}`);
-}
-
-function toIsoDate(value: string | null | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length >= 10 ? trimmed.slice(0, 10) : null;
-}
-
-function toIsoTimestamp(date: Date): string {
-  return date.toISOString();
-}
-
-function deriveSessionBounds(
-  date: string,
-  seconds: number,
-  preferredEndAt?: string | null,
-): { startedAt: string; endedAt: string } {
-  const safeSeconds = Math.max(0, Number(seconds || 0));
-  const defaultEnd = `${date}T21:00:00.000Z`;
-  const endedAt =
-    preferredEndAt?.startsWith(date)
-      ? preferredEndAt
-      : defaultEnd;
-  const endMs = Date.parse(endedAt);
-  const startedAt = Number.isFinite(endMs)
-    ? toIsoTimestamp(new Date(endMs - safeSeconds * 1000))
-    : `${date}T00:00:00.000Z`;
-
-  return {
-    startedAt,
-    endedAt,
-  };
-}
-
-function buildSessionMeta(
-  game: LegacyGameRow,
-  kind: LegacyUsageSessionKind,
-  date: string,
-): string {
-  return JSON.stringify({
-    source: "arrancador-legacy-backfill",
-    imported: true,
-    version: 1,
-    kind,
-    legacy_game_id: game.id,
-    legacy_date: date,
-  });
 }
 
 function minTimestamp(left: string, right: string): string {
@@ -174,7 +66,7 @@ function maxTimestamp(left: string, right: string): string {
 }
 
 function mergeTrackedApp(
-  existing: ExistingTrackedAppRow | undefined,
+  existing: ArkTrackedAppRecord | undefined,
   next: LegacyUsageBackfillTrackedApp,
 ): LegacyUsageBackfillTrackedApp {
   if (!existing) {
@@ -184,14 +76,14 @@ function mergeTrackedApp(
   return {
     id: existing.id,
     platform: next.platform,
-    exePath: existing.exe_path || next.exePath,
-    normalizedExePath: existing.normalized_exe_path || next.normalizedExePath,
-    processName: existing.process_name || next.processName,
-    displayName: existing.display_name ?? next.displayName,
+    exePath: existing.exePath || next.exePath,
+    normalizedExePath: existing.normalizedExePath || next.normalizedExePath,
+    processName: existing.processName || next.processName,
+    displayName: existing.displayName ?? next.displayName,
     publisher: existing.publisher ?? next.publisher,
-    iconRef: existing.icon_ref ?? next.iconRef,
-    firstSeenAt: minTimestamp(existing.first_seen_at, next.firstSeenAt),
-    lastSeenAt: maxTimestamp(existing.last_seen_at, next.lastSeenAt),
+    iconRef: existing.iconRef ?? next.iconRef,
+    firstSeenAt: minTimestamp(existing.firstSeenAt, next.firstSeenAt),
+    lastSeenAt: maxTimestamp(existing.lastSeenAt, next.lastSeenAt),
   };
 }
 
@@ -270,172 +162,34 @@ async function loadOrCreateBackfillDeviceId(db: DbLike): Promise<string> {
   return generated;
 }
 
-function nextHlc(existing: string | undefined, deviceId: string): string {
-  const now = new Date().toISOString();
-  if (!existing) {
-    return `${now}:000000:${deviceId}`;
+function createBackfillUsageApi(
+  options: BackfillLegacyUsageToArkOptions,
+  targetDbPath: string,
+  deviceId: string,
+): BackfillUsageApi {
+  if (options.arkUsage) {
+    return options.arkUsage;
   }
 
-  const zIndex = existing.indexOf("Z");
-  if (zIndex < 0) {
-    return `${now}:000000:${deviceId}`;
-  }
-
-  const firstColon = existing.indexOf(":", zIndex);
-  if (firstColon < 0) {
-    return `${now}:000000:${deviceId}`;
-  }
-
-  const rest = existing.slice(firstColon + 1);
-  const secondColon = rest.indexOf(":");
-  if (secondColon < 0) {
-    return `${now}:000000:${deviceId}`;
-  }
-
-  const wallTime = existing.slice(0, firstColon);
-  const counter = Number.parseInt(rest.slice(0, secondColon), 10) || 0;
-  const previousDeviceId = rest.slice(secondColon + 1);
-
-  if (previousDeviceId === deviceId) {
-    if (wallTime < now) {
-      return `${now}:000000:${deviceId}`;
-    }
-
-    return `${wallTime}:${String(counter + 1).padStart(6, "0")}:${deviceId}`;
-  }
-
-  if (wallTime >= now) {
-    return `${wallTime}:${String(counter + 1).padStart(6, "0")}:${deviceId}`;
-  }
-
-  return `${now}:000000:${deviceId}`;
+  return new ArkClient({
+    spaceId: "arrancador",
+    deviceId,
+    deviceName: "Arrancador Legacy Import",
+    dbPath: targetDbPath,
+    sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(),
+    requestTimeoutMs: options.requestTimeoutMs ?? 10_000,
+  }).usage;
 }
 
-async function bumpVersionVector(
-  db: DbLike,
-  entityId: string,
-  deviceId: string,
-): Promise<void> {
-  const encoded = await getSyncKv(db, VERSION_VECTOR_KEY);
-  const vector =
-    encoded && encoded.trim().length > 0
-      ? (JSON.parse(encoded) as Record<string, string>)
+function parseMetaJson(value: string): JsonValue {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as JsonValue)
       : {};
-  vector[entityId] = nextHlc(vector[entityId], deviceId);
-  await setSyncKv(db, VERSION_VECTOR_KEY, JSON.stringify(vector));
-}
-
-export function buildLegacyUsageBackfillPlan(
-  games: readonly LegacyGameRow[],
-  dailyRows: readonly LegacyDailyRow[],
-  deviceId: string,
-  deviceName: string,
-): LegacyUsageBackfillPlan {
-  const dailyRowsByGame = new Map<string, LegacyDailyRow[]>();
-  for (const row of dailyRows) {
-    const current = dailyRowsByGame.get(row.game_id) ?? [];
-    current.push(row);
-    dailyRowsByGame.set(row.game_id, current);
+  } catch {
+    return {};
   }
-
-  const trackedApps: LegacyUsageBackfillTrackedApp[] = [];
-  const sessions: LegacyUsageBackfillSession[] = [];
-
-  for (const game of games) {
-    const normalizedExePath = normalizeExePath(game.exe_path);
-    const trackedAppId = createTrackedAppId(game.exe_path);
-    const gameDailyRows = [...(dailyRowsByGame.get(game.id) ?? [])].sort((left, right) =>
-      left.date.localeCompare(right.date),
-    );
-    const importedGameSessions: LegacyUsageBackfillSession[] = [];
-    const totalFromDailyRows = gameDailyRows.reduce(
-      (sum, row) => sum + Math.max(0, Number(row.seconds ?? 0)),
-      0,
-    );
-
-    for (const row of gameDailyRows) {
-      const { startedAt, endedAt } = deriveSessionBounds(row.date, row.seconds);
-      importedGameSessions.push({
-        id: createSyntheticSessionId(trackedAppId, "daily", row.date, row.seconds),
-        trackedAppId,
-        deviceId,
-        deviceName,
-        platform: PLATFORM,
-        startedAt,
-        endedAt,
-        foregroundMs: Math.max(0, Number(row.seconds ?? 0)) * 1000,
-        idleMs: 0,
-        windowTitle: game.name,
-        processName: game.exe_name,
-        exePath: game.exe_path,
-        pidStart: null,
-        pidEnd: null,
-        metaJson: buildSessionMeta(game, "daily", row.date),
-        kind: "daily",
-      });
-    }
-
-    const residualSeconds = Math.max(
-      0,
-      Math.floor(Number(game.total_playtime ?? 0) - totalFromDailyRows),
-    );
-    if (residualSeconds > 0) {
-      const residualDate =
-        toIsoDate(game.last_played) ??
-        gameDailyRows[gameDailyRows.length - 1]?.date ??
-        game.date_added.slice(0, 10);
-      const { startedAt, endedAt } = deriveSessionBounds(
-        residualDate,
-        residualSeconds,
-        game.last_played,
-      );
-      importedGameSessions.push({
-        id: createSyntheticSessionId(trackedAppId, "residual", residualDate, residualSeconds),
-        trackedAppId,
-        deviceId,
-        deviceName,
-        platform: PLATFORM,
-        startedAt,
-        endedAt,
-        foregroundMs: residualSeconds * 1000,
-        idleMs: 0,
-        windowTitle: game.name,
-        processName: game.exe_name,
-        exePath: game.exe_path,
-        pidStart: null,
-        pidEnd: null,
-        metaJson: buildSessionMeta(game, "residual", residualDate),
-        kind: "residual",
-      });
-    }
-
-    if (importedGameSessions.length === 0) {
-      continue;
-    }
-
-    importedGameSessions.sort((left, right) => left.endedAt.localeCompare(right.endedAt));
-    const firstSeenAt = importedGameSessions[0]?.startedAt ?? game.date_added;
-    const lastSeenAt =
-      importedGameSessions[importedGameSessions.length - 1]?.endedAt ??
-      game.last_played ??
-      game.date_added;
-
-    trackedApps.push({
-      id: trackedAppId,
-      platform: PLATFORM,
-      exePath: game.exe_path,
-      normalizedExePath,
-      processName: game.exe_name,
-      displayName: game.name,
-      publisher: null,
-      iconRef: null,
-      firstSeenAt,
-      lastSeenAt,
-    });
-    sessions.push(...importedGameSessions);
-  }
-
-  return { trackedApps, sessions };
 }
 
 export async function backfillLegacyUsageToArk(
@@ -483,109 +237,80 @@ export async function backfillLegacyUsageToArk(
       deviceId,
       deviceName,
     );
+    const usage = createBackfillUsageApi(
+      options,
+      targetDbPath ?? options.arkDbPath,
+      deviceId,
+    );
+    const existingUsage = await usage.loadAll();
+    const existingTrackedApps = new Map(
+      existingUsage.trackedApps.map((trackedApp) => [trackedApp.id, trackedApp]),
+    );
+    const existingSessionIds = new Set(
+      existingUsage.usageSessions.map((session) => session.id),
+    );
 
-    return await runInTransaction(arkDb, async (tx) => {
-      const result: LegacyUsageBackfillResult = {
-        ...emptyResult,
-        targetDbPath,
-        alreadyBackfilled: false,
-      };
+    const result: LegacyUsageBackfillResult = {
+      ...emptyResult,
+      targetDbPath,
+      alreadyBackfilled: false,
+    };
 
-      for (const trackedApp of plan.trackedApps) {
-        const existing = await queryOne<ExistingTrackedAppRow>(
-          tx,
-          `SELECT id, exe_path, normalized_exe_path, process_name, display_name, publisher, icon_ref,
-                  first_seen_at, last_seen_at
-           FROM tracked_apps
-           WHERE id = ?1`,
-          [trackedApp.id],
-        );
+    for (const trackedApp of plan.trackedApps) {
+      const existing = existingTrackedApps.get(trackedApp.id);
+      const merged = mergeTrackedApp(existing, trackedApp);
+      await usage.trackedApps.upsert(merged);
+      existingTrackedApps.set(merged.id, merged);
 
-        const merged = mergeTrackedApp(existing ?? undefined, trackedApp);
-        await execute(
-          tx,
-          `INSERT OR REPLACE INTO tracked_apps
-             (id, platform, exe_path, normalized_exe_path, process_name,
-              display_name, publisher, icon_ref, first_seen_at, last_seen_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
-          [
-            merged.id,
-            merged.platform,
-            merged.exePath,
-            merged.normalizedExePath,
-            merged.processName,
-            merged.displayName,
-            merged.publisher,
-            merged.iconRef,
-            merged.firstSeenAt,
-            merged.lastSeenAt,
-          ],
-        );
+      if (!existing) {
+        result.migratedTrackedApps += 1;
+      } else if (
+        existing.firstSeenAt !== merged.firstSeenAt ||
+        existing.lastSeenAt !== merged.lastSeenAt ||
+        (existing.displayName ?? null) !== (merged.displayName ?? null)
+      ) {
+        result.updatedTrackedApps += 1;
+      }
+    }
 
-        if (!existing) {
-          result.migratedTrackedApps += 1;
-        } else if (
-          existing.first_seen_at !== merged.firstSeenAt ||
-          existing.last_seen_at !== merged.lastSeenAt ||
-          (existing.display_name ?? null) !== (merged.displayName ?? null)
-        ) {
-          result.updatedTrackedApps += 1;
-        }
-
-        await bumpVersionVector(tx, merged.id, deviceId);
+    for (const session of plan.sessions) {
+      if (existingSessionIds.has(session.id)) {
+        result.skippedSessions += 1;
+        continue;
       }
 
-      for (const session of plan.sessions) {
-        const existing = await queryOne<{ id: string }>(
-          tx,
-          "SELECT id FROM usage_sessions WHERE id = ?1",
-          [session.id],
-        );
-        if (existing) {
-          result.skippedSessions += 1;
-          continue;
-        }
+      await usage.sessions.upsert({
+        id: session.id,
+        trackedAppId: session.trackedAppId,
+        deviceId: session.deviceId,
+        deviceName: session.deviceName,
+        platform: session.platform,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        foregroundMs: session.foregroundMs,
+        idleMs: session.idleMs,
+        windowTitle: session.windowTitle,
+        processName: session.processName,
+        exePath: session.exePath,
+        pidStart: session.pidStart,
+        pidEnd: session.pidEnd,
+        metaJson: parseMetaJson(session.metaJson),
+      });
+      existingSessionIds.add(session.id);
+      result.migratedSessions += 1;
+    }
 
-        await execute(
-          tx,
-          `INSERT INTO usage_sessions
-             (id, tracked_app_id, device_id, device_name, platform, started_at, ended_at,
-              foreground_ms, idle_ms, window_title, process_name, exe_path, pid_start, pid_end, meta_json)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`,
-          [
-            session.id,
-            session.trackedAppId,
-            session.deviceId,
-            session.deviceName,
-            session.platform,
-            session.startedAt,
-            session.endedAt,
-            session.foregroundMs,
-            session.idleMs,
-            session.windowTitle,
-            session.processName,
-            session.exePath,
-            session.pidStart,
-            session.pidEnd,
-            session.metaJson,
-          ],
-        );
-        result.migratedSessions += 1;
-        await bumpVersionVector(tx, session.id, deviceId);
-      }
+    await setSyncKv(
+      arkDb,
+      BACKFILL_MARKER_KEY,
+      JSON.stringify({
+        version: 1,
+        imported_at: new Date().toISOString(),
+        sessions: plan.sessions.length,
+      }),
+    );
 
-      await setSyncKv(
-        tx,
-        BACKFILL_MARKER_KEY,
-        JSON.stringify({
-          version: 1,
-          imported_at: new Date().toISOString(),
-          sessions: plan.sessions.length,
-        }),
-      );
-
-      return result;
-    });
+    return result;
   } finally {
     await Promise.resolve(arkDb.close?.());
   }

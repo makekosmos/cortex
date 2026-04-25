@@ -164,6 +164,28 @@ describe("architecture boundaries", () => {
     expect(localHandleCount).toBe(0);
   });
 
+  it("keeps backup IPC registration free of backup workflow implementation details", () => {
+    const source = readAppFile("electron/main/ipc/backup-handlers.ts");
+    const forbiddenPatterns = [
+      /from\s+["']\.\.\/services\/backup["']/,
+      /from\s+["']\.\.\/services\/backup-ipc-support["']/,
+      /from\s+["']\.\.\/services\/settings-store["']/,
+      /from\s+["']\.\.\/helpers\/db["']/,
+      /\bcreateBackupArtifact\b/,
+      /\brestoreBackupArtifact\b/,
+      /\bdeleteBackupArtifact\b/,
+      /\bdiscoverBackupInfo\b/,
+      /\bfindGameSaveArtifacts\b/,
+      /\bgetGameBackupState\b/,
+      /\breconcileBackupRows\b/,
+    ];
+    const offenders = forbiddenPatterns
+      .filter((pattern) => pattern.test(source))
+      .map((pattern) => pattern.source);
+
+    expect(offenders).toEqual([]);
+  });
+
   it("keeps backend lifecycle separate from runtime service composition", () => {
     const backend = fs.readFileSync(
       path.join(rootDir, "electron", "main", "backend.ts"),
@@ -260,6 +282,91 @@ describe("architecture boundaries", () => {
     ];
 
     expect(boundaryProblems).toEqual([]);
+  });
+
+  it("keeps GameDetailPage launch orchestration in a composable", () => {
+    const source = readAppFile("src-vue/pages/GameDetailPage.vue");
+    const script = extractVueBlock(source, "script");
+    const forbiddenLaunchPatterns = [
+      {
+        label: "direct backup API import",
+        pattern: /import\s+\{[^}]*\bbackupApi\b[^}]*\}\s+from/,
+      },
+      { label: "restore check", pattern: /\bbackupApi\.checkRestoreNeeded\b/ },
+      { label: "restore call", pattern: /\bbackupApi\.restore\b/ },
+      {
+        label: "backup-before-launch setting",
+        pattern: /\bbackupApi\.shouldBackupBeforeLaunch\b/,
+      },
+      { label: "backup-needed check", pattern: /\bbackupApi\.checkBackupNeeded\b/ },
+      { label: "auto backup create", pattern: /\bbackupApi\.create\b/ },
+      { label: "direct launch call", pattern: /\bgamesApi\.launch\b/ },
+      {
+        label: "direct running count call",
+        pattern: /\bgamesApi\.getRunningInstances\b/,
+      },
+      { label: "direct process kill call", pattern: /\bgamesApi\.killProcesses\b/ },
+      { label: "local launchGame function", pattern: /async function launchGame\(/ },
+    ];
+    const offenders = forbiddenLaunchPatterns
+      .filter(({ pattern }) => pattern.test(script))
+      .map(({ label }) => label);
+
+    expect(script).toContain("useGameLaunchFlow");
+    expect(offenders).toEqual([]);
+    expect(countMeaningfulLines(source)).toBeLessThanOrEqual(420);
+  });
+
+  it("keeps GameDetailPage dialog prop bridge aligned with GameDetailDialogs", () => {
+    const page = readAppFile("src-vue/pages/GameDetailPage.vue");
+    const dialogs = readAppFile("src-vue/components/game-detail/GameDetailDialogs.vue");
+
+    expect(dialogs).toContain("savingEdit: boolean");
+    expect(dialogs).toContain("metadataResults: readonly RawgGame[]");
+    expect(page).toContain(":saving-edit=\"savingEdit\"");
+    expect(page).toContain(":metadata-results=\"metadataResults\"");
+    expect(page).not.toContain(":saving=\"savingEdit\"");
+    expect(page).not.toContain(":results=\"metadataResults\"");
+  });
+
+  it("keeps backup workflow facade small and split by responsibility", () => {
+    const facade = readAppFile("electron/main/services/backup-workflow.ts");
+    const facadeLines = countMeaningfulLines(facade);
+    const requiredModules = [
+      "electron/main/services/backup-workflow/types.ts",
+      "electron/main/services/backup-workflow/internals.ts",
+      "electron/main/services/backup-workflow/shared.ts",
+      "electron/main/services/backup-workflow/read-use-cases.ts",
+      "electron/main/services/backup-workflow/write-use-cases.ts",
+      "electron/main/services/backup-workflow/service.ts",
+    ];
+    const missingModules = requiredModules.filter(
+      (filePath) => !fs.existsSync(path.join(rootDir, filePath)),
+    );
+
+    expect(facadeLines).toBeLessThanOrEqual(80);
+    expect(facade).not.toMatch(/\bINSERT INTO backups\b/);
+    expect(facade).not.toMatch(/\bSELECT id, game_id, backup_path\b/);
+    expect(facade).not.toMatch(/\bcreateBackupArtifact\b/);
+    expect(missingModules).toEqual([]);
+  });
+
+  it("keeps games service contracts and row loading outside the command service", () => {
+    const service = readAppFile("electron/main/services/games.ts");
+    const meaningfulLines = countMeaningfulLines(service);
+    const requiredModules = [
+      "electron/main/services/games/service-types.ts",
+      "electron/main/services/games/loading.ts",
+    ];
+    const missingModules = requiredModules.filter(
+      (filePath) => !fs.existsSync(path.join(rootDir, filePath)),
+    );
+
+    expect(meaningfulLines).toBeLessThanOrEqual(330);
+    expect(service).not.toMatch(/export interface GamesServiceDeps/);
+    expect(service).not.toMatch(/export interface GamesService\s/);
+    expect(service).not.toMatch(/function hydrateExplicitBindings/);
+    expect(missingModules).toEqual([]);
   });
 
   it("keeps deprecated runtimes and test APIs out of active source", () => {

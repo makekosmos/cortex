@@ -1,8 +1,10 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { promisify } from "node:util";
 
 const ROOT = process.cwd();
 const HOST = "127.0.0.1";
+const execFileAsync = promisify(execFile);
 
 function run(command: string, args: string[], env = process.env) {
   return new Promise<void>((resolve, reject) => {
@@ -28,6 +30,9 @@ async function runE2ESuite(env: NodeJS.ProcessEnv) {
   try {
     await run(process.execPath, ["x", "playwright", "test"], env);
   } catch (error) {
+    if (env.ARRANCADOR_E2E_INLINE_FALLBACK !== "1") {
+      throw error;
+    }
     console.warn(
       "[e2e] Playwright test runner failed, retrying with inline fallback:",
       error,
@@ -72,6 +77,34 @@ async function waitForPreview(url: string, hasPreviewExited: () => boolean) {
   throw new Error(`Preview server did not become ready at ${url}`);
 }
 
+async function waitForExit(child: ChildProcess, timeoutMs: number) {
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, timeoutMs);
+    child.once("exit", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
+async function stopPreview(child: ChildProcess, hasExited: () => boolean) {
+  if (hasExited()) {
+    return;
+  }
+
+  if (process.platform === "win32" && child.pid) {
+    try {
+      await execFileAsync("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
+    } catch {
+      // Sandbox environments may block taskkill after the browser spawn fails.
+    }
+  } else if (!child.killed) {
+    child.kill();
+  }
+
+  await waitForExit(child, 3_000);
+}
+
 await run(process.execPath, ["run", "build"]);
 
 const port = await getAvailablePort();
@@ -111,7 +144,5 @@ try {
     ARRANCADOR_E2E_EXTERNAL_SERVER: "1",
   });
 } finally {
-  if (!preview.killed && !previewExited) {
-    preview.kill();
-  }
+  await stopPreview(preview, () => previewExited);
 }

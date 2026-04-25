@@ -24,7 +24,7 @@ interface ScanResult {
 interface Props {
   activeTab: "folders" | "processes";
   currentListLength: number;
-  filteredResults: ScanResult[];
+  filteredResults: readonly ScanResult[];
   selectedCount: number;
   newCount: number;
   loadingProcesses: boolean;

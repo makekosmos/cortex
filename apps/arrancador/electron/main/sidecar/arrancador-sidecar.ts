@@ -102,38 +102,6 @@ function createSidecarUnavailableError(binaryPath: string) {
   );
 }
 
-function isUnavailableShellLaunchFailure(
-  binaryPath: string,
-  code: number | null,
-  stderr: string,
-) {
-  if (process.platform !== "win32" || code === 0 || code === null) {
-    return false;
-  }
-
-  if (!fs.existsSync(binaryPath)) {
-    return true;
-  }
-
-  const lowerStderr = stderr.toLowerCase();
-  const trimmedLowerStderr = lowerStderr.trim();
-  const lowerBinaryPath = binaryPath.toLowerCase();
-  const lowerBinaryName = path.basename(binaryPath).toLowerCase();
-  const mentionsSidecarBinary =
-    lowerStderr.includes(lowerBinaryPath) || lowerStderr.includes(lowerBinaryName);
-
-  return (
-    (mentionsSidecarBinary &&
-      (lowerStderr.includes(
-        "is not recognized as an internal or external command",
-      ) ||
-        lowerStderr.includes("the system cannot find the file specified") ||
-        lowerStderr.includes("the system cannot find the path specified") ||
-        lowerStderr.includes("access is denied"))) ||
-    trimmedLowerStderr === "access is denied."
-  );
-}
-
 export function isArrancadorSidecarUnavailableError(
   error: unknown,
 ): error is ArrancadorSidecarUnavailableError {
@@ -159,8 +127,10 @@ async function runManagedSidecarRequest<T>(
     let child: ChildProcessWithoutNullStreams | null = null;
     let stdoutBuffer = "";
     let stderrBuffer = "";
+    let stdinError: Error | null = null;
     let settled = false;
     let killedForAbort = false;
+    let stdoutDrain = Promise.resolve();
 
     const settle = (fn: () => void) => {
       if (settled) {
@@ -182,7 +152,7 @@ async function runManagedSidecarRequest<T>(
     try {
       child = spawn(binaryPath, ["serve"], {
         stdio: ["pipe", "pipe", "pipe"],
-        shell: process.platform === "win32",
+        shell: false,
       });
     } catch (error) {
       const spawnError = error instanceof Error ? error : new Error(String(error));
@@ -202,9 +172,13 @@ async function runManagedSidecarRequest<T>(
       stderrBuffer = appendTail(stderrBuffer, chunk, MAX_STDERR_TAIL_CHARS);
     });
 
+    child.stdin.on("error", (error: Error) => {
+      stdinError = error;
+    });
+
     child.stdout.on("data", (chunk: string) => {
       stdoutBuffer += chunk;
-      void flushStdout();
+      scheduleStdoutDrain();
     });
 
     child.on("error", (error: Error & { code?: string }) => {
@@ -215,19 +189,32 @@ async function runManagedSidecarRequest<T>(
     });
 
     child.on("close", (code) => {
+      void handleClose(code);
+    });
+
+    async function handleClose(code: number | null) {
+      await stdoutDrain.catch(() => undefined);
       if (killedForAbort || settled) {
         return;
       }
-      if (isUnavailableShellLaunchFailure(binaryPath, code, stderrBuffer)) {
-        settle(() => reject(createSidecarUnavailableError(binaryPath)));
-        return;
-      }
-      const detail = stderrBuffer.trim() || `arrancador-sidecar exited with ${code}`;
+      const detail =
+        stderrBuffer.trim() ||
+        stdinError?.message ||
+        `arrancador-sidecar exited with ${code}`;
       settle(() => reject(new Error(detail)));
+    }
+
+    child.stdin.write(`${JSON.stringify(request)}\n`, (error) => {
+      if (error) {
+        stdinError = error;
+      }
+      child?.stdin.end();
     });
 
-    child.stdin.write(`${JSON.stringify(request)}\n`);
-    child.stdin.end();
+    function scheduleStdoutDrain() {
+      stdoutDrain = stdoutDrain.then(flushStdout, flushStdout);
+      void stdoutDrain.catch(() => undefined);
+    }
 
     async function flushStdout() {
       while (true) {
@@ -352,14 +339,16 @@ export async function copyBackupDirectoryWithSidecar(
 export async function restoreBackupDirectoryWithSidecar(
   backupRoot: string,
   options: {
+    allowedRestoreRoots: readonly string[];
     onProgress?: (progress: BackupProgress) => void | Promise<void>;
     binaryPath?: string;
-  } = {},
+  },
 ): Promise<void> {
   await runManagedSidecarRequest<boolean>(
     {
       operation: "restore_backup_directory",
       backupRoot,
+      allowedRestoreRoots: options.allowedRestoreRoots,
     },
     {
       binaryPath: options.binaryPath,

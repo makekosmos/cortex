@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Database, ExternalLink, FolderOpen, Loader2, RefreshCw } from "lucide-vue-next";
-import type { ArkConnectionInfo, GamesArkSyncResult } from "../../src/types";
+import type { ArkConnectionInfo, GamesArkSyncResult } from "@/types";
 import type { InlineFeedback } from "./types";
 
 const props = withDefaults(

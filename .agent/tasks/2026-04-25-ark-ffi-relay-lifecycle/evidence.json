@@ -1,0 +1,99 @@
+{
+  "taskId": "2026-04-25-ark-ffi-relay-lifecycle",
+  "verdict": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/ffi.rs imports RelaySync/RelaySyncConfig",
+        "ArkCore::start_sync creates RelaySync when config.relay_url is Some"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/ffi.rs install_relay_callbacks wires RelaySync callbacks to ArkEventListener"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/ffi.rs broadcast_change_json calls relay.broadcast_live_change when relay exists"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/ffi.rs stop_sync_inner calls relay.stop when relay exists"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/ffi.rs get_connected_peers merges relay.get_connected_peer_entries without duplicate device ids"
+      ]
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": [
+        "verify-ffi-relay-wiring.txt",
+        "cargo-check.txt",
+        "cargo-fmt-check.txt",
+        "cargo-test.txt",
+        "arksync-node-typecheck.txt",
+        "arksync-node-build.txt",
+        "git-diff-check.txt"
+      ]
+    }
+  },
+  "commands": [
+    {
+      "command": "cargo check --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "artifact": "cargo-check.txt"
+    },
+    {
+      "command": "cargo fmt --manifest-path packages\\ark-core\\rust\\Cargo.toml --check",
+      "status": "PASS",
+      "artifact": "cargo-fmt-check.txt"
+    },
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "artifact": "cargo-test.txt",
+      "notes": "relay_round_trip.rs emits pre-existing unused import/variable warnings"
+    },
+    {
+      "command": "bun run --cwd packages\\arksync-node typecheck",
+      "status": "PASS",
+      "artifact": "arksync-node-typecheck.txt"
+    },
+    {
+      "command": "bun run --cwd packages\\arksync-node build",
+      "status": "PASS",
+      "artifact": "arksync-node-build.txt"
+    },
+    {
+      "command": "bun .agent\\tasks\\2026-04-25-ark-ffi-relay-lifecycle\\verify-ffi-relay-wiring.ts",
+      "status": "PASS",
+      "artifact": "verify-ffi-relay-wiring.txt"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS",
+      "artifact": "git-diff-check.txt",
+      "notes": "Git reported CRLF normalization warnings only"
+    }
+  ],
+  "problems": [
+    {
+      "file": "problems.md",
+      "status": "RESOLVED",
+      "summary": "Verifier was too whitespace-sensitive around a formatted relay broadcast call; verifier now normalizes whitespace."
+    }
+  ],
+  "remainingNotes": [
+    "Relay lifecycle parity is now implemented for ark-core-rpc and UniFFI.",
+    "Mobile platform smoke testing and binding regeneration/consumption remain follow-up integration work."
+  ]
+}

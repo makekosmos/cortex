@@ -1,3 +1,4 @@
+import type { ArkTrackedAppRecord, ArkUsageApi, ArkUsageSessionRecord } from "@kepler/ark";
 import { describe, expect, it } from "vitest";
 import type { DbLike, DbRunResult, DbValue } from "../helpers/shared";
 import {
@@ -45,8 +46,6 @@ function createLegacyDb(
 
 function createArkDb() {
   const syncKv = new Map<string, string>();
-  const trackedApps = new Map<string, Record<string, unknown>>();
-  const usageSessions = new Map<string, Record<string, unknown>>();
 
   const db: DbLike = {
     all: () => [],
@@ -56,15 +55,6 @@ function createArkDb() {
         return value === undefined ? undefined : { value };
       }
 
-      if (sql.includes("FROM tracked_apps")) {
-        return trackedApps.get(String(params[0] ?? ""));
-      }
-
-      if (sql.includes("FROM usage_sessions")) {
-        const id = String(params[0] ?? "");
-        return usageSessions.has(id) ? { id } : undefined;
-      }
-
       return undefined;
     },
     run(sql, params: readonly DbValue[] = []): DbRunResult {
@@ -72,31 +62,6 @@ function createArkDb() {
         syncKv.set(String(params[0] ?? ""), String(params[1] ?? ""));
         return { changes: 1 };
       }
-
-      if (sql.includes("INSERT OR REPLACE INTO tracked_apps")) {
-        trackedApps.set(String(params[0] ?? ""), {
-          id: String(params[0] ?? ""),
-          platform: String(params[1] ?? ""),
-          exe_path: String(params[2] ?? ""),
-          normalized_exe_path: String(params[3] ?? ""),
-          process_name: String(params[4] ?? ""),
-          display_name: params[5] ?? null,
-          publisher: params[6] ?? null,
-          icon_ref: params[7] ?? null,
-          first_seen_at: String(params[8] ?? ""),
-          last_seen_at: String(params[9] ?? ""),
-        });
-        return { changes: 1 };
-      }
-
-      if (sql.includes("INSERT INTO usage_sessions")) {
-        usageSessions.set(String(params[0] ?? ""), {
-          id: String(params[0] ?? ""),
-          tracked_app_id: String(params[1] ?? ""),
-        });
-        return { changes: 1 };
-      }
-
       return { changes: 0 };
     },
     transaction: async (fn) => await Promise.resolve(fn(db)),
@@ -106,6 +71,35 @@ function createArkDb() {
   return {
     db,
     syncKv,
+  };
+}
+
+function createArkUsage() {
+  const trackedApps = new Map<string, ArkTrackedAppRecord>();
+  const usageSessions = new Map<string, ArkUsageSessionRecord>();
+  const usage: Pick<ArkUsageApi, "loadAll"> & {
+    trackedApps: Pick<ArkUsageApi["trackedApps"], "upsert">;
+    sessions: Pick<ArkUsageApi["sessions"], "upsert">;
+  } = {
+    loadAll: async () => ({
+      trackedApps: [...trackedApps.values()],
+      usageSessions: [...usageSessions.values()],
+      usageEvents: [],
+    }),
+    trackedApps: {
+      upsert: async (record) => {
+        trackedApps.set(record.id, record);
+      },
+    },
+    sessions: {
+      upsert: async (record) => {
+        usageSessions.set(record.id, record);
+      },
+    },
+  };
+
+  return {
+    usage,
     trackedApps,
     usageSessions,
   };
@@ -194,10 +188,12 @@ describe("backfillLegacyUsageToArk", () => {
       ],
     );
     const ark = createArkDb();
+    const arkUsage = createArkUsage();
 
     const first = await backfillLegacyUsageToArk({
       legacyDb,
       arkDbPath: "selected.db",
+      arkUsage: arkUsage.usage,
       resolveUsageDb: async () => ({
         db: ark.db,
         path: "selected.db",
@@ -207,14 +203,14 @@ describe("backfillLegacyUsageToArk", () => {
     expect(first.alreadyBackfilled).toBe(false);
     expect(first.migratedTrackedApps).toBe(1);
     expect(first.migratedSessions).toBe(2);
-    expect(ark.trackedApps.size).toBe(1);
-    expect(ark.usageSessions.size).toBe(2);
+    expect(arkUsage.trackedApps.size).toBe(1);
+    expect(arkUsage.usageSessions.size).toBe(2);
     expect(ark.syncKv.has("arrancador.legacy_usage_backfill.v1")).toBe(true);
-    expect(ark.syncKv.has("lan_sync.version_vector")).toBe(true);
 
     const second = await backfillLegacyUsageToArk({
       legacyDb,
       arkDbPath: "selected.db",
+      arkUsage: arkUsage.usage,
       resolveUsageDb: async () => ({
         db: ark.db,
         path: "selected.db",
@@ -226,7 +222,7 @@ describe("backfillLegacyUsageToArk", () => {
     expect(second.migratedTrackedApps).toBe(0);
     expect(second.migratedSessions).toBe(0);
     expect(second.skippedSessions).toBe(2);
-    expect(ark.trackedApps.size).toBe(1);
-    expect(ark.usageSessions.size).toBe(2);
+    expect(arkUsage.trackedApps.size).toBe(1);
+    expect(arkUsage.usageSessions.size).toBe(2);
   });
 });

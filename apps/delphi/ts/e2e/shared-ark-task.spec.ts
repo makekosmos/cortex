@@ -20,6 +20,7 @@ interface AppEnvironment {
   localAppDataPath: string;
   vaultPath: string;
   arkDbPath: string;
+  startupLogPath: string;
 }
 
 interface ArkTaskRow {
@@ -179,6 +180,7 @@ function createEnvironment(): AppEnvironment {
     localAppDataPath,
     vaultPath,
     arkDbPath: getArkDbPathForSelectedSpace(appDataPath, selection),
+    startupLogPath: path.join(rootPath, "delphi-startup.log"),
   };
 }
 
@@ -188,18 +190,27 @@ async function launchElectronApp(
   extraEnv: Record<string, string> = {},
   attempt = 0,
 ): Promise<LaunchedApp> {
-  const electronApp = await electron.launch({
-    args: [appPath],
-    env: {
-      ...process.env,
-      HOME: env.homePath,
-      USERPROFILE: env.homePath,
-      APPDATA: env.appDataPath,
-      LOCALAPPDATA: env.localAppDataPath,
-      PLAYWRIGHT: "1",
-      ...extraEnv,
-    },
-  });
+  let electronApp: ElectronApp;
+  try {
+    electronApp = await electron.launch({
+      args: ["--no-sandbox", "--disable-gpu", "--disable-software-rasterizer", appPath],
+      env: {
+        ...process.env,
+        HOME: env.homePath,
+        USERPROFILE: env.homePath,
+        APPDATA: env.appDataPath,
+        LOCALAPPDATA: env.localAppDataPath,
+        DELPHI_STARTUP_LOG: env.startupLogPath,
+        PLAYWRIGHT: "1",
+        ...extraEnv,
+      },
+    });
+  } catch (error) {
+    const startupLog = fs.existsSync(env.startupLogPath)
+      ? fs.readFileSync(env.startupLogPath, "utf8")
+      : "";
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nStartup log:\n${startupLog}`);
+  }
 
   try {
     const window = await electronApp.firstWindow({ timeout: 45_000 });

@@ -1,110 +1,23 @@
-# TODO — Незавершённые задачи
+# TODO
 
-## Ark (packages/ark/)
+## Legacy Note
 
-### Готово
-- [x] Переименование Dataverse → Ark (60 тестов проходят)
-- [x] core/sync.py — SyncManager с version vectors, outbox, конфликтами (28 тестов)
-- [x] server/sync_ws.py — WebSocket endpoint `/ws/sync` (6 тестов)
-- [x] server/discovery.py — mDNS `_ark-sync._tcp.local.`
-- [x] server/pairing.py — генерация pairing codes (`ark-XXXX`) + QR
-- [x] Pairing endpoints в app.py (POST /pairing/create, POST /pairing/claim, GET /pairing/qr)
-- [x] core/cli.py — CLI: ark add/task/note/list/search/stats/sync/serve/pair
-- [x] Демо-БД (examples/demo.db, 500 событий)
-- [x] Сервер работает на localhost:8000
-- [x] CLI: `ark pair` команда (генерация кода + ASCII QR в терминале)
-- [x] Фикс path traversal в `_ui_spa` (проверка `is_relative_to`)
-- [x] Санитизация FTS search input (strip спецсимволов FTS5)
-- [x] Field(ge=0, le=10000) на limit/offset в Pydantic моделях
-- [x] Тесты для server/app.py (27 тестов, TestClient)
-- [x] Тесты для pairing.py (16 тестов)
-- [x] Connection pooling в Ark class (keep_alive + threading.local, 8 тестов)
-- [x] E2E workflow тест (4 теста: pair→sync→broadcast)
-- [x] AGENTS.md документация
+The previous contents of this file described an older `packages/ark/` Python/server-era plan. That is no longer the active ARK architecture.
 
-### Не завершено
-- [ ] UI — решить нужен ли (Кирилл сказал "кривой, смысла нет")
-- [ ] HTTP POST /events не пушит в WebSocket (только sync outbox) — рассмотреть интеграцию
+Current ARK runtime documentation:
 
-## Delphi Swift (apps/delphi/swift/)
+- [`packages/ark-core/README.md`](./packages/ark-core/README.md)
+- Rust runtime: `packages/ark-core/rust`
+- Node/Electron SDK: `packages/kepler-ark` (`@kepler/ark`)
+- Compatibility SDK name: `packages/arksync-node` (`@arksync/node`)
+- Canonical desktop sidecar: `ark-core-rpc`
 
-### Готово
-- [x] Sync/ArkSyncClient.swift — WebSocket клиент (URLSessionWebSocketTask)
-- [x] Sync/ArkEventMapper.swift — маппинг TodoItem/Project ↔ Ark events
-- [x] Sync/SyncSettings.swift — настройки в UserDefaults + isPaired
-- [x] Sync/SyncSettingsView.swift — pairing flow (код ark-XXXX вместо URL+key)
-- [x] Sync/ArkPairing.swift — claim pairing code
-- [x] Sync/ArkDiscovery.swift — mDNS Bonjour + localhost probe
-- [x] Auto-connect при запуске если paired
-- [x] Network entitlements (client + server)
-- [x] xcodegen generate (билд проходит)
+## Current ARK Priorities
 
-### Не завершено
-(нет)
-
-## Delphi TS (apps/delphi/ts/)
-
-### Готово
-- [x] Миграция Tauri → Electron (main.ts, preload.ts, IPC fs)
-- [x] Vite 8.0.3 + vite-plugin-electron 1.0.0-beta.2
-- [x] oxlint настроен (157 правил, .oxlintrc.json), Prettier оставлен (oxcfmt не на npm)
-- [x] Очистка дублей (normalizeApiUrl/normalizePassphrase → src/helpers/normalize.ts)
-- [x] Интеграция с Ark sync (src/services/sync/ark-client.ts)
-- [x] Pairing flow в настройках (src/services/sync/pairing.ts + SettingsPage)
-- [x] Auto-connect при запуске если paired
-- [x] TS ошибки исправлены (LinkOff→Unlink, ES2023 lib)
-- [x] Feature parity — data layer:
-  - [x] Все модели (TodoItem, Project, Area, Tag, Heading, ChecklistItem, RecurrenceData)
-  - [x] Smart lists / TodoFilterService (7 списков)
-  - [x] Recurrence logic (daily/weekly/monthly/yearly)
-  - [x] Zustand store (todos.ts) с CRUD, state transitions, checklist, recurrence
-  - [x] useSmartList hook
-- [x] Feature parity — UI views:
-  - [x] Quick Entry (Cmd+N) — floating modal, today/evening, project picker
-  - [x] Quick Open (Cmd+K) — command palette, fuzzy search
-  - [x] Upcoming View — задачи по дням/неделям/месяцам
-- [x] Workspace linking проверен (bun workspaces)
-
-### Не завершено
-(нет)
-
-## Elysium (apps/elysium/)
-
-### Готово
-- [x] src/sync/ark-client.ts — WebSocket sync клиент
-- [x] src/sync/mapper.ts — MealEntry/WaterEntry ↔ Ark events
-- [x] src/sync/sync-store.ts — Zustand store для sync
-- [x] src/sync/pairing.ts — claim pairing code
-- [x] nutrition-store.ts и water-store.ts обновлены (push changes on write)
-- [x] settings.tsx — pairing flow (код вместо ручного URL+key)
-- [x] Auto-connect при запуске если paired
-- [x] E2E тесты sync (15 тестов: outgoing, incoming, round-trip, sync-store)
-
-### Не завершено
-(нет)
-
-## Olympia (apps/olympia/)
-
-### Готово
-- [x] AGENTS.md документация
-- [x] Ark sync интеграция (lib/sync/: ark-client, mapper, sync-store, pairing)
-- [x] Sync UI в профиле (pairing flow, connect/disconnect, status)
-- [x] Auto-connect при запуске если paired
-- [x] Создание пользовательских упражнений (app/exercise/create.tsx)
-
-### Не завершено
-(нет)
-
-## Общее
-
-### Готово
-- [x] `bun install` из корня монорепо
-- [x] E2E workflow тест (pair → connect → create → verify)
-
-### Не завершено
-
-- [ ] **P2P: event-driven discovery вместо постоянного polling**
-  - Сейчас: UDP beacon каждые 5 сек + бесконечный reconnect loop на всех платформах
-  - Идея: устройство при старте/пробуждении/смене сети шлёт burst beacon'ов и пытается подключиться ко всем известным пирам; если соединение упало — не reconnect loop, а ждать следующий beacon от пира
-  - Что нужно обдумать: стоит ли слать редкий фоновый beacon (напр. раз в 30-60 сек) чтобы новые устройства могли найти уже онлайн пиров; что делать при падении WS (0 попыток / 1-3 быстрых попытки / короткий backoff до max 5 попыток)
-  - Затронутые файлы: `broadcast-discovery.ts`, `sync-client.ts`, `peer-manager.ts`, `LanSyncClient.kt`, `BroadcastDiscovery.kt`, `PeerManager.kt`, `SyncClient.swift`
+- Keep app writes going through `ark-core-rpc` / `@kepler/ark`.
+- Keep direct Rust writers on `ark_core::db` helpers so sync state is updated consistently.
+- Add end-to-end mobile platform smoke tests for relay pairing. Both desktop `ark-core-rpc` and UniFFI `ArkCore::start_sync` now start relay sync when `relay_url` is provided.
+- When mobile testing is available, regenerate/consume UniFFI bindings in Android/iOS and verify the mobile apps can pass `relay_url`, `relay_api_key`, and `auth_secret` through `FfiSyncConfig`.
+- Add transport encryption before treating LAN sync as secure for sensitive data. LAN sync now has optional HMAC peer authentication, but HMAC does not encrypt payloads.
+- Delphi tasks should migrate automatically at app startup into `task_obj` records in the generic object model.
+- Eden notes should migrate automatically at app startup into `note_obj` records in the generic object model, while Heart remains available for editor/vault-specific behavior during the transition.

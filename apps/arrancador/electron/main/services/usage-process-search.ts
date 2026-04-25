@@ -1,6 +1,6 @@
 import type { UsageProcessCandidate } from "../../../src/types";
 import { queryAll } from "../helpers/db";
-import type { DbLike } from "../helpers/shared";
+import type { DbLike, DbValue } from "../helpers/shared";
 import { resolveUsageTrackerDb } from "./ark-usage";
 import { normalizeGameProcessBindingValue } from "./game-process-bindings";
 
@@ -61,7 +61,7 @@ function buildCandidate(row: UsageProcessRow): UsageProcessCandidate | null {
 async function runUsageProcessQuery(
   arkDb: DbLike,
   whereSql: string,
-  params: unknown[],
+  params: readonly DbValue[],
 ): Promise<UsageProcessCandidate[]> {
   const rows = await queryAll<UsageProcessRow>(
     arkDb,
@@ -98,7 +98,7 @@ export function createUsageProcessSearchService({
         fallbackArkDbPath,
       }));
 
-  const runQuery = async (whereSql: string, params: unknown[]) => {
+  const runQuery = async (whereSql: string, params: readonly DbValue[]) => {
     const { db } = await resolveDb();
     if (!db) {
       return [];

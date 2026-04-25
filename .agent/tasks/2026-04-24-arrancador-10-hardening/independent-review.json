@@ -1,0 +1,6 @@
+{
+  "status": "PENDING_FINAL_REVIEWS",
+  "supersedes": "Earlier intermediate review notes before restore-root, Electron hardening, sidecar stdin, and proof-artifact fixes.",
+  "reviewerInstruction": "Do not fail an individual review solely because AC9 is pending; judge whether this review can count as one of the five required 10/10 reviews.",
+  "requiredNextStep": "Run five fresh independent post-fix reviews and record their scores before AC9 can be marked PASS."
+}

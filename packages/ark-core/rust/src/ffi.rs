@@ -42,6 +42,7 @@ use crate::db::{
 use crate::host::{get_host_device_name, get_own_addresses};
 use crate::net::is_address_routable;
 use crate::protocol::LAN_SYNC_PORT;
+use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::sync_client::SyncClient;
 use crate::sync_server::{StorageBackend, SyncServer};
 use crate::types::{
@@ -102,6 +103,9 @@ pub struct FfiSyncConfig {
     /// API key for the relay server. Required when relay_url is Some.
     #[uniffi(default = None)]
     pub relay_api_key: Option<String>,
+    /// Optional shared secret for LAN/P2P hello HMAC authentication.
+    #[uniffi(default = None)]
+    pub auth_secret: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -142,10 +146,12 @@ struct SyncRuntime {
     server: Arc<SyncServer>,
     storage: Arc<SqliteStorageBackend>,
     clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    relay: Option<Arc<RelaySync>>,
     beacon: Arc<BroadcastDiscovery>,
     device_id: String,
     device_name: String,
     space_id: String,
+    auth_secret: Option<String>,
     own_addresses: Vec<String>,
 }
 
@@ -439,6 +445,7 @@ impl ArkCore {
 
                     let server =
                         Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
+                    server.set_auth_secret(config.auth_secret.clone()).await;
 
                     // Wire server → listener (using the self_arc inside the thread).
                     self_arc.install_server_callbacks(&server).await;
@@ -458,6 +465,25 @@ impl ArkCore {
                         )
                         .await
                         .map_err(ArkCoreError::from)?;
+
+                    let relay = if let Some(relay_url) = config.relay_url.clone() {
+                        let relay_sync = RelaySync::new(
+                            storage.clone() as Arc<dyn StorageBackend>,
+                            RelaySyncConfig {
+                                relay_url,
+                                relay_api_key: config.relay_api_key.clone(),
+                                space_id: config.space_id.clone(),
+                                device_id: config.device_id.clone(),
+                                device_name: device_name.clone(),
+                                auth_secret: config.auth_secret.clone(),
+                            },
+                        );
+                        self_arc.install_relay_callbacks(&relay_sync).await;
+                        relay_sync.start().await.map_err(ArkCoreError::from)?;
+                        Some(relay_sync)
+                    } else {
+                        None
+                    };
 
                     // Start clients for known peers.
                     let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
@@ -490,6 +516,7 @@ impl ArkCore {
                                 device_name.clone(),
                                 config.space_id.clone(),
                                 own_addresses.clone(),
+                                config.auth_secret.clone(),
                             )
                             .await;
                     }
@@ -506,6 +533,7 @@ impl ArkCore {
                                 device_name.clone(),
                                 config.space_id.clone(),
                                 own_addresses.clone(),
+                                config.auth_secret.clone(),
                             )
                             .await;
                     }
@@ -522,6 +550,7 @@ impl ArkCore {
                             device_name.clone(),
                             config.space_id.clone(),
                             own_addresses.clone(),
+                            config.auth_secret.clone(),
                         )
                         .await;
                     beacon
@@ -541,10 +570,12 @@ impl ArkCore {
                         server,
                         storage,
                         clients,
+                        relay,
                         beacon,
                         device_id: config.device_id.clone(),
                         device_name,
                         space_id: config.space_id.clone(),
+                        auth_secret: config.auth_secret.clone(),
                         own_addresses,
                     };
 
@@ -606,7 +637,11 @@ impl ArkCore {
 
             let hlc = runtime.server.update_entity_hlc(&entity.id).await;
             entity.hlc = hlc;
-            runtime.storage.apply_entity(&entity).await;
+            runtime
+                .storage
+                .apply_entity(&entity)
+                .await
+                .map_err(ArkCoreError::from)?;
             runtime
                 .server
                 .broadcast_live_change(entity.clone(), None)
@@ -614,6 +649,12 @@ impl ArkCore {
             let clients = runtime.clients.lock().await;
             for client in clients.values() {
                 client.broadcast_live_change(entity.clone()).await;
+            }
+            drop(clients);
+            if let Some(relay) = runtime.relay.as_ref() {
+                relay
+                    .broadcast_live_change(entity.clone())
+                    .map_err(ArkCoreError::from)?;
             }
             Ok(true)
         })
@@ -650,6 +691,18 @@ impl ArkCore {
                     });
                 }
             }
+            drop(clients);
+
+            if let Some(relay) = runtime.relay.as_ref() {
+                for (device_id, device_name) in relay.get_connected_peer_entries().await {
+                    if !out.iter().any(|e| e.device_id == device_id) {
+                        out.push(FfiConnectedPeer {
+                            device_id,
+                            device_name,
+                        });
+                    }
+                }
+            }
             Ok(out)
         })
     }
@@ -671,6 +724,7 @@ impl ArkCore {
                 runtime.device_name,
                 runtime.space_id,
                 runtime.own_addresses,
+                runtime.auth_secret,
             )
             .await;
             Ok(true)
@@ -698,6 +752,9 @@ impl ArkCore {
         let mut guard = self.sync.lock().await;
         if let Some(runtime) = guard.take() {
             runtime.beacon.stop().await;
+            if let Some(relay) = runtime.relay.as_ref() {
+                relay.stop();
+            }
             runtime.server.stop().await;
             let clients = runtime.clients.lock().await;
             for client in clients.values() {
@@ -747,6 +804,38 @@ impl ArkCore {
             .await;
     }
 
+    async fn install_relay_callbacks(&self, relay: &Arc<RelaySync>) {
+        let listener = self.listener.read().await.clone();
+        let listener_for_change = listener.clone();
+        relay
+            .set_on_change(Arc::new(move |entity| {
+                if let Some(l) = listener_for_change.as_ref() {
+                    if let Ok(json) = serde_json::to_string(&entity) {
+                        l.on_entity_changed(json);
+                    }
+                }
+            }))
+            .await;
+
+        let listener_for_connect = listener.clone();
+        relay
+            .set_on_peer_connect(Arc::new(move |device_id| {
+                if let Some(l) = listener_for_connect.as_ref() {
+                    l.on_peer_connected(device_id, String::new());
+                }
+            }))
+            .await;
+
+        let listener_for_disconnect = listener;
+        relay
+            .set_on_peer_disconnect(Arc::new(move |device_id, remaining| {
+                if let Some(l) = listener_for_disconnect.as_ref() {
+                    l.on_peer_disconnected(device_id, remaining as u32);
+                }
+            }))
+            .await;
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn spawn_client(
         &self,
@@ -758,6 +847,7 @@ impl ArkCore {
         device_name: String,
         space_id: String,
         own_addresses: Vec<String>,
+        auth_secret: Option<String>,
     ) {
         if peer.device_id == device_id {
             return;
@@ -769,6 +859,7 @@ impl ArkCore {
             device_name,
             space_id,
             own_addresses,
+            auth_secret,
         ));
 
         let listener = self.listener.read().await.clone();
@@ -832,6 +923,7 @@ impl ArkCore {
         device_name: String,
         space_id: String,
         own_addresses: Vec<String>,
+        auth_secret: Option<String>,
     ) {
         let reachable: Vec<String> = addresses
             .into_iter()
@@ -857,6 +949,7 @@ impl ArkCore {
             device_name,
             space_id,
             own_addresses,
+            auth_secret,
         )
         .await;
     }
@@ -872,6 +965,7 @@ impl ArkCore {
         device_name: String,
         space_id: String,
         own_addresses: Vec<String>,
+        auth_secret: Option<String>,
     ) {
         let server = server.clone();
         let storage = storage.clone();
@@ -886,6 +980,7 @@ impl ArkCore {
                 let device_name = device_name.clone();
                 let space_id = space_id.clone();
                 let own = own_addresses.clone();
+                let auth_secret = auth_secret.clone();
                 let listener = listener.clone();
                 tokio::spawn(async move {
                     let addrs: Vec<String> = if peer.addresses.is_empty() {
@@ -943,6 +1038,7 @@ impl ArkCore {
                         device_name.clone(),
                         space_id.clone(),
                         own.clone(),
+                        auth_secret.clone(),
                     ));
 
                     let listener_change = listener.clone();
@@ -987,9 +1083,11 @@ impl SyncRuntime {
             server: self.server.clone(),
             storage: self.storage.clone(),
             clients: self.clients.clone(),
+            relay: self.relay.clone(),
             device_id: self.device_id.clone(),
             device_name: self.device_name.clone(),
             space_id: self.space_id.clone(),
+            auth_secret: self.auth_secret.clone(),
             own_addresses: self.own_addresses.clone(),
         }
     }
@@ -999,9 +1097,11 @@ struct CloneSyncRuntime {
     server: Arc<SyncServer>,
     storage: Arc<SqliteStorageBackend>,
     clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    relay: Option<Arc<RelaySync>>,
     device_id: String,
     device_name: String,
     space_id: String,
+    auth_secret: Option<String>,
     own_addresses: Vec<String>,
 }
 

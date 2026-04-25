@@ -25,8 +25,8 @@ type MockRawgGame = {
 };
 
 type BridgeMockConfig = {
-  games: Array<Record<string, unknown>>;
-  settings: Record<string, unknown>;
+  games: unknown[];
+  settings: unknown;
   scanEntries: Array<{ path: string; file_name: string }>;
   processes: Array<{
     pid: number;
@@ -38,6 +38,14 @@ type BridgeMockConfig = {
   dialogOpenResult?: string | string[] | null;
   catalogueItems?: MockCatalogueItem[];
   rawgItems?: MockRawgGame[];
+};
+
+type MockGame = Record<string, unknown> & {
+  id: string;
+  name: string;
+  exe_path: string;
+  exe_name?: string;
+  process_bindings: unknown[];
 };
 
 const stableHash = (value: string) => {
@@ -52,6 +60,26 @@ const stableHash = (value: string) => {
 const now = () => new Date().toISOString();
 
 export const bridgeMockInit = (config: BridgeMockConfig) => {
+  const coerceGame = (input: unknown): MockGame => {
+    const game =
+      typeof input === "object" && input !== null
+        ? (input as Record<string, unknown>)
+        : {};
+    return {
+      ...game,
+      id: String(game.id ?? ""),
+      name: String(game.name ?? ""),
+      exe_path: String(game.exe_path ?? ""),
+      exe_name: typeof game.exe_name === "string" ? game.exe_name : undefined,
+      process_bindings: Array.isArray(game.process_bindings)
+        ? game.process_bindings
+        : [],
+    };
+  };
+  const coerceRecord = (input: unknown): Record<string, unknown> =>
+    typeof input === "object" && input !== null
+      ? { ...(input as Record<string, unknown>) }
+      : {};
   const listeners = new Map<string, Map<string, string>>();
   const callbacks = new Map<
     string,
@@ -67,15 +95,8 @@ export const bridgeMockInit = (config: BridgeMockConfig) => {
     ) + 1;
 
   const state = {
-    games: config.games
-      ? config.games.map((game) => ({
-          ...game,
-          process_bindings: Array.isArray(game.process_bindings)
-            ? game.process_bindings
-            : [],
-        }))
-      : [],
-    settings: config.settings ? { ...config.settings } : {},
+    games: config.games ? config.games.map(coerceGame) : [],
+    settings: coerceRecord(config.settings),
     catalogue: config.catalogueItems
       ? [...config.catalogueItems]
       : ([] as MockCatalogueItem[]),

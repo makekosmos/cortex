@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ArkClient } from '@arksync/node';
+import { ArkClient } from '@kepler/ark';
 import {
   buildSharedSelectedSpaceFromCode,
   readSharedSelectedSpace,
@@ -21,14 +21,10 @@ interface SyncEntity {
 import {
   sidecar,
   arkDeleteObject,
-  arkGetObjectType,
   arkListObjects,
   arkUpsertObject,
   arkUpsertObjectType,
   dbLoadAll,
-  dbUpsertTodo,
-  dbDeleteTodo,
-  dbBatchUpsertTodos,
   dbUpsertProject,
   dbDeleteProject,
   dbGetSyncKv,
@@ -45,11 +41,13 @@ import {
   type SyncEntityPayload,
 } from './sidecar';
 import {
-  arkTaskObjectToTodo,
-  createDelphiTaskObjectTypeRecord,
-  DELPHI_TASK_OBJECT_TYPE_ID,
-  todoToArkTaskObject,
-} from '../shared/task-ark';
+  batchUpsertTodosObjectFirst,
+  listDelphiTaskObjectsAsTodos,
+  loadAllObjectFirst,
+  migrateLegacyTodosToTaskObjects,
+  upsertTodoObjectFirst,
+  type DelphiTaskObjectMigrationDeps,
+} from '../shared/task-object-migration';
 
 /** WebSocket port used by the ark-core sync server. */
 const LAN_SYNC_PORT = 21531;
@@ -62,7 +60,12 @@ process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
     return;
   }
   // Re-throw anything else
+  writeStartupTrace('uncaughtException', err);
   console.error('[Main] Uncaught exception:', err);
+  if (process.env.PLAYWRIGHT === '1') {
+    app.quit();
+    return;
+  }
   throw err;
 });
 
@@ -71,8 +74,35 @@ const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
 
+if (process.env.PLAYWRIGHT === '1') {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+}
+
+function writeStartupTrace(message: string, error?: unknown): void {
+  const logPath = process.env.DELPHI_STARTUP_LOG;
+  if (!logPath) {
+    return;
+  }
+
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    const suffix = error instanceof Error ? ` ${error.stack ?? error.message}` : error ? ` ${String(error)}` : '';
+    fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${message}${suffix}\n`, 'utf8');
+  } catch {
+    // Best-effort diagnostics only.
+  }
+}
+
+writeStartupTrace('main-module-loaded');
+
+process.on('exit', (code) => {
+  writeStartupTrace(`process-exit ${code}`);
+});
+
 /**
- * ArkClient instance from @arksync/node. Created lazily when sync starts.
+ * ArkClient instance from @kepler/ark. Created lazily when sync starts.
  * Wraps the sync lifecycle (start/stop/broadcastChange) while DB operations
  * remain in sidecar.ts.
  */
@@ -83,6 +113,7 @@ let arkClient: ArkClient | null = null;
 let syncActive = false;
 /** Track peer names per device_id as reported by sidecar events. */
 const syncPeerNames: Map<string, string> = new Map();
+let mainWindow: BrowserWindow | null = null;
 let currentDeviceId = '';
 let currentSpaceId: string | null = null;
 let syncStartInFlight: Promise<boolean> | null = null;
@@ -138,7 +169,7 @@ function getSharedSelection() {
 }
 
 function shouldLaunchInBackground(): boolean {
-  return process.env.DELPHI_BACKGROUND_LAUNCH === '1' || process.env.PLAYWRIGHT === '1';
+  return process.env.DELPHI_BACKGROUND_LAUNCH === '1' && process.env.PLAYWRIGHT !== '1';
 }
 
 const WINDOWS_TITLEBAR_SYMBOL_COLOR = '#e5e7eb';
@@ -333,6 +364,7 @@ function createWindow() {
     },
     show: false,
   });
+  mainWindow = win;
 
   if (saved.isMaximized) win.maximize();
 
@@ -359,6 +391,11 @@ function createWindow() {
     win.removeListener('resize', onResize);
     win.removeListener('move', onMove);
     saveWindowState(win);
+  });
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
   });
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
@@ -429,17 +466,22 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
   fs.mkdirSync(safePath(dirPath), { recursive: true });
 });
 
-// --- Sync lifecycle is handled by ArkClient from @arksync/node. ---
+writeStartupTrace('fs-ipc-registered');
+
+// --- Sync lifecycle is handled by ArkClient from @kepler/ark. ---
 // The active renderer contract is `lan-sync:*`.
 
 // --- IPC handlers for space persistence (file-based, survives localStorage wipe) ---
 
-const spacesFile = path.join(getDataDir(), 'spaces.json');
+function getSpacesFile(): string {
+  return path.join(getDataDir(), 'spaces.json');
+}
 
 function readSpacesFile(): { active: string | null; spaces: Array<{ code: string; name: string; createdAt: string }> } {
   const shared = getSharedSelection();
 
   try {
+    const spacesFile = getSpacesFile();
     if (fs.existsSync(spacesFile)) {
       const parsed = JSON.parse(fs.readFileSync(spacesFile, 'utf-8')) as {
         active: string | null;
@@ -483,16 +525,32 @@ function readSpacesFile(): { active: string | null; spaces: Array<{ code: string
   };
 }
 
-async function ensureDelphiTaskObjectType(): Promise<void> {
-  const existing = await arkGetObjectType(DELPHI_TASK_OBJECT_TYPE_ID);
-  if (existing) {
-    return;
-  }
+const taskObjectMigrationDeps: DelphiTaskObjectMigrationDeps = {
+  loadAll: dbLoadAll,
+  getSyncKv: dbGetSyncKv,
+  setSyncKv: dbSetSyncKv,
+  listObjects: arkListObjects,
+  upsertObject: arkUpsertObject,
+  upsertObjectType: arkUpsertObjectType,
+  deleteObject: arkDeleteObject,
+};
 
-  await arkUpsertObjectType(createDelphiTaskObjectTypeRecord());
+function getTaskObjectMigrationOptions() {
+  return {
+    backupDir: path.join(app.getPath('userData'), '.migration-backups'),
+  };
+}
+
+async function runTaskObjectMigration() {
+  const report = await migrateLegacyTodosToTaskObjects(taskObjectMigrationDeps, getTaskObjectMigrationOptions());
+  if (report.status === 'partial_failure' || report.status === 'failed') {
+    console.warn('[Main] Delphi task object migration completed with errors:', report);
+  }
+  return report;
 }
 
 function writeSpacesFile(data: { active: string | null; spaces: Array<{ code: string; name: string; createdAt: string }> }): void {
+  const spacesFile = getSpacesFile();
   fs.writeFileSync(spacesFile, JSON.stringify(data, null, 2), 'utf-8');
 }
 
@@ -564,8 +622,10 @@ ipcMain.handle('space:scanOrphaned', () => {
   return orphaned;
 });
 
+writeStartupTrace('space-ipc-registered');
+
 // --- Migrate old spaces from legacy locations to Kepler ---
-{
+function migrateLegacySpaceFiles(): void {
   const newSpacesDir = path.join(getDataDir(), 'spaces');
   const legacyDirs = [
     path.join(app.getPath('userData'), 'spaces'),           // old userData/spaces
@@ -606,29 +666,29 @@ ipcMain.handle('space:scanOrphaned', () => {
 
 // --- IPC handlers for local DB ---
 
-ipcMain.handle('db:loadAll', () => dbLoadAll())
-ipcMain.handle('db:upsertTodo', (_e, todo) => dbUpsertTodo(todo))
-ipcMain.handle('db:deleteTodo', (_e, id) => dbDeleteTodo(id))
-ipcMain.handle('db:batchUpsertTodos', (_e, todos) => dbBatchUpsertTodos(todos))
+ipcMain.handle('db:loadAll', () => loadAllObjectFirst(taskObjectMigrationDeps, getTaskObjectMigrationOptions()))
+ipcMain.handle('db:upsertTodo', (_e, todo) => upsertTodoObjectFirst(taskObjectMigrationDeps, todo))
+ipcMain.handle('db:deleteTodo', (_e, id) => arkDeleteObject(id))
+ipcMain.handle('db:batchUpsertTodos', (_e, todos) => batchUpsertTodosObjectFirst(taskObjectMigrationDeps, todos))
 ipcMain.handle('db:upsertProject', (_e, project) => dbUpsertProject(project))
 ipcMain.handle('db:deleteProject', (_e, id) => dbDeleteProject(id))
 ipcMain.handle('db:getSyncKv', (_e, key) => dbGetSyncKv(key))
 ipcMain.handle('db:setSyncKv', (_e, key, value) => dbSetSyncKv(key, value))
 ipcMain.handle('db:clearAll', () => dbClearAll())
 ipcMain.handle('db:deleteTrashed', () => dbDeleteTrashed())
-ipcMain.handle('db:switchSpace', (_e, spaceId: string) => dbSwitchSpace(spaceId))
+ipcMain.handle('db:switchSpace', async (_e, spaceId: string) => {
+  await dbSwitchSpace(spaceId);
+  await runTaskObjectMigration();
+  return true;
+})
 
 ipcMain.handle('ark:listDelphiTasks', async () => {
-  const objects = await arkListObjects();
-  return objects
-    .filter((object) => object.typeId === DELPHI_TASK_OBJECT_TYPE_ID)
-    .map(arkTaskObjectToTodo);
+  await runTaskObjectMigration();
+  return listDelphiTaskObjectsAsTodos(taskObjectMigrationDeps);
 })
 
 ipcMain.handle('ark:upsertDelphiTask', async (_e, todo) => {
-  await ensureDelphiTaskObjectType();
-  await arkUpsertObject(todoToArkTaskObject(todo));
-  return true;
+  return upsertTodoObjectFirst(taskObjectMigrationDeps, todo);
 })
 
 ipcMain.handle('ark:deleteDelphiTask', async (_e, id: string) => {
@@ -666,12 +726,14 @@ ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
   return false;
 })
 
-// --- Sync IPC (backed by ArkClient from @arksync/node → ark-core-rpc sidecar) ---
+// --- Sync IPC (backed by ArkClient from @kepler/ark → ark-core-rpc sidecar) ---
 //
-// Sync lifecycle (start/stop/broadcast) is delegated to ArkClient (@arksync/node).
+// Sync lifecycle (start/stop/broadcast) is delegated to ArkClient (@kepler/ark).
 // ArkClient is wired to the existing sidecar via requestFn + onEventFn injection
 // so that DB ops and sync ops share the same ark-core-rpc process.
 // DB operations (dbLoadAll, dbUpsertTodo, …) remain in sidecar.ts.
+
+writeStartupTrace('db-ipc-registered');
 
 /** Forward a sync entity change to all renderer windows. */
 function notifyRendererSyncChange(entity: SyncEntity): void {
@@ -741,7 +803,9 @@ sidecar.onEvent((event: SidecarEvent) => {
   }
 });
 
-/** IPC: start sync via ArkClient (@arksync/node). */
+writeStartupTrace('sidecar-events-registered');
+
+/** IPC: start sync via ArkClient (@kepler/ark). */
 ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
   if (!spaceId) {
     console.warn('[Main] lan-sync:start called without spaceId, ignoring');
@@ -864,7 +928,7 @@ ipcMain.handle('sync:getOwnAddresses', async () => {
   } catch (err) {
     console.warn('[Main] get_own_addresses via sidecar failed, falling back to os:', err);
     // Cheap fallback: enumerate via os.networkInterfaces() without importing
-    // @arksync/node at runtime.
+    // @kepler/ark at runtime.
     const addrs: string[] = [];
     const nets = os.networkInterfaces();
     for (const name of Object.keys(nets)) {
@@ -923,17 +987,43 @@ ipcMain.handle('lan-sync:addSeedPeer', async (_e, addresses: string[]) => {
   }
 });
 
+writeStartupTrace('sync-ipc-registered');
+
 // --- App lifecycle ---
 
-app.whenReady().then(async () => {
-  const shared = getSharedSelection();
-  if (shared?.spaceId) {
-    await dbSwitchSpace(shared.spaceId).catch((err) => {
-      console.warn('[Main] Failed to switch to shared selected space:', err);
-    });
-  }
+writeStartupTrace('before-whenReady');
 
-  createWindow();
+app.on('ready', () => {
+  writeStartupTrace('app-ready-event');
+});
+
+app.whenReady().then(async () => {
+  try {
+    writeStartupTrace('whenReady');
+    migrateLegacySpaceFiles();
+    writeStartupTrace('legacy-space-files-migrated');
+
+    const shared = getSharedSelection();
+    if (shared?.spaceId) {
+      writeStartupTrace(`switching-space ${shared.spaceId}`);
+      await dbSwitchSpace(shared.spaceId).catch((err) => {
+        writeStartupTrace('switch-space-failed', err);
+        console.warn('[Main] Failed to switch to shared selected space:', err);
+      });
+    }
+    await runTaskObjectMigration().catch((err) => {
+      writeStartupTrace('task-object-migration-failed', err);
+      console.warn('[Main] Failed to migrate legacy todos to ARK task objects:', err);
+    });
+
+    writeStartupTrace('creating-window');
+    createWindow();
+    writeStartupTrace('window-created');
+  } catch (err) {
+    writeStartupTrace('fatal-startup-error', err);
+    console.error('[Main] Fatal startup error:', err);
+    app.quit();
+  }
 });
 
 app.on('window-all-closed', () => {

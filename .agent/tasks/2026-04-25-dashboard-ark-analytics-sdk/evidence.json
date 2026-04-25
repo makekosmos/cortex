@@ -1,0 +1,56 @@
+{
+  "taskId": "2026-04-25-dashboard-ark-analytics-sdk",
+  "status": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": "no-direct-sql.txt confirms no direct dashboard analytics SQL remains."
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": "source-evidence.txt shows ArkClient and ownedClient.usage.analytics usage in analytics.ts."
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": "source-evidence.txt shows build:sidecar, @arksync/node, and extraResources; dashboard-build.txt passed."
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": "verify-dashboard-analytics.txt passed and checks missing DB behavior plus injected analytics provider parameters."
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": "dashboard-typecheck.txt, dashboard-build.txt, verify-dashboard-analytics.txt, no-direct-sql.txt, and git-diff-check.txt passed."
+    }
+  },
+  "commands": [
+    {
+      "command": "bun run --cwd apps/dashboard typecheck",
+      "status": "PASS",
+      "artifact": "dashboard-typecheck.txt"
+    },
+    {
+      "command": "bun run --cwd apps/dashboard build",
+      "status": "PASS",
+      "artifact": "dashboard-build.txt"
+    },
+    {
+      "command": "bun .agent/tasks/2026-04-25-dashboard-ark-analytics-sdk/verify-dashboard-analytics.ts",
+      "status": "PASS",
+      "artifact": "verify-dashboard-analytics.txt"
+    },
+    {
+      "command": "rg no-direct-dashboard-analytics-sql pattern",
+      "status": "PASS",
+      "artifact": "no-direct-sql.txt"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS",
+      "artifact": "git-diff-check.txt"
+    }
+  ],
+  "problems": [
+    "Initial dashboard build failed inside sandbox with electron-rebuild spawn EPERM; unsandboxed rerun passed."
+  ]
+}

@@ -13,14 +13,30 @@
 /// Interface-name prefixes that belong to virtual / VPN / container adapters.
 pub const VIRTUAL_IFACE_PREFIXES: &[&str] = &[
     // macOS
-    "utun", "awdl", "llw", "ap", "bridge", "anpi",
+    "utun",
+    "awdl",
+    "llw",
+    "ap",
+    "bridge",
+    "anpi",
     // Linux
-    "docker", "br-", "veth", "virbr", "vboxnet", "vmnet", "tun", "tap",
-    "wg", "tailscale",
+    "docker",
+    "br-",
+    "veth",
+    "virbr",
+    "vboxnet",
+    "vmnet",
+    "tun",
+    "tap",
+    "wg",
+    "tailscale",
     // Windows
-    "vethernet", "vmware", "virtualbox",
+    "vethernet",
+    "vmware",
+    "virtualbox",
     // Android
-    "rmnet", "dummy",
+    "rmnet",
+    "dummy",
 ];
 
 /// Test whether a parsed IPv4 address is routable on the LAN. Shared with
@@ -43,8 +59,12 @@ pub fn is_virtual_interface(name: &str) -> bool {
 /// Check whether an IPv4 string is routable on the LAN.
 /// Rejects link-local (169.254/16) and loopback (127/8).
 pub fn is_routable_v4(addr: &str) -> bool {
-    if addr.starts_with("169.254.") { return false; }
-    if addr.starts_with("127.") { return false; }
+    if addr.starts_with("169.254.") {
+        return false;
+    }
+    if addr.starts_with("127.") {
+        return false;
+    }
     true
 }
 
@@ -53,8 +73,11 @@ pub fn is_routable_v4(addr: &str) -> bool {
 pub fn is_routable_v6(addr: &str) -> bool {
     let lower = addr.to_lowercase();
     // Link-local fe80::/10
-    if lower.starts_with("fe8") || lower.starts_with("fe9")
-        || lower.starts_with("fea") || lower.starts_with("feb") {
+    if lower.starts_with("fe8")
+        || lower.starts_with("fe9")
+        || lower.starts_with("fea")
+        || lower.starts_with("feb")
+    {
         return false;
     }
     // Unique-local fc00::/7
@@ -62,7 +85,9 @@ pub fn is_routable_v6(addr: &str) -> bool {
         return false;
     }
     // Loopback
-    if lower == "::1" { return false; }
+    if lower == "::1" {
+        return false;
+    }
     true
 }
 
@@ -80,10 +105,15 @@ pub fn filter_routable_addresses(addresses: &[String]) -> Vec<String> {
 /// Return `true` if a single `host:port` (or `[ipv6]:port`) string is routable.
 pub fn is_address_routable(addr: &str) -> bool {
     let trimmed = addr.trim();
-    if trimmed.is_empty() { return false; }
+    if trimmed.is_empty() {
+        return false;
+    }
 
     // Bracketed IPv6: [addr]:port
-    if let Some(close) = trimmed.strip_prefix('[').and_then(|s| s.find(']').map(|i| (s, i))) {
+    if let Some(close) = trimmed
+        .strip_prefix('[')
+        .and_then(|s| s.find(']').map(|i| (s, i)))
+    {
         let (inner, end) = close;
         let host = &inner[..end];
         // Strip zone id if present (interface suffix for link-local)
@@ -157,10 +187,13 @@ mod tests {
             "127.0.0.1:21531".to_string(),
         ];
         let out = filter_routable_addresses(&input);
-        assert_eq!(out, vec![
-            "192.168.1.70:21531".to_string(),
-            "[2001:db8::1]:21531".to_string(),
-        ]);
+        assert_eq!(
+            out,
+            vec![
+                "192.168.1.70:21531".to_string(),
+                "[2001:db8::1]:21531".to_string(),
+            ]
+        );
     }
 
     #[test]

@@ -1,0 +1,71 @@
+{
+  "taskId": "2026-04-24-arrancador-ark-game-migration-sdk",
+  "status": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": "no-direct-writes.txt confirms no target object_types/objects INSERTs, targetDb writes, or runInTransaction calls remain in ark-game-migration.ts."
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": "source-evidence.txt and verify-ark-game-migration.txt confirm target.objectTypes.upsert is used for game_obj type migration."
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": "source-evidence.txt and verify-ark-game-migration.txt confirm target.objects.upsert is used for migrated and merged game objects."
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": "verify-ark-game-migration.txt covers new object migration, executable-path merge, unchanged-object skip, and type creation."
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": "arrancador-typecheck.txt, verify-ark-game-migration.txt, arrancador-build-main.txt, biome-ark-game-migration.txt, no-direct-writes.txt, and git-diff-check.txt all passed."
+    }
+  },
+  "commands": [
+    {
+      "command": "bun run --cwd apps/arrancador typecheck",
+      "status": "PASS",
+      "artifact": "arrancador-typecheck.txt"
+    },
+    {
+      "command": "bun .agent/tasks/2026-04-24-arrancador-ark-game-migration-sdk/verify-ark-game-migration.ts",
+      "status": "PASS",
+      "artifact": "verify-ark-game-migration.txt"
+    },
+    {
+      "command": "bun run build:main",
+      "status": "PASS",
+      "artifact": "arrancador-build-main.txt"
+    },
+    {
+      "command": "bun biome check electron/main/services/ark-game-migration.ts electron/main/services/ark-game-migration.test.ts",
+      "status": "PASS",
+      "artifact": "biome-ark-game-migration.txt"
+    },
+    {
+      "command": "rg no-direct-target-Ark-writes pattern",
+      "status": "PASS",
+      "artifact": "no-direct-writes.txt"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS",
+      "artifact": "git-diff-check.txt"
+    }
+  ],
+  "knownIssues": [
+    {
+      "command": "bun vitest run electron/main/services/ark-game-migration.test.ts",
+      "status": "BLOCKED",
+      "artifact": "vitest-ark-game-migration.txt",
+      "reason": "Vite config loading fails before tests execute with spawn EPERM in this environment."
+    }
+  ],
+  "problems": [
+    "Sorted test imports for Biome.",
+    "Replaced blocked Vitest execution with a focused Bun verifier.",
+    "Made getArkCoreRpcBinaryPath import lazy so SDK-injected verification does not require Electron runtime."
+  ]
+}

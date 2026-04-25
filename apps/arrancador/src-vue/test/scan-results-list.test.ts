@@ -15,7 +15,7 @@ describe("ScanResultsList", () => {
   it("renders scan results and emits list actions", async () => {
     const wrapper = mount(ScanResultsList, {
       props: {
-        activeTab: "processes",
+        activeTab: "processes" as const,
         currentListLength: 1,
         filteredResults: [scanResult],
         selectedCount: 1,
@@ -24,7 +24,7 @@ describe("ScanResultsList", () => {
         adding: false,
         error: null,
         filter: "",
-        sortBy: "cpu",
+        sortBy: "cpu" as const,
         "onUpdate:filter": (value: string) => wrapper.setProps({ filter: value }),
         "onUpdate:sortBy": (value: "name" | "cpu") =>
           wrapper.setProps({ sortBy: value }),
@@ -67,7 +67,7 @@ describe("ScanResultsList", () => {
   it("emits retry from the error state", async () => {
     const wrapper = mount(ScanResultsList, {
       props: {
-        activeTab: "processes",
+        activeTab: "processes" as const,
         currentListLength: 0,
         filteredResults: [],
         selectedCount: 0,
@@ -76,7 +76,7 @@ describe("ScanResultsList", () => {
         adding: false,
         error: "GPU query failed",
         filter: "",
-        sortBy: "cpu",
+        sortBy: "cpu" as const,
       },
     });
 

@@ -127,7 +127,10 @@ mod tests {
     #[test]
     fn host_name_is_non_empty() {
         let name = get_host_device_name();
-        assert!(!name.is_empty(), "host name should fall back to a non-empty string");
+        assert!(
+            !name.is_empty(),
+            "host name should fall back to a non-empty string"
+        );
     }
 
     #[test]
@@ -179,7 +182,10 @@ mod tests {
     fn own_addresses_strip_ipv6_zone() {
         let addrs = get_own_addresses(21531);
         for a in &addrs {
-            assert!(!a.contains('%'), "address {a} still carries an IPv6 zone id");
+            assert!(
+                !a.contains('%'),
+                "address {a} still carries an IPv6 zone id"
+            );
         }
     }
 }

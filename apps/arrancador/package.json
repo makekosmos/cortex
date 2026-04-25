@@ -6,8 +6,8 @@
   "main": "./out/main/index.js",
   "scripts": {
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
-    "build:sidecar": "cargo build --release --manifest-path sidecar/Cargo.toml",
-    "build:sidecar:dev": "cargo build --manifest-path sidecar/Cargo.toml",
+    "build:sidecar": "cargo build --release --manifest-path sidecar/Cargo.toml && cargo build --release --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
+    "build:sidecar:dev": "cargo build --manifest-path sidecar/Cargo.toml && cargo build --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
     "prepare:native": "bun run scripts/rebuild-native-if-needed.ts",
     "predev": "bun run build:sidecar:dev && bun run prepare:native",
     "dev": "bun run scripts/dev.ts",
@@ -20,18 +20,19 @@
     "preview": "vite preview --configLoader native --host 127.0.0.1 --port 4174 --strictPort",
     "pack": "bun run build && electron-builder --dir",
     "dist": "bun run build && electron-builder",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.electron.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "bun run typecheck && bun run biome:check",
     "biome:check": "biome check .",
     "biome:fix": "biome check . --write",
     "bench:baseline": "bun run build:sidecar && node bench/run-baseline.mjs",
     "bench:compare": "bun bench/compare-baseline.ts",
     "test": "vitest run --configLoader native --config vitest.config.mjs",
-    "test:coverage": "vitest run --configLoader native --config vitest.config.mjs --coverage",
+    "test:coverage": "vitest run --configLoader native --config vitest.config.mjs --coverage --maxWorkers=1",
     "test:watch": "vitest --configLoader native --config vitest.config.mjs",
     "test:e2e": "bun run scripts/run-e2e.ts"
   },
   "dependencies": {
+    "@kepler/ark": "workspace:*",
     "@tailwindcss/vite": "^4.1.11",
     "@vue/runtime-vapor": "3.6.0-beta.9",
     "better-sqlite3": "^12.9.0",
@@ -45,8 +46,8 @@
     "vue-router": "^5.0.4"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.1",
     "@biomejs/biome": "^2.3.14",
+    "@electron/rebuild": "^4.0.1",
     "@playwright/test": "^1.55.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/user-event": "^14.6.1",
@@ -64,6 +65,7 @@
     "tw-animate-css": "^1.3.6",
     "typescript": "~5.6.2",
     "vite": "^8.0.8",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "vue-tsc": "^3.2.7"
   }
 }

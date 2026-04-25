@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 use crate::hlc::HLC;
@@ -32,11 +33,17 @@ pub enum LanSyncMessage {
         space_id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         addresses: Option<Vec<String>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        auth_nonce: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        auth_hmac: Option<String>,
     },
 
     #[serde(rename = "version_vector")]
     VersionVector {
         vector: crate::types::VersionVector,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        origin_device_id: Option<String>,
     },
 
     #[serde(rename = "sync_changes")]
@@ -44,39 +51,32 @@ pub enum LanSyncMessage {
         batch_id: String,
         entities: Vec<SyncEntity>,
         is_last: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        origin_device_id: Option<String>,
     },
 
     #[serde(rename = "sync_ack")]
-    SyncAck {
-        batch_id: String,
-        accepted: usize,
-    },
+    SyncAck { batch_id: String, accepted: usize },
 
     #[serde(rename = "live_change")]
     LiveChange {
         change_id: String,
         entity: SyncEntity,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        origin_device_id: Option<String>,
     },
 
     #[serde(rename = "live_ack")]
-    LiveAck {
-        change_id: String,
-    },
+    LiveAck { change_id: String },
 
     #[serde(rename = "peer_list")]
-    PeerList {
-        peers: Vec<PeerRecord>,
-    },
+    PeerList { peers: Vec<PeerRecord> },
 
     #[serde(rename = "ping")]
-    Ping {
-        ts: u64,
-    },
+    Ping { ts: u64 },
 
     #[serde(rename = "pong")]
-    Pong {
-        ts: u64,
-    },
+    Pong { ts: u64 },
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +89,111 @@ pub fn serialize_message(msg: &LanSyncMessage) -> String {
 
 pub fn deserialize_message(raw: &str) -> Option<LanSyncMessage> {
     serde_json::from_str(raw).ok()
+}
+
+pub fn message_origin_device_id(msg: &LanSyncMessage) -> Option<String> {
+    match msg {
+        LanSyncMessage::Hello { device_id, .. } => Some(device_id.clone()),
+        LanSyncMessage::VersionVector {
+            origin_device_id, ..
+        }
+        | LanSyncMessage::SyncChanges {
+            origin_device_id, ..
+        }
+        | LanSyncMessage::LiveChange {
+            origin_device_id, ..
+        } => origin_device_id.clone(),
+        _ => None,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hello HMAC authentication
+// ---------------------------------------------------------------------------
+
+pub fn normalize_auth_secret(secret: Option<String>) -> Option<String> {
+    secret
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+pub fn generate_auth_nonce() -> String {
+    use rand::RngCore;
+
+    let mut bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    hex_encode(&bytes)
+}
+
+pub fn compute_hello_auth_hmac(
+    secret: &str,
+    space_id: &str,
+    device_id: &str,
+    nonce: &str,
+) -> String {
+    let message = format!("ark-sync-v1:hello:{space_id}:{device_id}:{nonce}");
+    hmac_sha256_hex(secret.as_bytes(), message.as_bytes())
+}
+
+pub fn verify_hello_auth_hmac(
+    secret: &str,
+    space_id: &str,
+    device_id: &str,
+    nonce: &str,
+    provided_hmac: &str,
+) -> bool {
+    let expected = compute_hello_auth_hmac(secret, space_id, device_id, nonce);
+    constant_time_eq(expected.as_bytes(), provided_hmac.as_bytes())
+}
+
+fn hmac_sha256_hex(secret: &[u8], message: &[u8]) -> String {
+    const BLOCK_SIZE: usize = 64;
+
+    let mut key = [0u8; BLOCK_SIZE];
+    if secret.len() > BLOCK_SIZE {
+        let digest = Sha256::digest(secret);
+        key[..digest.len()].copy_from_slice(&digest);
+    } else {
+        key[..secret.len()].copy_from_slice(secret);
+    }
+
+    let mut outer_key_pad = [0x5c_u8; BLOCK_SIZE];
+    let mut inner_key_pad = [0x36_u8; BLOCK_SIZE];
+    for i in 0..BLOCK_SIZE {
+        outer_key_pad[i] ^= key[i];
+        inner_key_pad[i] ^= key[i];
+    }
+
+    let mut inner = Sha256::new();
+    inner.update(inner_key_pad);
+    inner.update(message);
+    let inner_result = inner.finalize();
+
+    let mut outer = Sha256::new();
+    outer.update(outer_key_pad);
+    outer.update(inner_result);
+    hex_encode(&outer.finalize())
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    let mut diff = a.len() ^ b.len();
+    let max_len = a.len().max(b.len());
+    for i in 0..max_len {
+        let left = a.get(i).copied().unwrap_or(0);
+        let right = b.get(i).copied().unwrap_or(0);
+        diff |= (left ^ right) as usize;
+    }
+    diff == 0
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -163,9 +268,7 @@ pub fn split_into_batches(entities: &[SyncEntity]) -> Vec<Vec<SyncEntity>> {
     let mut current_bytes: usize = 0;
 
     for entity in entities {
-        let entity_bytes = serde_json::to_string(entity)
-            .unwrap_or_default()
-            .len();
+        let entity_bytes = serde_json::to_string(entity).unwrap_or_default().len();
 
         if !current.is_empty()
             && (current.len() >= MAX_BATCH_SIZE || current_bytes + entity_bytes > MAX_BATCH_BYTES)
@@ -205,8 +308,7 @@ pub fn merge_peer_records(existing: &[PeerRecord], incoming: &[PeerRecord]) -> V
             }
             Some(current) => {
                 // Union addresses
-                let mut addr_set: HashSet<String> =
-                    current.addresses.iter().cloned().collect();
+                let mut addr_set: HashSet<String> = current.addresses.iter().cloned().collect();
                 for addr in &inc.addresses {
                     addr_set.insert(addr.clone());
                 }
@@ -244,6 +346,8 @@ mod tests {
             device_name: "MacBook".to_string(),
             space_id: "abc123".to_string(),
             addresses: Some(vec!["192.168.1.70:21531".to_string()]),
+            auth_nonce: None,
+            auth_hmac: None,
         };
         let json_str = serialize_message(&msg);
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
@@ -257,9 +361,15 @@ mod tests {
     #[test]
     fn test_version_vector_serialization() {
         let mut vector = crate::types::VersionVector::new();
-        vector.insert("e1".to_string(), "2026-01-01T00:00:00.000Z:000000:dev".to_string());
+        vector.insert(
+            "e1".to_string(),
+            "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
+        );
 
-        let msg = LanSyncMessage::VersionVector { vector };
+        let msg = LanSyncMessage::VersionVector {
+            vector,
+            origin_device_id: None,
+        };
         let json_str = serialize_message(&msg);
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         assert_eq!(parsed["type"], "version_vector");
@@ -279,6 +389,7 @@ mod tests {
             batch_id: "123-abc".to_string(),
             entities: vec![entity],
             is_last: true,
+            origin_device_id: None,
         };
         let json_str = serialize_message(&msg);
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
@@ -321,6 +432,7 @@ mod tests {
         let msg = LanSyncMessage::LiveChange {
             change_id: "ch-1".to_string(),
             entity,
+            origin_device_id: None,
         };
         let json_str = serialize_message(&msg);
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
@@ -375,7 +487,10 @@ mod tests {
     fn test_compute_vector_diff_missing() {
         let local = crate::types::VersionVector::new();
         let mut remote = crate::types::VersionVector::new();
-        remote.insert("e1".to_string(), "2026-01-01T00:00:00.000Z:000000:dev".to_string());
+        remote.insert(
+            "e1".to_string(),
+            "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
+        );
 
         let needed = compute_vector_diff(&local, &remote);
         assert!(needed.contains("e1"));
@@ -384,10 +499,16 @@ mod tests {
     #[test]
     fn test_compute_vector_diff_outdated() {
         let mut local = crate::types::VersionVector::new();
-        local.insert("e1".to_string(), "2026-01-01T00:00:00.000Z:000000:dev".to_string());
+        local.insert(
+            "e1".to_string(),
+            "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
+        );
 
         let mut remote = crate::types::VersionVector::new();
-        remote.insert("e1".to_string(), "2026-01-02T00:00:00.000Z:000000:dev".to_string());
+        remote.insert(
+            "e1".to_string(),
+            "2026-01-02T00:00:00.000Z:000000:dev".to_string(),
+        );
 
         let needed = compute_vector_diff(&local, &remote);
         assert!(needed.contains("e1"));
@@ -396,10 +517,16 @@ mod tests {
     #[test]
     fn test_compute_vector_diff_up_to_date() {
         let mut local = crate::types::VersionVector::new();
-        local.insert("e1".to_string(), "2026-01-02T00:00:00.000Z:000000:dev".to_string());
+        local.insert(
+            "e1".to_string(),
+            "2026-01-02T00:00:00.000Z:000000:dev".to_string(),
+        );
 
         let mut remote = crate::types::VersionVector::new();
-        remote.insert("e1".to_string(), "2026-01-01T00:00:00.000Z:000000:dev".to_string());
+        remote.insert(
+            "e1".to_string(),
+            "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
+        );
 
         let needed = compute_vector_diff(&local, &remote);
         assert!(needed.is_empty());
@@ -408,11 +535,20 @@ mod tests {
     #[test]
     fn test_compute_local_excess() {
         let mut local = crate::types::VersionVector::new();
-        local.insert("e1".to_string(), "2026-01-01T00:00:00.000Z:000000:dev".to_string());
-        local.insert("e2".to_string(), "2026-01-01T00:00:00.000Z:000000:dev".to_string());
+        local.insert(
+            "e1".to_string(),
+            "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
+        );
+        local.insert(
+            "e2".to_string(),
+            "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
+        );
 
         let mut remote = crate::types::VersionVector::new();
-        remote.insert("e1".to_string(), "2026-01-01T00:00:00.000Z:000000:dev".to_string());
+        remote.insert(
+            "e1".to_string(),
+            "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
+        );
 
         let excess = compute_local_excess(&local, &remote);
         assert!(excess.contains("e2"));
@@ -514,7 +650,9 @@ mod tests {
         let merged = merge_peer_records(&existing, &incoming);
         assert_eq!(merged.len(), 1);
         assert!(merged[0].addresses.contains(&"10.0.0.1:21531".to_string()));
-        assert!(merged[0].addresses.contains(&"192.168.1.50:21531".to_string()));
+        assert!(merged[0]
+            .addresses
+            .contains(&"192.168.1.50:21531".to_string()));
         assert_eq!(merged[0].device_name, "Phone v2");
         assert_eq!(merged[0].last_seen, "2026-01-02T00:00:00.000Z");
         assert_eq!(
@@ -543,10 +681,7 @@ mod tests {
         let merged = merge_peer_records(&existing, &incoming);
         // Existing is newer, so device_name and last_address should stay
         assert_eq!(merged[0].device_name, "Phone");
-        assert_eq!(
-            merged[0].last_address,
-            Some("10.0.0.1:21531".to_string())
-        );
+        assert_eq!(merged[0].last_address, Some("10.0.0.1:21531".to_string()));
     }
 
     #[test]
@@ -571,15 +706,46 @@ mod tests {
                 device_name,
                 space_id,
                 addresses,
+                auth_nonce,
+                auth_hmac,
             } => {
                 assert_eq!(protocol_version, 1);
                 assert_eq!(device_id, "dev-123");
                 assert_eq!(device_name, "Electron");
                 assert_eq!(space_id, "abcdef0123456789");
                 assert_eq!(addresses, Some(vec!["192.168.1.70:21531".to_string()]));
+                assert_eq!(auth_nonce, None);
+                assert_eq!(auth_hmac, None);
             }
             _ => panic!("Expected Hello"),
         }
+    }
+
+    #[test]
+    fn test_hello_hmac_helpers_are_deterministic_and_verify() {
+        let nonce = "0123456789abcdef";
+        let hmac = compute_hello_auth_hmac("secret", "space-a", "device-a", nonce);
+
+        assert_eq!(hmac.len(), 64);
+        assert!(verify_hello_auth_hmac(
+            "secret", "space-a", "device-a", nonce, &hmac
+        ));
+        assert!(!verify_hello_auth_hmac(
+            "wrong", "space-a", "device-a", nonce, &hmac
+        ));
+        assert!(!verify_hello_auth_hmac(
+            "secret", "space-a", "device-b", nonce, &hmac
+        ));
+    }
+
+    #[test]
+    fn test_auth_nonce_is_random_hex_64() {
+        let nonce_a = generate_auth_nonce();
+        let nonce_b = generate_auth_nonce();
+
+        assert_eq!(nonce_a.len(), 64);
+        assert!(nonce_a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(nonce_a, nonce_b);
     }
 
     #[test]

@@ -1,0 +1,1253 @@
+﻿diff --git a/packages/ark-core/rust/src/db.rs b/packages/ark-core/rust/src/db.rs
+index 80c982f..9470667 100644
+--- a/packages/ark-core/rust/src/db.rs
++++ b/packages/ark-core/rust/src/db.rs
+@@ -1,14 +1,17 @@
+ use std::sync::{Arc, Mutex};
+ 
++use chrono::{Duration, Utc};
+ use rusqlite::{params, Connection, OptionalExtension};
+ use serde::Serialize;
+ use serde_json::{json, Value};
+ 
+ use crate::hlc::HLC;
+-use crate::schema::CREATE_TABLES;
++use crate::schema::{CREATE_OBJECT_SEARCH_FTS, CREATE_TABLES};
+ use crate::sync_server::StorageBackend;
+ use crate::types::*;
+ 
++const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
++
+ // ---------------------------------------------------------------------------
+ // Open and init
+ // ---------------------------------------------------------------------------
+@@ -26,8 +29,14 @@ pub fn open_db(path: &str) -> Result<Connection, String> {
+ }
+ 
+ pub fn init_schema(conn: &Connection) -> Result<(), String> {
+-    conn.execute_batch(CREATE_TABLES).map_err(|e| e.to_string())?;
+-    seed_builtin_object_types(conn)
++    conn.execute_batch(CREATE_TABLES)
++        .map_err(|e| e.to_string())?;
++    let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
++    seed_builtin_object_types(conn)?;
++    if object_search_fts_enabled {
++        rebuild_object_search_fts(conn)?;
++    }
++    Ok(())
+ }
+ 
+ #[allow(dead_code)]
+@@ -548,28 +557,133 @@ pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>
+     .map_err(|e| e.to_string())
+ }
+ 
+-pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
++fn ensure_object_search_fts(conn: &Connection) -> Result<(), String> {
++    conn.execute_batch(CREATE_OBJECT_SEARCH_FTS)
++        .map_err(|e| e.to_string())
++}
++
++fn object_search_fts_exists(conn: &Connection) -> Result<bool, String> {
++    conn.query_row(
++        "SELECT EXISTS(
++             SELECT 1 FROM sqlite_master
++             WHERE type = 'table' AND name = 'object_search_fts'
++         )",
++        [],
++        |row| row.get::<_, i64>(0),
++    )
++    .map(|value| value != 0)
++    .map_err(|e| e.to_string())
++}
++
++fn rebuild_object_search_fts(conn: &Connection) -> Result<(), String> {
++    if !object_search_fts_exists(conn)? {
++        return Ok(());
++    }
++
++    conn.execute("DELETE FROM object_search_fts", [])
++        .map_err(|e| e.to_string())?;
++    for object in list_objects(conn)? {
++        index_object_for_search(conn, &object)?;
++    }
++    Ok(())
++}
++
++fn index_object_for_search(conn: &Connection, object: &ArkObject) -> Result<(), String> {
++    if !object_search_fts_exists(conn)? {
++        return Ok(());
++    }
++
+     conn.execute(
+-        "INSERT OR REPLACE INTO objects
+-            (id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at)
+-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
++        "DELETE FROM object_search_fts WHERE object_id = ?1",
++        params![object.id],
++    )
++    .map_err(|e| e.to_string())?;
++
++    if object.deleted_at.is_some() {
++        return Ok(());
++    }
++
++    conn.execute(
++        "INSERT INTO object_search_fts (object_id, title, body, props)
++         VALUES (?1, ?2, ?3, ?4)",
+         params![
+             object.id,
+-            object.type_id,
+             object.title,
+-            serialize_json(&object.content_json)?,
+-            serialize_json(&object.props_json)?,
+-            object.created_at,
+-            object.updated_at,
+-            object.deleted_at,
++            extract_plain_text_from_value(&object.content_json),
++            extract_plain_text_from_value(&object.props_json),
+         ],
+     )
+     .map_err(|e| e.to_string())?;
+     Ok(())
+ }
+ 
++fn remove_object_from_search(conn: &Connection, id: &str) -> Result<(), String> {
++    if !object_search_fts_exists(conn)? {
++        return Ok(());
++    }
++
++    conn.execute(
++        "DELETE FROM object_search_fts WHERE object_id = ?1",
++        params![id],
++    )
++    .map_err(|e| e.to_string())?;
++    Ok(())
++}
++
++fn rollback_savepoint(conn: &Connection, name: &str) {
++    let _ = conn.execute_batch(&format!(
++        "ROLLBACK TO SAVEPOINT {name}; RELEASE SAVEPOINT {name};"
++    ));
++}
++
++pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
++    conn.execute_batch("SAVEPOINT ark_upsert_object")
++        .map_err(|e| e.to_string())?;
++    let result = (|| -> Result<(), String> {
++        conn.execute(
++            "INSERT OR REPLACE INTO objects
++                (id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at)
++             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
++            params![
++                object.id,
++                object.type_id,
++                object.title,
++                serialize_json(&object.content_json)?,
++                serialize_json(&object.props_json)?,
++                object.created_at,
++                object.updated_at,
++                object.deleted_at,
++            ],
++        )
++        .map_err(|e| e.to_string())?;
++        index_object_for_search(conn, object)
++    })();
++
++    if let Err(error) = result {
++        rollback_savepoint(conn, "ark_upsert_object");
++        return Err(error);
++    }
++
++    conn.execute_batch("RELEASE SAVEPOINT ark_upsert_object")
++        .map_err(|e| e.to_string())?;
++    Ok(())
++}
++
+ pub fn delete_object(conn: &Connection, id: &str) -> Result<(), String> {
+-    conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
++    conn.execute_batch("SAVEPOINT ark_delete_object")
++        .map_err(|e| e.to_string())?;
++    let result = (|| -> Result<(), String> {
++        conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
++            .map_err(|e| e.to_string())?;
++        remove_object_from_search(conn, id)
++    })();
++
++    if let Err(error) = result {
++        rollback_savepoint(conn, "ark_delete_object");
++        return Err(error);
++    }
++
++    conn.execute_batch("RELEASE SAVEPOINT ark_delete_object")
+         .map_err(|e| e.to_string())?;
+     Ok(())
+ }
+@@ -639,13 +753,83 @@ pub fn search_objects(conn: &Connection, query: &str) -> Result<Vec<SearchResult
+ 
+     let normalized_query = query.trim().to_lowercase();
+     let query_terms = tokenize_search_text(query);
++    if let Some(fts_query) = build_fts_match_query(&query_terms) {
++        if let Ok(results) =
++            search_objects_with_fts(conn, &fts_query, &normalized_query, &query_terms)
++        {
++            return Ok(results);
++        }
++    }
++
++    search_objects_fallback(conn, &normalized_query, &query_terms)
++}
++
++fn search_objects_with_fts(
++    conn: &Connection,
++    fts_query: &str,
++    normalized_query: &str,
++    query_terms: &[String],
++) -> Result<Vec<SearchResult>, String> {
++    if !object_search_fts_exists(conn)? {
++        return Err("object_search_fts is not available".to_string());
++    }
++
++    let mut stmt = conn
++        .prepare(
++            "SELECT objects.id, objects.title, objects.content_json, objects.props_json
++             FROM object_search_fts
++             JOIN objects ON objects.id = object_search_fts.object_id
++             WHERE object_search_fts MATCH ?1
++               AND objects.deleted_at IS NULL
++             ORDER BY bm25(object_search_fts), objects.updated_at DESC, objects.created_at DESC
++             LIMIT 30",
++        )
++        .map_err(|e| e.to_string())?;
++    let rows = stmt
++        .query_map(params![fts_query], |row| {
++            let content_json: String = row.get(2)?;
++            let props_json: String = row.get(3)?;
++            Ok(ArkObject {
++                id: row.get(0)?,
++                type_id: String::new(),
++                title: row.get(1)?,
++                content_json: parse_json_or_default(content_json),
++                props_json: parse_json_or_default(props_json),
++                created_at: String::new(),
++                updated_at: String::new(),
++                deleted_at: None,
++            })
++        })
++        .map_err(|e| e.to_string())?;
++
++    let mut results = Vec::new();
++    for object in rows {
++        let object = object.map_err(|e| e.to_string())?;
++        let body = object_search_body(&object);
++        let (line, text) =
++            build_search_context(&object.title, &body, normalized_query, query_terms);
++        results.push(SearchResult {
++            file: String::new(),
++            line,
++            text,
++            entry_id: object.id,
++        });
++    }
++    Ok(results)
++}
++
++fn search_objects_fallback(
++    conn: &Connection,
++    normalized_query: &str,
++    query_terms: &[String],
++) -> Result<Vec<SearchResult>, String> {
+     let mut objects = list_objects(conn)?;
+     objects.retain(|object| object.deleted_at.is_none());
+ 
+     let mut matches = Vec::new();
+ 
+     for object in objects {
+-        let body = extract_plain_text_from_value(&object.content_json);
++        let body = object_search_body(&object);
+         let title_matches = line_matches_query(&object.title, &normalized_query, &query_terms);
+         let body_matches = body
+             .lines()
+@@ -667,7 +851,8 @@ pub fn search_objects(conn: &Connection, query: &str) -> Result<Vec<SearchResult
+             100
+         };
+ 
+-        let (line, text) = build_search_context(&object.title, &body, &normalized_query, &query_terms);
++        let (line, text) =
++            build_search_context(&object.title, &body, &normalized_query, &query_terms);
+         matches.push((
+             score,
+             SearchResult {
+@@ -685,6 +870,30 @@ pub fn search_objects(conn: &Connection, query: &str) -> Result<Vec<SearchResult
+     Ok(matches.into_iter().map(|(_, result)| result).collect())
+ }
+ 
++fn build_fts_match_query(query_terms: &[String]) -> Option<String> {
++    if query_terms.is_empty() {
++        return None;
++    }
++
++    let terms = query_terms
++        .iter()
++        .map(|term| format!("{term}*"))
++        .collect::<Vec<_>>();
++    Some(terms.join(" AND "))
++}
++
++fn object_search_body(object: &ArkObject) -> String {
++    let content = extract_plain_text_from_value(&object.content_json);
++    let props = extract_plain_text_from_value(&object.props_json);
++
++    match (content.is_empty(), props.is_empty()) {
++        (true, true) => String::new(),
++        (false, true) => content,
++        (true, false) => props,
++        (false, false) => format!("{content}\n{props}"),
++    }
++}
++
+ fn build_search_context(
+     title: &str,
+     body: &str,
+@@ -708,7 +917,10 @@ fn build_search_context(
+     if line_matches_query(title, normalized_query, query_terms) {
+         return (
+             0,
+-            format!("Название: {}", build_snippet(title.trim(), normalized_query, query_terms)),
++            format!(
++                "Название: {}",
++                build_snippet(title.trim(), normalized_query, query_terms)
++            ),
+         );
+     }
+ 
+@@ -843,6 +1055,19 @@ fn collect_plain_text(node: &Value, output: &mut String) {
+         }
+     }
+ 
++    if let Some(values) = node.as_object() {
++        let is_rich_text_text_node = matches!(
++            node.get("type").and_then(|value| value.as_str()),
++            Some("text")
++        );
++        for (key, value) in values {
++            if key == "type" || key == "content" || (key == "text" && is_rich_text_text_node) {
++                continue;
++            }
++            collect_plain_text(value, output);
++        }
++    }
++
+     if matches!(
+         node.get("type").and_then(|value| value.as_str()),
+         Some("paragraph" | "heading" | "codeBlock" | "blockquote" | "listItem")
+@@ -1006,6 +1231,235 @@ pub fn delete_usage_event(conn: &Connection, id: &str) -> Result<(), String> {
+     Ok(())
+ }
+ 
++fn clamp_positive_i64(value: i64, fallback: i64) -> i64 {
++    if value > 0 {
++        value
++    } else {
++        fallback
++    }
++}
++
++fn iso_date_days_ago(days_ago: i64) -> String {
++    (Utc::now().date_naive() - Duration::days(days_ago))
++        .format("%Y-%m-%d")
++        .to_string()
++}
++
++fn enumerate_dates(range_days: i64) -> Vec<String> {
++    (0..range_days)
++        .map(|index| iso_date_days_ago(range_days - index - 1))
++        .collect()
++}
++
++pub fn load_usage_analytics(
++    conn: &Connection,
++    range_days: i64,
++    top_apps_limit: i64,
++    recent_sessions_limit: i64,
++) -> Result<UsageAnalyticsSnapshot, String> {
++    let range_days = clamp_positive_i64(range_days, 21);
++    let top_apps_limit = clamp_positive_i64(top_apps_limit, 8);
++    let recent_sessions_limit = clamp_positive_i64(recent_sessions_limit, 24);
++    let range_start = iso_date_days_ago(range_days - 1);
++    let range_end = iso_date_days_ago(0);
++
++    let summary = conn
++        .query_row(
++            "SELECT COUNT(DISTINCT tracked_apps.id) AS tracked_app_count,
++                    COUNT(DISTINCT usage_sessions.id) AS session_count,
++                    (SELECT COUNT(*) FROM usage_events) AS event_count,
++                    COALESCE(SUM(usage_sessions.foreground_ms), 0) AS total_foreground_ms,
++                    COALESCE(SUM(usage_sessions.idle_ms), 0) AS total_idle_ms,
++                    MIN(usage_sessions.started_at) AS first_recorded_at,
++                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_recorded_at
++             FROM tracked_apps
++             LEFT JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id",
++            [],
++            |row| {
++                Ok(UsageSummary {
++                    tracked_app_count: row.get::<_, Option<i64>>(0)?.unwrap_or(0),
++                    session_count: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
++                    event_count: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
++                    total_foreground_ms: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
++                    total_idle_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
++                    first_recorded_at: row.get(5)?,
++                    last_recorded_at: row.get(6)?,
++                })
++            },
++        )
++        .map_err(|e| e.to_string())?;
++
++    let mut stmt = conn
++        .prepare(
++            "SELECT SUBSTR(COALESCE(ended_at, started_at), 1, 10) AS date,
++                    COALESCE(SUM(foreground_ms), 0) AS foreground_ms,
++                    COALESCE(SUM(idle_ms), 0) AS idle_ms,
++                    COUNT(*) AS sessions
++             FROM usage_sessions
++             WHERE SUBSTR(COALESCE(ended_at, started_at), 1, 10) BETWEEN ?1 AND ?2
++             GROUP BY date
++             ORDER BY date ASC",
++        )
++        .map_err(|e| e.to_string())?;
++    let trend_rows = stmt
++        .query_map(params![range_start, range_end], |row| {
++            Ok(DailyTrendPoint {
++                date: row.get(0)?,
++                foreground_ms: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
++                idle_ms: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
++                sessions: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
++            })
++        })
++        .map_err(|e| e.to_string())?
++        .collect::<Result<Vec<_>, _>>()
++        .map_err(|e| e.to_string())?;
++    let trend_by_date = trend_rows
++        .into_iter()
++        .map(|point| (point.date.clone(), point))
++        .collect::<std::collections::HashMap<_, _>>();
++    let daily_trend = enumerate_dates(range_days)
++        .into_iter()
++        .map(|date| {
++            trend_by_date
++                .get(&date)
++                .cloned()
++                .unwrap_or(DailyTrendPoint {
++                    date,
++                    foreground_ms: 0,
++                    idle_ms: 0,
++                    sessions: 0,
++                })
++        })
++        .collect();
++
++    let mut stmt = conn
++        .prepare(
++            "SELECT CAST(STRFTIME('%w', started_at) AS INTEGER) AS weekday,
++                    CAST(STRFTIME('%H', started_at) AS INTEGER) AS hour,
++                    COALESCE(SUM(foreground_ms), 0) AS foreground_ms
++             FROM usage_sessions
++             WHERE SUBSTR(COALESCE(ended_at, started_at), 1, 10) BETWEEN ?1 AND ?2
++             GROUP BY weekday, hour",
++        )
++        .map_err(|e| e.to_string())?;
++    let hourly_heatmap = stmt
++        .query_map(params![range_start, range_end], |row| {
++            Ok((
++                row.get::<_, Option<i64>>(0)?,
++                row.get::<_, Option<i64>>(1)?,
++                row.get::<_, Option<i64>>(2)?.unwrap_or(0),
++            ))
++        })
++        .map_err(|e| e.to_string())?
++        .filter_map(|row| match row {
++            Ok((Some(weekday), Some(hour), foreground_ms)) => Some(Ok(HourlyHeatmapCell {
++                weekday,
++                hour,
++                foreground_ms,
++            })),
++            Ok((_, _, _)) => None,
++            Err(error) => Some(Err(error)),
++        })
++        .collect::<Result<Vec<_>, _>>()
++        .map_err(|e| e.to_string())?;
++
++    let mut stmt = conn
++        .prepare(
++            "SELECT tracked_apps.id,
++                    tracked_apps.display_name,
++                    tracked_apps.process_name,
++                    tracked_apps.normalized_exe_path AS normalized_path,
++                    COALESCE(SUM(usage_sessions.foreground_ms), 0) AS foreground_ms,
++                    COALESCE(SUM(usage_sessions.idle_ms), 0) AS idle_ms,
++                    COUNT(usage_sessions.id) AS sessions,
++                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at
++             FROM tracked_apps
++             JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id
++             GROUP BY tracked_apps.id
++             ORDER BY foreground_ms DESC, last_seen_at DESC
++             LIMIT ?1",
++        )
++        .map_err(|e| e.to_string())?;
++    let top_apps = stmt
++        .query_map(params![top_apps_limit], |row| {
++            let display_name: Option<String> = row.get(1)?;
++            let process_name: String = row.get(2)?;
++            Ok(TopAppEntry {
++                id: row.get(0)?,
++                display_name: display_name
++                    .as_deref()
++                    .map(str::trim)
++                    .filter(|value| !value.is_empty())
++                    .unwrap_or(&process_name)
++                    .to_string(),
++                process_name,
++                normalized_path: row.get(3)?,
++                foreground_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
++                idle_ms: row.get::<_, Option<i64>>(5)?.unwrap_or(0),
++                sessions: row.get::<_, Option<i64>>(6)?.unwrap_or(0),
++                last_seen_at: row.get(7)?,
++            })
++        })
++        .map_err(|e| e.to_string())?
++        .collect::<Result<Vec<_>, _>>()
++        .map_err(|e| e.to_string())?;
++
++    let mut stmt = conn
++        .prepare(
++            "SELECT usage_sessions.id,
++                    usage_sessions.tracked_app_id,
++                    tracked_apps.display_name,
++                    usage_sessions.process_name,
++                    usage_sessions.platform,
++                    usage_sessions.device_name,
++                    usage_sessions.started_at,
++                    usage_sessions.ended_at,
++                    usage_sessions.foreground_ms,
++                    usage_sessions.idle_ms,
++                    usage_sessions.window_title
++             FROM usage_sessions
++             JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
++             ORDER BY usage_sessions.started_at DESC
++             LIMIT ?1",
++        )
++        .map_err(|e| e.to_string())?;
++    let recent_sessions = stmt
++        .query_map(params![recent_sessions_limit], |row| {
++            let display_name: Option<String> = row.get(2)?;
++            let process_name: String = row.get(3)?;
++            Ok(RecentSessionEntry {
++                id: row.get(0)?,
++                tracked_app_id: row.get(1)?,
++                display_name: display_name
++                    .as_deref()
++                    .map(str::trim)
++                    .filter(|value| !value.is_empty())
++                    .unwrap_or(&process_name)
++                    .to_string(),
++                process_name,
++                platform: row.get(4)?,
++                device_name: row.get(5)?,
++                started_at: row.get(6)?,
++                ended_at: row.get(7)?,
++                foreground_ms: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
++                idle_ms: row.get::<_, Option<i64>>(9)?.unwrap_or(0),
++                window_title: row.get(10)?,
++            })
++        })
++        .map_err(|e| e.to_string())?
++        .collect::<Result<Vec<_>, _>>()
++        .map_err(|e| e.to_string())?;
++
++    Ok(UsageAnalyticsSnapshot {
++        generated_at: Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
++        summary,
++        daily_trend,
++        hourly_heatmap,
++        top_apps,
++        recent_sessions,
++    })
++}
++
+ // ---------------------------------------------------------------------------
+ // sync_kv
+ // ---------------------------------------------------------------------------
+@@ -1029,11 +1483,114 @@ pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), Stri
+     Ok(())
+ }
+ 
++fn upsert_sync_tombstone(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
++    conn.execute(
++        "INSERT INTO sync_tombstones (id, entity_type, hlc, deleted_at)
++         VALUES (?1, ?2, ?3, ?4)
++         ON CONFLICT(id) DO UPDATE SET
++            entity_type = excluded.entity_type,
++            hlc = excluded.hlc,
++            deleted_at = excluded.deleted_at
++         WHERE excluded.hlc >= sync_tombstones.hlc",
++        params![entity.id, entity.entity_type, entity.hlc, entity.hlc],
++    )
++    .map_err(|e| e.to_string())?;
++    Ok(())
++}
++
++pub fn delete_sync_tombstone(conn: &Connection, id: &str) -> Result<(), String> {
++    conn.execute("DELETE FROM sync_tombstones WHERE id = ?1", params![id])
++        .map_err(|e| e.to_string())?;
++    Ok(())
++}
++
++pub fn bump_sync_version_vector(
++    conn: &Connection,
++    entity_id: &str,
++    device_id: &str,
++) -> Result<String, String> {
++    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
++    let mut vector: VersionVector = raw
++        .as_deref()
++        .filter(|value| !value.trim().is_empty())
++        .map(|value| serde_json::from_str(value).map_err(|e| e.to_string()))
++        .transpose()?
++        .unwrap_or_default();
++
++    let now = HLC::now(device_id);
++    let next = match vector.get(entity_id) {
++        Some(existing) => {
++            let previous = HLC::from_string(existing);
++            if HLC::compare(&now, &previous).is_gt() {
++                now
++            } else {
++                HLC::new(
++                    previous.wall_time,
++                    previous.counter.saturating_add(1),
++                    device_id.to_string(),
++                )
++            }
++        }
++        None => now,
++    };
++    let hlc = next.to_string();
++    vector.insert(entity_id.to_string(), hlc.clone());
++    set_sync_kv(
++        conn,
++        VERSION_VECTOR_KEY,
++        &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
++    )?;
++    Ok(hlc)
++}
++
++pub fn record_sync_tombstone(
++    conn: &Connection,
++    entity_type: &str,
++    entity_id: &str,
++    hlc: &str,
++) -> Result<(), String> {
++    let entity = SyncEntity {
++        entity_type: entity_type.to_string(),
++        id: entity_id.to_string(),
++        data: serde_json::Map::new(),
++        hlc: hlc.to_string(),
++        deleted: Some(true),
++    };
++    upsert_sync_tombstone(conn, &entity)
++}
++
++fn load_sync_tombstones(conn: &Connection) -> Result<Vec<SyncEntity>, String> {
++    let mut stmt = conn
++        .prepare(
++            "SELECT id, entity_type, hlc
++             FROM sync_tombstones
++             ORDER BY hlc ASC, id ASC",
++        )
++        .map_err(|e| e.to_string())?;
++    let rows = stmt
++        .query_map([], |row| {
++            Ok(SyncEntity {
++                id: row.get(0)?,
++                entity_type: row.get(1)?,
++                hlc: row.get(2)?,
++                data: serde_json::Map::new(),
++                deleted: Some(true),
++            })
++        })
++        .map_err(|e| e.to_string())?;
++    rows.collect::<rusqlite::Result<Vec<_>>>()
++        .map_err(|e| e.to_string())
++}
++
+ // ---------------------------------------------------------------------------
+ // Bulk operations
+ // ---------------------------------------------------------------------------
+ 
+ pub fn clear_all(conn: &Connection) -> Result<(), String> {
++    if object_search_fts_exists(conn).unwrap_or(false) {
++        conn.execute("DELETE FROM object_search_fts", [])
++            .map_err(|e| e.to_string())?;
++    }
+     conn.execute_batch(
+         "DELETE FROM object_links;
+          DELETE FROM objects;
+@@ -1046,6 +1603,7 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
+          DELETE FROM areas;
+          DELETE FROM tags;
+          DELETE FROM headings;
++         DELETE FROM sync_tombstones;
+          DELETE FROM sync_kv;",
+     )
+     .map_err(|e| e.to_string())
+@@ -1553,12 +2111,16 @@ impl SqliteStorageBackend {
+             }
+         }
+ 
++        if let Ok(tombstones) = load_sync_tombstones(conn) {
++            entities.extend(tombstones);
++        }
++
+         entities
+     }
+ 
+-    fn apply_entity_blocking(conn: &Connection, entity: &SyncEntity) {
++    fn apply_entity_blocking(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+         if entity.deleted == Some(true) {
+-            let _ = match entity.entity_type.as_str() {
++            match entity.entity_type.as_str() {
+                 "todo" => delete_todo(conn, &entity.id),
+                 "project" => delete_project(conn, &entity.id),
+                 "area" => delete_area(conn, &entity.id),
+@@ -1570,16 +2132,16 @@ impl SqliteStorageBackend {
+                 "object_type" => delete_object_type(conn, &entity.id),
+                 "object" => delete_object(conn, &entity.id),
+                 "object_link" => delete_object_link(conn, &entity.id),
+-                _ => Ok(()),
+-            };
+-            return;
++                _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
++            }?;
++            return upsert_sync_tombstone(conn, entity);
+         }
+ 
+         let mut full_data = entity.data.clone();
+         full_data.insert("id".to_string(), Value::String(entity.id.clone()));
+         let value = Value::Object(full_data);
+ 
+-        let _ = match entity.entity_type.as_str() {
++        let result = match entity.entity_type.as_str() {
+             "todo" => serde_json::from_value::<TodoItem>(value)
+                 .map_err(|e| e.to_string())
+                 .and_then(|todo| upsert_todo(conn, &todo)),
+@@ -1613,8 +2175,10 @@ impl SqliteStorageBackend {
+             "object_link" => serde_json::from_value::<ObjectLink>(value)
+                 .map_err(|e| e.to_string())
+                 .and_then(|link| upsert_object_link(conn, &link)),
+-            _ => Ok(()),
++            _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
+         };
++        result?;
++        delete_sync_tombstone(conn, &entity.id)
+     }
+ }
+ 
+@@ -1632,14 +2196,15 @@ impl StorageBackend for SqliteStorageBackend {
+         .unwrap_or_default()
+     }
+ 
+-    async fn apply_entity(&self, entity: &SyncEntity) {
++    async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
+         let conn = self.conn.clone();
+         let entity = entity.clone();
+-        let _ = tokio::task::spawn_blocking(move || {
+-            let guard = conn.lock().unwrap();
+-            Self::apply_entity_blocking(&guard, &entity);
++        tokio::task::spawn_blocking(move || {
++            let guard = conn.lock().map_err(|e| e.to_string())?;
++            Self::apply_entity_blocking(&guard, &entity)
+         })
+-        .await;
++        .await
++        .map_err(|e| e.to_string())?
+     }
+ 
+     async fn get_kv(&self, key: &str) -> Option<String> {
+@@ -1826,12 +2391,12 @@ mod tests {
+         // Verify tables exist
+         let count: i64 = conn
+             .query_row(
+-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos','projects','areas','tags','headings','tracked_apps','usage_sessions','usage_events','sync_kv')",
++                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos','projects','areas','tags','headings','tracked_apps','usage_sessions','usage_events','sync_kv','sync_tombstones')",
+                 [],
+                 |row| row.get(0),
+             )
+             .unwrap();
+-        assert_eq!(count, 9);
++        assert_eq!(count, 10);
+         let object_count: i64 = conn
+             .query_row(
+                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('object_types', 'objects', 'object_links')",
+@@ -1945,6 +2510,15 @@ mod tests {
+             )
+             .unwrap();
+         assert_eq!(object_table_count, 3);
++        let tombstone_table_count: i64 = conn
++            .query_row(
++                "SELECT COUNT(*) FROM sqlite_master
++                 WHERE type='table' AND name = 'sync_tombstones'",
++                [],
++                |row| row.get(0),
++            )
++            .unwrap();
++        assert_eq!(tombstone_table_count, 1);
+         let object_types = list_object_types(&conn).unwrap();
+         assert!(object_types.iter().any(|item| item.id == "note_obj"));
+         assert!(object_types.iter().any(|item| item.id == "game_obj"));
+@@ -2075,6 +2649,51 @@ mod tests {
+         assert_eq!(data.usage_events.len(), 0);
+     }
+ 
++    #[test]
++    fn usage_analytics_snapshot_includes_summary_and_zero_filled_trend() {
++        let conn = setup_db();
++        let mut tracked_app = make_tracked_app("app-analytics");
++        tracked_app.display_name = None;
++        upsert_tracked_app(&conn, &tracked_app).unwrap();
++
++        let today = Utc::now().date_naive();
++        let today_start = format!("{}T10:00:00.000Z", today.format("%Y-%m-%d"));
++        let today_end = format!("{}T10:30:00.000Z", today.format("%Y-%m-%d"));
++        let mut session = make_usage_session("session-analytics", &tracked_app.id);
++        session.started_at = today_start.clone();
++        session.ended_at = Some(today_end);
++        session.foreground_ms = 1_200;
++        session.idle_ms = 300;
++        upsert_usage_session(&conn, &session).unwrap();
++
++        let mut event = make_usage_event("event-analytics", &tracked_app.id, Some(&session.id));
++        event.occurred_at = today_start;
++        upsert_usage_event(&conn, &event).unwrap();
++
++        let snapshot = load_usage_analytics(&conn, 3, 5, 5).unwrap();
++
++        assert_eq!(snapshot.summary.tracked_app_count, 1);
++        assert_eq!(snapshot.summary.session_count, 1);
++        assert_eq!(snapshot.summary.event_count, 1);
++        assert_eq!(snapshot.summary.total_foreground_ms, 1_200);
++        assert_eq!(snapshot.summary.total_idle_ms, 300);
++        assert_eq!(snapshot.daily_trend.len(), 3);
++        assert_eq!(
++            snapshot
++                .daily_trend
++                .iter()
++                .filter(|point| point.sessions == 0)
++                .count(),
++            2,
++            "range should include zero-filled days without sessions"
++        );
++        assert_eq!(snapshot.daily_trend.last().unwrap().sessions, 1);
++        assert_eq!(snapshot.top_apps[0].display_name, "demo.exe");
++        assert_eq!(snapshot.top_apps[0].foreground_ms, 1_200);
++        assert_eq!(snapshot.recent_sessions[0].id, "session-analytics");
++        assert_eq!(snapshot.hourly_heatmap[0].foreground_ms, 1_200);
++    }
++
+     #[test]
+     fn test_object_model_crud() {
+         let conn = setup_db();
+@@ -2106,6 +2725,85 @@ mod tests {
+         assert!(!data.object_types.iter().any(|item| item.id == "book_obj"));
+     }
+ 
++    #[test]
++    fn test_object_search_fts_rebuilds_existing_objects_on_init() {
++        let conn = Connection::open_in_memory().unwrap();
++        conn.execute_batch(CREATE_TABLES).unwrap();
++
++        let object_type = make_object_type("search_obj", "Searchable");
++        upsert_object_type(&conn, &object_type).unwrap();
++        let mut object = make_object("obj-existing-search", "search_obj", "Existing Object");
++        object.props_json = json!({
++            "description": "preexisting nebula archive"
++        });
++        upsert_object(&conn, &object).unwrap();
++
++        assert!(
++            !object_search_fts_exists(&conn).unwrap(),
++            "legacy DB setup should not have the FTS table yet"
++        );
++
++        init_schema(&conn).unwrap();
++
++        let results = search_objects(&conn, "nebula").unwrap();
++        assert_eq!(results.len(), 1);
++        assert_eq!(results[0].entry_id, "obj-existing-search");
++    }
++
++    #[test]
++    fn test_object_search_fts_updates_and_removes_index_entries() {
++        let conn = setup_db();
++        let object_type = make_object_type("search_obj", "Searchable");
++        upsert_object_type(&conn, &object_type).unwrap();
++
++        let mut object = make_object("obj-search-update", "search_obj", "Search Target");
++        object.props_json = json!({ "description": "alpha marker" });
++        upsert_object(&conn, &object).unwrap();
++        assert_eq!(
++            search_objects(&conn, "alpha").unwrap()[0].entry_id,
++            object.id
++        );
++
++        object.props_json = json!({ "description": "beta marker" });
++        object.updated_at = "2026-01-02T00:00:00.000Z".to_string();
++        upsert_object(&conn, &object).unwrap();
++        assert!(
++            search_objects(&conn, "alpha").unwrap().is_empty(),
++            "old FTS text should be removed on object update"
++        );
++        assert_eq!(
++            search_objects(&conn, "beta").unwrap()[0].entry_id,
++            object.id
++        );
++
++        delete_object(&conn, &object.id).unwrap();
++        assert!(
++            search_objects(&conn, "beta").unwrap().is_empty(),
++            "deleted objects should be removed from the FTS index"
++        );
++    }
++
++    #[test]
++    fn test_object_search_is_punctuation_safe_and_falls_back_without_fts() {
++        let conn = setup_db();
++        let object_type = make_object_type("search_obj", "Searchable");
++        upsert_object_type(&conn, &object_type).unwrap();
++        let mut object = make_object("obj-punctuation-search", "search_obj", "C++ Primer");
++        object.props_json = json!({
++            "description": "boss-fight co-op notes"
++        });
++        upsert_object(&conn, &object).unwrap();
++
++        let punctuation_results = search_objects(&conn, "boss-fight??").unwrap();
++        assert_eq!(punctuation_results.len(), 1);
++        assert_eq!(punctuation_results[0].entry_id, "obj-punctuation-search");
++
++        conn.execute_batch("DROP TABLE object_search_fts").unwrap();
++        let fallback_results = search_objects(&conn, "co-op").unwrap();
++        assert_eq!(fallback_results.len(), 1);
++        assert_eq!(fallback_results[0].entry_id, "obj-punctuation-search");
++    }
++
+     #[test]
+     fn test_sync_kv() {
+         let conn = setup_db();
+@@ -2292,7 +2990,7 @@ mod tests {
+     async fn storage_backend_roundtrip_todo() {
+         let backend = make_backend();
+         let entity = sync_todo("tbk1", "Roundtrip");
+-        backend.apply_entity(&entity).await;
++        backend.apply_entity(&entity).await.unwrap();
+ 
+         let empty_vector: VersionVector = std::collections::HashMap::new();
+         let loaded = backend.load_entities(&empty_vector).await;
+@@ -2307,20 +3005,57 @@ mod tests {
+         );
+     }
+ 
++    #[tokio::test]
++    async fn storage_backend_rejects_invalid_sync_payload() {
++        let backend = make_backend();
++        let mut entity = sync_todo("tbk-invalid", "Invalid");
++        entity.data.insert("title".to_string(), json!(123));
++
++        let err = backend
++            .apply_entity(&entity)
++            .await
++            .expect_err("invalid payload should return an apply error");
++        assert!(
++            err.contains("invalid type") || err.contains("expected"),
++            "unexpected error: {err}",
++        );
++    }
++
++    #[tokio::test]
++    async fn storage_backend_rejects_unknown_sync_entity_type() {
++        let backend = make_backend();
++        let mut entity = sync_todo("tbk-unknown", "Unknown");
++        entity.entity_type = "unknown_entity".to_string();
++
++        let err = backend
++            .apply_entity(&entity)
++            .await
++            .expect_err("unknown entity type should return an apply error");
++        assert!(
++            err.contains("unknown sync entity type"),
++            "unexpected error: {err}"
++        );
++    }
++
+     #[tokio::test]
+     async fn storage_backend_roundtrip_usage_entities() {
+         let backend = make_backend();
+-        backend.apply_entity(&sync_tracked_app("app-sync")).await;
++        backend
++            .apply_entity(&sync_tracked_app("app-sync"))
++            .await
++            .unwrap();
+         backend
+             .apply_entity(&sync_usage_session("session-sync", "app-sync"))
+-            .await;
++            .await
++            .unwrap();
+         backend
+             .apply_entity(&sync_usage_event(
+                 "event-sync",
+                 "app-sync",
+                 Some("session-sync"),
+             ))
+-            .await;
++            .await
++            .unwrap();
+ 
+         let empty_vector: VersionVector = std::collections::HashMap::new();
+         let loaded = backend.load_entities(&empty_vector).await;
+@@ -2358,13 +3093,16 @@ mod tests {
+         let backend = make_backend();
+         backend
+             .apply_entity(&sync_object("obj-sync-a", "note_obj", "Ark note"))
+-            .await;
++            .await
++            .unwrap();
+         backend
+             .apply_entity(&sync_object("obj-sync-b", "game_obj", "Ark game"))
+-            .await;
++            .await
++            .unwrap();
+         backend
+             .apply_entity(&sync_object_link("link-sync", "obj-sync-a", "obj-sync-b"))
+-            .await;
++            .await
++            .unwrap();
+ 
+         let empty_vector: VersionVector = std::collections::HashMap::new();
+         let loaded = backend.load_entities(&empty_vector).await;
+@@ -2392,7 +3130,7 @@ mod tests {
+     async fn storage_backend_delete_removes_entity() {
+         let backend = make_backend();
+         let entity = sync_todo("tbk2", "To delete");
+-        backend.apply_entity(&entity).await;
++        backend.apply_entity(&entity).await.unwrap();
+ 
+         // Now apply a tombstone.
+         let tombstone = SyncEntity {
+@@ -2402,30 +3140,139 @@ mod tests {
+             hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
+             deleted: Some(true),
+         };
+-        backend.apply_entity(&tombstone).await;
++        backend.apply_entity(&tombstone).await.unwrap();
++
++        let empty_vector: VersionVector = std::collections::HashMap::new();
++        let loaded = backend.load_entities(&empty_vector).await;
++        let found = loaded
++            .iter()
++            .find(|e| e.id == "tbk2")
++            .expect("deleted entity should be emitted as a tombstone");
++        assert_eq!(found.entity_type, "todo");
++        assert_eq!(found.deleted, Some(true));
++        assert_eq!(found.hlc, "2026-01-02T00:00:00.000Z:000001:peer-a");
++        assert!(found.data.is_empty());
++    }
++
++    #[tokio::test]
++    async fn storage_backend_tombstone_survives_backend_recreation() {
++        let conn = setup_db();
++        let shared = Arc::new(Mutex::new(conn));
++        let backend = SqliteStorageBackend::new(shared.clone());
++
++        let tombstone = SyncEntity {
++            entity_type: "todo".to_string(),
++            id: "tbk-recreated".to_string(),
++            data: serde_json::Map::new(),
++            hlc: "2026-01-02T00:00:00.000Z:000002:peer-a".to_string(),
++            deleted: Some(true),
++        };
++        backend.apply_entity(&tombstone).await.unwrap();
++
++        let recreated = SqliteStorageBackend::new(shared);
++        let empty_vector: VersionVector = std::collections::HashMap::new();
++        let loaded = recreated.load_entities(&empty_vector).await;
++        assert!(
++            loaded
++                .iter()
++                .any(|e| e.id == "tbk-recreated" && e.deleted == Some(true)),
++            "tombstone should survive recreating the storage backend",
++        );
++    }
++
++    #[tokio::test]
++    async fn storage_backend_live_entity_clears_tombstone() {
++        let backend = make_backend();
++        let tombstone = SyncEntity {
++            entity_type: "todo".to_string(),
++            id: "tbk-resurrected".to_string(),
++            data: serde_json::Map::new(),
++            hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
++            deleted: Some(true),
++        };
++        backend.apply_entity(&tombstone).await.unwrap();
++
++        let mut live = sync_todo("tbk-resurrected", "Live again");
++        live.hlc = "2026-01-03T00:00:00.000Z:000001:peer-a".to_string();
++        backend.apply_entity(&live).await.unwrap();
+ 
+         let empty_vector: VersionVector = std::collections::HashMap::new();
+         let loaded = backend.load_entities(&empty_vector).await;
++        let matching: Vec<&SyncEntity> = loaded
++            .iter()
++            .filter(|e| e.id == "tbk-resurrected")
++            .collect();
++        assert_eq!(matching.len(), 1);
++        assert_eq!(matching[0].deleted, None);
++        assert_eq!(
++            matching[0].data.get("title").and_then(|v| v.as_str()),
++            Some("Live again")
++        );
++    }
++
++    #[test]
++    fn local_sync_version_bump_persists_hlc_for_entity() {
++        let conn = setup_db();
++        let first = bump_sync_version_vector(&conn, "obj-local", "device-local").unwrap();
++        let second = bump_sync_version_vector(&conn, "obj-local", "device-local").unwrap();
++
++        assert!(HLC::is_newer(&second, &first) || second > first);
++        let raw = get_sync_kv(&conn, VERSION_VECTOR_KEY)
++            .unwrap()
++            .expect("version vector should be stored");
++        let vector: VersionVector = serde_json::from_str(&raw).unwrap();
++        assert_eq!(vector.get("obj-local"), Some(&second));
++        assert!(second.ends_with(":device-local"));
++    }
++
++    #[test]
++    fn local_sync_tombstone_is_persisted_and_can_be_cleared() {
++        let conn = setup_db();
++        record_sync_tombstone(
++            &conn,
++            "object",
++            "obj-deleted",
++            "2026-01-02T00:00:00.000Z:000001:device-local",
++        )
++        .unwrap();
++
++        let tombstones = load_sync_tombstones(&conn).unwrap();
++        assert!(
++            tombstones.iter().any(|entity| {
++                entity.entity_type == "object"
++                    && entity.id == "obj-deleted"
++                    && entity.deleted == Some(true)
++            }),
++            "local delete should leave a durable tombstone",
++        );
++
++        delete_sync_tombstone(&conn, "obj-deleted").unwrap();
++        let tombstones = load_sync_tombstones(&conn).unwrap();
+         assert!(
+-            loaded.iter().all(|e| e.id != "tbk2"),
+-            "deleted entity should be absent from load_entities",
++            tombstones.iter().all(|entity| entity.id != "obj-deleted"),
++            "local live upsert should be able to clear prior tombstone",
+         );
+     }
+ 
+     #[tokio::test]
+     async fn storage_backend_delete_usage_entity_removes_entity() {
+         let backend = make_backend();
+-        backend.apply_entity(&sync_tracked_app("app-del")).await;
++        backend
++            .apply_entity(&sync_tracked_app("app-del"))
++            .await
++            .unwrap();
+         backend
+             .apply_entity(&sync_usage_session("session-del", "app-del"))
+-            .await;
++            .await
++            .unwrap();
+         backend
+             .apply_entity(&sync_usage_event(
+                 "event-del",
+                 "app-del",
+                 Some("session-del"),
+             ))
+-            .await;
++            .await
++            .unwrap();
+ 
+         let tombstone = SyncEntity {
+             entity_type: "usage_event".to_string(),
+@@ -2434,14 +3281,17 @@ mod tests {
+             hlc: "2026-01-02T00:00:00.000Z:000001:peer-a".to_string(),
+             deleted: Some(true),
+         };
+-        backend.apply_entity(&tombstone).await;
++        backend.apply_entity(&tombstone).await.unwrap();
+ 
+         let empty_vector: VersionVector = std::collections::HashMap::new();
+         let loaded = backend.load_entities(&empty_vector).await;
+-        assert!(
+-            loaded.iter().all(|e| e.id != "event-del"),
+-            "deleted usage event should be absent from load_entities",
+-        );
++        let found = loaded
++            .iter()
++            .find(|e| e.id == "event-del")
++            .expect("deleted usage event should be emitted as a tombstone");
++        assert_eq!(found.entity_type, "usage_event");
++        assert_eq!(found.deleted, Some(true));
++        assert!(found.data.is_empty());
+     }
+ 
+     #[tokio::test]
+@@ -2456,7 +3306,7 @@ mod tests {
+     async fn storage_backend_uses_stored_hlc_when_present() {
+         let backend = make_backend();
+         let entity = sync_todo("tbk3", "With HLC");
+-        backend.apply_entity(&entity).await;
++        backend.apply_entity(&entity).await.unwrap();
+ 
+         let mut vector: VersionVector = std::collections::HashMap::new();
+         vector.insert(
+diff --git a/packages/ark-core/rust/src/schema.rs b/packages/ark-core/rust/src/schema.rs
+index 9e2fe4c..87f16a5 100644
+--- a/packages/ark-core/rust/src/schema.rs
++++ b/packages/ark-core/rust/src/schema.rs
+@@ -148,9 +148,27 @@ CREATE TABLE IF NOT EXISTS sync_kv (
+     value TEXT NOT NULL
+ );
+ 
++CREATE TABLE IF NOT EXISTS sync_tombstones (
++    id TEXT PRIMARY KEY,
++    entity_type TEXT NOT NULL,
++    hlc TEXT NOT NULL,
++    deleted_at TEXT NOT NULL
++);
++
+ CREATE INDEX IF NOT EXISTS idx_objects_type_id ON objects(type_id);
+ CREATE INDEX IF NOT EXISTS idx_objects_updated_at ON objects(updated_at DESC);
+ CREATE INDEX IF NOT EXISTS idx_objects_deleted_at ON objects(deleted_at);
+ CREATE INDEX IF NOT EXISTS idx_object_links_source ON object_links(source_object_id);
+ CREATE INDEX IF NOT EXISTS idx_object_links_target ON object_links(target_object_id);
++CREATE INDEX IF NOT EXISTS idx_sync_tombstones_hlc ON sync_tombstones(hlc);
++";
++
++pub const CREATE_OBJECT_SEARCH_FTS: &str = "
++CREATE VIRTUAL TABLE IF NOT EXISTS object_search_fts USING fts5(
++    object_id UNINDEXED,
++    title,
++    body,
++    props,
++    tokenize = 'unicode61'
++);
+ ";

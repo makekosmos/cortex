@@ -152,7 +152,11 @@ export async function createBackup(
 export async function restoreBackup(
   input: RestoreBackupInput,
 ): Promise<void> {
-  await restoreBackupArtifact(input.backupPath, input.onProgress ?? null);
+  await restoreBackupArtifact(
+    input.backupPath,
+    input.allowedRestoreRoots,
+    input.onProgress ?? null,
+  );
   await emitProgress(input.onProgress, {
     stage: "done",
     current: "Restore completed",
@@ -189,9 +193,9 @@ export async function checkBackupNeeded(
     return true;
   }
 
-  for (const filePath of input.currentSave.files) {
+  for (const file of input.currentSave.files) {
     try {
-      const fileStat = await stat(filePath);
+      const fileStat = await stat(file.path);
       if (fileStat.mtimeMs > backupTime) {
         return true;
       }

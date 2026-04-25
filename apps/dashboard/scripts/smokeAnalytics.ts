@@ -1,5 +1,9 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadDashboardSnapshot } from "../electron/services/analytics.ts";
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(scriptDir, "..");
 
 function argValue(flag: string): string | null {
   const index = process.argv.indexOf(flag);
@@ -11,9 +15,9 @@ function argValue(flag: string): string | null {
 
 const dbPath =
   argValue("--db-path") ??
-  path.join(process.cwd(), "apps", "dashboard", ".tmp", "smoke-dashboard.db");
+  path.join(projectRoot, ".tmp", "smoke-dashboard.db");
 
-const snapshot = loadDashboardSnapshot({
+const snapshot = await loadDashboardSnapshot({
   dbPath,
   rangeDays: 14,
   topAppsLimit: 5,

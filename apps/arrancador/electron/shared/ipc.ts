@@ -182,6 +182,21 @@ function validateSetAutostartState(payload: unknown) {
   requireBooleanField("set_autostart_state", record, "enabled");
 }
 
+function validateShellOpenExternal(payload: unknown) {
+  const record = requireRecord("shell_open_external", payload);
+  requireStringField("shell_open_external", record, "url");
+  const value = record.url as string;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Invalid IPC payload for shell_open_external: expected http(s) URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Invalid IPC payload for shell_open_external: expected http(s) URL");
+  }
+}
+
 function validateUsageProcessSearch(payload: unknown) {
   const record = requireRecord("search_usage_processes", payload);
   requireStringField("search_usage_processes", record, "query");
@@ -242,7 +257,7 @@ const PAYLOAD_VALIDATORS: Partial<Record<IpcChannel, PayloadValidator>> = {
   set_backup_directory: validateStringFields("path"),
   set_ludusavi_path: validateStringFields("path"),
   set_setting: validateStringFields("key", "value"),
-  shell_open_external: validateStringFields("url"),
+  shell_open_external: validateShellOpenExternal,
   shell_open_path: validateStringFields("path"),
   test_disk_speed: validateStringFields("mountPoint"),
 };

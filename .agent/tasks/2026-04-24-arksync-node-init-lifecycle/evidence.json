@@ -1,0 +1,103 @@
+{
+  "task_id": "2026-04-24-arksync-node-init-lifecycle",
+  "verification_date": "2026-04-24",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "source-evidence.txt",
+        "git-diff.txt"
+      ],
+      "summary": "ArkClientOptions accepts documented dbPath?: string."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "verify-lifecycle.ts",
+        "verify-lifecycle.txt",
+        "source-evidence.txt"
+      ],
+      "summary": "Self-managed start initializes once before start_sync."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "verify-lifecycle.ts",
+        "verify-lifecycle.txt"
+      ],
+      "summary": "Injected requestFn mode does not require dbPath and does not send init."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "verify-lifecycle.ts",
+        "verify-lifecycle.txt"
+      ],
+      "summary": "Self-managed start without dbPath fails before any sidecar request."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "evidence": [
+        "typecheck.txt",
+        "build.txt",
+        "git-diff-check.txt"
+      ],
+      "summary": "TypeScript typecheck/build and diff check pass."
+    }
+  ],
+  "commands": [
+    {
+      "command": "bun run typecheck",
+      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "exit_code": 0,
+      "artifact": "typecheck.txt"
+    },
+    {
+      "command": "bun run build",
+      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "exit_code": 0,
+      "artifact": "build.txt"
+    },
+    {
+      "command": "bun .agent/tasks/2026-04-24-arksync-node-init-lifecycle/verify-lifecycle.ts",
+      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "exit_code": 0,
+      "artifact": "verify-lifecycle.txt"
+    },
+    {
+      "command": "git diff --check -- packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-arksync-node-init-lifecycle/spec.md .agent/tasks/2026-04-24-arksync-node-init-lifecycle/verify-lifecycle.ts",
+      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "exit_code": 0,
+      "artifact": "git-diff-check.txt"
+    }
+  ],
+  "optional_smoke": [
+    {
+      "command": "Bun real sidecar smoke",
+      "exit_code": 1,
+      "artifact": "standalone-smoke.txt",
+      "status": "BLOCKED_BY_ENVIRONMENT",
+      "summary": "uv_spawn returned EPERM before any ARK request was sent."
+    },
+    {
+      "command": "Node real sidecar smoke",
+      "exit_code": 1,
+      "artifact": "standalone-smoke-node.txt",
+      "status": "BLOCKED_BY_ENVIRONMENT",
+      "summary": "child_process.spawn returned EPERM before any ARK request was sent."
+    }
+  ],
+  "changed_files": [
+    "packages/arksync-node/src/ark-client.ts",
+    ".agent/tasks/2026-04-24-arksync-node-init-lifecycle/spec.md",
+    ".agent/tasks/2026-04-24-arksync-node-init-lifecycle/verify-lifecycle.ts",
+    ".agent/tasks/2026-04-24-arksync-node-init-lifecycle/evidence.md",
+    ".agent/tasks/2026-04-24-arksync-node-init-lifecycle/evidence.json"
+  ]
+}

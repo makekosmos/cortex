@@ -52,7 +52,11 @@ impl HLC {
     pub fn merge(&self, remote: &HLC) -> Self {
         let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
 
-        let mut times = [now.as_str(), self.wall_time.as_str(), remote.wall_time.as_str()];
+        let mut times = [
+            now.as_str(),
+            self.wall_time.as_str(),
+            remote.wall_time.as_str(),
+        ];
         times.sort();
         let max_time = times[2].to_string();
 
@@ -121,7 +125,11 @@ impl HLC {
 
 impl std::fmt::Display for HLC {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{:06}:{}", self.wall_time, self.counter, self.device_id)
+        write!(
+            f,
+            "{}:{:06}:{}",
+            self.wall_time, self.counter, self.device_id
+        )
     }
 }
 
@@ -191,8 +199,16 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let local = HLC::new("2026-01-01T00:00:00.000Z".to_string(), 5, "local".to_string());
-        let remote = HLC::new("2026-01-01T00:00:00.000Z".to_string(), 10, "remote".to_string());
+        let local = HLC::new(
+            "2026-01-01T00:00:00.000Z".to_string(),
+            5,
+            "local".to_string(),
+        );
+        let remote = HLC::new(
+            "2026-01-01T00:00:00.000Z".to_string(),
+            10,
+            "remote".to_string(),
+        );
         let merged = local.merge(&remote);
         assert_eq!(merged.device_id, "local");
         // merged counter should be max(5, 10) + 1 = 11 if wall_times match

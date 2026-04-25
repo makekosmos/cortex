@@ -10,11 +10,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ark_core::db::{
-    get_sync_kv, init_schema, open_db, set_sync_kv, upsert_tracked_app, upsert_usage_event,
-    upsert_usage_session,
+    bump_sync_version_vector, get_sync_kv, init_schema, open_db, set_sync_kv, upsert_tracked_app,
+    upsert_usage_event, upsert_usage_session,
 };
-use ark_core::types::{TrackedApp, UsageEvent, UsageSession, VersionVector};
-use ark_core::HLC;
+use ark_core::types::{TrackedApp, UsageEvent, UsageSession};
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::{json, Value};
@@ -27,7 +26,6 @@ use windows_capture::capture_foreground_window;
 use windows_capture::ForegroundWindowSample;
 
 const PLATFORM: &str = "windows";
-const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 const TRACKER_DEVICE_ID_KEY: &str = "usage_tracker.device_id";
 
 #[derive(Debug, Clone)]
@@ -413,7 +411,7 @@ fn persist_tracked_app(
     device_id: &str,
 ) -> Result<(), String> {
     upsert_tracked_app(conn, tracked_app)?;
-    bump_version_vector(conn, &tracked_app.id, device_id)
+    bump_sync_version_vector(conn, &tracked_app.id, device_id).map(|_| ())
 }
 
 fn persist_usage_session(
@@ -422,7 +420,7 @@ fn persist_usage_session(
     device_id: &str,
 ) -> Result<(), String> {
     upsert_usage_session(conn, session)?;
-    bump_version_vector(conn, &session.id, device_id)
+    bump_sync_version_vector(conn, &session.id, device_id).map(|_| ())
 }
 
 fn persist_usage_event(
@@ -431,29 +429,7 @@ fn persist_usage_event(
     device_id: &str,
 ) -> Result<(), String> {
     upsert_usage_event(conn, event)?;
-    bump_version_vector(conn, &event.id, device_id)
-}
-
-fn bump_version_vector(conn: &Connection, entity_id: &str, device_id: &str) -> Result<(), String> {
-    let mut vector: VersionVector = get_sync_kv(conn, VERSION_VECTOR_KEY)?
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default();
-
-    let next_hlc = match vector.get(entity_id) {
-        Some(existing) if !existing.trim().is_empty() => {
-            let previous = HLC::from_string(existing);
-            if previous.device_id == device_id {
-                previous.tick().to_string()
-            } else {
-                HLC::now(device_id).merge(&previous).to_string()
-            }
-        }
-        _ => HLC::now(device_id).to_string(),
-    };
-
-    vector.insert(entity_id.to_string(), next_hlc);
-    let encoded = serde_json::to_string(&vector).map_err(|error| error.to_string())?;
-    set_sync_kv(conn, VERSION_VECTOR_KEY, &encoded)
+    bump_sync_version_vector(conn, &event.id, device_id).map(|_| ())
 }
 
 impl Config {
@@ -590,5 +566,50 @@ mod tests {
         let first = tracked_app_id_for("C:/Games/Demo/Game.EXE");
         let second = tracked_app_id_for("c:\\games\\demo\\game.exe");
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn persist_tracked_app_records_sync_state_with_ark_core_helper() {
+        let conn = open_db(":memory:").unwrap();
+        init_schema(&conn).unwrap();
+        let tracked_app = TrackedApp {
+            id: "app-local".to_string(),
+            platform: PLATFORM.to_string(),
+            exe_path: "C:\\Games\\Demo\\demo.exe".to_string(),
+            normalized_exe_path: "c:\\games\\demo\\demo.exe".to_string(),
+            process_name: "demo.exe".to_string(),
+            display_name: Some("Demo".to_string()),
+            publisher: None,
+            icon_ref: None,
+            first_seen_at: "2026-04-24T00:00:00.000Z".to_string(),
+            last_seen_at: "2026-04-24T00:00:00.000Z".to_string(),
+        };
+
+        persist_tracked_app(&conn, &tracked_app, "usage-device").unwrap();
+
+        let raw = get_sync_kv(&conn, "lan_sync.version_vector")
+            .unwrap()
+            .expect("version vector should be stored");
+        let vector: ark_core::types::VersionVector = serde_json::from_str(&raw).unwrap();
+        assert!(
+            vector
+                .get("app-local")
+                .is_some_and(|hlc| hlc.ends_with(":usage-device")),
+            "tracked app should have a usage-device HLC"
+        );
+    }
+
+    #[test]
+    fn tracker_device_id_is_stored_in_sync_kv() {
+        let conn = open_db(":memory:").unwrap();
+        init_schema(&conn).unwrap();
+
+        let generated = load_or_create_tracker_device_id(&conn).unwrap();
+        assert!(generated.starts_with("usage-tracker-"));
+        assert_eq!(
+            get_sync_kv(&conn, TRACKER_DEVICE_ID_KEY).unwrap(),
+            Some(generated.clone())
+        );
+        assert_eq!(load_or_create_tracker_device_id(&conn).unwrap(), generated);
     }
 }

@@ -133,7 +133,7 @@ app.whenReady().then(() => {
   ipcMain.handle("dashboard:get-snapshot", async (_event, options?: DashboardLoadOptions) => {
     const explicitDbPath =
       typeof options?.dbPath === "string" ? options.dbPath : undefined;
-    return loadDashboardSnapshot(
+    return await loadDashboardSnapshot(
       {
         ...options,
         dbPath: explicitDbPath,
@@ -144,7 +144,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle("dashboard:choose-database", async () => {
     if (!win) {
-      return loadDashboardSnapshot({}, currentDbPath());
+      return await loadDashboardSnapshot({}, currentDbPath());
     }
 
     const result = await dialog.showOpenDialog(win, {
@@ -157,16 +157,16 @@ app.whenReady().then(() => {
     });
 
     if (result.canceled || result.filePaths.length === 0) {
-      return loadDashboardSnapshot({}, currentDbPath());
+      return await loadDashboardSnapshot({}, currentDbPath());
     }
 
     writePreferences({ dbPath: result.filePaths[0] });
-    return loadDashboardSnapshot({}, result.filePaths[0]);
+    return await loadDashboardSnapshot({}, result.filePaths[0]);
   });
 
   ipcMain.handle("dashboard:reset-database", async () => {
     writePreferences({ dbPath: null });
-    return loadDashboardSnapshot({}, null);
+    return await loadDashboardSnapshot({}, null);
   });
 
   ipcMain.handle("dashboard:get-default-db-path", () => resolveDefaultArkDbPath());

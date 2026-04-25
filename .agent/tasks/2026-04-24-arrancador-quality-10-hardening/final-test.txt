@@ -1,0 +1,20 @@
+﻿COMMAND: bun run test
+START: 2026-04-24T12:16:05.2328986+03:00
+cmd : $ vitest run --configLoader native --config vitest.config.mjs
+строка:2 знак:301
++ ... Out-File -Encoding utf8 -Append $path; cmd /c "$command" 2>&1 | Out-F ...
++                                            ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ($ vitest run --...test.config.mjs:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+ RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+
+
+ Test Files  35 passed (35)
+      Tests  105 passed (105)
+   Start at  12:16:05
+   Duration  6.45s (transform 6.97s, setup 4.12s, import 15.33s, tests 2.44s, environment 30.14s)
+
+EXIT_CODE: 0
+END: 2026-04-24T12:16:12.4009286+03:00

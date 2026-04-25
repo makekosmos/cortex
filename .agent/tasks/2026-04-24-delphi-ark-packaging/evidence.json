@@ -1,0 +1,80 @@
+{
+  "task_id": "2026-04-24-delphi-ark-packaging",
+  "verification_date": "2026-04-24",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "evidence": [
+        "package-json-evidence.txt",
+        "package-json-assert.txt",
+        "build-sidecar-release.txt"
+      ],
+      "summary": "Release sidecar build script builds ../../../packages/ark-core/rust/Cargo.toml with --bin ark-core-rpc."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "evidence": [
+        "package-json-evidence.txt",
+        "package-json-assert.txt",
+        "build-sidecar-dev.txt"
+      ],
+      "summary": "Dev sidecar build script builds ../../../packages/ark-core/rust/Cargo.toml with --bin ark-core-rpc."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "evidence": [
+        "package-json-evidence.txt",
+        "package-json-assert.txt",
+        "git-diff.txt"
+      ],
+      "summary": "Electron Builder extraResources copies ../../../packages/ark-core/rust/target/release/ark-core-rpc.exe to ark-core/ark-core-rpc.exe and no longer references delphi-db.exe."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "evidence": [
+        "build-sidecar-release.txt",
+        "build-sidecar-dev.txt",
+        "package-json-assert.txt",
+        "git-diff-check.txt"
+      ],
+      "summary": "Fresh verification commands were run and recorded in the task directory."
+    }
+  ],
+  "commands": [
+    {
+      "command": "bun run build:sidecar",
+      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/delphi/ts",
+      "exit_code": 0,
+      "artifact": "build-sidecar-release.txt"
+    },
+    {
+      "command": "bun run build:sidecar:dev",
+      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/delphi/ts",
+      "exit_code": 0,
+      "artifact": "build-sidecar-dev.txt"
+    },
+    {
+      "command": "bun -e package-json assertion",
+      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "exit_code": 0,
+      "artifact": "package-json-assert.txt"
+    },
+    {
+      "command": "git diff --check -- apps/delphi/ts/package.json .agent/tasks/2026-04-24-delphi-ark-packaging/spec.md",
+      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "exit_code": 0,
+      "artifact": "git-diff-check.txt"
+    }
+  ],
+  "changed_files": [
+    "apps/delphi/ts/package.json",
+    ".agent/tasks/2026-04-24-delphi-ark-packaging/spec.md",
+    ".agent/tasks/2026-04-24-delphi-ark-packaging/evidence.md",
+    ".agent/tasks/2026-04-24-delphi-ark-packaging/evidence.json"
+  ]
+}

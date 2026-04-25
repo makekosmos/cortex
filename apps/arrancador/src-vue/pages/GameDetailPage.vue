@@ -1,37 +1,24 @@
 <script setup lang="ts">
-import {
-  ArrowLeft,
-  Trash2,
-} from "lucide-vue-next";
 import { computed, onMounted, shallowRef, watch } from "vue";
-import { RouterLink, useRoute, useRouter } from "vue-router";
-import { backupApi, gamesApi } from "../../src/lib/api";
+import { useRoute, useRouter } from "vue-router";
+import { gamesApi } from "../../src/lib/api";
 import { translateGenreListToRu } from "../../src/lib/genres";
 import type {
   Game,
   NewGameProcessBinding,
 } from "../../src/types";
-import BackupProgressToast from "../components/game-detail/BackupProgressToast.vue";
-import GameDescriptionModal from "../components/game-detail/GameDescriptionModal.vue";
-import GameDetailBackupSection from "../components/game-detail/GameDetailBackupSection.vue";
+import GameBackLink from "../components/game-detail/GameBackLink.vue";
+import GameDetailDialogs from "../components/game-detail/GameDetailDialogs.vue";
 import GameDetailHeroSection from "../components/game-detail/GameDetailHeroSection.vue";
-import GameDetailInfoSection from "../components/game-detail/GameDetailInfoSection.vue";
-import GameDetailMetadataSection from "../components/game-detail/GameDetailMetadataSection.vue";
-import GameDetailStateSection from "../components/game-detail/GameDetailStateSection.vue";
-import GameEditDialog from "../components/game-detail/GameEditDialog.vue";
-import GameMetadataSearchModal from "../components/game-detail/GameMetadataSearchModal.vue";
-import GameProcessBindingsSection from "../components/game-detail/GameProcessBindingsSection.vue";
-import GameRatingModal from "../components/game-detail/GameRatingModal.vue";
+import GameDetailSections from "../components/game-detail/GameDetailSections.vue";
+import GameMissingState from "../components/game-detail/GameMissingState.vue";
 import { useGameBackups } from "../composables/useGameBackups";
+import { useGameLaunchFlow } from "../composables/useGameLaunchFlow";
 import { useGameMetadataSearch } from "../composables/useGameMetadataSearch";
 import { useGameSavePath } from "../composables/useGameSavePath";
 import { useGameStatus } from "../composables/useGameStatus";
 import { useToast } from "../composables/useToast";
-import {
-  formatBytes,
-  formatPlayedHours,
-  normalizeDescription,
-} from "../lib/gameDetailDisplay";
+import { formatPlayedHours, normalizeDescription } from "../lib/gameDetailDisplay";
 import { useGamesStore } from "../stores/games";
 
 const route = useRoute();
@@ -44,7 +31,6 @@ const routeGameId = computed(() =>
 );
 const game = computed(() => gamesStore.getGame(routeGameId.value) ?? null);
 
-const launching = shallowRef(false);
 const savingNote = shallowRef(false);
 const savingRating = shallowRef(false);
 const addingProcessBindings = shallowRef(false);
@@ -141,6 +127,18 @@ const heroMeta = computed(() =>
 );
 const isMissing = computed(() => !isInstalled.value && !checkingInstalled.value);
 
+const { launching, handleLaunch } = useGameLaunchFlow({
+  game: () => game.value,
+  isMissing: () => isMissing.value,
+  runningCount,
+  restoring,
+  creatingBackup,
+  setRunningCount,
+  refreshGames: gamesStore.refreshGames,
+  loadBackups,
+  notify,
+});
+
 watch(
   game,
   (currentGame) => {
@@ -157,115 +155,6 @@ async function ensureGameLoaded() {
   if (gamesStore.games.length === 0) {
     await gamesStore.refreshGames();
   }
-}
-
-async function launchGame() {
-  if (!game.value) return;
-  launching.value = true;
-
-  try {
-    await gamesApi.launch(game.value.id);
-    const count = await gamesApi.getRunningInstances(game.value.id);
-    setRunningCount(count);
-    await gamesStore.refreshGames();
-  } catch (cause) {
-    console.error("Failed to launch game:", cause);
-    notify({
-      tone: "error",
-      title: "Не удалось запустить игру",
-    });
-  } finally {
-    launching.value = false;
-  }
-}
-
-async function handleLaunch() {
-  if (!game.value || isMissing.value) return;
-
-  if (runningCount.value > 0) {
-    const confirmed = window.confirm(
-      runningCount.value > 1
-        ? `Игра уже запущена. Закрыть ${runningCount.value} процесса?`
-        : "Игра уже запущена. Закрыть игру?",
-    );
-
-    if (!confirmed) return;
-
-    try {
-      await gamesApi.killProcesses(game.value.id);
-      const remaining = await gamesApi.getRunningInstances(game.value.id);
-      setRunningCount(remaining);
-      if (remaining > 0) {
-        notify({
-          tone: "warning",
-          title: "Не удалось закрыть все процессы",
-          description: `Осталось процессов: ${remaining}`,
-        });
-      }
-    } catch (cause) {
-      console.error("Failed to kill processes:", cause);
-      notify({
-        tone: "error",
-        title: "Не удалось закрыть игру",
-      });
-    }
-    return;
-  }
-
-  let canLaunch = true;
-
-  try {
-    if (game.value.backup_enabled) {
-      const restoreCheck = await backupApi.checkRestoreNeeded(
-        game.value.id,
-        game.value.name,
-      );
-      if (restoreCheck.should_restore && restoreCheck.backup_id) {
-        const shouldRestore = window.confirm(
-          `Текущий размер сохранений меньше, чем в бэкапе. Восстановить перед запуском?\n\nТекущий: ${formatBytes(restoreCheck.current_size)} • Бэкап: ${formatBytes(restoreCheck.backup_size)}`,
-        );
-
-        if (shouldRestore) {
-          restoring.value = true;
-          await backupApi.restore(restoreCheck.backup_id);
-          await gamesStore.refreshGames();
-          restoring.value = false;
-        }
-      }
-
-      const shouldBackup = await backupApi.shouldBackupBeforeLaunch(game.value.id);
-      if (shouldBackup) {
-        const needsBackup = await backupApi.checkBackupNeeded(
-          game.value.id,
-          game.value.name,
-        );
-        if (needsBackup) {
-          const shouldCreateBackup = window.confirm(
-            "Сохранения изменились. Создать бэкап перед запуском?",
-          );
-          if (shouldCreateBackup) {
-            creatingBackup.value = true;
-            await backupApi.create(game.value.id, game.value.name, true);
-            await loadBackups();
-            await gamesStore.refreshGames();
-            creatingBackup.value = false;
-          }
-        }
-      }
-    }
-  } catch (cause) {
-    console.error("Backup or restore pre-launch flow failed:", cause);
-    creatingBackup.value = false;
-    restoring.value = false;
-    canLaunch = false;
-    notify({
-      tone: "error",
-      title: "Не удалось подготовить запуск",
-    });
-  }
-
-  if (!canLaunch) return;
-  await launchGame();
 }
 
 async function handleToggleFavorite() {
@@ -410,23 +299,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="!game" class="flex h-full items-center justify-center p-6">
-    <div class="text-center">
-      <div class="text-lg font-semibold">Игра не найдена</div>
-      <RouterLink to="/" class="mt-3 inline-flex text-primary hover:underline">
-        Вернуться в библиотеку
-      </RouterLink>
-    </div>
-  </div>
+  <GameMissingState v-if="!game" />
 
   <div v-else class="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-    <RouterLink
-      to="/"
-      class="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-    >
-      <ArrowLeft class="h-4 w-4" />
-      Назад
-    </RouterLink>
+    <GameBackLink />
 
     <GameDetailHeroSection
       :game="game"
@@ -444,123 +320,72 @@ onMounted(async () => {
       @show-description="showDescriptionModal = true"
     />
 
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-      <section class="space-y-6">
-        <GameDetailStateSection
-          v-model:play-status="playStatus"
-          v-model:user-rating="userRating"
-          v-model:user-note="userNote"
-          :total-playtime="game.total_playtime"
-          :saving-rating="savingRating"
-          :saving-note="savingNote"
-          @save-play-status="void savePlayStatus()"
-          @save-user-rating="void saveUserRating()"
-          @open-rating-modal="openRatingModal"
-          @save-user-note="void saveUserNote()"
-        />
-
-        <GameDetailInfoSection :game="game" @edit="showEditDialog = true" />
-
-        <GameProcessBindingsSection
-          :primary-exe-path="game.exe_path"
-          :bindings="game.process_bindings"
-          :adding="addingProcessBindings"
-          :removing-binding-id="removingProcessBindingId"
-          @add-bindings="void handleAddProcessBindings($event)"
-          @remove-binding="void handleRemoveProcessBinding($event)"
-        />
-
-        <GameDetailBackupSection
-          v-model:save-path-draft="savePathDraft"
-          v-model:show-all-backups="showAllBackups"
-          :backup-enabled="game.backup_enabled"
-          :creating-backup="creatingBackup"
-          :saving-path="savingPath"
-          :locating-save-path="locatingSavePath"
-          :can-open-save-path="canOpenSavePath"
-          :save-path-preview-parts="savePathPreviewParts"
-          :backups="backups"
-          :latest-backup="latestBackup"
-          :older-backups="olderBackups"
-          :loading-backups="loadingBackups"
-          :restoring="restoring"
-          @toggle-backup-enabled="void toggleBackupEnabled($event)"
-          @create-backup="void createManualBackup()"
-          @choose-save-folder="void chooseSaveFolder()"
-          @choose-save-file="void chooseSaveFile()"
-          @insert-game-path-token="insertGamePathToken()"
-          @locate-save-path="void locateSavePath()"
-          @open-save-path="void openSavePath()"
-          @save-game-path="void saveGamePath()"
-          @restore-backup="void restoreBackup($event)"
-        />
-      </section>
-
-      <section class="space-y-6">
-        <GameDetailMetadataSection
-          :game="game"
-          @search-rawg="openMetadataSearch"
-          @edit="showEditDialog = true"
-        />
-
-        <div class="rounded-2xl border border-border/70 bg-card/80 p-4 shadow-sm">
-          <div class="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <div class="text-base font-semibold">Опасные действия</div>
-              <div class="text-xs text-muted-foreground">
-                Удаление записи из библиотеки
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-2 text-sm text-red-300 transition-colors hover:bg-red-500/15"
-            @click="void handleDelete()"
-          >
-            <Trash2 class="h-4 w-4" />
-            Удалить игру
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <GameDescriptionModal
-      :open="showDescriptionModal"
-      :description="heroDescription"
-      @close="showDescriptionModal = false"
+    <GameDetailSections
+      v-model:play-status="playStatus"
+      v-model:user-rating="userRating"
+      v-model:user-note="userNote"
+      v-model:save-path-draft="savePathDraft"
+      v-model:show-all-backups="showAllBackups"
+      :game="game"
+      :saving-rating="savingRating"
+      :saving-note="savingNote"
+      :adding-process-bindings="addingProcessBindings"
+      :removing-process-binding-id="removingProcessBindingId"
+      :save-path-preview-parts="savePathPreviewParts"
+      :backup-enabled="game.backup_enabled"
+      :creating-backup="creatingBackup"
+      :saving-path="savingPath"
+      :locating-save-path="locatingSavePath"
+      :can-open-save-path="canOpenSavePath"
+      :backups="backups"
+      :latest-backup="latestBackup"
+      :older-backups="olderBackups"
+      :loading-backups="loadingBackups"
+      :restoring="restoring"
+      @save-play-status="void savePlayStatus()"
+      @save-user-rating="void saveUserRating()"
+      @open-rating-modal="openRatingModal"
+      @save-user-note="void saveUserNote()"
+      @edit="showEditDialog = true"
+      @add-process-bindings="void handleAddProcessBindings($event)"
+      @remove-process-binding="void handleRemoveProcessBinding($event)"
+      @toggle-backup-enabled="void toggleBackupEnabled($event)"
+      @create-backup="void createManualBackup()"
+      @choose-save-folder="void chooseSaveFolder()"
+      @choose-save-file="void chooseSaveFile()"
+      @insert-game-path-token="insertGamePathToken()"
+      @locate-save-path="void locateSavePath()"
+      @open-save-path="void openSavePath()"
+      @save-game-path="void saveGamePath()"
+      @restore-backup="void restoreBackup($event)"
+      @search-rawg="openMetadataSearch"
+      @delete="void handleDelete()"
     />
 
-    <GameRatingModal
-      v-model:open="showRatingModal"
+    <GameDetailDialogs
+      v-model:description-open="showDescriptionModal"
+      v-model:rating-open="showRatingModal"
       v-model:rating-draft="ratingDraft"
-      @save="saveRatingFromModal"
-    />
-
-    <GameEditDialog
-      v-model:name="editForm.name"
-      v-model:description="editForm.description"
-      v-model:background-image="editForm.background_image"
-      v-model:cover-image="editForm.cover_image"
-      :open="showEditDialog"
+      v-model:edit-open="showEditDialog"
+      v-model:edit-name="editForm.name"
+      v-model:edit-description="editForm.description"
+      v-model:edit-background-image="editForm.background_image"
+      v-model:edit-cover-image="editForm.cover_image"
+      v-model:metadata-open="showMetadataSearch"
+      v-model:metadata-query="metadataQuery"
+      v-model:metadata-rename="renameFromMetadata"
+      :description="heroDescription"
       :game-name="game.name"
-      :saving="savingEdit"
-      @close="showEditDialog = false"
-      @save="void handleSaveEdit()"
+      :saving-edit="savingEdit"
+      :metadata-results="metadataResults"
+      :searching-metadata="searchingMetadata"
+      :applying-metadata="applyingMetadata"
+      :backup-progress="backupProgress"
+      @save-rating="saveRatingFromModal"
+      @save-edit="void handleSaveEdit()"
       @search-image="void handleSearchGoogleImage($event.query, $event.target)"
+      @search-metadata="void searchMetadata()"
+      @apply-metadata="void applyMetadata($event)"
     />
-
-    <GameMetadataSearchModal
-      v-model:open="showMetadataSearch"
-      v-model:query="metadataQuery"
-      v-model:rename="renameFromMetadata"
-      :results="metadataResults"
-      :searching="searchingMetadata"
-      :applying="applyingMetadata"
-      @search="void searchMetadata()"
-      @apply="void applyMetadata($event)"
-    />
-
-    <BackupProgressToast :progress="backupProgress" />
   </div>
 </template>

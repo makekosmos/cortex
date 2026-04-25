@@ -143,13 +143,15 @@ describe("game detail components", () => {
   it("renders state section and emits save/update contracts", async () => {
     const wrapper = mount(GameDetailStateSection, {
       props: {
-        playStatus: "not_started",
+        playStatus: "not_started" as const,
         userRating: 4,
         userNote: "Remember the maze.",
         totalPlaytime: 7200,
         savingRating: false,
         savingNote: false,
-        "onUpdate:playStatus": (value: string) =>
+        "onUpdate:playStatus": (
+          value: "not_started" | "in_progress" | "completed" | "abandoned",
+        ) =>
           wrapper.setProps({ playStatus: value }),
         "onUpdate:userRating": (value: number | null) =>
           wrapper.setProps({ userRating: value }),

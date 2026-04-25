@@ -1,17 +1,11 @@
-import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(import.meta.url);
-const BetterSqlite3 = require("better-sqlite3") as new (
-  filePath: string,
-) => {
-  exec(sql: string): void;
-  prepare(sql: string): {
-    run(...params: unknown[]): void;
-  };
-  close(): void;
-};
+type SmokeStatement = ReturnType<DatabaseSync["prepare"]>;
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(scriptDir, "..");
 
 function argValue(flag: string): string | null {
   const index = process.argv.indexOf(flag);
@@ -23,11 +17,11 @@ function argValue(flag: string): string | null {
 
 const dbPath =
   argValue("--db-path") ??
-  path.join(process.cwd(), "apps", "dashboard", ".tmp", "smoke-dashboard.db");
+  path.join(projectRoot, ".tmp", "smoke-dashboard.db");
 
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-const db = new BetterSqlite3(dbPath);
+const db = new DatabaseSync(dbPath);
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS tracked_apps (
@@ -78,21 +72,21 @@ CREATE TABLE IF NOT EXISTS usage_events (
 );
 `);
 
-const insertApp = db.prepare(`
+const insertApp: SmokeStatement = db.prepare(`
 INSERT OR REPLACE INTO tracked_apps (
   id, platform, exe_path, normalized_exe_path, process_name, display_name,
   publisher, icon_ref, first_seen_at, last_seen_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
-const insertSession = db.prepare(`
+const insertSession: SmokeStatement = db.prepare(`
 INSERT OR REPLACE INTO usage_sessions (
   id, tracked_app_id, device_id, device_name, platform, started_at, ended_at,
   foreground_ms, idle_ms, window_title, process_name, exe_path, pid_start, pid_end, meta_json
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
-const insertEvent = db.prepare(`
+const insertEvent: SmokeStatement = db.prepare(`
 INSERT OR REPLACE INTO usage_events (
   id, tracked_app_id, usage_session_id, device_id, device_name, platform, occurred_at,
   kind, window_title, process_name, exe_path, pid, is_foreground, is_idle, meta_json

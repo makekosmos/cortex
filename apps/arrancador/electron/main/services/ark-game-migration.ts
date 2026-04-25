@@ -1,8 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import {
+  ArkClient,
+  type ArkObjectsApi,
+  type ArkObjectTypesApi,
+  type JsonValue,
+} from "@kepler/ark";
+
 import { openSqliteDatabase } from "../db";
-import { queryAll, queryOne, runInTransaction } from "../helpers/db";
+import { queryAll, queryOne } from "../helpers/db";
 import type { DbLike } from "../helpers/shared";
 
 const GAME_OBJECT_TYPE_ID = "game_obj";
@@ -30,11 +37,19 @@ type ArkObjectRow = {
 
 type ArkObjectRecord = {
   id: string;
+  typeId: string;
   title: string;
   contentJson: string;
   propsJson: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
+};
+
+type ArkGameMigrationTarget = {
+  objectTypes: Pick<ArkObjectTypesApi, "list" | "upsert">;
+  objects: Pick<ArkObjectsApi, "list" | "upsert">;
+  close?(): Promise<void> | void;
 };
 
 export interface ArkGameMigrationResult {
@@ -47,6 +62,16 @@ export interface ArkGameMigrationResult {
 export interface MigrateArkGamesOptions {
   sourceDbPath: string;
   targetDbPath: string;
+  arkTarget?: ArkGameMigrationTarget;
+  openSourceDb?: (filePath: string) => DbLike;
+  arkCoreRpcPath?: string;
+  requestTimeoutMs?: number;
+  spaceId?: string;
+  deviceId?: string;
+  deviceName?: string;
+  appRoot?: string;
+  isPackaged?: boolean;
+  resourcesPath?: string;
 }
 
 function normalizeExePath(exePath: string): string {
@@ -68,6 +93,26 @@ function parseJsonRecord(value: string | null | undefined): Record<string, unkno
   }
 }
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function parseJsonValue(value: string | null | undefined): JsonValue {
+  if (!value) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(value) as JsonValue;
+  } catch {
+    return {};
+  }
+}
+
+function stringifyJsonValue(value: JsonValue): string {
+  return JSON.stringify(value);
+}
+
 function readOptionalString(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -80,11 +125,13 @@ function readOptionalString(value: unknown): string | null {
 function mapArkObjectRow(row: ArkObjectRow): ArkObjectRecord {
   return {
     id: row.id,
+    typeId: row.type_id,
     title: row.title,
     contentJson: row.content_json,
     propsJson: parseJsonRecord(row.props_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
   };
 }
 
@@ -99,6 +146,24 @@ async function listActiveGameObjects(arkDb: DbLike): Promise<ArkObjectRecord[]> 
   );
 
   return rows.map(mapArkObjectRow);
+}
+
+async function listActiveGameObjectsFromSdk(
+  arkObjects: Pick<ArkObjectsApi, "list">,
+): Promise<ArkObjectRecord[]> {
+  const objects = await arkObjects.list();
+  return objects
+    .filter((object) => object.typeId === GAME_OBJECT_TYPE_ID && object.deletedAt === null)
+    .map((object) => ({
+      id: object.id,
+      typeId: object.typeId,
+      title: object.title,
+      contentJson: stringifyJsonValue(object.contentJson),
+      propsJson: isJsonRecord(object.propsJson) ? object.propsJson : {},
+      createdAt: object.createdAt,
+      updatedAt: object.updatedAt,
+      deletedAt: object.deletedAt,
+    }));
 }
 
 function buildGameIndexes(objects: readonly ArkObjectRecord[]) {
@@ -143,13 +208,12 @@ function arePropsEqual(
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-async function ensureGameObjectType(sourceDb: DbLike, targetDb: DbLike): Promise<number> {
-  const targetType = await queryOne<{ id: string }>(
-    targetDb,
-    "SELECT id FROM object_types WHERE id = ?1",
-    [GAME_OBJECT_TYPE_ID],
-  );
-  if (targetType) {
+async function ensureGameObjectType(
+  sourceDb: DbLike,
+  target: Pick<ArkObjectTypesApi, "list" | "upsert">,
+): Promise<number> {
+  const targetTypes = await target.list();
+  if (targetTypes.some((objectType) => objectType.id === GAME_OBJECT_TYPE_ID)) {
     return 0;
   }
 
@@ -165,20 +229,15 @@ async function ensureGameObjectType(sourceDb: DbLike, targetDb: DbLike): Promise
     return 0;
   }
 
-  await targetDb.run(
-    `INSERT INTO object_types
-       (id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
-    [
-      sourceType.id,
-      sourceType.name,
-      sourceType.schema_json,
-      sourceType.ui_schema_json,
-      sourceType.created_at,
-      sourceType.updated_at,
-      sourceType.system_locked,
-    ],
-  );
+  await target.upsert({
+    id: sourceType.id,
+    name: sourceType.name,
+    schemaJson: sourceType.schema_json,
+    uiSchemaJson: sourceType.ui_schema_json,
+    createdAt: sourceType.created_at,
+    updatedAt: sourceType.updated_at,
+    systemLocked: sourceType.system_locked !== 0,
+  });
 
   return 1;
 }
@@ -198,6 +257,32 @@ function openArkDb(filePath: string): DbLike {
   });
 }
 
+async function createArkMigrationTarget(
+  options: MigrateArkGamesOptions,
+): Promise<ArkGameMigrationTarget> {
+  if (options.arkTarget) {
+    return options.arkTarget;
+  }
+
+  const { getArkCoreRpcBinaryPath } = await import("./ark-game-objects");
+  const client = new ArkClient({
+    spaceId: options.spaceId ?? "arrancador",
+    deviceId: options.deviceId ?? "arrancador-migration",
+    deviceName: options.deviceName ?? "Arrancador Migration",
+    dbPath: options.targetDbPath,
+    sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(options),
+    requestTimeoutMs: options.requestTimeoutMs ?? 10_000,
+  });
+
+  return {
+    objectTypes: client.objectTypes,
+    objects: client.objects,
+    close: async () => {
+      await client.stop();
+    },
+  };
+}
+
 export async function migrateArkGames(
   options: MigrateArkGamesOptions,
 ): Promise<ArkGameMigrationResult> {
@@ -205,102 +290,98 @@ export async function migrateArkGames(
     throw new Error("Source and target Ark DB must be different");
   }
 
-  const sourceDb = openArkDb(options.sourceDbPath);
-  const targetDb = openArkDb(options.targetDbPath);
+  const sourceDb = (options.openSourceDb ?? openArkDb)(options.sourceDbPath);
+  const target = await createArkMigrationTarget(options);
 
   try {
-    return await runInTransaction(targetDb, async (tx) => {
-      const result: ArkGameMigrationResult = {
-        migratedTypes: await ensureGameObjectType(sourceDb, tx),
-        migratedObjects: 0,
-        mergedObjects: 0,
-        skippedObjects: 0,
-      };
+    const result: ArkGameMigrationResult = {
+      migratedTypes: await ensureGameObjectType(sourceDb, target.objectTypes),
+      migratedObjects: 0,
+      mergedObjects: 0,
+      skippedObjects: 0,
+    };
 
-      const sourceObjects = await listActiveGameObjects(sourceDb);
-      const targetObjects = await listActiveGameObjects(tx);
-      const targetIndexes = buildGameIndexes(targetObjects);
+    const sourceObjects = await listActiveGameObjects(sourceDb);
+    const targetObjects = await listActiveGameObjectsFromSdk(target.objects);
+    const targetIndexes = buildGameIndexes(targetObjects);
 
-      for (const sourceObject of sourceObjects) {
-        const sourceArrancadorGameId = readOptionalString(sourceObject.propsJson.arrancador_game_id);
-        const sourceExePath = readOptionalString(sourceObject.propsJson.exe_path);
-        const targetMatch =
-          targetIndexes.byId.get(sourceObject.id) ??
-          (sourceArrancadorGameId
-            ? targetIndexes.byArrancadorGameId.get(sourceArrancadorGameId)
-            : undefined) ??
-          (sourceExePath
-            ? targetIndexes.byExePath.get(normalizeExePath(sourceExePath))
-            : undefined) ??
-          null;
+    for (const sourceObject of sourceObjects) {
+      const sourceArrancadorGameId = readOptionalString(sourceObject.propsJson.arrancador_game_id);
+      const sourceExePath = readOptionalString(sourceObject.propsJson.exe_path);
+      const targetMatch =
+        targetIndexes.byId.get(sourceObject.id) ??
+        (sourceArrancadorGameId
+          ? targetIndexes.byArrancadorGameId.get(sourceArrancadorGameId)
+          : undefined) ??
+        (sourceExePath
+          ? targetIndexes.byExePath.get(normalizeExePath(sourceExePath))
+          : undefined) ??
+        null;
 
-        const objectId = targetMatch?.id ?? sourceObject.id;
-        const mergedProps = mergeObjectProps(sourceObject.propsJson, targetMatch?.propsJson ?? {});
-        const createdAt =
-          targetMatch && targetMatch.createdAt < sourceObject.createdAt
-            ? targetMatch.createdAt
-            : sourceObject.createdAt;
-        const updatedAt =
-          targetMatch && targetMatch.updatedAt > sourceObject.updatedAt
-            ? targetMatch.updatedAt
-            : sourceObject.updatedAt;
+      const objectId = targetMatch?.id ?? sourceObject.id;
+      const mergedProps = mergeObjectProps(sourceObject.propsJson, targetMatch?.propsJson ?? {});
+      const createdAt =
+        targetMatch && targetMatch.createdAt < sourceObject.createdAt
+          ? targetMatch.createdAt
+          : sourceObject.createdAt;
+      const updatedAt =
+        targetMatch && targetMatch.updatedAt > sourceObject.updatedAt
+          ? targetMatch.updatedAt
+          : sourceObject.updatedAt;
 
-        if (
-          targetMatch &&
-          targetMatch.title === sourceObject.title &&
-          targetMatch.contentJson === sourceObject.contentJson &&
-          arePropsEqual(targetMatch.propsJson, mergedProps)
-        ) {
-          result.skippedObjects += 1;
-          continue;
-        }
-
-        await tx.run(
-          `INSERT OR REPLACE INTO objects
-             (id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL)`,
-          [
-            objectId,
-            GAME_OBJECT_TYPE_ID,
-            sourceObject.title,
-            sourceObject.contentJson,
-            JSON.stringify(mergedProps),
-            createdAt,
-            updatedAt,
-          ],
-        );
-
-        const nextRecord: ArkObjectRecord = {
-          id: objectId,
-          title: sourceObject.title,
-          contentJson: sourceObject.contentJson,
-          propsJson: mergedProps,
-          createdAt,
-          updatedAt,
-        };
-        targetIndexes.byId.set(nextRecord.id, nextRecord);
-
-        const nextArrancadorGameId = readOptionalString(nextRecord.propsJson.arrancador_game_id);
-        if (nextArrancadorGameId) {
-          targetIndexes.byArrancadorGameId.set(nextArrancadorGameId, nextRecord);
-        }
-
-        const nextExePath = readOptionalString(nextRecord.propsJson.exe_path);
-        if (nextExePath) {
-          targetIndexes.byExePath.set(normalizeExePath(nextExePath), nextRecord);
-        }
-
-        if (targetMatch) {
-          result.mergedObjects += 1;
-        } else {
-          result.migratedObjects += 1;
-        }
+      if (
+        targetMatch &&
+        targetMatch.title === sourceObject.title &&
+        targetMatch.contentJson === sourceObject.contentJson &&
+        arePropsEqual(targetMatch.propsJson, mergedProps)
+      ) {
+        result.skippedObjects += 1;
+        continue;
       }
 
-      return result;
-    });
+      await target.objects.upsert({
+        id: objectId,
+        typeId: GAME_OBJECT_TYPE_ID,
+        title: sourceObject.title,
+        contentJson: parseJsonValue(sourceObject.contentJson),
+        propsJson: mergedProps as JsonValue,
+        createdAt,
+        updatedAt,
+        deletedAt: null,
+      });
+
+      const nextRecord: ArkObjectRecord = {
+        id: objectId,
+        typeId: GAME_OBJECT_TYPE_ID,
+        title: sourceObject.title,
+        contentJson: sourceObject.contentJson,
+        propsJson: mergedProps,
+        createdAt,
+        updatedAt,
+        deletedAt: null,
+      };
+      targetIndexes.byId.set(nextRecord.id, nextRecord);
+
+      const nextArrancadorGameId = readOptionalString(nextRecord.propsJson.arrancador_game_id);
+      if (nextArrancadorGameId) {
+        targetIndexes.byArrancadorGameId.set(nextArrancadorGameId, nextRecord);
+      }
+
+      const nextExePath = readOptionalString(nextRecord.propsJson.exe_path);
+      if (nextExePath) {
+        targetIndexes.byExePath.set(normalizeExePath(nextExePath), nextRecord);
+      }
+
+      if (targetMatch) {
+        result.mergedObjects += 1;
+      } else {
+        result.migratedObjects += 1;
+      }
+    }
+
+    return result;
   } finally {
     await Promise.resolve(sourceDb.close?.());
-    await Promise.resolve(targetDb.close?.());
+    await Promise.resolve(target.close?.());
   }
 }

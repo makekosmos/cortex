@@ -5,9 +5,11 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
+    "build:sidecar": "cargo build --release --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
+    "build:sidecar:dev": "cargo build --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
-    "dev": "bun run rebuild:native && vite --configLoader native",
-    "build": "bun run rebuild:native && tsc && vite build --configLoader native",
+    "dev": "bun run build:sidecar:dev && bun run rebuild:native && vite --configLoader native",
+    "build": "bun run build:sidecar && bun run rebuild:native && tsc && vite build --configLoader native",
     "typecheck": "tsc --noEmit",
     "package:dir": "bun run build && electron-builder --dir",
     "dist": "bun run build && electron-builder --win nsis",
@@ -18,6 +20,7 @@
     "test:e2e:smoke": "bun run build && node --experimental-strip-types scripts/runE2ESmoke.ts"
   },
   "dependencies": {
+    "@kepler/ark": "workspace:*",
     "@vue/compiler-dom": "3.6.0-beta.9",
     "@vue/compiler-sfc": "3.6.0-beta.9",
     "@vue/runtime-dom": "3.6.0-beta.9",
@@ -55,6 +58,12 @@
     ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*.{node,dll,dylib,so}"
+    ],
+    "extraResources": [
+      {
+        "from": "../../packages/ark-core/rust/target/release/ark-core-rpc.exe",
+        "to": "ark-core/ark-core-rpc.exe"
+      }
     ],
     "win": {
       "target": "nsis"

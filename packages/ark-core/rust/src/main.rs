@@ -30,6 +30,7 @@ use ark_core::db::{self, SqliteStorageBackend};
 use ark_core::host::{get_host_device_name, get_own_addresses};
 use ark_core::net::is_address_routable;
 use ark_core::protocol::LAN_SYNC_PORT;
+use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
 use ark_core::sync_client::SyncClient;
 use ark_core::sync_server::{StorageBackend, SyncServer};
 use ark_core::types::*;
@@ -44,10 +45,12 @@ struct SyncRuntime {
     server: Arc<SyncServer>,
     storage: Arc<SqliteStorageBackend>,
     clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    relay: Option<Arc<RelaySync>>,
     beacon: Arc<BroadcastDiscovery>,
     space_id: String,
     device_id: String,
     device_name: String,
+    auth_secret: Option<String>,
     own_addresses: Arc<TokioMutex<Vec<String>>>,
 }
 
@@ -109,21 +112,41 @@ enum Request {
     },
     UpsertTrackedApp {
         tracked_app: TrackedApp,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteTrackedApp {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     UpsertUsageSession {
         usage_session: UsageSession,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteUsageSession {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     UpsertUsageEvent {
         usage_event: UsageEvent,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteUsageEvent {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
+    },
+    GetUsageAnalytics {
+        #[serde(default)]
+        range_days: Option<i64>,
+        #[serde(default)]
+        top_apps_limit: Option<i64>,
+        #[serde(default)]
+        recent_sessions_limit: Option<i64>,
     },
     ListObjects,
     SearchObjects {
@@ -134,9 +157,13 @@ enum Request {
     },
     UpsertObject {
         object: ArkObject,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteObject {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     ListObjectTypes,
     GetObjectType {
@@ -144,16 +171,24 @@ enum Request {
     },
     UpsertObjectType {
         object_type: ObjectType,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteObjectType {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     ListObjectLinks,
     UpsertObjectLink {
         object_link: ObjectLink,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteObjectLink {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     GetSyncKv {
         key: String,
@@ -181,6 +216,9 @@ enum Request {
         /// API key for the relay server.
         #[serde(default)]
         relay_api_key: Option<String>,
+        /// Optional shared secret for LAN/P2P hello HMAC authentication.
+        #[serde(default)]
+        auth_secret: Option<String>,
     },
     StopSync,
     BroadcastChange {
@@ -235,16 +273,41 @@ async fn serve() -> Result<(), String> {
         if trimmed.is_empty() {
             continue;
         }
-        let response = match serde_json::from_str::<Request>(trimmed) {
-            Ok(req) => match handle_request(req).await {
-                Ok(data) => json!({ "ok": true, "data": data }),
-                Err(e) => json!({ "ok": false, "error": e }),
-            },
-            Err(e) => json!({ "ok": false, "error": e.to_string() }),
+        let response = match serde_json::from_str::<Value>(trimmed) {
+            Ok(raw) => {
+                let request_id = request_id_from_value(&raw);
+                match serde_json::from_value::<Request>(raw) {
+                    Ok(req) => match handle_request(req).await {
+                        Ok(data) => response_ok(data, request_id),
+                        Err(e) => response_error(e, request_id),
+                    },
+                    Err(e) => response_error(e.to_string(), request_id),
+                }
+            }
+            Err(e) => response_error(e.to_string(), None),
         };
         write_response_line(&response);
     }
     Ok(())
+}
+
+fn request_id_from_value(value: &Value) -> Option<Value> {
+    value.get("id").cloned()
+}
+
+fn response_ok(data: Value, request_id: Option<Value>) -> Value {
+    response_with_optional_id(json!({ "ok": true, "data": data }), request_id)
+}
+
+fn response_error(error: String, request_id: Option<Value>) -> Value {
+    response_with_optional_id(json!({ "ok": false, "error": error }), request_id)
+}
+
+fn response_with_optional_id(mut response: Value, request_id: Option<Value>) -> Value {
+    if let (Value::Object(map), Some(id)) = (&mut response, request_id) {
+        map.insert("id".to_string(), id);
+    }
+    response
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +360,35 @@ fn get_shared_conn() -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
         .as_ref()
         .cloned()
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
+}
+
+fn local_write_device_id(device_id: Option<String>) -> String {
+    device_id
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| value.trim().to_string())
+        .unwrap_or_else(|| "ark-core-rpc-local".to_string())
+}
+
+fn record_local_upsert(
+    conn: &rusqlite::Connection,
+    _entity_type: &str,
+    entity_id: &str,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    let device_id = local_write_device_id(device_id);
+    db::bump_sync_version_vector(conn, entity_id, &device_id)?;
+    db::delete_sync_tombstone(conn, entity_id)
+}
+
+fn record_local_delete(
+    conn: &rusqlite::Connection,
+    entity_type: &str,
+    entity_id: &str,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    let device_id = local_write_device_id(device_id);
+    let hlc = db::bump_sync_version_vector(conn, entity_id, &device_id)?;
+    db::record_sync_tombstone(conn, entity_type, entity_id, &hlc)
 }
 
 // ---------------------------------------------------------------------------
@@ -362,34 +454,62 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             Ok(json!(true))
         }),
 
-        Request::UpsertTrackedApp { tracked_app } => with_conn(|conn| {
+        Request::UpsertTrackedApp {
+            tracked_app,
+            device_id,
+        } => with_conn(|conn| {
             db::upsert_tracked_app(conn, &tracked_app)?;
+            record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::DeleteTrackedApp { id } => with_conn(|conn| {
+        Request::DeleteTrackedApp { id, device_id } => with_conn(|conn| {
             db::delete_tracked_app(conn, &id)?;
+            record_local_delete(conn, "tracked_app", &id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::UpsertUsageSession { usage_session } => with_conn(|conn| {
+        Request::UpsertUsageSession {
+            usage_session,
+            device_id,
+        } => with_conn(|conn| {
             db::upsert_usage_session(conn, &usage_session)?;
+            record_local_upsert(conn, "usage_session", &usage_session.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::DeleteUsageSession { id } => with_conn(|conn| {
+        Request::DeleteUsageSession { id, device_id } => with_conn(|conn| {
             db::delete_usage_session(conn, &id)?;
+            record_local_delete(conn, "usage_session", &id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::UpsertUsageEvent { usage_event } => with_conn(|conn| {
+        Request::UpsertUsageEvent {
+            usage_event,
+            device_id,
+        } => with_conn(|conn| {
             db::upsert_usage_event(conn, &usage_event)?;
+            record_local_upsert(conn, "usage_event", &usage_event.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::DeleteUsageEvent { id } => with_conn(|conn| {
+        Request::DeleteUsageEvent { id, device_id } => with_conn(|conn| {
             db::delete_usage_event(conn, &id)?;
+            record_local_delete(conn, "usage_event", &id, device_id)?;
             Ok(json!(true))
+        }),
+        Request::GetUsageAnalytics {
+            range_days,
+            top_apps_limit,
+            recent_sessions_limit,
+        } => with_conn(|conn| {
+            let snapshot = db::load_usage_analytics(
+                conn,
+                range_days.unwrap_or(21),
+                top_apps_limit.unwrap_or(8),
+                recent_sessions_limit.unwrap_or(24),
+            )?;
+            serde_json::to_value(snapshot).map_err(|e| e.to_string())
         }),
         Request::ListObjects => with_conn(|conn| {
             let objects = db::list_objects(conn)?;
@@ -403,12 +523,14 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let object = db::get_object(conn, &id)?;
             serde_json::to_value(object).map_err(|e| e.to_string())
         }),
-        Request::UpsertObject { object } => with_conn(|conn| {
+        Request::UpsertObject { object, device_id } => with_conn(|conn| {
             db::upsert_object(conn, &object)?;
+            record_local_upsert(conn, "object", &object.id, device_id)?;
             Ok(json!(true))
         }),
-        Request::DeleteObject { id } => with_conn(|conn| {
+        Request::DeleteObject { id, device_id } => with_conn(|conn| {
             db::delete_object(conn, &id)?;
+            record_local_delete(conn, "object", &id, device_id)?;
             Ok(json!(true))
         }),
         Request::ListObjectTypes => with_conn(|conn| {
@@ -419,24 +541,34 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let object_type = db::get_object_type(conn, &id)?;
             serde_json::to_value(object_type).map_err(|e| e.to_string())
         }),
-        Request::UpsertObjectType { object_type } => with_conn(|conn| {
+        Request::UpsertObjectType {
+            object_type,
+            device_id,
+        } => with_conn(|conn| {
             db::upsert_object_type(conn, &object_type)?;
+            record_local_upsert(conn, "object_type", &object_type.id, device_id)?;
             Ok(json!(true))
         }),
-        Request::DeleteObjectType { id } => with_conn(|conn| {
+        Request::DeleteObjectType { id, device_id } => with_conn(|conn| {
             db::delete_object_type(conn, &id)?;
+            record_local_delete(conn, "object_type", &id, device_id)?;
             Ok(json!(true))
         }),
         Request::ListObjectLinks => with_conn(|conn| {
             let object_links = db::list_object_links(conn)?;
             serde_json::to_value(object_links).map_err(|e| e.to_string())
         }),
-        Request::UpsertObjectLink { object_link } => with_conn(|conn| {
+        Request::UpsertObjectLink {
+            object_link,
+            device_id,
+        } => with_conn(|conn| {
             db::upsert_object_link(conn, &object_link)?;
+            record_local_upsert(conn, "object_link", &object_link.id, device_id)?;
             Ok(json!(true))
         }),
-        Request::DeleteObjectLink { id } => with_conn(|conn| {
+        Request::DeleteObjectLink { id, device_id } => with_conn(|conn| {
             db::delete_object_link(conn, &id)?;
+            record_local_delete(conn, "object_link", &id, device_id)?;
             Ok(json!(true))
         }),
 
@@ -466,9 +598,22 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             device_name,
             port,
             seed_addresses,
-            relay_url: _,
-            relay_api_key: _,
-        } => handle_start_sync(space_id, device_id, device_name, port, seed_addresses).await,
+            relay_url,
+            relay_api_key,
+            auth_secret,
+        } => {
+            handle_start_sync(
+                space_id,
+                device_id,
+                device_name,
+                port,
+                seed_addresses,
+                relay_url,
+                relay_api_key,
+                auth_secret,
+            )
+            .await
+        }
 
         Request::StopSync => {
             handle_stop_sync().await;
@@ -509,6 +654,9 @@ async fn handle_start_sync(
     device_name: Option<String>,
     port: Option<u16>,
     seed_addresses: Option<Vec<String>>,
+    relay_url: Option<String>,
+    relay_api_key: Option<String>,
+    auth_secret: Option<String>,
 ) -> Result<Value, String> {
     // Idempotency: tear down any running runtime first.
     handle_stop_sync().await;
@@ -521,6 +669,7 @@ async fn handle_start_sync(
     storage.set_device_id(&device_id);
 
     let server = Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
+    server.set_auth_secret(auth_secret.clone()).await;
 
     // Wire server callbacks -> event stream
     {
@@ -573,6 +722,49 @@ async fn handle_start_sync(
         )
         .await?;
 
+    let relay = if let Some(relay_url) = relay_url.clone() {
+        let relay_sync = RelaySync::new(
+            storage.clone() as Arc<dyn StorageBackend>,
+            RelaySyncConfig {
+                relay_url,
+                relay_api_key: relay_api_key.clone(),
+                space_id: space_id.clone(),
+                device_id: device_id.clone(),
+                device_name: device_name.clone(),
+                auth_secret: auth_secret.clone(),
+            },
+        );
+        relay_sync
+            .set_on_change(Arc::new(|entity| {
+                emit_event(json!({
+                    "event": "entity_changed",
+                    "entity": entity,
+                }));
+            }))
+            .await;
+        relay_sync
+            .set_on_peer_connect(Arc::new(|peer_device_id| {
+                emit_event(json!({
+                    "event": "peer_connected",
+                    "device_id": peer_device_id,
+                }));
+            }))
+            .await;
+        relay_sync
+            .set_on_peer_disconnect(Arc::new(|peer_device_id, remaining| {
+                emit_event(json!({
+                    "event": "peer_disconnected",
+                    "device_id": peer_device_id,
+                    "remaining": remaining,
+                }));
+            }))
+            .await;
+        relay_sync.start().await?;
+        Some(relay_sync)
+    } else {
+        None
+    };
+
     // Start SyncClient connections for every known peer.
     let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
         Arc::new(TokioMutex::new(HashMap::new()));
@@ -603,6 +795,7 @@ async fn handle_start_sync(
             device_name.clone(),
             space_id.clone(),
             own_addresses.clone(),
+            auth_secret.clone(),
         )
         .await;
     }
@@ -619,6 +812,7 @@ async fn handle_start_sync(
                 device_name.clone(),
                 space_id.clone(),
                 own_addresses.clone(),
+                auth_secret.clone(),
             )
             .await;
         }
@@ -634,6 +828,7 @@ async fn handle_start_sync(
     let device_name_for_beacon = device_name.clone();
     let space_id_for_beacon = space_id.clone();
     let own_addresses_for_beacon = own_addresses.clone();
+    let auth_secret_for_beacon = auth_secret.clone();
     beacon
         .set_on_peer_discovered(Arc::new(move |peer: BeaconPeer| {
             // Callbacks from UDP recv run on tokio tasks — but this one is
@@ -646,6 +841,7 @@ async fn handle_start_sync(
             let device_name = device_name_for_beacon.clone();
             let space_id = space_id_for_beacon.clone();
             let own = own_addresses_for_beacon.clone();
+            let auth_secret = auth_secret_for_beacon.clone();
             tokio::spawn(async move {
                 let addrs: Vec<String> = if peer.addresses.is_empty() {
                     vec![peer.address.clone()]
@@ -708,6 +904,7 @@ async fn handle_start_sync(
                     device_name,
                     space_id,
                     own,
+                    auth_secret,
                 )
                 .await;
             });
@@ -727,10 +924,12 @@ async fn handle_start_sync(
         server,
         storage,
         clients,
+        relay,
         beacon: beacon_clone,
         space_id,
         device_id,
         device_name,
+        auth_secret,
         own_addresses: own_addresses_shared,
     };
     *SYNC.lock().await = Some(Arc::new(runtime));
@@ -748,6 +947,7 @@ async fn spawn_sync_client(
     device_name: String,
     space_id: String,
     own_addresses: Vec<String>,
+    auth_secret: Option<String>,
 ) {
     if peer.device_id == device_id {
         return;
@@ -760,6 +960,7 @@ async fn spawn_sync_client(
         device_name.clone(),
         space_id.clone(),
         own_addresses.clone(),
+        auth_secret,
     ));
 
     client
@@ -822,6 +1023,7 @@ async fn start_seed_client(
     device_name: String,
     space_id: String,
     own_addresses: Vec<String>,
+    auth_secret: Option<String>,
 ) {
     let reachable: Vec<String> = addresses
         .into_iter()
@@ -847,6 +1049,7 @@ async fn start_seed_client(
         device_name,
         space_id,
         own_addresses,
+        auth_secret,
     )
     .await;
 }
@@ -855,6 +1058,9 @@ async fn handle_stop_sync() {
     let mut guard = SYNC.lock().await;
     if let Some(runtime) = guard.take() {
         runtime.beacon.stop().await;
+        if let Some(relay) = runtime.relay.as_ref() {
+            relay.stop();
+        }
         runtime.server.stop().await;
         let clients = runtime.clients.lock().await;
         for client in clients.values() {
@@ -876,7 +1082,7 @@ async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String
     entity.hlc = hlc;
 
     // Persist locally so future version-vector exchanges reflect it.
-    runtime.storage.apply_entity(&entity).await;
+    runtime.storage.apply_entity(&entity).await?;
 
     // Broadcast via the inbound server sessions.
     runtime
@@ -888,6 +1094,9 @@ async fn handle_broadcast_change(mut entity: SyncEntity) -> Result<Value, String
     let clients = runtime.clients.lock().await;
     for client in clients.values() {
         client.broadcast_live_change(entity.clone()).await;
+    }
+    if let Some(relay) = runtime.relay.as_ref() {
+        relay.broadcast_live_change(entity.clone())?;
     }
     Ok(json!(true))
 }
@@ -921,6 +1130,17 @@ async fn handle_get_connected_peers() -> Result<Value, String> {
             seen.insert(peer.device_id, peer.device_name);
         }
     }
+    drop(clients);
+
+    if let Some(relay) = runtime.relay.as_ref() {
+        for (device_id, device_name) in relay.get_connected_peer_entries().await {
+            if seen.contains_key(&device_id) {
+                continue;
+            }
+            order.push(device_id.clone());
+            seen.insert(device_id, device_name);
+        }
+    }
 
     let list: Vec<Value> = order
         .into_iter()
@@ -952,7 +1172,343 @@ async fn handle_add_seed_peer(addresses: Vec<String>) -> Result<Value, String> {
         runtime.device_name.clone(),
         runtime.space_id.clone(),
         own,
+        runtime.auth_secret.clone(),
     )
     .await;
     Ok(json!(true))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static TEST_DB_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[test]
+    fn response_omits_id_for_legacy_request() {
+        let response = response_ok(json!(true), None);
+        assert_eq!(response.get("ok"), Some(&json!(true)));
+        assert!(response.get("id").is_none());
+    }
+
+    #[test]
+    fn response_echoes_request_id_on_success() {
+        let response = response_ok(json!(true), Some(json!("req-1")));
+        assert_eq!(response.get("ok"), Some(&json!(true)));
+        assert_eq!(response.get("id"), Some(&json!("req-1")));
+    }
+
+    #[test]
+    fn response_echoes_request_id_on_error() {
+        let response = response_error("bad request".to_string(), Some(json!("req-2")));
+        assert_eq!(response.get("ok"), Some(&json!(false)));
+        assert_eq!(response.get("id"), Some(&json!("req-2")));
+        assert_eq!(response.get("error"), Some(&json!("bad request")));
+    }
+
+    #[test]
+    fn request_deserialization_ignores_optional_id_field() {
+        let request = serde_json::from_value::<Request>(json!({
+            "id": "req-3",
+            "operation": "get_host_device_name"
+        }))
+        .expect("request id must be backward-compatible metadata");
+
+        assert!(matches!(request, Request::GetHostDeviceName));
+    }
+
+    #[test]
+    fn request_deserialization_accepts_relay_and_auth_config() {
+        let request = serde_json::from_value::<Request>(json!({
+            "operation": "start_sync",
+            "space_id": "space",
+            "device_id": "device",
+            "relay_url": "ws://127.0.0.1:8765",
+            "relay_api_key": "key",
+            "auth_secret": "secret"
+        }))
+        .expect("relay config should be accepted by the request schema");
+
+        match request {
+            Request::StartSync {
+                relay_url,
+                relay_api_key,
+                auth_secret,
+                ..
+            } => {
+                assert_eq!(relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
+                assert_eq!(relay_api_key.as_deref(), Some("key"));
+                assert_eq!(auth_secret.as_deref(), Some("secret"));
+            }
+            _ => panic!("expected start_sync"),
+        }
+    }
+
+    #[tokio::test]
+    async fn local_object_and_usage_writes_record_sync_state() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let object = ArkObject {
+            id: "obj-local-write".to_string(),
+            type_id: "game_obj".to_string(),
+            title: "Local Game".to_string(),
+            content_json: json!({ "type": "doc", "content": [] }),
+            props_json: json!({ "source": "test" }),
+            created_at: "2026-04-24T00:00:00.000Z".to_string(),
+            updated_at: "2026-04-24T00:00:00.000Z".to_string(),
+            deleted_at: None,
+        };
+        handle_request(Request::UpsertObject {
+            object,
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let tracked_app = TrackedApp {
+            id: "app-local-write".to_string(),
+            platform: "windows".to_string(),
+            exe_path: "C:\\Games\\Demo\\demo.exe".to_string(),
+            normalized_exe_path: "c:\\games\\demo\\demo.exe".to_string(),
+            process_name: "demo.exe".to_string(),
+            display_name: Some("Demo".to_string()),
+            publisher: None,
+            icon_ref: None,
+            first_seen_at: "2026-04-24T00:00:00.000Z".to_string(),
+            last_seen_at: "2026-04-24T00:00:00.000Z".to_string(),
+        };
+        handle_request(Request::UpsertTrackedApp {
+            tracked_app,
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let session = UsageSession {
+            id: "session-local-write".to_string(),
+            tracked_app_id: "app-local-write".to_string(),
+            device_id: "device-local".to_string(),
+            device_name: "Device".to_string(),
+            platform: "windows".to_string(),
+            started_at: "2026-04-24T00:00:00.000Z".to_string(),
+            ended_at: None,
+            foreground_ms: 1000,
+            idle_ms: 0,
+            window_title: Some("Demo".to_string()),
+            process_name: "demo.exe".to_string(),
+            exe_path: "C:\\Games\\Demo\\demo.exe".to_string(),
+            pid_start: Some(1),
+            pid_end: None,
+            meta_json: json!({}),
+        };
+        handle_request(Request::UpsertUsageSession {
+            usage_session: session,
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let event = UsageEvent {
+            id: "event-local-write".to_string(),
+            tracked_app_id: "app-local-write".to_string(),
+            usage_session_id: Some("session-local-write".to_string()),
+            device_id: "device-local".to_string(),
+            device_name: "Device".to_string(),
+            platform: "windows".to_string(),
+            occurred_at: "2026-04-24T00:00:01.000Z".to_string(),
+            kind: "foreground".to_string(),
+            window_title: Some("Demo".to_string()),
+            process_name: "demo.exe".to_string(),
+            exe_path: "C:\\Games\\Demo\\demo.exe".to_string(),
+            pid: Some(1),
+            is_foreground: true,
+            is_idle: false,
+            meta_json: json!({}),
+        };
+        handle_request(Request::UpsertUsageEvent {
+            usage_event: event,
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        handle_request(Request::DeleteObject {
+            id: "obj-local-write".to_string(),
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let shared = get_shared_conn().unwrap();
+        let guard = shared.lock().unwrap();
+        let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+            .unwrap()
+            .expect("version vector should be stored");
+        let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+        for id in [
+            "obj-local-write",
+            "app-local-write",
+            "session-local-write",
+            "event-local-write",
+        ] {
+            assert!(
+                vector
+                    .get(id)
+                    .is_some_and(|hlc| hlc.ends_with(":device-local")),
+                "{id} should have a local HLC in the version vector",
+            );
+        }
+
+        let tombstone_count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["obj-local-write", "object"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tombstone_count, 1);
+    }
+
+    #[tokio::test]
+    async fn local_object_type_and_link_writes_record_sync_state() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let timestamp = "2026-04-24T00:00:00.000Z".to_string();
+        let object_type = ObjectType {
+            id: "game_obj".to_string(),
+            name: "Game".to_string(),
+            schema_json: "{}".to_string(),
+            ui_schema_json: "{}".to_string(),
+            created_at: timestamp.clone(),
+            updated_at: timestamp.clone(),
+            system_locked: false,
+        };
+        handle_request(Request::UpsertObjectType {
+            object_type: object_type.clone(),
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+        handle_request(Request::UpsertObjectType {
+            object_type: ObjectType {
+                id: "empty_type_for_delete".to_string(),
+                name: "Empty".to_string(),
+                schema_json: "{}".to_string(),
+                ui_schema_json: "{}".to_string(),
+                created_at: timestamp.clone(),
+                updated_at: timestamp.clone(),
+                system_locked: false,
+            },
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let source = ArkObject {
+            id: "source-object".to_string(),
+            type_id: object_type.id.clone(),
+            title: "Source".to_string(),
+            content_json: json!({}),
+            props_json: json!({}),
+            created_at: timestamp.clone(),
+            updated_at: timestamp.clone(),
+            deleted_at: None,
+        };
+        let target = ArkObject {
+            id: "target-object".to_string(),
+            type_id: object_type.id.clone(),
+            title: "Target".to_string(),
+            content_json: json!({}),
+            props_json: json!({}),
+            created_at: timestamp.clone(),
+            updated_at: timestamp.clone(),
+            deleted_at: None,
+        };
+        handle_request(Request::UpsertObject {
+            object: source,
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+        handle_request(Request::UpsertObject {
+            object: target,
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let link = ObjectLink {
+            id: "link-local-write".to_string(),
+            source_object_id: "source-object".to_string(),
+            target_object_id: "target-object".to_string(),
+            link_type: "related".to_string(),
+            created_at: timestamp,
+        };
+        handle_request(Request::UpsertObjectLink {
+            object_link: link,
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        handle_request(Request::DeleteObjectLink {
+            id: "link-local-write".to_string(),
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+        handle_request(Request::DeleteObjectType {
+            id: "empty_type_for_delete".to_string(),
+            device_id: Some("device-local".to_string()),
+        })
+        .await
+        .unwrap();
+
+        let shared = get_shared_conn().unwrap();
+        let guard = shared.lock().unwrap();
+        let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+            .unwrap()
+            .expect("version vector should be stored");
+        let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+        for id in ["game_obj", "link-local-write", "empty_type_for_delete"] {
+            assert!(
+                vector
+                    .get(id)
+                    .is_some_and(|hlc| hlc.ends_with(":device-local")),
+                "{id} should have a local HLC in the version vector",
+            );
+        }
+
+        let link_tombstone_count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["link-local-write", "object_link"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(link_tombstone_count, 1);
+
+        let type_tombstone_count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["empty_type_for_delete", "object_type"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(type_tombstone_count, 1);
+    }
 }

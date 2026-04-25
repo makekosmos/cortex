@@ -30,6 +30,7 @@ import {
   type ArkObjectRecord,
   type ArkObjectTypeRecord,
 } from "./ark";
+import { runHeartVaultToArkObjectMigration } from "./ark-object-migration";
 
 export interface Entry {
   id: string;
@@ -473,6 +474,74 @@ async function listArkObjects(): Promise<Entry[]> {
   return ensureArkList<ArkObjectRecord>(objects).map((object) => mapArkObjectToEntry(object, normalizedLinks));
 }
 
+async function migrateHeartVaultToArkObjects(vaultPath: string) {
+  const report = await runHeartVaultToArkObjectMigration({
+    listNoteTypes: (path) =>
+      runHeartRequest<NoteType[]>({
+        operation: "list_note_types",
+        vaultPath: path,
+      }),
+    listEntries: (path) =>
+      runHeartRequest<Entry[]>({
+        operation: "list_entries",
+        vaultPath: path,
+      }),
+    listObjects: () =>
+      runArkRequest<ArkObjectRecord[] | { items?: ArkObjectRecord[]; objects?: ArkObjectRecord[] }>({
+        operation: "list_objects",
+      }).then((objects) => ensureArkList<ArkObjectRecord>(objects)),
+    listObjectLinks: () =>
+      runArkRequest<ArkObjectLinkRecord[] | { items?: ArkObjectLinkRecord[]; links?: ArkObjectLinkRecord[] }>({
+        operation: "list_object_links",
+      }).then((links) => ensureArkList<ArkObjectLinkRecord>(links)),
+    upsertObjectType: (objectType) =>
+      runArkRequest<boolean>({
+        operation: "upsert_object_type",
+        object_type: {
+          id: objectType.id,
+          name: objectType.name,
+          schemaJson: objectType.schemaJson,
+          uiSchemaJson: objectType.uiSchemaJson,
+          createdAt: objectType.createdAt,
+          updatedAt: objectType.updatedAt,
+          systemLocked: objectType.systemLocked,
+        },
+      }),
+    upsertObject: (object) =>
+      runArkRequest<boolean>({
+        operation: "upsert_object",
+        object: {
+          id: object.id,
+          typeId: object.typeId,
+          title: object.title,
+          contentJson: object.contentJson,
+          propsJson: object.propsJson,
+          createdAt: object.createdAt,
+          updatedAt: object.updatedAt,
+          deletedAt: object.deletedAt ?? null,
+        },
+      }),
+    upsertObjectLink: (objectLink) =>
+      runArkRequest<boolean>({
+        operation: "upsert_object_link",
+        object_link: {
+          id: objectLink.id,
+          sourceObjectId: objectLink.sourceObjectId,
+          targetObjectId: objectLink.targetObjectId,
+          linkType: objectLink.linkType,
+          createdAt: objectLink.createdAt,
+        },
+      }),
+    deleteObjectLink: (id) => runArkRequest<boolean>({ operation: "delete_object_link", id }),
+  }, vaultPath, {
+    backupDir: path.join(app.getPath("userData"), ".migration-backups"),
+  });
+
+  if (report.status === "partial_failure" || report.status === "failed") {
+    console.warn("[Eden] ARK note object migration completed with errors:", report);
+  }
+}
+
 async function getArkEntry(id: string): Promise<Entry | undefined> {
   const [object, links] = await Promise.all([
     runArkRequest<ArkObjectRecord | null>({ operation: "get_object", id }),
@@ -653,6 +722,8 @@ export async function initStore(vaultPath?: string) {
 
     vaultPath: currentVaultPath,
   });
+
+  await migrateHeartVaultToArkObjects(currentVaultPath);
 
   return true;
 }

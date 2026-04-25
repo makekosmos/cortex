@@ -5,17 +5,16 @@
 //! 5 seconds.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
-use tokio_tungstenite::{accept_async, connect_async};
+use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use ark_core::protocol::{deserialize_message, serialize_message, LanSyncMessage, PROTOCOL_VERSION};
+use ark_core::protocol::{deserialize_message, serialize_message, LanSyncMessage};
 
 // ---------------------------------------------------------------------------
 // Minimal in-process relay server
@@ -140,7 +139,7 @@ async fn relay_round_trip() {
     let space_id = "test-space-relay-round-trip";
     let url_b = format!("{relay_url}/ws?space_id={space_id}&device_id=device-B&api_key=");
     let (ws_b, _) = connect_async(&url_b).await.expect("B connect");
-    let (mut ws_b_tx, mut ws_b_rx) = ws_b.split();
+    let (_ws_b_tx, mut ws_b_rx) = ws_b.split();
 
     // Spawn B receiver.
     tokio::spawn(async move {
@@ -165,7 +164,10 @@ async fn relay_round_trip() {
         id: "test-entity-relay-001".to_string(),
         data: {
             let mut m = serde_json::Map::new();
-            m.insert("title".to_string(), serde_json::Value::String("Relay test task".to_string()));
+            m.insert(
+                "title".to_string(),
+                serde_json::Value::String("Relay test task".to_string()),
+            );
             m
         },
         hlc: "2026-04-09T00:00:00.000Z:000001:device-A".to_string(),
@@ -176,6 +178,7 @@ async fn relay_round_trip() {
     let msg = LanSyncMessage::LiveChange {
         change_id,
         entity: test_entity.clone(),
+        origin_device_id: Some("device-A".to_string()),
     };
     let text = serialize_message(&msg);
     ws_a_tx.send(Message::Text(text.into())).await.unwrap();

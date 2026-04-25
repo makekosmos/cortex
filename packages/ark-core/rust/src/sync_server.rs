@@ -24,7 +24,7 @@ const KNOWN_PEERS_KEY: &str = "sync.peers";
 #[async_trait::async_trait]
 pub trait StorageBackend: Send + Sync {
     async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity>;
-    async fn apply_entity(&self, entity: &SyncEntity);
+    async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
     async fn get_kv(&self, key: &str) -> Option<String>;
     async fn set_kv(&self, key: &str, value: &str);
 }
@@ -62,6 +62,7 @@ pub struct SyncServer {
     device_id: Arc<RwLock<String>>,
     device_name: Arc<RwLock<String>>,
     own_addresses: Arc<RwLock<Vec<String>>>,
+    auth_secret: Arc<RwLock<Option<String>>>,
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
     known_peer_records: Arc<Mutex<Vec<PeerRecord>>>,
     shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -80,6 +81,7 @@ impl SyncServer {
             device_id: Arc::new(RwLock::new(String::new())),
             device_name: Arc::new(RwLock::new("ArkSync".to_string())),
             own_addresses: Arc::new(RwLock::new(Vec::new())),
+            auth_secret: Arc::new(RwLock::new(None)),
             peers: Arc::new(Mutex::new(HashMap::new())),
             known_peer_records: Arc::new(Mutex::new(Vec::new())),
             shutdown_tx: Arc::new(Mutex::new(None)),
@@ -189,6 +191,10 @@ impl SyncServer {
         *self.own_addresses.write().await = addresses;
     }
 
+    pub async fn set_auth_secret(&self, auth_secret: Option<String>) {
+        *self.auth_secret.write().await = normalize_auth_secret(auth_secret);
+    }
+
     pub async fn get_device_id(&self) -> String {
         self.device_id.read().await.clone()
     }
@@ -254,6 +260,7 @@ impl SyncServer {
         let device_id = self.device_id.clone();
         let device_name = self.device_name.clone();
         let own_addresses = self.own_addresses.clone();
+        let auth_secret = self.auth_secret.clone();
         let known_peer_records = self.known_peer_records.clone();
         let on_change = self.on_change.clone();
         let on_peer_connect = self.on_peer_connect.clone();
@@ -322,6 +329,7 @@ impl SyncServer {
                                 let device_id_reader = device_id.clone();
                                 let device_name_reader = device_name.clone();
                                 let own_addresses_reader = own_addresses.clone();
+                                let auth_secret_reader = auth_secret.clone();
                                 let known_peer_records_reader = known_peer_records.clone();
                                 let on_change_reader = on_change.clone();
                                 let on_peer_connect_reader = on_peer_connect.clone();
@@ -342,6 +350,7 @@ impl SyncServer {
                                                         &device_id_reader,
                                                         &device_name_reader,
                                                         &own_addresses_reader,
+                                                        &auth_secret_reader,
                                                         &known_peer_records_reader,
                                                         &on_change_reader,
                                                         &on_peer_connect_reader,
@@ -399,6 +408,7 @@ impl SyncServer {
         let msg = LanSyncMessage::LiveChange {
             change_id,
             entity: entity.clone(),
+            origin_device_id: None,
         };
         let json = serialize_message(&msg);
 
@@ -456,8 +466,12 @@ impl SyncServer {
         let mut known = self.known_peer_records.lock().await;
         let before = known.len();
         known.retain(|p| {
-            if p.device_id == my_device_id { return false; }
-            if p.addresses.is_empty() { return true; }
+            if p.device_id == my_device_id {
+                return false;
+            }
+            if p.addresses.is_empty() {
+                return true;
+            }
             let all_ours = p.addresses.iter().all(|a| my_addresses.contains(a));
             !all_ours
         });
@@ -510,6 +524,7 @@ async fn handle_message(
     device_id: &Arc<RwLock<String>>,
     device_name: &Arc<RwLock<String>>,
     own_addresses: &Arc<RwLock<Vec<String>>>,
+    auth_secret: &Arc<RwLock<Option<String>>>,
     known_peer_records: &Arc<Mutex<Vec<PeerRecord>>>,
     on_change: &Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: &Arc<Mutex<Option<OnPeerConnectCallback>>>,
@@ -522,9 +537,13 @@ async fn handle_message(
             device_name: peer_device_name,
             space_id: _peer_space_id,
             addresses,
+            auth_nonce,
+            auth_hmac,
         } => {
             if protocol_version != PROTOCOL_VERSION {
-                eprintln!("{TAG} Protocol version mismatch: {protocol_version} vs {PROTOCOL_VERSION}");
+                eprintln!(
+                    "{TAG} Protocol version mismatch: {protocol_version} vs {PROTOCOL_VERSION}"
+                );
                 return;
             }
 
@@ -533,10 +552,29 @@ async fn handle_message(
             let my_space_id = space_id.read().await.clone();
             let my_addresses = own_addresses.read().await.clone();
 
+            if let Some(secret) = auth_secret.read().await.clone() {
+                let valid = match (auth_nonce.as_deref(), auth_hmac.as_deref()) {
+                    (Some(nonce), Some(hmac)) => {
+                        verify_hello_auth_hmac(&secret, &my_space_id, &peer_device_id, nonce, hmac)
+                    }
+                    _ => false,
+                };
+                if !valid {
+                    eprintln!("{TAG} Rejecting peer hello with invalid HMAC");
+                    let mut peers_guard = peers.lock().await;
+                    if let Some(peer) = peers_guard.remove(&peer_id) {
+                        let _ = peer.tx.send(Message::Close(None));
+                    }
+                    return;
+                }
+            }
+
             // Reject self-connect: a client claiming our own device_id is us
             // (stale phantom peer in storage or address looping back to us).
             if !peer_device_id.is_empty() && peer_device_id == my_device_id {
-                eprintln!("{TAG} Rejecting self-connect: client claims our device_id {peer_device_id}");
+                eprintln!(
+                    "{TAG} Rejecting self-connect: client claims our device_id {peer_device_id}"
+                );
                 let mut peers_guard = peers.lock().await;
                 peers_guard.remove(&peer_id);
                 return;
@@ -560,7 +598,10 @@ async fn handle_message(
                     .collect();
                 for stale_id in stale_ids {
                     if let Some(stale) = peers_guard.get_mut(&stale_id) {
-                        eprintln!("{TAG} Evicting stale session for {} (superseded by new hello)", stale.device_name);
+                        eprintln!(
+                            "{TAG} Evicting stale session for {} (superseded by new hello)",
+                            stale.device_name
+                        );
                         stale.authenticated = false;
                         let _ = stale.tx.send(Message::Close(None));
                     }
@@ -595,7 +636,8 @@ async fn handle_message(
                         device_id: peer_device_id.clone(),
                         device_name: peer_device_name,
                         addresses: peer_addresses,
-                        last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                        last_seen: chrono::Utc::now()
+                            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                         last_address: None,
                     };
                     let mut known = known_peer_records.lock().await;
@@ -605,13 +647,27 @@ async fn handle_message(
             }
 
             // Reply hello
-            send_msg(&tx, &LanSyncMessage::Hello {
-                protocol_version: PROTOCOL_VERSION,
-                device_id: my_device_id,
-                device_name: my_device_name,
-                space_id: my_space_id,
-                addresses: Some(my_addresses),
-            });
+            let (reply_auth_nonce, reply_auth_hmac) = match auth_secret.read().await.clone() {
+                Some(secret) => {
+                    let nonce = generate_auth_nonce();
+                    let hmac =
+                        compute_hello_auth_hmac(&secret, &my_space_id, &my_device_id, &nonce);
+                    (Some(nonce), Some(hmac))
+                }
+                None => (None, None),
+            };
+            send_msg(
+                &tx,
+                &LanSyncMessage::Hello {
+                    protocol_version: PROTOCOL_VERSION,
+                    device_id: my_device_id,
+                    device_name: my_device_name,
+                    space_id: my_space_id,
+                    addresses: Some(my_addresses),
+                    auth_nonce: reply_auth_nonce,
+                    auth_hmac: reply_auth_hmac,
+                },
+            );
 
             if let Some(handler) = on_peer_connect.lock().await.as_ref() {
                 handler(peer_device_id);
@@ -619,7 +675,13 @@ async fn handle_message(
 
             // Send version vector
             let vector = load_version_vector(storage).await;
-            send_msg(&tx, &LanSyncMessage::VersionVector { vector });
+            send_msg(
+                &tx,
+                &LanSyncMessage::VersionVector {
+                    vector,
+                    origin_device_id: None,
+                },
+            );
 
             // Send peer list after short delay
             let known = known_peer_records.lock().await.clone();
@@ -630,7 +692,10 @@ async fn handle_message(
             });
         }
 
-        LanSyncMessage::VersionVector { vector: remote_vector } => {
+        LanSyncMessage::VersionVector {
+            vector: remote_vector,
+            ..
+        } => {
             let (tx, authenticated) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
@@ -669,19 +734,27 @@ async fn handle_message(
             }
 
             if to_send.is_empty() {
-                send_msg(&tx, &LanSyncMessage::SyncChanges {
-                    batch_id: generate_id(),
-                    entities: vec![],
-                    is_last: true,
-                });
+                send_msg(
+                    &tx,
+                    &LanSyncMessage::SyncChanges {
+                        batch_id: generate_id(),
+                        entities: vec![],
+                        is_last: true,
+                        origin_device_id: None,
+                    },
+                );
             } else {
                 let batches = split_into_batches(&to_send);
                 for (i, batch) in batches.iter().enumerate() {
-                    send_msg(&tx, &LanSyncMessage::SyncChanges {
-                        batch_id: generate_id(),
-                        entities: batch.clone(),
-                        is_last: i == batches.len() - 1,
-                    });
+                    send_msg(
+                        &tx,
+                        &LanSyncMessage::SyncChanges {
+                            batch_id: generate_id(),
+                            entities: batch.clone(),
+                            is_last: i == batches.len() - 1,
+                            origin_device_id: None,
+                        },
+                    );
                 }
             }
 
@@ -694,16 +767,25 @@ async fn handle_message(
                     let queued: Vec<SyncEntity> = peer.queued_live_changes.drain(..).collect();
                     for entity in queued {
                         let change_id = generate_id();
-                        send_msg(&peer.tx, &LanSyncMessage::LiveChange {
-                            change_id,
-                            entity,
-                        });
+                        send_msg(
+                            &peer.tx,
+                            &LanSyncMessage::LiveChange {
+                                change_id,
+                                entity,
+                                origin_device_id: None,
+                            },
+                        );
                     }
                 }
             }
         }
 
-        LanSyncMessage::SyncChanges { batch_id, entities, is_last } => {
+        LanSyncMessage::SyncChanges {
+            batch_id,
+            entities,
+            is_last,
+            ..
+        } => {
             let (tx, authenticated) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
@@ -720,7 +802,10 @@ async fn handle_message(
 
             let peer_device_id = {
                 let peers_guard = peers.lock().await;
-                peers_guard.get(&peer_id).map(|p| p.device_id.clone()).unwrap_or_default()
+                peers_guard
+                    .get(&peer_id)
+                    .map(|p| p.device_id.clone())
+                    .unwrap_or_default()
             };
 
             for entity in &entities {
@@ -731,20 +816,26 @@ async fn handle_message(
                 };
 
                 if should_apply {
-                    storage.apply_entity(entity).await;
-                    if entity.deleted == Some(true) {
-                        local_vector.remove(&entity.id);
-                    } else {
-                        local_vector.insert(entity.id.clone(), entity.hlc.clone());
-                    }
-                    accepted += 1;
+                    match storage.apply_entity(entity).await {
+                        Ok(()) => {
+                            local_vector.insert(entity.id.clone(), entity.hlc.clone());
+                            accepted += 1;
 
-                    if let Some(handler) = on_change.lock().await.as_ref() {
-                        handler(entity.clone());
-                    }
+                            if let Some(handler) = on_change.lock().await.as_ref() {
+                                handler(entity.clone());
+                            }
 
-                    // Broadcast to other peers
-                    broadcast_to_others(peers, &entity.clone(), Some(&peer_device_id)).await;
+                            // Broadcast to other peers
+                            broadcast_to_others(peers, &entity.clone(), Some(&peer_device_id))
+                                .await;
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "{TAG} Failed to apply sync entity {}:{}: {e}",
+                                entity.entity_type, entity.id
+                            );
+                        }
+                    }
                 }
             }
 
@@ -760,7 +851,9 @@ async fn handle_message(
             // ACK received -- in a full implementation, resolve pending ACK timers
         }
 
-        LanSyncMessage::LiveChange { change_id, entity } => {
+        LanSyncMessage::LiveChange {
+            change_id, entity, ..
+        } => {
             let (tx, authenticated) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
@@ -780,23 +873,31 @@ async fn handle_message(
             };
 
             if should_apply {
-                storage.apply_entity(&entity).await;
-                if entity.deleted == Some(true) {
-                    local_vector.remove(&entity.id);
-                } else {
-                    local_vector.insert(entity.id.clone(), entity.hlc.clone());
-                }
-                save_version_vector(storage, &local_vector).await;
+                match storage.apply_entity(&entity).await {
+                    Ok(()) => {
+                        local_vector.insert(entity.id.clone(), entity.hlc.clone());
+                        save_version_vector(storage, &local_vector).await;
 
-                if let Some(handler) = on_change.lock().await.as_ref() {
-                    handler(entity.clone());
-                }
+                        if let Some(handler) = on_change.lock().await.as_ref() {
+                            handler(entity.clone());
+                        }
 
-                let peer_device_id = {
-                    let peers_guard = peers.lock().await;
-                    peers_guard.get(&peer_id).map(|p| p.device_id.clone()).unwrap_or_default()
-                };
-                broadcast_to_others(peers, &entity, Some(&peer_device_id)).await;
+                        let peer_device_id = {
+                            let peers_guard = peers.lock().await;
+                            peers_guard
+                                .get(&peer_id)
+                                .map(|p| p.device_id.clone())
+                                .unwrap_or_default()
+                        };
+                        broadcast_to_others(peers, &entity, Some(&peer_device_id)).await;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "{TAG} Failed to apply live sync entity {}:{}: {e}",
+                            entity.entity_type, entity.id
+                        );
+                    }
+                }
             }
 
             send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
@@ -804,10 +905,15 @@ async fn handle_message(
 
         LanSyncMessage::LiveAck { .. } => {}
 
-        LanSyncMessage::PeerList { peers: incoming_peers } => {
+        LanSyncMessage::PeerList {
+            peers: incoming_peers,
+        } => {
             let authenticated = {
                 let peers_guard = peers.lock().await;
-                peers_guard.get(&peer_id).map(|p| p.authenticated).unwrap_or(false)
+                peers_guard
+                    .get(&peer_id)
+                    .map(|p| p.authenticated)
+                    .unwrap_or(false)
             };
             if !authenticated {
                 return;
@@ -820,9 +926,12 @@ async fn handle_message(
             let filtered: Vec<PeerRecord> = incoming_peers
                 .into_iter()
                 .filter(|p| {
-                    if p.device_id == my_device_id { return false; }
+                    if p.device_id == my_device_id {
+                        return false;
+                    }
                     if !p.addresses.is_empty()
-                        && p.addresses.iter().all(|a| my_addresses.contains(a)) {
+                        && p.addresses.iter().all(|a| my_addresses.contains(a))
+                    {
                         return false;
                     }
                     true
@@ -844,7 +953,10 @@ async fn handle_message(
             }
 
             if known.len() > before_count {
-                eprintln!("{TAG} Peer list updated: {before_count} -> {} known peers", known.len());
+                eprintln!(
+                    "{TAG} Peer list updated: {before_count} -> {} known peers",
+                    known.len()
+                );
             }
         }
 
@@ -871,6 +983,7 @@ async fn broadcast_to_others(
     let msg = LanSyncMessage::LiveChange {
         change_id,
         entity: entity.clone(),
+        origin_device_id: None,
     };
     let json = serialize_message(&msg);
 
@@ -917,7 +1030,7 @@ mod tests {
         async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
             self.entities.lock().unwrap().values().cloned().collect()
         }
-        async fn apply_entity(&self, entity: &SyncEntity) {
+        async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
             if entity.deleted == Some(true) {
                 self.entities.lock().unwrap().remove(&entity.id);
             } else {
@@ -926,6 +1039,7 @@ mod tests {
                     .unwrap()
                     .insert(entity.id.clone(), entity.clone());
             }
+            Ok(())
         }
         async fn get_kv(&self, key: &str) -> Option<String> {
             self.kv.lock().unwrap().get(key).cloned()
@@ -1024,11 +1138,7 @@ mod tests {
         *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
 
         server
-            .register_external_peer(
-                "other",
-                "Other",
-                vec!["192.168.1.20:21531".to_string()],
-            )
+            .register_external_peer("other", "Other", vec!["192.168.1.20:21531".to_string()])
             .await;
 
         let known = server.get_known_peers().await;

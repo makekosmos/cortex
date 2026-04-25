@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
+
+import { ArkClient, type ArkObjectsApi, type JsonValue } from "@kepler/ark";
+import { app } from "electron";
 
 import { openSqliteDatabase } from "../db";
-import { queryAll, queryOne } from "../helpers/db";
+import { queryAll } from "../helpers/db";
 import type { DbLike } from "../helpers/shared";
 import type { Game } from "./games/types";
 
@@ -24,11 +28,13 @@ type ArkObjectRow = {
 
 type ArkObjectRecord = {
   id: string;
+  typeId?: string;
   title: string;
   contentJson: unknown;
   propsJson: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string | null;
 };
 
 export interface ArkGameObjectService {
@@ -39,6 +45,15 @@ export interface ArkGameObjectService {
 export interface ArkGameObjectServiceOptions {
   arkDbPath: string;
   now?: () => Date;
+  arkObjects?: Pick<ArkObjectsApi, "list" | "get" | "upsert">;
+  arkCoreRpcPath?: string;
+  requestTimeoutMs?: number;
+  spaceId?: string;
+  deviceId?: string;
+  deviceName?: string;
+  appRoot?: string;
+  isPackaged?: boolean;
+  resourcesPath?: string;
 }
 
 function normalizeExePath(exePath: string): string {
@@ -47,6 +62,55 @@ function normalizeExePath(exePath: string): string {
 
 function buildParameterizedList(values: readonly string[], startIndex = 1): string {
   return values.map((_, index) => `?${index + startIndex}`).join(", ");
+}
+
+function getArkCoreRpcBinaryName() {
+  return process.platform === "win32" ? "ark-core-rpc.exe" : "ark-core-rpc";
+}
+
+export function getArkCoreRpcBinaryPath(
+  options: Pick<
+    ArkGameObjectServiceOptions,
+    "appRoot" | "isPackaged" | "resourcesPath"
+  > = {},
+) {
+  const binaryName = getArkCoreRpcBinaryName();
+  const electronApp = app as typeof app | undefined;
+
+  if (options.isPackaged ?? electronApp?.isPackaged ?? false) {
+    return path.join(
+      options.resourcesPath ?? process.resourcesPath,
+      "ark-core",
+      binaryName,
+    );
+  }
+
+  const appRoot = path.resolve(options.appRoot ?? process.env.APP_ROOT ?? process.cwd());
+  const repoRoot = path.basename(appRoot) === "arrancador"
+    ? path.resolve(appRoot, "..", "..")
+    : appRoot;
+  const releasePath = path.join(
+    repoRoot,
+    "packages",
+    "ark-core",
+    "rust",
+    "target",
+    "release",
+    binaryName,
+  );
+  if (fs.existsSync(releasePath)) {
+    return releasePath;
+  }
+
+  return path.join(
+    repoRoot,
+    "packages",
+    "ark-core",
+    "rust",
+    "target",
+    "debug",
+    binaryName,
+  );
 }
 
 function tryOpenArkDb(
@@ -93,6 +157,10 @@ function parseJsonValue(value: string | null | undefined): unknown {
   } catch {
     return DEFAULT_CONTENT_JSON;
   }
+}
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function readOptionalString(value: unknown): string | null {
@@ -181,6 +249,24 @@ async function listObjectsById(
   );
 
   return new Map(rows.map((row) => [row.id, mapArkObjectRow(row)]));
+}
+
+async function listActiveGameObjectsFromSdk(
+  arkObjects: Pick<ArkObjectsApi, "list">,
+): Promise<ArkObjectRecord[]> {
+  const objects = await arkObjects.list();
+  return objects
+    .filter((object) => object.typeId === GAME_OBJECT_TYPE_ID && object.deletedAt === null)
+    .map((object) => ({
+      id: object.id,
+      typeId: object.typeId,
+      title: object.title,
+      contentJson: object.contentJson,
+      propsJson: isJsonRecord(object.propsJson) ? object.propsJson : {},
+      createdAt: object.createdAt,
+      updatedAt: object.updatedAt,
+      deletedAt: object.deletedAt,
+    }));
 }
 
 function buildObjectIndexes(objects: readonly ArkObjectRecord[]) {
@@ -291,23 +377,26 @@ function buildGameObjectProps(
 }
 
 async function loadExistingObjectForSync(
-  arkDb: DbLike,
+  arkObjects: Pick<ArkObjectsApi, "list" | "get">,
   game: Game,
 ): Promise<ArkObjectRecord | null> {
   if (game.ark_object_id) {
-    const row = await queryOne<ArkObjectRow>(
-      arkDb,
-      `SELECT id, title, content_json, props_json, created_at, updated_at, deleted_at
-       FROM objects
-       WHERE id = ?1 AND type_id = ?2`,
-      [game.ark_object_id, GAME_OBJECT_TYPE_ID],
-    );
-    if (row) {
-      return mapArkObjectRow(row);
+    const object = await arkObjects.get(game.ark_object_id);
+    if (object?.typeId === GAME_OBJECT_TYPE_ID) {
+      return {
+        id: object.id,
+        typeId: object.typeId,
+        title: object.title,
+        contentJson: object.contentJson,
+        propsJson: isJsonRecord(object.propsJson) ? object.propsJson : {},
+        createdAt: object.createdAt,
+        updatedAt: object.updatedAt,
+        deletedAt: object.deletedAt,
+      };
     }
   }
 
-  const objects = await listActiveGameObjects(arkDb);
+  const objects = await listActiveGameObjectsFromSdk(arkObjects);
   const { byGameId, byExePath } = buildObjectIndexes(objects);
   return (
     byGameId.get(game.id) ??
@@ -320,6 +409,24 @@ export function createArkGameObjectService(
   options: ArkGameObjectServiceOptions,
 ): ArkGameObjectService {
   const now = options.now ?? (() => new Date());
+  let arkClient: ArkClient | null = null;
+
+  const getArkObjects = (): Pick<ArkObjectsApi, "list" | "get" | "upsert"> => {
+    if (options.arkObjects) {
+      return options.arkObjects;
+    }
+
+    arkClient ??= new ArkClient({
+      spaceId: options.spaceId ?? "arrancador",
+      deviceId: options.deviceId ?? "arrancador-main",
+      deviceName: options.deviceName ?? "Arrancador",
+      dbPath: options.arkDbPath,
+      sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(options),
+      requestTimeoutMs: options.requestTimeoutMs ?? 10_000,
+    });
+
+    return arkClient.objects;
+  };
 
   return {
     async hydrateGames(games: Game[]): Promise<Game[]> {
@@ -352,33 +459,25 @@ export function createArkGameObjectService(
     },
 
     async syncGame(game: Game): Promise<string | null> {
-      const arkDb = tryOpenArkDb(options.arkDbPath);
-      if (!arkDb) {
-        return null;
-      }
-
       try {
-        const existing = await loadExistingObjectForSync(arkDb, game);
+        const arkObjects = getArkObjects();
+        const existing = await loadExistingObjectForSync(arkObjects, game);
         const objectId = existing?.id ?? game.ark_object_id ?? randomUUID();
         const timestamp = now().toISOString();
         const createdAt = existing?.createdAt ?? timestamp;
         const contentJson = existing?.contentJson ?? DEFAULT_CONTENT_JSON;
         const propsJson = buildGameObjectProps(game, existing?.propsJson ?? {});
 
-        await arkDb.run(
-          `INSERT OR REPLACE INTO objects
-             (id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL)`,
-          [
-            objectId,
-            GAME_OBJECT_TYPE_ID,
-            game.name,
-            JSON.stringify(contentJson),
-            JSON.stringify(propsJson),
-            createdAt,
-            timestamp,
-          ],
-        );
+        await arkObjects.upsert({
+          id: objectId,
+          typeId: GAME_OBJECT_TYPE_ID,
+          title: game.name,
+          contentJson: contentJson as JsonValue,
+          propsJson: propsJson as JsonValue,
+          createdAt,
+          updatedAt: timestamp,
+          deletedAt: null,
+        });
 
         return objectId;
       } catch {

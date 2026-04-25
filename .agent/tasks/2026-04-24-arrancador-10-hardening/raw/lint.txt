@@ -1,0 +1,4 @@
+$ bun run typecheck && bun run biome:check
+$ vue-tsc --noEmit && tsc --noEmit -p tsconfig.electron.json && tsc --noEmit -p tsconfig.node.json
+$ biome check .
+Checked 245 files in 187ms. No fixes applied.

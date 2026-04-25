@@ -34,7 +34,7 @@ function getSidecarBinaryPath() {
     return path.join(process.resourcesPath, 'ark-core', binaryName)
   }
 
-  // Try ark-core (new unified crate) first, then legacy delphi-db
+  // ARK is the canonical runtime for Delphi. The legacy delphi-db sidecar was removed.
   const repoRoot = path.resolve(process.env.APP_ROOT ?? process.cwd(), '..', '..', '..')
   const arkCorePaths = [
     path.join(repoRoot, 'packages', 'ark-core', 'rust', 'target', 'release', binaryName),
@@ -44,12 +44,7 @@ function getSidecarBinaryPath() {
     if (fs.existsSync(p)) return p
   }
 
-  // Legacy fallback
-  const appRoot = process.env.APP_ROOT ?? process.cwd()
-  const legacyName = process.platform === 'win32' ? 'delphi-db.exe' : 'delphi-db'
-  const legacyRelease = path.join(appRoot, 'sidecar', 'target', 'release', legacyName)
-  if (fs.existsSync(legacyRelease)) return legacyRelease
-  return path.join(appRoot, 'sidecar', 'target', 'debug', legacyName)
+  return arkCorePaths[0]
 }
 
 const MAX_QUEUE_SIZE = 500
@@ -111,7 +106,7 @@ class SidecarClient {
     })
 
     child.on('close', code => {
-      const reason = this.stderrBuffer.trim() || `delphi-db exited with ${code}`
+      const reason = this.stderrBuffer.trim() || `ark-core-rpc exited with ${code}`
       this.failAll(new Error(reason))
     })
 
@@ -258,7 +253,7 @@ class SidecarClient {
   request<T>(request: SidecarRequest): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (this.requestQueue.length >= MAX_QUEUE_SIZE) {
-        reject(new Error(`delphi-db request queue overflow (${MAX_QUEUE_SIZE})`))
+        reject(new Error(`ark-core-rpc request queue overflow (${MAX_QUEUE_SIZE})`))
         return
       }
       this.requestQueue.push({

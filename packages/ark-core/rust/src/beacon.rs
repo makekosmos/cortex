@@ -103,9 +103,7 @@ fn classify_beacon(
 
     let should_fire = match existing {
         None => true,
-        Some(prev) => {
-            prev.device_name != incoming_name || prev.sorted_addresses != sorted_addrs
-        }
+        Some(prev) => prev.device_name != incoming_name || prev.sorted_addresses != sorted_addrs,
     };
 
     (should_fire, new_state)
@@ -197,7 +195,11 @@ impl BroadcastDiscovery {
             return; // self-reject
         }
 
-        let port = if payload.p == 0 { LAN_SYNC_PORT } else { payload.p };
+        let port = if payload.p == 0 {
+            LAN_SYNC_PORT
+        } else {
+            payload.p
+        };
         let sender_addr = format!("{sender_ip}:{port}");
 
         // Merge: sender IP first, then beacon-provided addresses (deduplicated).
@@ -671,12 +673,7 @@ mod tests {
             sorted_addresses: vec!["1.1.1.1:21531".to_string()],
             last_seen_ms: 100,
         };
-        let (fire, _) = classify_beacon(
-            Some(&prev),
-            "alpha",
-            &["1.1.1.1:21531".to_string()],
-            now,
-        );
+        let (fire, _) = classify_beacon(Some(&prev), "alpha", &["1.1.1.1:21531".to_string()], now);
         assert!(!fire);
     }
 

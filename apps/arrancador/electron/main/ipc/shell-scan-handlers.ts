@@ -13,6 +13,13 @@ import {
 } from "../services/scan";
 import type { WithRuntime } from "./types";
 
+type DialogOpenPayload = {
+  directory?: boolean;
+  multiple?: boolean;
+  title?: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+};
+
 export interface ShellScanIpcDeps {
   withRuntime: WithRuntime;
   emitRendererEvent: (channel: string, payload: unknown) => void;
@@ -20,6 +27,19 @@ export interface ShellScanIpcDeps {
 
 function getTargetWindow() {
   return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+}
+
+function assertHttpExternalUrl(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Invalid external URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`Blocked external URL protocol: ${url.protocol}`);
+  }
+  return url.toString();
 }
 
 export function registerShellScanIpcHandlers(deps: ShellScanIpcDeps) {
@@ -32,11 +52,19 @@ export function registerShellScanIpcHandlers(deps: ShellScanIpcDeps) {
 
   ipcMain.handle(
     "dialog_open",
-    withRuntime(async (_runtime, payload: OpenDialogOptions) => {
+    withRuntime(async (_runtime, payload: DialogOpenPayload = {}) => {
       const window = getTargetWindow();
+      const options: OpenDialogOptions = {
+        title: payload.title,
+        filters: payload.filters,
+        properties: [
+          ...(payload.directory ? ["openDirectory" as const] : ["openFile" as const]),
+          ...(payload.multiple ? ["multiSelections" as const] : []),
+        ],
+      };
       const result = window
-        ? await dialog.showOpenDialog(window, payload)
-        : await dialog.showOpenDialog(payload);
+        ? await dialog.showOpenDialog(window, options)
+        : await dialog.showOpenDialog(options);
 
       if (result.canceled) {
         return null;
@@ -97,7 +125,7 @@ export function registerShellScanIpcHandlers(deps: ShellScanIpcDeps) {
   ipcMain.handle(
     "shell_open_external",
     withRuntime(async (_runtime, payload: { url: string }) => {
-      await shell.openExternal(payload.url);
+      await shell.openExternal(assertHttpExternalUrl(payload.url));
     }),
   );
 

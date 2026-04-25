@@ -1,0 +1,4 @@
+PASS root README has no legacy packages/ark README link
+PASS root README links packages/ark-core/README.md
+PASS TODO.md starts with legacy note
+PASS ARK-P2P-WORKPROGRESS.md starts with legacy note

@@ -1,0 +1,107 @@
+{
+  "task_id": "2026-04-24-arrancador-full-10",
+  "phase": "final",
+  "captured_at": "2026-04-24",
+  "line_counts": {
+    "backup_workflow_facade_lines": 16,
+    "backup_workflow_facade_meaningful_lines": 16,
+    "backup_workflow_modules": {
+      "types.ts": {
+        "lines": 140,
+        "meaningful_lines": 130
+      },
+      "internals.ts": {
+        "lines": 53,
+        "meaningful_lines": 52
+      },
+      "shared.ts": {
+        "lines": 64,
+        "meaningful_lines": 59
+      },
+      "read-use-cases.ts": {
+        "lines": 162,
+        "meaningful_lines": 145
+      },
+      "write-use-cases.ts": {
+        "lines": 153,
+        "meaningful_lines": 136
+      },
+      "service.ts": {
+        "lines": 18,
+        "meaningful_lines": 15
+      }
+    },
+    "backup_handlers_lines": 151,
+    "backup_handlers_meaningful_lines": 146,
+    "game_detail_page_lines": 392,
+    "game_detail_page_meaningful_lines": 359,
+    "games_service_lines": 321,
+    "games_service_meaningful_lines": 282,
+    "games_service_type_contract_lines": 57,
+    "games_service_loading_lines": 46,
+    "architecture_boundaries_test_lines": 375
+  },
+  "before_after": {
+    "backup_workflow_lines": {
+      "before": 499,
+      "after_facade": 16
+    },
+    "games_service_lines": {
+      "before": 395,
+      "after": 321
+    },
+    "unit_tests": {
+      "before": 119,
+      "after": 121
+    },
+    "coverage": {
+      "before": {
+        "statements": 79.5,
+        "branches": 73.09,
+        "functions": 74.52,
+        "lines": 80.88
+      },
+      "after": {
+        "statements": 79.57,
+        "branches": 74.43,
+        "functions": 75.31,
+        "lines": 81.09
+      }
+    }
+  },
+  "verification": {
+    "typecheck": {
+      "command": "bun run typecheck",
+      "status": "PASS",
+      "raw_artifact": "final-typecheck.txt"
+    },
+    "unit_tests": {
+      "command": "bun run test",
+      "status": "PASS",
+      "files": 37,
+      "tests": 121,
+      "raw_artifact": "final-test.txt"
+    },
+    "coverage": {
+      "command": "bun run test:coverage",
+      "status": "PASS",
+      "statements": 79.57,
+      "branches": 74.43,
+      "functions": 75.31,
+      "lines": 81.09,
+      "raw_artifact": "final-coverage.txt"
+    },
+    "e2e": {
+      "command": "bun run test:e2e",
+      "status": "PASS",
+      "tests": 4,
+      "raw_artifact": "final-e2e.txt"
+    },
+    "sidecar": {
+      "command": "cargo test --manifest-path sidecar\\Cargo.toml",
+      "status": "PASS",
+      "tests": 6,
+      "raw_artifact": "final-cargo-sidecar-test.txt"
+    }
+  }
+}

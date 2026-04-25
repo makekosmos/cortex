@@ -7,7 +7,7 @@ const query = defineModel<string>("query", { required: true });
 const rename = defineModel<boolean>("rename", { required: true });
 
 defineProps<{
-  results: RawgGame[];
+  results: readonly RawgGame[];
   searching: boolean;
   applying: boolean;
 }>();

@@ -110,6 +110,7 @@ export interface CreateBackupInput {
 
 export interface RestoreBackupInput {
   backupPath: string;
+  allowedRestoreRoots: string[];
   onProgress?: ProgressListener | null;
 }
 

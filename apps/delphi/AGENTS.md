@@ -1,5 +1,20 @@
 # Delphi
 
+## Current ARK Runtime Override
+
+The Electron/TypeScript app uses the canonical `ark-core-rpc` runtime and the
+`@kepler/ark` SDK. The legacy `ts/sidecar` Rust binary has been removed and
+must not be rebuilt, packaged, or used as a fallback.
+
+Replacement model:
+- `ark-core-rpc` owns the shared ARK SQLite database (`ark.db`).
+- Delphi tasks are stored as generic ARK `task_obj` objects.
+- On app entry and shared-space switch, legacy todos are migrated into `task_obj`.
+- `@kepler/ark` is the canonical SDK for new Delphi Electron code.
+
+Older sections in this file may still mention the removed legacy sidecar. Treat
+this override as authoritative for ARK integration work.
+
 GTD-менеджер задач — часть экосистемы Kosmos. Три реализации: macOS (SwiftUI), Web/Desktop (Electron + Vue с shared `DesktopChrome`/`DesktopContentSurface`), Android (Kotlin + Compose).
 
 ## РџР»Р°С‚С„РѕСЂРјС‹
@@ -109,8 +124,8 @@ Beacon'С‹ Рё `ownAddresses` (РІ `hello`/`peer_list`) **MUST** СЃРѕР�
 | `packages/ark-core/rust/src/relay_transport.rs` | Outbound relay WebSocket РєР»РёРµРЅС‚ (backoff, offline outbox) |
 | `packages/ark-core/rust/src/mesh.rs` | MeshCoordinator: LAN + relay, РґРµРґСѓРїР»РёРєР°С†РёСЏ РёР·РјРµРЅРµРЅРёР№ |
 | `packages/ark-core/rust/src/ffi.rs` | UniFFI facade (ArkCore, FfiSyncConfig, ArkEventListener) |
-| `packages/arksync-node/src/ark-client.ts` | `@arksync/node` ArkClient вЂ” TypeScript РѕР±С‘СЂС‚РєР° РЅР°Рґ sidecar IPC |
-| `ts/electron/main.ts` | Electron main: ArkClient РёР· @arksync/node, stale-sync reset, macOS application menu |
+| `packages/kepler-ark/src/ark-client.ts` | `@kepler/ark` ArkClient вЂ” TypeScript РѕР±С‘СЂС‚РєР° РЅР°Рґ sidecar IPC |
+| `ts/electron/main.ts` | Electron main: ArkClient РёР· @kepler/ark, stale-sync reset, macOS application menu |
 | `ts/electron/sidecar.ts` | SidecarClient: С‚РѕР»СЊРєРѕ DB ops |
 | `ts/src/services/sync/lan-protocol.ts` | РћР±С‰РёРµ С‚РёРїС‹, HLC, diff, batch splitting (standalone) |
 | `ts/src/store/todos.ts` | CRUD + `broadcastToLanSync()` РЅР° РєР°Р¶РґРѕР№ РјСѓС‚Р°С†РёРё |
@@ -291,12 +306,12 @@ endDate         Date?
 
 ```
 ts/
-в”њв”Ђв”Ђ sidecar/               вЂ” Rust sidecar (delphi-db)
+в”њв”Ђв”Ђ sidecar/               вЂ” Rust sidecar (removed legacy Delphi DB sidecar)
 в”‚   в”њв”Ђв”Ђ Cargo.toml         вЂ” rusqlite (bundled), serde_json
 в”‚   в””в”Ђв”Ђ src/main.rs        вЂ” stdin/stdout JSON RPC + SQLite (WAL)
 в”њв”Ђв”Ђ electron/              вЂ” Electron main process
 │   ├── main.ts            — точка входа, IPC-хендлеры (db:*, fs:*, lan-sync:*) и native window chrome bootstrap для macOS/Windows
-в”‚   в””в”Ђв”Ђ sidecar.ts         вЂ” SidecarClient: spawn delphi-db, JSON queue, dbLoadAll/upsertTodo/вЂ¦
+в”‚   в””в”Ђв”Ђ sidecar.ts         вЂ” SidecarClient: spawn removed legacy Delphi DB sidecar, JSON queue, dbLoadAll/upsertTodo/вЂ¦
 в”њв”Ђв”Ђ src/
 в”‚   в”њв”Ђв”Ђ App.vue            вЂ” РєРѕСЂРЅРµРІРѕР№ layout, connection bootstrap, P2P sync bridge
 в”‚   в”њв”Ђв”Ђ main.ts            вЂ” createApp, router, Pinia
@@ -321,7 +336,7 @@ ts/
 
 ### Rust Sidecar (Р»РѕРєР°Р»СЊРЅР°СЏ Р‘Р”)
 
-`sidecar/` вЂ” Р±РёРЅР°СЂРЅРёРє `delphi-db` РЅР° Rust (РїР°С‚С‚РµСЂРЅ РёР· Eden):
+`sidecar/` вЂ” Р±РёРЅР°СЂРЅРёРє `removed legacy Delphi DB sidecar` РЅР° Rust (РїР°С‚С‚РµСЂРЅ РёР· Eden):
 - **РџСЂРѕС‚РѕРєРѕР»**: stdin/stdout, РѕРґРЅР° СЃС‚СЂРѕРєР° = РѕРґРёРЅ JSON-Р·Р°РїСЂРѕСЃ/РѕС‚РІРµС‚
 - **Р‘Р”**: `<userData>/delphi.db` (SQLite WAL, rusqlite bundled)
 - **РўР°Р±Р»РёС†С‹**: `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`
@@ -370,9 +385,9 @@ Titlebar navigation for routed desktop pages should use shared `TitlebarHistoryC
 
 ### P2P Sync (Electron main process)
 
-Electron РёСЃРїРѕР»СЊР·СѓРµС‚ `@arksync/node` в†’ `ArkClient` в†’ IPC Рє Rust sidecar `ark-core-rpc`. TS-СѓСЂРѕРІРµРЅСЊ РЅРµ СЃРѕРґРµСЂР¶РёС‚ WebSocket-РєРѕРґР° вЂ” РІРµСЃСЊ P2P РІ Rust:
+Electron РёСЃРїРѕР»СЊР·СѓРµС‚ `@kepler/ark` в†’ `ArkClient` в†’ IPC Рє Rust sidecar `ark-core-rpc`. TS-СѓСЂРѕРІРµРЅСЊ РЅРµ СЃРѕРґРµСЂР¶РёС‚ WebSocket-РєРѕРґР° вЂ” РІРµСЃСЊ P2P РІ Rust:
 
-- **`packages/arksync-node/src/ark-client.ts`** вЂ” `ArkClient`: `start()`, `stop()`, `broadcastChange()`, `onPeerConnected`, `onEntityChanged`
+- **`packages/kepler-ark/src/ark-client.ts`** вЂ” `ArkClient`: `start()`, `stop()`, `broadcastChange()`, `onPeerConnected`, `onEntityChanged`
 - **Sidecar IPC** С‡РµСЂРµР· `electron/main.ts` в†’ `lan-sync:start`, `lan-sync:change`, `lan-sync:broadcast`
 - **Version vector**: РїРµСЂСЃРёСЃС‚РёСЂСѓРµС‚СЃСЏ РІ sidecar `sync_kv` (SQLite)
 - **Incoming changes**: IPC `lan-sync:change` в†’ renderer в†’ Pinia store
@@ -402,8 +417,8 @@ Electron РёСЃРїРѕР»СЊР·СѓРµС‚ `@arksync/node` в†’ `Ark
 
 | Р¤Р°Р№Р» | Р РѕР»СЊ |
 |------|------|
-| `packages/arksync-node/src/ark-client.ts` | `@arksync/node` ArkClient вЂ” TypeScript РѕР±С‘СЂС‚РєР° РЅР°Рґ sidecar IPC |
-| `electron/main.ts` | ArkClient РёР· @arksync/node, IPC-С…РµРЅРґР»РµСЂС‹ |
+| `packages/kepler-ark/src/ark-client.ts` | `@kepler/ark` ArkClient вЂ” TypeScript РѕР±С‘СЂС‚РєР° РЅР°Рґ sidecar IPC |
+| `electron/main.ts` | ArkClient РёР· @kepler/ark, IPC-С…РµРЅРґР»РµСЂС‹ |
 | `electron/sidecar.ts` | SidecarClient: С‚РѕР»СЊРєРѕ DB ops |
 | `src/services/sync/ark-types.ts` | РўРёРїС‹ ArkChange, РјР°РїРїРёРЅРі СЃСѓС‰РЅРѕСЃС‚РµР№, settings helpers |
 | `src/services/sync/lan-protocol.ts` | РћР±С‰РёРµ С‚РёРїС‹, HLC, diff, batch splitting |
@@ -423,11 +438,11 @@ Electron РёСЃРїРѕР»СЊР·СѓРµС‚ `@arksync/node` в†’ `Ark
 
 ### Sidecar: clear_all
 
-РћРїРµСЂР°С†РёСЏ `clear_all` РІ Rust sidecar delphi-db вЂ” СѓРґР°Р»СЏРµС‚ РІСЃРµ СЃС‚СЂРѕРєРё РёР· С‚Р°Р±Р»РёС† `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`.
+РћРїРµСЂР°С†РёСЏ `clear_all` РІ Rust sidecar removed legacy Delphi DB sidecar вЂ” СѓРґР°Р»СЏРµС‚ РІСЃРµ СЃС‚СЂРѕРєРё РёР· С‚Р°Р±Р»РёС† `todos`, `projects`, `areas`, `tags`, `headings`, `sync_kv`.
 
-### Relay С‚СЂР°РЅСЃРїРѕСЂС‚ (@arksync/node / Rust)
+### Relay С‚СЂР°РЅСЃРїРѕСЂС‚ (@kepler/ark / Rust)
 
-Relay WebSocket С‚СЂР°РЅСЃРїРѕСЂС‚ СЂРµР°Р»РёР·РѕРІР°РЅ РІ `packages/ark-core/rust/src/relay_transport.rs` Рё РєРѕРѕСЂРґРёРЅРёСЂСѓРµС‚СЃСЏ С‡РµСЂРµР· `mesh.rs`. `@arksync/node` ArkClient РїСЂРёРЅРёРјР°РµС‚ РѕРїС†РёРѕРЅР°Р»СЊРЅС‹Рµ `relayUrl` Рё `relayApiKey` вЂ” Р±РµР· РЅРёС… СЂР°Р±РѕС‚Р°РµС‚ С‚РѕР»СЊРєРѕ LAN.
+Relay WebSocket С‚СЂР°РЅСЃРїРѕСЂС‚ СЂРµР°Р»РёР·РѕРІР°РЅ РІ `packages/ark-core/rust/src/relay_transport.rs` Рё РєРѕРѕСЂРґРёРЅРёСЂСѓРµС‚СЃСЏ С‡РµСЂРµР· `mesh.rs`. `@kepler/ark` ArkClient РїСЂРёРЅРёРјР°РµС‚ РѕРїС†РёРѕРЅР°Р»СЊРЅС‹Рµ `relayUrl` Рё `relayApiKey` вЂ” Р±РµР· РЅРёС… СЂР°Р±РѕС‚Р°РµС‚ С‚РѕР»СЊРєРѕ LAN.
 
 ## Р“РѕР»РѕСЃРѕРІРѕР№ РІРІРѕРґ (Web)
 

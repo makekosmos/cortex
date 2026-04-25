@@ -1,0 +1,2 @@
+    Checking ark-core v0.1.0 (D:\Personal\Hobby\Coding\kepler\packages\ark-core\rust)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.88s

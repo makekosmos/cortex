@@ -13,24 +13,28 @@ import { createTempDir, ensureDir, isDirectory, isFile, mapLimit, pathExists, re
 
 const WIN_PATH = path.win32;
 
-function validateBackupRelPath(rel: string): void {
-  const parts = rel.split("/").filter(Boolean);
-  if (parts.length === 0) {
+function normalizeBackupRelPath(rel: string): string {
+  const normalized = rel.replaceAll("\\", "/");
+  if (!normalized || normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized)) {
     throw new Error(`Invalid backup path in manifest: ${rel}`);
   }
 
+  const parts = normalized.split("/");
   for (const part of parts) {
-    if (part === "." || part === "..") {
-      throw new Error(`Invalid backup path in manifest: ${rel}`);
-    }
-    if (WIN_PATH.isAbsolute(part) || part.includes(":")) {
+    if (!part || part === "." || part === ".." || part.includes(":")) {
       throw new Error(`Invalid backup path in manifest: ${rel}`);
     }
   }
+
+  return normalized;
+}
+
+function validateBackupRelPath(rel: string): void {
+  normalizeBackupRelPath(rel);
 }
 
 function pathFromBackupRel(rel: string): string {
-  const parts = rel.split("/").filter(Boolean);
+  const parts = normalizeBackupRelPath(rel).split("/");
   return path.join(...parts);
 }
 
@@ -45,6 +49,28 @@ function validateRestoreTargetPath(original: string): string {
     throw new Error(`Invalid restore target path in manifest: ${original}`);
   }
   return target;
+}
+
+function normalizeRestoreRoot(root: string): string {
+  return WIN_PATH.normalize(root).replace(/[\\/]+$/, "").toLowerCase();
+}
+
+function validateAllowedRestoreRoots(roots: readonly string[]): string[] {
+  const normalized = roots.map(normalizeRestoreRoot).filter(Boolean);
+  if (normalized.length === 0) {
+    throw new Error("Restore target roots are required");
+  }
+  return normalized;
+}
+
+function assertWithinRestoreRoots(target: string, allowedRoots: readonly string[]) {
+  const normalizedTarget = normalizeRestoreRoot(target);
+  const isAllowed = allowedRoots.some(
+    (root) => normalizedTarget === root || normalizedTarget.startsWith(`${root}\\`),
+  );
+  if (!isAllowed) {
+    throw new Error(`Restore target is outside allowed roots: ${target}`);
+  }
 }
 
 function splitDriveForRestore(
@@ -170,12 +196,15 @@ async function restoreFromEntries(
 async function restoreManifestDirectory(
   backupRoot: string,
   manifest: BackupArchiveManifest,
+  allowedRestoreRoots: readonly string[],
   onProgress?: ProgressListener | null,
 ): Promise<void> {
+  const normalizedAllowedRoots = validateAllowedRestoreRoots(allowedRestoreRoots);
   const entries = manifest.files.map((entry) => {
     validateBackupRelPath(entry.backupPath);
     const source = path.join(backupRoot, pathFromBackupRel(entry.backupPath));
     const target = validateRestoreTargetPath(entry.originalPath);
+    assertWithinRestoreRoots(target, normalizedAllowedRoots);
     return { source, target };
   });
 
@@ -191,8 +220,10 @@ async function restoreManifestDirectory(
 async function restoreLegacyMapping(
   backupRoot: string,
   mappingPath: string,
+  allowedRestoreRoots: readonly string[],
   onProgress?: ProgressListener | null,
 ): Promise<void> {
+  const normalizedAllowedRoots = validateAllowedRestoreRoots(allowedRestoreRoots);
   const mappingText = await readFile(mappingPath, "utf8");
   const mapping = parseLegacyMapping(mappingText);
 
@@ -202,6 +233,7 @@ async function restoreLegacyMapping(
     validateBackupRelPath(sourceRel);
     const source = path.join(backupRoot, pathFromBackupRel(sourceRel));
     const target = validateRestoreTargetPath(originalPath.replaceAll("/", "\\"));
+    assertWithinRestoreRoots(target, normalizedAllowedRoots);
     return { source, target };
   });
 
@@ -216,11 +248,15 @@ async function restoreLegacyMapping(
 
 export async function restoreBackupDirectory(
   backupRoot: string,
+  allowedRestoreRoots: readonly string[],
   onProgress?: ProgressListener | null,
 ): Promise<void> {
   if (process.env.ARRANCADOR_BACKUP_BACKEND !== "ts") {
     try {
-      await restoreBackupDirectoryWithSidecar(backupRoot, { onProgress });
+      await restoreBackupDirectoryWithSidecar(backupRoot, {
+        allowedRestoreRoots,
+        onProgress,
+      });
       return;
     } catch (error) {
       if (!isArrancadorSidecarUnavailableError(error)) {
@@ -234,13 +270,13 @@ export async function restoreBackupDirectory(
 
   const manifest = await readBackupManifestFromDirectory(backupRoot);
   if (manifest) {
-    await restoreManifestDirectory(backupRoot, manifest, onProgress);
+    await restoreManifestDirectory(backupRoot, manifest, allowedRestoreRoots, onProgress);
     return;
   }
 
   const mappingPath = path.join(backupRoot, "mapping.yaml");
   if (await isFile(mappingPath)) {
-    await restoreLegacyMapping(backupRoot, mappingPath, onProgress);
+    await restoreLegacyMapping(backupRoot, mappingPath, allowedRestoreRoots, onProgress);
     return;
   }
 
@@ -249,10 +285,11 @@ export async function restoreBackupDirectory(
 
 export async function restoreBackupArtifact(
   backupPath: string,
+  allowedRestoreRoots: readonly string[],
   onProgress?: ProgressListener | null,
 ): Promise<void> {
   if (await isDirectory(backupPath)) {
-    await restoreBackupDirectory(backupPath, onProgress);
+    await restoreBackupDirectory(backupPath, allowedRestoreRoots, onProgress);
     return;
   }
 
@@ -267,7 +304,7 @@ export async function restoreBackupArtifact(
   const tempDir = await createTempDir("arrancador-restore-");
   try {
     await expandBackupArchive(backupPath, tempDir);
-    await restoreBackupDirectory(tempDir, onProgress);
+    await restoreBackupDirectory(tempDir, allowedRestoreRoots, onProgress);
   } finally {
     await removeBackupArtifact(tempDir);
   }

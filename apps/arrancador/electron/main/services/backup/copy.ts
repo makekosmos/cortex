@@ -9,8 +9,40 @@ import { buildBackupManifest, writeBackupManifestToDirectory, writeBackupReadmeT
 import type { BackupArchiveManifest, BackupFileEntry, ProgressListener, SaveDiscovery } from "./types";
 import { ensureDir, mapLimit } from "./utils";
 
+function assertSafeBackupSegment(kind: string, value: string) {
+  if (
+    !value ||
+    value === "." ||
+    value === ".." ||
+    value.includes(":") ||
+    value.includes("/") ||
+    value.includes("\\") ||
+    path.isAbsolute(value)
+  ) {
+    throw new Error(`Invalid backup ${kind}: ${value}`);
+  }
+}
+
+function normalizeSafeRelativePath(relativePath: string): string {
+  const normalized = relativePath.replaceAll("\\", "/");
+  if (normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized)) {
+    throw new Error(`Invalid backup relative path: ${relativePath}`);
+  }
+
+  if (!normalized) {
+    return "";
+  }
+
+  for (const segment of normalized.split("/")) {
+    assertSafeBackupSegment("relative path segment", segment);
+  }
+
+  return normalized;
+}
+
 export function buildBackupRelPath(rootLabel: string, relativePath: string): string {
-  const rel = relativePath.replaceAll("\\", "/").replace(/^\/+/, "");
+  assertSafeBackupSegment("root label", rootLabel);
+  const rel = normalizeSafeRelativePath(relativePath);
   if (!rel) {
     return `files/${rootLabel}/file`;
   }
@@ -42,6 +74,11 @@ export async function copyDiscoveryToDirectory(
   discovery: SaveDiscovery,
   options: CopyDiscoveryOptions = {},
 ): Promise<CopyDiscoveryResult> {
+  const plannedEntries = discovery.files.map((file) => ({
+    file,
+    backupPath: buildBackupRelPath(file.rootLabel, file.relativePath),
+  }));
+
   if (process.env.ARRANCADOR_BACKUP_BACKEND !== "ts") {
     try {
       const result = await copyBackupDirectoryWithSidecar(destination, discovery, {
@@ -49,8 +86,8 @@ export async function copyDiscoveryToDirectory(
       });
       return {
         manifest: buildBackupManifest(
-          discovery.files.map((file) => ({
-            backupPath: buildBackupRelPath(file.rootLabel, file.relativePath),
+          plannedEntries.map(({ file, backupPath }) => ({
+            backupPath,
             originalPath: file.path,
             size: file.size,
             mtime: null,
@@ -75,8 +112,7 @@ export async function copyDiscoveryToDirectory(
   let completed = 0;
   let totalBytes = 0;
 
-  await mapLimit(discovery.files, concurrency, async (file, index) => {
-    const backupPath = buildBackupRelPath(file.rootLabel, file.relativePath);
+  await mapLimit(plannedEntries, concurrency, async ({ file, backupPath }, index) => {
     const targetPath = path.join(destination, backupPath);
     await ensureDir(path.dirname(targetPath));
     await copyFile(file.path, targetPath);

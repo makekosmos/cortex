@@ -168,6 +168,7 @@ export function triggerStartupArkSync(): void {
 
   startupArkSyncPromise = runtime.services.games
     .syncAllGamesToArk()
+    .then(() => undefined)
     .catch((error) => {
       console.warn("Startup Ark game sync failed:", error);
     })

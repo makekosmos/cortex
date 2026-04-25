@@ -1,0 +1,48 @@
+{
+  "task_id": "2026-04-24-arrancador-full-10",
+  "verdict": "PASS",
+  "scorecard": {
+    "architecture": {
+      "before": 9,
+      "after": 10,
+      "basis": "IPC remains thin, route side effects are delegated, backup workflow exposes ports, and architecture tests guard the boundaries."
+    },
+    "readability": {
+      "before": 8.5,
+      "after": 10,
+      "basis": "backup-workflow.ts reduced from 499 lines to a 16-line facade and implementation split by responsibility; games.ts reduced from 395 to 321 lines."
+    },
+    "atomicity": {
+      "before": 8,
+      "after": 10,
+      "basis": "Backup writes and settings updates remain centralized and covered by workflow tests."
+    },
+    "testing": {
+      "before": 9,
+      "after": 10,
+      "basis": "All required checks passed; unit test count increased from 119 to 121; coverage stayed above thresholds."
+    }
+  },
+  "acceptance_criteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS"
+  },
+  "verification": {
+    "typecheck": "PASS",
+    "unit_tests": "PASS",
+    "coverage": "PASS",
+    "e2e": "PASS",
+    "sidecar": "PASS"
+  },
+  "raw_artifacts": [
+    "final-typecheck.txt",
+    "final-test.txt",
+    "final-coverage.txt",
+    "final-e2e.txt",
+    "final-cargo-sidecar-test.txt"
+  ]
+}

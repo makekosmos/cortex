@@ -61,7 +61,7 @@ export function openSqliteDatabase(
       const statement = prepare(normalized.sql);
       return (normalized.params.length === 0
         ? statement.all()
-        : statement.all(normalized.params as unknown as DbValue[])) as T[];
+        : statement.all(...normalized.params)) as T[];
     },
 
     get<T = Record<string, unknown> | undefined>(
@@ -72,7 +72,7 @@ export function openSqliteDatabase(
       const statement = prepare(normalized.sql);
       return (normalized.params.length === 0
         ? statement.get()
-        : statement.get(normalized.params as unknown as DbValue[])) as T | undefined;
+        : statement.get(...normalized.params)) as T | undefined;
     },
 
     run(sql: string, params: readonly DbValue[] = []): DbRunResult {
@@ -80,7 +80,7 @@ export function openSqliteDatabase(
       const statement = prepare(normalized.sql);
       return (normalized.params.length === 0
         ? statement.run()
-        : statement.run(normalized.params as unknown as DbValue[])) as DbRunResult;
+        : statement.run(...normalized.params)) as DbRunResult;
     },
 
     async transaction<T>(fn: (tx: DbLike) => MaybePromise<T>): Promise<T> {

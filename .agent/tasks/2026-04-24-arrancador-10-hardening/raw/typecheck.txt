@@ -1,0 +1,1 @@
+$ vue-tsc --noEmit && tsc --noEmit -p tsconfig.electron.json && tsc --noEmit -p tsconfig.node.json

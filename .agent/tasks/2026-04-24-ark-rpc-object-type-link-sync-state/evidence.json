@@ -1,0 +1,73 @@
+{
+  "taskId": "2026-04-24-ark-rpc-object-type-link-sync-state",
+  "status": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": "Request variants accept optional device_id fields in packages/ark-core/rust/src/main.rs."
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": "cargo-test-focused.txt verifies object_type and object_link upserts write caller-device HLCs to lan_sync.version_vector."
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": "cargo-test-focused.txt verifies object_type and object_link deletes persist sync_tombstones rows."
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": "verify-arksync-node-device-id.txt confirms SDK object type/link writes include device_id."
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": "cargo-check.txt, cargo-test-full.txt, cargo-fmt-check.txt, arksync-node-typecheck.txt, arksync-node-build.txt, verify-arksync-node-device-id.txt, and git-diff-check.txt all passed."
+    }
+  },
+  "commands": [
+    {
+      "command": "cargo check --manifest-path packages/ark-core/rust/Cargo.toml",
+      "status": "PASS",
+      "artifact": "cargo-check.txt"
+    },
+    {
+      "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml local_object_type_and_link_writes_record_sync_state -- --nocapture",
+      "status": "PASS",
+      "artifact": "cargo-test-focused.txt"
+    },
+    {
+      "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml",
+      "status": "PASS",
+      "artifact": "cargo-test-full.txt"
+    },
+    {
+      "command": "cargo fmt --manifest-path packages/ark-core/rust/Cargo.toml --check",
+      "status": "PASS",
+      "artifact": "cargo-fmt-check.txt"
+    },
+    {
+      "command": "bun run --cwd packages/arksync-node typecheck",
+      "status": "PASS",
+      "artifact": "arksync-node-typecheck.txt"
+    },
+    {
+      "command": "bun run --cwd packages/arksync-node build",
+      "status": "PASS",
+      "artifact": "arksync-node-build.txt"
+    },
+    {
+      "command": "bun .agent/tasks/2026-04-24-ark-rpc-object-type-link-sync-state/verify-arksync-node-device-id.ts",
+      "status": "PASS",
+      "artifact": "verify-arksync-node-device-id.txt"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS",
+      "artifact": "git-diff-check.txt"
+    }
+  ],
+  "problems": [
+    "PowerShell pipeline wrapper adjusted for native command stderr.",
+    "Removed a final blank line at EOF in apps/arrancador/src-vue/pages/GameDetailPage.vue so full git diff --check passes.",
+    "Serialized global-DB RPC tests with a test-only tokio mutex."
+  ]
+}

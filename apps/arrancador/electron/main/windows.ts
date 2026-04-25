@@ -28,6 +28,17 @@ function getWindowsTitlebarSymbolColor() {
   return nativeTheme.shouldUseDarkColors ? "#e5e7eb" : "#111827";
 }
 
+function parseHttpExternalUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function createFallbackIcon(): NativeImage {
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
@@ -113,7 +124,7 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
       preload: options.preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -140,8 +151,9 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   }
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) {
-      void shell.openExternal(url);
+    const externalUrl = parseHttpExternalUrl(url);
+    if (externalUrl) {
+      void shell.openExternal(externalUrl);
     }
     return { action: "deny" };
   });

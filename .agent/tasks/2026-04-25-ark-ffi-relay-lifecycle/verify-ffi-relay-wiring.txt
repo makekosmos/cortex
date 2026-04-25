@@ -1,0 +1,1 @@
+verify-ffi-relay-wiring PASS

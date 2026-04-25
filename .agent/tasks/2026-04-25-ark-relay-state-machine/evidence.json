@@ -1,0 +1,122 @@
+{
+  "taskId": "2026-04-25-ark-relay-state-machine",
+  "verdict": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/main.rs accepts relay_url and relay_api_key in start_sync",
+        "cargo-test.txt includes tests::request_deserialization_accepts_relay_and_auth_config"
+      ]
+    },
+    "AC2": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/relay_transport.rs sends HMAC-authenticated hello when auth_secret is configured",
+        "packages/ark-core/rust/src/protocol.rs adds origin_device_id support and message_origin_device_id"
+      ]
+    },
+    "AC3": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/relay_sync.rs handles hello verification, peer tracking, hello reply, and version vector send",
+        "cargo-test.txt includes relay_sync::tests::relay_rejects_wrong_hmac_secret"
+      ]
+    },
+    "AC4": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/relay_sync.rs applies inbound sync_changes/live_change via StorageBackend::apply_entity and updates lan_sync.version_vector",
+        "cargo-test.txt includes relay_sync::tests::relay_propagates_live_change"
+      ]
+    },
+    "AC5": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/relay_sync.rs send_missing_entities responds to relay version vectors",
+        "cargo-test.txt includes relay_sync::tests::relay_syncs_existing_entity_between_two_runtimes"
+      ]
+    },
+    "AC6": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/main.rs handle_broadcast_change calls relay.broadcast_live_change when relay is running"
+      ]
+    },
+    "AC7": {
+      "status": "PASS",
+      "evidence": [
+        "packages/ark-core/rust/src/main.rs handle_stop_sync calls relay.stop when relay is running"
+      ]
+    },
+    "AC8": {
+      "status": "PASS",
+      "evidence": [
+        "packages/arksync-node/src/ark-client.ts no longer rejects relay options before start_sync",
+        "verify-arksync-node-relay-options.txt shows relay options forwarded"
+      ]
+    },
+    "AC9": {
+      "status": "PASS",
+      "evidence": [
+        "cargo-check.txt",
+        "cargo-fmt-check.txt",
+        "cargo-test.txt",
+        "arksync-node-typecheck.txt",
+        "arksync-node-build.txt",
+        "verify-arksync-node-relay-options.txt",
+        "git-diff-check.txt"
+      ]
+    }
+  },
+  "commands": [
+    {
+      "command": "cargo check --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "artifact": "cargo-check.txt"
+    },
+    {
+      "command": "cargo fmt --manifest-path packages\\ark-core\\rust\\Cargo.toml --check",
+      "status": "PASS",
+      "artifact": "cargo-fmt-check.txt"
+    },
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "artifact": "cargo-test.txt",
+      "notes": "relay_round_trip.rs emits pre-existing unused import/variable warnings"
+    },
+    {
+      "command": "bun run --cwd packages\\arksync-node typecheck",
+      "status": "PASS",
+      "artifact": "arksync-node-typecheck.txt"
+    },
+    {
+      "command": "bun run --cwd packages\\arksync-node build",
+      "status": "PASS",
+      "artifact": "arksync-node-build.txt"
+    },
+    {
+      "command": "bun .agent\\tasks\\2026-04-25-ark-relay-state-machine\\verify-arksync-node-relay-options.ts",
+      "status": "PASS",
+      "artifact": "verify-arksync-node-relay-options.txt"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS",
+      "artifact": "git-diff-check.txt",
+      "notes": "Git reported CRLF normalization warnings only"
+    }
+  ],
+  "problems": [
+    {
+      "file": "problems.md",
+      "status": "RESOLVED",
+      "summary": "Relay tests originally used invalid todo payloads; tests now use complete valid todo data."
+    }
+  ],
+  "remainingNotes": [
+    "Relay lifecycle is now wired for ark-core-rpc desktop sidecar callers.",
+    "UniFFI/mobile relay lifecycle wiring remains a separate follow-up."
+  ]
+}

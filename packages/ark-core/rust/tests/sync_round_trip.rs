@@ -14,7 +14,9 @@ use std::time::Duration;
 use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::sync_client::SyncClient;
 use ark_core::sync_server::{StorageBackend, SyncServer};
-use ark_core::types::{PeerRecord, SyncEntity, TrackedApp, UsageEvent, UsageSession, VersionVector};
+use ark_core::types::{
+    PeerRecord, SyncEntity, TrackedApp, UsageEvent, UsageSession, VersionVector,
+};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
@@ -187,7 +189,7 @@ async fn round_trip_sync_between_two_servers() {
 
     // Seed one todo on side A.
     let seed = todo_entity("entity-a-1", "Seeded on A", "device-a", 1);
-    storage_a.apply_entity(&seed).await;
+    storage_a.apply_entity(&seed).await.unwrap();
 
     // Also stamp it into the local version vector so load_entities emits the
     // right HLC. Using the StorageBackend API via set_kv since the sync
@@ -201,10 +203,8 @@ async fn round_trip_sync_between_two_servers() {
         )
         .await;
 
-    let server_a = Arc::new(SyncServer::new(storage_a.clone()
-        as Arc<dyn StorageBackend>));
-    let server_b = Arc::new(SyncServer::new(storage_b.clone()
-        as Arc<dyn StorageBackend>));
+    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
+    let server_b = Arc::new(SyncServer::new(storage_b.clone() as Arc<dyn StorageBackend>));
 
     // Use two separate loopback ports.
     let port_a = pick_port().await;
@@ -287,6 +287,7 @@ async fn round_trip_sync_between_two_servers() {
         "Beta".to_string(),
         "space-int".to_string(),
         vec![format!("127.0.0.1:{port_b}")],
+        None,
     ));
     client.start();
 
@@ -311,7 +312,7 @@ async fn round_trip_sync_between_two_servers() {
     // Live change: broadcast from server A → should appear on B.
     // ---------------------------------------------------------------------
     let live = todo_entity("entity-a-2", "Live from A", "device-a", 2);
-    storage_a.apply_entity(&live).await;
+    storage_a.apply_entity(&live).await.unwrap();
     server_a.broadcast_live_change(live.clone(), None).await;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -364,6 +365,7 @@ async fn self_connect_is_rejected() {
         "Self".to_string(),
         "space-s".to_string(),
         vec![format!("127.0.0.1:{port}")],
+        None,
     ));
 
     let connect_counter = Arc::new(Mutex::new(0usize));
@@ -398,6 +400,129 @@ async fn self_connect_is_rejected() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
+    let storage_a = make_storage("device-a");
+    let storage_b = make_storage("device-b");
+    storage_a
+        .apply_entity(&todo_entity("hmac-entity-a", "Protected", "device-a", 1))
+        .await
+        .unwrap();
+
+    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
+    server_a
+        .set_auth_secret(Some("mesh-secret".to_string()))
+        .await;
+
+    let port_a = pick_port().await;
+    server_a
+        .start_with_addr(
+            "space-hmac",
+            "device-a",
+            Some("Alpha"),
+            Some(vec![format!("127.0.0.1:{port_a}")]),
+            &format!("127.0.0.1:{port_a}"),
+        )
+        .await
+        .expect("server A start");
+
+    let peer = PeerRecord {
+        device_id: "device-a".to_string(),
+        device_name: "Alpha".to_string(),
+        addresses: vec![format!("127.0.0.1:{port_a}")],
+        last_seen: chrono::Utc::now().to_rfc3339(),
+        last_address: None,
+    };
+    let client = Arc::new(SyncClient::new(
+        storage_b.clone() as Arc<dyn StorageBackend>,
+        peer,
+        "device-b".to_string(),
+        "Beta".to_string(),
+        "space-hmac".to_string(),
+        vec![],
+        Some("mesh-secret".to_string()),
+    ));
+    client.start();
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+    assert!(
+        loaded_b.iter().any(|e| e.id == "hmac-entity-a"),
+        "matching HMAC secret should allow initial sync; got {:?}",
+        loaded_b.iter().map(|e| &e.id).collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        server_a.connected_peer_count().await,
+        1,
+        "server should authenticate exactly one matching-secret peer",
+    );
+
+    client.stop();
+    server_a.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn hmac_authenticated_sync_rejects_wrong_secret() {
+    let storage_a = make_storage("device-a");
+    let storage_b = make_storage("device-b");
+    storage_a
+        .apply_entity(&todo_entity("hmac-denied-a", "Denied", "device-a", 1))
+        .await
+        .unwrap();
+
+    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
+    server_a
+        .set_auth_secret(Some("correct-secret".to_string()))
+        .await;
+
+    let port_a = pick_port().await;
+    server_a
+        .start_with_addr(
+            "space-hmac-denied",
+            "device-a",
+            Some("Alpha"),
+            Some(vec![format!("127.0.0.1:{port_a}")]),
+            &format!("127.0.0.1:{port_a}"),
+        )
+        .await
+        .expect("server A start");
+
+    let peer = PeerRecord {
+        device_id: "device-a".to_string(),
+        device_name: "Alpha".to_string(),
+        addresses: vec![format!("127.0.0.1:{port_a}")],
+        last_seen: chrono::Utc::now().to_rfc3339(),
+        last_address: None,
+    };
+    let client = Arc::new(SyncClient::new(
+        storage_b.clone() as Arc<dyn StorageBackend>,
+        peer,
+        "device-b".to_string(),
+        "Beta".to_string(),
+        "space-hmac-denied".to_string(),
+        vec![],
+        Some("wrong-secret".to_string()),
+    ));
+    client.start();
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    assert_eq!(
+        server_a.connected_peer_count().await,
+        0,
+        "server must not authenticate a peer with the wrong HMAC secret",
+    );
+    let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+    assert!(
+        !loaded_b.iter().any(|e| e.id == "hmac-denied-a"),
+        "wrong-secret client must not receive protected sync data",
+    );
+
+    client.stop();
+    server_a.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn usage_entities_sync_between_two_servers() {
     let storage_a = make_storage("device-a");
     let storage_b = make_storage("device-b");
@@ -412,9 +537,9 @@ async fn usage_entities_sync_between_two_servers() {
         3,
     );
 
-    storage_a.apply_entity(&tracked_app).await;
-    storage_a.apply_entity(&session).await;
-    storage_a.apply_entity(&event).await;
+    storage_a.apply_entity(&tracked_app).await.unwrap();
+    storage_a.apply_entity(&session).await.unwrap();
+    storage_a.apply_entity(&event).await.unwrap();
 
     let mut vector_a: VersionVector = HashMap::new();
     vector_a.insert(tracked_app.id.clone(), tracked_app.hlc.clone());
@@ -469,6 +594,7 @@ async fn usage_entities_sync_between_two_servers() {
         "Beta".to_string(),
         "space-usage".to_string(),
         vec![format!("127.0.0.1:{port_b}")],
+        None,
     ));
     client.start();
 
@@ -513,8 +639,10 @@ async fn usage_entities_sync_between_two_servers() {
         "device-a",
         4,
     );
-    storage_a.apply_entity(&live_event).await;
-    server_a.broadcast_live_change(live_event.clone(), None).await;
+    storage_a.apply_entity(&live_event).await.unwrap();
+    server_a
+        .broadcast_live_change(live_event.clone(), None)
+        .await;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 

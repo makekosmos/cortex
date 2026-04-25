@@ -7,6 +7,10 @@ import type { ProcessEntry } from "../contracts";
 
 const execFileAsync = promisify(execFile);
 
+function outputToUtf8(value: string | Buffer) {
+  return typeof value === "string" ? value : value.toString("utf8");
+}
+
 function toNumber(value: unknown) {
   if (typeof value === "number") {
     return value;
@@ -55,7 +59,7 @@ async function runPowerShellJson<T>(script: string): Promise<T[]> {
     },
   );
 
-  const text = stdout.toString("utf8").trim();
+  const text = outputToUtf8(stdout).trim();
   if (!text) {
     return [];
   }
@@ -143,8 +147,7 @@ async function listPosixProcesses(): Promise<ProcessEntry[]> {
       },
     );
 
-    const lines = stdout
-      .toString("utf8")
+    const lines = outputToUtf8(stdout)
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);

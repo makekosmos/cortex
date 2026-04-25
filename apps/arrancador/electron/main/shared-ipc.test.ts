@@ -57,6 +57,26 @@ describe("shared IPC registry bridge", () => {
     ).toThrow("malformed binding");
   });
 
+  it("allows only http(s) URLs for external shell opens", async () => {
+    const { createArrancadorBridge } = await import("../shared/ipc");
+    const invoke = vi.fn();
+    const bridge = createArrancadorBridge(invoke);
+
+    bridge.commands.shell_open_external({ url: "https://example.com/store" });
+    bridge.commands.shell_open_external({ url: "http://example.com/store" });
+    expect(() =>
+      bridge.commands.shell_open_external({ url: "file:///C:/Windows/System32/calc.exe" }),
+    ).toThrow("expected http(s) URL");
+    expect(() =>
+      bridge.commands.shell_open_external({ url: "javascript:alert(1)" }),
+    ).toThrow("expected http(s) URL");
+    expect(() =>
+      bridge.commands.shell_open_external({ url: "steam://run/123" }),
+    ).toThrow("expected http(s) URL");
+
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
   it("blocks unknown renderer invoke channels", async () => {
     const { electronRendererInvoke } = await import("../shared/ipc");
 

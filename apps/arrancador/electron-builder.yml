@@ -9,6 +9,8 @@ asar: true
 extraResources:
   - from: sidecar/target/release/arrancador-sidecar.exe
     to: arrancador-sidecar/arrancador-sidecar.exe
+  - from: ../../packages/ark-core/rust/target/release/ark-core-rpc.exe
+    to: ark-core/ark-core-rpc.exe
 npmRebuild: false
 win:
   executableName: arrancador

@@ -35,10 +35,7 @@ pub fn encode_ipv4(ipv4: &str) -> Option<String> {
     if parts.len() != 4 {
         return None;
     }
-    let octets: Vec<u32> = parts
-        .iter()
-        .filter_map(|p| p.parse::<u32>().ok())
-        .collect();
+    let octets: Vec<u32> = parts.iter().filter_map(|p| p.parse::<u32>().ok()).collect();
     if octets.len() != 4 || octets.iter().any(|&n| n > 255) {
         return None;
     }
@@ -76,7 +73,10 @@ pub fn decode_ipv4(encoded: &str) -> Option<String> {
         (value >> 8) & 0xff,
         value & 0xff,
     ];
-    Some(format!("{}.{}.{}.{}", parts[0], parts[1], parts[2], parts[3]))
+    Some(format!(
+        "{}.{}.{}.{}",
+        parts[0], parts[1], parts[2], parts[3]
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +170,12 @@ pub fn parse_qr_payload(payload: &str) -> Option<(String, Vec<String>)> {
         let raw_code = code_raw?;
         let code = parse_space_code(&raw_code)?;
         let addresses: Vec<String> = addrs_raw
-            .map(|a| a.split(',').filter(|s| !s.is_empty()).map(String::from).collect())
+            .map(|a| {
+                a.split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .collect()
+            })
             .unwrap_or_default();
 
         return Some((code, addresses));
@@ -293,10 +298,7 @@ mod tests {
 
     #[test]
     fn test_parse_space_code_7() {
-        assert_eq!(
-            parse_space_code("ABCD-EFG"),
-            Some("ABCDEFG".to_string())
-        );
+        assert_eq!(parse_space_code("ABCD-EFG"), Some("ABCDEFG".to_string()));
     }
 
     #[test]

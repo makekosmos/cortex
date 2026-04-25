@@ -67,12 +67,7 @@ impl MeshCoordinator {
 
     /// Returns `true` if this change has NOT been seen before and should be
     /// processed; returns `false` if it is a duplicate.
-    pub fn should_process(
-        &self,
-        device_id: &str,
-        entity_id: &str,
-        hlc: &str,
-    ) -> bool {
+    pub fn should_process(&self, device_id: &str, entity_id: &str, hlc: &str) -> bool {
         let key = DedupKey {
             device_id: device_id.to_string(),
             entity_id: entity_id.to_string(),
@@ -104,12 +99,7 @@ impl MeshCoordinator {
         match msg {
             LanSyncMessage::LiveChange { entity, .. } => {
                 // Extract device_id from HLC: last segment after the second colon.
-                let device_id = entity
-                    .hlc
-                    .splitn(3, ':')
-                    .nth(2)
-                    .unwrap_or("")
-                    .to_string();
+                let device_id = entity.hlc.splitn(3, ':').nth(2).unwrap_or("").to_string();
                 Some((device_id, entity.id.clone(), entity.hlc.clone()))
             }
             LanSyncMessage::SyncChanges { entities, .. } => {
