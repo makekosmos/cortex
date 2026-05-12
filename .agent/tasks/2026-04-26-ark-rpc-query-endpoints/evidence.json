@@ -1,0 +1,51 @@
+{
+  "taskId": "2026-04-26-ark-rpc-query-endpoints",
+  "status": "PASS",
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS"
+  },
+  "checks": [
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml object_query_helpers_filter_by_type_and_ids",
+      "status": "PASS"
+    },
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml usage_process_queries_return_recent_and_search_candidates",
+      "status": "PASS"
+    },
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "summary": "115 tests passed"
+    },
+    {
+      "command": "bun run --cwd packages/kepler-ark typecheck",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run --cwd apps/arrancador test",
+      "status": "PASS",
+      "summary": "47 files, 161 tests passed"
+    },
+    {
+      "command": "bun run --cwd apps/arrancador typecheck",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run ark:smoke",
+      "status": "PASS",
+      "summary": "ARK smoke matrix passed using isolated smoke/test databases"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  ],
+  "testDatabasePolicy": "All verification used isolated test/smoke databases and did not target the main user database.",
+  "problems": []
+}

@@ -1,6 +1,6 @@
 {
   "task_id": "2026-04-25-ark-migration-backup-telemetry",
-  "verification": "PARTIAL_PASS",
+  "verification": "PASS",
   "acceptance_criteria": {
     "AC1": "PASS",
     "AC2": "PASS",
@@ -9,7 +9,7 @@
     "AC5": "PASS",
     "AC6": "PASS",
     "AC7": "PASS",
-    "AC8": "PARTIAL"
+    "AC8": "PASS"
   },
   "checks": [
     {
@@ -21,6 +21,11 @@
       "command": "bun run --cwd apps/delphi/ts build",
       "status": "PASS",
       "summary": "Renderer/main/preload builds, electron-builder packaging, and ark-core-rpc release build passed"
+    },
+    {
+      "command": "bun run --cwd apps/delphi/ts e2e",
+      "status": "PASS",
+      "summary": "Delphi shared ARK task object Playwright e2e passed on isolated test appData/userData paths"
     },
     {
       "command": "bun run --cwd apps/eden/ts test:ark-migration",
@@ -41,17 +46,16 @@
       "command": "rg -n \"Test database isolation|isolated test databases|main/user ARK database\" AGENTS.md",
       "status": "PASS",
       "summary": "Root AGENTS.md test database isolation invariant found"
-    },
-    {
-      "command": "bun run --cwd apps/delphi/ts e2e",
-      "status": "BLOCKED",
-      "summary": "Playwright Electron launch reaches before-whenReady then exits with native STATUS_BREAKPOINT before app.ready"
     }
   ],
-  "blocked": [
+  "resolved_problems": [
     {
       "area": "Delphi Playwright Electron e2e",
-      "details": "Electron exits with status 2147483651 before app.ready on isolated test profile; startup trace confirms main module and IPC registration completed."
+      "details": "Removed USERPROFILE override from the Playwright environment and added KEPLER_TEST_APPDATA/KEPLER_TEST_USER_DATA overrides so Electron tests do not touch real appData/userData paths."
+    },
+    {
+      "area": "Delphi Playwright SQLite assertion",
+      "details": "Removed direct better-sqlite3 reads from the Playwright test and verified task persistence through Delphi/Eden ARK IPC instead."
     }
   ]
 }

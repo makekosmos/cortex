@@ -1,10 +1,9 @@
-import {
-  app,
-  BrowserWindow,
-  ipcMain,
-  dialog,
-  Menu,
-  type MenuItemConstructorOptions,
+import electron from "electron";
+import type {
+  BrowserWindow as BrowserWindowType,
+  Event as ElectronEvent,
+  Input,
+  MenuItemConstructorOptions,
 } from "electron";
 
 import { execFile } from "node:child_process";
@@ -68,8 +67,26 @@ import {
 import { convertHevyWorkoutsToEntries } from "./hevySync";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { app, BrowserWindow, ipcMain, dialog, Menu } = electron;
 
 process.env.APP_ROOT = path.join(__dirname, "..");
+
+const testAppDataPath = process.env.KEPLER_TEST_APPDATA?.trim()
+  ? path.resolve(process.env.KEPLER_TEST_APPDATA)
+  : null;
+const testUserDataPath = process.env.KEPLER_TEST_USER_DATA?.trim()
+  ? path.resolve(process.env.KEPLER_TEST_USER_DATA)
+  : null;
+
+if (testAppDataPath) {
+  fs.mkdirSync(testAppDataPath, { recursive: true });
+  app.setPath("appData", testAppDataPath);
+}
+
+if (testUserDataPath) {
+  fs.mkdirSync(testUserDataPath, { recursive: true });
+  app.setPath("userData", testUserDataPath);
+}
 
 export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 
@@ -83,7 +100,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
 
-let win: BrowserWindow | null;
+let win: BrowserWindowType | null;
 const WINDOWS_TITLEBAR_SYMBOL_COLOR = "#e5e7eb";
 
 function setupApplicationMenu() {
@@ -153,7 +170,7 @@ function shouldShowWindowInBackground() {
   );
 }
 
-function applyWindowsTitlebarOverlay(window: BrowserWindow) {
+function applyWindowsTitlebarOverlay(window: BrowserWindowType) {
   if (process.platform !== "win32" || window.isDestroyed()) {
     return;
   }
@@ -246,7 +263,7 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 
-  win.webContents.on("before-input-event", (event, input) => {
+  win.webContents.on("before-input-event", (event: ElectronEvent, input: Input) => {
     const isToggleDevTools =
       input.key === "F12" ||
       ((input.control || input.meta) &&

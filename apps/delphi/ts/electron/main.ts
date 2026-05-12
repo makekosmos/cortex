@@ -8,7 +8,7 @@ import {
   buildSharedSelectedSpaceFromCode,
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
-} from '../../../../packages/shared-space/selectedSpace';
+} from '@kepler/ark';
 
 /** Minimal sync entity type (matches Rust SyncEntity wire format). */
 interface SyncEntity {
@@ -73,11 +73,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
+const testAppDataPath = process.env.KEPLER_TEST_APPDATA
+  ? path.resolve(process.env.KEPLER_TEST_APPDATA)
+  : null;
+const testUserDataPath = process.env.KEPLER_TEST_USER_DATA
+  ? path.resolve(process.env.KEPLER_TEST_USER_DATA)
+  : null;
 
-if (process.env.PLAYWRIGHT === '1') {
-  app.disableHardwareAcceleration();
-  app.commandLine.appendSwitch('disable-gpu');
-  app.commandLine.appendSwitch('disable-software-rasterizer');
+if (testUserDataPath) {
+  fs.mkdirSync(testUserDataPath, { recursive: true });
+  app.setPath('userData', testUserDataPath);
+}
+
+function getAppDataPath(): string {
+  return testAppDataPath ?? app.getPath('appData');
+}
+
+function getUserDataPath(): string {
+  return testUserDataPath ?? app.getPath('userData');
 }
 
 function writeStartupTrace(message: string, error?: unknown): void {
@@ -159,13 +172,13 @@ function getHostDeviceName(): string {
 let currentDeviceName = getHostDeviceName();
 
 function getDataDir(): string {
-  const dir = path.join(app.getPath('appData'), 'Kepler');
+  const dir = path.join(getAppDataPath(), 'Kepler');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
 function getSharedSelection() {
-  return readSharedSelectedSpace(app.getPath('appData'));
+  return readSharedSelectedSpace(getAppDataPath());
 }
 
 function shouldLaunchInBackground(): boolean {
@@ -178,7 +191,7 @@ const MIN_ZOOM_LEVEL = -3;
 const MAX_ZOOM_LEVEL = 3;
 
 function getWindowStateFile(): string {
-  const userDataPath = app.getPath('userData');
+  const userDataPath = getUserDataPath();
   fs.mkdirSync(userDataPath, { recursive: true });
   return path.join(userDataPath, 'window-state.json');
 }
@@ -537,7 +550,7 @@ const taskObjectMigrationDeps: DelphiTaskObjectMigrationDeps = {
 
 function getTaskObjectMigrationOptions() {
   return {
-    backupDir: path.join(app.getPath('userData'), '.migration-backups'),
+    backupDir: path.join(getUserDataPath(), '.migration-backups'),
   };
 }
 
@@ -561,13 +574,13 @@ ipcMain.handle('space:setActive', (_e, code: string | null) => {
   writeSpacesFile(data);
 
   if (!code) {
-    writeSharedSelectedSpace(app.getPath('appData'), null);
+    writeSharedSelectedSpace(getAppDataPath(), null);
     return;
   }
 
   const existingShared = getSharedSelection();
   writeSharedSelectedSpace(
-    app.getPath('appData'),
+    getAppDataPath(),
     buildSharedSelectedSpaceFromCode(code, 'delphi-electron', {
       vaultPath: existingShared?.vaultPath ?? null,
     }),
@@ -628,8 +641,8 @@ writeStartupTrace('space-ipc-registered');
 function migrateLegacySpaceFiles(): void {
   const newSpacesDir = path.join(getDataDir(), 'spaces');
   const legacyDirs = [
-    path.join(app.getPath('userData'), 'spaces'),           // old userData/spaces
-    path.join(app.getPath('appData'), 'delphi', 'data', 'spaces'), // old delphi/data/spaces
+    path.join(getUserDataPath(), 'spaces'),           // old userData/spaces
+    path.join(getAppDataPath(), 'delphi', 'data', 'spaces'), // old delphi/data/spaces
   ];
   for (const oldDir of legacyDirs) {
     if (fs.existsSync(oldDir) && oldDir !== newSpacesDir) {
@@ -651,7 +664,7 @@ function migrateLegacySpaceFiles(): void {
     }
   }
   // Also migrate mesh_credentials.json and spaces.json from old delphi/data
-  const oldDataDir = path.join(app.getPath('appData'), 'delphi', 'data');
+  const oldDataDir = path.join(getAppDataPath(), 'delphi', 'data');
   if (fs.existsSync(oldDataDir) && oldDataDir !== getDataDir()) {
     for (const file of ['mesh_credentials.json', 'spaces.json']) {
       const src = path.join(oldDataDir, file);
@@ -991,13 +1004,7 @@ writeStartupTrace('sync-ipc-registered');
 
 // --- App lifecycle ---
 
-writeStartupTrace('before-whenReady');
-
-app.on('ready', () => {
-  writeStartupTrace('app-ready-event');
-});
-
-app.whenReady().then(async () => {
+async function startApp(): Promise<void> {
   try {
     writeStartupTrace('whenReady');
     migrateLegacySpaceFiles();
@@ -1024,7 +1031,16 @@ app.whenReady().then(async () => {
     console.error('[Main] Fatal startup error:', err);
     app.quit();
   }
+}
+
+writeStartupTrace('before-ready-listener');
+
+app.on('ready', () => {
+  writeStartupTrace('app-ready-event');
+  void startApp();
 });
+
+writeStartupTrace('ready-listener-registered');
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

@@ -269,6 +269,62 @@ pub struct UsageAnalyticsSnapshot {
     pub recent_sessions: Vec<RecentSessionEntry>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageProcessCandidate {
+    pub tracked_app_id: String,
+    pub display_name: String,
+    pub exe_path: Option<String>,
+    pub process_name: Option<String>,
+    pub last_seen_at: Option<String>,
+    pub session_count: i64,
+    pub binding_match_type: String,
+    pub binding_match_value: String,
+    pub binding_normalized_value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageGamePlaytimeBinding {
+    pub game_id: String,
+    pub game_name: String,
+    pub match_type: String,
+    pub match_value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageGamePlaytimeAggregate {
+    pub game_id: String,
+    pub game_name: String,
+    pub total_seconds: i64,
+    pub session_count: i64,
+    pub last_played: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageGameDailyTotal {
+    pub date: String,
+    pub seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageGameRangeTotal {
+    pub game_id: String,
+    pub game_name: String,
+    pub seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageGamePlaytimeSummary {
+    pub aggregates: Vec<UsageGamePlaytimeAggregate>,
+    pub daily_totals: Vec<UsageGameDailyTotal>,
+    pub per_game_totals: Vec<UsageGameRangeTotal>,
+}
+
 // ---------------------------------------------------------------------------
 // Sync entity (snake_case JSON for protocol compatibility)
 // ---------------------------------------------------------------------------

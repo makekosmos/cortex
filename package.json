@@ -2,12 +2,22 @@
   "name": "kepler",
   "private": true,
   "packageManager": "bun@1.3.5",
+  "scripts": {
+    "ark:guard:writes": "node scripts/check-ark-write-boundaries.mjs",
+    "ark:smoke": "node scripts/ark-smoke.mjs",
+    "docs:dev": "bun run --cwd docs-site dev",
+    "docs:build": "bun run docs:sync && bun run --cwd docs-site build",
+    "docs:preview": "bun run --cwd docs-site preview",
+    "docs:sync": "node scripts/sync-agents-docs.mjs",
+    "docs:check": "node scripts/check-docs-freshness.mjs"
+  },
   "workspaces": [
     "apps/*",
     "apps/delphi/ts",
     "apps/eden/ts",
     "services/*",
-    "packages/*"
+    "packages/*",
+    "docs-site"
   ],
   "dependencies": {},
   "devDependencies": {

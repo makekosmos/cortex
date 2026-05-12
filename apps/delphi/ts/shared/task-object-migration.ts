@@ -207,7 +207,7 @@ export async function loadAllObjectFirst(
   const objectTodos = await listDelphiTaskObjectsAsTodos(deps);
   return {
     ...legacyData,
-    todos: objectTodos.length > 0 ? objectTodos : legacyData.todos,
+    todos: objectTodos,
   };
 }
 

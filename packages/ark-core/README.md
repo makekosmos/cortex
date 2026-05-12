@@ -29,7 +29,7 @@ Modern callers may include an optional request `id`; responses echo it. Legacy c
 Typical lifecycle:
 
 1. `init` with `dbPath`.
-2. Object/usage CRUD through RPC operations.
+2. Object/usage CRUD and query operations through RPC.
 3. Optional `start_sync` for LAN sync.
 4. `stop_sync` before shutdown.
 
@@ -76,6 +76,14 @@ ARK currently contains:
 - Sync metadata: `sync_kv`, `sync_tombstones`
 
 New app-domain data should prefer the generic object model unless it is high-volume usage/analytics data.
+
+Runtime query endpoints include:
+
+- `list_objects_by_type`
+- `get_objects_by_ids`
+- `list_recent_usage_processes`
+- `search_usage_processes`
+- `get_usage_game_playtime_summary`
 
 ## Sync State
 

@@ -7,6 +7,12 @@ import {
 } from "./ark-usage";
 import type { Game } from "./games/types";
 
+const unavailableArkUsage = {
+  loadAll: async () => {
+    throw new Error("mock ark runtime unavailable");
+  },
+};
+
 function createDb(_label: string): DbLike {
   return {
     all: () => [],
@@ -146,6 +152,61 @@ describe("resolveUsageTrackerDb", () => {
 });
 
 describe("createPlaytimeStatsRepository", () => {
+  it("reads range statistics through the Ark playtime summary endpoint first", async () => {
+    let summaryCalls = 0;
+    let resolveCalls = 0;
+    const repository = createPlaytimeStatsRepository({
+      legacyDb: createLegacyGamesDb([
+        { id: "valorant", name: "VALORANT", normalized_path: "c:\\valorant.exe" },
+      ]),
+      arkDbPath: "selected.db",
+      arkUsage: {
+        loadAll: async () => {
+          throw new Error("loadAll should not be used for playtime stats");
+        },
+        gamePlaytime: {
+          summary: async (options) => {
+            summaryCalls += 1;
+            expect(options.rangeStart).toBe("2026-04-16");
+            expect(options.rangeEnd).toBe("2026-04-17");
+            expect(options.bindings).toEqual([
+              {
+                gameId: "valorant",
+                gameName: "VALORANT",
+                matchType: "exe_path",
+                matchValue: "c:\\valorant.exe",
+              },
+            ]);
+            return {
+              aggregates: [],
+              dailyTotals: [
+                { date: "2026-04-16", seconds: 5400 },
+                { date: "2026-04-17", seconds: 3000 },
+              ],
+              perGameTotals: [
+                { gameId: "valorant", gameName: "VALORANT", seconds: 8400 },
+              ],
+            };
+          },
+        },
+      },
+      resolveUsageDb: async () => {
+        resolveCalls += 1;
+        return { db: null, path: null };
+      },
+    });
+
+    await expect(repository.getRangeStats("2026-04-16", "2026-04-17")).resolves.toEqual({
+      dailyTotals: [
+        { date: "2026-04-16", seconds: 5400 },
+        { date: "2026-04-17", seconds: 3000 },
+      ],
+      perGameTotals: [{ id: "valorant", name: "VALORANT", seconds: 8400 }],
+    });
+    expect(summaryCalls).toBe(1);
+    expect(resolveCalls).toBe(0);
+  });
+
   it("reads statistics from Ark usage rows only", async () => {
     const legacyDb = createLegacyGamesDb([
       { id: "valorant", name: "VALORANT", normalized_path: "c:\\valorant.exe" },
@@ -179,6 +240,7 @@ describe("createPlaytimeStatsRepository", () => {
       legacyDb,
       arkDbPath: "selected.db",
       fallbackArkDbPath: "root.db",
+      arkUsage: unavailableArkUsage,
       resolveUsageDb: async () => {
         resolveCalls += 1;
         return {
@@ -213,6 +275,7 @@ describe("createPlaytimeStatsRepository", () => {
       ]),
       arkDbPath: "selected.db",
       fallbackArkDbPath: "root.db",
+      arkUsage: unavailableArkUsage,
       resolveUsageDb: async () => ({
         db: null,
         path: null,
@@ -225,12 +288,97 @@ describe("createPlaytimeStatsRepository", () => {
 });
 
 describe("createGameUsageReadModel", () => {
+  it("hydrates usage through the Ark playtime summary endpoint first", async () => {
+    let summaryCalls = 0;
+    let resolveCalls = 0;
+    const readModel = createGameUsageReadModel({
+      legacyDb: createLegacyGamesDb([]),
+      arkDbPath: "selected.db",
+      arkUsage: {
+        loadAll: async () => {
+          throw new Error("loadAll should not be used for usage hydration");
+        },
+        gamePlaytime: {
+          summary: async (options) => {
+            summaryCalls += 1;
+            expect(options.rangeStart).toBeUndefined();
+            expect(options.rangeEnd).toBeUndefined();
+            expect(options.bindings[0]).toMatchObject({
+              gameId: "valorant",
+              gameName: "VALORANT",
+              matchType: "exe_path",
+              matchValue: "C:\\VALORANT.exe",
+            });
+            return {
+              aggregates: [
+                {
+                  gameId: "valorant",
+                  gameName: "VALORANT",
+                  totalSeconds: 8400,
+                  sessionCount: 3,
+                  lastPlayed: "2026-04-17T12:00:00.000Z",
+                },
+              ],
+              dailyTotals: [],
+              perGameTotals: [],
+            };
+          },
+        },
+      },
+      resolveUsageDb: async () => {
+        resolveCalls += 1;
+        return { db: null, path: null };
+      },
+    });
+
+    await expect(readModel.hydrateGame({
+      id: "valorant",
+      ark_object_id: null,
+      name: "VALORANT",
+      exe_path: "C:\\VALORANT.exe",
+      exe_name: "VALORANT.exe",
+      process_bindings: [],
+      play_status: "not_started",
+      rawg_id: null,
+      description: null,
+      released: null,
+      background_image: null,
+      metacritic: null,
+      rating: null,
+      genres: null,
+      platforms: null,
+      developers: null,
+      publishers: null,
+      cover_image: null,
+      icon_image: null,
+      is_favorite: false,
+      play_count: 99,
+      total_playtime: 10000,
+      last_played: "2026-04-16T19:54:26.571Z",
+      date_added: "2026-01-01T00:00:00.000Z",
+      backup_enabled: false,
+      last_backup: null,
+      backup_count: 0,
+      save_path: null,
+      user_rating: null,
+      user_note: null,
+    })).resolves.toMatchObject({
+      id: "valorant",
+      play_count: 3,
+      total_playtime: 8400,
+      last_played: "2026-04-17T12:00:00.000Z",
+    });
+    expect(summaryCalls).toBe(1);
+    expect(resolveCalls).toBe(0);
+  });
+
   it("hydrates play_count, total_playtime, and last_played from Ark only", async () => {
     let closeCalls = 0;
     const readModel = createGameUsageReadModel({
       legacyDb: createLegacyGamesDb([]),
       arkDbPath: "selected.db",
       fallbackArkDbPath: "root.db",
+      arkUsage: unavailableArkUsage,
       resolveUsageDb: async () => ({
         db: createTrackerDb(
           [
@@ -297,6 +445,7 @@ describe("createGameUsageReadModel", () => {
       legacyDb: createLegacyGamesDb([]),
       arkDbPath: "selected.db",
       fallbackArkDbPath: "root.db",
+      arkUsage: unavailableArkUsage,
       resolveUsageDb: async () => ({
         db: createTrackerDb([], []),
         path: "root.db",

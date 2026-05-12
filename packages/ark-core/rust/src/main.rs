@@ -148,7 +148,29 @@ enum Request {
         #[serde(default)]
         recent_sessions_limit: Option<i64>,
     },
+    ListRecentUsageProcesses {
+        #[serde(default)]
+        limit: Option<i64>,
+    },
+    SearchUsageProcesses {
+        query: String,
+        #[serde(default)]
+        limit: Option<i64>,
+    },
+    GetUsageGamePlaytimeSummary {
+        bindings: Vec<UsageGamePlaytimeBinding>,
+        #[serde(default)]
+        range_start: Option<String>,
+        #[serde(default)]
+        range_end: Option<String>,
+    },
     ListObjects,
+    ListObjectsByType {
+        type_id: String,
+    },
+    GetObjectsByIds {
+        ids: Vec<String>,
+    },
     SearchObjects {
         query: String,
     },
@@ -511,8 +533,37 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             )?;
             serde_json::to_value(snapshot).map_err(|e| e.to_string())
         }),
+        Request::ListRecentUsageProcesses { limit } => with_conn(|conn| {
+            let candidates = db::list_recent_usage_processes(conn, limit.unwrap_or(10))?;
+            serde_json::to_value(candidates).map_err(|e| e.to_string())
+        }),
+        Request::SearchUsageProcesses { query, limit } => with_conn(|conn| {
+            let candidates = db::search_usage_processes(conn, &query, limit.unwrap_or(10))?;
+            serde_json::to_value(candidates).map_err(|e| e.to_string())
+        }),
+        Request::GetUsageGamePlaytimeSummary {
+            bindings,
+            range_start,
+            range_end,
+        } => with_conn(|conn| {
+            let summary = db::load_usage_game_playtime_summary(
+                conn,
+                &bindings,
+                range_start.as_deref(),
+                range_end.as_deref(),
+            )?;
+            serde_json::to_value(summary).map_err(|e| e.to_string())
+        }),
         Request::ListObjects => with_conn(|conn| {
             let objects = db::list_objects(conn)?;
+            serde_json::to_value(objects).map_err(|e| e.to_string())
+        }),
+        Request::ListObjectsByType { type_id } => with_conn(|conn| {
+            let objects = db::list_objects_by_type(conn, &type_id)?;
+            serde_json::to_value(objects).map_err(|e| e.to_string())
+        }),
+        Request::GetObjectsByIds { ids } => with_conn(|conn| {
+            let objects = db::get_objects_by_ids(conn, &ids)?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
         Request::SearchObjects { query } => with_conn(|conn| {

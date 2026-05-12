@@ -6,7 +6,7 @@ import {
   getArkDbPathForSelectedSpace,
   getKeplerDataDir,
   readSharedSelectedSpace,
-} from "../../../../packages/shared-space/selectedSpace";
+} from "@kepler/ark";
 import { syncArkRuntimeBinding } from "./ark-runtime";
 import { openGameDatabase, openSqliteDatabase } from "./db";
 import type { DbLike } from "./helpers/shared";

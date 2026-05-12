@@ -93,11 +93,13 @@ function getArkDbPathForSelectedSpace(appDataPath, selection) {
 function createEnvironment() {
   const rootPath = fs.mkdtempSync(path.join(os.tmpdir(), "delphi-ark-task-"));
   const homePath = path.join(rootPath, "home");
+  const userDataPath = path.join(rootPath, "userData");
   const appDataPath = path.join(rootPath, "appdata", "Roaming");
   const localAppDataPath = path.join(rootPath, "appdata", "Local");
   const vaultPath = path.join(rootPath, "vault-main");
 
   fs.mkdirSync(homePath, { recursive: true });
+  fs.mkdirSync(userDataPath, { recursive: true });
   fs.mkdirSync(appDataPath, { recursive: true });
   fs.mkdirSync(localAppDataPath, { recursive: true });
   fs.mkdirSync(vaultPath, { recursive: true });
@@ -108,6 +110,7 @@ function createEnvironment() {
   return {
     rootPath,
     homePath,
+    userDataPath,
     appDataPath,
     localAppDataPath,
     vaultPath,
@@ -136,9 +139,10 @@ async function launchElectronApp(appPath, env, extraEnv = {}) {
     env: {
       ...process.env,
       HOME: env.homePath,
-      USERPROFILE: env.homePath,
       APPDATA: env.appDataPath,
       LOCALAPPDATA: env.localAppDataPath,
+      KEPLER_TEST_APPDATA: env.appDataPath,
+      KEPLER_TEST_USER_DATA: env.userDataPath,
       PLAYWRIGHT: "1",
       ...extraEnv,
     },

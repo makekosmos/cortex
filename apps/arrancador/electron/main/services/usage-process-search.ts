@@ -1,7 +1,9 @@
+import { ArkClient, type ArkUsageApi, type ArkUsageProcessCandidate } from "@kepler/ark";
 import type { UsageProcessCandidate } from "../../../src/types";
 import { queryAll } from "../helpers/db";
 import type { DbLike, DbValue } from "../helpers/shared";
 import { resolveUsageTrackerDb } from "./ark-usage";
+import { getArkCoreRpcBinaryPath } from "./ark-game-objects";
 import { normalizeGameProcessBindingValue } from "./game-process-bindings";
 
 type UsageProcessRow = {
@@ -16,6 +18,9 @@ type UsageProcessRow = {
 interface UsageProcessSearchOptions {
   arkDbPath: string;
   fallbackArkDbPath?: string;
+  arkUsage?: Pick<ArkUsageApi, "processes">;
+  arkCoreRpcPath?: string;
+  requestTimeoutMs?: number;
   resolveUsageDb?: () => Promise<{ db: DbLike | null; path: string | null }>;
 }
 
@@ -58,6 +63,20 @@ function buildCandidate(row: UsageProcessRow): UsageProcessCandidate | null {
   };
 }
 
+function mapArkProcessCandidate(candidate: ArkUsageProcessCandidate): UsageProcessCandidate {
+  return {
+    tracked_app_id: candidate.trackedAppId,
+    display_name: candidate.displayName,
+    exe_path: candidate.exePath,
+    process_name: candidate.processName,
+    last_seen_at: candidate.lastSeenAt,
+    session_count: candidate.sessionCount,
+    binding_match_type: candidate.bindingMatchType,
+    binding_match_value: candidate.bindingMatchValue,
+    binding_normalized_value: candidate.bindingNormalizedValue,
+  };
+}
+
 async function runUsageProcessQuery(
   arkDb: DbLike,
   whereSql: string,
@@ -88,8 +107,33 @@ async function runUsageProcessQuery(
 export function createUsageProcessSearchService({
   arkDbPath,
   fallbackArkDbPath,
+  arkUsage,
+  arkCoreRpcPath,
+  requestTimeoutMs,
   resolveUsageDb,
 }: UsageProcessSearchOptions): UsageProcessSearchService {
+  const arkClients = new Map<string, ArkClient>();
+  const getArkUsage = (dbPath: string): Pick<ArkUsageApi, "processes"> => {
+    if (arkUsage) {
+      return arkUsage;
+    }
+
+    let arkClient = arkClients.get(dbPath);
+    if (!arkClient) {
+      arkClient = new ArkClient({
+        spaceId: "arrancador",
+        deviceId: "arrancador-main",
+        deviceName: "Arrancador",
+        dbPath,
+        sidecarPath: arkCoreRpcPath ?? getArkCoreRpcBinaryPath(),
+        requestTimeoutMs: requestTimeoutMs ?? 10_000,
+      });
+      arkClients.set(dbPath, arkClient);
+    }
+    return arkClient.usage;
+  };
+  const arkDbCandidates = [arkDbPath, fallbackArkDbPath]
+    .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
   const resolveDb =
     resolveUsageDb ??
     (() =>
@@ -98,7 +142,7 @@ export function createUsageProcessSearchService({
         fallbackArkDbPath,
       }));
 
-  const runQuery = async (whereSql: string, params: readonly DbValue[]) => {
+  const runFallbackQuery = async (whereSql: string, params: readonly DbValue[]) => {
     const { db } = await resolveDb();
     if (!db) {
       return [];
@@ -111,13 +155,51 @@ export function createUsageProcessSearchService({
     }
   };
 
+  const runRecentQuery = async (limit: number) => {
+    try {
+      for (const dbPath of arkDbCandidates) {
+        const candidates = await getArkUsage(dbPath).processes.recent(limit);
+        if (candidates.length > 0 || arkUsage || dbPath === arkDbCandidates.at(-1)) {
+          return candidates.map(mapArkProcessCandidate);
+        }
+      }
+    } catch {
+      // Fall back to read-only SQLite when the ARK runtime is unavailable.
+    }
+
+    return runFallbackQuery(
+      `WHERE NULLIF(COALESCE(tracked_apps.exe_path, tracked_apps.process_name), '') IS NOT NULL`,
+      [limit],
+    );
+  };
+
+  const runSearchQuery = async (query: string, limit: number) => {
+    try {
+      for (const dbPath of arkDbCandidates) {
+        const candidates = await getArkUsage(dbPath).processes.search(query, limit);
+        if (candidates.length > 0 || arkUsage || dbPath === arkDbCandidates.at(-1)) {
+          return candidates.map(mapArkProcessCandidate);
+        }
+      }
+    } catch {
+      // Fall back to read-only SQLite when the ARK runtime is unavailable.
+    }
+
+    const pattern = `%${query}%`;
+    return runFallbackQuery(
+      `WHERE (
+          LOWER(COALESCE(tracked_apps.display_name, '')) LIKE ?1
+          OR LOWER(COALESCE(tracked_apps.process_name, '')) LIKE ?1
+          OR LOWER(COALESCE(tracked_apps.exe_path, '')) LIKE ?1
+        )`,
+      [pattern, limit],
+    );
+  };
+
   return {
     getRecentProcesses(limit = 10) {
       const boundedLimit = clampLimit(limit);
-      return runQuery(
-        `WHERE NULLIF(COALESCE(tracked_apps.exe_path, tracked_apps.process_name), '') IS NOT NULL`,
-        [boundedLimit],
-      );
+      return runRecentQuery(boundedLimit);
     },
 
     searchProcesses(query, limit = 10) {
@@ -127,15 +209,7 @@ export function createUsageProcessSearchService({
       }
 
       const boundedLimit = clampLimit(limit);
-      const pattern = `%${trimmed}%`;
-      return runQuery(
-        `WHERE (
-            LOWER(COALESCE(tracked_apps.display_name, '')) LIKE ?1
-            OR LOWER(COALESCE(tracked_apps.process_name, '')) LIKE ?1
-            OR LOWER(COALESCE(tracked_apps.exe_path, '')) LIKE ?1
-          )`,
-        [pattern, boundedLimit],
-      );
+      return runSearchQuery(trimmed, boundedLimit);
     },
   };
 }

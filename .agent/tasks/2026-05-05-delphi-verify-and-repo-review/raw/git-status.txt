@@ -1,0 +1,64 @@
+ M .agent/tasks/2026-04-14-eden-writer-performance/artifacts/typing-perf-playwright.json
+ M .agent/tasks/2026-04-25-ark-migration-backup-telemetry/evidence.json
+ M .agent/tasks/2026-04-25-ark-migration-backup-telemetry/evidence.md
+ M .agent/tasks/2026-04-25-ark-migration-backup-telemetry/problems.md
+ M .agent/tasks/2026-04-25-ark-migration-backup-telemetry/raw/command-results.md
+ M TODO.md
+ M apps/README.md
+ M apps/arrancador/AGENTS.md
+ M apps/arrancador/electron/main/services/ark-game-migration.ts
+ M apps/arrancador/electron/main/services/ark-game-objects.test.ts
+ M apps/arrancador/electron/main/services/ark-game-objects.ts
+ M apps/arrancador/electron/main/services/ark-usage-backfill.test.ts
+ M apps/arrancador/electron/main/services/ark-usage-backfill.ts
+ M apps/arrancador/electron/main/services/ark-usage-bindings.test.ts
+ M apps/arrancador/electron/main/services/ark-usage.test.ts
+ M apps/arrancador/electron/main/services/ark-usage.ts
+ M apps/arrancador/electron/main/services/usage-process-search.ts
+ M apps/arrancador/package.json
+ M apps/dashboard/AGENTS.md
+ M apps/delphi/AGENTS.md
+ M apps/delphi/ts/e2e/shared-ark-task.spec.ts
+ M apps/delphi/ts/electron/main.ts
+ M apps/delphi/ts/electron/sidecar.ts
+ M apps/delphi/ts/package.json
+ M apps/delphi/ts/scripts/verifySharedArkTask.mjs
+ M apps/delphi/ts/shared/task-object-migration.ts
+ M apps/delphi/ts/src/services/storage/task-object-migration.test.ts
+ M apps/eden/ts/docs/typed-notes-and-eden-heart-plan.md
+ M apps/eden/ts/main/ark.ts
+ M apps/eden/ts/main/heart.ts
+ M apps/eden/ts/main/hevy.ts
+ M apps/eden/ts/main/main.ts
+ M apps/eden/ts/main/store.ts
+ M apps/eden/ts/src/App.vue
+ M apps/eden/ts/src/Editor.vue
+ M apps/eden/ts/src/InlineCaret.ts
+ M apps/eden/ts/tests/app.spec.ts
+ M apps/eden/ts/tests/arrancador-ark-sync.spec.ts
+ M apps/eden/ts/tests/hevy.spec.ts
+ M apps/eden/ts/tests/typing-stress.spec.ts
+ M bun.lock
+ M package.json
+ M packages/ark-core/README.md
+ M packages/ark-core/rust/src/db.rs
+ M packages/ark-core/rust/src/main.rs
+ M packages/ark-core/rust/src/types.rs
+ M packages/kepler-ark/README.md
+ M packages/kepler-ark/src/ark-client.ts
+ M packages/kepler-ark/src/index.ts
+ M services/usage-tracker/AGENTS.md
+ M services/usage-tracker/README.md
+?? .agent/tasks/2026-04-26-ark-app-completion/
+?? .agent/tasks/2026-04-26-ark-initial-plan-close/
+?? .agent/tasks/2026-04-26-ark-read-endpoints/
+?? .agent/tasks/2026-04-26-ark-rpc-query-endpoints/
+?? .agent/tasks/2026-04-26-delphi-legacy-removal/
+?? .agent/tasks/2026-04-27-affected-apps-verification/
+?? .agent/tasks/2026-04-27-ark-usage-playtime-summary/
+?? .agent/tasks/2026-04-27-packaged-smoke/
+?? .agent/tasks/2026-05-05-delphi-verify-and-repo-review/
+?? apps/arrancador/scripts/run-packaged-smoke.ts
+?? apps/dashboard/README.md
+?? docs/
+?? scripts/

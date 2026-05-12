@@ -16,12 +16,16 @@ async function launchApp(
   homePath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-hevy-")),
   attempt = 0,
 ): Promise<LaunchedApp> {
+  const testAppDataPath = path.join(homePath, "AppData", "Roaming");
+  const testUserDataPath = path.join(testAppDataPath, "EdenTestUserData");
   const electronApp = await electron.launch({
     args: ["."],
     env: {
       ...process.env,
       EDEN_BACKGROUND_LAUNCH: "1",
       HOME: homePath,
+      KEPLER_TEST_APPDATA: testAppDataPath,
+      KEPLER_TEST_USER_DATA: testUserDataPath,
       NODE_ENV: "development",
     },
   });
@@ -202,25 +206,17 @@ test.describe("Hevy Integration", () => {
 
       // Navigate to Object Types tab
       await launch.window.locator('[data-testid="settings-nav-object-types"]').click();
-      await expect(launch.window.locator(".object-types-layout")).toBeVisible();
+      await expect(launch.window.locator(".object-types-scene")).toBeVisible();
 
       // System types should be listed as built-in and openable in the editor
-      const builtinItems = launch.window.locator(".object-types-item.builtin");
-      await expect(builtinItems).toHaveCount(4);
-      await expect(
-        launch.window.locator(".object-types-item.builtin", { hasText: "Заметка" }),
-      ).toBeVisible();
-      await expect(
-        launch.window.locator(".object-types-item.builtin", { hasText: "Игра" }),
-      ).toBeVisible();
-      await expect(
-        launch.window.locator(".object-types-item.builtin", { hasText: "Тренировка" }),
-      ).toBeVisible();
-      await expect(
-        launch.window.locator(".object-types-item.builtin", { hasText: "Упражнение" }),
-      ).toBeVisible();
-      await launch.window.locator(".object-types-item.builtin", { hasText: "Игра" }).click();
-      await expect(launch.window.locator(".type-editor-chip")).toContainText("Контракт защищён кодом");
+      await expect(launch.window.locator('[data-testid="system-type-note_obj"]')).toBeVisible();
+      await expect(launch.window.locator('[data-testid="system-type-game_obj"]')).toBeVisible();
+      await expect(launch.window.locator('[data-testid="system-type-system-type-workout"]')).toBeVisible();
+      await expect(launch.window.locator('[data-testid="system-type-system-type-exercise"]')).toBeVisible();
+      await launch.window.locator('[data-testid="system-type-game_obj"]').click();
+      await expect(launch.window.locator('[data-testid="type-objects-view"]')).toBeVisible();
+      await launch.window.locator(".type-objects-secondary-btn").click();
+      await expect(launch.window.locator(".type-editor-chip")).toContainText("Контракт защищен кодом");
 
       expect(launch.pageErrors).toEqual([]);
     } finally {

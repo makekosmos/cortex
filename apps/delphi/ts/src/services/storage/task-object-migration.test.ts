@@ -179,6 +179,22 @@ describe("Delphi task object migration", () => {
     expect(result.todos[0]?.title).toBe("Object title");
   });
 
+  it("does not fall back to legacy todos after object migration", async () => {
+    const legacyTodo = makeTodo("todo-a", "Legacy only");
+    const { deps } = createDeps([legacyTodo]);
+
+    const result = await loadAllObjectFirst(deps);
+
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos[0]?.title).toBe("Legacy only");
+
+    const objectOnlyDeps = createDeps([makeTodo("todo-b", "Unmigrated")], [], {
+      failObjectIds: ["todo-b"],
+    }).deps;
+    const failedResult = await loadAllObjectFirst(objectOnlyDeps);
+    expect(failedResult.todos).toEqual([]);
+  });
+
   it("writes single and batch task mutations as ARK objects", async () => {
     const single = makeTodo("single");
     const batch = [makeTodo("batch-a"), makeTodo("batch-b")];

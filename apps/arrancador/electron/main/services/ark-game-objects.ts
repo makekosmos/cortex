@@ -2,39 +2,26 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { ArkClient, type ArkObjectsApi, type JsonValue } from "@kepler/ark";
-import { app } from "electron";
+import {
+  ArkClient,
+  type ArkObjectRecord,
+  type ArkObjectsApi,
+  type ArkObjectTypesApi,
+  type JsonValue,
+} from "@kepler/ark";
+import electron from "electron";
 
-import { openSqliteDatabase } from "../db";
-import { queryAll } from "../helpers/db";
-import type { DbLike } from "../helpers/shared";
 import type { Game } from "./games/types";
 
 const GAME_OBJECT_TYPE_ID = "game_obj";
+const { app } = electron;
 const DEFAULT_CONTENT_JSON = {
   type: "doc",
   content: [{ type: "paragraph" }],
 };
 
-type ArkObjectRow = {
-  id: string;
-  title: string;
-  content_json: string;
-  props_json: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-};
-
-type ArkObjectRecord = {
-  id: string;
-  typeId?: string;
-  title: string;
-  contentJson: unknown;
+type GameArkObjectRecord = Omit<ArkObjectRecord, "propsJson"> & {
   propsJson: Record<string, unknown>;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt?: string | null;
 };
 
 export interface ArkGameObjectService {
@@ -45,7 +32,8 @@ export interface ArkGameObjectService {
 export interface ArkGameObjectServiceOptions {
   arkDbPath: string;
   now?: () => Date;
-  arkObjects?: Pick<ArkObjectsApi, "list" | "get" | "upsert">;
+  arkObjects?: Pick<ArkObjectsApi, "list" | "listByType" | "get" | "getMany" | "upsert">;
+  arkObjectTypes?: Pick<ArkObjectTypesApi, "get" | "upsert">;
   arkCoreRpcPath?: string;
   requestTimeoutMs?: number;
   spaceId?: string;
@@ -54,14 +42,11 @@ export interface ArkGameObjectServiceOptions {
   appRoot?: string;
   isPackaged?: boolean;
   resourcesPath?: string;
+  throwOnError?: boolean;
 }
 
 function normalizeExePath(exePath: string): string {
   return exePath.trim().replaceAll("/", "\\").toLowerCase();
-}
-
-function buildParameterizedList(values: readonly string[], startIndex = 1): string {
-  return values.map((_, index) => `?${index + startIndex}`).join(", ");
 }
 
 function getArkCoreRpcBinaryName() {
@@ -113,52 +98,6 @@ export function getArkCoreRpcBinaryPath(
   );
 }
 
-function tryOpenArkDb(
-  arkDbPath: string,
-  options: { readonly?: boolean } = {},
-): DbLike | null {
-  if (!arkDbPath || !fs.existsSync(arkDbPath)) {
-    return null;
-  }
-
-  try {
-    return openSqliteDatabase(arkDbPath, {
-      readonly: options.readonly ?? false,
-      fileMustExist: true,
-      timeoutMs: 2000,
-    });
-  } catch {
-    return null;
-  }
-}
-
-function parseJsonRecord(value: string | null | undefined): Record<string, unknown> {
-  if (!value) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function parseJsonValue(value: string | null | undefined): unknown {
-  if (!value) {
-    return DEFAULT_CONTENT_JSON;
-  }
-
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return DEFAULT_CONTENT_JSON;
-  }
-}
-
 function isJsonRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -206,57 +145,12 @@ function readPlayStatus(value: unknown): Game["play_status"] | null {
     : null;
 }
 
-function mapArkObjectRow(row: ArkObjectRow): ArkObjectRecord {
-  return {
-    id: row.id,
-    title: row.title,
-    contentJson: parseJsonValue(row.content_json),
-    propsJson: parseJsonRecord(row.props_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-async function listActiveGameObjects(arkDb: DbLike): Promise<ArkObjectRecord[]> {
-  const rows = await queryAll<ArkObjectRow>(
-    arkDb,
-    `SELECT id, title, content_json, props_json, created_at, updated_at, deleted_at
-     FROM objects
-     WHERE type_id = ?1 AND deleted_at IS NULL
-     ORDER BY updated_at DESC, created_at DESC`,
-    [GAME_OBJECT_TYPE_ID],
-  );
-
-  return rows.map(mapArkObjectRow);
-}
-
-async function listObjectsById(
-  arkDb: DbLike,
-  ids: readonly string[],
-): Promise<Map<string, ArkObjectRecord>> {
-  if (ids.length === 0) {
-    return new Map();
-  }
-
-  const placeholders = buildParameterizedList(ids);
-  const rows = await queryAll<ArkObjectRow>(
-    arkDb,
-    `SELECT id, title, content_json, props_json, created_at, updated_at, deleted_at
-     FROM objects
-     WHERE type_id = ?1 AND deleted_at IS NULL AND id IN (${placeholders})
-     ORDER BY updated_at DESC, created_at DESC`,
-    [GAME_OBJECT_TYPE_ID, ...ids],
-  );
-
-  return new Map(rows.map((row) => [row.id, mapArkObjectRow(row)]));
-}
-
 async function listActiveGameObjectsFromSdk(
-  arkObjects: Pick<ArkObjectsApi, "list">,
-): Promise<ArkObjectRecord[]> {
-  const objects = await arkObjects.list();
+  arkObjects: Pick<ArkObjectsApi, "listByType">,
+): Promise<GameArkObjectRecord[]> {
+  const objects = await arkObjects.listByType(GAME_OBJECT_TYPE_ID);
   return objects
-    .filter((object) => object.typeId === GAME_OBJECT_TYPE_ID && object.deletedAt === null)
+    .filter((object) => object.deletedAt === null)
     .map((object) => ({
       id: object.id,
       typeId: object.typeId,
@@ -269,9 +163,9 @@ async function listActiveGameObjectsFromSdk(
     }));
 }
 
-function buildObjectIndexes(objects: readonly ArkObjectRecord[]) {
-  const byGameId = new Map<string, ArkObjectRecord>();
-  const byExePath = new Map<string, ArkObjectRecord>();
+function buildObjectIndexes(objects: readonly GameArkObjectRecord[]) {
+  const byGameId = new Map<string, GameArkObjectRecord>();
+  const byExePath = new Map<string, GameArkObjectRecord>();
 
   for (const object of objects) {
     const gameId = readOptionalString(object.propsJson.arrancador_game_id);
@@ -293,12 +187,12 @@ function buildObjectIndexes(objects: readonly ArkObjectRecord[]) {
 
 function resolveLinkedObject(
   game: Game,
-  directById: ReadonlyMap<string, ArkObjectRecord>,
+  directById: ReadonlyMap<string, GameArkObjectRecord>,
   fallback?: {
-    byGameId: ReadonlyMap<string, ArkObjectRecord>;
-    byExePath: ReadonlyMap<string, ArkObjectRecord>;
+    byGameId: ReadonlyMap<string, GameArkObjectRecord>;
+    byExePath: ReadonlyMap<string, GameArkObjectRecord>;
   },
-): ArkObjectRecord | null {
+): GameArkObjectRecord | null {
   if (game.ark_object_id) {
     const direct = directById.get(game.ark_object_id);
     if (direct) {
@@ -317,7 +211,7 @@ function resolveLinkedObject(
   );
 }
 
-function mergeArkGameProps(game: Game, object: ArkObjectRecord): Game {
+function mergeArkGameProps(game: Game, object: GameArkObjectRecord): Game {
   const props = object.propsJson;
   const nextName = readOptionalString(object.title) ?? game.name;
   const nextDescription = readOptionalString(props.description) ?? game.description;
@@ -376,10 +270,56 @@ function buildGameObjectProps(
   };
 }
 
+async function ensureGameObjectType(
+  arkObjectTypes: Pick<ArkObjectTypesApi, "get" | "upsert">,
+  timestamp: string,
+) {
+  const existing = await arkObjectTypes.get(GAME_OBJECT_TYPE_ID);
+  if (existing) {
+    return;
+  }
+
+  await arkObjectTypes.upsert({
+    id: GAME_OBJECT_TYPE_ID,
+    name: "Игра",
+    schemaJson: JSON.stringify({
+      fields: [
+        { id: "description", label: "Описание", kind: "long_text", required: false },
+        { id: "play_status", label: "Статус", kind: "select", required: false },
+        { id: "genres", label: "Жанры", kind: "multi_select", required: false },
+        { id: "exe_path", label: "Путь к игре", kind: "text", required: false, system: true },
+        { id: "exe_name", label: "Имя exe", kind: "text", required: false, system: true },
+        { id: "total_playtime_seconds", label: "Время игры", kind: "number", required: false, read_only: true, system: true },
+        { id: "last_played_at", label: "Последний запуск", kind: "date", required: false, read_only: true, system: true },
+        { id: "play_count", label: "Запусков", kind: "number", required: false, read_only: true, system: true },
+      ],
+    }),
+    uiSchemaJson: JSON.stringify({
+      collection_name: "Игры",
+      visible_fields: ["play_status", "genres", "total_playtime_seconds", "last_played_at"],
+      hidden_fields: ["description", "exe_path", "exe_name", "play_count"],
+      read_only_fields: ["total_playtime_seconds", "last_played_at", "play_count", "exe_name"],
+      field_order: [
+        "play_status",
+        "genres",
+        "total_playtime_seconds",
+        "last_played_at",
+        "description",
+        "exe_path",
+        "exe_name",
+        "play_count",
+      ],
+    }),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    systemLocked: true,
+  });
+}
+
 async function loadExistingObjectForSync(
-  arkObjects: Pick<ArkObjectsApi, "list" | "get">,
+  arkObjects: Pick<ArkObjectsApi, "listByType" | "get">,
   game: Game,
-): Promise<ArkObjectRecord | null> {
+): Promise<GameArkObjectRecord | null> {
   if (game.ark_object_id) {
     const object = await arkObjects.get(game.ark_object_id);
     if (object?.typeId === GAME_OBJECT_TYPE_ID) {
@@ -411,7 +351,7 @@ export function createArkGameObjectService(
   const now = options.now ?? (() => new Date());
   let arkClient: ArkClient | null = null;
 
-  const getArkObjects = (): Pick<ArkObjectsApi, "list" | "get" | "upsert"> => {
+  const getArkObjects = (): Pick<ArkObjectsApi, "list" | "listByType" | "get" | "getMany" | "upsert"> => {
     if (options.arkObjects) {
       return options.arkObjects;
     }
@@ -428,32 +368,60 @@ export function createArkGameObjectService(
     return arkClient.objects;
   };
 
+  const getArkObjectTypes = (): Pick<ArkObjectTypesApi, "get" | "upsert"> => {
+    if (options.arkObjectTypes) {
+      return options.arkObjectTypes;
+    }
+
+    arkClient ??= new ArkClient({
+      spaceId: options.spaceId ?? "arrancador",
+      deviceId: options.deviceId ?? "arrancador-main",
+      deviceName: options.deviceName ?? "Arrancador",
+      dbPath: options.arkDbPath,
+      sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(options),
+      requestTimeoutMs: options.requestTimeoutMs ?? 10_000,
+    });
+
+    return arkClient.objectTypes;
+  };
+
   return {
     async hydrateGames(games: Game[]): Promise<Game[]> {
       if (games.length === 0) {
         return games;
       }
 
-      const arkDb = tryOpenArkDb(options.arkDbPath, { readonly: true });
-      if (!arkDb) {
-        return games;
-      }
-
       try {
+        const arkObjects = getArkObjects();
         const linkedIds = games
           .map((game) => game.ark_object_id)
           .filter((value): value is string => typeof value === "string" && value.length > 0);
-        const directById = await listObjectsById(arkDb, linkedIds);
+        const directObjects = await arkObjects.getMany(linkedIds);
+        const directById = new Map(
+          directObjects
+            .filter((object) => object.typeId === GAME_OBJECT_TYPE_ID && object.deletedAt === null)
+            .map((object) => [
+              object.id,
+              {
+                ...object,
+                propsJson: isJsonRecord(object.propsJson) ? object.propsJson : {},
+              },
+            ]),
+        );
         const needsFallback = games.some(
           (game) => !game.ark_object_id || !directById.has(game.ark_object_id),
         );
-        const fallback = needsFallback ? buildObjectIndexes(await listActiveGameObjects(arkDb)) : null;
+        const fallback = needsFallback ? buildObjectIndexes(await listActiveGameObjectsFromSdk(arkObjects)) : null;
 
         return games.map((game) => {
           const object = resolveLinkedObject(game, directById, fallback ?? undefined);
           return object ? mergeArkGameProps(game, object) : game;
         });
-      } catch {
+      } catch (error) {
+        if (options.throwOnError) {
+          throw error;
+        }
+
         return games;
       }
     },
@@ -464,6 +432,7 @@ export function createArkGameObjectService(
         const existing = await loadExistingObjectForSync(arkObjects, game);
         const objectId = existing?.id ?? game.ark_object_id ?? randomUUID();
         const timestamp = now().toISOString();
+        await ensureGameObjectType(getArkObjectTypes(), timestamp);
         const createdAt = existing?.createdAt ?? timestamp;
         const contentJson = existing?.contentJson ?? DEFAULT_CONTENT_JSON;
         const propsJson = buildGameObjectProps(game, existing?.propsJson ?? {});
@@ -480,7 +449,11 @@ export function createArkGameObjectService(
         });
 
         return objectId;
-      } catch {
+      } catch (error) {
+        if (options.throwOnError) {
+          throw error;
+        }
+
         return null;
       }
     },

@@ -1,0 +1,62 @@
+{
+  "taskId": "2026-04-26-ark-app-completion",
+  "verification": "PASS",
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS",
+    "AC7": "PASS"
+  },
+  "checks": [
+    {
+      "command": "bun run --cwd packages/kepler-ark typecheck",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run --cwd apps/arrancador test",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run --cwd apps/arrancador typecheck",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run --cwd apps/eden/ts test:ark-migration",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run build",
+      "cwd": "apps/eden/ts",
+      "status": "PASS"
+    },
+    {
+      "command": "bunx playwright test tests/app.spec.ts --config playwright.config.ts --grep \"custom note type\"",
+      "cwd": "apps/eden/ts",
+      "status": "PASS"
+    },
+    {
+      "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml",
+      "status": "PASS"
+    },
+    {
+      "command": "cargo test --manifest-path services/usage-tracker/Cargo.toml",
+      "status": "PASS"
+    },
+    {
+      "command": "node --experimental-strip-types apps/dashboard/scripts/seedSmokeDb.ts --db-path .agent/tasks/2026-04-26-ark-app-completion/smoke/dashboard/smoke-dashboard.db",
+      "status": "PASS"
+    },
+    {
+      "command": "node --experimental-strip-types apps/dashboard/scripts/smokeAnalytics.ts --db-path .agent/tasks/2026-04-26-ark-app-completion/smoke/dashboard/smoke-dashboard.db",
+      "status": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS_WITH_CRLF_WARNINGS"
+    }
+  ],
+  "testDatabaseIsolation": "All new smoke/e2e verification paths used .agent task-local DBs or temp app-data paths."
+}

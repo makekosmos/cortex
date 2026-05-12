@@ -1,0 +1,39 @@
+{
+  "taskId": "2026-04-26-ark-read-endpoints",
+  "status": "PASS",
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS"
+  },
+  "checks": [
+    {
+      "command": "bun run --cwd packages/kepler-ark typecheck",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run --cwd apps/arrancador test -- ark-usage ark-game-objects",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run --cwd apps/arrancador typecheck",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run ark:guard:writes",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run ark:smoke",
+      "status": "PASS",
+      "note": "Initial sandbox run failed at Playwright worker spawn with EPERM; escalated rerun passed."
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS",
+      "note": "Line-ending warnings only."
+    }
+  ]
+}

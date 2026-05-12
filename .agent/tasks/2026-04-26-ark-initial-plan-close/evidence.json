@@ -1,0 +1,29 @@
+{
+  "taskId": "2026-04-26-ark-initial-plan-close",
+  "verification": "PASS",
+  "acceptanceCriteria": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS",
+    "AC7": "PASS"
+  },
+  "checks": [
+    {
+      "command": "bun run ark:guard:writes",
+      "status": "PASS"
+    },
+    {
+      "command": "bun run ark:smoke",
+      "status": "PASS",
+      "smokeRoot": ".agent/tasks/2026-04-26-ark-initial-plan-close/smoke"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS_WITH_CRLF_WARNINGS"
+    }
+  ],
+  "testDatabaseIsolation": "The smoke runner writes generated DB artifacts under the task-local .agent/tasks smoke directory and uses existing Eden temp app-data e2e paths."
+}

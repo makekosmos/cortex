@@ -1,0 +1,118 @@
+{
+  "taskId": "2026-04-27-affected-apps-verification",
+  "date": "2026-04-27",
+  "result": "PASS",
+  "acceptanceCriteria": {
+    "AC1": {
+      "status": "PASS",
+      "summary": "Shared ARK runtime checks passed."
+    },
+    "AC2": {
+      "status": "PASS",
+      "summary": "Arrancador typecheck, unit tests, and packaged smoke passed with isolated data."
+    },
+    "AC3": {
+      "status": "PASS",
+      "summary": "Dashboard typecheck and Electron smoke passed with isolated data."
+    },
+    "AC4": {
+      "status": "PASS",
+      "summary": "Eden ARK migration, production build, and e2e suite passed with isolated data."
+    },
+    "AC5": {
+      "status": "PASS",
+      "summary": "Delphi unit tests, production build, and shared ARK task e2e smoke passed with isolated data."
+    },
+    "AC6": {
+      "status": "PASS",
+      "summary": "Evidence records commands, results, isolation notes, and warnings."
+    }
+  },
+  "commands": [
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "notes": "116 library tests, 7 rpc tests, relay/sync integration tests, and doctests passed."
+    },
+    {
+      "command": "cargo test --manifest-path services\\usage-tracker\\Cargo.toml",
+      "status": "PASS",
+      "notes": "4 tests passed."
+    },
+    {
+      "command": "bun run --cwd packages/kepler-ark typecheck",
+      "status": "PASS",
+      "notes": "TypeScript noEmit passed."
+    },
+    {
+      "command": "bun run --cwd apps/arrancador typecheck",
+      "status": "PASS",
+      "notes": "TypeScript check passed."
+    },
+    {
+      "command": "bun run --cwd apps/arrancador test",
+      "status": "PASS",
+      "notes": "47 files and 163 tests passed."
+    },
+    {
+      "command": "bun run --cwd apps/arrancador smoke:packaged",
+      "status": "PASS",
+      "notes": "Packaged smoke passed with isolated ARK_DB_PATH and userData."
+    },
+    {
+      "command": "bun run --cwd apps/dashboard typecheck",
+      "status": "PASS",
+      "notes": "TypeScript check passed."
+    },
+    {
+      "command": "bun run --cwd apps/dashboard test:e2e:smoke",
+      "status": "PASS",
+      "notes": "Dashboard smoke passed against apps/dashboard/.e2e/smoke-dashboard.db."
+    },
+    {
+      "command": "bun run --cwd apps/eden/ts test:ark-migration",
+      "status": "PASS",
+      "notes": "ARK object migration smoke passed."
+    },
+    {
+      "command": "bun run --cwd apps/eden/ts build",
+      "status": "PASS",
+      "notes": "Production build passed."
+    },
+    {
+      "command": "bun run --cwd apps/eden/ts test:e2e",
+      "status": "PASS",
+      "notes": "22 Playwright tests passed."
+    },
+    {
+      "command": "bun run --cwd apps/delphi/ts test",
+      "status": "PASS",
+      "notes": "8 files and 100 tests passed."
+    },
+    {
+      "command": "bun run --cwd apps/delphi/ts build",
+      "status": "PASS",
+      "notes": "Build/package path passed and compiled canonical ark-core-rpc."
+    },
+    {
+      "command": "bun run --cwd apps/delphi/ts test:e2e -- e2e/shared-ark-task.spec.ts",
+      "status": "PASS",
+      "notes": "Shared ARK task e2e passed."
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS",
+      "notes": "No whitespace errors; LF/CRLF normalization warnings only."
+    }
+  ],
+  "isolation": {
+    "status": "PASS",
+    "notes": "All checks used isolated test databases or temporary data paths. No check targeted a main/user ARK database."
+  },
+  "warnings": [
+    "Electron CSP warnings in e2e/smoke output.",
+    "Vite chunk-size and deprecated Rollup inlineDynamicImports warnings.",
+    "Electron-builder metadata/icon/signing warnings.",
+    "Git LF/CRLF normalization warnings."
+  ]
+}

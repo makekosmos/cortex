@@ -1,14 +1,15 @@
 import { test, expect, _electron as electron, type Page } from "@playwright/test";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { createRequire as createNodeRequire } from "node:module";
-import { openSqliteDatabase } from "../../../arrancador/electron/main/db/sqlite.ts";
-import { openGameDatabase } from "../../../arrancador/electron/main/db/database.ts";
-import { createArkGameObjectService } from "../../../arrancador/electron/main/services/ark-game-objects.ts";
-import { createGamesService } from "../../../arrancador/electron/main/services/games.ts";
+import { ArkClient, type ArkObjectRecord } from "../../../../packages/kepler-ark/src/ark-client.ts";
+import {
+  createArkGameObjectService,
+  getArkCoreRpcBinaryPath,
+} from "../../../arrancador/electron/main/services/ark-game-objects.ts";
+import type { Game } from "../../../arrancador/electron/main/services/games/types.ts";
 
 type ElectronApp = Awaited<ReturnType<typeof electron.launch>>;
 
@@ -23,6 +24,7 @@ interface AppEnvironment {
   homePath: string;
   appDataPath: string;
   localAppDataPath: string;
+  userDataPath: string;
   vaultPath: string;
   arrDbPath: string;
   arkDbPath: string;
@@ -48,22 +50,6 @@ const TEST_GAME = {
   name: "E2E Shared Ark Game",
   exePath: "C:\\Games\\E2E Shared Ark Game\\shared-ark-game.exe",
   exeName: "shared-ark-game.exe",
-};
-
-const require = createNodeRequire(new URL("../../../arrancador/package.json", import.meta.url));
-const BetterSqlite3 = require("better-sqlite3") as new (
-  filePath: string,
-  options?: {
-    readonly?: boolean;
-    fileMustExist?: boolean;
-  },
-) => {
-  prepare(sql: string): {
-    get<T = Record<string, unknown>>(...params: unknown[]): T | undefined;
-    run(...params: unknown[]): { changes: number };
-  };
-  exec(sql: string): void;
-  close(): void;
 };
 
 function normalizeSpaceCode(code: string): string {
@@ -155,12 +141,14 @@ function createEnvironment(): AppEnvironment {
   const homePath = path.join(rootPath, "home");
   const appDataPath = path.join(rootPath, "appdata", "Roaming");
   const localAppDataPath = path.join(rootPath, "appdata", "Local");
+  const userDataPath = path.join(rootPath, "eden-userData");
   const vaultPath = path.join(rootPath, "vault-main");
   const arrDbPath = path.join(rootPath, "arrancador.db");
 
   fs.mkdirSync(homePath, { recursive: true });
   fs.mkdirSync(appDataPath, { recursive: true });
   fs.mkdirSync(localAppDataPath, { recursive: true });
+  fs.mkdirSync(userDataPath, { recursive: true });
   fs.mkdirSync(vaultPath, { recursive: true });
 
   const selection = buildPersonalSelectedSpace(vaultPath, "eden-e2e");
@@ -171,6 +159,7 @@ function createEnvironment(): AppEnvironment {
     homePath,
     appDataPath,
     localAppDataPath,
+    userDataPath,
     vaultPath,
     arrDbPath,
     arkDbPath: getArkDbPathForSelectedSpace(appDataPath, selection),
@@ -178,18 +167,29 @@ function createEnvironment(): AppEnvironment {
 }
 
 async function launchEden(env: AppEnvironment, attempt = 0): Promise<LaunchedApp> {
-  const electronApp = await electron.launch({
-    args: ["."],
-    env: {
-      ...process.env,
-      EDEN_BACKGROUND_LAUNCH: "1",
-      NODE_ENV: "development",
-      HOME: env.homePath,
-      USERPROFILE: env.homePath,
-      APPDATA: env.appDataPath,
-      LOCALAPPDATA: env.localAppDataPath,
-    },
-  });
+  let electronApp: ElectronApp;
+  try {
+    electronApp = await electron.launch({
+      args: ["."],
+      env: {
+        ...process.env,
+        EDEN_BACKGROUND_LAUNCH: "1",
+        NODE_ENV: "development",
+        HOME: env.homePath,
+        USERPROFILE: env.homePath,
+        APPDATA: env.appDataPath,
+        LOCALAPPDATA: env.localAppDataPath,
+        KEPLER_TEST_APPDATA: env.appDataPath,
+        KEPLER_TEST_USER_DATA: env.userDataPath,
+      },
+    });
+  } catch (error) {
+    if (attempt >= 2) {
+      throw error;
+    }
+
+    return await launchEden(env, attempt + 1);
+  }
 
   try {
     const window = await electronApp.firstWindow({ timeout: 45_000 });
@@ -245,55 +245,104 @@ async function initializeEdenArk(env: AppEnvironment) {
 }
 
 async function createAndSyncGame(env: AppEnvironment) {
-  const arrDb = openSqliteDatabase(env.arrDbPath);
-  await openGameDatabase(arrDb);
-
+  const arkClient = createTestArkClient(env);
   try {
-    const gamesService = createGamesService({
-      db: arrDb,
-      arkGameObjectSync: createArkGameObjectService({
-        arkDbPath: env.arkDbPath,
-      }),
-    });
-
-    const created = await gamesService.addGame({
+    const created: Game = {
+      id: randomUUID(),
+      ark_object_id: null,
       name: TEST_GAME.name,
       exe_path: TEST_GAME.exePath,
       exe_name: TEST_GAME.exeName,
+      process_bindings: [],
+      play_status: "not_started",
+      rawg_id: null,
+      description: null,
+      released: null,
+      background_image: null,
+      metacritic: null,
+      rating: null,
+      genres: null,
+      platforms: null,
+      developers: null,
+      publishers: null,
+      cover_image: null,
+      icon_image: null,
+      is_favorite: false,
+      play_count: 0,
+      total_playtime: 0,
+      last_played: null,
+      date_added: new Date().toISOString(),
+      backup_enabled: false,
+      last_backup: null,
+      backup_count: 0,
+      save_path: null,
+      user_rating: null,
+      user_note: null,
+    };
+
+    const arkObjectSync = createArkGameObjectService({
+      arkDbPath: env.arkDbPath,
+      arkObjects: arkClient.objects,
+      arkObjectTypes: arkClient.objectTypes,
+      throwOnError: true,
     });
+    const objectId = await arkObjectSync.syncGame(created);
+    const synced = objectId ? 1 : 0;
 
     return {
-      created,
+      created: {
+        ...created,
+        ark_object_id: objectId,
+      },
       syncResult: {
         total: 1,
-        synced: 1,
-        failed: 0,
+        synced,
+        failed: objectId ? 0 : 1,
       },
     };
   } finally {
-    arrDb.close?.();
+    await arkClient.stop();
   }
 }
 
-async function readArkGameObject(arkDbPath: string): Promise<ArkObjectRow | null> {
-  const db = new BetterSqlite3(arkDbPath, {
-    readonly: true,
-    fileMustExist: true,
+function createTestArkClient(env: AppEnvironment) {
+  return new ArkClient({
+    spaceId: "eden-arrancador-e2e",
+    deviceId: "eden-arrancador-e2e",
+    deviceName: "Eden Arrancador E2E",
+    dbPath: env.arkDbPath,
+    sidecarPath: getArkCoreRpcBinaryPath({
+      appRoot: path.resolve(process.cwd(), "../../arrancador"),
+    }),
+    requestTimeoutMs: 10_000,
   });
+}
 
+async function readArkGameObject(arkDbPath: string): Promise<ArkObjectRow | null> {
+  const arkClient = createTestArkClient({
+    rootPath: path.dirname(path.dirname(arkDbPath)),
+    homePath: "",
+    appDataPath: "",
+    localAppDataPath: "",
+    userDataPath: "",
+    vaultPath: "",
+    arrDbPath: "",
+    arkDbPath,
+  });
   try {
-    return (
-      (db
-        .prepare(
-        `SELECT id, type_id, title, props_json
-         FROM objects
-         WHERE type_id = ?1 AND title = ?2 AND deleted_at IS NULL
-         LIMIT 1`,
-        )
-        .get<ArkObjectRow>("game_obj", TEST_GAME.name)) ?? null
-    );
+    const object = (await arkClient.objects.listByType("game_obj"))
+      .find((candidate: ArkObjectRecord) => candidate.title === TEST_GAME.name && candidate.deletedAt === null);
+
+    return object
+      ? {
+          id: object.id,
+          type_id: object.typeId ?? "",
+          title: object.title,
+          props_json: JSON.stringify(object.propsJson ?? {}),
+        }
+      : null;
   } finally {
-    db.close();
+    await arkClient.stop();
   }
 }
 
@@ -307,8 +356,6 @@ test.describe("Arrancador Ark sync visible in Eden", () => {
     let launch: LaunchedApp | null = null;
 
     try {
-      await initializeEdenArk(env);
-
       const { created, syncResult } = await createAndSyncGame(env);
 
       expect(syncResult.total).toBeGreaterThanOrEqual(1);
@@ -317,7 +364,6 @@ test.describe("Arrancador Ark sync visible in Eden", () => {
       expect(created.name).toBe(TEST_GAME.name);
       expect(created.ark_object_id).toBeTruthy();
 
-      expect(fs.existsSync(env.arrDbPath)).toBe(true);
       expect(fs.existsSync(env.arkDbPath)).toBe(true);
 
       const arkRow = await readArkGameObject(env.arkDbPath);

@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import type { ArkObjectRecord, ArkObjectsApi } from "@kepler/ark";
+import type { ArkObjectRecord, ArkObjectsApi, ArkObjectTypesApi } from "@kepler/ark";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -68,7 +68,9 @@ function arkObject(overrides: Partial<ArkObjectRecord> = {}): ArkObjectRecord {
 function arkObjects(overrides: Partial<ArkObjectsApi> = {}) {
   return {
     list: vi.fn(async () => []),
+    listByType: vi.fn(async () => []),
     get: vi.fn(async () => null),
+    getMany: vi.fn(async () => []),
     upsert: vi.fn(async () => undefined),
     delete: vi.fn(async () => undefined),
     search: vi.fn(async () => []),
@@ -76,17 +78,36 @@ function arkObjects(overrides: Partial<ArkObjectsApi> = {}) {
   } satisfies ArkObjectsApi;
 }
 
+function arkObjectTypes(overrides: Partial<ArkObjectTypesApi> = {}) {
+  return {
+    list: vi.fn(async () => []),
+    get: vi.fn(async () => null),
+    upsert: vi.fn(async () => undefined),
+    delete: vi.fn(async () => undefined),
+    ...overrides,
+  } satisfies ArkObjectTypesApi;
+}
+
 describe("createArkGameObjectService", () => {
   it("writes game objects through the Ark object API", async () => {
     const objects = arkObjects();
+    const objectTypes = arkObjectTypes();
     const service = createArkGameObjectService({
       arkDbPath: "unused.db",
       arkObjects: objects,
+      arkObjectTypes: objectTypes,
       now: () => new Date(timestamp),
     });
 
     await expect(service.syncGame(game())).resolves.toEqual(expect.any(String));
 
+    expect(objectTypes.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "game_obj",
+        name: "Игра",
+        systemLocked: true,
+      }),
+    );
     expect(objects.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         typeId: "game_obj",
@@ -114,9 +135,21 @@ describe("createArkGameObjectService", () => {
     const objects = arkObjects({
       get: vi.fn(async () => existing),
     });
+    const objectTypes = arkObjectTypes({
+      get: vi.fn(async () => ({
+        id: "game_obj",
+        name: "Игра",
+        schemaJson: "{}",
+        uiSchemaJson: "{}",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        systemLocked: true,
+      })),
+    });
     const service = createArkGameObjectService({
       arkDbPath: "unused.db",
       arkObjects: objects,
+      arkObjectTypes: objectTypes,
       now: () => new Date(timestamp),
     });
 
@@ -136,7 +169,7 @@ describe("createArkGameObjectService", () => {
 
   it("reuses an existing object by game id or executable path fallback", async () => {
     const objects = arkObjects({
-      list: vi.fn(async () => [
+      listByType: vi.fn(async () => [
         arkObject({
           id: "by-game-id",
           propsJson: { arrancador_game_id: "game-1" },
@@ -147,9 +180,11 @@ describe("createArkGameObjectService", () => {
         }),
       ]),
     });
+    const objectTypes = arkObjectTypes();
     const service = createArkGameObjectService({
       arkDbPath: "unused.db",
       arkObjects: objects,
+      arkObjectTypes: objectTypes,
       now: () => new Date(timestamp),
     });
 

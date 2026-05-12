@@ -55,7 +55,7 @@
                   <button
                     v-for="noteType in typePickerOptions"
                     :key="noteType.id"
-                    :class="['note-type-submenu-item', noteType.id === noteTypeId && 'is-active']"
+                    :class="['note-type-menu-item', 'note-type-submenu-item', noteType.id === noteTypeId && 'is-active']"
                     type="button"
                     @click="handleNoteTypeChange(noteType.id)"
                   >
@@ -115,6 +115,7 @@ import { all, createLowlight } from "lowlight";
 import Typography from "@tiptap/extension-typography";
 import type { Editor as TiptapEditor, Range } from "@tiptap/vue-3";
 import { Wikilink } from "./Wikilink";
+import { InlineCaret } from "./InlineCaret";
 import WikilinkList from "./WikilinkList.vue";
 import { SlashCommand } from "./SlashCommand";
 import SlashCommandList from "./SlashCommandList.vue";
@@ -255,6 +256,7 @@ const extensions = [
     defaultLanguage: null,
   }),
   Typography,
+  InlineCaret,
   Wikilink.configure({
     suggestion: {
       items: ({ query }: { query: string }) =>
@@ -887,9 +889,7 @@ function handleNoteTypeChange(nextTypeId: string) {
 
 function toggleNoteTypeMenu() {
   isNoteTypeMenuOpen.value = !isNoteTypeMenuOpen.value;
-  if (!isNoteTypeMenuOpen.value) {
-    isTypePickerOpen.value = false;
-  }
+  isTypePickerOpen.value = isNoteTypeMenuOpen.value;
 }
 
 function toggleTypePicker() {

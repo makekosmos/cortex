@@ -1,8 +1,21 @@
 export { ArkClient } from './ark-client.js'
+export {
+  buildPersonalSelectedSpace,
+  buildSharedSelectedSpaceFromCode,
+  derivePersonalSpaceCodeFromVaultPath,
+  deriveSpaceIdFromCode,
+  getArkDbPathForSelectedSpace,
+  getKeplerDataDir,
+  getSharedSelectedSpacePath,
+  readSharedSelectedSpace,
+  writeSharedSelectedSpace,
+} from './selected-space.js'
+export type { SharedSelectedSpace } from './selected-space.js'
 export type {
   ArkClientOptions,
   ArkDailyTrendPoint,
   ArkHourlyHeatmapCell,
+  ArkKvApi,
   ArkLinksApi,
   ArkObjectLinkRecord,
   ArkObjectRecord,
@@ -18,6 +31,13 @@ export type {
   ArkUsageApi,
   ArkUsageEntityApi,
   ArkUsageEventRecord,
+  ArkUsageGameDailyTotal,
+  ArkUsageGamePlaytimeAggregate,
+  ArkUsageGamePlaytimeBinding,
+  ArkUsageGamePlaytimeSummary,
+  ArkUsageGamePlaytimeSummaryOptions,
+  ArkUsageGameRangeTotal,
+  ArkUsageProcessCandidate,
   ArkUsageSessionRecord,
   ArkUsageSnapshot,
   ArkUsageSummary,

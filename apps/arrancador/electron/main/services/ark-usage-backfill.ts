@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 
 import {
   ArkClient,
+  type ArkKvApi,
   type ArkTrackedAppRecord,
   type ArkUsageApi,
   type JsonValue,
 } from "@kepler/ark";
 
 import { openSqliteDatabase } from "../db";
-import { execute, queryAll, queryOne } from "../helpers/db";
+import { queryAll } from "../helpers/db";
 import type { DbLike } from "../helpers/shared";
 import { getArkCoreRpcBinaryPath } from "./ark-game-objects";
 import { resolveUsageTrackerDb } from "./ark-usage";
@@ -37,6 +38,14 @@ type BackfillUsageApi = Pick<ArkUsageApi, "loadAll"> & {
   sessions: Pick<ArkUsageApi["sessions"], "upsert">;
 };
 
+type BackfillKvApi = Pick<ArkKvApi, "get" | "set">;
+
+type BackfillArkApis = {
+  usage: BackfillUsageApi;
+  kv: BackfillKvApi;
+  close?: () => Promise<void> | void;
+};
+
 export interface LegacyUsageBackfillResult {
   targetDbPath: string | null;
   alreadyBackfilled: boolean;
@@ -52,6 +61,7 @@ export interface BackfillLegacyUsageToArkOptions {
   fallbackArkDbPath?: string;
   resolveUsageDb?: () => Promise<{ db: DbLike | null; path: string | null }>;
   arkUsage?: BackfillUsageApi;
+  arkKv?: BackfillKvApi;
   arkCoreRpcPath?: string;
   requestTimeoutMs?: number;
   force?: boolean;
@@ -134,51 +144,45 @@ async function listLegacyDailyRows(db: DbLike): Promise<LegacyDailyRow[]> {
   );
 }
 
-async function getSyncKv(db: DbLike, key: string): Promise<string | null> {
-  const row = await queryOne<{ value: string }>(
-    db,
-    "SELECT value FROM sync_kv WHERE key = ?1",
-    [key],
-  );
-  return row?.value ?? null;
-}
-
-async function setSyncKv(db: DbLike, key: string, value: string): Promise<void> {
-  await execute(
-    db,
-    "INSERT OR REPLACE INTO sync_kv (key, value) VALUES (?1, ?2)",
-    [key, value],
-  );
-}
-
-async function loadOrCreateBackfillDeviceId(db: DbLike): Promise<string> {
-  const existing = await getSyncKv(db, BACKFILL_DEVICE_ID_KEY);
+async function loadOrCreateBackfillDeviceId(kv: BackfillKvApi): Promise<string> {
+  const existing = await kv.get(BACKFILL_DEVICE_ID_KEY);
   if (existing && existing.trim().length > 0) {
     return existing.trim();
   }
 
   const generated = `arrancador-legacy-${randomUUID().replaceAll("-", "")}`;
-  await setSyncKv(db, BACKFILL_DEVICE_ID_KEY, generated);
+  await kv.set(BACKFILL_DEVICE_ID_KEY, generated);
   return generated;
 }
 
-function createBackfillUsageApi(
+function createBackfillArkApis(
   options: BackfillLegacyUsageToArkOptions,
   targetDbPath: string,
   deviceId: string,
-): BackfillUsageApi {
-  if (options.arkUsage) {
-    return options.arkUsage;
+): BackfillArkApis {
+  if (options.arkUsage && options.arkKv) {
+    return {
+      usage: options.arkUsage,
+      kv: options.arkKv,
+    };
   }
 
-  return new ArkClient({
+  const client = new ArkClient({
     spaceId: "arrancador",
     deviceId,
     deviceName: "Arrancador Legacy Import",
     dbPath: targetDbPath,
     sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(),
     requestTimeoutMs: options.requestTimeoutMs ?? 10_000,
-  }).usage;
+  });
+
+  return {
+    usage: options.arkUsage ?? client.usage,
+    kv: options.arkKv ?? client.kv,
+    close: async () => {
+      await client.stop();
+    },
+  };
 }
 
 function parseMetaJson(value: string): JsonValue {
@@ -211,9 +215,18 @@ export async function backfillLegacyUsageToArk(
     return emptyResult;
   }
 
+  let ark: BackfillArkApis | null = null;
+
   try {
+    const bootstrapDeviceId = `arrancador-legacy-${randomUUID().replaceAll("-", "")}`;
+    ark = createBackfillArkApis(
+      options,
+      targetDbPath ?? options.arkDbPath,
+      bootstrapDeviceId,
+    );
+
     if (!options.force) {
-      const marker = await getSyncKv(arkDb, BACKFILL_MARKER_KEY);
+      const marker = await ark.kv.get(BACKFILL_MARKER_KEY);
       if (marker && marker.trim().length > 0) {
         return {
           ...emptyResult,
@@ -225,7 +238,7 @@ export async function backfillLegacyUsageToArk(
     const [legacyGames, legacyDailyRows, deviceId] = await Promise.all([
       listLegacyGamesWithUsage(options.legacyDb),
       listLegacyDailyRows(options.legacyDb),
-      loadOrCreateBackfillDeviceId(arkDb),
+      loadOrCreateBackfillDeviceId(ark.kv),
     ]);
     const deviceName =
       process.env.COMPUTERNAME?.trim() ||
@@ -237,11 +250,7 @@ export async function backfillLegacyUsageToArk(
       deviceId,
       deviceName,
     );
-    const usage = createBackfillUsageApi(
-      options,
-      targetDbPath ?? options.arkDbPath,
-      deviceId,
-    );
+    const usage = ark.usage;
     const existingUsage = await usage.loadAll();
     const existingTrackedApps = new Map(
       existingUsage.trackedApps.map((trackedApp) => [trackedApp.id, trackedApp]),
@@ -300,8 +309,7 @@ export async function backfillLegacyUsageToArk(
       result.migratedSessions += 1;
     }
 
-    await setSyncKv(
-      arkDb,
+    await ark.kv.set(
       BACKFILL_MARKER_KEY,
       JSON.stringify({
         version: 1,
@@ -312,6 +320,7 @@ export async function backfillLegacyUsageToArk(
 
     return result;
   } finally {
+    await Promise.resolve(ark?.close?.());
     await Promise.resolve(arkDb.close?.());
   }
 }

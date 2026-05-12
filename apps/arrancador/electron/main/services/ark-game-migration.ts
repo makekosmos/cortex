@@ -252,6 +252,7 @@ function openArkDb(filePath: string): DbLike {
   }
 
   return openSqliteDatabase(filePath, {
+    readonly: true,
     fileMustExist: true,
     timeoutMs: 2000,
   });

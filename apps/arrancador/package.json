@@ -19,6 +19,7 @@
     "build:preload": "bun build ./electron/preload.ts --outfile=out/preload/index.js --target=node --format=esm -e electron",
     "preview": "vite preview --configLoader native --host 127.0.0.1 --port 4174 --strictPort",
     "pack": "bun run build && electron-builder --dir",
+    "smoke:packaged": "bun run build && electron-builder --dir -c.win.signAndEditExecutable=false && node --experimental-strip-types scripts/run-packaged-smoke.ts",
     "dist": "bun run build && electron-builder",
     "typecheck": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.electron.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "bun run typecheck && bun run biome:check",

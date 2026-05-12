@@ -1,6 +1,6 @@
 import type { ArkTrackedAppRecord, ArkUsageApi, ArkUsageSessionRecord } from "@kepler/ark";
 import { describe, expect, it } from "vitest";
-import type { DbLike, DbRunResult, DbValue } from "../helpers/shared";
+import type { DbLike } from "../helpers/shared";
 import {
   backfillLegacyUsageToArk,
   buildLegacyUsageBackfillPlan,
@@ -45,32 +45,30 @@ function createLegacyDb(
 }
 
 function createArkDb() {
-  const syncKv = new Map<string, string>();
-
   const db: DbLike = {
     all: () => [],
-    get(sql, params = []) {
-      if (sql.includes("SELECT value FROM sync_kv")) {
-        const value = syncKv.get(String(params[0] ?? ""));
-        return value === undefined ? undefined : { value };
-      }
-
-      return undefined;
-    },
-    run(sql, params: readonly DbValue[] = []): DbRunResult {
-      if (sql.includes("INSERT OR REPLACE INTO sync_kv")) {
-        syncKv.set(String(params[0] ?? ""), String(params[1] ?? ""));
-        return { changes: 1 };
-      }
-      return { changes: 0 };
-    },
+    get: () => undefined,
+    run: () => ({ changes: 0 }),
     transaction: async (fn) => await Promise.resolve(fn(db)),
     close: () => undefined,
   };
 
   return {
     db,
-    syncKv,
+  };
+}
+
+function createArkKv() {
+  const values = new Map<string, string>();
+
+  return {
+    kv: {
+      get: async (key: string) => values.get(key) ?? null,
+      set: async (key: string, value: string) => {
+        values.set(key, value);
+      },
+    },
+    values,
   };
 }
 
@@ -188,12 +186,14 @@ describe("backfillLegacyUsageToArk", () => {
       ],
     );
     const ark = createArkDb();
+    const arkKv = createArkKv();
     const arkUsage = createArkUsage();
 
     const first = await backfillLegacyUsageToArk({
       legacyDb,
       arkDbPath: "selected.db",
       arkUsage: arkUsage.usage,
+      arkKv: arkKv.kv,
       resolveUsageDb: async () => ({
         db: ark.db,
         path: "selected.db",
@@ -205,12 +205,13 @@ describe("backfillLegacyUsageToArk", () => {
     expect(first.migratedSessions).toBe(2);
     expect(arkUsage.trackedApps.size).toBe(1);
     expect(arkUsage.usageSessions.size).toBe(2);
-    expect(ark.syncKv.has("arrancador.legacy_usage_backfill.v1")).toBe(true);
+    expect(arkKv.values.has("arrancador.legacy_usage_backfill.v1")).toBe(true);
 
     const second = await backfillLegacyUsageToArk({
       legacyDb,
       arkDbPath: "selected.db",
       arkUsage: arkUsage.usage,
+      arkKv: arkKv.kv,
       resolveUsageDb: async () => ({
         db: ark.db,
         path: "selected.db",

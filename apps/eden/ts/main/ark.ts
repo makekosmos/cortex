@@ -1,11 +1,13 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { app } from "electron";
+import electron from "electron";
 import {
   getArkDbPathForSelectedSpace,
   readSharedSelectedSpace,
-} from "../../../../packages/shared-space/selectedSpace";
+} from "@kepler/ark";
+
+const { app } = electron;
 
 interface ArkRequest {
   operation: string;

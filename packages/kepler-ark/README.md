@@ -89,7 +89,9 @@ without the shared secret from joining the mesh, but it does not encrypt traffic
 
 ```ts
 const objects = await ark.objects.list()
+const taskObjects = await ark.objects.listByType('task_obj')
 const task = await ark.objects.get('task-1')
+const linked = await ark.objects.getMany(['task-1', 'note-1'])
 
 await ark.objects.upsert({
   id: 'task-1',
@@ -105,6 +107,9 @@ await ark.objects.upsert({
 const matches = await ark.objects.search('plan')
 await ark.objects.delete('task-1')
 ```
+
+`listByType` and `getMany` are real `ark-core-rpc` query operations, not
+SDK-side filtering over `list()`.
 
 ## Object Types And Links
 
@@ -132,6 +137,20 @@ await ark.links.upsert({
 
 ```ts
 const usage = await ark.usage.loadAll()
+const recentProcesses = await ark.usage.processes.recent(10)
+const matchingProcesses = await ark.usage.processes.search('demo', 10)
+const gamePlaytime = await ark.usage.gamePlaytime.summary({
+  bindings: [
+    {
+      gameId: 'game-1',
+      gameName: 'Demo',
+      matchType: 'exe_path',
+      matchValue: 'C:/Games/Demo/demo.exe',
+    },
+  ],
+  rangeStart: '2026-04-01',
+  rangeEnd: '2026-04-30',
+})
 
 await ark.usage.trackedApps.upsert({
   id: 'app-1',
@@ -149,6 +168,9 @@ await ark.usage.trackedApps.upsert({
 await ark.usage.sessions.delete('session-1')
 await ark.usage.events.delete('event-1')
 ```
+
+Usage process and game playtime summary queries are backed by Rust/SQLite
+aggregation in `ark-core-rpc`; callers pass app-specific bindings, not SQL.
 
 ## Integration Rules
 

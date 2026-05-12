@@ -37,6 +37,7 @@
         <button
           type="button"
           class="sidebar-head-icon withBackground eden-titlebar-toggle"
+          data-testid="sidebar-toggle"
           :title="layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
           @click="layout.toggleWidgetSidebar()"
         >
@@ -326,6 +327,8 @@
     </main>
     -->
   </div>
+
+  <CustomCaret />
 </template>
 
 <script setup lang="ts">
@@ -333,6 +336,7 @@ import { computed, nextTick, onMounted, shallowRef, watch } from "vue";
 import {
   DesktopChrome,
   DesktopContentSurface,
+  CustomCaret,
   TitlebarHistoryControls,
   type TitlebarPlatform,
 } from "@kepler/visuals";

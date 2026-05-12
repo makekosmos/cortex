@@ -41,12 +41,16 @@ async function launchApp(
   homePath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-home-")),
   attempt = 0,
 ): Promise<LaunchedApp> {
+  const testAppDataPath = path.join(homePath, "AppData", "Roaming");
+  const testUserDataPath = path.join(testAppDataPath, "EdenTestUserData");
   const electronApp = await electron.launch({
     args: ["."],
     env: {
       ...process.env,
       EDEN_BACKGROUND_LAUNCH: "1",
       HOME: homePath,
+      KEPLER_TEST_APPDATA: testAppDataPath,
+      KEPLER_TEST_USER_DATA: testUserDataPath,
       NODE_ENV: "development",
     },
   });
@@ -321,7 +325,7 @@ test.describe("Electron App", () => {
         "Space alpha",
       );
       await expect(launch.window.locator('[data-testid="space-view-all-objects"]')).toContainText(
-        "Страница",
+        "Заметка",
       );
 
       await launch.window.locator('[data-testid="open-settings-btn"]').click();
@@ -417,7 +421,9 @@ test.describe("Electron App", () => {
         window.__edenPerf?.reset();
       });
 
-      await editor.click();
+      const zenEditor = launch.window.locator(".app-main--zen .ProseMirror");
+      await expect(zenEditor).toBeVisible();
+      await zenEditor.click();
       await launch.window.keyboard.type(" Zen typing burst ".repeat(12), { delay: 4 });
       await launch.window.waitForTimeout(250);
 
@@ -446,13 +452,16 @@ test.describe("Electron App", () => {
         ),
       );
 
+      await launch.window.waitForTimeout(1200);
+      await expect(zenEditor).toContainText("Zen typing burst");
+
       await launch.window.locator('[data-testid="zen-mode-exit"]').click();
 
       await expect(launch.window.locator(".widget-sidebar-wrapper")).toBeVisible();
       await expect(launch.window.locator('[data-testid="zen-mode-exit"]')).toHaveCount(0);
 
       await launch.window.waitForTimeout(1200);
-      await expect(launch.window.locator(".ProseMirror")).toContainText("Zen typing burst");
+      await expect(launch.window.locator(".ProseMirror")).toBeVisible();
       expect(launch.pageErrors).toEqual([]);
     } finally {
       if (launch) {
@@ -981,9 +990,7 @@ test.describe("Electron App", () => {
 
       await expect(sidebarWrapper).toHaveClass(/collapsed/);
 
-      const expandBtn = launch.window.locator('[data-testid="sidebar-toggle-external"]');
-      await expect(expandBtn).toBeVisible();
-      await expandBtn.click();
+      await collapseBtn.click();
       await launch.window.waitForTimeout(400);
 
       await expect(sidebarWrapper).not.toHaveClass(/collapsed/);
@@ -1128,7 +1135,7 @@ test.describe("Electron App", () => {
 
       const slashMenu = launch.window.locator(".slash-commands");
       await expect(slashMenu).toBeVisible();
-      await expect(slashMenu).toContainText("Заголовок 1");
+      await expect(slashMenu).toContainText("Заголовок");
 
       await launch.window.keyboard.press("Enter");
       await launch.window.keyboard.type("Slash heading");

@@ -27,6 +27,12 @@ export interface SidecarEvent {
 }
 export type SidecarEventListener = (event: SidecarEvent) => void;
 
+function getAppDataPath(): string {
+  return process.env.KEPLER_TEST_APPDATA
+    ? path.resolve(process.env.KEPLER_TEST_APPDATA)
+    : app.getPath('appData')
+}
+
 function getSidecarBinaryPath() {
   const binaryName = process.platform === 'win32' ? 'ark-core-rpc.exe' : 'ark-core-rpc'
 
@@ -34,7 +40,7 @@ function getSidecarBinaryPath() {
     return path.join(process.resourcesPath, 'ark-core', binaryName)
   }
 
-  // ARK is the canonical runtime for Delphi. The legacy delphi-db sidecar was removed.
+  // ARK is the canonical runtime for Delphi; there is no Delphi-specific DB sidecar fallback.
   const repoRoot = path.resolve(process.env.APP_ROOT ?? process.cwd(), '..', '..', '..')
   const arkCorePaths = [
     path.join(repoRoot, 'packages', 'ark-core', 'rust', 'target', 'release', binaryName),
@@ -117,7 +123,7 @@ class SidecarClient {
 
     if (!this.initialized) {
       this.initialized = true
-      const dbPath = this.dbPathOverride ?? path.join(app.getPath('appData'), 'Kepler', 'ark.db')
+      const dbPath = this.dbPathOverride ?? path.join(getAppDataPath(), 'Kepler', 'ark.db')
       // Ensure parent directory exists (for per-space paths)
       fs.mkdirSync(path.dirname(dbPath), { recursive: true })
       const initMsg = JSON.stringify({ operation: 'init', dbPath })
@@ -625,7 +631,7 @@ export function syncGetHostDeviceName(): Promise<string> {
  * The old sidecar process is killed and a new one is started with the space DB path.
  */
 export async function dbSwitchSpace(spaceId: string): Promise<void> {
-  const dataDir = path.join(app.getPath('appData'), 'Kepler')
+  const dataDir = path.join(getAppDataPath(), 'Kepler')
   const spaceDir = path.join(dataDir, 'spaces', spaceId)
   fs.mkdirSync(spaceDir, { recursive: true })
   const newDbPath = path.join(spaceDir, 'ark.db')

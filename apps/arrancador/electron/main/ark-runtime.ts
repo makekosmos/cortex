@@ -1,7 +1,7 @@
 import {
   getArkDbPathForSelectedSpace,
   type SharedSelectedSpace,
-} from "../../../../packages/shared-space/selectedSpace";
+} from "@kepler/ark";
 
 export interface ArkRuntimeBinding<TServices> {
   arkDbPath: string | null;

@@ -6,6 +6,12 @@ import {
 } from "./ark-usage";
 import type { Game, GameProcessBinding } from "./games/types";
 
+const unavailableArkUsage = {
+  loadAll: async () => {
+    throw new Error("mock ark runtime unavailable");
+  },
+};
+
 type LegacyGameRow = {
   id: string;
   name: string;
@@ -141,6 +147,7 @@ describe("multi-process Ark usage bindings", () => {
       legacyDb: createLegacyDb([], []),
       arkDbPath: "selected.db",
       fallbackArkDbPath: "root.db",
+      arkUsage: unavailableArkUsage,
       resolveUsageDb: async () => ({
         db: createTrackerDb(
           [
@@ -222,6 +229,7 @@ describe("multi-process Ark usage bindings", () => {
       ),
       arkDbPath: "selected.db",
       fallbackArkDbPath: "root.db",
+      arkUsage: unavailableArkUsage,
       resolveUsageDb: async () => ({
         db: createTrackerDb(
           [],

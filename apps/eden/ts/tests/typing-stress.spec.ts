@@ -28,12 +28,16 @@ async function launchApp(
   homePath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-stress-home-")),
   attempt = 0,
 ): Promise<LaunchedApp> {
+  const testAppDataPath = path.join(homePath, "AppData", "Roaming");
+  const testUserDataPath = path.join(testAppDataPath, "EdenTestUserData");
   const electronApp = await electron.launch({
     args: ["."],
     env: {
       ...process.env,
       EDEN_BACKGROUND_LAUNCH: "1",
       HOME: homePath,
+      KEPLER_TEST_APPDATA: testAppDataPath,
+      KEPLER_TEST_USER_DATA: testUserDataPath,
       NODE_ENV: "development",
     },
   });

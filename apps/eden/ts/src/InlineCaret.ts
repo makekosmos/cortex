@@ -96,6 +96,9 @@ export const InlineCaret = Extension.create({
         },
         view: (view) => {
           if (view.hasFocus()) {
+            view.dispatch(
+              view.state.tr.setMeta(inlineCaretPluginKey, { focused: true }),
+            );
             view.dom.classList.add("pm-inline-caret-enabled");
           }
 

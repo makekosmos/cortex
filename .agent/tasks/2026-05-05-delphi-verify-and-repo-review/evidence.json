@@ -1,0 +1,52 @@
+{
+  "task_id": "2026-05-05-delphi-verify-and-repo-review",
+  "verified_at": "2026-05-05",
+  "branch": "main",
+  "status": "PASS",
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "description": "Delphi vitest exits 0",
+      "command": "cd apps/delphi/ts && bunx vitest run",
+      "exit_code": 0,
+      "result": "PASS",
+      "summary": "Test Files 8 passed (8); Tests 100 passed (100); Duration 29.78s",
+      "raw": "raw/delphi-vitest.txt"
+    },
+    {
+      "id": "AC2",
+      "description": "Delphi tsc --noEmit clean",
+      "command": "cd apps/delphi/ts && bunx tsc --noEmit",
+      "exit_code": 0,
+      "result": "PASS",
+      "summary": "no errors",
+      "raw": "raw/delphi-tsc.txt"
+    },
+    {
+      "id": "AC3",
+      "description": "ARK write-boundary guard clean",
+      "command": "node scripts/check-ark-write-boundaries.mjs",
+      "exit_code": 0,
+      "result": "PASS",
+      "summary": "ARK write boundary guard passed.",
+      "raw": "raw/ark-guard-writes.txt"
+    },
+    {
+      "id": "AC4",
+      "description": "Per-area review of all 51 modified + 13 untracked paths",
+      "result": "PASS",
+      "summary": "See evidence.md sections.",
+      "raw": "raw/git-status.txt"
+    }
+  ],
+  "deferred": [
+    "delphi e2e (Playwright) — needs ark-core-rpc build",
+    "arrancador unit tests + packaged-smoke — out of contracted scope",
+    "Electron 38 packaged build smoke — covered by .agent/tasks/2026-04-27-packaged-smoke"
+  ],
+  "advisories": [
+    "CRLF/LF warnings on nearly all modified files — consider pinning .gitattributes",
+    "Electron pinned 41 → 38; revalidate packaged smoke before release",
+    "eden listArkObjects/getArkEntry now perform an extra list_object_types call per fetch"
+  ]
+}

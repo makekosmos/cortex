@@ -2,12 +2,12 @@ import fs from "node:fs";
 
 import path from "node:path";
 
-import { app } from "electron";
+import electron from "electron";
 import {
   buildPersonalSelectedSpace,
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
-} from "../../../../packages/shared-space/selectedSpace";
+} from "@kepler/ark";
 
 import { defaultCodeToolsSettings, type CodeToolsSettings } from "./codeTools";
 
@@ -31,6 +31,8 @@ import {
   type ArkObjectTypeRecord,
 } from "./ark";
 import { runHeartVaultToArkObjectMigration } from "./ark-object-migration";
+
+const { app } = electron;
 
 export interface Entry {
   id: string;
@@ -281,7 +283,6 @@ function mergeCodeToolsSettings(
 }
 
 const DEFAULT_ARK_TYPE_ID = "note_obj";
-const ARK_OBJECT_TYPE_IDS = new Set(["note_obj", "game_obj", "task_obj"]);
 
 function arkTimestampToMillis(value?: string | null) {
   if (!value) {
@@ -345,6 +346,7 @@ function ensureArkList<T>(value: unknown): T[] {
 function mapArkObjectToEntry(
   object: ArkObjectRecord,
   links: ArkObjectLinkRecord[],
+  objectType?: ArkObjectTypeRecord,
 ): Entry {
   const headerProps = {
     ...object.propsJson,
@@ -361,7 +363,9 @@ function mapArkObjectToEntry(
     updated_at: arkTimestampToMillis(object.updatedAt),
     folder_id: null,
     type_id: object.typeId,
-    header_layout: "default",
+    header_layout: objectType
+      ? parseNoteTypeUiSchema(objectType.uiSchemaJson).header_layout ?? "default"
+      : "default",
     header_props_json: stringifyHeaderProps(headerProps),
     schema_version: 1,
     deleted_at: object.deletedAt ? arkTimestampToMillis(object.deletedAt) : null,
@@ -460,18 +464,26 @@ function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
 }
 
 async function listArkObjects(): Promise<Entry[]> {
-  const [objects, links] = await Promise.all([
+  const [objects, links, objectTypes] = await Promise.all([
     runArkRequest<ArkObjectRecord[] | { items?: ArkObjectRecord[]; objects?: ArkObjectRecord[] }>({
       operation: "list_objects",
     }),
     runArkRequest<ArkObjectLinkRecord[] | { items?: ArkObjectLinkRecord[]; links?: ArkObjectLinkRecord[] }>({
       operation: "list_object_links",
     }),
+    runArkRequest<ArkObjectTypeRecord[] | { items?: ArkObjectTypeRecord[]; types?: ArkObjectTypeRecord[] }>({
+      operation: "list_object_types",
+    }),
   ]);
 
   const normalizedLinks = ensureArkList<ArkObjectLinkRecord>(links);
+  const typesById = new Map(
+    ensureArkList<ArkObjectTypeRecord>(objectTypes).map((objectType) => [objectType.id, objectType]),
+  );
 
-  return ensureArkList<ArkObjectRecord>(objects).map((object) => mapArkObjectToEntry(object, normalizedLinks));
+  return ensureArkList<ArkObjectRecord>(objects).map((object) =>
+    mapArkObjectToEntry(object, normalizedLinks, typesById.get(object.typeId))
+  );
 }
 
 async function migrateHeartVaultToArkObjects(vaultPath: string) {
@@ -543,12 +555,19 @@ async function migrateHeartVaultToArkObjects(vaultPath: string) {
 }
 
 async function getArkEntry(id: string): Promise<Entry | undefined> {
-  const [object, links] = await Promise.all([
+  const [object, links, objectTypes] = await Promise.all([
     runArkRequest<ArkObjectRecord | null>({ operation: "get_object", id }),
     runArkRequest<ArkObjectLinkRecord[]>({ operation: "list_object_links" }),
+    runArkRequest<ArkObjectTypeRecord[] | { items?: ArkObjectTypeRecord[]; types?: ArkObjectTypeRecord[] }>({
+      operation: "list_object_types",
+    }),
   ]);
 
-  return object ? mapArkObjectToEntry(object, links) : undefined;
+  const typesById = new Map(
+    ensureArkList<ArkObjectTypeRecord>(objectTypes).map((objectType) => [objectType.id, objectType]),
+  );
+
+  return object ? mapArkObjectToEntry(object, links, typesById.get(object.typeId)) : undefined;
 }
 
 async function syncArkObjectLinks(entry: Entry) {
@@ -626,24 +645,25 @@ function normalizeNoteType(noteType: NoteType) {
 }
 
 async function getNoteTypeById(noteTypeId: string) {
-  if (ARK_OBJECT_TYPE_IDS.has(noteTypeId)) {
-    const objectType = await runArkRequest<ArkObjectTypeRecord | null>({
-      operation: "get_object_type",
-      id: noteTypeId,
-    });
+  const objectType = await runArkRequest<ArkObjectTypeRecord | null>({
+    operation: "get_object_type",
+    id: noteTypeId,
+  });
 
-    return objectType ? mapArkObjectTypeToNoteType(objectType) : null;
+  return objectType ? mapArkObjectTypeToNoteType(objectType) : null;
+}
+
+async function ensureEntryTypeAvailableInArk(noteTypeId: string): Promise<boolean> {
+  const objectType = await runArkRequest<ArkObjectTypeRecord | null>({
+    operation: "get_object_type",
+    id: noteTypeId,
+  });
+
+  if (objectType) {
+    return true;
   }
 
-  const vaultPath = requireVaultPath();
-
-  return runHeartRequest<NoteType | null>({
-    operation: "get_note_type_by_id",
-
-    vaultPath,
-
-    noteTypeId,
-  });
+  return false;
 }
 
 async function validateEntryTypeMetadata(
@@ -850,7 +870,7 @@ export {
 };
 
 export async function saveEntry(entry: Entry): Promise<SaveEntryResult> {
-  const vaultPath = requireVaultPath();
+  requireVaultPath();
 
   const normalizedEntry = normalizeEntry({
     ...entry,
@@ -864,36 +884,57 @@ export async function saveEntry(entry: Entry): Promise<SaveEntryResult> {
     return validationResult;
   }
 
-  if (ARK_OBJECT_TYPE_IDS.has(normalizedEntry.type_id ?? DEFAULT_ARK_TYPE_ID)) {
-    const arkObject = mapEntryToArkObject(normalizedEntry);
-    await runArkRequest<boolean>({
-      operation: "upsert_object",
-      object: {
-        id: arkObject.id,
-        typeId: arkObject.typeId,
-        title: arkObject.title,
-        contentJson: arkObject.contentJson,
-        propsJson: arkObject.propsJson,
-        createdAt: arkObject.createdAt,
-        updatedAt: arkObject.updatedAt,
-        deletedAt: arkObject.deletedAt ?? null,
-      },
-    });
-    await syncArkObjectLinks(normalizedEntry);
-
+  if (!(await ensureEntryTypeAvailableInArk(normalizedEntry.type_id ?? DEFAULT_ARK_TYPE_ID))) {
     return {
-      ok: true,
-      entryId: normalizedEntry.id,
+      ok: false,
+      reason: "invalid_type_metadata",
+      message: "РўРёРї Р·Р°РјРµС‚РєРё Р±РѕР»СЊС€Рµ РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚",
     };
   }
 
-  return runHeartRequest<SaveEntryResult>({
-    operation: "save_entry",
+  const normalizedTitle = normalizedEntry.title.trim().toLocaleLowerCase("ru");
+  const conflictingEntry = (await listArkObjects()).find((candidate) => {
+    if (candidate.id === normalizedEntry.id || candidate.deleted_at !== null) {
+      return false;
+    }
 
-    vaultPath,
+    if ((candidate.folder_id ?? null) !== (normalizedEntry.folder_id ?? null)) {
+      return false;
+    }
 
-    entry: normalizedEntry,
+    return candidate.title.trim().toLocaleLowerCase("ru") === normalizedTitle;
   });
+
+  if (conflictingEntry) {
+    return {
+      ok: false,
+      reason: "duplicate_title",
+      conflictingEntryId: conflictingEntry.id,
+      title: normalizedEntry.title,
+      folder_id: normalizedEntry.folder_id,
+    };
+  }
+
+  const arkObject = mapEntryToArkObject(normalizedEntry);
+  await runArkRequest<boolean>({
+    operation: "upsert_object",
+    object: {
+      id: arkObject.id,
+      typeId: arkObject.typeId,
+      title: arkObject.title,
+      contentJson: arkObject.contentJson,
+      propsJson: arkObject.propsJson,
+      createdAt: arkObject.createdAt,
+      updatedAt: arkObject.updatedAt,
+      deletedAt: arkObject.deletedAt ?? null,
+    },
+  });
+  await syncArkObjectLinks(normalizedEntry);
+
+  return {
+    ok: true,
+    entryId: normalizedEntry.id,
+  };
 }
 
 export async function exportMarkdownVault(
@@ -911,73 +952,28 @@ export async function exportMarkdownVault(
 }
 
 export async function loadEntry(id: string): Promise<Entry | undefined> {
-  const vaultPath = currentVaultPath ?? getVaultPath();
-
   const arkEntry = await getArkEntry(id);
-  if (arkEntry) {
-    return arkEntry;
-  }
-
-  if (!vaultPath) {
-    return undefined;
-  }
-
-  const entry = await runHeartRequest<Entry | null>({
-    operation: "load_entry",
-
-    vaultPath,
-
-    id,
-  });
-
-  return entry ? normalizeEntry(entry) : undefined;
+  return arkEntry ?? undefined;
 }
 
 export async function listEntries(): Promise<Entry[]> {
-  const vaultPath = currentVaultPath ?? getVaultPath();
-
-  const [arkEntries, heartEntries] = await Promise.all([
-    listArkObjects(),
-    vaultPath
-      ? runHeartRequest<Entry[]>({
-        operation: "list_entries",
-        vaultPath,
-      }).then((entries) => entries.map(normalizeEntry))
-      : Promise.resolve([]),
-  ]);
-
-  const byId = new Map<string, Entry>();
-  for (const entry of heartEntries) {
-    byId.set(entry.id, entry);
-  }
-  for (const entry of arkEntries) {
-    byId.set(entry.id, entry);
-  }
-  return [...byId.values()].sort((a, b) => b.updated_at - a.updated_at);
+  const arkEntries = await listArkObjects();
+  return arkEntries.sort((a, b) => b.updated_at - a.updated_at);
 }
 
 export async function searchEntries(query: string): Promise<SearchResult[]> {
-  const vaultPath = currentVaultPath ?? getVaultPath();
-
-  if (!vaultPath || !query.trim()) {
+  if (!query.trim()) {
     return [];
   }
 
-  const [heartResults, arkResults] = await Promise.all([
-    runHeartRequest<SearchResult[]>({
-      operation: "search_entries",
-      vaultPath,
-      query,
-    }),
-    runArkRequest<SearchResult[]>({
-      operation: "search_objects",
-      query,
-    }),
-  ]);
+  const arkResults = await runArkRequest<SearchResult[]>({
+    operation: "search_objects",
+    query,
+  });
 
   const seen = new Set<string>();
 
-  return [...arkResults, ...heartResults].filter((result) => {
+  return arkResults.filter((result) => {
     const key = `${result.entryId}:${result.line}:${result.text}`;
     if (seen.has(key)) {
       return false;
@@ -1025,36 +1021,17 @@ export async function listFolders(): Promise<Folder[]> {
 }
 
 export async function listNoteTypes(): Promise<NoteType[]> {
-  const vaultPath = currentVaultPath ?? getVaultPath();
-
-  const [arkTypes, heartTypes] = await Promise.all([
-    runArkRequest<ArkObjectTypeRecord[] | { items?: ArkObjectTypeRecord[]; types?: ArkObjectTypeRecord[] }>({
-      operation: "list_object_types",
-    }).then((types) =>
-      ensureArkList<ArkObjectTypeRecord>(types).map(mapArkObjectTypeToNoteType)
-    ),
-    vaultPath
-      ? runHeartRequest<NoteType[]>({
-        operation: "list_note_types",
-        vaultPath,
-      }).then((types) => types.map(normalizeNoteType))
-      : Promise.resolve([]),
-  ]);
-
-  const byId = new Map<string, NoteType>();
-  for (const noteType of heartTypes) {
-    byId.set(noteType.id, noteType);
-  }
-  for (const noteType of arkTypes) {
-    byId.set(noteType.id, noteType);
-  }
-  return [...byId.values()];
+  return runArkRequest<ArkObjectTypeRecord[] | { items?: ArkObjectTypeRecord[]; types?: ArkObjectTypeRecord[] }>({
+    operation: "list_object_types",
+  }).then((types) =>
+    ensureArkList<ArkObjectTypeRecord>(types).map(mapArkObjectTypeToNoteType)
+  );
 }
 
 export async function saveNoteType(
   noteType: NoteType,
 ): Promise<SaveNoteTypeResult> {
-  const vaultPath = requireVaultPath();
+  requireVaultPath();
 
   try {
     parseNoteTypeDefinition(noteType.schema_json);
@@ -1090,39 +1067,21 @@ export async function saveNoteType(
     },
   });
 
-  if (ARK_OBJECT_TYPE_IDS.has(normalizedNoteType.id)) {
-    return {
-      ok: true,
-      noteType: normalizedNoteType,
-    };
-  }
-
-  return runHeartRequest<SaveNoteTypeResult>({
-    operation: "save_note_type",
-    vaultPath,
-    note_type: normalizedNoteType,
-  });
+  return {
+    ok: true,
+    noteType: normalizedNoteType,
+  };
 }
 
 export async function deleteNoteType(noteTypeId: string) {
-  const vaultPath = requireVaultPath();
+  requireVaultPath();
 
   await runArkRequest<boolean>({
     operation: "delete_object_type",
     id: noteTypeId,
   });
 
-  if (ARK_OBJECT_TYPE_IDS.has(noteTypeId)) {
-    return true;
-  }
-
-  return runHeartRequest<boolean>({
-    operation: "delete_note_type",
-
-    vaultPath,
-
-    noteTypeId,
-  });
+  return true;
 }
 
 export async function moveEntryToFolder(
@@ -1162,15 +1121,11 @@ export async function deleteEntry(entryId: string): Promise<DeleteEntryResult> {
     };
   }
 
-  const vaultPath = requireVaultPath();
-
-  return runHeartRequest<DeleteEntryResult>({
-    operation: "delete_entry",
-
-    vaultPath,
-
-    entryId,
-  });
+  return {
+    ok: false,
+    reason: "entry_not_found",
+    message: "Entry was not found in ARK objects",
+  };
 }
 
 export async function deleteFolder(

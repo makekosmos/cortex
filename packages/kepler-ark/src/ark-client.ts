@@ -243,6 +243,56 @@ export interface ArkRecentSessionEntry {
   windowTitle: string | null
 }
 
+export interface ArkUsageProcessCandidate {
+  trackedAppId: string
+  displayName: string
+  exePath: string | null
+  processName: string | null
+  lastSeenAt: string | null
+  sessionCount: number
+  bindingMatchType: 'exe_path' | 'process_name'
+  bindingMatchValue: string
+  bindingNormalizedValue: string
+}
+
+export interface ArkUsageGamePlaytimeBinding {
+  gameId: string
+  gameName: string
+  matchType: 'exe_path' | 'process_name'
+  matchValue: string
+}
+
+export interface ArkUsageGamePlaytimeAggregate {
+  gameId: string
+  gameName: string
+  totalSeconds: number
+  sessionCount: number
+  lastPlayed: string | null
+}
+
+export interface ArkUsageGameDailyTotal {
+  date: string
+  seconds: number
+}
+
+export interface ArkUsageGameRangeTotal {
+  gameId: string
+  gameName: string
+  seconds: number
+}
+
+export interface ArkUsageGamePlaytimeSummaryOptions {
+  bindings: ArkUsageGamePlaytimeBinding[]
+  rangeStart?: string
+  rangeEnd?: string
+}
+
+export interface ArkUsageGamePlaytimeSummary {
+  aggregates: ArkUsageGamePlaytimeAggregate[]
+  dailyTotals: ArkUsageGameDailyTotal[]
+  perGameTotals: ArkUsageGameRangeTotal[]
+}
+
 export interface ArkUsageAnalyticsSnapshot {
   generatedAt: string
   summary: ArkUsageSummary
@@ -262,6 +312,13 @@ export interface ArkUsageApi {
   analytics: {
     snapshot(options?: ArkUsageAnalyticsOptions): Promise<ArkUsageAnalyticsSnapshot>
   }
+  processes: {
+    recent(limit?: number): Promise<ArkUsageProcessCandidate[]>
+    search(query: string, limit?: number): Promise<ArkUsageProcessCandidate[]>
+  }
+  gamePlaytime: {
+    summary(options: ArkUsageGamePlaytimeSummaryOptions): Promise<ArkUsageGamePlaytimeSummary>
+  }
   trackedApps: ArkUsageEntityApi<ArkTrackedAppRecord>
   sessions: ArkUsageEntityApi<ArkUsageSessionRecord>
   events: ArkUsageEntityApi<ArkUsageEventRecord>
@@ -269,7 +326,9 @@ export interface ArkUsageApi {
 
 export interface ArkObjectsApi {
   list(): Promise<ArkObjectRecord[]>
+  listByType(typeId: string): Promise<ArkObjectRecord[]>
   get(id: string): Promise<ArkObjectRecord | null>
+  getMany(ids: readonly string[]): Promise<ArkObjectRecord[]>
   upsert(object: ArkObjectRecord): Promise<void>
   delete(id: string): Promise<void>
   search(query: string): Promise<ArkSearchResult[]>
@@ -286,6 +345,11 @@ export interface ArkLinksApi {
   list(): Promise<ArkObjectLinkRecord[]>
   upsert(link: ArkObjectLinkRecord): Promise<void>
   delete(id: string): Promise<void>
+}
+
+export interface ArkKvApi {
+  get(key: string): Promise<string | null>
+  set(key: string, value: string): Promise<void>
 }
 
 interface ArkLoadAllData {
@@ -311,6 +375,7 @@ export class ArkClient {
   readonly objectTypes: ArkObjectTypesApi
   readonly links: ArkLinksApi
   readonly usage: ArkUsageApi
+  readonly kv: ArkKvApi
 
   // ---- Built-in sidecar child-process (used when requestFn is absent) ----
   private child: ChildProcessWithoutNullStreams | null = null
@@ -335,7 +400,11 @@ export class ArkClient {
     this.delegateRequest = opts.requestFn ?? null
     this.objects = {
       list: () => this.requestAfterInit<ArkObjectRecord[]>({ operation: 'list_objects' }),
+      listByType: (typeId) =>
+        this.requestAfterInit<ArkObjectRecord[]>({ operation: 'list_objects_by_type', type_id: typeId }),
       get: (id) => this.requestAfterInit<ArkObjectRecord | null>({ operation: 'get_object', id }),
+      getMany: (ids) =>
+        this.requestAfterInit<ArkObjectRecord[]>({ operation: 'get_objects_by_ids', ids: [...ids] }),
       upsert: async (object) => {
         await this.requestAfterInit<boolean>({
           operation: 'upsert_object',
@@ -387,6 +456,12 @@ export class ArkClient {
         })
       },
     }
+    this.kv = {
+      get: (key) => this.requestAfterInit<string | null>({ operation: 'get_sync_kv', key }),
+      set: async (key, value) => {
+        await this.requestAfterInit<boolean>({ operation: 'set_sync_kv', key, value })
+      },
+    }
     this.usage = {
       loadAll: async () => {
         const data = await this.requestAfterInit<ArkLoadAllData>({ operation: 'load_all' })
@@ -403,6 +478,28 @@ export class ArkClient {
             range_days: options.rangeDays,
             top_apps_limit: options.topAppsLimit,
             recent_sessions_limit: options.recentSessionsLimit,
+          }),
+      },
+      processes: {
+        recent: (limit = 10) =>
+          this.requestAfterInit<ArkUsageProcessCandidate[]>({
+            operation: 'list_recent_usage_processes',
+            limit,
+          }),
+        search: (query, limit = 10) =>
+          this.requestAfterInit<ArkUsageProcessCandidate[]>({
+            operation: 'search_usage_processes',
+            query,
+            limit,
+          }),
+      },
+      gamePlaytime: {
+        summary: (options) =>
+          this.requestAfterInit<ArkUsageGamePlaytimeSummary>({
+            operation: 'get_usage_game_playtime_summary',
+            bindings: options.bindings,
+            range_start: options.rangeStart,
+            range_end: options.rangeEnd,
           }),
       },
       trackedApps: {

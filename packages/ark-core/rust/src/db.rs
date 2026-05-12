@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use chrono::{Duration, Utc};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -688,6 +689,19 @@ pub fn delete_object(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn map_ark_object_row(row: &Row<'_>) -> rusqlite::Result<ArkObject> {
+    Ok(ArkObject {
+        id: row.get(0)?,
+        type_id: row.get(1)?,
+        title: row.get(2)?,
+        content_json: parse_json_or_default(row.get(3)?),
+        props_json: parse_json_or_default(row.get(4)?),
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+        deleted_at: row.get(7)?,
+    })
+}
+
 pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
     let mut stmt = conn
         .prepare(
@@ -697,18 +711,46 @@ pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map([], |row| {
-            Ok(ArkObject {
-                id: row.get(0)?,
-                type_id: row.get(1)?,
-                title: row.get(2)?,
-                content_json: parse_json_or_default(row.get(3)?),
-                props_json: parse_json_or_default(row.get(4)?),
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
-                deleted_at: row.get(7)?,
-            })
-        })
+        .query_map([], map_ark_object_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkObject>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+             FROM objects
+             WHERE type_id = ?1
+             ORDER BY updated_at DESC, created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![type_id], map_ark_object_row)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn get_objects_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<ArkObject>, String> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders = (1..=ids.len())
+        .map(|index| format!("?{index}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+         FROM objects
+         WHERE id IN ({placeholders})
+         ORDER BY updated_at DESC, created_at DESC"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(ids.iter()), map_ark_object_row)
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
@@ -720,18 +762,7 @@ pub fn get_object(conn: &Connection, id: &str) -> Result<Option<ArkObject>, Stri
          FROM objects
          WHERE id = ?1",
         params![id],
-        |row| {
-            Ok(ArkObject {
-                id: row.get(0)?,
-                type_id: row.get(1)?,
-                title: row.get(2)?,
-                content_json: parse_json_or_default(row.get(3)?),
-                props_json: parse_json_or_default(row.get(4)?),
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
-                deleted_at: row.get(7)?,
-            })
-        },
+        map_ark_object_row,
     )
     .optional()
     .map_err(|e| e.to_string())
@@ -1457,6 +1488,493 @@ pub fn load_usage_analytics(
         hourly_heatmap,
         top_apps,
         recent_sessions,
+    })
+}
+
+fn clamp_usage_process_limit(limit: i64) -> i64 {
+    limit.clamp(1, 25)
+}
+
+fn normalize_usage_binding_value(match_type: &str, value: &str) -> String {
+    let trimmed = value.trim();
+    if match_type == "exe_path" {
+        trimmed.replace('/', "\\").to_lowercase()
+    } else {
+        trimmed.to_lowercase()
+    }
+}
+
+fn build_usage_process_candidate(
+    tracked_app_id: String,
+    display_name: Option<String>,
+    exe_path: Option<String>,
+    process_name: Option<String>,
+    last_seen_at: Option<String>,
+    session_count: i64,
+) -> Option<UsageProcessCandidate> {
+    let exe_path = exe_path.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    let process_name = process_name.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+    let (binding_match_type, binding_match_value) = match (&exe_path, &process_name) {
+        (Some(value), _) => ("exe_path".to_string(), value.clone()),
+        (None, Some(value)) => ("process_name".to_string(), value.clone()),
+        (None, None) => return None,
+    };
+    let binding_normalized_value =
+        normalize_usage_binding_value(&binding_match_type, &binding_match_value);
+    let display_name = display_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or(process_name.as_deref())
+        .or(exe_path.as_deref())
+        .unwrap_or(&tracked_app_id)
+        .to_string();
+
+    Some(UsageProcessCandidate {
+        tracked_app_id,
+        display_name,
+        exe_path,
+        process_name,
+        last_seen_at,
+        session_count,
+        binding_match_type,
+        binding_match_value,
+        binding_normalized_value,
+    })
+}
+
+fn map_usage_process_candidate_row(
+    row: &Row<'_>,
+) -> rusqlite::Result<Option<UsageProcessCandidate>> {
+    let tracked_app_id: String = row.get(0)?;
+    let display_name: Option<String> = row.get(1)?;
+    let exe_path: Option<String> = row.get(2)?;
+    let process_name: Option<String> = row.get(3)?;
+    let last_seen_at: Option<String> = row.get(4)?;
+    let session_count = row.get::<_, Option<i64>>(5)?.unwrap_or(0);
+    Ok(build_usage_process_candidate(
+        tracked_app_id,
+        display_name,
+        exe_path,
+        process_name,
+        last_seen_at,
+        session_count,
+    ))
+}
+
+pub fn list_recent_usage_processes(
+    conn: &Connection,
+    limit: i64,
+) -> Result<Vec<UsageProcessCandidate>, String> {
+    let limit = clamp_usage_process_limit(limit);
+    let mut stmt = conn
+        .prepare(
+            "SELECT tracked_apps.id AS tracked_app_id,
+                    NULLIF(COALESCE(tracked_apps.display_name, tracked_apps.process_name, tracked_apps.exe_path), '') AS display_name,
+                    NULLIF(tracked_apps.exe_path, '') AS exe_path,
+                    NULLIF(tracked_apps.process_name, '') AS process_name,
+                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at,
+                    SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count
+             FROM usage_sessions
+             JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
+             WHERE NULLIF(COALESCE(tracked_apps.exe_path, tracked_apps.process_name), '') IS NOT NULL
+             GROUP BY tracked_apps.id, tracked_apps.display_name, tracked_apps.exe_path, tracked_apps.process_name
+             ORDER BY last_seen_at DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![limit], map_usage_process_candidate_row)
+        .map_err(|e| e.to_string())?;
+    rows.filter_map(|row| match row {
+        Ok(Some(candidate)) => Some(Ok(candidate)),
+        Ok(None) => None,
+        Err(error) => Some(Err(error)),
+    })
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| e.to_string())
+}
+
+pub fn search_usage_processes(
+    conn: &Connection,
+    query: &str,
+    limit: i64,
+) -> Result<Vec<UsageProcessCandidate>, String> {
+    let trimmed = query.trim().to_lowercase();
+    if trimmed.is_empty() {
+        return list_recent_usage_processes(conn, limit);
+    }
+
+    let limit = clamp_usage_process_limit(limit);
+    let pattern = format!("%{trimmed}%");
+    let mut stmt = conn
+        .prepare(
+            "SELECT tracked_apps.id AS tracked_app_id,
+                    NULLIF(COALESCE(tracked_apps.display_name, tracked_apps.process_name, tracked_apps.exe_path), '') AS display_name,
+                    NULLIF(tracked_apps.exe_path, '') AS exe_path,
+                    NULLIF(tracked_apps.process_name, '') AS process_name,
+                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at,
+                    SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count
+             FROM usage_sessions
+             JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
+             WHERE (
+                LOWER(COALESCE(tracked_apps.display_name, '')) LIKE ?1
+                OR LOWER(COALESCE(tracked_apps.process_name, '')) LIKE ?1
+                OR LOWER(COALESCE(tracked_apps.exe_path, '')) LIKE ?1
+             )
+             GROUP BY tracked_apps.id, tracked_apps.display_name, tracked_apps.exe_path, tracked_apps.process_name
+             ORDER BY last_seen_at DESC
+             LIMIT ?2",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![pattern, limit], map_usage_process_candidate_row)
+        .map_err(|e| e.to_string())?;
+    rows.filter_map(|row| match row {
+        Ok(Some(candidate)) => Some(Ok(candidate)),
+        Ok(None) => None,
+        Err(error) => Some(Err(error)),
+    })
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| e.to_string())
+}
+
+#[derive(Debug)]
+struct UsageGameBindingIndex {
+    game_names_by_id: HashMap<String, String>,
+    game_ids_by_path: HashMap<String, String>,
+    game_ids_by_process_name: HashMap<String, String>,
+}
+
+#[derive(Debug)]
+struct UsageTrackedAggregateRow {
+    normalized_path: Option<String>,
+    normalized_process_name: Option<String>,
+    total_seconds: i64,
+    session_count: i64,
+    last_played: Option<String>,
+}
+
+#[derive(Debug)]
+struct UsageTrackedDailyRow {
+    normalized_path: Option<String>,
+    normalized_process_name: Option<String>,
+    date: String,
+    seconds: i64,
+}
+
+fn build_usage_game_binding_index(bindings: &[UsageGamePlaytimeBinding]) -> UsageGameBindingIndex {
+    let mut index = UsageGameBindingIndex {
+        game_names_by_id: HashMap::new(),
+        game_ids_by_path: HashMap::new(),
+        game_ids_by_process_name: HashMap::new(),
+    };
+
+    for binding in bindings {
+        let game_id = binding.game_id.trim();
+        if game_id.is_empty() {
+            continue;
+        }
+
+        let game_name = binding.game_name.trim();
+        index.game_names_by_id.insert(
+            game_id.to_string(),
+            if game_name.is_empty() {
+                game_id.to_string()
+            } else {
+                game_name.to_string()
+            },
+        );
+
+        let normalized = normalize_usage_binding_value(&binding.match_type, &binding.match_value);
+        if normalized.is_empty() {
+            continue;
+        }
+
+        if binding.match_type == "exe_path" {
+            index
+                .game_ids_by_path
+                .insert(normalized, game_id.to_string());
+        } else if binding.match_type == "process_name" {
+            index
+                .game_ids_by_process_name
+                .insert(normalized, game_id.to_string());
+        }
+    }
+
+    index
+}
+
+fn append_usage_binding_where_clause(
+    index: &UsageGameBindingIndex,
+    params: &mut Vec<String>,
+) -> Option<String> {
+    let mut clauses = Vec::new();
+
+    if !index.game_ids_by_path.is_empty() {
+        let placeholders = (0..index.game_ids_by_path.len())
+            .map(|offset| format!("?{}", params.len() + offset + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        clauses.push(format!(
+            "tracked_apps.normalized_exe_path IN ({placeholders})"
+        ));
+        params.extend(index.game_ids_by_path.keys().cloned());
+    }
+
+    if !index.game_ids_by_process_name.is_empty() {
+        let placeholders = (0..index.game_ids_by_process_name.len())
+            .map(|offset| format!("?{}", params.len() + offset + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        clauses.push(format!(
+            "LOWER(COALESCE(tracked_apps.process_name, '')) IN ({placeholders})"
+        ));
+        params.extend(index.game_ids_by_process_name.keys().cloned());
+    }
+
+    if clauses.is_empty() {
+        None
+    } else {
+        Some(format!("WHERE ({})", clauses.join(" OR ")))
+    }
+}
+
+fn find_usage_game_for_tracked_row(
+    normalized_path: Option<&str>,
+    normalized_process_name: Option<&str>,
+    index: &UsageGameBindingIndex,
+) -> Option<(String, String)> {
+    if let Some(path) = normalized_path {
+        let normalized = normalize_usage_binding_value("exe_path", path);
+        if let Some(game_id) = index.game_ids_by_path.get(&normalized) {
+            let game_name = index
+                .game_names_by_id
+                .get(game_id)
+                .cloned()
+                .unwrap_or_else(|| game_id.clone());
+            return Some((game_id.clone(), game_name));
+        }
+    }
+
+    let process_name = normalized_process_name
+        .map(|value| normalize_usage_binding_value("process_name", value))
+        .unwrap_or_default();
+    if process_name.is_empty() {
+        return None;
+    }
+
+    index
+        .game_ids_by_process_name
+        .get(&process_name)
+        .map(|game_id| {
+            let game_name = index
+                .game_names_by_id
+                .get(game_id)
+                .cloned()
+                .unwrap_or_else(|| game_id.clone());
+            (game_id.clone(), game_name)
+        })
+}
+
+fn map_usage_tracked_aggregate_row(row: &Row<'_>) -> rusqlite::Result<UsageTrackedAggregateRow> {
+    Ok(UsageTrackedAggregateRow {
+        normalized_path: row.get(0)?,
+        normalized_process_name: row.get(1)?,
+        total_seconds: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
+        session_count: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+        last_played: row.get(4)?,
+    })
+}
+
+fn map_usage_tracked_daily_row(row: &Row<'_>) -> rusqlite::Result<UsageTrackedDailyRow> {
+    Ok(UsageTrackedDailyRow {
+        normalized_path: row.get(0)?,
+        normalized_process_name: row.get(1)?,
+        date: row.get(2)?,
+        seconds: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+    })
+}
+
+pub fn load_usage_game_playtime_summary(
+    conn: &Connection,
+    bindings: &[UsageGamePlaytimeBinding],
+    range_start: Option<&str>,
+    range_end: Option<&str>,
+) -> Result<UsageGamePlaytimeSummary, String> {
+    let index = build_usage_game_binding_index(bindings);
+    let mut aggregate_params = Vec::new();
+    let Some(aggregate_where_sql) =
+        append_usage_binding_where_clause(&index, &mut aggregate_params)
+    else {
+        return Ok(UsageGamePlaytimeSummary {
+            aggregates: Vec::new(),
+            daily_totals: Vec::new(),
+            per_game_totals: Vec::new(),
+        });
+    };
+
+    let aggregate_sql = format!(
+        "SELECT tracked_apps.normalized_exe_path AS normalized_path,
+                LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
+                CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS total_seconds,
+                SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count,
+                MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_played
+         FROM usage_sessions
+         JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
+         {aggregate_where_sql}
+         GROUP BY tracked_apps.id, tracked_apps.normalized_exe_path, normalized_process_name"
+    );
+    let mut stmt = conn.prepare(&aggregate_sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(
+            params_from_iter(aggregate_params.iter()),
+            map_usage_tracked_aggregate_row,
+        )
+        .map_err(|e| e.to_string())?;
+    let tracked_rows = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut aggregates_by_game: HashMap<String, UsageGamePlaytimeAggregate> = HashMap::new();
+    for row in tracked_rows {
+        let Some((game_id, game_name)) = find_usage_game_for_tracked_row(
+            row.normalized_path.as_deref(),
+            row.normalized_process_name.as_deref(),
+            &index,
+        ) else {
+            continue;
+        };
+
+        let entry =
+            aggregates_by_game
+                .entry(game_id.clone())
+                .or_insert(UsageGamePlaytimeAggregate {
+                    game_id,
+                    game_name,
+                    total_seconds: 0,
+                    session_count: 0,
+                    last_played: None,
+                });
+        entry.total_seconds += row.total_seconds;
+        entry.session_count += row.session_count;
+        let should_update_last_played = match (&row.last_played, &entry.last_played) {
+            (Some(next), Some(current)) => next > current,
+            (Some(_), None) => true,
+            (None, _) => false,
+        };
+        if should_update_last_played {
+            entry.last_played = row.last_played;
+        }
+    }
+    let mut aggregates = aggregates_by_game.into_values().collect::<Vec<_>>();
+    aggregates.sort_by(|left, right| {
+        right
+            .total_seconds
+            .cmp(&left.total_seconds)
+            .then_with(|| left.game_name.cmp(&right.game_name))
+    });
+
+    let mut daily_totals = Vec::new();
+    let mut per_game_totals = Vec::new();
+    if let (Some(range_start), Some(range_end)) = (range_start, range_end) {
+        let mut daily_params = Vec::new();
+        let Some(mut daily_where_sql) =
+            append_usage_binding_where_clause(&index, &mut daily_params)
+        else {
+            return Ok(UsageGamePlaytimeSummary {
+                aggregates,
+                daily_totals,
+                per_game_totals,
+            });
+        };
+        let start_placeholder = daily_params.len() + 1;
+        let end_placeholder = daily_params.len() + 2;
+        daily_where_sql.push_str(&format!(
+            " AND SUBSTR(COALESCE(usage_sessions.ended_at, usage_sessions.started_at), 1, 10)
+                  BETWEEN ?{start_placeholder} AND ?{end_placeholder}"
+        ));
+        daily_params.push(range_start.to_string());
+        daily_params.push(range_end.to_string());
+
+        let daily_sql = format!(
+            "SELECT tracked_apps.normalized_exe_path AS normalized_path,
+                    LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
+                    SUBSTR(COALESCE(usage_sessions.ended_at, usage_sessions.started_at), 1, 10) AS date,
+                    CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS seconds
+             FROM usage_sessions
+             JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
+             {daily_where_sql}
+             GROUP BY tracked_apps.id, tracked_apps.normalized_exe_path, normalized_process_name, date
+             HAVING seconds > 0
+             ORDER BY date ASC, tracked_apps.id ASC"
+        );
+        let mut stmt = conn.prepare(&daily_sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(
+                params_from_iter(daily_params.iter()),
+                map_usage_tracked_daily_row,
+            )
+            .map_err(|e| e.to_string())?;
+        let tracked_daily_rows = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
+        let mut daily_totals_by_date: HashMap<String, i64> = HashMap::new();
+        let mut per_game_totals_by_id: HashMap<String, UsageGameRangeTotal> = HashMap::new();
+        for row in tracked_daily_rows {
+            let Some((game_id, game_name)) = find_usage_game_for_tracked_row(
+                row.normalized_path.as_deref(),
+                row.normalized_process_name.as_deref(),
+                &index,
+            ) else {
+                continue;
+            };
+
+            *daily_totals_by_date.entry(row.date.clone()).or_insert(0) += row.seconds;
+            let entry =
+                per_game_totals_by_id
+                    .entry(game_id.clone())
+                    .or_insert(UsageGameRangeTotal {
+                        game_id,
+                        game_name,
+                        seconds: 0,
+                    });
+            entry.seconds += row.seconds;
+        }
+        daily_totals = daily_totals_by_date
+            .into_iter()
+            .map(|(date, seconds)| UsageGameDailyTotal { date, seconds })
+            .collect();
+        daily_totals.sort_by(|left, right| left.date.cmp(&right.date));
+
+        per_game_totals = per_game_totals_by_id.into_values().collect();
+        per_game_totals.sort_by(|left, right| {
+            right
+                .seconds
+                .cmp(&left.seconds)
+                .then_with(|| left.game_name.cmp(&right.game_name))
+        });
+    }
+
+    Ok(UsageGamePlaytimeSummary {
+        aggregates,
+        daily_totals,
+        per_game_totals,
     })
 }
 
@@ -2695,6 +3213,150 @@ mod tests {
     }
 
     #[test]
+    fn usage_process_queries_return_recent_and_search_candidates() {
+        let conn = setup_db();
+        let mut app = make_tracked_app("app-process");
+        app.display_name = Some("Nebula Game".to_string());
+        app.exe_path = r"C:/Games/Nebula/nebula.exe".to_string();
+        app.normalized_exe_path = r"c:\games\nebula\nebula.exe".to_string();
+        app.process_name = "Nebula.exe".to_string();
+        upsert_tracked_app(&conn, &app).unwrap();
+        let mut session = make_usage_session("session-process", &app.id);
+        session.started_at = "2026-04-26T10:00:00.000Z".to_string();
+        session.ended_at = Some("2026-04-26T11:00:00.000Z".to_string());
+        session.foreground_ms = 3_600_000;
+        upsert_usage_session(&conn, &session).unwrap();
+
+        let recent = list_recent_usage_processes(&conn, 10).unwrap();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].tracked_app_id, "app-process");
+        assert_eq!(recent[0].binding_match_type, "exe_path");
+        assert_eq!(
+            recent[0].binding_normalized_value,
+            r"c:\games\nebula\nebula.exe"
+        );
+        assert_eq!(recent[0].session_count, 1);
+
+        let search_results = search_usage_processes(&conn, "nebula", 10).unwrap();
+        assert_eq!(search_results.len(), 1);
+        assert_eq!(search_results[0].display_name, "Nebula Game");
+        assert!(search_usage_processes(&conn, "missing", 10)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn usage_game_playtime_summary_matches_bindings_and_range() {
+        let conn = setup_db();
+        let mut main_app = make_tracked_app("tracked-main");
+        main_app.exe_path = r"C:\Games\Chronicle\Chronicle.exe".to_string();
+        main_app.normalized_exe_path = r"c:\games\chronicle\chronicle.exe".to_string();
+        main_app.process_name = "chronicle.exe".to_string();
+        upsert_tracked_app(&conn, &main_app).unwrap();
+
+        let mut alt_app = make_tracked_app("tracked-alt");
+        alt_app.exe_path = r"C:\Games\Chronicle\Chronicle_DX12.exe".to_string();
+        alt_app.normalized_exe_path = r"c:\games\chronicle\chronicle_dx12.exe".to_string();
+        alt_app.process_name = "chronicle_dx12.exe".to_string();
+        upsert_tracked_app(&conn, &alt_app).unwrap();
+
+        let mut helper_app = make_tracked_app("tracked-helper");
+        helper_app.exe_path = "".to_string();
+        helper_app.normalized_exe_path = "".to_string();
+        helper_app.process_name = "Chronicle Helper.exe".to_string();
+        upsert_tracked_app(&conn, &helper_app).unwrap();
+
+        let mut other_app = make_tracked_app("tracked-other");
+        other_app.exe_path = r"C:\Other\Other.exe".to_string();
+        other_app.normalized_exe_path = r"c:\other\other.exe".to_string();
+        other_app.process_name = "other.exe".to_string();
+        upsert_tracked_app(&conn, &other_app).unwrap();
+
+        let sessions = [
+            (
+                "session-main",
+                "tracked-main",
+                "2026-04-20T10:00:00.000Z",
+                1_800_000,
+            ),
+            (
+                "session-alt",
+                "tracked-alt",
+                "2026-04-20T11:00:00.000Z",
+                3_600_000,
+            ),
+            (
+                "session-helper",
+                "tracked-helper",
+                "2026-04-21T12:00:00.000Z",
+                600_000,
+            ),
+            (
+                "session-other",
+                "tracked-other",
+                "2026-04-20T13:00:00.000Z",
+                9_000_000,
+            ),
+        ];
+        for (session_id, tracked_app_id, started_at, foreground_ms) in sessions {
+            let mut session = make_usage_session(session_id, tracked_app_id);
+            session.started_at = started_at.to_string();
+            session.ended_at = Some(started_at.replace(":00.000Z", ":30.000Z"));
+            session.foreground_ms = foreground_ms;
+            upsert_usage_session(&conn, &session).unwrap();
+        }
+
+        let bindings = vec![
+            UsageGamePlaytimeBinding {
+                game_id: "game-1".to_string(),
+                game_name: "Chronicle".to_string(),
+                match_type: "exe_path".to_string(),
+                match_value: r"C:\Games\Chronicle\Chronicle.exe".to_string(),
+            },
+            UsageGamePlaytimeBinding {
+                game_id: "game-1".to_string(),
+                game_name: "Chronicle".to_string(),
+                match_type: "exe_path".to_string(),
+                match_value: r"C:\Games\Chronicle\Chronicle_DX12.exe".to_string(),
+            },
+            UsageGamePlaytimeBinding {
+                game_id: "game-1".to_string(),
+                game_name: "Chronicle".to_string(),
+                match_type: "process_name".to_string(),
+                match_value: "chronicle helper.exe".to_string(),
+            },
+        ];
+
+        let summary = load_usage_game_playtime_summary(
+            &conn,
+            &bindings,
+            Some("2026-04-20"),
+            Some("2026-04-21"),
+        )
+        .unwrap();
+
+        assert_eq!(summary.aggregates.len(), 1);
+        assert_eq!(summary.aggregates[0].game_id, "game-1");
+        assert_eq!(summary.aggregates[0].total_seconds, 6_000);
+        assert_eq!(summary.aggregates[0].session_count, 3);
+        assert_eq!(
+            summary.daily_totals,
+            vec![
+                UsageGameDailyTotal {
+                    date: "2026-04-20".to_string(),
+                    seconds: 5_400,
+                },
+                UsageGameDailyTotal {
+                    date: "2026-04-21".to_string(),
+                    seconds: 600,
+                },
+            ]
+        );
+        assert_eq!(summary.per_game_totals.len(), 1);
+        assert_eq!(summary.per_game_totals[0].seconds, 6_000);
+    }
+
+    #[test]
     fn test_object_model_crud() {
         let conn = setup_db();
         let object_type = make_object_type("book_obj", "Книга");
@@ -2723,6 +3385,35 @@ mod tests {
         assert_eq!(data.object_links.len(), 0);
         assert_eq!(data.objects.len(), 1);
         assert!(!data.object_types.iter().any(|item| item.id == "book_obj"));
+    }
+
+    #[test]
+    fn object_query_helpers_filter_by_type_and_ids() {
+        let conn = setup_db();
+        let object_type = make_object_type("book_obj", "Book");
+        upsert_object_type(&conn, &object_type).unwrap();
+        upsert_object(&conn, &make_object("obj-1", "note_obj", "Journal")).unwrap();
+        upsert_object(&conn, &make_object("obj-2", "book_obj", "Clean Code")).unwrap();
+        upsert_object(&conn, &make_object("obj-3", "book_obj", "Rust Book")).unwrap();
+
+        let books = list_objects_by_type(&conn, "book_obj").unwrap();
+        assert_eq!(books.len(), 2);
+        assert!(books.iter().all(|object| object.type_id == "book_obj"));
+
+        let ids = vec![
+            "obj-3".to_string(),
+            "missing".to_string(),
+            "obj-1".to_string(),
+        ];
+        let objects = get_objects_by_ids(&conn, &ids).unwrap();
+        let returned_ids = objects
+            .iter()
+            .map(|object| object.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(returned_ids.len(), 2);
+        assert!(returned_ids.contains(&"obj-3"));
+        assert!(returned_ids.contains(&"obj-1"));
+        assert!(get_objects_by_ids(&conn, &[]).unwrap().is_empty());
     }
 
     #[test]

@@ -1,56 +1,37 @@
 # Apps
 
-Приложения экосистемы Kosmos — **quick capture + zero intention** способы записи данных.
+Kepler apps are product shells around the shared ARK runtime. The current
+desktop integration path is:
 
-## Философия
+1. Renderer displays UI and calls a narrow preload API.
+2. Electron main owns app orchestration.
+3. Electron main talks to `ark-core-rpc` through `@kepler/ark`.
+4. ARK owns shared SQLite schema, object storage, usage storage, search, and sync.
 
-Каждое приложение — это удобный интерфейс для конкретного типа данных.
-Приложения не хранят данные навечно — они **собирают** и **отдают** их в Ark (центральную базу).
+Direct writes into ARK SQLite tables are not an app integration path. If an app
+needs to write shared data, add or use an ARK runtime operation and call it
+through `@kepler/ark`.
 
-## Принципы
+## App Boundaries
 
-### Offline-first
-Приложения работают автономно с локальной базой данных (SQLite).
-Ark может быть недоступен — это нормально. Данные копятся локально
-и синхронизируются при появлении соединения.
+- `delphi`: task UI over ARK `task_obj` objects.
+- `eden`: note/editor UI over ARK `note_obj` and custom object types; Heart can
+  remain for editor/vault-specific behavior and legacy migration.
+- `arrancador`: game UI over ARK `game_obj` objects and ARK usage data.
+- `dashboard`: read-only ARK database inspector/analytics UI. It may inspect a
+  selected ARK SQLite database from Electron main, but it must not write.
 
-### Синхронизация: NDJSON + Syncthing
+See `docs/ARK-READONLY-SQL-BOUNDARY.md` for the distinction between allowed
+read-only inspection and forbidden direct app writes.
 
-Никакого центрального сервера. VPS — просто ещё одна нода, не обязательная.
+## Testing
 
-Каждое приложение пишет новые события в **append-only NDJSON лог**
-(один файл на день: `sync/2026-03-27.ndjson`).
-Syncthing синкает папку `sync/` между всеми устройствами.
-Любое устройство с Ark импортирует новые строки из логов.
+All automated checks must use isolated databases or temp app-data paths. Do not
+point tests, smoke checks, migration verification, or Playwright runs at a main
+user ARK database.
 
+The root smoke matrix is available as:
+
+```powershell
+bun run ark:smoke
 ```
-MacBook (Ark)  ←— Syncthing —→  Android (Elysium)
-      ↕                               ↕
-  Ark SQLite                     Local SQLite
-      ↕                               ↓
-VPS (опционально,            sync/*.ndjson (append-only)
- ещё одна реплика)
-```
-
-Дедупликация — через `source` + `source_id` (idempotent upsert в Ark).
-Один и тот же лог можно импортировать сколько угодно раз — результат не меняется.
-Это по сути CRDT бесплатно: append-only лог + idempotent import = convergence.
-
-Если Ark-сервер доступен по сети — приложения могут использовать HTTP API
-(`POST /events/batch`) напрямую, минуя Syncthing. Оба пути совместимы.
-
-### Конфликты
-Практически невозможны — один пользователь, одно устройство на тип данных.
-Если всё-таки возникают — last-write-wins по `updated_at` timestamp.
-
-### Направление данных
-Приложения могут и **читать** из Ark (например, Delphi тянет задачи),
-и **писать** (Elysium пушит записи о питании).
-
-## Приложения
-
-| Приложение | Назначение | Платформа |
-|-----------|-----------|-----------|
-| **Delphi** | Задачи (GTD) | macOS (SwiftUI) |
-| **Elysium** | Питание + вода | Android/iOS (React Native) |
-| **Eden** | Дневник | TBD |

@@ -28,6 +28,12 @@ pre-commit:
     typecheck-eden:
       glob: "apps/eden/ts/**/*.{ts,tsx}"
       run: cd apps/eden/ts && bunx tsc --noEmit
+    docs-sync:
+      glob: "docs-site/**/*.md"
+      run: bun run docs:sync && git add AGENTS.md CLAUDE.md apps/*/AGENTS.md apps/*/*/AGENTS.md packages/ark-core/AGENTS.md services/usage-tracker/AGENTS.md docs-site/public/llms.txt
+    docs-check:
+      glob: "docs-site/**/*.md"
+      run: bun run docs:check
 
 pre-push:
   parallel: true
@@ -41,6 +47,3 @@ pre-push:
     test-eden-heart:
       glob: "apps/eden/ts/heart/**/*"
       run: cd apps/eden/ts/heart && cargo test
-    test-elysium:
-      glob: "apps/elysium/**/*"
-      run: cd apps/elysium && bun run test

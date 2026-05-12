@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPersonalSelectedSpace } from "../../../../packages/shared-space/selectedSpace";
+import { buildPersonalSelectedSpace } from "@kepler/ark";
 import { syncArkRuntimeBinding } from "./ark-runtime";
 
 describe("syncArkRuntimeBinding", () => {

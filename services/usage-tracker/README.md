@@ -67,6 +67,10 @@ If you want a single-click entrypoint from Explorer, use:
 - Poll interval: `5000` ms
 - Idle threshold: `60` s
 
+Automated tests and smoke checks must not use the default user DB path. For
+checks, set `ARK_DB_PATH` or pass `--db-path` to a database under `.tmp`,
+`.agent/tasks/<TASK_ID>/`, `.e2e`, or an OS temp directory.
+
 ## Overrides
 
 - `ARK_DB_PATH`

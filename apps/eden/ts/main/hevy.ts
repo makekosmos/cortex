@@ -1,4 +1,6 @@
-import { BrowserWindow } from "electron";
+import electron from "electron";
+
+const { BrowserWindow } = electron;
 
 const HEVY_API_BASE = "https://api.hevyapp.com";
 

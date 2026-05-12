@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire as createNodeRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import crypto from "node:crypto";
 
 type ElectronApp = Awaited<ReturnType<typeof electron.launch>>;
 
@@ -16,6 +17,7 @@ interface LaunchedApp {
 interface AppEnvironment {
   rootPath: string;
   homePath: string;
+  userDataPath: string;
   appDataPath: string;
   localAppDataPath: string;
   vaultPath: string;
@@ -23,34 +25,13 @@ interface AppEnvironment {
   startupLogPath: string;
 }
 
-interface ArkTaskRow {
-  id: string;
-  type_id: string;
-  title: string;
-  props_json: string;
-  content_json: string;
-}
-
 const TEST_TASK = {
   title: "Shared Ark Delphi Task",
   notes: "Created in Delphi and expected to be visible in Eden.",
 };
 
-const require = createNodeRequire(
-  new URL("../../../arrancador/package.json", import.meta.url),
-);
-const BetterSqlite3 = require("better-sqlite3") as new (
-  filePath: string,
-  options?: {
-    readonly?: boolean;
-    fileMustExist?: boolean;
-  },
-) => {
-  prepare(sql: string): {
-    get<T = Record<string, unknown>>(...params: unknown[]): T | undefined;
-  };
-  close(): void;
-};
+const requireFromDelphi = createNodeRequire(new URL("../package.json", import.meta.url));
+const delphiElectronExecutable = requireFromDelphi("electron") as string;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -73,7 +54,7 @@ function normalizeVaultPath(vaultPath: string): string {
 }
 
 function deriveSpaceIdFromCode(code: string): string {
-  return require("node:crypto")
+  return crypto
     .createHash("sha256")
     .update(normalizeSpaceCode(code), "utf8")
     .digest("hex")
@@ -82,7 +63,7 @@ function deriveSpaceIdFromCode(code: string): string {
 
 function derivePersonalSpaceCodeFromVaultPath(vaultPath: string): string {
   const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-  const digest = require("node:crypto")
+  const digest = crypto
     .createHash("sha256")
     .update(normalizeVaultPath(vaultPath), "utf8")
     .digest();
@@ -161,11 +142,13 @@ function getArkDbPathForSelectedSpace(
 function createEnvironment(): AppEnvironment {
   const rootPath = fs.mkdtempSync(path.join(os.tmpdir(), "delphi-ark-task-"));
   const homePath = path.join(rootPath, "home");
+  const userDataPath = path.join(rootPath, "userData");
   const appDataPath = path.join(rootPath, "appdata", "Roaming");
   const localAppDataPath = path.join(rootPath, "appdata", "Local");
   const vaultPath = path.join(rootPath, "vault-main");
 
   fs.mkdirSync(homePath, { recursive: true });
+  fs.mkdirSync(userDataPath, { recursive: true });
   fs.mkdirSync(appDataPath, { recursive: true });
   fs.mkdirSync(localAppDataPath, { recursive: true });
   fs.mkdirSync(vaultPath, { recursive: true });
@@ -176,6 +159,7 @@ function createEnvironment(): AppEnvironment {
   return {
     rootPath,
     homePath,
+    userDataPath,
     appDataPath,
     localAppDataPath,
     vaultPath,
@@ -193,13 +177,18 @@ async function launchElectronApp(
   let electronApp: ElectronApp;
   try {
     electronApp = await electron.launch({
-      args: ["--no-sandbox", "--disable-gpu", "--disable-software-rasterizer", appPath],
+      executablePath: appPath.endsWith(path.join("delphi", "ts"))
+        ? delphiElectronExecutable
+        : undefined,
+      cwd: appPath,
+      args: ["."],
       env: {
         ...process.env,
         HOME: env.homePath,
-        USERPROFILE: env.homePath,
         APPDATA: env.appDataPath,
         LOCALAPPDATA: env.localAppDataPath,
+        KEPLER_TEST_APPDATA: env.appDataPath,
+        KEPLER_TEST_USER_DATA: env.userDataPath,
         DELPHI_STARTUP_LOG: env.startupLogPath,
         PLAYWRIGHT: "1",
         ...extraEnv,
@@ -280,47 +269,19 @@ async function createTaskInDelphi(window: Page) {
   await expect(window.getByText(TEST_TASK.title)).toBeVisible({ timeout: 20_000 });
 }
 
-function readArkTaskRow(arkDbPath: string): ArkTaskRow | null {
-  const db = new BetterSqlite3(arkDbPath, {
-    readonly: true,
-    fileMustExist: true,
-  });
-
-  try {
-    return (
-      db
-        .prepare(
-          `SELECT id, type_id, title, props_json, content_json
-           FROM objects
-           WHERE type_id = ?1 AND title = ?2 AND deleted_at IS NULL
-           LIMIT 1`,
-        )
-        .get<ArkTaskRow>("task_obj", TEST_TASK.title) ?? null
-    );
-  } finally {
-    db.close();
-  }
-}
-
-function readArkTaskObjectTypeExists(arkDbPath: string): boolean {
-  const db = new BetterSqlite3(arkDbPath, {
-    readonly: true,
-    fileMustExist: true,
-  });
-
-  try {
-    const row = db
-      .prepare(
-        `SELECT id
-         FROM object_types
-         WHERE id = ?1
-         LIMIT 1`,
-      )
-      .get<{ id: string }>("task_obj");
-    return Boolean(row?.id);
-  } finally {
-    db.close();
-  }
+async function findDelphiArkTask(window: Page) {
+  return window.evaluate(async (taskTitle: string) => {
+    const api = Reflect.get(window, "electronAPI") as
+      | { invoke?: (channel: string, ...args: unknown[]) => Promise<unknown> }
+      | undefined;
+    const tasks = api?.invoke ? await api.invoke("ark:listDelphiTasks") : [];
+    return Array.isArray(tasks)
+      ? tasks.find((task) => {
+          const candidate = task as { title?: unknown };
+          return candidate.title === taskTitle;
+        }) ?? null
+      : null;
+  }, TEST_TASK.title);
 }
 
 test.describe("Delphi shared Ark task objects", () => {
@@ -347,22 +308,11 @@ test.describe("Delphi shared Ark task objects", () => {
         .toBe(true);
 
       await expect
-        .poll(() => readArkTaskObjectTypeExists(env.arkDbPath), {
-          timeout: 20_000,
-        })
-        .toBe(true);
-
-      await expect
-        .poll(() => readArkTaskRow(env.arkDbPath), { timeout: 20_000 })
-        .not.toBeNull();
-
-      const row = readArkTaskRow(env.arkDbPath);
-      expect(row?.type_id).toBe("task_obj");
-      expect(row?.title).toBe(TEST_TASK.title);
-
-      const props = JSON.parse(row?.props_json ?? "{}") as Record<string, unknown>;
-      expect(props.description).toBe(TEST_TASK.notes);
-      expect(props.source_app).toBe("delphi");
+        .poll(() => findDelphiArkTask(delphi.window), { timeout: 20_000 })
+        .toMatchObject({
+          title: TEST_TASK.title,
+          notes: TEST_TASK.notes,
+        });
 
       eden = await launchEden(env);
 
