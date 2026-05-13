@@ -53,3 +53,5 @@ export { default as DateChip } from "./DateChip.vue";
 export { default as TimeColumn } from "./TimeColumn.vue";
 
 export { default as DateTimePicker } from "./DateTimePicker.vue";
+
+export { default as Dropdown } from "./Dropdown.vue";

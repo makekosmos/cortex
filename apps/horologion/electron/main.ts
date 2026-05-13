@@ -299,6 +299,7 @@ function registerIpc(): void {
   ipcMain.handle("horologion:tags:list", () => listTags());
   ipcMain.handle("horologion:tasks:list", () => listDelphiTasks());
   ipcMain.handle("horologion:ark:status", (): ArkStatus => arkStatus);
+  ipcMain.handle("horologion:settings:open", () => openSettingsWindow());
 }
 
 // Прогреваем ArkClient при старте окна, чтобы статус становился `connected`
@@ -315,6 +316,59 @@ app.whenReady().then(() => {
 let allowQuit = false;
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
+let settingsWindow: BrowserWindow | null = null;
+
+/**
+ * Открывает отдельное Electron-окно с настройками (route `/settings`).
+ * Если уже открыто — фокусирует. Окно использует тот же preload и тот же
+ * renderer URL, но с hash `#/settings` — App.vue видит этот route и
+ * рендерит только SettingsView без основной chrome.
+ */
+function openSettingsWindow(): void {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  const iconPath = resolveIconPath();
+  const win = new BrowserWindow({
+    width: 560,
+    height: 680,
+    minWidth: 440,
+    minHeight: 480,
+    title: "Настройки — Horologion",
+    icon: nativeImage.createFromPath(iconPath),
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: "rgba(0,0,0,0)", symbolColor: "#fafafa", height: 44 },
+    backgroundColor: "#171717",
+    parent: mainWindow ?? undefined,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.mjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  settingsWindow = win;
+  win.on("closed", () => {
+    settingsWindow = null;
+  });
+  // F12 для DevTools (как в main window).
+  win.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") return;
+    if (input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i")) {
+      const wc = win.webContents;
+      if (wc.isDevToolsOpened()) wc.closeDevTools();
+      else wc.openDevTools({ mode: "detach" });
+      event.preventDefault();
+    }
+  });
+
+  if (process.env.VITE_DEV_SERVER_URL) {
+    void win.loadURL(`${process.env.VITE_DEV_SERVER_URL}#/settings`);
+  } else {
+    void win.loadFile(path.join(__dirname, "../dist/index.html"), { hash: "/settings" });
+  }
+}
 
 function resolveIconPath(): string {
   // В dev иконка лежит рядом с исходниками (apps/horologion/build/icon.png).

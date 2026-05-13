@@ -25,6 +25,9 @@ const api: HorologionApi = {
   ark: {
     status: () => ipcRenderer.invoke("horologion:ark:status"),
   },
+  settings: {
+    open: () => ipcRenderer.invoke("horologion:settings:open"),
+  },
 };
 
 contextBridge.exposeInMainWorld("horologion", api);

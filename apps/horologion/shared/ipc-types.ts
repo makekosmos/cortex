@@ -86,4 +86,8 @@ export interface HorologionApi {
     /** Текущий статус подключения к ark-core-rpc sidecar. */
     status(): Promise<ArkStatus>;
   };
+  settings: {
+    /** Открыть отдельное окно настроек (или сфокусировать уже открытое). */
+    open(): Promise<void>;
+  };
 }

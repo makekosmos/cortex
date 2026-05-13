@@ -15,11 +15,11 @@
 # Horologion — трекер времени
 
 ::: tip Статус
-**MVP работает.** Запись через top-bar, edit-modal, ПКМ-удаление, группировка одинаковых, expand/collapse, @-mention задач Delphi (в т.ч. мульти-задачи в помодоро с равномерным дроблением сегмента), помодоро со звуками и системными уведомлениями, tray + close-to-tray, MSI-установщик, embed'нутая иконка в `.exe`.
+**MVP работает.** Запись через top-bar, edit-modal, ПКМ-удаление, группировка одинаковых, expand/collapse, @-mention задач Delphi (в т.ч. мульти-задачи в помодоро с равномерным дроблением сегмента), помодоро со звуками и системными уведомлениями, tray + close-to-tray, NSIS one-click установщик, embed'нутая иконка в `.exe`.
 :::
 
 ::: info Имя
-Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). Workspace-директория исторически осталась `apps/horologion`; внутренние идентификаторы (`HorologionApi`, `window.horologion`, IPC `horologion:*`) тоже сохранены, чтобы не ломать git-историю и type-graph. Меняется только всё user-visible: `productName`, `appId` (`com.kazui.horologion`), AppUserModelID, MSI shortcut, title окна, текст в trail/tray.
+Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). Workspace-директория исторически осталась `apps/horologion`; внутренние идентификаторы (`HorologionApi`, `window.horologion`, IPC `horologion:*`) тоже сохранены, чтобы не ломать git-историю и type-graph. Меняется только всё user-visible: `productName`, `appId` (`com.kazui.horologion`), AppUserModelID, NSIS shortcut, title окна, текст в trail/tray.
 :::
 
 - **Path**: `apps/horologion`
@@ -122,13 +122,13 @@ cd apps/horologion
 bun run typecheck
 bun run dev               # cargo build sidecar:dev + vite + Electron
 bun run build:js          # release sidecar + tsc + vite build (без установщика)
-bun run build             # build:js + electron-builder --win msi (финальный MSI)
+bun run build             # build:js + electron-builder --win nsis (финальный NSIS one-click)
 bun run package:dir       # unpacked desktop bundle
 bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 ```
 
 ::: tip Билд
-По общей [конвенции Kepler](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает финальный установщик в формате **MSI** (Windows Installer) — `apps/horologion/release/Horologion X.Y.Z.msi`. Per-machine установка, поддержка GPO / unattended install.
+По общей [конвенции Kepler](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает **NSIS one-click** установщик — `apps/horologion/release/Horologion Setup X.Y.Z.exe`. Ставится в `%LocalAppData%\Horologion` без UAC, без мастера (стиль Linear / Slack / Discord). `runAfterFinish: true` сразу запускает приложение после установки.
 
 **Иконка** embed'ится в `Horologion.exe` через `afterPack`-хук (`build/afterPack.cjs`), использующий npm-пакеты `rcedit` + `png-to-ico`. Это нужно, потому что `win.signAndEditExecutable: false` отрубает встроенный rcedit electron-builder (workaround под падение winCodeSign symlinks на Windows без Developer Mode). Хук конвертирует `build/icon.png` → `build/icon.ico` (с кэшем по mtime), затем зовёт rcedit и проставляет иконку + version-string метаданные (ProductName, CompanyName, FileVersion). Дополнительно в main.ts вызывается `app.setAppUserModelId("com.kazui.horologion")`, чтобы Windows правильно группировал окно в taskbar и подхватывал нашу иконку, а не дефолтную electron.exe.
 

@@ -117,12 +117,14 @@ function remove() {
       <div class="time-row">
         <div class="time-field">
           <span class="field__label">С</span>
-          <DateTimePicker v-model:value="startedAtIso" />
+          <!-- reference = «сегодня»: если start сегодня — покажется только HH:MM. -->
+          <DateTimePicker v-model:value="startedAtIso" :reference="Date.now()" />
         </div>
         <span class="time-row__arrow">→</span>
         <div class="time-field">
           <span class="field__label">По</span>
-          <DateTimePicker v-model:value="endedAtIso" />
+          <!-- reference = startedAtIso: end в тот же день → HH:MM, иначе DD HH:MM и т.д. -->
+          <DateTimePicker v-model:value="endedAtIso" :reference="startedAtIso" />
         </div>
         <div class="duration">{{ formatDuration(duration) }}</div>
       </div>
