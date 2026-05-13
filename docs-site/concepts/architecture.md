@@ -8,20 +8,16 @@ flowchart TD
   M["Electron main"]
   SDK["@kepler/ark"]
   RPC["ark-core-rpc"]
-  EXPO["Локальная SQLite"]
 
   R -- "preload API" --> M
-  R -. "expo-sqlite" .-> EXPO
   M --> SDK
   SDK -- "JSON по stdio" --> RPC
 
   classDef canon fill:#2b2b46,stroke:#6b6bcd,color:#fff,stroke-width:1.5px
   classDef neutral fill:#202020,stroke:#666,color:#fafafa
-  classDef legacy fill:#3a2f22,stroke:#a07c4a,color:#fff
 
   class RPC,SDK canon
   class R,M neutral
-  class EXPO legacy
 ```
 
 - `Renderer` — Vue 3 Vapor в Electron-приложениях. Никакого SQLite, всё через preload IPC.

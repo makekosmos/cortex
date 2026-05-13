@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -334,6 +334,14 @@ function setupApplicationMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+function resolveIconPath(): string {
+  // В dev иконка лежит рядом с исходниками (apps/delphi/ts/build/icon.png).
+  // В packaged build она копируется через `extraResources` в resources/icon.png.
+  return isDev
+    ? path.resolve(__dirname, '../build/icon.png')
+    : path.join(process.resourcesPath ?? '', 'icon.png');
+}
+
 function createWindow() {
   setupApplicationMenu();
 
@@ -341,6 +349,7 @@ function createWindow() {
   const isMac = process.platform === 'darwin';
   const isWindows = process.platform === 'win32';
   const launchInBackground = shouldLaunchInBackground();
+  const iconPath = resolveIconPath();
 
   // Shared desktop chrome contract:
   // macOS uses hiddenInset so the shared visuals can render into the titlebar inset,
@@ -353,6 +362,7 @@ function createWindow() {
     minWidth: 1280,
     minHeight: 720,
     title: 'Delphi',
+    icon: nativeImage.createFromPath(iconPath),
     frame: !isWindows,
     ...(isMac
       ? {

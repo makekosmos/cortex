@@ -59,7 +59,8 @@ cd apps/delphi/ts
 bun run build:ark:dev      # debug-сборка ark-core-rpc
 bun run build:ark          # release-сборка ark-core-rpc
 bun run dev                # build:ark:dev + Vite + Electron
-bun run build              # build:ark + TS + Vite + electron-builder
+bun run build:js           # ark release + TS + Vite (без установщика)
+bun run build              # build:js + electron-builder --win msi
 bun run test               # unit
 bun run e2e                # Playwright
 ```

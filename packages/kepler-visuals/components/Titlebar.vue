@@ -68,15 +68,13 @@ const titlebarClasses = computed(() => [
 
 .kepler-titlebar--windows {
     height: calc(
-        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height)) +
-            (var(--kepler-titlebar-vertical-padding) * 2)
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
     );
     min-height: calc(
-        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height)) +
-            (var(--kepler-titlebar-vertical-padding) * 2)
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
     );
-    padding-top: calc(env(titlebar-area-y, 0px) + var(--kepler-titlebar-vertical-padding));
-    padding-bottom: var(--kepler-titlebar-vertical-padding);
+    padding-top: env(titlebar-area-y, 0px);
+    padding-bottom: 0;
     padding-left: max(
         var(--kepler-titlebar-inline-padding),
         calc(env(titlebar-area-x, 0px) + var(--kepler-titlebar-inline-padding))

@@ -1,0 +1,74 @@
+{
+  "name": "horologion",
+  "private": true,
+  "version": "0.0.3",
+  "description": "Horologion — Kepler time tracker + pomodoro",
+  "author": "Kazui",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build:sidecar": "cargo build --release --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
+    "build:sidecar:dev": "cargo build --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
+    "dev": "bun run build:sidecar:dev && vite --configLoader native",
+    "build:js": "bun run build:sidecar && tsc && vite build --configLoader native",
+    "build": "bun run build:js && electron-builder --win msi",
+    "typecheck": "tsc --noEmit",
+    "package:dir": "bun run build:js && electron-builder --dir",
+    "test:e2e": "bun run build:js && playwright test --config playwright.config.ts"
+  },
+  "dependencies": {
+    "@kepler/ark": "workspace:*",
+    "@kepler/visuals": "workspace:*",
+    "lucide-vue-next": "^0.548.0",
+    "vue": "^3.6.0-beta.9",
+    "vue-router": "^5.0.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^24.9.2",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
+    "playwright": "^1.58.2",
+    "png-to-ico": "^3.0.1",
+    "rcedit": "^5.0.2",
+    "typescript": "~5.8.3",
+    "vite": "^8.0.3",
+    "vite-plugin-electron": "1.0.0-beta.2",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.kazui.horologion",
+    "productName": "Horologion",
+    "afterPack": "./build/afterPack.cjs",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../../packages/ark-core/rust/target/release/ark-core-rpc.exe",
+        "to": "ark-core-rpc.exe"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": "msi",
+      "signAndEditExecutable": false
+    },
+    "msi": {
+      "oneClick": false,
+      "perMachine": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Horologion"
+    }
+  }
+}

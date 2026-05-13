@@ -3,7 +3,18 @@
 - **Path**: `packages/kepler-visuals`
 - **Имя**: `@kepler/visuals`
 
-Общая UI-система для всех Electron-приложений Kepler. Источник дизайна — включая этот сайт документации.
+Общая UI-система для **всех** Electron-приложений Kepler (Eden, Delphi, Arrancador, Dashboard, Horologion) и для этого сайта документации. Источник дизайна, токенов, и shared компонентов чрома.
+
+::: danger Обязательно для приложений
+Каждое Electron-приложение Kepler **обязано**:
+
+1. Подключить `@kepler/visuals/theme/css` в renderer entry — это даёт все CSS-переменные (`--background`, `--foreground`, `--border`, `--accent`, `--radius`, `--corner-shape`, шрифты и т.д.).
+2. Оборачивать root в `<DesktopChrome>` + `<DesktopContentSurface>` — не делать свой titlebar / safe-area.
+3. Использовать только токены (`var(--*)`) для цветов / радиусов / шрифтов в собственных компонентах — никаких hardcoded `#hex`, `rgb()`, `font-family: "Inter"` и тому подобного.
+4. Брать готовые компоненты (`Sidebar`, `Titlebar`, `StatusDot`, `CommandPalette`, и т.д.) вместо своих копий.
+
+Свой UI пишется в `apps/<name>/src/` и должен **только** использовать токены и компоненты из `@kepler/visuals`. App-specific компоненты (например, `TimeEntryRow` в Horologion) — это потребители kepler-visuals токенов, не альтернатива им.
+:::
 
 ## Структура
 

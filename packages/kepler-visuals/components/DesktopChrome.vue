@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, provide, useSlots } from "vue";
 import Titlebar, { type TitlebarPlatform } from "./Titlebar.vue";
 
 interface Props {
@@ -10,6 +11,13 @@ const props = withDefaults(defineProps<Props>(), {
   platform: "windows",
   title: undefined,
 });
+
+// Провайдим наличие сайдбара вниз по дереву, чтобы DesktopContentSurface
+// мог автоматически убрать скругление верхнего-левого угла + левую границу,
+// когда сайдбар не используется.
+const slots = useSlots();
+const hasSidebar = computed(() => Boolean(slots.sidebar));
+provide("keplerHasSidebar", hasSidebar);
 </script>
 
 <template>
@@ -30,7 +38,7 @@ const props = withDefaults(defineProps<Props>(), {
     </Titlebar>
 
     <div class="kepler-desktop-chrome__body">
-      <aside v-if="$slots.sidebar" class="kepler-desktop-chrome__sidebar">
+      <aside v-if="hasSidebar" class="kepler-desktop-chrome__sidebar">
         <slot name="sidebar" />
       </aside>
 

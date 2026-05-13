@@ -3,6 +3,10 @@
   --corner-shape: squircle;
   --bringhurst-wide: 600px;
   --accent: oklch(0.546 0.229 264.1);
+  --accent-foreground: oklch(0.985 0 0);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "IBM Plex Sans", "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --color-bg-primary: oklch(0.145 0 0);
   --color-shape-highlight-light-solid: oklch(0.18 0 0);

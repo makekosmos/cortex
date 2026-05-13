@@ -1,0 +1,130 @@
+# Horologion — трекер времени
+
+::: tip Статус
+**MVP работает.** Запись через top-bar, edit-modal, ПКМ-удаление, группировка одинаковых, expand/collapse, @-mention задач Delphi (в т.ч. мульти-задачи в помодоро с равномерным дроблением сегмента), помодоро со звуками и системными уведомлениями, tray + close-to-tray, MSI-установщик, embed'нутая иконка в `.exe`.
+:::
+
+::: info Имя
+Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). Workspace-директория исторически осталась `apps/horologion`; внутренние идентификаторы (`HorologionApi`, `window.horologion`, IPC `horologion:*`) тоже сохранены, чтобы не ломать git-историю и type-graph. Меняется только всё user-visible: `productName`, `appId` (`com.kazui.horologion`), AppUserModelID, MSI shortcut, title окна, текст в trail/tray.
+:::
+
+- **Path**: `apps/horologion`
+- **Стек**: Electron 41 + Vite 8 + **Vue 3.6 Vapor** + `@kepler/ark` + `@kepler/visuals`. Жёсткое окно 600×800px.
+- **Аналог**: Toggl Track — без социалки, без web-app, локально, с интеграцией Delphi-задач.
+
+## Список фич, которые планируется/нужно сделать
+
+См. [Roadmap](/apps/horologion-roadmap).
+
+## UI и дизайн
+
+Horologion полностью использует [`@kepler/visuals`](/packages/kepler-visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные kepler-visuals. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
+
+### Структура окна
+
+```
+┌────────────────────────────────────────────────┐
+│ Horologion          ● ARK status  ⚙  [─][□][✕]  │  titlebar
+├────────────────────────────────────────────────┤
+│ [▶]  @ для выбора задачи             00:00:00  │  input row
+├────────────────────────────────────────────────┤
+│      Список       │       Помодоро              │  tabs 50/50
+├────────────────────────────────────────────────┤
+│  СЕГОДНЯ                          0:45:23      │
+│  ┌──────────────────────────────────────────┐  │
+│  │ Ср, 13 мая                       2:15:42 │  │
+│  │ [3] Учёба @Vapor                 1:30:00 │  │
+│  │     E2E тесты                    0:25:00 │  │
+│  └──────────────────────────────────────────┘  │
+└────────────────────────────────────────────────┘
+```
+
+### Titlebar
+- **Слева**: «Horologion» (muted color, secondary).
+- **Справа**: круглый dot подключения к ARK (`var(--status-success)` / warning / `var(--destructive)`) + ⚙ Настройки.
+- Windows-controls справа от наших иконок (через `titleBarOverlay`).
+
+### Input row (под titlebar'ом)
+- Слева: play-кнопка (accent → hover → инверсия в `foreground`).
+- В центре: инпут с автокомплитом задач (`@`).
+- Справа: текущий счётчик `HH:MM:SS`.
+
+### Tabs
+- Список / Помодоро — flex 50/50, active имеет accent-индикатор подчёркивания.
+
+### Список записей
+- Группировка по дням (хедер с суммой).
+- Группировка одинаковых entries (одинаковый title + taskId + billable) внутри дня → одна строка с `[N]` badge'ем.
+- **Клик на `[N]`** → раскрывает группу (CSS Grid 0fr→1fr транзишн, 280ms) — видны индивидуальные подстроки `HH:MM — HH:MM`.
+- **Клик на строку** → открывает Edit-modal.
+- **ПКМ** на строке → context menu «Удалить» (групповое удаление всех entries в группе).
+- `@TaskName` в title рендерится в accent-цвете (без `@`).
+- $-badge для billable.
+
+### Edit modal
+- `<Modal>` из kepler-visuals.
+- Поле «Описание» — `<MentionInput>` (можно поменять / добавить задачу через `@`).
+- Preview под input'ом показывает task-pill.
+- Два `<DateTimePicker>` (С / По) — кастомный недельный календарь + текстовый ввод HH:MM.
+- Кнопки: «Удалить» (слева, danger) / «Отмена» / «Сохранить».
+
+### Помодоро
+- Круговой SVG-таймер с tick-метками минут + крупный mono-счётчик `MM:SS`.
+- Cвой `<MentionInput>` сверху — выбираешь «над чем работаешь» (можно поменять в любой момент, в т.ч. во время break'а — следующий work возьмёт новое значение).
+- Точки `[● ● ○ ○]` показывают сколько помидорок до длинного перерыва.
+- Кнопки: primary «Начать сессию» (по статусу: Пауза / Продолжить / Старт фокуса / Старт перерыва), Skip, Stop.
+- **Состояние сохраняется при сворачивании в трей** — таймер тикает в фоне.
+
+### Settings
+- Длительности (work / short / long), сколько помидорок до длинного.
+- 4 toggle'а: трекать брейки как «Отдых», автостарт work, автостарт break, системные уведомления.
+- Звук конца work и конца break — 4 опции через Web Audio (без файлов): «Колокольчик» / «Перелив» / «Стук» / «Сигнал» + ▶ для прослушивания.
+
+## Объектная модель в ARK
+
+| Тип | Где владеется | Роль |
+|---|---|---|
+| `time_entry_obj` | Horologion | Запись отрезка времени. propsJson: `startedAt`, `endedAt`, `source`, `billable`, `taskId`, `taskTitle`. |
+| `tag_obj` | shared (Horologion / Delphi) | Общий тег. **Пока не используется в UI** (TODO). |
+| `task_obj` | Delphi | Существующий тип, Horologion ссылается через `propsJson.taskId` (object_link — TODO). |
+
+**Pomodoro не маркирует записи** — поле `kind` снято. Pomodoro чисто UI-фича, создаёт обычные `time_entry_obj` (опционально break-entries с title «Отдых», если `trackBreaksAsRest` включён в Settings).
+
+## Close-to-tray
+
+- Закрытие окна не убивает приложение — окно прячется, Horologion живёт в системном трее.
+- Tray-иконка с меню: «Открыть Horologion» / «Выйти». Клик по иконке = toggle show/hide.
+- Pomodoro-таймер продолжает тикать в фоне (Vue renderer живёт).
+- Реальный quit — только через tray «Выйти» (тогда `ArkClient.stop()` корректно останавливает sidecar).
+
+::: warning Future
+Сейчас pomodoro-состояние живёт в Vue renderer. Если Electron упадёт — состояние pomodoro потеряется (но активный `time_entry_obj` уже в ARK с `startedAt`). Долгосрочно — перенос pomodoro state machine в ark-core-rpc, чтобы переживать полный quit. Это TODO в roadmap.
+:::
+
+## Команды
+
+```powershell
+cd apps/horologion
+bun run typecheck
+bun run dev               # cargo build sidecar:dev + vite + Electron
+bun run build:js          # release sidecar + tsc + vite build (без установщика)
+bun run build             # build:js + electron-builder --win msi (финальный MSI)
+bun run package:dir       # unpacked desktop bundle
+bun run test:e2e          # Playwright (.e2e/ изолированная БД)
+```
+
+::: tip Билд
+По общей [конвенции Kepler](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает финальный установщик в формате **MSI** (Windows Installer) — `apps/horologion/release/Horologion X.Y.Z.msi`. Per-machine установка, поддержка GPO / unattended install.
+
+**Иконка** embed'ится в `Horologion.exe` через `afterPack`-хук (`build/afterPack.cjs`), использующий npm-пакеты `rcedit` + `png-to-ico`. Это нужно, потому что `win.signAndEditExecutable: false` отрубает встроенный rcedit electron-builder (workaround под падение winCodeSign symlinks на Windows без Developer Mode). Хук конвертирует `build/icon.png` → `build/icon.ico` (с кэшем по mtime), затем зовёт rcedit и проставляет иконку + version-string метаданные (ProductName, CompanyName, FileVersion). Дополнительно в main.ts вызывается `app.setAppUserModelId("com.kazui.horologion")`, чтобы Windows правильно группировал окно в taskbar и подхватывал нашу иконку, а не дефолтную electron.exe.
+
+Итог: иконка отображается в окне, трее, taskbar, Start Menu, Проводнике.
+:::
+
+## Связанные документы
+
+- [Roadmap](/apps/horologion-roadmap) — что планируется / баги.
+- [Модель данных ARK](/concepts/ark-objects) — `time_entry_obj`, `tag_obj`.
+- [Delphi](/apps/delphi) — задачи (для `@`-mention).
+- [@kepler/ark](/packages/kepler-ark) — TS SDK.
+- [kepler-visuals](/packages/kepler-visuals) — UI-система.

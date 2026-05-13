@@ -112,8 +112,53 @@ erDiagram
 | `note_obj` | Eden | заметка (дневник, typed note) |
 | `task_obj` | Delphi | задача (после миграции legacy todos) |
 | `game_obj` | Arrancador | запись об игре |
+| `time_entry_obj` <span class="kbadge accent">WIP</span> | Horologion | запись отрезка времени (start/end/kind), pomodoro-сегменты, ручные записи |
+| `tag_obj` <span class="kbadge accent">WIP</span> | **shared** (Delphi + Horologion) | общий тег (`title` = имя, `propsJson.color` = OKLCH-цвет). Связи через `object_links` с `linkType='tagged'`. |
 
 Каждое приложение может зарегистрировать **custom object type** (например, для специализированных typed-notes Eden или для категорий задач Delphi). Custom types — это часть продуктового домена приложения.
+
+### Object links — конвенции `linkType`
+
+| `linkType` | source → target | Кто использует |
+|---|---|---|
+| `tagged` | `<any>` → `tag_obj` | Все приложения — для пометки тегом |
+| `for-task` | `time_entry_obj` → `task_obj` | Horologion — привязка записи к задаче |
+| `related` | универсальное | любая семантически связанная пара |
+
+### Schema для `time_entry_obj`
+
+```ts
+{
+  id: 'te-...',
+  typeId: 'time_entry_obj',
+  title: 'Описание чем занимался',
+  contentJson: { /* зарезервировано */ },
+  propsJson: {
+    startedAt: '2026-05-12T10:00:00Z',
+    endedAt:   '2026-05-12T10:25:00Z',   // null пока тикает
+    kind: 'manual' | 'pomodoro_work' | 'pomodoro_break',
+    pomodoroSessionId?: string,           // группировка сегментов одной pomodoro-сессии
+    billable?: boolean,                   // флаг для будущей агрегации в Delphi billing
+    source: 'manual' | 'pomodoro' | 'imported',
+  },
+}
+```
+
+### Schema для `tag_obj`
+
+```ts
+{
+  id: 'tag-...',
+  typeId: 'tag_obj',
+  title: 'учёба',
+  propsJson: {
+    color: 'oklch(0.7 0.15 250)',
+    description?: string,
+  },
+}
+```
+
+Подробнее про использование — см. [Horologion](/apps/horologion).
 
 ## Usage data
 

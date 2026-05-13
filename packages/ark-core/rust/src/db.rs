@@ -287,8 +287,76 @@ fn builtin_game_object_type_v2() -> ObjectType {
     }
 }
 
+fn builtin_time_entry_object_type() -> ObjectType {
+    ObjectType {
+        id: "time_entry_obj".to_string(),
+        name: "Запись времени".to_string(),
+        schema_json: json!({
+            "fields": [
+                { "id": "started_at",            "label": "Начало",          "kind": "date",     "required": true,  "visible": true,  "read_only": false, "system": true },
+                { "id": "ended_at",              "label": "Конец",           "kind": "date",     "required": false, "visible": true,  "read_only": false, "system": true },
+                { "id": "kind",                  "label": "Тип",             "kind": "select",   "required": true,  "visible": true,  "read_only": false, "options": ["manual", "pomodoro_work", "pomodoro_break"], "system": true },
+                { "id": "source",                "label": "Источник",        "kind": "select",   "required": false, "visible": true,  "read_only": false, "options": ["manual", "pomodoro", "imported"], "system": true },
+                { "id": "pomodoro_session_id",   "label": "Pomodoro-сессия", "kind": "text",     "required": false, "visible": false, "read_only": true,  "system": true },
+                { "id": "billable",              "label": "Оплачиваемое",    "kind": "boolean",  "required": false, "visible": true,  "read_only": false, "system": false },
+                { "id": "description",           "label": "Описание",        "kind": "long_text","required": false, "visible": true,  "read_only": false, "system": false },
+                { "id": "tags",                  "label": "Теги",            "kind": "relation", "required": false, "visible": true,  "read_only": false, "link_type": "tagged",   "system": false },
+                { "id": "for_task",              "label": "Задача",          "kind": "relation", "required": false, "visible": true,  "read_only": false, "link_type": "for-task", "system": false }
+            ]
+        })
+        .to_string(),
+        ui_schema_json: json!({
+            "featured_fields": ["description"],
+            "visible_fields": ["started_at", "ended_at", "kind", "billable", "description", "tags", "for_task"],
+            "hidden_fields": ["pomodoro_session_id", "source", "created_at", "updated_at", "deleted_at"],
+            "read_only_fields": ["pomodoro_session_id"],
+            "field_order": ["started_at", "ended_at", "kind", "description", "tags", "for_task", "billable", "source", "pomodoro_session_id"],
+            "header_layout": "inline",
+            "default_layout": "page",
+            "default_template_id": null,
+        })
+        .to_string(),
+        created_at: "1970-01-01T00:00:00.000Z".to_string(),
+        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
+        system_locked: true,
+    }
+}
+
+fn builtin_tag_object_type() -> ObjectType {
+    ObjectType {
+        id: "tag_obj".to_string(),
+        name: "Тег".to_string(),
+        schema_json: json!({
+            "fields": [
+                { "id": "color",       "label": "Цвет",     "kind": "text",     "required": false, "visible": true,  "read_only": false, "system": false },
+                { "id": "description", "label": "Описание", "kind": "long_text","required": false, "visible": true,  "read_only": false, "system": false }
+            ]
+        })
+        .to_string(),
+        ui_schema_json: json!({
+            "featured_fields": [],
+            "visible_fields": ["color", "description"],
+            "hidden_fields": ["created_at", "updated_at", "deleted_at"],
+            "read_only_fields": [],
+            "field_order": ["color", "description"],
+            "header_layout": "inline",
+            "default_layout": "page",
+            "default_template_id": null,
+        })
+        .to_string(),
+        created_at: "1970-01-01T00:00:00.000Z".to_string(),
+        updated_at: "1970-01-01T00:00:00.000Z".to_string(),
+        system_locked: true,
+    }
+}
+
 fn seed_builtin_object_types(conn: &Connection) -> Result<(), String> {
-    for object_type in [builtin_note_object_type_v2(), builtin_game_object_type_v2()] {
+    for object_type in [
+        builtin_note_object_type_v2(),
+        builtin_game_object_type_v2(),
+        builtin_time_entry_object_type(),
+        builtin_tag_object_type(),
+    ] {
         seed_builtin_object_type(conn, &object_type)?;
     }
     Ok(())

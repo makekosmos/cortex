@@ -105,6 +105,8 @@ bun run ark:smoke
 | **Delphi** | `apps/delphi/ts` | задачи (Electron) |
 | **Arrancador** | `apps/arrancador` | игровая библиотека (Electron) |
 | **Dashboard** | `apps/dashboard` | read-only аналитика (Electron) |
+| **Horologion** | `apps/horologion` | трекер времени, pomodoro (WIP). `time_entry_obj` + общий `tag_obj` |
+| **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |
 | **@kepler/ark** | `packages/kepler-ark` | TS SDK |
@@ -153,20 +155,16 @@ flowchart TD
   M["Electron main"]
   SDK["@kepler/ark"]
   RPC["ark-core-rpc"]
-  EXPO["Локальная SQLite"]
 
   R -- "preload API" --> M
-  R -. "expo-sqlite" .-> EXPO
   M --> SDK
   SDK -- "JSON по stdio" --> RPC
 
   classDef canon fill:#2b2b46,stroke:#6b6bcd,color:#fff,stroke-width:1.5px
   classDef neutral fill:#202020,stroke:#666,color:#fafafa
-  classDef legacy fill:#3a2f22,stroke:#a07c4a,color:#fff
 
   class RPC,SDK canon
   class R,M neutral
-  class EXPO legacy
 ```
 
 - `Renderer` — Vue 3 Vapor в Electron-приложениях. Никакого SQLite, всё через preload IPC.
@@ -373,8 +371,53 @@ erDiagram
 | `note_obj` | Eden | заметка (дневник, typed note) |
 | `task_obj` | Delphi | задача (после миграции legacy todos) |
 | `game_obj` | Arrancador | запись об игре |
+| `time_entry_obj` <span class="kbadge accent">WIP</span> | Horologion | запись отрезка времени (start/end/kind), pomodoro-сегменты, ручные записи |
+| `tag_obj` <span class="kbadge accent">WIP</span> | **shared** (Delphi + Horologion) | общий тег (`title` = имя, `propsJson.color` = OKLCH-цвет). Связи через `object_links` с `linkType='tagged'`. |
 
 Каждое приложение может зарегистрировать **custom object type** (например, для специализированных typed-notes Eden или для категорий задач Delphi). Custom types — это часть продуктового домена приложения.
+
+### Object links — конвенции `linkType`
+
+| `linkType` | source → target | Кто использует |
+|---|---|---|
+| `tagged` | `<any>` → `tag_obj` | Все приложения — для пометки тегом |
+| `for-task` | `time_entry_obj` → `task_obj` | Horologion — привязка записи к задаче |
+| `related` | универсальное | любая семантически связанная пара |
+
+### Schema для `time_entry_obj`
+
+```ts
+{
+  id: 'te-...',
+  typeId: 'time_entry_obj',
+  title: 'Описание чем занимался',
+  contentJson: { /* зарезервировано */ },
+  propsJson: {
+    startedAt: '2026-05-12T10:00:00Z',
+    endedAt:   '2026-05-12T10:25:00Z',   // null пока тикает
+    kind: 'manual' | 'pomodoro_work' | 'pomodoro_break',
+    pomodoroSessionId?: string,           // группировка сегментов одной pomodoro-сессии
+    billable?: boolean,                   // флаг для будущей агрегации в Delphi billing
+    source: 'manual' | 'pomodoro' | 'imported',
+  },
+}
+```
+
+### Schema для `tag_obj`
+
+```ts
+{
+  id: 'tag-...',
+  typeId: 'tag_obj',
+  title: 'учёба',
+  propsJson: {
+    color: 'oklch(0.7 0.15 250)',
+    description?: string,
+  },
+}
+```
+
+Подробнее про использование — см. [Horologion](docs-site/apps/horologion.md).
 
 ## Usage data
 
@@ -1138,6 +1181,17 @@ bun run --cwd apps/arrancador smoke:packaged
 - ❌ Добавление UI / tray icon / окон.
 - ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
 
+## Файловые операции на Windows
+
+::: danger Junction'ы bun workspaces
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kepler/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kepler-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+:::
+
+- ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
+- ❌ Переименование/перемещение `apps/<name>/` без предварительной коммитной зачистки untracked-файлов в `packages/*`. Если что-то ценное лежит как `??` в `git status` — закоммить или временно сохрани вне репо, иначе `Move-Item` уничтожит таргет junction'а навсегда.
+- ❌ Удаление любых директорий внутри `apps/` или `packages/` через GUI-проводник Windows. Используй `git rm`, `Remove-Item` после удаления `node_modules`, или CLI с явным контролем.
+- ❌ `rm -rf packages/...` или эквиваленты, если результат можно достичь через `git restore` / переключение веток.
+
 ## Git / tooling
 
 - ❌ `--no-verify` при коммите.
@@ -1147,6 +1201,12 @@ bun run --cwd apps/arrancador smoke:packaged
 - ❌ Коммит файлов с секретами (`.env`, `credentials.json`).
 - ❌ Коммит `dist/`, `build/`, `coverage/`, `.tmp/`, `.e2e/`, `node_modules/`.
 - ❌ Создание новых правил в `MEMORY.md` или AGENTS.md без согласования с человеком.
+
+## UI
+
+- ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
 
@@ -1512,6 +1572,7 @@ AC4. `bun run --cwd <app> build` — собирается.
 | Принял архитектурное решение | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md` |
 | Изменил дизайн-токены `kepler-visuals` | `docs-site/packages/kepler-visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
 | Создал/убрал `object_type` | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
+| Запланировал фичу / нашёл баг приложения | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap)) |
 
 ## Когда **НЕ** надо трогать документацию
 
@@ -1593,6 +1654,34 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 - Весь набор ключевых страниц inline → `docs-site/public/llms.txt`.
 
 Если меняешь логику генерации — правь сам `scripts/sync-agents-docs.mjs`, потом `bun run docs:sync`.
+
+## Roadmap
+
+У каждого приложения может быть **отдельная страница roadmap** — `docs-site/apps/<name>-roadmap.md`. Это список того, что хочется сделать в приложении / баги / TODO. Источник информации:
+
+- Что-то обсудили с пользователем — записываешь в roadmap (не в код, не в TODO.md, не «запомнишь»).
+- Нашёл баг или ограничение в процессе работы — записываешь в roadmap → `Баги / замечания`.
+
+### Структура roadmap-страницы
+
+Три обязательных секции:
+
+1. **Ближайшее** — фичи, над которыми работают сейчас или планируют скоро (по приоритету ↓). Если фича в работе — пометка статуса (`WIP — scaffold`, `WIP — UI готов`).
+2. **Потом** — идеи / nice-to-have. Не критично, но не теряем.
+3. **Баги / замечания** — открытые проблемы.
+
+Пример — [Horologion Roadmap](docs-site/apps/horologion-roadmap.md).
+
+### Как поддерживать
+
+- **Когда фича в roadmap начинает делаться** — оставляй её в «Ближайшее» с пометкой статуса.
+- **Когда фича завершена** — убирай из roadmap и фиксируй в обзоре приложения (`docs-site/apps/<name>.md`).
+- **Баг исправили** — убираем из «Баги».
+- **Не дублируй с code-комментариями `// TODO`** — комментарии в коде про *локальное место*; roadmap про *направление приложения*.
+
+### Когда roadmap-страницы нет
+
+Создаёшь новую — добавь её в `docs-site/.vitepress/config.ts` sidebar под соответствующим приложением как «`<Name> — Roadmap`».
 
 ## Связанные документы
 
@@ -1917,6 +2006,17 @@ bun run ark:guard:writes
 
 Шпаргалка по всем командам, которые есть в репо.
 
+::: tip Конвенция сборки релизов
+Для всех desktop-приложений Kepler `bun run build` из директории приложения
+производит **финальный установщик в формате MSI** (Windows Installer).
+Это единый формат дистрибуции — установка per-machine, поддерживает enterprise-деплой,
+unattended install и GPO. NSIS (`.exe`) больше не используем.
+
+Промежуточная сборка только JS/Rust артефактов (без установщика) —
+`bun run build:js` (если приложение её предоставляет) или `bun run package:dir`
+для unpacked-бандла.
+:::
+
 ## Корневые
 
 Из корня `kepler/`:
@@ -1965,7 +2065,9 @@ cd apps/delphi/ts
 bun run build:ark:dev    # debug ark-core-rpc
 bun run build:ark        # release ark-core-rpc
 bun run dev              # build:ark:dev + Vite + Electron
-bun run build            # build:ark + TS + Vite + electron-builder
+bun run build:js         # ark release + TS + Vite (без установщика)
+bun run build            # build:js + electron-builder --win msi (финальный MSI)
+bun run package:dir      # unpacked desktop bundle (без установщика)
 bun run test             # unit
 bun run e2e              # Playwright (включая shared-ark-task.spec.ts)
 ```
@@ -1993,6 +2095,20 @@ bun run smoke:seed       # сидинг smoke БД
 bun run smoke:analytics  # CLI assertion аналитики
 bun run test:e2e         # Playwright (с Python-сидингом в globalSetup)
 bun run test:e2e:smoke   # прямой Playwright-library smoke
+```
+
+## Horologion
+
+Workspace-директория исторически осталась `apps/horologion`, имя приложения — Horologion.
+
+```powershell
+cd apps/horologion
+bun run dev              # build:sidecar:dev + Vite + Electron
+bun run build:js         # sidecar release + TS + Vite (без установщика)
+bun run build            # build:js + electron-builder --win msi (финальный MSI)
+bun run package:dir      # unpacked desktop bundle (без установщика)
+bun run typecheck
+bun run test:e2e         # build:js + Playwright
 ```
 
 ## Usage tracker

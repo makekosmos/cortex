@@ -2,6 +2,17 @@
 
 Шпаргалка по всем командам, которые есть в репо.
 
+::: tip Конвенция сборки релизов
+Для всех desktop-приложений Kepler `bun run build` из директории приложения
+производит **финальный установщик в формате MSI** (Windows Installer).
+Это единый формат дистрибуции — установка per-machine, поддерживает enterprise-деплой,
+unattended install и GPO. NSIS (`.exe`) больше не используем.
+
+Промежуточная сборка только JS/Rust артефактов (без установщика) —
+`bun run build:js` (если приложение её предоставляет) или `bun run package:dir`
+для unpacked-бандла.
+:::
+
 ## Корневые
 
 Из корня `kepler/`:
@@ -50,7 +61,9 @@ cd apps/delphi/ts
 bun run build:ark:dev    # debug ark-core-rpc
 bun run build:ark        # release ark-core-rpc
 bun run dev              # build:ark:dev + Vite + Electron
-bun run build            # build:ark + TS + Vite + electron-builder
+bun run build:js         # ark release + TS + Vite (без установщика)
+bun run build            # build:js + electron-builder --win msi (финальный MSI)
+bun run package:dir      # unpacked desktop bundle (без установщика)
 bun run test             # unit
 bun run e2e              # Playwright (включая shared-ark-task.spec.ts)
 ```
@@ -78,6 +91,20 @@ bun run smoke:seed       # сидинг smoke БД
 bun run smoke:analytics  # CLI assertion аналитики
 bun run test:e2e         # Playwright (с Python-сидингом в globalSetup)
 bun run test:e2e:smoke   # прямой Playwright-library smoke
+```
+
+## Horologion
+
+Workspace-директория исторически осталась `apps/horologion`, имя приложения — Horologion.
+
+```powershell
+cd apps/horologion
+bun run dev              # build:sidecar:dev + Vite + Electron
+bun run build:js         # sidecar release + TS + Vite (без установщика)
+bun run build            # build:js + electron-builder --win msi (финальный MSI)
+bun run package:dir      # unpacked desktop bundle (без установщика)
+bun run typecheck
+bun run test:e2e         # build:js + Playwright
 ```
 
 ## Usage tracker

@@ -31,10 +31,39 @@ Delphi — приложение для управления задачами в 
 bun run build:ark:dev      # debug-сборка ark-core-rpc
 bun run build:ark          # release-сборка ark-core-rpc
 bun run dev                # build:ark:dev + Vite + Electron
-bun run build              # build:ark + TypeScript + Vite + electron-builder
+bun run build:js           # build:ark + TS + Vite (без установщика)
+bun run build              # build:js + electron-builder --win msi (финальный MSI)
+bun run package:dir        # unpacked desktop bundle
 bun run test               # unit
 bun run e2e                # Playwright
 ```
+
+Артефакты после `build` лежат в `apps/delphi/ts/release/`:
+
+- `Delphi <version>.msi` — финальный установщик (Windows Installer, per-machine).
+- `win-unpacked/Delphi.exe` — распакованное приложение (доступно после `package:dir`).
+
+Версия берётся из `package.json` → `version` (текущая `0.0.2`). MSI — единый формат
+дистрибуции для всех desktop-приложений Kepler, см. [конвенцию сборки релизов](/reference/commands#корневые).
+
+## Иконка
+
+Источник — `apps/delphi/ts/build/icon.png` (минимум 512×512, рекомендуется ≥1024×1024 PNG).
+Pipeline:
+
+- `package.json → build.win.icon` указан явно на `build/icon.png`.
+- `build/afterPack.cjs` (hook electron-builder) конвертирует PNG → ICO через `png-to-ico`
+  и встраивает иконку + version-string метаданные в `Delphi.exe` через `rcedit`.
+  Это нужно, потому что `win.signAndEditExecutable: false` отключает встроенный
+  rcedit electron-builder (workaround под падение winCodeSign symlinks без Developer Mode).
+- `extraResources` копирует `build/icon.png` в `resources/icon.png` packaged-сборки;
+  `electron/main.ts` использует её для `BrowserWindow.icon` (taskbar / тайтлбар).
+- В dev иконка читается из `apps/delphi/ts/build/icon.png` напрямую через `resolveIconPath()`.
+
+Чтобы обновить иконку — замени `build/icon.png` и перезапусти `bun run build`.
+Кэшированный `build/icon.ico` afterPack перегенерит, если PNG новее.
+
+Это стандарт для всех Electron-приложений Kepler — см. [Структура репо → Иконки](/guide/layout#иконки-приложений).
 
 ## Boundaries
 
@@ -64,8 +93,30 @@ bun run e2e                # Playwright
 - ❌ Прямой SQL write в `objects` из app services (см. [Граница записи](/concepts/write-boundary)).
 - ❌ Дефолт пути к user DB в тестах.
 
+## TODO — биллинг
+
+Планируется (не сделано): добавить опциональные поля в `propsJson` `task_obj` для расчёта дохода:
+
+```ts
+// task_obj.propsJson — потенциальные поля
+{
+  priceModel?: 'fixed' | 'hourly',
+  price?: number,        // fixed: общая сумма за задачу
+  hourlyRate?: number,   // hourly: ставка в час
+  currency?: 'USD' | 'RUB' | 'EUR' | ...,
+}
+```
+
+Time entries из [Horologion](/apps/horologion) ссылаются на `task_obj` через `object_link` (`linkType='for-task'`). Расчёт `$/час`:
+
+- **fixed model**: `price / Σ(time_entries.duration where billable)` — фактический $/час за результат.
+- **hourly model**: `Σ(time_entries.duration where billable) × hourlyRate` — заработано.
+
+Считать в Dashboard report или в самой Delphi на странице задачи. **Сам Horologion цены не показывает** — только пишет `time_entry.propsJson.billable`.
+
 ## Связанные документы
 
 - `docs/DELPHI-LEGACY-DB-DECISION.md` — почему legacy sidecar удалён.
 - [Модель данных ARK](/concepts/ark-objects).
+- [Horologion](/apps/horologion) — трекер времени, который привязывается к Delphi-задачам.
 - [@kepler/ark](/packages/kepler-ark).

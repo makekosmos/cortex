@@ -72,6 +72,8 @@ bun run ark:smoke
 | **Delphi** | `apps/delphi/ts` | задачи (Electron) |
 | **Arrancador** | `apps/arrancador` | игровая библиотека (Electron) |
 | **Dashboard** | `apps/dashboard` | read-only аналитика (Electron) |
+| **Horologion** | `apps/horologion` | трекер времени, pomodoro (WIP). `time_entry_obj` + общий `tag_obj` |
+| **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |
 | **@kepler/ark** | `packages/kepler-ark` | TS SDK |

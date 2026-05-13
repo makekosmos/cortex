@@ -1,8 +1,12 @@
 export const typography = {
   fontFamily: {
-    sans: "-apple-system, BlinkMacSystemFont, SF Pro Display, SF Pro Text, Inter, Avenir, Helvetica, Arial, sans-serif",
+    // На Apple: -apple-system → BlinkMacSystemFont → SF Pro (системный, не требует загрузки).
+    // На Windows / Linux: IBM Plex Sans → системные fallback'и.
+    sans: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'IBM Plex Sans', 'Segoe UI', Inter, Avenir, Helvetica, Arial, sans-serif",
 
-    mono: "'Zed Mono', monospace",
+    // Mono: IBM Plex Mono приоритетный (доступен на любой ОС после установки),
+    // затем системные mono-стеки.
+    mono: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
   },
 
   fontSize: {

@@ -754,7 +754,14 @@ export class ArkClient {
       }
 
       const resp = obj as unknown as SidecarResponse<unknown>
-      const pending = this.takePendingRequest(resp.id)
+      // Rust echoes envelope-id обратно как `_req_id` (новое) или `id` (legacy).
+      const respReqId =
+        typeof obj._req_id === "string"
+          ? (obj._req_id as string)
+          : typeof obj.id === "string"
+            ? (obj.id as string)
+            : undefined
+      const pending = this.takePendingRequest(respReqId)
       if (!pending) continue
 
       if (!resp.ok) {
@@ -796,7 +803,11 @@ export class ArkClient {
 
     const child = this.ensureChild()
     const id = this.makeRequestId()
-    const request = { ...req, id }
+    // ВАЖНО: envelope-id живёт в `_req_id`, не в `id`. Иначе он бы затирал
+    // payload-поле `id` у операций вроде get_object / delete_object — это
+    // приводит к молчаливому "not found", потому что Rust пытался искать
+    // строку запроса в БД. Rust обрабатывает оба поля для обратной совместимости.
+    const request = { ...req, _req_id: id }
     const timeoutMs = this.opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
 
     const promise = new Promise<T>((resolve, reject) => {

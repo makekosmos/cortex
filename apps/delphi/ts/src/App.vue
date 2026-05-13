@@ -2,8 +2,7 @@
 /* eslint-disable no-console */
 import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
-import { Loader, PanelLeft, Wifi, WifiOff } from "lucide-vue-next";
-import QRCode from "qrcode";
+import { PanelLeft } from "lucide-vue-next";
 import {
   fetchProjectsFromArk,
   fetchTasksFromArk,
@@ -34,12 +33,18 @@ import {
   CustomCaret,
   DesktopChrome,
   DesktopContentSurface,
-  StatusDot,
   TitlebarHistoryControls,
-  type StatusDotTone,
   type TitlebarPlatform,
 } from "@kepler/visuals";
 import { setSidebarHidden, useSidebarState } from "@/composables/useSidebarState";
+import {
+  activeSpaceCode,
+  arkStatus,
+  connectedPeerCount,
+  connectedPeerNames,
+  connectionState,
+  LEAVE_SPACE_EVENT,
+} from "@/composables/useSyncState";
 
 // ---------------------------------------------------------------------------
 // Store
@@ -72,132 +77,24 @@ function handleGlobalKeydown(e: KeyboardEvent) {
 // Connection state
 // ---------------------------------------------------------------------------
 
-type ConnectionState = "online" | "syncing" | "offline";
-const connectionState = shallowRef<ConnectionState>("offline");
 const authRequired = shallowRef(false);
 const authBusy = shallowRef(false);
 const authError = shallowRef<string | null>(null);
 
-// Ark Space state (Electron P2P mode)
 const isElectron = typeof window !== "undefined" && !!window.electronAPI;
 const spaceRequired = shallowRef(false);
-const activeSpaceCode = shallowRef<string | null>(null);
-const connectedPeerCount = shallowRef(0);
-const connectedPeerNames = shallowRef<string[]>([]);
 
-const showQrOverlay = shallowRef(false);
-const fullQrDataUrl = shallowRef("");
-const qrOverlayPayload = shallowRef("");
-const qrLinkCopied = shallowRef(false);
+const arkDotClass = computed(() => `dot dot--${arkStatus.value}`);
 
-// Generate large QR on demand
-async function openQrOverlay() {
-  const code = activeSpaceCode.value;
-  if (!code) return;
-  try {
-    let payload = "";
-    if (isElectron && window.electronAPI?.invoke) {
-      payload =
-        ((await window.electronAPI.invoke(
-          "sync:getQrPayload",
-          code,
-        )) as string) || "";
-    }
-    if (!payload) payload = formatSpaceCode(code);
-    qrOverlayPayload.value = payload;
-    fullQrDataUrl.value = await QRCode.toDataURL(payload, {
-      width: 512,
-      margin: 3,
-      color: { dark: "#000000", light: "#ffffff" },
-      errorCorrectionLevel: "M",
-    });
-  } catch {
-    fullQrDataUrl.value = "";
-  }
-  showQrOverlay.value = true;
-}
-
-async function copyQrLink() {
-  if (!qrOverlayPayload.value) return;
-  try {
-    await navigator.clipboard.writeText(qrOverlayPayload.value);
-    qrLinkCopied.value = true;
-    setTimeout(() => {
-      qrLinkCopied.value = false;
-    }, 2000);
-  } catch {
-    /* clipboard blocked */
-  }
-}
-
-const connectionIconBg = computed(() => {
-  switch (connectionState.value) {
-    case "online":
-      return "bg-emerald-500/15";
-    case "syncing":
-      return "bg-amber-500/15";
-    case "offline":
-      return "bg-rose-500/15";
-  }
-});
-
-const connectionIconColor = computed(() => {
-  switch (connectionState.value) {
-    case "online":
-      return "text-emerald-500";
-    case "syncing":
-      return "text-amber-500";
-    case "offline":
-      return "text-rose-500";
-  }
-});
-
-const connectionIcon = computed(() => {
-  switch (connectionState.value) {
-    case "online":
-      return Wifi;
-    case "syncing":
-      return Loader;
-    case "offline":
-      return WifiOff;
-  }
-});
-
-const connectionSubtext = computed(() => {
-  if (connectionState.value === "online" && connectedPeerCount.value > 0) {
-    return `${connectedPeerCount.value} ${connectedPeerCount.value === 1 ? "пир" : "пиров"} подключено`;
-  }
-  switch (connectionState.value) {
-    case "online":
-      return "Соединение установлено";
-    case "syncing":
-      return "Соединение в процессе";
-    case "offline":
-      return "Соединение отсутствует";
-  }
-});
-
-const connectionStatusTone = computed<StatusDotTone>(() => {
-  switch (connectionState.value) {
-    case "online":
-      return "success";
-    case "syncing":
-      return "warning";
-    case "offline":
+const arkStatusMessage = computed(() => {
+  switch (arkStatus.value) {
+    case "connected":
+      return "ARK подключен";
+    case "connecting":
+      return "Подключение к ARK…";
+    case "error":
     default:
-      return "danger";
-  }
-});
-
-const connectionStatusLabel = computed(() => {
-  switch (connectionState.value) {
-    case "online":
-      return "P2P соединение активно";
-    case "syncing":
-      return "P2P соединение синхронизируется";
-    case "offline":
-    default:
-      return "P2P соединение недоступно";
+      return "ARK недоступен";
   }
 });
 
@@ -343,6 +240,7 @@ async function bootstrapWeb() {
   }
 
   connectionState.value = "syncing";
+  arkStatus.value = "connecting";
   authRequired.value = false;
   authError.value = null;
   store.setHydrated(false);
@@ -359,11 +257,13 @@ async function bootstrapWeb() {
     store.setTags([]);
     store.setHeadings([]);
     connectionState.value = "online";
+    arkStatus.value = "connected";
   } catch (error) {
     authRequired.value = true;
     authError.value =
       error instanceof Error ? error.message : "Ошибка подключения";
     connectionState.value = "offline";
+    arkStatus.value = "error";
   } finally {
     store.setHydrated(true);
   }
@@ -417,10 +317,15 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
   spaceRequired.value = false;
 
   // Switch sidecar to per-space DB
+  arkStatus.value = "connecting";
   if (window.electronAPI?.invoke) {
-    await window.electronAPI
-      .invoke("db:switchSpace", spaceId)
-      .catch(console.warn);
+    try {
+      await window.electronAPI.invoke("db:switchSpace", spaceId);
+      arkStatus.value = "connected";
+    } catch (err) {
+      console.warn("[App] db:switchSpace failed:", err);
+      arkStatus.value = "error";
+    }
   }
 
   // Sync is started via lan-sync:start → ArkClient (see startSyncServer below)
@@ -627,6 +532,7 @@ function refreshPeerStatus() {
 
 onMounted(async () => {
   window.addEventListener("keydown", handleGlobalKeydown);
+  window.addEventListener(LEAVE_SPACE_EVENT, leaveSpaceListener);
   if (isElectron) {
     // Electron: P2P space mode takes priority
     const code = await getActiveSpace();
@@ -647,97 +553,19 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleGlobalKeydown);
+  window.removeEventListener(LEAVE_SPACE_EVENT, leaveSpaceListener);
   cleanupLanSyncListener?.();
 });
+
+function leaveSpaceListener() {
+  void handleLeaveSpace();
+}
 </script>
 
 <template>
   <div
     class="flex h-screen w-screen overflow-hidden bg-(--background) text-(--foreground)"
   >
-    <!-- Legacy fixed popover replaced by shared titlebar status dot.
-    <PopoverRoot>
-      <PopoverTrigger as-child>
-        <button
-          :class="connectionDotClass"
-          class="fixed top-4 right-4 z-40 h-2.5 w-2.5 cursor-pointer rounded-full"
-        />
-      </PopoverTrigger>
-      <PopoverPortal>
-        <PopoverContent
-          side="bottom"
-          :side-offset="8"
-          align="end"
-          class="z-50 w-64 rounded-lg border border-(--border) bg-(--popover) p-3 text-xs text-(--popover-foreground) shadow-md"
-        >
-          <div class="flex items-center gap-2.5">
-            <div
-              :class="connectionIconBg"
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-            >
-              <component
-                :is="connectionIcon"
-                :class="[
-                  connectionIconColor,
-                  connectionState === 'syncing' && 'animate-spin',
-                ]"
-                :size="16"
-              />
-            </div>
-            <div class="min-w-0">
-              <p class="font-bold">P2P соединение</p>
-              <p class="text-(--muted-foreground)">{{ connectionSubtext }}</p>
-            </div>
-          </div>
-          <p
-            v-if="activeSpaceCode && connectionState === 'offline'"
-            class="mt-2 text-center text-xs text-(--muted-foreground)"
-          >
-            Ожидание пиров в сети...
-          </p>
-          <div
-            v-if="activeSpaceCode"
-            class="mt-3 border-t border-(--border) pt-3"
-          >
-            <p class="mb-1 text-xs text-(--muted-foreground)">Пространство</p>
-            <p class="break-all font-mono text-sm font-bold tracking-wide">
-              {{ formatSpaceCode(activeSpaceCode) }}
-            </p>
-            <button
-              class="mt-2 w-full rounded-md border border-(--border) px-2 py-1.5 text-xs font-medium transition-colors hover:bg-(--muted)"
-              @click="openQrOverlay"
-            >
-              Показать QR-код
-            </button>
-            <div v-if="connectedPeerNames.length > 0" class="mt-2">
-              <p class="mb-1 text-xs text-(--muted-foreground)">
-                Подключённые пиры
-              </p>
-              <ul class="text-xs">
-                <li v-for="name in connectedPeerNames" :key="name">
-                  {{ name }}
-                </li>
-              </ul>
-            </div>
-            <button
-              class="mt-2 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
-              @click="handleLeaveSpace"
-            >
-              Покинуть пространство
-            </button>
-          </div>
-          <button
-            v-else-if="!isElectron && connectionState === 'offline'"
-            class="mt-3 w-full rounded-md bg-(--foreground) px-2 py-1.5 text-xs font-medium text-(--background) transition-opacity hover:opacity-80"
-            @click="handleReconnect"
-          >
-            Подключиться
-          </button>
-          <PopoverArrow class="fill-(--popover)" />
-        </PopoverContent>
-      </PopoverPortal>
-    </PopoverRoot>
-    -->
 
     <DesktopChrome :platform="chromePlatform" class="flex min-h-0 min-w-0 flex-1">
       <template #titlebar-leading>
@@ -772,76 +600,14 @@ onUnmounted(() => {
       </template>
 
       <template #titlebar-trailing>
-        <StatusDot
-          :tone="connectionStatusTone"
-          :label="connectionStatusLabel"
+        <button
+          type="button"
+          class="ark-status-btn"
+          :title="arkStatusMessage"
+          :aria-label="arkStatusMessage"
         >
-          <div class="w-64 text-xs text-(--popover-foreground)">
-            <div class="flex items-center gap-2.5">
-              <div
-                :class="connectionIconBg"
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-              >
-                <component
-                  :is="connectionIcon"
-                  :class="[
-                    connectionIconColor,
-                    connectionState === 'syncing' && 'animate-spin',
-                  ]"
-                  :size="16"
-                />
-              </div>
-              <div class="min-w-0">
-                <p class="font-bold">P2P соединение</p>
-                <p class="text-(--muted-foreground)">{{ connectionSubtext }}</p>
-              </div>
-            </div>
-            <p
-              v-if="activeSpaceCode && connectionState === 'offline'"
-              class="mt-2 text-center text-xs text-(--muted-foreground)"
-            >
-              Ожидание пиров в сети...
-            </p>
-            <div
-              v-if="activeSpaceCode"
-              class="mt-3 border-t border-(--border) pt-3"
-            >
-              <p class="mb-1 text-xs text-(--muted-foreground)">Пространство</p>
-              <p class="break-all font-mono text-sm font-bold tracking-wide">
-                {{ formatSpaceCode(activeSpaceCode) }}
-              </p>
-              <button
-                class="mt-2 w-full rounded-md border border-(--border) px-2 py-1.5 text-xs font-medium transition-colors hover:bg-(--muted)"
-                @click="openQrOverlay"
-              >
-                Показать QR-код
-              </button>
-              <div v-if="connectedPeerNames.length > 0" class="mt-2">
-                <p class="mb-1 text-xs text-(--muted-foreground)">
-                  Подключённые пиры
-                </p>
-                <ul class="text-xs">
-                  <li v-for="name in connectedPeerNames" :key="name">
-                    {{ name }}
-                  </li>
-                </ul>
-              </div>
-              <button
-                class="mt-2 w-full rounded-md border border-rose-500/30 px-2 py-1.5 text-xs font-medium text-rose-400 transition-opacity hover:bg-rose-500/10"
-                @click="handleLeaveSpace"
-              >
-                Покинуть пространство
-              </button>
-            </div>
-            <button
-              v-else-if="!isElectron && connectionState === 'offline'"
-              class="mt-3 w-full rounded-md bg-(--foreground) px-2 py-1.5 text-xs font-medium text-(--background) transition-opacity hover:opacity-80"
-              @click="handleReconnect"
-            >
-              Подключиться
-            </button>
-          </div>
-        </StatusDot>
+          <span :class="arkDotClass" />
+        </button>
       </template>
 
       <template #sidebar>
@@ -883,50 +649,6 @@ onUnmounted(() => {
       @space-deleted="handleSpaceDeleted"
     />
 
-    <!-- Fullscreen QR overlay -->
-    <div
-      v-if="showQrOverlay"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8"
-      @click.self="showQrOverlay = false"
-    >
-      <div
-        class="flex flex-col items-center gap-4 rounded-2xl bg-(--background) p-8 shadow-2xl"
-      >
-        <p class="text-xs text-(--muted-foreground)">Пространство</p>
-        <p
-          v-if="activeSpaceCode"
-          class="font-mono text-2xl font-bold tracking-widest"
-        >
-          {{ formatSpaceCode(activeSpaceCode) }}
-        </p>
-        <img
-          v-if="fullQrDataUrl"
-          :src="fullQrDataUrl"
-          alt="QR"
-          class="rounded-lg"
-          width="320"
-          height="320"
-        />
-        <p class="max-w-xs text-center text-xs text-(--muted-foreground)">
-          Отсканируйте QR или вставьте ссылку на другом устройстве
-        </p>
-        <div class="flex w-full gap-2">
-          <button
-            v-if="qrOverlayPayload"
-            class="flex-1 rounded-md bg-(--foreground) px-4 py-2 text-sm font-medium text-(--background) transition-opacity hover:opacity-80"
-            @click="copyQrLink"
-          >
-            {{ qrLinkCopied ? "Скопировано!" : "Скопировать ссылку" }}
-          </button>
-          <button
-            class="rounded-md border border-(--border) px-4 py-2 text-sm transition-colors hover:bg-(--muted)"
-            @click="showQrOverlay = false"
-          >
-            Закрыть
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -959,5 +681,49 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
   color: var(--foreground);
   opacity: 1;
+}
+
+/* ARK status indicator — single-line dot, no popover.
+   Matches Horologion's titlebar indicator (32x32 transparent button + 8px dot). */
+.ark-status-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: default;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--sidebar-foreground) 55%, transparent);
+  transition:
+    color 120ms cubic-bezier(0.2, 0, 0, 1),
+    background-color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.ark-status-btn:hover {
+  color: var(--sidebar-foreground);
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.dot--connected {
+  color: var(--status-success);
+}
+
+.dot--connecting {
+  color: oklch(0.75 0.14 75);
+}
+
+.dot--error {
+  color: var(--destructive);
 }
 </style>

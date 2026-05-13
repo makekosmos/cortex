@@ -9,7 +9,8 @@ kepler/
 │  ├─ arrancador/         # Electron — игровая библиотека / playtime / бэкапы
 │  ├─ dashboard/          # Electron — read-only аналитика ARK
 │  ├─ delphi/             # Electron (ts/) + Android (kotlin/) — задачи
-│  └─ eden/               # Vue 3.6 + Electron — заметки и дневник
+│  ├─ eden/               # Vue 3.6 + Electron — заметки и дневник
+│  └─ horologion/          # Electron — трекер времени + pomodoro (WIP)
 ├─ packages/              # Переиспользуемые пакеты
 │  ├─ ark-core/           # ⭐ Rust runtime + ark-core-rpc sidecar
 │  ├─ kepler-ark/         # ⭐ @kepler/ark — канонический TS SDK
@@ -101,6 +102,72 @@ apps/eden/ts/
 ### Delphi, Arrancador, Dashboard
 
 Аналогичная схема: `apps/<name>/electron/main.ts`, `apps/<name>/electron/preload.ts`, `apps/<name>/electron/main/services/`, `apps/<name>/src/` (Vue).
+
+## Иконки приложений
+
+Стандарт для всех Electron-приложений Kepler (Delphi, Eden, Arrancador, Dashboard, Horologion):
+
+```text
+apps/<name>/[ts/]build/
+├─ icon.png              # источник, ≥512×512 (рекомендуется ≥1024×1024)
+├─ icon.ico              # кэш (генерируется автоматически из icon.png)
+└─ afterPack.cjs         # electron-builder hook: PNG→ICO + rcedit
+```
+
+### Конвенция в `package.json` приложения
+
+```jsonc
+"build": {
+  "afterPack": "./build/afterPack.cjs",
+  "directories": { "buildResources": "build" },
+  "extraResources": [
+    { "from": "build/icon.png", "to": "icon.png" }
+  ],
+  "win": {
+    "icon": "build/icon.png",
+    "target": "msi",
+    "signAndEditExecutable": false
+  },
+  "mac": { "icon": "build/icon.png" },
+  "linux": { "icon": "build/icon.png" }
+}
+```
+
+### Зачем `afterPack.cjs`
+
+`win.signAndEditExecutable: false` — workaround под падение `winCodeSign` symlinks
+на Windows без Developer Mode. Побочка: встроенный rcedit electron-builder отключается,
+и `.exe` выходит с дефолтной Electron-иконкой. `afterPack.cjs` чинит это руками:
+
+1. `png-to-ico` — `build/icon.png` → `build/icon.ico` (кэшируется по mtime).
+2. `rcedit` — встраивает icon + ProductName/FileDescription/version в `<App>.exe`.
+
+Без этого иконки нет ни в taskbar, ни в Start Menu, ни в Explorer.
+
+### Использование в runtime
+
+`electron/main.ts` читает иконку для `BrowserWindow.icon` (и tray, где есть):
+
+```ts
+function resolveIconPath(): string {
+  return isDev
+    ? path.resolve(__dirname, "../build/icon.png")
+    : path.join(process.resourcesPath ?? "", "icon.png");
+}
+
+new BrowserWindow({ icon: nativeImage.createFromPath(resolveIconPath()), ... });
+```
+
+### Обновление
+
+Замени `build/icon.png` → `bun run build`. `build/icon.ico` перегенерится автоматически.
+
+::: warning Куда класть нельзя
+Не в `public/`, не в `electron/`, не в `src/`. `public/` доступен только из renderer
+по URL; `build/` — единственная конвенция, которую понимают electron-builder + `afterPack.cjs`.
+:::
+
+Референс реализации — `apps/horologion/`, `apps/delphi/ts/`.
 
 ## Куда складывать что
 

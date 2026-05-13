@@ -314,7 +314,12 @@ async fn serve() -> Result<(), String> {
 }
 
 fn request_id_from_value(value: &Value) -> Option<Value> {
-    value.get("id").cloned()
+    // SDK кладёт envelope-id в `_req_id`. Старый формат (`id`) тоже принимаем
+    // для обратной совместимости с прежним протоколом.
+    value
+        .get("_req_id")
+        .cloned()
+        .or_else(|| value.get("id").cloned())
 }
 
 fn response_ok(data: Value, request_id: Option<Value>) -> Value {
@@ -327,6 +332,9 @@ fn response_error(error: String, request_id: Option<Value>) -> Value {
 
 fn response_with_optional_id(mut response: Value, request_id: Option<Value>) -> Value {
     if let (Value::Object(map), Some(id)) = (&mut response, request_id) {
+        // Эхо envelope-id под `_req_id`. Старый формат (`id`) тоже дублируем
+        // для SDK-версий, читающих legacy-поле.
+        map.insert("_req_id".to_string(), id.clone());
         map.insert("id".to_string(), id);
     }
     response

@@ -1,34 +1,55 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject, ref, type Ref } from "vue";
 
 interface Props {
   paddingTop?: string;
   paddingInline?: string;
   paddingBottom?: string;
+  /**
+   * Скругление верхнего-левого угла content surface.
+   *
+   * Если не передано — берётся из контекста `DesktopChrome` через provide/inject:
+   * с сайдбаром → `16px`, без сайдбара → `0` (плоский край, без «лестницы»).
+   * Передавай явно, чтобы переопределить.
+   */
   radiusTopLeft?: string;
   radiusBottomLeft?: string;
+  /**
+   * Левая граница content surface.
+   *
+   * Если не передано — берётся из контекста: с сайдбаром → `true`, без → `false`.
+   */
   showLeftBorder?: boolean;
   scrollable?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  paddingTop: "1rem",
-  paddingInline: "1rem",
-  paddingBottom: "0",
-  radiusTopLeft: "16px",
-  radiusBottomLeft: "0",
-  showLeftBorder: true,
-  scrollable: false,
+const props = defineProps<Props>();
+
+// Контекст из DesktopChrome: есть ли сайдбар. По умолчанию (без обёртки) считаем
+// что сайдбар есть — это сохраняет старое поведение для standalone-использования.
+const hasSidebar = inject<Ref<boolean>>("keplerHasSidebar", ref(true));
+
+const effectiveRadiusTopLeft = computed(() => {
+  if (props.radiusTopLeft !== undefined) return props.radiusTopLeft;
+  return hasSidebar.value ? "16px" : "0";
 });
+const effectiveRadiusBottomLeft = computed(() => props.radiusBottomLeft ?? "0");
+const effectiveShowLeftBorder = computed(() => {
+  if (props.showLeftBorder !== undefined) return props.showLeftBorder;
+  return hasSidebar.value;
+});
+const effectivePaddingTop = computed(() => props.paddingTop ?? "1rem");
+const effectivePaddingInline = computed(() => props.paddingInline ?? "1rem");
+const effectivePaddingBottom = computed(() => props.paddingBottom ?? "0");
 
 const surfaceStyle = computed(() => ({
-  "--kepler-content-padding-top": props.paddingTop,
-  "--kepler-content-padding-inline": props.paddingInline,
-  "--kepler-content-padding-bottom": props.paddingBottom,
-  "--kepler-content-radius-top-left": props.radiusTopLeft,
-  "--kepler-content-radius-bottom-left": props.radiusBottomLeft,
+  "--kepler-content-padding-top": effectivePaddingTop.value,
+  "--kepler-content-padding-inline": effectivePaddingInline.value,
+  "--kepler-content-padding-bottom": effectivePaddingBottom.value,
+  "--kepler-content-radius-top-left": effectiveRadiusTopLeft.value,
+  "--kepler-content-radius-bottom-left": effectiveRadiusBottomLeft.value,
   "--kepler-content-border-color": "var(--dashboard-border-subtle, var(--border))",
-  "--kepler-content-border-left-color": props.showLeftBorder
+  "--kepler-content-border-left-color": effectiveShowLeftBorder.value
     ? "var(--kepler-content-border-color)"
     : "transparent",
 }));
