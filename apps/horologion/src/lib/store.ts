@@ -15,16 +15,10 @@ export function notifyEntriesChanged(): void {
   entriesChangedAt.value = Date.now();
 }
 
-// Контекст top-bar'а (description / task), шарится между App.vue (top-bar)
-// и любыми другими view'ами, которым нужно его прочитать.
-export const currentDraft = ref<{
-  title: string;
-  taskId: string | null;
-  taskTitle: string | null;
-}>({ title: "", taskId: null, taskTitle: null });
-
-// Контекст pomodoro-сегмента — отдельный от top-bar'а. Поддерживает несколько
-// задач: на finish work-сегмента время делится поровну между ними.
+// Контекст pomodoro/секундомер draft'а — title + список выбранных задач.
+// Шарится между HomeView (поле ввода), PomodoroView и StopwatchView.
+// Pomodoro поддерживает несколько задач: на finish work-сегмента время
+// делится поровну между ними.
 export interface PomodoroDraftTask {
   id: string;
   title: string;

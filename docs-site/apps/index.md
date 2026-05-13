@@ -1,6 +1,6 @@
 # Приложения
 
-Kepler — это **четыре активных** desktop-приложения на Electron, **одно WIP** (Horologion), **одно зарезервированное** (Digital Cave), плюс **отдельный Android-стек** (две APK).
+Kepler — это **пять активных** desktop-приложений на Electron, **одно зарезервированное** (Digital Cave), плюс **отдельный Android-стек** (две APK).
 
 ## Desktop (Electron)
 
@@ -10,7 +10,7 @@ Kepler — это **четыре активных** desktop-приложения
 | [Delphi](/apps/delphi) | `apps/delphi/ts` | задачи | `task_obj` (auto-миграция legacy todos на старте) |
 | [Arrancador](/apps/arrancador) | `apps/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data |
 | [Dashboard](/apps/dashboard) | `apps/dashboard` | read-only аналитика ARK | inspector, без записи |
-| [Horologion](/apps/horologion) <span class="kbadge accent">WIP</span> | `apps/horologion` (code-name) | трекер времени, pomodoro, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
+| [Horologion](/apps/horologion) | `apps/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
 | [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог) | TBD |
 
 Все desktop-приложения говорят с ARK через `@kepler/ark` и используют общие UI-компоненты из `@kepler/visuals` (Sidebar, Titlebar, DesktopChrome, и т.д.).
@@ -53,6 +53,6 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 | Delphi (desktop) | ✅ (tasks как `task_obj`) | legacy DB sidecar **удалён**; auto-migration на старте; **TODO billing**: `propsJson.price` / `hourlyRate` на task_obj для расчёта $/час из связанных `time_entry_obj` |
 | Arrancador | ✅ (games как `game_obj`, usage через ARK) | завершён usage backfill |
 | Dashboard | ✅ (read-only inspector) | предпочитать ARK analytics endpoints вместо raw SQL |
-| Horologion | 🟡 WIP | новые типы `time_entry_obj`, `tag_obj` (общий) — добавляются |
+| Horologion | ✅ (time_entry_obj) | tag picker UI и реальный `object_link` task↔entry — TODO (см. roadmap) |
 | Digital Cave | ⏳ TBD | зарезервировано, кода нет |
 | Delphi (Android) + ark-service | ❌ | отдельный Room-стек; миграция на UniFFI от `ark-core` — задача на будущее |

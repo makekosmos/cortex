@@ -134,7 +134,7 @@ const isRunning = computed(() => running.value !== null);
     width: 100%;
     height: 40px;
     border: none;
-    border-radius: calc(var(--radius) * 1.5);
+    border-radius: var(--radius-button);
     corner-shape: var(--corner-shape);
     background: var(--accent);
     color: var(--accent-foreground);

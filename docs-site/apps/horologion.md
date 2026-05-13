@@ -16,6 +16,43 @@
 
 См. [Roadmap](/apps/horologion-roadmap).
 
+## Структура `src/`
+
+```
+apps/horologion/
+├─ electron/
+│  ├─ main.ts              # ArkClient sidecar, IPC, BrowserWindow, tray, settings window
+│  └─ preload.ts           # contextBridge → window.horologion
+├─ shared/
+│  └─ ipc-types.ts         # HorologionApi + TimeEntry/Tag/DelphiTask types
+├─ src/
+│  ├─ App.vue              # DesktopChrome + RouterView + scroll fade. На /settings рендерит только SettingsView
+│  ├─ main.ts              # Vue createApp + Inter Variable import + router mount
+│  ├─ router.ts            # `/` → HomeView, `/settings` → SettingsView (для отдельного окна)
+│  ├─ styles.css           # --horologion-accent + локальные токены
+│  ├─ views/
+│  │  ├─ HomeView.vue      # Draft input + Pomodoro/Stopwatch toggle + список
+│  │  ├─ PomodoroView.vue  # Ring + ticks + dots + actions; читает usePomodoro
+│  │  ├─ StopwatchView.vue # Большое HH:MM:SS + primary-кнопка
+│  │  ├─ ListView.vue      # Группы по дням, collapse/expand, live duration tick
+│  │  └─ SettingsView.vue  # Группы настроек, открывается в отдельном окне
+│  ├─ components/
+│  │  ├─ PomodoroDraftInput.vue  # Поле «Над чем работаем?» с chip'ами задач
+│  │  ├─ MentionInput.vue        # Generic @-mention обёртка
+│  │  ├─ MentionMenu.vue         # Popover автокомплита задач
+│  │  └─ EditEntryModal.vue      # Modal редактирования time_entry
+│  └─ lib/
+│     ├─ store.ts          # entriesChangedAt signal, pomodoroDraft, tasks cache, timerMode
+│     ├─ usePomodoro.ts    # state machine pomodoro (singleton)
+│     ├─ pomodoroSettings.ts  # настройки помодоро (localStorage)
+│     ├─ sounds.ts         # звуки конца work/break
+│     └─ format.ts         # formatDuration / dayKey / formatDayHeader
+└─ build/
+   ├─ icon.png             # 1024×1024 PNG
+   ├─ icon.ico             # cache, генерируется afterPack'ом
+   └─ afterPack.cjs        # embed icon в Horologion.exe через rcedit
+```
+
 ## UI и дизайн
 
 Horologion полностью использует [`@kepler/visuals`](/packages/kepler-visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные kepler-visuals. **Никакого hardcoded `#hex` или собственного titlebar-кода.**

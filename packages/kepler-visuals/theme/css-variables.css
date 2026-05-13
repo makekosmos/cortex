@@ -1,6 +1,19 @@
 :root {
   --radius: 0.85rem;
+  /* Семантические radii для повторного использования:
+     - card — для больших card-обёрток (внутри .home__pomo, .day и т.п.)
+     - button — primary CTA, pill-style 40px-кнопки («Начать сессию»)
+     - input — inputs/selects/dropdowns/secondary buttons */
+  --radius-card: calc(var(--radius) * 3);
+  --radius-button: calc(var(--radius) * 1.5);
+  --radius-input: calc(var(--radius) * 0.7);
   --corner-shape: squircle;
+
+  /* Easing-токены. -standard для основных interaction-переходов
+     (button hover, layout shift), -emphasized для более «упругих»
+     UI-движений (modal in/out, popover, expand/collapse). */
+  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-emphasized: cubic-bezier(0.2, 0, 0, 1);
   --bringhurst-wide: 600px;
   --accent: oklch(0.546 0.229 264.1);
   --accent-foreground: oklch(0.985 0 0);

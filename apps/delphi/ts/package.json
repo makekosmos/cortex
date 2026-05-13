@@ -9,7 +9,7 @@
     "build:ark:dev": "cargo build --manifest-path ../../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
     "dev": "bun run build:ark:dev && vite --configLoader native",
     "build:js": "bun run build:ark && tsc && vite build --configLoader native",
-    "build": "bun run build:js && electron-builder --win msi",
+    "build": "bun run build:js && electron-builder --win nsis",
     "package:dir": "bun run build:js && electron-builder --dir",
     "build:web": "BUILD_TARGET=web tsc && BUILD_TARGET=web vite build --configLoader native",
     "test": "vitest run",
@@ -96,14 +96,18 @@
     },
     "win": {
       "icon": "build/icon.png",
-      "target": "msi",
+      "target": "nsis",
       "signAndEditExecutable": false
     },
-    "msi": {
-      "oneClick": false,
-      "perMachine": true,
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
-      "shortcutName": "Delphi"
+      "createStartMenuShortcut": true,
+      "shortcutName": "Delphi",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     },
     "linux": {
       "target": "AppImage",

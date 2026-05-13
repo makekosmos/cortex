@@ -313,11 +313,11 @@ function testSound(s: SoundName) {
     justify-content: center;
     gap: 0.4rem;
     width: 100%;
-    height: 36px;
-    padding: 0 0.75rem;
+    height: 40px;
+    padding: 0 0.875rem;
     background: transparent;
     border: 1px solid color-mix(in srgb, var(--destructive) 55%, transparent);
-    border-radius: calc(var(--radius) * 0.6);
+    border-radius: var(--radius-button);
     corner-shape: var(--corner-shape);
     color: var(--destructive);
     font-family: inherit;

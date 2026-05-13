@@ -22,12 +22,11 @@ const transitionName = computed(() =>
     swipeDir.value === "fwd" ? "swipe-fwd" : "swipe-bwd",
 );
 // JS-driven height transition card'а. Логика:
-//   1. На клик меняется timerMode → watcher фиксирует текущую высоту в inline-style
-//      → card визуально не «прыгает» во время swipe.
-//   2. Ждём 360мс (swipe-анимация почти отыгралась).
-//   3. Снимаем lock, измеряем natural-высоту нового контента.
-//   4. Восстанавливаем оld высоту → запускаем CSS transition 500мс к новой.
-//   5. После окончания убираем inline-стили — card возвращается к auto.
+//   1. На клик меняется timerMode → watcher фиксирует текущую высоту в inline-style.
+//   2. await nextTick — DOM обновляется, transition контента уезжает параллельно.
+//   3. Снимаем lock (height: auto) — измеряем natural-высоту нового контента.
+//   4. Возвращаем oldH → форсируем reflow → запускаем CSS transition 420мс к newH.
+//   5. После 460мс убираем inline-стили — card возвращается к auto.
 const cardRef = ref<HTMLElement | null>(null);
 
 async function runHeightTransition(): Promise<void> {

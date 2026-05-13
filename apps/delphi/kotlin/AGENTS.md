@@ -46,7 +46,7 @@ bun run build:ark:dev      # debug-сборка ark-core-rpc
 bun run build:ark          # release-сборка ark-core-rpc
 bun run dev                # build:ark:dev + Vite + Electron
 bun run build:js           # build:ark + TS + Vite (без установщика)
-bun run build              # build:js + electron-builder --win msi (финальный MSI)
+bun run build              # build:js + electron-builder --win nsis (финальный NSIS one-click)
 bun run package:dir        # unpacked desktop bundle
 bun run test               # unit
 bun run e2e                # Playwright
@@ -54,11 +54,10 @@ bun run e2e                # Playwright
 
 Артефакты после `build` лежат в `apps/delphi/ts/release/`:
 
-- `Delphi <version>.msi` — финальный установщик (Windows Installer, per-machine).
+- `Delphi Setup <version>.exe` — финальный NSIS one-click установщик (см. [конвенцию сборки релизов](/reference/commands#конвенция-сборки-релизов)).
 - `win-unpacked/Delphi.exe` — распакованное приложение (доступно после `package:dir`).
 
-Версия берётся из `package.json` → `version` (текущая `0.0.2`). MSI — единый формат
-дистрибуции для всех desktop-приложений Kepler, см. [конвенцию сборки релизов](/reference/commands#корневые).
+Версия берётся из `package.json` → `version` (текущая `0.0.2`).
 
 ## Иконка
 
