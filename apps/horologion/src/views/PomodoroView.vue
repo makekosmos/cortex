@@ -2,9 +2,8 @@
 import { computed } from "vue";
 import { Play, Pause, SkipForward, Square, Settings } from "lucide-vue-next";
 import { usePomodoro, type PomodoroPhase } from "../lib/usePomodoro";
-import { pomodoroDraft, type PomodoroDraftTask } from "../lib/store";
+import { pomodoroDraft } from "../lib/store";
 import { pomodoroSettings } from "../lib/pomodoroSettings";
-import PomodoroDraftInput from "../components/PomodoroDraftInput.vue";
 
 const p = usePomodoro();
 
@@ -58,19 +57,6 @@ const ringColorClass = computed(() => {
 const pomodorosDone = computed(() => p.completedPomodoros.value);
 const pomodorosTotal = computed(() => pomodoroSettings.pomodorosUntilLongBreak);
 
-const draftV = computed({
-    get: () => pomodoroDraft.value.title,
-    set: (v) => {
-        pomodoroDraft.value = { ...pomodoroDraft.value, title: v };
-    },
-});
-const draftTasks = computed({
-    get: () => pomodoroDraft.value.tasks,
-    set: (v: PomodoroDraftTask[]) => {
-        pomodoroDraft.value = { ...pomodoroDraft.value, tasks: v };
-    },
-});
-
 async function onPrimary() {
     if (p.isRunning.value) {
         if (p.isPaused.value) p.resume();
@@ -94,11 +80,6 @@ const primaryLabel = computed(() => {
 
 <template>
     <div class="pomo">
-        <!-- Описание + чипы выбранных задач. Можно выбрать несколько — на finish
-         time work-сегмента делится поровну между ними. -->
-        <PomodoroDraftInput v-model="draftV" v-model:tasks="draftTasks" placeholder="Над чем работаем? @ для задачи"
-            class="pomo__draft" @submit="onPrimary" />
-
         <div class="pomo__ring-wrap">
             <svg class="pomo__ring" viewBox="0 0 280 280" width="280" height="280">
                 <circle class="pomo__ring-bg" cx="140" cy="140" :r="R" />
@@ -117,9 +98,9 @@ const primaryLabel = computed(() => {
                     :stroke-dashoffset="dashOffset" />
             </svg>
             <div class="pomo__center">
-                <span class="pomo__phase">{{ phaseLabel }}</span>
+                <span v-if="p.phase.value !== 'idle'" class="pomo__phase">{{ phaseLabel }}</span>
                 <span class="pomo__time">{{ minutesLabel }}</span>
-                <span class="pomo__status">{{ statusLabel }}</span>
+                <span v-if="p.isRunning.value" class="pomo__status">{{ statusLabel }}</span>
             </div>
         </div>
 

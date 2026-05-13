@@ -1,6 +1,11 @@
 import { ref } from "vue";
 import type { DelphiTask } from "@shared/ipc-types";
 
+// Какой таймер показывается в верхнем card'е — pomodoro или обычный секундомер.
+// Шарится между PomodoroView и Stopwatch view, чтобы переключение помнило выбор.
+export type TimerMode = "pomodoro" | "stopwatch";
+export const timerMode = ref<TimerMode>("pomodoro");
+
 // Простой signal для оповещения view'ов про апдейт списка time entries.
 // Любая операция (create/stop/update/delete) должна вызвать notifyEntriesChanged().
 // Views с подпиской (ListView, App.vue) перечитают данные через watcher.

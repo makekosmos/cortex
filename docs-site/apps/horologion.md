@@ -1,7 +1,7 @@
 # Horologion — трекер времени
 
 ::: tip Статус
-**MVP работает.** Запись через top-bar, edit-modal, ПКМ-удаление, группировка одинаковых, expand/collapse, @-mention задач Delphi (в т.ч. мульти-задачи в помодоро с равномерным дроблением сегмента), помодоро со звуками и системными уведомлениями, tray + close-to-tray, NSIS one-click установщик, embed'нутая иконка в `.exe`.
+**MVP работает.** Единая Home-страница: pomodoro/секундомер с переключателем в шайбе (sliding pill), плавная анимация смены режимов (swipe + height transition card'а), @-mention задач Delphi (в т.ч. мульти-задачи в помодоро с равномерным дроблением сегмента), live duration в списке, edit-modal, ПКМ-удаление, группировка одинаковых, collapse/expand дней, помодоро со звуками и системными уведомлениями, tray + close-to-tray, NSIS one-click установщик, embed'нутая иконка в `.exe`.
 :::
 
 ::: info Имя
@@ -26,31 +26,43 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 ┌────────────────────────────────────────────────┐
 │ Horologion          ● ARK status  ⚙  [─][□][✕]  │  titlebar
 ├────────────────────────────────────────────────┤
-│ [▶]  @ для выбора задачи             00:00:00  │  input row
+│  ╭──────────────────────────────────────────╮  │
+│  │  Над чем работаем?  @ для задачи         │  │  draft input card
+│  ╰──────────────────────────────────────────╯  │
+│  ╭──────────────────────────────────────────╮  │
+│  │      ⟨ Помодоро │ Секундомер ⟩  ← pill   │  │  timer card
+│  │              ◯  25:00                     │  │
+│  │       [▶ Начать сессию]                   │  │
+│  │       [Пропустить][Стоп]                  │  │
+│  ╰──────────────────────────────────────────╯  │
 ├────────────────────────────────────────────────┤
-│      Список       │       Помодоро              │  tabs 50/50
-├────────────────────────────────────────────────┤
-│  СЕГОДНЯ                          0:45:23      │
-│  ┌──────────────────────────────────────────┐  │
-│  │ Ср, 13 мая                       2:15:42 │  │
+│  ╭─ Ср, 13 мая ◀                    2:15:42 ╮  │
 │  │ [3] Учёба @Vapor                 1:30:00 │  │
 │  │     E2E тесты                    0:25:00 │  │
-│  └──────────────────────────────────────────┘  │
+│  ╰──────────────────────────────────────────╯  │
 └────────────────────────────────────────────────┘
 ```
 
 ### Titlebar
 - **Слева**: «Horologion» (muted color, secondary).
-- **Справа**: круглый dot подключения к ARK (`var(--status-success)` / warning / `var(--destructive)`) + ⚙ Настройки.
+- **Справа**: круглый dot подключения к ARK (`var(--status-success)` / warning / `var(--destructive)`) + ⚙ Настройки (открывает [отдельное окно настроек](#окно-настроек)).
 - Windows-controls справа от наших иконок (через `titleBarOverlay`).
 
-### Input row (под titlebar'ом)
-- Слева: play-кнопка (accent → hover → инверсия в `foreground`).
-- В центре: инпут с автокомплитом задач (`@`).
-- Справа: текущий счётчик `HH:MM:SS`.
+### Draft input card
+- Скруглённый прямоугольник с inline-chip'ами выбранных задач + текстовый ввод.
+- `@` запускает MentionMenu, выбор задачи добавляет chip; Backspace на пустом — убирает последний chip.
+- Submit (Enter) на этом поле → запускает текущий выбранный режим таймера (помодоро или секундомер).
 
-### Tabs
-- Список / Помодоро — flex 50/50, active имеет accent-индикатор подчёркивания.
+### Timer card (pomodoro / stopwatch)
+- Сверху — segmented control (шайба) с двумя кнопками **Помодоро / Секундомер** + sliding accent pill, перекатывается transform-анимацией.
+- Ниже — выбранный таймер: pomodoro (с ring + ticks 60×1 минута) или stopwatch (большое `HH:MM:SS`).
+- Переключение режимов — swipe-анимация (translateX + opacity) с одновременной плавной анимацией высоты card'а (JS-driven, FLIP через inline `height`).
+- При активной сессии (`isSessionActive`):
+  - Неактивная кнопка в шайбе сжимается до 0 (max-width + padding + opacity), pill растягивается на полную ширину toggle'а (toggle стабилен за счёт `min-width: 224px` → нет snap'а в конце).
+  - Draft input card и timer card визуально объединяются: gap → 0, соседние углы выпрямляются (`border-bottom-radius` у draft и `border-top-radius` у pomo транзишнятся в 0 + прилегающие border-color → transparent).
+
+### Список записей
+- Группировка по дням (clickable header `▼ Ср, 13 мая` + сумма). Клик по header'у — collapse/expand дня с CSS-grid анимацией `grid-template-rows: 1fr ↔ 0fr`.
 
 ### Список записей
 - Группировка по дням (хедер с суммой).
@@ -89,6 +101,16 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 | `task_obj` | Delphi | Существующий тип, Horologion ссылается через `propsJson.taskId` (object_link — TODO). |
 
 **Pomodoro не маркирует записи** — поле `kind` снято. Pomodoro чисто UI-фича, создаёт обычные `time_entry_obj` (опционально break-entries с title «Отдых», если `trackBreaksAsRest` включён в Settings).
+
+## Окно настроек
+
+Settings — **отдельное Electron BrowserWindow** (не модалка, не route в основном окне). Кнопка ⚙ в тайтлбаре и «Настройки помодоро» внутри pomodoro-card зовут `window.horologion.settings.open()` → IPC `horologion:settings:open` → main создаёт второе окно 560×680 с тем же preload и hash `#/settings`. App.vue видит `route.path === '/settings'` и рендерит только SettingsView внутри `DesktopChrome + DesktopContentSurface` (единый стиль с main).
+
+В Settings:
+- Длительности (work / shortBreak / longBreak / pomodorosUntilLongBreak) — input[type=number] с 2px border, без spin-button'ов.
+- Поведение — toggles (трекать break как «Отдых» / autostart work / autostart break / системные уведомления).
+- Звуки — kepler-visuals `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования.
+- Reset — кнопка стиля `.pomo__secbtn` в destructive-цвете.
 
 ## Close-to-tray
 

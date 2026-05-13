@@ -36,6 +36,7 @@
 - **Calendar week-strip в EditModal** — добавить возможность типа «вчера / 2 дня назад» вместо месячной навигации.
 - **Soft delete / корзина** — сейчас delete = permanent.
 - **Чип-пикер задачи** в input row (`📁` иконка) — выбор задачи без `@`.
+- **Goo / metaballs соединение** draft input ↔ timer card при активной сессии. Пробовали через SVG-filter — текст в card'ах блёрился из-за `feGaussianBlur`. Для production-quality нужна двухслойная архитектура: background-only-слой с goo + content-слой без filter. Сейчас вместо этого простое соединение: gap → 0 + плавное выпрямление прилегающих углов.
 
 ## Баги / замечания
 

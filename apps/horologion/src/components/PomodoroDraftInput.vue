@@ -173,8 +173,8 @@ function onKeyDown(e: KeyboardEvent) {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.3rem;
-    min-height: 36px;
-    padding: 0.25rem 0.5rem;
+    min-height: 48px;
+    padding: 0.375rem 0.75rem;
     background: var(--background);
     border: 2px solid var(--border);
     border-radius: calc(var(--radius) * 2);
@@ -189,14 +189,14 @@ function onKeyDown(e: KeyboardEvent) {
 .pdi__chip {
     display: inline-flex;
     align-items: center;
-    height: 22px;
-    padding: 0 0.5rem;
+    height: 28px;
+    padding: 0 0.625rem;
     background: color-mix(in srgb, var(--accent) 22%, transparent);
     color: var(--accent);
     border: none;
     border-radius: 999px;
     font-family: inherit;
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     max-width: 140px;
     cursor: pointer;
@@ -218,14 +218,14 @@ function onKeyDown(e: KeyboardEvent) {
 .pdi__input {
     flex: 1;
     min-width: 80px;
-    height: 22px;
+    height: 32px;
     background: transparent;
     border: none;
     outline: none;
     color: var(--foreground);
     font-family: inherit;
-    font-size: 0.8125rem;
-    font-weight: 500;
+    font-size: 1rem;
+    font-weight: 600;
     text-align: center;
 }
 
