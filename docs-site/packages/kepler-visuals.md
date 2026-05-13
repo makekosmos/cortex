@@ -127,9 +127,10 @@ Light и dark темы:
 | `ContextMenu.vue` + `ContextMenuItem.vue` | Правая-клик меню. Используется в TodoRow и Horologion ListView |
 | `Calendar.vue` | Inline-недельный date picker (стрип неделя + навигация) |
 | `DateChip.vue` | Chip-кнопка «Дата» + popover с `Calendar`. Замена нативного `<input type="date">` — без чёрной браузерной иконки |
-| `DateTimePicker.vue` | Picker даты + времени (для Horologion edit-modal) |
+| `DateTimePicker.vue` | Picker даты + времени. Опциональный проп `reference` (`string \| number \| Date`) даёт компактный формат относительно опорной даты: `HH:MM` тот же день, `DD HH:MM` другой день того же месяца, `DD.MM HH:MM` другой месяц, `DD.MM.YY HH:MM` другой год. |
 | `Modal.vue` | Базовая модалка |
 | `TimeColumn.vue` | Вертикальная шкала времени |
+| `Dropdown.vue` | Generic shadcn-стиль `<select>`-замена: trigger + teleport-popover, поддержка клавиатуры (↑/↓/Enter/Escape), click-outside, чекмарк на выбранном. API: `v-model` + `options: { value, label, description?, disabled? }[]`. |
 
 ## Визуальный референс компонентов
 
