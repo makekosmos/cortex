@@ -9,7 +9,7 @@ import {
   watch,
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Circle, MoreHorizontal, Plus } from "lucide-vue-next";
+import { Circle, DollarSign, MoreHorizontal, Plus } from "lucide-vue-next";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 import { useSidebarState } from "@/composables/useSidebarState";
 
@@ -75,6 +75,82 @@ const activeTodos = computed(() =>
 const completedTodos = computed(() =>
   todos.value.filter((t) => t.isCompleted || t.isCancelled),
 );
+
+// ---------------------------------------------------------------------------
+// Time entries — read from ARK (Horologion / Strontium) and distribute price
+// ---------------------------------------------------------------------------
+
+interface TimeEntrySummary {
+  taskId: string | null;
+  billable: boolean;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+const timeEntries = ref<TimeEntrySummary[]>([]);
+let timeEntryPollHandle: ReturnType<typeof setInterval> | null = null;
+const isElectronEnv = typeof window !== "undefined" && Boolean(window.electronAPI);
+
+async function refreshTimeEntries() {
+  if (!isElectronEnv) return;
+  try {
+    const result = (await window.electronAPI?.invoke("ark:listTimeEntries")) as
+      | TimeEntrySummary[]
+      | undefined;
+    timeEntries.value = result ?? [];
+  } catch {
+    timeEntries.value = [];
+  }
+}
+
+onMounted(() => {
+  void refreshTimeEntries();
+  timeEntryPollHandle = setInterval(refreshTimeEntries, 15000);
+});
+
+onUnmounted(() => {
+  if (timeEntryPollHandle) clearInterval(timeEntryPollHandle);
+});
+
+function entryDurationSec(entry: TimeEntrySummary): number {
+  const start = new Date(entry.startedAt).getTime();
+  if (!Number.isFinite(start)) return 0;
+  const end = entry.endedAt ? new Date(entry.endedAt).getTime() : Date.now();
+  return Math.max(0, Math.floor((end - start) / 1000));
+}
+
+const billableSecondsByTask = computed(() => {
+  const out = new Map<string, number>();
+  for (const entry of timeEntries.value) {
+    if (!entry.billable || !entry.taskId) continue;
+    out.set(entry.taskId, (out.get(entry.taskId) ?? 0) + entryDurationSec(entry));
+  }
+  return out;
+});
+
+const totalBillableSeconds = computed(() => {
+  let total = 0;
+  for (const t of todos.value) {
+    total += billableSecondsByTask.value.get(t.id) ?? 0;
+  }
+  return total;
+});
+
+const totalBillableHours = computed(() => totalBillableSeconds.value / 3600);
+
+const projectHourlyRate = computed<number | null>(() => {
+  const price = project.value?.price ?? null;
+  if (price === null || totalBillableHours.value <= 0) return null;
+  return price / totalBillableHours.value;
+});
+
+function formatHours(hours: number): string {
+  return hours.toFixed(2).replace(/\.?0+$/, "") + " ч";
+}
+
+function formatPrice(value: number): string {
+  return value.toFixed(value % 1 === 0 ? 0 : 2);
+}
 
 // ---------------------------------------------------------------------------
 // Editable title
@@ -203,6 +279,30 @@ function handleArchive() {
         <span v-if="todos.length > 0" class="text-sm text-(--muted-foreground)">
           {{ activeTodos.length }}
         </span>
+
+        <span
+          v-if="project.billable"
+          class="ml-2 flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs text-emerald-500"
+        >
+          <DollarSign :size="11" />
+          <span v-if="project.price !== null && project.price !== undefined">
+            {{ formatPrice(project.price) }}
+          </span>
+          <span v-else>оплачиваемый</span>
+        </span>
+
+        <span
+          v-if="totalBillableSeconds > 0"
+          class="ml-1 rounded-full bg-(--secondary) px-2.5 py-0.5 text-xs text-(--muted-foreground)"
+          :title="projectHourlyRate !== null
+            ? `${formatPrice(projectHourlyRate)} / час`
+            : 'Сумма оплачиваемого времени по задачам проекта'"
+        >
+          {{ formatHours(totalBillableHours) }}
+          <template v-if="projectHourlyRate !== null">
+            · {{ formatPrice(projectHourlyRate) }}/ч
+          </template>
+        </span>
       </div>
 
       <!-- Context menu -->
@@ -262,8 +362,17 @@ function handleArchive() {
               :todo="todo"
               @complete="store.completeTodo(todo.id)"
               @trash="store.trashTodo(todo.id)"
+              @update="store.updateTodo(todo.id, $event)"
               @drop="handleDrop($event, todo.id)"
-            />
+            >
+              <span
+                v-if="(billableSecondsByTask.get(todo.id) ?? 0) > 0"
+                class="rounded-full bg-(--secondary) px-2 py-0.5 text-[10px] text-(--muted-foreground)"
+                :title="'Оплачиваемое время по задаче'"
+              >
+                {{ formatHours((billableSecondsByTask.get(todo.id) ?? 0) / 3600) }}
+              </span>
+            </TodoRow>
           </div>
 
           <template v-if="completedTodos.length > 0">

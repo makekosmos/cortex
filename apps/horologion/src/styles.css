@@ -7,6 +7,14 @@
  */
 
 :root {
+  /* Apple HIG systemPurple (dark) ≈ #BF5AF2. У каждого приложения Kepler свой
+     акцентный цвет — Horologion фиолетовый. Переопределяем общий --accent,
+     чтобы все компоненты (ring, кнопки, чипы, индикаторы табов) подхватили. */
+  --horologion-accent: oklch(0.66 0.245 305);
+  --horologion-accent-foreground: oklch(0.99 0.005 305);
+  --accent: var(--horologion-accent);
+  --accent-foreground: var(--horologion-accent-foreground);
+
   /* Billable — спокойный зелёный (отличается от status-success). */
   --horologion-billable: oklch(0.75 0.15 130);
   --horologion-billable-fg: oklch(0.45 0.18 130);

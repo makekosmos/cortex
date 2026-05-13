@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { pomodoroSettings } from "./pomodoroSettings";
 import { playSound } from "./sounds";
-import { notifyEntriesChanged } from "./store";
+import { notifyEntriesChanged, pomodoroDraft } from "./store";
 
 export type PomodoroPhase = "idle" | "work" | "shortBreak" | "longBreak";
 
@@ -95,10 +95,19 @@ function createPomodoroState() {
   async function closeArkEntry() {
     const id = currentEntryId.value;
     if (!id) return;
-    const ctx = lastContext.value;
+
+    // На finish work-сегмента читаем АКТУАЛЬНОЕ состояние draft'а — пользователь
+    // мог менять title и список задач во время работы pomodoro. Итоговый
+    // разрез делается по тому, что выбрано НА МОМЕНТ ЗАВЕРШЕНИЯ, не на старте.
+    // lastContext остался только для break-фаз (там работаем по снапшоту).
+    const liveTitle = pomodoroDraft.value.title;
+    const liveTasks = pomodoroDraft.value.tasks.slice();
+    const isWork = phase.value === "work";
+    const effectiveTitle = (isWork ? liveTitle : lastContext.value?.title) || "Помодоро";
+    const effectiveTasks = isWork ? liveTasks : lastContext.value?.tasks ?? [];
 
     // Work-фаза с несколькими задачами → split на N равных промежутков.
-    if (phase.value === "work" && ctx && ctx.tasks.length > 1) {
+    if (isWork && effectiveTasks.length > 1) {
       try {
         // Найдём anchor-entry, заберём его startedAt, удалим, создадим N entries.
         const anchorList = await window.horologion.timeEntries.list();
@@ -107,7 +116,7 @@ function createPomodoroState() {
           const startMs = new Date(anchor.startedAt).getTime();
           const endMs = Date.now();
           const totalMs = Math.max(0, endMs - startMs);
-          const n = ctx.tasks.length;
+          const n = effectiveTasks.length;
           const slotMs = totalMs / n;
 
           // Удаляем якорь
@@ -115,11 +124,11 @@ function createPomodoroState() {
 
           // Создаём N split-entries
           for (let i = 0; i < n; i++) {
-            const t = ctx.tasks[i];
+            const t = effectiveTasks[i];
             const sliceStart = new Date(startMs + i * slotMs).toISOString();
             const sliceEnd = new Date(startMs + (i + 1) * slotMs).toISOString();
             await window.horologion.timeEntries.create({
-              title: ctx.title || "Помодоро",
+              title: effectiveTitle,
               startedAt: sliceStart,
               endedAt: sliceEnd,
               taskId: t.id,
@@ -136,8 +145,27 @@ function createPomodoroState() {
           /* ignore */
         }
       }
+    } else if (isWork) {
+      // Work с 0 или 1 задачей — обновляем якорь под актуальные title/task,
+      // потом стопаем. Если задач 0 — taskId=null.
+      const t = effectiveTasks[0] ?? null;
+      try {
+        await window.horologion.timeEntries.update({
+          id,
+          title: effectiveTitle,
+          taskId: t?.id ?? null,
+          taskTitle: t?.title ?? null,
+        });
+      } catch (e) {
+        console.error("[pomodoro] failed to update work entry before stop:", e);
+      }
+      try {
+        await window.horologion.timeEntries.stopTimer(id);
+      } catch {
+        /* sidecar мог уже закрыть запись */
+      }
     } else {
-      // Single task / break — обычный stop
+      // Break-фаза — обычный stop без правок
       try {
         await window.horologion.timeEntries.stopTimer(id);
       } catch {

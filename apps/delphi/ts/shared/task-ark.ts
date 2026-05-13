@@ -344,6 +344,8 @@ export function todoToArkTaskObject(todo: TodoItem): ArkObjectRecord {
       tag_ids: todo.tagIds,
       checklist_items: todo.checklistItems,
       recurrence_rule: todo.recurrenceRule ?? null,
+      billable: todo.billable ?? false,
+      price: todo.price ?? null,
       created_at: todo.createdAt,
       source_app: "delphi",
       model_version: 1,
@@ -384,5 +386,10 @@ export function arkTaskObjectToTodo(object: ArkObjectRecord): TodoItem {
     tagIds: asStringArray(props.tag_ids),
     checklistItems: asChecklistItems(props.checklist_items),
     recurrenceRule: asRecurrenceRule(props.recurrence_rule),
+    billable: asBoolean(props.billable, false),
+    price:
+      typeof props.price === "number" && Number.isFinite(props.price)
+        ? props.price
+        : null,
   };
 }

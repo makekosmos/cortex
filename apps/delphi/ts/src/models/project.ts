@@ -12,6 +12,10 @@ export type CreateProjectParams = {
   areaId?: string | null;
 
   colorTag?: string | null;
+
+  billable?: boolean;
+
+  price?: number | null;
 };
 
 export function createProject(params: CreateProjectParams): Project {
@@ -35,6 +39,10 @@ export function createProject(params: CreateProjectParams): Project {
     createdAt: new Date().toISOString(),
 
     areaId: params.areaId ?? null,
+
+    billable: params.billable ?? false,
+
+    price: params.price ?? null,
   };
 }
 

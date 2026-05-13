@@ -32,6 +32,10 @@ export type CreateTodoParams = {
   areaId?: string | null;
 
   headingId?: string | null;
+
+  billable?: boolean;
+
+  price?: number | null;
 };
 
 export function createTodoItem(params: CreateTodoParams): TodoItem {
@@ -81,6 +85,10 @@ export function createTodoItem(params: CreateTodoParams): TodoItem {
     checklistItems: [],
 
     recurrenceRule: null,
+
+    billable: params.billable ?? false,
+
+    price: params.price ?? null,
   };
 }
 

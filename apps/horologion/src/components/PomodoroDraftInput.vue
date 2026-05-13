@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import type { DelphiTask } from "@shared/ipc-types";
-import { tasks as tasksRef, loadTasksOnce } from "../lib/store";
+import { tasks as tasksRef, loadTasksOnce, ensureFreshTasks } from "../lib/store";
 import type { PomodoroDraftTask } from "../lib/store";
 import MentionMenu from "./MentionMenu.vue";
 
@@ -59,6 +59,7 @@ function onInput() {
       query.value = q;
       open.value = true;
       highlight.value = 0;
+      void ensureFreshTasks();
       return;
     }
   }

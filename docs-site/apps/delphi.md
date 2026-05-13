@@ -74,9 +74,13 @@ Pipeline:
 
 ## Ключевые модули
 
-- `apps/delphi/ts/electron/main.ts` — Electron main.
+- `apps/delphi/ts/electron/main.ts` — Electron main. IPC `ark:listDelphiTasks`, `ark:upsertDelphiTask`, `ark:deleteDelphiTask`, `ark:listTimeEntries` (читает `time_entry_obj` для ProjectPage биллинга).
 - `apps/delphi/ts/electron/sidecar.ts` — поднятие и владение `ark-core-rpc`.
 - `apps/delphi/ts/shared/task-object-migration.ts` — стартовая миграция legacy → `task_obj`.
+- `apps/delphi/ts/shared/task-ark.ts` — мапперы `TodoItem ↔ task_obj` (propsJson). Здесь же читается/пишется `billable` / `price`.
+- `apps/delphi/ts/src/components/QuickEntry.vue` — обёртка над `QuickEntryPanel` из `@kepler/visuals`. Передаёт `defaultScheduledDate=today` если открыто со страницы `/today`, `defaultProjectId` если со страницы проекта.
+- `apps/delphi/ts/src/components/projects/ProjectCreateDialog.vue` — диалог нового проекта, toggle «Оплачиваемый» + поле «Бюджет».
+- `apps/delphi/ts/src/pages/ProjectPage.vue` — поллит `ark:listTimeEntries` каждые 15s, агрегирует billable секунды по задаче, считает $/час из `project.price`.
 - `apps/delphi/ts/scripts/verifySharedArkTask.mjs` — verification скрипт shared task state.
 - `apps/delphi/ts/e2e/shared-ark-task.spec.ts` — e2e shared task flow.
 - `apps/delphi/ts/src/services/storage/task-object-migration.test.ts` — тест миграции.
@@ -93,26 +97,54 @@ Pipeline:
 - ❌ Прямой SQL write в `objects` из app services (см. [Граница записи](/concepts/write-boundary)).
 - ❌ Дефолт пути к user DB в тестах.
 
-## TODO — биллинг
+## UX модель задач
 
-Планируется (не сделано): добавить опциональные поля в `propsJson` `task_obj` для расчёта дохода:
+Текущая модель форм / списков:
+
+- **Sidebar:** только «Входящие» и «Сегодня» как top-level nav. Календарь/Неделя удалены — это не приоритет.
+- **QuickEntry** (⌘N / Ctrl+N) — модалка над content-областью (не перекрывает titlebar и sidebar). Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kepler/visuals`, native browser date picker не используем), проект (dropdown реальных проектов + «Входящие»), `billable` toggle + опциональный `price`.
+- **TodoRow** — клик разворачивает inline-форму (title / notes / дата / billable / price), правый клик открывает `<ContextMenu>` с пунктом «Удалить». Inline-кнопка delete не используется.
+- **ProjectPage** — кроме списка задач показывает: бейдж «оплачиваемый + бюджет», суммарное оплачиваемое время по задачам проекта, расчётный `$/час`.
+
+## Биллинг
+
+Реализован минимальный flow «оплачиваемая задача + опциональная цена» + наследование от проекта.
+
+### `task_obj.propsJson` (актуальная схема)
 
 ```ts
-// task_obj.propsJson — потенциальные поля
 {
-  priceModel?: 'fixed' | 'hourly',
-  price?: number,        // fixed: общая сумма за задачу
-  hourlyRate?: number,   // hourly: ставка в час
-  currency?: 'USD' | 'RUB' | 'EUR' | ...,
+  billable: boolean,     // источник правды — стор задачи (Delphi)
+  price: number | null,  // опциональная сумма за задачу (фикс-цена)
+  // ... остальные поля task (description, priority, dates, и т.д.)
 }
 ```
 
-Time entries из [Horologion](/apps/horologion) ссылаются на `task_obj` через `object_link` (`linkType='for-task'`). Расчёт `$/час`:
+Сериализуется в `apps/delphi/ts/shared/task-ark.ts → todoToArkTaskObject/arkTaskObjectToTodo`. Старые задачи без полей читаются как `billable=false, price=null` (back-compat).
 
-- **fixed model**: `price / Σ(time_entries.duration where billable)` — фактический $/час за результат.
-- **hourly model**: `Σ(time_entries.duration where billable) × hourlyRate` — заработано.
+### `Project` (Delphi)
 
-Считать в Dashboard report или в самой Delphi на странице задачи. **Сам Horologion цены не показывает** — только пишет `time_entry.propsJson.billable`.
+```ts
+type Project = {
+  // ...
+  billable: boolean,     // помечает весь проект как оплачиваемый
+  price?: number | null, // общий бюджет проекта (опц.)
+}
+```
+
+### Наследование
+
+При создании задачи в проекте `billable` авто-подставляется из `project.billable` (через `QuickEntryPanel` — поле `QuickEntryProject.billable`). Пользователь может переопределить toggle'ом до сохранения. После сохранения значения независимы — задача хранит свой флаг.
+
+### Распределение по time entries
+
+[Horologion](/apps/horologion) пишет `time_entry_obj` с `propsJson.taskId` и `propsJson.billable`. Delphi читает их через IPC `ark:listTimeEntries` (`apps/delphi/ts/electron/main.ts`) и в `ProjectPage`:
+
+- Σ billable секунд по задаче → chip с часами рядом со строкой.
+- Σ billable секунд по всем задачам проекта → общий часовой счётчик.
+- Если у проекта задан `price` — `$/час = price / Σ(billable_hours)` (на месте).
+
+Сам Horologion цены не показывает — только пишет `billable` флаг. Все денежные расчёты идут в Delphi (на страницах) или в Dashboard.
 
 ## Связанные документы
 

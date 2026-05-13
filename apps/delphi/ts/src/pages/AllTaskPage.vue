@@ -75,7 +75,7 @@ function handleDrop(
             :todo="todo"
             @complete="store.completeTodo(todo.id)"
             @trash="store.trashTodo(todo.id)"
-            @rename="store.updateTodo(todo.id, { title: $event })"
+            @update="store.updateTodo(todo.id, $event)"
             @drop="handleDrop($event, todo.id)"
           />
         </div>

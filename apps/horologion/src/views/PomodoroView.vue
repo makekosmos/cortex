@@ -103,14 +103,17 @@ const primaryLabel = computed(() => {
     <div class="pomo__ring-wrap">
       <svg class="pomo__ring" viewBox="0 0 280 280" width="280" height="280">
         <circle class="pomo__ring-bg" cx="140" cy="140" :r="R" />
+        <!-- 60 делений = 60 минут (1 деление = 1 минута). Сдвинуты внутрь
+             кольца: outer край в R-9, inner край в R-15 для обычных делений;
+             major (каждое 5-е, 5-минутная отметка) удлинено внутрь до R-18. -->
         <g class="pomo__ticks">
           <line
             v-for="i in 60"
             :key="i"
-            :x1="140 + (R - 6) * Math.cos(((i - 1) * 6 - 90) * (Math.PI / 180))"
-            :y1="140 + (R - 6) * Math.sin(((i - 1) * 6 - 90) * (Math.PI / 180))"
-            :x2="140 + R * Math.cos(((i - 1) * 6 - 90) * (Math.PI / 180))"
-            :y2="140 + R * Math.sin(((i - 1) * 6 - 90) * (Math.PI / 180))"
+            :x1="140 + (i % 5 === 1 ? R - 18 : R - 15) * Math.cos(((i - 1) * 6 - 90) * (Math.PI / 180))"
+            :y1="140 + (i % 5 === 1 ? R - 18 : R - 15) * Math.sin(((i - 1) * 6 - 90) * (Math.PI / 180))"
+            :x2="140 + (R - 9) * Math.cos(((i - 1) * 6 - 90) * (Math.PI / 180))"
+            :y2="140 + (R - 9) * Math.sin(((i - 1) * 6 - 90) * (Math.PI / 180))"
             :class="i % 5 === 1 ? 'pomo__tick pomo__tick--major' : 'pomo__tick'"
           />
         </g>

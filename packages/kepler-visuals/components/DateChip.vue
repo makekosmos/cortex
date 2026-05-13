@@ -1,0 +1,194 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
+import { Calendar as CalendarIcon, X } from "lucide-vue-next";
+import Calendar from "./Calendar.vue";
+
+interface Props {
+  /** ISO `YYYY-MM-DD` или null. */
+  value: string | null;
+  /** Текст когда дата не выбрана. */
+  placeholder?: string;
+  /** Если true — компактный размер чипа. */
+  compact?: boolean;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  placeholder: "Дата",
+  compact: false,
+});
+
+const emit = defineEmits<{
+  "update:value": [iso: string | null];
+}>();
+
+const open = shallowRef(false);
+const anchorRef = ref<HTMLElement | null>(null);
+
+const RU_MONTHS_SHORT = [
+  "янв", "фев", "мар", "апр", "май", "июн",
+  "июл", "авг", "сен", "окт", "ноя", "дек",
+] as const;
+
+const label = computed(() => {
+  if (!props.value) return props.placeholder;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(props.value);
+  if (!m) return props.value;
+  const day = Number(m[3]);
+  const month = RU_MONTHS_SHORT[Number(m[2]) - 1];
+  return `${day} ${month}`;
+});
+
+const todayIso = computed(() => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+});
+
+function pick(iso: string) {
+  emit("update:value", iso);
+  open.value = false;
+}
+
+function clear(e: MouseEvent) {
+  e.stopPropagation();
+  emit("update:value", null);
+}
+
+function toggle() {
+  open.value = !open.value;
+}
+
+function onDocPointerDown(e: PointerEvent) {
+  if (!open.value || !anchorRef.value) return;
+  if (anchorRef.value.contains(e.target as Node)) return;
+  open.value = false;
+}
+
+function onDocKeyDown(e: KeyboardEvent) {
+  if (e.key === "Escape" && open.value) open.value = false;
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", onDocPointerDown);
+  document.addEventListener("keydown", onDocKeyDown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("pointerdown", onDocPointerDown);
+  document.removeEventListener("keydown", onDocKeyDown);
+});
+</script>
+
+<template>
+  <div ref="anchorRef" class="kepler-datechip-anchor">
+    <button
+      type="button"
+      :class="[
+        'kepler-datechip',
+        props.value ? 'kepler-datechip--active' : '',
+        compact ? 'kepler-datechip--compact' : '',
+      ]"
+      @click="toggle"
+    >
+      <CalendarIcon :size="compact ? 11 : 12" class="kepler-datechip__icon" />
+      <span class="kepler-datechip__label">{{ label }}</span>
+      <span
+        v-if="props.value"
+        class="kepler-datechip__clear"
+        role="button"
+        tabindex="-1"
+        aria-label="Очистить дату"
+        @click="clear"
+      >
+        <X :size="10" />
+      </span>
+    </button>
+
+    <div v-if="open" class="kepler-datechip__popover">
+      <Calendar :value="props.value" :today="todayIso" @pick="pick" />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.kepler-datechip-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.kepler-datechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
+    color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.kepler-datechip:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, var(--secondary));
+  color: var(--foreground);
+}
+
+.kepler-datechip--active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.kepler-datechip--active:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.kepler-datechip--compact {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.7rem;
+}
+
+.kepler-datechip__icon {
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.kepler-datechip__label {
+  line-height: 1;
+}
+
+.kepler-datechip__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+  margin-left: 0.1rem;
+  cursor: pointer;
+}
+
+.kepler-datechip__clear:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  color: currentColor;
+}
+
+.kepler-datechip__popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  min-width: 320px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--popover, var(--background));
+  box-shadow:
+    0 10px 32px color-mix(in srgb, #000 28%, transparent),
+    0 3px 10px color-mix(in srgb, #000 14%, transparent);
+  overflow: hidden;
+}
+</style>

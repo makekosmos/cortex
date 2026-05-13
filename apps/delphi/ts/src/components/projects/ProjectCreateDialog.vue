@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue";
-import { Check, FolderPlus, X } from "lucide-vue-next";
+import { Check, DollarSign, FolderPlus, X } from "lucide-vue-next";
 
 type ProjectColorTag =
   | "red"
@@ -15,6 +15,8 @@ export type ProjectCreatePayload = {
   title: string;
   notes: string | null;
   colorTag: ProjectColorTag | null;
+  billable: boolean;
+  price: number | null;
 };
 
 const COLOR_OPTIONS: Array<{
@@ -80,6 +82,8 @@ const emit = defineEmits<{
 const title = shallowRef("");
 const notes = shallowRef("");
 const colorTag = shallowRef<ProjectColorTag | null>(null);
+const billable = shallowRef(false);
+const priceInput = shallowRef("");
 
 const titleInputRef = useTemplateRef<HTMLInputElement>("titleInput");
 
@@ -103,6 +107,8 @@ function reset() {
   title.value = "";
   notes.value = "";
   colorTag.value = null;
+  billable.value = false;
+  priceInput.value = "";
 }
 
 function close() {
@@ -117,10 +123,13 @@ function handleClose() {
 function save() {
   if (!canSave.value) return;
 
+  const parsedPrice = priceInput.value.trim() === "" ? null : Number(priceInput.value);
   emit("save", {
     title: trimmedTitle.value,
     notes: notes.value.trim() ? notes.value.trim() : null,
     colorTag: colorTag.value,
+    billable: billable.value,
+    price: Number.isFinite(parsedPrice) ? (parsedPrice as number) : null,
   });
 
   close();
@@ -292,6 +301,48 @@ watch(
               />
             </button>
           </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <span class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)">
+            Оплата
+          </span>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              :class="[
+                'flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition-colors',
+                billable
+                  ? 'border-emerald-500/40 bg-emerald-500/12 text-emerald-500'
+                  : 'border-(--border) bg-(--background) text-(--muted-foreground) hover:bg-(--secondary)',
+              ]"
+              @click="billable = !billable"
+            >
+              <DollarSign :size="14" />
+              <span>Оплачиваемый</span>
+              <Check v-if="billable" :size="14" class="ml-1" />
+            </button>
+
+            <label
+              v-if="billable"
+              class="flex flex-1 items-center gap-2 rounded-2xl border border-(--border) bg-(--background) px-3 py-2 text-sm text-(--foreground)"
+            >
+              <span class="text-(--muted-foreground)">Бюджет</span>
+              <input
+                v-model="priceInput"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                class="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-(--muted-foreground)/60"
+              />
+            </label>
+          </div>
+          <p class="text-xs text-(--muted-foreground)">
+            Если включено, задачи внутри проекта по умолчанию оплачиваемые.
+          </p>
         </div>
       </div>
 

@@ -4,10 +4,8 @@ import {
   Archive,
   ArrowLeft,
   Book,
-  CalendarDays,
   Globe,
   Inbox,
-  Kanban,
   Plus,
   Settings2,
   Star,
@@ -156,6 +154,8 @@ function handleProjectCreate(payload: ProjectCreatePayload) {
     title: payload.title,
     notes: payload.notes,
     colorTag: payload.colorTag,
+    billable: payload.billable,
+    price: payload.price,
   });
 
   projectCreateOpen.value = false;
@@ -194,8 +194,6 @@ const primaryItems = computed<SidebarNavItem[]>(() => {
   return [
     { id: "inbox", icon: Inbox, to: "/", label: "Входящие" },
     { id: "today", icon: Star, to: "/today", label: "Сегодня" },
-    { id: "calendar", icon: CalendarDays, to: "/calendar", label: "Календарь" },
-    { id: "week", icon: Kanban, to: "/week", label: "Неделя" },
   ];
 });
 

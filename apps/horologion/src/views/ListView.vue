@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { Trash2 } from "lucide-vue-next";
 import { ContextMenu, ContextMenuItem, useContextMenu } from "@kepler/visuals";
 import type { TimeEntry } from "@shared/ipc-types";
@@ -26,18 +26,44 @@ interface DayGroup {
 
 const entries = ref<TimeEntry[]>([]);
 
+// Реактивный «сейчас» — тикает раз в секунду, но только пока есть хотя бы
+// одна running-запись (endedAt = null). Иначе зря дёргаем reactivity.
+const nowTick = ref(Date.now());
+let tickHandle: ReturnType<typeof setInterval> | null = null;
+
+function ensureTickerForRunning() {
+  const hasRunning = entries.value.some((e) => !e.endedAt);
+  if (hasRunning && !tickHandle) {
+    tickHandle = setInterval(() => {
+      nowTick.value = Date.now();
+    }, 1000);
+  } else if (!hasRunning && tickHandle) {
+    clearInterval(tickHandle);
+    tickHandle = null;
+  }
+}
+
 async function load() {
   entries.value = await window.horologion.timeEntries.list();
+  ensureTickerForRunning();
 }
 
 onMounted(load);
+onBeforeUnmount(() => {
+  if (tickHandle) {
+    clearInterval(tickHandle);
+    tickHandle = null;
+  }
+});
 watch(entriesChangedAt, () => {
   void load();
 });
 
 function durationSec(e: TimeEntry): number {
   const start = new Date(e.startedAt).getTime();
-  const end = e.endedAt ? new Date(e.endedAt).getTime() : Date.now();
+  // Для running-записи берём реактивный nowTick — это заставит computed
+  // groupedByDay пересчитываться каждую секунду, пока таймер идёт.
+  const end = e.endedAt ? new Date(e.endedAt).getTime() : nowTick.value;
   return Math.max(0, Math.floor((end - start) / 1000));
 }
 

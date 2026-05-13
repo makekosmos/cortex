@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { shallowRef, computed, useTemplateRef, nextTick, ref } from "vue";
+import { shallowRef, computed, useTemplateRef, nextTick, ref, watch } from "vue";
+import { Calendar as CalendarIcon, DollarSign } from "lucide-vue-next";
+import ContextMenu from "./ContextMenu.vue";
+import ContextMenuItem from "./ContextMenuItem.vue";
+import DateChip from "./DateChip.vue";
 
 export interface TodoRowItem {
   id: string;
@@ -8,11 +12,22 @@ export interface TodoRowItem {
   isCompleted?: boolean;
   isCancelled?: boolean;
   isTrashed?: boolean;
+  scheduledDate?: string | null;
+  billable?: boolean;
+  price?: number | null;
 }
 
 export interface TodoDropPayload {
   targetId: string;
   after: boolean;
+}
+
+export interface TodoRowUpdate {
+  title?: string;
+  notes?: string | null;
+  scheduledDate?: string | null;
+  billable?: boolean;
+  price?: number | null;
 }
 
 const props = withDefaults(
@@ -30,7 +45,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   complete: [];
   trash: [];
-  rename: [newTitle: string];
+  update: [patch: TodoRowUpdate];
   drop: [payload: TodoDropPayload];
 }>();
 
@@ -38,29 +53,118 @@ const isCompleted = computed(
   () => props.todo.isCompleted || props.todo.isCancelled,
 );
 
-const editing = shallowRef(false);
-const draft = shallowRef(props.todo.title);
-const inputRef = useTemplateRef<HTMLInputElement>("editInput");
+const expanded = shallowRef(false);
+const titleDraft = shallowRef(props.todo.title);
+const notesDraft = shallowRef(props.todo.notes ?? "");
+const dateDraft = shallowRef<string | null>(props.todo.scheduledDate ?? null);
+const billableDraft = shallowRef(Boolean(props.todo.billable));
+const priceDraft = shallowRef(
+  props.todo.price !== null && props.todo.price !== undefined ? String(props.todo.price) : "",
+);
+
+watch(
+  () => props.todo,
+  (next) => {
+    if (expanded.value) return;
+    titleDraft.value = next.title;
+    notesDraft.value = next.notes ?? "";
+    dateDraft.value = next.scheduledDate ?? null;
+    billableDraft.value = Boolean(next.billable);
+    priceDraft.value =
+      next.price !== null && next.price !== undefined ? String(next.price) : "";
+  },
+  { deep: true },
+);
+
+const titleInputRef = useTemplateRef<HTMLInputElement>("titleInput");
 const rowRef = ref<HTMLElement>();
 const isDragging = shallowRef(false);
+const dragSuppressClick = shallowRef(false);
 
-function startEditing() {
-  draft.value = props.todo.title;
-  editing.value = true;
-  nextTick(() => inputRef.value?.focus());
-}
-
-function commitEdit() {
-  editing.value = false;
-  const trimmed = draft.value.trim();
-  if (trimmed && trimmed !== props.todo.title) {
-    emit("rename", trimmed);
+function toggleExpand() {
+  if (!props.editable || props.todo.isTrashed) return;
+  expanded.value = !expanded.value;
+  if (expanded.value) {
+    titleDraft.value = props.todo.title;
+    notesDraft.value = props.todo.notes ?? "";
+    dateDraft.value = props.todo.scheduledDate ?? null;
+    billableDraft.value = Boolean(props.todo.billable);
+    priceDraft.value =
+      props.todo.price !== null && props.todo.price !== undefined
+        ? String(props.todo.price)
+        : "";
+    nextTick(() => titleInputRef.value?.focus());
   }
 }
 
-function onEditKeyDown(e: KeyboardEvent) {
-  if (e.key === "Enter") commitEdit();
-  if (e.key === "Escape") editing.value = false;
+function commitTitle() {
+  const trimmed = titleDraft.value.trim();
+  if (trimmed && trimmed !== props.todo.title) {
+    emit("update", { title: trimmed });
+  } else {
+    titleDraft.value = props.todo.title;
+  }
+}
+
+function commitNotes() {
+  const next = notesDraft.value.trim() || null;
+  if (next !== (props.todo.notes ?? null)) {
+    emit("update", { notes: next });
+  }
+}
+
+function commitDate(next: string | null) {
+  dateDraft.value = next;
+  if (next !== (props.todo.scheduledDate ?? null)) {
+    emit("update", { scheduledDate: next });
+  }
+}
+
+function toggleBillable() {
+  billableDraft.value = !billableDraft.value;
+  emit("update", { billable: billableDraft.value });
+}
+
+function commitPrice() {
+  const trimmed = priceDraft.value.trim();
+  const parsed = trimmed === "" ? null : Number(trimmed);
+  const next = parsed !== null && Number.isFinite(parsed) ? parsed : null;
+  if (next !== (props.todo.price ?? null)) {
+    emit("update", { price: next });
+  }
+}
+
+function onExpandKeyDown(e: KeyboardEvent) {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    expanded.value = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Context menu
+// ---------------------------------------------------------------------------
+
+const menuOpen = shallowRef(false);
+const menuX = shallowRef(0);
+const menuY = shallowRef(0);
+
+function onContextMenu(e: MouseEvent) {
+  if (!props.editable) return;
+  e.preventDefault();
+  menuX.value = e.clientX;
+  menuY.value = e.clientY;
+  menuOpen.value = true;
+}
+
+function closeMenu() {
+  menuOpen.value = false;
+}
+
+function handleDelete() {
+  closeMenu();
+  expanded.value = false;
+  emit("trash");
 }
 
 // ---------------------------------------------------------------------------
@@ -73,11 +177,10 @@ let startX = 0;
 let startY = 0;
 let lastTarget: TodoDropPayload | null = null;
 
-// Snapshot of row positions taken once at drag start (before ghost distorts layout)
 let rowSnapshot: { id: string; top: number; bottom: number; mid: number }[] = [];
 
 function onRowPointerDown(e: PointerEvent) {
-  if (!props.draggable || editing.value) return;
+  if (!props.draggable || expanded.value || e.button !== 0) return;
 
   const ox = e.clientX;
   const oy = e.clientY;
@@ -86,6 +189,7 @@ function onRowPointerDown(e: PointerEvent) {
   const onMove = (me: PointerEvent) => {
     if (!started && (Math.abs(me.clientX - ox) > 4 || Math.abs(me.clientY - oy) > 4)) {
       started = true;
+      dragSuppressClick.value = true;
       beginDrag(ox, oy);
     }
     if (started) onDragMove(me);
@@ -98,6 +202,15 @@ function onRowPointerDown(e: PointerEvent) {
   document.addEventListener("pointerup", onUp, { once: true });
 }
 
+function onRowClick(e: MouseEvent) {
+  if (dragSuppressClick.value) {
+    dragSuppressClick.value = false;
+    return;
+  }
+  if ((e.target as HTMLElement | null)?.closest("[data-stop-toggle]")) return;
+  toggleExpand();
+}
+
 function beginDrag(cx: number, cy: number) {
   if (!rowRef.value) return;
 
@@ -106,13 +219,11 @@ function beginDrag(cx: number, cy: number) {
   startY = cy;
   lastTarget = null;
 
-  // Snapshot sibling positions BEFORE any DOM changes
   rowSnapshot = getSiblingRows().map((el) => {
     const r = el.getBoundingClientRect();
     return { id: el.dataset.todoId!, top: r.top, bottom: r.bottom, mid: r.top + r.height / 2 };
   });
 
-  // Floating clone
   clone = rowRef.value.cloneNode(true) as HTMLElement;
   clone.dataset.dragClone = "";
   Object.assign(clone.style, {
@@ -133,7 +244,6 @@ function beginDrag(cx: number, cy: number) {
   document.body.appendChild(clone);
   document.body.style.cursor = "grabbing";
 
-  // Invisible placeholder that occupies the target slot.
   ghost = document.createElement("div");
   ghost.dataset.dropGhost = "";
   Object.assign(ghost.style, {
@@ -161,7 +271,6 @@ function getSiblingRows(): HTMLElement[] {
   );
 }
 
-/** Use the frozen snapshot to find the drop target — immune to ghost layout shifts. */
 function findDropTarget(clientY: number): TodoDropPayload | null {
   if (rowSnapshot.length === 0) return null;
 
@@ -199,7 +308,6 @@ function onDragMove(e: PointerEvent) {
   const target = findDropTarget(e.clientY);
   if (!target) return;
 
-  // Only update placeholder if target changed
   if (!lastTarget || lastTarget.targetId !== target.targetId || lastTarget.after !== target.after) {
     lastTarget = target;
     positionGhost(target);
@@ -236,33 +344,36 @@ function onDragEnd() {
     ref="rowRef"
     :data-todo-id="todo.id"
     :class="[
-      'todo-row group flex h-10 items-center gap-3 px-7 hover:bg-(--secondary)',
+      'todo-row group flex flex-col px-7 hover:bg-(--secondary)',
       isDragging ? 'todo-row--drag-source' : '',
-      draggable && !editing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+      expanded ? 'todo-row--expanded' : '',
     ]"
     @pointerdown="onRowPointerDown"
-    @dblclick="editable ? startEditing() : undefined"
+    @click="onRowClick"
+    @contextmenu="onContextMenu"
   >
+    <!-- Row header -->
+    <div
+      :class="[
+        'flex h-10 items-center gap-3',
+        draggable && !expanded ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+      ]"
+    >
+      <!-- Checkbox -->
+      <button
+        type="button"
+        class="check-btn shrink-0"
+        data-stop-toggle
+        @pointerdown.stop
+        @click.stop="emit('complete')"
+      >
+        <span :class="['check-box', isCompleted ? 'check-box--done' : '']">
+          <span v-if="isCompleted" class="check-box__inner" />
+        </span>
+      </button>
 
-    <!-- Checkbox -->
-    <button type="button" class="check-btn shrink-0" @pointerdown.stop @click.stop="emit('complete')">
-      <span :class="['check-box', isCompleted ? 'check-box--done' : '']">
-        <span v-if="isCompleted" class="check-box__inner" />
-      </span>
-    </button>
-
-    <!-- Content -->
-    <div class="min-w-0 flex-1">
-      <input
-        v-if="editing"
-        ref="editInput"
-        :value="draft"
-        class="block w-full rounded bg-(--secondary) px-1 py-0.5 text-sm leading-5 text-(--foreground) outline-none ring-1 ring-(--ring)"
-        @input="draft = ($event.target as HTMLInputElement).value"
-        @blur="commitEdit"
-        @keydown="onEditKeyDown"
-      />
-      <template v-else>
+      <!-- Title (collapsed) -->
+      <div class="min-w-0 flex-1">
         <div
           :class="[
             'truncate text-sm leading-5 px-1 py-0.5 select-none',
@@ -274,32 +385,111 @@ function onDragEnd() {
           {{ todo.title }}
         </div>
         <div
-          v-if="todo.notes"
+          v-if="!expanded && todo.notes"
           class="truncate text-xs text-(--muted-foreground)/70 select-none"
         >
           {{ todo.notes }}
         </div>
-      </template>
+      </div>
+
+      <!-- Trailing chips (collapsed) -->
+      <div
+        v-if="!expanded"
+        class="flex items-center gap-1.5 text-xs text-(--muted-foreground)"
+      >
+        <span
+          v-if="todo.billable"
+          class="flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-500"
+        >
+          <DollarSign :size="10" />
+          <span v-if="todo.price">{{ todo.price }}</span>
+        </span>
+        <span
+          v-if="todo.scheduledDate"
+          class="flex items-center gap-0.5 rounded-full bg-(--secondary) px-2 py-0.5"
+        >
+          <CalendarIcon :size="10" />
+          {{ todo.scheduledDate }}
+        </span>
+      </div>
+
+      <slot />
     </div>
 
-    <slot />
-
-    <!-- Quick actions (visible on hover) -->
+    <!-- Expanded editor -->
     <div
-      v-if="editable && !editing && !todo.isTrashed"
-      class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+      v-if="expanded"
+      class="flex flex-col gap-2 py-3 pl-8 pr-2"
+      data-stop-toggle
+      @click.stop
+      @pointerdown.stop
+      @keydown="onExpandKeyDown"
     >
-      <button
-        type="button"
-        title="В корзину"
-        class="rounded px-1.5 py-0.5 text-[10px] text-(--muted-foreground) hover:bg-red-500/15 hover:text-red-500 select-none"
-        @pointerdown.stop
-        @click.stop="emit('trash')"
-      >
-        Удалить
-      </button>
+      <input
+        ref="titleInput"
+        type="text"
+        :value="titleDraft"
+        class="w-full rounded bg-(--secondary) px-2 py-1 text-sm font-medium text-(--foreground) outline-none ring-1 ring-(--ring) focus:ring-(--accent)"
+        @input="titleDraft = ($event.target as HTMLInputElement).value"
+        @blur="commitTitle"
+        @keydown.enter.prevent="commitTitle"
+      />
+
+      <textarea
+        :value="notesDraft"
+        :rows="2"
+        placeholder="Заметки"
+        class="w-full resize-none rounded bg-(--secondary) px-2 py-1 text-xs text-(--muted-foreground) outline-none ring-1 ring-(--ring)/40 focus:ring-(--accent)"
+        @input="notesDraft = ($event.target as HTMLTextAreaElement).value"
+        @blur="commitNotes"
+      />
+
+      <div class="flex flex-wrap items-center gap-2">
+        <DateChip
+          :value="dateDraft"
+          placeholder="Без даты"
+          @update:value="commitDate"
+        />
+
+        <button
+          type="button"
+          :class="[
+            'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors',
+            billableDraft
+              ? 'bg-emerald-500/15 text-emerald-500'
+              : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
+          ]"
+          @click="toggleBillable"
+        >
+          <DollarSign :size="12" />
+          <span>Оплачиваемая</span>
+        </button>
+
+        <label
+          v-if="billableDraft"
+          class="flex items-center gap-1.5 rounded-full bg-(--secondary) px-3 py-1.5 text-xs"
+        >
+          <input
+            type="number"
+            inputmode="decimal"
+            min="0"
+            step="0.01"
+            placeholder="Цена"
+            :value="priceDraft"
+            class="w-20 bg-transparent text-xs outline-none placeholder:text-(--muted-foreground)/60"
+            @input="priceDraft = ($event.target as HTMLInputElement).value"
+            @blur="commitPrice"
+          />
+        </label>
+      </div>
     </div>
   </div>
+
+  <ContextMenu :open="menuOpen" :x="menuX" :y="menuY" @close="closeMenu">
+    <ContextMenuItem destructive @click="handleDelete">
+      Удалить
+    </ContextMenuItem>
+  </ContextMenu>
 </template>
 
 <style scoped>
@@ -347,6 +537,10 @@ function onDragEnd() {
 .todo-row--drag-source {
   opacity: 0;
   pointer-events: none;
+}
+
+.todo-row--expanded {
+  background: var(--secondary);
 }
 
 .todo-focus-pulse {

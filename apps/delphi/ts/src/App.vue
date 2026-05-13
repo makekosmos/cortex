@@ -626,13 +626,13 @@ function leaveSpaceListener() {
         :show-left-border="!sidebarHidden"
         :radius-top-left="sidebarHidden ? '0px' : '16px'"
       >
-        <main class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main class="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <RouterView />
+          <QuickEntry />
         </main>
       </DesktopContentSurface>
     </DesktopChrome>
 
-    <QuickEntry />
     <QuickSearch v-model:open="quickSearchOpen" />
     <CustomCaret />
 

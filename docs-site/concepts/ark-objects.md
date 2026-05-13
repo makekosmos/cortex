@@ -84,7 +84,7 @@ erDiagram
   typeId: 'task_obj',
   title: 'Draft plan',
   contentJson: { body: '...' },          // основное тело
-  propsJson: { status: 'open' },         // app-specific properties
+  propsJson: { status: 'open', billable: false, price: null }, // app-specific properties
   createdAt: '...',
   updatedAt: '...',
   deletedAt: null,
@@ -138,7 +138,8 @@ erDiagram
     endedAt:   '2026-05-12T10:25:00Z',   // null пока тикает
     kind: 'manual' | 'pomodoro_work' | 'pomodoro_break',
     pomodoroSessionId?: string,           // группировка сегментов одной pomodoro-сессии
-    billable?: boolean,                   // флаг для будущей агрегации в Delphi billing
+    billable?: boolean,                   // флаг для агрегации в Delphi billing (ProjectPage читает через `ark:listTimeEntries`)
+    taskId?: string,                      // ID `task_obj` — связь задачи и записи времени
     source: 'manual' | 'pomodoro' | 'imported',
   },
 }

@@ -35,6 +35,7 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 - Прямые SQL writes в ARK-таблицы запрещены. См. [Граница записи](/concepts/write-boundary).
 - Все тесты — на изолированных БД. См. [Изоляция тестовых БД](/concepts/test-isolation).
 - **Язык UI — русский.** Все user-facing строки (placeholder, labels, кнопки, эмпти-стейты, пилюли, заголовки view) — на русском. Английский только для technical-идентификаторов (id типов объектов, имена пакетов, log message'и). Это относится ко всем приложениям без исключения.
+- **Каждое приложение запоминает геометрию окна между запусками.** Сохранять `x` / `y` / `width` / `height` / `isMaximized` в `app.getPath("userData") + "/window-state.json"` на события `resize` / `move` / `maximize` / `unmaximize` / `close` (debounce 400мс на тики, final flush на close), и восстанавливать при `createWindow`. Если сохранённый файл отсутствует или битый — fallback на дефолтные дименсии приложения. Electron сам клампит bounds внутрь доступных дисплеев, если монитор отключили. Reference-имплементация: `apps/horologion/electron/main.ts` (`loadWindowState` / `saveWindowState` / `scheduleWindowStateSave`).
 - **Все desktop-приложения используют `@kepler/visuals` как единый источник UI**:
   - Chrome / safe-area — через `<DesktopChrome>` + `<DesktopContentSurface>`. Никаких ручных `--titlebar-height` хаков.
   - Цвета, радиусы, шрифты — **только** через CSS-переменные kepler-visuals (`var(--background)`, `var(--foreground)`, `var(--border)`, `var(--accent)`, `var(--radius)`, `var(--corner-shape)`, и т.д.).

@@ -316,6 +316,13 @@ export function arkChangeToTodoItem(change: ArkChange): TodoItem | null {
       : [],
 
     recurrenceRule: (data.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
+
+    billable: Boolean(data.billable),
+
+    price:
+      typeof data.price === "number" && Number.isFinite(data.price)
+        ? (data.price as number)
+        : null,
   };
 }
 
@@ -366,6 +373,10 @@ export function projectToArkChange(
         createdAt: project.createdAt,
 
         areaId: project.areaId ?? null,
+
+        billable: project.billable ?? false,
+
+        price: project.price ?? null,
       },
     },
   };
@@ -411,6 +422,13 @@ export function arkChangeToProject(change: ArkChange): Project | null {
     createdAt: (data.createdAt as string) ?? new Date().toISOString(),
 
     areaId: (data.areaId as string | null) ?? null,
+
+    billable: Boolean(data.billable),
+
+    price:
+      typeof data.price === "number" && Number.isFinite(data.price)
+        ? (data.price as number)
+        : null,
   };
 }
 
@@ -497,6 +515,11 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
           : [],
         recurrenceRule:
           (dataRaw.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
+        billable: Boolean(dataRaw.billable),
+        price:
+          typeof dataRaw.price === "number" && Number.isFinite(dataRaw.price)
+            ? (dataRaw.price as number)
+            : null,
       };
 
       const dedupeKey = id.toLowerCase();
@@ -559,6 +582,11 @@ export async function fetchProjectsFromArk(): Promise<Project[]> {
           (event.occurred_at as string) ??
           new Date().toISOString(),
         areaId: (dataRaw.areaId as string | null) ?? null,
+        billable: Boolean(dataRaw.billable),
+        price:
+          typeof dataRaw.price === "number" && Number.isFinite(dataRaw.price)
+            ? (dataRaw.price as number)
+            : null,
       });
     }
 

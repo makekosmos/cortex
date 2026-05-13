@@ -28,6 +28,7 @@ export {
   TodoRow,
   type TodoRowItem,
   type TodoDropPayload,
+  type TodoRowUpdate,
   QuickEntryPanel,
   type QuickEntryProject,
   type QuickEntrySavePayload,
@@ -35,6 +36,7 @@ export {
   ContextMenuItem,
   Modal,
   Calendar,
+  DateChip,
   TimeColumn,
   DateTimePicker,
 } from "./components";

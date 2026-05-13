@@ -31,7 +31,7 @@ export type { StatusDotTone } from "./StatusDot.vue";
 
 export { default as TodoRow } from "./TodoRow.vue";
 
-export type { TodoRowItem, TodoDropPayload } from "./TodoRow.vue";
+export type { TodoRowItem, TodoDropPayload, TodoRowUpdate } from "./TodoRow.vue";
 
 export { default as QuickEntryPanel } from "./QuickEntryPanel.vue";
 
@@ -47,6 +47,8 @@ export { default as ContextMenuItem } from "./ContextMenuItem.vue";
 export { default as Modal } from "./Modal.vue";
 
 export { default as Calendar } from "./Calendar.vue";
+
+export { default as DateChip } from "./DateChip.vue";
 
 export { default as TimeColumn } from "./TimeColumn.vue";
 

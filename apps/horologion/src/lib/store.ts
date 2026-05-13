@@ -60,3 +60,15 @@ export async function refreshTasks(): Promise<void> {
   tasksPromise = null;
   await loadTasksOnce();
 }
+
+/**
+ * Гарантирует свежий список задач при открытии @-mention. Если кэш ещё пустой —
+ * блокирующая загрузка (через `loadTasksOnce`); если уже есть — фоновый
+ * `refreshTasks` без await, чтобы меню сразу показалось с прошлым списком,
+ * а через момент обновилось свежими данными (новые задачи из Delphi подхватятся).
+ */
+export function ensureFreshTasks(): Promise<void> {
+  if (!tasksLoaded.value) return loadTasksOnce();
+  void refreshTasks();
+  return Promise.resolve();
+}

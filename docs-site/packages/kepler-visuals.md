@@ -122,8 +122,14 @@ Light и dark темы:
 | `CustomCaret.vue` | Кастомный курсор Eden (overlay над браузерным) |
 | `GamePosterCard.vue` | Карточка игры для Arrancador |
 | `StatusDot.vue` | Статус-индикатор (success / warning / error / info) |
-| `TodoRow.vue` | Строка задачи для Delphi |
-| `QuickEntryPanel.vue` | Быстрый ввод |
+| `TodoRow.vue` | Строка задачи для Delphi (click → expand, contextmenu → delete) |
+| `QuickEntryPanel.vue` | Быстрый ввод (title / notes / date / project / billable / price) |
+| `ContextMenu.vue` + `ContextMenuItem.vue` | Правая-клик меню. Используется в TodoRow и Horologion ListView |
+| `Calendar.vue` | Inline-недельный date picker (стрип неделя + навигация) |
+| `DateChip.vue` | Chip-кнопка «Дата» + popover с `Calendar`. Замена нативного `<input type="date">` — без чёрной браузерной иконки |
+| `DateTimePicker.vue` | Picker даты + времени (для Horologion edit-modal) |
+| `Modal.vue` | Базовая модалка |
+| `TimeColumn.vue` | Вертикальная шкала времени |
 
 ## Визуальный референс компонентов
 
@@ -167,14 +173,31 @@ ASCII-мокапы — чтобы агенту/новому человеку б�
 
 ### TodoRow (Delphi)
 
+Свёрнутая:
+
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ ⊙   Купить хлеб                                  📅 Завтра   │
+│ ⊙   Купить хлеб                       $ · 📅 14 май          │
 └──────────────────────────────────────────────────────────────┘
 ┌──────────────────────────────────────────────────────────────┐
-│ ✓   ~~Сделать ревью PR~~                             ✅       │
+│ ✓   ~~Сделать ревью PR~~                                     │
 └──────────────────────────────────────────────────────────────┘
-  ⊙ — open    ✓ — completed    drag handle слева невидим до hover
+  ⊙ — open    ✓ — completed
+  $ — emerald chip если billable    📅 — chip если scheduledDate
+  ПКМ → ContextMenu с пунктом «Удалить» (destructive)
+```
+
+Развёрнутая (по клику):
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ ⊙   Купить хлеб                          $ · 📅 14 май       │
+│                                                              │
+│      [ Купить хлеб                                       ]   │  title input
+│      [ Заметки …                                         ]   │  notes textarea
+│                                                              │
+│      📅 14 май    [ $ Оплачиваемая ]    [ Цена 500 ]         │  date chip + billable + price
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### GamePosterCard (Arrancador)
@@ -211,12 +234,16 @@ ABC▌DEF      ← CustomCaret overlay (Vapor-friendly, smooth blink)
 ### QuickEntryPanel
 
 ```text
-┌──────────────────────────────────────────────────┐
-│  ⊙  Что нужно сделать?                            │  inline textarea
-│ ─                                                 │
-│  📁 Project: Inbox  ▾    📅 Today  ▾    🏷 Tag    │  meta-pills
-│                            [    Создать    ]      │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Новая задача                                    ✕   │  title input
+│  Заметки …                                           │  notes textarea
+│ ──                                                   │
+│  📅 14 май   $ Оплачиваемая   [ Цена ]    📁 Inbox ▾ │  meta-row
+└──────────────────────────────────────────────────────┘
+   ◇ Backdrop ограничен content-областью — titlebar/sidebar остаются интерактивными.
+   ◇ `📅` — DateChip (popover Calendar). Native `<input type="date">` не используется.
+   ◇ `📁 Inbox` — dropdown реальных проектов из стора. При выборе проекта,
+     помеченного `billable`, флаг `$ Оплачиваемая` авто-включается.
 ```
 
 ## Полный API
@@ -235,8 +262,10 @@ import {
   TitlebarHistoryControls,
   DesktopChrome, DesktopContentSurface,
   StatusDot, type StatusDotTone,
-  TodoRow, type TodoRowItem, type TodoDropPayload,
+  TodoRow, type TodoRowItem, type TodoDropPayload, type TodoRowUpdate,
   QuickEntryPanel, type QuickEntryProject, type QuickEntrySavePayload,
+  ContextMenu, ContextMenuItem, useContextMenu, type ContextMenuState,
+  Modal, Calendar, DateChip, TimeColumn, DateTimePicker,
 } from "@kepler/visuals";
 ```
 

@@ -16,6 +16,7 @@ import {
   entriesChangedAt,
   tasks as tasksRef,
   loadTasksOnce,
+  ensureFreshTasks,
 } from "./lib/store";
 import MentionMenu from "./components/MentionMenu.vue";
 
@@ -107,7 +108,7 @@ const tasks = tasksRef;
 const mentionMenuRef = ref<InstanceType<typeof MentionMenu> | null>(null);
 
 async function loadTasks() {
-  await loadTasksOnce();
+  await ensureFreshTasks();
 }
 
 function onInput() {

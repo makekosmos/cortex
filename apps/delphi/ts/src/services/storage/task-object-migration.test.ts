@@ -46,6 +46,8 @@ function makeTodo(id: string, title = `Task ${id}`): TodoItem {
     tagIds: [],
     checklistItems: [],
     recurrenceRule: null,
+    billable: false,
+    price: null,
   };
 }
 

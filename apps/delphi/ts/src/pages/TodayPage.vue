@@ -72,11 +72,9 @@ function handleDrop(payload: { targetId: string; after: boolean }, sourceId: str
             :todo="todo"
             @complete="store.completeTodo(todo.id)"
             @trash="store.trashTodo(todo.id)"
-            @rename="store.updateTodo(todo.id, { title: $event })"
+            @update="store.updateTodo(todo.id, $event)"
             @drop="handleDrop($event, todo.id)"
-          >
-            <span v-if="todo.isEvening" class="text-[10px] text-indigo-400 select-none">Вечер</span>
-          </TodoRow>
+          />
         </div>
       </div>
     </div>

@@ -714,6 +714,22 @@ ipcMain.handle('ark:upsertDelphiTask', async (_e, todo) => {
   return upsertTodoObjectFirst(taskObjectMigrationDeps, todo);
 })
 
+ipcMain.handle('ark:listTimeEntries', async () => {
+  const objects = await arkListObjects();
+  return objects
+    .filter((o) => o.typeId === 'time_entry_obj' && !o.deletedAt)
+    .map((o) => {
+      const props = (o.propsJson ?? {}) as Record<string, unknown>;
+      return {
+        id: o.id,
+        taskId: (props.taskId as string | null) ?? null,
+        billable: Boolean(props.billable),
+        startedAt: (props.startedAt as string) ?? '',
+        endedAt: (props.endedAt as string | null) ?? null,
+      };
+    });
+})
+
 ipcMain.handle('ark:deleteDelphiTask', async (_e, id: string) => {
   await arkDeleteObject(id);
   return true;

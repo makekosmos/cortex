@@ -256,6 +256,10 @@ export type Project = {
   createdAt: string;
 
   areaId?: string | null;
+
+  billable: boolean;
+
+  price?: number | null;
 };
 
 export type TodoItem = {
@@ -304,6 +308,10 @@ export type TodoItem = {
   checklistItems: ChecklistItem[];
 
   recurrenceRule?: RecurrenceData | null;
+
+  billable: boolean;
+
+  price?: number | null;
 };
 
 // ---------------------------------------------------------------------------

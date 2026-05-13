@@ -8,6 +8,7 @@ import {
   type IpcMainInvokeEvent,
 } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   ArkClient,
@@ -356,17 +357,84 @@ function createTray(win: BrowserWindow): void {
   });
 }
 
+interface PersistedWindowState {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  isMaximized?: boolean;
+}
+
+function windowStateFile(): string {
+  return path.join(app.getPath("userData"), "window-state.json");
+}
+
+function loadWindowState(): PersistedWindowState | null {
+  try {
+    const raw = fs.readFileSync(windowStateFile(), "utf-8");
+    const parsed = JSON.parse(raw) as PersistedWindowState;
+    if (typeof parsed.width !== "number" || typeof parsed.height !== "number") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleWindowStateSave(win: BrowserWindow): void {
+  if (saveStateTimer) clearTimeout(saveStateTimer);
+  // Debounce — пользователь может resize'ить рывками; пишем не чаще раза в 400мс.
+  saveStateTimer = setTimeout(() => {
+    saveWindowState(win);
+    saveStateTimer = null;
+  }, 400);
+}
+
+function saveWindowState(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  // На minimize не записываем — это не «настоящие» bounds, перезапись затрёт
+  // последний реальный размер. (Окно может прятаться в трей через win.hide()
+  // — `getBounds` на скрытом окне возвращает корректные предыдущие bounds.)
+  if (win.isMinimized()) return;
+  try {
+    const isMaximized = win.isMaximized();
+    // При maximized getBounds возвращает screen bounds — берём normalBounds
+    // (внутреннее API), либо просто пропускаем, чтобы при restore был тот же
+    // maximized. Electron автоматически восстановит maximized из флага.
+    const b = isMaximized ? win.getNormalBounds() : win.getBounds();
+    const payload: PersistedWindowState = {
+      x: b.x,
+      y: b.y,
+      width: b.width,
+      height: b.height,
+      isMaximized,
+    };
+    fs.writeFileSync(windowStateFile(), JSON.stringify(payload));
+  } catch (e) {
+    console.error("[window-state] failed to save:", e);
+  }
+}
+
 function createWindow(): void {
   // Иконка приложения (видна в dev mode и при packaged запуске).
   const iconPath = resolveIconPath();
 
+  // Восстанавливаем размер/позицию из предыдущей сессии. Если файла нет
+  // или он битый — fallback на дефолтные дименсии. Electron сам клампит
+  // bounds внутрь доступных дисплеев (если монитор отключили — окно
+  // переедет на primary).
+  const saved = loadWindowState();
+  const initialBounds = saved
+    ? { x: saved.x, y: saved.y, width: saved.width, height: saved.height }
+    : { width: 600, height: 800 };
+
   const win = new BrowserWindow({
-    width: 600,
-    height: 800,
+    ...initialBounds,
     minWidth: 420,
     minHeight: 560,
-    maxWidth: 600,
-    maxHeight: 800,
     icon: nativeImage.createFromPath(iconPath),
     // Скрываем системный titlebar — рисуем свой через @kepler/visuals (DesktopChrome).
     // titlebarOverlay даёт нам env(titlebar-area-*) для расчёта safe-area под кнопками окна.
@@ -408,8 +476,23 @@ function createWindow(): void {
     }
   });
 
+  // Восстанавливаем maximized-флаг сразу после ready-to-show, иначе при
+  // вызове до показа Electron может проигнорировать.
+  if (saved?.isMaximized) {
+    win.maximize();
+  }
+
+  // Сохраняем bounds на каждое движение/ресайз (debounced) и финально на close.
+  // Через `close` ловим и обычный quit (allowQuit=true), и tray-«закрытие» в трей.
+  win.on("resize", () => scheduleWindowStateSave(win));
+  win.on("move", () => scheduleWindowStateSave(win));
+  win.on("maximize", () => scheduleWindowStateSave(win));
+  win.on("unmaximize", () => scheduleWindowStateSave(win));
+
   // Перехватываем «закрытие» — прячем окно вместо выхода.
   win.on("close", (event) => {
+    // Финальный flush — debounce-таймер мог не успеть.
+    saveWindowState(win);
     if (allowQuit) return;
     event.preventDefault();
     win.hide();
