@@ -6,6 +6,10 @@
 //   - kepler.window.{close,minimize,maximize}()     — управление окном
 //   - kepler.meta.id()                              — id текущего extension'а
 //   - kepler.host.invoke(action, payload?)          — host-level действия
+//   - kepler.userData.{readJson,writeJson,readFile,writeFile,path}()
+//     — persistent user data extension'а в <APPDATA>/Kosmos/extensions-data/<id>/.
+//       Эта папка не трогается install/uninstall'ом — settings и кеш переживают
+//       реинсталл кода extension'а.
 //
 // Контракт ARK совпадает с публичным SidecarRequest API: вызывающая сторона
 // формирует объект { operation: string, ...params } который main proxy
@@ -56,6 +60,30 @@ const api = {
   host: {
     invoke: (action: string, payload?: unknown): Promise<boolean> =>
       ipcRenderer.invoke("kepler:extension:invoke-host", action, payload),
+  },
+  userData: {
+    readJson: <T = unknown>(name: string): Promise<T | null> =>
+      ipcRenderer.invoke("kepler:extension:userData:readJson", name) as Promise<
+        T | null
+      >,
+    writeJson: <T = unknown>(name: string, value: T): Promise<void> =>
+      ipcRenderer.invoke(
+        "kepler:extension:userData:writeJson",
+        name,
+        value,
+      ) as Promise<void>,
+    readFile: (name: string): Promise<string | null> =>
+      ipcRenderer.invoke("kepler:extension:userData:readFile", name) as Promise<
+        string | null
+      >,
+    writeFile: (name: string, content: string): Promise<void> =>
+      ipcRenderer.invoke(
+        "kepler:extension:userData:writeFile",
+        name,
+        content,
+      ) as Promise<void>,
+    path: (): Promise<string> =>
+      ipcRenderer.invoke("kepler:extension:userData:path") as Promise<string>,
   },
 };
 

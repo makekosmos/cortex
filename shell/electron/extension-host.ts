@@ -31,7 +31,14 @@ import {
   screen,
   type WebContents,
 } from "electron";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -172,6 +179,39 @@ function resolveExtensionRoots(): string[] {
  */
 export function userExtensionsRoot(): string {
   return path.join(app.getPath("appData"), "Kosmos", "extensions");
+}
+
+/**
+ * Path к директории с persistent user data extension'а. Отдельный от code dir
+ * (`extensions/<id>/`) — install/uninstall кода не трогают эту папку.
+ *
+ * Структура:
+ *   <APPDATA>/Kosmos/extensions-data/<id>/
+ *     settings.json        (опциональный, extension пишет через preload API)
+ *     window-state.json    (Kepler shell пишет сам по window events)
+ *     ...                  (любые user files extension'а)
+ */
+export function extensionUserDataDir(id: string): string {
+  return path.join(app.getPath("appData"), "Kosmos", "extensions-data", id);
+}
+
+// Path traversal protection: name должно быть «нормальным» basename'ом —
+// никаких `/`, `\`, `..`, не начинается с `.`. Используется во всех
+// userData handler'ах перед join'ом с user data dir.
+const USER_DATA_NAME_RE = /^[\w][\w.-]*$/;
+
+function assertSafeUserDataName(name: unknown): asserts name is string {
+  if (typeof name !== "string" || !USER_DATA_NAME_RE.test(name)) {
+    throw new Error(
+      `[kepler-shell] invalid user data file name: ${String(name)}`,
+    );
+  }
+}
+
+function ensureUserDataDir(extId: string): string {
+  const dir = extensionUserDataDir(extId);
+  mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 function resolveExtensionDir(id: string): string | null {
@@ -504,5 +544,88 @@ ipcMain.handle(
   (_e, action: string, _payload?: unknown) => {
     console.error(`[kepler-shell] extension invoke-host: ${action} (no handler)`);
     return false;
+  },
+);
+
+// ---------------------------------------------------------------------------
+// IPC: userData (extension renderer → main → <APPDATA>/Kosmos/extensions-data/<id>/)
+// ---------------------------------------------------------------------------
+//
+// Persistent user data extension'а — settings.json и любые другие files,
+// которые extension хочет хранить локально (а не в ARK). Path физически
+// отделён от code dir (`extensions/<id>/`), поэтому install/uninstall кода
+// не трогает эти файлы. Каждый handler определяет extension id по sender —
+// extension не может писать в чужой namespace.
+
+function senderUserDataDir(sender: WebContents): string {
+  const extId = extensionIdForSender(sender);
+  if (!extId) {
+    throw new Error("[kepler-shell] userData: sender is not an extension");
+  }
+  return ensureUserDataDir(extId);
+}
+
+ipcMain.handle("kepler:extension:userData:path", (e) => {
+  return senderUserDataDir(e.sender);
+});
+
+ipcMain.handle(
+  "kepler:extension:userData:readJson",
+  (e, name: string): unknown => {
+    assertSafeUserDataName(name);
+    const dir = senderUserDataDir(e.sender);
+    const filePath = path.join(dir, name);
+    if (!existsSync(filePath)) return null;
+    try {
+      return JSON.parse(readFileSync(filePath, "utf8")) as unknown;
+    } catch (err) {
+      console.warn(
+        `[kepler-shell] userData.readJson failed for ${filePath}:`,
+        err,
+      );
+      return null;
+    }
+  },
+);
+
+ipcMain.handle(
+  "kepler:extension:userData:writeJson",
+  (e, name: string, value: unknown): void => {
+    assertSafeUserDataName(name);
+    const dir = senderUserDataDir(e.sender);
+    const filePath = path.join(dir, name);
+    writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
+  },
+);
+
+ipcMain.handle(
+  "kepler:extension:userData:readFile",
+  (e, name: string): string | null => {
+    assertSafeUserDataName(name);
+    const dir = senderUserDataDir(e.sender);
+    const filePath = path.join(dir, name);
+    if (!existsSync(filePath)) return null;
+    try {
+      return readFileSync(filePath, "utf8");
+    } catch (err) {
+      console.warn(
+        `[kepler-shell] userData.readFile failed for ${filePath}:`,
+        err,
+      );
+      return null;
+    }
+  },
+);
+
+ipcMain.handle(
+  "kepler:extension:userData:writeFile",
+  (e, name: string, content: string): void => {
+    assertSafeUserDataName(name);
+    if (typeof content !== "string") {
+      throw new Error("[kepler-shell] userData.writeFile: content must be a string");
+    }
+    const dir = senderUserDataDir(e.sender);
+    const filePath = path.join(dir, name);
+    writeFileSync(filePath, content, "utf8");
   },
 );
