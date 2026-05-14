@@ -18,4 +18,5 @@ pub mod lock_file;
 pub mod protocol_version;
 pub mod singleton;
 pub mod sync;
+pub mod usage_tracker;
 pub mod ws_server;
