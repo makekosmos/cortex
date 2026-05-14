@@ -132,12 +132,52 @@ function isDeveloperModeActive(): boolean {
   return process.env.KEPLER_DEV === "1" || readDevModeSetting();
 }
 
-function resolveExtensionsRoot(): string {
-  // dev: <repo>/apps/kepler-shell/extensions/
-  // prod packaged: process.resourcesPath/extensions/
+// Priority chain для resolution extension-папок. Higher priority first.
+//
+//   1. Dev source tree (`apps/kepler-shell/extensions/`) — если папка
+//      существует. Это означает, что мы запущены из repo (developer flow).
+//   2. User-installed (`%APPDATA%\Kosmos\extensions\<id>\`) — основной канал
+//      для prod: пользователь устанавливает / обновляет extension через CLI
+//      или (в будущем) через UI, копия живёт в writable location.
+//   3. Bundled (`<resourcesPath>/extensions/<id>\`) — fallback для packaged
+//      сборок: built-in extensions едут с Kepler installer'ом, user-installed
+//      их перекрывает, удаление user-папки откатывает на bundled.
+//
+// Per-id lookup (`resolveExtensionDir`) обходит цепочку и возвращает первый
+// корень, где есть `manifest.json`. Это позволяет смешивать: Dashboard может
+// быть user-installed, а Horologion — bundled.
+function resolveExtensionRoots(): string[] {
+  const roots: string[] = [];
   const dev = path.resolve(__dirname, "..", "extensions");
-  if (existsSync(dev)) return dev;
-  return path.join(process.resourcesPath ?? __dirname, "extensions");
+  if (existsSync(dev)) roots.push(dev);
+  const userRoot = path.join(
+    app.getPath("appData"),
+    "Kosmos",
+    "extensions",
+  );
+  if (!roots.includes(userRoot)) roots.push(userRoot);
+  if (process.resourcesPath) {
+    const bundled = path.join(process.resourcesPath, "extensions");
+    if (!roots.includes(bundled)) roots.push(bundled);
+  }
+  return roots;
+}
+
+/**
+ * Path к директории, куда CLI installer пишет user-installed extensions.
+ * Экспортируется, чтобы install/uninstall scripts могли импортировать его
+ * (а не дублировать path-логику).
+ */
+export function userExtensionsRoot(): string {
+  return path.join(app.getPath("appData"), "Kosmos", "extensions");
+}
+
+function resolveExtensionDir(id: string): string | null {
+  for (const root of resolveExtensionRoots()) {
+    const dir = path.join(root, id);
+    if (existsSync(path.join(dir, "manifest.json"))) return dir;
+  }
+  return null;
 }
 
 function resolveSharedPreloadPath(): string {
@@ -146,9 +186,9 @@ function resolveSharedPreloadPath(): string {
 }
 
 export function loadExtensionManifest(id: string): ExtensionManifest | null {
-  const root = resolveExtensionsRoot();
-  const manifestPath = path.join(root, id, "manifest.json");
-  if (!existsSync(manifestPath)) return null;
+  const dir = resolveExtensionDir(id);
+  if (!dir) return null;
+  const manifestPath = path.join(dir, "manifest.json");
   try {
     return JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
   } catch (e) {
@@ -175,8 +215,9 @@ const iconDataUriCache = new Map<string, IconCacheEntry>();
 export function extensionIconDataUri(id: string): string | undefined {
   const manifest = loadExtensionManifest(id);
   if (!manifest || !manifest.icon) return undefined;
-  const root = resolveExtensionsRoot();
-  const iconPath = path.join(root, id, manifest.icon);
+  const dir = resolveExtensionDir(id);
+  if (!dir) return undefined;
+  const iconPath = path.join(dir, manifest.icon);
   if (!existsSync(iconPath)) return undefined;
   const stat = statSync(iconPath);
   const cached = iconDataUriCache.get(id);
@@ -199,19 +240,26 @@ export function extensionIconDataUri(id: string): string | undefined {
 }
 
 export function listExtensions(): ExtensionManifest[] {
-  const root = resolveExtensionsRoot();
-  if (!existsSync(root)) return [];
+  // Collect ids из всех roots; dedup по id, выигрывает первый встреченный
+  // (priority order — см. resolveExtensionRoots).
+  const seen = new Set<string>();
   const out: ExtensionManifest[] = [];
-  try {
-    const entries = readdirSync(root, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
+  for (const root of resolveExtensionRoots()) {
+    if (!existsSync(root)) continue;
+    try {
+      const entries = readdirSync(root, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (seen.has(entry.name)) continue;
         const m = loadExtensionManifest(entry.name);
-        if (m) out.push(m);
+        if (m) {
+          seen.add(entry.name);
+          out.push(m);
+        }
       }
+    } catch {
+      /* ignore unreadable root */
     }
-  } catch {
-    /* ignore */
   }
   return out;
 }
@@ -253,8 +301,11 @@ export function openExtension(id: string): void {
     console.warn(`[kepler-shell] extension not found: ${id}`);
     return;
   }
-  const root = resolveExtensionsRoot();
-  const extensionDir = path.join(root, id);
+  const extensionDir = resolveExtensionDir(id);
+  if (!extensionDir) {
+    console.warn(`[kepler-shell] extension dir disappeared: ${id}`);
+    return;
+  }
   const useDev = isDeveloperModeActive() && !!manifest.devPort;
   const entryHtml = resolveEntryHtml(manifest, extensionDir);
   if (!useDev && !existsSync(entryHtml)) {

@@ -96,6 +96,10 @@ bun run ark:smoke
 
 ## Карта приложений и пакетов
 
+::: tip STATUS.md — always-current snapshot
+Корневой `STATUS.md` хранит актуальный snapshot состояния проекта (что работает, что в работе, что сломано). Перед началом substantial-задачи открой его — карта ниже описывает «где что», а `STATUS.md` — «что сейчас в каком состоянии». Обновлять `STATUS.md` нужно, когда меняется статус приложения или появляется/исчезает заметная багу/фича.
+:::
+
 Когда пользователь упоминает имя — ты должен моментально знать, где это.
 
 | Имя | Где | Что |
@@ -218,7 +222,9 @@ bun run ark:smoke
 - ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
 - ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
 - ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
-- ❌ Build-step для extension content в `apps/kepler-shell/extensions/<id>/`. Сейчас PoC, контент static, без bundler/transpile.
+- ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
+- ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
+- ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
 
 ### Command bus
 
@@ -372,6 +378,23 @@ bun run ark:smoke
 - [ ] Settings → Developer Mode toggle persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`.
 - [ ] Если правил manifest format — обновил [Extension dev mode](docs-site/concepts/extension-dev-mode.md) и [Extension host](docs-site/concepts/extension-host.md).
 - [ ] Production build (без `KEPLER_DEV`) грузит extensions из `dist/`, не из dev server'ов.
+
+## Я правил Delphi extension (`apps/kepler-shell/extensions/delphi`)
+
+- [ ] `electron-api-shim.ts` **не удалён** — он эмулирует `window.electronAPI` и нужен для compat с legacy Delphi-кодом. Без него ломается CRUD во всём приложении (требует переписывания каждого call site).
+- [ ] Tailwind plugin (`@tailwindcss/vite`) подключён в `vite.config.mjs` extension'а. Без него страницы Delphi теряют классы.
+- [ ] Если ввёл новый `window.electronAPI.*` вызов в Vue-коде — добавил эквивалент в `electron-api-shim.ts` (через kepler ark bridge).
+- [ ] Миграция UI на plain CSS / kosmos-visuals токены — **Phase 9, отдельная задача**. Не делай попутно с другими правками.
+- [ ] `bun run --cwd apps/kepler-shell build:js` — собирается без ошибок.
+- [ ] При запуске Kepler shell extension открывается, без crash'а на missing window.electronAPI.
+
+## Я правил Arrancador extension (`apps/kepler-shell/extensions/arrancador`)
+
+- [ ] Vue Router (memory history) routes остаются актуальными — каждый новый view зарегистрирован в роутере.
+- [ ] Native scanner (`child_process` + FS-сканирование Steam/Epic/GOG) **не переписывай в renderer** — он живёт в legacy standalone Arrancador main process (Phase 5+ план — миграция в kepler-backend Rust либо в kepler-shell sidecar, см. [Decisions](/reference/decisions#2026-05-14-arrancador-native-scanner-остался-в-legacy)).
+- [ ] Game launch / catalogue / scan — **TODO в extension**, не возвращай случайно stub'ы как «работающие» (только UI subset мигрирован: LayoutPage + GameCard).
+- [ ] `bun run --cwd apps/kepler-shell build:js` — собирается.
+- [ ] `electron-api-shim.ts` или эквивалент (если используется) — не сломан после правок.
 
 ## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
 

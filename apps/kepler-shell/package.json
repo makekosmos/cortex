@@ -17,6 +17,8 @@
     "build": "bun run build:backend && bun run build:js && electron-builder --win nsis",
     "typecheck": "tsc --noEmit",
     "package:dir": "bun run build:js && electron-builder --dir",
+    "ext:install": "node scripts/install-extension.mjs",
+    "ext:uninstall": "node scripts/uninstall-extension.mjs",
     "test:e2e": "bun run build:js && playwright test --config playwright.config.ts",
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },

@@ -154,6 +154,15 @@ Horologion полностью использует [`@kosmos/visuals`](docs-site
 
 **Pomodoro не маркирует записи** — поле `kind` снято. Pomodoro чисто UI-фича, создаёт обычные `time_entry_obj` (опционально break-entries с title «Отдых», если `trackBreaksAsRest` включён в Settings).
 
+## Topbar (extension)
+
+В Horologion-extension'е (`apps/kepler-shell/extensions/horologion/`) topbar содержит два UI-элемента справа от заголовка:
+
+- **Status dot** — круглая точка (8px), цвет показывает состояние подключения к `kepler-backend`. Логика в `extensions/horologion/src/App.vue`: при mount и каждые 10 секунд дёргает дешёвую операцию `kepler.ark.request("list_object_types")` — успех → `connected` (зелёный), ошибка → `error` (красный), стартовое состояние → `connecting`. Tooltip переключается между «ARK подключен» / «Подключение к ARK…» / «ARK недоступен». Визуально совпадает с Delphi extension status dot (одни и те же oklch-токены из `@kosmos/visuals`).
+- **Кнопка ⚙ Настройки** — `router.push("/settings")` в memory-router'е extension'а. На route `/settings` App.vue прячет dot и кнопку, показывает «Назад» (`router.push("/")`) и заголовок «Настройки помодоро».
+
+В standalone-приложении (`apps/horologion/`) topbar собран по другой схеме — через IPC `horologion:settings:open` открывается отдельное BrowserWindow (см. [Окно настроек](#окно-настроек) ниже). В extension'е settings — это просто роут внутри того же окна.
+
 ## Окно настроек
 
 Settings — **отдельное Electron BrowserWindow** (не модалка, не route в основном окне). Кнопка ⚙ в тайтлбаре и «Настройки помодоро» внутри pomodoro-card зовут `window.horologion.settings.open()` → IPC `horologion:settings:open` → main создаёт второе окно 560×680 с тем же preload и hash `#/settings`. App.vue видит `route.path === '/settings'` и рендерит только SettingsView внутри `DesktopChrome + DesktopContentSurface` (единый стиль с main).
@@ -321,7 +330,9 @@ Preload экспонирует подписку `window.horologion.onCommand((pa
 - ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
 - ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
 - ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
-- ❌ Build-step для extension content в `apps/kepler-shell/extensions/<id>/`. Сейчас PoC, контент static, без bundler/transpile.
+- ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
+- ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
+- ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
 
 ### Command bus
 

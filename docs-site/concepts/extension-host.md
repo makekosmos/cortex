@@ -41,17 +41,35 @@ export function readDevModeSetting(): boolean
 export function setExtensionArkBridge(opts: { request, subscribe }): void
 ```
 
-Resolver:
+Resolver. С момента extension installer MVP (2026-05-14) resolution идёт по **priority chain**, а не single root:
 
 ```ts
-function resolveExtensionsRoot(): string {
-  // dev:  <repo>/apps/kepler-shell/extensions/
-  // prod: process.resourcesPath/extensions/
+function resolveExtensionRoots(): string[] {
+  const roots: string[] = []
+  // 1. Dev source tree — если запущены из repo (highest priority).
   const dev = path.resolve(__dirname, '..', 'extensions')
-  if (existsSync(dev)) return dev
-  return path.join(process.resourcesPath ?? __dirname, 'extensions')
+  if (existsSync(dev)) roots.push(dev)
+  // 2. User-installed (writable) — основной канал для prod.
+  roots.push(path.join(app.getPath('appData'), 'Kosmos', 'extensions'))
+  // 3. Bundled — fallback внутри packaged Kepler.
+  if (process.resourcesPath) {
+    roots.push(path.join(process.resourcesPath, 'extensions'))
+  }
+  return roots
+}
+
+function resolveExtensionDir(id: string): string | null {
+  for (const root of resolveExtensionRoots()) {
+    const dir = path.join(root, id)
+    if (existsSync(path.join(dir, 'manifest.json'))) return dir
+  }
+  return null
 }
 ```
+
+Per-id lookup означает, что Dashboard может быть user-installed (свежий через `ext:install`), Horologion — bundled (приехал с installer), и оба видны в одном `listExtensions()`. Удаление user-папки (см. [Extension installer](/concepts/extension-installer)) откатывает конкретный extension обратно на bundled.
+
+`listExtensions()` дедуплицирует по `id` — если один и тот же `<id>` присутствует и в user-installed, и в bundled, побеждает первый встреченный (т.е. user-installed override).
 
 Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `focus()`. На `closed` — `delete` из map.
 
@@ -240,10 +258,9 @@ window.kepler.window.maximize()
 
 Как extensions обновляются?
 
-- Сейчас extensions лежат в `process.resourcesPath/extensions/` — обновляются вместе с kepler.exe (через NSIS).
-- Возможный вариант: separate extension marketplace / lazy download в `app.getPath('userData')/extensions/`. Но требует подписи + manifest validation + rollback.
-
-Решение по умолчанию — **bundling с Kepler installer**, ничего отдельно не downloaded.
+- Built-ins едут с Kepler NSIS installer'ом в `process.resourcesPath/extensions/` — обновляются вместе с kepler.exe.
+- **User-installed override (с 2026-05-14)**: ставится через CLI в `%APPDATA%\Kosmos\extensions\<id>\` и перекрывает bundled версию для этого `id`. См. [Extension installer](/concepts/extension-installer). Это закрывает потребность «обновить конкретное приложение, не пересобирая весь shell».
+- Auto-update / version compare / `.kext` пакетный формат — open для будущей итерации, см. [Kepler Roadmap](/apps/kepler-roadmap).
 
 ## Code refs
 

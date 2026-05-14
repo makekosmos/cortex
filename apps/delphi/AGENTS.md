@@ -159,6 +159,37 @@ type Project = {
 
 Сам Horologion цены не показывает — только пишет `billable` флаг. Все денежные расчёты идут в Delphi (на страницах) или в Dashboard.
 
+## electron-api shim в extension
+
+Delphi мигрирован в Kepler extension (`apps/kepler-shell/extensions/delphi/`), но Vue-приложение портировано **как есть** из standalone Electron-апки — все компоненты, сторы и helpers продолжают звать `window.electronAPI.*` (legacy main process IPC). В extension renderer'е этих каналов нет — есть только `window.kepler.ark.request(operation, params)`.
+
+Чтобы не переписывать каждый call-site, существует **compatibility shim** `apps/kepler-shell/extensions/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как side-effect **до** `createApp(...).mount(...)` и устанавливает `window.electronAPI` поверх `kepler.ark.request`.
+
+### Mapping legacy каналов → ARK operations
+
+| Legacy channel | Ark operation |
+|---|---|
+| `db:loadAll`, `ark:listDelphiTasks` | `list_objects_by_type` (`task_obj`) → массив `TodoItem` |
+| `db:upsertTodo`, `ark:upsertDelphiTask` | `upsert_object` (`task_obj`) |
+| `db:deleteTodo`, `ark:deleteDelphiTask` | `delete_object` |
+| `db:batchUpsertTodos` | цикл `upsert_object` |
+| `ark:listTimeEntries` | `list_objects_by_type` (`time_entry_obj`) |
+
+`TodoItem ↔ ArkObjectRecord` mapping инлайнен прямо в shim (mirrors `apps/delphi/ts/shared/task-ark.ts`) — поля `billable` / `price` / `description` / `dates` / `priority` сериализуются в `propsJson`, plain text — в `contentJson`.
+
+### Graceful no-op'ы
+
+Каналы, которых физически нет в extension'е (P2P sync, file system, space management), возвращают пустые значения, чтобы UI graceful показывал offline без crash'а:
+
+- `lan-sync:start` → `false`, `lan-sync:getStatus` → `{ active: false, peers: 0, peerNames: [] }`, `lan-sync:broadcastChange/leaveSpace` → `true`.
+- `sync:getOwnAddresses` → `[]`, `sync:getQrPayload` → `undefined` (caller fallback'ает на `formatSpaceCode()`).
+- `space:*` → `undefined` (space-manager fallback'ает на localStorage; в extension'е база одна — глобальная ARK shell'а, переключение space — ответственность Kepler host'а через `KOSMOS_DB_PATH` env, см. [Kepler → Selected space DB resolution](./kepler.md#selected-space-db-resolution)).
+- `db:switchSpace`, `db:deleteSpace`, `db:getSyncKv`, `db:setSyncKv`, `db:clearAll` — `warnOnce()` + no-op.
+
+### Tailwind
+
+Delphi extension сохраняет Tailwind v4 (`@tailwindcss/vite` plugin в `extensions/delphi/vite.config.mjs` + `@import "tailwindcss"` в `src/global.css`). Это сделано по необходимости — оригинальный UI Delphi на Tailwind utility classes, переписывание на plain CSS — отдельная задача (см. [Kepler Roadmap → Phase 9](./kepler-roadmap.md#phase-9-delphi-ui-tailwind-plain-css-открытый-вопрос), открытый вопрос).
+
 ## Command bus integration
 
 Delphi регистрируется в [Kepler command bus](docs-site/concepts/command-bus.md) как provider действий. Юзер из launcher'а (`Ctrl+Shift+K`) может быстро создать задачу или прыгнуть в `Сегодня`, не открывая окно Delphi руками.
@@ -273,7 +304,9 @@ window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 - ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
 - ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
 - ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
-- ❌ Build-step для extension content в `apps/kepler-shell/extensions/<id>/`. Сейчас PoC, контент static, без bundler/transpile.
+- ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
+- ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
+- ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
 
 ### Command bus
 

@@ -94,6 +94,7 @@ export default defineConfig({
             { text: "Command bus", link: "/concepts/command-bus" },
             { text: "Extension host", link: "/concepts/extension-host" },
             { text: "Extension dev mode", link: "/concepts/extension-dev-mode" },
+            { text: "Extension installer", link: "/concepts/extension-installer" },
             { text: "RAM benchmarks", link: "/concepts/ram-benchmarks" },
             { text: "Proof loop", link: "/concepts/proof-loop" },
             { text: "Изоляция тестовых БД", link: "/concepts/test-isolation" },

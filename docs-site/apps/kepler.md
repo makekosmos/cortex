@@ -159,6 +159,19 @@ NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%Loc
 
 Что ещё в Phase 8 (⏳): `electron-updater` для auto-update и удаление legacy `apps/kepler/` (старый Rust gpui launcher).
 
+## Extension installer (Phase 10 MVP)
+
+Built-ins (Dashboard, Horologion, Delphi, Arrancador) едут с Kepler installer'ом в `<resourcesPath>/extensions/`. Поверх можно положить свежую копию extension'а в `%APPDATA%\Kosmos\extensions\<id>\` — resolution chain в `extension-host.ts` ставит её выше bundled, перекрывая для этого `id`. Удаление user-папки откатывает на bundled.
+
+```powershell
+# install: <path-to-extension-dir> должен содержать manifest.json, dist/, icon.png
+bun run --cwd apps/kepler-shell ext:install ./apps/kepler-shell/extensions/dashboard
+# uninstall
+bun run --cwd apps/kepler-shell ext:uninstall dashboard
+```
+
+Подробно (atomic копирование, layout, что НЕ входит в MVP — auto-update, `.kext` формат, UI manager) — [Extension installer](../concepts/extension-installer.md).
+
 ## Запуск (dev)
 
 ```powershell
@@ -179,6 +192,8 @@ bun run dev                 # build:backend:dev + vite + Electron
 | `bun run --cwd apps/kepler-shell typecheck` | tsc --noEmit |
 | `bun run --cwd apps/kepler-shell package:dir` | unpacked Electron сборка |
 | `bun run --cwd apps/kepler-shell test:e2e` | Playwright e2e |
+| `bun run --cwd apps/kepler-shell ext:install <path>` | поставить extension в `%APPDATA%\Kosmos\extensions\<id>\` (override bundled). См. [Extension installer](../concepts/extension-installer.md). |
+| `bun run --cwd apps/kepler-shell ext:uninstall <id>` | удалить user-installed extension; bundled (если есть) поднимется автоматически. |
 
 Артефакты `build` — `apps/kepler-shell/release/Kepler Setup X.Y.Z.exe` (NSIS one-click).
 
