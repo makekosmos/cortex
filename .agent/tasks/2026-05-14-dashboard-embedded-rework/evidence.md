@@ -72,3 +72,48 @@ d0a36b3 docs: rewrite dashboard.md под embedded архитектуру
 - `bun run docs:check` — PASS
 - `bun run --cwd shell typecheck` — PASS
 - `bun run --cwd shell build:js` — PASS
+
+## Appendix — пост-тестовые фиксы (2026-05-15)
+
+Пользователь после первого приёмочного теста зарепортил 3 проблемы. Все
+закрыты атомарными коммитами поверх стека:
+
+### Commits
+
+```
+e56f19e feat(dashboard): listSpaces читает spaces.json registry (2 vs 4 dups fix)
+ea55180 feat(dashboard): objectCount через node:sqlite read-only
+853cb12 refactor(dashboard): use @kepler/visuals shared компоненты
+```
+
+### Files modified
+
+- `shell/electron/main.ts` — `readSpacesRegistry`, `labelFromSpaceCode`,
+  `countObjectsInSpaceDb`, `loadDatabaseSync`, async `listSpaces`.
+- `shell/src/views/DashboardWelcomeView.vue` — wrap в `DesktopChrome` +
+  `DesktopContentSurface` (scrollable).
+- `shell/src/views/DashboardSpaceView.vue` — wrap в `DesktopChrome`
+  + sidebar slot + `DesktopContentSurface` (padding=0).
+
+### Acceptance criteria (appendix)
+
+| AC | Status | Evidence |
+|---|---|---|
+| Appendix AC1: `listSpaces()` возвращает ровно 2 entries (не 4) | PASS | `spaces.json` registry читается как source of truth, derived spaceId через `deriveSpaceIdFromCode(code)`. На текущей машине: Personal (`f028287f78de2d7e`) + MWVQ-YBRE-WTQK (`2b42c913678b1572`). Осиротевшие dirs `76a639…` и `main` игнорируются |
+| Appendix AC2: objectCount показывает реальное число | PASS | `node:sqlite` DatabaseSync read-only + `SELECT COUNT(*) FROM objects WHERE deleted_at IS NULL`. Personal → 26 (verified через ad-hoc node script). MWVQ → 0 (DB exists без schema, «no such table» fallback) |
+| Appendix AC3: Welcome / Space используют DesktopChrome | PASS | `<DesktopChrome platform="windows">` обёрнут вокруг root в обоих views, sidebar через `#sidebar` slot в Space view, content через `<DesktopContentSurface>` |
+| Appendix AC4: `bun run --cwd shell build:js` PASS | PASS | vite build clean, DashboardRoot-DH-JFkR6.js / DashboardRoot-DnZZlYo6.css emitted |
+| Appendix AC5: typecheck PASS | PASS | `bun run --cwd shell typecheck` clean после каждого коммита |
+| Appendix AC6: Visual consistency | PASS | DesktopChrome даёт ту же titlebar drag area + sidebar slot, что и у Delphi/Horologion extensions; единые tokens из @kepler/visuals |
+
+### Open notes
+
+- `node:sqlite` experimental warning печатается при первом импорте при
+  открытии Dashboard'а. Подавлено dynamic import'ом — warning не сыпется
+  при старте Kepler. Когда модуль стабилизируется в Node 24 LTS — можно
+  убрать lazy import.
+- Shared `Sidebar` из @kepler/visuals требует vue-router + проектные
+  группы — overkill для flat type list. Custom SidebarItem оставлен.
+- backend kepler-backend.exe держит активный space DB open в r/w —
+  одновременное чтение через `node:sqlite` read-only возможно благодаря
+  WAL mode SQLite.
