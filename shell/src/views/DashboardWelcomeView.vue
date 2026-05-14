@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
+import { DesktopChrome, DesktopContentSurface } from "@kepler/visuals";
 import KosmosLogo from "../dashboard/KosmosLogo.vue";
 import SpaceCard from "../dashboard/SpaceCard.vue";
 import { loadSpaces, spaces, spacesError, spacesLoading } from "../dashboard/store";
@@ -14,49 +15,50 @@ function openSpace(id: string): void {
 </script>
 
 <template>
-  <div class="welcome">
-    <header class="title-stack">
-      <KosmosLogo :size="64" />
-      <div class="brand">Kosmos</div>
-    </header>
+  <DesktopChrome platform="windows">
+    <DesktopContentSurface scrollable>
+      <div class="welcome">
+        <header class="title-stack">
+          <KosmosLogo :size="64" />
+          <div class="brand">Kosmos</div>
+        </header>
 
-    <main class="content">
-      <div v-if="spacesLoading" class="state">Загрузка…</div>
-      <div v-else-if="spacesError" class="state error">
-        Ошибка загрузки spaces: {{ spacesError }}
-      </div>
-      <div v-else-if="spaces.length === 0" class="state">
-        Ни одного space не найдено
-      </div>
-      <div v-else class="cards">
-        <SpaceCard
-          v-for="space in spaces"
-          :key="space.id"
-          :space="space"
-          @open="openSpace"
-        />
-      </div>
-    </main>
+        <main class="content">
+          <div v-if="spacesLoading" class="state">Загрузка…</div>
+          <div v-else-if="spacesError" class="state error">
+            Ошибка загрузки spaces: {{ spacesError }}
+          </div>
+          <div v-else-if="spaces.length === 0" class="state">
+            Ни одного space не найдено
+          </div>
+          <div v-else class="cards">
+            <SpaceCard
+              v-for="space in spaces"
+              :key="space.id"
+              :space="space"
+              @open="openSpace"
+            />
+          </div>
+        </main>
 
-    <footer class="page-footer">
-      <div>Все права защищены © 2026 YOSO Technologies Corp.</div>
-      <div>Создано с любовью к данным, интернету и биологии человека.</div>
-    </footer>
-  </div>
+        <footer class="page-footer">
+          <div>Все права защищены © 2026 YOSO Technologies Corp.</div>
+          <div>Создано с любовью к данным, интернету и биологии человека.</div>
+        </footer>
+      </div>
+    </DesktopContentSurface>
+  </DesktopChrome>
 </template>
 
 <style scoped>
 .welcome {
   width: 100%;
-  height: 100vh;
-  background: var(--background);
-  color: var(--foreground);
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 64px 24px 32px;
+  padding: 32px 24px 24px;
   box-sizing: border-box;
-  overflow: auto;
 }
 
 .title-stack {

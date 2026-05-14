@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue";
+import { DesktopChrome, DesktopContentSurface } from "@kepler/visuals";
 import SidebarItem from "../dashboard/SidebarItem.vue";
 import ObjectTable from "../dashboard/ObjectTable.vue";
 import {
@@ -77,43 +78,45 @@ function goBack(): void {
 </script>
 
 <template>
-  <div class="space-view">
-    <aside class="sidebar">
-      <div class="sidebar-section">
-        <SidebarItem
-          label="Всё"
-          color="#ef4444"
-          :active="!showSettings && currentTypeId === null"
-          @click="selectAll"
-        />
-        <SidebarItem
-          label="Настройки"
-          color="#9ca3af"
-          :active="showSettings"
-          @click="selectSettings"
-        />
-      </div>
+  <DesktopChrome platform="windows">
+    <template #sidebar>
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <SidebarItem
+            label="Всё"
+            color="#ef4444"
+            :active="!showSettings && currentTypeId === null"
+            @click="selectAll"
+          />
+          <SidebarItem
+            label="Настройки"
+            color="#9ca3af"
+            :active="showSettings"
+            @click="selectSettings"
+          />
+        </div>
 
-      <div class="sidebar-divider"></div>
+        <div class="sidebar-divider"></div>
 
-      <div class="sidebar-section">
-        <div class="sidebar-header">Типы</div>
-        <SidebarItem
-          v-for="t in objectTypes"
-          :key="t.id"
-          :label="t.name"
-          :color="colorForType(t.id)"
-          :active="!showSettings && currentTypeId === t.id"
-          @click="selectType(t.id)"
-        />
-      </div>
+        <div class="sidebar-section">
+          <div class="sidebar-header">Типы</div>
+          <SidebarItem
+            v-for="t in objectTypes"
+            :key="t.id"
+            :label="t.name"
+            :color="colorForType(t.id)"
+            :active="!showSettings && currentTypeId === t.id"
+            @click="selectType(t.id)"
+          />
+        </div>
 
-      <div class="sidebar-bottom">
-        <button class="back" type="button" @click="goBack">← К spaces</button>
-      </div>
-    </aside>
+        <div class="sidebar-bottom">
+          <button class="back" type="button" @click="goBack">← К spaces</button>
+        </div>
+      </aside>
+    </template>
 
-    <main class="main">
+    <DesktopContentSurface :padding-top="'0'" :padding-inline="'0'">
       <header class="main-header">
         <h1>{{ titleLabel }}</h1>
       </header>
@@ -123,27 +126,20 @@ function goBack(): void {
         </div>
         <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
       </div>
-    </main>
-  </div>
+    </DesktopContentSurface>
+  </DesktopChrome>
 </template>
 
 <style scoped>
-.space-view {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  width: 100%;
-  height: 100vh;
-  background: var(--background);
-  color: var(--foreground);
-}
-
 .sidebar {
-  border-right: 1px solid var(--border);
-  background: var(--sidebar-bg, var(--background));
   display: flex;
   flex-direction: column;
+  width: 240px;
+  height: 100%;
+  background: var(--sidebar-bg, var(--background));
   padding: 16px 12px;
   gap: 8px;
+  box-sizing: border-box;
 }
 
 .sidebar-section {
@@ -188,17 +184,10 @@ function goBack(): void {
   color: var(--foreground);
 }
 
-.main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
 .main-header {
   padding: 16px 24px;
   border-bottom: 1px solid var(--border);
   text-align: center;
-  -webkit-app-region: drag;
 }
 
 .main-header h1 {
