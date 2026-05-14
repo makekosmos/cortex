@@ -585,7 +585,7 @@ app.whenReady().then(async () => {
   if (process.env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
     setTimeout(async () => {
       const { openExtension } = await import("./extension-host");
-      for (const id of ["dashboard", "horologion", "delphi", "arrancador"]) {
+      for (const id of ["horologion", "delphi", "arrancador"]) {
         try { openExtension(id); } catch (e) { console.error(`bench open ${id} failed:`, e); }
       }
     }, 5000);

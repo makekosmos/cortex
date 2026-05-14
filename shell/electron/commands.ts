@@ -63,14 +63,8 @@ async function openAsExtension(id: string): Promise<void> {
 
 export const COMMANDS: InternalCommand[] = [
   // Phase 4 migrated apps — открываются как Vue extension'ы внутри Kepler.
-  {
-    id: "dashboard:open",
-    title: "Открыть Dashboard",
-    subtitle: "Аналитика",
-    category: "open",
-    icon: () => extensionIconDataUri("dashboard"),
-    exec: () => openAsExtension("dashboard"),
-  },
+  // Dashboard заморожен в legacy/dashboard-extension/ — будет восстановлен
+  // как встроенный shell view в C2.
   {
     id: "delphi:open",
     title: "Открыть Delphi",
