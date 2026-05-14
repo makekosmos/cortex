@@ -1,6 +1,6 @@
 # Приложения
 
-Kosmos — это **четыре активных** desktop-приложения на Electron, **одно WIP** (Horologion), **одно зарезервированное** (Digital Cave), плюс **отдельный Android-стек** (две APK).
+Kosmos — это **пять активных** desktop-приложений на Electron, **одно зарезервированное** (Digital Cave), плюс **отдельный Android-стек** (две APK).
 
 ## Desktop (Electron)
 
@@ -10,7 +10,7 @@ Kosmos — это **четыре активных** desktop-приложения
 | [Delphi](/apps/delphi) | `apps/delphi/ts` | задачи | `task_obj` (auto-миграция legacy todos на старте) |
 | [Arrancador](/apps/arrancador) | `apps/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data |
 | [Dashboard](/apps/dashboard) | `apps/dashboard` | read-only аналитика ARK | inspector, без записи |
-| [Horologion](/apps/horologion) <span class="kbadge accent">WIP</span> | `apps/horologion` (code-name) | трекер времени, pomodoro, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
+| [Horologion](/apps/horologion) | `apps/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
 | [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог) | TBD |
 
 Все desktop-приложения говорят с ARK через `@kosmos/ark` и используют общие UI-компоненты из `@kosmos/visuals` (Sidebar, Titlebar, DesktopChrome, и т.д.).
@@ -36,6 +36,9 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 - Все тесты — на изолированных БД. См. [Изоляция тестовых БД](/concepts/test-isolation).
 - **Язык UI — русский.** Все user-facing строки (placeholder, labels, кнопки, эмпти-стейты, пилюли, заголовки view) — на русском. Английский только для technical-идентификаторов (id типов объектов, имена пакетов, log message'и). Это относится ко всем приложениям без исключения.
 - **Каждое приложение запоминает геометрию окна между запусками.** Сохранять `x` / `y` / `width` / `height` / `isMaximized` в `app.getPath("userData") + "/window-state.json"` на события `resize` / `move` / `maximize` / `unmaximize` / `close` (debounce 400мс на тики, final flush на close), и восстанавливать при `createWindow`. Если сохранённый файл отсутствует или битый — fallback на дефолтные дименсии приложения. Electron сам клампит bounds внутрь доступных дисплеев, если монитор отключили. Reference-имплементация: `apps/horologion/electron/main.ts` (`loadWindowState` / `saveWindowState` / `scheduleWindowStateSave`).
+- **Каждое приложение имеет свой `--<app>-accent` токен.** В локальном `styles.css` приложения объявляется `--<app>-accent` (например `--horologion-accent: oklch(0.66 0.245 305)` — Apple HIG systemPurple) + `--<app>-accent-foreground`, и переопределяется общий `--accent` / `--accent-foreground` на эти значения. Все компоненты автоматически подхватят свой цвет. Цвет выбирается осмысленно (Eden — зелёный, Horologion — фиолетовый, и т.п.), желательно из официальных HIG-палитр для узнаваемости.
+- **Inter Variable как fallback-шрифт.** macOS подхватит системный SF Pro раньше, но Windows и Linux должны рендерить именно Inter — мы подгружаем его через `@fontsource-variable/inter` (variable-шрифт ~30KB woff2, все weights в одном файле). Импортируется одной строкой в `src/main.ts` приложения. Дальше fallback на Segoe UI / Helvetica / Arial. Порядок прописан в `--font-sans` в `@kosmos/visuals/theme/css-variables.css`.
+- **Settings — отдельное Electron-окно.** Для приложений с настройками: не делать `/settings` route в основной навигации, а открывать через IPC отдельный `BrowserWindow` с hash `#/settings`. App.vue видит этот route и рендерит только `SettingsView` внутри своего `<DesktopChrome>` + `<DesktopContentSurface>` — единый стиль с main, но без основного chrome'а / контента. Reference: `apps/horologion/electron/main.ts → openSettingsWindow()` + handler `horologion:settings:open`.
 - **Все desktop-приложения используют `@kosmos/visuals` как единый источник UI**:
   - Chrome / safe-area — через `<DesktopChrome>` + `<DesktopContentSurface>`. Никаких ручных `--titlebar-height` хаков.
   - Цвета, радиусы, шрифты — **только** через CSS-переменные kosmos-visuals (`var(--background)`, `var(--foreground)`, `var(--border)`, `var(--accent)`, `var(--radius)`, `var(--corner-shape)`, и т.д.).
@@ -50,6 +53,6 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 | Delphi (desktop) | ✅ (tasks как `task_obj`) | legacy DB sidecar **удалён**; auto-migration на старте; **TODO billing**: `propsJson.price` / `hourlyRate` на task_obj для расчёта $/час из связанных `time_entry_obj` |
 | Arrancador | ✅ (games как `game_obj`, usage через ARK) | завершён usage backfill |
 | Dashboard | ✅ (read-only inspector) | предпочитать ARK analytics endpoints вместо raw SQL |
-| Horologion | 🟡 WIP | новые типы `time_entry_obj`, `tag_obj` (общий) — добавляются |
+| Horologion | ✅ (time_entry_obj) | tag picker UI и реальный `object_link` task↔entry — TODO (см. roadmap) |
 | Digital Cave | ⏳ TBD | зарезервировано, кода нет |
 | Delphi (Android) + ark-service | ❌ | отдельный Room-стек; миграция на UniFFI от `ark-core` — задача на будущее |

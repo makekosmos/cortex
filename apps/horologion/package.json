@@ -1,7 +1,7 @@
 {
   "name": "horologion",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.0.8",
   "description": "Horologion — Kosmos time tracker + pomodoro",
   "author": "Kazui",
   "type": "module",
@@ -11,12 +11,13 @@
     "build:sidecar:dev": "cargo build --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
     "dev": "bun run build:sidecar:dev && vite --configLoader native",
     "build:js": "bun run build:sidecar && tsc && vite build --configLoader native",
-    "build": "bun run build:js && electron-builder --win msi",
+    "build": "bun run build:js && electron-builder --win nsis",
     "typecheck": "tsc --noEmit",
     "package:dir": "bun run build:js && electron-builder --dir",
     "test:e2e": "bun run build:js && playwright test --config playwright.config.ts"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
     "@kosmos/ark": "workspace:*",
     "@kosmos/visuals": "workspace:*",
     "lucide-vue-next": "^0.548.0",
@@ -61,14 +62,18 @@
     ],
     "win": {
       "icon": "build/icon.png",
-      "target": "msi",
+      "target": "nsis",
       "signAndEditExecutable": false
     },
-    "msi": {
-      "oneClick": false,
-      "perMachine": true,
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
-      "shortcutName": "Horologion"
+      "createStartMenuShortcut": true,
+      "shortcutName": "Horologion",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

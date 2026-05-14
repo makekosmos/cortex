@@ -20,7 +20,7 @@ cd apps/horologion
 bun run typecheck
 bun run dev               # cargo build:sidecar:dev + vite + Electron
 bun run build:js          # release sidecar + tsc + vite build (без установщика)
-bun run build             # build:js + electron-builder --win msi (финальный MSI)
+bun run build             # build:js + electron-builder --win nsis (финальный NSIS one-click)
 ```
 
 ## Архитектура

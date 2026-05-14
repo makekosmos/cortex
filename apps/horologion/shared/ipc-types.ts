@@ -86,4 +86,16 @@ export interface HorologionApi {
     /** Текущий статус подключения к ark-core-rpc sidecar. */
     status(): Promise<ArkStatus>;
   };
+  settings: {
+    /** Открыть отдельное окно настроек (или сфокусировать уже открытое). */
+    open(): Promise<void>;
+  };
+  streamerMode: {
+    /**
+     * Сохранить флаг «режим стримера» на диск main-процесса. Применится после
+     * перезапуска: switches `disable-features=CalculateNativeWinOcclusion` и
+     * `disable-backgrounding-occluded-windows` ставятся до `app.ready`.
+     */
+    set(enabled: boolean): Promise<void>;
+  };
 }

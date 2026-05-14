@@ -39,6 +39,7 @@ export {
   DateChip,
   TimeColumn,
   DateTimePicker,
+  Dropdown,
 } from "./components";
 
 // Composables

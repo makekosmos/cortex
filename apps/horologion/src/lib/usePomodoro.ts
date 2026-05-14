@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, ref } from "vue";
 import { pomodoroSettings } from "./pomodoroSettings";
 import { playSound } from "./sounds";
 import { notifyEntriesChanged, pomodoroDraft } from "./store";
@@ -336,8 +336,7 @@ function createPomodoroState() {
 const pomodoro = createPomodoroState();
 
 export function usePomodoro() {
-  // composable не делает ничего нового при каждом вызове — возвращаем singleton.
-  // onBeforeUnmount нам не нужен (singleton живёт всё время сессии).
-  void onBeforeUnmount;
+  // Singleton: composable не делает ничего нового при каждом вызове.
+  // onBeforeUnmount намеренно не подключаем — state живёт всё время сессии.
   return pomodoro;
 }

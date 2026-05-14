@@ -1,6 +1,11 @@
 import { ref } from "vue";
 import type { DelphiTask } from "@shared/ipc-types";
 
+// Какой таймер показывается в верхнем card'е — pomodoro или обычный секундомер.
+// Шарится между PomodoroView и Stopwatch view, чтобы переключение помнило выбор.
+export type TimerMode = "pomodoro" | "stopwatch";
+export const timerMode = ref<TimerMode>("pomodoro");
+
 // Простой signal для оповещения view'ов про апдейт списка time entries.
 // Любая операция (create/stop/update/delete) должна вызвать notifyEntriesChanged().
 // Views с подпиской (ListView, App.vue) перечитают данные через watcher.
@@ -10,16 +15,10 @@ export function notifyEntriesChanged(): void {
   entriesChangedAt.value = Date.now();
 }
 
-// Контекст top-bar'а (description / task), шарится между App.vue (top-bar)
-// и любыми другими view'ами, которым нужно его прочитать.
-export const currentDraft = ref<{
-  title: string;
-  taskId: string | null;
-  taskTitle: string | null;
-}>({ title: "", taskId: null, taskTitle: null });
-
-// Контекст pomodoro-сегмента — отдельный от top-bar'а. Поддерживает несколько
-// задач: на finish work-сегмента время делится поровну между ними.
+// Контекст pomodoro/секундомер draft'а — title + список выбранных задач.
+// Шарится между HomeView (поле ввода), PomodoroView и StopwatchView.
+// Pomodoro поддерживает несколько задач: на finish work-сегмента время
+// делится поровну между ними.
 export interface PomodoroDraftTask {
   id: string;
   title: string;

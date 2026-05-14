@@ -46,7 +46,12 @@ const titlebarClasses = computed(() => [
     --kosmos-titlebar-vertical-padding: 0.375rem;
     box-sizing: border-box;
     position: relative;
-    z-index: 20;
+    /* Тайтлбар всегда поверх Modal backdrop/panel (Modal = 9000) и любых
+       app-overlay'ов: пользователь должен видеть/нажимать наши leading
+       (sidebar toggle, app name) и trailing (status, settings) даже при
+       открытом модальном окне. Native window controls (titleBarOverlay)
+       и так выше любого CSS-слоя. */
+    z-index: 10000;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;

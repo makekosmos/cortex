@@ -9,11 +9,24 @@ interface Props {
   placeholder?: string;
   /** Заголовок над триггером (опционально). */
   label?: string;
+  /**
+   * Опорная дата для компактного отображения в триггере. Если совпадает
+   * с `value` (тот же день/месяц/год) — соответствующие части скрываются.
+   * Например, для пары пикеров «С/По» можно передать сюда `Date.now()`
+   * (или start-значение в end-picker), и компактная подпись будет:
+   * - тот же день → `HH:MM`
+   * - другой день в том же месяце → `DD HH:MM`
+   * - другой месяц в том же году → `DD.MM HH:MM`
+   * - другой год → `DD.MM.YY HH:MM`
+   * Если не передано — формат остаётся полным («13 мая 2026, 14:30»).
+   */
+  reference?: string | number | Date | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: "Выбрать…",
   label: undefined,
+  reference: null,
 });
 
 const emit = defineEmits<{
@@ -148,10 +161,30 @@ const RU_MONTHS_SHORT = [
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ] as const;
 
+function refDate(): Date | null {
+  const r = props.reference;
+  if (r === null || r === undefined) return null;
+  const d = r instanceof Date ? r : new Date(r);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 const displayLabel = computed(() => {
   if (!props.value) return props.placeholder;
   const s = isoToLocal(props.value)!;
-  return `${pad(s.day)} ${RU_MONTHS_SHORT[s.month]} ${s.year}, ${pad(s.hour)}:${pad(s.minute)}`;
+  const time = `${pad(s.hour)}:${pad(s.minute)}`;
+  const ref = refDate();
+  if (!ref) {
+    // Без референса — полный формат, как раньше.
+    return `${pad(s.day)} ${RU_MONTHS_SHORT[s.month]} ${s.year}, ${time}`;
+  }
+  const sameYear = ref.getFullYear() === s.year;
+  const sameMonth = sameYear && ref.getMonth() === s.month;
+  const sameDay = sameMonth && ref.getDate() === s.day;
+
+  if (sameDay) return time;
+  if (sameMonth) return `${pad(s.day)} ${time}`;
+  if (sameYear) return `${pad(s.day)}.${pad(s.month + 1)} ${time}`;
+  return `${pad(s.day)}.${pad(s.month + 1)}.${String(s.year).slice(-2)} ${time}`;
 });
 
 function clearValue() {
@@ -307,10 +340,10 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.5rem;
   width: 100%;
-  height: 32px;
+  height: 34px;
   padding: 0 0.625rem;
   background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: calc(var(--radius) * 0.7);
   corner-shape: var(--corner-shape);
   color: var(--foreground);
@@ -372,8 +405,8 @@ onBeforeUnmount(() => {
   text-align: center;
   padding: 0 0.625rem;
   background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.6);
+  border: 2px solid var(--border);
+  border-radius: calc(var(--radius) * 0.7);
   corner-shape: var(--corner-shape);
   color: var(--foreground);
   font-family: var(--font-mono, ui-monospace, monospace);

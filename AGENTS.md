@@ -322,6 +322,16 @@ bun run ark:smoke
 - [ ] Никаких writes в ARK таблицы.
 - [ ] `@kosmos/visuals` через import/alias, не скопирован.
 
+## Я правил Horologion (`apps/horologion`)
+
+- [ ] `bun run --cwd apps/horologion typecheck` — зелёный.
+- [ ] `bun run --cwd apps/horologion build:js` — собирается (sidecar + tsc + vite).
+- [ ] `bun run --cwd apps/horologion test:e2e` — зелёный (selectors из `HomeView`/`StopwatchView`/`PomodoroView` актуальны).
+- [ ] Если правил pomodoro — multi-task split в `closeArkEntry` читает АКТУАЛЬНЫЙ `pomodoroDraft`, не снапшот со старта.
+- [ ] Если правил Settings — IPC `horologion:settings:open` в `main.ts` + preload + `HorologionApi.settings.open()` в `shared/ipc-types.ts` все согласованы.
+- [ ] Если правил BrowserWindow — `loadWindowState` / `saveWindowState` / `scheduleWindowStateSave` в `electron/main.ts` сохранили window-state.json конвенцию.
+- [ ] Тесты — на изолированной БД через `ARK_DB_PATH=.e2e/horologion-e2e.db`.
+
 ## Я правил usage-tracker (`services/usage-tracker`)
 
 - [ ] `cargo test --manifest-path services\usage-tracker\Cargo.toml` — зелёный.

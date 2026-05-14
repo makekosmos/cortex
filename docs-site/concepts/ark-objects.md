@@ -112,7 +112,7 @@ erDiagram
 | `note_obj` | Eden | заметка (дневник, typed note) |
 | `task_obj` | Delphi | задача (после миграции legacy todos) |
 | `game_obj` | Arrancador | запись об игре |
-| `time_entry_obj` <span class="kbadge accent">WIP</span> | Horologion | запись отрезка времени (start/end/kind), pomodoro-сегменты, ручные записи |
+| `time_entry_obj` | Horologion | запись отрезка времени (start/end), pomodoro-сегменты, ручные записи |
 | `tag_obj` <span class="kbadge accent">WIP</span> | **shared** (Delphi + Horologion) | общий тег (`title` = имя, `propsJson.color` = OKLCH-цвет). Связи через `object_links` с `linkType='tagged'`. |
 
 Каждое приложение может зарегистрировать **custom object type** (например, для специализированных typed-notes Eden или для категорий задач Delphi). Custom types — это часть продуктового домена приложения.
@@ -136,14 +136,21 @@ erDiagram
   propsJson: {
     startedAt: '2026-05-12T10:00:00Z',
     endedAt:   '2026-05-12T10:25:00Z',   // null пока тикает
-    kind: 'manual' | 'pomodoro_work' | 'pomodoro_break',
-    pomodoroSessionId?: string,           // группировка сегментов одной pomodoro-сессии
-    billable?: boolean,                   // флаг для агрегации в Delphi billing (ProjectPage читает через `ark:listTimeEntries`)
-    taskId?: string,                      // ID `task_obj` — связь задачи и записи времени
-    source: 'manual' | 'pomodoro' | 'imported',
+    billable?: boolean,                   // флаг для агрегации в Delphi billing
+    taskId?: string | null,               // ID `task_obj` — связь задачи и записи времени
+    taskTitle?: string | null,            // snapshot title задачи на момент записи
+    source: 'manual' | 'imported',        // ручная запись или импорт из usage-tracker
   },
 }
 ```
+
+::: info Pomodoro не маркирует записи
+`kind` / `pomodoroSessionId` сняты. Pomodoro — чисто UI-фича: создаёт обычные
+`time_entry_obj` через тот же IPC, что и ручной секундомер. На finish work-сегмента
+с N выбранными задачами anchor-запись удаляется и создаются N равных split-entries.
+Опционально (`pomodoroSettings.trackBreaksAsRest`) break-фазы пишут entry с
+title «Отдых».
+:::
 
 ### Schema для `tag_obj`
 

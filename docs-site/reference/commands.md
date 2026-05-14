@@ -4,13 +4,46 @@
 
 ::: tip Конвенция сборки релизов
 Для всех desktop-приложений Kosmos `bun run build` из директории приложения
-производит **финальный установщик в формате MSI** (Windows Installer).
-Это единый формат дистрибуции — установка per-machine, поддерживает enterprise-деплой,
-unattended install и GPO. NSIS (`.exe`) больше не используем.
+производит **финальный установщик NSIS one-click** (тот самый «плавный»
+опыт как у Linear / Slack / Discord / GitHub Desktop):
+
+```json
+"nsis": {
+  "oneClick": true,
+  "perMachine": false,
+  "allowToChangeInstallationDirectory": false,
+  "createDesktopShortcut": true,
+  "createStartMenuShortcut": true,
+  "shortcutName": "<AppName>",
+  "runAfterFinish": true,
+  "deleteAppDataOnUninstall": false
+}
+```
+
+Почему не MSI: MSI — корпоративный формат, диктует step-by-step wizard,
+требует admin-прав, ставит в `Program Files`, не стилизуется. Все
+современные Electron-приложения используют NSIS one-click или Squirrel.
+
+`perMachine: false` + `oneClick: true` означают установку в
+`%LocalAppData%\<AppName>` без UAC-промпта и без мастера — пользователь
+дважды кликает по `Setup.exe`, видит короткий прогресс, приложение
+запускается (`runAfterFinish: true`).
 
 Промежуточная сборка только JS/Rust артефактов (без установщика) —
 `bun run build:js` (если приложение её предоставляет) или `bun run package:dir`
 для unpacked-бандла.
+:::
+
+::: warning Bump версии после билда
+**После каждого успешного `bun run build`** (который произвёл установщик
+NSIS) — поднимаем `version` приложения в его `apps/<name>/package.json` на
+`+0.0.1` (patch). Делается **сразу же**, в том же коммите, что и сам билд,
+чтобы следующий релиз не перезаписал предыдущий installer-файл
+(`release/<App> Setup X.Y.Z.exe`) и чтобы auto-update / changelog имел
+монотонную последовательность.
+
+Минорные/мажорные bump'ы (`+0.1.0` / `+1.0.0`) — только по явному решению
+человека (новая большая фича, breaking change). По умолчанию — patch.
 :::
 
 ## Корневые
@@ -62,7 +95,7 @@ bun run build:ark:dev    # debug ark-core-rpc
 bun run build:ark        # release ark-core-rpc
 bun run dev              # build:ark:dev + Vite + Electron
 bun run build:js         # ark release + TS + Vite (без установщика)
-bun run build            # build:js + electron-builder --win msi (финальный MSI)
+bun run build            # build:js + electron-builder --win nsis (финальный NSIS one-click)
 bun run package:dir      # unpacked desktop bundle (без установщика)
 bun run test             # unit
 bun run e2e              # Playwright (включая shared-ark-task.spec.ts)
@@ -101,7 +134,7 @@ Workspace-директория исторически осталась `apps/hor
 cd apps/horologion
 bun run dev              # build:sidecar:dev + Vite + Electron
 bun run build:js         # sidecar release + TS + Vite (без установщика)
-bun run build            # build:js + electron-builder --win msi (финальный MSI)
+bun run build            # build:js + electron-builder --win nsis (финальный NSIS one-click)
 bun run package:dir      # unpacked desktop bundle (без установщика)
 bun run typecheck
 bun run test:e2e         # build:js + Playwright

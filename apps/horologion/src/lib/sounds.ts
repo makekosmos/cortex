@@ -36,6 +36,14 @@ interface Tone {
   gain?: number; // 0..1
 }
 
+// Глобальный множитель громкости (0..1). Применяется ко всем тонам.
+// Устанавливается из Settings, читается перед каждым playSound.
+let volumeMultiplier = 1;
+
+export function setVolumeMultiplier(v: number): void {
+  volumeMultiplier = Math.max(0, Math.min(1, v));
+}
+
 function playTones(tones: Tone[]): void {
   let c: AudioContext;
   try {
@@ -51,8 +59,9 @@ function playTones(tones: Tone[]): void {
     const gain = c.createGain();
     osc.type = t.type ?? "sine";
     osc.frequency.value = t.freq;
-    const peak = t.gain ?? 0.18;
-    // ADSR-облегчённая — быстрый attack, экспоненциальный decay
+    // Базовый gain поднят (раньше 0.18 — едва слышно), ×volumeMultiplier.
+    // Минимум 0.0001 чтобы exponentialRamp не уехал в NaN.
+    const peak = Math.max(0.0001, (t.gain ?? 0.4) * volumeMultiplier);
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.exponentialRampToValueAtTime(peak, start + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, stop);
@@ -63,25 +72,27 @@ function playTones(tones: Tone[]): void {
   }
 }
 
+// Recipe-gains подняты ~×2.5 относительно прежних 0.14-0.25 — раньше было
+// едва слышно. Финальная громкость = recipe * volumeMultiplier из настроек.
 const SOUNDS: Record<Exclude<SoundName, "none">, () => void> = {
   bell: () => playTones([
-    { freq: 880, duration: 350, type: "sine", gain: 0.22 },
-    { freq: 1320, duration: 280, type: "sine", gain: 0.14, delay: 30 },
+    { freq: 880, duration: 350, type: "sine", gain: 0.55 },
+    { freq: 1320, duration: 280, type: "sine", gain: 0.35, delay: 30 },
   ]),
   chime: () => playTones([
-    { freq: 587.33, duration: 220, type: "sine", gain: 0.18 },         // D5
-    { freq: 783.99, duration: 240, type: "sine", gain: 0.18, delay: 180 }, // G5
-    { freq: 1174.66, duration: 380, type: "sine", gain: 0.14, delay: 360 }, // D6
+    { freq: 587.33, duration: 220, type: "sine", gain: 0.45 },          // D5
+    { freq: 783.99, duration: 240, type: "sine", gain: 0.45, delay: 180 }, // G5
+    { freq: 1174.66, duration: 380, type: "sine", gain: 0.35, delay: 360 }, // D6
   ]),
   tap: () => playTones([
-    { freq: 420, duration: 60, type: "triangle", gain: 0.25 },
-    { freq: 320, duration: 90, type: "triangle", gain: 0.15, delay: 50 },
+    { freq: 420, duration: 60, type: "triangle", gain: 0.6 },
+    { freq: 320, duration: 90, type: "triangle", gain: 0.4, delay: 50 },
   ]),
   alarm: () => playTones([
-    { freq: 880, duration: 160, type: "square", gain: 0.16 },
-    { freq: 660, duration: 160, type: "square", gain: 0.16, delay: 180 },
-    { freq: 880, duration: 160, type: "square", gain: 0.16, delay: 360 },
-    { freq: 660, duration: 160, type: "square", gain: 0.16, delay: 540 },
+    { freq: 880, duration: 160, type: "square", gain: 0.4 },
+    { freq: 660, duration: 160, type: "square", gain: 0.4, delay: 180 },
+    { freq: 880, duration: 160, type: "square", gain: 0.4, delay: 360 },
+    { freq: 660, duration: 160, type: "square", gain: 0.4, delay: 540 },
   ]),
 };
 
