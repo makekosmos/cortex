@@ -31,7 +31,7 @@ import {
   screen,
   type WebContents,
 } from "electron";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -157,42 +157,43 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
   }
 }
 
-// In-memory cache для иконок — читаем с диска один раз, потом отдаём data URI.
-// Иконки статичные, кешировать безопасно. Ключ — extension id, значение —
-// либо data URI, либо `null` если иконки нет / не удалось прочитать.
-const iconDataUriCache = new Map<string, string | null>();
+// In-memory cache иконок с mtime-инвалидацией — если файл иконки изменился
+// на диске (user добавил новую), кеш автоматически перечитает на следующий
+// запрос. Это важно для dev workflow когда иконки меняются в running session.
+interface IconCacheEntry {
+  uri: string | null;
+  mtimeMs: number;
+}
+const iconDataUriCache = new Map<string, IconCacheEntry>();
 
 /**
  * Возвращает icon extension'а как `data:image/png;base64,...` URI, или undefined
  * если у extension'а нет icon (нет поля в manifest или файл отсутствует).
- * Результат кешируется in-memory — повторные вызовы дешёвые.
+ * Кеширует по mtime файла — повторные вызовы дешёвые, обновление файла
+ * автоматически перечитывается.
  */
 export function extensionIconDataUri(id: string): string | undefined {
-  const cached = iconDataUriCache.get(id);
-  if (cached !== undefined) return cached ?? undefined;
   const manifest = loadExtensionManifest(id);
-  if (!manifest || !manifest.icon) {
-    iconDataUriCache.set(id, null);
-    return undefined;
-  }
+  if (!manifest || !manifest.icon) return undefined;
   const root = resolveExtensionsRoot();
   const iconPath = path.join(root, id, manifest.icon);
-  if (!existsSync(iconPath)) {
-    iconDataUriCache.set(id, null);
-    return undefined;
+  if (!existsSync(iconPath)) return undefined;
+  const stat = statSync(iconPath);
+  const cached = iconDataUriCache.get(id);
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    return cached.uri ?? undefined;
   }
   try {
     const buf = readFileSync(iconPath);
-    // MIME по расширению — поддерживаем .png и .svg (типичные кейсы).
     const ext = path.extname(iconPath).toLowerCase();
     const mime =
       ext === ".svg" ? "image/svg+xml" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
     const uri = `data:${mime};base64,${buf.toString("base64")}`;
-    iconDataUriCache.set(id, uri);
+    iconDataUriCache.set(id, { uri, mtimeMs: stat.mtimeMs });
     return uri;
   } catch (e) {
     console.error(`[kepler-shell] failed to read icon for ${id}:`, e);
-    iconDataUriCache.set(id, null);
+    iconDataUriCache.set(id, { uri: null, mtimeMs: stat.mtimeMs });
     return undefined;
   }
 }
