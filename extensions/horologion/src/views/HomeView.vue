@@ -134,12 +134,9 @@ async function onSubmit() {
                     class="mode-toggle__btn"
                     :class="{
                         'mode-toggle__btn--active': timerMode === 'pomodoro',
-                        'mode-toggle__btn--hidden':
-                            isSessionActive && timerMode !== 'pomodoro',
                     }"
                     role="tab"
                     :aria-selected="timerMode === 'pomodoro'"
-                    :tabindex="isSessionActive && timerMode !== 'pomodoro' ? -1 : 0"
                     @click="timerMode = 'pomodoro'"
                 >
                     Помодоро
@@ -149,12 +146,9 @@ async function onSubmit() {
                     class="mode-toggle__btn"
                     :class="{
                         'mode-toggle__btn--active': timerMode === 'stopwatch',
-                        'mode-toggle__btn--hidden':
-                            isSessionActive && timerMode !== 'stopwatch',
                     }"
                     role="tab"
                     :aria-selected="timerMode === 'stopwatch'"
-                    :tabindex="isSessionActive && timerMode !== 'stopwatch' ? -1 : 0"
                     @click="timerMode = 'stopwatch'"
                 >
                     Секундомер
