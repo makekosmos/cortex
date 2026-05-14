@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import { Settings, ArrowLeft } from "lucide-vue-next";
+import { DesktopChrome, DesktopContentSurface } from "@kepler/visuals";
 
 const route = useRoute();
 const router = useRouter();
@@ -17,10 +18,10 @@ function goBack() {
 }
 
 // ---------------------------------------------------------------------------
-// ARK connection status — точка-индикатор в topbar.
+// ARK connection status — точка-индикатор в titlebar.
 // Каждые 10 секунд (и при mount) дёргаем дешёвую операцию `list_object_types`,
 // успех → connected, ошибка → error. Используем такой же визуал как в Delphi
-// extension'е (8px dot, 32x32 button, oklch tokens из @kepler/visuals).
+// extension'е (8px dot, 28x28 button, oklch tokens из @kepler/visuals).
 // ---------------------------------------------------------------------------
 
 type ArkStatus = "connected" | "connecting" | "error";
@@ -73,67 +74,67 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="app">
-        <header class="topbar">
-            <button v-if="isSettingsRoute" type="button" class="iconbtn" title="Назад" @click="goBack">
+    <DesktopChrome platform="windows" class="app">
+        <template #titlebar-leading>
+            <button
+                v-if="isSettingsRoute"
+                type="button"
+                class="iconbtn"
+                title="Назад"
+                @click="goBack"
+            >
                 <ArrowLeft :size="16" :stroke-width="1.7" />
             </button>
-            <div class="appname">{{ isSettingsRoute ? "Настройки помодоро" : "Horologion" }}</div>
-            <div class="trail">
-                <button
-                    type="button"
-                    class="ark-status-btn"
-                    :title="arkStatusMessage"
-                    :aria-label="arkStatusMessage"
-                >
-                    <span :class="arkDotClass" />
-                </button>
-                <button v-if="!isSettingsRoute" type="button" class="iconbtn" title="Настройки" @click="openSettings">
-                    <Settings :size="16" :stroke-width="1.7" />
-                </button>
+            <div class="appname">
+                {{ isSettingsRoute ? "Настройки помодоро" : "Horologion" }}
             </div>
-        </header>
+        </template>
 
-        <main class="content">
-            <RouterView />
-        </main>
-    </div>
+        <template #titlebar-trailing>
+            <button
+                type="button"
+                class="ark-status-btn"
+                :title="arkStatusMessage"
+                :aria-label="arkStatusMessage"
+            >
+                <span :class="arkDotClass" />
+            </button>
+            <button
+                v-if="!isSettingsRoute"
+                type="button"
+                class="iconbtn"
+                title="Настройки"
+                @click="openSettings"
+            >
+                <Settings :size="16" :stroke-width="1.7" />
+            </button>
+        </template>
+
+        <DesktopContentSurface
+            padding-top="0"
+            padding-inline="0"
+            padding-bottom="0"
+            :scrollable="false"
+        >
+            <main class="content">
+                <RouterView />
+            </main>
+        </DesktopContentSurface>
+    </DesktopChrome>
 </template>
 
 <style scoped>
 .app {
-    display: flex;
-    flex-direction: column;
     height: 100%;
     min-height: 0;
 }
 
-.topbar {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    height: 44px;
-    padding: 0 0.75rem;
-    background: var(--sidebar-bg);
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-    -webkit-app-region: drag;
-    flex-shrink: 0;
-}
-
 .appname {
-    flex: 1;
     font-size: 0.8125rem;
     font-weight: 600;
     letter-spacing: 0.01em;
     color: color-mix(in srgb, var(--sidebar-foreground) 55%, transparent);
     line-height: 1;
-}
-
-.trail {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    -webkit-app-region: no-drag;
 }
 
 .iconbtn {
@@ -159,7 +160,7 @@ onBeforeUnmount(() => {
 }
 
 /* ARK status indicator — single-line dot, без popover'а.
-   Совпадает с Delphi extension'ом: 32x32 transparent button + 8px dot,
+   Совпадает с Delphi extension'ом: 28x28 transparent button + 8px dot,
    цвета из @kepler/visuals (--status-success / --destructive). */
 .ark-status-btn {
     display: inline-flex;
