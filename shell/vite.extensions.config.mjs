@@ -82,6 +82,15 @@ export default defineConfig(({ mode }) => {
           __dirname,
           "../packages/visuals",
         ),
+        // Extensions live at <repoRoot>/extensions/<id>/ and have no own
+        // node_modules. Bare-specifier deps used by extension sources
+        // (e.g. lucide-vue-next, tailwindcss) resolve via shell's
+        // node_modules: point them explicitly so Rolldown does not walk
+        // up past the repo root and miss them.
+        "lucide-vue-next": path.resolve(
+          __dirname,
+          "node_modules/lucide-vue-next",
+        ),
       },
       dedupe: ["vue"],
     },

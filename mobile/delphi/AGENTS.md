@@ -386,4 +386,4 @@ bun run ark:smoke
 - **Sync state** — direct writers в синхронизируемые таблицы обязаны вызывать `ark_core::db::bump_sync_version_vector`.
 - **Tooling** — `bun run ark:guard:writes` перед PR в data-слой; `bun run ark:smoke` перед нетривиальным PR.
 
-Полный текст: [`AGENTS.md`](../../../AGENTS.md#сжатые-правила) и `docs-site/reference/rules.md`.
+Полный текст: [`AGENTS.md`](../../AGENTS.md#сжатые-правила) и `docs-site/reference/rules.md`.
