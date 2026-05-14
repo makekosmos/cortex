@@ -52,7 +52,27 @@ async function runHeightTransition(): Promise<void> {
     card.style.transition = "height 420ms cubic-bezier(0.4, 0, 0.2, 1)";
     card.style.height = `${newH}px`;
 
-    await new Promise<void>((r) => setTimeout(r, 460));
+    // Ждём реального завершения CSS-перехода `height`, а не hardcoded delay —
+    // setTimeout(460) рейсится с фактическим transition и даёт jank (контент
+    // дёргается, если фактический transition длится дольше). Listener
+    // снимается на transitionend ИЛИ transitioncancel; safety-таймаут 800мс
+    // на случай, если ни одно событие не пришло (например, transition был
+    // удалён извне).
+    await new Promise<void>((resolve) => {
+        const handler = (e: TransitionEvent) => {
+            if (e.target !== card || e.propertyName !== "height") return;
+            card.removeEventListener("transitionend", handler);
+            card.removeEventListener("transitioncancel", handler);
+            resolve();
+        };
+        card.addEventListener("transitionend", handler);
+        card.addEventListener("transitioncancel", handler);
+        setTimeout(() => {
+            card.removeEventListener("transitionend", handler);
+            card.removeEventListener("transitioncancel", handler);
+            resolve();
+        }, 800);
+    });
     card.style.transition = "";
     card.style.height = "";
     card.style.overflow = "";
