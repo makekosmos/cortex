@@ -12,6 +12,13 @@ import "./extension-host";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ESM shim — __dirname / __filename не определены в Node ESM bundles
+// (electron-vite собирает main как ESM). Без этого resolveAppExe падает
+// с ReferenceError: __dirname is not defined.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface InternalCommand {
   id: string;

@@ -1,6 +1,11 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ESM shim — __dirname / __filename не определены в Node ESM bundles.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface ExtensionManifest {
   id: string;
