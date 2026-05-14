@@ -64,10 +64,10 @@ index cd10bd0..b7ac086 100644
                  @dragstart="onCardDragStart(todo.id, $event)"
                  @dragend="onCardDragEnd"
                >
-diff --git a/packages/kepler-visuals/components/TodoRow.vue b/packages/kepler-visuals/components/TodoRow.vue
+diff --git a/packages/kosmos-visuals/components/TodoRow.vue b/packages/kosmos-visuals/components/TodoRow.vue
 index 1ed4488..dc89617 100644
---- a/packages/kepler-visuals/components/TodoRow.vue
-+++ b/packages/kepler-visuals/components/TodoRow.vue
+--- a/packages/kosmos-visuals/components/TodoRow.vue
++++ b/packages/kosmos-visuals/components/TodoRow.vue
 @@ -1,6 +1,5 @@
  <script setup lang="ts">
  import { shallowRef, computed, useTemplateRef, nextTick, ref } from "vue";

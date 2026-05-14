@@ -6,7 +6,7 @@
 
 ## Scope
 
-Restore the shared sidebar toggle shortcut as a built-in default in `@kepler/visuals` so every app gets the same `Ctrl/Meta + B` and localized-layout behavior without needing to pass `toggleShortcut`.
+Restore the shared sidebar toggle shortcut as a built-in default in `@kosmos/visuals` so every app gets the same `Ctrl/Meta + B` and localized-layout behavior without needing to pass `toggleShortcut`.
 
 ## Assumptions
 
@@ -27,7 +27,7 @@ Restore the shared sidebar toggle shortcut as a built-in default in `@kepler/vis
 
 ## Acceptance Criteria
 
-- AC1: `packages/kepler-visuals/components/Sidebar.vue` uses a default toggle shortcut so keyboard toggling works even when consumers omit `toggleShortcut`.
+- AC1: `packages/kosmos-visuals/components/Sidebar.vue` uses a default toggle shortcut so keyboard toggling works even when consumers omit `toggleShortcut`.
 - AC2: Eden keeps using the shared sidebar without extra local shortcut props and receives the same behavior as Delphi/dashboard.
 - AC3: Focused type checks pass for current consumers after the change.
 

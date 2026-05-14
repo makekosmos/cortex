@@ -1,7 +1,7 @@
 {
-  "schema": "D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\@develar+schema-utils@2.6.5\\node_modules\\@develar\\schema-utils\\package.json",
-  "ajvKeywords": "D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\ajv-keywords@3.5.2+9b61d4cafcf64a6a\\node_modules\\ajv-keywords\\package.json",
-  "ajvFromKeywords": "D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\ajv@6.14.0\\node_modules\\ajv\\package.json",
-  "hosted": "D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\hosted-git-info@4.1.0\\node_modules\\hosted-git-info\\package.json",
-  "lru": "D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\lru-cache@6.0.0\\node_modules\\lru-cache\\package.json"
+  "schema": "D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\@develar+schema-utils@2.6.5\\node_modules\\@develar\\schema-utils\\package.json",
+  "ajvKeywords": "D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\ajv-keywords@3.5.2+9b61d4cafcf64a6a\\node_modules\\ajv-keywords\\package.json",
+  "ajvFromKeywords": "D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\ajv@6.14.0\\node_modules\\ajv\\package.json",
+  "hosted": "D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\hosted-git-info@4.1.0\\node_modules\\hosted-git-info\\package.json",
+  "lru": "D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\lru-cache@6.0.0\\node_modules\\lru-cache\\package.json"
 }

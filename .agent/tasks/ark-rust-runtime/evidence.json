@@ -187,7 +187,7 @@
       "text": "Kotlin bindings generate and the Rust cdylib is cross-compiled for arm64-v8a and wired into jniLibs.",
       "status": "PASS",
       "proof": [
-        "apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ark_core.kt (88.1 KB) generated Kotlin bindings",
+        "apps/delphi/kotlin/app/src/main/java/com/kosmos/ark/core/ark_core.kt (88.1 KB) generated Kotlin bindings",
         "UniffiVTableCallbackInterfaceArkEventListener at ark_core.kt:667-676",
         "apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so (5.9 MB, aarch64 ELF)",
         "`file libark_core.so` reports: ELF 64-bit LSB shared object, ARM aarch64, dynamically linked",
@@ -202,7 +202,7 @@
       "proof": [
         "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/ has no SyncServer.kt, LanSyncClient.kt, BroadcastDiscovery.kt (see raw/file-tree.txt)",
         "rg 'class (SyncServer|LanSyncClient|BroadcastDiscovery)' across app/src/main/java/ returns zero matches (raw/rg-banned-imports.txt)",
-        "PeerManager.kt:7-10 imports ArkCore, ArkEventListener, FfiConnectedPeer, FfiSyncConfig from com.kepler.ark.core",
+        "PeerManager.kt:7-10 imports ArkCore, ArkEventListener, FfiConnectedPeer, FfiSyncConfig from com.kosmos.ark.core",
         "PeerManager.kt:56 arkCore: ArkCore = ArkCore()",
         "PeerManager.kt:104 arkCore.startSync(...)",
         "PeerManager.kt:126 arkCore.stopSync()",
@@ -295,7 +295,7 @@
     "apps/delphi/ts/electron/sidecar.ts",
     "apps/delphi/kotlin/app/build.gradle.kts",
     "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/PeerManager.kt",
-    "apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ark_core.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kosmos/ark/core/ark_core.kt",
     "apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so"
   ],
   "commands_for_fresh_verifier": [
@@ -310,7 +310,7 @@
     "unzip -l apps/delphi/kotlin/app/build/outputs/apk/debug/app-debug.apk | grep -E '(libark_core|ark_core)'",
     "rg -n \"from ['\\\"]@arksync/core['\\\"]\" apps/delphi/ts/electron/main.ts | grep -v 'import type'",
     "rg -n 'class (SyncServer|LanSyncClient|BroadcastDiscovery)' apps/delphi/kotlin/app/src/main/java/",
-    "ls -la packages/ark-core/rust/src/ apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/ apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/"
+    "ls -la packages/ark-core/rust/src/ apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/ apps/delphi/kotlin/app/src/main/java/com/kosmos/ark/core/ apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/"
   ],
   "known_gaps": [
     "AC12 (Electron dev run) — requires `bun run dev` plus a live Android peer on the same LAN; not executed in this pack. Marked UNKNOWN pending manual verification.",

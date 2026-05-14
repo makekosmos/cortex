@@ -11,18 +11,18 @@ These are useful migration references and confirm that the repo already contains
   - `vue-router`
   - `vaporInteropPlugin`
   - Entry/reference files:
-    - [package.json](/D:/Personal/Hobby/Coding/kepler/apps/dashboard/package.json)
-    - [vite.config.mjs](/D:/Personal/Hobby/Coding/kepler/apps/dashboard/vite.config.mjs)
-    - [src/main.ts](/D:/Personal/Hobby/Coding/kepler/apps/dashboard/src/main.ts)
+    - [package.json](/D:/Personal/Hobby/Coding/kosmos/apps/dashboard/package.json)
+    - [vite.config.mjs](/D:/Personal/Hobby/Coding/kosmos/apps/dashboard/vite.config.mjs)
+    - [src/main.ts](/D:/Personal/Hobby/Coding/kosmos/apps/dashboard/src/main.ts)
 
 - `apps/eden/ts`
   - Vue `3.6.0-beta.9`
   - `@vitejs/plugin-vue` with `vaporInterop: true`
   - Pinia
   - Entry/reference files:
-    - [package.json](/D:/Personal/Hobby/Coding/kepler/apps/eden/ts/package.json)
-    - [vite.config.mjs](/D:/Personal/Hobby/Coding/kepler/apps/eden/ts/vite.config.mjs)
-    - [src/main.ts](/D:/Personal/Hobby/Coding/kepler/apps/eden/ts/src/main.ts)
+    - [package.json](/D:/Personal/Hobby/Coding/kosmos/apps/eden/ts/package.json)
+    - [vite.config.mjs](/D:/Personal/Hobby/Coding/kosmos/apps/eden/ts/vite.config.mjs)
+    - [src/main.ts](/D:/Personal/Hobby/Coding/kosmos/apps/eden/ts/src/main.ts)
 
 - `apps/delphi/ts`
   - Stable Vue `3.5.31`
@@ -31,9 +31,9 @@ These are useful migration references and confirm that the repo already contains
   - Vitest
   - `reka-ui`
   - Entry/reference files:
-    - [package.json](/D:/Personal/Hobby/Coding/kepler/apps/delphi/ts/package.json)
-    - [vite.config.mjs](/D:/Personal/Hobby/Coding/kepler/apps/delphi/ts/vite.config.mjs)
-    - [src/main.ts](/D:/Personal/Hobby/Coding/kepler/apps/delphi/ts/src/main.ts)
+    - [package.json](/D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts/package.json)
+    - [vite.config.mjs](/D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts/vite.config.mjs)
+    - [src/main.ts](/D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts/src/main.ts)
 
 Conclusion:
 - The repo already has usable local patterns for both stable Vue and Vue + vapor interop.
@@ -42,11 +42,11 @@ Conclusion:
 ## 2. Current Arrancador frontend scope
 
 Renderer app:
-- [apps/arrancador/package.json](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/package.json)
-- [src/main.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/main.tsx)
-- [src/router.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/router.tsx)
-- [src/providers.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/providers.tsx)
-- [vite.config.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/vite.config.ts)
+- [apps/arrancador/package.json](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/package.json)
+- [src/main.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/main.tsx)
+- [src/router.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/router.tsx)
+- [src/providers.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/providers.tsx)
+- [vite.config.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/vite.config.ts)
 
 Current renderer size indicators:
 - 10 route-level page components in `src/pages/`
@@ -63,11 +63,11 @@ This section is the feature contract. These are not “React features”; these 
 ### 3.1 App shell and navigation
 
 Files:
-- [src/pages/Layout.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Layout.tsx)
-- [src/components/Sidebar.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/Sidebar.tsx)
-- [src/components/AppTitlebar.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/AppTitlebar.tsx)
-- [src/components/TitlebarHistoryControls.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/TitlebarHistoryControls.tsx)
-- [src/components/Spotlight.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/Spotlight.tsx)
+- [src/pages/Layout.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Layout.tsx)
+- [src/components/Sidebar.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/Sidebar.tsx)
+- [src/components/AppTitlebar.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/AppTitlebar.tsx)
+- [src/components/TitlebarHistoryControls.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/TitlebarHistoryControls.tsx)
+- [src/components/Spotlight.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/Spotlight.tsx)
 
 Feature list:
 - Desktop shell with custom titlebar
@@ -82,7 +82,7 @@ Feature list:
 ### 3.2 Library page
 
 File:
-- [src/pages/Library.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Library.tsx)
+- [src/pages/Library.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Library.tsx)
 
 Feature list:
 - Main game library listing
@@ -112,7 +112,7 @@ Feature list:
 ### 3.3 Game detail page
 
 File:
-- [src/pages/GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx)
+- [src/pages/GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx)
 
 Feature list:
 - Game hero with localized genres and metadata
@@ -143,7 +143,7 @@ Feature list:
 ### 3.4 Scan page
 
 File:
-- [src/pages/Scan.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Scan.tsx)
+- [src/pages/Scan.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Scan.tsx)
 
 Feature list:
 - Folder scan tab
@@ -160,7 +160,7 @@ Feature list:
 ### 3.5 Catalogue page
 
 File:
-- [src/pages/Catalogue.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Catalogue.tsx)
+- [src/pages/Catalogue.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Catalogue.tsx)
 
 Feature list:
 - RAWG showcase / search page
@@ -174,7 +174,7 @@ Feature list:
 ### 3.6 Statistics page
 
 File:
-- [src/pages/Statistics.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Statistics.tsx)
+- [src/pages/Statistics.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Statistics.tsx)
 
 Feature list:
 - Playtime stats fetch by date range
@@ -190,7 +190,7 @@ Feature list:
 ### 3.7 Settings page
 
 File:
-- [src/pages/Settings.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Settings.tsx)
+- [src/pages/Settings.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Settings.tsx)
 
 Feature list:
 - Appearance/theme settings
@@ -205,7 +205,7 @@ Feature list:
 ### 3.8 Achievements page
 
 File:
-- [src/pages/Achievements.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Achievements.tsx)
+- [src/pages/Achievements.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Achievements.tsx)
 
 Feature list:
 - Load achievements
@@ -219,7 +219,7 @@ Feature list:
 ### 3.9 System info page
 
 File:
-- [src/pages/SystemInfo.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/SystemInfo.tsx)
+- [src/pages/SystemInfo.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/SystemInfo.tsx)
 
 Feature list:
 - Load/cached system information
@@ -230,7 +230,7 @@ Feature list:
 ### 3.10 SQOBA page
 
 File:
-- [src/pages/Sqoba.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Sqoba.tsx)
+- [src/pages/Sqoba.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Sqoba.tsx)
 
 Feature list:
 - SQOBA overview cards
@@ -248,12 +248,12 @@ Feature list:
 ### 4.1 Shared components
 
 Files:
-- [src/components/GameCard.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/GameCard.tsx)
-- [src/components/RawgMetadataPrompt.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/RawgMetadataPrompt.tsx)
-- [src/components/Spotlight.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/Spotlight.tsx)
-- [src/components/Sidebar.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/Sidebar.tsx)
-- [src/components/AppTitlebar.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/AppTitlebar.tsx)
-- [src/components/mode-toggle.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/mode-toggle.tsx)
+- [src/components/GameCard.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/GameCard.tsx)
+- [src/components/RawgMetadataPrompt.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/RawgMetadataPrompt.tsx)
+- [src/components/Spotlight.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/Spotlight.tsx)
+- [src/components/Sidebar.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/Sidebar.tsx)
+- [src/components/AppTitlebar.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/AppTitlebar.tsx)
+- [src/components/mode-toggle.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/mode-toggle.tsx)
 
 These are feature-bearing and must be ported, not just visually replicated:
 - Game card link behavior
@@ -266,11 +266,11 @@ These are feature-bearing and must be ported, not just visually replicated:
 ### 4.2 Global providers / global state
 
 Files:
-- [src/providers.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/providers.tsx)
-- [src/store/GamesContext.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/store/GamesContext.tsx)
-- [src/components/theme-provider.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/theme-provider.tsx)
-- [src/components/language-provider.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/language-provider.tsx)
-- [src/components/ToastProvider.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ToastProvider.tsx)
+- [src/providers.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/providers.tsx)
+- [src/store/GamesContext.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/store/GamesContext.tsx)
+- [src/components/theme-provider.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/theme-provider.tsx)
+- [src/components/language-provider.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/language-provider.tsx)
+- [src/components/ToastProvider.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ToastProvider.tsx)
 
 Migration targets:
 - `GamesContext` -> Pinia store or provide/inject composable store
@@ -286,9 +286,9 @@ This is the direct rewrite surface.
 ### 5.1 Entry and routing
 
 Current React files:
-- [src/main.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/main.tsx)
-- [src/router.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/router.tsx)
-- [src/App.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/App.tsx)
+- [src/main.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/main.tsx)
+- [src/router.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/router.tsx)
+- [src/App.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/App.tsx)
 
 Current React-specific behavior:
 - `ReactDOM.createRoot`
@@ -317,11 +317,11 @@ Current React-specific patterns:
 - `forwardRef`
 
 Affected files include:
-- [src/store/GamesContext.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/store/GamesContext.tsx)
-- [src/hooks/useSettingsState.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/hooks/useSettingsState.ts)
-- [src/hooks/useGameStatus.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/hooks/useGameStatus.ts)
-- [src/hooks/useDropZone.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/hooks/useDropZone.ts)
-- [src/hooks/use-mobile.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/hooks/use-mobile.ts)
+- [src/store/GamesContext.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/store/GamesContext.tsx)
+- [src/hooks/useSettingsState.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/hooks/useSettingsState.ts)
+- [src/hooks/useGameStatus.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/hooks/useGameStatus.ts)
+- [src/hooks/useDropZone.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/hooks/useDropZone.ts)
+- [src/hooks/use-mobile.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/hooks/use-mobile.ts)
 
 Vue migration target:
 - composables
@@ -332,18 +332,18 @@ Vue migration target:
 ### 5.3 UI primitive layer
 
 Current React UI wrappers:
-- [button.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/button.tsx)
-- [card.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/card.tsx)
-- [dropdown-menu.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/dropdown-menu.tsx)
-- [input.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/input.tsx)
-- [progress.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/progress.tsx)
-- [scroll-area.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/scroll-area.tsx)
-- [separator.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/separator.tsx)
-- [sheet.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/sheet.tsx)
-- [sidebar.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/sidebar.tsx)
-- [skeleton.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/skeleton.tsx)
-- [switch.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/switch.tsx)
-- [tooltip.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/components/ui/tooltip.tsx)
+- [button.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/button.tsx)
+- [card.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/card.tsx)
+- [dropdown-menu.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/dropdown-menu.tsx)
+- [input.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/input.tsx)
+- [progress.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/progress.tsx)
+- [scroll-area.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/scroll-area.tsx)
+- [separator.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/separator.tsx)
+- [sheet.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/sheet.tsx)
+- [sidebar.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/sidebar.tsx)
+- [skeleton.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/skeleton.tsx)
+- [switch.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/switch.tsx)
+- [tooltip.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/tooltip.tsx)
 
 Current React-specific vendor dependencies:
 - `@radix-ui/react-dialog`
@@ -371,7 +371,7 @@ Migration target:
 
 Current:
 - `recharts`
-- used in [src/pages/Statistics.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/Statistics.tsx)
+- used in [src/pages/Statistics.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Statistics.tsx)
 
 Migration target:
 - replace charting with a Vue-capable chart library or local wrapper
@@ -381,10 +381,10 @@ Migration target:
 
 These are not React-specific and should be preserved as-is or minimally adapted:
 
-- [src/lib/api.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/lib/api.ts)
-- [src/lib/browser.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/lib/browser.ts)
-- [src/lib/ipc.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/lib/ipc.ts)
-- [src/types/index.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/types/index.ts)
+- [src/lib/api.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/lib/api.ts)
+- [src/lib/browser.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/lib/browser.ts)
+- [src/lib/ipc.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/lib/ipc.ts)
+- [src/types/index.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/types/index.ts)
 
 API groups already defined:
 - `gamesApi`
@@ -408,7 +408,7 @@ Migration note:
 ### 7.1 Build/tooling replacements
 
 Current React-specific config:
-- [vite.config.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/vite.config.ts)
+- [vite.config.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/vite.config.ts)
 
 Current React-specific items:
 - `@vitejs/plugin-react`
@@ -424,7 +424,7 @@ Vue migration target:
 
 ### 7.2 Dependency replacements
 
-Current React deps in [package.json](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/package.json):
+Current React deps in [package.json](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/package.json):
 - `react`
 - `react-dom`
 - `react-router-dom`

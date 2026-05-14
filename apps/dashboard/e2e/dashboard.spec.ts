@@ -115,8 +115,8 @@ test("sidebar resize handle changes dashboard sidebar width", async () => {
     await page.waitForLoadState("domcontentloaded");
     await expect(page.getByTestId("overview-page")).toBeVisible();
 
-    const sidebar = page.getByTestId("kepler-sidebar");
-    const handle = page.getByTestId("kepler-sidebar-resize-handle");
+    const sidebar = page.getByTestId("kosmos-sidebar");
+    const handle = page.getByTestId("kosmos-sidebar-resize-handle");
 
     await expect(sidebar).toBeVisible();
     await expect(handle).toBeVisible();

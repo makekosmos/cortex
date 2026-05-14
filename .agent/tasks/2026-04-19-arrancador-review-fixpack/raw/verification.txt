@@ -1,12 +1,12 @@
 Verification summary for `2026-04-19-arrancador-review-fixpack`
 
 Command: `bun run typecheck`
-CWD: `D:\Personal\Hobby\Coding\kepler\apps\arrancador`
+CWD: `D:\Personal\Hobby\Coding\kosmos\apps\arrancador`
 Status: PASS
 Artifact: `.agent/tasks/2026-04-19-arrancador-review-fixpack/raw/typecheck.log`
 
 Command: `bun run test`
-CWD: `D:\Personal\Hobby\Coding\kepler\apps\arrancador`
+CWD: `D:\Personal\Hobby\Coding\kosmos\apps\arrancador`
 Status: PASS
 Artifact: `.agent/tasks/2026-04-19-arrancador-review-fixpack/raw/test.log`
 Notes:

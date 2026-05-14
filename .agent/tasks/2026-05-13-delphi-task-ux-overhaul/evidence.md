@@ -7,7 +7,7 @@ Spec: [spec.md](./spec.md)
 
 `apps/delphi/ts/src/App.vue:629-632` — `<QuickEntry />` теперь рендерится
 **внутри** `<main class="relative">` под `<DesktopContentSurface>`, а не на root.
-`packages/kepler-visuals/components/QuickEntryPanel.vue:111` — модалка использует
+`packages/kosmos-visuals/components/QuickEntryPanel.vue:111` — модалка использует
 `absolute inset-0` (вместо `fixed inset-0`), поэтому backdrop ограничен
 content-областью. Titlebar и Sidebar остаются вне backdrop'а.
 
@@ -21,7 +21,7 @@ content-областью. Titlebar и Sidebar остаются вне backdrop'�
 
 ## AC3 — QuickEntry: убраны Сегодня / Вечер — PASS
 
-`packages/kepler-visuals/components/QuickEntryPanel.vue` — кнопки `Сегодня` (Star)
+`packages/kosmos-visuals/components/QuickEntryPanel.vue` — кнопки `Сегодня` (Star)
 и `Вечер` (Moon) удалены. `isToday/isEvening` исчезли из payload.
 `apps/delphi/ts/src/components/QuickEntry.vue:21-23` — `defaultScheduledDate`
 автоматически = today, если QuickEntry открыта со страницы `/today` (используется
@@ -29,14 +29,14 @@ content-областью. Titlebar и Sidebar остаются вне backdrop'�
 
 ## AC4 — QuickEntry: project-picker → реальный список — PASS
 
-`packages/kepler-visuals/components/QuickEntryPanel.vue:182-220` — chip с текстом
+`packages/kosmos-visuals/components/QuickEntryPanel.vue:182-220` — chip с текстом
 «Входящие» (или название выбранного проекта) теперь всегда показывается,
 клик открывает dropdown со списком: пункт «Входящие» (projectId=null) +
 все активные `projects` из `useTodoStore`. Выбранный пункт подсвечивается accent-цветом.
 
 ## AC5 — Billable flag в QuickEntry — PASS
 
-`packages/kepler-visuals/components/QuickEntryPanel.vue:142-180` — кнопка
+`packages/kosmos-visuals/components/QuickEntryPanel.vue:142-180` — кнопка
 «Оплачиваемая» (DollarSign icon, emerald-tone когда активна) переключает
 `billable`. Когда активна — появляется number-input «Цена». Payload расширен
 полями `billable: boolean`, `price: number | null`.
@@ -52,7 +52,7 @@ content-областью. Titlebar и Sidebar остаются вне backdrop'�
 
 ## AC7 — Inline expand on click — PASS
 
-`packages/kepler-visuals/components/TodoRow.vue` — переписан. Левый клик по
+`packages/kosmos-visuals/components/TodoRow.vue` — переписан. Левый клик по
 row (`onRowClick`) переключает `expanded`. При expand — рендерится
 inline-форма с input title, textarea notes, date input, billable toggle +
 price input. Каждый commit (blur / Enter / change) эмитит `@update` с patch'ем.
@@ -61,7 +61,7 @@ price input. Каждый commit (blur / Enter / change) эмитит `@update` 
 
 ## AC8 — Context menu delete — PASS
 
-`packages/kepler-visuals/components/TodoRow.vue:127-145` — обработчик
+`packages/kosmos-visuals/components/TodoRow.vue:127-145` — обработчик
 `@contextmenu.prevent` открывает `<ContextMenu :open :x :y @close>` с
 `<ContextMenuItem destructive @click="handleDelete">Удалить</ContextMenuItem>`.
 Inline-кнопка «Удалить» из строки удалена. Событие `@trash` сохраняется —

@@ -1,5 +1,5 @@
-Command: Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\tsc.exe
+Command: Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\tsc.exe
 Result: PASS
 
-Command: Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
+Command: Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
 Result: PASS

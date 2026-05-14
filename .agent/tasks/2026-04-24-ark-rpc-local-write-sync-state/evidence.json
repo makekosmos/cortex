@@ -12,49 +12,49 @@
   "commands": [
     {
       "command": "cargo check --manifest-path packages/ark-core/rust/Cargo.toml",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/cargo-check.txt",
       "exit_code": 0
     },
     {
       "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml local_",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/cargo-test-local.txt",
       "exit_code": 0
     },
     {
       "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/cargo-test-full.txt",
       "exit_code": 0
     },
     {
       "command": "cargo fmt --manifest-path packages/ark-core/rust/Cargo.toml -- --check",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/cargo-fmt-check.txt",
       "exit_code": 0
     },
     {
       "command": "bun run typecheck",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\packages\\arksync-node",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\packages\\arksync-node",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/arksync-node-typecheck.txt",
       "exit_code": 0
     },
     {
       "command": "bun run build",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\packages\\arksync-node",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\packages\\arksync-node",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/arksync-node-build.txt",
       "exit_code": 0
     },
     {
       "command": "bun .agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/verify-arksync-node-device-id.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/verify-arksync-node-device-id.txt",
       "exit_code": 0
     },
     {
       "command": "git diff --check -- packages/ark-core/rust/src/db.rs packages/ark-core/rust/src/main.rs packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/spec.md .agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/verify-arksync-node-device-id.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-ark-rpc-local-write-sync-state/git-diff-check.txt",
       "exit_code": 0
     }

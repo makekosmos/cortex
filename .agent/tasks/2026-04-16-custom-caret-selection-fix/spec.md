@@ -1,10 +1,10 @@
 # Task: Custom caret preserves native text selection behavior
 
 ## Goal
-Fix the shared `@kepler/visuals` custom caret so text fields keep normal native text selection behavior. The custom caret must remain enabled for collapsed caret states, but when the user has an expanded text selection the component should stop forcing transparent native caret mode and allow standard selection UX.
+Fix the shared `@kosmos/visuals` custom caret so text fields keep normal native text selection behavior. The custom caret must remain enabled for collapsed caret states, but when the user has an expanded text selection the component should stop forcing transparent native caret mode and allow standard selection UX.
 
 ## Component Map
-- `packages/kepler-visuals/components/CustomCaret.vue`: shared custom caret implementation and native caret toggling.
+- `packages/kosmos-visuals/components/CustomCaret.vue`: shared custom caret implementation and native caret toggling.
 - `apps/eden/ts/tests/app.spec.ts`: regression coverage for input selection behavior while the shared custom caret is mounted.
 
 ## Acceptance Criteria

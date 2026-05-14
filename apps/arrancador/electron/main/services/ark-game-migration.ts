@@ -6,7 +6,7 @@ import {
   type ArkObjectsApi,
   type ArkObjectTypesApi,
   type JsonValue,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 
 import { openSqliteDatabase } from "../db";
 import { queryAll, queryOne } from "../helpers/db";

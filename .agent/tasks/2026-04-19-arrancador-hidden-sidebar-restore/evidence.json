@@ -5,13 +5,13 @@
     "commands": [
       {
         "command": "bun run typecheck",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-hidden-sidebar-restore/raw/typecheck.log"
       },
       {
         "command": "bun run test",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-hidden-sidebar-restore/raw/test.log",
         "notes": [

@@ -78,9 +78,9 @@ EDEN_STRESS_CHARS=120000 EDEN_STRESS_LABEL=after-next-pass bun run benchmark:typ
 Then compare:
 ```bash
 bun run scripts/compareTypingStress.ts \
-  --baseline /Users/kirill/Documents/projects/kepler/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/baseline-typing-stress-120000.json \
-  --current /Users/kirill/Documents/projects/kepler/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/after-next-pass-typing-stress-120000.json \
-  --output /Users/kirill/Documents/projects/kepler/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/compare-after-next-pass-vs-baseline.json
+  --baseline /Users/kirill/Documents/projects/kosmos/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/baseline-typing-stress-120000.json \
+  --current /Users/kirill/Documents/projects/kosmos/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/after-next-pass-typing-stress-120000.json \
+  --output /Users/kirill/Documents/projects/kosmos/.agent/tasks/2026-04-15-eden-100k-stress-benchmark/artifacts/compare-after-next-pass-vs-baseline.json
 ```
 
 ## Remaining risks

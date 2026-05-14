@@ -7,7 +7,7 @@
 - [ ] Заменить react-router-dom на vue-router
 - [ ] Заменить Radix UI на Vue-совместимые headless компоненты (Reka UI и т.д.)
 - [ ] Заменить lucide-react на lucide-vue-next
-- [ ] Адаптировать @kosmos/ui под Vue
+- [ ] Адаптировать @kepler/ui под Vue
 - [ ] Держать TS sync-утилиты (`hlc`, `lan-protocol`, `ark-types`) чистыми и фреймворк-агностичными
 
 ## Mobile: уход с React Native

@@ -339,7 +339,7 @@ import {
   CustomCaret,
   TitlebarHistoryControls,
   type TitlebarPlatform,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 import { useEdenStore } from "@/store/eden";
 import { useLayoutStore } from "@/store/layout";
 import { useKeyboard } from "@/composables/useKeyboard";

@@ -1,6 +1,6 @@
-// Phase 3 cutover: SidecarClient переписан на thin wrapper над @kepler/ark
-// ArkClient. По умолчанию ходим через Kosmos host (WS), при KEPLER_KOSMOS_OPTIONAL=1
-// и недоступном Kosmos — fallback на self-managed ark-core-rpc child.
+// Phase 3 cutover: SidecarClient переписан на thin wrapper над @kosmos/ark
+// ArkClient. По умолчанию ходим через Kepler host (WS), при KOSMOS_KEPLER_OPTIONAL=1
+// и недоступном Kepler — fallback на self-managed ark-core-rpc child.
 //
 // Public API (request / onEvent / reinit / releaseAndReset / shutdown / currentDbPath)
 // сохранён по сигнатуре, но `reinit`/`releaseAndReset`/`shutdown` стали async
@@ -13,9 +13,9 @@ import { app } from 'electron'
 
 import {
   ArkClient,
-  ensureKosmosRunning,
+  ensureKeplerRunning,
   readSharedSelectedSpace,
-} from '@kepler/ark'
+} from '@kosmos/ark'
 
 interface SidecarRequest {
   operation: string;
@@ -30,8 +30,8 @@ export interface SidecarEvent {
 export type SidecarEventListener = (event: SidecarEvent) => void;
 
 function getAppDataPath(): string {
-  return process.env.KEPLER_TEST_APPDATA
-    ? path.resolve(process.env.KEPLER_TEST_APPDATA)
+  return process.env.KOSMOS_TEST_APPDATA
+    ? path.resolve(process.env.KOSMOS_TEST_APPDATA)
     : app.getPath('appData')
 }
 
@@ -55,13 +55,13 @@ function getSidecarBinaryPath() {
   return arkCorePaths[0]
 }
 
-/** Kosmos optional by default. `KEPLER_REQUIRE_KOSMOS=1` для строгого режима. */
-function isKosmosRequired(): boolean {
-  return process.env.KEPLER_REQUIRE_KOSMOS === '1'
+/** Kepler optional by default. `KOSMOS_REQUIRE_KEPLER=1` для строгого режима. */
+function isKeplerRequired(): boolean {
+  return process.env.KOSMOS_REQUIRE_KEPLER === '1'
 }
 
-function isKosmosOptional(): boolean {
-  return !isKosmosRequired()
+function isKeplerOptional(): boolean {
+  return !isKeplerRequired()
 }
 
 function defaultSpaceId(): string {
@@ -98,7 +98,7 @@ class SidecarClient {
     }
   }
 
-  /** Получить ArkClient в нужном режиме (Kosmos cosmos-mode или self-managed fallback). */
+  /** Получить ArkClient в нужном режиме (Kepler kepler-mode или self-managed fallback). */
   async getArkClient(): Promise<ArkClient> {
     if (this.arkClient) return this.arkClient
     if (this.arkClientPromise) return this.arkClientPromise
@@ -108,49 +108,49 @@ class SidecarClient {
       const deviceId = `delphi-${process.platform}`
       const deviceName = 'Delphi'
 
-      const state = await ensureKosmosRunning({
+      const state = await ensureKeplerRunning({
         appDataPath: getAppDataPath(),
         waitMs: 10000,
-        autoLaunch: !isKosmosOptional(),
+        autoLaunch: !isKeplerOptional(),
       })
 
       let client: ArkClient
       switch (state.kind) {
         case 'connected': {
           console.log(
-            `[delphi.sidecar] using Kosmos host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+            `[delphi.sidecar] using Kepler host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
           )
           client = new ArkClient({
             spaceId,
             deviceId,
             deviceName,
-            cosmosLock: state.lock,
+            keplerLock: state.lock,
           })
           break
         }
         case 'incompatible-version': {
           throw new Error(
-            `Kosmos protocol mismatch: server ${state.cosmosVersion.major}.${state.cosmosVersion.minor}.${state.cosmosVersion.patch}, ` +
+            `Kepler protocol mismatch: server ${state.keplerVersion.major}.${state.keplerVersion.minor}.${state.keplerVersion.patch}, ` +
               `client expects ${state.clientMajor}.x.`,
           )
         }
         case 'launch-failed':
         case 'not-installed': {
-          if (isKosmosRequired()) {
+          if (isKeplerRequired()) {
             const detail =
               state.kind === 'not-installed'
                 ? `checked: ${state.checkedPaths.join(', ') || '(no candidates)'}`
                 : state.reason
             throw new Error(
-              `Delphi запущен с KEPLER_REQUIRE_KOSMOS=1, но Kosmos ${state.kind} (${detail}). ` +
-                `Установи Kepler Kosmos или сними флаг.`,
+              `Delphi запущен с KOSMOS_REQUIRE_KEPLER=1, но Kepler ${state.kind} (${detail}). ` +
+                `Установи Kosmos Kepler или сними флаг.`,
             )
           }
           console.log(
-            `[delphi.sidecar] Kosmos ${state.kind} — standalone mode, sync disabled`,
+            `[delphi.sidecar] Kepler ${state.kind} — standalone mode, sync disabled`,
           )
           const dbPath =
-            this.dbPathOverride ?? path.join(getAppDataPath(), 'Kepler', 'ark.db')
+            this.dbPathOverride ?? path.join(getAppDataPath(), 'Kosmos', 'ark.db')
           fs.mkdirSync(path.dirname(dbPath), { recursive: true })
           client = new ArkClient({
             spaceId,
@@ -190,8 +190,8 @@ class SidecarClient {
   }
 
   /**
-   * Re-init под другой DB path. В cosmos-mode Kosmos владеет DB — `dbPath`
-   * запоминается, но фактически Kosmos нужно switch отдельным op'ом (Phase 5+).
+   * Re-init под другой DB path. В kepler-mode Kepler владеет DB — `dbPath`
+   * запоминается, но фактически Kepler нужно switch отдельным op'ом (Phase 5+).
    * В self-managed mode — пересоздаём ArkClient с новым dbPath.
    */
   async reinit(dbPath: string): Promise<void> {
@@ -552,7 +552,7 @@ export function syncGetHostDeviceName(): Promise<string> {
  * The old sidecar process is killed and a new one is started with the space DB path.
  */
 export async function dbSwitchSpace(spaceId: string): Promise<void> {
-  const dataDir = path.join(getAppDataPath(), 'Kepler')
+  const dataDir = path.join(getAppDataPath(), 'Kosmos')
   const spaceDir = path.join(dataDir, 'spaces', spaceId)
   fs.mkdirSync(spaceDir, { recursive: true })
   const newDbPath = path.join(spaceDir, 'ark.db')

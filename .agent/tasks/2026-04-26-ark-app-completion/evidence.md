@@ -4,7 +4,7 @@ Verification: PASS
 
 ## Acceptance Criteria
 
-- AC1 PASS: Arrancador legacy usage backfill no longer writes `sync_kv` through raw SQLite; it uses `@kepler/ark` KV calls backed by `ark-core-rpc`. Game object writes already used ARK object APIs, and source migration DB access is read-only.
+- AC1 PASS: Arrancador legacy usage backfill no longer writes `sync_kv` through raw SQLite; it uses `@kosmos/ark` KV calls backed by `ark-core-rpc`. Game object writes already used ARK object APIs, and source migration DB access is read-only.
 - AC2 PASS: Arrancador tests cover game object writes/migration and usage backfill with mocked ARK APIs. `bun run --cwd apps/arrancador test` passed.
 - AC3 PASS: Eden note and custom typed-note writes are object-first. Custom note types are ARK object types, note entries are ARK objects, and ARK object listing preserves typed header layout from object type metadata.
 - AC4 PASS: Dashboard read-only inspector boundary is documented in `apps/dashboard/AGENTS.md` and `apps/dashboard/README.md`.
@@ -14,7 +14,7 @@ Verification: PASS
 
 ## Checks
 
-- PASS: `bun run --cwd packages/kepler-ark typecheck`
+- PASS: `bun run --cwd packages/kosmos-ark typecheck`
 - PASS: `bun run --cwd apps/arrancador test`
 - PASS: `bun run --cwd apps/arrancador typecheck`
 - PASS: `bun run --cwd apps/eden/ts test:ark-migration`

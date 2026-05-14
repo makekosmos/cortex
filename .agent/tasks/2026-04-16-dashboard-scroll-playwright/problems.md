@@ -11,5 +11,5 @@
 - The failing syscall is process spawn/fork inside the test runner, which is controlled by the execution environment rather than dashboard code.
 
 ## Local machine verification command
-- `cd D:\Personal\Hobby\Coding\kepler\apps\dashboard`
-- `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\cli.js test`
+- `cd D:\Personal\Hobby\Coding\kosmos\apps\dashboard`
+- `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\playwright@1.58.2\node_modules\playwright\cli.js test`

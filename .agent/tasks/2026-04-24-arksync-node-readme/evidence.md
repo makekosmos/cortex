@@ -25,6 +25,6 @@ PASS
 ## Commands
 
 ```text
-cmd /c "bun D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-readme\verify-readme.ts > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-readme\verify-readme.txt 2>&1"
-cmd /c "git diff --check -- packages/arksync-node/README.md .agent/tasks/2026-04-24-arksync-node-readme/spec.md .agent/tasks/2026-04-24-arksync-node-readme/verify-readme.ts .agent/tasks/2026-04-24-arksync-node-readme/problems.md > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-readme\git-diff-check.txt 2>&1"
+cmd /c "bun D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-readme\verify-readme.ts > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-readme\verify-readme.txt 2>&1"
+cmd /c "git diff --check -- packages/arksync-node/README.md .agent/tasks/2026-04-24-arksync-node-readme/spec.md .agent/tasks/2026-04-24-arksync-node-readme/verify-readme.ts .agent/tasks/2026-04-24-arksync-node-readme/problems.md > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-readme\git-diff-check.txt 2>&1"
 ```

@@ -1,17 +1,17 @@
-// Eden ARK bridge — Phase 2 cutover на @kepler/ark с cosmos-aware resolution.
+// Eden ARK bridge — Phase 2 cutover на @kosmos/ark с kepler-aware resolution.
 //
 // Поведение:
 //   1. При первом вызове `runArkRequest` (или явном `initArkRuntime()` из main.ts)
-//      выполняется `ensureKosmosRunning(...)`.
-//   2. Если Kosmos host доступен (lock-file + PID alive + protocol_version matches) —
+//      выполняется `ensureKeplerRunning(...)`.
+//   2. Если Kepler host доступен (lock-file + PID alive + protocol_version matches) —
 //      идём через WebSocket к нему (без spawn'а собственного ark-core-rpc).
-//   3. Если Kosmos недоступен И env `KEPLER_KOSMOS_OPTIONAL=1` — fallback на
+//   3. Если Kepler недоступен И env `KOSMOS_KEPLER_OPTIONAL=1` — fallback на
 //      self-managed sidecar (поведение pre-Phase-2).
 //   4. Иначе — fail с понятным сообщением (Phase 6 final state).
 //
 // Public API `runArkRequest` / `shutdownArk` сохранена для обратной совместимости
 // с `store.ts` (там 30+ call-sites через `runArkRequest({operation: ..., ...})`).
-// Постепенная миграция на typed API @kepler/ark (`client.objects.list()` и т.п.) —
+// Постепенная миграция на typed API @kosmos/ark (`client.objects.list()` и т.п.) —
 // отдельная follow-up задача.
 
 import fs from "node:fs";
@@ -21,10 +21,10 @@ import electron from "electron";
 
 import {
   ArkClient,
-  ensureKosmosRunning,
+  ensureKeplerRunning,
   getArkDbPathForSelectedSpace,
   readSharedSelectedSpace,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 
 const { app } = electron;
 
@@ -64,22 +64,22 @@ export interface ArkObjectLinkRecord {
 
 /**
  * Architectural model:
- *   Default — Kosmos OPTIONAL. Без Kosmos installed app работает standalone:
+ *   Default — Kepler OPTIONAL. Без Kepler installed app работает standalone:
  *   spawn'ит свой ark-core-rpc child, читает/пишет общую `ark.db`, **без sync**.
- *   Если установлен Kosmos host — app автоматически детектит lock-file и идёт
+ *   Если установлен Kepler host — app автоматически детектит lock-file и идёт
  *   через WS (получает sync + общий sidecar с другими апками).
  *
- *   `KEPLER_REQUIRE_KOSMOS=1` — для production / deployments, где запуск без
- *   Kosmos нежелателен (например, чтобы гарантировать sync включён).
- *   `KEPLER_KOSMOS_OPTIONAL=1` — legacy флаг (no-op, fallback включён always).
+ *   `KOSMOS_REQUIRE_KEPLER=1` — для production / deployments, где запуск без
+ *   Kepler нежелателен (например, чтобы гарантировать sync включён).
+ *   `KOSMOS_KEPLER_OPTIONAL=1` — legacy флаг (no-op, fallback включён always).
  */
-function isKosmosRequired(): boolean {
-  return process.env.KEPLER_REQUIRE_KOSMOS === "1";
+function isKeplerRequired(): boolean {
+  return process.env.KOSMOS_REQUIRE_KEPLER === "1";
 }
 
-function isKosmosOptional(): boolean {
+function isKeplerOptional(): boolean {
   // Backwards compat — flag всё ещё respected, но default behavior уже optional.
-  return !isKosmosRequired();
+  return !isKeplerRequired();
 }
 
 function getArkBinaryPath(): string {
@@ -138,7 +138,7 @@ function resolveSpaceId(): string {
 }
 
 function resolveDeviceId(): string {
-  // Eden исторически не делал start_sync (sync принадлежит Kosmos в Phase 5).
+  // Eden исторически не делал start_sync (sync принадлежит Kepler в Phase 5).
   // Stable deviceId на основе platform достаточен для HLC локального origin'а.
   return `eden-${process.platform}`;
 }
@@ -151,12 +151,12 @@ async function resolveClient(): Promise<ArkClient> {
   if (clientPromise) return clientPromise;
 
   clientPromise = (async (): Promise<ArkClient> => {
-    const state = await ensureKosmosRunning({
+    const state = await ensureKeplerRunning({
       appDataPath: app.getPath("appData"),
       waitMs: 10000,
-      // Если Kosmos required (флаг не set) — auto-launch. Если optional — пробуем
+      // Если Kepler required (флаг не set) — auto-launch. Если optional — пробуем
       // подключиться к запущенному, но не пытаемся стартовать сами (fallback path).
-      autoLaunch: !isKosmosOptional(),
+      autoLaunch: !isKeplerOptional(),
     });
 
     const spaceId = resolveSpaceId();
@@ -165,12 +165,12 @@ async function resolveClient(): Promise<ArkClient> {
     switch (state.kind) {
       case "connected": {
         console.log(
-          `[eden.ark] using Kosmos host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+          `[eden.ark] using Kepler host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
         );
         const client = new ArkClient({
           spaceId,
           deviceId,
-          cosmosLock: state.lock,
+          keplerLock: state.lock,
         });
         wireDriftEventLogging(client);
         clientInstance = client;
@@ -179,19 +179,19 @@ async function resolveClient(): Promise<ArkClient> {
 
       case "incompatible-version": {
         throw new Error(
-          `Kosmos protocol mismatch: server ${state.cosmosVersion.major}.${state.cosmosVersion.minor}.${state.cosmosVersion.patch}, ` +
-            `client expects ${state.clientMajor}.x. Update Kosmos or Eden.`,
+          `Kepler protocol mismatch: server ${state.keplerVersion.major}.${state.keplerVersion.minor}.${state.keplerVersion.patch}, ` +
+            `client expects ${state.clientMajor}.x. Update Kepler or Eden.`,
         );
       }
 
       case "launch-failed":
       case "not-installed": {
-        if (!isKosmosRequired()) {
+        if (!isKeplerRequired()) {
           // Default path: standalone mode без sync. App работает локально.
           const detail =
             state.kind === "not-installed"
-              ? "Kosmos не установлен — standalone mode, sync disabled"
-              : `Kosmos недоступен (${state.reason}) — standalone fallback`;
+              ? "Kepler не установлен — standalone mode, sync disabled"
+              : `Kepler недоступен (${state.reason}) — standalone fallback`;
           console.log(`[eden.ark] ${detail}`);
           const dbPath = getArkDbPath();
           fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -211,8 +211,8 @@ async function resolveClient(): Promise<ArkClient> {
             ? `checked: ${state.checkedPaths.join(", ") || "(no candidates)"}`
             : state.reason;
         throw new Error(
-          `Eden запущен с KEPLER_REQUIRE_KOSMOS=1, но Kosmos ${state.kind} (${detail}). ` +
-            `Установи Kepler Kosmos или сними флаг.`,
+          `Eden запущен с KOSMOS_REQUIRE_KEPLER=1, но Kepler ${state.kind} (${detail}). ` +
+            `Установи Kosmos Kepler или сними флаг.`,
         );
       }
     }
@@ -247,7 +247,7 @@ function wireDriftEventLogging(client: ArkClient): void {
 }
 
 /**
- * Явная инициализация runtime — pre-resolves cosmos/self-managed mode.
+ * Явная инициализация runtime — pre-resolves kepler/self-managed mode.
  * Вызывается из `main.ts` после `await initStore()` (см. `app.whenReady` hook),
  * чтобы при первом `runArkRequest` не было задержки на discovery + handshake.
  */

@@ -12,7 +12,7 @@ Windows titlebar layout accounts for `titlebar-area-y` in vertical sizing/alignm
 Result: PASS
 
 Evidence:
-- `packages/kepler-visuals/components/Titlebar.vue` now:
+- `packages/kosmos-visuals/components/Titlebar.vue` now:
   - uses `box-sizing: border-box`
   - sets Windows height/min-height to `calc(env(titlebar-area-y) + env(titlebar-area-height))`
   - sets `padding-top: env(titlebar-area-y, 0px)`
@@ -25,7 +25,7 @@ Result: PASS
 
 Evidence:
 - No renderer/main-process IPC was added.
-- The change is confined to CSS in `packages/kepler-visuals/components/Titlebar.vue`.
+- The change is confined to CSS in `packages/kosmos-visuals/components/Titlebar.vue`.
 - Raw artifact: `raw/titlebar-vertical-align-diff.txt`
 
 ### AC3

@@ -1,0 +1,160 @@
+:root {
+  --radius: 0.85rem;
+  --corner-shape: squircle;
+  --bringhurst-wide: 600px;
+  --accent: oklch(0.546 0.229 264.1);
+  --accent-foreground: oklch(0.985 0 0);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "IBM Plex Sans", "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-bg-primary: oklch(0.145 0 0);
+  --color-shape-highlight-light-solid: oklch(0.18 0 0);
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+
+  --surface: oklch(0.97 0 0);
+  --surface-foreground: oklch(0.205 0 0);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --status-success: oklch(62.7% 0.194 149.214);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  --sidebar-bg: var(--background);
+  --sidebar: var(--sidebar-bg);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-surface: oklch(0.97 0 0);
+  --sidebar-surface-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  --kosmos-text-heading-size: 28px;
+  --kosmos-text-heading-line-height: 1.02;
+  --kosmos-text-heading-letter-spacing: -0.4px;
+  --kosmos-text-heading-weight: 700;
+
+  --kosmos-text-subheading-size: 15px;
+  --kosmos-text-subheading-line-height: 1.4;
+  --kosmos-text-subheading-letter-spacing: -0.1px;
+  --kosmos-text-subheading-weight: 500;
+
+  --kosmos-text-page-title-size: 34px;
+  --kosmos-text-page-title-line-height: 1.02;
+  --kosmos-text-page-title-letter-spacing: -0.5px;
+  --kosmos-text-page-title-weight: 700;
+
+  --kosmos-type-title-1-size: var(--kosmos-text-heading-size);
+  --kosmos-type-title-1-line-height: var(--kosmos-text-heading-line-height);
+  --kosmos-type-title-1-letter-spacing: var(--kosmos-text-heading-letter-spacing);
+  --kosmos-type-title-1-weight: var(--kosmos-text-heading-weight);
+  --kosmos-page-max-width: 700px;
+}
+
+.dark {
+  --background: oklch(0.17 0 0);
+  --foreground: oklch(0.985 0 0);
+
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+
+  --secondary: oklch(0.269 0.00003 271);
+  --secondary-foreground: oklch(0.985 0 0);
+
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+
+  --surface: oklch(0.269 0 0);
+  --surface-foreground: oklch(0.985 0 0);
+
+  --destructive: oklch(0.704 0.191 22.216);
+  --status-success: oklch(62.7% 0.194 149.214);
+
+  --border: oklch(0.23 0.00004 271);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.53 0 0);
+
+  --color-shape-highlight-light-solid: oklch(0.17 0.003 251);
+
+  --sidebar-bg: oklch(0.15 0 0);
+  --sidebar: var(--sidebar-bg);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.58 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-surface: oklch(0.32 0 0);
+  --sidebar-surface-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+.kosmos-game-poster-card {
+  isolation: isolate;
+  aspect-ratio: 16 / 9;
+}
+
+.kosmos-game-poster-card__media-stack {
+  isolation: isolate;
+}
+
+.kosmos-game-poster-card__media {
+  z-index: 0;
+}
+
+.kosmos-game-poster-card__scrim {
+  height: 62%;
+  background: linear-gradient(
+    to top,
+    rgb(0 0 0 / 82%) 0%,
+    rgb(0 0 0 / 48%) 52%,
+    transparent 100%
+  );
+}
+
+.kosmos-game-poster-card__overlay {
+  background: var(--background);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.kosmos-game-poster-card__eyebrow {
+  color: #fff;
+}
+
+.kosmos-game-poster-card__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.38);
+}
+
+.kosmos-game-poster-card:hover .kosmos-game-poster-card__overlay,
+.kosmos-game-poster-card:focus-visible .kosmos-game-poster-card__overlay {
+  opacity: 0.4;
+}

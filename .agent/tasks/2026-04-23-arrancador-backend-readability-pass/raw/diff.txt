@@ -17,7 +17,7 @@ index 01f155a..e5516ff 100644
 -} from "electron";
 -
 +  getArkDbPathForSelectedSpace,
-+  getKeplerDataDir,
++  getKosmosDataDir,
 +  readSharedSelectedSpace,
 +} from "../../../../packages/shared-space/selectedSpace";
 +import { syncArkRuntimeBinding } from "./ark-runtime";
@@ -102,7 +102,7 @@ index 01f155a..e5516ff 100644
    if (override) {
      return override;
    }
--  return path.join(app.getPath("appData"), "Kepler", "ark.db");
+-  return path.join(app.getPath("appData"), "Kosmos", "ark.db");
 -}
  
 -async function getSettingsMap(db: DbLike): Promise<Record<string, string>> {
@@ -156,7 +156,7 @@ index 01f155a..e5516ff 100644
 -
 -function defaultBackupDirectory() {
 -  return path.join(app.getPath("userData"), "backups");
-+  return path.join(getKeplerDataDir(app.getPath("appData")), "ark.db");
++  return path.join(getKosmosDataDir(app.getPath("appData")), "ark.db");
  }
  
 -async function getBackupRoot(db: DbLike): Promise<string> {

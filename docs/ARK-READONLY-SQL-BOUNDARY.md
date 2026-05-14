@@ -8,14 +8,14 @@ There are two separate questions:
 The write rule is strict: app TypeScript services must not write directly to ARK
 tables such as `objects`, `object_types`, `object_links`, `tracked_apps`,
 `usage_sessions`, `usage_events`, or `sync_kv`. Writes go through
-`ark-core-rpc` / `@kepler/ark`, or through Rust `ark_core::db` helpers in
+`ark-core-rpc` / `@kosmos/ark`, or through Rust `ark_core::db` helpers in
 dedicated Rust writers such as `usage-tracker`.
 
 Read-only inspection is looser:
 
 - Dashboard is a read-only inspector/analytics app. It may inspect a selected
   ARK SQLite database from Electron main, similar to a database console.
-- Arrancador normal app flows should read through `@kepler/ark` first. Direct
+- Arrancador normal app flows should read through `@kosmos/ark` first. Direct
   read-only SQLite is allowed only as an emergency fallback when the ARK runtime
   is unavailable.
 - Renderer code must not open SQLite directly.

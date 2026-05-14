@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPersonalSelectedSpace } from "@kepler/ark";
+import { buildPersonalSelectedSpace } from "@kosmos/ark";
 import { syncArkRuntimeBinding } from "./ark-runtime";
 
 describe("syncArkRuntimeBinding", () => {
@@ -10,7 +10,7 @@ describe("syncArkRuntimeBinding", () => {
     const result = syncArkRuntimeBinding(
       {
         arkDbPath:
-          "C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\spaces\\"
+          "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\spaces\\"
           + `${selection.spaceId}\\ark.db`,
         services,
       },
@@ -33,7 +33,7 @@ describe("syncArkRuntimeBinding", () => {
     const result = syncArkRuntimeBinding(
       {
         arkDbPath:
-          "C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\spaces\\"
+          "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\spaces\\"
           + `${previousSelection.spaceId}\\ark.db`,
         services: { marker: "previous-service" },
       },
@@ -42,7 +42,7 @@ describe("syncArkRuntimeBinding", () => {
         selection: nextSelection,
         createServices: (arkDbPath) => {
           expect(arkDbPath).toBe(
-            "C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\spaces\\"
+            "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\spaces\\"
               + `${nextSelection.spaceId}\\ark.db`,
           );
           return nextServices;
@@ -53,7 +53,7 @@ describe("syncArkRuntimeBinding", () => {
     expect(result.changed).toBe(true);
     expect(result.services).toBe(nextServices);
     expect(result.arkDbPath).toBe(
-      "C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\spaces\\"
+      "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\spaces\\"
         + `${nextSelection.spaceId}\\ark.db`,
     );
   });

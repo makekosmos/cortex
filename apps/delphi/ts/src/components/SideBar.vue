@@ -11,12 +11,12 @@ import {
   Star,
 } from "lucide-vue-next";
 import {
-  Sidebar as KeplerSidebar,
+  Sidebar as KosmosSidebar,
   type SidebarConfig,
   type SidebarNavItem,
   type SidebarProjectGroup,
   type SidebarProjectItem,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
@@ -208,7 +208,7 @@ const footerItems = computed<SidebarNavItem[]>(() =>
 </script>
 
 <template>
-  <KeplerSidebar
+  <KosmosSidebar
     :primary-items="primaryItems"
     :project-groups="projectGroups"
     :footer-items="footerItems"

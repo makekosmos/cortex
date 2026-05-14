@@ -13,7 +13,7 @@ Restore broken Russian user-facing text in the Delphi desktop status tooltip/pop
 - AC3: TypeScript verification for `apps/delphi/ts` passes after the change.
 
 ## Source of Truth
-- Git history for `apps/delphi/ts/src/App.vue`, especially commit `0abe11d` (`better kepler ui`), which contains intact Russian strings for the same UI block.
+- Git history for `apps/delphi/ts/src/App.vue`, especially commit `0abe11d` (`better kosmos ui`), which contains intact Russian strings for the same UI block.
 
 ## Notes
 - Keep the fix minimal and localized to the broken text block unless current-code verification shows additional required edits.

@@ -3,7 +3,7 @@
 ## Metadata
 - Task ID: p2p-lan-sync
 - Created: 2026-03-31T17:53:01+00:00
-- Repo root: /Users/kirill/Documents/projects/kosmos
+- Repo root: /Users/kirill/Documents/projects/kepler
 - Scope: Фаза 1 only (минимальный работающий sync)
 
 ## Guidance sources

@@ -5,19 +5,19 @@
     "commands": [
       {
         "command": "bun run typecheck",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-playwright-dom-diagnosis/raw/typecheck.log"
       },
       {
         "command": "bun run test",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-playwright-dom-diagnosis/raw/test.log"
       },
       {
         "command": "bun x playwright screenshot --browser chromium ...",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "FAIL",
         "artifact": ".agent/tasks/2026-04-19-arrancador-playwright-dom-diagnosis/raw/playwright-cli-error.log",
         "notes": [

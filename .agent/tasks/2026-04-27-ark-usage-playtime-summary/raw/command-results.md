@@ -35,7 +35,7 @@ Result: PASS
 Command:
 
 ```powershell
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 ```
 
 Result: PASS

@@ -200,7 +200,7 @@ onUnmounted(() => {
 <template>
   <div
     :class="[
-      !mobile && 'kepler-sidebar-wrapper',
+      !mobile && 'kosmos-sidebar-wrapper',
       !mobile && showCollapsedRail && 'is-hidden collapsed',
       !mobile && unmountDesktopContent && 'hidden collapsed',
       !mobile && animating && 'animating',
@@ -209,7 +209,7 @@ onUnmounted(() => {
     ]"
     :style="wrapperStyle"
   >
-    <div class="kepler-sidebar-content">
+    <div class="kosmos-sidebar-content">
       <aside
         class="arrancador-sidebar-shell"
         :class="[
@@ -237,35 +237,35 @@ onUnmounted(() => {
                 trigger-variant="sidebar"
                 trigger-class-name="arrancador-sidebar-search-button"
               />
-              <div class="kepler-sidebar-divider" />
+              <div class="kosmos-sidebar-divider" />
             </template>
 
             <RouterLink
               v-for="item in navItems"
               :key="item.to"
               :to="item.to"
-              class="kepler-sidebar-btn"
-              :class="{ 'kepler-sidebar-btn--active': isActiveRoute(item.to) }"
+              class="kosmos-sidebar-btn"
+              :class="{ 'kosmos-sidebar-btn--active': isActiveRoute(item.to) }"
             >
               <component :is="item.icon" class="h-[18px] w-[18px] shrink-0" />
               <span class="truncate">{{ t(item.key) }}</span>
             </RouterLink>
 
             <template v-if="gamesStore.favorites.length > 0">
-              <div class="kepler-sidebar-divider" />
-              <div class="kepler-sidebar-section-label">{{ t("sidebar.favorites") }}</div>
+              <div class="kosmos-sidebar-divider" />
+              <div class="kosmos-sidebar-section-label">{{ t("sidebar.favorites") }}</div>
 
               <RouterLink
                 v-for="game in gamesStore.favorites.slice(0, 5)"
                 :key="game.id"
                 :to="`/game/${game.id}`"
-                class="kepler-sidebar-project-link"
+                class="kosmos-sidebar-project-link"
                 :class="{
-                  'kepler-sidebar-project-link--active': route.path === `/game/${game.id}`,
+                  'kosmos-sidebar-project-link--active': route.path === `/game/${game.id}`,
                 }"
               >
                 <Star class="h-[14px] w-[14px] shrink-0 text-yellow-500" />
-                <span class="kepler-sidebar-project-label">{{ game.name }}</span>
+                <span class="kosmos-sidebar-project-label">{{ game.name }}</span>
               </RouterLink>
 
               <div
@@ -277,11 +277,11 @@ onUnmounted(() => {
             </template>
           </div>
 
-          <div class="kepler-sidebar-footer">
+          <div class="kosmos-sidebar-footer">
             <RouterLink
               to="/settings"
-              class="kepler-sidebar-btn"
-              :class="{ 'kepler-sidebar-btn--active': route.path === '/settings' }"
+              class="kosmos-sidebar-btn"
+              :class="{ 'kosmos-sidebar-btn--active': route.path === '/settings' }"
             >
               <Settings class="h-[18px] w-[18px] shrink-0" />
               <span class="truncate">{{ t("sidebar.settings") }}</span>
@@ -293,10 +293,10 @@ onUnmounted(() => {
 
     <div
       v-if="!mobile && !hidden"
-      class="kepler-sidebar-resize-handle"
+      class="kosmos-sidebar-resize-handle"
       @mousedown="handleResizeStart"
     >
-      <div class="kepler-resize-handle-line" />
+      <div class="kosmos-resize-handle-line" />
     </div>
   </div>
 </template>

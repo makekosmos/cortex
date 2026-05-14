@@ -17,7 +17,7 @@ Result: PASS
 - PASS: `bun run --cwd apps/delphi/ts build`
 - PASS: `bun run --cwd apps/eden/ts test:ark-migration`
 - PASS: `bun run --cwd apps/eden/ts build`
-- PASS: `bun run --cwd packages/kepler-ark typecheck`
+- PASS: `bun run --cwd packages/kosmos-ark typecheck`
 - PASS: `bun run ark:smoke`
 - PASS: `git diff --check` with line-ending warnings only
 

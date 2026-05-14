@@ -6,7 +6,7 @@ import {
   type ArkTrackedAppRecord,
   type ArkUsageApi,
   type JsonValue,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 
 import { openSqliteDatabase } from "../db";
 import { queryAll } from "../helpers/db";

@@ -1,5 +1,5 @@
 // Phase 4 (scaffold): local spool для буферизации usage-tracker writes когда
-// Kosmos host недоступен (cold-start race, кратковременный crash).
+// Kepler host недоступен (cold-start race, кратковременный crash).
 //
 // Реализация — простая in-memory очередь. Persistent SQLite spool — следующий
 // шаг (когда понадобится переживать restart usage-tracker'а).

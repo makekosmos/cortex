@@ -48,8 +48,8 @@ bun run typecheck   # tsc --noEmit (в TS-пакетах)
 ```powershell
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
-bun run --cwd packages/kepler-ark typecheck
-bun run --cwd packages/kepler-ark build
+bun run --cwd packages/kosmos-ark typecheck
+bun run --cwd packages/kosmos-ark build
 ```
 
 ## Сборка приложения (на примере Delphi)

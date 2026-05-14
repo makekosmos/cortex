@@ -11,5 +11,5 @@
   - `apps/eden/ts/src/InlineCaret.ts` remains present and unchanged in the codebase.
 
 - AC4: PASS
-  - `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\eden\ts\tsconfig.json`
+  - `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\tsconfig.json`
 

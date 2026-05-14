@@ -3,7 +3,7 @@
 Шпаргалка по всем командам, которые есть в репо.
 
 ::: tip Конвенция сборки релизов
-Для всех desktop-приложений Kepler `bun run build` из директории приложения
+Для всех desktop-приложений Kosmos `bun run build` из директории приложения
 производит **финальный установщик в формате MSI** (Windows Installer).
 Это единый формат дистрибуции — установка per-machine, поддерживает enterprise-деплой,
 unattended install и GPO. NSIS (`.exe`) больше не используем.
@@ -15,7 +15,7 @@ unattended install и GPO. NSIS (`.exe`) больше не используем.
 
 ## Корневые
 
-Из корня `kepler/`:
+Из корня `kosmos/`:
 
 ```powershell
 bun install                      # установка зависимостей всех workspaces
@@ -37,8 +37,8 @@ bun run docs:preview             # превью собранного
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
 
-bun run --cwd packages/kepler-ark typecheck
-bun run --cwd packages/kepler-ark build
+bun run --cwd packages/kosmos-ark typecheck
+bun run --cwd packages/kosmos-ark build
 ```
 
 ## Eden
@@ -127,8 +127,8 @@ $env:USAGE_TRACKER_POLL_MS = "1000"
 Установка / удаление:
 
 ```powershell
-.\dist\KeplerUsageTrackerInstaller\install.ps1
-.\dist\KeplerUsageTrackerInstaller\uninstall.ps1
+.\dist\KosmosUsageTrackerInstaller\install.ps1
+.\dist\KosmosUsageTrackerInstaller\uninstall.ps1
 ```
 
 ## Android
@@ -147,26 +147,26 @@ cd apps/delphi/kotlin
 .\gradlew build
 ```
 
-Для запуска на устройстве — обе APK должны быть установлены и подписаны одним ключом (signature permission `com.kepler.ark.data.READ_WRITE`).
+Для запуска на устройстве — обе APK должны быть установлены и подписаны одним ключом (signature permission `com.kosmos.ark.data.READ_WRITE`).
 
 ## Smoke матрица (по разделу)
 
 ```powershell
 # Зафиксировать корень
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
-New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
+New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 
 # Core
 cargo test --manifest-path packages\ark-core\rust\Cargo.toml
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 
 # Usage tracker
 cargo test --manifest-path services\usage-tracker\Cargo.toml
 
 # Dashboard
-node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
-node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 bun run --cwd apps/dashboard test:e2e:smoke
 
 # Delphi / Eden shared objects

@@ -4,21 +4,21 @@ import path from "node:path";
 
 import {
   ArkClient,
-  ensureKosmosRunning,
+  ensureKeplerRunning,
   type ArkObjectRecord,
   type ArkObjectsApi,
   type ArkObjectTypesApi,
   type JsonValue,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 import electron from "electron";
 
-/** Kosmos optional by default. KEPLER_REQUIRE_KOSMOS=1 для строгого режима. */
-function isKosmosRequired(): boolean {
-  return process.env.KEPLER_REQUIRE_KOSMOS === "1";
+/** Kepler optional by default. KOSMOS_REQUIRE_KEPLER=1 для строгого режима. */
+function isKeplerRequired(): boolean {
+  return process.env.KOSMOS_REQUIRE_KEPLER === "1";
 }
 
-function isKosmosOptional(): boolean {
-  return !isKosmosRequired();
+function isKeplerOptional(): boolean {
+  return !isKeplerRequired();
 }
 
 import type { Game } from "./games/types";
@@ -371,23 +371,23 @@ export function createArkGameObjectService(
       const deviceName = options.deviceName ?? "Arrancador";
       const requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
 
-      // Phase 3: cosmos-aware resolution.
-      const state = await ensureKosmosRunning({
+      // Phase 3: kepler-aware resolution.
+      const state = await ensureKeplerRunning({
         appDataPath: app.getPath("appData"),
         waitMs: 10000,
-        autoLaunch: !isKosmosOptional(),
+        autoLaunch: !isKeplerOptional(),
       });
 
       switch (state.kind) {
         case "connected": {
           console.log(
-            `[arrancador.ark] using Kosmos host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+            `[arrancador.ark] using Kepler host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
           );
           const client = new ArkClient({
             spaceId,
             deviceId,
             deviceName,
-            cosmosLock: state.lock,
+            keplerLock: state.lock,
             requestTimeoutMs,
           });
           arkClient = client;
@@ -395,24 +395,24 @@ export function createArkGameObjectService(
         }
         case "incompatible-version": {
           throw new Error(
-            `Kosmos protocol mismatch: server ${state.cosmosVersion.major}.${state.cosmosVersion.minor}.${state.cosmosVersion.patch}, ` +
+            `Kepler protocol mismatch: server ${state.keplerVersion.major}.${state.keplerVersion.minor}.${state.keplerVersion.patch}, ` +
               `client expects ${state.clientMajor}.x.`,
           );
         }
         case "launch-failed":
         case "not-installed": {
-          if (isKosmosRequired()) {
+          if (isKeplerRequired()) {
             const detail =
               state.kind === "not-installed"
                 ? `checked: ${state.checkedPaths.join(", ") || "(no candidates)"}`
                 : state.reason;
             throw new Error(
-              `Arrancador запущен с KEPLER_REQUIRE_KOSMOS=1, но Kosmos ${state.kind} (${detail}). ` +
-                `Установи Kepler Kosmos или сними флаг.`,
+              `Arrancador запущен с KOSMOS_REQUIRE_KEPLER=1, но Kepler ${state.kind} (${detail}). ` +
+                `Установи Kosmos Kepler или сними флаг.`,
             );
           }
           console.log(
-            `[arrancador.ark] Kosmos ${state.kind} — standalone mode, sync disabled`,
+            `[arrancador.ark] Kepler ${state.kind} — standalone mode, sync disabled`,
           );
           const client = new ArkClient({
             spaceId,

@@ -8,7 +8,7 @@ $ vite build --configLoader native
 rendering chunks...
 computing gzip size...
 out/renderer/index.html                                    3.34 kB │ gzip:  1.24 kB
-out/renderer/assets/kepler-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
+out/renderer/assets/kosmos-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
 out/renderer/assets/index--uRUBvyf.css                    92.83 kB │ gzip: 14.83 kB
 out/renderer/assets/loader-circle-DAwEm5_j.js              0.13 kB │ gzip:  0.14 kB
 out/renderer/assets/plus-CtTQLWac.js                       0.14 kB │ gzip:  0.13 kB
@@ -30,7 +30,7 @@ out/renderer/assets/games-CCJUiZIZ.js                      1.11 kB │ gzip:  0.
 out/renderer/assets/useSidebarConfig-Ldxg99v8.js           1.50 kB │ gzip:  0.74 kB
 out/renderer/assets/useToast-DqeT-yei.js                   3.51 kB │ gzip:  1.59 kB
 out/renderer/assets/api-rJXYP5Gm.js                        4.29 kB │ gzip:  1.79 kB
-out/renderer/assets/kepler-visuals-D-UnDLKc.js             5.55 kB │ gzip:  2.36 kB
+out/renderer/assets/kosmos-visuals-D-UnDLKc.js             5.55 kB │ gzip:  2.36 kB
 out/renderer/assets/pinia-CEErbrLS.js                      6.00 kB │ gzip:  2.83 kB
 out/renderer/assets/CataloguePage-C_-gMZXR.js              6.19 kB │ gzip:  2.58 kB
 out/renderer/assets/useSettingsPageState-CiT0AAi9.js       7.20 kB │ gzip:  2.80 kB
@@ -75,9 +75,9 @@ Error: spawn EPERM
     at ChildProcess.spawn (node:internal/child_process:420:11)
     at spawn (node:child_process:753:9)
     at Object.fork (node:child_process:171:10)
-    at WorkerHost.startRunner (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\processHost.js:54:49)
-    at WorkerHost.start (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\workerHost.js:69:23)
-    at Dispatcher._runJobInWorker (D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\dispatcher.js:103:20) {
+    at WorkerHost.startRunner (D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\processHost.js:54:49)
+    at WorkerHost.start (D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\workerHost.js:69:23)
+    at Dispatcher._runJobInWorker (D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\playwright@1.58.2\node_modules\playwright\lib\runner\dispatcher.js:103:20) {
   errno: -4048,
   code: 'EPERM',
   syscall: 'spawn'
@@ -85,7 +85,7 @@ Error: spawn EPERM
 
 Node.js v22.16.0
 [e2e] Playwright test runner failed, retrying with inline fallback: warn: C:\Users\Kazui\.bun\bin\bun.exe x playwright test exited with code 1
-      at <anonymous> (D:\Personal\Hobby\Coding\kepler\apps\arrancador\scripts\run-e2e.ts:22:18)
+      at <anonymous> (D:\Personal\Hobby\Coding\kosmos\apps\arrancador\scripts\run-e2e.ts:22:18)
       at emit (node:events:98:22)
       at #handleOnExit (node:child_process:532:14)
 
@@ -100,7 +100,7 @@ error: launch: EPERM: operation not permitted, uv_spawn 'C:\Users\Kazui\AppData\
 Call log:
 [2m  - <launching> C:\Users\Kazui\AppData\Local\ms-playwright\chromium_headless_shell-1208\chrome-headless-shell-win64\chrome-headless-shell.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=C:\Users\Kazui\AppData\Local\Temp\playwright_chromiumdev_profile-q8braF --remote-debugging-pipe --no-startup-window[22m
 
-      at D:\Personal\Hobby\Coding\kepler\node_modules\.bun\playwright-core@1.58.2\node_modules\playwright-core\lib\client\errors.js:65:17
+      at D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\playwright-core@1.58.2\node_modules\playwright-core\lib\client\errors.js:65:17
 
 Bun v1.3.5 (Windows x64)
 17 |     child.once("exit", (code) => {
@@ -111,7 +111,7 @@ Bun v1.3.5 (Windows x64)
 22 |       reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
                       ^
 error: C:\Users\Kazui\.bun\bin\bun.exe run scripts/run-e2e-inline.ts exited with code 1
-      at <anonymous> (D:\Personal\Hobby\Coding\kepler\apps\arrancador\scripts\run-e2e.ts:22:18)
+      at <anonymous> (D:\Personal\Hobby\Coding\kosmos\apps\arrancador\scripts\run-e2e.ts:22:18)
       at emit (node:events:98:22)
       at #handleOnExit (node:child_process:532:14)
 

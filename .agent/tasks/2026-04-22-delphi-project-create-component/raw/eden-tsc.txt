@@ -1,5 +1,5 @@
 Command:
-cmd.exe /c "cd /d D:\Personal\Hobby\Coding\kepler\apps\eden\ts && bun x tsc --noEmit"
+cmd.exe /c "cd /d D:\Personal\Hobby\Coding\kosmos\apps\eden\ts && bun x tsc --noEmit"
 
 Result:
 PASS

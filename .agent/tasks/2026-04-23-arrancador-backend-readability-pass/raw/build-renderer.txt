@@ -4,7 +4,7 @@ $ vite build --configLoader native
 rendering chunks...
 computing gzip size...
 out/renderer/index.html                                    3.34 kB │ gzip:  1.23 kB
-out/renderer/assets/kepler-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
+out/renderer/assets/kosmos-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
 out/renderer/assets/index--uRUBvyf.css                    92.83 kB │ gzip: 14.83 kB
 out/renderer/assets/loader-circle-DAwEm5_j.js              0.13 kB │ gzip:  0.14 kB
 out/renderer/assets/plus-CtTQLWac.js                       0.14 kB │ gzip:  0.13 kB
@@ -26,7 +26,7 @@ out/renderer/assets/games-CCJUiZIZ.js                      1.11 kB │ gzip:  0.
 out/renderer/assets/useSidebarConfig-Ldxg99v8.js           1.50 kB │ gzip:  0.74 kB
 out/renderer/assets/useToast-DqeT-yei.js                   3.51 kB │ gzip:  1.59 kB
 out/renderer/assets/api-rJXYP5Gm.js                        4.29 kB │ gzip:  1.79 kB
-out/renderer/assets/kepler-visuals-D-UnDLKc.js             5.55 kB │ gzip:  2.36 kB
+out/renderer/assets/kosmos-visuals-D-UnDLKc.js             5.55 kB │ gzip:  2.36 kB
 out/renderer/assets/pinia-CEErbrLS.js                      6.00 kB │ gzip:  2.83 kB
 out/renderer/assets/CataloguePage-D0zNuFDk.js              6.19 kB │ gzip:  2.58 kB
 out/renderer/assets/useSettingsPageState-CiT0AAi9.js       7.20 kB │ gzip:  2.80 kB

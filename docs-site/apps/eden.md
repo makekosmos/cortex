@@ -20,16 +20,16 @@ Eden — основное приложение для записей: дневн
 └─────────────────────────────────┘
 ```
 
-- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kepler/visuals`.
+- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kosmos/visuals`.
 - **main/** — Electron main process: IPC handlers, SQLite storage (`store.ts`), Heart integration, Hevy sync, мост на ARK через `ark.ts`.
 - **heart/** — Rust binary: vault filesystem manager (note types, folders, save/move/delete с hardening), stdin/stdout sidecar. **Не** search engine — search мигрирован на ARK FTS5 в `store.ts:searchEntries`.
 
 ### ARK transport (Phase 2 cutover)
 
-`main/ark.ts` использует `@kepler/ark` с cosmos-aware resolution:
+`main/ark.ts` использует `@kosmos/ark` с kepler-aware resolution:
 
-- По умолчанию пытается подключиться к [Kosmos host](./kosmos.md) через WebSocket. Если Kosmos запущен — Eden не спавнит собственный `ark-core-rpc`.
-- Env-флаг `KEPLER_KOSMOS_OPTIONAL=1` включает **fallback** на self-managed sidecar (legacy режим), если Kosmos недоступен. Это transitional флаг — будет убран в Phase 6.
+- По умолчанию пытается подключиться к [Kepler host](./kepler.md) через WebSocket. Если Kepler запущен — Eden не спавнит собственный `ark-core-rpc`.
+- Env-флаг `KOSMOS_KEPLER_OPTIONAL=1` включает **fallback** на self-managed sidecar (legacy режим), если Kepler недоступен. Это transitional флаг — будет убран в Phase 6.
 - Eden подписывается на `sync_error`/`sync_replay` events для observability schema drift'а (см. [sync hold-and-replay](../concepts/sync.md#schema-drift-hold-and-replay-phase-2)).
 
 ## Стек
@@ -61,7 +61,7 @@ apps/eden/
    │  ├─ main.ts                 # init, BrowserWindow, IPC handlers
    │  ├─ preload.ts
    │  ├─ store.ts                # SQLite: entries, folders, note types, trash, vault
-   │  ├─ ark.ts                  # мост на @kepler/ark
+   │  ├─ ark.ts                  # мост на @kosmos/ark
    │  ├─ heart.ts                # Eden Heart sidecar
    │  ├─ hevy.ts                 # Hevy fitness API
    │  └─ hevySync.ts             # Hevy → Eden entries
@@ -124,9 +124,9 @@ bun x tsc --noEmit
 - **Heart остаётся**, не возвращаться к ripgrep. Расширение поиска — инкрементальный индекс в Tantivy, не новый JS-хак.
 - **Storage hardening** в `main/store.ts` — не упрощать. Защита для `save`/`move`/`delete` уже есть, не ломай её.
 - **tree-aware path logic**: для markdown-файлов один путь заметки, не плоские пути.
-- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`. **Не возвращай** ручные `--titlebar-height` / `--titlebar-left-safe-area` хаки в shell.
-- **Titlebar history controls** — общий `TitlebarHistoryControls` из `@kepler/visuals`. Состояние — из локальной истории экранов/записей Eden, **не** из vue-router.
-- **Shared visuals**: если компонент есть в `@kepler/visuals` — импорт через public API пакета, не deep import. Локальные `src/components/sidebar/*` — это **app-specific** контейнеры, не дубли shared UI.
+- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kosmos/visuals`. **Не возвращай** ручные `--titlebar-height` / `--titlebar-left-safe-area` хаки в shell.
+- **Titlebar history controls** — общий `TitlebarHistoryControls` из `@kosmos/visuals`. Состояние — из локальной истории экранов/записей Eden, **не** из vue-router.
+- **Shared visuals**: если компонент есть в `@kosmos/visuals` — импорт через public API пакета, не deep import. Локальные `src/components/sidebar/*` — это **app-specific** контейнеры, не дубли shared UI.
 - **Alias** `@/` → `src/`.
 - **preload**: `vite-plugin-electron` (бывший) генерирует `preload.mjs`, не `.js`. В `main.ts` путь — `.mjs`.
 

@@ -20,7 +20,7 @@ Add a small typed object-model API surface to `@arksync/node` over the existing 
 
 ## Out Of Scope
 
-- Renaming `@arksync/node` to `@kepler/ark`.
+- Renaming `@arksync/node` to `@kosmos/ark`.
 - Adding usage analytics APIs.
 - Changing Rust object schema or RPC operation names.
 - Rewriting Eden/Delphi to consume these new namespaces.

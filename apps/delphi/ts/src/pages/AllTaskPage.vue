@@ -7,7 +7,7 @@ import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 import { useSidebarState } from "@/composables/useSidebarState";
-import { TodoRow } from "@kepler/visuals";
+import { TodoRow } from "@kosmos/visuals";
 
 const { show: openQuickEntry } = useQuickEntry();
 const {

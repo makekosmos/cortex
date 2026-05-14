@@ -13,8 +13,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 uuid = { version = "1", features = ["v4"] }
-# Phase 4: WS-клиент к Kosmos host (replace direct ARK writes).
-# Wiring в main.rs — opt-in через env USAGE_TRACKER_USE_COSMOS=1 (по умолчанию остаётся direct write).
+# Phase 4: WS-клиент к Kepler host (replace direct ARK writes).
+# Wiring в main.rs — opt-in через env USAGE_TRACKER_USE_KEPLER=1 (по умолчанию остаётся direct write).
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "macros", "time", "sync", "io-util"] }
 tokio-tungstenite = "0.24"
 futures-util = "0.3"

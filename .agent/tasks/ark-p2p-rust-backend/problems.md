@@ -6,8 +6,8 @@
 - **Why it is not proven**: `apps/delphi/ts/src/services/sync/ark-client.ts` still exists. The spec states "Any file named `ark-client.ts` under `apps/delphi/ts/`" must not exist. This file is actively imported by App.vue, SettingsPage.vue, ProjectPage.vue, store/todos.ts, store/tasks.ts, and peer-bridge.ts.
 - **Minimal reproduction**:
   ```bash
-  ls /Users/kirill/Documents/projects/kosmos/apps/delphi/ts/src/services/sync/ark-client.ts
-  grep -r "ark-client" /Users/kirill/Documents/projects/kosmos/apps/delphi/ts/src/
+  ls /Users/kirill/Documents/projects/kepler/apps/delphi/ts/src/services/sync/ark-client.ts
+  grep -r "ark-client" /Users/kirill/Documents/projects/kepler/apps/delphi/ts/src/
   ```
 - **Expected**: File does not exist; grep returns empty.
 - **Actual**: File exists (the legacy WebSocket sync client for the Delphi web Vue renderer, used by multiple Vue pages and Pinia stores).
@@ -34,9 +34,9 @@
   - `ArkEventMapper.kt` — imported by TodoViewModel
 - **Minimal reproduction**:
   ```bash
-  ls /Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/ArkSyncClient.kt
+  ls /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/ArkSyncClient.kt
   grep -r "ArkSyncClient\|ArkPeerManager\|ArkPeerProtocol\|ArkEventMapper" \
-    /Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin/app/src/main/java/
+    /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin/app/src/main/java/
   ```
 - **Expected**: Files do not exist; grep in `src/main/java/` returns empty.
 - **Actual**: All four files exist and are referenced by multiple ViewModel source files.
@@ -65,8 +65,8 @@
 - **Minimal reproduction**:
   ```bash
   grep -n "peer-manager.ts\|peer-discovery.ts\|ArkSyncClient\|ark-client.*legacy" \
-    /Users/kirill/Documents/projects/kosmos/apps/delphi/CLAUDE.md
-  grep -n "ArkSyncClient" /Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin/CLAUDE.md
+    /Users/kirill/Documents/projects/kepler/apps/delphi/CLAUDE.md
+  grep -n "ArkSyncClient" /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin/CLAUDE.md
   ```
 - **Expected**: No references to deleted legacy files in active file-tree sections; legacy sections explicitly marked as "DELETED" or removed entirely.
 - **Actual**: Multiple entries still listed as if the files are present.

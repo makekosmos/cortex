@@ -3,12 +3,12 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ArkClient } from '@kepler/ark';
+import { ArkClient } from '@kosmos/ark';
 import {
   buildSharedSelectedSpaceFromCode,
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
-} from '@kepler/ark';
+} from '@kosmos/ark';
 
 /** Minimal sync entity type (matches Rust SyncEntity wire format). */
 interface SyncEntity {
@@ -73,11 +73,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
-const testAppDataPath = process.env.KEPLER_TEST_APPDATA
-  ? path.resolve(process.env.KEPLER_TEST_APPDATA)
+const testAppDataPath = process.env.KOSMOS_TEST_APPDATA
+  ? path.resolve(process.env.KOSMOS_TEST_APPDATA)
   : null;
-const testUserDataPath = process.env.KEPLER_TEST_USER_DATA
-  ? path.resolve(process.env.KEPLER_TEST_USER_DATA)
+const testUserDataPath = process.env.KOSMOS_TEST_USER_DATA
+  ? path.resolve(process.env.KOSMOS_TEST_USER_DATA)
   : null;
 
 if (testUserDataPath) {
@@ -115,7 +115,7 @@ process.on('exit', (code) => {
 });
 
 /**
- * ArkClient instance from @kepler/ark. Created lazily when sync starts.
+ * ArkClient instance from @kosmos/ark. Created lazily when sync starts.
  * Wraps the sync lifecycle (start/stop/broadcastChange) while DB operations
  * remain in sidecar.ts.
  */
@@ -172,7 +172,7 @@ function getHostDeviceName(): string {
 let currentDeviceName = getHostDeviceName();
 
 function getDataDir(): string {
-  const dir = path.join(getAppDataPath(), 'Kepler');
+  const dir = path.join(getAppDataPath(), 'Kosmos');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -491,7 +491,7 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
 
 writeStartupTrace('fs-ipc-registered');
 
-// --- Sync lifecycle is handled by ArkClient from @kepler/ark. ---
+// --- Sync lifecycle is handled by ArkClient from @kosmos/ark. ---
 // The active renderer contract is `lan-sync:*`.
 
 // --- IPC handlers for space persistence (file-based, survives localStorage wipe) ---
@@ -647,7 +647,7 @@ ipcMain.handle('space:scanOrphaned', () => {
 
 writeStartupTrace('space-ipc-registered');
 
-// --- Migrate old spaces from legacy locations to Kepler ---
+// --- Migrate old spaces from legacy locations to Kosmos ---
 function migrateLegacySpaceFiles(): void {
   const newSpacesDir = path.join(getDataDir(), 'spaces');
   const legacyDirs = [
@@ -681,7 +681,7 @@ function migrateLegacySpaceFiles(): void {
       const dst = path.join(getDataDir(), file);
       if (fs.existsSync(src) && !fs.existsSync(dst)) {
         fs.cpSync(src, dst);
-        console.log(`[Main] Migrated ${file} to Kepler`);
+        console.log(`[Main] Migrated ${file} to Kosmos`);
       }
     }
   }
@@ -765,9 +765,9 @@ ipcMain.handle('db:deleteSpace', async (_e, spaceId: string) => {
   return false;
 })
 
-// --- Sync IPC (backed by ArkClient from @kepler/ark → ark-core-rpc sidecar) ---
+// --- Sync IPC (backed by ArkClient from @kosmos/ark → ark-core-rpc sidecar) ---
 //
-// Sync lifecycle (start/stop/broadcast) is delegated to ArkClient (@kepler/ark).
+// Sync lifecycle (start/stop/broadcast) is delegated to ArkClient (@kosmos/ark).
 // ArkClient is wired to the existing sidecar via requestFn + onEventFn injection
 // so that DB ops and sync ops share the same ark-core-rpc process.
 // DB operations (dbLoadAll, dbUpsertTodo, …) remain in sidecar.ts.
@@ -844,7 +844,7 @@ sidecar.onEvent((event: SidecarEvent) => {
 
 writeStartupTrace('sidecar-events-registered');
 
-/** IPC: start sync via ArkClient (@kepler/ark). */
+/** IPC: start sync via ArkClient (@kosmos/ark). */
 ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
   if (!spaceId) {
     console.warn('[Main] lan-sync:start called without spaceId, ignoring');
@@ -967,7 +967,7 @@ ipcMain.handle('sync:getOwnAddresses', async () => {
   } catch (err) {
     console.warn('[Main] get_own_addresses via sidecar failed, falling back to os:', err);
     // Cheap fallback: enumerate via os.networkInterfaces() without importing
-    // @kepler/ark at runtime.
+    // @kosmos/ark at runtime.
     const addrs: string[] = [];
     const nets = os.networkInterfaces();
     for (const name of Object.keys(nets)) {

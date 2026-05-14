@@ -4,25 +4,25 @@
     "overall": "PASS",
     "commands": [
       {
-        "command": "rg --line-number \"aspect-\\[16/9\\]|h-\\[62%\\]|line-clamp-2\" .\\packages\\kepler-visuals .\\apps\\arrancador",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+        "command": "rg --line-number \"aspect-\\[16/9\\]|h-\\[62%\\]|line-clamp-2\" .\\packages\\kosmos-visuals .\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
         "status": "PASS"
       },
       {
         "command": "bunx tsc --noEmit",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-horizontal-card-render-fix/typecheck.log"
       },
       {
         "command": "bunx vitest run --configLoader native --config vitest.config.mjs src/test/game-card.test.tsx",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-horizontal-card-render-fix/game-card-vitest.log"
       },
       {
-        "command": "rg --line-number \"�\" .\\packages\\kepler-visuals\\theme\\css-variables.css .\\packages\\kepler-visuals\\patterns\\gamePosterCard.ts .\\.agent\\tasks\\2026-04-19-arrancador-horizontal-card-render-fix",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+        "command": "rg --line-number \"�\" .\\packages\\kosmos-visuals\\theme\\css-variables.css .\\packages\\kosmos-visuals\\patterns\\gamePosterCard.ts .\\.agent\\tasks\\2026-04-19-arrancador-horizontal-card-render-fix",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
         "status": "PASS"
       }
     ]
@@ -33,7 +33,7 @@
       "status": "PASS",
       "summary": "The shared game card now has explicit CSS aspect-ratio and therefore retains visible height after the horizontal redesign.",
       "evidence": [
-        "packages/kepler-visuals/theme/css-variables.css"
+        "packages/kosmos-visuals/theme/css-variables.css"
       ]
     },
     {
@@ -41,7 +41,7 @@
       "status": "PASS",
       "summary": "Card height no longer depends on the external-package arbitrary Tailwind aspect utility.",
       "evidence": [
-        "packages/kepler-visuals/patterns/gamePosterCard.ts"
+        "packages/kosmos-visuals/patterns/gamePosterCard.ts"
       ]
     },
     {
@@ -49,8 +49,8 @@
       "status": "PASS",
       "summary": "The bottom scrim and title layer still render through stable shared CSS classes.",
       "evidence": [
-        "packages/kepler-visuals/theme/css-variables.css",
-        "packages/kepler-visuals/patterns/gamePosterCard.ts"
+        "packages/kosmos-visuals/theme/css-variables.css",
+        "packages/kosmos-visuals/patterns/gamePosterCard.ts"
       ]
     },
     {
@@ -67,8 +67,8 @@
       "status": "PASS",
       "summary": "No mojibake was introduced in the changed files.",
       "evidence": [
-        "packages/kepler-visuals/theme/css-variables.css",
-        "packages/kepler-visuals/patterns/gamePosterCard.ts",
+        "packages/kosmos-visuals/theme/css-variables.css",
+        "packages/kosmos-visuals/patterns/gamePosterCard.ts",
         ".agent/tasks/2026-04-19-arrancador-horizontal-card-render-fix/spec.md"
       ]
     }

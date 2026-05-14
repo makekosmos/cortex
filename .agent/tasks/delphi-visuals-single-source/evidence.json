@@ -4,20 +4,20 @@
   "acceptance_criteria": [
     {
       "id": "AC1",
-      "text": "Delphi TS must no longer depend on the local duplicate `apps/delphi/ts/src/components/SideBarButton.vue` for runtime behavior; shared sidebar button behavior must come from `packages/kepler-visuals/components/SidebarButton.vue`.",
+      "text": "Delphi TS must no longer depend on the local duplicate `apps/delphi/ts/src/components/SideBarButton.vue` for runtime behavior; shared sidebar button behavior must come from `packages/kosmos-visuals/components/SidebarButton.vue`.",
       "status": "PASS",
       "proof": [
-        "apps/delphi/ts/src/components/SideBar.vue imports Sidebar/types from @kepler/visuals",
-        "import audit found no Delphi TS imports of SideBarButton.vue or @kepler/visuals/components deep paths"
+        "apps/delphi/ts/src/components/SideBar.vue imports Sidebar/types from @kosmos/visuals",
+        "import audit found no Delphi TS imports of SideBarButton.vue or @kosmos/visuals/components deep paths"
       ],
       "gaps": []
     },
     {
       "id": "AC2",
-      "text": "Delphi TS shared-visual imports must go through the shared package public API (`@kepler/visuals`) instead of deep app-local duplicates or private package component file paths where equivalent root exports already exist.",
+      "text": "Delphi TS shared-visual imports must go through the shared package public API (`@kosmos/visuals`) instead of deep app-local duplicates or private package component file paths where equivalent root exports already exist.",
       "status": "PASS",
       "proof": [
-        "App.vue, QuickSearch.vue, SideBar.vue, AllTaskPage.vue, LogbookPage.vue, ProjectPage.vue, TodayPage.vue, and TrashPage.vue now import from @kepler/visuals",
+        "App.vue, QuickSearch.vue, SideBar.vue, AllTaskPage.vue, LogbookPage.vue, ProjectPage.vue, TodayPage.vue, and TrashPage.vue now import from @kosmos/visuals",
         "import-audit.txt shows the current shared visual imports"
       ],
       "gaps": []
@@ -55,7 +55,7 @@
     "apps/delphi/ts/src/pages/TrashPage.vue"
   ],
   "commands_for_fresh_verifier": [
-    "cd /workspace && rg -n '@kepler/visuals/components|SideBarButton\\.vue|from \"@kepler/visuals\"|from \"@kepler/visuals/components\"' apps/delphi/ts/src --glob '!**/node_modules/**'",
+    "cd /workspace && rg -n '@kosmos/visuals/components|SideBarButton\\.vue|from \"@kosmos/visuals\"|from \"@kosmos/visuals/components\"' apps/delphi/ts/src --glob '!**/node_modules/**'",
     "test ! -e /workspace/apps/delphi/ts/src/components/SideBarButton.vue",
     "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc -p tsconfig.node.json"
   ],

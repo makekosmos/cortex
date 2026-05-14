@@ -46,7 +46,7 @@
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug UP-TO-DATE
 
-[Incubating] Problems report is available at: file:///Users/kirill/Documents/projects/kosmos/apps/ark-data/build/reports/problems/problems-report.html
+[Incubating] Problems report is available at: file:///Users/kirill/Documents/projects/kepler/apps/ark-data/build/reports/problems/problems-report.html
 
 Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
 
@@ -111,7 +111,7 @@ All code optimizations and obfuscation are disabled for debuggable builds.
 > Task :app:createDebugApkListingFileRedirect UP-TO-DATE
 > Task :app:assembleDebug UP-TO-DATE
 
-[Incubating] Problems report is available at: file:///Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin/build/reports/problems/problems-report.html
+[Incubating] Problems report is available at: file:///Users/kirill/Documents/projects/kepler/apps/delphi/kotlin/build/reports/problems/problems-report.html
 
 Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
 

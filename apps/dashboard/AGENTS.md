@@ -25,7 +25,7 @@ Dashboard — desktop observability app для ARK usage data: foreground sessio
 - Frontend: Vue 3 + Composition API + `<script setup lang="ts">`.
 - Runtime: Electron.
 - Data access: read-only ARK inspection / analytics в Electron main.
-- Shared UI: `@kepler/visuals`.
+- Shared UI: `@kosmos/visuals`.
 
 ## Структура
 
@@ -57,11 +57,11 @@ apps/dashboard/
 ::: danger
 - Renderer **НИКОГДА** не открывает SQLite напрямую. Все DB reads — через `window.dashboardApi`.
 - Dashboard — **read-only**. Никаких writes в ARK таблицы.
-- Когда возможно — `@kepler/ark` analytics endpoints. Read-only SQLite fallback / inspector только в Electron main, не в renderer.
+- Когда возможно — `@kosmos/ark` analytics endpoints. Read-only SQLite fallback / inspector только в Electron main, не в renderer.
 - `electron/services/analytics.ts` — **единственная** граница для dashboard analytics. Не дублируй ARK queries внутри Vue компонентов.
-- `@kepler/visuals` — только через import/alias. Не копируй shared sidebar или токены внутрь `apps/dashboard`.
-- Desktop chrome выровнен с shared visuals. Wire actions в dashboard, но layout primitives — в `@kepler/visuals`.
-- `TitlebarHistoryControls` из `@kepler/visuals`, disabled-state — из реального состояния Vue Router history.
+- `@kosmos/visuals` — только через import/alias. Не копируй shared sidebar или токены внутрь `apps/dashboard`.
+- Desktop chrome выровнен с shared visuals. Wire actions в dashboard, но layout primitives — в `@kosmos/visuals`.
+- `TitlebarHistoryControls` из `@kosmos/visuals`, disabled-state — из реального состояния Vue Router history.
 - Route components тонкие. Data fetching — в `useDashboardData`. Side effects — в composables или Electron main.
 - Hash-based router navigation для стабильного deep-linking и Electron e2e navigation.
 :::
@@ -101,7 +101,7 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 
 - [Read-only SQL boundary](docs-site/concepts/readonly-sql.md)
 - [Граница записи в ARK](docs-site/concepts/write-boundary.md)
-- [kepler-visuals](docs-site/packages/kepler-visuals.md)
+- [kosmos-visuals](docs-site/packages/kosmos-visuals.md)
 - `docs/ARK-READONLY-SQL-BOUNDARY.md`
 
 ---
@@ -130,7 +130,7 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 
 ## Тесты
 
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kepler\ark.db`) в тестах.
+- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
 - ❌ Запуск Playwright против user vault Eden.
@@ -149,7 +149,7 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -180,7 +180,7 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kepler/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kepler-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -201,7 +201,7 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -231,7 +231,7 @@ bun run ark:smoke
 
 ## Сжатые правила репозитория (TL;DR)
 
-- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
+- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
 - **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.
 - **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.
 - **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.

@@ -1,7 +1,7 @@
 $ bun run build:renderer:vue
 $ VITE_HTML_ENTRY=index-vue.html vite build
 
-failed to load config from D:\Personal\Hobby\Coding\kepler\apps\arrancador\vite.config.ts
+failed to load config from D:\Personal\Hobby\Coding\kosmos\apps\arrancador\vite.config.ts
 error during build:
 - Could not load `@tailwindcss/oxide-win32-x64-msvc`
 - `spawn EPERM`

@@ -2,7 +2,7 @@
 
 - **Path**: `apps/ark-service`
 - **Стек**: Kotlin / Gradle / Android (`com.android.application`)
-- **Package**: `com.kepler.ark.data`
+- **Package**: `com.kosmos.ark.data`
 
 ::: warning Не путать с desktop-стеком
 Это **отдельная APK** для Android, которая хранит данные **Android-приложения** Delphi (`apps/delphi/kotlin`, `com.kazui.delphi`) через свой Room SQLite и отдаёт их через ContentProvider. Это **не** «JVM service surface» вокруг `ark-core` Rust runtime — никакого UniFFI/FFI здесь нет, чистый Room.
@@ -15,7 +15,7 @@ Android Delphi (`apps/delphi/kotlin`) и `ark-service` — это **две APK �
 ```mermaid
 flowchart LR
   delphi["Delphi APK<br/>com.kazui.delphi<br/>UI"]
-  arkdata["ark-service APK<br/>com.kepler.ark.data<br/>Room + ContentProvider"]
+  arkdata["ark-service APK<br/>com.kosmos.ark.data<br/>Room + ContentProvider"]
   room[("Room SQLite")]
 
   delphi -- "ContentProvider IPC<br/>READ_WRITE permission" --> arkdata
@@ -30,7 +30,7 @@ flowchart LR
   class room db
 ```
 
-То есть **на Android** Delphi не владеет своими данными — он стучится в `ark-service` через `com.kepler.ark.data` ContentProvider. Если `ark-service` не установлен — Delphi показывает экран «Установите ark-service для работы Delphi» (см. `apps/delphi/kotlin/.../NavGraph.kt:140`).
+То есть **на Android** Delphi не владеет своими данными — он стучится в `ark-service` через `com.kosmos.ark.data` ContentProvider. Если `ark-service` не установлен — Delphi показывает экран «Установите ark-service для работы Delphi» (см. `apps/delphi/kotlin/.../NavGraph.kt:140`).
 
 Это **зеркалит desktop-архитектуру** (Electron apps → ark-core-rpc), но в Android-IPC механизме и с Room вместо Rust runtime.
 
@@ -42,7 +42,7 @@ flowchart LR
 - DAO: `AreaDao`, `ProjectDao`, `TodoDao`, `NoteDao`, `HeadingDao`, `TagDao`, `ChecklistItemDao` — Things-clone модель данных.
 - `ArkDataProvider.kt` — ContentProvider, expose Room через IPC.
 - `ArkDataApp.kt` + Hilt — DI.
-- Permission `com.kepler.ark.data.READ_WRITE` с `protectionLevel="signature"` — доступ только для APK, подписанных тем же ключом (то есть только сам Delphi).
+- Permission `com.kosmos.ark.data.READ_WRITE` с `protectionLevel="signature"` — доступ только для APK, подписанных тем же ключом (то есть только сам Delphi).
 
 ## Сборка
 
@@ -71,4 +71,4 @@ cd apps/ark-service
 
 - `apps/delphi/kotlin/AGENTS.md` — Android-приложение Delphi, потребитель ContentProvider.
 - [Архитектура](/concepts/architecture) — общая картина desktop ARK.
-- [@kepler/ark](/packages/kepler-ark) — desktop TS-клиент к `ark-core-rpc` (аналог `ark-service` для desktop).
+- [@kosmos/ark](/packages/kosmos-ark) — desktop TS-клиент к `ark-core-rpc` (аналог `ark-service` для desktop).

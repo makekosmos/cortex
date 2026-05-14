@@ -77,12 +77,12 @@
     {
       "id": "AC15",
       "status": "PASS",
-      "reason": "apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ark_core.kt is the UniFFI-generated Kotlin binding (open class ArkCore, FfiSyncConfig, FfiConnectedPeer, ArkEventListener interface, ArkCoreException sealed class). libark_core.so present at apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so (5.9 MB, `file` reports ELF 64-bit LSB shared object, ARM aarch64, dynamically linked)."
+      "reason": "apps/delphi/kotlin/app/src/main/java/com/kosmos/ark/core/ark_core.kt is the UniFFI-generated Kotlin binding (open class ArkCore, FfiSyncConfig, FfiConnectedPeer, ArkEventListener interface, ArkCoreException sealed class). libark_core.so present at apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so (5.9 MB, `file` reports ELF 64-bit LSB shared object, ARM aarch64, dynamically linked)."
     },
     {
       "id": "AC16",
       "status": "PASS",
-      "reason": "SyncServer.kt / LanSyncClient.kt / BroadcastDiscovery.kt are deleted. Fresh grep `class (SyncServer|LanSyncClient|BroadcastDiscovery)` in apps/delphi/kotlin/app/src/main/java/ returns zero matches. PeerManager.kt imports com.kepler.ark.core.{ArkCore, ArkEventListener, FfiConnectedPeer, FfiSyncConfig} and delegates start/stop/broadcastChange/addSeedPeer to ArkCore; the Kotlin side contains zero wire-format code, zero HLC computation, zero version-vector math, zero beacon logic."
+      "reason": "SyncServer.kt / LanSyncClient.kt / BroadcastDiscovery.kt are deleted. Fresh grep `class (SyncServer|LanSyncClient|BroadcastDiscovery)` in apps/delphi/kotlin/app/src/main/java/ returns zero matches. PeerManager.kt imports com.kosmos.ark.core.{ArkCore, ArkEventListener, FfiConnectedPeer, FfiSyncConfig} and delegates start/stop/broadcastChange/addSeedPeer to ArkCore; the Kotlin side contains zero wire-format code, zero HLC computation, zero version-vector math, zero beacon logic."
     },
     {
       "id": "AC17",
@@ -141,7 +141,7 @@
     "apps/delphi/ts/electron/broadcast-discovery.ts",
     "apps/delphi/kotlin/app/build.gradle.kts",
     "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/PeerManager.kt",
-    "apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ark_core.kt",
+    "apps/delphi/kotlin/app/src/main/java/com/kosmos/ark/core/ark_core.kt",
     "apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so",
     "apps/delphi/kotlin/app/build/outputs/apk/debug/app-debug.apk"
   ]

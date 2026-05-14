@@ -1,7 +1,7 @@
 {
   "task_id": "2026-04-16-shared-status-dot-dashboard",
   "summary": {
-    "component": "packages/kepler-visuals/components/StatusDot.vue",
+    "component": "packages/kosmos-visuals/components/StatusDot.vue",
     "consumer": "apps/dashboard/src/components/dashboard/DashboardShell.vue",
     "windows_safe_area_px": 156
   },
@@ -10,7 +10,7 @@
       "id": "AC1",
       "status": "PASS",
       "evidence": [
-        "Shared StatusDot component added to @kepler/visuals",
+        "Shared StatusDot component added to @kosmos/visuals",
         "Hover background implemented",
         "Click popover implemented with outside-click and Escape close"
       ]

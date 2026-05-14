@@ -1,6 +1,6 @@
-﻿$ vitest run --configLoader native --config vitest.config.mjs
+$ vitest run --configLoader native --config vitest.config.mjs
 
-RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/arrancador
 
 Test Files  2 passed (2)
 Tests  3 passed (3)

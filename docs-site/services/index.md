@@ -39,7 +39,7 @@ flowchart LR
   class arkdb db
 ```
 
-- `Electron apps` — Eden, Delphi, Arrancador, Dashboard. Каждый дёргает `ark-core-rpc` через `@kepler/ark` (JSON-RPC по stdin/stdout).
+- `Electron apps` — Eden, Delphi, Arrancador, Dashboard. Каждый дёргает `ark-core-rpc` через `@kosmos/ark` (JSON-RPC по stdin/stdout).
 - `usage-tracker` пишет в ту же SQLite, но **минуя sidecar** — напрямую через `ark_core::db`-хелперы, обязательно вызывая `bump_sync_version_vector` после каждой записи.
 - `ark-relay-server` подключается опционально: если у space'а задан `relay_url`, `ark-core-rpc` поднимает WSS-bridge к нему параллельно LAN sync.
 
@@ -47,10 +47,10 @@ flowchart LR
 
 ## Правила для прямых writers (services)
 
-Сервисы — единственное место в репо, где разрешён **прямой Rust-write** в ARK SQLite (минуя `@kepler/ark` / `ark-core-rpc`). Жёсткое условие:
+Сервисы — единственное место в репо, где разрешён **прямой Rust-write** в ARK SQLite (минуя `@kosmos/ark` / `ark-core-rpc`). Жёсткое условие:
 
 - Запись через `ark_core::db` хелперы, не через сырой `rusqlite`.
 - После каждой записи в синхронизируемую таблицу — `ark_core::db::bump_sync_version_vector`.
-- Default DB path остаётся user-level (`%APPDATA%\Kepler\ark.db`), не системный.
+- Default DB path остаётся user-level (`%APPDATA%\Kosmos\ark.db`), не системный.
 
 Подробнее — [Граница записи в ARK](/concepts/write-boundary).

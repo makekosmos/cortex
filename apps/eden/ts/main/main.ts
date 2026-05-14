@@ -71,11 +71,11 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = electron;
 
 process.env.APP_ROOT = path.join(__dirname, "..");
 
-const testAppDataPath = process.env.KEPLER_TEST_APPDATA?.trim()
-  ? path.resolve(process.env.KEPLER_TEST_APPDATA)
+const testAppDataPath = process.env.KOSMOS_TEST_APPDATA?.trim()
+  ? path.resolve(process.env.KOSMOS_TEST_APPDATA)
   : null;
-const testUserDataPath = process.env.KEPLER_TEST_USER_DATA?.trim()
-  ? path.resolve(process.env.KEPLER_TEST_USER_DATA)
+const testUserDataPath = process.env.KOSMOS_TEST_USER_DATA?.trim()
+  ? path.resolve(process.env.KOSMOS_TEST_USER_DATA)
   : null;
 
 if (testAppDataPath) {

@@ -26,10 +26,10 @@ PASS
 ## Commands
 
 ```text
-cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-request-timeouts\typecheck.txt 2>&1"
-cmd /c "bun run build > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-request-timeouts\build.txt 2>&1"
-cmd /c "bun D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-request-timeouts\verify-request-timeouts.ts > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-request-timeouts\verify-request-timeouts.txt 2>&1"
-cmd /c "git diff --check -- packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-arksync-node-request-timeouts/spec.md .agent/tasks/2026-04-24-arksync-node-request-timeouts/verify-request-timeouts.ts > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-request-timeouts\git-diff-check.txt 2>&1"
+cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-request-timeouts\typecheck.txt 2>&1"
+cmd /c "bun run build > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-request-timeouts\build.txt 2>&1"
+cmd /c "bun D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-request-timeouts\verify-request-timeouts.ts > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-request-timeouts\verify-request-timeouts.txt 2>&1"
+cmd /c "git diff --check -- packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-arksync-node-request-timeouts/spec.md .agent/tasks/2026-04-24-arksync-node-request-timeouts/verify-request-timeouts.ts > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-request-timeouts\git-diff-check.txt 2>&1"
 ```
 
 ## Notes

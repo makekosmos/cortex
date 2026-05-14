@@ -59,7 +59,7 @@
   ],
   "checks": [
     {
-      "command": "apps/eden/ts/node_modules/.bin/tsc.exe --noEmit -p \"D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\tsconfig.json\"",
+      "command": "apps/eden/ts/node_modules/.bin/tsc.exe --noEmit -p \"D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\eden\\ts\\tsconfig.json\"",
       "status": "PASS",
       "raw_artifact": "raw/tsc.txt"
     },
@@ -70,7 +70,7 @@
       "raw_artifact": "raw/lint.txt"
     },
     {
-      "command": "rg -n \"<select\" \"D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\src\\components\\typed-notes\"",
+      "command": "rg -n \"<select\" \"D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\eden\\ts\\src\\components\\typed-notes\"",
       "status": "PASS",
       "raw_artifact": "raw/no-native-select.txt"
     },

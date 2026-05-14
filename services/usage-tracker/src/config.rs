@@ -131,7 +131,7 @@ fn arg_value(args: &[String], flag: &str) -> Option<String> {
 fn default_data_dir() -> PathBuf {
     if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
         return PathBuf::from(local_app_data)
-            .join("Kepler")
+            .join("Kosmos")
             .join(DEFAULT_DATA_DIR_NAME);
     }
 

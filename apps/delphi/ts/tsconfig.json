@@ -25,9 +25,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@kepler/ark": ["../../../packages/kepler-ark/src/index.ts"],
-      "@kepler/visuals": ["../../../packages/kepler-visuals/index.ts"],
-      "@kepler/visuals/*": ["../../../packages/kepler-visuals/*"],
+      "@kosmos/ark": ["../../../packages/kosmos-ark/src/index.ts"],
+      "@kosmos/visuals": ["../../../packages/kosmos-visuals/index.ts"],
+      "@kosmos/visuals/*": ["../../../packages/kosmos-visuals/*"],
     }
   },
   "include": ["src"]

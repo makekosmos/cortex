@@ -27,7 +27,7 @@ Build a release install bundle:
 bun run package:installer
 ```
 
-This produces `dist/KeplerUsageTrackerInstaller/` with:
+This produces `dist/KosmosUsageTrackerInstaller/` with:
 
 - `usage-tracker.exe`
 - `install.ps1`
@@ -38,11 +38,11 @@ This produces `dist/KeplerUsageTrackerInstaller/` with:
 
 It also creates:
 
-- `dist/KeplerUsageTrackerInstaller.zip`
+- `dist/KosmosUsageTrackerInstaller.zip`
 
 Default install target:
 
-- `%LOCALAPPDATA%\\Kepler\\UsageTracker`
+- `%LOCALAPPDATA%\\Kosmos\\UsageTracker`
 
 Default install behavior:
 
@@ -63,7 +63,7 @@ If you want a single-click entrypoint from Explorer, use:
 
 ## Defaults
 
-- Ark DB path: `%APPDATA%\\Kepler\\ark.db`
+- Ark DB path: `%APPDATA%\\Kosmos\\ark.db`
 - Poll interval: `5000` ms
 - Idle threshold: `60` s
 

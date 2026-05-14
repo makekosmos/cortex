@@ -1,7 +1,7 @@
 # Task: Arrancador hero visual refresh
 
 ## Goal
-Refresh the Arrancador game detail hero so it drops the dotted background treatment, uses a taller rounded-bottom hero image, and presents the game title/genres with the same lower-left visual language as shared game cards from `kepler-visuals`.
+Refresh the Arrancador game detail hero so it drops the dotted background treatment, uses a taller rounded-bottom hero image, and presents the game title/genres with the same lower-left visual language as shared game cards from `kosmos-visuals`.
 
 ## Acceptance Criteria
 - AC1: The dotted background layer behind the Arrancador game detail page is removed.

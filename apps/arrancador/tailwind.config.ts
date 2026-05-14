@@ -3,7 +3,7 @@ export default {
   content: [
     "./index.html",
     "./src-vue/**/*.{ts,vue}",
-    "../../packages/kepler-visuals/**/*.ts",
+    "../../packages/kosmos-visuals/**/*.ts",
   ],
   theme: { extend: {} },
   plugins: [],

@@ -83,7 +83,7 @@
         "artifact": ".agent/tasks/2026-04-20-eden-anytype-ux-pass/raw/seed.txt"
       },
       {
-        "command": "bun run seed:ark-demo -- --db D:\\\\Personal\\\\Hobby\\\\Coding\\\\kepler\\\\apps\\\\eden\\\\ts\\\\dev-data\\\\ark-demo-secondary.db",
+        "command": "bun run seed:ark-demo -- --db D:\\\\Personal\\\\Hobby\\\\Coding\\\\kosmos\\\\apps\\\\eden\\\\ts\\\\dev-data\\\\ark-demo-secondary.db",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-20-eden-anytype-ux-pass/raw/seed-secondary.txt"
       },

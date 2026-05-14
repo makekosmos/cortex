@@ -38,4 +38,4 @@ Relevant files for this pass:
 
 ## Remaining risks
 - This pass solves the Eden editor path only. Other potential non-ProseMirror surfaces still use native caret behavior, which is acceptable and more stable.
-- We did not convert `packages/kepler-visuals/components/CustomCaret.vue` itself to widget/decorations; Eden now has the better editor-specific path locally. Converging that back into shared visuals would be a follow-up design decision.
+- We did not convert `packages/kosmos-visuals/components/CustomCaret.vue` itself to widget/decorations; Eden now has the better editor-specific path locally. Converging that back into shared visuals would be a follow-up design decision.

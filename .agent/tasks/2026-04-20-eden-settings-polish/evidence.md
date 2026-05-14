@@ -3,7 +3,7 @@
 ## Summary
 The Eden visual polish pass was completed in three areas:
 - note/object title size now matches the settings page title scale
-- shared sidebar buttons and project rows in `kepler-visuals` are left-aligned and truncate with ellipsis
+- shared sidebar buttons and project rows in `kosmos-visuals` are left-aligned and truncate with ellipsis
 - Connected Apps settings were rebuilt onto the same section/row/action structure as the rest of Eden settings
 
 Settings outer spacing was also moved into the shared settings content container, so individual settings pages no longer carry their own heavy outer padding.
@@ -13,9 +13,9 @@ Settings outer spacing was also moved into the shared settings content container
   - `.title-input` now uses `28px`, `-0.4px`, `1.02` to match settings title rhythm
 - `apps/eden/ts/src/App.css`
   - duplicated `.title-input` definitions were aligned with the same title scale so global overrides do not reintroduce the old larger heading
-- `packages/kepler-visuals/components/SidebarButton.vue`
+- `packages/kosmos-visuals/components/SidebarButton.vue`
   - button content now uses left alignment and explicit ellipsis behavior
-- `packages/kepler-visuals/components/Sidebar.vue`
+- `packages/kosmos-visuals/components/Sidebar.vue`
   - project/object rows now justify content to the left and let labels shrink/truncate cleanly
 - `apps/eden/ts/src/components/settings/ConnectedAppsSettings.vue`
   - rebuilt from bespoke card layout into `settings-tab` / `settings-section` / `settings-row` structure
@@ -41,7 +41,7 @@ PASS
 Shared sidebar buttons now left-align content and truncate labels with ellipsis.
 
 Evidence:
-- `packages/kepler-visuals/components/SidebarButton.vue`
+- `packages/kosmos-visuals/components/SidebarButton.vue`
 
 ### AC3
 PASS
@@ -49,7 +49,7 @@ PASS
 Shared sidebar project/object rows preserve left alignment and truncation.
 
 Evidence:
-- `packages/kepler-visuals/components/Sidebar.vue`
+- `packages/kosmos-visuals/components/Sidebar.vue`
 
 ### AC4
 PASS

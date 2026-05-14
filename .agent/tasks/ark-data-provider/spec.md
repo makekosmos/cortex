@@ -5,15 +5,15 @@
 
 ## Original Task Statement
 
-Создать Android-приложение **ark-data** (headless APK, без UI, без launcher-иконки) — общий ContentProvider для приложений экосистемы **Kepler**.
+Создать Android-приложение **ark-data** (headless APK, без UI, без launcher-иконки) — общий ContentProvider для приложений экосистемы **Kosmos**.
 
 Контекст:
-- Экосистема называется Kepler (бывший Kosmos)
-- `ark-data` — отдельный APK, пакет `com.kepler.ark.data`
+- Экосистема называется Kosmos (бывший Kepler)
+- `ark-data` — отдельный APK, пакет `com.kosmos.ark.data`
 - Схема БД сейчас: **задачи** (TodoItem — для Delphi) и **заметки** (Note — для Eden)
 - Delphi (пакет `com.kazui.delphi`) читает/пишет задачи через ContentProvider URI вместо собственной Room DB
 - Eden будет читать/писать заметки через тот же ContentProvider
-- ContentProvider authorities: `com.kepler.ark.data`
+- ContentProvider authorities: `com.kosmos.ark.data`
 - Схема будет расширяться со временем, но сейчас только todos + notes
 - Ark-data устанавливается отдельно, нет UI, нет launcher activity
 
@@ -27,13 +27,13 @@
 
 **A3.** Схема таблицы `notes` для Eden — минимальная начальная версия: `id` (TEXT PK), `title` (TEXT), `body` (TEXT), `createdAt` (TEXT ISO-8601), `updatedAt` (TEXT ISO-8601), `isTrashed` (INTEGER 0/1). Расширение схемы Notes в рамках этой задачи не планируется.
 
-**A4.** ContentProvider экспортирован с атрибутом `android:exported="true"` и защищён permission `com.kepler.ark.data.READ_WRITE` (signature-level), чтобы только приложения Kepler могли обращаться к нему.
+**A4.** ContentProvider экспортирован с атрибутом `android:exported="true"` и защищён permission `com.kosmos.ark.data.READ_WRITE` (signature-level), чтобы только приложения Kosmos могли обращаться к нему.
 
 **A5.** Delphi мигрирует с собственной Room DB на ContentProvider только для таблицы `todos` и связанных сущностей (`projects`, `areas`, `tags`, `headings`, `checklist_items`, `todo_tag_cross_ref`). Таблица `PendingChange` и sync-код Delphi остаются в собственной Room DB Delphi (out of scope этой задачи).
 
 **A6.** `minSdk` для ark-data: 28 (совпадает с Delphi).
 
-**A7.** Основная БД ark-data хранится в стандартном размещении Room: `/data/data/com.kepler.ark.data/databases/ark_data.db`.
+**A7.** Основная БД ark-data хранится в стандартном размещении Room: `/data/data/com.kosmos.ark.data/databases/ark_data.db`.
 
 ---
 
@@ -41,8 +41,8 @@
 
 ### AC1 — Структура проекта
 Директория `apps/ark-data/` существует и содержит корректный Gradle-проект Android:
-- `app/build.gradle.kts` с `applicationId = "com.kepler.ark.data"`, `minSdk = 28`
-- Исходный код в `app/src/main/java/com/kepler/ark/data/`
+- `app/build.gradle.kts` с `applicationId = "com.kosmos.ark.data"`, `minSdk = 28`
+- Исходный код в `app/src/main/java/com/kosmos/ark/data/`
 - Модуль включён в корневой `settings.gradle` монорепо (или имеет собственный)
 
 ### AC2 — Headless APK (нет UI, нет launcher-иконки)
@@ -50,8 +50,8 @@
 - Приложение не появляется в системном лаунчере после установки
 
 ### AC3 — ContentProvider зарегистрирован и защищён
-- `AndroidManifest.xml` содержит `<provider>` с `android:authorities="com.kepler.ark.data"` и `android:exported="true"`
-- Permission `com.kepler.ark.data.READ_WRITE` объявлен с `android:protectionLevel="signature"`
+- `AndroidManifest.xml` содержит `<provider>` с `android:authorities="com.kosmos.ark.data"` и `android:exported="true"`
+- Permission `com.kosmos.ark.data.READ_WRITE` объявлен с `android:protectionLevel="signature"`
 - Provider требует этот permission для чтения и записи
 
 ### AC4 — Room DB: таблица todos и связанные сущности
@@ -70,20 +70,20 @@
 
 ### AC6 — ContentProvider реализует CRUD для todos и связанных таблиц
 `ArkDataProvider` поддерживает следующие URI и операции:
-- `content://com.kepler.ark.data/todos` — `query`, `insert`
-- `content://com.kepler.ark.data/todos/#` — `query`, `update`, `delete`
+- `content://com.kosmos.ark.data/todos` — `query`, `insert`
+- `content://com.kosmos.ark.data/todos/#` — `query`, `update`, `delete`
 - Аналогично для `projects`, `areas`, `tags`, `headings`, `checklist_items`
-- `content://com.kepler.ark.data/todo_tag_cross_ref` — `query`, `insert`, `delete`
+- `content://com.kosmos.ark.data/todo_tag_cross_ref` — `query`, `insert`, `delete`
 - `insert` возвращает URI с id новой записи; `update`/`delete` возвращают число затронутых строк
 
 ### AC7 — ContentProvider реализует CRUD для notes
 `ArkDataProvider` поддерживает:
-- `content://com.kepler.ark.data/notes` — `query`, `insert`
-- `content://com.kepler.ark.data/notes/#` — `query`, `update`, `delete`
+- `content://com.kosmos.ark.data/notes` — `query`, `insert`
+- `content://com.kosmos.ark.data/notes/#` — `query`, `update`, `delete`
 
 ### AC8 — Delphi мигрирует с Room DB на ContentProvider для todos
 В `apps/delphi/kotlin/`:
-- Добавлен `ArkDataRepository` (или аналогичный класс), реализующий доступ к tasks/projects через `ContentResolver` с authority `com.kepler.ark.data`
+- Добавлен `ArkDataRepository` (или аналогичный класс), реализующий доступ к tasks/projects через `ContentResolver` с authority `com.kosmos.ark.data`
 - Все ViewModel и UseCase, ранее использовавшие `TodoDao`/`ProjectDao` напрямую, переключены на новый репозиторий
 - `DelphiDatabase` больше не включает сущности todos, projects, areas, tags, headings, checklist_items, todo_tag_cross_ref (они остаются только в ark-data)
 - Приложение Delphi компилируется без ошибок
@@ -92,7 +92,7 @@
 Если ark-data не установлен или недоступен, Delphi отображает пользователю понятное сообщение об ошибке (UI-экран или toast) вместо краша с необработанным исключением.
 
 ### AC10 — Сборка ark-data
-`./gradlew :apps:ark-data:app:assembleDebug` завершается без ошибок, итоговый APK содержит класс `com.kepler.ark.data.ArkDataProvider`.
+`./gradlew :apps:ark-data:app:assembleDebug` завершается без ошибок, итоговый APK содержит класс `com.kosmos.ark.data.ArkDataProvider`.
 
 ### AC11 — Сборка Delphi после миграции
 `./gradlew :apps:delphi:kotlin:app:assembleDebug` завершается без ошибок после всех изменений в Delphi.
@@ -105,8 +105,8 @@
 - DI: **Hilt** (`@HiltAndroidApp`, `@Inject constructor`)
 - ORM: **Room** (версия совместима с Delphi)
 - `minSdk`: 28, `targetSdk`: 35
-- Пакет: `com.kepler.ark.data`
-- Все идентификаторы (id) — строки UUID, lowercase (инвариант экосистемы Kepler)
+- Пакет: `com.kosmos.ark.data`
+- Все идентификаторы (id) — строки UUID, lowercase (инвариант экосистемы Kosmos)
 - `ContentProvider` должен быть потокобезопасен (Room обеспечивает это через DAOs)
 - Новый модуль размещается в `apps/ark-data/` внутри монорепо
 - Нет UI Activity, нет иконки в системном лаунчере
@@ -133,9 +133,9 @@
 
 | ID | Шаг | Команда / Проверка | Ожидаемый результат |
 |----|-----|--------------------|---------------------|
-| V1 | Структура проекта | `ls apps/ark-data/app/src/main/java/com/kepler/ark/data/` | Директория существует, содержит `.kt` файлы |
+| V1 | Структура проекта | `ls apps/ark-data/app/src/main/java/com/kosmos/ark/data/` | Директория существует, содержит `.kt` файлы |
 | V2 | Headless: нет LAUNCHER | `grep -r "LAUNCHER" apps/ark-data/app/src/main/AndroidManifest.xml` | Нет совпадений |
-| V3 | Provider зарегистрирован | `grep "authorities" apps/ark-data/app/src/main/AndroidManifest.xml` | `android:authorities="com.kepler.ark.data"` |
+| V3 | Provider зарегистрирован | `grep "authorities" apps/ark-data/app/src/main/AndroidManifest.xml` | `android:authorities="com.kosmos.ark.data"` |
 | V4 | Permission signature-level | `grep "protectionLevel" apps/ark-data/app/src/main/AndroidManifest.xml` | `android:protectionLevel="signature"` |
 | V5 | Entities в ArkDatabase | Читать `ArkDatabase.kt`, проверить `entities = [...]` | Содержит все 7 todos-сущностей + `Note::class` |
 | V6 | URI patterns в провайдере | Читать `ArkDataProvider.kt`, проверить `UriMatcher` | Все URI для todos, notes, projects, areas и т.д. зарегистрированы |

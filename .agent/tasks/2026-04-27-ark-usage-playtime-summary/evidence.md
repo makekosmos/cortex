@@ -7,7 +7,7 @@ PASS
 ## Acceptance criteria
 
 - AC1 PASS: `ark-core-rpc` exposes `get_usage_game_playtime_summary` and accepts game/process bindings plus optional date range.
-- AC2 PASS: `@kepler/ark` exposes `usage.gamePlaytime.summary(...)` with typed bindings and result records.
+- AC2 PASS: `@kosmos/ark` exposes `usage.gamePlaytime.summary(...)` with typed bindings and result records.
 - AC3 PASS: Arrancador `createGameUsageReadModel` calls the new SDK method before read-only SQLite fallback.
 - AC4 PASS: Arrancador `createPlaytimeStatsRepository` calls the new SDK method for range stats before read-only SQLite fallback.
 - AC5 PASS: Read-only SQLite remains as a runtime compatibility fallback only.
@@ -23,13 +23,13 @@ PASS
   - Added unit coverage for multi-binding playtime summaries and date range totals.
 - `packages/ark-core/rust/src/main.rs`
   - Added the `get_usage_game_playtime_summary` RPC operation.
-- `packages/kepler-ark/src/ark-client.ts`
+- `packages/kosmos-ark/src/ark-client.ts`
   - Added `usage.gamePlaytime.summary(...)`.
 - `apps/arrancador/electron/main/services/ark-usage.ts`
   - Uses ARK runtime aggregation first for game hydration and range stats.
   - Keeps read-only SQLite only as fallback.
 - Docs updated:
-  - `packages/kepler-ark/README.md`
+  - `packages/kosmos-ark/README.md`
   - `packages/ark-core/README.md`
   - `docs/ARK-READONLY-SQL-BOUNDARY.md`
   - `apps/arrancador/AGENTS.md`
@@ -40,7 +40,7 @@ PASS
 - `cargo fmt --manifest-path packages\ark-core\rust\Cargo.toml`
 - `cargo test --manifest-path packages\ark-core\rust\Cargo.toml usage_game_playtime_summary_matches_bindings_and_range`
 - `cargo test --manifest-path packages\ark-core\rust\Cargo.toml`
-- `bun run --cwd packages/kepler-ark typecheck`
+- `bun run --cwd packages/kosmos-ark typecheck`
 - `bun run --cwd apps/arrancador test ark-usage`
 - `bun run --cwd apps/arrancador test`
 - `bun run --cwd apps/arrancador typecheck`

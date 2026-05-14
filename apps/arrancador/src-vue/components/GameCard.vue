@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { GamePosterCard } from "@kepler/visuals";
+import { GamePosterCard } from "@kosmos/visuals";
 import { Gamepad2 } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterLink } from "vue-router";

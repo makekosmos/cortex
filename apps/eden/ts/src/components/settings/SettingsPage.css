@@ -25,10 +25,10 @@
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: var(--kepler-text-page-title-size);
-  line-height: var(--kepler-text-page-title-line-height);
-  letter-spacing: var(--kepler-text-page-title-letter-spacing);
-  font-weight: var(--kepler-text-page-title-weight);
+  font-size: var(--kosmos-text-page-title-size);
+  line-height: var(--kosmos-text-page-title-line-height);
+  letter-spacing: var(--kosmos-text-page-title-letter-spacing);
+  font-weight: var(--kosmos-text-page-title-weight);
 }
 
 .settings-page__subtitle {
@@ -219,10 +219,10 @@
 
 .settings-tab-title {
   font-family: var(--font-display);
-  font-size: var(--kepler-text-page-title-size);
-  font-weight: var(--kepler-text-page-title-weight);
-  letter-spacing: var(--kepler-text-page-title-letter-spacing);
-  line-height: var(--kepler-text-page-title-line-height);
+  font-size: var(--kosmos-text-page-title-size);
+  font-weight: var(--kosmos-text-page-title-weight);
+  letter-spacing: var(--kosmos-text-page-title-letter-spacing);
+  line-height: var(--kosmos-text-page-title-line-height);
   color: var(--text-primary);
   margin-bottom: 4px;
 }
@@ -1366,7 +1366,7 @@
 
 
 .settings-page--mac .settings-content-header {
-  min-height: calc(52px + var(--kepler-mac-traffic-light-top-safe-area));
-  padding-top: var(--kepler-mac-traffic-light-top-safe-area);
-  padding-left: var(--kepler-mac-traffic-light-left-safe-area);
+  min-height: calc(52px + var(--kosmos-mac-traffic-light-top-safe-area));
+  padding-top: var(--kosmos-mac-traffic-light-top-safe-area);
+  padding-left: var(--kosmos-mac-traffic-light-left-safe-area);
 }

@@ -2,10 +2,10 @@
 
 ## Code changes inspected
 
-- Shared sidebar group header actions added in `packages/kepler-visuals/components/Sidebar.vue`
+- Shared sidebar group header actions added in `packages/kosmos-visuals/components/Sidebar.vue`
 - Shared sidebar type exports updated in:
-  - `packages/kepler-visuals/components/index.ts`
-  - `packages/kepler-visuals/index.ts`
+  - `packages/kosmos-visuals/components/index.ts`
+  - `packages/kosmos-visuals/index.ts`
 - Delphi sidebar now owns project-create flow in `apps/delphi/ts/src/components/SideBar.vue`
 - New Delphi project creation component added in `apps/delphi/ts/src/components/projects/ProjectCreateDialog.vue`
 

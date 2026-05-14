@@ -1,16 +1,16 @@
-# Что такое Kepler
+# Что такое Kosmos
 
 ## Идея в одном абзаце
 
-Kepler — это **monorepo для личного софта одного человека**. В его центре общий рантайм данных **ARK** (Rust + SQLite + sync), а вокруг него — сфокусированные приложения: дневник, задачи, игровая библиотека, аналитика. Любая «штука пользователя» (заметка, задача, игра, сессия использования компьютера) — это **объект ARK**. Приложения — это разные UI-оболочки и интеграции поверх одной общей базы данных.
+Kosmos — это **monorepo для личного софта одного человека**. В его центре общий рантайм данных **ARK** (Rust + SQLite + sync), а вокруг него — сфокусированные приложения: дневник, задачи, игровая библиотека, аналитика. Любая «штука пользователя» (заметка, задача, игра, сессия использования компьютера) — это **объект ARK**. Приложения — это разные UI-оболочки и интеграции поверх одной общей базы данных.
 
 Главное архитектурное обещание: данные **живут на устройстве**, синхронизация (LAN или relay) — это бонус сверху, а не основа работы. Приложение остаётся полностью работоспособным без интернета и без облака.
 
 ## Зачем монорепо
 
 - **Один контракт хранения.** ARK владеет схемой и форматом синхронизации. Приложения не изобретают каждый раз своё.
-- **Один SDK.** Все Electron-приложения говорят с ARK через `@kepler/ark`. Один тип ошибок, один API, одно место для эволюции.
-- **Общий UI.** Sidebar, Titlebar, DesktopChrome, CommandPalette берутся из `@kepler/visuals` и выглядят одинаково в Eden / Delphi / Arrancador / Dashboard.
+- **Один SDK.** Все Electron-приложения говорят с ARK через `@kosmos/ark`. Один тип ошибок, один API, одно место для эволюции.
+- **Общий UI.** Sidebar, Titlebar, DesktopChrome, CommandPalette берутся из `@kosmos/visuals` и выглядят одинаково в Eden / Delphi / Arrancador / Dashboard.
 - **Один процесс правок.** Substantial-задачи проходят через [proof loop](/concepts/proof-loop), правила едины для всех приложений.
 
 ## Требования
@@ -27,8 +27,8 @@ Kepler — это **monorepo для личного софта одного че�
 ## Первый запуск
 
 ```powershell
-git clone <repo> kepler
-cd kepler
+git clone <repo> kosmos
+cd kosmos
 bun install
 ```
 
@@ -50,7 +50,7 @@ ARK — это Rust-крейт + бинарь sidecar'а. Большинство
 ```powershell
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 ```
 
 Бинарь `ark-core-rpc` — канонический sidecar для всех Electron-приложений. Он общается через stdin/stdout newline-delimited JSON. См. [ark-core](/packages/ark-core) и [Синхронизация](/concepts/sync).

@@ -15,8 +15,8 @@ bun run ark:smoke
 Перед task-локальными прогонами зафиксируй корень:
 
 ```powershell
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
-New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
+New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 ```
 
 ## Core
@@ -24,7 +24,7 @@ New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
 ```powershell
 cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 ```
 
 ## Usage tracker
@@ -36,17 +36,17 @@ cargo test --manifest-path services\usage-tracker\Cargo.toml
 Для ручных smoke прогонов передавай явный path:
 
 ```powershell
-$env:ARK_DB_PATH = "$env:KEPLER_SMOKE_ROOT\usage-tracker\ark.db"
+$env:ARK_DB_PATH = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
 ```
 
 ## Dashboard
 
 ```powershell
 node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
-  --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+  --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 
 node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts `
-  --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+  --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 
 bun run --cwd apps/dashboard test:e2e:smoke
 ```

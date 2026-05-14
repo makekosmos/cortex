@@ -6,7 +6,7 @@
 flowchart TD
   R["Renderer"]
   M["Electron main"]
-  SDK["@kepler/ark"]
+  SDK["@kosmos/ark"]
   RPC["ark-core-rpc"]
 
   R -- "preload API" --> M
@@ -21,8 +21,8 @@ flowchart TD
 ```
 
 - `Renderer` — Vue 3 Vapor в Electron-приложениях. Никакого SQLite, всё через preload IPC.
-- `Electron main` — оркестрация, app-сервисы, единственный слой, который вызывает `@kepler/ark`.
-- `@kepler/ark` — TS SDK к sidecar'у.
+- `Electron main` — оркестрация, app-сервисы, единственный слой, который вызывает `@kosmos/ark`.
+- `@kosmos/ark` — TS SDK к sidecar'у.
 - `ark-core-rpc` — Rust runtime: SQLite, миграции, p2p sync.
 
 ## Слои
@@ -31,20 +31,20 @@ flowchart TD
 
 Vue 3.6 Vapor в Eden, Dashboard, Arrancador. Никогда не пишет напрямую в SQLite. Общается с Electron main через preload API.
 
-Использует общие UI-примитивы из `@kepler/visuals`: `Sidebar`, `Titlebar`, `TitlebarHistoryControls`, `DesktopChrome`, `DesktopContentSurface`, `CommandPalette`, `StatusDot`, `TodoRow`, `GamePosterCard`, `QuickEntryPanel`, `CustomCaret`.
+Использует общие UI-примитивы из `@kosmos/visuals`: `Sidebar`, `Titlebar`, `TitlebarHistoryControls`, `DesktopChrome`, `DesktopContentSurface`, `CommandPalette`, `StatusDot`, `TodoRow`, `GamePosterCard`, `QuickEntryPanel`, `CustomCaret`.
 
 ### Electron main
 
-Оркестрирует приложение, держит IPC, владеет sidecar-процессом. **Единственный** слой, который вызывает `@kepler/ark`. Renderer его не видит — он работает через `window.<appName>Api` (`window.dashboardApi`, `window.arrancador`, и т.п.).
+Оркестрирует приложение, держит IPC, владеет sidecar-процессом. **Единственный** слой, который вызывает `@kosmos/ark`. Renderer его не видит — он работает через `window.<appName>Api` (`window.dashboardApi`, `window.arrancador`, и т.п.).
 
-### @kepler/ark
+### @kosmos/ark
 
 Канонический TS-клиент к `ark-core-rpc`. Два режима работы:
 
 - **self-managed sidecar** — `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`. Используется когда приложение единственный потребитель.
 - **injected sidecar** — sidecar уже владеется другим слоем (например, `apps/delphi/ts/electron/sidecar.ts`), `ArkClient` получает `requestFn` / `onEventFn`. Используется когда внутри Electron-приложения несколько сервисов делят один sidecar.
 
-См. [@kepler/ark](/packages/kepler-ark).
+См. [@kosmos/ark](/packages/kosmos-ark).
 
 ### ark-core-rpc (Rust)
 
@@ -67,7 +67,7 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador. Никогда не пишет н�
 
 ### SQLite
 
-Внутри одна база на пространство данных (`space`), путь типа `%APPDATA%\Kepler\spaces\<spaceId>\ark.db` (или `%APPDATA%\Kepler\ark.db` для usage-tracker).
+Внутри одна база на пространство данных (`space`), путь типа `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db` (или `%APPDATA%\Kosmos\ark.db` для usage-tracker).
 
 Схема — additive: `init_schema` мигрирует существующие БД на месте через `CREATE TABLE IF NOT EXISTS` без перезаписи файла.
 
@@ -85,7 +85,7 @@ ARK владеет схемой, объектами, usage-данными, sync-
 
 ### 3. Narrow contract
 
-Приложения говорят с ARK **только** через `@kepler/ark` (TS) или `ark_core::db` (Rust-writers). Прямые SQL writes в app services запрещены. См. [Граница записи](/concepts/write-boundary).
+Приложения говорят с ARK **только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust-writers). Прямые SQL writes в app services запрещены. См. [Граница записи](/concepts/write-boundary).
 
 ### 4. Auditable changes
 
@@ -100,9 +100,9 @@ Substantial-правки проходят через proof loop с явными 
 | Кусок | Где | Тип | Роль |
 |---|---|---|---|
 | ark-core | `packages/ark-core/rust` | Rust crate + бинарь | runtime данных |
-| @kepler/ark | `packages/kepler-ark` | TS SDK | клиент к sidecar |
+| @kosmos/ark | `packages/kosmos-ark` | TS SDK | клиент к sidecar |
 | ark-relay-server | `services/ark-relay-server` | Rust server | WebSocket relay (NAT-обход p2p sync) |
-| kepler-visuals | `packages/kepler-visuals` | TS + Vue | дизайн-система |
+| kosmos-visuals | `packages/kosmos-visuals` | TS + Vue | дизайн-система |
 | Electron apps | `apps/{eden,delphi,arrancador,dashboard}` | TS + Electron | продуктовые оболочки |
 | ark-service | `apps/ark-service` | Kotlin + Room | Android ContentProvider, держит данные Android Delphi (`apps/delphi/kotlin`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
 | usage-tracker | `services/usage-tracker` | Rust | захват usage data → ARK |

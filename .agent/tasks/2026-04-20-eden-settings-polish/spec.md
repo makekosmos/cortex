@@ -3,7 +3,7 @@
 ## Goal
 Polish Eden shared UI so that:
 - note/object titles in the editor use the same visual size as settings page titles
-- sidebar button labels in `kepler-visuals` are left-aligned and truncate cleanly with ellipsis
+- sidebar button labels in `kosmos-visuals` are left-aligned and truncate cleanly with ellipsis
 - Connected Apps settings match the same unified settings visual language as the other settings pages
 - settings page spacing comes from the main settings content container instead of per-page extra padding
 - touched Russian UI remains valid UTF-8
@@ -13,12 +13,12 @@ Polish Eden shared UI so that:
 - `apps/eden/ts/src/App.css`
 - `apps/eden/ts/src/components/settings/ConnectedAppsSettings.vue`
 - `apps/eden/ts/src/components/settings/SettingsPage.css`
-- `packages/kepler-visuals/components/SidebarButton.vue`
-- `packages/kepler-visuals/components/Sidebar.vue`
+- `packages/kosmos-visuals/components/SidebarButton.vue`
+- `packages/kosmos-visuals/components/Sidebar.vue`
 
 ## Acceptance Criteria
 - AC1: The main note/object title input in Eden uses the same effective title size as settings page headings.
-- AC2: Shared sidebar buttons in `kepler-visuals` left-align icon+label content and truncate label text with ellipsis when space is insufficient.
+- AC2: Shared sidebar buttons in `kosmos-visuals` left-align icon+label content and truncate label text with ellipsis when space is insufficient.
 - AC3: Shared sidebar project/object rows also preserve left alignment and truncation behavior.
 - AC4: Connected Apps settings use the same section/row/action structure as the rest of Eden settings instead of a bespoke card layout.
 - AC5: Settings pages rely on the shared settings content container for outer spacing; per-page inner padding is reduced accordingly.

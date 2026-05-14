@@ -19,7 +19,7 @@ PASS
 ```
 
 ```text
-> bun run --cwd packages/kepler-ark typecheck
+> bun run --cwd packages/kosmos-ark typecheck
 PASS
 tsc --noEmit
 ```
@@ -42,9 +42,9 @@ PASS
 > bun run --cwd apps/arrancador smoke:packaged
 PASS
 status: ok
-executablePath: D:\Personal\Hobby\Coding\kepler\apps\arrancador\release\win-unpacked\arrancador.exe
-userData: D:\Personal\Hobby\Coding\kepler\apps\arrancador\.e2e\packaged-smoke\localappdata\arrancador
-arkDbPath: D:\Personal\Hobby\Coding\kepler\apps\arrancador\.e2e\packaged-smoke\ark\ark.db
+executablePath: D:\Personal\Hobby\Coding\kosmos\apps\arrancador\release\win-unpacked\arrancador.exe
+userData: D:\Personal\Hobby\Coding\kosmos\apps\arrancador\.e2e\packaged-smoke\localappdata\arrancador
+arkDbPath: D:\Personal\Hobby\Coding\kosmos\apps\arrancador\.e2e\packaged-smoke\ark\ark.db
 title: Arrancador
 ```
 
@@ -58,7 +58,7 @@ PASS
 ```text
 > bun run --cwd apps/dashboard test:e2e:smoke
 PASS
-Smoke dashboard DB seeded at D:\Personal\Hobby\Coding\kepler\apps\dashboard\.e2e\smoke-dashboard.db
+Smoke dashboard DB seeded at D:\Personal\Hobby\Coding\kosmos\apps\dashboard\.e2e\smoke-dashboard.db
 status: ok
 statusText: База подключена
 topApp: Odyssey Browser

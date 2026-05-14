@@ -4,8 +4,8 @@
 - Task ID: ark-rust-runtime
 - Created: 2026-04-09T09:49:19+00:00
 - Frozen: 2026-04-08
-- Repo root: /Users/kirill/Documents/projects/kosmos
-- Working directory at init: /Users/kirill/Documents/projects/kosmos
+- Repo root: /Users/kirill/Documents/projects/kepler
+- Working directory at init: /Users/kirill/Documents/projects/kepler
 
 ## Guidance sources
 - `/CLAUDE.md` (repo task proof loop)
@@ -47,7 +47,7 @@ After this task lands:
 - `apps/delphi/ts/electron/sidecar.ts` spawns `ark-core-rpc`, runs a single-request/single-response JSON queue with `activeRequest`/`requestQueue`, treats every stdout line as a response, and has **no event stream handling**.
 - `apps/delphi/ts/electron/main.ts` imports `SyncServer`, `SyncClient`, `LAN_SYNC_PORT`, `mergePeerRecords`, `PeerRecord`, `SyncEntity`, `PeerChange` from `@arksync/core`, and `getOwnAddresses` from `@arksync/node`. It instantiates `SyncServer` / `SyncClient` in the main process and wires `BroadcastDiscovery` from `./broadcast-discovery`.
 - `apps/delphi/ts/electron/broadcast-discovery.ts` implements the Syncthing-style UDP beacon on port 21532 with a `Map<device_id, SeenPeer>` dedup, 30s TTL, and routable-address filtering.
-- `apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/` contains: `SyncServer.kt` (907 LOC), `LanSyncClient.kt` (797 LOC), `BroadcastDiscovery.kt` (314 LOC), `PeerManager.kt` (409 LOC), plus helper files (`HLC.kt`, `Pairing.kt`, `ArkDiscovery.kt`, `ArkEventMapper.kt`, `ArkPeerProtocol.kt`, `PeerRecord.kt`, `ArkPeerManager.kt`, `SyncEntityParser.kt`, `ArkSyncClient.kt`). The Kotlin package root is `com.kazui.delphi` (not `com.kepler.delphi` — the task brief's path is a typo; see Assumption A1).
+- `apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/` contains: `SyncServer.kt` (907 LOC), `LanSyncClient.kt` (797 LOC), `BroadcastDiscovery.kt` (314 LOC), `PeerManager.kt` (409 LOC), plus helper files (`HLC.kt`, `Pairing.kt`, `ArkDiscovery.kt`, `ArkEventMapper.kt`, `ArkPeerProtocol.kt`, `PeerRecord.kt`, `ArkPeerManager.kt`, `SyncEntityParser.kt`, `ArkSyncClient.kt`). The Kotlin package root is `com.kazui.delphi` (not `com.kosmos.delphi` — the task brief's path is a typo; see Assumption A1).
 - `apps/delphi/kotlin/app/build.gradle.kts` has no `jniLibs` wiring, no Rust cross-compile plugin, no UniFFI Kotlin source set.
 - `packages/arksync/` (TS) still exists and is still consumed by `ts/electron/main.ts`. It becomes legacy after this task but is **not** deleted here.
 
@@ -254,7 +254,7 @@ The Rust crate enforces, and unit or integration tests verify, every invariant b
    - Response: `{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`
    - New sync operations (AC5) join the same enum. No existing operation is renamed, removed, or has its field names changed.
 7. The new event stream (AC6) shares the same stdout as responses but must never corrupt a response line or a prior event line. One JSON object per line is the only permitted framing.
-8. Android package path is `com.kazui.delphi` (not `com.kepler.delphi`). The implementer must target the real path; see Assumption A1.
+8. Android package path is `com.kazui.delphi` (not `com.kosmos.delphi`). The implementer must target the real path; see Assumption A1.
 9. Dependencies added to `Cargo.toml` must be justified:
    - `if-addrs` (or equivalent) for interface enumeration — required by AC2.
    - The UniFFI toolchain version already in `Cargo.toml` (`uniffi = "0.28"`) is the baseline. If a newer version is required for Kotlin export of trait objects / callback interfaces, it may be upgraded, but not downgraded.
@@ -278,7 +278,7 @@ The Rust crate enforces, and unit or integration tests verify, every invariant b
 
 ## Assumptions
 
-1. **A1 — Android package path.** The task brief references `apps/delphi/kotlin/app/src/main/java/com/kepler/delphi/...`, but the real path is `com.kazui.delphi` (confirmed by listing `app/src/main/java/`). All Android ACs target the real path. If a future rename lands, ACs carry over unchanged.
+1. **A1 — Android package path.** The task brief references `apps/delphi/kotlin/app/src/main/java/com/kosmos/delphi/...`, but the real path is `com.kazui.delphi` (confirmed by listing `app/src/main/java/`). All Android ACs target the real path. If a future rename lands, ACs carry over unchanged.
 2. **A2 — UniFFI version.** `uniffi = "0.28"` in `Cargo.toml` is assumed sufficient for Kotlin callback-interface export. If proc-macro export of trait-based listeners hits a known limitation, the implementer may bump to the next stable UniFFI release without re-opening the spec.
 3. **A3 — Rust host device-name fallback.** On macOS the function strips `.local` and otherwise returns the raw hostname. On Android the Kotlin caller always provides an explicit `device_name`, so the Rust-side default (`"Android device"`) is a safety net, not the observed value in production.
 4. **A4 — Event envelope.** Events are distinguished from responses by the **presence of an `event` field**, not by a separate channel. `main.ts` (via `sidecar.ts`) demuxes on this field. If a future task needs richer event metadata, it can extend the envelope without breaking the demux.

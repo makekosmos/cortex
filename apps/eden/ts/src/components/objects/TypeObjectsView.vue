@@ -238,10 +238,10 @@ const tableColumnsStyle = computed(() => ({
 .type-objects-title {
   margin: 0;
   color: var(--foreground);
-  font-size: var(--kepler-text-page-title-size);
-  line-height: var(--kepler-text-page-title-line-height);
-  letter-spacing: var(--kepler-text-page-title-letter-spacing);
-  font-weight: var(--kepler-text-page-title-weight);
+  font-size: var(--kosmos-text-page-title-size);
+  line-height: var(--kosmos-text-page-title-line-height);
+  letter-spacing: var(--kosmos-text-page-title-letter-spacing);
+  font-weight: var(--kosmos-text-page-title-weight);
 }
 
 .type-objects-actions {

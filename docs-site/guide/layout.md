@@ -3,7 +3,7 @@
 ## Карта верхнего уровня
 
 ```text
-kepler/
+kosmos/
 ├─ apps/                  # Продуктовые приложения (UI + специфичная логика)
 │  ├─ ark-service/        # Android APK — Room ContentProvider для Android Delphi
 │  ├─ arrancador/         # Electron — игровая библиотека / playtime / бэкапы
@@ -13,8 +13,8 @@ kepler/
 │  └─ horologion/          # Electron — трекер времени + pomodoro (WIP)
 ├─ packages/              # Переиспользуемые пакеты
 │  ├─ ark-core/           # ⭐ Rust runtime + ark-core-rpc sidecar
-│  ├─ kepler-ark/         # ⭐ @kepler/ark — канонический TS SDK
-│  └─ kepler-visuals/     # UI-токены, тема, компоненты
+│  ├─ kosmos-ark/         # ⭐ @kosmos/ark — канонический TS SDK
+│  └─ kosmos-visuals/     # UI-токены, тема, компоненты
 ├─ services/              # Долгоживущие фоновые сервисы / серверы
 │  ├─ usage-tracker/      # Rust — захват usage data, пишет в ARK через RPC
 │  └─ ark-relay-server/   # Rust — WebSocket relay для p2p sync через NAT
@@ -87,7 +87,7 @@ apps/eden/ts/
 │  ├─ main.ts                 # init, BrowserWindow, IPC handlers
 │  ├─ preload.ts              # IPC bridge
 │  ├─ store.ts                # SQLite: entries, folders, note types, trash, vault
-│  ├─ ark.ts                  # мост на @kepler/ark
+│  ├─ ark.ts                  # мост на @kosmos/ark
 │  ├─ heart.ts                # Eden Heart sidecar integration
 │  ├─ hevy.ts                 # Hevy fitness API
 │  └─ hevySync.ts             # Hevy → Eden entries
@@ -105,7 +105,7 @@ apps/eden/ts/
 
 ## Иконки приложений
 
-Стандарт для всех Electron-приложений Kepler (Delphi, Eden, Arrancador, Dashboard, Horologion):
+Стандарт для всех Electron-приложений Kosmos (Delphi, Eden, Arrancador, Dashboard, Horologion):
 
 ```text
 apps/<name>/[ts/]build/
@@ -174,8 +174,8 @@ new BrowserWindow({ icon: nativeImage.createFromPath(resolveIconPath()), ... });
 | Это | Куда |
 |---|---|
 | Новый ARK endpoint (Rust) | `packages/ark-core/rust/src/*.rs` + регистрация в `main.rs` |
-| Новый метод в TS SDK | `packages/kepler-ark/src/ark-client.ts` |
-| UI-компонент, переиспользуемый в 2+ приложениях | `packages/kepler-visuals/components/` |
+| Новый метод в TS SDK | `packages/kosmos-ark/src/ark-client.ts` |
+| UI-компонент, переиспользуемый в 2+ приложениях | `packages/kosmos-visuals/components/` |
 | Локальная фича одного приложения | внутри `apps/<name>/` |
 | Концепт / архитектурное решение | `docs/` (источник правды) + страница в `docs-site/concepts/` |
 | Артефакты proof-loop задачи | `.agent/tasks/<DATE>-<slug>/` |

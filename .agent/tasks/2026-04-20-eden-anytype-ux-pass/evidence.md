@@ -108,7 +108,7 @@ Evidence:
 1. `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`
 2. `bun run build`
 3. `bun run seed:ark-demo`
-4. `bun run seed:ark-demo -- --db D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\dev-data\\ark-demo-secondary.db`
+4. `bun run seed:ark-demo -- --db D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\eden\\ts\\dev-data\\ark-demo-secondary.db`
 
 ## Notes
 

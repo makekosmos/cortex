@@ -34,13 +34,13 @@
 - ❌ Возврат старого Delphi DB sidecar.
 - ❌ Возврат собственного usage tracker внутри Arrancador (он живёт в `services/usage-tracker`).
 - ❌ Возврат ripgrep как поискового движка Eden — он на Tantivy через Eden Heart.
-- ❌ Дублирование UI-компонентов, которые уже есть в `@kepler/visuals` (Sidebar, Titlebar, DesktopChrome).
+- ❌ Дублирование UI-компонентов, которые уже есть в `@kosmos/visuals` (Sidebar, Titlebar, DesktopChrome).
 - ❌ `--no-verify` при коммите.
 
 ## Когда нужно
 
 - ✅ Перед PR в data-слой — `bun run ark:guard:writes`.
-- ✅ Перед PR в любую часть ARK — `cargo test` + `bun run --cwd packages/kepler-ark typecheck`.
+- ✅ Перед PR в любую часть ARK — `cargo test` + `bun run --cwd packages/kosmos-ark typecheck`.
 - ✅ Перед PR в Electron-приложение — `bun run typecheck`, `bun run build`, `bun run test:e2e`.
 - ✅ Все новые тестовые БД — изолированные. Передавай путь через CLI/env, не дефолти в user data.
 - ✅ Если меняешь endpoint в `ark-core-rpc` — добавь тест миграции и репликации, не только локальный CRUD.

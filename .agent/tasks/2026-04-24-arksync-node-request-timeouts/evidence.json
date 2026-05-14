@@ -13,25 +13,25 @@
   "commands": [
     {
       "command": "bun run typecheck",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\packages\\arksync-node",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\packages\\arksync-node",
       "artifact": ".agent/tasks/2026-04-24-arksync-node-request-timeouts/typecheck.txt",
       "exit_code": 0
     },
     {
       "command": "bun run build",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\packages\\arksync-node",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\packages\\arksync-node",
       "artifact": ".agent/tasks/2026-04-24-arksync-node-request-timeouts/build.txt",
       "exit_code": 0
     },
     {
       "command": "bun .agent/tasks/2026-04-24-arksync-node-request-timeouts/verify-request-timeouts.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-arksync-node-request-timeouts/verify-request-timeouts.txt",
       "exit_code": 0
     },
     {
       "command": "git diff --check -- packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-arksync-node-request-timeouts/spec.md .agent/tasks/2026-04-24-arksync-node-request-timeouts/verify-request-timeouts.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-arksync-node-request-timeouts/git-diff-check.txt",
       "exit_code": 0
     }

@@ -71,55 +71,55 @@
   "commands": [
     {
       "command": "cargo check --manifest-path packages/ark-core/rust/Cargo.toml",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-check.txt"
     },
     {
       "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml response_",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-test-response-id.txt"
     },
     {
       "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml request_deserialization_ignores_optional_id_field",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-test-request-id.txt"
     },
     {
       "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-test-full.txt"
     },
     {
       "command": "cargo fmt --manifest-path packages/ark-core/rust/Cargo.toml -- --check",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-fmt-check.txt"
     },
     {
       "command": "bun run typecheck",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/packages/arksync-node",
       "exit_code": 0,
       "artifact": "arksync-node-typecheck.txt"
     },
     {
       "command": "bun run build",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/packages/arksync-node",
       "exit_code": 0,
       "artifact": "arksync-node-build.txt"
     },
     {
       "command": "bun .agent/tasks/2026-04-24-ark-sidecar-request-id/verify-arksync-node-request-id.ts",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "verify-arksync-node-request-id.txt"
     },
     {
       "command": "git diff --check -- packages/ark-core/rust/src/main.rs packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-ark-sidecar-request-id/spec.md .agent/tasks/2026-04-24-ark-sidecar-request-id/verify-arksync-node-request-id.ts",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "git-diff-check.txt"
     }

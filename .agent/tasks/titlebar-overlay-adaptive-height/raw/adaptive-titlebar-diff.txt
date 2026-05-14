@@ -1,4 +1,4 @@
-﻿diff --git a/apps/delphi/ts/electron/main.ts b/apps/delphi/ts/electron/main.ts
+diff --git a/apps/delphi/ts/electron/main.ts b/apps/delphi/ts/electron/main.ts
 index da3c378..332ed71 100644
 --- a/apps/delphi/ts/electron/main.ts
 +++ b/apps/delphi/ts/electron/main.ts
@@ -125,10 +125,10 @@ index da3c378..332ed71 100644
  // --- Sync lifecycle is handled by ArkClient from @arksync/node. ---
  // The active renderer contract is `lan-sync:*`.
  
-diff --git a/packages/kepler-visuals/components/Titlebar.vue b/packages/kepler-visuals/components/Titlebar.vue
+diff --git a/packages/kosmos-visuals/components/Titlebar.vue b/packages/kosmos-visuals/components/Titlebar.vue
 index 59a994c..2fd8a72 100644
---- a/packages/kepler-visuals/components/Titlebar.vue
-+++ b/packages/kepler-visuals/components/Titlebar.vue
+--- a/packages/kosmos-visuals/components/Titlebar.vue
++++ b/packages/kosmos-visuals/components/Titlebar.vue
 @@ -1,5 +1,10 @@
  <script setup lang="ts">
 -import { computed } from "vue";
@@ -142,8 +142,8 @@ index 59a994c..2fd8a72 100644
  export type TitlebarPlatform = "mac" | "windows" | "linux";
  
 @@ -17,10 +22,65 @@ const titlebarClasses = computed(() => [
-     "kepler-titlebar",
-     `kepler-titlebar--${props.platform}`,
+     "kosmos-titlebar",
+     `kosmos-titlebar--${props.platform}`,
  ]);
 +
 +const rootRef = useTemplateRef<HTMLElement>("root");
@@ -205,15 +205,15 @@ index 59a994c..2fd8a72 100644
  <template>
 -    <header :class="titlebarClasses">
 +    <header ref="root" :class="titlebarClasses">
-         <div class="kepler-titlebar__leading">
+         <div class="kosmos-titlebar__leading">
              <slot name="leading" />
          </div>
 @@ -62,7 +122,7 @@ const titlebarClasses = computed(() => [
  }
  
- .kepler-titlebar--windows {
--    padding-right: var(--kepler-windows-controls-safe-area, 156px);
-+    padding-right: var(--kepler-windows-controls-safe-area, 11%);
+ .kosmos-titlebar--windows {
+-    padding-right: var(--kosmos-windows-controls-safe-area, 156px);
++    padding-right: var(--kosmos-windows-controls-safe-area, 11%);
  }
  
- .kepler-titlebar__leading,
+ .kosmos-titlebar__leading,

@@ -6,14 +6,14 @@
       "id": "AC1",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/Titlebar.vue defines --kepler-titlebar-control-size and --kepler-titlebar-control-radius."
+        "packages/kosmos-visuals/components/Titlebar.vue defines --kosmos-titlebar-control-size and --kosmos-titlebar-control-radius."
       ]
     },
     {
       "id": "AC2",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/TitlebarHistoryControls.vue uses var(--kepler-titlebar-control-size, 32px) and var(--kepler-titlebar-control-radius, 10px)."
+        "packages/kosmos-visuals/components/TitlebarHistoryControls.vue uses var(--kosmos-titlebar-control-size, 32px) and var(--kosmos-titlebar-control-radius, 10px)."
       ]
     },
     {
@@ -34,7 +34,7 @@
       "id": "AC5",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/Titlebar.vue sets --kepler-titlebar-height: 32px.",
+        "packages/kosmos-visuals/components/Titlebar.vue sets --kosmos-titlebar-height: 32px.",
         "apps/dashboard/electron/main.ts, apps/delphi/ts/electron/main.ts, and apps/eden/ts/main/main.ts each keep titleBarOverlay.height: 32."
       ]
     },
@@ -47,8 +47,8 @@
     }
   ],
   "commands": [
-    "node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard\\tsconfig.json",
-    "node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kepler\\apps\\delphi\\ts\\tsconfig.json",
-    "node D:\\Personal\\Hobby\\Coding\\kepler\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\tsconfig.json"
+    "node D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\dashboard\\tsconfig.json",
+    "node D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\delphi\\ts\\tsconfig.json",
+    "node D:\\Personal\\Hobby\\Coding\\kosmos\\node_modules\\.bun\\typescript@5.8.3\\node_modules\\typescript\\lib\\tsc.js --noEmit -p D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\eden\\ts\\tsconfig.json"
   ]
 }

@@ -2,7 +2,7 @@
   "task_id": "2026-04-16-dashboard-status-dot-content-surface",
   "summary": {
     "status_indicator": "Delphi-style dot",
-    "shared_surface_component": "packages/kepler-visuals/components/DesktopContentSurface.vue",
+    "shared_surface_component": "packages/kosmos-visuals/components/DesktopContentSurface.vue",
     "consumer": "apps/dashboard/src/components/dashboard/DashboardShell.vue"
   },
   "acceptance_criteria": [
@@ -18,7 +18,7 @@
       "id": "AC2",
       "status": "PASS",
       "evidence": [
-        "DesktopContentSurface component added to @kepler/visuals",
+        "DesktopContentSurface component added to @kosmos/visuals",
         "Shared padding and radius props exported for reuse"
       ]
     },

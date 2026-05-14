@@ -44,9 +44,9 @@
  M packages/ark-core/rust/src/db.rs
  M packages/ark-core/rust/src/main.rs
  M packages/ark-core/rust/src/types.rs
- M packages/kepler-ark/README.md
- M packages/kepler-ark/src/ark-client.ts
- M packages/kepler-ark/src/index.ts
+ M packages/kosmos-ark/README.md
+ M packages/kosmos-ark/src/ark-client.ts
+ M packages/kosmos-ark/src/index.ts
  M services/usage-tracker/AGENTS.md
  M services/usage-tracker/README.md
 ?? .agent/tasks/2026-04-26-ark-app-completion/

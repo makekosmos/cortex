@@ -2,7 +2,7 @@
 
 ## Goal
 
-Вернуть draggable-область на sidebar в `@kepler/visuals`, но держать её фоновым слоем: под кнопками, ссылками и resize-handle.
+Вернуть draggable-область на sidebar в `@kosmos/visuals`, но держать её фоновым слоем: под кнопками, ссылками и resize-handle.
 
 ## Acceptance Criteria
 
@@ -13,6 +13,6 @@
 
 ## Verification Plan
 
-- Проверить diff в `packages/kepler-visuals/components/Sidebar.vue`
-- Проверить `git diff -- packages/kepler-visuals/components/Sidebar.vue`
+- Проверить diff в `packages/kosmos-visuals/components/Sidebar.vue`
+- Проверить `git diff -- packages/kosmos-visuals/components/Sidebar.vue`
 - Проверить `vue-tsc`/typecheck для dashboard как smoke-потребителя shared sidebar

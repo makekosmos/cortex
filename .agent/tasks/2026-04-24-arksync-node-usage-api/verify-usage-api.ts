@@ -110,7 +110,7 @@ const selfManagedCalls: Array<Record<string, unknown>> = []
 const selfManaged = new ArkClient({
   spaceId: 'space',
   deviceId: 'device',
-  dbPath: 'D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-24-arksync-node-usage-api/self-managed/ark.db',
+  dbPath: 'D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-24-arksync-node-usage-api/self-managed/ark.db',
   sidecarPath: 'unused',
 }) as ArkClient & { requestViaChild: (req: Record<string, unknown>) => Promise<unknown> }
 selfManaged.requestViaChild = async (req: Record<string, unknown>) => {

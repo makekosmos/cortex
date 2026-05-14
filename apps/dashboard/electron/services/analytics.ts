@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { ArkClient, type ArkUsageAnalyticsSnapshot } from "@kepler/ark";
+import { ArkClient, type ArkUsageAnalyticsSnapshot } from "@kosmos/ark";
 
 import type {
   DashboardLoadOptions,
@@ -111,7 +111,7 @@ export function resolveDefaultArkDbPath(): string {
     return path.join(process.cwd(), "ark.db");
   }
 
-  return path.join(appData, "Kepler", "ark.db");
+  return path.join(appData, "Kosmos", "ark.db");
 }
 
 function createDashboardArkClient(

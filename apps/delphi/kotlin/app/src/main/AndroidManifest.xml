@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Required to access the ark-service ContentProvider -->
-    <uses-permission android:name="com.kepler.ark.data.READ_WRITE" />
+    <uses-permission android:name="com.kosmos.ark.data.READ_WRITE" />
 
     <uses-feature
         android:name="android.hardware.camera"

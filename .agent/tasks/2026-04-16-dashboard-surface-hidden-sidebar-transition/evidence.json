@@ -1,7 +1,7 @@
 {
   "task_id": "2026-04-16-dashboard-surface-hidden-sidebar-transition",
   "summary": {
-    "shared_surface_component": "packages/kepler-visuals/components/DesktopContentSurface.vue",
+    "shared_surface_component": "packages/kosmos-visuals/components/DesktopContentSurface.vue",
     "driven_by": "sidebarConfig.hidden"
   },
   "acceptance_criteria": [

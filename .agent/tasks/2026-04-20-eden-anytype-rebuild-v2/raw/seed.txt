@@ -2,7 +2,7 @@ bun run seed:ark-demo
 
 Result: PASS
 
-dbPath: D:\Personal\Hobby\Coding\kepler\apps\eden\ts\dev-data\ark-demo-mixed.db
+dbPath: D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\dev-data\ark-demo-mixed.db
 objectTypeIds:
 - book_obj
 - game_obj

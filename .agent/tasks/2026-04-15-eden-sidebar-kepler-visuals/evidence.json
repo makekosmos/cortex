@@ -1,5 +1,5 @@
 {
-  "taskId": "2026-04-15-eden-sidebar-kepler-visuals",
+  "taskId": "2026-04-15-eden-sidebar-kosmos-visuals",
   "status": "PASS",
   "checks": {
     "lint": "PASS",
@@ -16,14 +16,14 @@
     "AC7": "PASS"
   },
   "artifacts": {
-    "spec": ".agent/tasks/2026-04-15-eden-sidebar-kepler-visuals/spec.md",
-    "evidence": ".agent/tasks/2026-04-15-eden-sidebar-kepler-visuals/evidence.md",
-    "prd": ".omx/plans/prd-eden-sidebar-kepler-visuals.md",
-    "testSpec": ".omx/plans/test-spec-eden-sidebar-kepler-visuals.md"
+    "spec": ".agent/tasks/2026-04-15-eden-sidebar-kosmos-visuals/spec.md",
+    "evidence": ".agent/tasks/2026-04-15-eden-sidebar-kosmos-visuals/evidence.md",
+    "prd": ".omx/plans/prd-eden-sidebar-kosmos-visuals.md",
+    "testSpec": ".omx/plans/test-spec-eden-sidebar-kosmos-visuals.md"
   },
   "notes": [
-    "Eden main shell and settings now use shared sidebar contract via @kepler/visuals",
-    "Eden sidebar now matches the direct Delphi-style usage pattern of KeplerSidebar",
+    "Eden main shell and settings now use shared sidebar contract via @kosmos/visuals",
+    "Eden sidebar now matches the direct Delphi-style usage pattern of KosmosSidebar",
     "spaces moved into settings",
     "full e2e suite passed with 19/19 tests"
   ]

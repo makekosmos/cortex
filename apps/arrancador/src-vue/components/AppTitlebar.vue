@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Titlebar, TitlebarHistoryControls } from "@kepler/visuals";
+import { Titlebar, TitlebarHistoryControls } from "@kosmos/visuals";
 import { Maximize2, Minimize2, PanelLeft, X } from "lucide-vue-next";
 import { computed, onMounted, onUnmounted, shallowRef } from "vue";
 import {

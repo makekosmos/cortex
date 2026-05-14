@@ -14,7 +14,7 @@
  D apps/delphi/ts/src/services/sync/peer-bridge.ts
  M apps/delphi/ts/src/store/tasks.ts
  M apps/delphi/ts/src/store/todos.ts
- M packages/kepler-visuals/theme/css-variables.css
+ M packages/kosmos-visuals/theme/css-variables.css
 ?? .agent/tasks/2026-04-11-delphi-google-calendar/
 ?? .agent/tasks/2026-04-11-delphi-p2p-sync-cleanup/
 ?? apps/delphi/ts/electron/google-calendar.ts

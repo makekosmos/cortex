@@ -4,9 +4,9 @@ import path from "node:path";
 import { app, BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import {
   getArkDbPathForSelectedSpace,
-  getKeplerDataDir,
+  getKosmosDataDir,
   readSharedSelectedSpace,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 import { syncArkRuntimeBinding } from "./ark-runtime";
 import { openGameDatabase, openSqliteDatabase } from "./db";
 import type { DbLike } from "./helpers/shared";
@@ -53,7 +53,7 @@ function getRootArkDbPath() {
     return override;
   }
 
-  return path.join(getKeplerDataDir(app.getPath("appData")), "ark.db");
+  return path.join(getKosmosDataDir(app.getPath("appData")), "ark.db");
 }
 
 function getArkConnectionInfo() {

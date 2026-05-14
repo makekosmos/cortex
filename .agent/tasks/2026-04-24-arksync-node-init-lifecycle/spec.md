@@ -20,7 +20,7 @@ Add the smallest standalone lifecycle support to `@arksync/node` so self-managed
 
 ## Out Of Scope
 
-- Renaming `@arksync/node` to `@kepler/ark`.
+- Renaming `@arksync/node` to `@kosmos/ark`.
 - Adding object CRUD or usage APIs to the SDK.
 - Changing the `ark-core-rpc` wire protocol.
 - Adding request ids or multiplexing.

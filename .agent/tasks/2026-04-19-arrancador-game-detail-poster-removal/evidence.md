@@ -5,7 +5,7 @@
 - `.agent/tasks/2026-04-19-arrancador-game-detail-poster-removal/spec.md`
 
 ## What changed
-- Removed the vertical `cover_image` poster block from the main game detail header area in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:890).
+- Removed the vertical `cover_image` poster block from the main game detail header area in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:890).
 - Kept the game title/genre/actions layout and left the edit dialog cover-image controls intact.
 
 ## Acceptance criteria

@@ -31,7 +31,7 @@
 
 .editor-rail {
   width: 100%;
-  max-width: var(--kepler-page-max-width, 700px);
+  max-width: var(--kosmos-page-max-width, 700px);
   margin: 0 auto;
   padding-inline: var(--editor-inline-gutter, 48px);
 }
@@ -54,14 +54,14 @@
   border: none;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: var(--kepler-text-page-title-size);
-  font-weight: var(--kepler-text-page-title-weight);
+  font-size: var(--kosmos-text-page-title-size);
+  font-weight: var(--kosmos-text-page-title-weight);
   width: 100%;
   min-width: 0;
   outline: none;
   padding: 0;
-  letter-spacing: var(--kepler-text-page-title-letter-spacing);
-  line-height: var(--kepler-text-page-title-line-height);
+  letter-spacing: var(--kosmos-text-page-title-letter-spacing);
+  line-height: var(--kosmos-text-page-title-line-height);
 }
 
 .title-input::placeholder {

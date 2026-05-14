@@ -49,8 +49,8 @@ async function launchApp(
       ...process.env,
       EDEN_BACKGROUND_LAUNCH: "1",
       HOME: homePath,
-      KEPLER_TEST_APPDATA: testAppDataPath,
-      KEPLER_TEST_USER_DATA: testUserDataPath,
+      KOSMOS_TEST_APPDATA: testAppDataPath,
+      KOSMOS_TEST_USER_DATA: testUserDataPath,
       NODE_ENV: "development",
     },
   });
@@ -270,7 +270,7 @@ test.describe("Electron App", () => {
 
       if (process.platform === "darwin") {
         const sidebarChrome = await launch.window.evaluate(() => {
-          const shell = document.querySelector(".widget-sidebar-wrapper .kepler-sidebar-shell");
+          const shell = document.querySelector(".widget-sidebar-wrapper .kosmos-sidebar-shell");
           const toggle = document.querySelector('[data-testid="sidebar-toggle"]');
           if (!(shell instanceof HTMLElement) || !(toggle instanceof HTMLElement)) {
             return null;
@@ -297,7 +297,7 @@ test.describe("Electron App", () => {
 
       if (process.platform === "darwin") {
         const settingsChrome = await launch.window.evaluate(() => {
-          const sidebarShell = document.querySelector('.settings-page .kepler-sidebar-shell');
+          const sidebarShell = document.querySelector('.settings-page .kosmos-sidebar-shell');
           const header = document.querySelector('[data-testid="settings-content-header"]');
           if (!(sidebarShell instanceof HTMLElement) || !(header instanceof HTMLElement)) {
             return null;
@@ -503,8 +503,8 @@ test.describe("Electron App", () => {
         .poll(
           async () =>
             launch?.window.evaluate(() => {
-              const caret = document.querySelector(".kepler-caret");
-              return caret instanceof HTMLElement && !caret.classList.contains("kepler-caret--hidden");
+              const caret = document.querySelector(".kosmos-caret");
+              return caret instanceof HTMLElement && !caret.classList.contains("kosmos-caret--hidden");
             }),
           { timeout: 5000 },
         )
@@ -547,8 +547,8 @@ test.describe("Electron App", () => {
         .poll(
           async () =>
             launch?.window.evaluate(() => {
-              const caret = document.querySelector(".kepler-caret");
-              return caret instanceof HTMLElement && !caret.classList.contains("kepler-caret--hidden");
+              const caret = document.querySelector(".kosmos-caret");
+              return caret instanceof HTMLElement && !caret.classList.contains("kosmos-caret--hidden");
             }),
           { timeout: 5000 },
         )
@@ -604,8 +604,8 @@ test.describe("Electron App", () => {
         .poll(
           async () =>
             launch?.window.evaluate(() => {
-              const caret = document.querySelector(".kepler-caret");
-              return caret instanceof HTMLElement && caret.classList.contains("kepler-caret--hidden");
+              const caret = document.querySelector(".kosmos-caret");
+              return caret instanceof HTMLElement && caret.classList.contains("kosmos-caret--hidden");
             }),
           { timeout: 5000 },
         )
@@ -644,12 +644,12 @@ test.describe("Electron App", () => {
         .poll(
           async () =>
             launch?.window.evaluate(() => {
-              const caret = document.querySelector(".kepler-caret");
+              const caret = document.querySelector(".kosmos-caret");
               const input = document.querySelector(".title-input");
 
               return {
                 customVisible:
-                  caret instanceof HTMLElement && !caret.classList.contains("kepler-caret--hidden"),
+                  caret instanceof HTMLElement && !caret.classList.contains("kosmos-caret--hidden"),
                 caretColor:
                   input instanceof HTMLInputElement
                     ? input.style.getPropertyValue("caret-color")
@@ -968,7 +968,7 @@ test.describe("Electron App", () => {
 
       const sidebarTheme = await launch.window.evaluate(() => {
         const root = document.documentElement;
-        const sidebar = document.querySelector(".kepler-sidebar-content");
+        const sidebar = document.querySelector(".kosmos-sidebar-content");
         if (!(sidebar instanceof HTMLElement)) return null;
         const style = window.getComputedStyle(sidebar);
         return {

@@ -34,7 +34,7 @@ drwxr-xr-x@  7 kirill  staff    224 Apr  4 03:35 ..
 -rw-r--r--@  1 kirill  staff   2701 Apr  1 14:10 PeerRecord.kt
 -rw-r--r--@  1 kirill  staff  10384 Apr  6 11:48 SyncEntityParser.kt
 
-=== apps/delphi/kotlin/app/src/main/java/com/kepler/ark/core/ ===
+=== apps/delphi/kotlin/app/src/main/java/com/kosmos/ark/core/ ===
 total 184
 drwxr-xr-x@ 3 kirill  staff     96 Apr  9 13:39 .
 drwxr-xr-x@ 3 kirill  staff     96 Apr  9 13:39 ..

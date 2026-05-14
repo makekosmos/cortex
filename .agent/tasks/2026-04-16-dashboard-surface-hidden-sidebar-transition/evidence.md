@@ -10,8 +10,8 @@
 Status: PASS
 
 Evidence:
-- `packages/kepler-visuals/components/DesktopContentSurface.vue` now accepts `showLeftBorder`.
-- The component drives left-divider color through `--kepler-content-border-left-color`.
+- `packages/kosmos-visuals/components/DesktopContentSurface.vue` now accepts `showLeftBorder`.
+- The component drives left-divider color through `--kosmos-content-border-left-color`.
 - The shared surface now animates border-left color and left-corner radius values.
 
 ### AC2

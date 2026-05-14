@@ -122,7 +122,7 @@ for (const app of apps) {
     app.path,
     app.process,
     app.name,
-    "Kepler",
+    "Kosmos",
     null,
     "2026-04-01T07:00:00.000Z",
     "2026-04-16T18:00:00.000Z",

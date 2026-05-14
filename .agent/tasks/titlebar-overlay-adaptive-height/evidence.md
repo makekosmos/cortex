@@ -13,7 +13,7 @@ The shared `Titlebar` component measures its rendered height on Windows Electron
 Result: PASS
 
 Evidence:
-- `packages/kepler-visuals/components/Titlebar.vue` now:
+- `packages/kosmos-visuals/components/Titlebar.vue` now:
   - uses `useTemplateRef("root")`
   - observes the header with `ResizeObserver`
   - invokes `window.electronAPI.invoke("titlebar:setOverlayHeight", measuredHeight)`

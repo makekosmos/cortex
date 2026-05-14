@@ -2,7 +2,7 @@
 name = "ark-core"
 version = "0.1.0"
 edition = "2021"
-description = "Unified DB + sync engine for Kosmos/Delphi"
+description = "Unified DB + sync engine for Kepler/Delphi"
 
 [lib]
 name = "ark_core"

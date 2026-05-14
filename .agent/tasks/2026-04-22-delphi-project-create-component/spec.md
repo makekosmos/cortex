@@ -21,7 +21,7 @@ The project creation entry point should live next to the existing project list i
 - `SideBar.vue`
   - Responsibility: own the open/close state for the creator, invoke store creation, and navigate to the new project after save.
   - Passes project groups and the sidebar header action into shared visuals.
-- `packages/kepler-visuals/components/Sidebar.vue`
+- `packages/kosmos-visuals/components/Sidebar.vue`
   - Responsibility: expose an optional per-group header action button without owning Delphi business logic.
 
 ## Acceptance Criteria
@@ -35,7 +35,7 @@ The project creation entry point should live next to the existing project list i
 - AC4: After successful creation, Delphi navigates to the created project's route so the user lands inside the project immediately.
 - AC5: The component prevents accidental empty-project creation.
 - AC6: Existing sidebar project navigation remains intact; this task must not break project listing, active-state highlighting, or settings navigation.
-- AC7: Shared `kepler-visuals` sidebar changes remain additive and backward-compatible for Eden/dashboard and any other existing consumers.
+- AC7: Shared `kosmos-visuals` sidebar changes remain additive and backward-compatible for Eden/dashboard and any other existing consumers.
 - AC8: TypeScript for Delphi remains clean after the change.
 
 ## Constraints

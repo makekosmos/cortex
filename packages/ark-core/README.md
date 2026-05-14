@@ -1,6 +1,6 @@
 # ARK Core
 
-ARK Core is the canonical local-first data runtime for Kepler. It is a Rust library plus the `ark-core-rpc` sidecar binary backed by SQLite.
+ARK Core is the canonical local-first data runtime for Kosmos. It is a Rust library plus the `ark-core-rpc` sidecar binary backed by SQLite.
 
 ## Source Layout
 
@@ -8,16 +8,16 @@ ARK Core is the canonical local-first data runtime for Kepler. It is a Rust libr
 - `packages/ark-core/rust/src/main.rs` - `ark-core-rpc` stdin/stdout sidecar
 - `packages/ark-core/rust/src/db.rs` - SQLite schema, CRUD, sync storage adapter
 - `packages/ark-core/rust/src/sync_server.rs` and `sync_client.rs` - LAN sync runtime
-- `packages/kepler-ark` - canonical TypeScript SDK for Electron main/Node callers
-- `packages/arksync-node` - compatibility package that re-exports `@kepler/ark`
+- `packages/kosmos-ark` - canonical TypeScript SDK for Electron main/Node callers
+- `packages/arksync-node` - compatibility package that re-exports `@kosmos/ark`
 
 ## Build And Test
 
 ```powershell
 cargo build --manifest-path packages/ark-core/rust/Cargo.toml --bin ark-core-rpc
 cargo test --manifest-path packages/ark-core/rust/Cargo.toml
-bun run --cwd packages/kepler-ark typecheck
-bun run --cwd packages/kepler-ark build
+bun run --cwd packages/kosmos-ark typecheck
+bun run --cwd packages/kosmos-ark build
 ```
 
 ## Sidecar Contract
@@ -39,16 +39,16 @@ When `relay_url` is provided, `ark-core-rpc` starts a relay bridge beside LAN sy
 
 ## TypeScript Integration
 
-Use `@kepler/ark` from Electron main or another trusted Node process:
+Use `@kosmos/ark` from Electron main or another trusted Node process:
 
 ```ts
-import { ArkClient } from "@kepler/ark";
+import { ArkClient } from "@kosmos/ark";
 
 const ark = new ArkClient({
   spaceId: "main",
   deviceId: "my-app-main",
   deviceName: "My App",
-  dbPath: "C:/Users/me/AppData/Roaming/Kepler/spaces/main/ark.db",
+  dbPath: "C:/Users/me/AppData/Roaming/Kosmos/spaces/main/ark.db",
   sidecarPath: "path/to/ark-core-rpc.exe",
 });
 
@@ -95,7 +95,7 @@ Delete propagation depends on durable tombstones in `sync_tombstones`. Apply err
 
 - Renderer processes should not talk to ARK directly.
 - Electron preload should expose narrow app-specific APIs.
-- Electron main should use `@kepler/ark` or app-specific wrappers around it.
+- Electron main should use `@kosmos/ark` or app-specific wrappers around it.
 - Apps should not write directly into ARK SQLite tables.
 - Migration scripts may read source databases directly, but target ARK writes should go through ARK RPC/SDK.
 - If a Rust process must write directly, it must call `ark_core::db` helpers that update sync state.

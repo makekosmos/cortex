@@ -12,7 +12,7 @@ Key output:
 Notes:
 - Eden now builds via `vite.config.mjs` with `--configLoader native`, which avoids the previous config-loader `spawn EPERM` failure.
 
-*** Add File: D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-20-eden-anytype-object-types\raw\test-ark-schema-migration.txt
+*** Add File: D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-20-eden-anytype-object-types\raw\test-ark-schema-migration.txt
 Command:
 `cargo test --manifest-path packages/ark-core/rust/Cargo.toml test_init_schema_migrates_existing_db_without_destroying_data -- --nocapture`
 

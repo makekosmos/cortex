@@ -2,12 +2,12 @@
 
 ## Changes
 
-- Restored the old visible custom editor caret in [Editor.css](D:/Personal/Hobby/Coding/kepler/apps/eden/ts/src/Editor.css) by switching `.pm-inline-caret-enabled` back to `caret-color: transparent` and restoring the `.pm-inline-caret-anchor` blink styles.
-- Restored a direct devtools path in [main.ts](D:/Personal/Hobby/Coding/kepler/apps/eden/ts/main/main.ts) by adding an application menu with `toggleDevTools` and a `before-input-event` handler for `F12` / `Ctrl+Shift+I`.
+- Restored the old visible custom editor caret in [Editor.css](D:/Personal/Hobby/Coding/kosmos/apps/eden/ts/src/Editor.css) by switching `.pm-inline-caret-enabled` back to `caret-color: transparent` and restoring the `.pm-inline-caret-anchor` blink styles.
+- Restored a direct devtools path in [main.ts](D:/Personal/Hobby/Coding/kosmos/apps/eden/ts/main/main.ts) by adding an application menu with `toggleDevTools` and a `before-input-event` handler for `F12` / `Ctrl+Shift+I`.
 
 ## Verification
 
-- `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\eden\ts\tsconfig.json`
+- `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\tsconfig.json`
   - PASS
 - `bun run lint`
   - FAIL in this environment because `oxlint` cannot load `vite.config.ts` as a TypeScript config file.

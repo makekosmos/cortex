@@ -1,5 +1,5 @@
 {
-  "task_id": "2026-04-20-kepler-sidebar-groups",
+  "task_id": "2026-04-20-kosmos-sidebar-groups",
   "result": "PASS",
   "checks": [
     {
@@ -11,7 +11,7 @@
       "name": "utf8_source_spot_check",
       "status": "PASS",
       "files": [
-        "packages/kepler-visuals/components/Sidebar.vue",
+        "packages/kosmos-visuals/components/Sidebar.vue",
         "apps/eden/ts/src/components/sidebar/EdenSidebar.vue"
       ]
     }

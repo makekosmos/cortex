@@ -35,7 +35,7 @@ Result: PASS, 115 tests passed.
 Command:
 
 ```powershell
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 ```
 
 Result: PASS

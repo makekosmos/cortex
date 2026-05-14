@@ -27,10 +27,10 @@ PASS
 ## Commands
 
 ```text
-cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-usage-api\typecheck.txt 2>&1"
-cmd /c "bun run build > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-usage-api\build.txt 2>&1"
-cmd /c "bun D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-usage-api\verify-usage-api.ts > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-usage-api\verify-usage-api.txt 2>&1"
-cmd /c "git diff --check -- packages/arksync-node/src/ark-client.ts packages/arksync-node/src/index.ts .agent/tasks/2026-04-24-arksync-node-usage-api/spec.md .agent/tasks/2026-04-24-arksync-node-usage-api/verify-usage-api.ts > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arksync-node-usage-api\git-diff-check.txt 2>&1"
+cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-usage-api\typecheck.txt 2>&1"
+cmd /c "bun run build > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-usage-api\build.txt 2>&1"
+cmd /c "bun D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-usage-api\verify-usage-api.ts > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-usage-api\verify-usage-api.txt 2>&1"
+cmd /c "git diff --check -- packages/arksync-node/src/ark-client.ts packages/arksync-node/src/index.ts .agent/tasks/2026-04-24-arksync-node-usage-api/spec.md .agent/tasks/2026-04-24-arksync-node-usage-api/verify-usage-api.ts > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arksync-node-usage-api\git-diff-check.txt 2>&1"
 ```
 
 ## Notes

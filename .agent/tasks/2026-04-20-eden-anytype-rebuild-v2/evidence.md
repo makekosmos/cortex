@@ -30,7 +30,7 @@ Notes:
 - The route-level component is orchestration-only.
 
 ### AC2
-The rebuilt screen consumes Kepler visuals theme tokens for background, surface, border, text, sidebar, and hover states; new ad-hoc gray color mixing is removed from the rebuilt object type UI.
+The rebuilt screen consumes Kosmos visuals theme tokens for background, surface, border, text, sidebar, and hover states; new ad-hoc gray color mixing is removed from the rebuilt object type UI.
 
 Status: `PASS`
 
@@ -41,11 +41,11 @@ Evidence:
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypeIdentitySection.vue`
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypeFieldsSection.vue`
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypePreviewRail.vue`
-- `packages/kepler-visuals/theme/css-variables.css`
+- `packages/kosmos-visuals/theme/css-variables.css`
 
 Notes:
 - Rebuilt object type UI now uses `var(--background)`, `var(--card)`, `var(--surface)`, `var(--border)`, `var(--input)`, `var(--ring)`, and `var(--sidebar-*)`.
-- Where `color-mix(...)` remains, it is derived from existing Kepler tokens such as `--background`, `--secondary`, or the current accent color, not from ad-hoc black/white gray surfaces.
+- Where `color-mix(...)` remains, it is derived from existing Kosmos tokens such as `--background`, `--secondary`, or the current accent color, not from ad-hoc black/white gray surfaces.
 
 ### AC3
 Object type rows and field rows have clear interactive states inspired by Anytype.
@@ -183,7 +183,7 @@ Evidence:
 1. `bun x tsc --noEmit`
 2. `bun run build`
 3. `bun run seed:ark-demo`
-4. `bun run seed:ark-demo -- --db D:\\Personal\\Hobby\\Coding\\kepler\\apps\\eden\\ts\\dev-data\\ark-demo-secondary.db`
+4. `bun run seed:ark-demo -- --db D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\eden\\ts\\dev-data\\ark-demo-secondary.db`
 5. `bun run dev`
 6. `bun run dev:web`
 

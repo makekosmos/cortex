@@ -3,7 +3,7 @@ Command:
   bun x vite build --configLoader native
 
 Workdir:
-  D:\Personal\Hobby\Coding\kepler\apps\delphi\ts
+  D:\Personal\Hobby\Coding\kosmos\apps\delphi\ts
 
 Observed result:
   ark-core-rpc built successfully

@@ -21,7 +21,7 @@
 
 ## Acceptance Criteria
 
-- AC1: Root workspace остаётся канонической Bun entrypoint-конфигурацией, а [bun.lock](D:/Personal/Hobby/Coding/kepler/bun.lock) остаётся единственным Bun lockfile в git.
+- AC1: Root workspace остаётся канонической Bun entrypoint-конфигурацией, а [bun.lock](D:/Personal/Hobby/Coding/kosmos/bun.lock) остаётся единственным Bun lockfile в git.
 - AC2: Явные tracked artifacts и test-output мусор удалены из git, включая `test-results/.last-run.json`.
 - AC3: Root `.gitignore` закрывает найденные пробелы для `test-results/` и `.bun_tmp/`.
 - AC4: Исторические tracked хвосты в `apps/arrancador`, не относящиеся к активному runtime, удалены из git.

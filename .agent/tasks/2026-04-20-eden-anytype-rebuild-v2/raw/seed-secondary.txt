@@ -1,8 +1,8 @@
-bun run seed:ark-demo -- --db D:\Personal\Hobby\Coding\kepler\apps\eden\ts\dev-data\ark-demo-secondary.db
+bun run seed:ark-demo -- --db D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\dev-data\ark-demo-secondary.db
 
 Result: PASS
 
-dbPath: D:\Personal\Hobby\Coding\kepler\apps\eden\ts\dev-data\ark-demo-secondary.db
+dbPath: D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\dev-data\ark-demo-secondary.db
 objectTypeIds:
 - book_obj
 - game_obj

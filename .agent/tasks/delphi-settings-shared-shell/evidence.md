@@ -7,7 +7,7 @@ Task: `delphi-settings-shared-shell`
 ## Acceptance Criteria
 
 - AC1: PASS
-  `apps/delphi/ts/src/pages/SettingsPage.vue:143` renders settings content inside shared `DesktopContentSurface`, and the same page still uses shared `KeplerSidebar` on the left at `apps/delphi/ts/src/pages/SettingsPage.vue:129`.
+  `apps/delphi/ts/src/pages/SettingsPage.vue:143` renders settings content inside shared `DesktopContentSurface`, and the same page still uses shared `KosmosSidebar` on the left at `apps/delphi/ts/src/pages/SettingsPage.vue:129`.
 - AC2: PASS
   `apps/delphi/ts/src/pages/SettingsPage.vue:132`, `:133`, and `:134` set the settings sidebar sizing to the same Delphi profile as the regular app sidebar: `200 / 160 / 320`. The fallback persisted config width was also reset to `200` at `apps/delphi/ts/src/pages/SettingsPage.vue:43`.
 - AC3: PASS

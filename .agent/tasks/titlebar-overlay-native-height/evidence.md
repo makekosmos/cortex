@@ -13,7 +13,7 @@ Shared `Titlebar` no longer measures and sends overlay height to Electron main.
 Result: PASS
 
 Evidence:
-- `packages/kepler-visuals/components/Titlebar.vue` no longer contains `ResizeObserver`, `useTemplateRef`, or `titlebar:setOverlayHeight` IPC calls.
+- `packages/kosmos-visuals/components/Titlebar.vue` no longer contains `ResizeObserver`, `useTemplateRef`, or `titlebar:setOverlayHeight` IPC calls.
 - Raw artifact: `raw/native-titlebar-diff.txt`
 
 ### AC2

@@ -60,49 +60,49 @@
   "commands": [
     {
       "command": "cargo check --manifest-path packages/ark-core/rust/Cargo.toml",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-check.txt"
     },
     {
       "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml start_sync_rejects_relay_config",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-test-relay.txt"
     },
     {
       "command": "cargo test --manifest-path packages/ark-core/rust/Cargo.toml",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-test-full.txt"
     },
     {
       "command": "cargo fmt --manifest-path packages/ark-core/rust/Cargo.toml -- --check",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "cargo-fmt-check.txt"
     },
     {
       "command": "bun run typecheck",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/packages/arksync-node",
       "exit_code": 0,
       "artifact": "arksync-node-typecheck.txt"
     },
     {
       "command": "bun run build",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/packages/arksync-node",
       "exit_code": 0,
       "artifact": "arksync-node-build.txt"
     },
     {
       "command": "bun .agent/tasks/2026-04-24-ark-relay-fail-fast/verify-arksync-node-relay.ts",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "verify-arksync-node-relay.txt"
     },
     {
       "command": "git diff --check -- packages/ark-core/rust/src/main.rs packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-ark-relay-fail-fast/spec.md .agent/tasks/2026-04-24-ark-relay-fail-fast/verify-arksync-node-relay.ts",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "git-diff-check.txt"
     }

@@ -12,9 +12,9 @@
 - Updated the focused game detail test to verify the clamp class, description button, and modal opening.
 
 ## Acceptance criteria
-- `AC1` PASS: the hero description now uses two-line clamp styling in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:875).
-- `AC2` PASS: the description button and darkened modal were added in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:881) and [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:1532).
-- `AC3` PASS: the targeted modal behavior is covered in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/test/game-detail.test.tsx:101).
+- `AC1` PASS: the hero description now uses two-line clamp styling in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:875).
+- `AC2` PASS: the description button and darkened modal were added in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:881) and [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:1532).
+- `AC3` PASS: the targeted modal behavior is covered in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/test/game-detail.test.tsx:101).
 - `AC4` PASS: `bun run typecheck` and the focused `vitest` run both passed.
 
 ## Verification

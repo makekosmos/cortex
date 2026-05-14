@@ -1,5 +1,5 @@
 
- RUN  v4.1.2 /Users/kirill/Documents/projects/kepler/apps/delphi/ts
+ RUN  v4.1.2 /Users/kirill/Documents/projects/kosmos/apps/delphi/ts
 
 
  Test Files  2 passed (2)

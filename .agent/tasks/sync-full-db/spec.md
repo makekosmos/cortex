@@ -3,7 +3,7 @@
 ## Metadata
 - Task ID: sync-full-db
 - Created: 2026-04-04
-- Repo root: /Users/kirill/Documents/projects/kosmos
+- Repo root: /Users/kirill/Documents/projects/kepler
 
 ## Guidance sources
 - `/CLAUDE.md` (repo task proof loop)
@@ -121,7 +121,7 @@ Changes MUST NOT break builds on any platform:
 - Do not change the SyncEntity wire format in a breaking way -- the `deleted: boolean` field already exists and is sufficient for hard deletes.
 - Version vector keys are entity IDs (UUIDs). The version vector can grow large over time; this is an existing design limitation, not in scope to fix.
 - The macOS/Swift platform exists but is out of scope for implementation in this task (no user-reported issues on macOS). However, protocol-level changes in `packages/arksync/` affect all platforms.
-- Android Ark-data is a separate APK (`com.kepler.ark.data`). Its ContentProvider API is the interface boundary -- changes to its database schema or backup behavior may require changes in the ark-data project.
+- Android Ark-data is a separate APK (`com.kosmos.ark.data`). Its ContentProvider API is the interface boundary -- changes to its database schema or backup behavior may require changes in the ark-data project.
 
 ## Non-goals
 
@@ -146,12 +146,12 @@ Changes MUST NOT break builds on any platform:
 ## Verification plan
 
 ### Build
-- `cd /Users/kirill/Documents/projects/kosmos && bun run build` -- Electron/TS compiles
-- `cd /Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin && ./gradlew assembleDebug` -- Android compiles
+- `cd /Users/kirill/Documents/projects/kepler && bun run build` -- Electron/TS compiles
+- `cd /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin && ./gradlew assembleDebug` -- Android compiles
 
 ### Unit tests
-- `cd /Users/kirill/Documents/projects/kosmos && bun run test` -- existing tests pass
-- `cd /Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin && ./gradlew test` -- existing tests pass
+- `cd /Users/kirill/Documents/projects/kepler && bun run test` -- existing tests pass
+- `cd /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin && ./gradlew test` -- existing tests pass
 
 ### Code review checks
 - Verify `loadAllEntities` on Android includes all 5 entity types

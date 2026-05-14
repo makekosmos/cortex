@@ -39,8 +39,8 @@ Evidence:
 - Release packaging flow exists in `services/usage-tracker/scripts/build-installer.ps1`.
 - Install/uninstall scripts exist in `services/usage-tracker/installer/install.ps1` and `services/usage-tracker/installer/uninstall.ps1`.
 - `services/usage-tracker/package.json` exposes `build:release` and `package:installer`.
-- Generated artifact directory: `services/usage-tracker/dist/KeplerUsageTrackerInstaller/` with `usage-tracker.exe`, `install.ps1`, `uninstall.ps1`, `Install Usage Tracker.cmd`, `Uninstall Usage Tracker.cmd`, `README.md`, `manifest.json`.
-- Generated archive: `services/usage-tracker/dist/KeplerUsageTrackerInstaller.zip`.
+- Generated artifact directory: `services/usage-tracker/dist/KosmosUsageTrackerInstaller/` with `usage-tracker.exe`, `install.ps1`, `uninstall.ps1`, `Install Usage Tracker.cmd`, `Uninstall Usage Tracker.cmd`, `README.md`, `manifest.json`.
+- Generated archive: `services/usage-tracker/dist/KosmosUsageTrackerInstaller.zip`.
 - Verification log: `raw/usage-tracker-installer.txt`.
 
 ### AC4 - New dashboard desktop app exists with Vue Composition API and Vapor-enabled Vite
@@ -54,7 +54,7 @@ Evidence:
 - Vapor-enabled Vite config via `vue({ features: { vaporInterop: true } })`.
 - Follow-up reliability fix removed the unstable Vapor leaf usage that caused `vite` dev parse failures while preserving Vapor-enabled build configuration.
 
-### AC5 - Dashboard consumes `@kepler/visuals` directly
+### AC5 - Dashboard consumes `@kosmos/visuals` directly
 
 PASS.
 
@@ -62,7 +62,7 @@ Evidence:
 - Direct dependency: `apps/dashboard/package.json`.
 - Direct alias usage in `apps/dashboard/vite.config.mjs`.
 - Direct imports in `apps/dashboard/src/components/dashboard/DashboardShell.vue` and `apps/dashboard/src/global.css`.
-- No vendored copy of `kepler-visuals` exists under `apps/dashboard`.
+- No vendored copy of `kosmos-visuals` exists under `apps/dashboard`.
 
 ### AC6 - Dashboard reads Ark DB through a secure Electron bridge and renders meaningful analytics
 

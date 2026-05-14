@@ -1,6 +1,6 @@
 # Command Results
 
-- `bun run --cwd packages/kepler-ark typecheck`: PASS.
+- `bun run --cwd packages/kosmos-ark typecheck`: PASS.
 - `bun run --cwd apps/arrancador test`: PASS, 47 files and 161 tests.
 - `bun run --cwd apps/arrancador typecheck`: PASS.
 - `bun run --cwd apps/eden/ts test:ark-migration`: PASS, object migration script returned `status: ok`.

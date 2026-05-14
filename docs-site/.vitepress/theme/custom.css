@@ -1,89 +1,89 @@
 /*
- * Kepler docs theme.
+ * Kosmos docs theme.
  *
- * Источник правды для дизайн-токенов — packages/kepler-visuals/theme/css-variables.css
- * и packages/kepler-visuals/tokens/*.ts. Переменные ниже приведены к именам VitePress.
+ * Источник правды для дизайн-токенов — packages/kosmos-visuals/theme/css-variables.css
+ * и packages/kosmos-visuals/tokens/*.ts. Переменные ниже приведены к именам VitePress.
  */
 
 :root {
-  /* Kepler raw tokens (mirror of kepler-visuals) */
-  --kepler-radius: 0.85rem;
-  --kepler-radius-sm: 0.5rem;
-  --kepler-accent: oklch(0.546 0.229 264.1);
-  --kepler-accent-soft: oklch(0.546 0.229 264.1 / 0.16);
+  /* Kosmos raw tokens (mirror of kosmos-visuals) */
+  --kosmos-radius: 0.85rem;
+  --kosmos-radius-sm: 0.5rem;
+  --kosmos-accent: oklch(0.546 0.229 264.1);
+  --kosmos-accent-soft: oklch(0.546 0.229 264.1 / 0.16);
 
-  --kepler-bg: oklch(1 0 0);
-  --kepler-bg-soft: oklch(0.97 0 0);
-  --kepler-fg: oklch(0.145 0 0);
-  --kepler-muted-fg: oklch(0.556 0 0);
-  --kepler-border: oklch(0.922 0 0);
-  --kepler-ring: oklch(0.708 0 0);
-  --kepler-sidebar-bg: oklch(1 0 0);
-  --kepler-sidebar-surface: oklch(0.97 0 0);
+  --kosmos-bg: oklch(1 0 0);
+  --kosmos-bg-soft: oklch(0.97 0 0);
+  --kosmos-fg: oklch(0.145 0 0);
+  --kosmos-muted-fg: oklch(0.556 0 0);
+  --kosmos-border: oklch(0.922 0 0);
+  --kosmos-ring: oklch(0.708 0 0);
+  --kosmos-sidebar-bg: oklch(1 0 0);
+  --kosmos-sidebar-surface: oklch(0.97 0 0);
 
-  --kepler-success: oklch(62.7% 0.194 149.214);
-  --kepler-warning: #f59e0b;
-  --kepler-error: oklch(0.577 0.245 27.325);
-  --kepler-info: #3b82f6;
+  --kosmos-success: oklch(62.7% 0.194 149.214);
+  --kosmos-warning: #f59e0b;
+  --kosmos-error: oklch(0.577 0.245 27.325);
+  --kosmos-info: #3b82f6;
 
-  --kepler-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  --kosmos-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display",
     "SF Pro Text", Inter, Avenir, Helvetica, Arial, sans-serif;
-  --kepler-font-mono: "Zed Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --kosmos-font-mono: "Zed Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* VitePress mappings — light */
-  --vp-font-family-base: var(--kepler-font-sans);
-  --vp-font-family-mono: var(--kepler-font-mono);
+  --vp-font-family-base: var(--kosmos-font-sans);
+  --vp-font-family-mono: var(--kosmos-font-mono);
 
   --vp-c-brand-1: oklch(0.546 0.229 264.1);
   --vp-c-brand-2: oklch(0.6 0.229 264.1);
   --vp-c-brand-3: oklch(0.65 0.229 264.1);
-  --vp-c-brand-soft: var(--kepler-accent-soft);
+  --vp-c-brand-soft: var(--kosmos-accent-soft);
 
-  --vp-c-bg: var(--kepler-bg);
-  --vp-c-bg-alt: var(--kepler-bg-soft);
-  --vp-c-bg-elv: var(--kepler-bg);
-  --vp-c-bg-soft: var(--kepler-bg-soft);
-  --vp-c-text-1: var(--kepler-fg);
+  --vp-c-bg: var(--kosmos-bg);
+  --vp-c-bg-alt: var(--kosmos-bg-soft);
+  --vp-c-bg-elv: var(--kosmos-bg);
+  --vp-c-bg-soft: var(--kosmos-bg-soft);
+  --vp-c-text-1: var(--kosmos-fg);
   --vp-c-text-2: oklch(0.4 0 0);
-  --vp-c-text-3: var(--kepler-muted-fg);
-  --vp-c-divider: var(--kepler-border);
-  --vp-c-border: var(--kepler-border);
+  --vp-c-text-3: var(--kosmos-muted-fg);
+  --vp-c-divider: var(--kosmos-border);
+  --vp-c-border: var(--kosmos-border);
   --vp-c-gutter: oklch(0.95 0 0);
 
   --vp-c-default-1: oklch(0.97 0 0);
   --vp-c-default-2: oklch(0.94 0 0);
   --vp-c-default-3: oklch(0.92 0 0);
 
-  --vp-c-tip-1: var(--kepler-info);
+  --vp-c-tip-1: var(--kosmos-info);
   --vp-c-tip-soft: oklch(0.6 0.15 240 / 0.16);
 
-  --vp-c-warning-1: var(--kepler-warning);
+  --vp-c-warning-1: var(--kosmos-warning);
   --vp-c-warning-soft: oklch(0.75 0.16 75 / 0.16);
 
-  --vp-c-danger-1: var(--kepler-error);
+  --vp-c-danger-1: var(--kosmos-error);
   --vp-c-danger-soft: oklch(0.6 0.245 27 / 0.16);
 }
 
 .dark {
-  --kepler-bg: oklch(0.17 0 0);
-  --kepler-bg-soft: oklch(0.269 0 0);
-  --kepler-fg: oklch(0.985 0 0);
-  --kepler-muted-fg: oklch(0.708 0 0);
-  --kepler-border: oklch(0.23 0.00004 271);
-  --kepler-ring: oklch(0.53 0 0);
-  --kepler-sidebar-bg: oklch(0.15 0 0);
-  --kepler-sidebar-surface: oklch(0.32 0 0);
+  --kosmos-bg: oklch(0.17 0 0);
+  --kosmos-bg-soft: oklch(0.269 0 0);
+  --kosmos-fg: oklch(0.985 0 0);
+  --kosmos-muted-fg: oklch(0.708 0 0);
+  --kosmos-border: oklch(0.23 0.00004 271);
+  --kosmos-ring: oklch(0.53 0 0);
+  --kosmos-sidebar-bg: oklch(0.15 0 0);
+  --kosmos-sidebar-surface: oklch(0.32 0 0);
 
-  --vp-c-bg: var(--kepler-bg);
+  --vp-c-bg: var(--kosmos-bg);
   --vp-c-bg-alt: oklch(0.205 0 0);
   --vp-c-bg-elv: oklch(0.205 0 0);
-  --vp-c-bg-soft: var(--kepler-bg-soft);
-  --vp-c-text-1: var(--kepler-fg);
+  --vp-c-bg-soft: var(--kosmos-bg-soft);
+  --vp-c-text-1: var(--kosmos-fg);
   --vp-c-text-2: oklch(0.78 0 0);
-  --vp-c-text-3: var(--kepler-muted-fg);
-  --vp-c-divider: var(--kepler-border);
-  --vp-c-border: var(--kepler-border);
-  --vp-c-gutter: var(--kepler-sidebar-bg);
+  --vp-c-text-3: var(--kosmos-muted-fg);
+  --vp-c-divider: var(--kosmos-border);
+  --vp-c-border: var(--kosmos-border);
+  --vp-c-gutter: var(--kosmos-sidebar-bg);
 
   --vp-c-default-1: oklch(0.269 0 0);
   --vp-c-default-2: oklch(0.31 0 0);
@@ -100,35 +100,35 @@ body {
 /* ── Шапка / навигация ───────────────────────────────── */
 
 .VPNav {
-  --vp-nav-bg-color: var(--kepler-sidebar-bg);
+  --vp-nav-bg-color: var(--kosmos-sidebar-bg);
 }
 
 .VPNavBar {
-  border-bottom: 1px solid var(--kepler-border);
-  background: var(--kepler-sidebar-bg);
+  border-bottom: 1px solid var(--kosmos-border);
+  background: var(--kosmos-sidebar-bg);
   backdrop-filter: none;
 }
 
 .VPNavBar.has-sidebar .wrapper {
-  background: var(--kepler-sidebar-bg);
+  background: var(--kosmos-sidebar-bg);
 }
 
 .VPNavBar .title {
   letter-spacing: -0.3px;
   font-weight: 600;
   background: transparent !important;
-  border-bottom-color: var(--kepler-border) !important;
+  border-bottom-color: var(--kosmos-border) !important;
 }
 
 .VPNavBar.has-sidebar .title {
-  border-right-color: var(--kepler-border) !important;
+  border-right-color: var(--kosmos-border) !important;
 }
 
 /* ── Сайдбар ─────────────────────────────────────────── */
 
 .VPSidebar {
-  background: var(--kepler-sidebar-bg) !important;
-  border-right: 1px solid var(--kepler-border);
+  background: var(--kosmos-sidebar-bg) !important;
+  border-right: 1px solid var(--kosmos-border);
   padding-top: 12px;
 }
 
@@ -147,12 +147,12 @@ body {
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--kepler-muted-fg);
+  color: var(--kosmos-muted-fg);
   font-weight: 600;
 }
 
 .VPSidebarItem.is-active > .item .link .text {
-  color: var(--kepler-fg);
+  color: var(--kosmos-fg);
   font-weight: 600;
 }
 
@@ -175,7 +175,7 @@ body {
   letter-spacing: -0.3px;
   font-weight: 700;
   margin-top: 2.2em;
-  border-top: 1px solid var(--kepler-border);
+  border-top: 1px solid var(--kosmos-border);
   padding-top: 1.2em;
 }
 
@@ -254,10 +254,10 @@ body {
 
 /* Mermaid контейнеры — squircle, фон под тему */
 
-.mermaid-kepler,
+.mermaid-kosmos,
 .vp-doc .mermaid {
-  border-radius: var(--kepler-radius);
-  border: 1px solid var(--kepler-border);
+  border-radius: var(--kosmos-radius);
+  border: 1px solid var(--kosmos-border);
   background: var(--vp-c-bg-soft);
   padding: 0;
   margin: 20px 0;
@@ -291,7 +291,7 @@ body {
 .vp-doc .mermaid .svg-pan-zoom-control-background {
   fill: var(--vp-c-bg);
   fill-opacity: 0.9;
-  stroke: var(--kepler-border);
+  stroke: var(--kosmos-border);
 }
 
 .vp-doc .mermaid .svg-pan-zoom-control-element path {
@@ -308,7 +308,7 @@ body {
   bottom: 8px;
   font-size: 11px;
   font-family: var(--vp-font-family-mono);
-  color: var(--kepler-muted-fg);
+  color: var(--kosmos-muted-fg);
   pointer-events: none;
   opacity: 0.7;
 }
@@ -317,15 +317,15 @@ body {
 
 .VPDoc .content :not(pre) > code {
   background: var(--vp-c-bg-soft);
-  border: 1px solid var(--kepler-border);
-  border-radius: var(--kepler-radius-sm);
+  border: 1px solid var(--kosmos-border);
+  border-radius: var(--kosmos-radius-sm);
   padding: 1px 6px;
   font-size: 0.85em;
 }
 
 .vp-doc div[class*="language-"] {
-  border-radius: var(--kepler-radius);
-  border: 1px solid var(--kepler-border);
+  border-radius: var(--kosmos-radius);
+  border: 1px solid var(--kosmos-border);
   background: var(--vp-c-bg-soft);
 }
 
@@ -339,8 +339,8 @@ body {
 .vp-doc table {
   border-collapse: separate;
   border-spacing: 0;
-  border-radius: var(--kepler-radius);
-  border: 1px solid var(--kepler-border);
+  border-radius: var(--kosmos-radius);
+  border: 1px solid var(--kosmos-border);
   overflow: hidden;
   display: table;
   width: 100%;
@@ -350,8 +350,8 @@ body {
 .vp-doc table th,
 .vp-doc table td {
   border: 0;
-  border-bottom: 1px solid var(--kepler-border);
-  border-right: 1px solid var(--kepler-border);
+  border-bottom: 1px solid var(--kosmos-border);
+  border-right: 1px solid var(--kosmos-border);
   padding: 9px 14px;
   font-size: 13.5px;
   line-height: 1.45;
@@ -381,8 +381,8 @@ body {
 /* ── Кастом-блоки (tip/warning/danger/info) ──────────── */
 
 .vp-doc .custom-block {
-  border-radius: var(--kepler-radius);
-  border: 1px solid var(--kepler-border);
+  border-radius: var(--kosmos-radius);
+  border: 1px solid var(--kosmos-border);
 }
 
 .vp-doc .custom-block.tip {
@@ -429,7 +429,7 @@ body {
 }
 
 .VPHero .tagline {
-  color: var(--kepler-muted-fg);
+  color: var(--kosmos-muted-fg);
   font-size: 18px;
   letter-spacing: -0.1px;
   line-height: 1.4;
@@ -443,8 +443,8 @@ body {
 }
 
 .VPButton.brand {
-  background: var(--kepler-accent);
-  border-color: var(--kepler-accent);
+  background: var(--kosmos-accent);
+  border-color: var(--kosmos-accent);
 }
 
 .VPButton.brand:hover {
@@ -455,20 +455,20 @@ body {
 /* ── Features grid (главная) ─────────────────────────── */
 
 .VPFeature {
-  border-radius: var(--kepler-radius);
-  border: 1px solid var(--kepler-border) !important;
+  border-radius: var(--kosmos-radius);
+  border: 1px solid var(--kosmos-border) !important;
   background: var(--vp-c-bg-alt);
   transition: transform 0.15s ease, border-color 0.15s ease;
 }
 
 .VPFeature:hover {
-  border-color: var(--kepler-accent) !important;
+  border-color: var(--kosmos-accent) !important;
   transform: translateY(-1px);
 }
 
 .VPFeature .icon {
   border-radius: 10px;
-  background: var(--kepler-accent-soft) !important;
+  background: var(--kosmos-accent-soft) !important;
 }
 
 .VPFeature .title {
@@ -478,7 +478,7 @@ body {
 }
 
 .VPFeature .details {
-  color: var(--kepler-muted-fg);
+  color: var(--kosmos-muted-fg);
   font-size: 13.5px;
   line-height: 1.5;
 }
@@ -494,7 +494,7 @@ body {
   font-size: 11.5px;
   font-weight: 500;
   background: var(--vp-c-bg-soft);
-  border: 1px solid var(--kepler-border);
+  border: 1px solid var(--kosmos-border);
   color: var(--vp-c-text-1);
   margin-right: 4px;
 }
@@ -504,25 +504,25 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: var(--kepler-muted-fg);
+  background: var(--kosmos-muted-fg);
 }
 
-.kbadge.canon::before { background: var(--kepler-success); }
-.kbadge.legacy::before { background: var(--kepler-warning); }
-.kbadge.info::before { background: var(--kepler-info); }
-.kbadge.error::before { background: var(--kepler-error); }
-.kbadge.accent::before { background: var(--kepler-accent); }
+.kbadge.canon::before { background: var(--kosmos-success); }
+.kbadge.legacy::before { background: var(--kosmos-warning); }
+.kbadge.info::before { background: var(--kosmos-info); }
+.kbadge.error::before { background: var(--kosmos-error); }
+.kbadge.accent::before { background: var(--kosmos-accent); }
 
 /* ── Поиск ───────────────────────────────────────────── */
 
 .DocSearch-Button {
   border-radius: 999px !important;
-  border: 1px solid var(--kepler-border) !important;
+  border: 1px solid var(--kosmos-border) !important;
 }
 
 /* ── Last updated ────────────────────────────────────── */
 
 .VPDocFooter .VPLastUpdated {
-  color: var(--kepler-muted-fg);
+  color: var(--kosmos-muted-fg);
   font-size: 12.5px;
 }

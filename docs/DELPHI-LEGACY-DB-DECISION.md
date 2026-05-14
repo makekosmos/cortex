@@ -7,7 +7,7 @@ Current replacement for shared task state is ARK object storage:
 - task data: `objects` with `type_id = task_obj`;
 - typed/schema metadata: `object_types`;
 - relationships: `object_links`;
-- app access: `@kepler/ark` / `ark-core-rpc`.
+- app access: `@kosmos/ark` / `ark-core-rpc`.
 
 Rules:
 

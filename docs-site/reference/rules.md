@@ -5,7 +5,7 @@
 ## 1. Граница записи в ARK
 
 ::: danger
-- Все ARK writes через `@kepler/ark` (TS) или `ark_core::db` (Rust).
+- Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
 - **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
 - Dashboard — read-only.
 - Перед PR в data services: `bun run ark:guard:writes`.
@@ -58,11 +58,11 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 7. UI и Visuals
 
-- Используй `@kepler/visuals` для shared chrome / сайдбара / titlebar.
+- Используй `@kosmos/visuals` для shared chrome / сайдбара / titlebar.
 - **Не копируй** shared компоненты внутрь приложения.
 - Не возвращай ручные titlebar-offset / safe-area хаки — есть `DesktopChrome` / `DesktopContentSurface`.
 
-См. [kepler-visuals](/packages/kepler-visuals).
+См. [kosmos-visuals](/packages/kosmos-visuals).
 
 ## 8. Запреты per-app
 

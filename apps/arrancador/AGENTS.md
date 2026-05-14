@@ -40,10 +40,10 @@ apps/arrancador/
 │     ├─ db/                         # local database adapters
 │     └─ services/
 │        ├─ games.ts                 # game CRUD / launch orchestration
-│        ├─ ark-usage.ts             # ARK usage reader (prefer @kepler/ark)
+│        ├─ ark-usage.ts             # ARK usage reader (prefer @kosmos/ark)
 │        ├─ ark-usage-backfill.ts    # legacy usage import через ARK usage/KV
 │        ├─ ark-usage-bindings.ts    # биндинги game ↔ exe для usage
-│        ├─ ark-game-objects.ts      # game_obj hydration и writes через @kepler/ark
+│        ├─ ark-game-objects.ts      # game_obj hydration и writes через @kosmos/ark
 │        ├─ ark-game-migration.ts    # миграция в game_obj
 │        ├─ playtime-stats.ts        # делегирует aggregation в ARK runtime
 │        └─ usage-process-search.ts  # поиск процессов через ARK
@@ -54,7 +54,7 @@ apps/arrancador/
 
 - **Игры** — ARK-объекты `game_obj`.
 - **Playtime / usage** — отдельный usage-слой ARK (`tracked_apps`, `usage_sessions`, `usage_events`).
-- **Бэкапы и process search** — через `@kepler/ark`.
+- **Бэкапы и process search** — через `@kosmos/ark`.
 - Read-only SQLite — только fallback, когда `ark-core-rpc` недоступен. Запись запрещена.
 
 ## Команды
@@ -72,8 +72,8 @@ bun run smoke:packaged     # smoke на packaged Electron сборке
 ## Правила
 
 - Renderer вызывает preload, preload — explicit main-process handlers. Узкая граница.
-- **ARK reads** через `@kepler/ark` сначала. Direct ARK SQLite reads — только inspector/fallback, **только** main-process сервисы, **только** read-only.
-- **ARK writes** через `@kepler/ark`. Не писать напрямую в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из app services.
+- **ARK reads** через `@kosmos/ark` сначала. Direct ARK SQLite reads — только inspector/fallback, **только** main-process сервисы, **только** read-only.
+- **ARK writes** через `@kosmos/ark`. Не писать напрямую в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из app services.
 - Игры мапятся на process bindings внутри Arrancador, дальше ARK runtime агрегирует usage.
 - **Не возвращай** в Arrancador собственный in-process tracker, window polling loop или Arrancador-owned usage SQLite. Usage capture теперь живёт в `services/usage-tracker`.
 - Native работа — сначала Electron main-process services. Rust только как sidecar с явным Electron integration path.
@@ -130,7 +130,7 @@ Arrancador использует:
 
 ## Тесты
 
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kepler\ark.db`) в тестах.
+- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
 - ❌ Запуск Playwright против user vault Eden.
@@ -149,7 +149,7 @@ Arrancador использует:
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -180,7 +180,7 @@ Arrancador использует:
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kepler/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kepler-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -201,7 +201,7 @@ Arrancador использует:
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -231,7 +231,7 @@ bun run ark:smoke
 
 ## Сжатые правила репозитория (TL;DR)
 
-- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
+- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
 - **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.
 - **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.
 - **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.

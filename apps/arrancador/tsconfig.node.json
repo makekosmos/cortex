@@ -10,7 +10,7 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
-      "@kepler/ark": ["../../packages/kepler-ark/src/index.ts"]
+      "@kosmos/ark": ["../../packages/kosmos-ark/src/index.ts"]
     }
   },
   "include": [

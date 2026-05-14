@@ -5,11 +5,11 @@ Run date: 2026-04-25
 ## SDK packages
 
 ```text
-$ bun run --cwd packages/kepler-ark typecheck
+$ bun run --cwd packages/kosmos-ark typecheck
 $ tsc --noEmit
 PASS
 
-$ bun run --cwd packages/kepler-ark build
+$ bun run --cwd packages/kosmos-ark build
 $ tsc
 PASS
 

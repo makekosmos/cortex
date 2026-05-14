@@ -1,4 +1,4 @@
 $ cargo build --release --manifest-path sidecar/Cargo.toml && cargo build --release --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc
     Finished `release` profile [optimized] target(s) in 0.98s
-   Compiling ark-core v0.1.0 (D:\Personal\Hobby\Coding\kepler\packages\ark-core\rust)
+   Compiling ark-core v0.1.0 (D:\Personal\Hobby\Coding\kosmos\packages\ark-core\rust)
     Finished `release` profile [optimized] target(s) in 39.98s

@@ -20,7 +20,7 @@ Result: PASS
   - 7 `ark-core-rpc` tests passed.
   - Relay and sync integration tests passed.
 - `cargo test --manifest-path services\usage-tracker\Cargo.toml`: PASS, 4 tests passed.
-- `bun run --cwd packages/kepler-ark typecheck`: PASS.
+- `bun run --cwd packages/kosmos-ark typecheck`: PASS.
 - `git diff --check`: PASS, no whitespace errors. Git reported LF/CRLF normalization warnings only.
 
 ## Application Checks
@@ -30,13 +30,13 @@ Arrancador:
 - `bun run --cwd apps/arrancador test`: PASS, 47 files and 163 tests passed.
 - `bun run --cwd apps/arrancador smoke:packaged`: PASS.
   - Packaged executable started.
-  - Smoke used isolated `ARK_DB_PATH`: `D:\Personal\Hobby\Coding\kepler\apps\arrancador\.e2e\packaged-smoke\ark\ark.db`.
-  - Smoke used isolated `userData`: `D:\Personal\Hobby\Coding\kepler\apps\arrancador\.e2e\packaged-smoke\localappdata\arrancador`.
+  - Smoke used isolated `ARK_DB_PATH`: `D:\Personal\Hobby\Coding\kosmos\apps\arrancador\.e2e\packaged-smoke\ark\ark.db`.
+  - Smoke used isolated `userData`: `D:\Personal\Hobby\Coding\kosmos\apps\arrancador\.e2e\packaged-smoke\localappdata\arrancador`.
 
 Dashboard:
 - `bun run --cwd apps/dashboard typecheck`: PASS.
 - `bun run --cwd apps/dashboard test:e2e:smoke`: PASS.
-  - Smoke database: `D:\Personal\Hobby\Coding\kepler\apps\dashboard\.e2e\smoke-dashboard.db`.
+  - Smoke database: `D:\Personal\Hobby\Coding\kosmos\apps\dashboard\.e2e\smoke-dashboard.db`.
   - Verified database connected status, top app rendering, scrolling, responsive width, and sessions route.
 
 Eden:

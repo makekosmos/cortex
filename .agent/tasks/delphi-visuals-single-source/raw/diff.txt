@@ -7,7 +7,7 @@ index 363d2ff..e0465d5 100644
  │   ├── App.vue            — корневой layout, connection bootstrap, P2P sync bridge
  │   ├── main.ts            — createApp, router, Pinia
 -│   ├── components/        — UI-компоненты (SideBar, QuickEntry, QuickOpen, TodoRow, …)
-+│   ├── components/        — app-level composition/components (SideBar adapter, QuickEntry wrapper, QuickOpen, …); shared visuals come from `@kepler/visuals`
++│   ├── components/        — app-level composition/components (SideBar adapter, QuickEntry wrapper, QuickOpen, …); shared visuals come from `@kosmos/visuals`
  │   ├── pages/             — route views (TodayPage, AllTaskPage, WeekPage, ProjectPage, …)
  │   ├── composables/       — useSmartList, useQuickEntry, useTheme, useSidebarState
  │   ├── store/
@@ -15,7 +15,7 @@ index 363d2ff..e0465d5 100644
  
  reka-ui (headless Vue 3 components): Tooltip, Dialog и т.д. Стили — Tailwind CSS 4 с CSS-переменными (`--background`, `--foreground`, `--border`, `--popover`, `--muted-foreground`).
  
-+**Shared UI single source of truth:** Delphi TS **MUST** брать общие визуальные компоненты из workspace-пакета `@kepler/visuals` через его public API. Не держи локальные копии вроде `src/components/SideBarButton.vue`; app-level компоненты в `src/components/` должны быть только адаптерами/композицией над shared package.
++**Shared UI single source of truth:** Delphi TS **MUST** брать общие визуальные компоненты из workspace-пакета `@kosmos/visuals` через его public API. Не держи локальные копии вроде `src/components/SideBarButton.vue`; app-level компоненты в `src/components/` должны быть только адаптерами/композицией над shared package.
 +
  ### Sidebar zen-mode width
  
@@ -28,8 +28,8 @@ index a0b5393..4b33ec6 100644
  import QuickSearch from "@/components/QuickSearch.vue";
  import AuthOverlay from "@/components/AuthOverlay.vue";
  import SpaceSetup from "@/components/SpaceSetup.vue";
--import { CustomCaret } from "@kepler/visuals/components";
-+import { CustomCaret } from "@kepler/visuals";
+-import { CustomCaret } from "@kosmos/visuals/components";
++import { CustomCaret } from "@kosmos/visuals";
  
  // ---------------------------------------------------------------------------
  // Store
@@ -41,9 +41,9 @@ index 746fda8..18e3338 100644
  import { useRouter } from "vue-router";
  import { FolderOpen } from "lucide-vue-next";
  import { storeToRefs } from "pinia";
--import CommandPalette from "@kepler/visuals/components/CommandPalette.vue";
--import TodoRow from "@kepler/visuals/components/TodoRow.vue";
-+import { CommandPalette, TodoRow } from "@kepler/visuals";
+-import CommandPalette from "@kosmos/visuals/components/CommandPalette.vue";
+-import TodoRow from "@kosmos/visuals/components/TodoRow.vue";
++import { CommandPalette, TodoRow } from "@kosmos/visuals";
  import { useTodoStore } from "@/store/todos";
  
  const props = defineProps<{ open: boolean }>();
@@ -66,18 +66,18 @@ index 7d26f8b..b82aa9f 100644
    Settings,
    Star,
  } from "lucide-vue-next";
--import { SidebarButton as SideBarButton } from "@kepler/visuals/components";
+-import { SidebarButton as SideBarButton } from "@kosmos/visuals/components";
 +import {
-+  Sidebar as KeplerSidebar,
++  Sidebar as KosmosSidebar,
 +  type SidebarConfig,
 +  type SidebarNavItem,
 +  type SidebarProjectItem,
-+} from "@kepler/visuals";
++} from "@kosmos/visuals";
  import { useTodoStore } from "@/store/todos";
  import { storeToRefs } from "pinia";
  import { ProjectStatus } from "@/types/task";
--import ResizableSidebar from "@kepler/visuals/components/ResizableSidebar.vue";
--import type { SidebarConfig } from "@kepler/visuals/components/ResizableSidebar.vue";
+-import ResizableSidebar from "@kosmos/visuals/components/ResizableSidebar.vue";
+-import type { SidebarConfig } from "@kosmos/visuals/components/ResizableSidebar.vue";
  import { setSidebarHidden } from "@/composables/useSidebarState";
 +import { useRoute } from "vue-router";
  
@@ -149,7 +149,7 @@ index 7d26f8b..b82aa9f 100644
  
  <template>
 -  <ResizableSidebar
-+  <KeplerSidebar
++  <KosmosSidebar
 +    :primary-items="primaryItems"
 +    :project-items="projectItems"
 +    :footer-items="footerItems"
@@ -286,8 +286,8 @@ index 8b205b2..7ebd7db 100644
  import { filterTodos } from "@/services/filters/todoFilterService";
  import { useQuickEntry } from "@/composables/useQuickEntry";
  import { useSidebarState } from "@/composables/useSidebarState";
--import TodoRow from "@kepler/visuals/components/TodoRow.vue";
-+import { TodoRow } from "@kepler/visuals";
+-import TodoRow from "@kosmos/visuals/components/TodoRow.vue";
++import { TodoRow } from "@kosmos/visuals";
  
  const { show: openQuickEntry } = useQuickEntry();
 -const { wrapClass, wrapStyle } = useSidebarState();
@@ -353,8 +353,8 @@ index e30139f..cd7e5b7 100644
  import { useTodoStore } from "@/store/todos";
  import { storeToRefs } from "pinia";
  import { filterTodos } from "@/services/filters/todoFilterService";
--import TodoRow from "@kepler/visuals/components/TodoRow.vue";
-+import { TodoRow } from "@kepler/visuals";
+-import TodoRow from "@kosmos/visuals/components/TodoRow.vue";
++import { TodoRow } from "@kosmos/visuals";
  import { useSidebarState } from "@/composables/useSidebarState";
  
 -const { wrapClass, wrapStyle } = useSidebarState();
@@ -419,8 +419,8 @@ index 38d5a97..fbf01f5 100644
  import { useTodoStore } from "@/store/todos";
  import { storeToRefs } from "pinia";
  import { ProjectStatus } from "@/types/task";
--import TodoRow from "@kepler/visuals/components/TodoRow.vue";
-+import { TodoRow } from "@kepler/visuals";
+-import TodoRow from "@kosmos/visuals/components/TodoRow.vue";
++import { TodoRow } from "@kosmos/visuals";
  import { arkSync, projectToArkChange } from "@/services/sync/ark-types";
  import { broadcastToPeers } from "@/services/sync/peer-bridge";
  
@@ -493,8 +493,8 @@ index c6c3b5e..9e86b59 100644
  import { useTodoStore } from "@/store/todos";
  import { storeToRefs } from "pinia";
  import { filterTodos } from "@/services/filters/todoFilterService";
--import TodoRow from "@kepler/visuals/components/TodoRow.vue";
-+import { TodoRow } from "@kepler/visuals";
+-import TodoRow from "@kosmos/visuals/components/TodoRow.vue";
++import { TodoRow } from "@kosmos/visuals";
  import { useSidebarState } from "@/composables/useSidebarState";
  
 -const { wrapClass, wrapStyle } = useSidebarState();
@@ -550,8 +550,8 @@ index 15e8ca2..a15e5ac 100644
  import { useTodoStore } from "@/store/todos";
  import { storeToRefs } from "pinia";
  import { filterTodos } from "@/services/filters/todoFilterService";
--import TodoRow from "@kepler/visuals/components/TodoRow.vue";
-+import { TodoRow } from "@kepler/visuals";
+-import TodoRow from "@kosmos/visuals/components/TodoRow.vue";
++import { TodoRow } from "@kosmos/visuals";
  import { useSidebarState } from "@/composables/useSidebarState";
  
 -const { wrapClass, wrapStyle } = useSidebarState();

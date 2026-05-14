@@ -41,7 +41,7 @@ This should be a focused UI rearrangement only. Existing routes and settings scr
 
 - Settings page redesign.
 - Titlebar visual system refactor.
-- Shared `kepler-visuals` API changes unless strictly required.
+- Shared `kosmos-visuals` API changes unless strictly required.
 
 ## Verification Plan
 

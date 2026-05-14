@@ -2,7 +2,7 @@ $ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build.ps1
 $ bun run scripts/rebuild-native-if-needed.ts
 [native] native rebuild is up to date, skipping
 $ vite build
-[31mfailed to load config from D:\Personal\Hobby\Coding\kepler\apps\arrancador\vite.config.mjs[39m
+[31mfailed to load config from D:\Personal\Hobby\Coding\kosmos\apps\arrancador\vite.config.mjs[39m
 [31merror during build:
 Error: Build failed with 2 errors:
 
@@ -20,21 +20,21 @@ Error: spawn EPERM
     at spawn (node:child_process:753:9)
     at Object.execFile (node:child_process:346:17)
     at exec (node:child_process:233:25)
-    at optimizeSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1954:2)
-    at windowsSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1940:3)
-    at getRealPath (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32413:36)
-    at tryResolveRealFileOrType (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32407:9)
-    at tryCleanFsResolve (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32151:21)
-    at tryFsResolve (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32144:14)
-    at aggregateBindingErrorsIntoJsError (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:48:18)
-    at unwrapBindingResult (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:18:128)
-    at #build (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/rolldown-build-DtGk-m96.mjs:3313:34)
-    at async bundleConfigFile (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34633:17)
-    at async bundleAndLoadConfigFile (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34541:18)
-    at async loadConfigFromFile (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34510:42)
-    at async resolveConfig (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34134:22)
-    at async createBuilder (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:33351:17)
-    at async CAC.<anonymous> (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/cli.js:767:19) {
+    at optimizeSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1954:2)
+    at windowsSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1940:3)
+    at getRealPath (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32413:36)
+    at tryResolveRealFileOrType (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32407:9)
+    at tryCleanFsResolve (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32151:21)
+    at tryFsResolve (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32144:14)
+    at aggregateBindingErrorsIntoJsError (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:48:18)
+    at unwrapBindingResult (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:18:128)
+    at #build (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/rolldown-build-DtGk-m96.mjs:3313:34)
+    at async bundleConfigFile (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34633:17)
+    at async bundleAndLoadConfigFile (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34541:18)
+    at async loadConfigFromFile (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34510:42)
+    at async resolveConfig (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34134:22)
+    at async createBuilder (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:33351:17)
+    at async CAC.<anonymous> (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/cli.js:767:19) {
   errors: [Getter/Setter]
 }[39m
 error: script "build:renderer" exited with code 1

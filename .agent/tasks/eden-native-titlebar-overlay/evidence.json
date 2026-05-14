@@ -39,7 +39,7 @@
   "commands": [
     {
       "command": "bunx tsc --noEmit",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/eden/ts",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/apps/eden/ts",
       "status": "PASS"
     }
   ]

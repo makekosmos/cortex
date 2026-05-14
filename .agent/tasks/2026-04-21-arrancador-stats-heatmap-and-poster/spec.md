@@ -14,7 +14,7 @@ Update the active Vue renderer in `apps/arrancador` to remove the Achievements/S
   - Presentational heatmap grid; receives prepared cells and emits selected date.
 - `src-vue/components/statistics/StatisticsDayDetails.vue`
   - Presentational selected-day summary and per-game breakdown.
-- `packages/kepler-visuals/components/GamePosterCard.vue`
+- `packages/kosmos-visuals/components/GamePosterCard.vue`
   - Reusable poster card visual primitive for Vue consumers.
 - `src-vue/components/GameCard.vue`
   - Thin Arrancador adapter that maps `Game` data into the shared Vue poster card.

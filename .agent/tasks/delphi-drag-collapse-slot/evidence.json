@@ -6,7 +6,7 @@
       "id": "AC1",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/TodoRow.vue",
+        "packages/kosmos-visuals/components/TodoRow.vue",
         ".agent/tasks/delphi-drag-collapse-slot/raw/verification-summary.txt"
       ]
     },
@@ -22,7 +22,7 @@
       "id": "AC3",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/TodoRow.vue",
+        "packages/kosmos-visuals/components/TodoRow.vue",
         "apps/delphi/ts/src/pages/WeekPage.vue",
         ".agent/tasks/delphi-drag-collapse-slot/raw/verification-summary.txt",
         ".agent/tasks/delphi-drag-collapse-slot/raw/drag-collapse-diff.txt"
@@ -39,7 +39,7 @@
   "commands": [
     {
       "command": "bunx tsc --noEmit",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/delphi/ts",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts",
       "status": "PASS"
     }
   ]

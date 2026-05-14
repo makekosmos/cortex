@@ -6,11 +6,11 @@
 
 ## Scope
 
-Restore the shared sidebar toggle shortcut behavior so the current `@kepler/visuals` `Sidebar` correctly toggles on the old hide shortcut in both Latin and Russian keyboard layouts.
+Restore the shared sidebar toggle shortcut behavior so the current `@kosmos/visuals` `Sidebar` correctly toggles on the old hide shortcut in both Latin and Russian keyboard layouts.
 
 ## Assumptions
 
-- The regression is in the shared keyboard shortcut matching for `packages/kepler-visuals/components/Sidebar.vue`.
+- The regression is in the shared keyboard shortcut matching for `packages/kosmos-visuals/components/Sidebar.vue`.
 - The desired behavior is that the sidebar toggle continues to work for the physical `B` key and for the localized Russian key value `и`.
 
 ## Constraints

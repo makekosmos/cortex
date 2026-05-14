@@ -10,7 +10,7 @@
 - `apps/delphi/ts/src/App.vue` использует shared shell composition: `DesktopChrome`, `TitlebarHistoryControls`, слот `sidebar`, и `DesktopContentSurface`.
 - `apps/delphi/ts/src/components/SideBar.vue` опирается на persisted sidebar config с `hidden`, а не на простое collapse-состояние.
 - `apps/arrancador` уже имеет custom Electron window contract и React titlebar/sidebar, но их поведение не совпадает с Delphi-shell.
-- `arrancador` — React renderer, поэтому прямой импорт Vue-компонентов из `@kepler/visuals` не является минимальным решением; нужен React-перенос того же shell contract.
+- `arrancador` — React renderer, поэтому прямой импорт Vue-компонентов из `@kosmos/visuals` не является минимальным решением; нужен React-перенос того же shell contract.
 
 ## Acceptance Criteria
 - AC1: Desktop titlebar `arrancador` повторяет Delphi-shell composition: leading controls содержат кнопку sidebar toggle и history back/forward controls вместо текущего centered titlebar layout.

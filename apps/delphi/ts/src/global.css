@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../../../packages/kepler-visuals/**/*.vue";
+@source "../../../../packages/kosmos-visuals/**/*.vue";
 
 @font-face {
   font-family: "Zed Mono";
@@ -49,8 +49,8 @@ li {
   scrollbar-gutter: stable;
 }
 
-/* Theme CSS variables from @kepler/visuals — single source of truth */
-@import "../../../../packages/kepler-visuals/theme/css-variables.css";
+/* Theme CSS variables from @kosmos/visuals — single source of truth */
+@import "../../../../packages/kosmos-visuals/theme/css-variables.css";
 
 :root {
   font-family:

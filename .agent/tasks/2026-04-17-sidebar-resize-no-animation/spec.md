@@ -10,7 +10,7 @@ Remove the width animation only while the user is manually dragging the shared s
 
 ## Assumptions
 
-- The resize lag comes from the width transition on `.kepler-sidebar-wrapper`.
+- The resize lag comes from the width transition on `.kosmos-sidebar-wrapper`.
 - Hide/show animation should remain unchanged.
 
 ## Constraints

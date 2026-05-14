@@ -10,7 +10,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(rootDir, "./src"),
       "@vue-app": path.resolve(rootDir, "./src-vue"),
-      "@kepler/visuals": path.resolve(rootDir, "../../packages/kepler-visuals"),
+      "@kosmos/visuals": path.resolve(rootDir, "../../packages/kosmos-visuals"),
     },
   },
   test: {

@@ -1,2 +1,2 @@
-   Compiling arrancador-sidecar v0.1.0 (D:\Personal\Hobby\Coding\kepler\apps\arrancador\sidecar)
+   Compiling arrancador-sidecar v0.1.0 (D:\Personal\Hobby\Coding\kosmos\apps\arrancador\sidecar)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.94s

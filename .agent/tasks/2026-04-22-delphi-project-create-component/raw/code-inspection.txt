@@ -1,6 +1,6 @@
 Relevant inspected facts:
 
-- `packages/kepler-visuals/components/Sidebar.vue`
+- `packages/kosmos-visuals/components/Sidebar.vue`
   - `SidebarProjectGroup` now supports optional `actionIcon`, `actionLabel`, `actionTestId`, `onAction`
   - custom groups remain visible when they have no items but do have an action
   - project group surface is only rendered when there are items, avoiding an empty visual bubble

@@ -11,13 +11,13 @@ apps/eden/ts/tests/app.spec.ts:324:      await launch.window.locator('[data-test
 apps/eden/ts/tests/app.spec.ts:337:      await launch.window.locator('[data-testid="settings-nav-spaces"]').click();
 apps/eden/ts/tests/app.spec.ts:338:      await launch.window.locator('[data-testid="settings-space-diary"]').click();
 apps/eden/ts/src/App.vue:61:      <EdenSidebar
-apps/eden/ts/src/App.vue:140:import { ResizableSidebar } from "@kepler/visuals";
+apps/eden/ts/src/App.vue:140:import { ResizableSidebar } from "@kosmos/visuals";
 apps/eden/ts/src/App.vue:144:import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
 apps/eden/ts/src/components/sidebar/edenSidebarIcons.ts:5:    name: "EdenSidebarIcon",
-apps/eden/ts/src/components/settings/SettingsPage.vue:3:    <KeplerSidebar
-apps/eden/ts/src/components/settings/SettingsPage.vue:66:  Sidebar as KeplerSidebar,
-apps/eden/ts/src/components/settings/SettingsPage.vue:69:} from "@kepler/visuals";
+apps/eden/ts/src/components/settings/SettingsPage.vue:3:    <KosmosSidebar
+apps/eden/ts/src/components/settings/SettingsPage.vue:66:  Sidebar as KosmosSidebar,
+apps/eden/ts/src/components/settings/SettingsPage.vue:69:} from "@kosmos/visuals";
 apps/eden/ts/src/components/settings/SettingsPage.vue:181:    testId: "settings-nav-spaces",
-apps/eden/ts/src/components/sidebar/EdenSidebar.vue:2:  <KeplerSidebar
-apps/eden/ts/src/components/sidebar/EdenSidebar.vue:25:  Sidebar as KeplerSidebar,
-apps/eden/ts/src/components/sidebar/EdenSidebar.vue:29:} from "@kepler/visuals";
+apps/eden/ts/src/components/sidebar/EdenSidebar.vue:2:  <KosmosSidebar
+apps/eden/ts/src/components/sidebar/EdenSidebar.vue:25:  Sidebar as KosmosSidebar,
+apps/eden/ts/src/components/sidebar/EdenSidebar.vue:29:} from "@kosmos/visuals";

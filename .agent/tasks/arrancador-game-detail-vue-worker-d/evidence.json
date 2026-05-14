@@ -3,25 +3,25 @@
   "commands": [
     {
       "command": "bun run typecheck",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "result": "PASS",
       "artifact": "typecheck.txt"
     },
     {
       "command": "bunx vitest run --configLoader native --config src-vue/test/vitest.config.mjs",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "result": "PASS",
       "artifact": "vue-tests.txt"
     },
     {
       "command": "rg -n 'path: \"game/:id\"|component: GameDetailPage|import GameDetailPage' apps/arrancador/src-vue/router.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "result": "PASS",
       "artifact": "route-check.txt"
     },
     {
       "command": "rg -n \"checkRestoreNeeded|shouldBackupBeforeLaunch|checkBackupNeeded|subscribeAppEvent|backup:progress|restore:progress|toggleBackupEnabled|findGameSavePaths|pickDirectoryPath|pickFilePath|user_rating|user_note|metadataApi\\\\.search|metadataApi\\\\.apply|background_image|cover_image\" apps/arrancador/src-vue/pages/GameDetailPage.vue",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "result": "PASS",
       "artifact": "behavior-check.txt"
     }

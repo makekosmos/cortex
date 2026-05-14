@@ -1,11 +1,11 @@
 # Task: Delphi and Eden shared chrome
 
 ## Goal
-Adopt the shared `@kepler/visuals` desktop titlebar and shared content surface in both `apps/delphi/ts` and `apps/eden/ts`, so each app uses the same top chrome pattern as dashboard: titlebar above sidebar and a bordered content surface under it.
+Adopt the shared `@kosmos/visuals` desktop titlebar and shared content surface in both `apps/delphi/ts` and `apps/eden/ts`, so each app uses the same top chrome pattern as dashboard: titlebar above sidebar and a bordered content surface under it.
 
 ## Component Map
-- `packages/kepler-visuals/DesktopChrome`: shared shell that hosts titlebar, sidebar, and content area.
-- `packages/kepler-visuals/DesktopContentSurface`: shared bordered content pane reused by dashboard, Delphi, and Eden.
+- `packages/kosmos-visuals/DesktopChrome`: shared shell that hosts titlebar, sidebar, and content area.
+- `packages/kosmos-visuals/DesktopContentSurface`: shared bordered content pane reused by dashboard, Delphi, and Eden.
 - `apps/delphi/ts/src/App.vue`: composition surface wiring shared chrome, Delphi sidebar, top status/actions, and routed main content.
 - `apps/eden/ts/src/App.vue`: composition surface wiring shared chrome, Eden sidebar, titlebar actions, and existing screens.
 

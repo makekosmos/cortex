@@ -33,15 +33,15 @@ PASS
 
 ```text
 bun install
-cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\typecheck.txt 2>&1"
-cmd /c "bun vitest run --configLoader native --config vitest.config.mjs electron/main/services/ark-game-objects.test.ts > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\test-ark-game-objects.txt 2>&1"
-cmd /c "bun run build:main > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\build-main.txt 2>&1"
-cmd /c "bun run build:sidecar:dev > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\build-sidecar-dev.txt 2>&1"
-cmd /c "bun run build:sidecar > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\build-sidecar-release.txt 2>&1"
-cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\arksync-node-typecheck.txt 2>&1"
-cmd /c "bun run build > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\arksync-node-build.txt 2>&1"
-cmd /c "bun biome check electron/main/services/ark-game-objects.ts electron/main/services/ark-game-objects.test.ts > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\biome-check.txt 2>&1"
-cmd /c "git diff --check -- apps/arrancador/electron/main/services/ark-game-objects.ts apps/arrancador/electron/main/services/ark-game-objects.test.ts apps/arrancador/package.json apps/arrancador/electron-builder.yml packages/arksync-node/src/index.ts .agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/spec.md > D:\Personal\Hobby\Coding\kepler\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\git-diff-check.txt 2>&1"
+cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\typecheck.txt 2>&1"
+cmd /c "bun vitest run --configLoader native --config vitest.config.mjs electron/main/services/ark-game-objects.test.ts > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\test-ark-game-objects.txt 2>&1"
+cmd /c "bun run build:main > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\build-main.txt 2>&1"
+cmd /c "bun run build:sidecar:dev > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\build-sidecar-dev.txt 2>&1"
+cmd /c "bun run build:sidecar > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\build-sidecar-release.txt 2>&1"
+cmd /c "bun run typecheck > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\arksync-node-typecheck.txt 2>&1"
+cmd /c "bun run build > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\arksync-node-build.txt 2>&1"
+cmd /c "bun biome check electron/main/services/ark-game-objects.ts electron/main/services/ark-game-objects.test.ts > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\biome-check.txt 2>&1"
+cmd /c "git diff --check -- apps/arrancador/electron/main/services/ark-game-objects.ts apps/arrancador/electron/main/services/ark-game-objects.test.ts apps/arrancador/package.json apps/arrancador/electron-builder.yml packages/arksync-node/src/index.ts .agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/spec.md > D:\Personal\Hobby\Coding\kosmos\.agent\tasks\2026-04-24-arrancador-ark-game-writes-sdk\git-diff-check.txt 2>&1"
 ```
 
 ## Notes

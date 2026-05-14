@@ -26,10 +26,10 @@ apps/arrancador/
 │     ├─ db/                         # local database adapters
 │     └─ services/
 │        ├─ games.ts                 # game CRUD / launch orchestration
-│        ├─ ark-usage.ts             # ARK usage reader (prefer @kepler/ark)
+│        ├─ ark-usage.ts             # ARK usage reader (prefer @kosmos/ark)
 │        ├─ ark-usage-backfill.ts    # legacy usage import через ARK usage/KV
 │        ├─ ark-usage-bindings.ts    # биндинги game ↔ exe для usage
-│        ├─ ark-game-objects.ts      # game_obj hydration и writes через @kepler/ark
+│        ├─ ark-game-objects.ts      # game_obj hydration и writes через @kosmos/ark
 │        ├─ ark-game-migration.ts    # миграция в game_obj
 │        ├─ playtime-stats.ts        # делегирует aggregation в ARK runtime
 │        └─ usage-process-search.ts  # поиск процессов через ARK
@@ -40,7 +40,7 @@ apps/arrancador/
 
 - **Игры** — ARK-объекты `game_obj`.
 - **Playtime / usage** — отдельный usage-слой ARK (`tracked_apps`, `usage_sessions`, `usage_events`).
-- **Бэкапы и process search** — через `@kepler/ark`.
+- **Бэкапы и process search** — через `@kosmos/ark`.
 - Read-only SQLite — только fallback, когда `ark-core-rpc` недоступен. Запись запрещена.
 
 ## Команды
@@ -58,8 +58,8 @@ bun run smoke:packaged     # smoke на packaged Electron сборке
 ## Правила
 
 - Renderer вызывает preload, preload — explicit main-process handlers. Узкая граница.
-- **ARK reads** через `@kepler/ark` сначала. Direct ARK SQLite reads — только inspector/fallback, **только** main-process сервисы, **только** read-only.
-- **ARK writes** через `@kepler/ark`. Не писать напрямую в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из app services.
+- **ARK reads** через `@kosmos/ark` сначала. Direct ARK SQLite reads — только inspector/fallback, **только** main-process сервисы, **только** read-only.
+- **ARK writes** через `@kosmos/ark`. Не писать напрямую в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из app services.
 - Игры мапятся на process bindings внутри Arrancador, дальше ARK runtime агрегирует usage.
 - **Не возвращай** в Arrancador собственный in-process tracker, window polling loop или Arrancador-owned usage SQLite. Usage capture теперь живёт в `services/usage-tracker`.
 - Native работа — сначала Electron main-process services. Rust только как sidecar с явным Electron integration path.

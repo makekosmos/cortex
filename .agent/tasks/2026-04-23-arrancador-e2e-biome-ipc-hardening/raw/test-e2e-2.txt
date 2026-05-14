@@ -8,7 +8,7 @@ $ vite build --configLoader native
 rendering chunks...
 computing gzip size...
 out/renderer/index.html                                    3.34 kB │ gzip:  1.24 kB
-out/renderer/assets/kepler-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
+out/renderer/assets/kosmos-visuals-DIpIIHe4.css            5.52 kB │ gzip:  1.42 kB
 out/renderer/assets/index-DnRcrjg8.css                    91.29 kB │ gzip: 14.71 kB
 out/renderer/assets/loader-circle-TmXmu1Op.js              0.13 kB │ gzip:  0.14 kB
 out/renderer/assets/plus-CPVk_xqI.js                       0.14 kB │ gzip:  0.13 kB
@@ -30,7 +30,7 @@ out/renderer/assets/games-BT10Uens.js                      1.11 kB │ gzip:  0.
 out/renderer/assets/useSidebarConfig-Ldxg99v8.js           1.50 kB │ gzip:  0.74 kB
 out/renderer/assets/useToast-PFKvj2Si.js                   3.51 kB │ gzip:  1.59 kB
 out/renderer/assets/api-DXIJ3tcp.js                        3.98 kB │ gzip:  1.69 kB
-out/renderer/assets/kepler-visuals-6SkbbKQa.js             5.55 kB │ gzip:  2.36 kB
+out/renderer/assets/kosmos-visuals-6SkbbKQa.js             5.55 kB │ gzip:  2.36 kB
 out/renderer/assets/CataloguePage-DCrAZ-B0.js              5.99 kB │ gzip:  2.53 kB
 out/renderer/assets/pinia-CEErbrLS.js                      6.00 kB │ gzip:  2.83 kB
 out/renderer/assets/useSettingsPageState-BWX6D_yg.js       7.20 kB │ gzip:  2.80 kB
@@ -61,7 +61,7 @@ Bundled 3 modules in 11ms
   index.js  3.24 KB  (entry point)
 
 $ vite preview --host 127.0.0.1 --port 4174 --strictPort
-[31mfailed to load config from D:\Personal\Hobby\Coding\kepler\apps\arrancador\vite.config.mjs[39m
+[31mfailed to load config from D:\Personal\Hobby\Coding\kosmos\apps\arrancador\vite.config.mjs[39m
 [31merror when starting preview server:
 Error: Build failed with 2 errors:
 
@@ -79,21 +79,21 @@ Error: spawn EPERM
     at spawn (node:child_process:753:9)
     at Object.execFile (node:child_process:346:17)
     at exec (node:child_process:233:25)
-    at optimizeSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1954:2)
-    at windowsSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1940:3)
-    at getRealPath (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32413:36)
-    at tryResolveRealFileOrType (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32407:9)
-    at tryCleanFsResolve (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32151:21)
-    at tryFsResolve (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32144:14)
-    at aggregateBindingErrorsIntoJsError (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:48:18)
-    at unwrapBindingResult (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:18:128)
-    at #build (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/rolldown-build-DtGk-m96.mjs:3313:34)
-    at async bundleConfigFile (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34633:17)
-    at async bundleAndLoadConfigFile (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34541:18)
-    at async loadConfigFromFile (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34510:42)
-    at async resolveConfig (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34134:22)
-    at async preview (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:33556:17)
-    at async CAC.<anonymous> (file:///D:/Personal/Hobby/Coding/kepler/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/cli.js:809:18) {
+    at optimizeSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1954:2)
+    at windowsSafeRealPathSync (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:1940:3)
+    at getRealPath (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32413:36)
+    at tryResolveRealFileOrType (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32407:9)
+    at tryCleanFsResolve (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32151:21)
+    at tryFsResolve (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:32144:14)
+    at aggregateBindingErrorsIntoJsError (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:48:18)
+    at unwrapBindingResult (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/error-w0u7biK-.mjs:18:128)
+    at #build (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/rolldown@1.0.0-rc.15/node_modules/rolldown/dist/shared/rolldown-build-DtGk-m96.mjs:3313:34)
+    at async bundleConfigFile (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34633:17)
+    at async bundleAndLoadConfigFile (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34541:18)
+    at async loadConfigFromFile (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34510:42)
+    at async resolveConfig (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:34134:22)
+    at async preview (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/chunks/node.js:33556:17)
+    at async CAC.<anonymous> (file:///D:/Personal/Hobby/Coding/kosmos/node_modules/.bun/vite@8.0.8+cac867131b98ca75/node_modules/vite/dist/node/cli.js:809:18) {
   errors: [Getter/Setter]
 }[39m
 error: script "preview" exited with code 1
@@ -105,7 +105,7 @@ error: script "preview" exited with code 1
 39 |   throw new Error(`Preview server did not become ready at ${PREVIEW_URL}`);
                  ^
 error: Preview server did not become ready at http://127.0.0.1:4174
-      at waitForPreview (D:\Personal\Hobby\Coding\kepler\apps\arrancador\scripts\run-e2e.ts:39:13)
+      at waitForPreview (D:\Personal\Hobby\Coding\kosmos\apps\arrancador\scripts\run-e2e.ts:39:13)
 
 Bun v1.3.5 (Windows x64)
 error: script "test:e2e" exited with code 1

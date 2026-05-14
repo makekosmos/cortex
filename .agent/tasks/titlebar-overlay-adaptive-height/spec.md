@@ -4,7 +4,7 @@
 Make Electron window controls in Delphi TS adapt vertically to the effective titlebar height on Windows by updating `titleBarOverlay.height` from the renderer's measured titlebar height.
 
 ## Scope
-- `packages/kepler-visuals/components/Titlebar.vue`
+- `packages/kosmos-visuals/components/Titlebar.vue`
 - `apps/delphi/ts/electron/main.ts`
 - verification artifacts in `.agent/tasks/titlebar-overlay-adaptive-height/`
 

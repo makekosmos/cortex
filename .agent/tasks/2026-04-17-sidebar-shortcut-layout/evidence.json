@@ -9,7 +9,7 @@
       "evidence": [
         {
           "type": "file",
-          "path": "packages/kepler-visuals/components/Sidebar.vue"
+          "path": "packages/kosmos-visuals/components/Sidebar.vue"
         },
         {
           "type": "artifact",
@@ -46,7 +46,7 @@
   ],
   "checks": [
     {
-      "command": "bun run --cwd packages/kepler-visuals format",
+      "command": "bun run --cwd packages/kosmos-visuals format",
       "status": "PASS"
     },
     {

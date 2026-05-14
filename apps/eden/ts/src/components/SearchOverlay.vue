@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { CommandPalette } from "@kepler/visuals";
+import { CommandPalette } from "@kosmos/visuals";
 
 defineProps<{
   isOpen: boolean;

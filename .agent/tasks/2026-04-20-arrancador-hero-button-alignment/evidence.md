@@ -12,9 +12,9 @@
 - Updated the targeted game detail test to assert that the play button now lives inside the hero action block.
 
 ## Acceptance criteria
-- `AC1` PASS: the primary action now renders inside the hero footer in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:822).
-- `AC2` PASS: the hero footer now uses a shared lower row with copy on the left and actions on the right in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:817).
-- `AC3` PASS: the targeted test now checks hero action placement in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/test/game-detail.test.tsx:114).
+- `AC1` PASS: the primary action now renders inside the hero footer in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:822).
+- `AC2` PASS: the hero footer now uses a shared lower row with copy on the left and actions on the right in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:817).
+- `AC3` PASS: the targeted test now checks hero action placement in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/test/game-detail.test.tsx:114).
 - `AC4` PASS: `bun run typecheck` and the focused game-detail vitest run both passed.
 
 ## Verification

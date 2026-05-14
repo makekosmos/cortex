@@ -12,8 +12,8 @@ Bundled 21 modules in 19ms
 {
   "schemaVersion": 1,
   "generatedAt": "2026-04-23T22:23:39.386Z",
-  "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
-  "repoRoot": "D:\\Personal\\Hobby\\Coding\\kepler",
+  "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
+  "repoRoot": "D:\\Personal\\Hobby\\Coding\\kosmos",
   "backend": "electron-main+rust-scan-sidecar",
   "fixtureRoot": "C:\\Users\\Kazui\\AppData\\Local\\Temp\\arrancador-baseline-ysxCzP",
   "results": [

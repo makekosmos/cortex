@@ -3,7 +3,7 @@
 ## Context
 
 Eden already has:
-- shared `Kepler Visuals` sidebar shell
+- shared `Kosmos Visuals` sidebar shell
 - note type editor and built-in object types
 - recent notes in the sidebar
 - settings and object-type editing screens

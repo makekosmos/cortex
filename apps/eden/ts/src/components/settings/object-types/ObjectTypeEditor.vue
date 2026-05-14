@@ -178,10 +178,10 @@ function handleUpdateField(index: number, patch: Partial<TypeEditorFieldDraft>) 
 .object-type-editor-empty__title {
   margin: 8px 0 0;
   color: var(--foreground);
-  font-size: var(--kepler-text-page-title-size);
-  line-height: var(--kepler-text-page-title-line-height);
-  font-weight: var(--kepler-text-page-title-weight);
-  letter-spacing: var(--kepler-text-page-title-letter-spacing);
+  font-size: var(--kosmos-text-page-title-size);
+  line-height: var(--kosmos-text-page-title-line-height);
+  font-weight: var(--kosmos-text-page-title-weight);
+  letter-spacing: var(--kosmos-text-page-title-letter-spacing);
 }
 
 .object-type-editor__subtitle {

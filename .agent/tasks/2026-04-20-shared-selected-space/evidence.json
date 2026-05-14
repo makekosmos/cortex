@@ -27,7 +27,7 @@
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": "Fallback path remains appData/Kepler/ark.db when selection is absent."
+      "evidence": "Fallback path remains appData/Kosmos/ark.db when selection is absent."
     },
     {
       "id": "AC6",

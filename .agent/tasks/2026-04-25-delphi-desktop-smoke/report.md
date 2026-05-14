@@ -1,7 +1,7 @@
 # Delphi desktop smoke/build report
 
 Date: 2026-04-25
-Workspace: `D:\Personal\Hobby\Coding\kepler`
+Workspace: `D:\Personal\Hobby\Coding\kosmos`
 Project: `apps/delphi/ts`
 
 ## Package scripts found
@@ -41,7 +41,7 @@ From `apps/delphi/ts/package.json`:
 `bun run build` failed while building Electron main:
 
 ```text
-Error: [vite]: Rolldown failed to resolve import "@kepler/ark" from "D:/Personal/Hobby/Coding/kepler/apps/delphi/ts/electron/main.ts".
+Error: [vite]: Rolldown failed to resolve import "@kosmos/ark" from "D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts/electron/main.ts".
 This is most likely unintended because it can break your application at runtime.
 If you do want to externalize this module explicitly add it to
 `build.rollupOptions.external`

@@ -18,7 +18,7 @@ function makeSelfManaged(timeoutMs: number, write: (line: string) => void = () =
   const client = new ArkClient({
     spaceId: 'space',
     deviceId: 'device',
-    dbPath: 'D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-24-arksync-node-request-timeouts/self-managed/ark.db',
+    dbPath: 'D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-24-arksync-node-request-timeouts/self-managed/ark.db',
     sidecarPath: 'unused',
     requestTimeoutMs: timeoutMs,
   }) as unknown as InternalClient

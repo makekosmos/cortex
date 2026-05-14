@@ -1,8 +1,8 @@
-== git diff -- packages/kepler-visuals/components/Sidebar.vue ==
-diff --git a/packages/kepler-visuals/components/Sidebar.vue b/packages/kepler-visuals/components/Sidebar.vue
+== git diff -- packages/kosmos-visuals/components/Sidebar.vue ==
+diff --git a/packages/kosmos-visuals/components/Sidebar.vue b/packages/kosmos-visuals/components/Sidebar.vue
 index 4adffd9..392be14 100644
---- a/packages/kepler-visuals/components/Sidebar.vue
-+++ b/packages/kepler-visuals/components/Sidebar.vue
+--- a/packages/kosmos-visuals/components/Sidebar.vue
++++ b/packages/kosmos-visuals/components/Sidebar.vue
 @@ -9,6 +9,8 @@ import {
  } from "vue";
  import { RouterLink } from "vue-router";
@@ -79,10 +79,10 @@ index 4adffd9..392be14 100644
  const _hidden = shallowRef(
      props.hidden !== undefined
 @@ -111,6 +156,7 @@ const shellClasses = computed(() => [
-     "kepler-sidebar-shell",
-     { "kepler-sidebar-shell--mac-safe-top": props.isMac && props.reserveTopInset },
-     { "kepler-sidebar-shell--with-top-bar": hasTopBar.value },
-+    { "kepler-sidebar-shell--drag-region": props.dragRegion },
+     "kosmos-sidebar-shell",
+     { "kosmos-sidebar-shell--mac-safe-top": props.isMac && props.reserveTopInset },
+     { "kosmos-sidebar-shell--with-top-bar": hasTopBar.value },
++    { "kosmos-sidebar-shell--drag-region": props.dragRegion },
  ]);
  
  watch([width, _hidden], () => {
@@ -138,7 +138,7 @@ index 4adffd9..392be14 100644
 -
  const wrapperClasses = computed(() =>
      [
-         "kepler-sidebar-wrapper",
+         "kosmos-sidebar-wrapper",
 @@ -408,7 +479,10 @@ const wrapperClasses = computed(() =>
    position: absolute;
    inset: 0;
@@ -146,14 +146,14 @@ index 4adffd9..392be14 100644
 -  /* -webkit-app-region: drag; */
 +}
 +
-+.kepler-sidebar-shell--drag-region::before {
++.kosmos-sidebar-shell--drag-region::before {
 +  -webkit-app-region: drag;
  }
  
- .kepler-sidebar-top,
+ .kosmos-sidebar-top,
 
 == dashboard tsc smoke ==
 
 == git status --short target files ==
- M packages/kepler-visuals/components/Sidebar.vue
+ M packages/kosmos-visuals/components/Sidebar.vue
 ?? .agent/tasks/2026-04-17-sidebar-drag-layer/

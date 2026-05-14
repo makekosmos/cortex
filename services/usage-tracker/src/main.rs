@@ -3,8 +3,8 @@
 #[cfg(target_os = "windows")]
 mod windows_capture;
 
-// Phase 4 wired: WS-клиент к Kosmos host + local spool routing.
-mod cosmos_client;
+// Phase 4 wired: WS-клиент к Kepler host + local spool routing.
+mod kepler_client;
 mod spool;
 
 use std::env;
@@ -25,13 +25,13 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use crate::cosmos_client::CosmosClient;
+use crate::kepler_client::KeplerClient;
 use crate::spool::{Spool, SpoolEntry};
 
 // Phase 4 wiring:
-// COSMOS установлен один раз при старте если Kosmos host доступен И env
-// `USAGE_TRACKER_DIRECT` не set. SPOOL буферизует writes при cosmos errors.
-static COSMOS: OnceLock<Arc<CosmosClient>> = OnceLock::new();
+// KEPLER установлен один раз при старте если Kepler host доступен И env
+// `USAGE_TRACKER_DIRECT` не set. SPOOL буферизует writes при kepler errors.
+static KEPLER: OnceLock<Arc<KeplerClient>> = OnceLock::new();
 static SPOOL: OnceLock<Spool> = OnceLock::new();
 
 const FLUSH_INTERVAL: Duration = Duration::from_secs(30);
@@ -150,9 +150,9 @@ fn run() -> Result<(), String> {
         device_name: resolve_device_name(),
     };
 
-    // Phase 4: init cosmos writer (best-effort). При недоступности — fallback
+    // Phase 4: init kepler writer (best-effort). При недоступности — fallback
     // на direct ARK writes (текущее поведение).
-    try_init_cosmos_writer(&identity.device_id);
+    try_init_kepler_writer(&identity.device_id);
 
     let mut current_session: Option<ActiveSession> = None;
     let mut previous_tick = Instant::now();
@@ -431,16 +431,16 @@ fn resolve_device_name() -> String {
         .unwrap_or_else(|| "Windows Device".to_string())
 }
 
-/// Если Kosmos host доступен — отправить операцию через WS. При ошибке —
+/// Если Kepler host доступен — отправить операцию через WS. При ошибке —
 /// положить в spool (вернётся к попытке при следующем flush). Возвращает
-/// `Some(Ok)` если ответ был отправлен (даже через spool), `None` если cosmos
+/// `Some(Ok)` если ответ был отправлен (даже через spool), `None` если kepler
 /// вообще не инициализирован — caller fallback'нёт на direct write.
-fn try_cosmos_write(operation: &str, params: Value) -> Option<Result<(), String>> {
-    let client = COSMOS.get()?;
+fn try_kepler_write(operation: &str, params: Value) -> Option<Result<(), String>> {
+    let client = KEPLER.get()?;
     match client.invoke(operation, params.clone()) {
         Ok(_) => Some(Ok(())),
         Err(e) => {
-            eprintln!("[usage-tracker] cosmos {operation} failed: {e}; spooling");
+            eprintln!("[usage-tracker] kepler {operation} failed: {e}; spooling");
             if let Some(spool) = SPOOL.get() {
                 let dropped = spool.push(SpoolEntry {
                     operation: operation.to_string(),
@@ -464,7 +464,7 @@ fn persist_tracked_app(
     device_id: &str,
 ) -> Result<(), String> {
     if let Some(value) = serde_json::to_value(tracked_app).ok() {
-        if let Some(res) = try_cosmos_write(
+        if let Some(res) = try_kepler_write(
             "upsert_tracked_app",
             json!({ "tracked_app": value, "device_id": device_id }),
         ) {
@@ -481,7 +481,7 @@ fn persist_usage_session(
     device_id: &str,
 ) -> Result<(), String> {
     if let Some(value) = serde_json::to_value(session).ok() {
-        if let Some(res) = try_cosmos_write(
+        if let Some(res) = try_kepler_write(
             "upsert_usage_session",
             json!({ "usage_session": value, "device_id": device_id }),
         ) {
@@ -498,7 +498,7 @@ fn persist_usage_event(
     device_id: &str,
 ) -> Result<(), String> {
     if let Some(value) = serde_json::to_value(event).ok() {
-        if let Some(res) = try_cosmos_write(
+        if let Some(res) = try_kepler_write(
             "upsert_usage_event",
             json!({ "usage_event": value, "device_id": device_id }),
         ) {
@@ -509,43 +509,43 @@ fn persist_usage_event(
     bump_sync_version_vector(conn, &event.id, device_id).map(|_| ())
 }
 
-/// Init COSMOS + SPOOL. Best-effort. При env `USAGE_TRACKER_DIRECT=1` — skip
-/// cosmos, оставляет COSMOS пустым (fallback на direct writes).
-fn try_init_cosmos_writer(device_id: &str) {
+/// Init KEPLER + SPOOL. Best-effort. При env `USAGE_TRACKER_DIRECT=1` — skip
+/// kepler, оставляет KEPLER пустым (fallback на direct writes).
+fn try_init_kepler_writer(device_id: &str) {
     let _ = SPOOL.set(Spool::new());
 
     if env::var("USAGE_TRACKER_DIRECT").map(|v| v == "1").unwrap_or(false) {
         eprintln!("[usage-tracker] USAGE_TRACKER_DIRECT=1 — пишем напрямую в ARK DB");
         return;
     }
-    match cosmos_client::try_read_kosmos_lock() {
+    match kepler_client::try_read_kepler_lock() {
         Ok(lock) => {
             let pid = lock.pid;
             let port = lock.ws_port;
-            match CosmosClient::new(lock, device_id.to_string()) {
+            match KeplerClient::new(lock, device_id.to_string()) {
                 Ok(client) => {
                     eprintln!(
-                        "[usage-tracker] Kosmos host found (pid {pid}, ws_port {port}) — writes go through WS"
+                        "[usage-tracker] Kepler host found (pid {pid}, ws_port {port}) — writes go through WS"
                     );
-                    let _ = COSMOS.set(Arc::new(client));
+                    let _ = KEPLER.set(Arc::new(client));
                 }
                 Err(e) => {
                     eprintln!(
-                        "[usage-tracker] cosmos client init failed: {e}; direct write fallback"
+                        "[usage-tracker] kepler client init failed: {e}; direct write fallback"
                     );
                 }
             }
         }
         Err(e) => {
-            eprintln!("[usage-tracker] kosmos lock-file unavailable ({e}); direct write fallback");
+            eprintln!("[usage-tracker] kepler lock-file unavailable ({e}); direct write fallback");
         }
     }
 }
 
-/// Flush буферизованные writes в Kosmos. Вызывается периодически из run().
+/// Flush буферизованные writes в Kepler. Вызывается периодически из run().
 /// Batched по 50 за раз чтобы не блокировать hot path надолго.
 fn flush_spool_batch() {
-    let client = match COSMOS.get() {
+    let client = match KEPLER.get() {
         Some(c) => c.clone(),
         None => return,
     };
@@ -638,7 +638,7 @@ fn default_ark_db_path() -> Result<PathBuf, String> {
         .or_else(|_| env::var("LOCALAPPDATA").map(PathBuf::from))
         .map_err(|_| "APPDATA or LOCALAPPDATA is required to resolve Ark DB path".to_string())?;
 
-    Ok(app_data.join("Kepler").join("ark.db"))
+    Ok(app_data.join("Kosmos").join("ark.db"))
 }
 
 fn ensure_parent_dir(path: &Path) -> Result<(), String> {

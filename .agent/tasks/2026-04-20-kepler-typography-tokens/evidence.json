@@ -1,15 +1,15 @@
 {
-  "task_id": "2026-04-20-kepler-typography-tokens",
+  "task_id": "2026-04-20-kosmos-typography-tokens",
   "status": "PASS",
-  "summary": "Added shared primary title typography tokens to kepler-visuals and migrated Eden first-level headings to use them.",
+  "summary": "Added shared primary title typography tokens to kosmos-visuals and migrated Eden first-level headings to use them.",
   "acceptance_criteria": [
     {
       "id": "AC1",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/theme/css-variables.css"
+        "packages/kosmos-visuals/theme/css-variables.css"
       ],
-      "notes": "Shared primary title typography variables were added to kepler-visuals."
+      "notes": "Shared primary title typography variables were added to kosmos-visuals."
     },
     {
       "id": "AC2",
@@ -41,8 +41,8 @@
       "id": "AC5",
       "status": "PASS",
       "evidence": [
-        ".agent/tasks/2026-04-20-kepler-typography-tokens/raw/tsc.txt",
-        ".agent/tasks/2026-04-20-kepler-typography-tokens/raw/build.txt"
+        ".agent/tasks/2026-04-20-kosmos-typography-tokens/raw/tsc.txt",
+        ".agent/tasks/2026-04-20-kosmos-typography-tokens/raw/build.txt"
       ],
       "notes": "Typecheck and production build both passed."
     }
@@ -51,12 +51,12 @@
     "typecheck": {
       "command": "bun x tsc --noEmit",
       "status": "PASS",
-      "artifact": ".agent/tasks/2026-04-20-kepler-typography-tokens/raw/tsc.txt"
+      "artifact": ".agent/tasks/2026-04-20-kosmos-typography-tokens/raw/tsc.txt"
     },
     "build": {
       "command": "bun run build",
       "status": "PASS",
-      "artifact": ".agent/tasks/2026-04-20-kepler-typography-tokens/raw/build.txt"
+      "artifact": ".agent/tasks/2026-04-20-kosmos-typography-tokens/raw/build.txt"
     }
   }
 }

@@ -12,9 +12,9 @@
 - Updated the targeted game detail test to assert Russian genre labels, short description, and `year · hours` metadata.
 
 ## Acceptance criteria
-- `AC1` PASS: hero genres are translated to Russian via local mapping in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:45).
-- `AC2` PASS: the hero copy now renders title, genres, short description, and metadata in that order in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:851).
-- `AC3` PASS: the focused game detail test was updated in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/test/game-detail.test.tsx:101).
+- `AC1` PASS: hero genres are translated to Russian via local mapping in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:45).
+- `AC2` PASS: the hero copy now renders title, genres, short description, and metadata in that order in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:851).
+- `AC3` PASS: the focused game detail test was updated in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/test/game-detail.test.tsx:101).
 - `AC4` PASS: `bun run typecheck` and the focused `vitest` run both passed.
 
 ## Verification

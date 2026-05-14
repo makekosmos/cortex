@@ -34,8 +34,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@kepler/ark': path.resolve(__dirname, '../../../packages/kepler-ark/src/index.ts'),
-      '@kepler/visuals': path.resolve(__dirname, '../../../packages/kepler-visuals'),
+      '@kosmos/ark': path.resolve(__dirname, '../../../packages/kosmos-ark/src/index.ts'),
+      '@kosmos/visuals': path.resolve(__dirname, '../../../packages/kosmos-visuals'),
     },
     dedupe: ['vue', 'vue-router'],
   },

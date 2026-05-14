@@ -14,19 +14,19 @@
 ## Acceptance Criteria Evidence
 
 ### AC1 — Структура проекта: PASS
-- `apps/ark-data/app/build.gradle.kts` содержит `applicationId = "com.kepler.ark.data"`, `minSdk = 28`
-- Исходный код в `apps/ark-data/app/src/main/java/com/kepler/ark/data/`
+- `apps/ark-data/app/build.gradle.kts` содержит `applicationId = "com.kosmos.ark.data"`, `minSdk = 28`
+- Исходный код в `apps/ark-data/app/src/main/java/com/kosmos/ark/data/`
 - Собственный `settings.gradle.kts` (`rootProject.name = "ark-data"`, `include(":app")`)
-- Команда: `ls apps/ark-data/app/src/main/java/com/kepler/ark/data/` → `db/ di/ model/ provider/ ArkDataApp.kt`
+- Команда: `ls apps/ark-data/app/src/main/java/com/kosmos/ark/data/` → `db/ di/ model/ provider/ ArkDataApp.kt`
 
 ### AC2 — Headless APK: PASS
 - `AndroidManifest.xml` не содержит ни одного `<activity>`
 - `grep "LAUNCHER" apps/ark-data/app/src/main/AndroidManifest.xml` → 0 совпадений
 
 ### AC3 — ContentProvider зарегистрирован и защищён: PASS
-- `android:authorities="com.kepler.ark.data"` и `android:exported="true"` — подтверждено в манифесте
+- `android:authorities="com.kosmos.ark.data"` и `android:exported="true"` — подтверждено в манифесте
 - `android:protectionLevel="signature"` — подтверждено
-- `readPermission` и `writePermission` = `com.kepler.ark.data.READ_WRITE`
+- `readPermission` и `writePermission` = `com.kosmos.ark.data.READ_WRITE`
 
 ### AC4 — Room DB: todos entities: PASS
 - `ArkDatabase` содержит `TodoItem`, `ChecklistItem`, `Project`, `Area`, `Tag`, `Heading`, `TodoTagCrossRef`
@@ -80,7 +80,7 @@ BUILD SUCCESSFUL in 32s
 
 ```bash
 # V1: structure
-ls apps/ark-data/app/src/main/java/com/kepler/ark/data/
+ls apps/ark-data/app/src/main/java/com/kosmos/ark/data/
 
 # V2: no launcher
 grep "LAUNCHER" apps/ark-data/app/src/main/AndroidManifest.xml
@@ -92,7 +92,7 @@ grep "authorities" apps/ark-data/app/src/main/AndroidManifest.xml
 grep "protectionLevel" apps/ark-data/app/src/main/AndroidManifest.xml
 
 # V5: entities
-grep "entities" apps/ark-data/app/src/main/java/com/kepler/ark/data/db/ArkDatabase.kt
+grep "entities" apps/ark-data/app/src/main/java/com/kosmos/ark/data/db/ArkDatabase.kt
 
 # V6: URI patterns
 grep -c "addURI" apps/ark-data/.../ArkDataProvider.kt  # → 16

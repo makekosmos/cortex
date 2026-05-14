@@ -29,7 +29,7 @@
       "status": "PASS"
     },
     {
-      "command": "bun run --cwd packages/kepler-ark typecheck",
+      "command": "bun run --cwd packages/kosmos-ark typecheck",
       "status": "PASS"
     },
     {

@@ -1,12 +1,12 @@
-# Task Spec: Restore ResizableSidebar behavior in `@kepler/visuals` `Sidebar`
+# Task Spec: Restore ResizableSidebar behavior in `@kosmos/visuals` `Sidebar`
 
 ## Original Task
 
-Изучи историю гита, раньше была приколюха `ResizableSidebar`, вот я хочу ввести его функционал в сайдбар сейчас `packages/kepler-visuals` sidebar.
+Изучи историю гита, раньше была приколюха `ResizableSidebar`, вот я хочу ввести его функционал в сайдбар сейчас `packages/kosmos-visuals` sidebar.
 
 ## Scope
 
-Restore the `ResizableSidebar` behavior that was lost when resize logic moved into [`packages/kepler-visuals/components/Sidebar.vue`](/D:/Personal/Hobby/Coding/kepler/packages/kepler-visuals/components/Sidebar.vue), while keeping the current structured `Sidebar` API.
+Restore the `ResizableSidebar` behavior that was lost when resize logic moved into [`packages/kosmos-visuals/components/Sidebar.vue`](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/components/Sidebar.vue), while keeping the current structured `Sidebar` API.
 
 ## Assumptions
 
@@ -15,7 +15,7 @@ Restore the `ResizableSidebar` behavior that was lost when resize logic moved in
 
 ## Constraints
 
-- Make the smallest safe diff in `packages/kepler-visuals`.
+- Make the smallest safe diff in `packages/kosmos-visuals`.
 - Preserve the current `Sidebar` props/events and existing consumers in `apps/dashboard`, `apps/delphi`, and `apps/eden`.
 - Follow Vue 3 Composition API patterns already used in the package.
 
@@ -39,5 +39,5 @@ Restore the `ResizableSidebar` behavior that was lost when resize logic moved in
 ## Verification Plan
 
 1. Inspect git history for the removed `ResizableSidebar.vue` contract and compare it with current `Sidebar.vue`.
-2. Run focused formatting/checks for `@kepler/visuals`.
+2. Run focused formatting/checks for `@kosmos/visuals`.
 3. Run the dashboard sidebar verification that exercises the resize handle against the current app.

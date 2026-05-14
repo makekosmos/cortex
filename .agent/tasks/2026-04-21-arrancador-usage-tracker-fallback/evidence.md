@@ -10,7 +10,7 @@ PASS
   - `apps/arrancador/electron/main/services/ark-usage.ts`
 - Arrancador now resolves an effective usage-tracker DB by:
   - preferring the selected-space Ark DB when it already has `usage_sessions`
-  - falling back to the root `Roaming\\Kepler\\ark.db` when the selected-space DB has no tracker rows
+  - falling back to the root `Roaming\\Kosmos\\ark.db` when the selected-space DB has no tracker rows
 - Selected-space game object sync remains unchanged:
   - `apps/arrancador/electron/main/backend.ts`
   - `apps/arrancador/electron/main/services/ark-game-objects.ts`
@@ -24,10 +24,10 @@ PASS
 - Shared selected space:
   - `spaceId = f028287f78de2d7e`
 - Selected-space Ark DB:
-  - `C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\spaces\\f028287f78de2d7e\\ark.db`
+  - `C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\spaces\\f028287f78de2d7e\\ark.db`
   - `usage_sessions = 0`
 - Root Ark DB:
-  - `C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\ark.db`
+  - `C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\ark.db`
   - `usage_sessions = 1609`
   - contains tracked app and usage rows for `VALORANT`
 - Arrancador library entry for `VALORANT` was present, but its stored `last_played` stopped at `2026-04-16T19:54:26.571592100+00:00`, which matches the missing fallback behavior.

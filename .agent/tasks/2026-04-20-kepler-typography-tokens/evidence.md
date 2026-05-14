@@ -1,15 +1,15 @@
-# Evidence - Kepler shared typography tokens
+# Evidence - Kosmos shared typography tokens
 
 ## Summary
-A shared primary title typography token set was added to `kepler-visuals`, and Eden first-level headings were migrated to use it instead of local hardcoded values.
+A shared primary title typography token set was added to `kosmos-visuals`, and Eden first-level headings were migrated to use it instead of local hardcoded values.
 
 ## Code Evidence
-- `packages/kepler-visuals/theme/css-variables.css`
+- `packages/kosmos-visuals/theme/css-variables.css`
   - introduced:
-    - `--kepler-type-title-1-size`
-    - `--kepler-type-title-1-line-height`
-    - `--kepler-type-title-1-letter-spacing`
-    - `--kepler-type-title-1-weight`
+    - `--kosmos-type-title-1-size`
+    - `--kosmos-type-title-1-line-height`
+    - `--kosmos-type-title-1-letter-spacing`
+    - `--kosmos-type-title-1-weight`
 - `apps/eden/ts/src/Editor.css`
   - note/object title input now reads the shared token
 - `apps/eden/ts/src/components/settings/SettingsPage.css`
@@ -26,7 +26,7 @@ A shared primary title typography token set was added to `kepler-visuals`, and E
 ### AC1
 PASS
 
-Shared primary title typography token set exists in `kepler-visuals`.
+Shared primary title typography token set exists in `kosmos-visuals`.
 
 ### AC2
 PASS

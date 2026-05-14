@@ -1,6 +1,6 @@
-# Kepler — llms.txt
+# Kosmos — llms.txt
 
-Полный inline-текст правил и контекста репозитория Kepler.
+Полный inline-текст правил и контекста репозитория Kosmos.
 Источник правды — docs-site/. Этот файл генерируется скриптом scripts/sync-agents-docs.mjs.
 
 Структура: каждый раздел — отдельный концепт или область. Читай по порядку для полной картины.
@@ -37,13 +37,13 @@
 Эта страница заменяет тонкие `AGENTS.md` / `CLAUDE.md` в корне. Полный контекст репо — в этом сайте документации. Все правила в одном месте.
 :::
 
-Ты работаешь в монорепо **Kepler**. Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](docs-site/concepts/proof-loop.md).
+Ты работаешь в монорепо **Kosmos**. Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](docs-site/concepts/proof-loop.md).
 
 ## За 30 секунд
 
-- **Kepler** = монорепо для личного софта. Bun workspaces.
+- **Kosmos** = монорепо для личного софта. Bun workspaces.
 - **ARK** = общий Rust+SQLite рантайм (`packages/ark-core`, бинарь `ark-core-rpc`).
-- **Apps** говорят с ARK **только** через `@kepler/ark` или `ark_core::db` (Rust direct writers).
+- **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
 - **Прямые SQL writes в ARK** из app services — **запрещены**.
 - **Тесты** — только на изолированных БД.
 - **Substantial-правки** — через `.agent/tasks/<DATE>-<slug>/` proof loop.
@@ -109,15 +109,15 @@ bun run ark:smoke
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |
-| **@kepler/ark** | `packages/kepler-ark` | TS SDK |
+| **@kosmos/ark** | `packages/kosmos-ark` | TS SDK |
 | **ark-relay-server** | `services/ark-relay-server` | WebSocket relay (опционально, для NAT) |
-| **kepler-visuals** | `packages/kepler-visuals` | UI токены, тема, компоненты |
+| **kosmos-visuals** | `packages/kosmos-visuals` | UI токены, тема, компоненты |
 | **usage-tracker** | `services/usage-tracker` | Rust фон-сервис, пишет usage в ARK |
 
 ## Что считается substantial (нужен proof loop)
 
 - Новая фича приложения.
-- Новый ARK endpoint в `ark-core-rpc` или метод в `@kepler/ark`.
+- Новый ARK endpoint в `ark-core-rpc` или метод в `@kosmos/ark`.
 - Изменение схемы SQLite.
 - Изменение sync-протокола.
 - Изменение write-boundary (правил доступа к данным).
@@ -153,7 +153,7 @@ bun run ark:smoke
 flowchart TD
   R["Renderer"]
   M["Electron main"]
-  SDK["@kepler/ark"]
+  SDK["@kosmos/ark"]
   RPC["ark-core-rpc"]
 
   R -- "preload API" --> M
@@ -168,8 +168,8 @@ flowchart TD
 ```
 
 - `Renderer` — Vue 3 Vapor в Electron-приложениях. Никакого SQLite, всё через preload IPC.
-- `Electron main` — оркестрация, app-сервисы, единственный слой, который вызывает `@kepler/ark`.
-- `@kepler/ark` — TS SDK к sidecar'у.
+- `Electron main` — оркестрация, app-сервисы, единственный слой, который вызывает `@kosmos/ark`.
+- `@kosmos/ark` — TS SDK к sidecar'у.
 - `ark-core-rpc` — Rust runtime: SQLite, миграции, p2p sync.
 
 ## Слои
@@ -178,20 +178,20 @@ flowchart TD
 
 Vue 3.6 Vapor в Eden, Dashboard, Arrancador. Никогда не пишет напрямую в SQLite. Общается с Electron main через preload API.
 
-Использует общие UI-примитивы из `@kepler/visuals`: `Sidebar`, `Titlebar`, `TitlebarHistoryControls`, `DesktopChrome`, `DesktopContentSurface`, `CommandPalette`, `StatusDot`, `TodoRow`, `GamePosterCard`, `QuickEntryPanel`, `CustomCaret`.
+Использует общие UI-примитивы из `@kosmos/visuals`: `Sidebar`, `Titlebar`, `TitlebarHistoryControls`, `DesktopChrome`, `DesktopContentSurface`, `CommandPalette`, `StatusDot`, `TodoRow`, `GamePosterCard`, `QuickEntryPanel`, `CustomCaret`.
 
 ### Electron main
 
-Оркестрирует приложение, держит IPC, владеет sidecar-процессом. **Единственный** слой, который вызывает `@kepler/ark`. Renderer его не видит — он работает через `window.<appName>Api` (`window.dashboardApi`, `window.arrancador`, и т.п.).
+Оркестрирует приложение, держит IPC, владеет sidecar-процессом. **Единственный** слой, который вызывает `@kosmos/ark`. Renderer его не видит — он работает через `window.<appName>Api` (`window.dashboardApi`, `window.arrancador`, и т.п.).
 
-### @kepler/ark
+### @kosmos/ark
 
 Канонический TS-клиент к `ark-core-rpc`. Два режима работы:
 
 - **self-managed sidecar** — `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`. Используется когда приложение единственный потребитель.
 - **injected sidecar** — sidecar уже владеется другим слоем (например, `apps/delphi/ts/electron/sidecar.ts`), `ArkClient` получает `requestFn` / `onEventFn`. Используется когда внутри Electron-приложения несколько сервисов делят один sidecar.
 
-См. [@kepler/ark](docs-site/packages/kepler-ark.md).
+См. [@kosmos/ark](docs-site/packages/kosmos-ark.md).
 
 ### ark-core-rpc (Rust)
 
@@ -214,7 +214,7 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador. Никогда не пишет н�
 
 ### SQLite
 
-Внутри одна база на пространство данных (`space`), путь типа `%APPDATA%\Kepler\spaces\<spaceId>\ark.db` (или `%APPDATA%\Kepler\ark.db` для usage-tracker).
+Внутри одна база на пространство данных (`space`), путь типа `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db` (или `%APPDATA%\Kosmos\ark.db` для usage-tracker).
 
 Схема — additive: `init_schema` мигрирует существующие БД на месте через `CREATE TABLE IF NOT EXISTS` без перезаписи файла.
 
@@ -232,7 +232,7 @@ ARK владеет схемой, объектами, usage-данными, sync-
 
 ### 3. Narrow contract
 
-Приложения говорят с ARK **только** через `@kepler/ark` (TS) или `ark_core::db` (Rust-writers). Прямые SQL writes в app services запрещены. См. [Граница записи](docs-site/concepts/write-boundary.md).
+Приложения говорят с ARK **только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust-writers). Прямые SQL writes в app services запрещены. См. [Граница записи](docs-site/concepts/write-boundary.md).
 
 ### 4. Auditable changes
 
@@ -247,9 +247,9 @@ Substantial-правки проходят через proof loop с явными 
 | Кусок | Где | Тип | Роль |
 |---|---|---|---|
 | ark-core | `packages/ark-core/rust` | Rust crate + бинарь | runtime данных |
-| @kepler/ark | `packages/kepler-ark` | TS SDK | клиент к sidecar |
+| @kosmos/ark | `packages/kosmos-ark` | TS SDK | клиент к sidecar |
 | ark-relay-server | `services/ark-relay-server` | Rust server | WebSocket relay (NAT-обход p2p sync) |
-| kepler-visuals | `packages/kepler-visuals` | TS + Vue | дизайн-система |
+| kosmos-visuals | `packages/kosmos-visuals` | TS + Vue | дизайн-система |
 | Electron apps | `apps/{eden,delphi,arrancador,dashboard}` | TS + Electron | продуктовые оболочки |
 | ark-service | `apps/ark-service` | Kotlin + Room | Android ContentProvider, держит данные Android Delphi (`apps/delphi/kotlin`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
 | usage-tracker | `services/usage-tracker` | Rust | захват usage data → ARK |
@@ -464,7 +464,7 @@ UsageSession { id, tracked_app_id, started_at, ended_at, duration_ms, ... }
 
 `lan_sync.version_vector` — это запись в `sync_kv` под фиксированным ключом, обновляется на каждой записи в синхронизируемую сущность.
 
-## TypeScript API через `@kepler/ark`
+## TypeScript API через `@kosmos/ark`
 
 ```ts
 // CRUD объектов
@@ -539,9 +539,9 @@ ARK предоставляет специализированные query-опе
 ARK поддерживает два транспорта синхронизации поверх одного протокола: **LAN** (peer-to-peer в локальной сети) и **relay** (через WebSocket-сервер, нужен для прохождения NAT).
 
 ::: info Sync = opt-in
-Kepler-приложения по умолчанию **не запускают sync**. Sync активируется только когда установлен [Kosmos host](../apps/kosmos.md) — он сам вызывает `start_sync` при старте. Apps в standalone mode (без Kosmos) пишут в локальную DB без репликации между устройствами.
+Kosmos-приложения по умолчанию **не запускают sync**. Sync активируется только когда установлен [Kepler host](../apps/kepler.md) — он сам вызывает `start_sync` при старте. Apps в standalone mode (без Kepler) пишут в локальную DB без репликации между устройствами.
 
-Для explicit standalone sync без Kosmos — можно вызвать `ArkClient.startSyncLegacy()` явно (rare use case, например для тестов).
+Для explicit standalone sync без Kepler — можно вызвать `ArkClient.startSyncLegacy()` явно (rare use case, например для тестов).
 :::
 
 ## Запуск sync
@@ -601,7 +601,7 @@ Self-peer фильтрация и фильтрация routable addresses — **
 Используется когда пиров разделяет NAT или они в разных сетях.
 
 ```ts
-// в @kepler/ark
+// в @kosmos/ark
 const ark = new ArkClient({
   spaceId: 'default',
   deviceId: 'device-1',
@@ -737,7 +737,7 @@ Apply-ошибки на стороне приёма возвращаются к�
 ## Правило
 
 ::: danger Жёстко
-**Все записи** в ARK-данные идут через `@kepler/ark` (TS) или `ark_core::db` хелперы (Rust). Прямые SQL writes в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events` или `sync_kv` из app services **запрещены**.
+**Все записи** в ARK-данные идут через `@kosmos/ark` (TS) или `ark_core::db` хелперы (Rust). Прямые SQL writes в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events` или `sync_kv` из app services **запрещены**.
 :::
 
 Это политика репо, закреплена в `docs/ARK-READONLY-SQL-BOUNDARY.md` и в `AGENTS.md` всех приложений.
@@ -758,8 +758,8 @@ Apply-ошибки на стороне приёма возвращаются к�
 | Кто | Что разрешено |
 |---|---|
 | Electron renderer | Только preload API (`window.<app>Api`). Никакого SQLite вообще. |
-| Electron main (app services) | `@kepler/ark`. Read-only SQLite — только как fallback, явно отделённый от writes. |
-| Rust app code | `@kepler/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
+| Electron main (app services) | `@kosmos/ark`. Read-only SQLite — только как fallback, явно отделённый от writes. |
+| Rust app code | `@kosmos/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
 | `services/usage-tracker` (Rust) | Прямые писи через `ark_core::db` **с** обновлением `version_vector`. |
 | Migration scripts | Могут читать **источник** напрямую, но writes в target ARK идут через ARK RPC/SDK. |
 | Dashboard | Read-only SQLite инспекция. **Никаких** writes. |
@@ -768,7 +768,7 @@ Apply-ошибки на стороне приёма возвращаются к�
 flowchart TD
     R["Renderer"]
     M["Electron main"]
-    SDK["@kepler/ark"]
+    SDK["@kosmos/ark"]
     CORE["ark_core::db"]
     UT["usage-tracker"]
     DB[("ARK SQLite")]
@@ -791,7 +791,7 @@ flowchart TD
     linkStyle 5,6 stroke:#a05050,stroke-width:2px,stroke-dasharray:4 3
 ```
 
-- `M` (Electron main, app services) → `SDK` (`@kepler/ark`) → `CORE` (`ark_core::db` через `ark-core-rpc`) → `DB` (`ARK SQLite`: `objects`, `usage_*`, `sync_kv` …).
+- `M` (Electron main, app services) → `SDK` (`@kosmos/ark`) → `CORE` (`ark_core::db` через `ark-core-rpc`) → `DB` (`ARK SQLite`: `objects`, `usage_*`, `sync_kv` …).
 - `UT` (`usage-tracker`, Rust) — единственный, кому можно писать напрямую в `ark_core::db`, и **только** с вызовом `bump_sync_version_vector` (на схеме `bump VV`) после каждой записи в синхронизируемую таблицу.
 - Пунктир с ❌ — то, что **запрещено**: и renderer, и Electron main не имеют права открывать SQLite напрямую.
 
@@ -816,7 +816,7 @@ db.prepare("DELETE FROM tracked_apps WHERE id = ?").run(...);
 ## Как делать правильно
 
 ```ts
-import { ArkClient } from '@kepler/ark';
+import { ArkClient } from '@kosmos/ark';
 
 const ark = new ArkClient({ /* ... */ });
 await ark.start();
@@ -882,7 +882,7 @@ bun run ark:guard:writes
 
 В репо две независимых политики:
 
-1. **Кто может писать в ARK?** Жёстко — только `@kepler/ark` или `ark_core::db`. См. [Граница записи](docs-site/concepts/write-boundary.md).
+1. **Кто может писать в ARK?** Жёстко — только `@kosmos/ark` или `ark_core::db`. См. [Граница записи](docs-site/concepts/write-boundary.md).
 2. **Кто может читать ARK напрямую?** Свободнее. Это страница про второй вопрос.
 
 ## Кому разрешено читать напрямую
@@ -914,7 +914,7 @@ Dashboard — буквально read-only ARK inspector. Это часть ег
 - **Нельзя** делать `INSERT` / `UPDATE` / `DELETE`.
 - Smoke использует `apps/dashboard/.e2e/smoke-dashboard.db`, никогда — user DB.
 
-Когда возможно, Dashboard должен **сначала** пробовать `@kepler/ark` analytics-endpoints:
+Когда возможно, Dashboard должен **сначала** пробовать `@kosmos/ark` analytics-endpoints:
 
 - `list_objects_by_type`
 - `get_objects_by_ids`
@@ -926,7 +926,7 @@ Read-only SQLite — fallback, когда подходящего endpoint нет
 
 ## Arrancador — fallback
 
-Arrancador предпочитает `@kepler/ark`:
+Arrancador предпочитает `@kosmos/ark`:
 
 - hydration `game_obj` объектов
 - usage queries
@@ -949,7 +949,7 @@ Read-only SQLite используется **только** когда `ark-core-
 ## Что ещё нужно
 
 - App-specific **bulk analytics queries**, чтобы не грузить полный usage snapshot ради одной агрегации.
-- Возможно, специализированный read-only режим `@kepler/ark` для inspector-приложений.
+- Возможно, специализированный read-only режим `@kosmos/ark` для inspector-приложений.
 
 
 ## 6. Proof loop
@@ -1018,7 +1018,7 @@ flowchart LR
 
 Пример AC из реальной задачи:
 
-> **AC1.** Arrancador ARK write-path audit passes: любые writes в ARK `objects`, `object_types`, `object_links`, или usage sync tables идут через `@kepler/ark` APIs или Rust `ark_core` helpers, не через raw `better-sqlite3` SQL в app services.
+> **AC1.** Arrancador ARK write-path audit passes: любые writes в ARK `objects`, `object_types`, `object_links`, или usage sync tables идут через `@kosmos/ark` APIs или Rust `ark_core` helpers, не через raw `better-sqlite3` SQL в app services.
 
 Когда `spec.md` готов — он **не редактируется** в процессе реализации. Если что-то меняется по дороге — это либо новая задача, либо отдельное решение в `problems.md` с обоснованием.
 
@@ -1105,7 +1105,7 @@ flowchart LR
 - Полностью удалить данные (тест очищает БД перед прогоном).
 - Засорить sync: тестовые версии записей улетят на пиры.
 
-Это **необратимо**. Один прогон Playwright против `%APPDATA%\Kepler\ark.db` может убить накопленные за месяцы записи.
+Это **необратимо**. Один прогон Playwright против `%APPDATA%\Kosmos\ark.db` может убить накопленные за месяцы записи.
 
 ## Где хранить тестовые БД
 
@@ -1127,16 +1127,16 @@ flowchart LR
 ### Через env
 
 ```powershell
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\2026-04-26-ark-app-completion\smoke"
-New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
-$env:ARK_DB_PATH = "$env:KEPLER_SMOKE_ROOT\usage-tracker\ark.db"
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\2026-04-26-ark-app-completion\smoke"
+New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
+$env:ARK_DB_PATH = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
 ```
 
 ### Через CLI-флаг
 
 ```powershell
 node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
-  --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+  --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 ```
 
 ### В Playwright globalSetup
@@ -1156,7 +1156,7 @@ bun run --cwd apps/arrancador smoke:packaged
 ## Что точно нельзя
 
 - ❌ Запускать миграцию/backfill против реальной ARK DB ради «проверить, как сработает».
-- ❌ Запускать Playwright без `KEPLER_SMOKE_ROOT` или эквивалентного override.
+- ❌ Запускать Playwright без `KOSMOS_SMOKE_ROOT` или эквивалентного override.
 - ❌ Делать тестовый Vitest, который дефолтится в `app.getPath('userData')`.
 - ❌ Использовать `:memory:` как «достаточную изоляцию» — некоторые миграции не воспроизводятся в in-memory; используй файловую БД во временной папке.
 
@@ -1199,7 +1199,7 @@ bun run --cwd apps/arrancador smoke:packaged
 
 ## Тесты
 
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kepler\ark.db`) в тестах.
+- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
 - ❌ Запуск Playwright против user vault Eden.
@@ -1218,7 +1218,7 @@ bun run --cwd apps/arrancador smoke:packaged
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -1249,7 +1249,7 @@ bun run --cwd apps/arrancador smoke:packaged
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kepler/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kepler-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -1270,7 +1270,7 @@ bun run --cwd apps/arrancador smoke:packaged
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -1311,12 +1311,12 @@ bun run ark:smoke
 - [ ] Если менял sync — добавлены или обновлены тесты миграции/репликации.
 - [ ] Если менял wire-протокол — остался `snake_case`.
 - [ ] Self-peer filtering и routable-address filtering не ослаблены.
-- [ ] `bun run --cwd packages/kepler-ark typecheck` — зелёный (если правил публичные типы).
+- [ ] `bun run --cwd packages/kosmos-ark typecheck` — зелёный (если правил публичные типы).
 
-## Я правил `@kepler/ark` (`packages/kepler-ark`)
+## Я правил `@kosmos/ark` (`packages/kosmos-ark`)
 
-- [ ] `bun run --cwd packages/kepler-ark typecheck` — зелёный.
-- [ ] `bun run --cwd packages/kepler-ark build` — собирается.
+- [ ] `bun run --cwd packages/kosmos-ark typecheck` — зелёный.
+- [ ] `bun run --cwd packages/kosmos-ark build` — собирается.
 - [ ] Если добавил новый метод — он реальный RPC к sidecar, не SDK-фильтрация.
 - [ ] Self-managed и injected режимы оба работают, request id есть только в self-managed.
 
@@ -1328,7 +1328,7 @@ bun run ark:smoke
 - [ ] `bun x tsc --noEmit` (в `apps/eden/ts`) — зелёный.
 - [ ] Не возвращён ripgrep, поиск через Heart/Tantivy / ARK FTS.
 - [ ] Если трогал `main/store.ts` — hardening для `save/move/delete` не сломан.
-- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kepler/visuals`. Никаких ручных `--titlebar-height` хаков.
+- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kosmos/visuals`. Никаких ручных `--titlebar-height` хаков.
 - [ ] Если трогал тесты — изолированная БД, не user vault.
 
 ## Я правил Delphi (`apps/delphi/ts`)
@@ -1348,7 +1348,7 @@ bun run ark:smoke
 - [ ] `bun run --cwd apps/arrancador smoke:packaged` — зелёный (если правил packaging / Electron main).
 - [ ] Не добавлен in-process tracker / window polling / app-owned usage SQLite.
 - [ ] Не добавлены Tauri или React зависимости.
-- [ ] ARK writes идут через `@kepler/ark`.
+- [ ] ARK writes идут через `@kosmos/ark`.
 - [ ] Read-only SQLite — только fallback, отделён от write paths.
 
 ## Я правил Dashboard (`apps/dashboard`)
@@ -1359,18 +1359,18 @@ bun run ark:smoke
 - [ ] Renderer не открывает SQLite напрямую.
 - [ ] ARK queries только в `electron/services/analytics.ts`.
 - [ ] Никаких writes в ARK таблицы.
-- [ ] `@kepler/visuals` через import/alias, не скопирован.
+- [ ] `@kosmos/visuals` через import/alias, не скопирован.
 
 ## Я правил usage-tracker (`services/usage-tracker`)
 
 - [ ] `cargo test --manifest-path services\usage-tracker\Cargo.toml` — зелёный.
 - [ ] Прямые ARK writes используют `ark_core::db` хелперы.
 - [ ] `lan_sync.version_vector` обновляется после прямых писей.
-- [ ] Default DB path остался `%APPDATA%\Kepler\ark.db`.
+- [ ] Default DB path остался `%APPDATA%\Kosmos\ark.db`.
 - [ ] Тесты переопределяют DB path в `.tmp` / `.e2e` / OS temp.
 - [ ] Tracker остаётся user-level, не Windows Service.
 
-## Я правил `kepler-visuals` (`packages/kepler-visuals`)
+## Я правил `kosmos-visuals` (`packages/kosmos-visuals`)
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).
 - [ ] Если меняешь CSS-переменные в `theme/css-variables.css` — сразу отрази в `docs-site/.vitepress/theme/custom.css`.
@@ -1471,7 +1471,7 @@ AC3. <…>
 Не в задаче:
 
 - Покрытие смежных приложений.
-- Изменения в ARK runtime / @kepler/ark API.
+- Изменения в ARK runtime / @kosmos/ark API.
 
 ## Acceptance Criteria
 
@@ -1503,7 +1503,7 @@ AC5. `bun run ark:guard:writes` — зелёный (никаких прямых 
 - `packages/ark-core/rust/src/main.rs` — регистрация RPC operation `<snake_case_name>`.
 - `packages/ark-core/rust/src/types.rs` — request / response типы.
 - Rust unit test для агрегатора.
-- `packages/kepler-ark/src/ark-client.ts` — обёртка `ark.<group>.<methodName>`.
+- `packages/kosmos-ark/src/ark-client.ts` — обёртка `ark.<group>.<methodName>`.
 - TS тип для request / response.
 
 Не в задаче:
@@ -1515,8 +1515,8 @@ AC5. `bun run ark:guard:writes` — зелёный (никаких прямых 
 
 AC1. `cargo test --manifest-path packages\ark-core\rust\Cargo.toml` — зелёный, новый тест есть.
 AC2. `cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc` — собирается.
-AC3. `bun run --cwd packages/kepler-ark typecheck` — зелёный, новый метод типизирован.
-AC4. `bun run --cwd packages/kepler-ark build` — собирается.
+AC3. `bun run --cwd packages/kosmos-ark typecheck` — зелёный, новый метод типизирован.
+AC4. `bun run --cwd packages/kosmos-ark build` — собирается.
 AC5. Wire-формат остался `snake_case`. Self-peer / routable filtering не тронуты.
 AC6. Schema-добавления (если были) — additive.
 
@@ -1610,7 +1610,7 @@ AC4. `bun run --cwd <app> build` — собирается.
 # Поддержка документации в актуальном состоянии
 
 ::: danger Ты — агент, читающий это
-Эта страница — **обязательный** контекст. Документация Kepler сейчас — единственный источник правды для людей и агентов. Если она устарела, ты как агент примешь неверные решения и сломаешь ожидания пользователя. Перед закрытием **любой** substantial-задачи пройди раздел [«Что проверить»](#что-проверить).
+Эта страница — **обязательный** контекст. Документация Kosmos сейчас — единственный источник правды для людей и агентов. Если она устарела, ты как агент примешь неверные решения и сломаешь ожидания пользователя. Перед закрытием **любой** substantial-задачи пройди раздел [«Что проверить»](#что-проверить).
 :::
 
 ## Базовый принцип
@@ -1627,7 +1627,7 @@ AC4. `bun run --cwd <app> build` — собирается.
 |---|---|
 | Добавил/убрал команду в `package.json` | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md` |
 | Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md` |
-| Добавил/изменил метод в `@kepler/ark` | `docs-site/packages/kepler-ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
+| Добавил/изменил метод в `@kosmos/ark` | `docs-site/packages/kosmos-ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
 | Изменил структуру папок приложения | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md` |
 | Удалил/перенёс файл, упомянутый в доке | grep по `docs-site/` на имя файла → обновить или удалить упоминание |
 | Изменил sync-протокол / HLC / relay | `docs-site/concepts/sync.md` |
@@ -1635,7 +1635,7 @@ AC4. `bun run --cwd <app> build` — собирается.
 | Добавил smoke-команду | `docs-site/reference/smoke-matrix.md` |
 | Изменил правило/запрет | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md` |
 | Принял архитектурное решение | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md` |
-| Изменил дизайн-токены `kepler-visuals` | `docs-site/packages/kepler-visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
+| Изменил дизайн-токены `kosmos-visuals` | `docs-site/packages/kosmos-visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
 | Создал/убрал `object_type` | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
 | Запланировал фичу / нашёл баг приложения | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap)) |
 
@@ -1659,7 +1659,7 @@ AC4. `bun run --cwd <app> build` — собирается.
 
 - [ ] Я перечитал `docs-site/apps/<которые трогал>.md` — там нет устаревших фактов?
 - [ ] Если добавил/убрал команду — отразил в `docs-site/reference/commands.md`?
-- [ ] Если изменил публичный API (ARK endpoint, `@kepler/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
+- [ ] Если изменил публичный API (ARK endpoint, `@kosmos/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
 - [ ] Если ввёл новое архитектурное решение — есть ADR в `docs/` и ссылка в `docs-site/reference/decisions.md`?
 - [ ] `bun run docs:sync` прошёл без ошибок.
 - [ ] `bun run docs:check` зелёный (нет stale-references).
@@ -1765,7 +1765,7 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 ## 1. Граница записи в ARK
 
 ::: danger
-- Все ARK writes через `@kepler/ark` (TS) или `ark_core::db` (Rust).
+- Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
 - **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
 - Dashboard — read-only.
 - Перед PR в data services: `bun run ark:guard:writes`.
@@ -1818,11 +1818,11 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 7. UI и Visuals
 
-- Используй `@kepler/visuals` для shared chrome / сайдбара / titlebar.
+- Используй `@kosmos/visuals` для shared chrome / сайдбара / titlebar.
 - **Не копируй** shared компоненты внутрь приложения.
 - Не возвращай ручные titlebar-offset / safe-area хаки — есть `DesktopChrome` / `DesktopContentSurface`.
 
-См. [kepler-visuals](docs-site/packages/kepler-visuals.md).
+См. [kosmos-visuals](docs-site/packages/kosmos-visuals.md).
 
 ## 8. Запреты per-app
 
@@ -1863,8 +1863,8 @@ bun run ark:smoke
 Перед task-локальными прогонами зафиксируй корень:
 
 ```powershell
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
-New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
+New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 ```
 
 ## Core
@@ -1872,7 +1872,7 @@ New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
 ```powershell
 cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 ```
 
 ## Usage tracker
@@ -1884,17 +1884,17 @@ cargo test --manifest-path services\usage-tracker\Cargo.toml
 Для ручных smoke прогонов передавай явный path:
 
 ```powershell
-$env:ARK_DB_PATH = "$env:KEPLER_SMOKE_ROOT\usage-tracker\ark.db"
+$env:ARK_DB_PATH = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
 ```
 
 ## Dashboard
 
 ```powershell
 node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
-  --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+  --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 
 node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts `
-  --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+  --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 
 bun run --cwd apps/dashboard test:e2e:smoke
 ```
@@ -1944,7 +1944,7 @@ bun run ark:guard:writes
 
 **ADR** (Architecture Decision Record) — документированное архитектурное решение. См. [Журнал решений](docs-site/reference/decisions.md).
 
-**ARK** — local-first data runtime Kepler. Rust + SQLite + sync. См. [ark-core](docs-site/packages/ark-core.md).
+**ARK** — local-first data runtime Kosmos. Rust + SQLite + sync. См. [ark-core](docs-site/packages/ark-core.md).
 
 **`ark-core-rpc`** — канонический бинарь sidecar ARK runtime. Принимает JSON-RPC по stdin/stdout.
 
@@ -1980,13 +1980,13 @@ bun run ark:guard:writes
 
 ## I
 
-**Injected sidecar** — режим `@kepler/ark`, когда sidecar уже владеется другим слоем, и SDK получает `requestFn` / `onEventFn`. См. [@kepler/ark](docs-site/packages/kepler-ark.md).
+**Injected sidecar** — режим `@kosmos/ark`, когда sidecar уже владеется другим слоем, и SDK получает `requestFn` / `onEventFn`. См. [@kosmos/ark](docs-site/packages/kosmos-ark.md).
 
 ## K
 
-**`@kepler/ark`** — канонический TS SDK для ARK runtime.
+**`@kosmos/ark`** — канонический TS SDK для ARK runtime.
 
-**`@kepler/visuals`** — общая UI-система (токены, тема, компоненты). См. [kepler-visuals](docs-site/packages/kepler-visuals.md).
+**`@kosmos/visuals`** — общая UI-система (токены, тема, компоненты). См. [kosmos-visuals](docs-site/packages/kosmos-visuals.md).
 
 ## L
 
@@ -2020,13 +2020,13 @@ bun run ark:guard:writes
 
 ## S
 
-**Self-managed sidecar** — режим `@kepler/ark`, когда `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`.
+**Self-managed sidecar** — режим `@kosmos/ark`, когда `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`.
 
 **Sidecar** — отдельный процесс рядом с приложением. Примеры: `ark-core-rpc` (для всех Electron apps), Eden Heart (для Eden).
 
-**Space** — отдельное пространство данных ARK. Разные spaces — разные SQLite-БД (`%APPDATA%\Kepler\spaces\<spaceId>\ark.db`).
+**Space** — отдельное пространство данных ARK. Разные spaces — разные SQLite-БД (`%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`).
 
-**Squircle** — закруглённый прямоугольник с переменной кривизной угла. Эстетика kepler-visuals.
+**Squircle** — закруглённый прямоугольник с переменной кривизной угла. Эстетика kosmos-visuals.
 
 **Sync** — синхронизация состояния между пирами. См. [Sync](docs-site/concepts/sync.md).
 
@@ -2058,11 +2058,11 @@ bun run ark:guard:writes
 
 **Version vector** — векторное clock пира для CRDT merge. Хранится в `sync_kv` под ключом `lan_sync.version_vector`. Обновляется при каждой записи в синхронизируемую сущность.
 
-**`@kepler/visuals`** — общая UI-система. См. [kepler-visuals](docs-site/packages/kepler-visuals.md).
+**`@kosmos/visuals`** — общая UI-система. См. [kosmos-visuals](docs-site/packages/kosmos-visuals.md).
 
 ## Z
 
-**Zed Mono** — моноширинный шрифт, используется в `kepler-visuals` для `font-family-mono`.
+**Zed Mono** — моноширинный шрифт, используется в `kosmos-visuals` для `font-family-mono`.
 
 
 ## 14. Команды
@@ -2072,7 +2072,7 @@ bun run ark:guard:writes
 Шпаргалка по всем командам, которые есть в репо.
 
 ::: tip Конвенция сборки релизов
-Для всех desktop-приложений Kepler `bun run build` из директории приложения
+Для всех desktop-приложений Kosmos `bun run build` из директории приложения
 производит **финальный установщик в формате MSI** (Windows Installer).
 Это единый формат дистрибуции — установка per-machine, поддерживает enterprise-деплой,
 unattended install и GPO. NSIS (`.exe`) больше не используем.
@@ -2084,7 +2084,7 @@ unattended install и GPO. NSIS (`.exe`) больше не используем.
 
 ## Корневые
 
-Из корня `kepler/`:
+Из корня `kosmos/`:
 
 ```powershell
 bun install                      # установка зависимостей всех workspaces
@@ -2106,8 +2106,8 @@ bun run docs:preview             # превью собранного
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
 
-bun run --cwd packages/kepler-ark typecheck
-bun run --cwd packages/kepler-ark build
+bun run --cwd packages/kosmos-ark typecheck
+bun run --cwd packages/kosmos-ark build
 ```
 
 ## Eden
@@ -2196,8 +2196,8 @@ $env:USAGE_TRACKER_POLL_MS = "1000"
 Установка / удаление:
 
 ```powershell
-.\dist\KeplerUsageTrackerInstaller\install.ps1
-.\dist\KeplerUsageTrackerInstaller\uninstall.ps1
+.\dist\KosmosUsageTrackerInstaller\install.ps1
+.\dist\KosmosUsageTrackerInstaller\uninstall.ps1
 ```
 
 ## Android
@@ -2216,26 +2216,26 @@ cd apps/delphi/kotlin
 .\gradlew build
 ```
 
-Для запуска на устройстве — обе APK должны быть установлены и подписаны одним ключом (signature permission `com.kepler.ark.data.READ_WRITE`).
+Для запуска на устройстве — обе APK должны быть установлены и подписаны одним ключом (signature permission `com.kosmos.ark.data.READ_WRITE`).
 
 ## Smoke матрица (по разделу)
 
 ```powershell
 # Зафиксировать корень
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
-New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
+New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 
 # Core
 cargo test --manifest-path packages\ark-core\rust\Cargo.toml
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 
 # Usage tracker
 cargo test --manifest-path services\usage-tracker\Cargo.toml
 
 # Dashboard
-node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
-node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 bun run --cwd apps/dashboard test:e2e:smoke
 
 # Delphi / Eden shared objects
@@ -2270,7 +2270,7 @@ bun run ark:guard:writes
 - task data: `objects` с `type_id = task_obj`
 - typed/schema metadata: `object_types`
 - relationships: `object_links`
-- app access: `@kepler/ark` / `ark-core-rpc`
+- app access: `@kosmos/ark` / `ark-core-rpc`
 
 Правила:
 
@@ -2309,7 +2309,7 @@ Search-решение:
 1. **Write rule** — жёсткий: app TS services **не** пишут напрямую в ARK таблицы.
 2. **Read inspection** — мягче:
    - Dashboard — read-only inspector, может открывать любую выбранную ARK SQLite-БД.
-   - Arrancador — `@kepler/ark` сначала; raw SQLite допустим как fallback когда runtime недоступен.
+   - Arrancador — `@kosmos/ark` сначала; raw SQLite допустим как fallback когда runtime недоступен.
    - Renderer — никогда не открывает SQLite напрямую.
 
 Будущий шаг — заменить оставшиеся fallback SQLite paths специализированными ARK endpoints. Уже добавлены:

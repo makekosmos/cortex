@@ -54,25 +54,25 @@
   "commands": [
     {
       "command": "bun run typecheck",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/packages/arksync-node",
       "exit_code": 0,
       "artifact": "typecheck.txt"
     },
     {
       "command": "bun run build",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/packages/arksync-node",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/packages/arksync-node",
       "exit_code": 0,
       "artifact": "build.txt"
     },
     {
       "command": "bun .agent/tasks/2026-04-24-arksync-node-init-lifecycle/verify-lifecycle.ts",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "verify-lifecycle.txt"
     },
     {
       "command": "git diff --check -- packages/arksync-node/src/ark-client.ts .agent/tasks/2026-04-24-arksync-node-init-lifecycle/spec.md .agent/tasks/2026-04-24-arksync-node-init-lifecycle/verify-lifecycle.ts",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "git-diff-check.txt"
     }

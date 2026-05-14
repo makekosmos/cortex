@@ -6,7 +6,7 @@
 
 ## Scope
 
-- `packages/kepler-visuals`
+- `packages/kosmos-visuals`
 - `apps/dashboard`
 - `apps/delphi/ts`
 - `apps/eden/ts`
@@ -18,7 +18,7 @@
 
 ## Acceptance Criteria
 
-- AC1: В `@kepler/visuals` есть shared titlebar history-control компонент с кнопками назад/вперёд.
+- AC1: В `@kosmos/visuals` есть shared titlebar history-control компонент с кнопками назад/вперёд.
 - AC2: Кнопки имеют явный disabled-state и визуально отличаются в disabled-состоянии.
 - AC3: Dashboard использует shared history controls и корректно отключает кнопки, когда history назад/вперёд недоступна.
 - AC4: Delphi TS использует shared history controls и корректно отключает кнопки, когда history назад/вперёд недоступна.

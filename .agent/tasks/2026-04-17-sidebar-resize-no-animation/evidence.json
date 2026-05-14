@@ -9,7 +9,7 @@
       "evidence": [
         {
           "type": "file",
-          "path": "packages/kepler-visuals/components/sidebar.css"
+          "path": "packages/kosmos-visuals/components/sidebar.css"
         },
         {
           "type": "artifact",
@@ -28,11 +28,11 @@
       "evidence": [
         {
           "type": "file",
-          "path": "packages/kepler-visuals/components/sidebar.css"
+          "path": "packages/kosmos-visuals/components/sidebar.css"
         },
         {
           "type": "file",
-          "path": "packages/kepler-visuals/components/Sidebar.vue"
+          "path": "packages/kosmos-visuals/components/Sidebar.vue"
         },
         {
           "type": "artifact",

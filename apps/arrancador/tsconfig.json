@@ -23,8 +23,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@vue-app/*": ["./src-vue/*"],
-      "@kepler/visuals": ["../../packages/kepler-visuals/index.ts"],
-      "@kepler/visuals/*": ["../../packages/kepler-visuals/*"]
+      "@kosmos/visuals": ["../../packages/kosmos-visuals/index.ts"],
+      "@kosmos/visuals/*": ["../../packages/kosmos-visuals/*"]
     }
   },
   "include": [

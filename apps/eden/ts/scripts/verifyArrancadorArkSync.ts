@@ -151,7 +151,7 @@ function buildPersonalSelectedSpace(vaultPath: string, source: string): SharedSe
 }
 
 function writeSharedSelectedSpace(appDataPath: string, selection: SharedSelectedSpace | null): void {
-  const filePath = path.join(appDataPath, "Kepler", "selected-space.json");
+  const filePath = path.join(appDataPath, "Kosmos", "selected-space.json");
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
   if (!selection) {
@@ -168,7 +168,7 @@ function getArkDbPathForSelectedSpace(
   appDataPath: string,
   selection: SharedSelectedSpace | null,
 ): string {
-  const dataDir = path.join(appDataPath, "Kepler");
+  const dataDir = path.join(appDataPath, "Kosmos");
   if (!selection?.spaceId) {
     return path.join(dataDir, "ark.db");
   }

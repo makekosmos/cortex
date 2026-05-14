@@ -8,8 +8,8 @@
       "text": "Директория apps/ark-data/ существует и содержит корректный Gradle-проект Android",
       "status": "PASS",
       "proof": [
-        "apps/ark-data/app/build.gradle.kts: applicationId = \"com.kepler.ark.data\", minSdk = 28",
-        "apps/ark-data/app/src/main/java/com/kepler/ark/data/ — содержит .kt файлы",
+        "apps/ark-data/app/build.gradle.kts: applicationId = \"com.kosmos.ark.data\", minSdk = 28",
+        "apps/ark-data/app/src/main/java/com/kosmos/ark/data/ — содержит .kt файлы",
         "apps/ark-data/settings.gradle.kts — собственный settings файл"
       ]
     },
@@ -24,11 +24,11 @@
     },
     {
       "id": "AC3",
-      "text": "ContentProvider зарегистрирован с authority com.kepler.ark.data и permission signature",
+      "text": "ContentProvider зарегистрирован с authority com.kosmos.ark.data и permission signature",
       "status": "PASS",
       "proof": [
-        "android:authorities=\"com.kepler.ark.data\" android:exported=\"true\"",
-        "android:protectionLevel=\"signature\" для com.kepler.ark.data.READ_WRITE",
+        "android:authorities=\"com.kosmos.ark.data\" android:exported=\"true\"",
+        "android:protectionLevel=\"signature\" для com.kosmos.ark.data.READ_WRITE",
         "readPermission и writePermission установлены"
       ]
     },
@@ -131,7 +131,7 @@
     "apps/delphi/kotlin/app/src/main/AndroidManifest.xml"
   ],
   "commands_for_fresh_verifier": [
-    "ls apps/ark-data/app/src/main/java/com/kepler/ark/data/",
+    "ls apps/ark-data/app/src/main/java/com/kosmos/ark/data/",
     "grep LAUNCHER apps/ark-data/app/src/main/AndroidManifest.xml",
     "grep authorities apps/ark-data/app/src/main/AndroidManifest.xml",
     "grep protectionLevel apps/ark-data/app/src/main/AndroidManifest.xml",

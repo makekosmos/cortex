@@ -2,7 +2,7 @@
 
 ## Context
 
-`apps/delphi/ts` uses a single primary sidebar pattern built on shared Kepler sidebar primitives and a macOS window configuration with `titleBarStyle: hiddenInset` plus inset traffic lights. `apps/eden/ts` still uses a custom Anytype-like main sidebar (`WidgetSidebar.vue`) and a separate renderer titlebar overlay.
+`apps/delphi/ts` uses a single primary sidebar pattern built on shared Kosmos sidebar primitives and a macOS window configuration with `titleBarStyle: hiddenInset` plus inset traffic lights. `apps/eden/ts` still uses a custom Anytype-like main sidebar (`WidgetSidebar.vue`) and a separate renderer titlebar overlay.
 
 The goal is to make Eden's main sidebar and macOS window/header behavior feel aligned with Delphi while preserving Eden-specific data flows and keeping the existing spaces content screens intact.
 

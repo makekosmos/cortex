@@ -4,7 +4,7 @@
 
 В репо две независимых политики:
 
-1. **Кто может писать в ARK?** Жёстко — только `@kepler/ark` или `ark_core::db`. См. [Граница записи](/concepts/write-boundary).
+1. **Кто может писать в ARK?** Жёстко — только `@kosmos/ark` или `ark_core::db`. См. [Граница записи](/concepts/write-boundary).
 2. **Кто может читать ARK напрямую?** Свободнее. Это страница про второй вопрос.
 
 ## Кому разрешено читать напрямую
@@ -36,7 +36,7 @@ Dashboard — буквально read-only ARK inspector. Это часть ег
 - **Нельзя** делать `INSERT` / `UPDATE` / `DELETE`.
 - Smoke использует `apps/dashboard/.e2e/smoke-dashboard.db`, никогда — user DB.
 
-Когда возможно, Dashboard должен **сначала** пробовать `@kepler/ark` analytics-endpoints:
+Когда возможно, Dashboard должен **сначала** пробовать `@kosmos/ark` analytics-endpoints:
 
 - `list_objects_by_type`
 - `get_objects_by_ids`
@@ -48,7 +48,7 @@ Read-only SQLite — fallback, когда подходящего endpoint нет
 
 ## Arrancador — fallback
 
-Arrancador предпочитает `@kepler/ark`:
+Arrancador предпочитает `@kosmos/ark`:
 
 - hydration `game_obj` объектов
 - usage queries
@@ -71,4 +71,4 @@ Read-only SQLite используется **только** когда `ark-core-
 ## Что ещё нужно
 
 - App-specific **bulk analytics queries**, чтобы не грузить полный usage snapshot ради одной агрегации.
-- Возможно, специализированный read-only режим `@kepler/ark` для inspector-приложений.
+- Возможно, специализированный read-only режим `@kosmos/ark` для inspector-приложений.

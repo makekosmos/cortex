@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "../../../packages/kepler-visuals/theme/css-variables.css";
+@import "../../../packages/kosmos-visuals/theme/css-variables.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -214,7 +214,7 @@
     scrollbar-gutter: stable both-edges;
 }
 
-.kepler-desktop-chrome {
+.kosmos-desktop-chrome {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -224,7 +224,7 @@
     background: var(--sidebar-bg);
 }
 
-.kepler-desktop-chrome__body {
+.kosmos-desktop-chrome__body {
     display: flex;
     flex: 1;
     min-height: 0;
@@ -232,7 +232,7 @@
     overflow: hidden;
 }
 
-.kepler-desktop-chrome__sidebar {
+.kosmos-desktop-chrome__sidebar {
     position: relative;
     display: flex;
     flex-shrink: 0;
@@ -242,7 +242,7 @@
     z-index: 10;
 }
 
-.kepler-desktop-chrome__content {
+.kosmos-desktop-chrome__content {
     position: relative;
     display: flex;
     flex-direction: column;
@@ -254,11 +254,11 @@
 }
 
 
-.kepler-titlebar {
-    --kepler-titlebar-height: 36px;
-    --kepler-titlebar-control-size: 32px;
-    --kepler-titlebar-control-radius: 10px;
-    --kepler-titlebar-inline-padding: 0.75rem;
+.kosmos-titlebar {
+    --kosmos-titlebar-height: 36px;
+    --kosmos-titlebar-control-size: 32px;
+    --kosmos-titlebar-control-radius: 10px;
+    --kosmos-titlebar-inline-padding: 0.75rem;
     box-sizing: border-box;
     position: relative;
     z-index: 20;
@@ -266,9 +266,9 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     gap: 0.75rem;
-    height: var(--kepler-titlebar-height);
-    min-height: var(--kepler-titlebar-height);
-    padding: 0 var(--kepler-titlebar-inline-padding);
+    height: var(--kosmos-titlebar-height);
+    min-height: var(--kosmos-titlebar-height);
+    padding: 0 var(--kosmos-titlebar-inline-padding);
     background: var(--sidebar-bg);
     color: var(--sidebar-foreground);
     -webkit-app-region: drag;
@@ -276,33 +276,33 @@
 }
 
 .app-titlebar--mac {
-    padding-left: var(--kepler-mac-traffic-light-left-safe-area, 92px);
+    padding-left: var(--kosmos-mac-traffic-light-left-safe-area, 92px);
 }
 
 .app-titlebar--windows {
     height: calc(
-        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-titlebar-height))
     );
     min-height: calc(
-        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kepler-titlebar-height))
+        env(titlebar-area-y, 0px) + env(titlebar-area-height, var(--kosmos-titlebar-height))
     );
     padding-top: env(titlebar-area-y, 0px);
     padding-left: max(
-        var(--kepler-titlebar-inline-padding),
-        calc(env(titlebar-area-x, 0px) + var(--kepler-titlebar-inline-padding))
+        var(--kosmos-titlebar-inline-padding),
+        calc(env(titlebar-area-x, 0px) + var(--kosmos-titlebar-inline-padding))
     );
     padding-right: max(
-        var(--kepler-titlebar-inline-padding),
+        var(--kosmos-titlebar-inline-padding),
         calc(
             100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) +
-                var(--kepler-titlebar-inline-padding)
+                var(--kosmos-titlebar-inline-padding)
         )
     );
 }
 
-.kepler-titlebar__leading,
-.kepler-titlebar__center,
-.kepler-titlebar__trailing {
+.kosmos-titlebar__leading,
+.kosmos-titlebar__center,
+.kosmos-titlebar__trailing {
     min-width: 0;
     display: flex;
     align-items: center;
@@ -310,15 +310,15 @@
     min-height: 100%;
 }
 
-.kepler-titlebar__leading {
+.kosmos-titlebar__leading {
     justify-content: flex-start;
 }
 
-.kepler-titlebar__center {
+.kosmos-titlebar__center {
     justify-content: center;
 }
 
-.kepler-titlebar__trailing {
+.kosmos-titlebar__trailing {
     justify-content: flex-end;
 }
 
@@ -333,9 +333,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--kepler-titlebar-control-size, 32px);
-    height: var(--kepler-titlebar-control-size, 32px);
-    border-radius: var(--kepler-titlebar-control-radius, 10px);
+    width: var(--kosmos-titlebar-control-size, 32px);
+    height: var(--kosmos-titlebar-control-size, 32px);
+    border-radius: var(--kosmos-titlebar-control-radius, 10px);
     color: color-mix(in srgb, var(--sidebar-foreground) 78%, transparent);
     transition:
         background-color 120ms ease,
@@ -357,10 +357,10 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    min-width: var(--kepler-titlebar-control-size);
-    height: var(--kepler-titlebar-control-size);
+    min-width: var(--kosmos-titlebar-control-size);
+    height: var(--kosmos-titlebar-control-size);
     padding: 0 0.625rem;
-    border-radius: var(--kepler-titlebar-control-radius);
+    border-radius: var(--kosmos-titlebar-control-radius);
     color: color-mix(in srgb, var(--sidebar-foreground) 78%, transparent);
     transition:
         background-color 120ms ease,
@@ -373,20 +373,20 @@
     color: var(--sidebar-foreground);
 }
 
-.kepler-titlebar-history-controls {
+.kosmos-titlebar-history-controls {
     display: inline-flex;
     align-items: center;
     gap: 0.125rem;
     -webkit-app-region: no-drag;
 }
 
-.kepler-titlebar-history-controls__button {
+.kosmos-titlebar-history-controls__button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--kepler-titlebar-control-size, 32px);
-    height: var(--kepler-titlebar-control-size, 32px);
-    border-radius: var(--kepler-titlebar-control-radius, 10px);
+    width: var(--kosmos-titlebar-control-size, 32px);
+    height: var(--kosmos-titlebar-control-size, 32px);
+    border-radius: var(--kosmos-titlebar-control-radius, 10px);
     color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
     transition:
         background-color 120ms ease,
@@ -395,39 +395,39 @@
     -webkit-app-region: no-drag;
 }
 
-.kepler-titlebar-history-controls__button:hover:not(:disabled) {
+.kosmos-titlebar-history-controls__button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--foreground) 8%, transparent);
     color: var(--foreground);
 }
 
-.kepler-titlebar-history-controls__button--disabled,
-.kepler-titlebar-history-controls__button:disabled {
+.kosmos-titlebar-history-controls__button--disabled,
+.kosmos-titlebar-history-controls__button:disabled {
     opacity: 0.38;
     cursor: default;
 }
 
-.kepler-titlebar button,
-.kepler-titlebar a,
-.kepler-titlebar input,
-.kepler-titlebar [role="button"] {
+.kosmos-titlebar button,
+.kosmos-titlebar a,
+.kosmos-titlebar input,
+.kosmos-titlebar [role="button"] {
     -webkit-app-region: no-drag;
 }
 
-.kepler-desktop-content-surface {
+.kosmos-desktop-content-surface {
     display: flex;
     flex: 1;
     min-width: 0;
     min-height: 0;
     flex-direction: column;
-    padding-top: var(--kepler-content-padding-top, 1rem);
-    padding-right: var(--kepler-content-padding-inline, 1rem);
-    padding-bottom: var(--kepler-content-padding-bottom, 0);
-    padding-left: var(--kepler-content-padding-inline, 1rem);
-    border-top: 1px solid var(--kepler-content-border-color, var(--border));
+    padding-top: var(--kosmos-content-padding-top, 1rem);
+    padding-right: var(--kosmos-content-padding-inline, 1rem);
+    padding-bottom: var(--kosmos-content-padding-bottom, 0);
+    padding-left: var(--kosmos-content-padding-inline, 1rem);
+    border-top: 1px solid var(--kosmos-content-border-color, var(--border));
     border-left: 1px solid
-        var(--kepler-content-border-left-color, var(--kepler-content-border-color, var(--border)));
-    border-top-left-radius: var(--kepler-content-radius-top-left, 16px);
-    border-bottom-left-radius: var(--kepler-content-radius-bottom-left, 0);
+        var(--kosmos-content-border-left-color, var(--kosmos-content-border-color, var(--border)));
+    border-top-left-radius: var(--kosmos-content-radius-top-left, 16px);
+    border-bottom-left-radius: var(--kosmos-content-radius-bottom-left, 0);
     background: var(--background);
     overflow: hidden;
     transition:
@@ -436,7 +436,7 @@
         border-bottom-left-radius 280ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.kepler-sidebar-wrapper {
+.kosmos-sidebar-wrapper {
     position: relative;
     flex-shrink: 0;
     align-self: stretch;
@@ -449,21 +449,21 @@
     transition: width 0.375s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.kepler-sidebar-wrapper.animating {
+.kosmos-sidebar-wrapper.animating {
     transition: width 0.33s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.kepler-sidebar-wrapper.is-resizing {
+.kosmos-sidebar-wrapper.is-resizing {
     transition: none;
 }
 
-.kepler-sidebar-wrapper.is-hidden .kepler-sidebar-content,
-.kepler-sidebar-wrapper.hidden .kepler-sidebar-content {
+.kosmos-sidebar-wrapper.is-hidden .kosmos-sidebar-content,
+.kosmos-sidebar-wrapper.hidden .kosmos-sidebar-content {
     background: transparent;
     border-color: transparent;
 }
 
-.kepler-sidebar-content {
+.kosmos-sidebar-content {
     position: absolute;
     inset: 0;
     display: flex;
@@ -479,7 +479,7 @@
     overflow: hidden;
 }
 
-.kepler-sidebar-resize-handle {
+.kosmos-sidebar-resize-handle {
     position: absolute;
     top: 0;
     right: -4px;
@@ -496,20 +496,20 @@
     -webkit-app-region: no-drag;
 }
 
-.kepler-sidebar-content a,
-.kepler-sidebar-content button,
-.kepler-sidebar-content input,
-.kepler-sidebar-content [role="button"] {
+.kosmos-sidebar-content a,
+.kosmos-sidebar-content button,
+.kosmos-sidebar-content input,
+.kosmos-sidebar-content [role="button"] {
     -webkit-app-region: no-drag;
 }
 
-.kepler-resize-handle-line {
+.kosmos-resize-handle-line {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: var(--kepler-resize-handle-thickness, 2px);
-    height: var(--kepler-resize-handle-height, 32px);
+    width: var(--kosmos-resize-handle-thickness, 2px);
+    height: var(--kosmos-resize-handle-height, 32px);
     background: color-mix(
         in oklab,
         var(--sidebar-foreground, var(--foreground, currentColor)) 60%,
@@ -521,12 +521,12 @@
     pointer-events: none;
 }
 
-.kepler-sidebar-wrapper:hover .kepler-resize-handle-line,
-.kepler-sidebar-wrapper.is-resizing .kepler-resize-handle-line {
+.kosmos-sidebar-wrapper:hover .kosmos-resize-handle-line,
+.kosmos-sidebar-wrapper.is-resizing .kosmos-resize-handle-line {
     opacity: 1;
 }
 
-.kepler-sidebar-btn {
+.kosmos-sidebar-btn {
     display: flex;
     align-items: center;
     gap: 0.625rem;
@@ -547,20 +547,20 @@
         color 120ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.kepler-sidebar-btn:hover {
+.kosmos-sidebar-btn:hover {
     background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
 }
 
-.kepler-sidebar-btn--active {
+.kosmos-sidebar-btn--active {
     background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
 }
 
-.kepler-sidebar-divider {
+.kosmos-sidebar-divider {
     margin: 0.5rem 0;
     border-top: 1px solid var(--border);
 }
 
-.kepler-sidebar-section-label {
+.kosmos-sidebar-section-label {
     padding: 0.5rem 0.75rem 0.25rem;
     color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
     font-size: 10px;
@@ -570,7 +570,7 @@
     user-select: none;
 }
 
-.kepler-sidebar-project-link {
+.kosmos-sidebar-project-link {
     display: flex;
     align-items: center;
     gap: 0.625rem;
@@ -588,18 +588,18 @@
         color 120ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-.kepler-sidebar-project-link:hover {
+.kosmos-sidebar-project-link:hover {
     background: var(--secondary);
     color: var(--foreground);
 }
 
-.kepler-sidebar-project-link--active {
+.kosmos-sidebar-project-link--active {
     background: var(--surface);
     color: var(--foreground);
     font-weight: 500;
 }
 
-.kepler-sidebar-project-label {
+.kosmos-sidebar-project-label {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -631,13 +631,13 @@
 
 .arrancador-sidebar-top,
 .arrancador-sidebar-body,
-.kepler-sidebar-footer {
+.kosmos-sidebar-footer {
     position: relative;
     z-index: 1;
 }
 
 .arrancador-sidebar-shell--mac-safe-top {
-    padding-top: var(--kepler-mac-sidebar-top-safe-area, 52px);
+    padding-top: var(--kosmos-mac-sidebar-top-safe-area, 52px);
 }
 
 .arrancador-sidebar-shell--mac-safe-top.arrancador-sidebar-shell--with-top-bar {
@@ -696,19 +696,19 @@
     padding-top: 2.5rem;
 }
 
-.kepler-sidebar-footer {
+.kosmos-sidebar-footer {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
 
-.kepler-sidebar-wrapper.is-hidden .arrancador-sidebar-top {
+.kosmos-sidebar-wrapper.is-hidden .arrancador-sidebar-top {
     justify-content: center;
     padding-bottom: 0;
 }
 
-.kepler-sidebar-wrapper.is-hidden .arrancador-sidebar-body,
-.kepler-sidebar-wrapper.is-hidden .kepler-sidebar-footer {
+.kosmos-sidebar-wrapper.is-hidden .arrancador-sidebar-body,
+.kosmos-sidebar-wrapper.is-hidden .kosmos-sidebar-footer {
     opacity: 0;
     pointer-events: none;
 }

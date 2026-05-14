@@ -12,7 +12,7 @@ Finish the remaining application-level ARK work that can be completed safely in 
 
 ## Acceptance Criteria
 
-AC1. Arrancador ARK write-path audit passes: any writes to ARK `objects`, `object_types`, `object_links`, or usage sync tables go through `@kepler/ark` APIs or Rust `ark_core` helpers, not raw `better-sqlite3` SQL in app services.
+AC1. Arrancador ARK write-path audit passes: any writes to ARK `objects`, `object_types`, `object_links`, or usage sync tables go through `@kosmos/ark` APIs or Rust `ark_core` helpers, not raw `better-sqlite3` SQL in app services.
 
 AC2. Arrancador still has tests covering game object migration/write behavior and usage backfill behavior on isolated test databases or mocked ARK APIs.
 

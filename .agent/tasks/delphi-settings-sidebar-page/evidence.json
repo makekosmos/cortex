@@ -61,7 +61,7 @@
   "commands": [
     {
       "command": "bunx tsc --noEmit",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\delphi\\ts",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\delphi\\ts",
       "status": "PASS"
     }
   ],

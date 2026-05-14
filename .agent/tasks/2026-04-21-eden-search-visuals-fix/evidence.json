@@ -1,6 +1,6 @@
 {
   "task_id": "2026-04-21-eden-search-visuals-fix",
-  "summary": "Restore Eden search for Ark-backed notes and move the search surface onto shared Kepler Visuals.",
+  "summary": "Restore Eden search for Ark-backed notes and move the search surface onto shared Kosmos Visuals.",
   "files_touched": [
     "apps/eden/ts/main/store.ts",
     "apps/eden/ts/src/components/SearchOverlay.vue",
@@ -9,7 +9,7 @@
     "apps/eden/ts/tests/app.spec.ts",
     "packages/ark-core/rust/src/db.rs",
     "packages/ark-core/rust/src/main.rs",
-    "packages/kepler-visuals/components/CommandPalette.vue"
+    "packages/kosmos-visuals/components/CommandPalette.vue"
   ],
   "checks": [
     {
@@ -70,8 +70,8 @@
       "id": "AC3",
       "status": "PASS",
       "evidence": [
-        "source-integration-check.txt shows apps/eden/ts/src/components/SearchOverlay.vue imports CommandPalette from @kepler/visuals",
-        "source-integration-check.txt shows packages/kepler-visuals/components/CommandPalette.vue exposes the controlled query contract used by Eden"
+        "source-integration-check.txt shows apps/eden/ts/src/components/SearchOverlay.vue imports CommandPalette from @kosmos/visuals",
+        "source-integration-check.txt shows packages/kosmos-visuals/components/CommandPalette.vue exposes the controlled query contract used by Eden"
       ]
     },
     {

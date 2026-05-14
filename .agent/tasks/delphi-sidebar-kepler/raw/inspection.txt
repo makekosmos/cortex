@@ -1,15 +1,15 @@
-apps/delphi/ts/src/components/SideBar.vue:13:  Sidebar as KeplerSidebar,
+apps/delphi/ts/src/components/SideBar.vue:13:  Sidebar as KosmosSidebar,
 apps/delphi/ts/src/components/SideBar.vue:15:  type SidebarNavItem,
 apps/delphi/ts/src/components/SideBar.vue:16:  type SidebarProjectItem,
 apps/delphi/ts/src/components/SideBar.vue:81:const projectItems = computed<SidebarProjectItem[]>(() =>
 apps/delphi/ts/src/components/SideBar.vue:98:    :project-items="projectItems"
 apps/delphi/ts/src/components/SideBar.vue:108:    @config-change="saveConfig"
-packages/kepler-visuals/index.ts:18:  type SidebarNavItem,
-packages/kepler-visuals/index.ts:19:  type SidebarProjectItem,
-packages/kepler-visuals/components/index.ts:11:export { default as Sidebar } from "./Sidebar.vue";
-packages/kepler-visuals/components/Sidebar.vue:28:  projectItems?: SidebarProjectItem[];
-packages/kepler-visuals/components/Sidebar.vue:43:  projectItems: () => [],
-packages/kepler-visuals/components/Sidebar.vue:61:const hasProjects = computed(() => props.projectItems.length > 0);
-packages/kepler-visuals/components/Sidebar.vue:73:    @config-change="emit('configChange', $event)"
-packages/kepler-visuals/components/Sidebar.vue:105:              v-for="project in projectItems"
+packages/kosmos-visuals/index.ts:18:  type SidebarNavItem,
+packages/kosmos-visuals/index.ts:19:  type SidebarProjectItem,
+packages/kosmos-visuals/components/index.ts:11:export { default as Sidebar } from "./Sidebar.vue";
+packages/kosmos-visuals/components/Sidebar.vue:28:  projectItems?: SidebarProjectItem[];
+packages/kosmos-visuals/components/Sidebar.vue:43:  projectItems: () => [],
+packages/kosmos-visuals/components/Sidebar.vue:61:const hasProjects = computed(() => props.projectItems.length > 0);
+packages/kosmos-visuals/components/Sidebar.vue:73:    @config-change="emit('configChange', $event)"
+packages/kosmos-visuals/components/Sidebar.vue:105:              v-for="project in projectItems"
 exit_code=0

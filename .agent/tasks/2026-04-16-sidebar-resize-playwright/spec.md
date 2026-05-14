@@ -2,7 +2,7 @@
 
 ## Goal
 
-Restore reliable sidebar resizing in shared `kepler-visuals` and prove it with Playwright against `apps/dashboard`.
+Restore reliable sidebar resizing in shared `kosmos-visuals` and prove it with Playwright against `apps/dashboard`.
 
 ## Acceptance Criteria
 

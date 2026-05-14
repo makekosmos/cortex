@@ -3,9 +3,9 @@ import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { test, expect } from "@playwright/test";
 
-const appDir = "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador";
+const appDir = "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador";
 const taskDir =
-  "D:\\Personal\\Hobby\\Coding\\kepler\\.agent\\tasks\\2026-04-19-arrancador-playwright-dom-diagnosis";
+  "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-04-19-arrancador-playwright-dom-diagnosis";
 const rawDir = path.join(taskDir, "raw");
 const devUrl = "http://127.0.0.1:5173/";
 const bunExe = "C:\\Users\\Kazui\\.bun\\bin\\bun.exe";
@@ -89,15 +89,15 @@ test("captures sidebar paint timing and visual state", async ({ page }) => {
 
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.goto(devUrl, { waitUntil: "domcontentloaded" });
-  await page.waitForSelector(".kepler-sidebar-btn", { state: "attached", timeout: 20_000 });
+  await page.waitForSelector(".kosmos-sidebar-btn", { state: "attached", timeout: 20_000 });
   const sidebarReadyAt = Date.now();
 
   const screenshotPath = path.join(rawDir, "playwright-sidebar.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
 
   const diagnostics = await page.evaluate(() => {
-    const firstButton = document.querySelector<HTMLElement>(".kepler-sidebar-btn");
-    const sidebar = document.querySelector<HTMLElement>(".kepler-desktop-chrome__sidebar");
+    const firstButton = document.querySelector<HTMLElement>(".kosmos-sidebar-btn");
+    const sidebar = document.querySelector<HTMLElement>(".kosmos-desktop-chrome__sidebar");
     const sidebarBody = document.querySelector<HTMLElement>(".arrancador-sidebar-body");
     const shell = document.querySelector<HTMLElement>(".arrancador-sidebar-shell");
     const rootStyles = getComputedStyle(document.documentElement);

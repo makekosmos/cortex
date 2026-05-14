@@ -16,7 +16,7 @@
 - Полностью удалить данные (тест очищает БД перед прогоном).
 - Засорить sync: тестовые версии записей улетят на пиры.
 
-Это **необратимо**. Один прогон Playwright против `%APPDATA%\Kepler\ark.db` может убить накопленные за месяцы записи.
+Это **необратимо**. Один прогон Playwright против `%APPDATA%\Kosmos\ark.db` может убить накопленные за месяцы записи.
 
 ## Где хранить тестовые БД
 
@@ -38,16 +38,16 @@
 ### Через env
 
 ```powershell
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\2026-04-26-ark-app-completion\smoke"
-New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
-$env:ARK_DB_PATH = "$env:KEPLER_SMOKE_ROOT\usage-tracker\ark.db"
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\2026-04-26-ark-app-completion\smoke"
+New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
+$env:ARK_DB_PATH = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
 ```
 
 ### Через CLI-флаг
 
 ```powershell
 node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
-  --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+  --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 ```
 
 ### В Playwright globalSetup
@@ -67,7 +67,7 @@ bun run --cwd apps/arrancador smoke:packaged
 ## Что точно нельзя
 
 - ❌ Запускать миграцию/backfill против реальной ARK DB ради «проверить, как сработает».
-- ❌ Запускать Playwright без `KEPLER_SMOKE_ROOT` или эквивалентного override.
+- ❌ Запускать Playwright без `KOSMOS_SMOKE_ROOT` или эквивалентного override.
 - ❌ Делать тестовый Vitest, который дефолтится в `app.getPath('userData')`.
 - ❌ Использовать `:memory:` как «достаточную изоляцию» — некоторые миграции не воспроизводятся в in-memory; используй файловую БД во временной папке.
 

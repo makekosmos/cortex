@@ -17,12 +17,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@kepler/ark": path.resolve(__dirname, "../../packages/kepler-ark/src/index.ts"),
-      "@kepler/visuals/theme/css": path.resolve(
+      "@kosmos/ark": path.resolve(__dirname, "../../packages/kosmos-ark/src/index.ts"),
+      "@kosmos/visuals/theme/css": path.resolve(
         __dirname,
-        "../../packages/kepler-visuals/theme/css-variables.css",
+        "../../packages/kosmos-visuals/theme/css-variables.css",
       ),
-      "@kepler/visuals": path.resolve(__dirname, "../../packages/kepler-visuals"),
+      "@kosmos/visuals": path.resolve(__dirname, "../../packages/kosmos-visuals"),
       "@shared": path.resolve(__dirname, "./shared"),
     },
     dedupe: ["vue", "vue-router"],

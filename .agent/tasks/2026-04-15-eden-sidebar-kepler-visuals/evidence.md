@@ -1,10 +1,10 @@
-# Evidence — Eden sidebar migration to @kepler/visuals
+# Evidence — Eden sidebar migration to @kosmos/visuals
 
 ## Scope
 Relevant files for this sidebar migration pass:
-- `packages/kepler-visuals/components/Sidebar.vue`
-- `packages/kepler-visuals/components/index.ts`
-- `packages/kepler-visuals/index.ts`
+- `packages/kosmos-visuals/components/Sidebar.vue`
+- `packages/kosmos-visuals/components/index.ts`
+- `packages/kosmos-visuals/index.ts`
 - `apps/eden/ts/src/App.vue`
 - `apps/eden/ts/src/components/sidebar/EdenSidebar.vue`
 - `apps/eden/ts/src/components/settings/SettingsPage.vue`
@@ -50,9 +50,9 @@ Relevant files for this sidebar migration pass:
 - Eden main shell sidebar adapter imports shared sidebar through public API:
   - `apps/eden/ts/src/components/sidebar/EdenSidebar.vue`
 - Shared package public contract updated in:
-  - `packages/kepler-visuals/components/Sidebar.vue`
-  - `packages/kepler-visuals/components/index.ts`
-  - `packages/kepler-visuals/index.ts`
+  - `packages/kosmos-visuals/components/Sidebar.vue`
+  - `packages/kosmos-visuals/components/index.ts`
+  - `packages/kosmos-visuals/index.ts`
 
 ## Behavioral evidence
 - Main shell still supports:
@@ -61,7 +61,7 @@ Relevant files for this sidebar migration pass:
   - recent note open
   - settings open
 - Main notes UI no longer renders `.vault-sidebar-wrapper`; tests assert a single shared sidebar path and no vault-specific custom sidebar chrome.
-- Eden main sidebar now follows the same public `KeplerSidebar` usage shape as Delphi (`primaryItems` + `projectItems` + `footerItems`).
+- Eden main sidebar now follows the same public `KosmosSidebar` usage shape as Delphi (`primaryItems` + `projectItems` + `footerItems`).
 - Settings sidebar supports:
   - general
   - trash

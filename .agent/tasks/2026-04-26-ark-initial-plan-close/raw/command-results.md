@@ -4,7 +4,7 @@
 - `bun run ark:smoke`: PASS.
   - ARK core Rust tests: PASS.
   - usage-tracker Rust tests: PASS.
-  - `@kepler/ark` typecheck: PASS.
+  - `@kosmos/ark` typecheck: PASS.
   - Arrancador unit tests: PASS, 47 files and 161 tests.
   - Arrancador typecheck: PASS.
   - Eden ARK migration script: PASS.

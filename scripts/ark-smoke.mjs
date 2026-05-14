@@ -28,9 +28,9 @@ const steps = [
     args: ["test", "--manifest-path", "services/usage-tracker/Cargo.toml"],
   },
   {
-    name: "@kepler/ark typecheck",
+    name: "@kosmos/ark typecheck",
     command: "bun",
-    args: ["run", "--cwd", "packages/kepler-ark", "typecheck"],
+    args: ["run", "--cwd", "packages/kosmos-ark", "typecheck"],
   },
   {
     name: "Arrancador unit tests",

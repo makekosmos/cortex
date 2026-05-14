@@ -9,15 +9,15 @@
 - Removed the dotted background layer from the Arrancador game detail page.
 - Extended the game detail hero to a viewport-scaled `80vh` treatment with rounded bottom corners.
 - Moved the game title and genre copy into the hero footer at the lower-left corner.
-- Reused `kepler-visuals` game-poster pattern classes for the hero copy so the title/eyebrow language matches the shared game cards.
+- Reused `kosmos-visuals` game-poster pattern classes for the hero copy so the title/eyebrow language matches the shared game cards.
 - Added a targeted test that locks the tall rounded hero and lower-left copy layout.
 
 ## Acceptance criteria
-- `AC1` PASS: the dotted background layer was removed from [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:769).
-- `AC2` PASS: the hero now uses a viewport-scaled height and rounded bottom corners in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:784).
-- `AC3` PASS: title and genres now render inside the hero footer instead of below the hero in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:822).
-- `AC4` PASS: the hero copy reuses shared game-card visual classes from `kepler-visuals` in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/pages/GameDetail.tsx:31).
-- `AC5` PASS: targeted layout coverage was added in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/src/test/game-detail.test.tsx:114).
+- `AC1` PASS: the dotted background layer was removed from [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:769).
+- `AC2` PASS: the hero now uses a viewport-scaled height and rounded bottom corners in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:784).
+- `AC3` PASS: title and genres now render inside the hero footer instead of below the hero in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:822).
+- `AC4` PASS: the hero copy reuses shared game-card visual classes from `kosmos-visuals` in [GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx:31).
+- `AC5` PASS: targeted layout coverage was added in [game-detail.test.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/test/game-detail.test.tsx:114).
 - `AC6` PASS: targeted Arrancador verification passed via `bun run typecheck` and `bunx vitest ... game-detail.test.tsx`.
 
 ## Verification

@@ -36,9 +36,9 @@
       "id": "AC4",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/GamePosterCard.vue",
-        "packages/kepler-visuals/components/index.ts",
-        "packages/kepler-visuals/index.ts",
+        "packages/kosmos-visuals/components/GamePosterCard.vue",
+        "packages/kosmos-visuals/components/index.ts",
+        "packages/kosmos-visuals/index.ts",
         "apps/arrancador/src-vue/components/GameCard.vue",
         "apps/arrancador/src-vue/test/game-card.test.ts",
         ".agent/tasks/2026-04-21-arrancador-stats-heatmap-and-poster/raw/react-poster-removal.txt"

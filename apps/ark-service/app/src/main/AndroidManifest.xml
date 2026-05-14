@@ -3,7 +3,7 @@
 
     <!-- Only apps signed with the same key may access this provider -->
     <permission
-        android:name="com.kepler.ark.data.READ_WRITE"
+        android:name="com.kosmos.ark.data.READ_WRITE"
         android:protectionLevel="signature" />
 
     <application
@@ -15,10 +15,10 @@
 
         <provider
             android:name=".provider.ArkDataProvider"
-            android:authorities="com.kepler.ark.data"
+            android:authorities="com.kosmos.ark.data"
             android:exported="true"
-            android:readPermission="com.kepler.ark.data.READ_WRITE"
-            android:writePermission="com.kepler.ark.data.READ_WRITE" />
+            android:readPermission="com.kosmos.ark.data.READ_WRITE"
+            android:writePermission="com.kosmos.ark.data.READ_WRITE" />
 
     </application>
 

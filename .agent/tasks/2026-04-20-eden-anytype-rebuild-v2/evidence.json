@@ -18,7 +18,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "summary": "Rebuilt object type UI now uses Kepler visuals tokens instead of custom gray color-mix surfaces.",
+      "summary": "Rebuilt object type UI now uses Kosmos visuals tokens instead of custom gray color-mix surfaces.",
       "evidence": [
         "apps/eden/ts/src/components/settings/ObjectTypesSettings.vue",
         "apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue",
@@ -26,7 +26,7 @@
         "apps/eden/ts/src/components/settings/object-types/ObjectTypeIdentitySection.vue",
         "apps/eden/ts/src/components/settings/object-types/ObjectTypeFieldsSection.vue",
         "apps/eden/ts/src/components/settings/object-types/ObjectTypePreviewRail.vue",
-        "packages/kepler-visuals/theme/css-variables.css"
+        "packages/kosmos-visuals/theme/css-variables.css"
       ]
     },
     {
@@ -129,7 +129,7 @@
         "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed.txt"
       },
       {
-        "command": "bun run seed:ark-demo -- --db D:\\\\Personal\\\\Hobby\\\\Coding\\\\kepler\\\\apps\\\\eden\\\\ts\\\\dev-data\\\\ark-demo-secondary.db",
+        "command": "bun run seed:ark-demo -- --db D:\\\\Personal\\\\Hobby\\\\Coding\\\\kosmos\\\\apps\\\\eden\\\\ts\\\\dev-data\\\\ark-demo-secondary.db",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed-secondary.txt"
       },

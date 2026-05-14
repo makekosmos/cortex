@@ -48,25 +48,25 @@
   "commands": [
     {
       "command": "bun run build:sidecar",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/delphi/ts",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts",
       "exit_code": 0,
       "artifact": "build-sidecar-release.txt"
     },
     {
       "command": "bun run build:sidecar:dev",
-      "cwd": "D:/Personal/Hobby/Coding/kepler/apps/delphi/ts",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts",
       "exit_code": 0,
       "artifact": "build-sidecar-dev.txt"
     },
     {
       "command": "bun -e package-json assertion",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "package-json-assert.txt"
     },
     {
       "command": "git diff --check -- apps/delphi/ts/package.json .agent/tasks/2026-04-24-delphi-ark-packaging/spec.md",
-      "cwd": "D:/Personal/Hobby/Coding/kepler",
+      "cwd": "D:/Personal/Hobby/Coding/kosmos",
       "exit_code": 0,
       "artifact": "git-diff-check.txt"
     }

@@ -2,7 +2,7 @@
 
 ## Targeted checks
 
-- `bun run --cwd packages/kepler-ark typecheck`: PASS
+- `bun run --cwd packages/kosmos-ark typecheck`: PASS
 - `bun run --cwd apps/arrancador test -- ark-usage ark-game-objects`: PASS, 6 files / 21 tests
 - `bun run --cwd apps/arrancador typecheck`: PASS
 - `bun run ark:guard:writes`: PASS
@@ -17,7 +17,7 @@ Smoke covered:
 - ARK app write boundary guard
 - ARK core Rust tests
 - usage-tracker Rust tests
-- `@kepler/ark` typecheck
+- `@kosmos/ark` typecheck
 - Arrancador full unit tests and typecheck
 - Eden ARK migration test
 - Eden build

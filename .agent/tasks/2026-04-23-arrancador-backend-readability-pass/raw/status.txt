@@ -329,15 +329,15 @@
  M bun.lock
  M packages/ark-core/rust/src/db.rs
  M packages/ark-core/rust/src/main.rs
- M packages/kepler-visuals/components/CommandPalette.vue
- M packages/kepler-visuals/components/Sidebar.vue
- M packages/kepler-visuals/components/SidebarButton.vue
- M packages/kepler-visuals/components/Titlebar.vue
- M packages/kepler-visuals/components/index.ts
- M packages/kepler-visuals/index.ts
- M packages/kepler-visuals/package.json
- D packages/kepler-visuals/react/GamePosterCard.tsx
- D packages/kepler-visuals/react/index.ts
+ M packages/kosmos-visuals/components/CommandPalette.vue
+ M packages/kosmos-visuals/components/Sidebar.vue
+ M packages/kosmos-visuals/components/SidebarButton.vue
+ M packages/kosmos-visuals/components/Titlebar.vue
+ M packages/kosmos-visuals/components/index.ts
+ M packages/kosmos-visuals/index.ts
+ M packages/kosmos-visuals/package.json
+ D packages/kosmos-visuals/react/GamePosterCard.tsx
+ D packages/kosmos-visuals/react/index.ts
 ?? .agent/tasks/2026-04-20-eden-vault-switch-ark-reset/
 ?? .agent/tasks/2026-04-20-object-type-icon-color-picker/
 ?? .agent/tasks/2026-04-20-shared-selected-space/
@@ -438,5 +438,5 @@
 ?? apps/eden/ts/src/components/typed-notes/ObjectPropertyPicker.vue
 ?? apps/eden/ts/src/lib/objectFieldFormatting.ts
 ?? apps/eden/ts/tests/arrancador-ark-sync.spec.ts
-?? packages/kepler-visuals/components/GamePosterCard.vue
+?? packages/kosmos-visuals/components/GamePosterCard.vue
 ?? packages/shared-space/

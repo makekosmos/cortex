@@ -11,7 +11,7 @@ The content panes for settings and object types no longer render their own sideb
   - `settings` mode: settings nav items and back button
   - `object-types` mode: new type button, system/custom type lists, back button
 - Settings content is content-only in `apps/eden/ts/src/components/settings/SettingsPage.vue`
-  - no `KeplerSidebar` import
+  - no `KosmosSidebar` import
   - no sidebar config persistence inside settings content
 - Object types content is editor-only in `apps/eden/ts/src/components/settings/ObjectTypesSettings.vue`
   - no `ObjectTypesSidebar` import
@@ -58,7 +58,7 @@ Object type rows in the shared sidebar use the actual type icon and color:
 - `iconSrc: /anytype/icon/type/default/...`
 - `iconColor: noteType.color`
 
-This reuses the shared visuals sidebar icon-mask support already added in `packages/kepler-visuals/components/Sidebar.vue`.
+This reuses the shared visuals sidebar icon-mask support already added in `packages/kosmos-visuals/components/Sidebar.vue`.
 
 ### AC6
 PASS

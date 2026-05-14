@@ -8,7 +8,7 @@
 
 ## Original task statement
 
-Финальный переход на единый Rust-бекенд для всей P2P-сети Kosmos. Rust crate `ark-core` становится источником истины для всего сетевого стека: LAN + Relay транспорты, event log, HLC/LWW, beacon discovery, storage, protocol messages. Делается Rust-relay сервер (`packages/ark-relay-server`) как отдельный binary под будущий деплой на VPS. UniFFI-биндинги для Kotlin (Android runtime должен реально работать — фиксится silent startSync баг) и Swift (scaffold для будущего macOS). Electron использует ark-core-rpc sidecar. Ergonomic `@arksync/node` TypeScript-обёртка спавнит sidecar и прячет IPC. Все legacy файлы удаляются. Smoke test: Delphi Electron (MacBook) ↔ Delphi Android (Nothing A063) реально синкаются end-to-end через единый Rust backend.
+Финальный переход на единый Rust-бекенд для всей P2P-сети Kepler. Rust crate `ark-core` становится источником истины для всего сетевого стека: LAN + Relay транспорты, event log, HLC/LWW, beacon discovery, storage, protocol messages. Делается Rust-relay сервер (`packages/ark-relay-server`) как отдельный binary под будущий деплой на VPS. UniFFI-биндинги для Kotlin (Android runtime должен реально работать — фиксится silent startSync баг) и Swift (scaffold для будущего macOS). Electron использует ark-core-rpc sidecar. Ergonomic `@arksync/node` TypeScript-обёртка спавнит sidecar и прячет IPC. Все legacy файлы удаляются. Smoke test: Delphi Electron (MacBook) ↔ Delphi Android (Nothing A063) реально синкаются end-to-end через единый Rust backend.
 
 ---
 
@@ -189,7 +189,7 @@ The "Runtime status" section in `packages/ark-core/CLAUDE.md` reflects that:
 
 1. Do NOT change the `LanSyncMessage` wire format (field names, message type strings, JSON structure) — binary-compatible with existing TS arksync peers.
 2. Do NOT break any existing DB operations in `ark-core-rpc` (`init`, `load_all`, `upsert_todo`, `delete_todo`, `batch_upsert_todos`, `upsert_project`, `delete_project`, `upsert_area`, `upsert_tag`, `upsert_heading`, `delete_heading`, `get_sync_kv`, `set_sync_kv`, `clear_all`, `delete_trashed`).
-3. Do NOT change Android `applicationId` (`com.kepler.ark.data` for ark-service; `com.kazui.delphi` for Delphi).
+3. Do NOT change Android `applicationId` (`com.kosmos.ark.data` for ark-service; `com.kazui.delphi` for Delphi).
 4. Keep UniFFI `ArkCore` API backward-compatible: existing Kotlin call sites (`arkCore.startSync(FfiSyncConfig(...), listener)`, `arkCore.stopSync()`, `arkCore.broadcastChangeJson(...)`, `arkCore.getConnectedPeers()`, `arkCore.addSeedPeer(...)`) must compile without modification.
 5. Android minSdk 28, arm64-v8a only.
 6. Relay server: no auth beyond api_key query param matching.
@@ -228,7 +228,7 @@ The "Runtime status" section in `packages/ark-core/CLAUDE.md` reflects that:
 ## Verification plan (ordered)
 
 ```bash
-REPO=/Users/kirill/Documents/projects/kosmos
+REPO=/Users/kirill/Documents/projects/kepler
 
 # 1. Rust crate (ark-core)
 cd "$REPO/packages/ark-core/rust" && cargo build --release

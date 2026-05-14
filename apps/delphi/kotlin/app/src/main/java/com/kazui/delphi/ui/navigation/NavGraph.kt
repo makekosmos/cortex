@@ -108,7 +108,7 @@ fun ArkDataMissingScreen() {
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = "Приложение ark-service (com.kepler.ark.data) не найдено. " +
+                text = "Приложение ark-service (com.kosmos.ark.data) не найдено. " +
                     "Установите его для работы Delphi.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,

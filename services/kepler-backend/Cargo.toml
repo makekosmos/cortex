@@ -1,0 +1,51 @@
+[package]
+name = "kepler-backend"
+version = "0.1.0"
+edition = "2021"
+description = "Kosmos Kepler backend — headless ARK host (WS server, sidecar supervisor, sync)"
+
+[lib]
+name = "kepler_backend"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kepler-backend"
+path = "src/main.rs"
+
+[dependencies]
+ark-core = { path = "../../packages/ark-core/rust" }
+rusqlite = { version = "0.32", features = ["bundled"] }
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "net",
+  "time",
+  "sync",
+  "io-util",
+  "io-std",
+  "process",
+  "signal",
+] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+chrono = "0.4"
+thiserror = "1"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Threading",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"

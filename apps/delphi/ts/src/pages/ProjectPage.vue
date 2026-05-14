@@ -26,7 +26,7 @@ const {
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
-import { TodoRow } from "@kepler/visuals";
+import { TodoRow } from "@kosmos/visuals";
 
 // ---------------------------------------------------------------------------
 // Color tag helper

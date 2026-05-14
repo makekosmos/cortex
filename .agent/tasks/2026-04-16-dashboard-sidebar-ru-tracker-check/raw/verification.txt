@@ -1,7 +1,7 @@
-Command: Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\tsc.exe
+Command: Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\tsc.exe
 Result: PASS
 
-Command: Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
+Command: Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
 Result: PASS
 Note: renderer, electron main, and preload bundles built successfully.
 
@@ -10,12 +10,12 @@ Result:
 ProcessName : usage-tracker
 Id          : 37500
 StartTime   : 4/16/2026 3:25:04 PM
-Path        : C:\Users\Kazui\AppData\Local\Kepler\UsageTracker\usage-tracker.exe
+Path        : C:\Users\Kazui\AppData\Local\Kosmos\UsageTracker\usage-tracker.exe
 
-Command: python sqlite query against %APPDATA%\Kepler\ark.db
+Command: python sqlite query against %APPDATA%\Kosmos\ark.db
 Result:
 {
-  "db": "C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\ark.db",
+  "db": "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\ark.db",
   "counts": {
     "tracked_apps": 6,
     "usage_sessions": 37,

@@ -13,13 +13,13 @@
   "commands": [
     {
       "command": "bun .agent/tasks/2026-04-24-arksync-node-readme/verify-readme.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-arksync-node-readme/verify-readme.txt",
       "exit_code": 0
     },
     {
       "command": "git diff --check -- packages/arksync-node/README.md .agent/tasks/2026-04-24-arksync-node-readme/spec.md .agent/tasks/2026-04-24-arksync-node-readme/verify-readme.ts .agent/tasks/2026-04-24-arksync-node-readme/problems.md",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-arksync-node-readme/git-diff-check.txt",
       "exit_code": 0
     }

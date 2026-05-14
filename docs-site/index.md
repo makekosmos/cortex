@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Kepler
+  name: Kosmos
   text: Local-first монорепо для личного софта
   tagline: Общий ARK-рантайм поверх Rust + SQLite и набор сфокусированных Electron-приложений. Данные живут на устройстве, синхронизация — поверх.
   actions:
@@ -22,7 +22,7 @@ features:
     link: /packages/ark-core
     linkText: ark-core
   - title: Один SDK на всех
-    details: "@kepler/ark — канонический TypeScript-клиент к sidecar. Apps говорят только через него. Прямые SQL writes в ARK-таблицы запрещены."
+    details: "@kosmos/ark — канонический TypeScript-клиент к sidecar. Apps говорят только через него. Прямые SQL writes в ARK-таблицы запрещены."
     link: /concepts/write-boundary
     linkText: Граница записи
   - title: Electron-приложения
@@ -38,9 +38,9 @@ features:
     link: /concepts/test-isolation
     linkText: Test isolation
   - title: Дизайн-система
-    details: kepler-visuals — общие токены OKLCH, тема, компоненты Sidebar / Titlebar / DesktopChrome / CommandPalette. Источник дизайна (включая этот сайт).
-    link: /packages/kepler-visuals
-    linkText: kepler-visuals
+    details: kosmos-visuals — общие токены OKLCH, тема, компоненты Sidebar / Titlebar / DesktopChrome / CommandPalette. Источник дизайна (включая этот сайт).
+    link: /packages/kosmos-visuals
+    linkText: kosmos-visuals
   - title: Документация-как-код
     details: Все страницы — markdown в docs-site/. Источник правды для разработчиков и AI-агентов одновременно. Заменяет AGENTS.md / CLAUDE.md.
     link: /agents/
@@ -51,7 +51,7 @@ features:
 
 ## Что это вообще
 
-Kepler — это **монорепо для всех личных приложений автора**. Внутри лежит общий рантайм данных (`ARK`) и продуктовые оболочки вокруг него: дневник, задачи, игры, аналитика.
+Kosmos — это **монорепо для всех личных приложений автора**. Внутри лежит общий рантайм данных (`ARK`) и продуктовые оболочки вокруг него: дневник, задачи, игры, аналитика.
 
 Цель монорепо — **единый контракт хранения и синхронизации**. Любая «штука пользователя» (заметка, задача, игра, сессия использования) — это объект в ARK. Приложения — просто разные UI-проекции и интеграции поверх одного общего данных.
 

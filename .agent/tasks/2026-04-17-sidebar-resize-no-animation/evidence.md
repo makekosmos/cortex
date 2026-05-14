@@ -15,11 +15,11 @@ Manual drag resize does not animate sidebar width.
 Status: PASS
 
 Proof:
-- `packages/kepler-visuals/components/sidebar.css` now defines `.kepler-sidebar-wrapper.is-resizing { transition: none; }`.
+- `packages/kosmos-visuals/components/sidebar.css` now defines `.kosmos-sidebar-wrapper.is-resizing { transition: none; }`.
 - The shared sidebar already toggles `is-resizing` during pointer-driven resize, so width updates now apply immediately while dragging.
 - Raw artifacts:
-  - [sidebar-css-grep.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-grep.txt)
-  - [sidebar-css-diff.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-diff.txt)
+  - [sidebar-css-grep.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-grep.txt)
+  - [sidebar-css-diff.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-diff.txt)
 
 ### AC2
 
@@ -28,11 +28,11 @@ Collapse and expand animation remains intact.
 Status: PASS
 
 Proof:
-- The existing `.kepler-sidebar-wrapper.animating` rule remains unchanged.
+- The existing `.kosmos-sidebar-wrapper.animating` rule remains unchanged.
 - No hide/show logic in `Sidebar.vue` was modified for this fix, so only the drag-resize path changes behavior.
 - Raw artifacts:
-  - [sidebar-css-grep.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-grep.txt)
-  - [sidebar-css-diff.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-diff.txt)
+  - [sidebar-css-grep.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-grep.txt)
+  - [sidebar-css-diff.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/sidebar-css-diff.txt)
 
 ### AC3
 
@@ -45,9 +45,9 @@ Proof:
 - `apps/delphi/ts` typecheck passed.
 - `apps/eden/ts` typecheck passed.
 - Raw artifacts:
-  - [dashboard-tsc.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/dashboard-tsc.txt)
-  - [delphi-tsc.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/delphi-tsc.txt)
-  - [eden-tsc.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/eden-tsc.txt)
+  - [dashboard-tsc.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/dashboard-tsc.txt)
+  - [delphi-tsc.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/delphi-tsc.txt)
+  - [eden-tsc.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resize-no-animation/raw/eden-tsc.txt)
 
 ## Checks Run
 

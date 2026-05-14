@@ -40,12 +40,12 @@
   "verification": [
     {
       "command": "bun run typecheck",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "status": "PASS"
     },
     {
       "command": "bunx vitest run --configLoader native --config vitest.config.mjs src/test/library.test.tsx",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "status": "PASS"
     }
   ]

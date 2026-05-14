@@ -1,6 +1,6 @@
-# Kepler docs site
+# Kosmos docs site
 
-VitePress-сайт документации Kepler. **Источник правды** для всех правил, инструкций и контекста — `docs-site/**/*.md`.
+VitePress-сайт документации Kosmos. **Источник правды** для всех правил, инструкций и контекста — `docs-site/**/*.md`.
 
 ## Поток источника правды
 
@@ -48,7 +48,7 @@ docs-site/
 │  └─ llms.txt               # автогенерация: полный inline-текст для агентов
 └─ .vitepress/
    ├─ config.ts              # nav, sidebar, search, тема
-   └─ theme/                 # кастомная тема под kepler-visuals токены
+   └─ theme/                 # кастомная тема под kosmos-visuals токены
 ```
 
 ## Что куда добавлять
@@ -66,7 +66,7 @@ docs-site/
 
 ## Тема
 
-Кастомная тема в `.vitepress/theme/custom.css` использует OKLCH-переменные из `packages/kepler-visuals/theme/css-variables.css`. При смене дизайн-токенов в `kepler-visuals` отрази их и здесь.
+Кастомная тема в `.vitepress/theme/custom.css` использует OKLCH-переменные из `packages/kosmos-visuals/theme/css-variables.css`. При смене дизайн-токенов в `kosmos-visuals` отрази их и здесь.
 
 ## Mermaid + pan/zoom
 

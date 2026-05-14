@@ -4,7 +4,7 @@
 When a task is dragged in Delphi, the original item should stop occupying layout space so only one visible placeholder slot remains during drag.
 
 ## Scope
-- `packages/kepler-visuals/components/TodoRow.vue`
+- `packages/kosmos-visuals/components/TodoRow.vue`
 - `apps/delphi/ts/src/pages/WeekPage.vue`
 - verification artifacts in `.agent/tasks/delphi-drag-collapse-slot/`
 

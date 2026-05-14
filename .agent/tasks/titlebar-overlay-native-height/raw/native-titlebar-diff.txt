@@ -1,4 +1,4 @@
-﻿diff --git a/apps/delphi/ts/electron/main.ts b/apps/delphi/ts/electron/main.ts
+diff --git a/apps/delphi/ts/electron/main.ts b/apps/delphi/ts/electron/main.ts
 index da3c378..09e71b3 100644
 --- a/apps/delphi/ts/electron/main.ts
 +++ b/apps/delphi/ts/electron/main.ts
@@ -234,16 +234,16 @@ index da3c378..09e71b3 100644
      arkClient = null;
    }
    syncActive = false;
-diff --git a/packages/kepler-visuals/components/Titlebar.vue b/packages/kepler-visuals/components/Titlebar.vue
+diff --git a/packages/kosmos-visuals/components/Titlebar.vue b/packages/kosmos-visuals/components/Titlebar.vue
 index 59a994c..c5f736e 100644
---- a/packages/kepler-visuals/components/Titlebar.vue
-+++ b/packages/kepler-visuals/components/Titlebar.vue
+--- a/packages/kosmos-visuals/components/Titlebar.vue
++++ b/packages/kosmos-visuals/components/Titlebar.vue
 @@ -62,7 +62,7 @@ const titlebarClasses = computed(() => [
  }
  
- .kepler-titlebar--windows {
--    padding-right: var(--kepler-windows-controls-safe-area, 156px);
-+    padding-right: var(--kepler-windows-controls-safe-area, 11%);
+ .kosmos-titlebar--windows {
+-    padding-right: var(--kosmos-windows-controls-safe-area, 156px);
++    padding-right: var(--kosmos-windows-controls-safe-area, 11%);
  }
  
- .kepler-titlebar__leading,
+ .kosmos-titlebar__leading,

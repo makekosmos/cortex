@@ -4,17 +4,17 @@
 
 - Command: `apps/arrancador\\node_modules\\.bin\\tsc.cmd --noEmit`
 - Result: `PASS`
-- Raw log: [raw/typecheck.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-20-arrancador-ark-game-sync/raw/typecheck.txt)
-- Diff snapshot: [raw/diff.txt](/D:/Personal/Hobby/Coding/kepler/.agent/tasks/2026-04-20-arrancador-ark-game-sync/raw/diff.txt)
+- Raw log: [raw/typecheck.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-20-arrancador-ark-game-sync/raw/typecheck.txt)
+- Diff snapshot: [raw/diff.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-20-arrancador-ark-game-sync/raw/diff.txt)
 
 ## Acceptance Criteria
 
 - AC1: `PASS`
-  `games` now stores nullable `ark_object_id`, includes an index for lookups, and adds the column via migration in [database.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/electron/main/db/database.ts:8) and [database.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/electron/main/db/database.ts:187).
+  `games` now stores nullable `ark_object_id`, includes an index for lookups, and adds the column via migration in [database.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/electron/main/db/database.ts:8) and [database.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/electron/main/db/database.ts:187).
 - AC2: `PASS`
-  Linked Ark `game_obj` records are read back into Arrancador game responses via best-effort hydration in [ark-game-objects.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/electron/main/services/ark-game-objects.ts:341) and are composed into the existing Ark usage read model in [ark-usage.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/electron/main/services/ark-usage.ts:219).
+  Linked Ark `game_obj` records are read back into Arrancador game responses via best-effort hydration in [ark-game-objects.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/electron/main/services/ark-game-objects.ts:341) and are composed into the existing Ark usage read model in [ark-usage.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/electron/main/services/ark-usage.ts:219).
 - AC3: `PASS`
-  Arrancador write paths upsert Ark `game_obj` records and persist returned `ark_object_id` locally through [games.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/electron/main/services/games.ts:338) with backend wiring in [backend.ts](/D:/Personal/Hobby/Coding/kepler/apps/arrancador/electron/main/backend.ts:265).
+  Arrancador write paths upsert Ark `game_obj` records and persist returned `ark_object_id` locally through [games.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/electron/main/services/games.ts:338) with backend wiring in [backend.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/electron/main/backend.ts:265).
 - AC4: `PASS`
   The patch is limited to Arrancador Electron/db/services/backend code plus task artifacts; no Eden files were modified.
 - AC5: `PASS`

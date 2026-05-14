@@ -1,10 +1,10 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
-  title: "Kepler",
-  titleTemplate: ":title · Kepler",
+  title: "Kosmos",
+  titleTemplate: ":title · Kosmos",
   description:
-    "Документация Kepler — local-first монорепо с ARK runtime и Electron-приложениями.",
+    "Документация Kosmos — local-first монорепо с ARK runtime и Electron-приложениями.",
   lang: "ru",
   cleanUrls: true,
   lastUpdated: true,
@@ -59,7 +59,7 @@ export default defineConfig({
   },
 
   themeConfig: {
-    siteTitle: "Kepler",
+    siteTitle: "Kosmos",
 
     nav: [
       { text: "Старт", link: "/guide/getting-started" },
@@ -75,7 +75,7 @@ export default defineConfig({
         {
           text: "Старт",
           items: [
-            { text: "Что такое Kepler", link: "/guide/getting-started" },
+            { text: "Что такое Kosmos", link: "/guide/getting-started" },
             { text: "Структура репозитория", link: "/guide/layout" },
             { text: "Стек и инструменты", link: "/guide/tooling" },
             { text: "Рабочий процесс", link: "/guide/workflow" },
@@ -118,8 +118,8 @@ export default defineConfig({
           items: [
             { text: "Обзор", link: "/packages/" },
             { text: "ark-core (Rust runtime)", link: "/packages/ark-core" },
-            { text: "@kepler/ark (TS SDK)", link: "/packages/kepler-ark" },
-            { text: "kepler-visuals", link: "/packages/kepler-visuals" },
+            { text: "@kosmos/ark (TS SDK)", link: "/packages/kosmos-ark" },
+            { text: "kosmos-visuals", link: "/packages/kosmos-visuals" },
           ],
         },
         {

@@ -85,8 +85,8 @@ try {
   await page.waitForLoadState("domcontentloaded");
   await page.getByTestId("overview-page").waitFor();
 
-  const sidebar = page.getByTestId("kepler-sidebar");
-  const handle = page.getByTestId("kepler-sidebar-resize-handle");
+  const sidebar = page.getByTestId("kosmos-sidebar");
+  const handle = page.getByTestId("kosmos-sidebar-resize-handle");
   await sidebar.waitFor();
   await handle.waitFor();
 
@@ -109,7 +109,7 @@ try {
   await page.mouse.up();
 
   const resizedWidth = await page.waitForFunction(() => {
-    const element = document.querySelector<HTMLElement>("[data-testid='kepler-sidebar']");
+    const element = document.querySelector<HTMLElement>("[data-testid='kosmos-sidebar']");
     return element?.getBoundingClientRect().width ?? 0;
   });
   const resizedWidthValue = await resizedWidth.jsonValue() as number;

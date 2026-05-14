@@ -28,7 +28,7 @@
     }
   ],
   "files_changed": [
-    "packages/kepler-visuals/components/Titlebar.vue"
+    "packages/kosmos-visuals/components/Titlebar.vue"
   ],
   "verifications": [
     {

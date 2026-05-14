@@ -24,8 +24,8 @@ async function launchApp(
       ...process.env,
       EDEN_BACKGROUND_LAUNCH: "1",
       HOME: homePath,
-      KEPLER_TEST_APPDATA: testAppDataPath,
-      KEPLER_TEST_USER_DATA: testUserDataPath,
+      KOSMOS_TEST_APPDATA: testAppDataPath,
+      KOSMOS_TEST_USER_DATA: testUserDataPath,
       NODE_ENV: "development",
     },
   });

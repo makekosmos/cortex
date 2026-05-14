@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { ArkClient, type ArkObjectRecord } from "../../../../packages/kepler-ark/src/ark-client.ts";
+import { ArkClient, type ArkObjectRecord } from "../../../../packages/kosmos-ark/src/ark-client.ts";
 import {
   createArkGameObjectService,
   getArkCoreRpcBinaryPath,
@@ -111,7 +111,7 @@ function buildPersonalSelectedSpace(vaultPath: string, source: string): SharedSe
 }
 
 function writeSharedSelectedSpace(appDataPath: string, selection: SharedSelectedSpace | null): void {
-  const filePath = path.join(appDataPath, "Kepler", "selected-space.json");
+  const filePath = path.join(appDataPath, "Kosmos", "selected-space.json");
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
   if (!selection) {
@@ -128,7 +128,7 @@ function getArkDbPathForSelectedSpace(
   appDataPath: string,
   selection: SharedSelectedSpace | null,
 ): string {
-  const dataDir = path.join(appDataPath, "Kepler");
+  const dataDir = path.join(appDataPath, "Kosmos");
   if (!selection?.spaceId) {
     return path.join(dataDir, "ark.db");
   }
@@ -179,8 +179,8 @@ async function launchEden(env: AppEnvironment, attempt = 0): Promise<LaunchedApp
         USERPROFILE: env.homePath,
         APPDATA: env.appDataPath,
         LOCALAPPDATA: env.localAppDataPath,
-        KEPLER_TEST_APPDATA: env.appDataPath,
-        KEPLER_TEST_USER_DATA: env.userDataPath,
+        KOSMOS_TEST_APPDATA: env.appDataPath,
+        KOSMOS_TEST_USER_DATA: env.userDataPath,
       },
     });
   } catch (error) {

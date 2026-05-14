@@ -1,5 +1,5 @@
 param(
-  [string]$OutputDir = "dist\KeplerUsageTrackerInstaller",
+  [string]$OutputDir = "dist\KosmosUsageTrackerInstaller",
   [switch]$SkipBuild
 )
 
@@ -47,10 +47,10 @@ Set-Content -LiteralPath (Join-Path $bundleDir "Install Usage Tracker.cmd") -Val
 Set-Content -LiteralPath (Join-Path $bundleDir "Uninstall Usage Tracker.cmd") -Value $uninstallCmd -Encoding ASCII
 
 $manifest = @{
-  product = "Kepler Usage Tracker"
+  product = "Kosmos Usage Tracker"
   version = "0.1.0"
   built_at_utc = (Get-Date).ToUniversalTime().ToString("o")
-  install_dir_default = "%LOCALAPPDATA%\Kepler\UsageTracker"
+  install_dir_default = "%LOCALAPPDATA%\Kosmos\UsageTracker"
   entrypoint = "usage-tracker.exe"
   install_command = "Install Usage Tracker.cmd"
   uninstall_command = "Uninstall Usage Tracker.cmd"

@@ -24,9 +24,9 @@
     "AC6": "PASS"
   },
   "notes": [
-    "The shared game-card visual recipe now lives in packages/kepler-visuals/patterns/gamePosterCard.ts.",
+    "The shared game-card visual recipe now lives in packages/kosmos-visuals/patterns/gamePosterCard.ts.",
     "Arrancador GameCard became a thin wrapper over the shared recipe plus local game data mapping.",
-    "Arrancador Tailwind content globs now include packages/kepler-visuals, so shared utility strings are emitted into the renderer CSS.",
+    "Arrancador Tailwind content globs now include packages/kosmos-visuals, so shared utility strings are emitted into the renderer CSS.",
     "An already running bun run dev process must be restarted to pick up the Tailwind config change.",
     "Full Arrancador verification passed after stabilizing statistics.test.tsx timeout from 10000 to 20000 ms."
   ]

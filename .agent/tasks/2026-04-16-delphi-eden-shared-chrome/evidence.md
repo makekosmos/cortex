@@ -28,8 +28,8 @@
 
 ## Commands
 
-- PASS: `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\delphi\ts\tsconfig.json`
-- PASS: `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\eden\ts\tsconfig.json`
+- PASS: `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\delphi\ts\tsconfig.json`
+- PASS: `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\tsconfig.json`
 - FAIL: `bun run build` in `apps/delphi/ts`
 - FAIL: `bun run build` in `apps/eden/ts`
 

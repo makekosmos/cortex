@@ -1,4 +1,4 @@
-# Problems: delphi-sidebar-kepler
+# Problems: delphi-sidebar-kosmos
 
 _No verifier findings yet._
 

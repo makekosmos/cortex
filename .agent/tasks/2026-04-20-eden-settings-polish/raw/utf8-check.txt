@@ -8,4 +8,4 @@ FILE apps/eden/ts/src/components/settings/ConnectedAppsSettings.vue
   OK Синхронизировать тренировки
 FILE apps/eden/ts/src/Editor.css
 FILE apps/eden/ts/src/components/settings/SettingsPage.css
-FILE packages/kepler-visuals/components/SidebarButton.vue
+FILE packages/kosmos-visuals/components/SidebarButton.vue

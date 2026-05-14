@@ -4,7 +4,7 @@
 Align shared titlebar content vertically with the actual Window Controls Overlay region by accounting for `env(titlebar-area-y, ...)` in the Windows titlebar layout.
 
 ## Scope
-- `packages/kepler-visuals/components/Titlebar.vue`
+- `packages/kosmos-visuals/components/Titlebar.vue`
 - verification artifacts in `.agent/tasks/titlebar-env-vertical-align/`
 
 ## Acceptance Criteria

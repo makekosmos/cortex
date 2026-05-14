@@ -29,15 +29,15 @@
       "evidence": [
         "apps/dashboard/src/global.css",
         "apps/dashboard/src/components/dashboard/DashboardShell.vue",
-        "packages/kepler-visuals/components/sidebar.css"
+        "packages/kosmos-visuals/components/sidebar.css"
       ]
     },
     {
       "id": "AC4",
       "status": "PASS",
       "commands": [
-        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\tsc.exe",
-        "Set-Location D:\\Personal\\Hobby\\Coding\\kepler\\apps\\dashboard; .\\node_modules\\.bin\\vite.exe build --configLoader native"
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\dashboard; .\\node_modules\\.bin\\tsc.exe",
+        "Set-Location D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\dashboard; .\\node_modules\\.bin\\vite.exe build --configLoader native"
       ]
     },
     {
@@ -45,12 +45,12 @@
       "status": "PASS",
       "commands": [
         "Get-Process | Where-Object { $_.ProcessName -like 'usage-tracker*' } | Select-Object ProcessName, Id, StartTime, Path | Format-List",
-        "python sqlite query against %APPDATA%\\\\Kepler\\\\ark.db"
+        "python sqlite query against %APPDATA%\\\\Kosmos\\\\ark.db"
       ],
       "runtime": {
         "process_name": "usage-tracker",
         "pid": 37500,
-        "db_path": "C:\\Users\\Kazui\\AppData\\Roaming\\Kepler\\ark.db",
+        "db_path": "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\ark.db",
         "counts": {
           "tracked_apps": 6,
           "usage_sessions": 37,

@@ -5,19 +5,19 @@
     "commands": [
       {
         "command": "bunx tsc --noEmit",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-horizontal-game-card/typecheck.log"
       },
       {
         "command": "bunx vitest run --configLoader native --config vitest.config.mjs src/test/game-card.test.tsx",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS",
         "artifact": ".agent/tasks/2026-04-19-arrancador-horizontal-game-card/game-card-vitest.log"
       },
       {
         "command": "npx vite build",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "FAIL",
         "artifact": ".agent/tasks/2026-04-19-arrancador-horizontal-game-card/build-renderer.log",
         "notes": [
@@ -34,8 +34,8 @@
       "status": "PASS",
       "summary": "The shared game card now renders as a horizontal media card.",
       "evidence": [
-        "packages/kepler-visuals/patterns/gamePosterCard.ts",
-        "packages/kepler-visuals/react/GamePosterCard.tsx"
+        "packages/kosmos-visuals/patterns/gamePosterCard.ts",
+        "packages/kosmos-visuals/react/GamePosterCard.tsx"
       ]
     },
     {
@@ -52,8 +52,8 @@
       "status": "PASS",
       "summary": "The card always renders a lower darkening scrim for text readability.",
       "evidence": [
-        "packages/kepler-visuals/patterns/gamePosterCard.ts",
-        "packages/kepler-visuals/react/GamePosterCard.tsx"
+        "packages/kosmos-visuals/patterns/gamePosterCard.ts",
+        "packages/kosmos-visuals/react/GamePosterCard.tsx"
       ]
     },
     {
@@ -61,7 +61,7 @@
       "status": "PASS",
       "summary": "Genre eyebrow and title are rendered in the lower-left content layer.",
       "evidence": [
-        "packages/kepler-visuals/react/GamePosterCard.tsx",
+        "packages/kosmos-visuals/react/GamePosterCard.tsx",
         "apps/arrancador/src/components/GameCard.tsx"
       ]
     },
@@ -70,9 +70,9 @@
       "status": "PASS",
       "summary": "Hover darkening remains a separate overlay above the image while placeholder behavior stays intact.",
       "evidence": [
-        "packages/kepler-visuals/patterns/gamePosterCard.ts",
-        "packages/kepler-visuals/react/GamePosterCard.tsx",
-        "packages/kepler-visuals/theme/css-variables.css"
+        "packages/kosmos-visuals/patterns/gamePosterCard.ts",
+        "packages/kosmos-visuals/react/GamePosterCard.tsx",
+        "packages/kosmos-visuals/theme/css-variables.css"
       ]
     },
     {
@@ -98,8 +98,8 @@
       "status": "PASS",
       "summary": "No mojibake was introduced in the changed source files.",
       "evidence": [
-        "packages/kepler-visuals/react/GamePosterCard.tsx",
-        "packages/kepler-visuals/patterns/gamePosterCard.ts",
+        "packages/kosmos-visuals/react/GamePosterCard.tsx",
+        "packages/kosmos-visuals/patterns/gamePosterCard.ts",
         "apps/arrancador/src/components/GameCard.tsx",
         "apps/arrancador/src/pages/Library.tsx",
         "apps/arrancador/src/test/game-card.test.tsx"

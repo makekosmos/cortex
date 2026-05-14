@@ -1,8 +1,8 @@
 {
-  "task_id": "2026-04-16-kepler-titlebar-chrome",
+  "task_id": "2026-04-16-kosmos-titlebar-chrome",
   "summary": {
-    "titlebar_component": "packages/kepler-visuals/components/Titlebar.vue",
-    "desktop_chrome_component": "packages/kepler-visuals/components/DesktopChrome.vue",
+    "titlebar_component": "packages/kosmos-visuals/components/Titlebar.vue",
+    "desktop_chrome_component": "packages/kosmos-visuals/components/DesktopChrome.vue",
     "primary_consumer": "apps/dashboard/src/components/dashboard/DashboardShell.vue",
     "window_controls": "native"
   },
@@ -11,7 +11,7 @@
       "id": "AC1",
       "status": "PASS",
       "evidence": [
-        "Shared Titlebar component exported from packages/kepler-visuals",
+        "Shared Titlebar component exported from packages/kosmos-visuals",
         "macOS leading safe-area padding reserved in Titlebar CSS",
         "Windows reserves right-side safe area for native overlay controls",
         "Titlebar uses sidebar background tokens"
@@ -21,7 +21,7 @@
       "id": "AC2",
       "status": "PASS",
       "evidence": [
-        "Shared DesktopChrome layout exported from packages/kepler-visuals",
+        "Shared DesktopChrome layout exported from packages/kosmos-visuals",
         "DesktopChrome renders titlebar above sidebar/content body",
         "Sidebar reserveTopInset flag allows sidebar to sit below an external titlebar",
         "Visible chrome borders moved from sidebar/titlebar onto the content pane"

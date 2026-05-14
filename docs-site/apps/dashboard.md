@@ -11,7 +11,7 @@ Dashboard — desktop observability app для ARK usage data: foreground sessio
 - Frontend: Vue 3 + Composition API + `<script setup lang="ts">`.
 - Runtime: Electron.
 - Data access: read-only ARK inspection / analytics в Electron main.
-- Shared UI: `@kepler/visuals`.
+- Shared UI: `@kosmos/visuals`.
 
 ## Структура
 
@@ -43,11 +43,11 @@ apps/dashboard/
 ::: danger
 - Renderer **НИКОГДА** не открывает SQLite напрямую. Все DB reads — через `window.dashboardApi`.
 - Dashboard — **read-only**. Никаких writes в ARK таблицы.
-- Когда возможно — `@kepler/ark` analytics endpoints. Read-only SQLite fallback / inspector только в Electron main, не в renderer.
+- Когда возможно — `@kosmos/ark` analytics endpoints. Read-only SQLite fallback / inspector только в Electron main, не в renderer.
 - `electron/services/analytics.ts` — **единственная** граница для dashboard analytics. Не дублируй ARK queries внутри Vue компонентов.
-- `@kepler/visuals` — только через import/alias. Не копируй shared sidebar или токены внутрь `apps/dashboard`.
-- Desktop chrome выровнен с shared visuals. Wire actions в dashboard, но layout primitives — в `@kepler/visuals`.
-- `TitlebarHistoryControls` из `@kepler/visuals`, disabled-state — из реального состояния Vue Router history.
+- `@kosmos/visuals` — только через import/alias. Не копируй shared sidebar или токены внутрь `apps/dashboard`.
+- Desktop chrome выровнен с shared visuals. Wire actions в dashboard, но layout primitives — в `@kosmos/visuals`.
+- `TitlebarHistoryControls` из `@kosmos/visuals`, disabled-state — из реального состояния Vue Router history.
 - Route components тонкие. Data fetching — в `useDashboardData`. Side effects — в composables или Electron main.
 - Hash-based router navigation для стабильного deep-linking и Electron e2e navigation.
 :::
@@ -87,5 +87,5 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 
 - [Read-only SQL boundary](/concepts/readonly-sql)
 - [Граница записи в ARK](/concepts/write-boundary)
-- [kepler-visuals](/packages/kepler-visuals)
+- [kosmos-visuals](/packages/kosmos-visuals)
 - `docs/ARK-READONLY-SQL-BOUNDARY.md`

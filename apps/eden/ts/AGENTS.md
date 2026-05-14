@@ -34,16 +34,16 @@ Eden — основное приложение для записей: дневн
 └─────────────────────────────────┘
 ```
 
-- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kepler/visuals`.
+- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kosmos/visuals`.
 - **main/** — Electron main process: IPC handlers, SQLite storage (`store.ts`), Heart integration, Hevy sync, мост на ARK через `ark.ts`.
 - **heart/** — Rust binary: vault filesystem manager (note types, folders, save/move/delete с hardening), stdin/stdout sidecar. **Не** search engine — search мигрирован на ARK FTS5 в `store.ts:searchEntries`.
 
 ### ARK transport (Phase 2 cutover)
 
-`main/ark.ts` использует `@kepler/ark` с cosmos-aware resolution:
+`main/ark.ts` использует `@kosmos/ark` с kepler-aware resolution:
 
-- По умолчанию пытается подключиться к [Kosmos host](./kosmos.md) через WebSocket. Если Kosmos запущен — Eden не спавнит собственный `ark-core-rpc`.
-- Env-флаг `KEPLER_KOSMOS_OPTIONAL=1` включает **fallback** на self-managed sidecar (legacy режим), если Kosmos недоступен. Это transitional флаг — будет убран в Phase 6.
+- По умолчанию пытается подключиться к [Kepler host](./kepler.md) через WebSocket. Если Kepler запущен — Eden не спавнит собственный `ark-core-rpc`.
+- Env-флаг `KOSMOS_KEPLER_OPTIONAL=1` включает **fallback** на self-managed sidecar (legacy режим), если Kepler недоступен. Это transitional флаг — будет убран в Phase 6.
 - Eden подписывается на `sync_error`/`sync_replay` events для observability schema drift'а (см. [sync hold-and-replay](../concepts/sync.md#schema-drift-hold-and-replay-phase-2)).
 
 ## Стек
@@ -75,7 +75,7 @@ apps/eden/
    │  ├─ main.ts                 # init, BrowserWindow, IPC handlers
    │  ├─ preload.ts
    │  ├─ store.ts                # SQLite: entries, folders, note types, trash, vault
-   │  ├─ ark.ts                  # мост на @kepler/ark
+   │  ├─ ark.ts                  # мост на @kosmos/ark
    │  ├─ heart.ts                # Eden Heart sidecar
    │  ├─ hevy.ts                 # Hevy fitness API
    │  └─ hevySync.ts             # Hevy → Eden entries
@@ -138,9 +138,9 @@ bun x tsc --noEmit
 - **Heart остаётся**, не возвращаться к ripgrep. Расширение поиска — инкрементальный индекс в Tantivy, не новый JS-хак.
 - **Storage hardening** в `main/store.ts` — не упрощать. Защита для `save`/`move`/`delete` уже есть, не ломай её.
 - **tree-aware path logic**: для markdown-файлов один путь заметки, не плоские пути.
-- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`. **Не возвращай** ручные `--titlebar-height` / `--titlebar-left-safe-area` хаки в shell.
-- **Titlebar history controls** — общий `TitlebarHistoryControls` из `@kepler/visuals`. Состояние — из локальной истории экранов/записей Eden, **не** из vue-router.
-- **Shared visuals**: если компонент есть в `@kepler/visuals` — импорт через public API пакета, не deep import. Локальные `src/components/sidebar/*` — это **app-specific** контейнеры, не дубли shared UI.
+- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kosmos/visuals`. **Не возвращай** ручные `--titlebar-height` / `--titlebar-left-safe-area` хаки в shell.
+- **Titlebar history controls** — общий `TitlebarHistoryControls` из `@kosmos/visuals`. Состояние — из локальной истории экранов/записей Eden, **не** из vue-router.
+- **Shared visuals**: если компонент есть в `@kosmos/visuals` — импорт через public API пакета, не deep import. Локальные `src/components/sidebar/*` — это **app-specific** контейнеры, не дубли shared UI.
 - **Alias** `@/` → `src/`.
 - **preload**: `vite-plugin-electron` (бывший) генерирует `preload.mjs`, не `.js`. В `main.ts` путь — `.mjs`.
 
@@ -192,7 +192,7 @@ bun x tsc --noEmit
 
 ## Тесты
 
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kepler\ark.db`) в тестах.
+- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
 - ❌ Запуск Playwright против user vault Eden.
@@ -211,7 +211,7 @@ bun x tsc --noEmit
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -242,7 +242,7 @@ bun x tsc --noEmit
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kepler/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kepler-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -263,7 +263,7 @@ bun x tsc --noEmit
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -293,7 +293,7 @@ bun run ark:smoke
 
 ## Сжатые правила репозитория (TL;DR)
 
-- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
+- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
 - **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.
 - **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.
 - **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.

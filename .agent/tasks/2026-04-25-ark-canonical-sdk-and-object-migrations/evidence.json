@@ -11,8 +11,8 @@
     "AC7": "PASS"
   },
   "checks": [
-    { "command": "bun run --cwd packages/kepler-ark typecheck", "status": "PASS" },
-    { "command": "bun run --cwd packages/kepler-ark build", "status": "PASS" },
+    { "command": "bun run --cwd packages/kosmos-ark typecheck", "status": "PASS" },
+    { "command": "bun run --cwd packages/kosmos-ark build", "status": "PASS" },
     { "command": "bun run --cwd packages/arksync-node typecheck", "status": "PASS" },
     { "command": "bun run --cwd packages/arksync-node build", "status": "PASS" },
     { "command": "bun run --cwd apps/arrancador build:main", "status": "PASS" },

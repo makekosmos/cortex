@@ -1,12 +1,12 @@
-﻿apps/eden/ts/src/components/SearchOverlay.vue
+apps/eden/ts/src/components/SearchOverlay.vue
   <CommandPalette
     dialog-test-id="eden-search-palette"
     input-test-id="eden-search-input"
             data-testid="eden-search-result-item"
   </CommandPalette>
-import { CommandPalette } from "@kepler/visuals";
+import { CommandPalette } from "@kosmos/visuals";
 
-packages/kepler-visuals/components/CommandPalette.vue
+packages/kosmos-visuals/components/CommandPalette.vue
   dialogTestId?: string;
   inputTestId?: string;
   "update:query": [string];

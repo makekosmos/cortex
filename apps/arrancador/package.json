@@ -33,7 +33,7 @@
     "test:e2e": "bun run scripts/run-e2e.ts"
   },
   "dependencies": {
-    "@kepler/ark": "workspace:*",
+    "@kosmos/ark": "workspace:*",
     "@tailwindcss/vite": "^4.1.11",
     "@vue/runtime-vapor": "3.6.0-beta.9",
     "better-sqlite3": "^12.9.0",

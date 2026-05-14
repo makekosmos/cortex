@@ -1,6 +1,6 @@
 $ vitest run --configLoader native --config vitest.config.mjs
 
- RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+ RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/arrancador
 
  ❯ |electron-main| electron/main/sidecar/arrancador-sidecar.test.ts (3 tests | 1 failed) 17ms
      × reports an unavailable sidecar for a missing binary 11ms

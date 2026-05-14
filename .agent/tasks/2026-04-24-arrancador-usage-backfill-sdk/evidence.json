@@ -12,31 +12,31 @@
   "commands": [
     {
       "command": "bun run typecheck",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-usage-backfill-sdk/typecheck.txt",
       "exit_code": 0
     },
     {
       "command": "bun vitest run --configLoader native --config vitest.config.mjs electron/main/services/ark-usage-backfill.test.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-usage-backfill-sdk/test-ark-usage-backfill.txt",
       "exit_code": 0
     },
     {
       "command": "bun biome check electron/main/services/ark-usage-backfill.ts electron/main/services/ark-usage-backfill.test.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-usage-backfill-sdk/biome-check.txt",
       "exit_code": 0
     },
     {
       "command": "bun run build:main",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-usage-backfill-sdk/build-main.txt",
       "exit_code": 0
     },
     {
       "command": "git diff --check -- apps/arrancador/electron/main/services/ark-usage-backfill.ts apps/arrancador/electron/main/services/ark-usage-backfill.test.ts .agent/tasks/2026-04-24-arrancador-usage-backfill-sdk/spec.md",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-arrancador-usage-backfill-sdk/git-diff-check.txt",
       "exit_code": 0
     }

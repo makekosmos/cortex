@@ -265,7 +265,7 @@ onUnmounted(() => {
     :aria-expanded="open"
     :class="[
       triggerVariant === 'sidebar'
-        ? 'kepler-sidebar-btn'
+        ? 'kosmos-sidebar-btn'
         : 'inline-flex h-9 items-center gap-2 rounded-md border border-border/70 bg-card/70 px-3 text-xs font-[510] text-muted-foreground shadow-[0_1px_0_rgba(255,255,255,0.02)] backdrop-blur-md transition-colors hover:border-border hover:bg-card hover:text-foreground',
       triggerClassName,
     ]"

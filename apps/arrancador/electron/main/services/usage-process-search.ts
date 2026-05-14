@@ -1,4 +1,4 @@
-import { ArkClient, type ArkUsageApi, type ArkUsageProcessCandidate } from "@kepler/ark";
+import { ArkClient, type ArkUsageApi, type ArkUsageProcessCandidate } from "@kosmos/ark";
 import type { UsageProcessCandidate } from "../../../src/types";
 import { queryAll } from "../helpers/db";
 import type { DbLike, DbValue } from "../helpers/shared";

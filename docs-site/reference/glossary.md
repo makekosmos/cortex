@@ -4,7 +4,7 @@
 
 **ADR** (Architecture Decision Record) — документированное архитектурное решение. См. [Журнал решений](/reference/decisions).
 
-**ARK** — local-first data runtime Kepler. Rust + SQLite + sync. См. [ark-core](/packages/ark-core).
+**ARK** — local-first data runtime Kosmos. Rust + SQLite + sync. См. [ark-core](/packages/ark-core).
 
 **`ark-core-rpc`** — канонический бинарь sidecar ARK runtime. Принимает JSON-RPC по stdin/stdout.
 
@@ -40,13 +40,13 @@
 
 ## I
 
-**Injected sidecar** — режим `@kepler/ark`, когда sidecar уже владеется другим слоем, и SDK получает `requestFn` / `onEventFn`. См. [@kepler/ark](/packages/kepler-ark).
+**Injected sidecar** — режим `@kosmos/ark`, когда sidecar уже владеется другим слоем, и SDK получает `requestFn` / `onEventFn`. См. [@kosmos/ark](/packages/kosmos-ark).
 
 ## K
 
-**`@kepler/ark`** — канонический TS SDK для ARK runtime.
+**`@kosmos/ark`** — канонический TS SDK для ARK runtime.
 
-**`@kepler/visuals`** — общая UI-система (токены, тема, компоненты). См. [kepler-visuals](/packages/kepler-visuals).
+**`@kosmos/visuals`** — общая UI-система (токены, тема, компоненты). См. [kosmos-visuals](/packages/kosmos-visuals).
 
 ## L
 
@@ -80,13 +80,13 @@
 
 ## S
 
-**Self-managed sidecar** — режим `@kepler/ark`, когда `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`.
+**Self-managed sidecar** — режим `@kosmos/ark`, когда `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`.
 
 **Sidecar** — отдельный процесс рядом с приложением. Примеры: `ark-core-rpc` (для всех Electron apps), Eden Heart (для Eden).
 
-**Space** — отдельное пространство данных ARK. Разные spaces — разные SQLite-БД (`%APPDATA%\Kepler\spaces\<spaceId>\ark.db`).
+**Space** — отдельное пространство данных ARK. Разные spaces — разные SQLite-БД (`%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`).
 
-**Squircle** — закруглённый прямоугольник с переменной кривизной угла. Эстетика kepler-visuals.
+**Squircle** — закруглённый прямоугольник с переменной кривизной угла. Эстетика kosmos-visuals.
 
 **Sync** — синхронизация состояния между пирами. См. [Sync](/concepts/sync).
 
@@ -118,9 +118,9 @@
 
 **Version vector** — векторное clock пира для CRDT merge. Хранится в `sync_kv` под ключом `lan_sync.version_vector`. Обновляется при каждой записи в синхронизируемую сущность.
 
-**`@kepler/visuals`** — общая UI-система. См. [kepler-visuals](/packages/kepler-visuals).
+**`@kosmos/visuals`** — общая UI-система. См. [kosmos-visuals](/packages/kosmos-visuals).
 
 ## Z
 
-**Zed Mono** — моноширинный шрифт, используется в `kepler-visuals` для `font-family-mono`.
+**Zed Mono** — моноширинный шрифт, используется в `kosmos-visuals` для `font-family-mono`.
 

@@ -15,7 +15,7 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "Eden search UI now renders through shared @kepler/visuals CommandPalette instead of the old standalone overlay shell."
+      "reason": "Eden search UI now renders through shared @kosmos/visuals CommandPalette instead of the old standalone overlay shell."
     },
     {
       "id": "AC4",

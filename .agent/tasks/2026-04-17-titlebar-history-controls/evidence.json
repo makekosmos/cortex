@@ -6,7 +6,7 @@
       "id": "AC1",
       "status": "PASS",
       "evidence": [
-        "Shared component added at packages/kepler-visuals/components/TitlebarHistoryControls.vue",
+        "Shared component added at packages/kosmos-visuals/components/TitlebarHistoryControls.vue",
         "Component exported through public package entrypoints"
       ]
     },

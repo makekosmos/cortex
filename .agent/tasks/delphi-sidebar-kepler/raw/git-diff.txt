@@ -17,18 +17,18 @@ index 7d26f8b..0708f51 100644
    Settings,
    Star,
  } from "lucide-vue-next";
--import { SidebarButton as SideBarButton } from "@kepler/visuals/components";
+-import { SidebarButton as SideBarButton } from "@kosmos/visuals/components";
 +import {
-+  Sidebar as KeplerSidebar,
++  Sidebar as KosmosSidebar,
 +  type SidebarConfig,
 +  type SidebarNavItem,
 +  type SidebarProjectItem,
-+} from "@kepler/visuals/components";
++} from "@kosmos/visuals/components";
  import { useTodoStore } from "@/store/todos";
  import { storeToRefs } from "pinia";
  import { ProjectStatus } from "@/types/task";
--import ResizableSidebar from "@kepler/visuals/components/ResizableSidebar.vue";
--import type { SidebarConfig } from "@kepler/visuals/components/ResizableSidebar.vue";
+-import ResizableSidebar from "@kosmos/visuals/components/ResizableSidebar.vue";
+-import type { SidebarConfig } from "@kosmos/visuals/components/ResizableSidebar.vue";
  import { setSidebarHidden } from "@/composables/useSidebarState";
 +import { useRoute } from "vue-router";
  
@@ -100,7 +100,7 @@ index 7d26f8b..0708f51 100644
  
  <template>
 -  <ResizableSidebar
-+  <KeplerSidebar
++  <KosmosSidebar
 +    :primary-items="primaryItems"
 +    :project-items="projectItems"
 +    :footer-items="footerItems"
@@ -179,10 +179,10 @@ index 7d26f8b..0708f51 100644
 -  corner-shape: var(--corner-shape);
 -}
 -</style>
-diff --git a/packages/kepler-visuals/components/index.ts b/packages/kepler-visuals/components/index.ts
+diff --git a/packages/kosmos-visuals/components/index.ts b/packages/kosmos-visuals/components/index.ts
 index 758b88f..63b4859 100644
---- a/packages/kepler-visuals/components/index.ts
-+++ b/packages/kepler-visuals/components/index.ts
+--- a/packages/kosmos-visuals/components/index.ts
++++ b/packages/kosmos-visuals/components/index.ts
 @@ -8,6 +8,10 @@ export type { SidebarConfig } from "./ResizableSidebar.vue";
  
  export { default as SidebarButton } from "./SidebarButton.vue";
@@ -194,10 +194,10 @@ index 758b88f..63b4859 100644
  export { default as TodoRow } from "./TodoRow.vue";
  
  export type { TodoRowItem, TodoDropPayload } from "./TodoRow.vue";
-diff --git a/packages/kepler-visuals/index.ts b/packages/kepler-visuals/index.ts
+diff --git a/packages/kosmos-visuals/index.ts b/packages/kosmos-visuals/index.ts
 index e4641fb..6f71158 100644
---- a/packages/kepler-visuals/index.ts
-+++ b/packages/kepler-visuals/index.ts
+--- a/packages/kosmos-visuals/index.ts
++++ b/packages/kosmos-visuals/index.ts
 @@ -14,6 +14,9 @@ export {
    type SidebarConfig,
    CommandPalette,

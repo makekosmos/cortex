@@ -9,7 +9,7 @@
 :::
 
 - **Path**: `apps/horologion`
-- **Стек**: Electron 41 + Vite 8 + **Vue 3.6 Vapor** + `@kepler/ark` + `@kepler/visuals`. Жёсткое окно 600×800px.
+- **Стек**: Electron 41 + Vite 8 + **Vue 3.6 Vapor** + `@kosmos/ark` + `@kosmos/visuals`. Жёсткое окно 600×800px.
 - **Аналог**: Toggl Track — без социалки, без web-app, локально, с интеграцией Delphi-задач.
 
 ## Список фич, которые планируется/нужно сделать
@@ -18,7 +18,7 @@
 
 ## UI и дизайн
 
-Horologion полностью использует [`@kepler/visuals`](/packages/kepler-visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные kepler-visuals. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
+Horologion полностью использует [`@kosmos/visuals`](/packages/kosmos-visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные kosmos-visuals. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
 
 ### Структура окна
 
@@ -62,7 +62,7 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 - $-badge для billable.
 
 ### Edit modal
-- `<Modal>` из kepler-visuals.
+- `<Modal>` из kosmos-visuals.
 - Поле «Описание» — `<MentionInput>` (можно поменять / добавить задачу через `@`).
 - Preview под input'ом показывает task-pill.
 - Два `<DateTimePicker>` (С / По) — кастомный недельный календарь + текстовый ввод HH:MM.
@@ -114,7 +114,7 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 ```
 
 ::: tip Билд
-По общей [конвенции Kepler](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает финальный установщик в формате **MSI** (Windows Installer) — `apps/horologion/release/Horologion X.Y.Z.msi`. Per-machine установка, поддержка GPO / unattended install.
+По общей [конвенции Kosmos](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает финальный установщик в формате **MSI** (Windows Installer) — `apps/horologion/release/Horologion X.Y.Z.msi`. Per-machine установка, поддержка GPO / unattended install.
 
 **Иконка** embed'ится в `Horologion.exe` через `afterPack`-хук (`build/afterPack.cjs`), использующий npm-пакеты `rcedit` + `png-to-ico`. Это нужно, потому что `win.signAndEditExecutable: false` отрубает встроенный rcedit electron-builder (workaround под падение winCodeSign symlinks на Windows без Developer Mode). Хук конвертирует `build/icon.png` → `build/icon.ico` (с кэшем по mtime), затем зовёт rcedit и проставляет иконку + version-string метаданные (ProductName, CompanyName, FileVersion). Дополнительно в main.ts вызывается `app.setAppUserModelId("com.kazui.horologion")`, чтобы Windows правильно группировал окно в taskbar и подхватывал нашу иконку, а не дефолтную electron.exe.
 
@@ -126,5 +126,5 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 - [Roadmap](/apps/horologion-roadmap) — что планируется / баги.
 - [Модель данных ARK](/concepts/ark-objects) — `time_entry_obj`, `tag_obj`.
 - [Delphi](/apps/delphi) — задачи (для `@`-mention).
-- [@kepler/ark](/packages/kepler-ark) — TS SDK.
-- [kepler-visuals](/packages/kepler-visuals) — UI-система.
+- [@kosmos/ark](/packages/kosmos-ark) — TS SDK.
+- [kosmos-visuals](/packages/kosmos-visuals) — UI-система.

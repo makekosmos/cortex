@@ -78,13 +78,13 @@ function buildPersonalSelectedSpace(vaultPath, source) {
 }
 
 function writeSelectedSpace(appDataPath, selection) {
-  const filePath = path.join(appDataPath, "Kepler", "selected-space.json");
+  const filePath = path.join(appDataPath, "Kosmos", "selected-space.json");
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(selection, null, 2), "utf8");
 }
 
 function getArkDbPathForSelectedSpace(appDataPath, selection) {
-  const dataDir = path.join(appDataPath, "Kepler");
+  const dataDir = path.join(appDataPath, "Kosmos");
   return selection?.spaceId
     ? path.join(dataDir, "spaces", selection.spaceId, "ark.db")
     : path.join(dataDir, "ark.db");
@@ -141,8 +141,8 @@ async function launchElectronApp(appPath, env, extraEnv = {}) {
       HOME: env.homePath,
       APPDATA: env.appDataPath,
       LOCALAPPDATA: env.localAppDataPath,
-      KEPLER_TEST_APPDATA: env.appDataPath,
-      KEPLER_TEST_USER_DATA: env.userDataPath,
+      KOSMOS_TEST_APPDATA: env.appDataPath,
+      KOSMOS_TEST_USER_DATA: env.userDataPath,
       PLAYWRIGHT: "1",
       ...extraEnv,
     },
@@ -160,7 +160,7 @@ async function launchElectronApp(appPath, env, extraEnv = {}) {
 }
 
 async function launchDelphi(env) {
-  const appPath = path.resolve("D:/Personal/Hobby/Coding/kepler/apps/delphi/ts");
+  const appPath = path.resolve("D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts");
   const launched = await launchElectronApp(appPath, env, {
     DELPHI_BACKGROUND_LAUNCH: "1",
     NODE_ENV: "production",
@@ -170,7 +170,7 @@ async function launchDelphi(env) {
 }
 
 async function launchEden(env) {
-  const appPath = path.resolve("D:/Personal/Hobby/Coding/kepler/apps/eden/ts");
+  const appPath = path.resolve("D:/Personal/Hobby/Coding/kosmos/apps/eden/ts");
   const launched = await launchElectronApp(appPath, env, {
     EDEN_BACKGROUND_LAUNCH: "1",
     NODE_ENV: "production",

@@ -5,12 +5,12 @@
     "commands": [
       {
         "command": "bunx tsc --noEmit",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "PASS"
       },
       {
-        "command": "rg --line-number \"�\" .\\packages\\kepler-visuals\\react\\GamePosterCard.tsx .\\packages\\kepler-visuals\\theme\\css-variables.css .\\packages\\kepler-visuals\\patterns\\gamePosterCard.ts .\\.agent\\tasks\\2026-04-19-arrancador-card-text-overlay-fix",
-        "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+        "command": "rg --line-number \"�\" .\\packages\\kosmos-visuals\\react\\GamePosterCard.tsx .\\packages\\kosmos-visuals\\theme\\css-variables.css .\\packages\\kosmos-visuals\\patterns\\gamePosterCard.ts .\\.agent\\tasks\\2026-04-19-arrancador-card-text-overlay-fix",
+        "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
         "status": "PASS"
       }
     ]

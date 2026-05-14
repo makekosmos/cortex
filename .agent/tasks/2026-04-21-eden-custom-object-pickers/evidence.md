@@ -17,11 +17,11 @@ The typed object property editor now uses an app-native picker for single-choice
 
 ## Checks
 
-- `PASS` — `apps/eden/ts/node_modules/.bin/tsc.exe --noEmit -p "D:\Personal\Hobby\Coding\kepler\apps\eden\ts\tsconfig.json"`  
+- `PASS` — `apps/eden/ts/node_modules/.bin/tsc.exe --noEmit -p "D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\tsconfig.json"`  
   Raw: `raw/tsc.txt`
 - `PASS` — `bun run lint` in `apps/eden/ts`  
   Raw: `raw/lint.txt`
-- `PASS` — `rg -n "<select" "D:\Personal\Hobby\Coding\kepler\apps\eden\ts\src\components\typed-notes"`  
+- `PASS` — `rg -n "<select" "D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\src\components\typed-notes"`  
   Raw: `raw/no-native-select.txt`
 - `PASS` — `Select-String` UTF-8/mojibake pass for new Russian UI strings  
   Raw: `raw/ui-strings-utf8.txt`

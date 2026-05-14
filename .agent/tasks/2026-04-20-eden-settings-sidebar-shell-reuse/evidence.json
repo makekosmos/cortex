@@ -44,7 +44,7 @@
       "status": "PASS",
       "evidence": [
         "apps/eden/ts/src/components/sidebar/EdenSidebar.vue",
-        "packages/kepler-visuals/components/Sidebar.vue"
+        "packages/kosmos-visuals/components/Sidebar.vue"
       ],
       "notes": "Object type rows use the shared icon-mask project item rendering tinted with type color."
     },

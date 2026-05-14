@@ -1,8 +1,8 @@
-# Kepler Sidebar Groups
+# Kosmos Sidebar Groups
 
 ## Context
 
-`Kepler Visuals` sidebar currently renders flat sections:
+`Kosmos Visuals` sidebar currently renders flat sections:
 - primary nav items
 - one project list
 - one secondary project list
@@ -13,7 +13,7 @@ The shell lacks a reusable grouped presentation for related object rows. Eden ne
 ## Acceptance criteria
 
 ### AC1. Generic grouped API
-- `packages/kepler-visuals/components/Sidebar.vue` supports grouped project sections as a reusable API.
+- `packages/kosmos-visuals/components/Sidebar.vue` supports grouped project sections as a reusable API.
 - A group has a label, rows, and collapsed/expanded state.
 - Existing non-group sidebar usage keeps working.
 

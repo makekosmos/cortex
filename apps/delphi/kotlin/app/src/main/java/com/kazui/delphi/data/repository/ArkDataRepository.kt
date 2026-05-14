@@ -35,8 +35,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "ArkDataRepository"
-private const val ARK_DATA_PACKAGE = "com.kepler.ark.data"
-private const val AUTHORITY = "com.kepler.ark.data"
+private const val ARK_DATA_PACKAGE = "com.kosmos.ark.data"
+private const val AUTHORITY = "com.kosmos.ark.data"
 private val BASE_URI: Uri = Uri.parse("content://$AUTHORITY")
 
 private fun tableUri(table: String): Uri = BASE_URI.buildUpon().appendPath(table).build()

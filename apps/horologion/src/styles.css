@@ -2,12 +2,12 @@
  * Horologion-локальные CSS-токены.
  *
  * Все ОБЩИЕ токены (--background, --foreground, --accent, --status-success,
- * --destructive, и т.д.) берутся из @kepler/visuals/theme/css-variables.css
+ * --destructive, и т.д.) берутся из @kosmos/visuals/theme/css-variables.css
  * (импортируется в main.ts). Тут только Horologion-domain-specific цвета.
  */
 
 :root {
-  /* Apple HIG systemPurple (dark) ≈ #BF5AF2. У каждого приложения Kepler свой
+  /* Apple HIG systemPurple (dark) ≈ #BF5AF2. У каждого приложения Kosmos свой
      акцентный цвет — Horologion фиолетовый. Переопределяем общий --accent,
      чтобы все компоненты (ring, кнопки, чипы, индикаторы табов) подхватили. */
   --horologion-accent: oklch(0.66 0.245 305);

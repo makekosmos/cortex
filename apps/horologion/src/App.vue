@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from "vue";
 import { RouterView, RouterLink, useRoute } from "vue-router";
 import { Play, Pause, Settings } from "lucide-vue-next";
-import { DesktopChrome, DesktopContentSurface } from "@kepler/visuals";
+import { DesktopChrome, DesktopContentSurface } from "@kosmos/visuals";
 import type {
   TimeEntry,
   ArkStatus,
@@ -449,7 +449,7 @@ function isTab(t: string): boolean {
 }
 
 .dot--connecting {
-  /* Тёплый-жёлтый "warning"-токен ещё не объявлен в kepler-visuals для всех тонов.
+  /* Тёплый-жёлтый "warning"-токен ещё не объявлен в kosmos-visuals для всех тонов.
      Когда добавим - заменим на var(--status-warning). */
   color: oklch(0.75 0.14 75);
 }

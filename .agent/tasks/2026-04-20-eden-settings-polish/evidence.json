@@ -16,7 +16,7 @@
       "id": "AC2",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/SidebarButton.vue"
+        "packages/kosmos-visuals/components/SidebarButton.vue"
       ],
       "notes": "Sidebar buttons now left-align content and truncate labels with ellipsis."
     },
@@ -24,7 +24,7 @@
       "id": "AC3",
       "status": "PASS",
       "evidence": [
-        "packages/kepler-visuals/components/Sidebar.vue"
+        "packages/kosmos-visuals/components/Sidebar.vue"
       ],
       "notes": "Sidebar project/object rows now left-align and truncate cleanly."
     },

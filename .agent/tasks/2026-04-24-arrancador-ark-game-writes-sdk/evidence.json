@@ -12,60 +12,60 @@
   "commands": [
     {
       "command": "bun install",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "exit_code": 0
     },
     {
       "command": "bun run typecheck",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/typecheck.txt",
       "exit_code": 0
     },
     {
       "command": "bun vitest run --configLoader native --config vitest.config.mjs electron/main/services/ark-game-objects.test.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/test-ark-game-objects.txt",
       "exit_code": 0
     },
     {
       "command": "bun run build:main",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/build-main.txt",
       "exit_code": 0
     },
     {
       "command": "bun run build:sidecar:dev",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/build-sidecar-dev.txt",
       "exit_code": 0
     },
     {
       "command": "bun run build:sidecar",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/build-sidecar-release.txt",
       "exit_code": 0
     },
     {
       "command": "bun run typecheck",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\packages\\arksync-node",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\packages\\arksync-node",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/arksync-node-typecheck.txt",
       "exit_code": 0
     },
     {
       "command": "bun run build",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\packages\\arksync-node",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\packages\\arksync-node",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/arksync-node-build.txt",
       "exit_code": 0
     },
     {
       "command": "bun biome check electron/main/services/ark-game-objects.ts electron/main/services/ark-game-objects.test.ts",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/biome-check.txt",
       "exit_code": 0
     },
     {
       "command": "git diff --check -- apps/arrancador/electron/main/services/ark-game-objects.ts apps/arrancador/electron/main/services/ark-game-objects.test.ts apps/arrancador/package.json apps/arrancador/electron-builder.yml packages/arksync-node/src/index.ts .agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/spec.md",
-      "cwd": "D:\\Personal\\Hobby\\Coding\\kepler",
+      "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos",
       "artifact": ".agent/tasks/2026-04-24-arrancador-ark-game-writes-sdk/git-diff-check.txt",
       "exit_code": 0
     }

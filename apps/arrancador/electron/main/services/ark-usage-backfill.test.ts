@@ -1,4 +1,4 @@
-import type { ArkTrackedAppRecord, ArkUsageApi, ArkUsageSessionRecord } from "@kepler/ark";
+import type { ArkTrackedAppRecord, ArkUsageApi, ArkUsageSessionRecord } from "@kosmos/ark";
 import { describe, expect, it } from "vitest";
 import type { DbLike } from "../helpers/shared";
 import {

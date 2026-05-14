@@ -1,4 +1,4 @@
-//! ark-relay-server: WebSocket relay for Kosmos P2P mesh.
+//! ark-relay-server: WebSocket relay for Kepler P2P mesh.
 //!
 //! Forwards `LanSyncMessage` JSON frames between devices sharing the same
 //! `space_id`. Persists an event log to SQLite so new devices receive a

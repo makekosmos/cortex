@@ -13,13 +13,13 @@ import { fileURLToPath } from "node:url";
 import {
   ArkClient,
   buildPersonalSelectedSpace,
-  ensureKosmosRunning,
+  ensureKeplerRunning,
   getArkDbPathForSelectedSpace,
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
   type ArkObjectRecord,
   type JsonValue,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 import type {
   CreateTimeEntryInput,
   StartTimerInput,
@@ -84,15 +84,15 @@ let arkClientPromise: Promise<ArkClient> | null = null;
 let arkStatus: ArkStatus = { status: "connecting" };
 
 /**
- * Architectural model: Kosmos optional by default. Без него — standalone mode
- * (self-managed sidecar, без sync). `KEPLER_REQUIRE_KOSMOS=1` для строгого режима.
+ * Architectural model: Kepler optional by default. Без него — standalone mode
+ * (self-managed sidecar, без sync). `KOSMOS_REQUIRE_KEPLER=1` для строгого режима.
  */
-function isKosmosRequired(): boolean {
-  return process.env.KEPLER_REQUIRE_KOSMOS === "1";
+function isKeplerRequired(): boolean {
+  return process.env.KOSMOS_REQUIRE_KEPLER === "1";
 }
 
-function isKosmosOptional(): boolean {
-  return !isKosmosRequired();
+function isKeplerOptional(): boolean {
+  return !isKeplerRequired();
 }
 
 async function getArk(): Promise<ArkClient> {
@@ -105,49 +105,49 @@ async function getArk(): Promise<ArkClient> {
       const deviceId = `horologion-${app.getPath("userData").slice(-12)}`;
       const deviceName = "Horologion";
 
-      // Phase 3: cosmos-aware resolution. По умолчанию ходим к Kosmos host через WS.
-      // Если Kosmos недоступен И env KEPLER_KOSMOS_OPTIONAL=1 — fallback на self-managed
+      // Phase 3: kepler-aware resolution. По умолчанию ходим к Kepler host через WS.
+      // Если Kepler недоступен И env KOSMOS_KEPLER_OPTIONAL=1 — fallback на self-managed
       // sidecar (legacy режим до Phase 6).
-      const state = await ensureKosmosRunning({
+      const state = await ensureKeplerRunning({
         appDataPath: app.getPath("appData"),
         waitMs: 10000,
-        autoLaunch: !isKosmosOptional(),
+        autoLaunch: !isKeplerOptional(),
       });
 
       let client: ArkClient;
       switch (state.kind) {
         case "connected": {
           console.log(
-            `[horologion.ark] using Kosmos host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+            `[horologion.ark] using Kepler host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
           );
           client = new ArkClient({
             spaceId,
             deviceId,
             deviceName,
-            cosmosLock: state.lock,
+            keplerLock: state.lock,
           });
           break;
         }
         case "incompatible-version": {
           throw new Error(
-            `Kosmos protocol mismatch: server ${state.cosmosVersion.major}.${state.cosmosVersion.minor}.${state.cosmosVersion.patch}, ` +
-              `client expects ${state.clientMajor}.x. Update Kosmos or Horologion.`,
+            `Kepler protocol mismatch: server ${state.keplerVersion.major}.${state.keplerVersion.minor}.${state.keplerVersion.patch}, ` +
+              `client expects ${state.clientMajor}.x. Update Kepler or Horologion.`,
           );
         }
         case "launch-failed":
         case "not-installed": {
-          if (isKosmosRequired()) {
+          if (isKeplerRequired()) {
             const detail =
               state.kind === "not-installed"
                 ? `checked: ${state.checkedPaths.join(", ") || "(no candidates)"}`
                 : state.reason;
             throw new Error(
-              `Horologion запущен с KEPLER_REQUIRE_KOSMOS=1, но Kosmos ${state.kind} (${detail}). ` +
-                `Установи Kepler Kosmos или сними флаг.`,
+              `Horologion запущен с KOSMOS_REQUIRE_KEPLER=1, но Kepler ${state.kind} (${detail}). ` +
+                `Установи Kosmos Kepler или сними флаг.`,
             );
           }
           console.log(
-            `[horologion.ark] Kosmos ${state.kind} — standalone mode, sync disabled`,
+            `[horologion.ark] Kepler ${state.kind} — standalone mode, sync disabled`,
           );
           client = new ArkClient({
             spaceId,
@@ -500,11 +500,11 @@ function createWindow(): void {
     minWidth: 420,
     minHeight: 560,
     icon: nativeImage.createFromPath(iconPath),
-    // Скрываем системный titlebar — рисуем свой через @kepler/visuals (DesktopChrome).
+    // Скрываем системный titlebar — рисуем свой через @kosmos/visuals (DesktopChrome).
     // titlebarOverlay даёт нам env(titlebar-area-*) для расчёта safe-area под кнопками окна.
     titleBarStyle: "hidden",
     // titleBarOverlay и backgroundColor нужны Electron'у ДО загрузки рендерера и CSS,
-    // поэтому литеральные значения; цвета подобраны под dark-токены kepler-visuals
+    // поэтому литеральные значения; цвета подобраны под dark-токены kosmos-visuals
     // (--sidebar-bg ≈ #171717, --sidebar-foreground ≈ #fafafa).
     titleBarOverlay: { color: "rgba(0,0,0,0)", symbolColor: "#fafafa", height: 44 },
     backgroundColor: "#171717",

@@ -18,7 +18,7 @@
 `packages/ark-core/README.md`, `packages/ark-core/AGENTS.md`
 :::
 
-Канонический local-first data runtime для Kepler. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
+Канонический local-first data runtime для Kosmos. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
 
 ## Статус (2026-04-16)
 
@@ -53,8 +53,8 @@ packages/ark-core/rust/src/
 ```powershell
 cargo build --manifest-path packages/ark-core/rust/Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path packages/ark-core/rust/Cargo.toml
-bun run --cwd packages/kepler-ark typecheck
-bun run --cwd packages/kepler-ark build
+bun run --cwd packages/kosmos-ark typecheck
+bun run --cwd packages/kosmos-ark build
 ```
 
 ## Sidecar контракт
@@ -158,7 +158,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Связанные документы
 
-- [@kepler/ark](docs-site/packages/kepler-ark.md) — TS SDK.
+- [@kosmos/ark](docs-site/packages/kosmos-ark.md) — TS SDK.
 - [Модель данных ARK](docs-site/concepts/ark-objects.md).
 - [Синхронизация](docs-site/concepts/sync.md).
 - [Граница записи в ARK](docs-site/concepts/write-boundary.md).
@@ -189,7 +189,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Тесты
 
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kepler\ark.db`) в тестах.
+- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
 - ❌ Запуск Playwright против user vault Eden.
@@ -208,7 +208,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -239,7 +239,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kepler/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kepler-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -260,7 +260,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -290,7 +290,7 @@ bun run ark:smoke
 
 ## Сжатые правила репозитория (TL;DR)
 
-- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
+- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
 - **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.
 - **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.
 - **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.

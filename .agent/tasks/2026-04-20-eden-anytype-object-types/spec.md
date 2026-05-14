@@ -29,7 +29,7 @@ We want the Anytype idea, not a literal port:
 - `packages/ark-core/rust`
 - `apps/eden/ts/main`
 - `apps/eden/ts/src`
-- optional supporting updates in `packages/kepler-visuals` if a reusable header/property component is extracted
+- optional supporting updates in `packages/kosmos-visuals` if a reusable header/property component is extracted
 
 ## Out Of Scope
 - Full Anytype parity in dataview/grid/gallery/board filtering and sorting

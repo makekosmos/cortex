@@ -7,7 +7,7 @@ import {
   buildPersonalSelectedSpace,
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 
 import { defaultCodeToolsSettings, type CodeToolsSettings } from "./codeTools";
 

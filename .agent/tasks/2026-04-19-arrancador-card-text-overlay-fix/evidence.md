@@ -1,14 +1,14 @@
 # Evidence - Arrancador card text overlay fix
 
 ## Scope
-- `packages/kepler-visuals/react/GamePosterCard.tsx`
-- `packages/kepler-visuals/patterns/gamePosterCard.ts`
-- `packages/kepler-visuals/theme/css-variables.css`
+- `packages/kosmos-visuals/react/GamePosterCard.tsx`
+- `packages/kosmos-visuals/patterns/gamePosterCard.ts`
+- `packages/kosmos-visuals/theme/css-variables.css`
 - `.agent/tasks/2026-04-19-arrancador-card-text-overlay-fix/spec.md`
 
 ## What changed
-- Moved all image darkening layers into a dedicated media stack inside [GamePosterCard.tsx](/D:/Personal/Hobby/Coding/kepler/packages/kepler-visuals/react/GamePosterCard.tsx:38).
-- Kept the text content as a separate sibling layer rendered after the media stack in [GamePosterCard.tsx](/D:/Personal/Hobby/Coding/kepler/packages/kepler-visuals/react/GamePosterCard.tsx:63).
+- Moved all image darkening layers into a dedicated media stack inside [GamePosterCard.tsx](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/react/GamePosterCard.tsx:38).
+- Kept the text content as a separate sibling layer rendered after the media stack in [GamePosterCard.tsx](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/react/GamePosterCard.tsx:63).
 - Switched genre/title to plain white in both inline styles and shared CSS.
 
 ## Acceptance criteria
@@ -20,4 +20,4 @@
 
 ## Verification
 - `bunx tsc --noEmit` PASS
-- `rg --line-number "�" .\packages\kepler-visuals\react\GamePosterCard.tsx .\packages\kepler-visuals\theme\css-variables.css .\packages\kepler-visuals\patterns\gamePosterCard.ts .\.agent\tasks\2026-04-19-arrancador-card-text-overlay-fix` PASS
+- `rg --line-number "�" .\packages\kosmos-visuals\react\GamePosterCard.tsx .\packages\kosmos-visuals\theme\css-variables.css .\packages\kosmos-visuals\patterns\gamePosterCard.ts .\.agent\tasks\2026-04-19-arrancador-card-text-overlay-fix` PASS

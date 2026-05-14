@@ -4,7 +4,7 @@
 Use `env(titlebar-area-*)` CSS environment variables for the Delphi TS shared titlebar layout on Windows instead of heuristic safe-area padding.
 
 ## Scope
-- `packages/kepler-visuals/components/Titlebar.vue`
+- `packages/kosmos-visuals/components/Titlebar.vue`
 - verification artifacts in `.agent/tasks/titlebar-env-layout/`
 
 ## Acceptance Criteria

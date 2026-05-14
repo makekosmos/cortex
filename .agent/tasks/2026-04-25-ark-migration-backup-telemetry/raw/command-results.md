@@ -11,7 +11,7 @@
 - `bun run --cwd apps/delphi/ts e2e`
   - Result: PASS.
   - Output included: `1 passed`.
-  - The test runs with isolated temporary `KEPLER_TEST_APPDATA` and `KEPLER_TEST_USER_DATA` paths.
+  - The test runs with isolated temporary `KOSMOS_TEST_APPDATA` and `KOSMOS_TEST_USER_DATA` paths.
 - `bun run --cwd apps/eden/ts test:ark-migration`
   - Result: PASS.
   - Output included: `{"status":"ok","objectTypes":["note_obj","research_note"],"objects":["note-a","note-b"],"links":["note-a:related:note-b"],"failureStatus":"partial_failure"}`.

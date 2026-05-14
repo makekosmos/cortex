@@ -9,8 +9,8 @@
 ## Commands
 
 ```powershell
-Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\tsc.exe
-Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
+Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\tsc.exe
+Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
 ```
 
 ## Result

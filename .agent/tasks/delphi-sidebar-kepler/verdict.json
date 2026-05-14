@@ -1,5 +1,5 @@
 {
-  "task_id": "delphi-sidebar-kepler",
+  "task_id": "delphi-sidebar-kosmos",
   "overall_verdict": "PASS",
   "verified_at": "2026-04-10",
   "verifier": "task-verifier",
@@ -7,12 +7,12 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "packages/kepler-visuals/components/Sidebar.vue now provides a reusable, typed sidebar shell over ResizableSidebar and SidebarButton. The package exports are wired in both components/index.ts and the package root index.ts."
+      "reason": "packages/kosmos-visuals/components/Sidebar.vue now provides a reusable, typed sidebar shell over ResizableSidebar and SidebarButton. The package exports are wired in both components/index.ts and the package root index.ts."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "reason": "apps/delphi/ts/src/components/SideBar.vue now only derives Delphi-specific navigation/project/footer arrays plus persisted config and renders <KeplerSidebar /> from @kepler/visuals/components instead of hand-building the sidebar structure."
+      "reason": "apps/delphi/ts/src/components/SideBar.vue now only derives Delphi-specific navigation/project/footer arrays plus persisted config and renders <KosmosSidebar /> from @kosmos/visuals/components instead of hand-building the sidebar structure."
     },
     {
       "id": "AC3",
@@ -22,25 +22,25 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "reason": "TypeScript compilation passed with ./node_modules/.bin/tsc --noEmit from apps/delphi/ts (exit code 0). Export wiring for the new package component is present in the touched kepler-visuals entrypoints."
+      "reason": "TypeScript compilation passed with ./node_modules/.bin/tsc --noEmit from apps/delphi/ts (exit code 0). Export wiring for the new package component is present in the touched kosmos-visuals entrypoints."
     }
   ],
   "commands_run": [
     "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc --noEmit",
-    "cd /workspace && rg -n \"export \\{ default as Sidebar \\}|type SidebarNavItem|type SidebarProjectItem|Sidebar as KeplerSidebar|config-change|projectItems\" packages/kepler-visuals apps/delphi/ts/src/components/SideBar.vue -g '*.ts' -g '*.vue'",
-    "cd /workspace && git diff -- packages/kepler-visuals/components/Sidebar.vue packages/kepler-visuals/components/index.ts packages/kepler-visuals/index.ts apps/delphi/ts/src/components/SideBar.vue"
+    "cd /workspace && rg -n \"export \\{ default as Sidebar \\}|type SidebarNavItem|type SidebarProjectItem|Sidebar as KosmosSidebar|config-change|projectItems\" packages/kosmos-visuals apps/delphi/ts/src/components/SideBar.vue -g '*.ts' -g '*.vue'",
+    "cd /workspace && git diff -- packages/kosmos-visuals/components/Sidebar.vue packages/kosmos-visuals/components/index.ts packages/kosmos-visuals/index.ts apps/delphi/ts/src/components/SideBar.vue"
   ],
   "artifacts_used": [
     "spec.md",
     "evidence.md",
-    ".agent/tasks/delphi-sidebar-kepler/raw/build.txt",
-    ".agent/tasks/delphi-sidebar-kepler/raw/inspection.txt",
-    ".agent/tasks/delphi-sidebar-kepler/raw/git-diff.txt",
-    ".agent/tasks/delphi-sidebar-kepler/raw/lint.txt",
-    ".agent/tasks/delphi-sidebar-kepler/raw/format.txt",
-    "packages/kepler-visuals/components/Sidebar.vue",
-    "packages/kepler-visuals/components/index.ts",
-    "packages/kepler-visuals/index.ts",
+    ".agent/tasks/delphi-sidebar-kosmos/raw/build.txt",
+    ".agent/tasks/delphi-sidebar-kosmos/raw/inspection.txt",
+    ".agent/tasks/delphi-sidebar-kosmos/raw/git-diff.txt",
+    ".agent/tasks/delphi-sidebar-kosmos/raw/lint.txt",
+    ".agent/tasks/delphi-sidebar-kosmos/raw/format.txt",
+    "packages/kosmos-visuals/components/Sidebar.vue",
+    "packages/kosmos-visuals/components/index.ts",
+    "packages/kosmos-visuals/index.ts",
     "apps/delphi/ts/src/components/SideBar.vue"
   ]
 }

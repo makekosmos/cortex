@@ -51,7 +51,7 @@
   "resolved_problems": [
     {
       "area": "Delphi Playwright Electron e2e",
-      "details": "Removed USERPROFILE override from the Playwright environment and added KEPLER_TEST_APPDATA/KEPLER_TEST_USER_DATA overrides so Electron tests do not touch real appData/userData paths."
+      "details": "Removed USERPROFILE override from the Playwright environment and added KOSMOS_TEST_APPDATA/KOSMOS_TEST_USER_DATA overrides so Electron tests do not touch real appData/userData paths."
     },
     {
       "area": "Delphi Playwright SQLite assertion",

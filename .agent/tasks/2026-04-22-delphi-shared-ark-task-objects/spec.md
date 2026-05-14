@@ -5,20 +5,20 @@
 User request summary:
 
 - explain how data currently gets into Ark because it is a black box right now;
-- make Delphi use the same currently selected Ark database/space as the rest of Kepler, especially Eden;
+- make Delphi use the same currently selected Ark database/space as the rest of Kosmos, especially Eden;
 - ensure Delphi tasks are written into that shared Ark database so they are visible and openable from Eden;
 - preserve the domain model direction that tasks are Ark objects with fields, with nested tasks/projects intentionally deferred for now;
 - verify the scenario with Playwright in headless/background mode so app windows do not disturb the user.
 
 ## Summary
 
-Bring Delphi Electron onto the shared Ark selection contract already used by the rest of Kepler, and persist Delphi tasks into Ark's object model instead of leaving them only in Delphi-local tables.
+Bring Delphi Electron onto the shared Ark selection contract already used by the rest of Kosmos, and persist Delphi tasks into Ark's object model instead of leaving them only in Delphi-local tables.
 
 The implementation should make a Delphi-created task land in the currently selected shared `ark.db`, under an Ark object type that Eden can list and open from the same selected space. Delphi must still keep its own task UI working during the transition.
 
 ## Acceptance Criteria
 
-- AC1: Delphi Electron resolves its active space from the shared selected-space contract in `appData/Kepler/selected-space.json`, so when Eden has selected a personal/shared space, Delphi boots against that same Ark DB without requiring a separate local choice.
+- AC1: Delphi Electron resolves its active space from the shared selected-space contract in `appData/Kosmos/selected-space.json`, so when Eden has selected a personal/shared space, Delphi boots against that same Ark DB without requiring a separate local choice.
 - AC2: Delphi space changes continue to update the shared selected-space marker, and fallback behavior remains intact when no shared selected space exists.
 - AC3: Saving or updating a Delphi task writes an Ark object into the currently selected shared Ark DB, not only Delphi-local task rows.
 - AC4: The Ark object written by Delphi uses a dedicated object type definition for Delphi tasks and stores the current Delphi task fields needed for round-trip visibility in Eden:

@@ -2,7 +2,7 @@
 
 ## Context
 
-Delphi now uses ARK task objects through `ark-core-rpc` / `@kepler/ark`. The old `apps/delphi/ts/sidecar` Rust binary is no longer intended to be a runtime source of truth. The user confirmed this is a full dev migration and legacy should be removed rather than kept as a long-term fallback.
+Delphi now uses ARK task objects through `ark-core-rpc` / `@kosmos/ark`. The old `apps/delphi/ts/sidecar` Rust binary is no longer intended to be a runtime source of truth. The user confirmed this is a full dev migration and legacy should be removed rather than kept as a long-term fallback.
 
 All verification must use isolated test databases/temp app-data only.
 

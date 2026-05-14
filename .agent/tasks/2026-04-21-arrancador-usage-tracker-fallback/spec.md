@@ -8,7 +8,7 @@ User reports that Arrancador statistics do not show recent play sessions, specif
 
 - The current shared selected space points Arrancador to a space-specific Ark DB.
 - That selected-space Ark DB exists but its `tracked_apps` and `usage_sessions` tables are empty.
-- The legacy/root Ark DB at `Roaming\\Kepler\\ark.db` contains active usage tracker data, including recent VALORANT sessions.
+- The legacy/root Ark DB at `Roaming\\Kosmos\\ark.db` contains active usage tracker data, including recent VALORANT sessions.
 - Arrancador currently uses the selected-space Ark DB for both game object sync and usage-stat reads.
 
 ## Scope

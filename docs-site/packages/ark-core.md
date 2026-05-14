@@ -4,7 +4,7 @@
 `packages/ark-core/README.md`, `packages/ark-core/AGENTS.md`
 :::
 
-Канонический local-first data runtime для Kepler. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
+Канонический local-first data runtime для Kosmos. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
 
 ## Статус (2026-04-16)
 
@@ -39,8 +39,8 @@ packages/ark-core/rust/src/
 ```powershell
 cargo build --manifest-path packages/ark-core/rust/Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path packages/ark-core/rust/Cargo.toml
-bun run --cwd packages/kepler-ark typecheck
-bun run --cwd packages/kepler-ark build
+bun run --cwd packages/kosmos-ark typecheck
+bun run --cwd packages/kosmos-ark build
 ```
 
 ## Sidecar контракт
@@ -144,7 +144,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Связанные документы
 
-- [@kepler/ark](/packages/kepler-ark) — TS SDK.
+- [@kosmos/ark](/packages/kosmos-ark) — TS SDK.
 - [Модель данных ARK](/concepts/ark-objects).
 - [Синхронизация](/concepts/sync).
 - [Граница записи в ARK](/concepts/write-boundary).

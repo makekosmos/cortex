@@ -1,11 +1,11 @@
 Command: Set-Location apps/dashboard; bun run typecheck
-Workdir: D:\Personal\Hobby\Coding\kepler
+Workdir: D:\Personal\Hobby\Coding\kosmos
 Result: PASS
 Output:
 $ tsc --noEmit
 
 Command: Set-Location apps/dashboard; bun x vite build --configLoader native
-Workdir: D:\Personal\Hobby\Coding\kepler
+Workdir: D:\Personal\Hobby\Coding\kosmos
 Result: PASS
 Output:
 vite v8.0.8 building client environment for production...
@@ -31,7 +31,7 @@ dist-electron/preload.mjs  0.56 kB │ gzip: 0.24 kB
 WARN  inlineDynamicImports option is deprecated, please use codeSplitting: false instead.
 
 Command: Set-Location apps/dashboard; bun run build
-Workdir: D:\Personal\Hobby\Coding\kepler
+Workdir: D:\Personal\Hobby\Coding\kosmos
 Result: ENVIRONMENT-LIMITATION
 Output:
 $ bun run rebuild:native && tsc && vite build --configLoader native

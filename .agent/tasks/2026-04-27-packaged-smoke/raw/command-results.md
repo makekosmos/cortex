@@ -45,9 +45,9 @@ Observed success payload:
 ```json
 {
   "status": "ok",
-  "executablePath": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador\\release\\win-unpacked\\arrancador.exe",
-  "userData": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador\\.e2e\\packaged-smoke\\localappdata\\arrancador",
-  "arkDbPath": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador\\.e2e\\packaged-smoke\\ark\\ark.db",
+  "executablePath": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador\\release\\win-unpacked\\arrancador.exe",
+  "userData": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador\\.e2e\\packaged-smoke\\localappdata\\arrancador",
+  "arkDbPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador\\.e2e\\packaged-smoke\\ark\\ark.db",
   "title": "Arrancador",
   "bodyLength": 241
 }

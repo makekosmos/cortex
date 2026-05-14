@@ -64,9 +64,9 @@ Diff stats (`git diff --stat HEAD`): 2442 insertions / 1586 deletions across 51 
 - `src/types.rs` (+56): adds `UsageProcessCandidate`, `UsageGamePlaytimeBinding/Aggregate/Summary/DailyTotal/RangeTotal`.
 - `README.md`: doc tweak.
 
-**Risk:** Surface-area expansion only; no migration. Coupled with `kepler-ark` SDK additions below — both must ship together.
+**Risk:** Surface-area expansion only; no migration. Coupled with `kosmos-ark` SDK additions below — both must ship together.
 
-#### `packages/kepler-ark` (`@kepler/ark` SDK)
+#### `packages/kosmos-ark` (`@kosmos/ark` SDK)
 
 - `src/ark-client.ts` (+97): adds `objects.listByType`, `objects.getMany`, `kv.get/set`, `usage.processes.{recent,search}`, `usage.gamePlaytime.summary`.
 - `src/index.ts` (+8): re-exports new types.
@@ -80,7 +80,7 @@ Diff stats (`git diff --stat HEAD`): 2442 insertions / 1586 deletions across 51 
 - `ark-game-migration.ts` (+1): minor.
 - `ark-usage.ts` (+467/-72): consumes new `usage.processes` and `usage.gamePlaytime.summary` APIs; new tests (`ark-usage.test.ts` +149).
 - `ark-usage-backfill.ts` (+81/-26), `ark-usage-bindings.test.ts` (+8), `ark-usage-backfill.test.ts` (+41), `ark-game-objects.test.ts` (+39): test surface expanded.
-- `usage-process-search.ts` (+102/-37): now delegates process candidate queries through `@kepler/ark`.
+- `usage-process-search.ts` (+102/-37): now delegates process candidate queries through `@kosmos/ark`.
 - `package.json` (+1): dep bump (likely SDK pin).
 
 **Risk medium:** Largest behaviour change in the diff. Direct-SQLite fallback paths converted to SDK calls. Verifier should re-run arrancador unit tests + the new packaged-smoke runner before tagging anything releasable. Out of AC scope for this task (only delphi was contracted), flagged for follow-up.
@@ -88,10 +88,10 @@ Diff stats (`git diff --stat HEAD`): 2442 insertions / 1586 deletions across 51 
 #### `apps/delphi/ts` (subject of verification)
 
 - `electron/main.ts` (+34/-22):
-  - Adds `KEPLER_TEST_APPDATA` + `KEPLER_TEST_USER_DATA` env overrides via new `getAppDataPath()` / `getUserDataPath()` helpers; consistent with the test-DB-isolation rule in `apps/delphi/AGENTS.md`.
+  - Adds `KOSMOS_TEST_APPDATA` + `KOSMOS_TEST_USER_DATA` env overrides via new `getAppDataPath()` / `getUserDataPath()` helpers; consistent with the test-DB-isolation rule in `apps/delphi/AGENTS.md`.
   - Removes `PLAYWRIGHT=1` GPU-disable block; replaced by Electron startup callback restructure (`startApp()` invoked from `app.on('ready')`). Risk **low** — vitest passes; e2e not rerun in this task.
   - Window-state and `.migration-backups` paths now flow through the helpers.
-- `electron/sidecar.ts` (+6/-2): mirrors `KEPLER_TEST_APPDATA` for sidecar `appData` + DB path.
+- `electron/sidecar.ts` (+6/-2): mirrors `KOSMOS_TEST_APPDATA` for sidecar `appData` + DB path.
 - `package.json`: `build:sidecar*` scripts renamed → `build:ark*`; Electron `^41.1.0` → `^38.8.4`, `electron-builder` `^26.0.0` → `^26.8.1`. **Watch:** Electron downgrade is intentional per `apps/delphi/AGENTS.md` rewrite, but every Electron API change should be revalidated by the packaged-smoke task before release.
 - `shared/task-object-migration.ts` (+1/-1): `loadAllObjectFirst` no longer falls back to `legacyData.todos`; **object data is the authoritative source** post-migration. Matches AGENTS.md "After migration, object data is the source of truth." A new test in `src/services/storage/task-object-migration.test.ts` (+16) pins this.
 - `e2e/shared-ark-task.spec.ts` (+/-): removes `better-sqlite3` direct read; uses `crypto` import directly; consumes `userDataPath` + new env overrides instead of patching `USERPROFILE`.
@@ -124,8 +124,8 @@ Diff stats (`git diff --stat HEAD`): 2442 insertions / 1586 deletions across 51 
 
 - **CRLF warnings:** Git reports `LF will be replaced by CRLF` for nearly every modified file. Working tree is on Windows; `.gitattributes` is the right place to pin if not already set. Not a blocker.
 - **Electron downgrade (41 → 38):** Verify packaged-smoke (`apps/arrancador/scripts/run-packaged-smoke.ts`) runs before merging. Out of this task's AC.
-- **Test isolation:** All new test paths use `tmpdir()` + `KEPLER_TEST_*` env overrides; AGENTS.md test-DB-isolation rule satisfied.
-- **ARK boundary:** New TypeScript service code routes through `@kepler/ark` not direct ARK SQLite; guard script confirms (AC3).
+- **Test isolation:** All new test paths use `tmpdir()` + `KOSMOS_TEST_*` env overrides; AGENTS.md test-DB-isolation rule satisfied.
+- **ARK boundary:** New TypeScript service code routes through `@kosmos/ark` not direct ARK SQLite; guard script confirms (AC3).
 
 ## Summary
 

@@ -6,7 +6,7 @@
       "id": "AC1",
       "status": "PASS",
       "evidence": [
-        "Sidebar drag-region now lives on .kepler-sidebar-shell--drag-region::before",
+        "Sidebar drag-region now lives on .kosmos-sidebar-shell--drag-region::before",
         "dragRegion defaults to true"
       ]
     },

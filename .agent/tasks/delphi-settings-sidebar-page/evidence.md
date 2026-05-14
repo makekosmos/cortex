@@ -7,7 +7,7 @@ Task: `delphi-settings-sidebar-page`
 ## Acceptance Criteria
 
 - AC1: PASS
-  `apps/delphi/ts/src/App.vue:209` disables the main Delphi sidebar chrome for `/settings`, and `apps/delphi/ts/src/pages/SettingsPage.vue:128` renders the dedicated two-column settings shell with its own `KeplerSidebar` on the left and `.delphi-settings-content` on the right.
+  `apps/delphi/ts/src/App.vue:209` disables the main Delphi sidebar chrome for `/settings`, and `apps/delphi/ts/src/pages/SettingsPage.vue:128` renders the dedicated two-column settings shell with its own `KosmosSidebar` on the left and `.delphi-settings-content` on the right.
 - AC2: PASS
   `apps/delphi/ts/src/pages/SettingsPage.vue:105` and `apps/delphi/ts/src/pages/SettingsPage.vue:113` define `Общие` and `Пространства` nav items, and `apps/delphi/ts/src/pages/SettingsPage.vue:146` / `apps/delphi/ts/src/pages/SettingsPage.vue:147` switch in-page content while staying on `/settings`.
 - AC3: PASS

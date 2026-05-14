@@ -10,12 +10,12 @@
 - [ ] Если менял sync — добавлены или обновлены тесты миграции/репликации.
 - [ ] Если менял wire-протокол — остался `snake_case`.
 - [ ] Self-peer filtering и routable-address filtering не ослаблены.
-- [ ] `bun run --cwd packages/kepler-ark typecheck` — зелёный (если правил публичные типы).
+- [ ] `bun run --cwd packages/kosmos-ark typecheck` — зелёный (если правил публичные типы).
 
-## Я правил `@kepler/ark` (`packages/kepler-ark`)
+## Я правил `@kosmos/ark` (`packages/kosmos-ark`)
 
-- [ ] `bun run --cwd packages/kepler-ark typecheck` — зелёный.
-- [ ] `bun run --cwd packages/kepler-ark build` — собирается.
+- [ ] `bun run --cwd packages/kosmos-ark typecheck` — зелёный.
+- [ ] `bun run --cwd packages/kosmos-ark build` — собирается.
 - [ ] Если добавил новый метод — он реальный RPC к sidecar, не SDK-фильтрация.
 - [ ] Self-managed и injected режимы оба работают, request id есть только в self-managed.
 
@@ -27,7 +27,7 @@
 - [ ] `bun x tsc --noEmit` (в `apps/eden/ts`) — зелёный.
 - [ ] Не возвращён ripgrep, поиск через Heart/Tantivy / ARK FTS.
 - [ ] Если трогал `main/store.ts` — hardening для `save/move/delete` не сломан.
-- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kepler/visuals`. Никаких ручных `--titlebar-height` хаков.
+- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kosmos/visuals`. Никаких ручных `--titlebar-height` хаков.
 - [ ] Если трогал тесты — изолированная БД, не user vault.
 
 ## Я правил Delphi (`apps/delphi/ts`)
@@ -47,7 +47,7 @@
 - [ ] `bun run --cwd apps/arrancador smoke:packaged` — зелёный (если правил packaging / Electron main).
 - [ ] Не добавлен in-process tracker / window polling / app-owned usage SQLite.
 - [ ] Не добавлены Tauri или React зависимости.
-- [ ] ARK writes идут через `@kepler/ark`.
+- [ ] ARK writes идут через `@kosmos/ark`.
 - [ ] Read-only SQLite — только fallback, отделён от write paths.
 
 ## Я правил Dashboard (`apps/dashboard`)
@@ -58,18 +58,18 @@
 - [ ] Renderer не открывает SQLite напрямую.
 - [ ] ARK queries только в `electron/services/analytics.ts`.
 - [ ] Никаких writes в ARK таблицы.
-- [ ] `@kepler/visuals` через import/alias, не скопирован.
+- [ ] `@kosmos/visuals` через import/alias, не скопирован.
 
 ## Я правил usage-tracker (`services/usage-tracker`)
 
 - [ ] `cargo test --manifest-path services\usage-tracker\Cargo.toml` — зелёный.
 - [ ] Прямые ARK writes используют `ark_core::db` хелперы.
 - [ ] `lan_sync.version_vector` обновляется после прямых писей.
-- [ ] Default DB path остался `%APPDATA%\Kepler\ark.db`.
+- [ ] Default DB path остался `%APPDATA%\Kosmos\ark.db`.
 - [ ] Тесты переопределяют DB path в `.tmp` / `.e2e` / OS temp.
 - [ ] Tracker остаётся user-level, не Windows Service.
 
-## Я правил `kepler-visuals` (`packages/kepler-visuals`)
+## Я правил `kosmos-visuals` (`packages/kosmos-visuals`)
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).
 - [ ] Если меняешь CSS-переменные в `theme/css-variables.css` — сразу отрази в `docs-site/.vitepress/theme/custom.css`.

@@ -1,5 +1,5 @@
 Command: bunx tsc --noEmit
-Working directory: D:\Personal\Hobby\Coding\kepler\apps\delphi\ts
+Working directory: D:\Personal\Hobby\Coding\kosmos\apps\delphi\ts
 Date: 2026-04-17
 
 Result: PASS

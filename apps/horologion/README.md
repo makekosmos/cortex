@@ -1,6 +1,6 @@
 # Horologion
 
-Time tracker + pomodoro для Kepler. Toggl Track-стайл без социалки.
+Time tracker + pomodoro для Kosmos. Toggl Track-стайл без социалки.
 Имя приложения — «Horologion» (греч. ὡρολόγιον — часослов). Workspace-директория
 исторически остаётся `apps/horologion`. См. `docs-site/apps/horologion.md`
 для полной картины.
@@ -11,7 +11,7 @@ Time tracker + pomodoro для Kepler. Toggl Track-стайл без социа�
 - Tab **List**: история записей, сгруппированных по дням.
 - Tab **Pomodoro**: заглушка.
 - **Settings**: заглушка.
-- Запись в ARK через `@kepler/ark` → `time_entry_obj`.
+- Запись в ARK через `@kosmos/ark` → `time_entry_obj`.
 
 ## Команды
 

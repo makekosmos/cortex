@@ -5,7 +5,7 @@ Verdict: PASS
 ## Root cause
 - Confirmed from the pre-change script wiring that `apps/arrancador/package.json` previously executed `bun run rebuild:native` on every `bun run dev`.
 - The expensive part was not `scripts/dev.ts`; it was the unconditional `electron-rebuild` of `better-sqlite3` before dev watchers started.
-- A direct Vue import from `packages/kepler-visuals` was not the minimal path because `arrancador` is a React renderer, so the shared shell had to be ported as a local React/Electron chrome implementation.
+- A direct Vue import from `packages/kosmos-visuals` was not the minimal path because `arrancador` is a React renderer, so the shared shell had to be ported as a local React/Electron chrome implementation.
 
 ## Acceptance criteria
 ### AC1
@@ -25,7 +25,7 @@ PASS
 PASS
 - Desktop layout now composes a dedicated titlebar plus integrated sidebar shell in `apps/arrancador/src/pages/Layout.tsx:42-106`.
 - The new titlebar is implemented in `apps/arrancador/src/components/AppTitlebar.tsx:51-173`.
-- Sidebar behavior and persistence were adapted to a controllable kepler-style shell in `apps/arrancador/src/components/Sidebar.tsx:17-222`.
+- Sidebar behavior and persistence were adapted to a controllable kosmos-style shell in `apps/arrancador/src/components/Sidebar.tsx:17-222`.
 - Mobile navigation remains intact through the preserved mobile top bar and slide-over sidebar in `apps/arrancador/src/pages/Layout.tsx:53-99`.
 
 ### AC4
@@ -62,4 +62,4 @@ PASS
 ## Notes
 - Direct interactive `bun run test` passes.
 - Redirecting Bun/Vitest output through shell redirection in this Windows workspace can trigger a false Vite startup failure (`spawn EPERM` during config loading). This is a tooling artifact of the capture method, not a failure of the current `arrancador` code; the PASS verdict is based on the direct command result.
-- Parallel sub-agent analysis was used to separate the startup bottleneck investigation from the `kepler-visuals` chrome audit before implementation.
+- Parallel sub-agent analysis was used to separate the startup bottleneck investigation from the `kosmos-visuals` chrome audit before implementation.

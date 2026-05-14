@@ -4,10 +4,10 @@ import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.kazui.delphi.data.space.SpaceManager
-import com.kepler.ark.core.ArkCore
-import com.kepler.ark.core.ArkEventListener
-import com.kepler.ark.core.FfiConnectedPeer
-import com.kepler.ark.core.FfiSyncConfig
+import com.kosmos.ark.core.ArkCore
+import com.kosmos.ark.core.ArkEventListener
+import com.kosmos.ark.core.FfiConnectedPeer
+import com.kosmos.ark.core.FfiSyncConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

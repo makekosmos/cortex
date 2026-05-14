@@ -139,7 +139,7 @@ async function buildRootAgents() {
   ];
 
   const agentsBody =
-    header("AGENTS.md — Kepler") +
+    header("AGENTS.md — Kosmos") +
     "\n" +
     toc(agentsLabels) +
     "---\n\n" +
@@ -159,7 +159,7 @@ async function buildRootAgents() {
     "",
     MARK,
     "",
-    "Auto-generated файл с контекстом работы над Kepler для Claude Code.",
+    "Auto-generated файл с контекстом работы над Kosmos для Claude Code.",
     "Источник — `docs-site/`, регенерация — `bun run docs:sync`. Полный набор",
     "правил продублирован в `AGENTS.md` (Claude Code читает оба).",
     "",
@@ -217,7 +217,7 @@ const TARGETS = [
 const RULES_TLDR = [
   "## Сжатые правила репозитория (TL;DR)",
   "",
-  "- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.",
+  "- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.",
   "- **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.",
   "- **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.",
   "- **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.",
@@ -287,9 +287,9 @@ async function buildLlmsTxt() {
   contents.push("");
 
   const head = [
-    "# Kepler — llms.txt",
+    "# Kosmos — llms.txt",
     "",
-    "Полный inline-текст правил и контекста репозитория Kepler.",
+    "Полный inline-текст правил и контекста репозитория Kosmos.",
     "Источник правды — docs-site/. Этот файл генерируется скриптом scripts/sync-agents-docs.mjs.",
     "",
     "Структура: каждый раздел — отдельный концепт или область. Читай по порядку для полной картины.",

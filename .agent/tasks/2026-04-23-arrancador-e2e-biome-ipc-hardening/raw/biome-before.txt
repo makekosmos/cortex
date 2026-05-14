@@ -451,7 +451,7 @@ src-vue\components\AppTitlebar.vue:2:8 lint/correctness/noUnusedImports  FIXABLE
   ! This import is unused.
   
     1 │ <script setup lang="ts">
-  > 2 │ import { Titlebar, TitlebarHistoryControls } from "@kepler/visuals";
+  > 2 │ import { Titlebar, TitlebarHistoryControls } from "@kosmos/visuals";
       │        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     3 │ import { Maximize2, Minimize2, PanelLeft, X } from "lucide-vue-next";
     4 │ import { computed, onMounted, onUnmounted, shallowRef } from "vue";
@@ -460,7 +460,7 @@ src-vue\components\AppTitlebar.vue:2:8 lint/correctness/noUnusedImports  FIXABLE
   
   i Unsafe fix: Remove the unused imports.
   
-    1 │ import·{·Titlebar,·TitlebarHistoryControls·}·from·"@kepler/visuals";
+    1 │ import·{·Titlebar,·TitlebarHistoryControls·}·from·"@kosmos/visuals";
       │ --------------------------------------------------------------------
 
 src-vue\components\AppTitlebar.vue:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━
@@ -468,7 +468,7 @@ src-vue\components\AppTitlebar.vue:3:8 lint/correctness/noUnusedImports  FIXABLE
   ! This import is unused.
   
     1 │ <script setup lang="ts">
-    2 │ import { Titlebar, TitlebarHistoryControls } from "@kepler/visuals";
+    2 │ import { Titlebar, TitlebarHistoryControls } from "@kosmos/visuals";
   > 3 │ import { Maximize2, Minimize2, PanelLeft, X } from "lucide-vue-next";
       │        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     4 │ import { computed, onMounted, onUnmounted, shallowRef } from "vue";
@@ -478,7 +478,7 @@ src-vue\components\AppTitlebar.vue:3:8 lint/correctness/noUnusedImports  FIXABLE
   
   i Unsafe fix: Remove the unused imports.
   
-      1   1 │   import { Titlebar, TitlebarHistoryControls } from "@kepler/visuals";
+      1   1 │   import { Titlebar, TitlebarHistoryControls } from "@kosmos/visuals";
       2     │ - import·{·Maximize2,·Minimize2,·PanelLeft,·X·}·from·"lucide-vue-next";
       3   2 │   import { computed, onMounted, onUnmounted, shallowRef } from "vue";
       4   3 │   import {
@@ -633,7 +633,7 @@ src-vue\components\GameCard.vue:2:8 lint/correctness/noUnusedImports  FIXABLE  �
   ! This import is unused.
   
     1 │ <script setup lang="ts">
-  > 2 │ import { GamePosterCard } from "@kepler/visuals";
+  > 2 │ import { GamePosterCard } from "@kosmos/visuals";
       │        ^^^^^^^^^^^^^^^^^^
     3 │ import { Gamepad2 } from "lucide-vue-next";
     4 │ import { computed } from "vue";
@@ -642,7 +642,7 @@ src-vue\components\GameCard.vue:2:8 lint/correctness/noUnusedImports  FIXABLE  �
   
   i Unsafe fix: Remove the unused imports.
   
-    1 │ import·{·GamePosterCard·}·from·"@kepler/visuals";
+    1 │ import·{·GamePosterCard·}·from·"@kosmos/visuals";
       │ -------------------------------------------------
 
 src-vue\components\GameCard.vue:3:8 lint/correctness/noUnusedImports  FIXABLE  ━━━━━━━━━━━━━━━━━━━━━
@@ -650,7 +650,7 @@ src-vue\components\GameCard.vue:3:8 lint/correctness/noUnusedImports  FIXABLE  �
   ! This import is unused.
   
     1 │ <script setup lang="ts">
-    2 │ import { GamePosterCard } from "@kepler/visuals";
+    2 │ import { GamePosterCard } from "@kosmos/visuals";
   > 3 │ import { Gamepad2 } from "lucide-vue-next";
       │        ^^^^^^^^^^^^
     4 │ import { computed } from "vue";
@@ -660,7 +660,7 @@ src-vue\components\GameCard.vue:3:8 lint/correctness/noUnusedImports  FIXABLE  �
   
   i Unsafe fix: Remove the unused imports.
   
-     1  1 │   import { GamePosterCard } from "@kepler/visuals";
+     1  1 │   import { GamePosterCard } from "@kosmos/visuals";
      2    │ - import·{·Gamepad2·}·from·"lucide-vue-next";
      3  2 │   import { computed } from "vue";
      4  3 │   import { RouterLink } from "vue-router";
@@ -5818,7 +5818,7 @@ src\index.css:466:1 lint/style/noDescendingSpecificity ━━━━━━━━�
   
     464 │ }
     465 │ 
-  > 466 │ .kepler-sidebar-content {
+  > 466 │ .kosmos-sidebar-content {
         │ ^^^^^^^^^^^^^^^^^^^^^^^
     467 │     position: absolute;
     468 │     inset: 0;
@@ -5827,9 +5827,9 @@ src\index.css:466:1 lint/style/noDescendingSpecificity ━━━━━━━━�
   
     458 │ }
     459 │ 
-  > 460 │ .kepler-sidebar-wrapper.is-hidden .kepler-sidebar-content,
+  > 460 │ .kosmos-sidebar-wrapper.is-hidden .kosmos-sidebar-content,
         │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    461 │ .kepler-sidebar-wrapper.hidden .kepler-sidebar-content {
+    461 │ .kosmos-sidebar-wrapper.hidden .kosmos-sidebar-content {
     462 │     background: transparent;
   
   i Descending specificity selector may not be applied. Consider rearranging the order of the selectors. See MDN web docs for more details.

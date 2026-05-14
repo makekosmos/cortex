@@ -6,7 +6,7 @@
 - `bun run --cwd apps/delphi/ts build`: PASS on escalated rerun.
 - `bun run --cwd apps/eden/ts test:ark-migration`: PASS.
 - `bun run --cwd apps/eden/ts build`: PASS.
-- `bun run --cwd packages/kepler-ark typecheck`: PASS.
+- `bun run --cwd packages/kosmos-ark typecheck`: PASS.
 
 ## Full smoke
 
@@ -17,7 +17,7 @@ Smoke covered:
 - ARK app write boundary guard
 - ARK core Rust tests
 - usage-tracker Rust tests
-- `@kepler/ark` typecheck
+- `@kosmos/ark` typecheck
 - Arrancador full unit tests and typecheck
 - Eden ARK migration test
 - Eden build

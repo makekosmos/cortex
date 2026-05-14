@@ -23,7 +23,7 @@
 :::
 
 - **Path**: `apps/horologion`
-- **Стек**: Electron 41 + Vite 8 + **Vue 3.6 Vapor** + `@kepler/ark` + `@kepler/visuals`. Жёсткое окно 600×800px.
+- **Стек**: Electron 41 + Vite 8 + **Vue 3.6 Vapor** + `@kosmos/ark` + `@kosmos/visuals`. Жёсткое окно 600×800px.
 - **Аналог**: Toggl Track — без социалки, без web-app, локально, с интеграцией Delphi-задач.
 
 ## Список фич, которые планируется/нужно сделать
@@ -32,7 +32,7 @@
 
 ## UI и дизайн
 
-Horologion полностью использует [`@kepler/visuals`](docs-site/packages/kepler-visuals.md): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные kepler-visuals. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
+Horologion полностью использует [`@kosmos/visuals`](docs-site/packages/kosmos-visuals.md): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные kosmos-visuals. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
 
 ### Структура окна
 
@@ -76,7 +76,7 @@ Horologion полностью использует [`@kepler/visuals`](docs-site
 - $-badge для billable.
 
 ### Edit modal
-- `<Modal>` из kepler-visuals.
+- `<Modal>` из kosmos-visuals.
 - Поле «Описание» — `<MentionInput>` (можно поменять / добавить задачу через `@`).
 - Preview под input'ом показывает task-pill.
 - Два `<DateTimePicker>` (С / По) — кастомный недельный календарь + текстовый ввод HH:MM.
@@ -128,7 +128,7 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 ```
 
 ::: tip Билд
-По общей [конвенции Kepler](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает финальный установщик в формате **MSI** (Windows Installer) — `apps/horologion/release/Horologion X.Y.Z.msi`. Per-machine установка, поддержка GPO / unattended install.
+По общей [конвенции Kosmos](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает финальный установщик в формате **MSI** (Windows Installer) — `apps/horologion/release/Horologion X.Y.Z.msi`. Per-machine установка, поддержка GPO / unattended install.
 
 **Иконка** embed'ится в `Horologion.exe` через `afterPack`-хук (`build/afterPack.cjs`), использующий npm-пакеты `rcedit` + `png-to-ico`. Это нужно, потому что `win.signAndEditExecutable: false` отрубает встроенный rcedit electron-builder (workaround под падение winCodeSign symlinks на Windows без Developer Mode). Хук конвертирует `build/icon.png` → `build/icon.ico` (с кэшем по mtime), затем зовёт rcedit и проставляет иконку + version-string метаданные (ProductName, CompanyName, FileVersion). Дополнительно в main.ts вызывается `app.setAppUserModelId("com.kazui.horologion")`, чтобы Windows правильно группировал окно в taskbar и подхватывал нашу иконку, а не дефолтную electron.exe.
 
@@ -140,8 +140,8 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 - [Roadmap](docs-site/apps/horologion-roadmap.md) — что планируется / баги.
 - [Модель данных ARK](docs-site/concepts/ark-objects.md) — `time_entry_obj`, `tag_obj`.
 - [Delphi](docs-site/apps/delphi.md) — задачи (для `@`-mention).
-- [@kepler/ark](docs-site/packages/kepler-ark.md) — TS SDK.
-- [kepler-visuals](docs-site/packages/kepler-visuals.md) — UI-система.
+- [@kosmos/ark](docs-site/packages/kosmos-ark.md) — TS SDK.
+- [kosmos-visuals](docs-site/packages/kosmos-visuals.md) — UI-система.
 
 ---
 
@@ -169,7 +169,7 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 
 ## Тесты
 
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kepler\ark.db`) в тестах.
+- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
 - ❌ Запуск Playwright против user vault Eden.
@@ -188,7 +188,7 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -219,7 +219,7 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kepler/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kepler-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -240,7 +240,7 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -270,7 +270,7 @@ bun run ark:smoke
 
 ## Сжатые правила репозитория (TL;DR)
 
-- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
+- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
 - **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.
 - **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.
 - **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.

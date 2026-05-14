@@ -2,7 +2,7 @@
 
 ## Original Task
 
-You are worker C on the Arrancador React->Vue/Vapor migration in `D:\Personal\Hobby\Coding\kepler\apps\arrancador`. Ownership: port the SQOBA route under `apps/arrancador/src-vue/**` only, including any supporting components/composables in `src-vue/components/sqoba` or `src-vue/composables` as needed. Do not touch React `src/` files. You are not alone in the codebase; do not revert others' edits, and adapt to concurrent changes. Task: port the current React SQOBA page into Vue using Composition API `<script setup lang="ts">` with the existing APIs from `src/lib/api.ts` and browser helpers. Preserve the core behaviors: manifest refresh, saves lookup, path editing, backup settings surface, about modal, and file list display. Keep the existing Tailwind visual language. At the end, report changed files and any remaining gaps. Edit files directly in your workspace.
+You are worker C on the Arrancador React->Vue/Vapor migration in `D:\Personal\Hobby\Coding\kosmos\apps\arrancador`. Ownership: port the SQOBA route under `apps/arrancador/src-vue/**` only, including any supporting components/composables in `src-vue/components/sqoba` or `src-vue/composables` as needed. Do not touch React `src/` files. You are not alone in the codebase; do not revert others' edits, and adapt to concurrent changes. Task: port the current React SQOBA page into Vue using Composition API `<script setup lang="ts">` with the existing APIs from `src/lib/api.ts` and browser helpers. Preserve the core behaviors: manifest refresh, saves lookup, path editing, backup settings surface, about modal, and file list display. Keep the existing Tailwind visual language. At the end, report changed files and any remaining gaps. Edit files directly in your workspace.
 
 ## Scope
 

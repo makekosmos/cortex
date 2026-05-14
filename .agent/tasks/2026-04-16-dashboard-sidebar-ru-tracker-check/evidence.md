@@ -2,21 +2,21 @@
 
 ## Verification summary
 
-- AC1 `PASS`: `apps/dashboard/src/components/dashboard/DashboardShell.vue` now uses the Delphi/Eden `KeplerSidebar` pattern with persisted `SidebarConfig`, `drag-region`, and a non-scrolling left rail while the content area owns scrolling.
+- AC1 `PASS`: `apps/dashboard/src/components/dashboard/DashboardShell.vue` now uses the Delphi/Eden `KosmosSidebar` pattern with persisted `SidebarConfig`, `drag-region`, and a non-scrolling left rail while the content area owns scrolling.
 - AC2 `PASS`: User-facing dashboard copy was translated to Russian across shell, overview, sessions, top apps, recent sessions, charts, heatmap titles, and formatting helpers.
-- AC3 `PASS`: Dashboard styling continues to derive from `@kepler/visuals` theme variables and keeps body scroll disabled so the sidebar remains visually fixed.
+- AC3 `PASS`: Dashboard styling continues to derive from `@kosmos/visuals` theme variables and keeps body scroll disabled so the sidebar remains visually fixed.
 - AC4 `PASS`: Renderer and Electron bundles build successfully from the current repository checkout.
-- AC5 `PASS`: The installed `usage-tracker` process is running and writing live usage rows into `%APPDATA%\\Kepler\\ark.db`.
+- AC5 `PASS`: The installed `usage-tracker` process is running and writing live usage rows into `%APPDATA%\\Kosmos\\ark.db`.
 
 ## Commands
 
 ```powershell
-Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\tsc.exe
-Set-Location D:\Personal\Hobby\Coding\kepler\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
+Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\tsc.exe
+Set-Location D:\Personal\Hobby\Coding\kosmos\apps\dashboard; .\node_modules\.bin\vite.exe build --configLoader native
 Get-Process | Where-Object { $_.ProcessName -like 'usage-tracker*' } | Select-Object ProcessName, Id, StartTime, Path | Format-List
 @'
 import os, sqlite3, json
-path = os.path.join(os.environ['APPDATA'], 'Kepler', 'ark.db')
+path = os.path.join(os.environ['APPDATA'], 'Kosmos', 'ark.db')
 conn = sqlite3.connect(path)
 cur = conn.cursor()
 counts = {table: cur.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0] for table in ('tracked_apps','usage_sessions','usage_events')}
@@ -30,8 +30,8 @@ print(json.dumps({"db": path, "counts": counts, "latest_session": latest_session
 
 - `tsc.exe`: passed with exit code `0`
 - `vite build --configLoader native`: passed with exit code `0`
-- `usage-tracker.exe`: active as PID `37500`, path `C:\Users\Kazui\AppData\Local\Kepler\UsageTracker\usage-tracker.exe`
-- Live DB: `C:\Users\Kazui\AppData\Roaming\Kepler\ark.db`
+- `usage-tracker.exe`: active as PID `37500`, path `C:\Users\Kazui\AppData\Local\Kosmos\UsageTracker\usage-tracker.exe`
+- Live DB: `C:\Users\Kazui\AppData\Roaming\Kosmos\ark.db`
 - Live counts at verification time:
   - `tracked_apps = 6`
   - `usage_sessions = 37`

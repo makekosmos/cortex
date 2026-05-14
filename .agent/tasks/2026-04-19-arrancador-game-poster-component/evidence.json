@@ -23,7 +23,7 @@
     "AC7": "PASS"
   },
   "notes": [
-    "Arrancador now renders the shared React poster-card component from packages/kepler-visuals/react/GamePosterCard.tsx.",
+    "Arrancador now renders the shared React poster-card component from packages/kosmos-visuals/react/GamePosterCard.tsx.",
     "The shared overlay darkens the poster itself with bg-background/20 on hover and focus-visible.",
     "The app-level test verifies delegation into the shared component, and renderer build verifies the real shared component bundles successfully."
   ]

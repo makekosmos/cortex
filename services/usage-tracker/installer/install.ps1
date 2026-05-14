@@ -1,5 +1,5 @@
 param(
-  [string]$InstallDir = "$env:LOCALAPPDATA\Kepler\UsageTracker",
+  [string]$InstallDir = "$env:LOCALAPPDATA\Kosmos\UsageTracker",
   [switch]$NoStartup,
   [switch]$NoLaunch
 )
@@ -20,11 +20,11 @@ Copy-Item -LiteralPath $sourceExe -Destination $targetExe -Force
 if (-not $NoStartup) {
   $runKeyPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
   New-Item -Path $runKeyPath -Force | Out-Null
-  Set-ItemProperty -Path $runKeyPath -Name "KeplerUsageTracker" -Value "`"$targetExe`""
+  Set-ItemProperty -Path $runKeyPath -Name "KosmosUsageTracker" -Value "`"$targetExe`""
 }
 
 if (-not $NoLaunch) {
   Start-Process -FilePath $targetExe -WindowStyle Hidden
 }
 
-Write-Output "Kepler Usage Tracker installed to $InstallDir"
+Write-Output "Kosmos Usage Tracker installed to $InstallDir"

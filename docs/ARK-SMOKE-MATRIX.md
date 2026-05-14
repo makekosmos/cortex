@@ -13,8 +13,8 @@ bun run ark:smoke
 Set a task-local root first:
 
 ```powershell
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\2026-04-26-ark-app-completion\smoke"
-New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\2026-04-26-ark-app-completion\smoke"
+New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 ```
 
 ## Core
@@ -22,7 +22,7 @@ New-Item -ItemType Directory -Force -Path $env:KEPLER_SMOKE_ROOT | Out-Null
 ```powershell
 cargo test --manifest-path packages\ark-core\rust\Cargo.toml
 cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-bun run --cwd packages/kepler-ark typecheck
+bun run --cwd packages/kosmos-ark typecheck
 ```
 
 ## Usage Tracker
@@ -34,14 +34,14 @@ cargo test --manifest-path services\usage-tracker\Cargo.toml
 For manual smoke runs, pass an explicit DB path under the smoke root:
 
 ```powershell
-$env:ARK_DB_PATH = "$env:KEPLER_SMOKE_ROOT\usage-tracker\ark.db"
+$env:ARK_DB_PATH = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
 ```
 
 ## Dashboard
 
 ```powershell
-node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
-node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts --db-path "$env:KEPLER_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
+node --experimental-strip-types apps\dashboard\scripts\smokeAnalytics.ts --db-path "$env:KOSMOS_SMOKE_ROOT\dashboard\smoke-dashboard.db"
 bun run --cwd apps/dashboard test:e2e:smoke
 ```
 

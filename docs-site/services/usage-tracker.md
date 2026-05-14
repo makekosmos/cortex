@@ -16,7 +16,7 @@ Windows-first фоновый исполняемый файл, который з�
 
 ## Зачем «напрямую»
 
-Это один из редких исключений правила [«всё через @kepler/ark»](/concepts/write-boundary): tracker — **Rust**, линкуется с `ark_core` как библиотека и использует `ark_core::db` хелперы, которые сами обновляют sync state. Это допустимо.
+Это один из редких исключений правила [«всё через @kosmos/ark»](/concepts/write-boundary): tracker — **Rust**, линкуется с `ark_core` как библиотека и использует `ark_core::db` хелперы, которые сами обновляют sync state. Это допустимо.
 
 Но `Arrancador` и любое другое **TS-приложение** должны потреблять usage data **только через ARK**, никогда не запуская собственный tracker и не открывая raw SQLite на запись.
 
@@ -43,7 +43,7 @@ services/usage-tracker/
 
 ## Defaults
 
-- ARK DB path: `%APPDATA%\Kepler\ark.db`
+- ARK DB path: `%APPDATA%\Kosmos\ark.db`
 - Poll interval: `5000` ms
 - Idle threshold: `60` s
 
@@ -73,7 +73,7 @@ bun run --cwd services/usage-tracker package:installer
 
 ## Installer bundle
 
-`bun run package:installer` создаёт `dist/KeplerUsageTrackerInstaller/` с:
+`bun run package:installer` создаёт `dist/KosmosUsageTrackerInstaller/` с:
 
 - `usage-tracker.exe`
 - `install.ps1`
@@ -82,9 +82,9 @@ bun run --cwd services/usage-tracker package:installer
 - `Uninstall Usage Tracker.cmd`
 - `manifest.json`
 
-И параллельно `dist/KeplerUsageTrackerInstaller.zip`.
+И параллельно `dist/KosmosUsageTrackerInstaller.zip`.
 
-Default install target — `%LOCALAPPDATA%\Kepler\UsageTracker`.
+Default install target — `%LOCALAPPDATA%\Kosmos\UsageTracker`.
 
 Default install behavior:
 
@@ -104,7 +104,7 @@ install.ps1 -InstallDir D:\Somewhere\UsageTracker
 
 ::: warning Жёстко
 - Tracker пишет напрямую в ARK DB и **обязан** обновлять `lan_sync.version_vector` после прямых entity writes.
-- Default DB path остаётся `%APPDATA%\Kepler\ark.db`, если не переопределён env или CLI.
+- Default DB path остаётся `%APPDATA%\Kosmos\ark.db`, если не переопределён env или CLI.
 - Автоматические тесты и smoke checks **обязаны** переопределить DB path на изолированный `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/`, или OS temp. **Не** запускай verification против main user ARK DB.
 - Installer — user-level. Не превращай в Windows Service без явного product decision.
 - `src/main.rs` — активный runtime path. Дополнительные файлы в `src/` — scaffolding, пока не подключены явно.
@@ -113,8 +113,8 @@ install.ps1 -InstallDir D:\Somewhere\UsageTracker
 ## Smoke
 
 ```powershell
-$env:KEPLER_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
-$env:ARK_DB_PATH       = "$env:KEPLER_SMOKE_ROOT\usage-tracker\ark.db"
+$env:KOSMOS_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
+$env:ARK_DB_PATH       = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
 cargo test --manifest-path services\usage-tracker\Cargo.toml
 ```
 

@@ -2,7 +2,7 @@
 
 ## Summary
 - Dashboard status chip in the titlebar was reduced to a minimal Delphi-style dot.
-- A reusable `DesktopContentSurface` component was added to `@kepler/visuals` for desktop content padding, border, and left-corner radius.
+- A reusable `DesktopContentSurface` component was added to `@kosmos/visuals` for desktop content padding, border, and left-corner radius.
 - Dashboard now consumes the shared content surface instead of owning those shell settings locally.
 
 ## Acceptance Criteria
@@ -18,9 +18,9 @@ Evidence:
 Status: PASS
 
 Evidence:
-- `packages/kepler-visuals/components/DesktopContentSurface.vue` was added.
+- `packages/kosmos-visuals/components/DesktopContentSurface.vue` was added.
 - It owns reusable desktop-shell props for `paddingTop`, `paddingInline`, `paddingBottom`, `radiusTopLeft`, and `radiusBottomLeft`.
-- It is exported from `packages/kepler-visuals/components/index.ts` and `packages/kepler-visuals/index.ts`.
+- It is exported from `packages/kosmos-visuals/components/index.ts` and `packages/kosmos-visuals/index.ts`.
 
 ### AC3
 Status: PASS

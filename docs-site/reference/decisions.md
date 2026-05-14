@@ -13,7 +13,7 @@
 - task data: `objects` с `type_id = task_obj`
 - typed/schema metadata: `object_types`
 - relationships: `object_links`
-- app access: `@kepler/ark` / `ark-core-rpc`
+- app access: `@kosmos/ark` / `ark-core-rpc`
 
 Правила:
 
@@ -52,7 +52,7 @@ Search-решение:
 1. **Write rule** — жёсткий: app TS services **не** пишут напрямую в ARK таблицы.
 2. **Read inspection** — мягче:
    - Dashboard — read-only inspector, может открывать любую выбранную ARK SQLite-БД.
-   - Arrancador — `@kepler/ark` сначала; raw SQLite допустим как fallback когда runtime недоступен.
+   - Arrancador — `@kosmos/ark` сначала; raw SQLite допустим как fallback когда runtime недоступен.
    - Renderer — никогда не открывает SQLite напрямую.
 
 Будущий шаг — заменить оставшиеся fallback SQLite paths специализированными ARK endpoints. Уже добавлены:

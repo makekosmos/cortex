@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { _electron as electron } from "/Users/kirill/Documents/projects/kepler/apps/eden/ts/node_modules/playwright/index.mjs";
+import { _electron as electron } from "/Users/kirill/Documents/projects/kosmos/apps/eden/ts/node_modules/playwright/index.mjs";
 
-const appDir = "/Users/kirill/Documents/projects/kepler/apps/eden/ts";
+const appDir = "/Users/kirill/Documents/projects/kosmos/apps/eden/ts";
 const homePath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-debug-home-"));
 const vaultPath = fs.mkdtempSync(path.join(os.tmpdir(), "eden-debug-vault-"));
 

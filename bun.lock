@@ -14,7 +14,7 @@
       "name": "arrancador",
       "version": "0.1.0",
       "dependencies": {
-        "@kepler/ark": "workspace:*",
+        "@kosmos/ark": "workspace:*",
         "@tailwindcss/vite": "^4.1.11",
         "@vue/runtime-vapor": "3.6.0-beta.9",
         "better-sqlite3": "^12.9.0",
@@ -55,8 +55,8 @@
       "name": "dashboard",
       "version": "0.1.0",
       "dependencies": {
-        "@kepler/ark": "workspace:*",
-        "@kepler/visuals": "workspace:*",
+        "@kosmos/ark": "workspace:*",
+        "@kosmos/visuals": "workspace:*",
         "@vue/compiler-dom": "3.6.0-beta.9",
         "@vue/compiler-sfc": "3.6.0-beta.9",
         "@vue/runtime-dom": "3.6.0-beta.9",
@@ -87,7 +87,7 @@
       "version": "0.0.2",
       "dependencies": {
         "@google/genai": "^1.42.0",
-        "@kepler/ark": "workspace:*",
+        "@kosmos/ark": "workspace:*",
         "@tailwindcss/vite": "^4.2.2",
         "@types/qrcode": "^1.5.6",
         "bonjour-service": "^1.3.0",
@@ -129,7 +129,7 @@
       "name": "eden",
       "version": "0.0.0",
       "dependencies": {
-        "@kepler/ark": "workspace:*",
+        "@kosmos/ark": "workspace:*",
         "@tiptap/extension-code-block-lowlight": "^3.20.1",
         "@tiptap/extension-mention": "^3.20.1",
         "@tiptap/extension-placeholder": "^3.20.1",
@@ -164,10 +164,10 @@
     },
     "apps/horologion": {
       "name": "horologion",
-      "version": "0.0.3",
+      "version": "0.0.4",
       "dependencies": {
-        "@kepler/ark": "workspace:*",
-        "@kepler/visuals": "workspace:*",
+        "@kosmos/ark": "workspace:*",
+        "@kosmos/visuals": "workspace:*",
         "lucide-vue-next": "^0.548.0",
         "vue": "^3.6.0-beta.9",
         "vue-router": "^5.0.4",
@@ -188,7 +188,7 @@
       },
     },
     "docs-site": {
-      "name": "@kepler/docs-site",
+      "name": "@kosmos/docs-site",
       "version": "0.0.0",
       "devDependencies": {
         "@braintree/sanitize-url": "^7.1.1",
@@ -203,16 +203,16 @@
         "vue": "^3.5.31",
       },
     },
-    "packages/kepler-ark": {
-      "name": "@kepler/ark",
+    "packages/kosmos-ark": {
+      "name": "@kosmos/ark",
       "version": "0.1.0",
       "devDependencies": {
         "@types/node": "^24.9.2",
         "typescript": "~5.8.3",
       },
     },
-    "packages/kepler-visuals": {
-      "name": "@kepler/visuals",
+    "packages/kosmos-visuals": {
+      "name": "@kosmos/visuals",
       "version": "0.1.0",
       "devDependencies": {
         "oxfmt": "^0.7.0",
@@ -451,11 +451,11 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@kepler/ark": ["@kepler/ark@workspace:packages/kepler-ark"],
+    "@kosmos/ark": ["@kosmos/ark@workspace:packages/kosmos-ark"],
 
-    "@kepler/docs-site": ["@kepler/docs-site@workspace:docs-site"],
+    "@kosmos/docs-site": ["@kosmos/docs-site@workspace:docs-site"],
 
-    "@kepler/visuals": ["@kepler/visuals@workspace:packages/kepler-visuals"],
+    "@kosmos/visuals": ["@kosmos/visuals@workspace:packages/kosmos-visuals"],
 
     "@leichtgewicht/ip-codec": ["@leichtgewicht/ip-codec@2.0.5", "", {}, "sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw=="],
 
@@ -2273,7 +2273,7 @@
 
     "@isaacs/cliui/wrap-ansi": ["wrap-ansi@8.1.0", "", { "dependencies": { "ansi-styles": "^6.1.0", "string-width": "^5.0.1", "strip-ansi": "^7.0.1" } }, "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ=="],
 
-    "@kepler/visuals/oxfmt": ["oxfmt@0.7.0", "", { "optionalDependencies": { "@oxfmt/darwin-arm64": "0.7.0", "@oxfmt/darwin-x64": "0.7.0", "@oxfmt/linux-arm64-gnu": "0.7.0", "@oxfmt/linux-arm64-musl": "0.7.0", "@oxfmt/linux-x64-gnu": "0.7.0", "@oxfmt/linux-x64-musl": "0.7.0", "@oxfmt/win32-arm64": "0.7.0", "@oxfmt/win32-x64": "0.7.0" }, "bin": { "oxfmt": "bin/oxfmt" } }, "sha512-f9e9EO6iA93hNog2EDUlxqguYSzO+Y0axgu9JJTGgt1ocE8Bp6shdZ8PuI+ePepSOYmYO9UPvZLGKcvzz8BBow=="],
+    "@kosmos/visuals/oxfmt": ["oxfmt@0.7.0", "", { "optionalDependencies": { "@oxfmt/darwin-arm64": "0.7.0", "@oxfmt/darwin-x64": "0.7.0", "@oxfmt/linux-arm64-gnu": "0.7.0", "@oxfmt/linux-arm64-musl": "0.7.0", "@oxfmt/linux-x64-gnu": "0.7.0", "@oxfmt/linux-x64-musl": "0.7.0", "@oxfmt/win32-arm64": "0.7.0", "@oxfmt/win32-x64": "0.7.0" }, "bin": { "oxfmt": "bin/oxfmt" } }, "sha512-f9e9EO6iA93hNog2EDUlxqguYSzO+Y0axgu9JJTGgt1ocE8Bp6shdZ8PuI+ePepSOYmYO9UPvZLGKcvzz8BBow=="],
 
     "@malept/flatpak-bundler/fs-extra": ["fs-extra@9.1.0", "", { "dependencies": { "at-least-node": "^1.0.0", "graceful-fs": "^4.2.0", "jsonfile": "^6.0.1", "universalify": "^2.0.0" } }, "sha512-hcg3ZmepS30/7BSFqRvoo3DOMQu7IjqxO5nCDt+zM9XWjb33Wg7ziNT+Qvqbuc3+gWpzO02JubVyk2G4Zvo1OQ=="],
 

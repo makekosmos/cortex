@@ -2,7 +2,7 @@ Command:
   bun x tsc --noEmit
 
 Workdir:
-  D:\Personal\Hobby\Coding\kepler\apps\delphi\ts
+  D:\Personal\Hobby\Coding\kosmos\apps\delphi\ts
 
 Observed result:
   Exit code 0

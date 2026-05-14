@@ -10,7 +10,7 @@ Rebuild Eden's object type/settings experience so it stops looking like a generi
 - motion/interaction cues
 
 At the same time:
-- consume Kepler visuals theme tokens instead of inventing ad-hoc gray surfaces
+- consume Kosmos visuals theme tokens instead of inventing ad-hoc gray surfaces
 - remove mojibake in touched UI
 - produce test Ark databases for typed note and game flows
 - document current dev-mode/runtime constraints and fix repo-side issues where feasible
@@ -24,13 +24,13 @@ At the same time:
 - `sample/anytype-ts-develop/src/scss/component/sidebar/preview.scss`
 - `sample/anytype-ts-develop/src/scss/component/headSimple.scss`
 - `sample/anytype-ts-develop/src/scss/block/featured.scss`
-- `packages/kepler-visuals/theme/css-variables.css`
-- `packages/kepler-visuals/tokens/colors.ts`
+- `packages/kosmos-visuals/theme/css-variables.css`
+- `packages/kosmos-visuals/tokens/colors.ts`
 
 ## Design constraints
 - Do not fake Anytype with random gradients and generic cards.
 - Prefer Anytype-like section rhythm, hover overlays, list row shells, and lightweight borders.
-- Reuse Kepler visuals CSS variables for base colors and surfaces.
+- Reuse Kosmos visuals CSS variables for base colors and surfaces.
 - Avoid introducing new mojibake. Validate touched strings in UTF-8-aware reads.
 - Preserve Vue Composition API and keep route-level files as composition surfaces.
 
@@ -56,7 +56,7 @@ At the same time:
 
 ## Acceptance Criteria
 - AC1: The object types screen uses a distinctly Anytype-like composition with a left type library and a right page-like editor workspace, not a generic form card layout.
-- AC2: The rebuilt screen consumes Kepler visuals theme tokens for background, surface, border, text, sidebar, and hover states; new ad-hoc gray color mixing is removed from the rebuilt object type UI.
+- AC2: The rebuilt screen consumes Kosmos visuals theme tokens for background, surface, border, text, sidebar, and hover states; new ad-hoc gray color mixing is removed from the rebuilt object type UI.
 - AC3: Object type rows and field rows have clear interactive states inspired by Anytype: hover overlay, active state, affordance for reordering, and tighter section rhythm.
 - AC4: The preview becomes a dedicated, visually separated rail/pane and mirrors header layout and featured-property presentation more closely to Anytype.
 - AC5: `TypedHeader.vue` and `ObjectPropertyField.vue` use Anytype-inspired lightweight featured-property rendering instead of generic boxed form controls for preview/read flows.

@@ -15,8 +15,8 @@ import path from "node:path";
 import os from "node:os";
 
 const APPDATA = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
-const DEFAULT_DB = path.join(APPDATA, "Kepler", "ark.db");
-const SPACES_DIR = path.join(APPDATA, "Kepler", "spaces");
+const DEFAULT_DB = path.join(APPDATA, "Kosmos", "ark.db");
+const SPACES_DIR = path.join(APPDATA, "Kosmos", "spaces");
 
 function inspect(dbPath) {
   if (!fs.existsSync(dbPath)) {

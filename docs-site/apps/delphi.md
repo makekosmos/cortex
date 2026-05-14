@@ -4,14 +4,14 @@
 `apps/delphi/AGENTS.md`, `apps/delphi/README.md`, `docs/DELPHI-LEGACY-DB-DECISION.md`
 :::
 
-Delphi — приложение для управления задачами в Kepler. Активный desktop-рантайм — Electron + Vue в `apps/delphi/ts`. Android/Swift код может существовать рядом, но desktop ARK-интеграция применяется только к Electron-приложению.
+Delphi — приложение для управления задачами в Kosmos. Активный desktop-рантайм — Electron + Vue в `apps/delphi/ts`. Android/Swift код может существовать рядом, но desktop ARK-интеграция применяется только к Electron-приложению.
 
 ## ARK Runtime
 
 - Канонический desktop sidecar — `ark-core-rpc` из `packages/ark-core/rust`.
 - **Старый Delphi-specific Rust DB sidecar удалён.** Не пересобирать, не восстанавливать, не упаковывать, не использовать как fallback.
 - Задачи Delphi хранятся как обобщённые ARK-объекты с `type_id = task_obj`.
-- App-код обращается к ARK через `@kepler/ark` или существующую обёртку `electron/sidecar.ts` вокруг `ark-core-rpc`.
+- App-код обращается к ARK через `@kosmos/ark` или существующую обёртку `electron/sidecar.ts` вокруг `ark-core-rpc`.
 - На входе в приложение и при смене shared-space **legacy todos мигрируются в `task_obj`**. После миграции object-данные — источник правды.
 
 ## Текущая модель
@@ -19,7 +19,7 @@ Delphi — приложение для управления задачами в 
 - `objects` с `type_id = task_obj` — сами задачи.
 - `object_types` — typed/schema metadata.
 - `object_links` — связи.
-- App access — через `@kepler/ark` / `ark-core-rpc`.
+- App access — через `@kosmos/ark` / `ark-core-rpc`.
 
 См. `docs/DELPHI-LEGACY-DB-DECISION.md`.
 
@@ -44,7 +44,7 @@ bun run e2e                # Playwright
 - `win-unpacked/Delphi.exe` — распакованное приложение (доступно после `package:dir`).
 
 Версия берётся из `package.json` → `version` (текущая `0.0.2`). MSI — единый формат
-дистрибуции для всех desktop-приложений Kepler, см. [конвенцию сборки релизов](/reference/commands#корневые).
+дистрибуции для всех desktop-приложений Kosmos, см. [конвенцию сборки релизов](/reference/commands#корневые).
 
 ## Иконка
 
@@ -63,7 +63,7 @@ Pipeline:
 Чтобы обновить иконку — замени `build/icon.png` и перезапусти `bun run build`.
 Кэшированный `build/icon.ico` afterPack перегенерит, если PNG новее.
 
-Это стандарт для всех Electron-приложений Kepler — см. [Структура репо → Иконки](/guide/layout#иконки-приложений).
+Это стандарт для всех Electron-приложений Kosmos — см. [Структура репо → Иконки](/guide/layout#иконки-приложений).
 
 ## Boundaries
 
@@ -78,7 +78,7 @@ Pipeline:
 - `apps/delphi/ts/electron/sidecar.ts` — поднятие и владение `ark-core-rpc`.
 - `apps/delphi/ts/shared/task-object-migration.ts` — стартовая миграция legacy → `task_obj`.
 - `apps/delphi/ts/shared/task-ark.ts` — мапперы `TodoItem ↔ task_obj` (propsJson). Здесь же читается/пишется `billable` / `price`.
-- `apps/delphi/ts/src/components/QuickEntry.vue` — обёртка над `QuickEntryPanel` из `@kepler/visuals`. Передаёт `defaultScheduledDate=today` если открыто со страницы `/today`, `defaultProjectId` если со страницы проекта.
+- `apps/delphi/ts/src/components/QuickEntry.vue` — обёртка над `QuickEntryPanel` из `@kosmos/visuals`. Передаёт `defaultScheduledDate=today` если открыто со страницы `/today`, `defaultProjectId` если со страницы проекта.
 - `apps/delphi/ts/src/components/projects/ProjectCreateDialog.vue` — диалог нового проекта, toggle «Оплачиваемый» + поле «Бюджет».
 - `apps/delphi/ts/src/pages/ProjectPage.vue` — поллит `ark:listTimeEntries` каждые 15s, агрегирует billable секунды по задаче, считает $/час из `project.price`.
 - `apps/delphi/ts/scripts/verifySharedArkTask.mjs` — verification скрипт shared task state.
@@ -102,7 +102,7 @@ Pipeline:
 Текущая модель форм / списков:
 
 - **Sidebar:** только «Входящие» и «Сегодня» как top-level nav. Календарь/Неделя удалены — это не приоритет.
-- **QuickEntry** (⌘N / Ctrl+N) — модалка над content-областью (не перекрывает titlebar и sidebar). Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kepler/visuals`, native browser date picker не используем), проект (dropdown реальных проектов + «Входящие»), `billable` toggle + опциональный `price`.
+- **QuickEntry** (⌘N / Ctrl+N) — модалка над content-областью (не перекрывает titlebar и sidebar). Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kosmos/visuals`, native browser date picker не используем), проект (dropdown реальных проектов + «Входящие»), `billable` toggle + опциональный `price`.
 - **TodoRow** — клик разворачивает inline-форму (title / notes / дата / billable / price), правый клик открывает `<ContextMenu>` с пунктом «Удалить». Inline-кнопка delete не используется.
 - **ProjectPage** — кроме списка задач показывает: бейдж «оплачиваемый + бюджет», суммарное оплачиваемое время по задачам проекта, расчётный `$/час`.
 
@@ -151,4 +151,4 @@ type Project = {
 - `docs/DELPHI-LEGACY-DB-DECISION.md` — почему legacy sidecar удалён.
 - [Модель данных ARK](/concepts/ark-objects).
 - [Horologion](/apps/horologion) — трекер времени, который привязывается к Delphi-задачам.
-- [@kepler/ark](/packages/kepler-ark).
+- [@kosmos/ark](/packages/kosmos-ark).

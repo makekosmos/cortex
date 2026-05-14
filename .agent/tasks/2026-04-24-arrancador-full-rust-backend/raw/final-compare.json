@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedAt": "2026-04-23T22:47:25.812Z",
-  "baselinePath": "D:\\Personal\\Hobby\\Coding\\kepler\\apps\\arrancador\\bench\\baselines\\pre-rust-ts-electron-main-2026-04-24.json",
-  "currentPath": "D:\\Personal\\Hobby\\Coding\\kepler\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\final.json",
+  "baselinePath": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador\\bench\\baselines\\pre-rust-ts-electron-main-2026-04-24.json",
+  "currentPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\final.json",
   "baselineBackend": "ts-electron-main",
   "currentBackend": "electron-main+rust-sidecar",
   "correctnessPass": true,

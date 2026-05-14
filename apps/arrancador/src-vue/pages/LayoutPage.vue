@@ -80,7 +80,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="kepler-desktop-chrome flex h-screen min-h-0 flex-col overflow-hidden bg-background text-foreground">
+  <div class="kosmos-desktop-chrome flex h-screen min-h-0 flex-col overflow-hidden bg-background text-foreground">
     <div class="hidden lg:block">
       <AppTitlebar
         :sidebar-hidden="sidebarConfig.hidden"
@@ -92,8 +92,8 @@ onMounted(async () => {
       />
     </div>
 
-    <div class="kepler-desktop-chrome__body">
-      <aside class="kepler-desktop-chrome__sidebar hidden lg:flex">
+    <div class="kosmos-desktop-chrome__body">
+      <aside class="kosmos-desktop-chrome__sidebar hidden lg:flex">
         <AppSidebar
           :hidden="sidebarConfig.hidden"
           :config="sidebarConfig"
@@ -104,7 +104,7 @@ onMounted(async () => {
         />
       </aside>
 
-      <div class="kepler-desktop-chrome__content">
+      <div class="kosmos-desktop-chrome__content">
         <div
           class="fixed top-0 left-0 right-0 z-50 flex h-14 items-center justify-between border-b px-4 backdrop-blur-xl lg:hidden"
           style="
@@ -152,15 +152,15 @@ onMounted(async () => {
         </Teleport>
 
         <section
-          class="kepler-desktop-content-surface flex min-h-0 min-w-0 flex-1 flex-col"
+          class="kosmos-desktop-content-surface flex min-h-0 min-w-0 flex-1 flex-col"
           :style="{
-            '--kepler-content-padding-top': '0',
-            '--kepler-content-padding-inline': '0',
-            '--kepler-content-padding-bottom': '0',
-            '--kepler-content-radius-top-left': sidebarConfig.hidden ? '0px' : '16px',
-            '--kepler-content-radius-bottom-left': '0px',
-            '--kepler-content-border-color': 'var(--border)',
-            '--kepler-content-border-left-color': sidebarConfig.hidden ? 'transparent' : 'var(--border)',
+            '--kosmos-content-padding-top': '0',
+            '--kosmos-content-padding-inline': '0',
+            '--kosmos-content-padding-bottom': '0',
+            '--kosmos-content-radius-top-left': sidebarConfig.hidden ? '0px' : '16px',
+            '--kosmos-content-radius-bottom-left': '0px',
+            '--kosmos-content-border-color': 'var(--border)',
+            '--kosmos-content-border-left-color': sidebarConfig.hidden ? 'transparent' : 'var(--border)',
           }"
         >
           <main class="min-w-0 flex-1 overflow-auto pt-14 lg:pt-0">

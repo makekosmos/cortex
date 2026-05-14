@@ -20,8 +20,8 @@ PASS
   - `apps/arrancador/src-vue/lib/statistics.ts`
 - The selected day defaults to today and per-day details are fetched separately from the same IPC endpoint.
 - `GamePosterCard` was ported from React to Vue and is now used by the active Arrancador game card:
-  - new shared component: `packages/kepler-visuals/components/GamePosterCard.vue`
-  - shared exports updated in `packages/kepler-visuals/components/index.ts` and `packages/kepler-visuals/index.ts`
+  - new shared component: `packages/kosmos-visuals/components/GamePosterCard.vue`
+  - shared exports updated in `packages/kosmos-visuals/components/index.ts` and `packages/kosmos-visuals/index.ts`
   - active app wrapper updated in `apps/arrancador/src-vue/components/GameCard.vue`
   - old React `GamePosterCard` implementation and old React Arrancador wrapper/test were removed
 

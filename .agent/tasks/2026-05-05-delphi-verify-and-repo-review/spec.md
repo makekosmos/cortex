@@ -11,7 +11,7 @@ Verify Delphi (Electron + Vue task app, `apps/delphi/ts`) is in working conditio
 ## Scope
 
 - Delphi: lint-free build, vitest unit tests, TypeScript typecheck.
-- Repo-wide ARK write-boundary guard (`bun run ark:guard:writes`) since data-layer files are modified across `apps/arrancador/electron/main/services/*`, `apps/eden/ts/main/*`, `apps/delphi/ts/electron/*`, `packages/ark-core/rust/src/*`, `packages/kepler-ark/src/*`.
+- Repo-wide ARK write-boundary guard (`bun run ark:guard:writes`) since data-layer files are modified across `apps/arrancador/electron/main/services/*`, `apps/eden/ts/main/*`, `apps/delphi/ts/electron/*`, `packages/ark-core/rust/src/*`, `packages/kosmos-ark/src/*`.
 - Review of all `M` and `??` paths reported by `git status` at task start: classify by area, summarise intent of the change cluster, and flag risk.
 
 ## Out of scope

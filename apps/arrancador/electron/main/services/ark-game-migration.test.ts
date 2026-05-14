@@ -1,7 +1,7 @@
 import type {
   ArkObjectTypeRecord,
   ArkObjectRecord as SdkArkObjectRecord,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DbLike } from "../helpers/shared";

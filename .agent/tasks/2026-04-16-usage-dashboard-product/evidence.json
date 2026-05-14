@@ -23,8 +23,8 @@
       "status": "PASS",
       "evidence": [
         "services/usage-tracker/scripts/build-installer.ps1",
-        "services/usage-tracker/dist/KeplerUsageTrackerInstaller",
-        "services/usage-tracker/dist/KeplerUsageTrackerInstaller.zip",
+        "services/usage-tracker/dist/KosmosUsageTrackerInstaller",
+        "services/usage-tracker/dist/KosmosUsageTrackerInstaller.zip",
         ".agent/tasks/2026-04-16-usage-dashboard-product/raw/usage-tracker-installer.txt"
       ]
     },

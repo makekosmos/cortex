@@ -4,7 +4,7 @@
 Remove custom runtime height calculation for Windows `titleBarOverlay` in Delphi TS and let Electron use the standard system height for native window controls.
 
 ## Scope
-- `packages/kepler-visuals/components/Titlebar.vue`
+- `packages/kosmos-visuals/components/Titlebar.vue`
 - `apps/delphi/ts/electron/main.ts`
 - verification artifacts in `.agent/tasks/titlebar-overlay-native-height/`
 

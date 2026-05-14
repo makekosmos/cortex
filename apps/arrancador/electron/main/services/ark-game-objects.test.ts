@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import type { ArkObjectRecord, ArkObjectsApi, ArkObjectTypesApi } from "@kepler/ark";
+import type { ArkObjectRecord, ArkObjectsApi, ArkObjectTypesApi } from "@kosmos/ark";
 import { describe, expect, it, vi } from "vitest";
 
 import {

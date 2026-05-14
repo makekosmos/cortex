@@ -17,7 +17,7 @@
       "id": "AC2",
       "status": "PASS",
       "evidence": [
-        "Dashboard now passes hiddenWidth=0 to KeplerSidebar"
+        "Dashboard now passes hiddenWidth=0 to KosmosSidebar"
       ]
     },
     {

@@ -13,14 +13,14 @@ import {
 import {
   DesktopChrome,
   DesktopContentSurface,
-  Sidebar as KeplerSidebar,
+  Sidebar as KosmosSidebar,
   StatusDot,
   TitlebarHistoryControls,
   type SidebarConfig,
   type SidebarNavItem,
   type StatusDotTone,
   type TitlebarPlatform,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 import { useDashboardData } from "@/composables/useDashboardData";
 
 type RouterHistoryStateLike = {
@@ -240,7 +240,7 @@ const statusPopoverCopy = computed(() => {
     </template>
 
     <template #sidebar>
-      <KeplerSidebar
+      <KosmosSidebar
         :primary-items="primaryItems"
         :footer-items="[]"
         :is-mac="chromePlatform === 'mac'"
@@ -314,10 +314,10 @@ const statusPopoverCopy = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-width: var(--kepler-titlebar-control-size, 32px);
-  height: var(--kepler-titlebar-control-size, 32px);
+  min-width: var(--kosmos-titlebar-control-size, 32px);
+  height: var(--kosmos-titlebar-control-size, 32px);
   padding: 0 0.625rem;
-  border-radius: var(--kepler-titlebar-control-radius, 10px);
+  border-radius: var(--kosmos-titlebar-control-radius, 10px);
   color: var(--dashboard-text-soft);
   transition:
     background-color 120ms ease,
@@ -456,7 +456,7 @@ const statusPopoverCopy = computed(() => {
     padding-inline: 0.9rem;
   }
 
-  :deep(.kepler-status-dot-anchor) {
+  :deep(.kosmos-status-dot-anchor) {
     display: none;
   }
 }

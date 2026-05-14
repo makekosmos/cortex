@@ -18,7 +18,7 @@ pub fn set_event_sender(tx: UnboundedSender<Value>) {
 }
 
 /// Эмитировать событие. Если sender не установлен (например, библиотека
-/// используется out-of-bin context'а — Kosmos host напрямую вызывает db), tихо
+/// используется out-of-bin context'а — Kepler host напрямую вызывает db), tихо
 /// игнорируется.
 pub fn emit_event(event: Value) {
     if let Ok(guard) = EVENT_TX.lock() {

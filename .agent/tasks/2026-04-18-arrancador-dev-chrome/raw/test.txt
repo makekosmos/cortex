@@ -1,6 +1,6 @@
 bun run test
 
-RUN  v4.1.4 D:/Personal/Hobby/Coding/kepler/apps/arrancador
+RUN  v4.1.4 D:/Personal/Hobby/Coding/kosmos/apps/arrancador
 Test Files  31 passed (31)
 Tests  133 passed | 2 expected fail (135)
 Duration  14.50s

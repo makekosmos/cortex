@@ -2,7 +2,7 @@
 
 ## Scope
 
-This task fixed Eden search so it no longer ignores Ark-backed notes/objects and moved the Eden search surface onto the shared Kepler Visuals command palette contract.
+This task fixed Eden search so it no longer ignores Ark-backed notes/objects and moved the Eden search surface onto the shared Kosmos Visuals command palette contract.
 
 ## Implemented Changes
 
@@ -11,9 +11,9 @@ This task fixed Eden search so it no longer ignores Ark-backed notes/objects and
   - `packages/ark-core/rust/src/db.rs`
 - Merged Ark + heart search results in Eden main process:
   - `apps/eden/ts/main/store.ts`
-- Replaced the local standalone Eden search overlay shell with shared `@kepler/visuals` `CommandPalette`:
+- Replaced the local standalone Eden search overlay shell with shared `@kosmos/visuals` `CommandPalette`:
   - `apps/eden/ts/src/components/SearchOverlay.vue`
-  - `packages/kepler-visuals/components/CommandPalette.vue`
+  - `packages/kosmos-visuals/components/CommandPalette.vue`
 - Updated Eden search e2e locators and made the Ark-backed expectation explicit:
   - `apps/eden/ts/tests/app.spec.ts`
 
@@ -24,7 +24,7 @@ This task fixed Eden search so it no longer ignores Ark-backed notes/objects and
   - Eden search previously queried only `eden-heart`.
   - Result: visible current notes existed in the UI but were absent from search.
 - Root cause for the off-looking search UI:
-  - Eden shell already used shared Kepler Visuals primitives.
+  - Eden shell already used shared Kosmos Visuals primitives.
   - The search surface itself still used a local `SearchOverlay.vue` + custom CSS instead of the shared visuals command palette.
 
 ## Verification
@@ -45,7 +45,7 @@ This task fixed Eden search so it no longer ignores Ark-backed notes/objects and
 - Source-level UI integration proof
   - artifact: `artifacts/source-integration-check.txt`
   - proved:
-    - Eden search UI imports `CommandPalette` from `@kepler/visuals`
+    - Eden search UI imports `CommandPalette` from `@kosmos/visuals`
     - shared `CommandPalette` exposes controlled query + test ids needed by Eden
     - Eden main search path now calls Ark `search_objects`
 

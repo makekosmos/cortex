@@ -4,13 +4,13 @@
 Эта страница заменяет тонкие `AGENTS.md` / `CLAUDE.md` в корне. Полный контекст репо — в этом сайте документации. Все правила в одном месте.
 :::
 
-Ты работаешь в монорепо **Kepler**. Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](/concepts/proof-loop).
+Ты работаешь в монорепо **Kosmos**. Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](/concepts/proof-loop).
 
 ## За 30 секунд
 
-- **Kepler** = монорепо для личного софта. Bun workspaces.
+- **Kosmos** = монорепо для личного софта. Bun workspaces.
 - **ARK** = общий Rust+SQLite рантайм (`packages/ark-core`, бинарь `ark-core-rpc`).
-- **Apps** говорят с ARK **только** через `@kepler/ark` или `ark_core::db` (Rust direct writers).
+- **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
 - **Прямые SQL writes в ARK** из app services — **запрещены**.
 - **Тесты** — только на изолированных БД.
 - **Substantial-правки** — через `.agent/tasks/<DATE>-<slug>/` proof loop.
@@ -76,15 +76,15 @@ bun run ark:smoke
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |
-| **@kepler/ark** | `packages/kepler-ark` | TS SDK |
+| **@kosmos/ark** | `packages/kosmos-ark` | TS SDK |
 | **ark-relay-server** | `services/ark-relay-server` | WebSocket relay (опционально, для NAT) |
-| **kepler-visuals** | `packages/kepler-visuals` | UI токены, тема, компоненты |
+| **kosmos-visuals** | `packages/kosmos-visuals` | UI токены, тема, компоненты |
 | **usage-tracker** | `services/usage-tracker` | Rust фон-сервис, пишет usage в ARK |
 
 ## Что считается substantial (нужен proof loop)
 
 - Новая фича приложения.
-- Новый ARK endpoint в `ark-core-rpc` или метод в `@kepler/ark`.
+- Новый ARK endpoint в `ark-core-rpc` или метод в `@kosmos/ark`.
 - Изменение схемы SQLite.
 - Изменение sync-протокола.
 - Изменение write-boundary (правил доступа к данным).

@@ -4,7 +4,7 @@
 
 `bun run build` now reaches the Windows packaging stage, but `electron-builder` fails to spawn:
 
-- `D:\Personal\Hobby\Coding\kepler\node_modules\.bun\app-builder-bin@5.0.0-alpha.12\node_modules\app-builder-bin\win\x64\app-builder.exe`
+- `D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\app-builder-bin@5.0.0-alpha.12\node_modules\app-builder-bin\win\x64\app-builder.exe`
 - Error: `spawn EPERM`
 
 ## Interpretation

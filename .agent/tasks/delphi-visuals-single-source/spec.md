@@ -12,19 +12,19 @@
 
 ## Original task statement
 
-User reports that `apps/delphi/ts/src/components/SideBarButton.vue` is not identical to `packages/kepler-visuals/components/SidebarButton.vue` and wants Delphi to stop carrying copied UI components. In this monorepo the app should consume the current shared UI components directly so work happens in one place.
+User reports that `apps/delphi/ts/src/components/SideBarButton.vue` is not identical to `packages/kosmos-visuals/components/SidebarButton.vue` and wants Delphi to stop carrying copied UI components. In this monorepo the app should consume the current shared UI components directly so work happens in one place.
 
 ## Component map
 - `apps/delphi/ts/src/components/SideBar.vue` — app-specific adapter that maps Delphi store/router data into the shared visual sidebar API.
-- `packages/kepler-visuals/components/*` — single source of truth for shared visual components consumed by Delphi.
+- `packages/kosmos-visuals/components/*` — single source of truth for shared visual components consumed by Delphi.
 
 ## Acceptance criteria
 
 ### AC1
-Delphi TS must no longer depend on the local duplicate `apps/delphi/ts/src/components/SideBarButton.vue` for runtime behavior; shared sidebar button behavior must come from `packages/kepler-visuals/components/SidebarButton.vue`.
+Delphi TS must no longer depend on the local duplicate `apps/delphi/ts/src/components/SideBarButton.vue` for runtime behavior; shared sidebar button behavior must come from `packages/kosmos-visuals/components/SidebarButton.vue`.
 
 ### AC2
-Delphi TS shared-visual imports must go through the shared package public API (`@kepler/visuals`) instead of deep app-local duplicates or private package component file paths where equivalent root exports already exist.
+Delphi TS shared-visual imports must go through the shared package public API (`@kosmos/visuals`) instead of deep app-local duplicates or private package component file paths where equivalent root exports already exist.
 
 ### AC3
 The obsolete duplicate file `apps/delphi/ts/src/components/SideBarButton.vue` must be removed from the app source tree.
@@ -43,6 +43,6 @@ The Delphi TS app must still build/type-check after the refactor.
 - Refactoring unrelated Delphi pages.
 
 ## Verification plan
-- Search imports in `apps/delphi/ts/src` for `@/components/SideBarButton` and private `@kepler/visuals/components/*.vue` paths.
+- Search imports in `apps/delphi/ts/src` for `@/components/SideBarButton` and private `@kosmos/visuals/components/*.vue` paths.
 - Confirm `apps/delphi/ts/src/components/SideBarButton.vue` no longer exists.
 - Run `cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc -p tsconfig.node.json`.

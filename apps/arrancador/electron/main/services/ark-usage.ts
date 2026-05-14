@@ -4,7 +4,7 @@ import {
   type ArkUsageGamePlaytimeBinding,
   type ArkUsageGamePlaytimeSummary,
   type ArkUsageSnapshot,
-} from "@kepler/ark";
+} from "@kosmos/ark";
 import { openSqliteDatabase } from "../db";
 import { queryAll } from "../helpers/db";
 import type { DbLike } from "../helpers/shared";

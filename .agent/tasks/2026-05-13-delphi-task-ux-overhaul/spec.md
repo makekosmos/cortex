@@ -37,7 +37,7 @@ Slug: `delphi-task-ux-overhaul`
 
 ### AC6 — TodoItem.propsJson billable
 `TodoItem` тип расширен полями `billable?: boolean` и `price?: number | null`.
-Сохраняются и загружаются через `@kepler/ark` (в `task_obj.propsJson`).
+Сохраняются и загружаются через `@kosmos/ark` (в `task_obj.propsJson`).
 Существующие задачи без этих полей загружаются как `billable=false, price=null`.
 
 ### AC7 — Inline expand on click
@@ -47,7 +47,7 @@ title, notes, scheduledDate, billable + price.
 Двойной клик переименования заменяется: title правится в развёрнутой панели.
 
 ### AC8 — Context menu delete
-Правый клик по задаче открывает ContextMenu из `@kepler/visuals` с пунктом «Удалить»
+Правый клик по задаче открывает ContextMenu из `@kosmos/visuals` с пунктом «Удалить»
 (destructive). Inline-кнопка «Удалить» из TodoRow удалена.
 
 ### AC9 — Сборка зелёная
@@ -64,11 +64,11 @@ typecheck (`bun x tsc --noEmit`) — exit 0.
 ## Где правим
 
 - `apps/delphi/ts/src/components/SideBar.vue` (AC2)
-- `packages/kepler-visuals/components/QuickEntryPanel.vue` (AC1, AC3, AC4, AC5)
+- `packages/kosmos-visuals/components/QuickEntryPanel.vue` (AC1, AC3, AC4, AC5)
   — компонент шарится, но используется только Delphi-приложением (grep подтвердил).
 - `apps/delphi/ts/src/components/QuickEntry.vue` (AC4, AC5, AC6 — proxy payload)
 - `apps/delphi/ts/src/types/task.ts` (AC6)
 - `apps/delphi/ts/src/store/todos.ts` (AC6 — newTodo defaults)
 - `apps/delphi/ts/shared/task-object-migration.ts` (AC6 — preserve propsJson billable)
-- `packages/kepler-visuals/components/TodoRow.vue` (AC7, AC8 — expand + remove inline delete)
+- `packages/kosmos-visuals/components/TodoRow.vue` (AC7, AC8 — expand + remove inline delete)
 - `apps/delphi/ts/src/pages/*Page.vue` (AC7, AC8 — wire expand-state + ContextMenu)

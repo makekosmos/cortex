@@ -22,7 +22,7 @@ AC1. Root package exposes a single ARK smoke command.
 AC2. The smoke command creates/uses only paths under `.agent/tasks/<TASK_ID>/`
 or another explicit isolated test location.
 
-AC3. The smoke command covers ARK core, usage-tracker, `@kepler/ark`,
+AC3. The smoke command covers ARK core, usage-tracker, `@kosmos/ark`,
 Arrancador tests/typecheck, Eden migration/build/typed-note e2e, and Dashboard
 seed/analytics smoke.
 

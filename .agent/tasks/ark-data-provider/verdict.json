@@ -6,7 +6,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "reason": "apps/ark-data/ exists with app/build.gradle.kts (applicationId='com.kepler.ark.data', minSdk=28), source in app/src/main/java/com/kepler/ark/data/, own settings.gradle.kts."
+      "reason": "apps/ark-data/ exists with app/build.gradle.kts (applicationId='com.kosmos.ark.data', minSdk=28), source in app/src/main/java/com/kosmos/ark/data/, own settings.gradle.kts."
     },
     {
       "id": "AC2",
@@ -16,7 +16,7 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "reason": "AndroidManifest has <provider authorities='com.kepler.ark.data' exported='true'>, permission 'com.kepler.ark.data.READ_WRITE' with protectionLevel='signature', readPermission and writePermission both set."
+      "reason": "AndroidManifest has <provider authorities='com.kosmos.ark.data' exported='true'>, permission 'com.kosmos.ark.data.READ_WRITE' with protectionLevel='signature', readPermission and writePermission both set."
     },
     {
       "id": "AC4",
@@ -46,7 +46,7 @@
     {
       "id": "AC9",
       "status": "PASS",
-      "reason": "ArkDataRepository.isAvailable() checks PackageManager.getPackageInfo for 'com.kepler.ark.data'. DatabaseProvider.isArkDataAvailable delegates to it. NavGraph.kt line 139-140 checks todoViewModel.isArkDataAvailable and renders ArkDataMissingScreen() (defined at line 92) when false."
+      "reason": "ArkDataRepository.isAvailable() checks PackageManager.getPackageInfo for 'com.kosmos.ark.data'. DatabaseProvider.isArkDataAvailable delegates to it. NavGraph.kt line 139-140 checks todoViewModel.isArkDataAvailable and renders ArkDataMissingScreen() (defined at line 92) when false."
     },
     {
       "id": "AC10",
@@ -60,16 +60,16 @@
     }
   ],
   "commands_run": [
-    "cd /Users/kirill/Documents/projects/kosmos/apps/ark-data && ./gradlew assembleDebug",
-    "cd /Users/kirill/Documents/projects/kosmos/apps/delphi/kotlin && ./gradlew assembleDebug"
+    "cd /Users/kirill/Documents/projects/kepler/apps/ark-data && ./gradlew assembleDebug",
+    "cd /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin && ./gradlew assembleDebug"
   ],
   "artifacts_used": [
     "apps/ark-data/app/build.gradle.kts",
     "apps/ark-data/app/src/main/AndroidManifest.xml",
-    "apps/ark-data/app/src/main/java/com/kepler/ark/data/db/ArkDatabase.kt",
-    "apps/ark-data/app/src/main/java/com/kepler/ark/data/model/TodoItem.kt",
-    "apps/ark-data/app/src/main/java/com/kepler/ark/data/model/Note.kt",
-    "apps/ark-data/app/src/main/java/com/kepler/ark/data/provider/ArkDataProvider.kt",
+    "apps/ark-data/app/src/main/java/com/kosmos/ark/data/db/ArkDatabase.kt",
+    "apps/ark-data/app/src/main/java/com/kosmos/ark/data/model/TodoItem.kt",
+    "apps/ark-data/app/src/main/java/com/kosmos/ark/data/model/Note.kt",
+    "apps/ark-data/app/src/main/java/com/kosmos/ark/data/provider/ArkDataProvider.kt",
     "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/db/DelphiDatabase.kt",
     "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/di/DatabaseModule.kt",
     "apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/repository/ArkDataRepository.kt",

@@ -23,7 +23,7 @@
   },
   "notes": [
     "The game detail hero now uses an 80vh rounded-bottom treatment and places title plus genres inside the hero footer.",
-    "The visual language of the hero copy now reuses kepler-visuals game-poster pattern classes.",
+    "The visual language of the hero copy now reuses kosmos-visuals game-poster pattern classes.",
     "Targeted verification passed through typecheck and the focused game-detail vitest file.",
     "Renderer build is currently blocked by local native dependency loading for @tailwindcss/oxide plus spawn EPERM in the environment."
   ]

@@ -1,4 +1,4 @@
-   Compiling arrancador-sidecar v0.1.0 (D:\Personal\Hobby\Coding\kepler\apps\arrancador\sidecar)
+   Compiling arrancador-sidecar v0.1.0 (D:\Personal\Hobby\Coding\kosmos\apps\arrancador\sidecar)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s
      Running unittests src\main.rs (sidecar\target\debug\deps\arrancador_sidecar-9ab50d25d2c00539.exe)
 

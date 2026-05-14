@@ -13,9 +13,9 @@ Windows titlebar height uses `env(titlebar-area-height, ...)`.
 Result: PASS
 
 Evidence:
-- `packages/kepler-visuals/components/Titlebar.vue` now sets:
-  - `height: env(titlebar-area-height, var(--kepler-titlebar-height))`
-  - `min-height: env(titlebar-area-height, var(--kepler-titlebar-height))`
+- `packages/kosmos-visuals/components/Titlebar.vue` now sets:
+  - `height: env(titlebar-area-height, var(--kosmos-titlebar-height))`
+  - `min-height: env(titlebar-area-height, var(--kosmos-titlebar-height))`
 - Raw artifact: `raw/titlebar-env-diff.txt`
 
 ### AC2
@@ -24,7 +24,7 @@ Windows titlebar horizontal safe-area no longer relies on percentage padding and
 Result: PASS
 
 Evidence:
-- `packages/kepler-visuals/components/Titlebar.vue` now computes:
+- `packages/kosmos-visuals/components/Titlebar.vue` now computes:
   - left safe area from `env(titlebar-area-x, 0px)`
   - right safe area from `100vw - env(titlebar-area-x) - env(titlebar-area-width)`
 - The previous percentage fallback padding was removed.

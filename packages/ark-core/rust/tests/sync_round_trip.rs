@@ -92,7 +92,7 @@ fn tracked_app_entity(id: &str, device_id: &str, counter: u64) -> SyncEntity {
         normalized_exe_path: r"c:\\games\\atlas\\atlas.exe".to_string(),
         process_name: "atlas.exe".to_string(),
         display_name: Some("Atlas".to_string()),
-        publisher: Some("Kepler".to_string()),
+        publisher: Some("Kosmos".to_string()),
         icon_ref: None,
         first_seen_at: "2026-04-01T00:00:00.000Z".to_string(),
         last_seen_at: "2026-04-01T00:05:00.000Z".to_string(),

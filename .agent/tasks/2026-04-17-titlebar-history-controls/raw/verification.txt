@@ -7,10 +7,10 @@
  .../src/components/dashboard/DashboardShell.vue    | 33 +++++++++
  apps/delphi/AGENTS.md                              |  1 +
  apps/delphi/ts/src/App.vue                         | 43 ++++++++++-
- packages/kepler-visuals/components/Sidebar.vue     | 84 ++++++++++++++++++++--
- packages/kepler-visuals/components/index.ts        |  2 +
- packages/kepler-visuals/components/sidebar.css     |  4 ++
- packages/kepler-visuals/index.ts                   |  1 +
+ packages/kosmos-visuals/components/Sidebar.vue     | 84 ++++++++++++++++++++--
+ packages/kosmos-visuals/components/index.ts        |  2 +
+ packages/kosmos-visuals/components/sidebar.css     |  4 ++
+ packages/kosmos-visuals/index.ts                   |  1 +
  8 files changed, 163 insertions(+), 6 deletions(-)
 
 == git status --short relevant ==
@@ -18,12 +18,12 @@
  M apps/dashboard/src/components/dashboard/DashboardShell.vue
  M apps/delphi/AGENTS.md
  M apps/delphi/ts/src/App.vue
- M packages/kepler-visuals/components/Sidebar.vue
- M packages/kepler-visuals/components/index.ts
- M packages/kepler-visuals/components/sidebar.css
- M packages/kepler-visuals/index.ts
+ M packages/kosmos-visuals/components/Sidebar.vue
+ M packages/kosmos-visuals/components/index.ts
+ M packages/kosmos-visuals/components/sidebar.css
+ M packages/kosmos-visuals/index.ts
 ?? .agent/tasks/2026-04-17-titlebar-history-controls/
-?? packages/kepler-visuals/components/TitlebarHistoryControls.vue
+?? packages/kosmos-visuals/components/TitlebarHistoryControls.vue
 
 == eden tsc ==
 

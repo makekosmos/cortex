@@ -23,12 +23,12 @@ export default defineConfig(async ({ mode }) => {
         { find: "@", replacement: path.resolve(rootDir, "./src") },
         { find: "@vue-app", replacement: path.resolve(rootDir, "./src-vue") },
         {
-          find: "@kepler/ark",
-          replacement: path.resolve(rootDir, "../../packages/kepler-ark/src/index.ts"),
+          find: "@kosmos/ark",
+          replacement: path.resolve(rootDir, "../../packages/kosmos-ark/src/index.ts"),
         },
         {
-          find: "@kepler/visuals",
-          replacement: path.resolve(rootDir, "../../packages/kepler-visuals"),
+          find: "@kosmos/visuals",
+          replacement: path.resolve(rootDir, "../../packages/kosmos-visuals"),
         },
       ],
       dedupe: ["vue", "vue-router"],

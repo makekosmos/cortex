@@ -8,7 +8,7 @@ PASS
 
 - AC1 PASS: `ark-core-rpc` exposes `list_objects_by_type` and `get_objects_by_ids`.
 - AC2 PASS: `ark-core-rpc` exposes `list_recent_usage_processes` and `search_usage_processes`.
-- AC3 PASS: `@kepler/ark` calls the new RPC operations directly for object type/id queries and usage process queries.
+- AC3 PASS: `@kosmos/ark` calls the new RPC operations directly for object type/id queries and usage process queries.
 - AC4 PASS: Arrancador process search calls `ArkUsageApi.processes.recent/search` before falling back to read-only SQLite.
 - AC5 PASS: ARK core, SDK, Arrancador boundary docs, and TODO mention the runtime query endpoints.
 - AC6 PASS: Fresh checks passed against isolated test/smoke databases.
@@ -23,7 +23,7 @@ PASS
   - Added RPC request variants and handlers for the four query operations.
 - `packages/ark-core/rust/src/types.rs`
   - Added `UsageProcessCandidate`.
-- `packages/kepler-ark/src/ark-client.ts`
+- `packages/kosmos-ark/src/ark-client.ts`
   - Rewired `objects.listByType`, `objects.getMany`, and new `usage.processes` APIs to RPC calls.
 - `apps/arrancador/electron/main/services/usage-process-search.ts`
   - Uses ARK runtime process queries first, with read-only SQLite as fallback.
@@ -33,7 +33,7 @@ PASS
 - `cargo test --manifest-path packages\ark-core\rust\Cargo.toml object_query_helpers_filter_by_type_and_ids`
 - `cargo test --manifest-path packages\ark-core\rust\Cargo.toml usage_process_queries_return_recent_and_search_candidates`
 - `cargo test --manifest-path packages\ark-core\rust\Cargo.toml`
-- `bun run --cwd packages/kepler-ark typecheck`
+- `bun run --cwd packages/kosmos-ark typecheck`
 - `bun run --cwd apps/arrancador test`
 - `bun run --cwd apps/arrancador typecheck`
 - `bun run ark:smoke`

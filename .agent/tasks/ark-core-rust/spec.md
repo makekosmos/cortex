@@ -3,7 +3,7 @@
 ## Metadata
 - Task ID: ark-core-rust
 - Created: 2026-04-04
-- Repo root: /Users/kirill/Documents/projects/kosmos
+- Repo root: /Users/kirill/Documents/projects/kepler
 
 ## Guidance Sources
 - `/CLAUDE.md` (repo task proof loop)

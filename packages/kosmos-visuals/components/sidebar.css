@@ -1,0 +1,94 @@
+.kosmos-sidebar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  height: 100%;
+  min-height: 100%;
+  display: block;
+  box-sizing: border-box;
+  overflow: visible;
+  z-index: 2;
+  transition: width 0.375s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kosmos-sidebar-wrapper.animating {
+  transition: width 0.33s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kosmos-sidebar-wrapper.is-resizing {
+  transition: none;
+}
+
+.kosmos-sidebar-wrapper.hidden .kosmos-sidebar-content {
+  background: transparent;
+  border-color: transparent;
+}
+
+
+.kosmos-sidebar-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  opacity: 1;
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+
+  background: var(--sidebar-bg);
+  overflow: hidden;
+}
+
+.kosmos-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  flex-shrink: 0;
+  height: 100%;
+  cursor: ew-resize;
+  padding: 0;
+  display: block;
+  pointer-events: auto;
+  z-index: 80;
+  touch-action: none;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+.kosmos-resize-handle-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--kosmos-resize-handle-thickness, 2px);
+  height: var(--kosmos-resize-handle-height, 32px);
+  background: var(
+    --kosmos-resize-handle-color,
+    color-mix(in oklab, var(--sidebar-foreground, var(--foreground, currentColor)) 60%, transparent),
+  );
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity var(--transition-fast, 0.15s ease);
+  pointer-events: none;
+}
+
+.kosmos-resize-handle-line.expanded,
+.kosmos-sidebar-wrapper:hover .kosmos-resize-handle-line,
+.kosmos-sidebar-wrapper.is-resizing .kosmos-resize-handle-line {
+  opacity: 1;
+}
+
+/* Make interactive elements inside a draggable sidebar clickable */
+.kosmos-sidebar-content a,
+.kosmos-sidebar-content button,
+.kosmos-sidebar-content input,
+.kosmos-sidebar-content [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
+body.sidebar-resizing {
+  user-select: none;
+  cursor: col-resize;
+}

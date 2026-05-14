@@ -2,7 +2,7 @@ Command:
   bun run build
 
 Workdir:
-  D:\Personal\Hobby\Coding\kepler\apps\eden\ts
+  D:\Personal\Hobby\Coding\kosmos\apps\eden\ts
 
 Observed result:
   Eden production build completed successfully.

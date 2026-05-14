@@ -3,7 +3,7 @@
 ## Acceptance Criteria
 
 - AC1: PASS
-  - `packages/kepler-visuals/components/CustomCaret.vue` still renders the shared custom caret for focused collapsed caret states.
+  - `packages/kosmos-visuals/components/CustomCaret.vue` still renders the shared custom caret for focused collapsed caret states.
   - The custom caret is not removed; it still owns collapsed caret rendering through `render()` and `getCaretRect()`.
 
 - AC2: PASS
@@ -20,16 +20,16 @@
   - The test covers pointerdown handoff into native selection mode, expanded-selection behavior, and the return to collapsed custom-caret mode.
 
 - AC5: PASS
-  - TypeScript verification passed for the touched consumers of `@kepler/visuals`:
+  - TypeScript verification passed for the touched consumers of `@kosmos/visuals`:
     - `apps/eden/ts`
     - `apps/delphi/ts`
     - `apps/dashboard`
 
 ## Commands
 
-- PASS: `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\eden\ts\tsconfig.json`
-- PASS: `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\delphi\ts\tsconfig.json`
-- PASS: `node D:\Personal\Hobby\Coding\kepler\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kepler\apps\dashboard\tsconfig.json`
+- PASS: `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\eden\ts\tsconfig.json`
+- PASS: `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\delphi\ts\tsconfig.json`
+- PASS: `node D:\Personal\Hobby\Coding\kosmos\node_modules\.bun\typescript@5.8.3\node_modules\typescript\lib\tsc.js --noEmit -p D:\Personal\Hobby\Coding\kosmos\apps\dashboard\tsconfig.json`
 
 ## Notes
 
