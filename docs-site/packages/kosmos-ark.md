@@ -22,7 +22,7 @@
 
 ### Self-managed sidecar
 
-`ArkClient` спавнит и владеет процессом `ark-core-rpc.exe`. Используй когда приложение — единственный потребитель ARK.
+`ArkClient` спавнит и владеет процессом `ark-core-rpc.exe`. Legacy режим для апок вне Kepler-экосистемы.
 
 ```ts
 import { ArkClient } from '@kosmos/ark';
@@ -30,33 +30,22 @@ import { ArkClient } from '@kosmos/ark';
 const ark = new ArkClient({
   spaceId: 'default',
   deviceId: 'device-1',
-  deviceName: 'Workstation',
-  authSecret: 'shared-space-secret',
   dbPath: 'C:/Users/me/AppData/Roaming/Kosmos/spaces/default/ark.db',
   sidecarPath: 'C:/path/to/ark-core-rpc.exe',
 });
-
 await ark.start();
 ```
 
-`dbPath` обязателен. Клиент шлёт `init` автоматически перед первым sync/object/usage запросом. Запросы к self-managed sidecar используют request id, чтобы матчить ответы даже когда в stdout есть async events.
+`dbPath` обязателен. Клиент шлёт `init` автоматически перед первым sync/object/usage запросом. Запросы используют request id, чтобы матчить ответы даже когда в stdout async events.
 
 ### Injected sidecar
 
-Sidecar уже владеется другим слоем (например, `apps/delphi/ts/electron/sidecar.ts`, который делит sidecar между несколькими сервисами). `ArkClient` получает `requestFn` и `onEventFn`.
+Sidecar уже владеется другим слоем. `ArkClient` получает `requestFn` и `onEventFn`. В injected mode владелец отвечает за инициализацию БД и жизненный цикл бинаря; `@kosmos/ark` сохраняет legacy-совместимый формат запросов и **не** добавляет request id'ы.
 
 ```ts
-const ark = new ArkClient({
-  spaceId: 'default',
-  deviceId: 'device-1',
-  requestFn: sidecar.request,
-  onEventFn: sidecar.onEvent,
-});
-
+const ark = new ArkClient({ spaceId: 'default', deviceId: 'device-1', requestFn: sidecar.request, onEventFn: sidecar.onEvent });
 await ark.start();
 ```
-
-В injected mode владелец `requestFn` отвечает за инициализацию БД и жизненный цикл бинаря. `@kosmos/ark` сохраняет legacy-совместимый формат запросов и **не** добавляет request id'ы в injected calls.
 
 ### Kepler mode (Phase 2+)
 
@@ -102,38 +91,19 @@ if (state.kind === 'connected') {
 // Event:    { "event": "<kind>", ... }  // нет _req_id, нет ok
 ```
 
+Известные `event.kind`: `entity_changed`, `peer_connected`, `peer_disconnected`, `command_invoked`, `commands_changed`. Диспатч событий — общий `dispatchSidecarEvent`, работает идентично в self-managed (stdout-кадры) и kepler mode (WS-кадры).
+
 ### `invokeOperation` escape-hatch
 
-Legacy callsites (например `apps/eden/ts/main/store.ts`) используют 30+ `runArkRequest({operation: ..., ...})`. Чтобы не переписывать всё одновременно с cutover'ом, `ArkClient` имеет public:
-
-```ts
-const result = await ark.invokeOperation<MyType>({
-  operation: 'list_objects',
-});
-```
-
-Постепенная миграция на typed API (`ark.objects.list()`) — отдельная follow-up задача.
+Legacy callsites используют 30+ `runArkRequest({operation: ..., ...})`. Чтобы не переписывать всё одновременно с cutover'ом, `ArkClient` имеет public `invokeOperation<T>({ operation, ... })`. Постепенная миграция на typed API (`ark.objects.list()`) — отдельная follow-up задача.
 
 ## Sync API
 
 ```ts
 await ark.start();
-
-ark.onPeerConnected((deviceId, deviceName) => {
-  console.log('peer connected', deviceId, deviceName);
-});
-
-ark.onEntityChanged((entityJson) => {
-  console.log('entity changed', entityJson);
-});
-
-await ark.broadcastChange('object', 'obj-1', {
-  type: 'object',
-  id: 'obj-1',
-  data: { /* ... */ },
-  hlc: '0:0:device-1',
-});
-
+ark.onPeerConnected((deviceId, deviceName) => { /* ... */ });
+ark.onEntityChanged((entityJson) => { /* ... */ });
+await ark.broadcastChange('object', 'obj-1', { type: 'object', id: 'obj-1', data: {}, hlc: '0:0:device-1' });
 const peers = await ark.getConnectedPeers();
 await ark.stop();
 ```
@@ -142,6 +112,73 @@ Relay options пробрасываются в `ark-core-rpc`. Когда `relayU
 
 `authSecret` опционален. Когда установлен на каждом устройстве space'а, LAN/P2P аутентифицирует `hello`-сообщения HMAC-SHA256.
 
+## Commands API
+
+`commands` — namespace для регистрации «ручек» приложений в Kepler launcher. Каждая апка публикует свой список команд (например, «Pomodoro 25 минут», «Создать заметку», «Открыть Delphi»), Kepler-launcher агрегирует их и показывает в command-palette. При выборе команды Kepler шлёт `command_invoked` обратно — апка выполняет действие.
+
+Работает в обоих режимах транспорта; wire-формат см. [Command Bus](/concepts/command-bus).
+
+### API
+
+```ts
+interface CommandManifest {
+  id: string;             // глобально уникальный, конвенция "<app>:<feature>:<verb>"
+  title: string;          // отображается в palette
+  subtitle?: string;      // обычно имя апки или контекст
+  category: 'open' | 'action';
+}
+
+interface CommandInvokedEvent {
+  id: string;
+  params?: Record<string, unknown>;
+  invokerClientId?: string; // кто инициировал invoke
+}
+
+interface ArkCommandsApi {
+  register(commands: CommandManifest[]): Promise<void>;
+  unregister(ids: string[]): Promise<void>;
+  list(): Promise<CommandManifest[]>;
+  invoke(id: string, params?: Record<string, unknown>): Promise<void>;
+  onInvoked(handler: (event: CommandInvokedEvent) => void): () => void;
+  onChanged(handler: (commands: CommandManifest[]) => void): () => void;
+}
+```
+
+### Пример: app-side (провайдер команд)
+
+```ts
+import { ArkClient } from '@kosmos/ark';
+
+await ark.commands.register([
+  {
+    id: 'horologion:pomodoro:25',
+    title: 'Pomodoro 25 минут',
+    subtitle: 'Horologion',
+    category: 'action',
+  },
+]);
+
+const off = ark.commands.onInvoked((event) => {
+  if (event.id === 'horologion:pomodoro:25') {
+    startPomodoro(25);
+  }
+});
+
+// На shutdown:
+off();
+await ark.commands.unregister(['horologion:pomodoro:25']);
+```
+
+### Пример: launcher-side
+
+```ts
+const cmds = await ark.commands.list();          // отрендерить в palette
+await ark.commands.invoke('horologion:pomodoro:25'); // провайдер получит CommandInvokedEvent
+const offChanged = ark.commands.onChanged((next) => rerenderPalette(next));
+```
+
+`onInvoked` / `onChanged` возвращают unsubscribe-функцию. Подписки переживают переподключение к kepler-host (callback'и хранятся в `ArkClient` instance).
+
 ## Object API
 
 ```ts
@@ -149,19 +186,8 @@ const objects = await ark.objects.list();
 const tasks = await ark.objects.listByType('task_obj');
 const task = await ark.objects.get('task-1');
 const linked = await ark.objects.getMany(['task-1', 'note-1']);
-
-await ark.objects.upsert({
-  id: 'task-1',
-  typeId: 'task_obj',
-  title: 'Draft plan',
-  contentJson: { body: '' },
-  propsJson: { status: 'open' },
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  deletedAt: null,
-});
-
 const matches = await ark.objects.search('plan');
+await ark.objects.upsert({ id: 'task-1', typeId: 'task_obj', title: 'Draft plan', contentJson: {}, propsJson: {}, createdAt: '...', updatedAt: '...', deletedAt: null });
 await ark.objects.delete('task-1');
 ```
 
@@ -170,23 +196,8 @@ await ark.objects.delete('task-1');
 ## Object Types и Links
 
 ```ts
-await ark.objectTypes.upsert({
-  id: 'task_obj',
-  name: 'Task',
-  schemaJson: '{}',
-  uiSchemaJson: '{}',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  systemLocked: false,
-});
-
-await ark.links.upsert({
-  id: 'link-1',
-  sourceObjectId: 'task-1',
-  targetObjectId: 'note-1',
-  linkType: 'related',
-  createdAt: new Date().toISOString(),
-});
+await ark.objectTypes.upsert({ id: 'task_obj', name: 'Task', /* ... */ });
+await ark.links.upsert({ id: 'link-1', sourceObjectId: 'task-1', targetObjectId: 'note-1', linkType: 'related', createdAt: '...' });
 ```
 
 ## Usage API
@@ -194,34 +205,9 @@ await ark.links.upsert({
 ```ts
 const usage = await ark.usage.loadAll();
 const recent = await ark.usage.processes.recent(10);
-const found = await ark.usage.processes.search('demo', 10);
-
-const summary = await ark.usage.gamePlaytime.summary({
-  bindings: [{
-    gameId: 'game-1',
-    gameName: 'Demo',
-    matchType: 'exe_path',
-    matchValue: 'C:/Games/Demo/demo.exe',
-  }],
-  rangeStart: '2026-04-01',
-  rangeEnd: '2026-04-30',
-});
-
-await ark.usage.trackedApps.upsert({
-  id: 'app-1',
-  platform: 'windows',
-  exePath: 'C:/Games/Demo/demo.exe',
-  normalizedExePath: 'c:/games/demo/demo.exe',
-  processName: 'demo.exe',
-  displayName: 'Demo',
-  publisher: null,
-  iconRef: null,
-  firstSeenAt: new Date().toISOString(),
-  lastSeenAt: new Date().toISOString(),
-});
-
+const summary = await ark.usage.gamePlaytime.summary({ bindings, rangeStart, rangeEnd });
+await ark.usage.trackedApps.upsert({ /* ... */ });
 await ark.usage.sessions.delete('session-1');
-await ark.usage.events.delete('event-1');
 ```
 
 Usage process и game playtime summary — Rust/SQLite агрегация в `ark-core-rpc`. Caller передаёт app-specific bindings, не SQL.
@@ -231,23 +217,13 @@ Usage process и game playtime summary — Rust/SQLite агрегация в `ar
 Identity-слой для shared selected space (`appData/Kosmos/selected-space.json`). Используется всеми Electron-приложениями, чтобы Eden / Delphi / Arrancador резолвили один и тот же ARK DB path.
 
 ```ts
-import {
-  buildPersonalSelectedSpace,
-  buildSharedSelectedSpaceFromCode,
-  readSharedSelectedSpace,
-  writeSharedSelectedSpace,
-  getArkDbPathForSelectedSpace,
-  getKosmosDataDir,
-  derivePersonalSpaceCodeFromVaultPath,
-  deriveSpaceIdFromCode,
-  type SharedSelectedSpace,
-} from '@kosmos/ark';
+import { readSharedSelectedSpace, getArkDbPathForSelectedSpace } from '@kosmos/ark';
 
 const selection = readSharedSelectedSpace(app.getPath('appData'));
 const dbPath = getArkDbPathForSelectedSpace(app.getPath('appData'), selection);
 ```
 
-`spaceCode` — Crockford-base32 от хэша нормализованного vault path (12 символов). `spaceId` — первые 16 hex-символов SHA-256 от нормализованного `spaceCode`.
+Полный набор экспортов: `buildPersonalSelectedSpace`, `buildSharedSelectedSpaceFromCode`, `writeSharedSelectedSpace`, `getKosmosDataDir`, `derivePersonalSpaceCodeFromVaultPath`, `deriveSpaceIdFromCode`, тип `SharedSelectedSpace`. `spaceCode` — Crockford-base32 от хэша нормализованного vault path (12 символов); `spaceId` — первые 16 hex-символов SHA-256 от нормализованного `spaceCode`.
 
 ## Правила интеграции
 
@@ -261,6 +237,14 @@ const dbPath = getArkDbPathForSelectedSpace(app.getPath('appData'), selection);
 ## Связанные документы
 
 - [ark-core](/packages/ark-core) — runtime.
+- [Kepler host](/apps/kepler) — single-sidecar host и launcher.
+- [Command Bus](/concepts/command-bus) — wire-формат `commands.*` и событий.
 - [Граница записи в ARK](/concepts/write-boundary).
 - [Модель данных ARK](/concepts/ark-objects).
 - [Синхронизация](/concepts/sync).
+
+## Источники
+
+- `packages/kosmos-ark/src/ark-client.ts` — `ArkClient`, `ArkCommandsApi`, dispatch событий.
+- `packages/kosmos-ark/src/ensure-kepler.ts` — `ensureKeplerRunning`, discovery + auto-launch.
+- `packages/kosmos-ark/src/selected-space.ts` — selected-space helpers.

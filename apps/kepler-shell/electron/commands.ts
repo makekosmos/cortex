@@ -1,11 +1,9 @@
-// Static command registry — open-commands ("Открыть <App>"), которые
-// kepler-shell исполняет локально через `spawn(exe)`. Это единственные
-// статические команды launcher'а.
+// Static command registry — open-commands ("Открыть <App>") теперь открывают
+// апки как Vue extension'ы внутри Kepler через extension-host (Phase 4).
+// Spawn .exe path остаётся fallback'ом для Eden (она ещё standalone Electron).
 //
-// Action-commands (Pomodoro start, create note и т.п.) теперь приходят
-// dynamic от running апок через kepler-backend (ArkClient.commands.list()).
-// Здесь их нет — они регистрируются апками и исполняются на стороне апки
-// после broadcast'а `command_invoked` от backend'а.
+// Action-commands (Pomodoro start, create note и т.п.) приходят dynamic от
+// running extension'ов через kepler-backend command bus.
 
 import "./extension-host";
 
@@ -14,9 +12,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// ESM shim — __dirname / __filename не определены в Node ESM bundles
-// (electron-vite собирает main как ESM). Без этого resolveAppExe падает
-// с ReferenceError: __dirname is not defined.
+// ESM shim — __dirname / __filename не определены в Node ESM bundles.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -31,12 +27,10 @@ export interface InternalCommand {
 function resolveAppExe(appLower: string): string | null {
   const cap = appLower.charAt(0).toUpperCase() + appLower.slice(1);
   const candidates = [
-    // Production install (после electron-builder NSIS/MSI)
     path.join(process.env.LOCALAPPDATA ?? "", "Kosmos", cap, `${cap}.exe`),
     path.join(process.env.LOCALAPPDATA ?? "", "Programs", cap, `${cap}.exe`),
     path.join(process.env.PROGRAMFILES ?? "", cap, `${cap}.exe`),
     path.join(process.env.PROGRAMFILES ?? "", "Kosmos", cap, `${cap}.exe`),
-    // Dev: release/ внутри workspace
     path.resolve(__dirname, "..", "..", "..", "..", "apps", appLower, "release", `${cap}.exe`),
     path.resolve(__dirname, "..", "..", "..", "..", "apps", appLower, "ts", "release", `${cap}.exe`),
   ];
@@ -46,61 +40,57 @@ function resolveAppExe(appLower: string): string | null {
   return null;
 }
 
-function openApp(appLower: string): void {
+function openAppExe(appLower: string): void {
   const exe = resolveAppExe(appLower);
   if (!exe) {
-    console.warn(`[kepler-shell] ${appLower}.exe not found in known paths`);
+    console.warn(`[kepler-shell] ${appLower}.exe not found (legacy fallback)`);
     return;
   }
   spawn(exe, [], { detached: true, stdio: "ignore" }).unref();
 }
 
+async function openAsExtension(id: string): Promise<void> {
+  const { openExtension } = await import("./extension-host");
+  openExtension(id);
+}
+
 export const COMMANDS: InternalCommand[] = [
+  // Phase 4 migrated apps — открываются как Vue extension'ы внутри Kepler.
   {
-    id: "eden:open",
-    title: "Открыть Eden",
-    subtitle: "Заметки",
+    id: "dashboard:open",
+    title: "Открыть Dashboard",
+    subtitle: "Аналитика",
     category: "open",
-    exec: () => openApp("eden"),
+    exec: () => openAsExtension("dashboard"),
   },
   {
     id: "delphi:open",
     title: "Открыть Delphi",
     subtitle: "Задачи",
     category: "open",
-    exec: () => openApp("delphi"),
+    exec: () => openAsExtension("delphi"),
   },
   {
     id: "horologion:open",
     title: "Открыть Horologion",
     subtitle: "Pomodoro + трекер времени",
     category: "open",
-    exec: () => openApp("horologion"),
+    exec: () => openAsExtension("horologion"),
   },
   {
     id: "arrancador:open",
     title: "Открыть Arrancador",
     subtitle: "Игровая библиотека",
     category: "open",
-    exec: () => openApp("arrancador"),
+    exec: () => openAsExtension("arrancador"),
   },
+  // Eden намеренно НЕ мигрирован в Phase 4 — остаётся standalone .exe.
   {
-    id: "dashboard:open",
-    title: "Открыть Dashboard",
-    subtitle: "Аналитика",
+    id: "eden:open",
+    title: "Открыть Eden",
+    subtitle: "Заметки (legacy standalone)",
     category: "open",
-    exec: () => openApp("dashboard"),
-  },
-  {
-    id: "dashboard:extension:demo",
-    title: "Открыть Dashboard (PoC extension)",
-    subtitle: "Demo",
-    category: "open",
-    exec: async () => {
-      // Lazy import чтобы не подгружать extension-host на старте если не вызвано
-      const { openExtension } = await import("./extension-host");
-      openExtension("dashboard");
-    },
+    exec: () => openAppExe("eden"),
   },
 ];
 

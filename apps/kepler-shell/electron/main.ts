@@ -47,6 +47,7 @@ import {
 } from "@kosmos/ark";
 import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
+import { setExtensionArkBridge } from "./extension-host";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import { openSettings } from "./settings-window";
@@ -379,6 +380,21 @@ async function initArkClient(): Promise<void> {
     console.error(
       `[kepler-shell] ArkClient connected to kepler-backend (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
     );
+    // Bridge для Vue-extensions: extension-host прокидывает renderer-запросы
+    // сюда через IPC. invokeOperation — public escape-hatch для generic RPC,
+    // onArkEvent — generic подписка, фильтруем по event-имени.
+    setExtensionArkBridge({
+      request: async (req) => {
+        if (!arkClient) throw new Error("ArkClient not ready");
+        return arkClient.invokeOperation(req as { operation: string; [key: string]: unknown });
+      },
+      subscribe: (event, handler) => {
+        if (!arkClient) return () => {};
+        return arkClient.onArkEvent((e) => {
+          if (e.event === event) handler(e);
+        });
+      },
+    });
     // Subscribe на commands_changed → пушим renderer'у сигнал перефетчить
     // список (он сам вызовет kepler:commands:list). Сам список не шлём —
     // renderer должен пройти через тот же merge-pipeline (static + dynamic).
@@ -571,6 +587,7 @@ app.on("window-all-closed", () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  setExtensionArkBridge({ request: null, subscribe: null });
   if (windowStateSaveTimer) {
     clearTimeout(windowStateSaveTimer);
     windowStateSaveTimer = null;

@@ -60,6 +60,25 @@
 - [ ] Никаких writes в ARK таблицы.
 - [ ] `@kosmos/visuals` через import/alias, не скопирован.
 
+## Я правил kepler-shell (`apps/kepler-shell`)
+
+- [ ] `bun run --cwd apps/kepler-shell typecheck` — clean.
+- [ ] `bun run --cwd apps/kepler-shell build:js` — clean.
+- [ ] `bun x vite build --configLoader native` — все 3 environments (renderer / main / preload) собираются.
+- [ ] Команды в `electron/commands.ts` имеют корректный category (`open` / `action`); action-команды не захардкожены, приходят dynamic от приложений.
+- [ ] Если правил commands — обновил `docs-site/concepts/command-bus.md`.
+- [ ] Settings-окно не сломано после изменений `main.ts`.
+- [ ] Extension PoC всё ещё открывается (`dashboard:extension:demo` команда работает).
+- [ ] Размер окна остался fixed 720×460, без per-frame resize animation.
+
+## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
+
+- [ ] Backend (`services/kepler-backend/src/command_bus.rs` + `ws_server.rs`) — `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.
+- [ ] SDK (`packages/kosmos-ark/src/ark-client.ts`) — `bun test` зелёный.
+- [ ] Wire format — flat events `{event: "...", ...fields}`, согласован между backend и SDK.
+- [ ] Apps register обёрнут в `try/catch` (self-managed mode без commands API — норма, не ошибка).
+- [ ] Если менял публичный shape события — обновил `docs-site/concepts/command-bus.md`.
+
 ## Я правил Horologion (`apps/horologion`)
 
 - [ ] `bun run --cwd apps/horologion typecheck` — зелёный.

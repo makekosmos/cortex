@@ -126,6 +126,30 @@ bun run test:e2e         # Playwright (с Python-сидингом в globalSetup
 bun run test:e2e:smoke   # прямой Playwright-library smoke
 ```
 
+## Kepler Shell (launcher)
+
+`apps/kepler-shell/` — Electron-лаунчер Kepler (фронт для экосистемы Kosmos). Окно fixed-size 720×460, command bus как primary integration primitive.
+
+```powershell
+cd apps/kepler-shell
+bun run dev              # dev mode (Vite renderer + Electron main)
+bun run typecheck        # TS check (renderer + main + preload)
+bun run build:js         # сборка renderer + main + preload (без установщика)
+bun run build            # build:js + electron-builder --win nsis (финальный NSIS one-click)
+bun run test:e2e         # Playwright smoke
+```
+
+Extension content статичен — `apps/kepler-shell/extensions/<id>/`, без отдельного build-step (PoC: `dashboard/`).
+
+## Kepler Backend (Rust)
+
+`services/kepler-backend/` — Rust-сервис: command bus host, WS server для лаунчера и приложений.
+
+```powershell
+cargo build --manifest-path services/kepler-backend/Cargo.toml --bin kepler-backend
+cargo test  --manifest-path services/kepler-backend/Cargo.toml --lib
+```
+
 ## Horologion
 
 Workspace-директория исторически осталась `apps/horologion`, имя приложения — Horologion.
@@ -215,3 +239,24 @@ bun run ark:guard:writes
 ```
 
 См. [Smoke-матрица](/reference/smoke-matrix).
+
+## Migration / служебные скрипты
+
+После brand swap Kepler ↔ Kosmos (2026-05-14) появился набор служебных PowerShell/JS-скриптов:
+
+```powershell
+# Перенос всех Kepler-имён в Kosmos-имена (и обратные точки) в репозитории.
+pwsh scripts/migrate-kepler-to-kosmos.ps1
+
+# Проверка completeness swap: ищет остаточные «Kepler»/«Kosmos» паттерны,
+# где их быть не должно. Падает при несоответствии — гард для PR.
+pwsh scripts/check-swap-completeness.ps1
+
+# Замер RAM-усреднённого процесса лаунчера (Kepler shell) под нагрузкой.
+pwsh scripts/measure-kepler-ram.ps1
+
+# Чинит mojibake (UTF-8 vs CP1251) в .md / .ts / .vue, накопленный при правках
+# в смешанной кодировке.
+node scripts/fix-mojibake.mjs
+```
+

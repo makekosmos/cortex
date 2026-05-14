@@ -1,202 +1,147 @@
-# Kepler — sync host + global launcher (opt-in)
+# Kepler — Electron host и global launcher
 
 ::: tip Источник правды
-`apps/kepler/`, `.agent/tasks/2026-05-13-kepler-phase-*` (proof loops)
+`apps/kepler-shell/`, `services/kepler-backend/`, `.agent/tasks/2026-05-14-kosmos-pivot/`
 :::
 
-**Kepler** — фоновый Rust-процесс с трей-иконкой, который активирует **синхронизацию между устройствами** + global launcher по хоткею. Это **opt-in feature** для Kosmos — если sync не нужен, ставить Kepler не обязательно.
+**Kepler** — Electron-приложение, которое выступает host'ом для всей Kosmos ecosystem: global launcher по `Ctrl+Shift+K`, единый backend для апок, command bus для динамических действий и (Phase 4+) extension loader для Vue-приложений. Это **сердце десктопа Kosmos**: один процесс держит ARK, маршрутизирует команды и (в перспективе) рендерит сами апки как extensions.
 
-## Архитектурная модель
-
-::: info Sync = opt-in feature
-Kosmos-приложения (Eden, Delphi, Arrancador, Horologion, Dashboard) **по умолчанию работают standalone**: каждая апка спавнит свой `ark-core-rpc` child-процесс, читает/пишет общую `%APPDATA%\Kosmos\ark.db`. Multi-process write через SQLite WAL. **Без LAN/relay sync.**
-
-**Установи Kepler если нужно:**
-- Sync между устройствами (LAN или через relay-server)
-- Единый sidecar на машине вместо N (экономия ~150 MB RAM при 4+ запущенных апках)
-- Global launcher Ctrl+Shift+K (поиск ARK FTS5 + quick-create задач/заметок)
-- Tray-иконка со статусом
-
-Без Kepler — apps просто работают локально, ARK FTS5 поиск работает, всё в одной DB shared между апками на машине.
+::: info Brand swap
+До 2026-05-14 «Kepler» был именем экосистемы, а launcher назывался иначе. После pivot'а имена swap'нуты: **Kosmos** = ecosystem (общий ARK, общая БД, общие пакеты), **Kepler** = host-приложение / launcher.
 :::
 
-## Detection — как apps решают использовать Kepler
-
-При запуске каждой апки `@kosmos/ark` `ensureKeplerRunning()` ищет `%APPDATA%\Kosmos\kepler.lock.json`. Если файл есть и PID жив:
-- App коннектится к Kepler через WS (kepler mode) — получает sync + общий sidecar.
-
-Если файла нет (Kepler не установлен / не запущен):
-- App спавнит свой `ark-core-rpc` child (standalone mode), работает локально.
-- Sync **не запускается** (никто не вызывает `start_sync`).
-- Если установишь Kepler позже — следующий запуск апки автоматически переключится.
-
-`KOSMOS_REQUIRE_KEPLER=1` env флаг — для production deployments, где запуск без Kepler недопустим. Default — flag не set, апки fallback на standalone.
-
-## Архитектура (target после Phase 6)
+## Архитектура
 
 ```text
-                  ┌──────────────────────────────────────────┐
-                  │  Kepler (Rust + gpui tray, single inst.) │
-                  │   ├─ ark-core-rpc child (stdio supervis.)│
-                  │   ├─ WS server 127.0.0.1:<random_port>   │
-                  │   ├─ kepler.lock.json (strict ACL)       │
-                  │   ├─ Singleton lock (SQLite WAL)         │
-                  │   └─ Launcher window (Ctrl+Shift+K, Phase 6)│
-                  └────────────────┬─────────────────────────┘
-                                   │ ws://127.0.0.1:<port>
-       ┌──────────┬────────────────┼────────────────┬──────────┐
-   ┌───┴───┐ ┌────┴────┐    ┌──────┴─────┐ ┌────────┴──┐ ┌─────┴──────┐
-   │ Eden  │ │ Delphi  │    │ Arrancador │ │ Dashboard │ │usage-tracker│
-   └───────┘ └─────────┘    └────────────┘ └───────────┘ └─────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  Kepler (Electron host, single instance)                   │
+│   ├─ kepler-backend.exe (Rust child, WS server)            │
+│   │    ├─ ARK runtime (объекты, FTS5, sync)                │
+│   │    └─ command bus (register/invoke/events)             │
+│   ├─ LauncherView (frameless 720×460, Mica/Acrylic)        │
+│   ├─ SettingsView (отдельное окно)                         │
+│   ├─ Extension host (Phase 4) → BrowserWindow per ext      │
+│   ├─ Tray icon + globalShortcut Ctrl+Shift+K               │
+│   └─ IPC к extensions / Electron apps через preload        │
+└────────────────────────┬───────────────────────────────────┘
+                         │ ws://127.0.0.1:<port>
+       ┌──────────┬──────┴────────┬──────────┬─────────────┐
+   ┌───┴───┐ ┌────┴────┐    ┌─────┴────┐ ┌───┴──────┐ ┌───┴─────┐
+   │Horolo-│ │ Delphi  │    │   Eden   │ │Arrancador│ │Dashboard│
+   │ gion  │ │         │    │          │ │          │ │         │
+   └───────┘ └─────────┘    └──────────┘ └──────────┘ └─────────┘
 ```
 
-## Текущий статус
-
-| Фаза | Что | Статус |
-|------|-----|--------|
-| 1 | Host scaffold (singleton, lock-file, WS server, ark-core-rpc supervisor, version handshake, PID-binding) | ✅ AC1-AC7 PASS, 41 unit + 4 integration |
-| 2 | `@kosmos/ark` kepler-mode + ARK hold-and-replay + Eden cutover | ✅ Code done, manual smoke pending |
-| 1.5 | installer + kepler-watcher | ✅ done |
-| 1.6 | tray-icon + tao event loop | ✅ Tray иконка с menu "Выход", graceful shutdown через SHUTDOWN_REQUESTED |
-| 3 | Delphi/Arrancador/Horologion cutover | ✅ Все три апки переписаны, typecheck зелёный |
-| 4 | usage-tracker → WS RPC | ✅ Wired: persist_* через KeplerClient, spool fallback, periodic flush. `USAGE_TRACKER_DIRECT=1` для direct write mode |
-| 5 | LAN sync централизация | ✅ Kepler host auto-`start_sync` при старте; apps в kepler mode не делают своего |
-| 5.5 | Soak 2-4 недели | ❌ blocked on user dogfooding |
-| 6 | Launcher UI + cleanup + auto-launch | ✅ Substantial: eframe launcher, Ctrl+Shift+K, FTS5 search, quick-create (task/note). Settings window + remove KOSMOS_KEPLER_OPTIONAL — следующие итерации/user-decision |
-
-См. [Kepler Roadmap](./kepler-roadmap.md) для деталей.
+Каждая Electron-апка коннектится к `kepler-backend` через WebSocket (`@kosmos/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kepler launcher и выбирает команду — backend роутит её к нужной апке.
 
 ## Стек
 
 | Слой | Технология |
 |---|---|
-| Runtime | Rust 2021, tokio (multi-thread) |
-| GUI (Phase 6) | gpui 0.2.2 + gpui-component 0.5.1 |
-| Tray (Phase 1.6) | `tray-icon` крейт |
-| Hotkey (Phase 6) | `global-hotkey` крейт |
-| Transport | `tokio-tungstenite` (WS 127.0.0.1, latency P95 = 258µs на dev машине) |
-| Auth | bearer token (256-bit hex) + OS file permissions + PID-binding |
-| Singleton | `rusqlite` WAL `BEGIN IMMEDIATE` (паттерн из `services/usage-tracker`) |
+| Shell | Electron 41 (frameless, Mica/Acrylic, transparent) |
+| Renderer | Vue 3.6 + TypeScript + Vite 8 (electron-vite) |
+| Bundler | `vite-plugin-electron` + `vite-plugin-electron-renderer` |
+| Backend | `kepler-backend.exe` (Rust, lib + bin из `services/kepler-backend/`) |
+| ARK SDK | `@kosmos/ark` (kepler mode, hello-handshake, command bus client) |
+| UI | `@kosmos/visuals` (DesktopChrome, токены, компоненты) |
+| Tray / hotkey | Electron `Tray` + `globalShortcut` |
 
-## Discovery — `kepler.lock.json`
+## Структура
 
-Kepler при старте атомарно пишет lock-файл с PID, port, token, protocol version:
-
-```text
-%APPDATA%\Kosmos\kepler.lock.json   (Windows)
-$XDG_CONFIG_HOME/Kosmos/kepler.lock.json   (Linux)
-~/Library/Application Support/Kosmos/kepler.lock.json   (macOS)
+```
+apps/kepler-shell/
+├─ electron/
+│  ├─ main.ts              # backend spawn, BrowserWindow, tray, globalShortcut, IPC
+│  ├─ preload.ts           # window.kepler API (search / invoke / commands)
+│  ├─ commands.ts          # статические команды (kepler:open-app:*, dashboard:open, …)
+│  ├─ settings-window.ts   # отдельное окно настроек + IPC handlers
+│  └─ extension-host.ts    # PoC загрузчик static extensions
+├─ shared/
+│  └─ ipc-types.ts         # KeplerApi (preload contract), CommandRecord, SearchResult
+├─ src/
+│  ├─ App.vue              # routing (LauncherView / SettingsView по hash)
+│  ├─ main.ts              # createApp + Inter Variable
+│  ├─ styles.css           # --kepler-accent + локальные токены
+│  └─ views/
+│     ├─ LauncherView.vue  # FTS5 search + dynamic command list
+│     └─ SettingsView.vue  # настройки host'а (hotkey, backend status)
+├─ extensions/
+│  └─ dashboard/           # PoC static extension (manifest.json + index.html + bundle.js)
+└─ build/                  # иконки + afterPack hook
 ```
 
-Структура:
+## Окно launcher'а
 
-```json
-{
-  "format_version": 1,
-  "protocol_version": { "major": 1, "minor": 0, "patch": 0 },
-  "pid": 12345,
-  "ws_port": 52436,
-  "auth_token": "deadbeef...",
-  "started_at": "2026-05-13T15:00:00Z",
-  "db_path": "..."
-}
-```
+- 720×460 fixed, не resizable, frameless, transparent.
+- `backgroundMaterial: 'mica'` (Win11) / acrylic fallback на старых билдах.
+- Центрируется на active display.
+- `nativeTheme.themeSource = 'dark'` — принудительно тёмная тема, независимо от системы.
+- `globalShortcut.register('Ctrl+Shift+K')` (`Cmd+Shift+K` на macOS) — toggle show/hide.
+- При потере фокуса — окно скрывается (focus-trap pattern, как Spotlight).
+- Tray icon с меню «Открыть» / «Выйти». Реальный quit — только через tray.
 
-::: warning Permissions критичны
-Файл создаётся с **strict OS permissions** — на Windows ACL разрешает чтение только текущему user SID (через `icacls /inheritance:r /grant:r %USERNAME%:F`); на Unix — `chmod 0600`. Любой другой user account на той же машине **не должен** прочитать `auth_token`. Это AC3 spec фазы 1.
-:::
+## Command bus
 
-## Protocol — hello-handshake
+Kepler — точка входа для всех команд экосистемы. Подробно см. [Command bus](../concepts/command-bus.md).
 
-Перед любыми RPC client отправляет hello:
+Коротко:
+- `kepler-backend` хранит in-memory registry команд (`commands.register/unregister/list/invoke`) и эмитит события `command_invoked` / `commands_changed` через WS.
+- Электронные апки при старте делают `ArkClient.commands.register([...])` и подписываются на `command_invoked` события для своих id'шников.
+- `LauncherView` слушает `commands_changed`, держит актуальный список и при выборе вызывает `commands.invoke(id)`.
+- Статические команды (`dashboard:open`, `arrancador:open`, `kepler:settings:open`) живут в `electron/commands.ts` и матчатся локально без backend roundtrip.
 
-```json
-{
-  "kind": "hello",
-  "protocolVersion": "1.0.0",
-  "token": "<auth_token из lock-file>",
-  "pid": 12345,
-  "clientId": "eden"
-}
-```
+Зарегистрированные сейчас динамические команды (Phase 3):
+- **Horologion** — `horologion:pomodoro:25`, `horologion:pomodoro:50`, `horologion:stopwatch:start`.
+- **Delphi** — `delphi:task:create`, `delphi:task:today`.
+- **Eden** — `eden:note:create`, `eden:search`.
 
-Server отвечает `hello_ok` или `hello_error`:
+## Extension loader (PoC)
 
-```json
-{ "kind": "hello_ok", "protocolVersion": "1.0.0", "compatibility": "exact" }
-```
+`electron/extension-host.ts` — экспериментальный загрузчик extensions. Phase 4 цель — рендерить Kosmos-апки как Vue extensions внутри Kepler, без отдельных Electron-процессов.
 
-```json
-{ "kind": "hello_error", "code": "incompatible_protocol_version", "message": "..." }
-```
+- Extensions лежат в `apps/kepler-shell/extensions/<id>/`.
+- Каждое — `manifest.json` + `index.html` + бандл (JS/CSS).
+- Host открывает extension в отдельном `BrowserWindow` с собственным preload.
+- PoC: `extensions/dashboard/` — static html+bundle демонстрирующий API.
 
-### Reject коды
+Phase 4 миграция реальных апок (Dashboard → real Vue ext, потом Horologion / Delphi / Eden) — отдельная задача, см. [Roadmap](./kepler-roadmap.md).
 
-| Код | Когда |
-|---|---|
-| `missing_protocol_version` | client не прислал `protocolVersion` |
-| `malformed_protocol_version` | не парсится как semver |
-| `incompatible_protocol_version` | MAJOR mismatch (`2.x.x` vs server `1.x.x`) |
-| `missing_token` | client не прислал `token` |
-| `invalid_token` | token не совпадает с lock-file |
-| `missing_pid` | client не прислал `pid` |
-| `invalid_pid` | процесс с указанным PID не существует |
-| `foreign_user_pid` | процесс принадлежит другому user account |
-| `malformed_hello` | hello — не валидный JSON |
+## Окно настроек
 
-После hello_ok — обычный JSON-RPC (`{operation, _req_id, ...}` → `{ok, data, error, _req_id}`).
+Настройки открываются как **отдельное `BrowserWindow`** через IPC `kepler:settings:open` (паттерн как в [Horologion](./horologion.md#окно-настроек)). Хеш-route `#/settings`, App.vue рендерит `SettingsView` внутри `<DesktopChrome>`.
+
+В Settings — статус `kepler-backend`, путь к ARK DB, hotkey, autostart toggle.
 
 ## Запуск (dev)
 
 ```powershell
-# 1. Собрать ark-core-rpc release
-cargo build --release --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-
-# 2. Запустить Kepler в режиме разработки
-$env:ARK_CORE_RPC_PATH = "$PWD\packages\ark-core\rust\target\release\ark-core-rpc.exe"
-cargo run --manifest-path apps\kepler\Cargo.toml --bin kepler
+cd apps/kepler-shell
+bun run build:backend:dev   # cargo build (debug) services/kepler-backend
+bun run dev                 # build:backend:dev + vite + Electron
 ```
 
-В stderr увидишь:
-
-```text
-Kepler v0.1.0 starting (protocol 1.0.0)
-[kepler] singleton acquired: ...\Kosmos\kepler-singleton.lock.db
-[kepler] ark-core-rpc binary: ...
-[kepler] db: ...\Kosmos\ark.db
-[kepler] ark-core-rpc spawned and initialized
-[kepler] WS listening on 127.0.0.1:52436
-[kepler] lock-file: ...\Kosmos\kepler.lock.json
-[kepler] ready. Ctrl+C to stop.
-```
-
-Ctrl+C — graceful shutdown, lock-файл удаляется.
+`Ctrl+Shift+K` глобально откроет launcher. Tray-иконка появится в трее.
 
 ## Команды
 
 | Команда | Что |
 |---|---|
-| `cargo run --manifest-path apps\kepler\Cargo.toml --bin kepler` | Запуск dev |
-| `cargo build --release --manifest-path apps\kepler\Cargo.toml --bin kepler` | Релизный бинарь |
-| `cargo test --manifest-path apps\kepler\Cargo.toml --lib` | Unit-тесты (41) |
-| `cargo test --manifest-path apps\kepler\Cargo.toml --test handshake -- --test-threads=1` | E2E integration (4) |
-| `cargo bench --manifest-path apps\kepler\Cargo.toml --bench rpc_latency` | AC6 latency benchmark |
+| `bun run --cwd apps/kepler-shell dev` | dev режим |
+| `bun run --cwd apps/kepler-shell build:js` | tsc + vite build (без NSIS) |
+| `bun run --cwd apps/kepler-shell build` | release backend + js + NSIS installer |
+| `bun run --cwd apps/kepler-shell typecheck` | tsc --noEmit |
+| `bun run --cwd apps/kepler-shell package:dir` | unpacked Electron сборка |
+| `bun run --cwd apps/kepler-shell test:e2e` | Playwright e2e |
 
-## Env vars (клиент-side)
+Артефакты `build` — `apps/kepler-shell/release/Kepler Setup X.Y.Z.exe` (NSIS one-click).
 
-| Var | Где |
-|---|---|
-| `KOSMOS_REQUIRE_KEPLER=1` | Eden/Delphi/etc — без Kepler апка fail'ится. Для production deployments. Default — flag не set, апки работают standalone когда Kepler недоступен. |
-| `KOSMOS_KEPLER_OPTIONAL=1` | **Deprecated** — был для opt-in fallback'а в старой модели. Сейчас fallback дефолтный, флаг no-op (оставлен для backward compat). |
-| `ARK_CORE_RPC_PATH` | Override path к `ark-core-rpc` бинарю (Kepler resolve этот в spawn child). |
-| `KOSMOS_DB_PATH` | Override path к ARK DB (Kepler сам). |
-| `KEPLER_SKIP_SYNC=1` | Не запускать LAN sync в Kepler host (для тестов / dev). |
-| `KOSMOS_SPACE_ID` / `KOSMOS_DEVICE_ID` / `KOSMOS_DEVICE_NAME` | Kepler sync identity. Авто-derived если не set. |
-| `KOSMOS_RELAY_URL` / `KOSMOS_RELAY_API_KEY` / `KOSMOS_AUTH_SECRET` | Relay sync config. |
+## Legacy Rust `apps/kepler/`
+
+Старый Rust-launcher (gpui + tao + global-hotkey) ещё лежит в `apps/kepler/`, но **retired**: вся новая работа идёт через `apps/kepler-shell/`. Phase 6 убирает legacy директорию целиком — см. [Roadmap](./kepler-roadmap.md).
 
 ## См. также
 
-- [Kepler Roadmap](./kepler-roadmap.md)
-- [@kosmos/ark](../packages/kosmos-ark.md) — TypeScript SDK с kepler-mode
-- [Sync](../concepts/sync.md) — sync layer, hold-and-replay для schema drift
-- [Architecture](../concepts/architecture.md)
+- [Roadmap](./kepler-roadmap.md) — фазы миграции и план Phase 4-6.
+- [Command bus](../concepts/command-bus.md) — протокол dynamic commands.
+- [@kosmos/ark](../packages/kosmos-ark.md) — TS SDK с `commands` namespace.
+- [Architecture](../concepts/architecture.md) — общая картина Kosmos.

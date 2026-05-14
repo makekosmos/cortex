@@ -4,14 +4,16 @@
 Эта страница заменяет тонкие `AGENTS.md` / `CLAUDE.md` в корне. Полный контекст репо — в этом сайте документации. Все правила в одном месте.
 :::
 
-Ты работаешь в монорепо **Kosmos**. Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](/concepts/proof-loop).
+Ты работаешь в монорепо **Kosmos** (после brand swap 2026-05-14). Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](/concepts/proof-loop).
 
 ## За 30 секунд
 
-- **Kosmos** = монорепо для личного софта. Bun workspaces.
+- **Kosmos** = монорепо / экосистема для личного софта. Bun workspaces.
+- **Kepler** = имя лаунчера (`apps/kepler-shell/`) и его shared backend (`services/kepler-backend/`).
 - **ARK** = общий Rust+SQLite рантайм (`packages/ark-core`, бинарь `ark-core-rpc`).
 - **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
 - **Прямые SQL writes в ARK** из app services — **запрещены**.
+- **Apps интегрируются с лаунчером через command bus** (apps регистрируют commands, Kepler invoke'ает).
 - **Тесты** — только на изолированных БД.
 - **Substantial-правки** — через `.agent/tasks/<DATE>-<slug>/` proof loop.
 
@@ -73,6 +75,8 @@ bun run ark:smoke
 | **Arrancador** | `apps/arrancador` | игровая библиотека (Electron) |
 | **Dashboard** | `apps/dashboard` | read-only аналитика (Electron) |
 | **Horologion** | `apps/horologion` | трекер времени, pomodoro (WIP). `time_entry_obj` + общий `tag_obj` |
+| **Kepler Shell** | `apps/kepler-shell` | лаунчер экосистемы (Electron, fixed 720×460). Command bus как primary integration primitive. Extensions PoC — `extensions/<id>/` |
+| **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server для лаунчера и приложений |
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |

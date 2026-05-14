@@ -1,0 +1,336 @@
+/* Arrancador extension — plain CSS layer.
+   Legacy `apps/arrancador/` использует tailwind; здесь намеренно упрощено
+   до vanilla CSS (tailwind config миграция вне scope Phase 4).
+   Все цвета/радиусы через `var(--*)` из `@kosmos/visuals/theme/css`. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- App shell ---------- */
+
+.arrancador-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.arrancador-shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- Titlebar ---------- */
+
+.arrancador-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  -webkit-app-region: drag;
+}
+
+.arrancador-titlebar__left,
+.arrancador-titlebar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.arrancador-titlebar__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+.arrancador-titlebar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-input);
+  color: var(--muted-foreground);
+  transition: background 120ms var(--easing-standard), color 120ms var(--easing-standard);
+}
+
+.arrancador-titlebar__btn:hover:not(:disabled) {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.arrancador-titlebar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Sidebar ---------- */
+
+.arrancador-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+  gap: 4px;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+  overflow-y: auto;
+}
+
+.arrancador-sidebar__heading {
+  padding: 0 8px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.arrancador-sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-input);
+  font-size: 13px;
+  color: var(--foreground);
+  text-align: left;
+  transition: background 120ms var(--easing-standard);
+}
+
+.arrancador-sidebar__item:hover {
+  background: var(--muted);
+}
+
+.arrancador-sidebar__item--active {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.arrancador-sidebar__item--active:hover {
+  background: var(--accent);
+}
+
+/* ---------- Spotlight ---------- */
+
+.arrancador-spotlight {
+  position: relative;
+  flex: 1;
+  max-width: 360px;
+}
+
+.arrancador-spotlight__input {
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--background);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 120ms var(--easing-standard);
+}
+
+.arrancador-spotlight__input:focus {
+  border-color: var(--accent);
+}
+
+.arrancador-spotlight__input::placeholder {
+  color: var(--muted-foreground);
+}
+
+/* ---------- Layout / content ---------- */
+
+.arrancador-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.arrancador-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+
+.arrancador-page {
+  flex: 1;
+  padding: 24px 20px;
+  overflow: auto;
+}
+
+.arrancador-page__title {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.arrancador-page__hint {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-input);
+  background: var(--muted);
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+.arrancador-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+
+.arrancador-empty__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.arrancador-empty__hint {
+  margin: 0;
+  font-size: 13px;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+.arrancador-error {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--destructive, #ef4444) 40%, transparent);
+  border-radius: var(--radius-input);
+  background: color-mix(in srgb, var(--destructive, #ef4444) 12%, transparent);
+  color: var(--destructive-foreground, var(--foreground));
+  font-size: 13px;
+}
+
+/* ---------- Game grid ---------- */
+
+.arrancador-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.arrancador-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-card);
+  background: var(--card);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: transform 160ms var(--easing-emphasized),
+    border-color 160ms var(--easing-standard);
+  cursor: default;
+}
+
+.arrancador-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+
+.arrancador-card__cover {
+  aspect-ratio: 3 / 4;
+  width: 100%;
+  background: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.arrancador-card__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.arrancador-card__placeholder {
+  font-size: 28px;
+  color: var(--muted-foreground);
+}
+
+.arrancador-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 12px;
+}
+
+.arrancador-card__eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.arrancador-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--foreground);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}

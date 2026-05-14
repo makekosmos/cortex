@@ -1,0 +1,81 @@
+/* NB(kepler-extension): legacy `@import "tailwindcss"` (Tailwind v4 entry +
+ * @source для kosmos-visuals .vue scanning) опущен. Shared vite config
+ * extensions не подключает `@tailwindcss/vite` plugin — Tailwind utility
+ * классы в template'ах Delphi компонентов окажутся unstyled, пока plugin не
+ * будет добавлен в `apps/kepler-shell/vite.extensions.config.mjs`. CSS
+ * переменные темы (`var(--background)`, `var(--foreground)` и т.п.) приходят
+ * из импорта `@kosmos/visuals/theme/css-variables.css` (см. ниже). */
+
+/* CSS @import должен идти первым (после @charset/@layer) — иначе postcss/
+ * lightningcss выдают warning. Резолвится через alias `@kosmos/visuals/theme/css`,
+ * определённый в `apps/kepler-shell/vite.extensions.config.mjs`. */
+@import "@kosmos/visuals/theme/css";
+
+@font-face {
+  font-family: "Zed Mono";
+  src: url("/fonts/zed-mono-extended.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* NB: @theme — Tailwind v4 синтаксис. Без `@tailwindcss/vite` plugin'а это
+ * unknown at-rule (warning, не error). Оставлено для совместимости с legacy
+ * Delphi, при добавлении plugin'а заработает как ожидается. */
+@theme {
+  --spacing-page: clamp(16px, 4vw, 24px);
+  --container-threadcontentwidth: 640px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground);
+}
+
+input,
+textarea {
+  background-color: inherit;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+li {
+  list-style-type: none;
+}
+
+.scrollbar-gutter {
+  scrollbar-gutter: stable;
+}
+
+:root {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter,
+    Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+
+  color: var(--foreground);
+  background-color: var(--background);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+
+  --font-mono: "Zed Mono", sans-serif;
+}

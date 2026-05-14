@@ -1,0 +1,10 @@
+{
+  "id": "arrancador",
+  "name": "Arrancador",
+  "kind": "vue",
+  "entryHtml": "dist/index.html",
+  "width": 1280,
+  "height": 800,
+  "minWidth": 900,
+  "minHeight": 600
+}

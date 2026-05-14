@@ -3,9 +3,9 @@
 ARK поддерживает два транспорта синхронизации поверх одного протокола: **LAN** (peer-to-peer в локальной сети) и **relay** (через WebSocket-сервер, нужен для прохождения NAT).
 
 ::: info Sync = opt-in
-Kosmos-приложения по умолчанию **не запускают sync**. Sync активируется только когда установлен [Kepler host](../apps/kepler.md) — он сам вызывает `start_sync` при старте. Apps в standalone mode (без Kepler) пишут в локальную DB без репликации между устройствами.
+Kosmos-приложения по умолчанию **не запускают sync** сами. Sync активируется когда запущен [Kepler launcher](/apps/kepler) — его `kepler-backend` сам вызывает `start_sync` на shared `ark-core-rpc` после старта. Apps в kepler-mode пользуются этим бесплатно (читают/пишут через WS — изменения автоматически реплицируются на пиров).
 
-Для explicit standalone sync без Kepler — можно вызвать `ArkClient.startSyncLegacy()` явно (rare use case, например для тестов).
+Если Kepler не запущен, апки работают standalone и пишут в локальную DB без репликации между устройствами. Для явного запуска sync вне Kepler — можно вызвать `ArkClient.startSyncLegacy()` напрямую (rare use case, например для тестов).
 :::
 
 ## Запуск sync

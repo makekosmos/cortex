@@ -1,7 +1,10 @@
 {
   "id": "dashboard",
-  "name": "Dashboard (PoC)",
-  "entryHtml": "index.html",
-  "width": 720,
-  "height": 480
+  "name": "Dashboard",
+  "kind": "vue",
+  "entryHtml": "dist/index.html",
+  "width": 1280,
+  "height": 800,
+  "minWidth": 900,
+  "minHeight": 600
 }

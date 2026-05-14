@@ -83,8 +83,16 @@ Arrancador использует:
 
 Прямой SQL остаётся как read-only fallback **и** для inspector-режима, не для основного flow.
 
+## Command bus integration
+
+Arrancador сейчас интегрирован в [Kepler launcher](/apps/kepler) **только как static "open" команда** — `arrancador:open` спавнит `arrancador.exe` напрямую. Команда живёт в `apps/kepler-shell/electron/commands.ts` и не требует регистрации со стороны самой апки.
+
+Dynamic action commands (например `arrancador:game:launch:<id>`, `arrancador:backup:run`) пока не реализованы — это Phase 4 работа [Kepler Roadmap](/apps/kepler-roadmap).
+
 ## Связанные документы
 
+- [Kepler](/apps/kepler) — host, который запускает Arrancador.
+- [Command bus](/concepts/command-bus)
 - [Граница записи в ARK](/concepts/write-boundary)
 - [Read-only SQL boundary](/concepts/readonly-sql)
 - [Модель данных ARK](/concepts/ark-objects)

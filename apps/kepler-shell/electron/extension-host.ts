@@ -1,4 +1,35 @@
-import { BrowserWindow, ipcMain, screen } from "electron";
+// Extension host — управляет lifecycle Vue/static extension'ов внутри Kepler.
+//
+// Phase 4 contract для extension'ов:
+//
+//   extensions/<id>/
+//     manifest.json         { id, name, kind: "vue" | "static",
+//                             entryHtml: "dist/index.html" | "index.html",
+//                             preload?, width, height, minWidth?, minHeight? }
+//     src/                  (только для kind: "vue")
+//       main.ts             // createApp(App).mount("#app")
+//       App.vue
+//       ...
+//     index.html            (для "vue" — точка входа vite, ссылается на /src/main.ts;
+//                            для "static" — финальный готовый html)
+//     dist/                 (для "vue" — build output, entryHtml: "dist/index.html")
+//
+// Vue extension'ы получают `window.kepler` namespace через shared preload
+// (extension-preload.mjs). API exposes:
+//   - kepler.ark.request(operation, params)   — RPC к ARK через main proxy
+//   - kepler.ark.subscribe(event, handler)    — события (commands_changed и т.п.)
+//   - kepler.window.{close,minimize,maximize} — управление окном
+//   - kepler.meta.id()                        — id текущего extension'а
+//
+// kind: "static" (legacy PoC) — preload не используется по умолчанию;
+// extension сам отвечает за всю свою логику.
+
+import {
+  BrowserWindow,
+  ipcMain,
+  screen,
+  type WebContents,
+} from "electron";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,16 +38,61 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+export type ExtensionKind = "vue" | "static";
+
 export interface ExtensionManifest {
   id: string;
   name: string;
+  kind?: ExtensionKind;
   entryHtml: string;
+  /**
+   * Путь к preload-скрипту:
+   *  - для "vue" по умолчанию используется shared preload из dist-electron;
+   *  - для "static" значение интерпретируется относительно директории
+   *    extension'а (legacy PoC mode).
+   *  - специальное значение "kepler-extension-preload.mjs" принудительно
+   *    использует shared preload.
+   */
   preload?: string;
   width?: number;
   height?: number;
+  minWidth?: number;
+  minHeight?: number;
 }
 
-const extensionWindows = new Map<string, BrowserWindow>();
+interface ExtensionWindowEntry {
+  win: BrowserWindow;
+  id: string;
+}
+
+const extensionWindows = new Map<string, ExtensionWindowEntry>();
+// Reverse map: webContents.id → extension id. Нужен, чтобы из IPC handler'а
+// определить, какое окно отправило запрос (kepler.window.close и т.п.).
+const webContentsToExtensionId = new Map<number, string>();
+
+// ArkClient injected lazily из main.ts через `setArkClient`. Если null —
+// extension'ы получают ошибку при попытке ARK-запроса.
+type ArkRequestFn = (req: Record<string, unknown>) => Promise<unknown>;
+type ArkSubscribeFn = (
+  event: string,
+  handler: (payload: unknown) => void,
+) => () => void;
+
+let arkRequest: ArkRequestFn | null = null;
+let arkSubscribe: ArkSubscribeFn | null = null;
+
+/**
+ * Регистрируется из main.ts после init ArkClient'а. extension-host остаётся
+ * loosely-coupled — не импортирует ArkClient напрямую и не дублирует логику
+ * выбора self-managed / kepler-managed режима.
+ */
+export function setExtensionArkBridge(opts: {
+  request: ArkRequestFn | null;
+  subscribe: ArkSubscribeFn | null;
+}): void {
+  arkRequest = opts.request;
+  arkSubscribe = opts.subscribe;
+}
 
 function resolveExtensionsRoot(): string {
   // dev: <repo>/apps/kepler-shell/extensions/
@@ -24,6 +100,11 @@ function resolveExtensionsRoot(): string {
   const dev = path.resolve(__dirname, "..", "extensions");
   if (existsSync(dev)) return dev;
   return path.join(process.resourcesPath ?? __dirname, "extensions");
+}
+
+function resolveSharedPreloadPath(): string {
+  // Bundled by vite-plugin-electron alongside main.js: dist-electron/extension-preload.mjs
+  return path.join(__dirname, "extension-preload.mjs");
 }
 
 export function loadExtensionManifest(id: string): ExtensionManifest | null {
@@ -56,10 +137,36 @@ export function listExtensions(): ExtensionManifest[] {
   return out;
 }
 
+function resolvePreloadForManifest(
+  manifest: ExtensionManifest,
+  extensionDir: string,
+): string | undefined {
+  const kind: ExtensionKind = manifest.kind ?? "static";
+  // Shared preload по умолчанию для Vue extension'ов.
+  if (!manifest.preload) {
+    return kind === "vue" ? resolveSharedPreloadPath() : undefined;
+  }
+  // Спец-значение → shared preload.
+  if (manifest.preload === "kepler-extension-preload.mjs") {
+    return resolveSharedPreloadPath();
+  }
+  // Иначе — относительный путь внутри extension dir (legacy / custom).
+  return path.join(extensionDir, manifest.preload);
+}
+
+function resolveEntryHtml(
+  manifest: ExtensionManifest,
+  extensionDir: string,
+): string {
+  // entryHtml интерпретируется относительно extension dir. Для vue это обычно
+  // "dist/index.html" (после vite build), для static — "index.html".
+  return path.join(extensionDir, manifest.entryHtml);
+}
+
 export function openExtension(id: string): void {
   const existing = extensionWindows.get(id);
-  if (existing && !existing.isDestroyed()) {
-    existing.focus();
+  if (existing && !existing.win.isDestroyed()) {
+    existing.win.focus();
     return;
   }
   const manifest = loadExtensionManifest(id);
@@ -68,30 +175,170 @@ export function openExtension(id: string): void {
     return;
   }
   const root = resolveExtensionsRoot();
+  const extensionDir = path.join(root, id);
+  const entryHtml = resolveEntryHtml(manifest, extensionDir);
+  if (!existsSync(entryHtml)) {
+    console.error(
+      `[kepler-shell] extension '${id}' entryHtml not found: ${entryHtml}` +
+        ` — для Vue extension'а сначала запусти build (bun run build:extensions).`,
+    );
+    return;
+  }
   const display = screen.getPrimaryDisplay().workAreaSize;
-  const width = manifest.width ?? 900;
-  const height = manifest.height ?? 600;
+  const width = manifest.width ?? 1200;
+  const height = manifest.height ?? 800;
+  const preload = resolvePreloadForManifest(manifest, extensionDir);
+
   const win = new BrowserWindow({
     width,
     height,
+    minWidth: manifest.minWidth ?? 800,
+    minHeight: manifest.minHeight ?? 600,
     x: Math.round((display.width - width) / 2),
     y: Math.round((display.height - height) / 2),
     show: true,
     title: manifest.name,
     backgroundColor: "#1a1a1a",
+    // Стандартное окно с custom titlebar (overlay для управления окном).
+    frame: true,
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#1a1a1a",
+      symbolColor: "#cccccc",
+      height: 36,
+    },
     webPreferences: {
-      preload: manifest.preload
-        ? path.join(root, id, manifest.preload)
-        : undefined,
+      preload,
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  void win.loadFile(path.join(root, id, manifest.entryHtml));
-  win.on("closed", () => extensionWindows.delete(id));
-  extensionWindows.set(id, win);
+
+  webContentsToExtensionId.set(win.webContents.id, id);
+  win.on("closed", () => {
+    webContentsToExtensionId.delete(win.webContents.id);
+    extensionWindows.delete(id);
+  });
+  extensionWindows.set(id, { win, id });
+
+  void win.loadFile(entryHtml);
 }
 
-// Top-level IPC registration (side-effect import).
+function windowForSender(sender: WebContents): BrowserWindow | null {
+  const win = BrowserWindow.fromWebContents(sender);
+  return win && !win.isDestroyed() ? win : null;
+}
+
+function extensionIdForSender(sender: WebContents): string | null {
+  return webContentsToExtensionId.get(sender.id) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// IPC: list / open (kept from previous PoC contract)
+// ---------------------------------------------------------------------------
+
 ipcMain.handle("kepler:extension:list", () => listExtensions());
 ipcMain.handle("kepler:extension:open", (_e, id: string) => openExtension(id));
+
+// ---------------------------------------------------------------------------
+// IPC: ARK proxy — extension renderer → main → ArkClient
+// ---------------------------------------------------------------------------
+
+ipcMain.handle(
+  "kepler:extension:ark:request",
+  async (_e, operation: string, params?: Record<string, unknown>) => {
+    if (!arkRequest) {
+      throw new Error("ark bridge not ready");
+    }
+    const req: Record<string, unknown> = { operation, ...(params ?? {}) };
+    return arkRequest(req);
+  },
+);
+
+// Extension subscribes; main forwards events to that extension's webContents.
+// Channel name encodes event name so multiple subscriptions on the same
+// webContents do not collide.
+const extensionEventUnsubscribers = new Map<string, () => void>();
+
+ipcMain.handle(
+  "kepler:extension:ark:subscribe",
+  (e, event: string) => {
+    if (!arkSubscribe) {
+      throw new Error("ark bridge not ready");
+    }
+    const sender = e.sender;
+    const key = `${sender.id}:${event}`;
+    if (extensionEventUnsubscribers.has(key)) {
+      // Idempotent — повторная подписка no-op.
+      return true;
+    }
+    const unsubscribe = arkSubscribe(event, (payload) => {
+      if (!sender.isDestroyed()) {
+        sender.send(`kepler:extension:ark:event:${event}`, payload);
+      }
+    });
+    extensionEventUnsubscribers.set(key, unsubscribe);
+    // Cleanup при закрытии renderer'а.
+    sender.once("destroyed", () => {
+      const u = extensionEventUnsubscribers.get(key);
+      if (u) {
+        u();
+        extensionEventUnsubscribers.delete(key);
+      }
+    });
+    return true;
+  },
+);
+
+ipcMain.handle(
+  "kepler:extension:ark:unsubscribe",
+  (e, event: string) => {
+    const key = `${e.sender.id}:${event}`;
+    const unsubscribe = extensionEventUnsubscribers.get(key);
+    if (unsubscribe) {
+      unsubscribe();
+      extensionEventUnsubscribers.delete(key);
+    }
+    return true;
+  },
+);
+
+// ---------------------------------------------------------------------------
+// IPC: meta / window controls (extension renderer → main)
+// ---------------------------------------------------------------------------
+
+ipcMain.handle("kepler:extension:meta:id", (e) => extensionIdForSender(e.sender));
+
+ipcMain.handle("kepler:extension:window:close", (e) => {
+  const win = windowForSender(e.sender);
+  if (win) win.close();
+});
+
+ipcMain.handle("kepler:extension:window:minimize", (e) => {
+  const win = windowForSender(e.sender);
+  if (win) win.minimize();
+});
+
+ipcMain.handle("kepler:extension:window:maximize", (e) => {
+  const win = windowForSender(e.sender);
+  if (!win) return;
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// IPC: host-action (extension → kepler-shell host action)
+// ---------------------------------------------------------------------------
+
+// Reserved для будущих host-action типа "show settings", "focus launcher" и т.п.
+// Сейчас просто логирует и возвращает false (action not handled).
+ipcMain.handle(
+  "kepler:extension:invoke-host",
+  (_e, action: string, _payload?: unknown) => {
+    console.error(`[kepler-shell] extension invoke-host: ${action} (no handler)`);
+    return false;
+  },
+);

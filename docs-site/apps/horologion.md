@@ -181,9 +181,55 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 Итог: иконка отображается в окне, трее, taskbar, Start Menu, Проводнике.
 :::
 
+## Command bus integration
+
+Horologion регистрируется в [Kepler command bus](/concepts/command-bus) как provider экшенов. Когда юзер открывает Kepler launcher (`Ctrl+Shift+K`) и выбирает horologion-команду — она роутится к нашей апке и реально что-то запускает.
+
+### Зарегистрированные команды
+
+| ID | Что делает |
+|---|---|
+| `horologion:pomodoro:25` | Запускает помодоро на 25 минут |
+| `horologion:pomodoro:50` | Запускает помодоро на 50 минут |
+| `horologion:stopwatch:start` | Запускает секундомер |
+
+Регистрация — в `electron/main.ts` через `ArkClient.commands.register([...])` после того, как `arkClient` ready. Snipet:
+
+```ts
+await client.commands.register([
+  { id: "horologion:pomodoro:25", title: "Pomodoro 25 минут", subtitle: "Horologion", category: "action" },
+  { id: "horologion:pomodoro:50", title: "Pomodoro 50 минут", subtitle: "Horologion", category: "action" },
+  { id: "horologion:stopwatch:start", title: "Запустить секундомер", subtitle: "Horologion", category: "action" },
+]);
+```
+
+### IPC флоу: main → renderer
+
+Main подписывается на backend событие `command_invoked` для своих id'ов. При получении формирует типизированный payload и отправляет в renderer через `webContents.send("horologion:cmd", payload)`:
+
+```ts
+type PomodoroStartPayload = { kind: "pomodoro:start"; durationMin: 25 | 50 };
+type StopwatchStartPayload = { kind: "stopwatch:start" };
+type HorologionCommandPayload = PomodoroStartPayload | StopwatchStartPayload;
+```
+
+Preload экспонирует подписку `window.horologion.onCommand((payload) => { ... })` через `ipcRenderer.on("horologion:cmd", ...)`.
+
+### Renderer: App.vue dispatcher
+
+`App.vue` при mount подписывается на `window.horologion.onCommand`:
+
+- `kind === "pomodoro:start"` → `pomodoro.start({ workMinOverride: payload.durationMin })`.
+- `kind === "stopwatch:start"` → `timeEntries.startTimer({ source: "stopwatch" })`.
+
+### `workMinOverride` — per-session override
+
+`usePomodoro` принимает опциональный `workMinOverride` в `start({ workMinOverride })`. Если задан — этот work-сегмент идёт на N минут, **не** мутируя `pomodoroSettings.workMin` (persistent). Следующая сессия (без override) вернётся к настройкам пользователя. Это нужно чтобы `horologion:pomodoro:50` запускал именно 50-минутный focus, не трогая дефолт (обычно 25).
+
 ## Связанные документы
 
 - [Roadmap](/apps/horologion-roadmap) — что планируется / баги.
+- [Command bus](/concepts/command-bus) — протокол dynamic commands.
 - [Модель данных ARK](/concepts/ark-objects) — `time_entry_obj`, `tag_obj`.
 - [Delphi](/apps/delphi) — задачи (для `@`-mention).
 - [@kosmos/ark](/packages/kosmos-ark) — TS SDK.

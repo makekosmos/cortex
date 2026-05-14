@@ -11,7 +11,25 @@ export default defineConfig({
     vue({ features: { vaporInterop: true } }),
     electron({
       main: { entry: "electron/main.ts" },
-      preload: { input: "electron/preload.ts" },
+      // Multi-input — главный preload для launcher / settings и shared
+      // extension preload для Vue extension'ов (см. electron/extension-host.ts).
+      preload: {
+        input: {
+          preload: "electron/preload.ts",
+          "extension-preload": "electron/extension-preload.ts",
+        },
+        // vite-plugin-electron/simple форсит inlineDynamicImports: true,
+        // что несовместимо с multi-input. Перебиваем через nested vite-config.
+        vite: {
+          build: {
+            rolldownOptions: {
+              output: {
+                inlineDynamicImports: false,
+              },
+            },
+          },
+        },
+      },
     }),
   ],
   resolve: {

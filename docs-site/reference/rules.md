@@ -73,7 +73,23 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 | Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути |
 | Dashboard | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts` |
 
-## 9. Стиль коммитов и кода
+## 9. Brand consistency (Kepler / Kosmos)
+
+После swap 2026-05-14:
+
+- **Kepler** — имя лаунчера и его UI-shell. `apps/kepler-shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
+- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kosmos/ark`, `@kosmos/visuals`, ARK runtime, doc-site, общий бренд.
+- Не смешивай: «Kosmos launcher» — неверно, это **Kepler**. «Kepler ARK» — неверно, ARK живёт в **Kosmos**.
+- Перед PR прогоняй `pwsh scripts/check-swap-completeness.ps1` если правил что-то рядом с брендом.
+
+## 10. Command bus
+
+- Apps регистрируют свои commands через `ArkClient.commands.register(...)` **только** в `kepler-mode` (когда лаунчер их вызвал). Регистрация — в `try/catch`: standalone-режим (без лаунчера) не имеет commands API, и это норма, не ошибка.
+- Wire format событий command bus — **flat**: `{event: "command:invoked", id: "...", ...fields}`. Не `{kind: "event", type: "...", payload: {...}}`. Согласовано с peer/sync events.
+- Command-категории в `apps/kepler-shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
+- Extension content в `apps/kepler-shell/extensions/<id>/` — static (no build step yet, PoC).
+
+## 11. Стиль коммитов и кода
 
 - Коммит — про **почему**, не про **что**. Не «add big».
 - Никаких `--no-verify`.

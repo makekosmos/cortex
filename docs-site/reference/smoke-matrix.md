@@ -27,6 +27,23 @@ cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
 bun run --cwd packages/kosmos-ark typecheck
 ```
 
+## Kepler Backend
+
+```powershell
+cargo build --manifest-path services\kepler-backend\Cargo.toml --bin kepler-backend
+cargo test  --manifest-path services\kepler-backend\Cargo.toml --lib
+```
+
+## Kepler Shell (launcher)
+
+```powershell
+bun run --cwd apps/kepler-shell typecheck
+bun run --cwd apps/kepler-shell build:js
+bun run --cwd apps/kepler-shell test:e2e
+```
+
+`test:e2e` — Playwright smoke по лаунчеру (открытие окна 720×460, выполнение зарегистрированной команды через command bus).
+
 ## Usage tracker
 
 ```powershell

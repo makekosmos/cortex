@@ -63,6 +63,34 @@ Search-решение:
 - `usage.processes.search` → `search_usage_processes`
 - `usage.gamePlaytime.summary` → `get_usage_game_playtime_summary`
 
+### 2026-05-14 — Brand swap Kepler ↔ Kosmos
+
+Источник: `docs/MIGRATION-2026-05-14-brand-swap.md`
+
+Поменяли семантику бренда:
+
+- **Kepler** теперь — имя **лаунчера** и его shell (`apps/kepler-shell/`, `services/kepler-backend/`).
+- **Kosmos** теперь — имя **экосистемы / монорепо** (`@kosmos/ark`, `@kosmos/visuals`, ARK runtime, документация).
+
+Раньше было наоборот. Все references в коде, конфигах, документации и токенах прошли через `scripts/migrate-kepler-to-kosmos.ps1`. Гард — `scripts/check-swap-completeness.ps1`.
+
+### 2026-05-14 — Apps остаются standalone .exe + shared backend
+
+Решено **не** мигрировать приложения в extensions лаунчера (Phase 1-3 plan отброшен). Каждое приложение по-прежнему — независимый Electron `.exe` со своим окном и пакетом. Kepler-shell вызывает их через command bus; общий backend (`services/kepler-backend/`) хостит command registry и WS server.
+
+Причина: extension model в Phase 1 PoC показал нарастающую сложность (разделяемый renderer, конфликты CSS-токенов, packaging) при минимальной выгоде. Standalone-распространение проще и сохраняет user expectation «отдельная иконка в Start menu на каждое приложение».
+
+### 2026-05-14 — Command bus как primary integration primitive
+
+Apps **регистрируют** свои commands в shared backend (через `@kosmos/ark` SDK), launcher **invoke**'ает их. Это заменяет более ранний план «ARK FTS5 search в launcher» — поиск в Kepler-shell теперь идёт по зарегистрированным командам, а не по индексу заметок/задач.
+
+- Wire format: flat events `{event: "...", ...fields}` (не nested).
+- Registration в `kepler-mode` only, под `try/catch`.
+
+### 2026-05-14 — Launcher window: fixed-size 720×460
+
+Лаунчер Kepler — окно фиксированного размера 720×460. Animated resize (per-frame) отброшен после экспериментов: Win32 не успевает синхронно прокидывать события, окно дёргается. Решение — фиксированный размер; expand/collapse состояния выражаются через layout внутри renderer, не через resize окна.
+
 ## Шаблон для нового решения
 
 Все новые архитектурные/безопасностные решения **обязаны** попадать сюда. Минимальный шаблон ADR:

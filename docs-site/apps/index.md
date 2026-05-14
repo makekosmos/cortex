@@ -1,8 +1,14 @@
 # Приложения
 
-Kosmos — это **пять активных** desktop-приложений на Electron, **одно зарезервированное** (Digital Cave), плюс **отдельный Android-стек** (две APK).
+Kosmos — это **Kepler host** (Electron-launcher + backend) + **пять активных** desktop-приложений на Electron, **одно зарезервированное** (Digital Cave), плюс **отдельный Android-стек** (две APK).
 
-## Desktop (Electron)
+## Desktop host
+
+| Приложение | Путь | Роль |
+|---|---|---|
+| [Kepler](/apps/kepler) | `apps/kepler-shell` | Electron host + global launcher (Ctrl+Shift+K). Спавнит `kepler-backend.exe`, рутит [command bus](/concepts/command-bus), Phase 4 — extension host для остальных апок |
+
+## Desktop apps (Electron)
 
 | Приложение | Путь | Роль | Модель данных |
 |---|---|---|---|
@@ -12,6 +18,8 @@ Kosmos — это **пять активных** desktop-приложений н�
 | [Dashboard](/apps/dashboard) | `apps/dashboard` | read-only аналитика ARK | inspector, без записи |
 | [Horologion](/apps/horologion) | `apps/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
 | [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог) | TBD |
+
+Apps коннектятся к `kepler-backend` (Rust, spawn'ится Kepler host'ом) через `@kosmos/ark` WS-транспорт. Динамические команды (Pomodoro start, создание задачи Delphi, заметка Eden) регистрируются апками и доступны из Kepler launcher'а — см. [Command bus](/concepts/command-bus).
 
 Все desktop-приложения говорят с ARK через `@kosmos/ark` и используют общие UI-компоненты из `@kosmos/visuals` (Sidebar, Titlebar, DesktopChrome, и т.д.).
 

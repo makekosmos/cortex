@@ -145,9 +145,44 @@ type Project = {
 
 Сам Horologion цены не показывает — только пишет `billable` флаг. Все денежные расчёты идут в Delphi (на страницах) или в Dashboard.
 
+## Command bus integration
+
+Delphi регистрируется в [Kepler command bus](/concepts/command-bus) как provider действий. Юзер из launcher'а (`Ctrl+Shift+K`) может быстро создать задачу или прыгнуть в `Сегодня`, не открывая окно Delphi руками.
+
+### Зарегистрированные команды
+
+| ID | Что делает |
+|---|---|
+| `delphi:task:create` | Открывает `QuickEntry` модалку |
+| `delphi:task:today` | `router.push('/today')` — страница сегодняшних задач |
+
+Регистрация — в `electron/sidecar.ts` через `ArkClient.commands.register([...])` после установки соединения с `kepler-backend`:
+
+```ts
+await client.commands.register([
+  { id: 'delphi:task:create', title: 'Создать задачу', subtitle: 'Delphi', category: 'action' },
+  { id: 'delphi:task:today',  title: 'Открыть сегодняшние задачи', subtitle: 'Delphi', category: 'action' },
+]);
+```
+
+### IPC флоу
+
+`SidecarClient.onCommand` слушает события `command_invoked` для зарегистрированных id'шников. В `electron/main.ts`:
+
+1. `focusMainWindow()` — поднимаем главное окно Delphi.
+2. Switch по `event.id` → `webContents.send('delphi:cmd:task:create')` либо `webContents.send('delphi:cmd:task:today')`.
+
+Preload экспонирует подписку через `window.electronAPI.on(channel, listener)`. Renderer `App.vue`:
+
+```ts
+window.electronAPI.on('delphi:cmd:task:create', () => openQuickEntry());
+window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
+```
+
 ## Связанные документы
 
 - `docs/DELPHI-LEGACY-DB-DECISION.md` — почему legacy sidecar удалён.
+- [Command bus](/concepts/command-bus) — протокол dynamic commands.
 - [Модель данных ARK](/concepts/ark-objects).
 - [Horologion](/apps/horologion) — трекер времени, который привязывается к Delphi-задачам.
 - [@kosmos/ark](/packages/kosmos-ark).
