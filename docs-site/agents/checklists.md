@@ -51,13 +51,16 @@
 - [ ] Не добавлены Tauri или React зависимости.
 - [ ] ARK writes идут через `@kepler/ark`.
 
-## Я правил Dashboard extension (`extensions/dashboard`)
+## Я правил Dashboard (встроенный shell view, `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`)
 
 - [ ] `bun run --cwd shell build:js` — собирается.
+- [ ] `bun run --cwd shell typecheck` — clean.
 - [ ] Renderer не открывает SQLite напрямую.
-- [ ] ARK queries идут через `@kepler/ark` SDK, не в обход.
-- [ ] Никаких writes в ARK таблицы.
+- [ ] ARK queries — только через `window.kepler.ark.request(...)`.
+- [ ] Никаких writes в ARK таблицы (Dashboard — read-only inspector).
 - [ ] `@kepler/visuals` через import/alias, не скопирован.
+- [ ] Tray menu всё ещё содержит «Dashboard» entry.
+- [ ] Закрытие dashboard окна не закрывает Kepler shell.
 
 ## Я правил Horologion extension (`extensions/horologion`)
 

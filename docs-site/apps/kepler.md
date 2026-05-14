@@ -169,13 +169,15 @@ NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%Loc
 
 ## Extension installer (Phase 10 MVP)
 
-Built-ins (Dashboard, Horologion, Delphi, Arrancador) едут с Kepler installer'ом в `<resourcesPath>/extensions/`. Поверх можно положить свежую копию extension'а в `%APPDATA%\Kosmos\extensions\<id>\` — resolution chain в `extension-host.ts` ставит её выше bundled, перекрывая для этого `id`. Удаление user-папки откатывает на bundled.
+Built-ins (Horologion, Delphi, Arrancador) едут с Kepler installer'ом в `<resourcesPath>/extensions/`. Поверх можно положить свежую копию extension'а в `%APPDATA%\Kosmos\extensions\<id>\` — resolution chain в `extension-host.ts` ставит её выше bundled, перекрывая для этого `id`. Удаление user-папки откатывает на bundled.
+
+Dashboard в этот список **не входит** — после 2026-05-14 он встроенный shell view (см. [Dashboard](/apps/dashboard)), не extension.
 
 ```powershell
 # install: <path-to-extension-dir> должен содержать manifest.json, dist/, icon.png
-bun run --cwd shell ext:install ./extensions/dashboard
+bun run --cwd shell ext:install ./extensions/horologion
 # uninstall
-bun run --cwd shell ext:uninstall dashboard
+bun run --cwd shell ext:uninstall horologion
 ```
 
 Подробно (atomic копирование, layout, что НЕ входит в MVP — auto-update, `.kext` формат, UI manager) — [Extension installer](../concepts/extension-installer.md).

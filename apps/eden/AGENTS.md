@@ -229,9 +229,9 @@ bun x tsc --noEmit
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries в обход `@kepler/ark` SDK (analytics дальше ходит через ARK RPC).
+- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kepler/ark` через main proxy).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Копирование shared sidebar / токенов внутрь `extensions/dashboard`.
+- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/Dashboard*.vue`), старый код заморожен в `legacy/dashboard-extension/`.
 
 ### Kepler Shell (launcher)
 

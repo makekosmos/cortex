@@ -118,10 +118,10 @@ bun run ark:guard:writes
 Скрипт — `scripts/check-ark-write-boundaries.mjs`. Проверяет, что app services не содержат `INSERT/UPDATE/DELETE` SQL в ARK-таблицы. Запуск обязателен при изменении файлов в:
 
 - `extensions/arrancador/src/`
-- `extensions/dashboard/src/`
 - `extensions/delphi/src/`
 - `extensions/horologion/src/`
 - `shell/electron/`
+- `shell/src/dashboard/` (встроенный Dashboard view — read-only ARK browser)
 - `apps/eden/ts/main/`
 
 ## Direct Rust writers — особый случай

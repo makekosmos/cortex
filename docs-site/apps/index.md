@@ -18,8 +18,13 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **ч�
 |---|---|---|---|
 | [Delphi](/apps/delphi) | `extensions/delphi` | задачи | `task_obj` (auto-миграция legacy todos на старте) |
 | [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data |
-| [Dashboard](/apps/dashboard) | `extensions/dashboard` | read-only аналитика ARK | inspector, без записи |
 | [Horologion](/apps/horologion) | `extensions/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
+
+## Встроенные shell views
+
+| Приложение | Путь | Роль | Модель данных |
+|---|---|---|---|
+| [Dashboard](/apps/dashboard) | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: welcome (space picker) + space view (sidebar + объекты) | read-only inspector |
 
 ## Standalone desktop apps (Electron)
 

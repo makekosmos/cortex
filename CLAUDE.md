@@ -107,9 +107,9 @@ bun run ark:smoke
 | **Eden** | `apps/eden/ts` | заметки (Vue + Electron + Heart Rust); standalone до Phase 6 |
 | **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
 | **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
-| **Dashboard** | `extensions/dashboard` | read-only аналитика — Vue-extension |
+| **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser (welcome / space view). До 2026-05-14 был extension'ом — заморожен в `legacy/dashboard-extension/`. |
 | **Horologion** | `extensions/horologion` | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj` |
-| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 ✅: Dashboard / Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier). |
+| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 ✅: Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier; Dashboard — встроенный shell view). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
 | **Extension host** | `shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md). |
 | **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kepler/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
@@ -214,9 +214,9 @@ bun run ark:smoke
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries в обход `@kepler/ark` SDK (analytics дальше ходит через ARK RPC).
+- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kepler/ark` через main proxy).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Копирование shared sidebar / токенов внутрь `extensions/dashboard`.
+- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/Dashboard*.vue`), старый код заморожен в `legacy/dashboard-extension/`.
 
 ### Kepler Shell (launcher)
 
@@ -354,13 +354,16 @@ bun run ark:smoke
 - [ ] Не добавлены Tauri или React зависимости.
 - [ ] ARK writes идут через `@kepler/ark`.
 
-## Я правил Dashboard extension (`extensions/dashboard`)
+## Я правил Dashboard (встроенный shell view, `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`)
 
 - [ ] `bun run --cwd shell build:js` — собирается.
+- [ ] `bun run --cwd shell typecheck` — clean.
 - [ ] Renderer не открывает SQLite напрямую.
-- [ ] ARK queries идут через `@kepler/ark` SDK, не в обход.
-- [ ] Никаких writes в ARK таблицы.
+- [ ] ARK queries — только через `window.kepler.ark.request(...)`.
+- [ ] Никаких writes в ARK таблицы (Dashboard — read-only inspector).
 - [ ] `@kepler/visuals` через import/alias, не скопирован.
+- [ ] Tray menu всё ещё содержит «Dashboard» entry.
+- [ ] Закрытие dashboard окна не закрывает Kepler shell.
 
 ## Я правил Horologion extension (`extensions/horologion`)
 
