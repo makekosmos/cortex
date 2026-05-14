@@ -27,14 +27,18 @@ export interface ExtensionManifest {
   id: string
   name: string
   entryHtml: string
-  preload?: string          // optional, per-extension preload bundle
+  icon?: string             // optional, имя файла иконки (icon.png) рядом с manifest.json
+  devPort?: number          // optional, порт Vite dev server'а для HMR (см. dev mode)
   width?: number            // default 900
   height?: number           // default 600
 }
 
 export function loadExtensionManifest(id: string): ExtensionManifest | null
 export function listExtensions(): ExtensionManifest[]
-export function openExtension(id: string): void  // reuse if already open, иначе create
+export function openExtension(id: string): void              // reuse if already open, иначе create
+export function extensionIconDataUri(id: string): string | undefined
+export function readDevModeSetting(): boolean
+export function setExtensionArkBridge(opts: { request, subscribe }): void
 ```
 
 Resolver:
@@ -56,24 +60,33 @@ Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `fo
 ```json
 {
   "id": "dashboard",
-  "name": "Dashboard (PoC)",
-  "entryHtml": "index.html",
-  "preload": "preload.js",
+  "name": "Dashboard",
+  "entryHtml": "dist/index.html",
+  "icon": "icon.png",
+  "devPort": 5180,
   "width": 720,
   "height": 480
 }
 ```
+
+Поля:
+
+- `id`, `name`, `entryHtml` — обязательные.
+- `icon` — optional, имя файла иконки внутри директории extension'а (`extensions/<id>/icon.png`). Если есть — `extensionIconDataUri(id)` читает файл и возвращает `data:image/<ext>;base64,...` URI; launcher показывает иконку в open-команде. См. ниже [«App icons»](#app-icons).
+- `devPort` — optional, порт Vite dev server'а для HMR. Используется только когда активен developer mode. См. [Extension dev mode](/concepts/extension-dev-mode).
+- `width`, `height` — optional, дефолты `900×600`.
 
 ### Структура extension директории
 
 ```text
 apps/kepler-shell/extensions/<id>/
 ├── manifest.json
-├── index.html           // entryHtml — корень Vue bundle
-├── bundle.js            // транспилированный Vue
-├── style.css
-└── preload.js           // optional, Electron preload bridge
+├── icon.png             // optional, ссылается через manifest.icon
+├── src/                  // Vue sources (dev)
+└── dist/                 // build output: index.html + assets/* (entryHtml = "dist/index.html")
 ```
+
+Shared preload (`extension-preload.mjs`) бандлится отдельно vite-plugin-electron'ом рядом с `main.js` и подгружается во все extension windows.
 
 ### IPC
 
@@ -100,7 +113,86 @@ webPreferences: {
 
 - `contextIsolation: true` — `window` extensiion'а изолирован, доступ к Node API только через preload bridge.
 - `nodeIntegration: false` — extension не может `require('fs')`.
-- Preload — **per-extension**, опциональный. Если есть — extension получает API через `contextBridge.exposeInMainWorld`.
+- Preload — **shared** (`dist-electron/extension-preload.mjs`). Bundle'ится vite-plugin-electron'ом и подгружается во все extension windows. Exposes `window.kepler.ark.*` (proxy через main → ArkClient) и `window.kepler.window.{close, minimize, maximize}`.
+
+## App icons
+
+Extension может задать `"icon": "icon.png"` в manifest. Файл лежит рядом с `manifest.json` (`extensions/<id>/icon.png`).
+
+`extensionIconDataUri(id)` (в `electron/extension-host.ts`):
+
+1. Читает manifest, если нет `icon` — возвращает `undefined`.
+2. `statSync(iconPath)` — берёт `mtimeMs`.
+3. Если в `iconDataUriCache: Map<id, IconCacheEntry>` есть запись с тем же `mtimeMs` — возвращает закешированный data URI.
+4. Иначе `readFileSync` → `base64` → собирает `data:image/<ext>;base64,...`, кладёт в кеш с актуальным `mtimeMs`.
+
+```ts
+interface IconCacheEntry {
+  uri: string | null;
+  mtimeMs: number;
+}
+```
+
+Кеш-инвалидация по mtime важна для dev workflow: пользователь добавил новую `icon.png` в running session → следующий запрос автоматически перечитает файл, рестарт shell'а не нужен. Negative results (битый файл) тоже кешируются как `uri: null` до изменения mtime, чтобы не молотить диск на каждый перерендер launcher'а.
+
+Launcher использует это в `electron/commands.ts` — lazy getter `icon: () => extensionIconDataUri('dashboard')`.
+
+## Crash safety
+
+`extension-host.ts` строит окно через `new BrowserWindow(...)` и регистрирует listener'ы — но `closed` event срабатывает после destroy'я `webContents`, поэтому обращаться к `win.webContents.id` внутри `closed` уже нельзя (`Object has been destroyed`).
+
+Решение — **capture `wcId` до регистрации listener'а**:
+
+```ts
+const wcId = win.webContents.id;
+webContentsToExtensionId.set(wcId, id);
+win.on("closed", () => {
+  webContentsToExtensionId.delete(wcId);
+  extensionWindows.delete(id);
+});
+```
+
+Reverse map `webContentsToExtensionId: Map<number, string>` нужен в IPC handler'ах окошек (`kepler:extension:window:*`), чтобы по `e.sender.id` понять, какому extension'у адресован запрос.
+
+## F12 DevTools toggle
+
+В `openExtension` зарегистрирован `before-input-event` listener:
+
+```ts
+win.webContents.on("before-input-event", (e, input) => {
+  if (input.key === "F12" && !input.alt && !input.control && !input.shift && !input.meta) {
+    e.preventDefault();
+    try {
+      win.webContents.toggleDevTools();
+    } catch {
+      /* webContents destroyed mid-flight — игнорируем. */
+    }
+  }
+});
+```
+
+`try/catch` нужен против race: event может быть в очереди, когда окно уже закрылось.
+
+## Window controls
+
+Shared preload exposes:
+
+```ts
+window.kepler.window.close()
+window.kepler.window.minimize()
+window.kepler.window.maximize()
+```
+
+Они шлют `kepler:extension:window:{close,minimize,maximize}` IPC. Main resolves окно через `BrowserWindow.fromWebContents(e.sender)` и вызывает соответствующий метод. Это позволяет extension'ам с `titleBarStyle: "hidden"` рисовать свой titlebar и управлять окном без node integration.
+
+## Developer mode integration
+
+`openExtension(id)` resolver выбирает источник renderer'а:
+
+- Если `isDeveloperModeActive()` (т.е. `KEPLER_DEV=1` **или** `developerMode: true` в `<userData>/kepler-shell-settings.json`) **и** manifest содержит `devPort` — `win.loadURL('http://localhost:<devPort>/')` + auto-open DevTools detached.
+- Иначе — `win.loadFile(<root>/<id>/<entryHtml>)` из bundled dist.
+
+Полная схема — [Extension dev mode](/concepts/extension-dev-mode).
 
 ## Phase 4 итог миграции
 

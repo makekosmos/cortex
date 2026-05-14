@@ -97,8 +97,22 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 
 `seedSmokeDb.py` нужен потому, что Playwright `globalSetup` запускается в Node-окружении, а native-зависимость `better-sqlite3` имеет ABI, которая может разъезжаться между Node-версиями. Python-сидинг через стандартный `sqlite3` модуль избегает этой проблемы.
 
+## Command bus integration
+
+Dashboard сейчас интегрирован в [Kepler launcher](docs-site/apps/kepler.md) **только как static "open" команда** — `dashboard:open` спавнит `dashboard.exe` напрямую, без regаster в command bus от самой апки. Команда живёт в `apps/kepler-shell/electron/commands.ts` и матчится локально на стороне launcher'а.
+
+Dynamic action commands (например `dashboard:filter:games-by-playtime`, `dashboard:report:weekly`) пока не реализованы — это работа Phase 4 roadmap'а Kepler.
+
+### Extension loader PoC
+
+Параллельно ведётся PoC миграции Dashboard как **Vue extension внутри Kepler shell**: `apps/kepler-shell/extensions/dashboard/` уже содержит static `manifest.json` + `index.html` + `bundle.js`, демонстрирующий extension host API. Реальная миграция Vue-приложения Dashboard в этот формат — Phase 4 работа [Kepler Roadmap](docs-site/apps/kepler-roadmap.md).
+
+После миграции Dashboard будет рендериться внутри Kepler как extension window, без отдельного Electron-процесса.
+
 ## Связанные документы
 
+- [Kepler](docs-site/apps/kepler.md) — host, который запускает Dashboard.
+- [Command bus](docs-site/concepts/command-bus.md)
 - [Read-only SQL boundary](docs-site/concepts/readonly-sql.md)
 - [Граница записи в ARK](docs-site/concepts/write-boundary.md)
 - [kosmos-visuals](docs-site/packages/kosmos-visuals.md)
@@ -170,6 +184,24 @@ bun run test:e2e:smoke     # прямой Playwright-library smoke
 - ❌ ARK queries вне `electron/services/analytics.ts`.
 - ❌ Любые **writes** в ARK таблицы.
 - ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+
+### Kepler Shell (launcher)
+
+- ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
+- ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
+- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Build-step для extension content в `apps/kepler-shell/extensions/<id>/`. Сейчас PoC, контент static, без bundler/transpile.
+
+### Command bus
+
+- ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
+- ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+
+### Brand consistency
+
+- ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
 
 ### usage-tracker
 

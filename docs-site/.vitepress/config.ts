@@ -114,6 +114,7 @@ export default defineConfig({
             { text: "Horologion — время (WIP)", link: "/apps/horologion" },
             { text: "Horologion — Roadmap", link: "/apps/horologion-roadmap" },
             { text: "Digital Cave — фокус (TBD)", link: "/apps/digital-cave" },
+            { text: "Kerux — голос (TBD)", link: "/apps/kerux" },
             { text: "ark-service (Android)", link: "/apps/ark-service" },
           ],
         },

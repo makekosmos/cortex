@@ -11,10 +11,11 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 2 | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher) | ✅ |
 | 3 | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC | ✅ |
 | 4 | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador) | ✅ |
-| 5 | Extension developer mode (Vite HMR per extension, Raycast-style) | ⏳ |
+| 5 | Extension developer mode (Vite HMR per extension, Raycast-style) | ✅ |
 | 6 | Eden как extension (намеренно отложено) | ⏳ |
 | 7 | Adaptive lifecycle (optional) | ⏳ |
-| 8 | Retire legacy Rust `apps/kepler/`, production packaging, auto-update | ⏳ |
+| 8 | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy `apps/kepler/` ⏳ | ⏳ |
+| 9 | Delphi UI: Tailwind → plain CSS (открытый вопрос) | ⏳ |
 
 ## Phase 0 ✅ — Backend extracted
 
@@ -68,7 +69,16 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / −4 процесса. Полная таблица — [RAM benchmarks](/concepts/ram-benchmarks).
 
-## Phase 5 ⏳ — Extension developer mode
+### Post-migration polish
+
+После основной миграции Phase 4 добавлены доводки, считаются частью Phase 4:
+
+- **App icons в launcher** — каждое open-command (Dashboard / Horologion / Delphi / Arrancador) показывает иконку extension'а в результатах launcher'а. `extensionIconDataUri(id)` в `extension-host.ts` читает `extensions/<id>/icon.png` и кэширует по **mtime файла** — hot-swap иконки без рестарта Kepler. Eden команда без иконки (legacy, не extension).
+- **Crash on close fix** — `BrowserWindow.on("closed", …)` теперь использует captured `wcId` (захваченный **до** регистрации listener'а), а не `win.webContents.id` после destroy. До фикса Kepler падал при закрытии extension-окна.
+- **Status dot в Horologion topbar** — точка статуса подключения к ARK (probe `list_object_types` каждые 10с), визуально совпадает с Delphi extension'ом.
+- **Selected-space DB resolution** — `kepler-shell` main читает `%APPDATA%\Kosmos\selected-space.json` (через `@kosmos/ark` хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace`) и передаёт `KOSMOS_DB_PATH=<spaceDir>/ark.db` в env при `spawnBackend()`. Backend пишет в выбранный space, а не в дефолтный `%APPDATA%\Kosmos\ark.db`.
+
+## Phase 5 ✅ — Extension developer mode
 
 Hot-reload для extensions через Vite dev servers, как `ray develop` у Raycast. Подробно — [Extension dev mode](/concepts/extension-dev-mode).
 
@@ -79,7 +89,11 @@ Hot-reload для extensions через Vite dev servers, как `ray develop` �
 - Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`).
 - F12 toggles DevTools на любом extension window.
 
-Также под Phase 5: cleanup `electronAPI` хвостов в Delphi extension и доделка остальных страниц Arrancador.
+### Cleanup под Phase 5 (выполнено)
+
+- **Delphi `electron-api-shim`** — `apps/kepler-shell/extensions/delphi/src/lib/electron-api-shim.ts` устанавливает `window.electronAPI` поверх `window.kepler.ark.request`, мапит legacy каналы (`ark:listDelphiTasks`, `ark:upsertDelphiTask`, `ark:deleteDelphiTask`, `ark:listTimeEntries`) на ARK operations. LAN sync / P2P / space management — graceful no-op. Подробно — [Delphi → electron-api shim](./delphi.md#electron-api-shim-в-extension).
+- **Arrancador pages migration** — все 7 страниц мигрированы в extension (Library, Catalogue, Scan, Sqoba, Statistics, Settings, GameDetail). Native scanner / RAWG / game launch / usage heatmap пока stubs. Подробно — [Arrancador](./arrancador.md).
+- **Tailwind restored для Delphi** — `@tailwindcss/vite` plugin подключён обратно в `extensions/delphi/vite.config.mjs`, т.к. оригинальный UI на Tailwind utility classes. Переписывание на plain CSS — открытый вопрос Phase 9.
 
 ## Phase 6 ⏳ — Eden как extension
 
@@ -89,11 +103,23 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 
 Динамическое включение/выключение extensions на основе usage (LRU eviction, RAM budget). Зависит от Phase 4-6.
 
-## Phase 8 ⏳ — Retire legacy + packaging
+## Phase 8 ⏳ — Production packaging + retire legacy
 
-- Удаление `apps/kepler/` (старый Rust gpui launcher).
-- Production NSIS packaging Kepler shell с включённым `kepler-backend.exe` + `ark-core-rpc.exe` через `extraResources`.
-- Auto-update mechanism (electron-updater).
+### Packaging ✅
+
+`bun run --cwd apps/kepler-shell build` собирает финальный **NSIS one-click** установщик `release/Kepler Setup X.Y.Z.exe`. Конфиг — `apps/kepler-shell/package.json → build`:
+
+- `extraResources` копирует `kepler-backend.exe`, `ark-core-rpc.exe`, директорию `extensions/` (только `manifest.json`, `icon.png`, `index.html`, `dist/` — без `src/` / `node_modules/`), и `build/icon.png`.
+- `afterPack` (`build/afterPack.cjs`) embed'ит иконку в `Kepler.exe` через `rcedit` + `png-to-ico` (стандартный паттерн Kosmos, см. [Horologion](./horologion.md), [Delphi](./delphi.md)).
+- NSIS: `oneClick`, `perMachine: false` (install в `%LocalAppData%\Kepler` без UAC), `runAfterFinish: true`, desktop + Start Menu shortcuts, `deleteAppDataOnUninstall: false`.
+
+Полная разбивка — [Kepler → Production packaging](./kepler.md#production-packaging-phase-8).
+
+### Что осталось
+
+- ⏳ **Auto-update** через `electron-updater`.
+- ⏳ **Удаление `apps/kepler/`** (старый Rust gpui launcher).
+- Установщик переписывает HKCU Run на новый `Kepler.exe`.
 
 ## Phase 9 ⏳ — Delphi UI: Tailwind → plain CSS (открытый вопрос)
 
@@ -110,7 +136,6 @@ Delphi extension сейчас использует Tailwind v4 в templates (н�
 - Verify build + manual UI smoke (Delphi выглядит OK на acrylic Mica background).
 
 Скоуп — несколько часов сфокусированной работы (или один agent). Откладываем до момента когда Delphi UI стабилизируется (project / area / settings flows не меняются часто) — иначе придётся переделывать дважды.
-- Установщик переписывает HKCU Run на новый `Kepler.exe`.
 
 ## Баги / замечания
 

@@ -66,6 +66,10 @@ bun run ark:smoke
 
 ## Карта приложений и пакетов
 
+::: tip STATUS.md — always-current snapshot
+Корневой `STATUS.md` хранит актуальный snapshot состояния проекта (что работает, что в работе, что сломано). Перед началом substantial-задачи открой его — карта ниже описывает «где что», а `STATUS.md` — «что сейчас в каком состоянии». Обновлять `STATUS.md` нужно, когда меняется статус приложения или появляется/исчезает заметная багу/фича.
+:::
+
 Когда пользователь упоминает имя — ты должен моментально знать, где это.
 
 | Имя | Где | Что |
@@ -80,6 +84,7 @@ bun run ark:smoke
 | **Extension host** | `apps/kepler-shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](/concepts/extension-host), [Extension dev mode](/concepts/extension-dev-mode). |
 | **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](/concepts/command-bus). |
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
+| **Kerux** | `apps/kerux` | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |
 | **@kosmos/ark** | `packages/kosmos-ark` | TS SDK |

@@ -135,9 +135,19 @@ cd apps/kepler-shell
 bun run dev              # dev mode (Vite renderer + Electron main)
 bun run typecheck        # TS check (renderer + main + preload)
 bun run build:js         # сборка renderer + main + preload (без установщика)
-bun run build            # build:js + electron-builder --win nsis (финальный NSIS one-click)
+bun run build            # full production chain:
+                          #   1. cargo build --release services/kepler-backend
+                          #   2. tsc + vite (renderer / main / preload)
+                          #   3. vite build per extension × 4 (Dashboard / Horologion / Delphi / Arrancador)
+                          #   4. electron-builder --win nsis (one-click installer)
 bun run test:e2e         # Playwright smoke
 ```
+
+Output финального билда:
+
+- Installer: `apps/kepler-shell/release/Kepler Setup 0.0.1.exe` (per-user oneClick).
+- Install path: `%LOCALAPPDATA%\Programs\Kepler\` (без UAC, без выбора директории).
+- Launch: `runAfterFinish: true`, ярлык на рабочем столе + Start Menu.
 
 Extension dev mode (Raycast-style HMR, см. [Extension dev mode](/concepts/extension-dev-mode)):
 

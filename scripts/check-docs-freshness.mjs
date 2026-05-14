@@ -98,6 +98,7 @@ const KNOWN_NONEXISTENT = new Set([
   "apps/delphi/ts/sidecar", // намеренно удалён, упомянут в DELPHI-LEGACY-DB-DECISION
   "apps/eden/kotlin",       // планируется
   "apps/digital-cave",      // TBD — имя зарезервировано, см. docs-site/apps/digital-cave.md
+  "apps/kerux",             // TBD — имя зарезервировано, см. docs-site/apps/kerux.md
 ]);
 
 // внутренние markdown-ссылки `/section/page` (с возможным якорем)

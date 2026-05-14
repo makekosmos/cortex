@@ -83,11 +83,46 @@ Arrancador использует:
 
 Прямой SQL остаётся как read-only fallback **и** для inspector-режима, не для основного flow.
 
+## Extension в Kepler
+
+Arrancador мигрирован в Kepler как Vue extension — `apps/kepler-shell/extensions/arrancador/`. Все **7 страниц** портированы, рендерятся внутри отдельного `BrowserWindow` Kepler host'а без своего Electron-процесса.
+
+### Страницы и их состояние
+
+| Страница | Файл | Состояние |
+|---|---|---|
+| Library | `src/pages/LibraryPage.vue` | ✅ list из `game_obj` через `useGames` |
+| Catalogue | `src/pages/CataloguePage.vue` | ⏳ stub (RAWG metadata не подключен) |
+| Scan | `src/pages/ScanPage.vue` | ✅ read-only (native scanner spawn — stub) |
+| Sqoba | `src/pages/SqobaPage.vue` | ⏳ stub |
+| Statistics | `src/pages/StatisticsPage.vue` | ✅ JS-агрегация по списку игр (heatmap по `usage_sessions` — stub) |
+| Settings | `src/pages/SettingsPage.vue` | ✅ localStorage (без electron IPC) |
+| GameDetail | `src/pages/GameDetailPage.vue` | ✅ read-only (game launch — stub) |
+
+Routing — Vue Router с `createMemoryHistory` (нет file-system URLs внутри extension'а).
+
+### Архитектура данных
+
+- **`src/lib/arkGames.ts`** — ARK bridge: `arkBridge()` достаёт `window.kepler.ark`, `loadGames()` дергает `list_objects_by_type(game_obj)` и projection'ит `ArkObjectRecord` → `ArrancadorGame` (id / name / cover / playtime / rating / status и т.д.). **Read-only** — write paths остаются в legacy `apps/arrancador/` standalone .exe.
+- **`src/composables/useGames.ts`** — shared store на vue refs (без Pinia). Singleton с ref-count, подписывается на `entity_changed` через `kepler.ark.subscribe` и автоматически refresh'ит список.
+- **`src/composables/useSearchQuery.ts`** — query state для Library / Catalogue фильтрации.
+
+### Что НЕ мигрировано (stubs)
+
+Эти функции в extension'е отсутствуют целиком, остаются в legacy standalone `arrancador.exe`:
+
+- **RAWG metadata** — fetch'а нет, Catalogue показывает заглушку.
+- **Native scanner spawn** — sidecar для сканирования диска (`apps/arrancador/electron/main/services/usage-process-search.ts`) недоступен из extension'а.
+- **Game launch** — `ShellExecute(exePath)` требует Electron main process'а, в extension renderer'е нет такого канала.
+- **Heatmap по `usage_sessions`** — Statistics показывает суммарный playtime, но визуальный heatmap по дням / часам не подключен.
+
+Эти возможности появятся в extension'е когда Kepler host расширит preload API соответствующими каналами, либо когда legacy standalone retire'нется в пользу exclusive extension flow.
+
 ## Command bus integration
 
-Arrancador сейчас интегрирован в [Kepler launcher](/apps/kepler) **только как static "open" команда** — `arrancador:open` спавнит `arrancador.exe` напрямую. Команда живёт в `apps/kepler-shell/electron/commands.ts` и не требует регистрации со стороны самой апки.
+Arrancador сейчас интегрирован в [Kepler launcher](/apps/kepler) **как static "open" команда** — `arrancador:open` открывает extension window (или standalone `arrancador.exe`, в зависимости от dev/prod пути). Команда живёт в `apps/kepler-shell/electron/commands.ts` и не требует регистрации со стороны самой апки.
 
-Dynamic action commands (например `arrancador:game:launch:<id>`, `arrancador:backup:run`) пока не реализованы — это Phase 4 работа [Kepler Roadmap](/apps/kepler-roadmap).
+Dynamic action commands (например `arrancador:game:launch:<id>`, `arrancador:backup:run`) пока не реализованы — это работа после миграции остатков game launch / scanner в extension flow.
 
 ## Связанные документы
 

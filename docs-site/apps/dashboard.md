@@ -89,11 +89,11 @@ Dashboard сейчас интегрирован в [Kepler launcher](/apps/keple
 
 Dynamic action commands (например `dashboard:filter:games-by-playtime`, `dashboard:report:weekly`) пока не реализованы — это работа Phase 4 roadmap'а Kepler.
 
-### Extension loader PoC
+### Extension в Kepler
 
-Параллельно ведётся PoC миграции Dashboard как **Vue extension внутри Kepler shell**: `apps/kepler-shell/extensions/dashboard/` уже содержит static `manifest.json` + `index.html` + `bundle.js`, демонстрирующий extension host API. Реальная миграция Vue-приложения Dashboard в этот формат — Phase 4 работа [Kepler Roadmap](/apps/kepler-roadmap).
+Dashboard мигрирован в Kepler как полноценный **Vue extension** — `apps/kepler-shell/extensions/dashboard/`. Static `bundle.js` PoC заменён реальным Vue-приложением. Внутри extension'а — Overview и Sessions pages, данные тянутся через `window.kepler.ark.request("get_usage_analytics", { … })` (тот же ARK runtime endpoint, что использовал standalone `electron/services/analytics.ts`).
 
-После миграции Dashboard будет рендериться внутри Kepler как extension window, без отдельного Electron-процесса.
+Standalone `apps/dashboard/` остаётся для legacy fallback и e2e smoke, но основной flow в Kosmos — открытие через `dashboard:open` из Kepler launcher'а, которое поднимает extension window. После Phase 8 standalone .exe ретайернется.
 
 ## Связанные документы
 

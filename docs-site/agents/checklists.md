@@ -80,6 +80,23 @@
 - [ ] Если правил manifest format — обновил [Extension dev mode](/concepts/extension-dev-mode) и [Extension host](/concepts/extension-host).
 - [ ] Production build (без `KEPLER_DEV`) грузит extensions из `dist/`, не из dev server'ов.
 
+## Я правил Delphi extension (`apps/kepler-shell/extensions/delphi`)
+
+- [ ] `electron-api-shim.ts` **не удалён** — он эмулирует `window.electronAPI` и нужен для compat с legacy Delphi-кодом. Без него ломается CRUD во всём приложении (требует переписывания каждого call site).
+- [ ] Tailwind plugin (`@tailwindcss/vite`) подключён в `vite.config.mjs` extension'а. Без него страницы Delphi теряют классы.
+- [ ] Если ввёл новый `window.electronAPI.*` вызов в Vue-коде — добавил эквивалент в `electron-api-shim.ts` (через kepler ark bridge).
+- [ ] Миграция UI на plain CSS / kosmos-visuals токены — **Phase 9, отдельная задача**. Не делай попутно с другими правками.
+- [ ] `bun run --cwd apps/kepler-shell build:js` — собирается без ошибок.
+- [ ] При запуске Kepler shell extension открывается, без crash'а на missing window.electronAPI.
+
+## Я правил Arrancador extension (`apps/kepler-shell/extensions/arrancador`)
+
+- [ ] Vue Router (memory history) routes остаются актуальными — каждый новый view зарегистрирован в роутере.
+- [ ] Native scanner (`child_process` + FS-сканирование Steam/Epic/GOG) **не переписывай в renderer** — он живёт в legacy standalone Arrancador main process (Phase 5+ план — миграция в kepler-backend Rust либо в kepler-shell sidecar, см. [Decisions](/reference/decisions#2026-05-14-arrancador-native-scanner-остался-в-legacy)).
+- [ ] Game launch / catalogue / scan — **TODO в extension**, не возвращай случайно stub'ы как «работающие» (только UI subset мигрирован: LayoutPage + GameCard).
+- [ ] `bun run --cwd apps/kepler-shell build:js` — собирается.
+- [ ] `electron-api-shim.ts` или эквивалент (если используется) — не сломан после правок.
+
 ## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
 
 - [ ] Backend (`services/kepler-backend/src/command_bus.rs` + `ws_server.rs`) — `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.

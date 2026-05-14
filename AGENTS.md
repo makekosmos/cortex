@@ -28,14 +28,16 @@
 Эта страница заменяет тонкие `AGENTS.md` / `CLAUDE.md` в корне. Полный контекст репо — в этом сайте документации. Все правила в одном месте.
 :::
 
-Ты работаешь в монорепо **Kosmos**. Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](docs-site/concepts/proof-loop.md).
+Ты работаешь в монорепо **Kosmos** (после brand swap 2026-05-14). Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](docs-site/concepts/proof-loop.md).
 
 ## За 30 секунд
 
-- **Kosmos** = монорепо для личного софта. Bun workspaces.
+- **Kosmos** = монорепо / экосистема для личного софта. Bun workspaces.
+- **Kepler** = имя лаунчера (`apps/kepler-shell/`) и его shared backend (`services/kepler-backend/`).
 - **ARK** = общий Rust+SQLite рантайм (`packages/ark-core`, бинарь `ark-core-rpc`).
 - **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
 - **Прямые SQL writes в ARK** из app services — **запрещены**.
+- **Apps интегрируются с лаунчером через command bus** (apps регистрируют commands, Kepler invoke'ает).
 - **Тесты** — только на изолированных БД.
 - **Substantial-правки** — через `.agent/tasks/<DATE>-<slug>/` proof loop.
 
@@ -97,7 +99,12 @@ bun run ark:smoke
 | **Arrancador** | `apps/arrancador` | игровая библиотека (Electron) |
 | **Dashboard** | `apps/dashboard` | read-only аналитика (Electron) |
 | **Horologion** | `apps/horologion` | трекер времени, pomodoro (WIP). `time_entry_obj` + общий `tag_obj` |
+| **Kepler Shell** | `apps/kepler-shell` | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 ✅: Dashboard / Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier). |
+| **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server для лаунчера и приложений |
+| **Extension host** | `apps/kepler-shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md). |
+| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
+| **Kerux** | `apps/kerux` | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |
 | **@kosmos/ark** | `packages/kosmos-ark` | TS SDK |
@@ -199,6 +206,24 @@ bun run ark:smoke
 - ❌ ARK queries вне `electron/services/analytics.ts`.
 - ❌ Любые **writes** в ARK таблицы.
 - ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+
+### Kepler Shell (launcher)
+
+- ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
+- ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
+- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Build-step для extension content в `apps/kepler-shell/extensions/<id>/`. Сейчас PoC, контент static, без bundler/transpile.
+
+### Command bus
+
+- ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
+- ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+
+### Brand consistency
+
+- ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
 
 ### usage-tracker
 
@@ -321,6 +346,34 @@ bun run ark:smoke
 - [ ] ARK queries только в `electron/services/analytics.ts`.
 - [ ] Никаких writes в ARK таблицы.
 - [ ] `@kosmos/visuals` через import/alias, не скопирован.
+
+## Я правил kepler-shell (`apps/kepler-shell`)
+
+- [ ] `bun run --cwd apps/kepler-shell typecheck` — clean.
+- [ ] `bun run --cwd apps/kepler-shell build:js` — clean.
+- [ ] `bun x vite build --configLoader native` — все 3 environments (renderer / main / preload) собираются.
+- [ ] Команды в `electron/commands.ts` имеют корректный category (`open` / `action`); action-команды не захардкожены, приходят dynamic от приложений.
+- [ ] Если правил commands — обновил `docs-site/concepts/command-bus.md`.
+- [ ] Settings-окно не сломано после изменений `main.ts`.
+- [ ] Extension PoC всё ещё открывается (`dashboard:extension:demo` команда работает).
+- [ ] Размер окна остался fixed 720×460, без per-frame resize animation.
+
+## Я правил extension dev mode (`apps/kepler-shell` + extensions)
+
+- [ ] `KEPLER_DEV=1` + `bun run --cwd apps/kepler-shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
+- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id)` в `electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно.
+- [ ] F12 toggles DevTools на любом extension window (detached, не блокирует).
+- [ ] Settings → Developer Mode toggle persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`.
+- [ ] Если правил manifest format — обновил [Extension dev mode](docs-site/concepts/extension-dev-mode.md) и [Extension host](docs-site/concepts/extension-host.md).
+- [ ] Production build (без `KEPLER_DEV`) грузит extensions из `dist/`, не из dev server'ов.
+
+## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
+
+- [ ] Backend (`services/kepler-backend/src/command_bus.rs` + `ws_server.rs`) — `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.
+- [ ] SDK (`packages/kosmos-ark/src/ark-client.ts`) — `bun test` зелёный.
+- [ ] Wire format — flat events `{event: "...", ...fields}`, согласован между backend и SDK.
+- [ ] Apps register обёрнут в `try/catch` (self-managed mode без commands API — норма, не ошибка).
+- [ ] Если менял публичный shape события — обновил `docs-site/concepts/command-bus.md`.
 
 ## Я правил Horologion (`apps/horologion`)
 
@@ -605,7 +658,23 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 | Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути |
 | Dashboard | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts` |
 
-## 9. Стиль коммитов и кода
+## 9. Brand consistency (Kepler / Kosmos)
+
+После swap 2026-05-14:
+
+- **Kepler** — имя лаунчера и его UI-shell. `apps/kepler-shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
+- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kosmos/ark`, `@kosmos/visuals`, ARK runtime, doc-site, общий бренд.
+- Не смешивай: «Kosmos launcher» — неверно, это **Kepler**. «Kepler ARK» — неверно, ARK живёт в **Kosmos**.
+- Перед PR прогоняй `pwsh scripts/check-swap-completeness.ps1` если правил что-то рядом с брендом.
+
+## 10. Command bus
+
+- Apps регистрируют свои commands через `ArkClient.commands.register(...)` **только** в `kepler-mode` (когда лаунчер их вызвал). Регистрация — в `try/catch`: standalone-режим (без лаунчера) не имеет commands API, и это норма, не ошибка.
+- Wire format событий command bus — **flat**: `{event: "command:invoked", id: "...", ...fields}`. Не `{kind: "event", type: "...", payload: {...}}`. Согласовано с peer/sync events.
+- Command-категории в `apps/kepler-shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
+- Extension content в `apps/kepler-shell/extensions/<id>/` — static (no build step yet, PoC).
+
+## 11. Стиль коммитов и кода
 
 - Коммит — про **почему**, не про **что**. Не «add big».
 - Никаких `--no-verify`.

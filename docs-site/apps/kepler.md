@@ -78,7 +78,7 @@ apps/kepler-shell/
 - `nativeTheme.themeSource = 'dark'` — принудительно тёмная тема, независимо от системы.
 - `globalShortcut.register('Ctrl+Shift+K')` (`Cmd+Shift+K` на macOS) — toggle show/hide.
 - При потере фокуса — окно скрывается (focus-trap pattern, как Spotlight).
-- Tray icon с меню «Открыть» / «Выйти». Реальный quit — только через tray.
+- Tray icon с меню **«Открыть» / «Настройки» / «Выход»**. «Настройки» открывает [отдельное окно настроек](#окно-настроек) через тот же IPC `kepler:settings:open`. Реальный quit — только через tray «Выход».
 
 ## Command bus
 
@@ -104,6 +104,14 @@ Kepler — точка входа для всех команд экосистем
 - Host открывает extension в отдельном `BrowserWindow` с reuse через `Map<id, BrowserWindow>`.
 - Eden — намеренно standalone .exe (миграция в Phase 6, см. [Roadmap](./kepler-roadmap.md)).
 
+### Иконки в launcher
+
+Каждое open-command в launcher показывает иконку соответствующего extension'а. `electron/extension-host.ts → extensionIconDataUri(id)` читает `extensions/<id>/icon.png`, кодирует в data-uri и кэширует **по mtime файла**: при изменении иконки на диске cache автоматически инвалидируется (hot-swap без перезапуска Kepler). Если иконки нет — команда показывается без неё. Eden команда **без иконки** (legacy, ещё не extension — см. Phase 6).
+
+### Crash safety
+
+`BrowserWindow.on("closed", …)` обращается к `win.webContents.id` **после** destroy и крашит процесс. Фикс: `wcId` захватывается **до** регистрации listener'ов (`const wcId = win.webContents.id; win.on("closed", () => webContentsToExtensionId.delete(wcId))`). Без этого Kepler падал при закрытии extension-окна.
+
 RAM-эффект: −124 MB Working Set / −209 MB Private Bytes / −4 процесса (см. [RAM benchmarks](../concepts/ram-benchmarks.md)).
 
 Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/extension-dev-mode.md). Полная архитектура — [Extension host](../concepts/extension-host.md).
@@ -112,7 +120,44 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
 
 Настройки открываются как **отдельное `BrowserWindow`** через IPC `kepler:settings:open` (паттерн как в [Horologion](./horologion.md#окно-настроек)). Хеш-route `#/settings`, App.vue рендерит `SettingsView` внутри `<DesktopChrome>`.
 
-В Settings — статус `kepler-backend`, путь к ARK DB, hotkey, autostart toggle.
+В Settings:
+
+- **Autostart** toggle — пишет / удаляет ключ `Kepler` в `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` через `app.setLoginItemSettings`. Ошибки записи показываются inline («Ошибка записи в реестр»).
+- **Backend status** — состояние `kepler-backend.exe` child process'а (running / not running) + текущий порт WS.
+- **Версия** — `app.getVersion()`.
+- **Developer Mode** toggle (Phase 5) — persist'ится в `%APPDATA%\Kosmos\kepler-shell-settings.json`. Когда включён, extension-host резолвит `loadURL('http://localhost:<devPort>/')` вместо `loadFile(dist/...)` для extension'ов, у которых в `manifest.json` указан `devPort`. F12 в любом extension window открывает DevTools.
+
+## Selected space DB resolution
+
+`kepler-backend` по умолчанию пишет в `%APPDATA%\Kosmos\ark.db`, но реальные данные пользователя живут в **выбранном space'е** — `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`. Чтобы backend читал правильную базу, Kepler shell резолвит путь сам:
+
+1. `electron/main.ts → resolveSpaceDbPath()` читает `%APPDATA%\Kosmos\selected-space.json` через хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace` из [`@kosmos/ark`](../packages/kosmos-ark.md).
+2. Если space выбран — `spawnBackend()` передаёт env-переменную `KOSMOS_DB_PATH=<spaceDir>/ark.db` дочернему процессу `kepler-backend.exe`.
+3. Backend использует `KOSMOS_DB_PATH` вместо дефолта.
+4. Если файла `selected-space.json` нет / он битый — backend падает на default. Это нормальное поведение для свежей инсталляции до создания первого space'а.
+
+## Production packaging (Phase 8)
+
+`bun run build` собирает финальный **NSIS one-click** установщик через electron-builder. Конфиг — в `apps/kepler-shell/package.json → build`.
+
+Pipeline:
+
+1. `build:backend` — `cargo build --release --bin kepler-backend`.
+2. `build:js` — tsc + vite build (main + preload + renderer).
+3. `electron-builder --win nsis` — `release/Kepler Setup X.Y.Z.exe`.
+
+`extraResources` (копируются рядом с упакованным `Kepler.exe`):
+
+- `kepler-backend.exe` — Rust backend (из `services/kepler-backend/target/release/`).
+- `ark-core-rpc.exe` — для legacy standalone-апок, которые ещё не extensions.
+- `extensions/` — bundle'ы Vue extensions (только `manifest.json`, `icon.png`, `index.html`, `dist/`; исключаются `src/`, `node_modules/`, `package.json`, vite configs).
+- `icon.png` — для tray и `BrowserWindow.icon`.
+
+`afterPack` (`build/afterPack.cjs`) embed'ит иконку в `Kepler.exe` через `rcedit` + `png-to-ico` (тот же паттерн, что у [Horologion](./horologion.md) / [Delphi](./delphi.md) — workaround под отключённый встроенный rcedit electron-builder из-за `win.signAndEditExecutable: false`).
+
+NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%LocalAppData%\Kepler` без UAC), `runAfterFinish: true`, desktop + Start Menu shortcut, `deleteAppDataOnUninstall: false` (не теряем space-данные при апдейте).
+
+Что ещё в Phase 8 (⏳): `electron-updater` для auto-update и удаление legacy `apps/kepler/` (старый Rust gpui launcher).
 
 ## Запуск (dev)
 

@@ -1,6 +1,10 @@
 # Приложения
 
-Kosmos — это **Kepler host** (Electron-launcher + backend) + **пять активных** desktop-приложений на Electron, **одно зарезервированное** (Digital Cave), плюс **отдельный Android-стек** (две APK).
+Kosmos — это **Kepler host** (Electron-launcher + backend) + **пять активных** desktop-приложений на Electron, **два зарезервированных** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK).
+
+::: tip Live snapshot
+Актуальное состояние миграций / Phase trackers — `STATUS.md` в корне репозитория. Эта страница — концептуальная карта; STATUS.md — what's in flight прямо сейчас.
+:::
 
 ## Desktop host
 
@@ -18,6 +22,7 @@ Kosmos — это **Kepler host** (Electron-launcher + backend) + **пять а�
 | [Dashboard](/apps/dashboard) | `apps/dashboard` | read-only аналитика ARK | inspector, без записи |
 | [Horologion](/apps/horologion) | `apps/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
 | [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог) | TBD |
+| [Kerux](/apps/kerux) <span class="kbadge info">TBD</span> | `apps/kerux` (зарезервировано) | голосовой ввод по хоткею (Superwhisper аналог; faster-whisper / Groq Whisper-v3) | TBD (опционально `voice_clip_obj`) |
 
 Apps коннектятся к `kepler-backend` (Rust, spawn'ится Kepler host'ом) через `@kosmos/ark` WS-транспорт. Динамические команды (Pomodoro start, создание задачи Delphi, заметка Eden) регистрируются апками и доступны из Kepler launcher'а — см. [Command bus](/concepts/command-bus).
 
@@ -63,4 +68,5 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 | Dashboard | ✅ (read-only inspector) | предпочитать ARK analytics endpoints вместо raw SQL |
 | Horologion | ✅ (time_entry_obj) | tag picker UI и реальный `object_link` task↔entry — TODO (см. roadmap) |
 | Digital Cave | ⏳ TBD | зарезервировано, кода нет |
+| Kerux | ⏳ TBD | зарезервировано, кода нет |
 | Delphi (Android) + ark-service | ❌ | отдельный Room-стек; миграция на UniFFI от `ark-core` — задача на будущее |

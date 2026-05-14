@@ -159,9 +159,44 @@ type Project = {
 
 Сам Horologion цены не показывает — только пишет `billable` флаг. Все денежные расчёты идут в Delphi (на страницах) или в Dashboard.
 
+## Command bus integration
+
+Delphi регистрируется в [Kepler command bus](docs-site/concepts/command-bus.md) как provider действий. Юзер из launcher'а (`Ctrl+Shift+K`) может быстро создать задачу или прыгнуть в `Сегодня`, не открывая окно Delphi руками.
+
+### Зарегистрированные команды
+
+| ID | Что делает |
+|---|---|
+| `delphi:task:create` | Открывает `QuickEntry` модалку |
+| `delphi:task:today` | `router.push('/today')` — страница сегодняшних задач |
+
+Регистрация — в `electron/sidecar.ts` через `ArkClient.commands.register([...])` после установки соединения с `kepler-backend`:
+
+```ts
+await client.commands.register([
+  { id: 'delphi:task:create', title: 'Создать задачу', subtitle: 'Delphi', category: 'action' },
+  { id: 'delphi:task:today',  title: 'Открыть сегодняшние задачи', subtitle: 'Delphi', category: 'action' },
+]);
+```
+
+### IPC флоу
+
+`SidecarClient.onCommand` слушает события `command_invoked` для зарегистрированных id'шников. В `electron/main.ts`:
+
+1. `focusMainWindow()` — поднимаем главное окно Delphi.
+2. Switch по `event.id` → `webContents.send('delphi:cmd:task:create')` либо `webContents.send('delphi:cmd:task:today')`.
+
+Preload экспонирует подписку через `window.electronAPI.on(channel, listener)`. Renderer `App.vue`:
+
+```ts
+window.electronAPI.on('delphi:cmd:task:create', () => openQuickEntry());
+window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
+```
+
 ## Связанные документы
 
 - `docs/DELPHI-LEGACY-DB-DECISION.md` — почему legacy sidecar удалён.
+- [Command bus](docs-site/concepts/command-bus.md) — протокол dynamic commands.
 - [Модель данных ARK](docs-site/concepts/ark-objects.md).
 - [Horologion](docs-site/apps/horologion.md) — трекер времени, который привязывается к Delphi-задачам.
 - [@kosmos/ark](docs-site/packages/kosmos-ark.md).
@@ -232,6 +267,24 @@ type Project = {
 - ❌ ARK queries вне `electron/services/analytics.ts`.
 - ❌ Любые **writes** в ARK таблицы.
 - ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+
+### Kepler Shell (launcher)
+
+- ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
+- ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
+- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Build-step для extension content в `apps/kepler-shell/extensions/<id>/`. Сейчас PoC, контент static, без bundler/transpile.
+
+### Command bus
+
+- ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
+- ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+
+### Brand consistency
+
+- ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
 
 ### usage-tracker
 

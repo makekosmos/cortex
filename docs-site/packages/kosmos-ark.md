@@ -225,6 +225,8 @@ const dbPath = getArkDbPathForSelectedSpace(app.getPath('appData'), selection);
 
 Полный набор экспортов: `buildPersonalSelectedSpace`, `buildSharedSelectedSpaceFromCode`, `writeSharedSelectedSpace`, `getKosmosDataDir`, `derivePersonalSpaceCodeFromVaultPath`, `deriveSpaceIdFromCode`, тип `SharedSelectedSpace`. `spaceCode` — Crockford-base32 от хэша нормализованного vault path (12 символов); `spaceId` — первые 16 hex-символов SHA-256 от нормализованного `spaceCode`.
 
+kepler-shell вызывает `readSharedSelectedSpace` + `getArkDbPathForSelectedSpace` при spawn'е `kepler-backend.exe` и передаёт результат как переменную окружения **`KOSMOS_DB_PATH`**. Backend использует её как путь к ARK SQLite; если переменная не выставлена — fallback на default `%APPDATA%\Kosmos\ark.db`. Код: `apps/kepler-shell/electron/main.ts` → `resolveSpaceDbPath` / `spawnBackend`. См. [Архитектура → Selected space DB resolution](/concepts/architecture#selected-space-db-resolution).
+
 ## Правила интеграции
 
 ::: danger

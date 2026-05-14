@@ -195,9 +195,55 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 Итог: иконка отображается в окне, трее, taskbar, Start Menu, Проводнике.
 :::
 
+## Command bus integration
+
+Horologion регистрируется в [Kepler command bus](docs-site/concepts/command-bus.md) как provider экшенов. Когда юзер открывает Kepler launcher (`Ctrl+Shift+K`) и выбирает horologion-команду — она роутится к нашей апке и реально что-то запускает.
+
+### Зарегистрированные команды
+
+| ID | Что делает |
+|---|---|
+| `horologion:pomodoro:25` | Запускает помодоро на 25 минут |
+| `horologion:pomodoro:50` | Запускает помодоро на 50 минут |
+| `horologion:stopwatch:start` | Запускает секундомер |
+
+Регистрация — в `electron/main.ts` через `ArkClient.commands.register([...])` после того, как `arkClient` ready. Snipet:
+
+```ts
+await client.commands.register([
+  { id: "horologion:pomodoro:25", title: "Pomodoro 25 минут", subtitle: "Horologion", category: "action" },
+  { id: "horologion:pomodoro:50", title: "Pomodoro 50 минут", subtitle: "Horologion", category: "action" },
+  { id: "horologion:stopwatch:start", title: "Запустить секундомер", subtitle: "Horologion", category: "action" },
+]);
+```
+
+### IPC флоу: main → renderer
+
+Main подписывается на backend событие `command_invoked` для своих id'ов. При получении формирует типизированный payload и отправляет в renderer через `webContents.send("horologion:cmd", payload)`:
+
+```ts
+type PomodoroStartPayload = { kind: "pomodoro:start"; durationMin: 25 | 50 };
+type StopwatchStartPayload = { kind: "stopwatch:start" };
+type HorologionCommandPayload = PomodoroStartPayload | StopwatchStartPayload;
+```
+
+Preload экспонирует подписку `window.horologion.onCommand((payload) => { ... })` через `ipcRenderer.on("horologion:cmd", ...)`.
+
+### Renderer: App.vue dispatcher
+
+`App.vue` при mount подписывается на `window.horologion.onCommand`:
+
+- `kind === "pomodoro:start"` → `pomodoro.start({ workMinOverride: payload.durationMin })`.
+- `kind === "stopwatch:start"` → `timeEntries.startTimer({ source: "stopwatch" })`.
+
+### `workMinOverride` — per-session override
+
+`usePomodoro` принимает опциональный `workMinOverride` в `start({ workMinOverride })`. Если задан — этот work-сегмент идёт на N минут, **не** мутируя `pomodoroSettings.workMin` (persistent). Следующая сессия (без override) вернётся к настройкам пользователя. Это нужно чтобы `horologion:pomodoro:50` запускал именно 50-минутный focus, не трогая дефолт (обычно 25).
+
 ## Связанные документы
 
 - [Roadmap](docs-site/apps/horologion-roadmap.md) — что планируется / баги.
+- [Command bus](docs-site/concepts/command-bus.md) — протокол dynamic commands.
 - [Модель данных ARK](docs-site/concepts/ark-objects.md) — `time_entry_obj`, `tag_obj`.
 - [Delphi](docs-site/apps/delphi.md) — задачи (для `@`-mention).
 - [@kosmos/ark](docs-site/packages/kosmos-ark.md) — TS SDK.
@@ -269,6 +315,24 @@ bun run test:e2e          # Playwright (.e2e/ изолированная БД)
 - ❌ ARK queries вне `electron/services/analytics.ts`.
 - ❌ Любые **writes** в ARK таблицы.
 - ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+
+### Kepler Shell (launcher)
+
+- ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
+- ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
+- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Build-step для extension content в `apps/kepler-shell/extensions/<id>/`. Сейчас PoC, контент static, без bundler/transpile.
+
+### Command bus
+
+- ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
+- ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+
+### Brand consistency
+
+- ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
 
 ### usage-tracker
 

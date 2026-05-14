@@ -87,6 +87,30 @@ Apps **регистрируют** свои commands в shared backend (чере�
 - Wire format: flat events `{event: "...", ...fields}` (не nested).
 - Registration в `kepler-mode` only, под `try/catch`.
 
+### 2026-05-14 — Delphi extension остался на Tailwind v4
+
+После миграции в extension Delphi сохранил Tailwind v4 (`@tailwindcss/vite` плагин подключён в `vite.config.mjs` extension'а). Переписывать UI на plain CSS / kosmos-visuals токены — отдельная Phase 9 задача, не выполняется попутно. Удалять Tailwind сейчас опасно: ломает существующие классы во всех Delphi-страницах без эквивалентной замены.
+
+Open question — после Phase 9 перевести Delphi на kosmos-visuals токены и удалить Tailwind dependency.
+
+### 2026-05-14 — Arrancador native scanner остался в legacy
+
+Native game scanner Arrancador'а (сканирование Steam / Epic / GOG библиотек, запуск .exe) остался в **legacy standalone Electron main**, не мигрирован в extension. Причина: extension renderer не имеет доступа к node API, а scanner требует `child_process` и FS-сканирование с правами user'а.
+
+Phase 5+ план — либо вынести scanner в `kepler-backend` (Rust) с capability-API через `@kosmos/ark`, либо в отдельный sidecar в `kepler-shell` electron main. До этого Arrancador-extension содержит только UI subset (LayoutPage + GameCard), все catalogue / scan / launch операции — stub'ы или disabled.
+
+### 2026-05-14 — Extension icons через base64 data URI + mtime cache
+
+Иконки extension'ов (`extensions/<id>/icon.png`) передаются в renderer launcher'а как `data:image/png;base64,...` (через `extensionIconDataUri(id)`), а не как `file://path/to/icon.png`. Причины:
+
+- **Security**: `file://` URLs из renderer Electron не любит (нужен webSecurity off либо protocol scheme), data URI работает прозрачно.
+- **Hot reload**: in-memory cache с mtime invalidation позволяет менять иконки без restart'а shell'а.
+- **No leak path**: renderer не получает абсолютные пути к ресурсам.
+
+Минус — `base64` раздувает payload на ~33%. Для иконок 64×64 PNG это ~5 KB, приемлемо.
+
+См. [Extension host → App icons](/concepts/extension-host#app-icons).
+
 ### 2026-05-14 — Launcher window: fixed-size 720×460
 
 Лаунчер Kepler — окно фиксированного размера 720×460. Animated resize (per-frame) отброшен после экспериментов: Win32 не успевает синхронно прокидывать события, окно дёргается. Решение — фиксированный размер; expand/collapse состояния выражаются через layout внутри renderer, не через resize окна.

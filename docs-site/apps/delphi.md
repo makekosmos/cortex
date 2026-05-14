@@ -145,6 +145,37 @@ type Project = {
 
 Сам Horologion цены не показывает — только пишет `billable` флаг. Все денежные расчёты идут в Delphi (на страницах) или в Dashboard.
 
+## electron-api shim в extension
+
+Delphi мигрирован в Kepler extension (`apps/kepler-shell/extensions/delphi/`), но Vue-приложение портировано **как есть** из standalone Electron-апки — все компоненты, сторы и helpers продолжают звать `window.electronAPI.*` (legacy main process IPC). В extension renderer'е этих каналов нет — есть только `window.kepler.ark.request(operation, params)`.
+
+Чтобы не переписывать каждый call-site, существует **compatibility shim** `apps/kepler-shell/extensions/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как side-effect **до** `createApp(...).mount(...)` и устанавливает `window.electronAPI` поверх `kepler.ark.request`.
+
+### Mapping legacy каналов → ARK operations
+
+| Legacy channel | Ark operation |
+|---|---|
+| `db:loadAll`, `ark:listDelphiTasks` | `list_objects_by_type` (`task_obj`) → массив `TodoItem` |
+| `db:upsertTodo`, `ark:upsertDelphiTask` | `upsert_object` (`task_obj`) |
+| `db:deleteTodo`, `ark:deleteDelphiTask` | `delete_object` |
+| `db:batchUpsertTodos` | цикл `upsert_object` |
+| `ark:listTimeEntries` | `list_objects_by_type` (`time_entry_obj`) |
+
+`TodoItem ↔ ArkObjectRecord` mapping инлайнен прямо в shim (mirrors `apps/delphi/ts/shared/task-ark.ts`) — поля `billable` / `price` / `description` / `dates` / `priority` сериализуются в `propsJson`, plain text — в `contentJson`.
+
+### Graceful no-op'ы
+
+Каналы, которых физически нет в extension'е (P2P sync, file system, space management), возвращают пустые значения, чтобы UI graceful показывал offline без crash'а:
+
+- `lan-sync:start` → `false`, `lan-sync:getStatus` → `{ active: false, peers: 0, peerNames: [] }`, `lan-sync:broadcastChange/leaveSpace` → `true`.
+- `sync:getOwnAddresses` → `[]`, `sync:getQrPayload` → `undefined` (caller fallback'ает на `formatSpaceCode()`).
+- `space:*` → `undefined` (space-manager fallback'ает на localStorage; в extension'е база одна — глобальная ARK shell'а, переключение space — ответственность Kepler host'а через `KOSMOS_DB_PATH` env, см. [Kepler → Selected space DB resolution](./kepler.md#selected-space-db-resolution)).
+- `db:switchSpace`, `db:deleteSpace`, `db:getSyncKv`, `db:setSyncKv`, `db:clearAll` — `warnOnce()` + no-op.
+
+### Tailwind
+
+Delphi extension сохраняет Tailwind v4 (`@tailwindcss/vite` plugin в `extensions/delphi/vite.config.mjs` + `@import "tailwindcss"` в `src/global.css`). Это сделано по необходимости — оригинальный UI Delphi на Tailwind utility classes, переписывание на plain CSS — отдельная задача (см. [Kepler Roadmap → Phase 9](./kepler-roadmap.md#phase-9-delphi-ui-tailwind-plain-css-открытый-вопрос), открытый вопрос).
+
 ## Command bus integration
 
 Delphi регистрируется в [Kepler command bus](/concepts/command-bus) как provider действий. Юзер из launcher'а (`Ctrl+Shift+K`) может быстро создать задачу или прыгнуть в `Сегодня`, не открывая окно Delphi руками.
