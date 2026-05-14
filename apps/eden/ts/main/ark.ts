@@ -138,9 +138,6 @@ function getArkBinaryPath(): string {
   );
   const releasePath = path.join(
     repoRoot,
-    "packages",
-    "ark-core",
-    "rust",
     "target",
     "release",
     binaryName,
@@ -151,9 +148,6 @@ function getArkBinaryPath(): string {
 
   return path.join(
     repoRoot,
-    "packages",
-    "ark-core",
-    "rust",
     "target",
     "debug",
     binaryName,

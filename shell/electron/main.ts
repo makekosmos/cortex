@@ -86,12 +86,12 @@ function resolveBackendExe(): string {
   if (isDev) {
     const dev = path.resolve(
       __dirname,
-      "../../services/kepler-backend/target/debug/kepler-backend.exe",
+      "../../target/debug/kepler-backend.exe",
     );
     if (existsSync(dev)) return dev;
     const devRelease = path.resolve(
       __dirname,
-      "../../services/kepler-backend/target/release/kepler-backend.exe",
+      "../../target/release/kepler-backend.exe",
     );
     if (existsSync(devRelease)) return devRelease;
   }

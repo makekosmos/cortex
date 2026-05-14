@@ -97,10 +97,10 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
     }
 
     let dev_relative = [
-        "../../packages/ark-core/rust/target/release/ark-core-rpc.exe",
-        "../../packages/ark-core/rust/target/release/ark-core-rpc",
-        "../../packages/ark-core/rust/target/debug/ark-core-rpc.exe",
-        "../../packages/ark-core/rust/target/debug/ark-core-rpc",
+        "../../target/release/ark-core-rpc.exe",
+        "../../target/release/ark-core-rpc",
+        "../../target/debug/ark-core-rpc.exe",
+        "../../target/debug/ark-core-rpc",
     ];
     for rel in dev_relative {
         let p = PathBuf::from(rel);
