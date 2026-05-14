@@ -4,12 +4,6 @@
 pre-commit:
   parallel: true
   commands:
-    delphi-ts-lint:
-      glob: "apps/delphi/ts/**/*.{ts,tsx}"
-      run: cd apps/delphi/ts && bun run lint
-    delphi-ts-format:
-      glob: "apps/delphi/ts/**/*.{ts,tsx,vue,css}"
-      run: cd apps/delphi/ts && bun run format:check
     eden-ts-lint:
       glob: "apps/eden/ts/**/*.{ts,tsx}"
       run: cd apps/eden/ts && bun run lint
@@ -22,15 +16,18 @@ pre-commit:
     ark-core-rust:
       glob: "crates/ark-core/rust/**/*.rs"
       run: cd crates/ark-core/rust && cargo check --quiet
-    typecheck-delphi:
-      glob: "apps/delphi/ts/**/*.{ts,tsx}"
-      run: cd apps/delphi/ts && bunx tsc --noEmit
+    kepler-backend-rust:
+      glob: "services/kepler-backend/src/**/*.rs"
+      run: cd services/kepler-backend && cargo check --quiet
     typecheck-eden:
       glob: "apps/eden/ts/**/*.{ts,tsx}"
       run: cd apps/eden/ts && bunx tsc --noEmit
+    typecheck-shell:
+      glob: "shell/**/*.{ts,tsx,vue}"
+      run: cd shell && bunx tsc --noEmit
     docs-sync:
       glob: "docs-site/**/*.md"
-      run: bun run docs:sync && git add AGENTS.md CLAUDE.md apps/*/AGENTS.md apps/*/*/AGENTS.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md services/usage-tracker/AGENTS.md docs-site/public/llms.txt
+      run: bun run docs:sync && git add AGENTS.md CLAUDE.md apps/eden/AGENTS.md apps/eden/ts/AGENTS.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md docs-site/public/llms.txt
     docs-check:
       glob: "docs-site/**/*.md"
       run: bun run docs:check
@@ -38,12 +35,12 @@ pre-commit:
 pre-push:
   parallel: true
   commands:
-    test-delphi:
-      glob: "apps/delphi/ts/**/*"
-      run: cd apps/delphi/ts && bun run test
     test-ark-core:
       glob: "crates/ark-core/rust/**/*.rs"
       run: cd crates/ark-core/rust && cargo test --quiet
+    test-kepler-backend:
+      glob: "services/kepler-backend/src/**/*.rs"
+      run: cd services/kepler-backend && cargo test --lib --quiet
     test-eden-heart:
       glob: "apps/eden/ts/heart/**/*"
       run: cd apps/eden/ts/heart && cargo test

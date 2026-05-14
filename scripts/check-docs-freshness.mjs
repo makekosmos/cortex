@@ -75,7 +75,7 @@ async function collectScripts() {
 // inline-code `apps/foo/bar.ts` или `apps/foo/`
 // Только пути от корня репо. Относительные внутри приложений (main/, electron/, src/)
 // сюда не попадают — их не проверяем, потому что они контекст-зависимые.
-const PATH_RE = /`((?:apps|packages|services|scripts|docs|\.agent|docs-site)\/[A-Za-z0-9._\-\/]+)`/g;
+const PATH_RE = /`((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy)\/[A-Za-z0-9._\-\/]+)`/g;
 
 // bun run <name> или bun run --cwd <path> <name>
 // "<name>" не должен содержать `<` (template-плейсхолдер) или `--` (флаг)
@@ -95,10 +95,11 @@ const IGNORE_PATH_PARTS = [
 
 // Пути, упомянутые в доке намеренно как удалённые / будущие
 const KNOWN_NONEXISTENT = new Set([
-  "apps/delphi/ts/sidecar", // намеренно удалён, упомянут в DELPHI-LEGACY-DB-DECISION
   "apps/eden/kotlin",       // планируется
   "apps/digital-cave",      // TBD — имя зарезервировано, см. docs-site/apps/digital-cave.md
   "apps/kerux",             // TBD — имя зарезервировано, см. docs-site/apps/kerux.md
+  "apps/kosmos-shell",      // намеренный «не возвращаемся» anti-pattern (был удалён Phase B1)
+  "services/kosmos-backend",// намеренный anti-pattern (был удалён Phase B1)
 ]);
 
 // внутренние markdown-ссылки `/section/page` (с возможным якорем)

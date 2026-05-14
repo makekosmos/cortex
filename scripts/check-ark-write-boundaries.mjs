@@ -4,9 +4,17 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
+// Scan только реальных границ записи. После Phase B-E:
+// — `extensions/<id>/src` — это Vue-экстеншены в Kepler shell, без своего Electron main.
+//   ARK writes идут через `@kepler/ark` (HTTP/WS клиент к sidecar).
+// — `apps/eden/ts/main` — standalone Electron app до Phase 6.
+// — `shell/electron` — Kepler host, должен использовать `@kepler/ark`, не SQL.
 const scanRoots = [
-  "apps/arrancador/electron",
-  "apps/dashboard/electron",
+  "extensions/arrancador/src",
+  "extensions/dashboard/src",
+  "extensions/delphi/src",
+  "extensions/horologion/src",
+  "shell/electron",
   "apps/eden/ts/main",
 ];
 

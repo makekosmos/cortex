@@ -8,8 +8,12 @@ members = [
 ]
 # Замороженный код. Не build'ится по умолчанию; реактивация требует
 # proof-loop (см. legacy/README.md).
+# Eden Heart (apps/eden/ts/heart) — standalone Rust crate с собственной
+# конфигурацией (edition 2024 + опции профиля). Не входит в workspace,
+# собирается через cargo build --manifest-path apps/eden/ts/heart/Cargo.toml.
 exclude = [
     "legacy/usage-tracker",
+    "apps/eden/ts/heart",
 ]
 
 [workspace.package]

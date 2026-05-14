@@ -6,9 +6,8 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const taskId = process.env.ARK_SMOKE_TASK_ID || "2026-04-26-ark-initial-plan-close";
 const smokeRoot = path.join(repoRoot, ".agent", "tasks", taskId, "smoke");
-const dashboardDb = path.join(smokeRoot, "dashboard", "smoke-dashboard.db");
 
-fs.mkdirSync(path.dirname(dashboardDb), { recursive: true });
+fs.mkdirSync(smokeRoot, { recursive: true });
 
 const isWindows = process.platform === "win32";
 const steps = [
@@ -31,16 +30,6 @@ const steps = [
     name: "@kepler/ark typecheck",
     command: "bun",
     args: ["run", "--cwd", "packages/ark", "typecheck"],
-  },
-  {
-    name: "Arrancador unit tests",
-    command: "bun",
-    args: ["run", "--cwd", "apps/arrancador", "test"],
-  },
-  {
-    name: "Arrancador typecheck",
-    command: "bun",
-    args: ["run", "--cwd", "apps/arrancador", "typecheck"],
   },
   {
     name: "Eden ARK migration test",
@@ -67,27 +56,18 @@ const steps = [
     ],
     cwd: path.join(repoRoot, "apps", "eden", "ts"),
   },
-  {
-    name: "Dashboard smoke seed",
-    command: process.execPath,
-    args: [
-      "--experimental-strip-types",
-      "apps/dashboard/scripts/seedSmokeDb.ts",
-      "--db-path",
-      dashboardDb,
-    ],
-  },
-  {
-    name: "Dashboard smoke analytics",
-    command: process.execPath,
-    args: [
-      "--experimental-strip-types",
-      "apps/dashboard/scripts/smokeAnalytics.ts",
-      "--db-path",
-      dashboardDb,
-    ],
-  },
 ];
+
+// Заметка: после Phase B-E смок-матрица сжалась.
+// — Arrancador / Dashboard / Delphi / Horologion теперь Vue-экстеншены в `extensions/<name>`,
+//   у них нет отдельных Electron unit / e2e наборов (host берёт на себя через Kepler shell).
+// — Standalone сценарии теперь покрывает `bun run --cwd shell test:e2e`,
+//   но он тяжёлый и должен запускаться явно, не как часть smoke.
+// — Dashboard seed/analytics скрипты переехали в архив (`legacy/`) и временно
+//   не подключены к смоку до Phase 6 (Eden + visuals refactor).
+//
+// Если нужно добавить шаг — извлекай `cwd` через `path.join(repoRoot, ...)`,
+// чтобы не зависеть от запуска из корня.
 
 function runStep(step) {
   return new Promise((resolve, reject) => {
