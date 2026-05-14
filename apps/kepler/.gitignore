@@ -1,5 +1,0 @@
-target/
-*.log
-*.lock.db
-*.tmp
-.e2e/

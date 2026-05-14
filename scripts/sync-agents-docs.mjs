@@ -198,14 +198,10 @@ async function buildRootAgents() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TARGETS = [
-  // root-level apps
+  // standalone Electron app (legacy, до Phase 6 migration в extension)
   { dest: "apps/eden/AGENTS.md", src: "apps/eden.md", title: "Eden" },
-  { dest: "apps/delphi/AGENTS.md", src: "apps/delphi.md", title: "Delphi" },
-  { dest: "apps/arrancador/AGENTS.md", src: "apps/arrancador.md", title: "Arrancador" },
-  { dest: "apps/dashboard/AGENTS.md", src: "apps/dashboard.md", title: "Dashboard" },
-  { dest: "apps/horologion/AGENTS.md", src: "apps/horologion.md", title: "Horologion" },
-  // nested workspaces
   { dest: "apps/eden/ts/AGENTS.md", src: "apps/eden.md", title: "Eden — TS workspace" },
+  // Android-only (Kotlin Room provider)
   { dest: "apps/delphi/kotlin/AGENTS.md", src: "apps/delphi.md", title: "Delphi — Kotlin workspace" },
   // packages / services
   { dest: "packages/ark-core/AGENTS.md", src: "packages/ark-core.md", title: "ark-core" },

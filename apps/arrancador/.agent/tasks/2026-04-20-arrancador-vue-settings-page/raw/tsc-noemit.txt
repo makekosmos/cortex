@@ -1,2 +1,0 @@
-bun x tsc --noEmit --pretty false
-exit_code=0
