@@ -20,6 +20,4 @@ export interface DashboardObjectRow {
   typeId: string;
   primary: string;
   createdAt: string;
-  dataX: string;
-  dataY: string;
 }

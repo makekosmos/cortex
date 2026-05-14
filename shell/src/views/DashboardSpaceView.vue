@@ -116,7 +116,11 @@ function goBack(): void {
       </aside>
     </template>
 
-    <DesktopContentSurface :padding-top="'0'" :padding-inline="'0'">
+    <DesktopContentSurface
+      :padding-top="'0'"
+      :padding-inline="'0'"
+      class="main-surface"
+    >
       <header class="main-header">
         <h1>{{ titleLabel }}</h1>
       </header>
@@ -182,6 +186,10 @@ function goBack(): void {
 .back:hover {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--foreground);
+}
+
+.main-surface {
+  border-left: 1px solid var(--border);
 }
 
 .main-header {

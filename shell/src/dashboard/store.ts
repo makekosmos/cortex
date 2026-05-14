@@ -90,40 +90,12 @@ function pickPrimary(rec: RawObjectRecord): string {
   return rec.id;
 }
 
-function pickDataField(rec: RawObjectRecord, index: number): string {
-  const candidates: unknown[] = [];
-  const c = rec.contentJson;
-  if (c && typeof c === "object" && !Array.isArray(c)) {
-    candidates.push(...Object.values(c as Record<string, unknown>));
-  }
-  const p = rec.propsJson;
-  if (p && typeof p === "object" && !Array.isArray(p)) {
-    candidates.push(...Object.values(p as Record<string, unknown>));
-  }
-  // Первое (index=0) уже использовано как primary если title пустой; даём
-  // обоим колонкам смещение от 1.
-  const value = candidates[index + 1];
-  if (value === undefined || value === null) return "—";
-  if (typeof value === "string") return value.length > 0 ? value : "—";
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  try {
-    const s = JSON.stringify(value);
-    return s.length > 48 ? `${s.slice(0, 48)}…` : s;
-  } catch {
-    return "—";
-  }
-}
-
 function toRow(rec: RawObjectRecord): DashboardObjectRow {
   return {
     id: rec.id,
     typeId: rec.typeId,
     primary: pickPrimary(rec),
     createdAt: rec.createdAt,
-    dataX: pickDataField(rec, 0),
-    dataY: pickDataField(rec, 1),
   };
 }
 

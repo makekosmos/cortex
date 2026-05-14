@@ -35,8 +35,6 @@ const hasRows = computed(() => props.rows.length > 0);
           <th>Значение</th>
           <th>Тип</th>
           <th>Добавлено</th>
-          <th>Данные X</th>
-          <th>Данные Y</th>
         </tr>
       </thead>
       <tbody>
@@ -44,8 +42,6 @@ const hasRows = computed(() => props.rows.length > 0);
           <td class="primary">{{ row.primary }}</td>
           <td><code class="type-id">{{ row.typeId }}</code></td>
           <td class="created">{{ fmtCreatedAt(row.createdAt) }}</td>
-          <td>{{ row.dataX }}</td>
-          <td>{{ row.dataY }}</td>
         </tr>
       </tbody>
     </table>
