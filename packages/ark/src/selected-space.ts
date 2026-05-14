@@ -69,7 +69,11 @@ export function readSharedSelectedSpace(appDataPath: string): SharedSelectedSpac
   }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as Partial<SharedSelectedSpace>;
+    // PowerShell `Set-Content -Encoding utf8` на Windows PS 5.1 пишет UTF-8
+    // с BOM (EF BB BF). JSON.parse кидает SyntaxError на BOM — strip его
+    // явно, иначе следующий agent / installer силенцно сломает space resolution.
+    const raw = fs.readFileSync(filePath, "utf8").replace(/^﻿/, "");
+    const parsed = JSON.parse(raw) as Partial<SharedSelectedSpace>;
     if (
       parsed?.version !== 1 ||
       typeof parsed.spaceCode !== "string" ||
