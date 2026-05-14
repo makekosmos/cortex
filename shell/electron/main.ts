@@ -42,6 +42,7 @@ import { fileURLToPath } from "node:url";
 import {
   ArkClient,
   buildPersonalSelectedSpace,
+  deriveSpaceIdFromCode,
   ensureKeplerRunning,
   getArkDbPathForSelectedSpace,
   readSharedSelectedSpace,
@@ -554,27 +555,81 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
 
 // --- Dashboard (embedded view) ----------------------------------------------
 
+interface SpaceRegistryEntry {
+  code: string;
+  name?: string;
+  createdAt?: string;
+}
+
+interface SpaceRegistry {
+  active?: string;
+  spaces?: SpaceRegistryEntry[];
+}
+
+function readSpacesRegistry(baseDir: string): SpaceRegistry | null {
+  const p = path.join(baseDir, "spaces.json");
+  if (!existsSync(p)) return null;
+  try {
+    // PowerShell может оставить UTF-8 BOM (см. selected-space.json fix в @kepler/ark) — стрипаем.
+    const raw = readFileSync(p, "utf8").replace(/^﻿/, "");
+    const parsed = JSON.parse(raw) as SpaceRegistry;
+    if (!parsed || !Array.isArray(parsed.spaces)) return null;
+    return parsed;
+  } catch (e) {
+    console.error("[kepler-shell] readSpacesRegistry failed:", e);
+    return null;
+  }
+}
+
+// Компактный label из 12-символьного spaceCode: «DCE9X21A8HYT» → «DCE9.X21A»
+// (4 + dot + 4 = 9 chars). Помещается в orange pill SpaceCard'а.
+function labelFromSpaceCode(code: string): string {
+  const upper = code.toUpperCase();
+  if (upper.length >= 8) return `${upper.slice(0, 4)}.${upper.slice(4, 8)}`;
+  return upper;
+}
+
 function listSpaces(): SpaceMeta[] {
   const baseDir = path.join(app.getPath("appData"), "Kosmos");
   const spacesDir = path.join(baseDir, "spaces");
   const selected = readSharedSelectedSpace(baseDir);
+  const registry = readSpacesRegistry(baseDir);
   const out: SpaceMeta[] = [];
-  // 1. Scan <APPDATA>/Kosmos/spaces/<spaceId>/
-  if (existsSync(spacesDir)) {
+
+  if (registry?.spaces && registry.spaces.length > 0) {
+    // Registry — source of truth. Игнорируем «осиротевшие» spaces/<id> директории
+    // (могут оставаться от предыдущих кодов или ручных экспериментов).
+    for (const entry of registry.spaces) {
+      if (!entry || typeof entry.code !== "string" || entry.code.length === 0) continue;
+      const id = deriveSpaceIdFromCode(entry.code);
+      const dbPath = path.join(spacesDir, id, "ark.db");
+      let lastAccessedAt: number;
+      if (existsSync(dbPath)) {
+        try {
+          lastAccessedAt = statSync(dbPath).mtimeMs;
+        } catch {
+          lastAccessedAt = entry.createdAt ? Date.parse(entry.createdAt) : Date.now();
+        }
+      } else {
+        lastAccessedAt = entry.createdAt ? Date.parse(entry.createdAt) : Date.now();
+      }
+      out.push({
+        id,
+        name: entry.name && entry.name.length > 0 ? entry.name : entry.code,
+        objectCount: null,
+        lastAccessedAt: Number.isFinite(lastAccessedAt) ? lastAccessedAt : Date.now(),
+        label: labelFromSpaceCode(entry.code),
+        isSelected: selected?.spaceId === id,
+      });
+    }
+  } else if (existsSync(spacesDir)) {
+    // Fallback: registry отсутствует — scan по spaces/ dir (legacy путь, без
+    // spaceCode мы не знаем человекочитаемое имя и label берём из id).
     try {
       for (const entry of readdirSync(spacesDir, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
         const id = entry.name;
         const dir = path.join(spacesDir, id);
-        const metaFile = path.join(dir, "space-meta.json");
-        let meta: { name?: string; label?: string; lastAccessedAt?: number } = {};
-        if (existsSync(metaFile)) {
-          try {
-            meta = JSON.parse(readFileSync(metaFile, "utf8")) as typeof meta;
-          } catch {
-            /* corrupt meta — пропускаем */
-          }
-        }
         let mtime = Date.now();
         try {
           mtime = statSync(dir).mtimeMs;
@@ -583,30 +638,32 @@ function listSpaces(): SpaceMeta[] {
         }
         out.push({
           id,
-          name: meta.name ?? id,
+          name: id,
           objectCount: null,
-          lastAccessedAt: meta.lastAccessedAt ?? mtime,
-          label: meta.label ?? id.slice(0, 8).toUpperCase(),
+          lastAccessedAt: mtime,
+          label: id.slice(0, 8).toUpperCase(),
           isSelected: selected?.spaceId === id,
         });
       }
     } catch (e) {
-      console.error("[kepler-shell] listSpaces scan failed:", e);
+      console.error("[kepler-shell] listSpaces fallback scan failed:", e);
     }
   }
-  // 2. Если selected space ещё не в результате (например spaces/ dir не был
-  //    создан), добавим запись на основе selected-space.json.
+
+  // Если selected space ещё не в результате (например выбран space, которого
+  // нет в registry), добавим запись на основе selected-space.json.
   if (selected && !out.some((s) => s.id === selected.spaceId)) {
     out.push({
       id: selected.spaceId,
       name: selected.spaceCode || selected.spaceId,
       objectCount: null,
       lastAccessedAt: Date.parse(selected.updatedAt) || Date.now(),
-      label: (selected.spaceCode || selected.spaceId).slice(0, 8).toUpperCase(),
+      label: labelFromSpaceCode(selected.spaceCode || selected.spaceId),
       isSelected: true,
     });
   }
-  // 3. Sort: selected первым, далее по lastAccessedAt desc.
+
+  // Sort: selected первым, далее по lastAccessedAt desc.
   out.sort((a, b) => {
     if (a.isSelected !== b.isSelected) return a.isSelected ? -1 : 1;
     return b.lastAccessedAt - a.lastAccessedAt;
