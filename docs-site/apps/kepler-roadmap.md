@@ -10,9 +10,11 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 1 | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state) | ✅ |
 | 2 | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher) | ✅ |
 | 3 | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC | ✅ |
-| 4 | Apps как Vue extensions внутри Kepler | ⏳ |
-| 5 | Adaptive lifecycle (optional) | ⏳ |
-| 6 | Retire legacy Rust `apps/kepler/`, production packaging, auto-update | ⏳ |
+| 4 | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador) | ✅ |
+| 5 | Extension developer mode (Vite HMR per extension, Raycast-style) | ⏳ |
+| 6 | Eden как extension (намеренно отложено) | ⏳ |
+| 7 | Adaptive lifecycle (optional) | ⏳ |
+| 8 | Retire legacy Rust `apps/kepler/`, production packaging, auto-update | ⏳ |
 
 ## Phase 0 ✅ — Backend extracted
 
@@ -53,23 +55,41 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 - Settings window для Kepler shell (отдельный `BrowserWindow`, hash `#/settings`).
 - Extension loader PoC: `electron/extension-host.ts` загружает static extensions из `apps/kepler-shell/extensions/<id>/{manifest.json,index.html,bundle.js}` в отдельные BrowserWindow'ы. Демо: `extensions/dashboard/`.
 
-## Phase 4 ⏳ — Apps как Vue extensions
+## Phase 4 ✅ — Apps как Vue extensions
 
-Цель: рендерить Kosmos-апки **внутри** Kepler как extensions, без отдельных Electron-процессов.
+Цель достигнута: 4 апки рендерятся **внутри** Kepler как Vue extensions, без отдельных Electron-процессов. Eden намеренно остался standalone (см. Phase 6).
 
-План:
-1. **Dashboard** — первый кандидат (read-only, минимум IPC, существующий PoC). Реальная миграция Vue app → extension bundle.
-2. **Horologion** — после Dashboard, как ext bundle.
-3. **Delphi** — следующий кандидат.
-4. **Eden** — последний (самый сложный, Heart vault).
+Мигрированы:
 
-Требует: extension manifest spec, sandbox для preload API, dynamic loading в LauncherView, общий ARK access через `window.kepler.ark.*`.
+- **Dashboard** — полная Vue migration, build ~83 KB JS. Read-only аналитика, ARK через preload bridge.
+- **Horologion** — полная Vue migration с `horologionApi` shim над `window.kepler.*`. Build ~102 KB chunk `pomodoroSettings`. Pomodoro/stopwatch state работает.
+- **Delphi** — Vue + memory router, build 3483 modules. ⚠️ `electronAPI` calls в `App.vue` / `ProjectPage` / `SpaceSetup` ещё ссылаются на `window.electronAPI` (undefined в extension контексте) — оставлено для Phase 5 cleanup. Tailwind plugin не подключён в extension build.
+- **Arrancador** — UI subset (LayoutPage + GameCard). Catalogue / Scan / Sqoba / Stats / Settings pages **не мигрированы** — native scanner остаётся в legacy standalone .exe.
 
-## Phase 5 ⏳ — Adaptive lifecycle (optional)
+RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / −4 процесса. Полная таблица — [RAM benchmarks](/concepts/ram-benchmarks).
 
-Динамическое включение/выключение extensions на основе usage (LRU eviction, RAM budget). Зависит от Phase 4.
+## Phase 5 ⏳ — Extension developer mode
 
-## Phase 6 ⏳ — Retire legacy + packaging
+Hot-reload для extensions через Vite dev servers, как `ray develop` у Raycast. Подробно — [Extension dev mode](/concepts/extension-dev-mode).
+
+Состав:
+
+- `bun run --cwd apps/kepler-shell dev:extensions` поднимает Vite dev server на отдельном порту для каждого extension'а (5180–5183).
+- `KEPLER_DEV=1` + поле `devPort` в manifest → extension-host резолвит `loadURL('http://localhost:<port>/')` вместо `loadFile(dist/...)`.
+- Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`).
+- F12 toggles DevTools на любом extension window.
+
+Также под Phase 5: cleanup `electronAPI` хвостов в Delphi extension и доделка остальных страниц Arrancador.
+
+## Phase 6 ⏳ — Eden как extension
+
+Eden — самый сложный кейс (TipTap editor + Heart Rust поиск + широкий preload API: titlebar history, store hardening, FTS, vault). Намеренно отложено пока остальные апки в extensions стабилизируются. Ожидаемый RAM-эффект — ~250 MB save относительно Eden.exe standalone.
+
+## Phase 7 ⏳ — Adaptive lifecycle (optional)
+
+Динамическое включение/выключение extensions на основе usage (LRU eviction, RAM budget). Зависит от Phase 4-6.
+
+## Phase 8 ⏳ — Retire legacy + packaging
 
 - Удаление `apps/kepler/` (старый Rust gpui launcher).
 - Production NSIS packaging Kepler shell с включённым `kepler-backend.exe` + `ark-core-rpc.exe` через `extraResources`.

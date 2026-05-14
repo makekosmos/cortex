@@ -71,6 +71,15 @@
 - [ ] Extension PoC всё ещё открывается (`dashboard:extension:demo` команда работает).
 - [ ] Размер окна остался fixed 720×460, без per-frame resize animation.
 
+## Я правил extension dev mode (`apps/kepler-shell` + extensions)
+
+- [ ] `KEPLER_DEV=1` + `bun run --cwd apps/kepler-shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
+- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id)` в `electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно.
+- [ ] F12 toggles DevTools на любом extension window (detached, не блокирует).
+- [ ] Settings → Developer Mode toggle persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`.
+- [ ] Если правил manifest format — обновил [Extension dev mode](/concepts/extension-dev-mode) и [Extension host](/concepts/extension-host).
+- [ ] Production build (без `KEPLER_DEV`) грузит extensions из `dist/`, не из dev server'ов.
+
 ## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
 
 - [ ] Backend (`services/kepler-backend/src/command_bus.rs` + `ws_server.rs`) — `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.

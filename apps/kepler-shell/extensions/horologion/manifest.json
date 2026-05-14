@@ -3,6 +3,7 @@
   "name": "Horologion",
   "kind": "vue",
   "entryHtml": "dist/index.html",
+  "devPort": 5181,
   "width": 800,
   "height": 600,
   "minWidth": 600,

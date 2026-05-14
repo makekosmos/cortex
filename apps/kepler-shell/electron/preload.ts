@@ -46,6 +46,11 @@ const api: KeplerApi = {
       set: (enabled) =>
         ipcRenderer.invoke("kepler:settings:autostart:set", enabled),
     },
+    developerMode: {
+      get: () => ipcRenderer.invoke("kepler:settings:developer-mode:get"),
+      set: (enabled) =>
+        ipcRenderer.invoke("kepler:settings:developer-mode:set", enabled),
+    },
     version: () => ipcRenderer.invoke("kepler:settings:version"),
     hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
   },

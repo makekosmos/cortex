@@ -1,0 +1,63 @@
+# RAM benchmarks — extensions vs standalone
+
+::: tip Зачем
+Главная мотивация миграции апок в extensions (Phase 4) — экономия памяти за счёт одного Electron host'а и одного `ark-core-rpc` вместо N отдельных. Эта страница фиксирует **факты**: что именно намерили, какие caveats и что ожидается дальше.
+:::
+
+## Результаты (Phase 4, commit `7cb16df` и далее)
+
+Сравнение двух конфигураций — 4 standalone Electron .exe против Kepler-shell с теми же 4 апками как Vue extensions:
+
+| Метрика | Baseline (4 standalone Electron apps) | Kepler + 4 extensions | Diff |
+|---|---|---|---|
+| Working Set | 1092 MB | 968 MB | −124 MB / −11% |
+| Private Bytes | 683 MB | 474 MB | −209 MB / −31% |
+| Processes | 15 | 11 | −4 |
+
+Конфигурация: Dashboard + Horologion + Delphi + Arrancador, open одновременно, dev mode, после ~30s стабилизации.
+
+## Caveats — читай прежде чем ссылаться
+
+- Оба измерения **в dev mode**. DevTools renderer добавляет ~160 MB на окно — production-цифры будут существенно ниже в обеих колонках.
+- Baseline недодал: только 3 из 4 standalone-апок успешно подняли свой `ark-core-rpc` sidecar (одна апка фейлнул spawn). Честный baseline без этого фейла был бы ~1100-1130 MB Working Set.
+- **Private Bytes diff (−31%) важнее, чем Working Set diff (−11%)**. Working Set включает shared pages (одна и та же DLL у нескольких процессов считается несколько раз); Private Bytes — уникальная память процесса. Главный сигнал — Private Bytes.
+- Главные источники экономии:
+  - **−1 Node runtime**: 4 Electron main процесса → 1 (kepler-shell).
+  - **Shared GPU process + utility processes**: один набор на host вместо четырёх.
+  - **1 ark-core-rpc вместо 4**: ARK runtime + SQLite handle разделяются между extensions через общий backend.
+- **Eden migration добавит ещё ~250 MB** save при включении (самая «толстая» апка из-за Heart Rust + TipTap). Eden намеренно остаётся standalone .exe пока — см. [Extension host](/concepts/extension-host).
+
+## Воспроизведение
+
+Скрипт: `scripts/measure-kepler-ram.ps1`.
+
+```powershell
+# Standalone baseline — поднимает все 4 standalone .exe и снимает метрики
+pwsh scripts/measure-kepler-ram.ps1 -Mode baseline
+
+# Kepler + extensions — поднимает kepler-shell, авто-открывает все 4 extensions
+pwsh scripts/measure-kepler-ram.ps1 -Mode kepler
+```
+
+Для kepler-режима нужно, чтобы launcher автоматически открыл все 4 extension-окна. Это делается через env var:
+
+```powershell
+$env:KEPLER_BENCHMARK_OPEN_ALL = "1"
+bun run --cwd apps/kepler-shell dev
+# через 5s после старта launcher вызовет openExtension('dashboard'|'horologion'|'delphi'|'arrancador')
+```
+
+После стабилизации (~30s) измеряются Working Set / Private Bytes / process count по дереву процессов host'а и его child'ов.
+
+## Что **не** измеряли (TODO для следующих бенчмарков)
+
+- Production build (без DevTools).
+- Холодный старт (cold-start latency, не RAM).
+- Долгая нагрузка (1+ час с активным pomodoro / task-инпутом / scroll'ом).
+- Eden as extension (Phase 4.5+).
+
+## См. также
+
+- [Extension host](/concepts/extension-host) — архитектура и план миграции.
+- [Kepler Roadmap](/apps/kepler-roadmap) — Phase 4 статус.
+- [Architecture](/concepts/architecture) — общая картина Kosmos.

@@ -3,6 +3,7 @@
   "name": "Arrancador",
   "kind": "vue",
   "entryHtml": "dist/index.html",
+  "devPort": 5183,
   "width": 1280,
   "height": 800,
   "minWidth": 900,

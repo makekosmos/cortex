@@ -25,6 +25,7 @@
 // extension сам отвечает за всю свою логику.
 
 import {
+  app,
   BrowserWindow,
   ipcMain,
   screen,
@@ -54,6 +55,12 @@ export interface ExtensionManifest {
    *    использует shared preload.
    */
   preload?: string;
+  /**
+   * Порт Vite dev server'а в developer mode. Если задан и активирован
+   * developer mode (env `KEPLER_DEV=1` или toggle в Settings) — extension
+   * грузится с `http://localhost:<devPort>/` вместо `dist/index.html`.
+   */
+  devPort?: number;
   width?: number;
   height?: number;
   minWidth?: number;
@@ -92,6 +99,32 @@ export function setExtensionArkBridge(opts: {
 }): void {
   arkRequest = opts.request;
   arkSubscribe = opts.subscribe;
+}
+
+// ---------------------------------------------------------------------------
+// Developer mode
+// ---------------------------------------------------------------------------
+
+/**
+ * Читает `developerMode: boolean` из `<userData>/kepler-shell-settings.json`.
+ * Если файла нет / повреждён — возвращает false. Sync read: вызывается
+ * редко (на open extension), значит выигрыша от async нет.
+ */
+export function readDevModeSetting(): boolean {
+  try {
+    const file = path.join(app.getPath("userData"), "kepler-shell-settings.json");
+    if (!existsSync(file)) return false;
+    const json = JSON.parse(readFileSync(file, "utf8")) as {
+      developerMode?: boolean;
+    };
+    return !!json.developerMode;
+  } catch {
+    return false;
+  }
+}
+
+function isDeveloperModeActive(): boolean {
+  return process.env.KEPLER_DEV === "1" || readDevModeSetting();
 }
 
 function resolveExtensionsRoot(): string {
@@ -176,8 +209,9 @@ export function openExtension(id: string): void {
   }
   const root = resolveExtensionsRoot();
   const extensionDir = path.join(root, id);
+  const useDev = isDeveloperModeActive() && !!manifest.devPort;
   const entryHtml = resolveEntryHtml(manifest, extensionDir);
-  if (!existsSync(entryHtml)) {
+  if (!useDev && !existsSync(entryHtml)) {
     console.error(
       `[kepler-shell] extension '${id}' entryHtml not found: ${entryHtml}` +
         ` — для Vue extension'а сначала запусти build (bun run build:extensions).`,
@@ -221,7 +255,28 @@ export function openExtension(id: string): void {
   });
   extensionWindows.set(id, { win, id });
 
-  void win.loadFile(entryHtml);
+  // F12 toggles DevTools для extension window (без модификаторов).
+  win.webContents.on("before-input-event", (e, input) => {
+    if (
+      input.key === "F12" &&
+      !input.alt &&
+      !input.control &&
+      !input.shift &&
+      !input.meta
+    ) {
+      e.preventDefault();
+      win.webContents.toggleDevTools();
+    }
+  });
+
+  if (useDev && manifest.devPort) {
+    const devUrl = `http://localhost:${manifest.devPort}/`;
+    console.log(`[kepler-shell] extension '${id}' dev mode → ${devUrl}`);
+    void win.loadURL(devUrl);
+    win.webContents.openDevTools({ mode: "detach" });
+  } else {
+    void win.loadFile(entryHtml);
+  }
 }
 
 function windowForSender(sender: WebContents): BrowserWindow | null {

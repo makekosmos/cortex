@@ -81,6 +81,13 @@ export interface KeplerApi {
       get(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
+    /** Developer mode — hot reload extension'ов через Vite dev server +
+        F12 для DevTools на extension window. Применяется при следующем
+        открытии extension'а. */
+    developerMode: {
+      get(): Promise<boolean>;
+      set(enabled: boolean): Promise<void>;
+    };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
     /** Текущий глобальный хоткей (read-only Phase 1). */

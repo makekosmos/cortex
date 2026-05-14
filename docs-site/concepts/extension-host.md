@@ -1,9 +1,11 @@
 # Extension host
 
-Extension host — foundation для Phase 4: миграция продуктовых апок из отдельных standalone Electron .exe в **Vue extension bundles**, загружаемые внутри kepler-shell в отдельных BrowserWindow.
+Extension host — production foundation Kepler shell: продуктовые апки рендерятся как **Vue extension bundles** в отдельных BrowserWindow внутри kepler-shell, без собственных Electron .exe.
 
-::: warning Текущий статус
-Готов только loader (`apps/kepler-shell/electron/extension-host.ts`) + PoC manifest для Dashboard placeholder. **Реальные апки ещё не мигрированы**, остаются standalone .exe. Эта страница описывает foundation и план миграции, а не текущее production-состояние.
+::: tip Текущий статус — Production foundation (Phase 4 ✅)
+Loader (`apps/kepler-shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Мигрированы **4 апки**: Dashboard, Horologion, Delphi, Arrancador (UI subset). Eden намеренно остаётся standalone .exe — миграция запланирована отдельной фазой, см. [Kepler Roadmap → Phase 6](/apps/kepler-roadmap#phase-6).
+
+RAM-эффект миграции зафиксирован в [RAM benchmarks](/concepts/ram-benchmarks): −124 MB Working Set / −209 MB Private Bytes / −4 процесса относительно baseline'а из 4 standalone Electron-апок.
 :::
 
 ## Цель
@@ -100,17 +102,15 @@ webPreferences: {
 - `nodeIntegration: false` — extension не может `require('fs')`.
 - Preload — **per-extension**, опциональный. Если есть — extension получает API через `contextBridge.exposeInMainWorld`.
 
-## Phase 4 plan миграции
+## Phase 4 итог миграции
 
-| Порядок | Апка | Почему | Сложность |
-|---|---|---|---|
-| 1 | Dashboard | Read-only, минимум IPC, простейшая | низкая |
-| 2 | Horologion | Multi-view Vue, IPC для pomodoro/stopwatch state, но без сложных нативных деп | средняя |
-| 3 | Delphi | Task UI, persistence через ARK уже есть | средняя |
-| 4 | Arrancador | Game library, IPC для resolve exe, sidecar — но через kepler-backend уже централизован | средняя |
-| 5 | Eden | TipTap editor + Heart Rust поиск + сложное preload API. **~2 недели alone** | высокая |
-
-Eden — последний, потому что у него самый широкий preload API (titlebar history, store hardening, search, FTS), и Heart требует bundling Rust .node addon.
+| Апка | Статус | Bundle / замечания |
+|---|---|---|
+| Dashboard | ✅ | Полная Vue migration, ~83 KB JS. Read-only, ARK через preload bridge. |
+| Horologion | ✅ | Полная Vue migration с `horologionApi` shim над `window.kepler.*`. Chunk `pomodoroSettings` ~102 KB. |
+| Delphi | ✅ (с долгами) | Vue + memory router, 3483 modules. `window.electronAPI` ссылки в `App.vue` / `ProjectPage` / `SpaceSetup` остались undefined — cleanup в Phase 5. Tailwind plugin не подключён. |
+| Arrancador | ⏳ частично | UI subset: LayoutPage + GameCard. Catalogue / Scan / Sqoba / Stats / Settings — **не мигрированы**, native scanner остаётся в legacy. |
+| Eden | ❌ outlier | Намеренно standalone .exe. TipTap + Heart Rust + широкий preload API → отдельная фаза (см. [Roadmap → Phase 6](/apps/kepler-roadmap#phase-6)). |
 
 ## Open questions (design decisions для Phase 4)
 
@@ -166,4 +166,6 @@ Eden — последний, потому что у него самый широ
 
 - [Архитектура](/concepts/architecture) — общая картина.
 - [Command bus](/concepts/command-bus) — как launcher invoke'ит «ручки» апок (work для standalone-апок и для extensions одинаково).
+- [Extension dev mode](/concepts/extension-dev-mode) — Vite HMR per extension (Raycast-style).
+- [RAM benchmarks](/concepts/ram-benchmarks) — измеренный эффект миграции.
 - [Kepler app](/apps/kepler) — обзор launcher'а целиком.

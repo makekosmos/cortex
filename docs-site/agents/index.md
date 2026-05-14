@@ -75,8 +75,10 @@ bun run ark:smoke
 | **Arrancador** | `apps/arrancador` | игровая библиотека (Electron) |
 | **Dashboard** | `apps/dashboard` | read-only аналитика (Electron) |
 | **Horologion** | `apps/horologion` | трекер времени, pomodoro (WIP). `time_entry_obj` + общий `tag_obj` |
-| **Kepler Shell** | `apps/kepler-shell` | лаунчер экосистемы (Electron, fixed 720×460). Command bus как primary integration primitive. Extensions PoC — `extensions/<id>/` |
+| **Kepler Shell** | `apps/kepler-shell` | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](/concepts/command-bus) + [Extension host](/concepts/extension-host) (Phase 4 ✅: Dashboard / Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server для лаунчера и приложений |
+| **Extension host** | `apps/kepler-shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](/concepts/extension-host), [Extension dev mode](/concepts/extension-dev-mode). |
+| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](/concepts/command-bus). |
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
 | **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |

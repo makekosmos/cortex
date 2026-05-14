@@ -139,7 +139,20 @@ bun run build            # build:js + electron-builder --win nsis (финаль�
 bun run test:e2e         # Playwright smoke
 ```
 
-Extension content статичен — `apps/kepler-shell/extensions/<id>/`, без отдельного build-step (PoC: `dashboard/`).
+Extension dev mode (Raycast-style HMR, см. [Extension dev mode](/concepts/extension-dev-mode)):
+
+```powershell
+# Vite dev servers per extension (порты 5180–5183)
+bun run --cwd apps/kepler-shell dev:extensions
+
+# Kepler shell с включённым dev режимом (loadURL вместо loadFile для extensions)
+$env:KEPLER_DEV = "1"; bun run --cwd apps/kepler-shell dev
+
+# Авто-открыть все 4 extension'а через 5s после старта (для RAM benchmark или smoke)
+$env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd apps/kepler-shell dev
+```
+
+Extension bundles лежат в `apps/kepler-shell/extensions/<id>/` (Dashboard / Horologion / Delphi / Arrancador). Eden — outlier, остаётся standalone .exe.
 
 ## Kepler Backend (Rust)
 
@@ -252,8 +265,9 @@ pwsh scripts/migrate-kepler-to-kosmos.ps1
 # где их быть не должно. Падает при несоответствии — гард для PR.
 pwsh scripts/check-swap-completeness.ps1
 
-# Замер RAM-усреднённого процесса лаунчера (Kepler shell) под нагрузкой.
-pwsh scripts/measure-kepler-ram.ps1
+# Замер RAM Kepler shell vs standalone-апок. См. /concepts/ram-benchmarks.
+pwsh scripts/measure-kepler-ram.ps1 -Mode kepler
+pwsh scripts/measure-kepler-ram.ps1 -Mode baseline
 
 # Чинит mojibake (UTF-8 vs CP1251) в .md / .ts / .vue, накопленный при правках
 # в смешанной кодировке.

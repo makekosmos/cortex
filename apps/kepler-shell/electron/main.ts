@@ -557,6 +557,17 @@ app.whenReady().then(async () => {
 
   void initArkClient();
 
+  // BENCHMARK: KEPLER_BENCHMARK_OPEN_ALL=1 → автоматически открыть все
+  // мигрированные extensions для RAM-измерения. После warmup 5s.
+  if (process.env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
+    setTimeout(async () => {
+      const { openExtension } = await import("./extension-host");
+      for (const id of ["dashboard", "horologion", "delphi", "arrancador"]) {
+        try { openExtension(id); } catch (e) { console.error(`bench open ${id} failed:`, e); }
+      }
+    }, 5000);
+  }
+
   const accelerator =
     process.platform === "darwin" ? "Command+Shift+K" : "Control+Shift+K";
   const ok = globalShortcut.register(accelerator, () => {

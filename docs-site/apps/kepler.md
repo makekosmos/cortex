@@ -95,16 +95,18 @@ Kepler — точка входа для всех команд экосистем
 - **Delphi** — `delphi:task:create`, `delphi:task:today`.
 - **Eden** — `eden:note:create`, `eden:search`.
 
-## Extension loader (PoC)
+## Extension host (Phase 4 ✅)
 
-`electron/extension-host.ts` — экспериментальный загрузчик extensions. Phase 4 цель — рендерить Kosmos-апки как Vue extensions внутри Kepler, без отдельных Electron-процессов.
+`electron/extension-host.ts` — production loader. Phase 4 завершён: 4 апки рендерятся как Vue extensions внутри Kepler без отдельных Electron-процессов.
 
-- Extensions лежат в `apps/kepler-shell/extensions/<id>/`.
-- Каждое — `manifest.json` + `index.html` + бандл (JS/CSS).
-- Host открывает extension в отдельном `BrowserWindow` с собственным preload.
-- PoC: `extensions/dashboard/` — static html+bundle демонстрирующий API.
+- Extensions лежат в `apps/kepler-shell/extensions/<id>/` (Dashboard, Horologion, Delphi, Arrancador).
+- Каждое — `manifest.json` + Vue bundle + опциональный preload.
+- Host открывает extension в отдельном `BrowserWindow` с reuse через `Map<id, BrowserWindow>`.
+- Eden — намеренно standalone .exe (миграция в Phase 6, см. [Roadmap](./kepler-roadmap.md)).
 
-Phase 4 миграция реальных апок (Dashboard → real Vue ext, потом Horologion / Delphi / Eden) — отдельная задача, см. [Roadmap](./kepler-roadmap.md).
+RAM-эффект: −124 MB Working Set / −209 MB Private Bytes / −4 процесса (см. [RAM benchmarks](../concepts/ram-benchmarks.md)).
+
+Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/extension-dev-mode.md). Полная архитектура — [Extension host](../concepts/extension-host.md).
 
 ## Окно настроек
 

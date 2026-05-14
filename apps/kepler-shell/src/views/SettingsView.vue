@@ -5,6 +5,7 @@ import type { BackendStatus } from "@shared/ipc-types";
 const hotkey = ref<string>("");
 const version = ref<string>("");
 const autostart = ref<boolean>(false);
+const developerMode = ref<boolean>(false);
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
 const loading = ref<boolean>(true);
 const autostartError = ref<string>("");
@@ -12,15 +13,17 @@ const autostartError = ref<string>("");
 async function load() {
   loading.value = true;
   try {
-    const [h, v, a, b] = await Promise.all([
+    const [h, v, a, d, b] = await Promise.all([
       window.kepler.settings.hotkey(),
       window.kepler.settings.version(),
       window.kepler.settings.autostart.get(),
+      window.kepler.settings.developerMode.get(),
       window.kepler.backend.status(),
     ]);
     hotkey.value = h;
     version.value = v;
     autostart.value = a;
+    developerMode.value = d;
     backend.value = b;
   } catch (e) {
     console.warn("settings load failed", e);
@@ -43,6 +46,18 @@ async function onToggleAutostart(e: Event) {
     console.warn("autostart set failed", err);
     autostartError.value = "Ошибка записи в реестр";
     autostart.value = await window.kepler.settings.autostart.get();
+  }
+}
+
+async function onToggleDeveloperMode(e: Event) {
+  const target = e.target as HTMLInputElement;
+  const desired = target.checked;
+  try {
+    await window.kepler.settings.developerMode.set(desired);
+    developerMode.value = await window.kepler.settings.developerMode.get();
+  } catch (err) {
+    console.warn("developerMode set failed", err);
+    developerMode.value = await window.kepler.settings.developerMode.get();
   }
 }
 
@@ -95,6 +110,24 @@ onMounted(() => {
             type="checkbox"
             :checked="autostart"
             @change="onToggleAutostart"
+          />
+          <span class="track"><span class="thumb" /></span>
+        </label>
+      </div>
+
+      <div class="row">
+        <div class="row-label">
+          <div class="label">Developer mode</div>
+          <div class="hint">
+            Hot reload extension'ов через Vite + F12 для DevTools.
+            Перезапусти extension чтобы применить.
+          </div>
+        </div>
+        <label class="toggle">
+          <input
+            type="checkbox"
+            :checked="developerMode"
+            @change="onToggleDeveloperMode"
           />
           <span class="track"><span class="thumb" /></span>
         </label>

@@ -3,6 +3,7 @@
   "name": "Delphi",
   "kind": "vue",
   "entryHtml": "dist/index.html",
+  "devPort": 5182,
   "width": 1100,
   "height": 720,
   "minWidth": 800,
