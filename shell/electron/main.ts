@@ -471,6 +471,10 @@ ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
     const dynamic = await arkClient.commands.list();
     const byId = new Map<string, CommandRecord>();
     for (const c of statics) byId.set(c.id, c);
+    if (!Array.isArray(dynamic)) {
+      console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
+      return Array.from(byId.values());
+    }
     for (const c of dynamic) {
       // Static open-commands имеют приоритет (их id типа "eden:open" не должны
       // переопределяться апкой). Если апка регистрирует уникальный id —

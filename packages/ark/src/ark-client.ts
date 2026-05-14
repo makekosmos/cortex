@@ -614,10 +614,20 @@ export class ArkClient {
         })
       },
       list: async () => {
-        const result = await this.requestAfterInit<{ commands: CommandManifest[] }>({
+        const result = await this.requestAfterInit<unknown>({
           operation: 'commands.list',
         })
-        return result.commands
+        // Backend envelope: { ok, data: { commands: [...] } }. SDK resolves
+        // pending.resolve(resp.data) → result === { commands: [...] }.
+        // Defensive: некоторые fallback-пути ранее возвращали bare array.
+        if (Array.isArray(result)) {
+          return result as CommandManifest[]
+        }
+        if (result && typeof result === 'object' && 'commands' in result) {
+          const arr = (result as { commands: unknown }).commands
+          if (Array.isArray(arr)) return arr as CommandManifest[]
+        }
+        return []
       },
       invoke: async (id, params) => {
         await this.requestAfterInit<boolean>({
