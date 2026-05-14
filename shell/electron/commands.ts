@@ -7,6 +7,7 @@
 
 import "./extension-host";
 import { extensionIconDataUri } from "./extension-host";
+import { openDashboardWindow } from "./dashboard-window";
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -62,9 +63,16 @@ async function openAsExtension(id: string): Promise<void> {
 }
 
 export const COMMANDS: InternalCommand[] = [
+  // Dashboard — встроенный shell view (не extension), открывается в
+  // отдельном BrowserWindow через dashboard-window.ts.
+  {
+    id: "dashboard:open",
+    title: "Открыть Dashboard",
+    subtitle: "ARK browser",
+    category: "open",
+    exec: () => openDashboardWindow(),
+  },
   // Phase 4 migrated apps — открываются как Vue extension'ы внутри Kepler.
-  // Dashboard заморожен в legacy/dashboard-extension/ — будет восстановлен
-  // как встроенный shell view в C2.
   {
     id: "delphi:open",
     title: "Открыть Delphi",
