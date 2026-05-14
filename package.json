@@ -16,6 +16,7 @@
     "extensions/*",
     "apps/*",
     "apps/eden/ts",
+    "mobile/*",
     "services/*",
     "packages/*",
     "docs-site"
