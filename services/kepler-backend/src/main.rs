@@ -24,13 +24,14 @@ use kepler_backend::{
     protocol_version::{ProtocolVersion, PROTOCOL_VERSION},
     singleton::SingletonGuard,
     sync,
+    usage_tracker::{self, UsageTrackerOpts},
     ws_server::WsServer,
 };
 
 type DynError = Box<dyn std::error::Error + Send + Sync>;
 
 struct SetupState {
-    _ark: Arc<ArkHost>,
+    ark: Arc<ArkHost>,
     ws: WsServer,
     lock_path: PathBuf,
     _singleton: SingletonGuard,
@@ -47,7 +48,7 @@ async fn main() -> ExitCode {
     };
 
     let SetupState {
-        _ark,
+        ark,
         ws,
         lock_path,
         _singleton,
@@ -58,6 +59,21 @@ async fn main() -> ExitCode {
             eprintln!("[kepler-backend] WS server exited: {e}");
         }
     });
+
+    // Phase E2: usage-tracker как in-process модуль. Gated через ENV
+    // `KEPLER_USAGE_TRACKER=0` если нужно отключить (например, в тестах);
+    // по умолчанию enabled.
+    let usage_tracker_enabled = std::env::var("KEPLER_USAGE_TRACKER").as_deref() != Ok("0");
+    if usage_tracker_enabled {
+        let ark_for_tracker = ark.clone();
+        let opts = UsageTrackerOpts::from_env();
+        usage_tracker::spawn(ark_for_tracker, opts);
+        eprintln!("[kepler-backend] usage_tracker spawned (in-process)");
+    } else {
+        eprintln!("[kepler-backend] KEPLER_USAGE_TRACKER=0 — usage_tracker disabled");
+    }
+    // ARK Host остаётся живым через clone (или базовый Arc) до конца main.
+    let _keep_ark_alive = ark;
 
     eprintln!("[kepler-backend] ready. Ctrl+C для shutdown.");
 
@@ -148,7 +164,7 @@ async fn setup() -> Result<SetupState, DynError> {
     eprintln!("[kepler-backend] lock-file: {lock_path:?}");
 
     Ok(SetupState {
-        _ark: ark,
+        ark,
         ws,
         lock_path,
         _singleton,
