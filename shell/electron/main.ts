@@ -113,11 +113,15 @@ function resolveSpaceDbPath(): string | null {
   // %APPDATA%/Kosmos/spaces/<spaceId>/ark.db (selected space). Читаем
   // selected-space.json (если есть) и резолвим через @kepler/ark helper.
   // Возвращаем null если space не выбран — backend использует default.
+  //
+  // ВАЖНО: helper'ы (read/getArkDbPathForSelectedSpace) сами джойнят "Kosmos"
+  // к переданному пути. Передавать сюда нужно RAW appData (Roaming),
+  // иначе получится Roaming/Kosmos/Kosmos/... и файл «не найдётся».
   try {
-    const baseDir = path.join(app.getPath("appData"), "Kosmos");
-    const space = readSharedSelectedSpace(baseDir);
+    const appDataPath = app.getPath("appData");
+    const space = readSharedSelectedSpace(appDataPath);
     if (!space) return null;
-    return getArkDbPathForSelectedSpace(baseDir, space);
+    return getArkDbPathForSelectedSpace(appDataPath, space);
   } catch (e) {
     console.error("[kepler-shell] resolveSpaceDbPath failed:", e);
     return null;
