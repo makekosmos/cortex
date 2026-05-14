@@ -376,16 +376,28 @@ async function invokeChannel(
     // Extension renderer не имеет filesystem доступа — компонент json.electron
     // используется только legacy кодом, который сегодня не достижим в
     // extension flow'е, поэтому warn'аем и возвращаем пусто.
+    case "space:getActive":
+      // 2026-05-15: концепция Kosmos spaces убрана, single DB per user.
+      // Возвращаем фиксированный «kepler-default» code чтобы Delphi
+      // App.vue прошёл через activateSpace вместо показа SpaceSetup modal'а.
+      // db:switchSpace ниже no-op'ит — ARK-данные всё равно из одной DB.
+      return "KEPLERDEFAULT";
+
     case "space:getAll":
+      return [
+        {
+          code: "KEPLERDEFAULT",
+          name: "Kepler",
+          createdAt: "2026-05-15T00:00:00.000Z",
+        },
+      ];
+
     case "space:save":
     case "space:remove":
     case "space:rename":
-    case "space:getActive":
     case "space:setActive":
     case "space:getDbPath":
-      // space-manager у себя fallback'ает на localStorage если ipc вернул
-      // не то, что ожидается — поэтому возвращаем undefined для большинства,
-      // а для get-вызовов возвращаем undefined чтобы fallback сработал.
+      // No-op для kepler-mode. setActive игнорим (active всегда kepler-default).
       return undefined;
 
     default:
