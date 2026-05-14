@@ -4,4 +4,11 @@ dist-electron/
 release/
 .tmp/
 .e2e/
+test-results/
+playwright-report/
 *.log
+
+# buildResources нужны electron-builder — корневой build/ в .gitignore;
+# явно whitelist'им необходимые файлы.
+!build/
+!build/icon.png

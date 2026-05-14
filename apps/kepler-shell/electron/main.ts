@@ -28,8 +28,22 @@ import {
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { fileURLToPath } from "node:url";
+import {
+  ArkClient,
+  buildPersonalSelectedSpace,
+  ensureKeplerRunning,
+  getArkDbPathForSelectedSpace,
+  readSharedSelectedSpace,
+  writeSharedSelectedSpace,
+} from "@kosmos/ark";
 import type { BackendStatus, SearchResult } from "../shared/ipc-types";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -37,6 +51,8 @@ const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 720;
 const WINDOW_HEIGHT_COMPACT = 76;
+const WINDOW_HEIGHT_EXPANDED = 460;
+const WINDOW_STATE_FILENAME = "kepler-shell-window-state.json";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -45,6 +61,9 @@ let tray: Tray | null = null;
 let backendProc: ChildProcess | null = null;
 let backendLockPath = "";
 let isQuiting = false;
+let arkClient: ArkClient | null = null;
+let windowStateSaveTimer: NodeJS.Timeout | null = null;
+let isExpanded = false;
 
 // --- single instance ---------------------------------------------------------
 
@@ -125,23 +144,79 @@ function readBackendStatus(): BackendStatus {
   }
 }
 
+// --- window state persistence -----------------------------------------------
+
+interface WindowState {
+  x: number;
+  y: number;
+}
+
+function windowStatePath(): string {
+  return path.join(app.getPath("appData"), "Kosmos", WINDOW_STATE_FILENAME);
+}
+
+function loadWindowState(): WindowState | null {
+  const p = windowStatePath();
+  if (!existsSync(p)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<WindowState>;
+    if (typeof raw.x === "number" && typeof raw.y === "number") {
+      return { x: raw.x, y: raw.y };
+    }
+  } catch {
+    /* corrupt file — игнор, используем default */
+  }
+  return null;
+}
+
+function saveWindowStateNow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const bounds = mainWindow.getBounds();
+  const state: WindowState = { x: bounds.x, y: bounds.y };
+  const targetPath = windowStatePath();
+  try {
+    mkdirSync(path.dirname(targetPath), { recursive: true });
+    // Атомарная запись через tmp + rename, чтобы прерванный shutdown не оставил пустой JSON.
+    const tmp = `${targetPath}.tmp`;
+    writeFileSync(tmp, JSON.stringify(state, null, 2), "utf8");
+    renameSync(tmp, targetPath);
+  } catch (e) {
+    console.error("[kepler-shell] saveWindowState failed:", e);
+  }
+}
+
+function scheduleWindowStateSave() {
+  if (windowStateSaveTimer) clearTimeout(windowStateSaveTimer);
+  windowStateSaveTimer = setTimeout(() => {
+    windowStateSaveTimer = null;
+    saveWindowStateNow();
+  }, 500);
+}
+
+function defaultLauncherPosition(): WindowState {
+  const display = screen.getPrimaryDisplay().workAreaSize;
+  return {
+    x: Math.round((display.width - WINDOW_WIDTH) / 2),
+    y: Math.round(display.height * 0.25),
+  };
+}
+
 // --- launcher window ---------------------------------------------------------
 
 function createLauncher() {
-  const display = screen.getPrimaryDisplay().workAreaSize;
-  const x = Math.round((display.width - WINDOW_WIDTH) / 2);
-  const y = Math.round(display.height * 0.25);
+  const saved = loadWindowState();
+  const pos = saved ?? defaultLauncherPosition();
 
   mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT_COMPACT,
-    x,
-    y,
+    x: pos.x,
+    y: pos.y,
     show: false,
     frame: false,
     transparent: true,
     resizable: false,
-    movable: false,
+    movable: true,
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -166,6 +241,7 @@ function createLauncher() {
       hideLauncher();
     }
   });
+  mainWindow.on("moved", () => scheduleWindowStateSave());
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -177,13 +253,12 @@ function createLauncher() {
 function showLauncher() {
   if (!mainWindow) createLauncher();
   if (!mainWindow) return;
-  // re-center при показе (на случай если monitor layout изменился)
-  const display = screen.getPrimaryDisplay().workAreaSize;
-  const x = Math.round((display.width - WINDOW_WIDTH) / 2);
-  const y = Math.round(display.height * 0.25);
+  const saved = loadWindowState();
+  const pos = saved ?? defaultLauncherPosition();
+  isExpanded = false;
   mainWindow.setBounds({
-    x,
-    y,
+    x: pos.x,
+    y: pos.y,
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT_COMPACT,
   });
@@ -198,13 +273,37 @@ function hideLauncher() {
   }
 }
 
+function setLauncherExpanded(expanded: boolean) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (isExpanded === expanded) return;
+  isExpanded = expanded;
+  const bounds = mainWindow.getBounds();
+  mainWindow.setBounds({
+    x: bounds.x,
+    y: bounds.y,
+    width: WINDOW_WIDTH,
+    height: expanded ? WINDOW_HEIGHT_EXPANDED : WINDOW_HEIGHT_COMPACT,
+  });
+}
+
 // --- tray --------------------------------------------------------------------
 
+function resolveTrayIconPath(): string | null {
+  // dev: dist-electron/main.js → ../build/icon.png
+  // prod electron-builder asar: resources/app.asar/dist-electron/main.js → ../../build/icon.png
+  const candidates = [
+    path.resolve(__dirname, "../build/icon.png"),
+    path.resolve(__dirname, "../../build/icon.png"),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+  return null;
+}
+
 function createTray() {
-  // Phase 1 fallback: пустая иконка-заглушка (16x16 чёрный квадрат). Реальная
-  // PNG/ICO иконка добавляется отдельно в build/ resources.
-  const iconPath = path.resolve(__dirname, "../build/icon.png");
-  const icon = existsSync(iconPath)
+  const iconPath = resolveTrayIconPath();
+  const icon = iconPath
     ? nativeImage.createFromPath(iconPath)
     : nativeImage.createEmpty();
   tray = new Tray(icon);
@@ -225,6 +324,53 @@ function createTray() {
   tray.on("click", () => showLauncher());
 }
 
+// --- ArkClient (WS to kepler-backend) ---------------------------------------
+
+function ensureSelectedSpace(): { spaceId: string; dbPath: string } {
+  const appDataPath = app.getPath("appData");
+  let selection = readSharedSelectedSpace(appDataPath);
+  if (!selection) {
+    selection = buildPersonalSelectedSpace(appDataPath, "kepler-shell");
+    writeSharedSelectedSpace(appDataPath, selection);
+  }
+  const dbPath = getArkDbPathForSelectedSpace(appDataPath, selection);
+  return { spaceId: selection.spaceId, dbPath };
+}
+
+async function initArkClient(): Promise<void> {
+  try {
+    const { spaceId } = ensureSelectedSpace();
+    // kepler-shell сам спавнит kepler-backend выше (spawnBackend), здесь
+    // только ждём lock-файл и коннектимся через WS. autoLaunch=false — повторно
+    // не запускаем.
+    const state = await ensureKeplerRunning({
+      appDataPath: app.getPath("appData"),
+      waitMs: 10000,
+      autoLaunch: false,
+    });
+    if (state.kind !== "connected") {
+      console.error(
+        `[kepler-shell] kepler-backend ${state.kind}: search will return empty`,
+      );
+      return;
+    }
+    const deviceId = `kepler-shell-${app.getPath("userData").slice(-12)}`;
+    const client = new ArkClient({
+      spaceId,
+      deviceId,
+      deviceName: "Kepler Shell",
+      keplerLock: state.lock,
+    });
+    await client.start();
+    arkClient = client;
+    console.error(
+      `[kepler-shell] ArkClient connected to kepler-backend (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+    );
+  } catch (e) {
+    console.error("[kepler-shell] ArkClient init failed:", e);
+  }
+}
+
 // --- IPC handlers ------------------------------------------------------------
 
 ipcMain.handle("kepler:backend:status", () => readBackendStatus());
@@ -238,19 +384,54 @@ ipcMain.handle("kepler:backend:restart", () => {
 
 ipcMain.handle("kepler:window:hide", () => hideLauncher());
 
-ipcMain.handle("kepler:search:query", async (_e, _text: string): Promise<SearchResult[]> => {
-  // Phase 1 stub: реальный WS-вызов к kepler-backend для search_objects
-  // будет добавлен в Phase 2. Сейчас возвращаем пустой массив, чтобы UI
-  // не падал.
-  return [];
-});
+ipcMain.handle(
+  "kepler:window:setExpanded",
+  (_e, expanded: boolean) => setLauncherExpanded(!!expanded),
+);
+
+ipcMain.handle(
+  "kepler:search:query",
+  async (_e, text: string): Promise<SearchResult[]> => {
+    if (!arkClient || !text.trim()) return [];
+    try {
+      const hits = await arkClient.objects.search(text);
+      if (hits.length === 0) return [];
+      // hits — массив { file, line, text, entryId } от db::search_objects.
+      // Резолвим title/typeId через get_objects_by_ids одной батч-операцией.
+      const ids = Array.from(new Set(hits.map((h) => h.entryId))).slice(0, 8);
+      const records = await arkClient.objects.getMany(ids);
+      const recordById = new Map(records.map((r) => [r.id, r]));
+      const out: SearchResult[] = [];
+      const seen = new Set<string>();
+      for (const h of hits) {
+        if (seen.has(h.entryId)) continue;
+        seen.add(h.entryId);
+        const rec = recordById.get(h.entryId);
+        if (!rec) continue;
+        out.push({
+          id: rec.id,
+          title: rec.title && rec.title.length > 0 ? rec.title : rec.id,
+          type_id: rec.typeId,
+          snippet: h.text,
+        });
+        if (out.length >= 8) break;
+      }
+      return out;
+    } catch (e) {
+      console.error("[kepler-shell] search failed:", e);
+      return [];
+    }
+  },
+);
 
 // --- lifecycle ---------------------------------------------------------------
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   spawnBackend();
   createLauncher();
   createTray();
+
+  void initArkClient();
 
   const accelerator =
     process.platform === "darwin" ? "Command+Shift+K" : "Control+Shift+K";
@@ -274,6 +455,11 @@ app.on("window-all-closed", () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  if (windowStateSaveTimer) {
+    clearTimeout(windowStateSaveTimer);
+    windowStateSaveTimer = null;
+    saveWindowStateNow();
+  }
   if (backendProc && !backendProc.killed) {
     backendProc.kill();
   }

@@ -19,6 +19,8 @@ const api: KeplerApi = {
       ipcRenderer.on("kepler:window:show", handler);
       return () => ipcRenderer.removeListener("kepler:window:show", handler);
     },
+    setExpanded: (expanded) =>
+      ipcRenderer.invoke("kepler:window:setExpanded", expanded),
   },
   search: {
     query: (text) => ipcRenderer.invoke("kepler:search:query", text),

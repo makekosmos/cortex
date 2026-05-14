@@ -7,16 +7,20 @@ const results = ref<SearchResult[]>([]);
 const inputRef = ref<HTMLInputElement | null>(null);
 
 async function onInput() {
-  if (!query.value.trim()) {
+  const text = query.value.trim();
+  if (!text) {
     results.value = [];
+    void window.kepler.window.setExpanded(false);
     return;
   }
-  // Phase 1 stub: kepler-backend search wiring — Phase 2.
+  void window.kepler.window.setExpanded(true);
   try {
     results.value = await window.kepler.search.query(query.value);
+    void window.kepler.window.setExpanded(results.value.length > 0);
   } catch (e) {
     console.warn("search failed", e);
     results.value = [];
+    void window.kepler.window.setExpanded(false);
   }
 }
 
@@ -33,6 +37,7 @@ onMounted(() => {
   offShow = window.kepler.window.onShow(() => {
     query.value = "";
     results.value = [];
+    void window.kepler.window.setExpanded(false);
     void nextTick(() => inputRef.value?.focus());
   });
   void nextTick(() => inputRef.value?.focus());

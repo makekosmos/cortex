@@ -30,9 +30,11 @@ export interface KeplerApi {
     hide(): Promise<void>;
     /** Зарегистрировать callback на показ окна (от globalShortcut). */
     onShow(listener: () => void): () => void;
+    /** Растягивает окно в expanded (с результатами) / collapsed (только input). */
+    setExpanded(expanded: boolean): Promise<void>;
   };
 
-  /** Поиск по ARK FTS5 через backend. Phase 1 — placeholder, реализация Phase 2+. */
+  /** Поиск по ARK FTS5 через backend (через @kosmos/ark → kepler-backend WS). */
   search: {
     query(text: string): Promise<SearchResult[]>;
   };
