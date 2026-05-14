@@ -26,7 +26,7 @@ export default defineConfig({
       ),
       "@kepler/visuals": path.resolve(repoRoot, "packages/visuals"),
     },
-    dedupe: ["vue"],
+    dedupe: ["vue", "vue-router", "pinia"],
   },
   build: {
     outDir: "dist",

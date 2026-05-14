@@ -27,7 +27,13 @@ export default defineConfig({
       ),
       "@kepler/visuals": path.resolve(repoRoot, "packages/visuals"),
     },
-    dedupe: ["vue"],
+    // КРИТИЧНО: vue-router и pinia должны быть дедуплицированы, иначе
+    // @kepler/visuals (SidebarButton.vue → RouterLink) получает СВОЮ копию
+    // vue-router, а app — свою. RouterLink тихо не рендерит anchor потому
+    // что injection symbols различаются. Симптом: sidebar primaryItems
+    // (Inbox, Today) и footerItems (Logbook, Trash) исчезают, project
+    // group header (без RouterLink) виден.
+    dedupe: ["vue", "vue-router", "pinia"],
   },
   build: {
     outDir: "dist",

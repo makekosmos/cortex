@@ -92,7 +92,7 @@ export default defineConfig(({ mode }) => {
           "node_modules/lucide-vue-next",
         ),
       },
-      dedupe: ["vue"],
+      dedupe: ["vue", "vue-router", "pinia"],
     },
     build: {
       outDir: path.join(extensionDir, "dist"),
