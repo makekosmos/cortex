@@ -89,6 +89,26 @@ export async function ensureKeplerRunning(
   }
 
   if (!autoLaunch) {
+    // autoLaunch=false означает «не спавни kepler сам, я уже спавнил/он скоро
+    // появится». Lock-файл может ещё не быть записан backend'ом — поллим до
+    // waitMs прежде чем сдаваться. Без этого получался race: shell спавнит
+    // backend → сразу зовёт ensureKeplerRunning → lock ещё не написан →
+    // возвращается not-installed → ArkClient не поднимается.
+    const startTime = Date.now();
+    while (Date.now() - startTime < waitMs) {
+      const lock = readLockIfAlive(lockPath);
+      if (lock) {
+        if (lock.protocol_version.major !== clientMajor) {
+          return {
+            kind: "incompatible-version",
+            keplerVersion: lock.protocol_version,
+            clientMajor,
+          };
+        }
+        return { kind: "connected", lock, lockPath };
+      }
+      await sleep(250);
+    }
     return { kind: "not-installed", checkedPaths: [] };
   }
 
