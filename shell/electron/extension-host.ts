@@ -358,17 +358,84 @@ export function openExtension(id: string): void {
     return;
   }
   const display = screen.getPrimaryDisplay().workAreaSize;
-  const width = manifest.width ?? 1200;
-  const height = manifest.height ?? 800;
+  const defaultWidth = manifest.width ?? 1200;
+  const defaultHeight = manifest.height ?? 800;
   const preload = resolvePreloadForManifest(manifest, extensionDir);
+
+  // Restore window bounds из persistent user data, если есть и валидны.
+  // Файл живёт в `extensions-data/<id>/window-state.json` — не трогается
+  // install/uninstall'ом кода.
+  const stateFile = path.join(extensionUserDataDir(id), "window-state.json");
+  let savedState: {
+    width?: number;
+    height?: number;
+    x?: number;
+    y?: number;
+    isMaximized?: boolean;
+  } = {};
+  if (existsSync(stateFile)) {
+    try {
+      savedState = JSON.parse(readFileSync(stateFile, "utf8")) as typeof savedState;
+    } catch (e) {
+      console.warn(
+        `[kepler-shell] extension '${id}' window-state.json invalid, ignoring:`,
+        e,
+      );
+    }
+  }
+
+  // Bounds sanitization: окно должно попадать хотя бы частично в какой-то
+  // подключённый display. Иначе пользователь отключил монитор, на котором
+  // окно стояло, и без проверки оно окажется за пределами экранов.
+  const displays = screen.getAllDisplays();
+  const isVisibleOnAnyDisplay = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): boolean =>
+    displays.some((d) => {
+      const wa = d.workArea;
+      return (
+        x + w > wa.x &&
+        x < wa.x + wa.width &&
+        y + h > wa.y &&
+        y < wa.y + wa.height
+      );
+    });
+
+  let width = defaultWidth;
+  let height = defaultHeight;
+  let initialX: number | undefined =
+    Math.round((display.width - defaultWidth) / 2);
+  let initialY: number | undefined =
+    Math.round((display.height - defaultHeight) / 2);
+
+  if (
+    typeof savedState.width === "number" &&
+    typeof savedState.height === "number" &&
+    typeof savedState.x === "number" &&
+    typeof savedState.y === "number" &&
+    isVisibleOnAnyDisplay(
+      savedState.x,
+      savedState.y,
+      savedState.width,
+      savedState.height,
+    )
+  ) {
+    width = savedState.width;
+    height = savedState.height;
+    initialX = savedState.x;
+    initialY = savedState.y;
+  }
 
   const win = new BrowserWindow({
     width,
     height,
     minWidth: manifest.minWidth ?? 800,
     minHeight: manifest.minHeight ?? 600,
-    x: Math.round((display.width - width) / 2),
-    y: Math.round((display.height - height) / 2),
+    x: initialX,
+    y: initialY,
     show: true,
     title: manifest.name,
     backgroundColor: "#1a1a1a",
@@ -385,6 +452,62 @@ export function openExtension(id: string): void {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Если в saved state окно было maximized — восстановим после ready-to-show.
+  if (savedState.isMaximized) {
+    win.once("ready-to-show", () => {
+      if (!win.isDestroyed()) win.maximize();
+    });
+  }
+
+  // Persist window bounds на disk. Debounced для resized/moved (часто), sync
+  // для maximize/unmaximize/close (редко, важно поймать финальное состояние).
+  const saveWindowState = (): void => {
+    try {
+      if (win.isDestroyed()) return;
+      // getBounds возвращает текущие, а не «нормальные» bounds —
+      // если окно maximized, мы НЕ хотим перезаписывать сохранённые normal
+      // bounds maximized-размером. Используем getNormalBounds.
+      const bounds = win.getNormalBounds();
+      const state = {
+        width: bounds.width,
+        height: bounds.height,
+        x: bounds.x,
+        y: bounds.y,
+        isMaximized: win.isMaximized(),
+        savedAt: new Date().toISOString(),
+      };
+      const dir = ensureUserDataDir(id);
+      writeFileSync(
+        path.join(dir, "window-state.json"),
+        JSON.stringify(state, null, 2),
+        "utf8",
+      );
+    } catch (e) {
+      console.warn(
+        `[kepler-shell] extension '${id}' save window-state failed:`,
+        e,
+      );
+    }
+  };
+
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const scheduleSave = (): void => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveWindowState, 500);
+  };
+
+  win.on("resized", scheduleSave);
+  win.on("moved", scheduleSave);
+  win.on("maximize", saveWindowState);
+  win.on("unmaximize", saveWindowState);
+  win.on("close", () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    saveWindowState();
   });
 
   // Capture webContents.id ДО регистрации listener'ов. После 'closed' event
