@@ -5,7 +5,11 @@ members = [
     "services/kepler-backend",
     "services/ark-relay-server",
     "services/kepler-watcher",
-    "services/usage-tracker",
+]
+# Замороженный код. Не build'ится по умолчанию; реактивация требует
+# proof-loop (см. legacy/README.md).
+exclude = [
+    "legacy/usage-tracker",
 ]
 
 [workspace.package]

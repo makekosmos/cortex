@@ -23,9 +23,9 @@ const steps = [
     args: ["test", "--manifest-path", "crates/ark-core/rust/Cargo.toml"],
   },
   {
-    name: "usage-tracker Rust tests",
+    name: "kepler-backend Rust tests (включая usage_tracker модуль)",
     command: "cargo",
-    args: ["test", "--manifest-path", "services/usage-tracker/Cargo.toml"],
+    args: ["test", "--manifest-path", "services/kepler-backend/Cargo.toml", "--lib"],
   },
   {
     name: "@kepler/ark typecheck",

@@ -9,7 +9,7 @@
  *   - CLAUDE.md      (корень)        — auto-context для Claude Code
  *   - apps/<name>/AGENTS.md          — per-app правила
  *   - packages/<name>/AGENTS.md      — per-package правила (только ark-core)
- *   - services/<name>/AGENTS.md      — per-service правила (только usage-tracker)
+ *   - services/<name>/AGENTS.md      — per-service правила (на данный момент таких нет; usage-tracker заморожен в legacy/)
  *   - docs-site/public/llms.txt      — полный inline-текст для агентов через WebFetch
  *
  * Все сгенерированные файлы помечены меткой `<!-- AUTO-GENERATED: do not edit -->`.
@@ -205,7 +205,6 @@ const TARGETS = [
   { dest: "mobile/delphi/AGENTS.md", src: "apps/delphi.md", title: "Delphi — Kotlin workspace" },
   // packages / services
   { dest: "crates/ark-core/AGENTS.md", src: "packages/ark-core.md", title: "ark-core" },
-  { dest: "services/usage-tracker/AGENTS.md", src: "services/usage-tracker.md", title: "usage-tracker" },
 ];
 
 // TL;DR версия `reference/rules.md` — 5-7 строк по ключевым правилам.

@@ -19,7 +19,7 @@ const renameMap = {
   "apps/kepler/": "apps/kosmos/",
   "services/kepler-backend/": "services/kosmos-backend/",
   "services/kepler-watcher/": "services/kosmos-watcher/",
-  "services/usage-tracker/src/kepler_client.rs":
+  "legacy/usage-tracker/src/kepler_client.rs":
     "services/usage-tracker/src/cosmos_client.rs",
 };
 
@@ -71,11 +71,10 @@ const broken = [
   "services/kepler-watcher/Cargo.toml",
   "services/kepler-watcher/src/main.rs",
   "services/ark-relay-server/Cargo.toml",
-  "services/usage-tracker/src/main.rs",
-  "services/usage-tracker/src/spool.rs",
-  "services/usage-tracker/src/kepler_client.rs",
-  "services/usage-tracker/Cargo.toml",
-  "services/usage-tracker/AGENTS.md",
+  "legacy/usage-tracker/src/main.rs",
+  "legacy/usage-tracker/src/spool.rs",
+  "legacy/usage-tracker/src/kepler_client.rs",
+  "legacy/usage-tracker/Cargo.toml",
   "apps/eden/ts/main/store.ts",
 ];
 
