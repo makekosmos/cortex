@@ -63,7 +63,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 - **Dashboard** — полная Vue migration, build ~83 KB JS. Read-only аналитика, ARK через preload bridge.
 - **Horologion** — полная Vue migration с `horologionApi` shim над `window.kepler.*`. Build ~102 KB chunk `pomodoroSettings`. Pomodoro/stopwatch state работает.
-- **Delphi** — Vue + memory router, build 3483 modules. ⚠️ `electronAPI` calls в `App.vue` / `ProjectPage` / `SpaceSetup` ещё ссылаются на `window.electronAPI` (undefined в extension контексте) — оставлено для Phase 5 cleanup. Tailwind plugin не подключён в extension build.
+- **Delphi** — Vue + memory router, build 3483 modules. После Phase 5 cleanup: `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request` — все existing call sites работают. Tailwind plugin подключён (Phase 5). **Открытый вопрос** — переписать Delphi UI с Tailwind utility classes на plain CSS + `@kosmos/visuals` tokens (как остальные extension'ы). См. Phase 9 ниже.
 - **Arrancador** — UI subset (LayoutPage + GameCard). Catalogue / Scan / Sqoba / Stats / Settings pages **не мигрированы** — native scanner остаётся в legacy standalone .exe.
 
 RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / −4 процесса. Полная таблица — [RAM benchmarks](/concepts/ram-benchmarks).
@@ -94,6 +94,22 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 - Удаление `apps/kepler/` (старый Rust gpui launcher).
 - Production NSIS packaging Kepler shell с включённым `kepler-backend.exe` + `ark-core-rpc.exe` через `extraResources`.
 - Auto-update mechanism (electron-updater).
+
+## Phase 9 ⏳ — Delphi UI: Tailwind → plain CSS (открытый вопрос)
+
+Delphi extension сейчас использует Tailwind v4 в templates (наследие legacy `apps/delphi/ts/`). Все остальные extension'ы (Horologion, Dashboard, Arrancador, Kepler launcher / settings) написаны на **plain scoped CSS + `@kosmos/visuals` CSS variables** — единый стиль через ecosystem.
+
+Что нужно для Phase 9:
+
+- Пройти ~30 .vue файлов в `apps/kepler-shell/extensions/delphi/src/{App.vue, components, pages}`.
+- Удалить Tailwind utility classes (`flex items-center gap-2 px-3 rounded-lg ...`) из шаблонов.
+- Переписать стили в `<style scoped>` с `var(--background) / --foreground / --border / --radius-*` из `@kosmos/visuals`.
+- Удалить `@import "tailwindcss"` + `@source` directive из `src/global.css`.
+- Удалить `@tailwindcss/vite` plugin из `extensions/delphi/vite.config.mjs` + `vite.extensions.config.mjs`.
+- Удалить `tailwindcss` + `@tailwindcss/vite` deps из `extensions/delphi/package.json` (и shared kepler-shell deps если нет других пользователей).
+- Verify build + manual UI smoke (Delphi выглядит OK на acrylic Mica background).
+
+Скоуп — несколько часов сфокусированной работы (или один agent). Откладываем до момента когда Delphi UI стабилизируется (project / area / settings flows не меняются часто) — иначе придётся переделывать дважды.
 - Установщик переписывает HKCU Run на новый `Kepler.exe`.
 
 ## Баги / замечания

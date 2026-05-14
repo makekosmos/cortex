@@ -7,7 +7,7 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "build:backend": "cargo build --release --manifest-path ../../services/kepler-backend/Cargo.toml --bin kepler-backend",
+    "build:backend": "cargo build --release --manifest-path ../../services/kepler-backend/Cargo.toml --bin kepler-backend && cargo build --release --manifest-path ../../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
     "build:backend:dev": "cargo build --manifest-path ../../services/kepler-backend/Cargo.toml --bin kepler-backend",
     "build:extensions": "node -e \"import('./vite.extensions.config.mjs').then(async (m)=>{const {execSync}=await import('node:child_process');for(const id of m.vueExtensions){console.log('[build:extensions]',id);execSync('vite build --configLoader native --config vite.extensions.config.mjs --mode '+id,{stdio:'inherit'});}if(m.vueExtensions.length===0)console.log('[build:extensions] no Vue extensions to build (only static PoCs present) — skipping');})\"",
     "dev:extensions": "node scripts/dev-extensions.mjs",
@@ -23,7 +23,9 @@
   "dependencies": {
     "@kosmos/ark": "workspace:*",
     "@kosmos/visuals": "workspace:*",
+    "@tailwindcss/vite": "^4.2.2",
     "lucide-vue-next": "^0.548.0",
+    "tailwindcss": "^4.1.16",
     "vue": "^3.6.0-beta.9"
   },
   "devDependencies": {
@@ -33,6 +35,8 @@
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
     "playwright": "^1.58.2",
+    "png-to-ico": "^3.0.1",
+    "rcedit": "^5.0.2",
     "typescript": "~5.8.3",
     "vite": "^8.0.3",
     "vite-plugin-electron": "1.0.0-beta.2",
@@ -41,6 +45,7 @@
   "build": {
     "appId": "com.kazui.kepler",
     "productName": "Kepler",
+    "afterPack": "./build/afterPack.cjs",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -57,17 +62,43 @@
       {
         "from": "../../packages/ark-core/rust/target/release/ark-core-rpc.exe",
         "to": "ark-core-rpc.exe"
+      },
+      {
+        "from": "extensions",
+        "to": "extensions",
+        "filter": [
+          "**/manifest.json",
+          "**/icon.png",
+          "**/index.html",
+          "**/dist/**",
+          "!**/node_modules/**",
+          "!**/src/**",
+          "!**/vite.config.mjs",
+          "!**/package.json",
+          "!**/tsconfig*.json"
+        ]
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "win": {
+      "icon": "build/icon.png",
       "target": "nsis",
       "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
-      "shortcutName": "Kepler"
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kepler",
+      "installerIcon": "build/icon.png",
+      "uninstallerIcon": "build/icon.png",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

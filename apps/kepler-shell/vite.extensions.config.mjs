@@ -12,6 +12,7 @@
 
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readdirSync, statSync } from "node:fs";
@@ -58,7 +59,11 @@ export default defineConfig(({ mode }) => {
   return {
     root: extensionDir,
     base: "./",
-    plugins: [vue({ features: { vaporInterop: true } })],
+    // `@tailwindcss/vite` v4 is a no-op for CSS files that don't `@import "tailwindcss"`,
+    // so включение plugin'а глобально безопасно для extensions без Tailwind
+    // (dashboard, horologion). Активируется только для delphi/arrancador,
+    // у которых tailwind directives есть в их CSS entry.
+    plugins: [vue({ features: { vaporInterop: true } }), tailwindcss()],
     resolve: {
       alias: {
         // Per-extension "@" alias → <extensionDir>/src. Совпадает с конвенцией

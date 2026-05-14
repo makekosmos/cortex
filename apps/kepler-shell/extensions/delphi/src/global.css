@@ -1,29 +1,29 @@
-/* NB(kepler-extension): legacy `@import "tailwindcss"` (Tailwind v4 entry +
- * @source для kosmos-visuals .vue scanning) опущен. Shared vite config
- * extensions не подключает `@tailwindcss/vite` plugin — Tailwind utility
- * классы в template'ах Delphi компонентов окажутся unstyled, пока plugin не
- * будет добавлен в `apps/kepler-shell/vite.extensions.config.mjs`. CSS
- * переменные темы (`var(--background)`, `var(--foreground)` и т.п.) приходят
- * из импорта `@kosmos/visuals/theme/css-variables.css` (см. ниже). */
+/* Tailwind v4 entry — должен идти первым (CSS spec требует @import перед
+ * другими rules). Резолвится `@tailwindcss/vite` plugin'ом, подключённым
+ * в shared `vite.extensions.config.mjs` и в per-extension `vite.config.mjs`. */
+@import "tailwindcss";
 
-/* CSS @import должен идти первым (после @charset/@layer) — иначе postcss/
- * lightningcss выдают warning. Резолвится через alias `@kosmos/visuals/theme/css`,
- * определённый в `apps/kepler-shell/vite.extensions.config.mjs`. */
+/* @source — Tailwind v4 directive, расширяет content scan на shared visuals
+ * package'и (где живут .vue компоненты с tailwind classes). Без этого
+ * утилиты, используемые только в @kosmos/visuals/*.vue, не попадут в bundle. */
+@source "../../../../packages/kosmos-visuals/**/*.{vue,ts}";
+
+/* Theme CSS variables from @kosmos/visuals — single source of truth.
+ * Резолвится через alias `@kosmos/visuals/theme/css` (см. shared vite config). */
 @import "@kosmos/visuals/theme/css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --spacing-page: clamp(16px, 4vw, 24px);
+  --container-threadcontentwidth: 640px;
+}
 
 @font-face {
   font-family: "Zed Mono";
   src: url("/fonts/zed-mono-extended.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
-}
-
-/* NB: @theme — Tailwind v4 синтаксис. Без `@tailwindcss/vite` plugin'а это
- * unknown at-rule (warning, не error). Оставлено для совместимости с legacy
- * Delphi, при добавлении plugin'а заработает как ожидается. */
-@theme {
-  --spacing-page: clamp(16px, 4vw, 24px);
-  --container-threadcontentwidth: 640px;
 }
 
 ::-webkit-scrollbar {

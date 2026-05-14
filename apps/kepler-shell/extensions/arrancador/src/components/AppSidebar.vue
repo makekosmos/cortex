@@ -1,48 +1,40 @@
 <script setup lang="ts">
-// Упрощённый sidebar Arrancador-extension'а.
+// Sidebar Arrancador-extension'а.
 //
 // Адаптация vs `apps/arrancador/src-vue/components/AppSidebar.vue`:
-//   - legacy 302-строчный sidebar с resize / persistent-config / RouterLink /
-//     i18n / sidebar-config Pinia store сведён к статичному списку разделов.
-//   - "Каталог" / "Статистика" / "Сканер" / "Sqoba" / "Настройки" — UI остаются
-//     placeholder'ами, full feature parity = Phase 5+.
-//   - active-state управляется простым v-model'ом, без vue-router.
-
-import type { ArrancadorSection } from "../pages/LayoutPage.vue";
+//   - legacy 302-строчный sidebar (resize / persistent-config / i18n /
+//     sidebar-config Pinia store) сведён к статичному списку router-link'ов.
+//   - active-state определяется Vue Router'ом (`router-link-active`).
 
 defineProps<{
-  current: ArrancadorSection;
   hidden: boolean;
 }>();
 
-const emit = defineEmits<{
-  select: [section: ArrancadorSection];
-}>();
-
-const items: { id: ArrancadorSection; label: string }[] = [
-  { id: "library", label: "Библиотека" },
-  { id: "catalogue", label: "Каталог" },
-  { id: "statistics", label: "Статистика" },
-  { id: "settings", label: "Настройки" },
+const items = [
+  { to: "/", label: "Библиотека" },
+  { to: "/catalogue", label: "Каталог" },
+  { to: "/scan", label: "Сканер" },
+  { to: "/sqoba", label: "SQOBA" },
+  { to: "/stats", label: "Статистика" },
+  { to: "/settings", label: "Настройки" },
 ];
-
-function select(section: ArrancadorSection) {
-  emit("select", section);
-}
 </script>
 
 <template>
-  <nav v-if="!hidden" class="arrancador-sidebar" aria-label="Навигация Arrancador">
+  <nav
+    v-if="!hidden"
+    class="arrancador-sidebar"
+    aria-label="Навигация Arrancador"
+  >
     <div class="arrancador-sidebar__heading">Разделы</div>
-    <button
+    <router-link
       v-for="item in items"
-      :key="item.id"
-      type="button"
+      :key="item.to"
+      :to="item.to"
       class="arrancador-sidebar__item"
-      :class="{ 'arrancador-sidebar__item--active': current === item.id }"
-      @click="select(item.id)"
+      exact-active-class="arrancador-sidebar__item--active"
     >
       {{ item.label }}
-    </button>
+    </router-link>
   </nav>
 </template>

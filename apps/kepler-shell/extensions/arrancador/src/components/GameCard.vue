@@ -3,15 +3,14 @@
 //
 // Адаптация vs `apps/arrancador/src-vue/components/GameCard.vue`:
 //   - legacy использует `@kosmos/visuals/GamePosterCard` + RouterLink + i18n
-//     перевод жанров. Здесь — самостоятельная карточка без router'а.
-//   - Launch игры (по клику) намеренно не реализован: для spawn-процесса нужен
-//     main-process IPC, которого extension не имеет. Tooltip объясняет, что
-//     запуск пока через legacy Arrancador.exe (Phase 5).
+//     перевод жанров. Здесь — самостоятельная карточка + router-link на
+//     детальную страницу.
 //   - Cover берётся из `propsJson.background_image` либо `propsJson.cover_image`
-//     (см. `ark-game-objects.ts.mergeArkGameProps`).
+//     (см. `lib/arkGames.ts.projectGame`).
 
-import type { ArrancadorGame } from "../pages/LayoutPage.vue";
 import { computed } from "vue";
+
+import type { ArrancadorGame } from "../lib/arkGames";
 
 const props = defineProps<{
   game: ArrancadorGame;
@@ -29,9 +28,10 @@ const primaryGenre = computed(() => {
 </script>
 
 <template>
-  <article
+  <router-link
+    :to="`/game/${game.id}`"
     class="arrancador-card"
-    :title="`Запуск через legacy Arrancador.exe (Phase 5)`"
+    :title="`Открыть страницу игры`"
   >
     <div class="arrancador-card__cover">
       <img v-if="cover" :src="cover" :alt="game.name" />
@@ -41,5 +41,5 @@ const primaryGenre = computed(() => {
       <span class="arrancador-card__eyebrow">{{ primaryGenre }}</span>
       <span class="arrancador-card__title">{{ game.name }}</span>
     </div>
-  </article>
+  </router-link>
 </template>

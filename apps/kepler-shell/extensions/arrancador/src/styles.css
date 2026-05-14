@@ -1,7 +1,17 @@
+/* Tailwind v4 entry — @import должен идти первым (CSS spec).
+ * Резолвится `@tailwindcss/vite` plugin'ом в vite.config.mjs +
+ * shared vite.extensions.config.mjs. */
+@import "tailwindcss";
+
+/* @source — расширяет content scan на shared visuals package.
+ * Текущие arrancador компоненты используют BEM-классы, не tailwind,
+ * но плагин подключён для будущего использования и parity с legacy. */
+@source "../../../../packages/kosmos-visuals/**/*.{vue,ts}";
+
 /* Arrancador extension — plain CSS layer.
-   Legacy `apps/arrancador/` использует tailwind; здесь намеренно упрощено
-   до vanilla CSS (tailwind config миграция вне scope Phase 4).
-   Все цвета/радиусы через `var(--*)` из `@kosmos/visuals/theme/css`. */
+   Legacy `apps/arrancador/` использовал tailwind; миграция компонентов
+   на utility-классы — Phase 5 follow-up. Сейчас все цвета/радиусы
+   через `var(--*)` из `@kosmos/visuals/theme/css`. */
 
 *,
 *::before,
@@ -333,4 +343,295 @@ input {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.arrancador-card {
+  text-decoration: none;
+  color: inherit;
+}
+
+.arrancador-sidebar__item {
+  text-decoration: none;
+}
+
+/* ---------- Scan list ---------- */
+
+.arrancador-scan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arrancador-scan-list__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--card);
+}
+
+.arrancador-scan-list__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.arrancador-scan-list__path {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+/* ---------- Stats ---------- */
+
+.arrancador-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.arrancador-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.arrancador-stats__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.arrancador-stats__label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.arrancador-stats__value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.arrancador-stats__subtitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.arrancador-stats__top {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arrancador-stats__top-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--card);
+}
+
+.arrancador-stats__top-name {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.arrancador-stats__top-value {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+/* ---------- Settings ---------- */
+
+.arrancador-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 480px;
+}
+
+.arrancador-settings__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--card);
+}
+
+.arrancador-settings__label {
+  font-size: 13px;
+  color: var(--foreground);
+  flex: 1;
+}
+
+.arrancador-settings__checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.arrancador-settings__select {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+}
+
+.arrancador-settings__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.arrancador-settings__btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+  transition: background 120ms var(--easing-standard);
+}
+
+.arrancador-settings__btn:hover {
+  background: var(--muted);
+}
+
+.arrancador-settings__saved {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* ---------- Detail page ---------- */
+
+.arrancador-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius-input);
+  font-size: 13px;
+  color: var(--muted-foreground);
+  transition: background 120ms var(--easing-standard);
+}
+
+.arrancador-back:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.arrancador-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.arrancador-detail__hero {
+  position: relative;
+  min-height: 200px;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background-color: var(--muted);
+  background-position: center;
+  background-size: cover;
+}
+
+.arrancador-detail__hero-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 20px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.75) 0%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
+.arrancador-detail__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.arrancador-detail__genres {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.arrancador-detail__meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.arrancador-detail__meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  background: var(--card);
+}
+
+.arrancador-detail__meta-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.arrancador-detail__meta-value {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.arrancador-detail__path {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrancador-detail__description,
+.arrancador-detail__note {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--foreground);
 }

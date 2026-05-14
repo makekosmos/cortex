@@ -6,11 +6,17 @@
 //   2. Command bus — регистрация Delphi-команд и подписка на `command_invoked`
 //      через `window.kepler.ark`. Legacy main process больше не нужен.
 //   3. Native main-process integrations (lan-sync:*, db:switchSpace и т.п.)
-//      недоступны в extension renderer. Code paths в App.vue, которые их
-//      используют, охраняются guard'ом `isElectronRuntime()` — он возвращает
-//      false внутри extension'а (`window.electronAPI` отсутствует, есть только
-//      `window.kepler`), поэтому фолбэк = web-mode (Ark HTTP). Полная замена
-//      на `kepler.ark.request` для list/upsert task_obj — Phase 4 follow-up.
+//      недоступны в extension renderer. `lib/electron-api-shim.ts` бридж'ит
+//      legacy `window.electronAPI` поверх `window.kepler.ark.request`:
+//      ARK операции (task_obj / time_entry_obj CRUD) транслируются, а P2P
+//      sync / filesystem каналы становятся graceful no-op'ами. Это позволило
+//      оставить компоненты (App.vue, ProjectPage, SpaceSetup, SpacesSettingsTab,
+//      store/todos, services/space, services/storage) без массового rewrite'а.
+
+// Shim должен быть установлен ДО mount'а Vue, поскольку App.vue читает
+// `window.electronAPI` синхронно в setup-блоке.
+// eslint-disable-next-line import/no-unassigned-import
+import "./lib/electron-api-shim";
 
 import { createApp } from "vue";
 import { createPinia } from "pinia";

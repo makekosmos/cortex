@@ -1,8 +1,10 @@
-// Arrancador Vue extension entry — Kepler shell host (Phase 4).
+// Arrancador Vue extension entry — Kepler shell host.
 //
-// Scope: UI-only port of the legacy game library. Native scanner и game launch
-// остаются в legacy `apps/arrancador/` (Phase 5 work). Extension показывает
-// только game_obj, уже присутствующие в ARK.
+// Scope (Phase 4 → расширено Phase 4.5):
+//   - UI порт всех страниц legacy Arrancador renderer'а (Library, Catalogue,
+//     Scan, SQOBA, Statistics, Settings, GameDetail).
+//   - Read-only через `kepler.ark.request("list_objects_by_type", ...)`.
+//   - Write paths (game launch, scanner, backups, RAWG add) — Phase 5+.
 //
 // API:
 //   - window.kepler.ark.request("list_objects_by_type", { type_id: "game_obj" })
@@ -18,7 +20,8 @@ import "@kosmos/visuals/theme/css";
 import "./styles.css";
 
 import App from "./App.vue";
+import { router } from "./router";
 
 document.documentElement.classList.add("dark");
 
-createApp(App).mount("#app");
+createApp(App).use(router).mount("#app");

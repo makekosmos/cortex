@@ -194,7 +194,9 @@
       "dependencies": {
         "@kosmos/ark": "workspace:*",
         "@kosmos/visuals": "workspace:*",
+        "@tailwindcss/vite": "^4.2.2",
         "lucide-vue-next": "^0.548.0",
+        "tailwindcss": "^4.1.16",
         "vue": "^3.6.0-beta.9",
       },
       "devDependencies": {
@@ -204,6 +206,8 @@
         "electron": "^41.1.0",
         "electron-builder": "^26.8.1",
         "playwright": "^1.58.2",
+        "png-to-ico": "^3.0.1",
+        "rcedit": "^5.0.2",
         "typescript": "~5.8.3",
         "vite": "^8.0.3",
         "vite-plugin-electron": "1.0.0-beta.2",
