@@ -203,6 +203,54 @@ window.kepler.window.maximize()
 
 Они шлют `kepler:extension:window:{close,minimize,maximize}` IPC. Main resolves окно через `BrowserWindow.fromWebContents(e.sender)` и вызывает соответствующий метод. Это позволяет extension'ам с `titleBarStyle: "hidden"` рисовать свой titlebar и управлять окном без node integration.
 
+## User data
+
+Каждый extension получает свой персональный writable путь в `<APPDATA>/Kosmos/extensions-data/<id>/`, который **не затрагивается** при install/uninstall extension'а (если пользователь явно не передал `--purge-data`). Это разделение «код vs user data» — см. [Extension installer → Persistent user data](/concepts/extension-installer#persistent-user-data).
+
+### Preload API
+
+```ts
+window.kepler.userData = {
+  readJson<T>(name: string): Promise<T | null>,
+  writeJson<T>(name: string, value: T): Promise<void>,
+  readFile(name: string): Promise<string | null>,
+  writeFile(name: string, content: string): Promise<void>,
+  path(): Promise<string>,  // absolute path к <APPDATA>/Kosmos/extensions-data/<id>/
+};
+```
+
+`name` — имя файла относительно user data dir. Запрещены символы кроме `[A-Za-z0-9._-]` и leading dot — path traversal заблокирован на стороне main процесса в модуле `extension-user-data` под `shell/electron/`.
+
+```ts
+// Пример из extension renderer
+const settings = await window.kepler.userData.readJson<{ accentColor: string }>("settings.json")
+  ?? { accentColor: "#7c3aed" };
+settings.accentColor = "#22c55e";
+await window.kepler.userData.writeJson("settings.json", settings);
+```
+
+### Window state
+
+`shell/electron/extension-host.ts → openExtension(id)` автоматически:
+
+1. Читает `<extensions-data>/<id>/window-state.json` перед созданием `BrowserWindow`.
+2. Если saved bounds валидные (попадают хотя бы частично в активный display) — применяет.
+3. Если `isMaximized: true` — максимизирует после `ready-to-show`.
+4. Подписывается на `resized` / `moved` (debounced 500ms) + `maximize` / `unmaximize` / `close` — пишет актуальные bounds в файл.
+
+Extension ничего не делает — это shell-level автоматика.
+
+```json
+{
+  "width": 1200,
+  "height": 800,
+  "x": 100,
+  "y": 50,
+  "isMaximized": false,
+  "savedAt": "2026-05-14T12:34:56Z"
+}
+```
+
 ## Developer mode integration
 
 `openExtension(id)` resolver выбирает источник renderer'а:

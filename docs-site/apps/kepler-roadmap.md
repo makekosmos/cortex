@@ -152,13 +152,7 @@ Delphi extension сейчас использует Tailwind v4 в templates (н�
 
 ### Что осталось
 
-- ⚠️ **Persistent extension user data (блокер production-rollout)** — сейчас install полностью заменяет папку `<APPDATA>/Kosmos/extensions/<id>/`, поэтому если extension писал в свою папку (settings, window-state, кеш) — при reinstall теряется. Нужно разделить:
-  - `extensions/<id>/` — код (manifest + dist + icon), replaceable installer'ом.
-  - `extensions-data/<id>/` — user data, **не трогается** install/uninstall'ом.
-  - Kepler shell сохраняет window state в `extensions-data/<id>/window-state.json` сам (по close event), восстанавливает при openExtension.
-  - Preload API `window.kepler.userData.{readFile, writeFile, readJson, writeJson}` для extension'ов, которые хотят persist'ить settings локально (не через ARK).
-  - Uninstall флаг `--purge-data` чтобы при желании удалить и user data; по умолчанию — нет.
-  - В текущем MVP gap не срабатывает только потому, что ни один extension не пишет в свою папку — все state через `kepler.ark.request` или shell-level userData. Это совпадение.
+- ✅ **Persistent extension user data** (2026-05-14) — split `extensions/<id>/` (код) vs `extensions-data/<id>/` (user data + window state); preload API `window.kepler.userData.*`; uninstall флаг `--purge-data`. См. [Extension installer](../concepts/extension-installer.md).
 - ⏳ **`.kext` пакетный формат** — zip с manifest + dist + icon в одном файле. File association в Windows, открытие по двойному клику инсталлирует.
 - ⏳ **UI manager в Kepler settings** — страница «Расширения»: список installed, кнопки install / remove / update.
 - ⏳ **Auto-update** — checker для новых версий extension'ов (manifest version field + remote URL или local update file).

@@ -1,7 +1,7 @@
 # Extension installer
 
 ::: tip Статус — MVP (2026-05-14)
-CLI install / uninstall в writable location, resolution chain в `extension-host.ts` поднимает user-installed копию выше bundled. **Не входит в MVP**: auto-update, `.kext` пакетный формат, UI manager в Kepler settings, code signing — см. [Kepler Roadmap](/apps/kepler-roadmap).
+CLI install / uninstall в writable location, resolution chain в `extension-host.ts` поднимает user-installed копию выше bundled. Persistent user data split (`extensions-data/<id>/`) — сделан в той же версии (2026-05-14): install не трогает user data, uninstall по умолчанию тоже не трогает; флаг `--purge-data` удаляет и user data. **Не входит в MVP**: auto-update, `.kext` пакетный формат, UI manager в Kepler settings, code signing — см. [Kepler Roadmap](/apps/kepler-roadmap).
 :::
 
 ## Зачем это нужно
@@ -48,7 +48,11 @@ bun run --cwd shell ext:install <path-to-extension-dir>
 
 # Uninstall: удаляет <APPDATA>/Kosmos/extensions/<id>/.
 # Bundled версия (если есть) поднимется автоматически на следующем openExtension(id).
+# User data в <APPDATA>/Kosmos/extensions-data/<id>/ по умолчанию сохраняется.
 bun run --cwd shell ext:uninstall <id>
+
+# Uninstall + очистка user data: удаляет и <APPDATA>/Kosmos/extensions-data/<id>/.
+bun run --cwd shell ext:uninstall <id> --purge-data
 ```
 
 Скрипты — `shell/scripts/install-extension.mjs` / `uninstall-extension.mjs`. Не зависят от Electron, могут быть запущены вне launcher'а (build script / CI / ручной dev flow).
@@ -64,27 +68,31 @@ Install выполняется в 4 шага, чтобы не оставить m
 
 При ошибке после шага 1 — best-effort rollback (вернуть `.old` → target, удалить `.tmp`).
 
-## Что НЕ входит в MVP
+## Persistent user data
 
-::: danger Критический gap MVP — persistent user data
-Сейчас install **полностью заменяет** папку `<APPDATA>/Kosmos/extensions/<id>/`. Если extension писал что-то внутрь своей папки (settings.json, кеш, window-state.json), при reinstall эти файлы **уничтожаются**. Для production-rollout это блокер.
+::: info Persistent user data — split с 2026-05-14
 
-Решение запланировано отдельно: разделить «код extension'а» и «user data extension'а» на два независимых path:
+Код и user data extension'а разделены на два path:
 
 ```
 <APPDATA>/Kosmos/
-├── extensions/<id>/         ← код (manifest, dist, icon) — replaceable, трогает install
-└── extensions-data/<id>/    ← user data (settings, window-state, кеш) — install НЕ трогает
+├── extensions/<id>/         ← код (manifest, dist, icon) — install полностью заменяет
+└── extensions-data/<id>/    ← user data — install НЕ трогает
+    ├── settings.json         (extension сам пишет через preload API)
+    ├── window-state.json     (Kepler shell сам сохраняет на close)
+    └── ...                   (любые user files extension'а)
 ```
 
-Window state (size/position BrowserWindow'а) Kepler shell сохранит сам в `extensions-data/<id>/window-state.json` по `close` event, восстановит при `openExtension`. Settings extension'а — через новый preload API `window.kepler.userData.{readFile, writeFile, readJson, writeJson}`.
-
-Сейчас (MVP) extension'ы Dashboard / Horologion / Delphi / Arrancador **не пишут** ничего в свою папку — у них нет API для этого, всё user-state хранится в Kepler shell userData (`<userData>/kepler-shell-settings.json`) или в ARK через `kepler.ark.request`. Поэтому reinstall в текущем MVP **безопасен**. Но это совпадение — как только появится первый extension со своими файлами, gap начнёт срабатывать.
-
-См. [Kepler Roadmap → Phase 10 → Persistent extension user data](/apps/kepler-roadmap#phase-10).
+- **Install** трогает только `extensions/<id>/`. `extensions-data/<id>/` сохраняется через все обновления.
+- **Uninstall** (`bun run --cwd shell ext:uninstall <id>`) по умолчанию удаляет только код, user data preserved.
+- **Uninstall с очисткой**: `bun run --cwd shell ext:uninstall <id> --purge-data` удаляет и code, и user data.
+- **Preload API для extension'ов**: `window.kepler.userData.{readJson, writeJson, readFile, writeFile, path}` — см. [Extension host → User data](/concepts/extension-host#user-data).
+- **Window state**: размер и положение окна каждого extension'а Kepler shell сохраняет автоматически в `extensions-data/<id>/window-state.json` по `close` / debounced `resized`/`moved`. Extension ничего не делает.
 :::
 
-Помимо persistent user data, в MVP отсутствуют:
+## Что НЕ входит в MVP
+
+В MVP отсутствуют:
 
 - **Auto-update** — checker для новых версий. Сейчас юзер сам запускает `ext:install` со свежим dir.
 - **`.kext` пакетный формат** — единый файл (zip с manifest + dist + icon), который Kepler ассоциирует как known mime type и устанавливает по двойному клику. Сейчас install принимает только директорию.
