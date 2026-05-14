@@ -47,6 +47,9 @@ import {
 } from "@kosmos/ark";
 import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
+// Side-effect import — регистрирует IPC handlers для окна настроек
+// (kepler:settings:*). Окно создаётся лениво из openSettings().
+import { openSettings } from "./settings-window";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -320,6 +323,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Открыть", click: () => showLauncher() },
+      { label: "Настройки", click: () => openSettings() },
       { type: "separator" },
       {
         label: "Выход",

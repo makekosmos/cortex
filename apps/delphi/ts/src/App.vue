@@ -29,6 +29,7 @@ import QuickEntry from "@/components/QuickEntry.vue";
 import QuickSearch from "@/components/QuickSearch.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
+import { useQuickEntry } from "@/composables/useQuickEntry";
 import {
   CustomCaret,
   DesktopChrome,
@@ -53,6 +54,7 @@ import {
 const store = useTodoStore();
 const route = useRoute();
 const router = useRouter();
+const { show: showQuickEntry } = useQuickEntry();
 
 const quickSearchOpen = shallowRef(false);
 const { sidebarHidden } = useSidebarState();
@@ -209,6 +211,26 @@ watch(
 // ---------------------------------------------------------------------------
 
 let cleanupLanSyncListener: (() => void) | null = null;
+let cleanupCommandListeners: (() => void) | null = null;
+
+function setupCommandBusBridge() {
+  if (!window.electronAPI?.on) return;
+
+  const unsubCreate = window.electronAPI.on("delphi:cmd:task:create", () => {
+    showQuickEntry();
+  });
+
+  const unsubToday = window.electronAPI.on("delphi:cmd:task:today", () => {
+    if (route.path !== "/today") {
+      void router.push("/today");
+    }
+  });
+
+  cleanupCommandListeners = () => {
+    unsubCreate?.();
+    unsubToday?.();
+  };
+}
 
 function mergeTodosById(
   localTodos: TodoItem[],
@@ -534,6 +556,7 @@ onMounted(async () => {
   window.addEventListener("keydown", handleGlobalKeydown);
   window.addEventListener(LEAVE_SPACE_EVENT, leaveSpaceListener);
   if (isElectron) {
+    setupCommandBusBridge();
     // Electron: P2P space mode takes priority
     const code = await getActiveSpace();
     if (code) {
@@ -555,6 +578,7 @@ onUnmounted(() => {
   window.removeEventListener("keydown", handleGlobalKeydown);
   window.removeEventListener(LEAVE_SPACE_EVENT, leaveSpaceListener);
   cleanupLanSyncListener?.();
+  cleanupCommandListeners?.();
 });
 
 function leaveSpaceListener() {

@@ -332,7 +332,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, shallowRef, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import {
   DesktopChrome,
   DesktopContentSurface,
@@ -545,8 +545,35 @@ async function navigateForward() {
   await applyHistorySnapshot(targetSnapshot);
 }
 
+const commandUnsubscribers: Array<() => void> = [];
+
 onMounted(() => {
   void eden.initApp();
+
+  if (window.api?.onCommand) {
+    commandUnsubscribers.push(
+      window.api.onCommand("eden:cmd:note:create", () => {
+        if (layout.isSearchOpen) layout.closeSearch();
+        if (layout.isZenMode) layout.disableZenMode();
+        void eden.createNewEntry();
+      }),
+      window.api.onCommand("eden:cmd:note:search", () => {
+        if (layout.isZenMode) layout.disableZenMode();
+        layout.openSearch();
+      }),
+    );
+  }
+});
+
+onUnmounted(() => {
+  while (commandUnsubscribers.length > 0) {
+    const off = commandUnsubscribers.pop();
+    try {
+      off?.();
+    } catch {
+      // ignore — best-effort cleanup
+    }
+  }
 });
 
 watch(currentHistorySnapshot, (nextSnapshot, previousSnapshot) => {

@@ -166,4 +166,15 @@ contextBridge.exposeInMainWorld("api", {
   maximize: () => ipcRenderer.send("window-max"),
 
   close: () => ipcRenderer.send("window-close"),
+
+  onCommand: (
+    channel: "eden:cmd:note:create" | "eden:cmd:note:search",
+    handler: (params: unknown) => void,
+  ): (() => void) => {
+    const listener = (_event: unknown, params: unknown) => handler(params);
+    ipcRenderer.on(channel, listener);
+    return () => {
+      ipcRenderer.off(channel, listener);
+    };
+  },
 });

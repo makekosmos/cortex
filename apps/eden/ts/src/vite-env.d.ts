@@ -437,6 +437,11 @@ interface Window {
     maximize: () => void;
 
     close: () => void;
+
+    onCommand: (
+      channel: "eden:cmd:note:create" | "eden:cmd:note:search",
+      handler: (params: unknown) => void,
+    ) => () => void;
   };
 
   __edenPerf?: EdenPerfTracker;

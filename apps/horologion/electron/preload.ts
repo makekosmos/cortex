@@ -1,8 +1,9 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type {
   CreateTimeEntryInput,
   StartTimerInput,
   HorologionApi,
+  HorologionCommandEvent,
   UpdateTimeEntryInput,
 } from "../shared/ipc-types";
 
@@ -30,6 +31,13 @@ const api: HorologionApi = {
   },
   streamerMode: {
     set: (enabled: boolean) => ipcRenderer.invoke("horologion:streamerMode:set", enabled),
+  },
+  onCommand: (handler: (event: HorologionCommandEvent) => void) => {
+    const listener = (_e: IpcRendererEvent, payload: HorologionCommandEvent) => handler(payload);
+    ipcRenderer.on("horologion:cmd", listener);
+    return () => {
+      ipcRenderer.removeListener("horologion:cmd", listener);
+    };
   },
 };
 

@@ -54,7 +54,7 @@ import type { Entry } from "./store";
 import { formatCode, lintCode } from "./codeTools";
 
 import { shutdownHeart } from "./heart";
-import { shutdownArk } from "./ark";
+import { shutdownArk, setEdenMainWindow } from "./ark";
 
 import {
   hevyLoginViaBrowser,
@@ -256,6 +256,11 @@ function createWindow() {
     win.webContents.on("did-finish-load", syncOverlay);
     syncOverlay();
   }
+
+  setEdenMainWindow(win);
+  win.on("closed", () => {
+    setEdenMainWindow(null);
+  });
 
   if (ELECTRON_RENDERER_URL ?? VITE_DEV_SERVER_URL) {
     win.loadURL(ELECTRON_RENDERER_URL ?? VITE_DEV_SERVER_URL!);

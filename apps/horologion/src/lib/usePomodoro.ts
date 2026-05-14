@@ -10,6 +10,13 @@ interface PhaseContext {
   title: string;
   /** Список задач для work-сегмента. Время делится поровну на finish. */
   tasks: Array<{ id: string; title: string }>;
+  /**
+   * Опционально: override длительности work-фазы в минутах. Используется
+   * ARK command bus'ом (`horologion:pomodoro:25` / `:50`), чтобы запустить
+   * сессию заданной длины, не трогая глобальные `pomodoroSettings.workMin`.
+   * Применяется только к work-сегментам; break-фазы читают свои настройки.
+   */
+  workMinOverride?: number;
 }
 
 /**
@@ -32,8 +39,11 @@ function createPomodoroState() {
   let tickHandle: ReturnType<typeof setInterval> | null = null;
   let phaseEndsAt = 0;
 
-  function durationMsForPhase(p: PomodoroPhase): number {
-    if (p === "work") return pomodoroSettings.workMin * 60 * 1000;
+  function durationMsForPhase(p: PomodoroPhase, ctx?: PhaseContext | null): number {
+    if (p === "work") {
+      const min = ctx?.workMinOverride ?? pomodoroSettings.workMin;
+      return min * 60 * 1000;
+    }
     if (p === "shortBreak") return pomodoroSettings.shortBreakMin * 60 * 1000;
     if (p === "longBreak") return pomodoroSettings.longBreakMin * 60 * 1000;
     return 0;
@@ -210,7 +220,7 @@ function createPomodoroState() {
 
   async function startPhase(p: PomodoroPhase, ctx: PhaseContext) {
     phase.value = p;
-    totalMs.value = durationMsForPhase(p);
+    totalMs.value = durationMsForPhase(p, ctx);
     remainingMs.value = totalMs.value;
     isRunning.value = true;
     isPaused.value = false;
@@ -251,7 +261,7 @@ function createPomodoroState() {
     } else {
       // Готовы к следующей фазе, но ждём явного `start`.
       phase.value = next;
-      totalMs.value = durationMsForPhase(next);
+      totalMs.value = durationMsForPhase(next, ctx);
       remainingMs.value = totalMs.value;
       isRunning.value = false;
     }
@@ -274,7 +284,7 @@ function createPomodoroState() {
       // Уже в "готова к запуску" — пропустим к следующей фазе.
       const next = nextPhaseAfter(phase.value);
       phase.value = next;
-      totalMs.value = durationMsForPhase(next);
+      totalMs.value = durationMsForPhase(next, lastContext.value);
       remainingMs.value = totalMs.value;
     }
   }

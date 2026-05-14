@@ -38,6 +38,17 @@ const api: KeplerApi = {
       return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
     },
   },
+  settings: {
+    open: () => ipcRenderer.invoke("kepler:settings:open"),
+    close: () => ipcRenderer.invoke("kepler:settings:close"),
+    autostart: {
+      get: () => ipcRenderer.invoke("kepler:settings:autostart:get"),
+      set: (enabled) =>
+        ipcRenderer.invoke("kepler:settings:autostart:set", enabled),
+    },
+    version: () => ipcRenderer.invoke("kepler:settings:version"),
+    hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
+  },
 };
 
 contextBridge.exposeInMainWorld("kepler", api);

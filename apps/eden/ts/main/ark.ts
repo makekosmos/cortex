@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import electron from "electron";
+import type { BrowserWindow as BrowserWindowType } from "electron";
 
 import {
   ArkClient,
@@ -26,7 +27,46 @@ import {
   readSharedSelectedSpace,
 } from "@kosmos/ark";
 
-const { app } = electron;
+const { app, BrowserWindow } = electron;
+
+let mainWindowRef: BrowserWindowType | null = null;
+
+/**
+ * Регистрирует главное окно Eden, чтобы command bus мог фокусировать его
+ * и отправлять IPC-события рендереру при инвокации команд.
+ */
+export function setEdenMainWindow(window: BrowserWindowType | null): void {
+  mainWindowRef = window;
+}
+
+function resolveTargetWindow(): BrowserWindowType | null {
+  if (mainWindowRef && !mainWindowRef.isDestroyed()) {
+    return mainWindowRef;
+  }
+  const all = BrowserWindow.getAllWindows();
+  for (const w of all) {
+    if (!w.isDestroyed()) return w;
+  }
+  return null;
+}
+
+function focusEdenWindow(): BrowserWindowType | null {
+  const target = resolveTargetWindow();
+  if (!target) return null;
+  if (target.isMinimized()) target.restore();
+  if (!target.isVisible()) target.show();
+  target.focus();
+  return target;
+}
+
+function dispatchEdenCommand(channel: string, params: unknown): void {
+  const target = focusEdenWindow();
+  if (!target) {
+    console.warn(`[eden] cannot dispatch ${channel}: no Eden window available`);
+    return;
+  }
+  target.webContents.send(channel, params ?? null);
+}
 
 interface ArkRequest {
   operation: string;
@@ -237,6 +277,16 @@ async function registerEdenCommands(client: ArkClient): Promise<void> {
     client.commands.onInvoked((event) => {
       if (!event.id.startsWith("eden:")) return;
       console.log(`[eden] command invoked: ${event.id}`, event.params);
+      switch (event.id) {
+        case "eden:note:create":
+          dispatchEdenCommand("eden:cmd:note:create", event.params);
+          return;
+        case "eden:note:search":
+          dispatchEdenCommand("eden:cmd:note:search", event.params);
+          return;
+        default:
+          return;
+      }
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

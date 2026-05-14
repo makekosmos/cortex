@@ -7,6 +7,8 @@
 // Здесь их нет — они регистрируются апками и исполняются на стороне апки
 // после broadcast'а `command_invoked` от backend'а.
 
+import "./extension-host";
+
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -81,6 +83,17 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Аналитика",
     category: "open",
     exec: () => openApp("dashboard"),
+  },
+  {
+    id: "dashboard:extension:demo",
+    title: "Открыть Dashboard (PoC extension)",
+    subtitle: "Demo",
+    category: "open",
+    exec: async () => {
+      // Lazy import чтобы не подгружать extension-host на старте если не вызвано
+      const { openExtension } = await import("./extension-host");
+      openExtension("dashboard");
+    },
   },
 ];
 

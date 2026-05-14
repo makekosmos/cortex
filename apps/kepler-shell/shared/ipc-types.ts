@@ -69,4 +69,21 @@ export interface KeplerApi {
         renderer'у следует заново вызвать list(). */
     onUpdated(listener: () => void): () => void;
   };
+
+  /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,
+      autostart toggle, версия и backend-статус (через backend.status()). */
+  settings: {
+    /** Открыть окно настроек (или сфокусировать существующее). */
+    open(): Promise<void>;
+    /** Закрыть окно настроек (вызывается из SettingsView). */
+    close(): Promise<void>;
+    autostart: {
+      get(): Promise<boolean>;
+      set(enabled: boolean): Promise<void>;
+    };
+    /** Версия Kepler из app.getVersion(). */
+    version(): Promise<string>;
+    /** Текущий глобальный хоткей (read-only Phase 1). */
+    hotkey(): Promise<string>;
+  };
 }

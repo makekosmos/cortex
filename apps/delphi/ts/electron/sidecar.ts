@@ -16,6 +16,7 @@ import {
   ensureKeplerRunning,
   readSharedSelectedSpace,
 } from '@kosmos/ark'
+import type { CommandInvokedEvent } from '@kosmos/ark'
 
 interface SidecarRequest {
   operation: string;
@@ -28,6 +29,7 @@ export interface SidecarEvent {
   [key: string]: unknown;
 }
 export type SidecarEventListener = (event: SidecarEvent) => void;
+export type DelphiCommandListener = (event: CommandInvokedEvent) => void;
 
 function getAppDataPath(): string {
   return process.env.KOSMOS_TEST_APPDATA
@@ -73,7 +75,10 @@ function defaultSpaceId(): string {
   }
 }
 
-async function registerDelphiCommands(client: ArkClient): Promise<void> {
+async function registerDelphiCommands(
+  client: ArkClient,
+  onCommand: DelphiCommandListener,
+): Promise<void> {
   try {
     await client.commands.register([
       { id: 'delphi:task:create', title: 'Создать задачу', subtitle: 'Delphi', category: 'action' },
@@ -81,7 +86,11 @@ async function registerDelphiCommands(client: ArkClient): Promise<void> {
     ])
     client.commands.onInvoked((event) => {
       if (!event.id.startsWith('delphi:')) return
-      console.log(`[delphi] command invoked: ${event.id}`, event.params)
+      try {
+        onCommand(event)
+      } catch (err) {
+        console.warn('[delphi.sidecar] command handler threw:', err)
+      }
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -95,6 +104,7 @@ class SidecarClient {
   private dbPathOverride: string | null = null
   private eventUnsubscribe: (() => void) | null = null
   private eventListeners: Set<SidecarEventListener> = new Set()
+  private commandListener: DelphiCommandListener = () => {}
 
   /** Subscribe to async events pushed by the ark-core-rpc sidecar. */
   onEvent(listener: SidecarEventListener): () => void {
@@ -102,6 +112,11 @@ class SidecarClient {
     return () => {
       this.eventListeners.delete(listener)
     }
+  }
+
+  /** Register the handler for Delphi command-bus invocations (delphi:*). */
+  onCommand(listener: DelphiCommandListener): void {
+    this.commandListener = listener
   }
 
   private dispatchEvent(event: SidecarEvent): void {
@@ -184,7 +199,7 @@ class SidecarClient {
       })
 
       if (state.kind === 'connected') {
-        await registerDelphiCommands(client)
+        await registerDelphiCommands(client, (event) => this.commandListener(event))
       }
 
       this.arkClient = client

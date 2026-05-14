@@ -3,8 +3,10 @@ import { ref, onMounted, onBeforeUnmount, computed } from "vue";
 import { RouterView, useRoute } from "vue-router";
 import { Settings } from "lucide-vue-next";
 import { DesktopChrome, DesktopContentSurface } from "@kosmos/visuals";
-import type { ArkStatus, ArkConnectionStatus } from "@shared/ipc-types";
+import type { ArkStatus, ArkConnectionStatus, HorologionCommandEvent } from "@shared/ipc-types";
 import SettingsView from "./views/SettingsView.vue";
+import { notifyEntriesChanged, pomodoroDraft, timerMode } from "./lib/store";
+import { usePomodoro } from "./lib/usePomodoro";
 
 const route = useRoute();
 // На route '/settings' (открыто отдельным окном) — рендерим только SettingsView,
@@ -40,13 +42,58 @@ async function refreshArkStatus() {
 // Класс точки соответствует тону подключения: success / warning / danger.
 const arkDotClass = computed(() => `dot dot--${arkStatus.value}`);
 
+// --- ARK command bus (Kosmos global launcher) ---
+// Main процесс отправляет события через `webContents.send('horologion:cmd', payload)`
+// в ответ на ARK command invocation. Подписываемся только в основном окне:
+// settings-окно тоже грузит этот App.vue, но фильтруем через isSettingsWindow.
+const pomodoro = usePomodoro();
+let unsubscribeCommand: (() => void) | null = null;
+
+async function handleCommand(event: HorologionCommandEvent): Promise<void> {
+    if (event.kind === "pomodoro:start") {
+        timerMode.value = "pomodoro";
+        if (pomodoro.isRunning.value) return; // Не перезапускаем активную сессию.
+        await pomodoro.start({
+            title: pomodoroDraft.value.title,
+            tasks: pomodoroDraft.value.tasks.slice(),
+            workMinOverride: event.durationMin,
+        });
+        return;
+    }
+    if (event.kind === "stopwatch:start") {
+        timerMode.value = "stopwatch";
+        // Если уже бежит time_entry — ничего не делаем. Иначе стартуем новый
+        // секундомер из текущего draft'а (тот же flow что и в StopwatchView).
+        const running = await window.horologion.timeEntries.listRunning();
+        if (running.length > 0) return;
+        const draft = pomodoroDraft.value;
+        const firstTask = draft.tasks[0];
+        await window.horologion.timeEntries.startTimer({
+            title: draft.title.trim() || "Без названия",
+            taskId: firstTask?.id ?? null,
+            taskTitle: firstTask?.title ?? null,
+        });
+        notifyEntriesChanged();
+    }
+}
+
 onMounted(() => {
     void refreshArkStatus();
     arkPollHandle = setInterval(refreshArkStatus, 2000);
+    // Подписку ставим только в main-окне; settings-окно команды игнорирует.
+    if (!isSettingsWindow.value) {
+        unsubscribeCommand = window.horologion.onCommand((event) => {
+            void handleCommand(event);
+        });
+    }
 });
 
 onBeforeUnmount(() => {
     if (arkPollHandle) clearInterval(arkPollHandle);
+    if (unsubscribeCommand) {
+        unsubscribeCommand();
+        unsubscribeCommand = null;
+    }
 });
 
 async function openSettingsWindow() {

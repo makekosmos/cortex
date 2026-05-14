@@ -64,6 +64,15 @@ export interface ArkStatus {
   dbPath?: string;
 }
 
+/**
+ * События, которые main-процесс отправляет в renderer как реакцию на
+ * command bus вызовы из ARK (Kosmos global launcher). Renderer подписывается
+ * через `horologion.onCommand(handler)` и стартует соответствующий таймер.
+ */
+export type HorologionCommandEvent =
+  | { kind: "pomodoro:start"; durationMin: number }
+  | { kind: "stopwatch:start" };
+
 export interface HorologionApi {
   timeEntries: {
     list(): Promise<TimeEntry[]>;
@@ -98,4 +107,10 @@ export interface HorologionApi {
      */
     set(enabled: boolean): Promise<void>;
   };
+  /**
+   * Подписка на команды от ARK command bus (Kosmos global launcher).
+   * Возвращает функцию для отписки. См. `electron/main.ts` — handler в
+   * `arkClient.commands.onInvoked` отправляет события через `webContents.send`.
+   */
+  onCommand(handler: (event: HorologionCommandEvent) => void): () => void;
 }

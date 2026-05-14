@@ -844,6 +844,39 @@ sidecar.onEvent((event: SidecarEvent) => {
 
 writeStartupTrace('sidecar-events-registered');
 
+/**
+ * Bring the main window to the foreground (show + focus + restore from minimized).
+ * Used by command-bus handlers that target Delphi's window.
+ */
+function focusMainWindow(): void {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+}
+
+// Wire Delphi command-bus handlers. The sidecar registers the `delphi:*`
+// commands once it has connected to Kepler; here we just say what to do
+// when one of them is invoked.
+sidecar.onCommand((event) => {
+  focusMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  switch (event.id) {
+    case 'delphi:task:create':
+      mainWindow.webContents.send('delphi:cmd:task:create');
+      break;
+    case 'delphi:task:today':
+      mainWindow.webContents.send('delphi:cmd:task:today');
+      break;
+    default:
+      // Unknown delphi:* command — ignore silently.
+      break;
+  }
+});
+
+writeStartupTrace('command-handler-registered');
+
 /** IPC: start sync via ArkClient (@kosmos/ark). */
 ipcMain.handle('lan-sync:start', async (_e, spaceId: string | undefined, deviceId: string, deviceName?: string, seedAddresses?: string[]) => {
   if (!spaceId) {

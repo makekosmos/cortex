@@ -22,6 +22,7 @@ import {
 } from "@kosmos/ark";
 import type {
   CreateTimeEntryInput,
+  HorologionCommandEvent,
   StartTimerInput,
   UpdateTimeEntryInput,
   TimeEntry,
@@ -141,7 +142,23 @@ async function registerHorologionCommands(client: ArkClient): Promise<void> {
     ]);
     client.commands.onInvoked((event) => {
       if (!event.id.startsWith("horologion:")) return;
-      console.log(`[horologion] command invoked: ${event.id}`, event.params);
+      let payload: HorologionCommandEvent | null = null;
+      if (event.id === "horologion:pomodoro:25") {
+        payload = { kind: "pomodoro:start", durationMin: 25 };
+      } else if (event.id === "horologion:pomodoro:50") {
+        payload = { kind: "pomodoro:start", durationMin: 50 };
+      } else if (event.id === "horologion:stopwatch:start") {
+        payload = { kind: "stopwatch:start" };
+      }
+      if (!payload) return;
+      focusMainWindow();
+      // Renderer должен быть готов к моменту отправки. Если main window только
+      // что показан — webContents уже загружен (initial loadURL отработал при
+      // createWindow). Если ещё нет — событие потеряется, но это OK: команды
+      // имеют смысл только когда Horologion реально запущен.
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("horologion:cmd", payload);
+      }
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -456,6 +473,18 @@ let allowQuit = false;
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
+
+/**
+ * Поднимает главное окно (показывает, если в трее; восстанавливает minimize;
+ * фокусирует). Используется как реакция на ARK command bus.
+ */
+function focusMainWindow(): void {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+}
 
 /**
  * Открывает отдельное Electron-окно с настройками (route `/settings`).
