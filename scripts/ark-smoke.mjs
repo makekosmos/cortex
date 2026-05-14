@@ -30,7 +30,7 @@ const steps = [
   {
     name: "@kosmos/ark typecheck",
     command: "bun",
-    args: ["run", "--cwd", "packages/kosmos-ark", "typecheck"],
+    args: ["run", "--cwd", "packages/ark", "typecheck"],
   },
   {
     name: "Arrancador unit tests",

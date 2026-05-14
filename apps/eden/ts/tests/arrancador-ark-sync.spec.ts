@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { ArkClient, type ArkObjectRecord } from "../../../../packages/kosmos-ark/src/ark-client.ts";
+import { ArkClient, type ArkObjectRecord } from "../../../../packages/ark/src/ark-client.ts";
 import {
   createArkGameObjectService,
   getArkCoreRpcBinaryPath,

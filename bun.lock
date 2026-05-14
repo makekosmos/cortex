@@ -99,7 +99,7 @@
         "vue-router": "^5.0.4",
       },
     },
-    "packages/kosmos-ark": {
+    "packages/ark": {
       "name": "@kosmos/ark",
       "version": "0.1.0",
       "devDependencies": {
@@ -107,7 +107,7 @@
         "typescript": "~5.8.3",
       },
     },
-    "packages/kosmos-visuals": {
+    "packages/visuals": {
       "name": "@kosmos/visuals",
       "version": "0.1.0",
       "dependencies": {
@@ -350,7 +350,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@kosmos/ark": ["@kosmos/ark@workspace:packages/kosmos-ark"],
+    "@kosmos/ark": ["@kosmos/ark@workspace:packages/ark"],
 
     "@kosmos/docs-site": ["@kosmos/docs-site@workspace:docs-site"],
 
@@ -360,7 +360,7 @@
 
     "@kosmos/extension-horologion": ["@kosmos/extension-horologion@workspace:extensions/horologion"],
 
-    "@kosmos/visuals": ["@kosmos/visuals@workspace:packages/kosmos-visuals"],
+    "@kosmos/visuals": ["@kosmos/visuals@workspace:packages/visuals"],
 
     "@leichtgewicht/ip-codec": ["@leichtgewicht/ip-codec@2.0.5", "", {}, "sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw=="],
 

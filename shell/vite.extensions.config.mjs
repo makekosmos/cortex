@@ -72,15 +72,15 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(extensionDir, "src"),
         "@kosmos/ark": path.resolve(
           __dirname,
-          "../packages/kosmos-ark/src/index.ts",
+          "../packages/ark/src/index.ts",
         ),
         "@kosmos/visuals/theme/css": path.resolve(
           __dirname,
-          "../packages/kosmos-visuals/theme/css-variables.css",
+          "../packages/visuals/theme/css-variables.css",
         ),
         "@kosmos/visuals": path.resolve(
           __dirname,
-          "../packages/kosmos-visuals",
+          "../packages/visuals",
         ),
       },
       dedupe: ["vue"],

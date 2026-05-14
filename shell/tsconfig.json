@@ -19,9 +19,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@kosmos/ark": ["../packages/kosmos-ark/src/index.ts"],
-      "@kosmos/visuals": ["../packages/kosmos-visuals/index.ts"],
-      "@kosmos/visuals/*": ["../packages/kosmos-visuals/*"],
+      "@kosmos/ark": ["../packages/ark/src/index.ts"],
+      "@kosmos/visuals": ["../packages/visuals/index.ts"],
+      "@kosmos/visuals/*": ["../packages/visuals/*"],
       "@shared/*": ["shared/*"]
     }
   },
