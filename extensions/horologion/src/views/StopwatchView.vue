@@ -10,7 +10,13 @@ let tickHandle: ReturnType<typeof setInterval> | null = null;
 
 async function refreshRunning() {
     const list = await window.horologion.timeEntries.listRunning();
-    running.value = list[0] ?? null;
+    // listRunning может вернуть orphan entries без `startedAt` (или с уже
+    // выставленным `endedAt` из-за рассогласованного состояния БД). Такие
+    // записи ломают tick: `new Date("").getTime()` → NaN → таймер рисует
+    // «NaN:NaN:NaN», а кнопка «Стоп» не может остановить запись (id есть, но
+    // visual state ломается на каждом тике). Фильтруем перед выбором.
+    const valid = list.filter((e) => Boolean(e.startedAt) && !e.endedAt);
+    running.value = valid[0] ?? null;
     if (running.value) startTick();
     else {
         stopTick();
