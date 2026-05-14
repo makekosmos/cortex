@@ -29,6 +29,9 @@ const api: KeplerApi = {
     listRecent: (limit) =>
       ipcRenderer.invoke("kepler:objects:listRecent", limit),
   },
+  spaces: {
+    list: () => ipcRenderer.invoke("kepler:spaces:list"),
+  },
   commands: {
     list: () => ipcRenderer.invoke("kepler:commands:list"),
     invoke: (id) => ipcRenderer.invoke("kepler:commands:invoke", id),

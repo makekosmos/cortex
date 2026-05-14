@@ -32,8 +32,10 @@ import path from "node:path";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -45,7 +47,12 @@ import {
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
 } from "@kepler/ark";
-import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
+import type {
+  BackendStatus,
+  CommandRecord,
+  SearchResult,
+  SpaceMeta,
+} from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
 import { setExtensionArkBridge } from "./extension-host";
 // Side-effect import — регистрирует IPC handlers для окна настроек
@@ -544,6 +551,70 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
   // поведение Spotlight/Raycast: command выполнен → окно уходит.
   hideLauncher();
 });
+
+// --- Dashboard (embedded view) ----------------------------------------------
+
+function listSpaces(): SpaceMeta[] {
+  const baseDir = path.join(app.getPath("appData"), "Kosmos");
+  const spacesDir = path.join(baseDir, "spaces");
+  const selected = readSharedSelectedSpace(baseDir);
+  const out: SpaceMeta[] = [];
+  // 1. Scan <APPDATA>/Kosmos/spaces/<spaceId>/
+  if (existsSync(spacesDir)) {
+    try {
+      for (const entry of readdirSync(spacesDir, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const id = entry.name;
+        const dir = path.join(spacesDir, id);
+        const metaFile = path.join(dir, "space-meta.json");
+        let meta: { name?: string; label?: string; lastAccessedAt?: number } = {};
+        if (existsSync(metaFile)) {
+          try {
+            meta = JSON.parse(readFileSync(metaFile, "utf8")) as typeof meta;
+          } catch {
+            /* corrupt meta — пропускаем */
+          }
+        }
+        let mtime = Date.now();
+        try {
+          mtime = statSync(dir).mtimeMs;
+        } catch {
+          /* unreadable — оставляем now */
+        }
+        out.push({
+          id,
+          name: meta.name ?? id,
+          objectCount: null,
+          lastAccessedAt: meta.lastAccessedAt ?? mtime,
+          label: meta.label ?? id.slice(0, 8).toUpperCase(),
+          isSelected: selected?.spaceId === id,
+        });
+      }
+    } catch (e) {
+      console.error("[kepler-shell] listSpaces scan failed:", e);
+    }
+  }
+  // 2. Если selected space ещё не в результате (например spaces/ dir не был
+  //    создан), добавим запись на основе selected-space.json.
+  if (selected && !out.some((s) => s.id === selected.spaceId)) {
+    out.push({
+      id: selected.spaceId,
+      name: selected.spaceCode || selected.spaceId,
+      objectCount: null,
+      lastAccessedAt: Date.parse(selected.updatedAt) || Date.now(),
+      label: (selected.spaceCode || selected.spaceId).slice(0, 8).toUpperCase(),
+      isSelected: true,
+    });
+  }
+  // 3. Sort: selected первым, далее по lastAccessedAt desc.
+  out.sort((a, b) => {
+    if (a.isSelected !== b.isSelected) return a.isSelected ? -1 : 1;
+    return b.lastAccessedAt - a.lastAccessedAt;
+  });
+  return out;
+}
+
+ipcMain.handle("kepler:spaces:list", (): SpaceMeta[] => listSpaces());
 
 ipcMain.handle(
   "kepler:objects:listRecent",
