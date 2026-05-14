@@ -1,3 +1,10 @@
+// @deprecated 2026-05-15: концепция spaces убрана, single DB per user.
+// Module оставлен временно для legacy/dashboard-extension и mobile/delphi
+// (могут читать старый selected-space.json для миграции). Активный код
+// shell/kepler-backend больше эти helper'ы не использует — все пишут в
+// %APPDATA%/Kosmos/ark.db без space resolution.
+// Удалить когда последний consumer переедет.
+
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
