@@ -32,10 +32,10 @@
 
 ## За 30 секунд
 
-- **Kosmos** = монорепо / экосистема для личного софта. Bun workspaces.
-- **Kepler** = имя лаунчера (`apps/kepler-shell/`) и его shared backend (`services/kepler-backend/`).
-- **ARK** = общий Rust+SQLite рантайм (`packages/ark-core`, бинарь `ark-core-rpc`).
-- **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
+- **Kosmos** = монорепо / экосистема для личного софта. Bun workspaces + Cargo workspace.
+- **Kepler** = имя лаунчера (`shell/`, npm name `kepler-shell`) и его shared backend (`services/kepler-backend/`).
+- **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, бинарь `ark-core-rpc`).
+- **Apps** говорят с ARK **только** через `@kepler/ark` или `ark_core::db` (Rust direct writers).
 - **Прямые SQL writes в ARK** из app services — **запрещены**.
 - **Apps интегрируются с лаунчером через command bus** (apps регистрируют commands, Kepler invoke'ает).
 - **Тесты** — только на изолированных БД.
@@ -98,28 +98,29 @@ bun run ark:smoke
 
 | Имя | Где | Что |
 |---|---|---|
-| **Eden** | `apps/eden/ts` | заметки (Vue + Electron + Heart Rust) |
-| **Delphi** | `apps/delphi/ts` | задачи (Electron) |
-| **Arrancador** | `apps/arrancador` | игровая библиотека (Electron) |
-| **Dashboard** | `apps/dashboard` | read-only аналитика (Electron) |
-| **Horologion** | `apps/horologion` | трекер времени, pomodoro (WIP). `time_entry_obj` + общий `tag_obj` |
-| **Kepler Shell** | `apps/kepler-shell` | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 ✅: Dashboard / Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier). |
-| **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server для лаунчера и приложений |
-| **Extension host** | `apps/kepler-shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md). |
-| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
+| **Eden** | `apps/eden/ts` | заметки (Vue + Electron + Heart Rust); standalone до Phase 6 |
+| **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
+| **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
+| **Dashboard** | `extensions/dashboard` | read-only аналитика — Vue-extension |
+| **Horologion** | `extensions/horologion` | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj` |
+| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 ✅: Dashboard / Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier). |
+| **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
+| **Extension host** | `shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md). |
+| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kepler/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **Kerux** | `apps/kerux` | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано) |
-| **ark-service** | `apps/ark-service` | Android Room ContentProvider для `apps/delphi/kotlin` (отдельно от desktop ARK) |
-| **ark-core** | `packages/ark-core/rust` | Rust runtime + ark-core-rpc |
-| **@kosmos/ark** | `packages/kosmos-ark` | TS SDK |
+| **ark-service (Android)** | `mobile/ark-service` | Android Room ContentProvider для `mobile/delphi` (отдельно от desktop ARK) |
+| **ark-core** | `crates/ark-core/rust` | Rust runtime + ark-core-rpc bin |
+| **@kepler/ark** | `packages/ark` | TS SDK |
+| **@kepler/visuals** | `packages/visuals` | UI токены, тема, компоненты |
 | **ark-relay-server** | `services/ark-relay-server` | WebSocket relay (опционально, для NAT) |
-| **kosmos-visuals** | `packages/kosmos-visuals` | UI токены, тема, компоненты |
-| **usage-tracker** | `services/usage-tracker` | Rust фон-сервис, пишет usage в ARK |
+| **kepler-watcher** | `services/kepler-watcher` | watcher-демон над `crates/ark-core` |
+| **usage-tracker** | `services/kepler-backend/src/usage_tracker/` | модуль внутри kepler-backend (был standalone до Phase E3 → `legacy/usage-tracker`) |
 
 ## Что считается substantial (нужен proof loop)
 
 - Новая фича приложения.
-- Новый ARK endpoint в `ark-core-rpc` или метод в `@kosmos/ark`.
+- Новый ARK endpoint в `ark-core-rpc` или метод в `@kepler/ark`.
 - Изменение схемы SQLite.
 - Изменение sync-протокола.
 - Изменение write-boundary (правил доступа к данным).
@@ -189,7 +190,7 @@ bun run ark:smoke
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -207,15 +208,15 @@ bun run ark:smoke
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries вне `electron/services/analytics.ts`.
+- ❌ ARK queries в обход `@kepler/ark` SDK (analytics дальше ходит через ARK RPC).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+- ❌ Копирование shared sidebar / токенов внутрь `extensions/dashboard`.
 
 ### Kepler Shell (launcher)
 
 - ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
 - ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
-- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Hardcoded action commands в `shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
 - ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
 - ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
 - ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
@@ -224,23 +225,25 @@ bun run ark:smoke
 
 - ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
 - ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kepler/ark` SDK.
 
 ### Brand consistency
 
 - ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
-- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
+- ❌ Возврат npm scope `@kosmos/*`. После Phase B4 — единый `@kepler/*` (`@kepler/ark`, `@kepler/visuals`).
 
 ### usage-tracker
 
 - ❌ Превращение в Windows Service.
 - ❌ Добавление UI / tray icon / окон.
 - ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
+- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 он заморожен в `legacy/usage-tracker/`, а активный код живёт как модуль `services/kepler-backend/src/usage_tracker/`.
 
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `shell/node_modules/@kepler/<pkg>` → `packages/<pkg>` и аналогично в `extensions/<id>/node_modules/`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/visuals/` до brand swap. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -261,7 +264,7 @@ bun run ark:smoke
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -278,7 +281,8 @@ bun run ark:smoke
 Прогнать **обязательно** в указанных случаях:
 
 ```powershell
-# Перед PR в data services (apps/*/electron/main/services/, services/usage-tracker)
+# Перед PR в data services (apps/eden/ts/main, shell/electron, extensions/<id>/src,
+# services/kepler-backend/src/usage_tracker)
 bun run ark:guard:writes
 
 # Перед PR в любую substantial-задачу
@@ -295,20 +299,22 @@ bun run ark:smoke
 
 Перед тем как сказать «готово» — пройди соответствующий чек-лист. По одному пункту, не пропускай.
 
-## Я правил ARK runtime (`packages/ark-core/rust`)
+## Я правил ARK runtime (`crates/ark-core/rust`)
 
-- [ ] `cargo test --manifest-path packages\ark-core\rust\Cargo.toml` — зелёный.
-- [ ] `cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc` — собирается.
+- [ ] `cargo test --manifest-path crates\ark-core\rust\Cargo.toml` — зелёный.
+- [ ] `cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc` — собирается.
+- [ ] `cargo build --workspace` — workspace целиком собирается (после Phase C2 общий target/).
 - [ ] Если менял schema — миграция additive (`CREATE TABLE IF NOT EXISTS`), не destructive.
 - [ ] Если менял sync — добавлены или обновлены тесты миграции/репликации.
 - [ ] Если менял wire-протокол — остался `snake_case`.
 - [ ] Self-peer filtering и routable-address filtering не ослаблены.
-- [ ] `bun run --cwd packages/kosmos-ark typecheck` — зелёный (если правил публичные типы).
+- [ ] `bun run --cwd packages/ark typecheck` — зелёный (если правил публичные типы).
 
-## Я правил `@kosmos/ark` (`packages/kosmos-ark`)
+## Я правил `@kepler/ark` (`packages/ark`)
 
-- [ ] `bun run --cwd packages/kosmos-ark typecheck` — зелёный.
-- [ ] `bun run --cwd packages/kosmos-ark build` — собирается.
+- [ ] `bun run --cwd packages/ark typecheck` — зелёный.
+- [ ] `bun run --cwd packages/ark build` — собирается.
+- [ ] `bun run --cwd packages/ark test` — зелёный (bun test).
 - [ ] Если добавил новый метод — он реальный RPC к sidecar, не SDK-фильтрация.
 - [ ] Self-managed и injected режимы оба работают, request id есть только в self-managed.
 
@@ -317,119 +323,110 @@ bun run ark:smoke
 - [ ] `bun run --cwd apps/eden/ts build` — собирается без ошибок.
 - [ ] `bun run --cwd apps/eden/ts test:e2e` — зелёный.
 - [ ] `bun run --cwd apps/eden/ts lint` — без warnings.
-- [ ] `bun x tsc --noEmit` (в `apps/eden/ts`) — зелёный.
+- [ ] `bunx tsc --noEmit` (в `apps/eden/ts`) — зелёный.
 - [ ] Не возвращён ripgrep, поиск через Heart/Tantivy / ARK FTS.
 - [ ] Если трогал `main/store.ts` — hardening для `save/move/delete` не сломан.
-- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kosmos/visuals`. Никаких ручных `--titlebar-height` хаков.
+- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kepler/visuals`. Никаких ручных `--titlebar-height` хаков.
 - [ ] Если трогал тесты — изолированная БД, не user vault.
 
-## Я правил Delphi (`apps/delphi/ts`)
+## Я правил Delphi extension (`extensions/delphi`)
 
-- [ ] `bun run --cwd apps/delphi/ts build` — собирается.
-- [ ] `bun run --cwd apps/delphi/ts test` — зелёный.
-- [ ] `bun run --cwd apps/delphi/ts e2e` — зелёный.
+- [ ] `bun run --cwd shell build:js` — собирается (extension билдится из shell сборки).
 - [ ] Если правил task storage — пишет в `task_obj`, не в legacy todos.
-- [ ] Не восстановлен legacy Delphi DB sidecar.
-- [ ] Тесты — на изолированной БД.
+- [ ] Не восстановлен legacy Delphi DB sidecar (DB sidecar заморожен).
+- [ ] `electron-api-shim.ts` **не удалён** — он эмулирует `window.electronAPI` поверх Kepler ark bridge. Без него ломается ~30 CRUD call sites.
+- [ ] Если ввёл новый `window.electronAPI.*` вызов — добавил эквивалент в `electron-api-shim.ts`.
+- [ ] Tailwind plugin (`@tailwindcss/vite`) подключён в `extensions/delphi/vite.config.mjs`.
+- [ ] Если правил `mobile/delphi` (Kotlin) — Android-only, не лезет в TS extension.
 
-## Я правил Arrancador (`apps/arrancador`)
+## Я правил Arrancador extension (`extensions/arrancador`)
 
-- [ ] `bun run --cwd apps/arrancador typecheck` — зелёный.
-- [ ] `bun run --cwd apps/arrancador build:renderer` / `build:main` / `build:preload` — собираются.
-- [ ] `bun run --cwd apps/arrancador test` — зелёный.
-- [ ] `bun run --cwd apps/arrancador smoke:packaged` — зелёный (если правил packaging / Electron main).
-- [ ] Не добавлен in-process tracker / window polling / app-owned usage SQLite.
+- [ ] `bun run --cwd shell build:js` — собирается.
+- [ ] Vue Router (memory history) routes остаются актуальными — каждый новый view зарегистрирован.
+- [ ] Native scanner (`child_process` + FS-сканирование Steam/Epic/GOG) **не переписывай в renderer**.
+- [ ] Game launch / catalogue / scan — TODO в extension, не возвращай stub'ы как «работающие».
 - [ ] Не добавлены Tauri или React зависимости.
-- [ ] ARK writes идут через `@kosmos/ark`.
-- [ ] Read-only SQLite — только fallback, отделён от write paths.
+- [ ] ARK writes идут через `@kepler/ark`.
 
-## Я правил Dashboard (`apps/dashboard`)
+## Я правил Dashboard extension (`extensions/dashboard`)
 
-- [ ] `bun run --cwd apps/dashboard build` — собирается.
-- [ ] `bun run --cwd apps/dashboard test:e2e` — зелёный.
-- [ ] `bun run --cwd apps/dashboard smoke:seed` + `smoke:analytics` — зелёные.
+- [ ] `bun run --cwd shell build:js` — собирается.
 - [ ] Renderer не открывает SQLite напрямую.
-- [ ] ARK queries только в `electron/services/analytics.ts`.
+- [ ] ARK queries идут через `@kepler/ark` SDK, не в обход.
 - [ ] Никаких writes в ARK таблицы.
-- [ ] `@kosmos/visuals` через import/alias, не скопирован.
+- [ ] `@kepler/visuals` через import/alias, не скопирован.
 
-## Я правил kepler-shell (`apps/kepler-shell`)
+## Я правил Horologion extension (`extensions/horologion`)
 
-- [ ] `bun run --cwd apps/kepler-shell typecheck` — clean.
-- [ ] `bun run --cwd apps/kepler-shell build:js` — clean.
-- [ ] `bun x vite build --configLoader native` — все 3 environments (renderer / main / preload) собираются.
-- [ ] Команды в `electron/commands.ts` имеют корректный category (`open` / `action`); action-команды не захардкожены, приходят dynamic от приложений.
+- [ ] `bun run --cwd shell build:js` — собирается.
+- [ ] Если правил pomodoro — multi-task split в `closeArkEntry` читает АКТУАЛЬНЫЙ `pomodoroDraft`, не снапшот со старта.
+- [ ] Если правил Settings — settings-окно открывается через `shell/electron/settings-window.ts` (отдельный BrowserWindow).
+- [ ] Тесты — на изолированной БД (`ARK_DB_PATH=.e2e/horologion-e2e.db`).
+- [ ] `time_entry_obj` и `tag_obj` — типы остаются согласованы с `crates/ark-core/rust/src/types.rs`.
+
+## Я правил kepler-shell (`shell/`)
+
+- [ ] `bun run --cwd shell typecheck` — clean (или `cd shell && bunx tsc --noEmit`).
+- [ ] `bun run --cwd shell build:js` — clean.
+- [ ] `bunx vite build --configLoader native` (внутри `shell/`) — renderer / main / preload собираются.
+- [ ] Команды в `shell/electron/commands.ts` имеют корректный category (`open` / `action`); action-команды не захардкожены.
 - [ ] Если правил commands — обновил `docs-site/concepts/command-bus.md`.
-- [ ] Settings-окно не сломано после изменений `main.ts`.
-- [ ] Extension PoC всё ещё открывается (`dashboard:extension:demo` команда работает).
+- [ ] Settings-окно не сломано после изменений `shell/electron/main.ts`.
 - [ ] Размер окна остался fixed 720×460, без per-frame resize animation.
 
-## Я правил extension dev mode (`apps/kepler-shell` + extensions)
+## Я правил extension dev mode (`shell/` + `extensions/`)
 
-- [ ] `KEPLER_DEV=1` + `bun run --cwd apps/kepler-shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
-- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id)` в `electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно.
+- [ ] `KEPLER_DEV=1` + `bun run --cwd shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
+- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id)` в `shell/electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно.
 - [ ] F12 toggles DevTools на любом extension window (detached, не блокирует).
 - [ ] Settings → Developer Mode toggle persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`.
 - [ ] Если правил manifest format — обновил [Extension dev mode](docs-site/concepts/extension-dev-mode.md) и [Extension host](docs-site/concepts/extension-host.md).
 - [ ] Production build (без `KEPLER_DEV`) грузит extensions из `dist/`, не из dev server'ов.
 
-## Я правил Delphi extension (`apps/kepler-shell/extensions/delphi`)
+## Я правил extension installer (`shell/scripts/install-extension.mjs`)
 
-- [ ] `electron-api-shim.ts` **не удалён** — он эмулирует `window.electronAPI` и нужен для compat с legacy Delphi-кодом. Без него ломается CRUD во всём приложении (требует переписывания каждого call site).
-- [ ] Tailwind plugin (`@tailwindcss/vite`) подключён в `vite.config.mjs` extension'а. Без него страницы Delphi теряют классы.
-- [ ] Если ввёл новый `window.electronAPI.*` вызов в Vue-коде — добавил эквивалент в `electron-api-shim.ts` (через kepler ark bridge).
-- [ ] Миграция UI на plain CSS / kosmos-visuals токены — **Phase 9, отдельная задача**. Не делай попутно с другими правками.
-- [ ] `bun run --cwd apps/kepler-shell build:js` — собирается без ошибок.
-- [ ] При запуске Kepler shell extension открывается, без crash'а на missing window.electronAPI.
+- [ ] `bun run --cwd shell ext:install <path|url>` отрабатывает на локальную папку и на zip-архив.
+- [ ] User overrides пишутся в `%APPDATA%\Kosmos\extensions\<id>\` (не в репозиторий).
+- [ ] `bun run --cwd shell ext:uninstall <id>` корректно убирает override.
+- [ ] Если правил формат manifest'а — обновил [Extension installer](docs-site/concepts/extension-installer.md).
 
-## Я правил Arrancador extension (`apps/kepler-shell/extensions/arrancador`)
-
-- [ ] Vue Router (memory history) routes остаются актуальными — каждый новый view зарегистрирован в роутере.
-- [ ] Native scanner (`child_process` + FS-сканирование Steam/Epic/GOG) **не переписывай в renderer** — он живёт в legacy standalone Arrancador main process (Phase 5+ план — миграция в kepler-backend Rust либо в kepler-shell sidecar, см. [Decisions](/reference/decisions#2026-05-14-arrancador-native-scanner-остался-в-legacy)).
-- [ ] Game launch / catalogue / scan — **TODO в extension**, не возвращай случайно stub'ы как «работающие» (только UI subset мигрирован: LayoutPage + GameCard).
-- [ ] `bun run --cwd apps/kepler-shell build:js` — собирается.
-- [ ] `electron-api-shim.ts` или эквивалент (если используется) — не сломан после правок.
-
-## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
+## Я правил command bus (`services/kepler-backend` + `@kepler/ark`)
 
 - [ ] Backend (`services/kepler-backend/src/command_bus.rs` + `ws_server.rs`) — `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.
-- [ ] SDK (`packages/kosmos-ark/src/ark-client.ts`) — `bun test` зелёный.
+- [ ] SDK (`packages/ark/src/ark-client.ts`) — `bun test` зелёный.
 - [ ] Wire format — flat events `{event: "...", ...fields}`, согласован между backend и SDK.
 - [ ] Apps register обёрнут в `try/catch` (self-managed mode без commands API — норма, не ошибка).
 - [ ] Если менял публичный shape события — обновил `docs-site/concepts/command-bus.md`.
 
-## Я правил Horologion (`apps/horologion`)
+## Я правил usage-tracker module (`services/kepler-backend/src/usage_tracker/`)
 
-- [ ] `bun run --cwd apps/horologion typecheck` — зелёный.
-- [ ] `bun run --cwd apps/horologion build:js` — собирается (sidecar + tsc + vite).
-- [ ] `bun run --cwd apps/horologion test:e2e` — зелёный (selectors из `HomeView`/`StopwatchView`/`PomodoroView` актуальны).
-- [ ] Если правил pomodoro — multi-task split в `closeArkEntry` читает АКТУАЛЬНЫЙ `pomodoroDraft`, не снапшот со старта.
-- [ ] Если правил Settings — IPC `horologion:settings:open` в `main.ts` + preload + `HorologionApi.settings.open()` в `shared/ipc-types.ts` все согласованы.
-- [ ] Если правил BrowserWindow — `loadWindowState` / `saveWindowState` / `scheduleWindowStateSave` в `electron/main.ts` сохранили window-state.json конвенцию.
-- [ ] Тесты — на изолированной БД через `ARK_DB_PATH=.e2e/horologion-e2e.db`.
-
-## Я правил usage-tracker (`services/usage-tracker`)
-
-- [ ] `cargo test --manifest-path services\usage-tracker\Cargo.toml` — зелёный.
+- [ ] `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` — зелёный.
 - [ ] Прямые ARK writes используют `ark_core::db` хелперы.
 - [ ] `lan_sync.version_vector` обновляется после прямых писей.
 - [ ] Default DB path остался `%APPDATA%\Kosmos\ark.db`.
 - [ ] Тесты переопределяют DB path в `.tmp` / `.e2e` / OS temp.
+- [ ] Tracker-модуль стартует/останавливается из `services/kepler-backend/src/main.rs` (Phase E2). Standalone-бинарь — frozen в `legacy/usage-tracker/`.
 - [ ] Tracker остаётся user-level, не Windows Service.
 
-## Я правил `kosmos-visuals` (`packages/kosmos-visuals`)
+## Я правил `@kepler/visuals` (`packages/visuals`)
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).
 - [ ] Если меняешь CSS-переменные в `theme/css-variables.css` — сразу отрази в `docs-site/.vitepress/theme/custom.css`.
 - [ ] Token-файлы (`tokens/*.ts`) остаются source of truth для соответствующих переменных.
 
+## Я правил мобильный код (`mobile/`)
+
+- [ ] `mobile/delphi/` — Kotlin Room. Изменения в схеме согласованы с `mobile/ark-service/` ContentProvider.
+- [ ] `mobile/ark-service/` — ContentProvider публикует только то, что приложение само пишет. Чужие writes не разрешены.
+
 ## Я правил документацию (`docs-site/`)
 
 - [ ] `bun run docs:build` — собирается.
+- [ ] `bun run docs:check` — зелёный (нет stale references).
 - [ ] Все внутренние ссылки рабочие.
 - [ ] Русский язык, без английских заглушек.
 - [ ] Не дублирую правила, лучше ссылка на канон-страницу.
-- [ ] Обновил `MEMORY.md` или связанные `AGENTS.md` если факты изменились.
+- [ ] Запустил `bun run docs:sync` для регенерации AGENTS.md / CLAUDE.md / llms.txt.
 
 ## Я делал substantial задачу через proof loop
 
@@ -474,7 +471,7 @@ bun run ark:smoke
 |---|---|
 | Добавил/убрал команду в `package.json` | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md` |
 | Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md` |
-| Добавил/изменил метод в `@kosmos/ark` | `docs-site/packages/kosmos-ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
+| Добавил/изменил метод в `@kepler/ark` | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
 | Изменил структуру папок приложения | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md` |
 | Удалил/перенёс файл, упомянутый в доке | grep по `docs-site/` на имя файла → обновить или удалить упоминание |
 | Изменил sync-протокол / HLC / relay | `docs-site/concepts/sync.md` |
@@ -482,7 +479,7 @@ bun run ark:smoke
 | Добавил smoke-команду | `docs-site/reference/smoke-matrix.md` |
 | Изменил правило/запрет | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md` |
 | Принял архитектурное решение | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md` |
-| Изменил дизайн-токены `kosmos-visuals` | `docs-site/packages/kosmos-visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
+| Изменил дизайн-токены `@kepler/visuals` | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
 | Создал/убрал `object_type` | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
 | Запланировал фичу / нашёл баг приложения | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap)) |
 
@@ -506,7 +503,7 @@ bun run ark:smoke
 
 - [ ] Я перечитал `docs-site/apps/<которые трогал>.md` — там нет устаревших фактов?
 - [ ] Если добавил/убрал команду — отразил в `docs-site/reference/commands.md`?
-- [ ] Если изменил публичный API (ARK endpoint, `@kosmos/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
+- [ ] Если изменил публичный API (ARK endpoint, `@kepler/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
 - [ ] Если ввёл новое архитектурное решение — есть ADR в `docs/` и ссылка в `docs-site/reference/decisions.md`?
 - [ ] `bun run docs:sync` прошёл без ошибок.
 - [ ] `bun run docs:check` зелёный (нет stale-references).
@@ -523,7 +520,7 @@ bun run docs:check
 Что делает (`scripts/check-docs-freshness.mjs`):
 
 - Парсит все `docs-site/**/*.md` (кроме сгенерированных).
-- Извлекает упоминания путей (`apps/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
+- Извлекает упоминания путей (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
 - Проверяет, что эти пути существуют в репозитории.
 - Извлекает упоминания команд (`bun run <name>`, `cargo <subcmd>`).
 - Проверяет, что `bun run <name>` есть в каком-то `package.json` workspace'а.
@@ -562,7 +559,9 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 Скрипт `scripts/sync-agents-docs.mjs` берёт:
 
 - `docs-site/agents/index.md` + `forbidden.md` + `checklists.md` + `reference/rules.md` + `concepts/proof-loop.md` → корневой `AGENTS.md` и `CLAUDE.md`.
-- `docs-site/apps/<name>.md` + общие запреты → `apps/<name>/AGENTS.md`.
+- `docs-site/apps/eden.md` + общие запреты → `apps/eden/AGENTS.md`, `apps/eden/ts/AGENTS.md`.
+- `docs-site/apps/delphi.md` (Kotlin-часть) → `mobile/delphi/AGENTS.md`.
+- `docs-site/packages/ark-core.md` → `crates/ark-core/AGENTS.md`.
 - Весь набор ключевых страниц inline → `docs-site/public/llms.txt`.
 
 Если меняешь логику генерации — правь сам `scripts/sync-agents-docs.mjs`, потом `bun run docs:sync`.
@@ -613,7 +612,7 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 ## 1. Граница записи в ARK
 
 ::: danger
-- Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
+- Все ARK writes через `@kepler/ark` (TS) или `ark_core::db` (Rust).
 - **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
 - Dashboard — read-only.
 - Перед PR в data services: `bun run ark:guard:writes`.
@@ -660,17 +659,17 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 - `bun install` после клона.
 - `bun run ark:guard:writes` перед PR в data-слой.
 - `bun run ark:smoke` перед нетривиальным PR.
-- `cargo test` в `packages/ark-core/rust` при правках runtime.
+- `cargo test` в `crates/ark-core/rust` при правках runtime.
 
 См. [Стек и инструменты](docs-site/guide/tooling.md) и [Smoke-матрица](docs-site/reference/smoke-matrix.md).
 
 ## 7. UI и Visuals
 
-- Используй `@kosmos/visuals` для shared chrome / сайдбара / titlebar.
+- Используй `@kepler/visuals` для shared chrome / сайдбара / titlebar.
 - **Не копируй** shared компоненты внутрь приложения.
 - Не возвращай ручные titlebar-offset / safe-area хаки — есть `DesktopChrome` / `DesktopContentSurface`.
 
-См. [kosmos-visuals](docs-site/packages/kosmos-visuals.md).
+См. [kosmos-visuals](docs-site/packages/visuals.md).
 
 ## 8. Запреты per-app
 
@@ -685,8 +684,8 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 После swap 2026-05-14:
 
-- **Kepler** — имя лаунчера и его UI-shell. `apps/kepler-shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
-- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kosmos/ark`, `@kosmos/visuals`, ARK runtime, doc-site, общий бренд.
+- **Kepler** — имя лаунчера и его UI-shell. `shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
+- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kepler/ark`, `@kepler/visuals`, ARK runtime, doc-site, общий бренд.
 - Не смешивай: «Kosmos launcher» — неверно, это **Kepler**. «Kepler ARK» — неверно, ARK живёт в **Kosmos**.
 - Перед PR прогоняй `pwsh scripts/check-swap-completeness.ps1` если правил что-то рядом с брендом.
 
@@ -694,8 +693,8 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 - Apps регистрируют свои commands через `ArkClient.commands.register(...)` **только** в `kepler-mode` (когда лаунчер их вызвал). Регистрация — в `try/catch`: standalone-режим (без лаунчера) не имеет commands API, и это норма, не ошибка.
 - Wire format событий command bus — **flat**: `{event: "command:invoked", id: "...", ...fields}`. Не `{kind: "event", type: "...", payload: {...}}`. Согласовано с peer/sync events.
-- Command-категории в `apps/kepler-shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
-- Extension content в `apps/kepler-shell/extensions/<id>/` — static (no build step yet, PoC).
+- Command-категории в `shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
+- Extension content в `extensions/<id>/` — static (no build step yet, PoC).
 
 ## 11. Стиль коммитов и кода
 
@@ -775,7 +774,7 @@ flowchart LR
 
 Пример AC из реальной задачи:
 
-> **AC1.** Arrancador ARK write-path audit passes: любые writes в ARK `objects`, `object_types`, `object_links`, или usage sync tables идут через `@kosmos/ark` APIs или Rust `ark_core` helpers, не через raw `better-sqlite3` SQL в app services.
+> **AC1.** Arrancador ARK write-path audit passes: любые writes в ARK `objects`, `object_types`, `object_links`, или usage sync tables идут через `@kepler/ark` APIs или Rust `ark_core` helpers, не через raw `better-sqlite3` SQL в app services.
 
 Когда `spec.md` готов — он **не редактируется** в процессе реализации. Если что-то меняется по дороге — это либо новая задача, либо отдельное решение в `problems.md` с обоснованием.
 

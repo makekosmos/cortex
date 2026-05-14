@@ -34,13 +34,13 @@ Eden — основное приложение для записей: дневн
 └─────────────────────────────────┘
 ```
 
-- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kosmos/visuals`.
+- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kepler/visuals`.
 - **main/** — Electron main process: IPC handlers, SQLite storage (`store.ts`), Heart integration, Hevy sync, мост на ARK через `ark.ts`.
 - **heart/** — Rust binary: vault filesystem manager (note types, folders, save/move/delete с hardening), stdin/stdout sidecar. **Не** search engine — search мигрирован на ARK FTS5 в `store.ts:searchEntries`.
 
 ### ARK transport (Phase 2 cutover)
 
-`main/ark.ts` использует `@kosmos/ark` с kepler-aware resolution:
+`main/ark.ts` использует `@kepler/ark` с kepler-aware resolution:
 
 - По умолчанию пытается подключиться к [Kepler host](./kepler.md) через WebSocket. Если Kepler запущен — Eden не спавнит собственный `ark-core-rpc`.
 - Env-флаг `KOSMOS_KEPLER_OPTIONAL=1` включает **fallback** на self-managed sidecar (legacy режим), если Kepler недоступен. Это transitional флаг — будет убран в Phase 6.
@@ -75,7 +75,7 @@ apps/eden/
    │  ├─ main.ts                 # init, BrowserWindow, IPC handlers
    │  ├─ preload.ts
    │  ├─ store.ts                # SQLite: entries, folders, note types, trash, vault
-   │  ├─ ark.ts                  # мост на @kosmos/ark
+   │  ├─ ark.ts                  # мост на @kepler/ark
    │  ├─ heart.ts                # Eden Heart sidecar
    │  ├─ hevy.ts                 # Hevy fitness API
    │  └─ hevySync.ts             # Hevy → Eden entries
@@ -138,9 +138,9 @@ bun x tsc --noEmit
 - **Heart остаётся**, не возвращаться к ripgrep. Расширение поиска — инкрементальный индекс в Tantivy, не новый JS-хак.
 - **Storage hardening** в `main/store.ts` — не упрощать. Защита для `save`/`move`/`delete` уже есть, не ломай её.
 - **tree-aware path logic**: для markdown-файлов один путь заметки, не плоские пути.
-- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kosmos/visuals`. **Не возвращай** ручные `--titlebar-height` / `--titlebar-left-safe-area` хаки в shell.
-- **Titlebar history controls** — общий `TitlebarHistoryControls` из `@kosmos/visuals`. Состояние — из локальной истории экранов/записей Eden, **не** из vue-router.
-- **Shared visuals**: если компонент есть в `@kosmos/visuals` — импорт через public API пакета, не deep import. Локальные `src/components/sidebar/*` — это **app-specific** контейнеры, не дубли shared UI.
+- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`. **Не возвращай** ручные `--titlebar-height` / `--titlebar-left-safe-area` хаки в shell.
+- **Titlebar history controls** — общий `TitlebarHistoryControls` из `@kepler/visuals`. Состояние — из локальной истории экранов/записей Eden, **не** из vue-router.
+- **Shared visuals**: если компонент есть в `@kepler/visuals` — импорт через public API пакета, не deep import. Локальные `src/components/sidebar/*` — это **app-specific** контейнеры, не дубли shared UI.
 - **Alias** `@/` → `src/`.
 - **preload**: `vite-plugin-electron` (бывший) генерирует `preload.mjs`, не `.js`. В `main.ts` путь — `.mjs`.
 
@@ -211,7 +211,7 @@ bun x tsc --noEmit
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -229,15 +229,15 @@ bun x tsc --noEmit
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries вне `electron/services/analytics.ts`.
+- ❌ ARK queries в обход `@kepler/ark` SDK (analytics дальше ходит через ARK RPC).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+- ❌ Копирование shared sidebar / токенов внутрь `extensions/dashboard`.
 
 ### Kepler Shell (launcher)
 
 - ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
 - ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
-- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Hardcoded action commands в `shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
 - ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
 - ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
 - ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
@@ -246,23 +246,25 @@ bun x tsc --noEmit
 
 - ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
 - ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kepler/ark` SDK.
 
 ### Brand consistency
 
 - ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
-- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
+- ❌ Возврат npm scope `@kosmos/*`. После Phase B4 — единый `@kepler/*` (`@kepler/ark`, `@kepler/visuals`).
 
 ### usage-tracker
 
 - ❌ Превращение в Windows Service.
 - ❌ Добавление UI / tray icon / окон.
 - ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
+- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 он заморожен в `legacy/usage-tracker/`, а активный код живёт как модуль `services/kepler-backend/src/usage_tracker/`.
 
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `shell/node_modules/@kepler/<pkg>` → `packages/<pkg>` и аналогично в `extensions/<id>/node_modules/`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/visuals/` до brand swap. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -283,7 +285,7 @@ bun x tsc --noEmit
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -300,7 +302,8 @@ bun x tsc --noEmit
 Прогнать **обязательно** в указанных случаях:
 
 ```powershell
-# Перед PR в data services (apps/*/electron/main/services/, services/usage-tracker)
+# Перед PR в data services (apps/eden/ts/main, shell/electron, extensions/<id>/src,
+# services/kepler-backend/src/usage_tracker)
 bun run ark:guard:writes
 
 # Перед PR в любую substantial-задачу

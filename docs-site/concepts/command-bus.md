@@ -102,10 +102,10 @@ sequenceDiagram
 |---|---|---|
 | Backend registry | `services/kepler-backend/src/command_bus.rs` | `CommandBus` структура (registrations, broadcast), unit-тесты |
 | Backend WS dispatch | `services/kepler-backend/src/ws_server.rs` | intercept `commands.*` operations, broadcast events |
-| TS SDK | `packages/kosmos-ark/src/ark-client.ts` | `ArkCommandsApi`: `register/unregister/list/invoke/onInvoked/onChanged` |
-| Launcher merge | `apps/kepler-shell/electron/main.ts` | `kepler:commands:list` IPC = static `COMMANDS` ∪ `arkClient.commands.list()` |
-| Launcher invoke | `apps/kepler-shell/electron/main.ts` | `kepler:commands:invoke` — static exec локально, dynamic — `arkClient.commands.invoke(id)` |
-| Static open-commands | `apps/kepler-shell/electron/commands.ts` | `COMMANDS: InternalCommand[]` — «Открыть Eden», «Открыть Delphi» и т.п. |
+| TS SDK | `packages/ark/src/ark-client.ts` | `ArkCommandsApi`: `register/unregister/list/invoke/onInvoked/onChanged` |
+| Launcher merge | `shell/electron/main.ts` | `kepler:commands:list` IPC = static `COMMANDS` ∪ `arkClient.commands.list()` |
+| Launcher invoke | `shell/electron/main.ts` | `kepler:commands:invoke` — static exec локально, dynamic — `arkClient.commands.invoke(id)` |
+| Static open-commands | `shell/electron/commands.ts` | `COMMANDS: InternalCommand[]` — «Открыть Eden», «Открыть Delphi» и т.п. |
 
 ## Examples
 
@@ -113,7 +113,7 @@ sequenceDiagram
 
 ```ts
 // apps/horologion/electron/main.ts
-import { ArkClient } from '@kosmos/ark'
+import { ArkClient } from '@kepler/ark'
 
 const client = new ArkClient({ /* kepler-mode */ })
 await client.start()
@@ -155,10 +155,10 @@ const off = client.commands.onInvoked((e) => {
 app.on('before-quit', () => off())
 ```
 
-### Invoke (от launcher через `@kosmos/ark`)
+### Invoke (от launcher через `@kepler/ark`)
 
 ```ts
-// apps/kepler-shell/electron/main.ts (упрощённо)
+// shell/electron/main.ts (упрощённо)
 await arkClient.commands.invoke('horologion:pomodoro:25')
 ```
 
@@ -195,4 +195,4 @@ client.commands.onChanged(() => {
 
 - [Архитектура](/concepts/architecture) — общая картина.
 - [Extension host](/concepts/extension-host) — Phase 4 foundation для in-shell extensions.
-- [@kosmos/ark](/packages/kosmos-ark) — TS SDK с `ArkCommandsApi`.
+- [@kepler/ark](/packages/ark) — TS SDK с `ArkCommandsApi`.

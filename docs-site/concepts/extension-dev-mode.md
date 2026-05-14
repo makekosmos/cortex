@@ -23,10 +23,10 @@ Hot-reload extension'ов через Vite dev servers. Изменения в `ex
 
 ```powershell
 # Terminal 1 — Vite dev servers для каждого extension'а
-bun run --cwd apps/kepler-shell dev:extensions
+bun run --cwd shell dev:extensions
 
 # Terminal 2 — Kepler shell с включённым dev режимом
-$env:KEPLER_DEV = "1"; bun run --cwd apps/kepler-shell dev
+$env:KEPLER_DEV = "1"; bun run --cwd shell dev
 ```
 
 После этого:
@@ -46,7 +46,7 @@ $env:KEPLER_DEV = "1"; bun run --cwd apps/kepler-shell dev
 | Delphi | 5182 |
 | Arrancador | 5183 |
 
-`bun run --cwd apps/kepler-shell dev:extensions` поднимает по одному Vite dev server'у на каждый порт (см. `apps/kepler-shell/vite.extensions.config.mjs`).
+`bun run --cwd shell dev:extensions` поднимает по одному Vite dev server'у на каждый порт (см. `shell/vite.extensions.config.mjs`).
 
 ## Manifest
 
@@ -61,7 +61,7 @@ $env:KEPLER_DEV = "1"; bun run --cwd apps/kepler-shell dev
 }
 ```
 
-Resolver `openExtension(id)` в `apps/kepler-shell/electron/extension-host.ts`:
+Resolver `openExtension(id)` в `shell/electron/extension-host.ts`:
 
 - Если `KEPLER_DEV=1` **и** в манифесте есть `devPort` → `BrowserWindow.loadURL('http://localhost:<devPort>/')`.
 - Иначе → fallback на `loadFile(<root>/<id>/<entryHtml>)` из bundled dist.
@@ -80,7 +80,7 @@ Settings window kepler-shell имеет checkbox «Developer Mode». Значе�
 - Без env-перменной значение из JSON — единственный источник.
 - Если **и** env var выставлен, **и** JSON true — оба эквивалентны, флаг ON.
 
-Код: `apps/kepler-shell/electron/settings-window.ts` (loader/saver + IPC handler), `apps/kepler-shell/src/views/SettingsView.vue` (UI).
+Код: `shell/electron/settings-window.ts` (loader/saver + IPC handler), `shell/src/views/SettingsView.vue` (UI).
 
 ## Caveats
 
@@ -93,10 +93,10 @@ Settings window kepler-shell имеет checkbox «Developer Mode». Значе�
 
 | Файл | Что |
 |---|---|
-| `apps/kepler-shell/electron/extension-host.ts` | `openExtension(id)` resolver: dev URL vs dist file |
-| `apps/kepler-shell/vite.extensions.config.mjs` | Vite dev server config per extension (порт-маппинг) |
-| `apps/kepler-shell/electron/settings-window.ts` | Developer Mode setting (load/save/IPC) |
-| `apps/kepler-shell/src/views/SettingsView.vue` | Settings UI с Developer Mode toggle |
+| `shell/electron/extension-host.ts` | `openExtension(id)` resolver: dev URL vs dist file |
+| `shell/vite.extensions.config.mjs` | Vite dev server config per extension (порт-маппинг) |
+| `shell/electron/settings-window.ts` | Developer Mode setting (load/save/IPC) |
+| `shell/src/views/SettingsView.vue` | Settings UI с Developer Mode toggle |
 
 ## См. также
 

@@ -18,7 +18,7 @@
 |---|---|
 | Добавил/убрал команду в `package.json` | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md` |
 | Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md` |
-| Добавил/изменил метод в `@kosmos/ark` | `docs-site/packages/kosmos-ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
+| Добавил/изменил метод в `@kepler/ark` | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
 | Изменил структуру папок приложения | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md` |
 | Удалил/перенёс файл, упомянутый в доке | grep по `docs-site/` на имя файла → обновить или удалить упоминание |
 | Изменил sync-протокол / HLC / relay | `docs-site/concepts/sync.md` |
@@ -26,7 +26,7 @@
 | Добавил smoke-команду | `docs-site/reference/smoke-matrix.md` |
 | Изменил правило/запрет | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md` |
 | Принял архитектурное решение | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md` |
-| Изменил дизайн-токены `kosmos-visuals` | `docs-site/packages/kosmos-visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
+| Изменил дизайн-токены `@kepler/visuals` | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
 | Создал/убрал `object_type` | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
 | Запланировал фичу / нашёл баг приложения | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap)) |
 
@@ -50,7 +50,7 @@
 
 - [ ] Я перечитал `docs-site/apps/<которые трогал>.md` — там нет устаревших фактов?
 - [ ] Если добавил/убрал команду — отразил в `docs-site/reference/commands.md`?
-- [ ] Если изменил публичный API (ARK endpoint, `@kosmos/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
+- [ ] Если изменил публичный API (ARK endpoint, `@kepler/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
 - [ ] Если ввёл новое архитектурное решение — есть ADR в `docs/` и ссылка в `docs-site/reference/decisions.md`?
 - [ ] `bun run docs:sync` прошёл без ошибок.
 - [ ] `bun run docs:check` зелёный (нет stale-references).
@@ -67,7 +67,7 @@ bun run docs:check
 Что делает (`scripts/check-docs-freshness.mjs`):
 
 - Парсит все `docs-site/**/*.md` (кроме сгенерированных).
-- Извлекает упоминания путей (`apps/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
+- Извлекает упоминания путей (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
 - Проверяет, что эти пути существуют в репозитории.
 - Извлекает упоминания команд (`bun run <name>`, `cargo <subcmd>`).
 - Проверяет, что `bun run <name>` есть в каком-то `package.json` workspace'а.
@@ -106,7 +106,9 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 Скрипт `scripts/sync-agents-docs.mjs` берёт:
 
 - `docs-site/agents/index.md` + `forbidden.md` + `checklists.md` + `reference/rules.md` + `concepts/proof-loop.md` → корневой `AGENTS.md` и `CLAUDE.md`.
-- `docs-site/apps/<name>.md` + общие запреты → `apps/<name>/AGENTS.md`.
+- `docs-site/apps/eden.md` + общие запреты → `apps/eden/AGENTS.md`, `apps/eden/ts/AGENTS.md`.
+- `docs-site/apps/delphi.md` (Kotlin-часть) → `mobile/delphi/AGENTS.md`.
+- `docs-site/packages/ark-core.md` → `crates/ark-core/AGENTS.md`.
 - Весь набор ключевых страниц inline → `docs-site/public/llms.txt`.
 
 Если меняешь логику генерации — правь сам `scripts/sync-agents-docs.mjs`, потом `bun run docs:sync`.

@@ -54,13 +54,9 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 
 Создавай smoke-БД в `globalSetup` под `apps/<app>/.e2e/`. Передавай путь через env-переменную, которую читает Electron main при `app.isPackaged ? userData : env.ARK_DB_PATH`.
 
-## packaged smoke (Arrancador пример)
+## packaged smoke
 
-Arrancador собирает unpacked Windows-бандл и запускает `release/win-unpacked/arrancador.exe` с **временными** `APPDATA`, `LOCALAPPDATA`, `ARK_DB_PATH` под `apps/arrancador/.e2e/packaged-smoke`:
-
-```powershell
-bun run --cwd apps/arrancador smoke:packaged
-```
+После Phase B-D большинство приложений живут как Vue-extensions в Kepler shell. Для packaged Electron-приложений (Kepler shell, Eden), которые умеют делать packaged smoke, паттерн тот же: собирается unpacked Windows-бандл и запускается с **временными** `APPDATA`, `LOCALAPPDATA`, `ARK_DB_PATH` под `<app>/.e2e/packaged-smoke/`.
 
 Это нужно потому, что packaged Electron читает реальные `%APPDATA%` пути — приходится подменять весь user dir, а не только `ARK_DB_PATH`.
 

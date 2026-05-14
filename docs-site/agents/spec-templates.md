@@ -63,7 +63,7 @@ AC3. <…>
 Не в задаче:
 
 - Покрытие смежных приложений.
-- Изменения в ARK runtime / @kosmos/ark API.
+- Изменения в ARK runtime / `@kepler/ark` API.
 
 ## Acceptance Criteria
 
@@ -91,11 +91,11 @@ AC5. `bun run ark:guard:writes` — зелёный (никаких прямых 
 
 В задаче:
 
-- `packages/ark-core/rust/src/db.rs` — функция-агрегатор.
-- `packages/ark-core/rust/src/main.rs` — регистрация RPC operation `<snake_case_name>`.
-- `packages/ark-core/rust/src/types.rs` — request / response типы.
+- `crates/ark-core/rust/src/db.rs` — функция-агрегатор.
+- `crates/ark-core/rust/src/main.rs` — регистрация RPC operation `<snake_case_name>`.
+- `crates/ark-core/rust/src/types.rs` — request / response типы.
 - Rust unit test для агрегатора.
-- `packages/kosmos-ark/src/ark-client.ts` — обёртка `ark.<group>.<methodName>`.
+- `packages/ark/src/ark-client.ts` — обёртка `ark.<group>.<methodName>`.
 - TS тип для request / response.
 
 Не в задаче:
@@ -105,10 +105,10 @@ AC5. `bun run ark:guard:writes` — зелёный (никаких прямых 
 
 ## Acceptance Criteria
 
-AC1. `cargo test --manifest-path packages\ark-core\rust\Cargo.toml` — зелёный, новый тест есть.
-AC2. `cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc` — собирается.
-AC3. `bun run --cwd packages/kosmos-ark typecheck` — зелёный, новый метод типизирован.
-AC4. `bun run --cwd packages/kosmos-ark build` — собирается.
+AC1. `cargo test --manifest-path crates\ark-core\rust\Cargo.toml` — зелёный, новый тест есть.
+AC2. `cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc` — собирается.
+AC3. `bun run --cwd packages/ark typecheck` — зелёный, новый метод типизирован.
+AC4. `bun run --cwd packages/ark build` — собирается.
 AC5. Wire-формат остался `snake_case`. Self-peer / routable filtering не тронуты.
 AC6. Schema-добавления (если были) — additive.
 

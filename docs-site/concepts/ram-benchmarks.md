@@ -43,7 +43,7 @@ pwsh scripts/measure-kepler-ram.ps1 -Mode kepler
 
 ```powershell
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"
-bun run --cwd apps/kepler-shell dev
+bun run --cwd shell dev
 # через 5s после старта launcher вызовет openExtension('dashboard'|'horologion'|'delphi'|'arrancador')
 ```
 

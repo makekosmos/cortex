@@ -3,7 +3,7 @@
 Extension host — production foundation Kepler shell: продуктовые апки рендерятся как **Vue extension bundles** в отдельных BrowserWindow внутри kepler-shell, без собственных Electron .exe.
 
 ::: tip Текущий статус — Production foundation (Phase 4 ✅)
-Loader (`apps/kepler-shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Мигрированы **4 апки**: Dashboard, Horologion, Delphi, Arrancador (UI subset). Eden намеренно остаётся standalone .exe — миграция запланирована отдельной фазой, см. [Kepler Roadmap → Phase 6](/apps/kepler-roadmap#phase-6).
+Loader (`shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Мигрированы **4 апки**: Dashboard, Horologion, Delphi, Arrancador (UI subset). Eden намеренно остаётся standalone .exe — миграция запланирована отдельной фазой, см. [Kepler Roadmap → Phase 6](/apps/kepler-roadmap#phase-6).
 
 RAM-эффект миграции зафиксирован в [RAM benchmarks](/concepts/ram-benchmarks): −124 MB Working Set / −209 MB Private Bytes / −4 процесса относительно baseline'а из 4 standalone Electron-апок.
 :::
@@ -20,7 +20,7 @@ Phase 4 цель — превратить апки в **extensions**: Vue-бан
 
 ## Текущая реализация loader'а
 
-`apps/kepler-shell/electron/extension-host.ts`:
+`shell/electron/extension-host.ts`:
 
 ```ts
 export interface ExtensionManifest {
@@ -97,7 +97,7 @@ Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `fo
 ### Структура extension директории
 
 ```text
-apps/kepler-shell/extensions/<id>/
+extensions/<id>/
 ├── manifest.json
 ├── icon.png             // optional, ссылается через manifest.icon
 ├── src/                  // Vue sources (dev)
@@ -233,7 +233,7 @@ window.kepler.window.maximize()
 Как extension получает `ArkClient` для работы с ARK?
 
 - **Вариант A — preload bridge.** Kepler-shell владеет одним общим `ArkClient`, expose через preload `contextBridge`. Extension вызывает `window.arkApi.objects.list()`. Плюс — один WS connection. Минус — preload bridge нужно designed для всех ARK операций.
-- **Вариант B — extension спавнит свой ArkClient.** Extension получает в preload `keplerLock` (port + bearer) и создаёт свой WS connection через `@kosmos/ark`. Плюс — extensions изолированы. Минус — N WS connections на kepler-backend.
+- **Вариант B — extension спавнит свой ArkClient.** Extension получает в preload `keplerLock` (port + bearer) и создаёт свой WS connection через `@kepler/ark`. Плюс — extensions изолированы. Минус — N WS connections на kepler-backend.
 
 Текущий PoC ничего не expose'ит (Dashboard placeholder — статичный HTML). Решение нужно к моменту миграции Dashboard.
 
@@ -266,10 +266,10 @@ window.kepler.window.maximize()
 
 | Файл | Что |
 |---|---|
-| `apps/kepler-shell/electron/extension-host.ts` | Loader, IPC handlers, BrowserWindow создание |
-| `apps/kepler-shell/electron/commands.ts` | `dashboard:extension:demo` — PoC trigger |
-| `apps/kepler-shell/extensions/<id>/manifest.json` | Per-extension манифест |
-| `apps/kepler-shell/extensions/<id>/index.html` | Entry HTML |
+| `shell/electron/extension-host.ts` | Loader, IPC handlers, BrowserWindow создание |
+| `shell/electron/commands.ts` | `dashboard:extension:demo` — PoC trigger |
+| `extensions/<id>/manifest.json` | Per-extension манифест |
+| `extensions/<id>/index.html` | Entry HTML |
 
 ## Связанные документы
 

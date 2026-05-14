@@ -170,7 +170,7 @@ title «Отдых».
 
 ## Usage data
 
-Отдельный тяжёлый stream. Источник правды — `services/usage-tracker`, который пишет напрямую в SQLite (через `ark_core::db` хелперы с обновлением `lan_sync.version_vector`).
+Отдельный тяжёлый stream. Источник правды — `services/kepler-backend/src/usage_tracker`, который пишет напрямую в SQLite (через `ark_core::db` хелперы с обновлением `lan_sync.version_vector`).
 
 ### `tracked_apps`
 
@@ -212,7 +212,7 @@ UsageSession { id, tracked_app_id, started_at, ended_at, duration_ms, ... }
 
 `lan_sync.version_vector` — это запись в `sync_kv` под фиксированным ключом, обновляется на каждой записи в синхронизируемую сущность.
 
-## TypeScript API через `@kosmos/ark`
+## TypeScript API через `@kepler/ark`
 
 ```ts
 // CRUD объектов
@@ -274,7 +274,7 @@ ARK предоставляет специализированные query-опе
 
 ## Канонический референс
 
-- `packages/ark-core/README.md` — обзор runtime.
-- `packages/ark-core/rust/src/schema.rs` — DDL.
-- `packages/ark-core/rust/src/db.rs` — CRUD и миграции.
-- `packages/ark-core/rust/src/types.rs` — сущности и payloads.
+- `crates/ark-core/README.md` — обзор runtime.
+- `crates/ark-core/rust/src/schema.rs` — DDL.
+- `crates/ark-core/rust/src/db.rs` — CRUD и миграции.
+- `crates/ark-core/rust/src/types.rs` — сущности и payloads.

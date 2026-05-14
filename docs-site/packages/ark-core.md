@@ -1,7 +1,7 @@
 # ark-core
 
 ::: tip Источник правды
-`packages/ark-core/README.md`, `packages/ark-core/AGENTS.md`
+`crates/ark-core/README.md`, `crates/ark-core/AGENTS.md`
 :::
 
 Канонический local-first data runtime для Kosmos. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
@@ -124,7 +124,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ::: warning Жёстко
 - Каждая persisted syncable сущность обязана round-trip'иться через `db.rs::load_entities` и `db.rs::apply_entity`.
-- Direct writers вне RPC layer (`services/usage-tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
+- Direct writers вне RPC layer (`services/kepler-backend/src/usage_tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
 - Schema-добавления **идемпотентны**. Используй `CREATE TABLE IF NOT EXISTS` / additive миграции, не destructive rewrites.
 - Wire-протокол sync остаётся `snake_case`. RPC может быть `camelCase` где зависят legacy Electron callers.
 - **Self-peer filtering** и **routable-address filtering** — обязательные инварианты. Не ослабляй при изменениях в sync startup или peer persistence.
@@ -132,7 +132,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Verification expectations
 
-- Запускай `cargo test` в `packages/ark-core/rust`.
+- Запускай `cargo test` в `crates/ark-core/rust`.
 - Если трогаешь sync или schema — добавь/обнови тесты миграции и репликации, а не только локальный CRUD.
 
 ## Текущие ограничения
@@ -144,7 +144,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Связанные документы
 
-- [@kosmos/ark](/packages/kosmos-ark) — TS SDK.
+- [@kepler/ark](/packages/ark) — TS SDK.
 - [Модель данных ARK](/concepts/ark-objects).
 - [Синхронизация](/concepts/sync).
 - [Граница записи в ARK](/concepts/write-boundary).

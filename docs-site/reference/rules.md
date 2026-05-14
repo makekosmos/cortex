@@ -5,7 +5,7 @@
 ## 1. Граница записи в ARK
 
 ::: danger
-- Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
+- Все ARK writes через `@kepler/ark` (TS) или `ark_core::db` (Rust).
 - **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
 - Dashboard — read-only.
 - Перед PR в data services: `bun run ark:guard:writes`.
@@ -52,17 +52,17 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 - `bun install` после клона.
 - `bun run ark:guard:writes` перед PR в data-слой.
 - `bun run ark:smoke` перед нетривиальным PR.
-- `cargo test` в `packages/ark-core/rust` при правках runtime.
+- `cargo test` в `crates/ark-core/rust` при правках runtime.
 
 См. [Стек и инструменты](/guide/tooling) и [Smoke-матрица](/reference/smoke-matrix).
 
 ## 7. UI и Visuals
 
-- Используй `@kosmos/visuals` для shared chrome / сайдбара / titlebar.
+- Используй `@kepler/visuals` для shared chrome / сайдбара / titlebar.
 - **Не копируй** shared компоненты внутрь приложения.
 - Не возвращай ручные titlebar-offset / safe-area хаки — есть `DesktopChrome` / `DesktopContentSurface`.
 
-См. [kosmos-visuals](/packages/kosmos-visuals).
+См. [kosmos-visuals](/packages/visuals).
 
 ## 8. Запреты per-app
 
@@ -77,8 +77,8 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 После swap 2026-05-14:
 
-- **Kepler** — имя лаунчера и его UI-shell. `apps/kepler-shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
-- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kosmos/ark`, `@kosmos/visuals`, ARK runtime, doc-site, общий бренд.
+- **Kepler** — имя лаунчера и его UI-shell. `shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
+- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kepler/ark`, `@kepler/visuals`, ARK runtime, doc-site, общий бренд.
 - Не смешивай: «Kosmos launcher» — неверно, это **Kepler**. «Kepler ARK» — неверно, ARK живёт в **Kosmos**.
 - Перед PR прогоняй `pwsh scripts/check-swap-completeness.ps1` если правил что-то рядом с брендом.
 
@@ -86,8 +86,8 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 - Apps регистрируют свои commands через `ArkClient.commands.register(...)` **только** в `kepler-mode` (когда лаунчер их вызвал). Регистрация — в `try/catch`: standalone-режим (без лаунчера) не имеет commands API, и это норма, не ошибка.
 - Wire format событий command bus — **flat**: `{event: "command:invoked", id: "...", ...fields}`. Не `{kind: "event", type: "...", payload: {...}}`. Согласовано с peer/sync events.
-- Command-категории в `apps/kepler-shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
-- Extension content в `apps/kepler-shell/extensions/<id>/` — static (no build step yet, PoC).
+- Command-категории в `shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
+- Extension content в `extensions/<id>/` — static (no build step yet, PoC).
 
 ## 11. Стиль коммитов и кода
 

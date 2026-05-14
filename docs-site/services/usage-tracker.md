@@ -1,10 +1,10 @@
 # usage-tracker
 
-::: tip Источник правды
-`services/usage-tracker/AGENTS.md`, `services/usage-tracker/README.md`
+::: tip Статус
+После Phase E3 (2026-05-14) `usage-tracker` **больше не standalone-сервис**. Активный код живёт как модуль в составе kepler-backend — `services/kepler-backend/src/usage_tracker/`. Старый бинарь (исторический путь services/usage-tracker) заморожен в `legacy/usage-tracker/`.
 :::
 
-Windows-first фоновый исполняемый файл, который записывает foreground application usage **напрямую в ARK DB**.
+Записывает foreground application usage **напрямую в ARK DB** изнутри kepler-backend процесса. На устройстве пользователя нет отдельного `usage-tracker.exe` — модуль стартует автоматически вместе с backend'ом (Phase E2 wiring).
 
 ## Что записывает
 
@@ -16,98 +16,54 @@ Windows-first фоновый исполняемый файл, который з�
 
 ## Зачем «напрямую»
 
-Это один из редких исключений правила [«всё через @kosmos/ark»](/concepts/write-boundary): tracker — **Rust**, линкуется с `ark_core` как библиотека и использует `ark_core::db` хелперы, которые сами обновляют sync state. Это допустимо.
+Это одно из редких исключений правила [«всё через @kepler/ark»](/concepts/write-boundary): tracker — **Rust**, линкуется с `ark_core` как библиотека и использует `ark_core::db` хелперы, которые сами обновляют sync state. Это допустимо.
 
-Но `Arrancador` и любое другое **TS-приложение** должны потреблять usage data **только через ARK**, никогда не запуская собственный tracker и не открывая raw SQLite на запись.
+`Arrancador` и любое другое **TS-приложение / extension** должны потреблять usage data **только через ARK** (`@kepler/ark` SDK), никогда не запуская собственный tracker и не открывая raw SQLite на запись.
 
-## Намеренно тихий процесс
-
-- Без UI.
-- Без tray-иконки.
-- Без Windows Service wrapper.
-- Один user-level фоновый процесс с маленьким polling loop.
-
-## Структура
+## Структура модуля
 
 ```
-services/usage-tracker/
-├─ src/
-│  ├─ main.rs                # активный runtime: polling, session reconciliation, ARK writes
-│  └─ windows_capture.rs     # Win32 foreground window sampling, idle detection
-├─ installer/
-│  ├─ install.ps1            # user-level installer + опциональный autostart
-│  └─ uninstall.ps1          # удаление autostart и файлов
-└─ scripts/
-   └─ build-installer.ps1    # сборка release installer bundle
+services/kepler-backend/
+└─ src/
+   └─ usage_tracker/
+      ├─ mod.rs                # активный runtime: polling, session reconciliation, ARK writes
+      └─ windows_capture.rs    # Win32 foreground window sampling, idle detection
 ```
+
+Подключён в `services/kepler-backend/src/lib.rs` и стартует из `services/kepler-backend/src/main.rs` после того как backend подключился к `ark-core-rpc`.
 
 ## Defaults
 
-- ARK DB path: `%APPDATA%\Kosmos\ark.db`
+- ARK DB path: `%APPDATA%\Kosmos\ark.db` (либо `KOSMOS_DB_PATH`, если backend получил его от `shell/electron/main.ts`).
 - Poll interval: `5000` ms
 - Idle threshold: `60` s
 
 ## Overrides
 
-Через env:
+Через env (читает kepler-backend):
 
-- `ARK_DB_PATH`
+- `ARK_DB_PATH` / `KOSMOS_DB_PATH`
 - `USAGE_TRACKER_POLL_MS`
 - `USAGE_TRACKER_IDLE_SECS`
 - `USAGE_TRACKER_RUN_ONCE=1`
 
-Через CLI (перебивают env и defaults):
-
-- `--db-path <path>`
-- `--poll-ms <number>`
-- `--idle-secs <number>`
-- `--once`
-
 ## Сборка и тесты
 
-```powershell
-cargo test --manifest-path services\usage-tracker\Cargo.toml
-bun run --cwd services/usage-tracker build:release    # release exe
-bun run --cwd services/usage-tracker package:installer
-```
-
-## Installer bundle
-
-`bun run package:installer` создаёт `dist/KosmosUsageTrackerInstaller/` с:
-
-- `usage-tracker.exe`
-- `install.ps1`
-- `uninstall.ps1`
-- `Install Usage Tracker.cmd`
-- `Uninstall Usage Tracker.cmd`
-- `manifest.json`
-
-И параллельно `dist/KosmosUsageTrackerInstaller.zip`.
-
-Default install target — `%LOCALAPPDATA%\Kosmos\UsageTracker`.
-
-Default install behavior:
-
-- Скопировать release-бинарь в install dir.
-- Зарегистрировать autostart через `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
-- Запустить tracker сразу в фоне.
-
-Полезные флаги:
+Модуль собирается как часть `services/kepler-backend`:
 
 ```powershell
-install.ps1 -NoStartup
-install.ps1 -NoLaunch
-install.ps1 -InstallDir D:\Somewhere\UsageTracker
+cargo build --manifest-path services\kepler-backend\Cargo.toml --bin kepler-backend
+cargo test --manifest-path services\kepler-backend\Cargo.toml --lib
 ```
 
 ## Правила
 
 ::: warning Жёстко
-- Tracker пишет напрямую в ARK DB и **обязан** обновлять `lan_sync.version_vector` после прямых entity writes.
-- Default DB path остаётся `%APPDATA%\Kosmos\ark.db`, если не переопределён env или CLI.
+- Модуль пишет напрямую в ARK DB и **обязан** обновлять `lan_sync.version_vector` после прямых entity writes.
+- Default DB path остаётся `%APPDATA%\Kosmos\ark.db`, если не переопределён env.
 - Автоматические тесты и smoke checks **обязаны** переопределить DB path на изолированный `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/`, или OS temp. **Не** запускай verification против main user ARK DB.
-- Installer — user-level. Не превращай в Windows Service без явного product decision.
-- `src/main.rs` — активный runtime path. Дополнительные файлы в `src/` — scaffolding, пока не подключены явно.
+- Не превращай в Windows Service.
+- Не добавляй UI, tray, окна — capture модуль остаётся пассивным.
 :::
 
 ## Smoke
@@ -115,14 +71,18 @@ install.ps1 -InstallDir D:\Somewhere\UsageTracker
 ```powershell
 $env:KOSMOS_SMOKE_ROOT = ".agent\tasks\<TASK>\smoke"
 $env:ARK_DB_PATH       = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
-cargo test --manifest-path services\usage-tracker\Cargo.toml
+cargo test --manifest-path services\kepler-backend\Cargo.toml --lib
 ```
+
+## Legacy standalone
+
+Standalone бинарь `usage-tracker.exe` со собственным installer'ом (`install.ps1` / `uninstall.ps1`, autostart через `HKCU\...\Run`) заморожен. Если нужен такой режим обратно — есть архив в `legacy/usage-tracker/`, но возвращать его в активный код запрещено (см. [Запреты](/agents/forbidden#usage-tracker)).
 
 ## Заметки
 
-- Это обычный user-level фоновый процесс, не Windows Service.
-- `Arrancador` потребляет результирующую ARK usage data, не запускает и не владеет процессом.
-- `v1` — Windows only. Поздний macOS backend подключается за тем же capture/persistence split.
+- Tracker остаётся user-level — внутри backend процесса, который spawn'ит Kepler shell.
+- `Arrancador` extension потребляет результирующую ARK usage data через `@kepler/ark`, не запускает и не владеет процессом.
+- Windows-only capture. Поздний macOS backend подключается за тем же capture/persistence split.
 - `tracked_apps` обновляются на session boundaries; `usage_sessions` и `usage_events` несут fine-grained usage stream.
 
 ## Связанные документы

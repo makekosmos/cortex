@@ -15,97 +15,56 @@
 # Delphi — задачи
 
 ::: tip Источник правды
-`apps/delphi/AGENTS.md`, `apps/delphi/README.md`, `docs/DELPHI-LEGACY-DB-DECISION.md`
+`extensions/delphi/` (Vue-extension) + `docs/DELPHI-LEGACY-DB-DECISION.md`
 :::
 
-Delphi — приложение для управления задачами в Kosmos. Активный desktop-рантайм — Electron + Vue в `apps/delphi/ts`. Android/Swift код может существовать рядом, но desktop ARK-интеграция применяется только к Electron-приложению.
+Delphi — приложение для управления задачами в Kosmos. Десктопный UI **мигрирован в Vue-extension** внутри Kepler shell (`extensions/delphi/`). Android-часть живёт отдельно в `mobile/delphi/`.
 
 ## ARK Runtime
 
-- Канонический desktop sidecar — `ark-core-rpc` из `packages/ark-core/rust`.
-- **Старый Delphi-specific Rust DB sidecar удалён.** Не пересобирать, не восстанавливать, не упаковывать, не использовать как fallback.
+- Канонический desktop sidecar — `ark-core-rpc` из `crates/ark-core/rust`.
+- **Старый Delphi-specific Rust DB sidecar удалён.** Не пересобирать, не восстанавливать, не упаковывать.
 - Задачи Delphi хранятся как обобщённые ARK-объекты с `type_id = task_obj`.
-- App-код обращается к ARK через `@kosmos/ark` или существующую обёртку `electron/sidecar.ts` вокруг `ark-core-rpc`.
-- На входе в приложение и при смене shared-space **legacy todos мигрируются в `task_obj`**. После миграции object-данные — источник правды.
+- Extension обращается к ARK через `@kepler/ark` (через `window.kepler.ark.request(...)` из Kepler shell preload).
+- На входе при смене shared-space **legacy todos мигрируются в `task_obj`**. После миграции object-данные — источник правды.
 
 ## Текущая модель
 
 - `objects` с `type_id = task_obj` — сами задачи.
 - `object_types` — typed/schema metadata.
 - `object_links` — связи.
-- App access — через `@kosmos/ark` / `ark-core-rpc`.
+- App access — через `@kepler/ark` SDK.
 
 См. `docs/DELPHI-LEGACY-DB-DECISION.md`.
 
 ## Команды
 
-Запуск из `apps/delphi/ts`:
+Сборка происходит через Kepler shell:
 
 ```powershell
-bun run build:ark:dev      # debug-сборка ark-core-rpc
-bun run build:ark          # release-сборка ark-core-rpc
-bun run dev                # build:ark:dev + Vite + Electron
-bun run build:js           # build:ark + TS + Vite (без установщика)
-bun run build              # build:js + electron-builder --win nsis (финальный NSIS one-click)
-bun run package:dir        # unpacked desktop bundle
-bun run test               # unit
-bun run e2e                # Playwright
+bun run --cwd shell build:extensions    # билдит все extensions включая Delphi
+bun run --cwd shell build:js            # tsc + vite + extensions
+bun run --cwd shell dev                 # dev: backend + extensions + Kepler shell renderer
 ```
 
-Артефакты после `build` лежат в `apps/delphi/ts/release/`:
-
-- `Delphi Setup <version>.exe` — финальный NSIS one-click установщик (см. [конвенцию сборки релизов](/reference/commands#конвенция-сборки-релизов)).
-- `win-unpacked/Delphi.exe` — распакованное приложение (доступно после `package:dir`).
-
-Версия берётся из `package.json` → `version` (текущая `0.0.2`).
-
-## Иконка
-
-Источник — `apps/delphi/ts/build/icon.png` (минимум 512×512, рекомендуется ≥1024×1024 PNG).
-Pipeline:
-
-- `package.json → build.win.icon` указан явно на `build/icon.png`.
-- `build/afterPack.cjs` (hook electron-builder) конвертирует PNG → ICO через `png-to-ico`
-  и встраивает иконку + version-string метаданные в `Delphi.exe` через `rcedit`.
-  Это нужно, потому что `win.signAndEditExecutable: false` отключает встроенный
-  rcedit electron-builder (workaround под падение winCodeSign symlinks без Developer Mode).
-- `extraResources` копирует `build/icon.png` в `resources/icon.png` packaged-сборки;
-  `electron/main.ts` использует её для `BrowserWindow.icon` (taskbar / тайтлбар).
-- В dev иконка читается из `apps/delphi/ts/build/icon.png` напрямую через `resolveIconPath()`.
-
-Чтобы обновить иконку — замени `build/icon.png` и перезапусти `bun run build`.
-Кэшированный `build/icon.ico` afterPack перегенерит, если PNG новее.
-
-Это стандарт для всех Electron-приложений Kosmos — см. [Структура репо → Иконки](/guide/layout#иконки-приложений).
+В dev mode (HMR) extension поднимается через `bun run --cwd shell dev:extensions` (см. [Extension dev mode](docs-site/concepts/extension-dev-mode.md)).
 
 ## Boundaries
 
-- Renderer **только** через preload API.
-- Electron main/preload экспонируют узкие IPC методы.
+- Renderer **только** через `@kepler/ark` SDK (либо через `window.electronAPI` shim — см. ниже).
+- Никаких прямых SQL writes (`@kepler/ark` → kepler-backend → ark-core-rpc).
 - Новые task writes идут в ARK `task_obj`, **не** в legacy todo таблицы.
-- Тесты и smoke checks используют изолированные тестовые БД / temp app-data пути, **никогда** — main user ARK DB.
-
-## Ключевые модули
-
-- `apps/delphi/ts/electron/main.ts` — Electron main. IPC `ark:listDelphiTasks`, `ark:upsertDelphiTask`, `ark:deleteDelphiTask`, `ark:listTimeEntries` (читает `time_entry_obj` для ProjectPage биллинга).
-- `apps/delphi/ts/electron/sidecar.ts` — поднятие и владение `ark-core-rpc`.
-- `apps/delphi/ts/shared/task-object-migration.ts` — стартовая миграция legacy → `task_obj`.
-- `apps/delphi/ts/shared/task-ark.ts` — мапперы `TodoItem ↔ task_obj` (propsJson). Здесь же читается/пишется `billable` / `price`.
-- `apps/delphi/ts/src/components/QuickEntry.vue` — обёртка над `QuickEntryPanel` из `@kosmos/visuals`. Передаёт `defaultScheduledDate=today` если открыто со страницы `/today`, `defaultProjectId` если со страницы проекта.
-- `apps/delphi/ts/src/components/projects/ProjectCreateDialog.vue` — диалог нового проекта, toggle «Оплачиваемый» + поле «Бюджет».
-- `apps/delphi/ts/src/pages/ProjectPage.vue` — поллит `ark:listTimeEntries` каждые 15s, агрегирует billable секунды по задаче, считает $/час из `project.price`.
-- `apps/delphi/ts/scripts/verifySharedArkTask.mjs` — verification скрипт shared task state.
-- `apps/delphi/ts/e2e/shared-ark-task.spec.ts` — e2e shared task flow.
-- `apps/delphi/ts/src/services/storage/task-object-migration.test.ts` — тест миграции.
+- Тесты используют изолированные тестовые БД, **никогда** — main user ARK DB.
 
 ## Mobile / Native
 
-- `apps/delphi/kotlin` — Android-часть (отдельные правила, см. её `AGENTS.md`).
+- `mobile/delphi/` — Android-часть (отдельные правила, см. её `AGENTS.md`).
 - Desktop ARK-решения отсюда **не** применяются к Kotlin, если задача явно не говорит обратное.
+- `mobile/ark-service/` — Android Room ContentProvider для `mobile/delphi`.
 
 ## Запрещено
 
-- ❌ Восстанавливать или паковать `apps/delphi/ts/sidecar` (legacy).
+- ❌ Восстанавливать или паковать legacy Delphi DB sidecar.
 - ❌ Использовать legacy todo таблицы как long-term fallback после миграции.
 - ❌ Прямой SQL write в `objects` из app services (см. [Граница записи](docs-site/concepts/write-boundary.md)).
 - ❌ Дефолт пути к user DB в тестах.
@@ -114,26 +73,26 @@ Pipeline:
 
 Текущая модель форм / списков:
 
-- **Sidebar:** только «Входящие» и «Сегодня» как top-level nav. Календарь/Неделя удалены — это не приоритет.
-- **QuickEntry** (⌘N / Ctrl+N) — модалка над content-областью (не перекрывает titlebar и sidebar). Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kosmos/visuals`, native browser date picker не используем), проект (dropdown реальных проектов + «Входящие»), `billable` toggle + опциональный `price`.
-- **TodoRow** — клик разворачивает inline-форму (title / notes / дата / billable / price), правый клик открывает `<ContextMenu>` с пунктом «Удалить». Inline-кнопка delete не используется.
-- **ProjectPage** — кроме списка задач показывает: бейдж «оплачиваемый + бюджет», суммарное оплачиваемое время по задачам проекта, расчётный `$/час`.
+- **Sidebar:** только «Входящие» и «Сегодня» как top-level nav.
+- **QuickEntry** (⌘N / Ctrl+N) — модалка. Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kepler/visuals`), проект (dropdown + «Входящие»), `billable` toggle + опциональный `price`.
+- **TodoRow** — клик разворачивает inline-форму, правый клик открывает `<ContextMenu>` с пунктом «Удалить».
+- **ProjectPage** — список задач, бейдж «оплачиваемый + бюджет», суммарное оплачиваемое время по задачам проекта, расчётный `$/час`.
 
 ## Биллинг
 
 Реализован минимальный flow «оплачиваемая задача + опциональная цена» + наследование от проекта.
 
-### `task_obj.propsJson` (актуальная схема)
+### `task_obj.propsJson`
 
 ```ts
 {
-  billable: boolean,     // источник правды — стор задачи (Delphi)
+  billable: boolean,     // источник правды — стор задачи
   price: number | null,  // опциональная сумма за задачу (фикс-цена)
   // ... остальные поля task (description, priority, dates, и т.д.)
 }
 ```
 
-Сериализуется в `apps/delphi/ts/shared/task-ark.ts → todoToArkTaskObject/arkTaskObjectToTodo`. Старые задачи без полей читаются как `billable=false, price=null` (back-compat).
+Старые задачи без полей читаются как `billable=false, price=null` (back-compat).
 
 ### `Project` (Delphi)
 
@@ -147,23 +106,21 @@ type Project = {
 
 ### Наследование
 
-При создании задачи в проекте `billable` авто-подставляется из `project.billable` (через `QuickEntryPanel` — поле `QuickEntryProject.billable`). Пользователь может переопределить toggle'ом до сохранения. После сохранения значения независимы — задача хранит свой флаг.
+При создании задачи в проекте `billable` авто-подставляется из `project.billable`. Пользователь может переопределить toggle'ом до сохранения. После сохранения значения независимы.
 
 ### Распределение по time entries
 
-[Horologion](docs-site/apps/horologion.md) пишет `time_entry_obj` с `propsJson.taskId` и `propsJson.billable`. Delphi читает их через IPC `ark:listTimeEntries` (`apps/delphi/ts/electron/main.ts`) и в `ProjectPage`:
+[Horologion](docs-site/apps/horologion.md) пишет `time_entry_obj` с `propsJson.taskId` и `propsJson.billable`. Delphi читает их через ARK SDK в `ProjectPage`:
 
-- Σ billable секунд по задаче → chip с часами рядом со строкой.
+- Σ billable секунд по задаче → chip с часами.
 - Σ billable секунд по всем задачам проекта → общий часовой счётчик.
-- Если у проекта задан `price` — `$/час = price / Σ(billable_hours)` (на месте).
-
-Сам Horologion цены не показывает — только пишет `billable` флаг. Все денежные расчёты идут в Delphi (на страницах) или в Dashboard.
+- Если у проекта задан `price` — `$/час = price / Σ(billable_hours)`.
 
 ## electron-api shim в extension
 
-Delphi мигрирован в Kepler extension (`apps/kepler-shell/extensions/delphi/`), но Vue-приложение портировано **как есть** из standalone Electron-апки — все компоненты, сторы и helpers продолжают звать `window.electronAPI.*` (legacy main process IPC). В extension renderer'е этих каналов нет — есть только `window.kepler.ark.request(operation, params)`.
+Delphi портирован в `extensions/delphi/` **как есть** из standalone Electron-апки — все компоненты, сторы и helpers продолжают звать `window.electronAPI.*` (legacy main process IPC). В extension renderer'е этих каналов нет — есть только `window.kepler.ark.request(operation, params)`.
 
-Чтобы не переписывать каждый call-site, существует **compatibility shim** `apps/kepler-shell/extensions/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как side-effect **до** `createApp(...).mount(...)` и устанавливает `window.electronAPI` поверх `kepler.ark.request`.
+Чтобы не переписывать каждый call-site, существует **compatibility shim** `extensions/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как side-effect **до** `createApp(...).mount(...)` и устанавливает `window.electronAPI` поверх `kepler.ark.request`.
 
 ### Mapping legacy каналов → ARK operations
 
@@ -175,24 +132,24 @@ Delphi мигрирован в Kepler extension (`apps/kepler-shell/extensions/d
 | `db:batchUpsertTodos` | цикл `upsert_object` |
 | `ark:listTimeEntries` | `list_objects_by_type` (`time_entry_obj`) |
 
-`TodoItem ↔ ArkObjectRecord` mapping инлайнен прямо в shim (mirrors `apps/delphi/ts/shared/task-ark.ts`) — поля `billable` / `price` / `description` / `dates` / `priority` сериализуются в `propsJson`, plain text — в `contentJson`.
+`TodoItem ↔ ArkObjectRecord` mapping инлайнен прямо в shim — поля `billable` / `price` / `description` / `dates` / `priority` сериализуются в `propsJson`, plain text — в `contentJson`.
 
 ### Graceful no-op'ы
 
-Каналы, которых физически нет в extension'е (P2P sync, file system, space management), возвращают пустые значения, чтобы UI graceful показывал offline без crash'а:
+Каналы, которых физически нет в extension'е (P2P sync, file system, space management), возвращают пустые значения, чтобы UI graceful показывал offline без crash'а.
 
-- `lan-sync:start` → `false`, `lan-sync:getStatus` → `{ active: false, peers: 0, peerNames: [] }`, `lan-sync:broadcastChange/leaveSpace` → `true`.
-- `sync:getOwnAddresses` → `[]`, `sync:getQrPayload` → `undefined` (caller fallback'ает на `formatSpaceCode()`).
-- `space:*` → `undefined` (space-manager fallback'ает на localStorage; в extension'е база одна — глобальная ARK shell'а, переключение space — ответственность Kepler host'а через `KOSMOS_DB_PATH` env, см. [Kepler → Selected space DB resolution](./kepler.md#selected-space-db-resolution)).
+- `lan-sync:start` → `false`, `lan-sync:getStatus` → `{ active: false, peers: 0, peerNames: [] }`.
+- `sync:getOwnAddresses` → `[]`, `sync:getQrPayload` → `undefined`.
+- `space:*` → `undefined` (в extension'е база одна — глобальная ARK shell'а, переключение space — ответственность Kepler host'а через `KOSMOS_DB_PATH` env, см. [Kepler → Selected space DB resolution](./kepler.md#selected-space-db-resolution)).
 - `db:switchSpace`, `db:deleteSpace`, `db:getSyncKv`, `db:setSyncKv`, `db:clearAll` — `warnOnce()` + no-op.
 
 ### Tailwind
 
-Delphi extension сохраняет Tailwind v4 (`@tailwindcss/vite` plugin в `extensions/delphi/vite.config.mjs` + `@import "tailwindcss"` в `src/global.css`). Это сделано по необходимости — оригинальный UI Delphi на Tailwind utility classes, переписывание на plain CSS — отдельная задача (см. [Kepler Roadmap → Phase 9](./kepler-roadmap.md#phase-9-delphi-ui-tailwind-plain-css-открытый-вопрос), открытый вопрос).
+Delphi extension сохраняет Tailwind v4 (`@tailwindcss/vite` plugin в `extensions/delphi/vite.config.mjs` + `@import "tailwindcss"` в `src/global.css`). Оригинальный UI Delphi на Tailwind utility classes; переписывание на plain CSS — отдельная задача (см. [Kepler Roadmap → Phase 9](./kepler-roadmap.md#phase-9-delphi-ui-tailwind-plain-css-открытый-вопрос)).
 
 ## Command bus integration
 
-Delphi регистрируется в [Kepler command bus](docs-site/concepts/command-bus.md) как provider действий. Юзер из launcher'а (`Ctrl+Shift+K`) может быстро создать задачу или прыгнуть в `Сегодня`, не открывая окно Delphi руками.
+Delphi регистрируется в [Kepler command bus](docs-site/concepts/command-bus.md) как provider действий. Юзер из launcher'а (`Ctrl+Shift+K`) может быстро создать задачу или прыгнуть в `Сегодня`.
 
 ### Зарегистрированные команды
 
@@ -201,27 +158,13 @@ Delphi регистрируется в [Kepler command bus](docs-site/concepts/c
 | `delphi:task:create` | Открывает `QuickEntry` модалку |
 | `delphi:task:today` | `router.push('/today')` — страница сегодняшних задач |
 
-Регистрация — в `electron/sidecar.ts` через `ArkClient.commands.register([...])` после установки соединения с `kepler-backend`:
+Регистрация — внутри extension'а через `ArkClient.commands.register([...])`:
 
 ```ts
-await client.commands.register([
+await arkClient.commands.register([
   { id: 'delphi:task:create', title: 'Создать задачу', subtitle: 'Delphi', category: 'action' },
   { id: 'delphi:task:today',  title: 'Открыть сегодняшние задачи', subtitle: 'Delphi', category: 'action' },
 ]);
-```
-
-### IPC флоу
-
-`SidecarClient.onCommand` слушает события `command_invoked` для зарегистрированных id'шников. В `electron/main.ts`:
-
-1. `focusMainWindow()` — поднимаем главное окно Delphi.
-2. Switch по `event.id` → `webContents.send('delphi:cmd:task:create')` либо `webContents.send('delphi:cmd:task:today')`.
-
-Preload экспонирует подписку через `window.electronAPI.on(channel, listener)`. Renderer `App.vue`:
-
-```ts
-window.electronAPI.on('delphi:cmd:task:create', () => openQuickEntry());
-window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 ```
 
 ## Связанные документы
@@ -230,7 +173,7 @@ window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 - [Command bus](docs-site/concepts/command-bus.md) — протокол dynamic commands.
 - [Модель данных ARK](docs-site/concepts/ark-objects.md).
 - [Horologion](docs-site/apps/horologion.md) — трекер времени, который привязывается к Delphi-задачам.
-- [@kosmos/ark](docs-site/packages/kosmos-ark.md).
+- [@kepler/ark](docs-site/packages/ark.md).
 
 ---
 
@@ -277,7 +220,7 @@ window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -295,15 +238,15 @@ window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries вне `electron/services/analytics.ts`.
+- ❌ ARK queries в обход `@kepler/ark` SDK (analytics дальше ходит через ARK RPC).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+- ❌ Копирование shared sidebar / токенов внутрь `extensions/dashboard`.
 
 ### Kepler Shell (launcher)
 
 - ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
 - ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
-- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Hardcoded action commands в `shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
 - ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
 - ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
 - ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
@@ -312,23 +255,25 @@ window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 
 - ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
 - ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kepler/ark` SDK.
 
 ### Brand consistency
 
 - ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
-- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
+- ❌ Возврат npm scope `@kosmos/*`. После Phase B4 — единый `@kepler/*` (`@kepler/ark`, `@kepler/visuals`).
 
 ### usage-tracker
 
 - ❌ Превращение в Windows Service.
 - ❌ Добавление UI / tray icon / окон.
 - ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
+- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 он заморожен в `legacy/usage-tracker/`, а активный код живёт как модуль `services/kepler-backend/src/usage_tracker/`.
 
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `shell/node_modules/@kepler/<pkg>` → `packages/<pkg>` и аналогично в `extensions/<id>/node_modules/`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/visuals/` до brand swap. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -349,7 +294,7 @@ window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -366,7 +311,8 @@ window.electronAPI.on('delphi:cmd:task:today',  () => router.push('/today'));
 Прогнать **обязательно** в указанных случаях:
 
 ```powershell
-# Перед PR в data services (apps/*/electron/main/services/, services/usage-tracker)
+# Перед PR в data services (apps/eden/ts/main, shell/electron, extensions/<id>/src,
+# services/kepler-backend/src/usage_tracker)
 bun run ark:guard:writes
 
 # Перед PR в любую substantial-задачу

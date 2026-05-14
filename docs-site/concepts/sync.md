@@ -65,7 +65,7 @@ Self-peer фильтрация и фильтрация routable addresses — **
 Используется когда пиров разделяет NAT или они в разных сетях.
 
 ```ts
-// в @kosmos/ark
+// в @kepler/ark
 const ark = new ArkClient({
   spaceId: 'default',
   deviceId: 'device-1',
@@ -159,7 +159,7 @@ Wire-формат остаётся `snake_case`. RPC-операции `ark-core-
 
 ## Hybrid Logical Clock (HLC)
 
-`packages/ark-core/rust/src/hlc.rs`. Гибрид физического и логического времени. Каждое изменение получает HLC-метку вида `<timestamp_ms>:<counter>:<device_id>`. HLC даёт строгий партийный порядок событий для merge-resolution даже когда часы пиров разъезжаются.
+`crates/ark-core/rust/src/hlc.rs`. Гибрид физического и логического времени. Каждое изменение получает HLC-метку вида `<timestamp_ms>:<counter>:<device_id>`. HLC даёт строгий партийный порядок событий для merge-resolution даже когда часы пиров разъезжаются.
 
 HLC последнего apply хранится в `sync_kv`.
 
@@ -173,7 +173,7 @@ Apply-ошибки на стороне приёма возвращаются к�
 
 Если процесс пишет напрямую в SQLite (не через `ark-core-rpc`), он **обязан** вызвать `ark_core::db::bump_sync_version_vector` после каждой группы изменений. Иначе CRDT-merge на пирах сломается — они не узнают, что у этого пира есть новые данные.
 
-Это касается `services/usage-tracker` и любых будущих Rust-writers.
+Это касается `services/kepler-backend/src/usage_tracker` и любых будущих Rust-writers.
 
 ## Текущие ограничения
 
@@ -183,12 +183,12 @@ Apply-ошибки на стороне приёма возвращаются к�
 
 ## Реализация
 
-- `packages/ark-core/rust/src/sync_server.rs` — WebSocket sync сервер.
-- `packages/ark-core/rust/src/sync_client.rs` — WebSocket sync клиент.
-- `packages/ark-core/rust/src/relay_transport.rs` — outbound клиент к relay.
-- `packages/ark-core/rust/src/relay_sync.rs` — relay bridge поверх sync.
-- `packages/ark-core/rust/src/beacon.rs` — UDP discovery.
-- `packages/ark-core/rust/src/mesh.rs` — координация LAN + relay.
-- `packages/ark-core/rust/src/hlc.rs` — HLC.
-- `packages/ark-core/rust/src/protocol.rs` — фреймы.
+- `crates/ark-core/rust/src/sync_server.rs` — WebSocket sync сервер.
+- `crates/ark-core/rust/src/sync_client.rs` — WebSocket sync клиент.
+- `crates/ark-core/rust/src/relay_transport.rs` — outbound клиент к relay.
+- `crates/ark-core/rust/src/relay_sync.rs` — relay bridge поверх sync.
+- `crates/ark-core/rust/src/beacon.rs` — UDP discovery.
+- `crates/ark-core/rust/src/mesh.rs` — координация LAN + relay.
+- `crates/ark-core/rust/src/hlc.rs` — HLC.
+- `crates/ark-core/rust/src/protocol.rs` — фреймы.
 - `services/ark-relay-server/` — сам relay-сервер.

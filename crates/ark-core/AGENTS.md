@@ -15,7 +15,7 @@
 # ark-core
 
 ::: tip Источник правды
-`packages/ark-core/README.md`, `packages/ark-core/AGENTS.md`
+`crates/ark-core/README.md`, `crates/ark-core/AGENTS.md`
 :::
 
 Канонический local-first data runtime для Kosmos. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
@@ -138,7 +138,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ::: warning Жёстко
 - Каждая persisted syncable сущность обязана round-trip'иться через `db.rs::load_entities` и `db.rs::apply_entity`.
-- Direct writers вне RPC layer (`services/usage-tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
+- Direct writers вне RPC layer (`services/kepler-backend/src/usage_tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
 - Schema-добавления **идемпотентны**. Используй `CREATE TABLE IF NOT EXISTS` / additive миграции, не destructive rewrites.
 - Wire-протокол sync остаётся `snake_case`. RPC может быть `camelCase` где зависят legacy Electron callers.
 - **Self-peer filtering** и **routable-address filtering** — обязательные инварианты. Не ослабляй при изменениях в sync startup или peer persistence.
@@ -146,7 +146,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Verification expectations
 
-- Запускай `cargo test` в `packages/ark-core/rust`.
+- Запускай `cargo test` в `crates/ark-core/rust`.
 - Если трогаешь sync или schema — добавь/обнови тесты миграции и репликации, а не только локальный CRUD.
 
 ## Текущие ограничения
@@ -158,7 +158,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Связанные документы
 
-- [@kosmos/ark](docs-site/packages/kosmos-ark.md) — TS SDK.
+- [@kepler/ark](docs-site/packages/ark.md) — TS SDK.
 - [Модель данных ARK](docs-site/concepts/ark-objects.md).
 - [Синхронизация](docs-site/concepts/sync.md).
 - [Граница записи в ARK](docs-site/concepts/write-boundary.md).
@@ -208,7 +208,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 - ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
 - ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
 
 ### Delphi
@@ -226,15 +226,15 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries вне `electron/services/analytics.ts`.
+- ❌ ARK queries в обход `@kepler/ark` SDK (analytics дальше ходит через ARK RPC).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Копирование shared sidebar / токенов внутрь `apps/dashboard`.
+- ❌ Копирование shared sidebar / токенов внутрь `extensions/dashboard`.
 
 ### Kepler Shell (launcher)
 
 - ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
 - ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
-- ❌ Hardcoded action commands в `apps/kepler-shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
+- ❌ Hardcoded action commands в `shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
 - ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
 - ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
 - ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
@@ -243,23 +243,25 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 - ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
 - ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kepler/ark` SDK.
 
 ### Brand consistency
 
 - ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
-- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 они называются `kepler-shell` и `kepler-backend`.
+- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
+- ❌ Возврат npm scope `@kosmos/*`. После Phase B4 — единый `@kepler/*` (`@kepler/ark`, `@kepler/visuals`).
 
 ### usage-tracker
 
 - ❌ Превращение в Windows Service.
 - ❌ Добавление UI / tray icon / окон.
 - ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
+- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 он заморожен в `legacy/usage-tracker/`, а активный код живёт как модуль `services/kepler-backend/src/usage_tracker/`.
 
 ## Файловые операции на Windows
 
 ::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `apps/<name>/node_modules/@kosmos/<pkg>` → `packages/<pkg>`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/kosmos-visuals/`. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
+В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `shell/node_modules/@kepler/<pkg>` → `packages/<pkg>` и аналогично в `extensions/<id>/node_modules/`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/visuals/` до brand swap. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
 :::
 
 - ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
@@ -280,7 +282,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 
 ## Общая дисциплина
@@ -297,7 +299,8 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 Прогнать **обязательно** в указанных случаях:
 
 ```powershell
-# Перед PR в data services (apps/*/electron/main/services/, services/usage-tracker)
+# Перед PR в data services (apps/eden/ts/main, shell/electron, extensions/<id>/src,
+# services/kepler-backend/src/usage_tracker)
 bun run ark:guard:writes
 
 # Перед PR в любую substantial-задачу

@@ -5,8 +5,8 @@
 | Слой | Инструменты | Где используется |
 |---|---|---|
 | Пакет-менеджер / runner | **Bun 1.3.5** | весь монорепо |
-| Системный язык | **Rust** (stable) + Cargo | `packages/ark-core`, `services/usage-tracker`, `apps/eden/ts/heart` |
-| Android | **Kotlin** + Gradle + Compose + Room | `apps/delphi/kotlin` (UI), `apps/ark-service` (Room ContentProvider) |
+| Системный язык | **Rust** (stable) + Cargo | `crates/ark-core`, `services/kepler-backend/src/usage_tracker`, `apps/eden/ts/heart` |
+| Android | **Kotlin** + Gradle + Compose + Room | `mobile/delphi` (UI), `mobile/ark-service` (Room ContentProvider) |
 | Desktop UI | **Vue 3.6 Vapor** | Eden, Arrancador (Vue), Dashboard |
 | Desktop shell | **Electron 38** | Eden, Delphi, Arrancador, Dashboard |
 | Bundler | **Vite 8** (Rolldown) | TS-приложения |
@@ -46,23 +46,32 @@ bun run typecheck   # tsc --noEmit (в TS-пакетах)
 ## Сборка ARK runtime
 
 ```powershell
-cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
-bun run --cwd packages/kosmos-ark typecheck
-bun run --cwd packages/kosmos-ark build
+cargo build --workspace                                                 # все crates + services
+cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc
+cargo test  --manifest-path crates\ark-core\rust\Cargo.toml
+bun run --cwd packages/ark typecheck
+bun run --cwd packages/ark build
 ```
 
-## Сборка приложения (на примере Delphi)
+## Сборка Kepler shell (главный путь)
 
 ```powershell
-cd apps/delphi/ts
-bun run build:ark:dev      # debug-сборка ark-core-rpc
-bun run build:ark          # release-сборка ark-core-rpc
-bun run dev                # build:ark:dev + Vite + Electron
-bun run build:js           # ark release + TS + Vite (без установщика)
-bun run build              # build:js + electron-builder --win msi
-bun run test               # unit
-bun run e2e                # Playwright
+cd shell
+bun run build:backend:dev    # cargo build (debug) services/kepler-backend
+bun run dev                  # backend + extensions + Vite + Electron
+bun run build:js             # tsc + vite + extensions (без NSIS)
+bun run build                # release backend + js + electron-builder --win nsis
+bun run typecheck            # tsc --noEmit
+bun run test:e2e             # Playwright
+```
+
+## Сборка Eden (standalone)
+
+```powershell
+cd apps/eden/ts
+bun run dev                # собирает Heart sidecar + запускает Vite + Electron
+bun run build              # NSIS installer
+bun run test:e2e           # Playwright
 ```
 
 ## Документация

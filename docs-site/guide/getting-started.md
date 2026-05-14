@@ -9,8 +9,8 @@ Kosmos — это **monorepo для личного софта одного че�
 ## Зачем монорепо
 
 - **Один контракт хранения.** ARK владеет схемой и форматом синхронизации. Приложения не изобретают каждый раз своё.
-- **Один SDK.** Все Electron-приложения говорят с ARK через `@kosmos/ark`. Один тип ошибок, один API, одно место для эволюции.
-- **Общий UI.** Sidebar, Titlebar, DesktopChrome, CommandPalette берутся из `@kosmos/visuals` и выглядят одинаково в Eden / Delphi / Arrancador / Dashboard.
+- **Один SDK.** Все Electron-приложения говорят с ARK через `@kepler/ark`. Один тип ошибок, один API, одно место для эволюции.
+- **Общий UI.** Sidebar, Titlebar, DesktopChrome, CommandPalette берутся из `@kepler/visuals` и выглядят одинаково в Eden / Delphi / Arrancador / Dashboard.
 - **Один процесс правок.** Substantial-задачи проходят через [proof loop](/concepts/proof-loop), правила едины для всех приложений.
 
 ## Требования
@@ -18,7 +18,7 @@ Kosmos — это **monorepo для личного софта одного че�
 | Что | Версия | Зачем |
 |---|---|---|
 | **Bun** | `1.3.5+` | пакет-менеджер, runner всех скриптов |
-| **Rust** | stable + `cargo` | сборка `ark-core` и `usage-tracker` |
+| **Rust** | stable + `cargo` | сборка `ark-core`, `kepler-backend`, `ark-relay-server`, `kepler-watcher` |
 | **Node** | 20+ | окружение для VitePress, native-зависимости Electron |
 | **PowerShell** | 7+ (Windows) | большинство smoke-команд написаны под PS |
 | **Git** | любая | репозиторий |
@@ -45,24 +45,34 @@ bun run docs:build         # собрать статический сайт в d
 
 ## Сборка ARK-рантайма
 
-ARK — это Rust-крейт + бинарь sidecar'а. Большинство Electron-приложений умеют собирать его сами (`bun run dev` в Delphi запускает `bun run build:ark:dev`), но иногда нужно собрать вручную:
+ARK — это Rust-крейт + бинарь sidecar'а. Большинство пути сборки спрятаны за `cargo build --workspace`, но если нужно вручную:
 
 ```powershell
-cargo build --manifest-path packages\ark-core\rust\Cargo.toml --bin ark-core-rpc
-cargo test  --manifest-path packages\ark-core\rust\Cargo.toml
-bun run --cwd packages/kosmos-ark typecheck
+cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc
+cargo test  --manifest-path crates\ark-core\rust\Cargo.toml
+bun run --cwd packages/ark typecheck
 ```
 
-Бинарь `ark-core-rpc` — канонический sidecar для всех Electron-приложений. Он общается через stdin/stdout newline-delimited JSON. См. [ark-core](/packages/ark-core) и [Синхронизация](/concepts/sync).
+Бинарь `ark-core-rpc` — канонический sidecar. Запускается из `services/kepler-backend` как child process; общается через stdin/stdout newline-delimited JSON. См. [ark-core](/packages/ark-core) и [Синхронизация](/concepts/sync).
 
-## Запуск приложения (на примере Eden)
+## Запуск Kepler shell (главный путь)
+
+```powershell
+cd shell
+bun run build:backend:dev   # cargo build (debug) services/kepler-backend
+bun run dev                 # backend + extensions + Vite + Electron
+```
+
+`Ctrl+Shift+K` глобально откроет launcher. Tray-иконка появится в трее. Открой extension через launcher (Dashboard, Horologion, Delphi, Arrancador).
+
+## Запуск Eden (standalone, до Phase 6)
 
 ```powershell
 cd apps/eden/ts
 bun run dev        # собирает Rust-sidecar Eden Heart, запускает Vite + Electron
 ```
 
-Каждое приложение — отдельный bun-workspace, у каждого свой `dev` / `build` / `test:e2e`. См. соответствующую страницу в разделе [Приложения](/apps/).
+Eden — единственное приложение, которое пока остаётся standalone Electron'ом. Остальное живёт внутри Kepler shell как Vue-extensions.
 
 ## Дальше
 

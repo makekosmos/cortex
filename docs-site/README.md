@@ -11,9 +11,9 @@ docs-site/**/*.md         (источник правды, правишь тол�
         ▼
         ├─ AGENTS.md                       (корень)
         ├─ CLAUDE.md                       (корень)
-        ├─ apps/<name>/AGENTS.md           (auto-context для агента в подпапках)
-        ├─ packages/ark-core/AGENTS.md
-        ├─ services/usage-tracker/AGENTS.md
+        ├─ apps/eden/AGENTS.md, apps/eden/ts/AGENTS.md
+        ├─ mobile/delphi/AGENTS.md
+        ├─ crates/ark-core/AGENTS.md
         └─ docs-site/public/llms.txt       (полный inline-текст для агентов через WebFetch)
 ```
 
@@ -66,7 +66,7 @@ docs-site/
 
 ## Тема
 
-Кастомная тема в `.vitepress/theme/custom.css` использует OKLCH-переменные из `packages/kosmos-visuals/theme/css-variables.css`. При смене дизайн-токенов в `kosmos-visuals` отрази их и здесь.
+Кастомная тема в `.vitepress/theme/custom.css` использует OKLCH-переменные из `packages/visuals/theme/css-variables.css`. При смене дизайн-токенов в `@kepler/visuals` отрази их и здесь.
 
 ## Mermaid + pan/zoom
 

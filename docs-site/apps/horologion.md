@@ -5,57 +5,54 @@
 :::
 
 ::: info Имя
-Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). Workspace-директория исторически осталась `apps/horologion`; внутренние идентификаторы (`HorologionApi`, `window.horologion`, IPC `horologion:*`) тоже сохранены, чтобы не ломать git-историю и type-graph. Меняется только всё user-visible: `productName`, `appId` (`com.kazui.horologion`), AppUserModelID, NSIS shortcut, title окна, текст в trail/tray.
+Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). После Phase B-D Horologion живёт как Vue-extension внутри Kepler shell — `extensions/horologion/`. Внутренние идентификаторы (`HorologionApi`, `window.horologion`, IPC `horologion:*`) сохранились для совместимости с существующим Vue-кодом, через shim поверх Kepler ark bridge.
 :::
 
-- **Path**: `apps/horologion`
-- **Стек**: Electron 41 + Vite 8 + **Vue 3.6 Vapor** + `@kosmos/ark` + `@kosmos/visuals`. Жёсткое окно 600×800px.
+- **Path**: `extensions/horologion/`
+- **Стек**: Vue 3.6 Vapor + `@kepler/ark` + `@kepler/visuals`. Открывается через Kepler shell `extension-host.ts` в отдельном `BrowserWindow`.
 - **Аналог**: Toggl Track — без социалки, без web-app, локально, с интеграцией Delphi-задач.
 
 ## Список фич, которые планируется/нужно сделать
 
 См. [Roadmap](/apps/horologion-roadmap).
 
-## Структура `src/`
+## Структура
 
 ```
-apps/horologion/
-├─ electron/
-│  ├─ main.ts              # ArkClient sidecar, IPC, BrowserWindow, tray, settings window
-│  └─ preload.ts           # contextBridge → window.horologion
-├─ shared/
-│  └─ ipc-types.ts         # HorologionApi + TimeEntry/Tag/DelphiTask types
-├─ src/
-│  ├─ App.vue              # DesktopChrome + RouterView + scroll fade. На /settings рендерит только SettingsView
-│  ├─ main.ts              # Vue createApp + Inter Variable import + router mount
-│  ├─ router.ts            # `/` → HomeView, `/settings` → SettingsView (для отдельного окна)
-│  ├─ styles.css           # --horologion-accent + локальные токены
-│  ├─ views/
-│  │  ├─ HomeView.vue      # Draft input + Pomodoro/Stopwatch toggle + список
-│  │  ├─ PomodoroView.vue  # Ring + ticks + dots + actions; читает usePomodoro
-│  │  ├─ StopwatchView.vue # Большое HH:MM:SS + primary-кнопка
-│  │  ├─ ListView.vue      # Группы по дням, collapse/expand, live duration tick
-│  │  └─ SettingsView.vue  # Группы настроек, открывается в отдельном окне
-│  ├─ components/
-│  │  ├─ PomodoroDraftInput.vue  # Поле «Над чем работаем?» с chip'ами задач
-│  │  ├─ MentionInput.vue        # Generic @-mention обёртка
-│  │  ├─ MentionMenu.vue         # Popover автокомплита задач
-│  │  └─ EditEntryModal.vue      # Modal редактирования time_entry
-│  └─ lib/
-│     ├─ store.ts          # entriesChangedAt signal, pomodoroDraft, tasks cache, timerMode
-│     ├─ usePomodoro.ts    # state machine pomodoro (singleton)
-│     ├─ pomodoroSettings.ts  # настройки помодоро (localStorage)
-│     ├─ sounds.ts         # звуки конца work/break
-│     └─ format.ts         # formatDuration / dayKey / formatDayHeader
-└─ build/
-   ├─ icon.png             # 1024×1024 PNG
-   ├─ icon.ico             # cache, генерируется afterPack'ом
-   └─ afterPack.cjs        # embed icon в Horologion.exe через rcedit
+extensions/horologion/
+├─ manifest.json           # id, title, devPort, capabilities
+├─ index.html
+├─ vite.config.mjs
+├─ icon.png                # отображается в Kepler launcher
+└─ src/
+   ├─ App.vue              # DesktopChrome + RouterView + scroll fade. На /settings рендерит только SettingsView
+   ├─ main.ts              # Vue createApp + Inter Variable import + router mount
+   ├─ router.ts            # `/` → HomeView, `/settings` → SettingsView (внутри memory router'а extension'а)
+   ├─ styles.css           # --horologion-accent + локальные токены
+   ├─ views/
+   │  ├─ HomeView.vue      # Draft input + Pomodoro/Stopwatch toggle + список
+   │  ├─ PomodoroView.vue  # Ring + ticks + dots + actions; читает usePomodoro
+   │  ├─ StopwatchView.vue # Большое HH:MM:SS + primary-кнопка
+   │  ├─ ListView.vue      # Группы по дням, collapse/expand, live duration tick
+   │  └─ SettingsView.vue  # Группы настроек
+   ├─ components/
+   │  ├─ PomodoroDraftInput.vue  # Поле «Над чем работаем?» с chip'ами задач
+   │  ├─ MentionInput.vue        # Generic @-mention обёртка
+   │  ├─ MentionMenu.vue         # Popover автокомплита задач
+   │  └─ EditEntryModal.vue      # Modal редактирования time_entry
+   └─ lib/
+      ├─ store.ts          # entriesChangedAt signal, pomodoroDraft, tasks cache, timerMode
+      ├─ usePomodoro.ts    # state machine pomodoro (singleton)
+      ├─ pomodoroSettings.ts  # настройки помодоро (localStorage)
+      ├─ sounds.ts         # звуки конца work/break
+      └─ format.ts         # formatDuration / dayKey / formatDayHeader
 ```
+
+Запускается из Kepler launcher'а через команду `horologion:open` (открывает extension window). Иконка embed в shell.exe — за это отвечает `shell/build/`.
 
 ## UI и дизайн
 
-Horologion полностью использует [`@kosmos/visuals`](/packages/kosmos-visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные kosmos-visuals. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
+Horologion полностью использует [`@kepler/visuals`](/packages/visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные `@kepler/visuals`. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
 
 ### Структура окна
 
@@ -82,8 +79,8 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 
 ### Titlebar
 - **Слева**: «Horologion» (muted color, secondary).
-- **Справа**: круглый dot подключения к ARK (`var(--status-success)` / warning / `var(--destructive)`) + ⚙ Настройки (открывает [отдельное окно настроек](#окно-настроек)).
-- Windows-controls справа от наших иконок (через `titleBarOverlay`).
+- **Справа**: круглый dot подключения к ARK (`var(--status-success)` / warning / `var(--destructive)`) + ⚙ Настройки (route `/settings` внутри extension window'а).
+- Windows-controls справа — через `DesktopChrome` (Kepler shell сам управляет рамкой extension window'а).
 
 ### Draft input card
 - Скруглённый прямоугольник с inline-chip'ами выбранных задач + текстовый ввод.
@@ -111,7 +108,7 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 - $-badge для billable.
 
 ### Edit modal
-- `<Modal>` из kosmos-visuals.
+- `<Modal>` из `@kepler/visuals`.
 - Поле «Описание» — `<MentionInput>` (можно поменять / добавить задачу через `@`).
 - Preview под input'ом показывает task-pill.
 - Два `<DateTimePicker>` (С / По) — кастомный недельный календарь + текстовый ввод HH:MM.
@@ -140,59 +137,45 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 
 **Pomodoro не маркирует записи** — поле `kind` снято. Pomodoro чисто UI-фича, создаёт обычные `time_entry_obj` (опционально break-entries с title «Отдых», если `trackBreaksAsRest` включён в Settings).
 
-## Topbar (extension)
+## Topbar
 
-В Horologion-extension'е (`apps/kepler-shell/extensions/horologion/`) topbar содержит два UI-элемента справа от заголовка:
+В Horologion-extension'е topbar содержит два UI-элемента справа от заголовка:
 
-- **Status dot** — круглая точка (8px), цвет показывает состояние подключения к `kepler-backend`. Логика в `extensions/horologion/src/App.vue`: при mount и каждые 10 секунд дёргает дешёвую операцию `kepler.ark.request("list_object_types")` — успех → `connected` (зелёный), ошибка → `error` (красный), стартовое состояние → `connecting`. Tooltip переключается между «ARK подключен» / «Подключение к ARK…» / «ARK недоступен». Визуально совпадает с Delphi extension status dot (одни и те же oklch-токены из `@kosmos/visuals`).
+- **Status dot** — круглая точка (8px), цвет показывает состояние подключения к `kepler-backend`. Логика в `extensions/horologion/src/App.vue`: при mount и каждые 10 секунд дёргает дешёвую операцию `kepler.ark.request("list_object_types")` — успех → `connected` (зелёный), ошибка → `error` (красный), стартовое состояние → `connecting`. Tooltip переключается между «ARK подключен» / «Подключение к ARK…» / «ARK недоступен». Визуально совпадает с Delphi extension status dot (одни и те же oklch-токены из `@kepler/visuals`).
 - **Кнопка ⚙ Настройки** — `router.push("/settings")` в memory-router'е extension'а. На route `/settings` App.vue прячет dot и кнопку, показывает «Назад» (`router.push("/")`) и заголовок «Настройки помодоро».
 
-В standalone-приложении (`apps/horologion/`) topbar собран по другой схеме — через IPC `horologion:settings:open` открывается отдельное BrowserWindow (см. [Окно настроек](#окно-настроек) ниже). В extension'е settings — это просто роут внутри того же окна.
-
-## Окно настроек
-
-Settings — **отдельное Electron BrowserWindow** (не модалка, не route в основном окне). Кнопка ⚙ в тайтлбаре и «Настройки помодоро» внутри pomodoro-card зовут `window.horologion.settings.open()` → IPC `horologion:settings:open` → main создаёт второе окно 560×680 с тем же preload и hash `#/settings`. App.vue видит `route.path === '/settings'` и рендерит только SettingsView внутри `DesktopChrome + DesktopContentSurface` (единый стиль с main).
+## Настройки
 
 В Settings:
 - Длительности (work / shortBreak / longBreak / pomodorosUntilLongBreak) — input[type=number] с 2px border, без spin-button'ов.
 - Поведение — toggles (трекать break как «Отдых» / autostart work / autostart break / системные уведомления / режим стримера — отключает паузу рендеринга при перекрытии окна; toggle мирорится из renderer'а в `userData/horologion-settings.json` через IPC `horologion:streamerMode:set`, main применяет `disable-features=CalculateNativeWinOcclusion` + `disable-backgrounding-occluded-windows` ДО `app.whenReady`; на toggle в проде делаем `app.relaunch()`, в деве авто-рестарт пропускаем — `VITE_DEV_SERVER_URL` теряется при self-relaunch).
-- Звуки — kosmos-visuals `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования + slider громкости (`pomodoroSettings.ringtoneVolume`, sync'ится через `setVolumeMultiplier` в `lib/sounds.ts`).
+- Звуки — `@kepler/visuals` `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования + slider громкости (`pomodoroSettings.ringtoneVolume`, sync'ится через `setVolumeMultiplier` в `lib/sounds.ts`).
 - Reset — кнопка стиля `.pomo__secbtn` в destructive-цвете.
 
-## Close-to-tray
-
-- Закрытие окна не убивает приложение — окно прячется, Horologion живёт в системном трее.
-- Tray-иконка с меню: «Открыть Horologion» / «Выйти». Клик по иконке = toggle show/hide.
-- Pomodoro-таймер продолжает тикать в фоне (Vue renderer живёт).
-- Реальный quit — только через tray «Выйти» (тогда `ArkClient.stop()` корректно останавливает sidecar).
+## Persistence pomodoro
 
 ::: warning Future
-Сейчас pomodoro-состояние живёт в Vue renderer. Если Electron упадёт — состояние pomodoro потеряется (но активный `time_entry_obj` уже в ARK с `startedAt`). Долгосрочно — перенос pomodoro state machine в ark-core-rpc, чтобы переживать полный quit. Это TODO в roadmap.
+Сейчас pomodoro-состояние живёт в Vue renderer (extension). Если Kepler shell закрыт — pomodoro теряет таймер, но активный `time_entry_obj` уже записан в ARK с `startedAt`. Долгосрочно — перенос pomodoro state machine в ark-core-rpc либо в kepler-backend, чтобы переживать полный quit. Это TODO в roadmap.
 :::
 
 ## Команды
 
+Сборка проходит через Kepler shell:
+
 ```powershell
-cd apps/horologion
-bun run typecheck
-bun run dev               # cargo build sidecar:dev + vite + Electron
-bun run build:js          # release sidecar + tsc + vite build (без установщика)
-bun run build             # build:js + electron-builder --win nsis (финальный NSIS one-click)
-bun run package:dir       # unpacked desktop bundle
-bun run test:e2e          # Playwright (.e2e/ изолированная БД)
+bun run --cwd shell build:extensions
+bun run --cwd shell build:js
+bun run --cwd shell dev
+bun run --cwd shell test:e2e
 ```
 
-::: tip Билд
-По общей [конвенции Kosmos](/reference/commands#конвенция-сборки-релизов) `bun run build` собирает **NSIS one-click** установщик — `apps/horologion/release/Horologion Setup X.Y.Z.exe`. Ставится в `%LocalAppData%\Horologion` без UAC, без мастера (стиль Linear / Slack / Discord). `runAfterFinish: true` сразу запускает приложение после установки.
+В dev mode (`KEPLER_DEV=1`) extension поднимается с HMR (см. [Extension dev mode](/concepts/extension-dev-mode)).
 
-**Иконка** embed'ится в `Horologion.exe` через `afterPack`-хук (`build/afterPack.cjs`), использующий npm-пакеты `rcedit` + `png-to-ico`. Это нужно, потому что `win.signAndEditExecutable: false` отрубает встроенный rcedit electron-builder (workaround под падение winCodeSign symlinks на Windows без Developer Mode). Хук конвертирует `build/icon.png` → `build/icon.ico` (с кэшем по mtime), затем зовёт rcedit и проставляет иконку + version-string метаданные (ProductName, CompanyName, FileVersion). Дополнительно в main.ts вызывается `app.setAppUserModelId("com.kazui.horologion")`, чтобы Windows правильно группировал окно в taskbar и подхватывал нашу иконку, а не дефолтную electron.exe.
-
-Итог: иконка отображается в окне, трее, taskbar, Start Menu, Проводнике.
-:::
+Иконка в Kepler launcher отображается из `extensions/horologion/icon.png`.
 
 ## Command bus integration
 
-Horologion регистрируется в [Kepler command bus](/concepts/command-bus) как provider экшенов. Когда юзер открывает Kepler launcher (`Ctrl+Shift+K`) и выбирает horologion-команду — она роутится к нашей апке и реально что-то запускает.
+Horologion регистрируется в [Kepler command bus](/concepts/command-bus) как provider экшенов. Когда юзер открывает Kepler launcher (`Ctrl+Shift+K`) и выбирает horologion-команду — она роутится к extension'у и реально что-то запускает.
 
 ### Зарегистрированные команды
 
@@ -202,34 +185,12 @@ Horologion регистрируется в [Kepler command bus](/concepts/comman
 | `horologion:pomodoro:50` | Запускает помодоро на 50 минут |
 | `horologion:stopwatch:start` | Запускает секундомер |
 
-Регистрация — в `electron/main.ts` через `ArkClient.commands.register([...])` после того, как `arkClient` ready. Snipet:
+Регистрация — в extension main (`extensions/horologion/src/main.ts`) через `ArkClient.commands.register([...])` после подключения к `kepler-backend`.
 
-```ts
-await client.commands.register([
-  { id: "horologion:pomodoro:25", title: "Pomodoro 25 минут", subtitle: "Horologion", category: "action" },
-  { id: "horologion:pomodoro:50", title: "Pomodoro 50 минут", subtitle: "Horologion", category: "action" },
-  { id: "horologion:stopwatch:start", title: "Запустить секундомер", subtitle: "Horologion", category: "action" },
-]);
-```
+Когда invoke приходит, App.vue dispatcher разводит:
 
-### IPC флоу: main → renderer
-
-Main подписывается на backend событие `command_invoked` для своих id'ов. При получении формирует типизированный payload и отправляет в renderer через `webContents.send("horologion:cmd", payload)`:
-
-```ts
-type PomodoroStartPayload = { kind: "pomodoro:start"; durationMin: 25 | 50 };
-type StopwatchStartPayload = { kind: "stopwatch:start" };
-type HorologionCommandPayload = PomodoroStartPayload | StopwatchStartPayload;
-```
-
-Preload экспонирует подписку `window.horologion.onCommand((payload) => { ... })` через `ipcRenderer.on("horologion:cmd", ...)`.
-
-### Renderer: App.vue dispatcher
-
-`App.vue` при mount подписывается на `window.horologion.onCommand`:
-
-- `kind === "pomodoro:start"` → `pomodoro.start({ workMinOverride: payload.durationMin })`.
-- `kind === "stopwatch:start"` → `timeEntries.startTimer({ source: "stopwatch" })`.
+- `horologion:pomodoro:25` / `:50` → `pomodoro.start({ workMinOverride: 25 | 50 })`.
+- `horologion:stopwatch:start` → `timeEntries.startTimer({ source: "stopwatch" })`.
 
 ### `workMinOverride` — per-session override
 
@@ -241,5 +202,5 @@ Preload экспонирует подписку `window.horologion.onCommand((pa
 - [Command bus](/concepts/command-bus) — протокол dynamic commands.
 - [Модель данных ARK](/concepts/ark-objects) — `time_entry_obj`, `tag_obj`.
 - [Delphi](/apps/delphi) — задачи (для `@`-mention).
-- [@kosmos/ark](/packages/kosmos-ark) — TS SDK.
-- [kosmos-visuals](/packages/kosmos-visuals) — UI-система.
+- [@kepler/ark](/packages/ark) — TS SDK.
+- [@kepler/visuals](/packages/visuals) — UI-система.

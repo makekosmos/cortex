@@ -3,51 +3,67 @@
 ## Карта верхнего уровня
 
 ```text
-kosmos/
-├─ apps/                  # Продуктовые приложения (UI + специфичная логика)
-│  ├─ ark-service/        # Android APK — Room ContentProvider для Android Delphi
-│  ├─ arrancador/         # Electron — игровая библиотека / playtime / бэкапы
-│  ├─ dashboard/          # Electron — read-only аналитика ARK
-│  ├─ delphi/             # Electron (ts/) + Android (kotlin/) — задачи
-│  ├─ eden/               # Vue 3.6 + Electron — заметки и дневник
-│  └─ horologion/          # Electron — трекер времени + pomodoro (WIP)
-├─ packages/              # Переиспользуемые пакеты
-│  ├─ ark-core/           # ⭐ Rust runtime + ark-core-rpc sidecar
-│  ├─ kosmos-ark/         # ⭐ @kosmos/ark — канонический TS SDK
-│  └─ kosmos-visuals/     # UI-токены, тема, компоненты
-├─ services/              # Долгоживущие фоновые сервисы / серверы
-│  ├─ usage-tracker/      # Rust — захват usage data, пишет в ARK через RPC
-│  └─ ark-relay-server/   # Rust — WebSocket relay для p2p sync через NAT
-├─ docs/                  # Исходные markdown-доки (ARK-*, EDEN-HEART-*, DELPHI-*)
-├─ docs-site/             # VitePress сайт документации (вы здесь)
-├─ scripts/               # ark:guard:writes, ark:smoke
-├─ .agent/                # Proof-loop артефакты задач
-└─ .agents/               # TOML/MD-описания workflow-агентов
+kepler/
+├─ shell/                  # ⭐ Kepler Electron host (npm: kepler-shell)
+├─ extensions/             # Vue-extensions внутри Kepler shell
+│  ├─ arrancador/          # игровая библиотека
+│  ├─ dashboard/           # read-only аналитика ARK
+│  ├─ delphi/              # задачи
+│  └─ horologion/          # трекер времени + pomodoro
+├─ apps/                   # Standalone Electron-приложения
+│  └─ eden/                # Vue 3.6 + Electron — заметки (до Phase 6)
+├─ crates/                 # Rust crates
+│  └─ ark-core/            # ⭐ Rust runtime + ark-core-rpc sidecar
+├─ packages/               # TS пакеты (npm scope @kepler/*)
+│  ├─ ark/                 # ⭐ @kepler/ark — канонический TS SDK
+│  └─ visuals/             # @kepler/visuals — UI-токены, тема, компоненты
+├─ services/               # Долгоживущие Rust-сервисы
+│  ├─ ark-relay-server/    # WebSocket relay для p2p sync через NAT
+│  ├─ kepler-backend/      # ⭐ supervisor для ark-core-rpc + WS gateway + command bus + usage_tracker
+│  └─ kepler-watcher/      # watcher-демон над ark-core
+├─ mobile/                 # Android модули
+│  ├─ delphi/              # Android Delphi (Kotlin + Room)
+│  └─ ark-service/         # Android Room ContentProvider
+├─ legacy/                 # Заморожено
+│  └─ usage-tracker/       # Standalone Rust бинарь (заморожен в Phase E3)
+├─ docs/                   # Исходные markdown-доки (ARK-*, EDEN-HEART-*, DELPHI-*, ADRs)
+├─ docs-site/              # VitePress сайт документации (вы здесь)
+├─ scripts/                # ark:guard:writes, ark:smoke, docs:check, docs:sync
+├─ Cargo.toml              # Cargo workspace root (members: crates/*, services/*)
+├─ package.json            # Bun workspace root
+├─ .agent/                 # Proof-loop артефакты задач
+└─ .agents/                # TOML/MD-описания workflow-агентов
 ```
 
 ## Workspaces
 
-`package.json` в корне репозитория объявляет bun-workspaces:
+### Bun (TS)
+
+`package.json` в корне репозитория объявляет:
 
 ```json
 "workspaces": [
+  "shell",
+  "extensions/*",
   "apps/*",
-  "apps/delphi/ts",
   "apps/eden/ts",
+  "mobile/*",
   "services/*",
   "packages/*",
   "docs-site"
 ]
 ```
 
-`apps/delphi/ts` и `apps/eden/ts` подняты как отдельные workspace-узлы, потому что TS-часть этих приложений живёт в подпапке рядом с `kotlin/` (Delphi) или `heart/` (Eden) — Rust/Kotlin не должны попадать в bun install.
+### Cargo (Rust)
+
+`Cargo.toml` в корне объявляет workspace членов: все `crates/*` и `services/*` собираются в общий `target/` (Phase C2). Это ускоряет инкрементальные билды и share'ит зависимости.
 
 ## Где что физически лежит
 
 ### ARK runtime
 
 ```text
-packages/ark-core/
+crates/ark-core/
 ├─ rust/
 │  ├─ Cargo.toml
 │  └─ src/
@@ -72,47 +88,54 @@ packages/ark-core/
 └─ README.md
 ```
 
-### Eden (заметки)
+### Kepler shell
+
+```text
+shell/
+├─ electron/                  # main / preload / extension-host / commands / settings-window
+├─ src/                       # Vue renderer (LauncherView, SettingsView)
+├─ shared/ipc-types.ts        # KeplerApi (preload contract)
+├─ scripts/                   # dev-extensions / install-extension / uninstall-extension
+├─ vite.config.mjs            # renderer / main / preload environments
+├─ vite.extensions.config.mjs # билд extensions/
+├─ playwright.config.ts
+└─ package.json               # npm name: "kepler-shell"
+```
+
+### Extensions
+
+```text
+extensions/<id>/
+├─ manifest.json              # id, title, devPort, capabilities
+├─ index.html
+├─ vite.config.mjs
+├─ icon.png                   # отображается в Kepler launcher (cached by mtime)
+└─ src/                       # Vue 3 SPA с memory router'ом
+```
+
+### Eden (заметки) — standalone
 
 ```text
 apps/eden/ts/
 ├─ src/                       # Vue 3.6 Vapor UI
-│  ├─ App.vue
-│  ├─ Editor.vue              # TipTap, slash commands, wikilinks
-│  ├─ store/                  # Pinia stores (eden.ts, layout.ts)
-│  ├─ composables/            # useKeyboard, usePlatform, useSearch
-│  ├─ components/             # sidebar/, settings/, typed-notes/, spaces/
-│  └─ lib/                    # edenApi.ts (IPC), typedNotes.ts, codeBlocks.ts
 ├─ main/                      # Electron main
-│  ├─ main.ts                 # init, BrowserWindow, IPC handlers
-│  ├─ preload.ts              # IPC bridge
-│  ├─ store.ts                # SQLite: entries, folders, note types, trash, vault
-│  ├─ ark.ts                  # мост на @kosmos/ark
-│  ├─ heart.ts                # Eden Heart sidecar integration
-│  ├─ hevy.ts                 # Hevy fitness API
-│  └─ hevySync.ts             # Hevy → Eden entries
 ├─ heart/                     # Rust + Tantivy search sidecar
-│  ├─ Cargo.toml
-│  └─ src/main.rs             # stdin/stdout JSON
-├─ tests/                     # Playwright E2E (app, typing-stress, hevy, …)
-├─ docs/                      # архитектурные решения Eden
+├─ tests/                     # Playwright E2E
 └─ electron-builder.json5
 ```
 
-### Delphi, Arrancador, Dashboard
-
-Аналогичная схема: `apps/<name>/electron/main.ts`, `apps/<name>/electron/preload.ts`, `apps/<name>/electron/main/services/`, `apps/<name>/src/` (Vue).
-
 ## Иконки приложений
 
-Стандарт для всех Electron-приложений Kosmos (Delphi, Eden, Arrancador, Dashboard, Horologion):
+Стандарт для standalone Electron-приложений Kosmos (Eden и сам Kepler shell):
 
 ```text
-apps/<name>/[ts/]build/
+<app-root>/build/
 ├─ icon.png              # источник, ≥512×512 (рекомендуется ≥1024×1024)
 ├─ icon.ico              # кэш (генерируется автоматически из icon.png)
 └─ afterPack.cjs         # electron-builder hook: PNG→ICO + rcedit
 ```
+
+Для Vue-extensions внутри Kepler shell иконка живёт в `extensions/<id>/icon.png` (Kepler shell хост-окно отвечает за `BrowserWindow.icon`).
 
 ### Конвенция в `package.json` приложения
 
@@ -125,58 +148,41 @@ apps/<name>/[ts/]build/
   ],
   "win": {
     "icon": "build/icon.png",
-    "target": "msi",
+    "target": "nsis",
     "signAndEditExecutable": false
-  },
-  "mac": { "icon": "build/icon.png" },
-  "linux": { "icon": "build/icon.png" }
+  }
 }
 ```
 
 ### Зачем `afterPack.cjs`
 
-`win.signAndEditExecutable: false` — workaround под падение `winCodeSign` symlinks
-на Windows без Developer Mode. Побочка: встроенный rcedit electron-builder отключается,
-и `.exe` выходит с дефолтной Electron-иконкой. `afterPack.cjs` чинит это руками:
+`win.signAndEditExecutable: false` — workaround под падение `winCodeSign` symlinks на Windows без Developer Mode. Побочка: встроенный rcedit electron-builder отключается, и `.exe` выходит с дефолтной Electron-иконкой. `afterPack.cjs` чинит это руками:
 
 1. `png-to-ico` — `build/icon.png` → `build/icon.ico` (кэшируется по mtime).
 2. `rcedit` — встраивает icon + ProductName/FileDescription/version в `<App>.exe`.
 
 Без этого иконки нет ни в taskbar, ни в Start Menu, ни в Explorer.
 
-### Использование в runtime
-
-`electron/main.ts` читает иконку для `BrowserWindow.icon` (и tray, где есть):
-
-```ts
-function resolveIconPath(): string {
-  return isDev
-    ? path.resolve(__dirname, "../build/icon.png")
-    : path.join(process.resourcesPath ?? "", "icon.png");
-}
-
-new BrowserWindow({ icon: nativeImage.createFromPath(resolveIconPath()), ... });
-```
-
 ### Обновление
 
 Замени `build/icon.png` → `bun run build`. `build/icon.ico` перегенерится автоматически.
 
 ::: warning Куда класть нельзя
-Не в `public/`, не в `electron/`, не в `src/`. `public/` доступен только из renderer
-по URL; `build/` — единственная конвенция, которую понимают electron-builder + `afterPack.cjs`.
+Не в `public/`, не в `electron/`, не в `src/`. `public/` доступен только из renderer по URL; `build/` — единственная конвенция, которую понимают electron-builder + `afterPack.cjs`.
 :::
 
-Референс реализации — `apps/horologion/`, `apps/delphi/ts/`.
+Референс реализации — `shell/build/` и `shell/build/afterPack.cjs`.
 
 ## Куда складывать что
 
 | Это | Куда |
 |---|---|
-| Новый ARK endpoint (Rust) | `packages/ark-core/rust/src/*.rs` + регистрация в `main.rs` |
-| Новый метод в TS SDK | `packages/kosmos-ark/src/ark-client.ts` |
-| UI-компонент, переиспользуемый в 2+ приложениях | `packages/kosmos-visuals/components/` |
-| Локальная фича одного приложения | внутри `apps/<name>/` |
+| Новый ARK endpoint (Rust) | `crates/ark-core/rust/src/*.rs` + регистрация в `main.rs` |
+| Новый метод в TS SDK | `packages/ark/src/ark-client.ts` |
+| UI-компонент, переиспользуемый в 2+ приложениях | `packages/visuals/components/` |
+| Локальная фича одного extension'а | внутри `extensions/<id>/src/` |
+| Локальная фича Eden | внутри `apps/eden/ts/` |
+| Новый extension | новая директория `extensions/<id>/` с `manifest.json` |
 | Концепт / архитектурное решение | `docs/` (источник правды) + страница в `docs-site/concepts/` |
 | Артефакты proof-loop задачи | `.agent/tasks/<DATE>-<slug>/` |
 | Smoke-БД для тестов | `.tmp`, `.e2e`, `.agent/tasks/<TASK>/smoke/`, OS temp |

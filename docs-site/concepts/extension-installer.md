@@ -6,7 +6,7 @@ CLI install / uninstall в writable location, resolution chain в `extension-hos
 
 ## Зачем это нужно
 
-До MVP extensions (`apps/kepler-shell/extensions/*`) уезжали в Kepler installer через `extraResources` в `electron-builder` конфиге. Обновить **один** extension означало пересобрать и переустановить весь shell. Это блокировало нормальный flow «итерация по конкретному приложению, не трогая launcher».
+До MVP extensions (`extensions/*`) уезжали в Kepler installer через `extraResources` в `electron-builder` конфиге. Обновить **один** extension означало пересобрать и переустановить весь shell. Это блокировало нормальный flow «итерация по конкретному приложению, не трогая launcher».
 
 После MVP:
 
@@ -44,14 +44,14 @@ Resolution chain — см. [extension-host.ts](/concepts/extension-host#теку
 # Install: копирует <path-to-extension-dir> → <APPDATA>/Kosmos/extensions/<id>/
 # <path-to-extension-dir> должен содержать manifest.json, dist/, icon.png
 # <id> берётся из manifest.json
-bun run --cwd apps/kepler-shell ext:install <path-to-extension-dir>
+bun run --cwd shell ext:install <path-to-extension-dir>
 
 # Uninstall: удаляет <APPDATA>/Kosmos/extensions/<id>/.
 # Bundled версия (если есть) поднимется автоматически на следующем openExtension(id).
-bun run --cwd apps/kepler-shell ext:uninstall <id>
+bun run --cwd shell ext:uninstall <id>
 ```
 
-Скрипты — `apps/kepler-shell/scripts/install-extension.mjs` / `uninstall-extension.mjs`. Не зависят от Electron, могут быть запущены вне launcher'а (build script / CI / ручной dev flow).
+Скрипты — `shell/scripts/install-extension.mjs` / `uninstall-extension.mjs`. Не зависят от Electron, могут быть запущены вне launcher'а (build script / CI / ручной dev flow).
 
 ### Atomic install
 

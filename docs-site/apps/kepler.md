@@ -1,7 +1,7 @@
 # Kepler — Electron host и global launcher
 
 ::: tip Источник правды
-`apps/kepler-shell/`, `services/kepler-backend/`, `.agent/tasks/2026-05-14-kosmos-pivot/`
+`shell/`, `services/kepler-backend/`
 :::
 
 **Kepler** — Electron-приложение, которое выступает host'ом для всей Kosmos ecosystem: global launcher по `Ctrl+Shift+K`, единый backend для апок, command bus для динамических действий и (Phase 4+) extension loader для Vue-приложений. Это **сердце десктопа Kosmos**: один процесс держит ARK, маршрутизирует команды и (в перспективе) рендерит сами апки как extensions.
@@ -32,7 +32,7 @@
    └───────┘ └─────────┘    └──────────┘ └──────────┘ └─────────┘
 ```
 
-Каждая Electron-апка коннектится к `kepler-backend` через WebSocket (`@kosmos/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kepler launcher и выбирает команду — backend роутит её к нужной апке.
+Каждая Electron-апка коннектится к `kepler-backend` через WebSocket (`@kepler/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kepler launcher и выбирает команду — backend роутит её к нужной апке.
 
 ## Стек
 
@@ -40,22 +40,23 @@
 |---|---|
 | Shell | Electron 41 (frameless, Mica/Acrylic, transparent) |
 | Renderer | Vue 3.6 + TypeScript + Vite 8 (electron-vite) |
-| Bundler | `vite-plugin-electron` + `vite-plugin-electron-renderer` |
+| Bundler | Vite environments (renderer / main / preload через `vite.config.mjs` в `shell/`) |
 | Backend | `kepler-backend.exe` (Rust, lib + bin из `services/kepler-backend/`) |
-| ARK SDK | `@kosmos/ark` (kepler mode, hello-handshake, command bus client) |
-| UI | `@kosmos/visuals` (DesktopChrome, токены, компоненты) |
+| ARK SDK | `@kepler/ark` (kepler mode, hello-handshake, command bus client) |
+| UI | `@kepler/visuals` (DesktopChrome, токены, компоненты) |
 | Tray / hotkey | Electron `Tray` + `globalShortcut` |
 
 ## Структура
 
 ```
-apps/kepler-shell/
+shell/                     # npm package "kepler-shell"
 ├─ electron/
 │  ├─ main.ts              # backend spawn, BrowserWindow, tray, globalShortcut, IPC
 │  ├─ preload.ts           # window.kepler API (search / invoke / commands)
+│  ├─ extension-preload.ts # preload для extension windows
 │  ├─ commands.ts          # статические команды (kepler:open-app:*, dashboard:open, …)
 │  ├─ settings-window.ts   # отдельное окно настроек + IPC handlers
-│  └─ extension-host.ts    # PoC загрузчик static extensions
+│  └─ extension-host.ts    # загрузчик Vue extensions
 ├─ shared/
 │  └─ ipc-types.ts         # KeplerApi (preload contract), CommandRecord, SearchResult
 ├─ src/
@@ -65,9 +66,16 @@ apps/kepler-shell/
 │  └─ views/
 │     ├─ LauncherView.vue  # FTS5 search + dynamic command list
 │     └─ SettingsView.vue  # настройки host'а (hotkey, backend status)
-├─ extensions/
-│  └─ dashboard/           # PoC static extension (manifest.json + index.html + bundle.js)
-└─ build/                  # иконки + afterPack hook
+├─ scripts/
+│  ├─ dev-extensions.mjs   # Vite dev серверы для всех extensions (HMR)
+│  ├─ install-extension.mjs   # CLI: положить extension override в %APPDATA%
+│  └─ uninstall-extension.mjs
+├─ vite.config.mjs            # renderer / main / preload environments
+├─ vite.extensions.config.mjs # билд для extensions/
+└─ build/                     # иконки + afterPack hook
+
+extensions/                   # ← top-level рядом с shell/
+├─ dashboard/  ├─ delphi/  ├─ horologion/  ├─ arrancador/
 ```
 
 ## Окно launcher'а
@@ -97,16 +105,16 @@ Kepler — точка входа для всех команд экосистем
 
 ## Extension host (Phase 4 ✅)
 
-`electron/extension-host.ts` — production loader. Phase 4 завершён: 4 апки рендерятся как Vue extensions внутри Kepler без отдельных Electron-процессов.
+`shell/electron/extension-host.ts` — production loader. Phase 4 завершён: 4 апки рендерятся как Vue extensions внутри Kepler без отдельных Electron-процессов.
 
-- Extensions лежат в `apps/kepler-shell/extensions/<id>/` (Dashboard, Horologion, Delphi, Arrancador).
+- Extensions лежат в `extensions/<id>/` (top-level, рядом с `shell/`): Dashboard, Horologion, Delphi, Arrancador.
 - Каждое — `manifest.json` + Vue bundle + опциональный preload.
 - Host открывает extension в отдельном `BrowserWindow` с reuse через `Map<id, BrowserWindow>`.
-- Eden — намеренно standalone .exe (миграция в Phase 6, см. [Roadmap](./kepler-roadmap.md)).
+- Eden — намеренно standalone .exe (`apps/eden/ts/`), миграция в Phase 6, см. [Roadmap](./kepler-roadmap.md).
 
 ### Иконки в launcher
 
-Каждое open-command в launcher показывает иконку соответствующего extension'а. `electron/extension-host.ts → extensionIconDataUri(id)` читает `extensions/<id>/icon.png`, кодирует в data-uri и кэширует **по mtime файла**: при изменении иконки на диске cache автоматически инвалидируется (hot-swap без перезапуска Kepler). Если иконки нет — команда показывается без неё. Eden команда **без иконки** (legacy, ещё не extension — см. Phase 6).
+Каждое open-command в launcher показывает иконку соответствующего extension'а. `shell/electron/extension-host.ts → extensionIconDataUri(id)` читает `extensions/<id>/icon.png`, кодирует в data-uri и кэширует **по mtime файла**: при изменении иконки на диске cache автоматически инвалидируется (hot-swap без перезапуска Kepler). Если иконки нет — команда показывается без неё. Eden команда **без иконки** (legacy, ещё не extension — см. Phase 6).
 
 ### Crash safety
 
@@ -131,14 +139,14 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
 
 `kepler-backend` по умолчанию пишет в `%APPDATA%\Kosmos\ark.db`, но реальные данные пользователя живут в **выбранном space'е** — `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`. Чтобы backend читал правильную базу, Kepler shell резолвит путь сам:
 
-1. `electron/main.ts → resolveSpaceDbPath()` читает `%APPDATA%\Kosmos\selected-space.json` через хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace` из [`@kosmos/ark`](../packages/kosmos-ark.md).
+1. `shell/electron/main.ts → resolveSpaceDbPath()` читает `%APPDATA%\Kosmos\selected-space.json` через хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace` из [`@kepler/ark`](../packages/ark.md).
 2. Если space выбран — `spawnBackend()` передаёт env-переменную `KOSMOS_DB_PATH=<spaceDir>/ark.db` дочернему процессу `kepler-backend.exe`.
 3. Backend использует `KOSMOS_DB_PATH` вместо дефолта.
 4. Если файла `selected-space.json` нет / он битый — backend падает на default. Это нормальное поведение для свежей инсталляции до создания первого space'а.
 
 ## Production packaging (Phase 8)
 
-`bun run build` собирает финальный **NSIS one-click** установщик через electron-builder. Конфиг — в `apps/kepler-shell/package.json → build`.
+`bun run build` собирает финальный **NSIS one-click** установщик через electron-builder. Конфиг — в `shell/package.json → build`.
 
 Pipeline:
 
@@ -157,7 +165,7 @@ Pipeline:
 
 NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%LocalAppData%\Kepler` без UAC), `runAfterFinish: true`, desktop + Start Menu shortcut, `deleteAppDataOnUninstall: false` (не теряем space-данные при апдейте).
 
-Что ещё в Phase 8 (⏳): `electron-updater` для auto-update и удаление legacy `apps/kepler/` (старый Rust gpui launcher).
+Что ещё в Phase 8 (⏳): `electron-updater` для auto-update. Legacy Rust gpui launcher уже удалён в Phase A (директория apps/kepler/ больше не существует).
 
 ## Extension installer (Phase 10 MVP)
 
@@ -165,9 +173,9 @@ Built-ins (Dashboard, Horologion, Delphi, Arrancador) едут с Kepler install
 
 ```powershell
 # install: <path-to-extension-dir> должен содержать manifest.json, dist/, icon.png
-bun run --cwd apps/kepler-shell ext:install ./apps/kepler-shell/extensions/dashboard
+bun run --cwd shell ext:install ./extensions/dashboard
 # uninstall
-bun run --cwd apps/kepler-shell ext:uninstall dashboard
+bun run --cwd shell ext:uninstall dashboard
 ```
 
 Подробно (atomic копирование, layout, что НЕ входит в MVP — auto-update, `.kext` формат, UI manager) — [Extension installer](../concepts/extension-installer.md).
@@ -175,9 +183,9 @@ bun run --cwd apps/kepler-shell ext:uninstall dashboard
 ## Запуск (dev)
 
 ```powershell
-cd apps/kepler-shell
+cd shell
 bun run build:backend:dev   # cargo build (debug) services/kepler-backend
-bun run dev                 # build:backend:dev + vite + Electron
+bun run dev                 # build:backend:dev + extensions + vite + Electron
 ```
 
 `Ctrl+Shift+K` глобально откроет launcher. Tray-иконка появится в трее.
@@ -186,24 +194,24 @@ bun run dev                 # build:backend:dev + vite + Electron
 
 | Команда | Что |
 |---|---|
-| `bun run --cwd apps/kepler-shell dev` | dev режим |
-| `bun run --cwd apps/kepler-shell build:js` | tsc + vite build (без NSIS) |
-| `bun run --cwd apps/kepler-shell build` | release backend + js + NSIS installer |
-| `bun run --cwd apps/kepler-shell typecheck` | tsc --noEmit |
-| `bun run --cwd apps/kepler-shell package:dir` | unpacked Electron сборка |
-| `bun run --cwd apps/kepler-shell test:e2e` | Playwright e2e |
-| `bun run --cwd apps/kepler-shell ext:install <path>` | поставить extension в `%APPDATA%\Kosmos\extensions\<id>\` (override bundled). См. [Extension installer](../concepts/extension-installer.md). |
-| `bun run --cwd apps/kepler-shell ext:uninstall <id>` | удалить user-installed extension; bundled (если есть) поднимется автоматически. |
+| `bun run --cwd shell dev` | dev режим |
+| `bun run --cwd shell build:js` | tsc + vite build (без NSIS) |
+| `bun run --cwd shell build` | release backend + js + NSIS installer |
+| `bun run --cwd shell typecheck` | tsc --noEmit |
+| `bun run --cwd shell package:dir` | unpacked Electron сборка |
+| `bun run --cwd shell test:e2e` | Playwright e2e |
+| `bun run --cwd shell ext:install <path>` | поставить extension в `%APPDATA%\Kosmos\extensions\<id>\` (override bundled). См. [Extension installer](../concepts/extension-installer.md). |
+| `bun run --cwd shell ext:uninstall <id>` | удалить user-installed extension; bundled (если есть) поднимется автоматически. |
 
-Артефакты `build` — `apps/kepler-shell/release/Kepler Setup X.Y.Z.exe` (NSIS one-click).
+Артефакты `build` — `shell/release/Kepler Setup X.Y.Z.exe` (NSIS one-click).
 
-## Legacy Rust `apps/kepler/`
+## История legacy Rust-launcher'а
 
-Старый Rust-launcher (gpui + tao + global-hotkey) ещё лежит в `apps/kepler/`, но **retired**: вся новая работа идёт через `apps/kepler-shell/`. Phase 6 убирает legacy директорию целиком — см. [Roadmap](./kepler-roadmap.md).
+Старый Rust-launcher (gpui + tao + global-hotkey) лежал в apps/kepler и удалён в Phase A (после brand swap'а 2026-05-14). Вся работа идёт через `shell/`.
 
 ## См. также
 
 - [Roadmap](./kepler-roadmap.md) — фазы миграции и план Phase 4-6.
 - [Command bus](../concepts/command-bus.md) — протокол dynamic commands.
-- [@kosmos/ark](../packages/kosmos-ark.md) — TS SDK с `commands` namespace.
+- [@kepler/ark](../packages/ark.md) — TS SDK с `commands` namespace.
 - [Architecture](../concepts/architecture.md) — общая картина Kosmos.

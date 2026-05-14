@@ -12,7 +12,7 @@
 
 ## B
 
-**Beacon** — UDP broadcast для discovery пиров в LAN. `packages/ark-core/rust/src/beacon.rs`.
+**Beacon** — UDP broadcast для discovery пиров в LAN. `crates/ark-core/rust/src/beacon.rs`.
 
 ## C
 
@@ -20,7 +20,7 @@
 
 ## D
 
-**Direct writer** — Rust-процесс, который пишет напрямую в ARK SQLite через `ark_core::db` хелперы (не через RPC). Пример: `services/usage-tracker`. **Обязан** обновлять `lan_sync.version_vector`.
+**Direct writer** — Rust-процесс, который пишет напрямую в ARK SQLite через `ark_core::db` хелперы (не через RPC). Пример: `services/kepler-backend/src/usage_tracker`. **Обязан** обновлять `lan_sync.version_vector`.
 
 ## E
 
@@ -34,19 +34,19 @@
 
 ## H
 
-**HLC** (Hybrid Logical Clock) — гибрид физического и логического времени. Каждое изменение получает HLC-метку для строгого порядка событий. `packages/ark-core/rust/src/hlc.rs`.
+**HLC** (Hybrid Logical Clock) — гибрид физического и логического времени. Каждое изменение получает HLC-метку для строгого порядка событий. `crates/ark-core/rust/src/hlc.rs`.
 
 **HMAC peer auth** — опциональная аутентификация пиров через HMAC-SHA256 поверх `auth_secret`. **Не** шифрует трафик.
 
 ## I
 
-**Injected sidecar** — режим `@kosmos/ark`, когда sidecar уже владеется другим слоем, и SDK получает `requestFn` / `onEventFn`. См. [@kosmos/ark](/packages/kosmos-ark).
+**Injected sidecar** — режим `@kepler/ark`, когда sidecar уже владеется другим слоем, и SDK получает `requestFn` / `onEventFn`. См. [@kepler/ark](/packages/ark).
 
 ## K
 
-**`@kosmos/ark`** — канонический TS SDK для ARK runtime.
+**`@kepler/ark`** — канонический TS SDK для ARK runtime.
 
-**`@kosmos/visuals`** — общая UI-система (токены, тема, компоненты). См. [kosmos-visuals](/packages/kosmos-visuals).
+**`@kepler/visuals`** — общая UI-система (токены, тема, компоненты). См. [kosmos-visuals](/packages/visuals).
 
 ## L
 
@@ -80,7 +80,7 @@
 
 ## S
 
-**Self-managed sidecar** — режим `@kosmos/ark`, когда `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`.
+**Self-managed sidecar** — режим `@kepler/ark`, когда `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`.
 
 **Sidecar** — отдельный процесс рядом с приложением. Примеры: `ark-core-rpc` (для всех Electron apps), Eden Heart (для Eden).
 
@@ -104,13 +104,13 @@
 
 **Tombstone** — запись об удалении сущности, нужна для propagation удалений на пиры.
 
-**`tracked_apps`**, **`usage_sessions`**, **`usage_events`** — ARK usage-таблицы. Пишутся `services/usage-tracker` напрямую через `ark_core::db`.
+**`tracked_apps`**, **`usage_sessions`**, **`usage_events`** — ARK usage-таблицы. Пишутся `services/kepler-backend/src/usage_tracker` напрямую через `ark_core::db`.
 
 **Typed note** — заметка Eden с собственным `object_type` (не дефолтный `note_obj`). Имеет специализированный header и schema.
 
 ## U
 
-**UniFFI** — Mozilla-инструмент для генерации FFI-обвязок Rust → Kotlin/Swift. `packages/ark-core/rust/src/ffi.rs`.
+**UniFFI** — Mozilla-инструмент для генерации FFI-обвязок Rust → Kotlin/Swift. `crates/ark-core/rust/src/ffi.rs`.
 
 ## V
 
@@ -118,9 +118,9 @@
 
 **Version vector** — векторное clock пира для CRDT merge. Хранится в `sync_kv` под ключом `lan_sync.version_vector`. Обновляется при каждой записи в синхронизируемую сущность.
 
-**`@kosmos/visuals`** — общая UI-система. См. [kosmos-visuals](/packages/kosmos-visuals).
+**`@kepler/visuals`** — общая UI-система. См. [kosmos-visuals](/packages/visuals).
 
 ## Z
 
-**Zed Mono** — моноширинный шрифт, используется в `kosmos-visuals` для `font-family-mono`.
+**Zed Mono** — моноширинный шрифт, используется в `@kepler/visuals` для `font-family-mono`.
 
