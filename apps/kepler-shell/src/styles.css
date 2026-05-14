@@ -1,0 +1,37 @@
+@import "@kosmos/visuals/theme/css";
+
+:root {
+  --kepler-accent: oklch(0.66 0.245 305);
+  --accent: var(--kepler-accent);
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-user-select: none;
+  user-select: none;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+input {
+  -webkit-user-select: text;
+  user-select: text;
+}

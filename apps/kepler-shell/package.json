@@ -1,0 +1,66 @@
+{
+  "name": "kepler-shell",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Kepler — Electron host для Kosmos ecosystem (global launcher + extension host)",
+  "author": "Kazui",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build:backend": "cargo build --release --manifest-path ../../services/kepler-backend/Cargo.toml --bin kepler-backend",
+    "build:backend:dev": "cargo build --manifest-path ../../services/kepler-backend/Cargo.toml --bin kepler-backend",
+    "dev": "bun run build:backend:dev && vite --configLoader native",
+    "build:js": "tsc && vite build --configLoader native",
+    "build": "bun run build:backend && bun run build:js && electron-builder --win nsis",
+    "typecheck": "tsc --noEmit",
+    "package:dir": "bun run build:js && electron-builder --dir"
+  },
+  "dependencies": {
+    "@kosmos/ark": "workspace:*",
+    "@kosmos/visuals": "workspace:*",
+    "lucide-vue-next": "^0.548.0",
+    "vue": "^3.6.0-beta.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
+    "typescript": "~5.8.3",
+    "vite": "^8.0.3",
+    "vite-plugin-electron": "1.0.0-beta.2",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.kazui.kepler",
+    "productName": "Kepler",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../../services/kepler-backend/target/release/kepler-backend.exe",
+        "to": "kepler-backend.exe"
+      },
+      {
+        "from": "../../packages/ark-core/rust/target/release/ark-core-rpc.exe",
+        "to": "ark-core-rpc.exe"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "Kepler"
+    }
+  }
+}
