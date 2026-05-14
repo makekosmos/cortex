@@ -99,6 +99,22 @@ function resolveBackendExe(): string {
   return path.join(process.resourcesPath ?? __dirname, "kepler-backend.exe");
 }
 
+function resolveSpaceDbPath(): string | null {
+  // Backend defaults to %APPDATA%/Kosmos/ark.db; но user data реально лежит в
+  // %APPDATA%/Kosmos/spaces/<spaceId>/ark.db (selected space). Читаем
+  // selected-space.json (если есть) и резолвим через @kosmos/ark helper.
+  // Возвращаем null если space не выбран — backend использует default.
+  try {
+    const baseDir = path.join(app.getPath("appData"), "Kosmos");
+    const space = readSharedSelectedSpace(baseDir);
+    if (!space) return null;
+    return getArkDbPathForSelectedSpace(baseDir, space);
+  } catch (e) {
+    console.error("[kepler-shell] resolveSpaceDbPath failed:", e);
+    return null;
+  }
+}
+
 function spawnBackend() {
   const exe = resolveBackendExe();
   if (!existsSync(exe)) {
@@ -110,11 +126,17 @@ function spawnBackend() {
     "Kosmos",
     "kepler.lock.json",
   );
+  const spaceDbPath = resolveSpaceDbPath();
+  const env = { ...process.env } as Record<string, string>;
+  if (spaceDbPath) {
+    env.KOSMOS_DB_PATH = spaceDbPath;
+    console.error(`[kepler-shell] using selected space DB: ${spaceDbPath}`);
+  }
   console.error("[kepler-shell] spawning backend:", exe);
   backendProc = spawn(exe, [], {
     detached: false,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env },
+    env,
   });
   backendProc.stdout?.on("data", (b) =>
     process.stderr.write(`[kepler-backend] ${b.toString()}`),
@@ -467,6 +489,7 @@ function staticCommands(): CommandRecord[] {
     title: c.title,
     subtitle: c.subtitle,
     category: c.category,
+    icon: c.icon?.(),
   }));
 }
 

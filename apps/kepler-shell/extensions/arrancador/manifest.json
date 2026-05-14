@@ -2,6 +2,7 @@
   "id": "arrancador",
   "name": "Arrancador",
   "kind": "vue",
+  "icon": "icon.png",
   "entryHtml": "dist/index.html",
   "devPort": 5183,
   "width": 1280,

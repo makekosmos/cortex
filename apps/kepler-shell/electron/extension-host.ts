@@ -56,6 +56,11 @@ export interface ExtensionManifest {
    */
   preload?: string;
   /**
+   * Относительный путь к иконке extension'а внутри его директории
+   * (обычно `icon.png`). Используется launcher'ом для open-команд.
+   */
+  icon?: string;
+  /**
    * Порт Vite dev server'а в developer mode. Если задан и активирован
    * developer mode (env `KEPLER_DEV=1` или toggle в Settings) — extension
    * грузится с `http://localhost:<devPort>/` вместо `dist/index.html`.
@@ -149,6 +154,46 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
   } catch (e) {
     console.error(`[kepler-shell] extension manifest invalid: ${id}`, e);
     return null;
+  }
+}
+
+// In-memory cache для иконок — читаем с диска один раз, потом отдаём data URI.
+// Иконки статичные, кешировать безопасно. Ключ — extension id, значение —
+// либо data URI, либо `null` если иконки нет / не удалось прочитать.
+const iconDataUriCache = new Map<string, string | null>();
+
+/**
+ * Возвращает icon extension'а как `data:image/png;base64,...` URI, или undefined
+ * если у extension'а нет icon (нет поля в manifest или файл отсутствует).
+ * Результат кешируется in-memory — повторные вызовы дешёвые.
+ */
+export function extensionIconDataUri(id: string): string | undefined {
+  const cached = iconDataUriCache.get(id);
+  if (cached !== undefined) return cached ?? undefined;
+  const manifest = loadExtensionManifest(id);
+  if (!manifest || !manifest.icon) {
+    iconDataUriCache.set(id, null);
+    return undefined;
+  }
+  const root = resolveExtensionsRoot();
+  const iconPath = path.join(root, id, manifest.icon);
+  if (!existsSync(iconPath)) {
+    iconDataUriCache.set(id, null);
+    return undefined;
+  }
+  try {
+    const buf = readFileSync(iconPath);
+    // MIME по расширению — поддерживаем .png и .svg (типичные кейсы).
+    const ext = path.extname(iconPath).toLowerCase();
+    const mime =
+      ext === ".svg" ? "image/svg+xml" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
+    const uri = `data:${mime};base64,${buf.toString("base64")}`;
+    iconDataUriCache.set(id, uri);
+    return uri;
+  } catch (e) {
+    console.error(`[kepler-shell] failed to read icon for ${id}:`, e);
+    iconDataUriCache.set(id, null);
+    return undefined;
   }
 }
 
@@ -248,14 +293,20 @@ export function openExtension(id: string): void {
     },
   });
 
-  webContentsToExtensionId.set(win.webContents.id, id);
+  // Capture webContents.id ДО регистрации listener'ов. После 'closed' event
+  // BrowserWindow.webContents уже destroyed и обращение к нему кидает
+  // "Object has been destroyed".
+  const wcId = win.webContents.id;
+  webContentsToExtensionId.set(wcId, id);
   win.on("closed", () => {
-    webContentsToExtensionId.delete(win.webContents.id);
+    webContentsToExtensionId.delete(wcId);
     extensionWindows.delete(id);
   });
   extensionWindows.set(id, { win, id });
 
   // F12 toggles DevTools для extension window (без модификаторов).
+  // try/catch — на случай race condition при закрытии окна, когда event ещё
+  // в очереди, а webContents уже destroyed.
   win.webContents.on("before-input-event", (e, input) => {
     if (
       input.key === "F12" &&
@@ -265,7 +316,11 @@ export function openExtension(id: string): void {
       !input.meta
     ) {
       e.preventDefault();
-      win.webContents.toggleDevTools();
+      try {
+        win.webContents.toggleDevTools();
+      } catch {
+        /* webContents destroyed mid-flight — игнорируем. */
+      }
     }
   });
 

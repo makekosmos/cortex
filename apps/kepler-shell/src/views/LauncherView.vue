@@ -157,6 +157,8 @@ function indexInFlat(cmd: CommandRecord): number {
               :class="{ selected: indexInFlat(cmd) === selectedIndex }"
               @click="() => { selectedIndex = indexInFlat(cmd); void invokeSelected(); }"
             >
+              <img v-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+              <span v-else class="icon icon-placeholder" aria-hidden="true" />
               <span class="title">{{ cmd.title }}</span>
               <span class="subtitle">{{ cmd.subtitle }}</span>
             </li>
@@ -172,6 +174,8 @@ function indexInFlat(cmd: CommandRecord): number {
               :class="{ selected: indexInFlat(cmd) === selectedIndex }"
               @click="() => { selectedIndex = indexInFlat(cmd); void invokeSelected(); }"
             >
+              <img v-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+              <span v-else class="icon icon-placeholder" aria-hidden="true" />
               <span class="title">{{ cmd.title }}</span>
               <span class="subtitle">{{ cmd.subtitle }}</span>
             </li>
@@ -188,6 +192,8 @@ function indexInFlat(cmd: CommandRecord): number {
             :class="{ selected: idx === selectedIndex }"
             @click="() => { selectedIndex = idx; void invokeSelected(); }"
           >
+            <img v-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+            <span v-else class="icon icon-placeholder" aria-hidden="true" />
             <span class="title">{{ cmd.title }}</span>
             <span class="subtitle">{{ cmd.subtitle }}</span>
           </li>
@@ -246,11 +252,23 @@ function indexInFlat(cmd: CommandRecord): number {
 
 .result {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12px;
   padding: 10px 14px;
   border-radius: 8px;
   cursor: pointer;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.icon-placeholder {
+  background: transparent;
 }
 
 .result:hover {
@@ -267,6 +285,8 @@ function indexInFlat(cmd: CommandRecord): number {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .subtitle {

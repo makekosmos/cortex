@@ -2,6 +2,7 @@
   "id": "dashboard",
   "name": "Dashboard",
   "kind": "vue",
+  "icon": "icon.png",
   "entryHtml": "dist/index.html",
   "devPort": 5180,
   "width": 1280,

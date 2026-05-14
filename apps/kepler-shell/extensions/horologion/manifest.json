@@ -2,6 +2,7 @@
   "id": "horologion",
   "name": "Horologion",
   "kind": "vue",
+  "icon": "icon.png",
   "entryHtml": "dist/index.html",
   "devPort": 5181,
   "width": 800,

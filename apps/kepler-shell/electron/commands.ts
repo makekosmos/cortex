@@ -6,6 +6,7 @@
 // running extension'ов через kepler-backend command bus.
 
 import "./extension-host";
+import { extensionIconDataUri } from "./extension-host";
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -21,6 +22,12 @@ export interface InternalCommand {
   title: string;
   subtitle: string;
   category: "open" | "action";
+  /**
+   * Опциональная иконка как data URI. Для open-команд extension'ов берётся
+   * из `extensionIconDataUri(<id>)`. Lazy getter — читаем с диска один раз,
+   * результат кешируется в extension-host.
+   */
+  icon?: () => string | undefined;
   exec: () => Promise<void> | void;
 }
 
@@ -61,6 +68,7 @@ export const COMMANDS: InternalCommand[] = [
     title: "Открыть Dashboard",
     subtitle: "Аналитика",
     category: "open",
+    icon: () => extensionIconDataUri("dashboard"),
     exec: () => openAsExtension("dashboard"),
   },
   {
@@ -68,6 +76,7 @@ export const COMMANDS: InternalCommand[] = [
     title: "Открыть Delphi",
     subtitle: "Задачи",
     category: "open",
+    icon: () => extensionIconDataUri("delphi"),
     exec: () => openAsExtension("delphi"),
   },
   {
@@ -75,6 +84,7 @@ export const COMMANDS: InternalCommand[] = [
     title: "Открыть Horologion",
     subtitle: "Pomodoro + трекер времени",
     category: "open",
+    icon: () => extensionIconDataUri("horologion"),
     exec: () => openAsExtension("horologion"),
   },
   {
@@ -82,6 +92,7 @@ export const COMMANDS: InternalCommand[] = [
     title: "Открыть Arrancador",
     subtitle: "Игровая библиотека",
     category: "open",
+    icon: () => extensionIconDataUri("arrancador"),
     exec: () => openAsExtension("arrancador"),
   },
   // Eden намеренно НЕ мигрирован в Phase 4 — остаётся standalone .exe.

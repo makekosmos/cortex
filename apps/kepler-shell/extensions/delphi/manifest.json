@@ -2,6 +2,7 @@
   "id": "delphi",
   "name": "Delphi",
   "kind": "vue",
+  "icon": "icon.png",
   "entryHtml": "dist/index.html",
   "devPort": 5182,
   "width": 1100,

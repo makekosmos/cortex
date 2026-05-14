@@ -25,6 +25,9 @@ export interface CommandRecord {
   subtitle?: string;
   /** Группа для секций в UI: 'open' = запустить апку, 'action' = ручка апки. */
   category: "open" | "action";
+  /** Опциональная иконка команды. Data URI (`data:image/png;base64,...`)
+      для open-команд extension'ов; undefined для action-команд. */
+  icon?: string;
 }
 
 export interface KeplerApi {
