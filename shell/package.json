@@ -23,8 +23,8 @@
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },
   "dependencies": {
-    "@kosmos/ark": "workspace:*",
-    "@kosmos/visuals": "workspace:*",
+    "@kepler/ark": "workspace:*",
+    "@kepler/visuals": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "lucide-vue-next": "^0.548.0",
     "tailwindcss": "^4.1.16",

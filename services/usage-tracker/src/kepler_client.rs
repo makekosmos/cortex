@@ -7,7 +7,7 @@
 // `USAGE_TRACKER_USE_KEPLER=1`. Когда AC5 (Phase 4 spec) выполнится — default
 // поведение перейдёт на kepler, fallback flag станет deprecation marker.
 //
-// Lock-file resolution — копирует логику из `@kosmos/ark` `ensureKeplerRunning`,
+// Lock-file resolution — копирует логику из `@kepler/ark` `ensureKeplerRunning`,
 // но проще (нам не нужен auto-launch — Kepler должен уже быть запущен через
 // HKCU autostart / installer).
 

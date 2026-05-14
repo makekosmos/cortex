@@ -21,7 +21,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@kosmos/visuals": path.resolve(__dirname, "../../../packages/visuals"),
+      "@kepler/visuals": path.resolve(__dirname, "../../../packages/visuals"),
     },
   },
   clearScreen: false,

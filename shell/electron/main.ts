@@ -44,7 +44,7 @@ import {
   getArkDbPathForSelectedSpace,
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
-} from "@kosmos/ark";
+} from "@kepler/ark";
 import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
 import { setExtensionArkBridge } from "./extension-host";
@@ -102,7 +102,7 @@ function resolveBackendExe(): string {
 function resolveSpaceDbPath(): string | null {
   // Backend defaults to %APPDATA%/Kosmos/ark.db; но user data реально лежит в
   // %APPDATA%/Kosmos/spaces/<spaceId>/ark.db (selected space). Читаем
-  // selected-space.json (если есть) и резолвим через @kosmos/ark helper.
+  // selected-space.json (если есть) и резолвим через @kepler/ark helper.
   // Возвращаем null если space не выбран — backend использует default.
   try {
     const baseDir = path.join(app.getPath("appData"), "Kosmos");

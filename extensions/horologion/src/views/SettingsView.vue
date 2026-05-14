@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Play } from "lucide-vue-next";
-import { Dropdown } from "@kosmos/visuals";
+import { Dropdown } from "@kepler/visuals";
 import { pomodoroSettings, resetPomodoroSettings } from "../lib/pomodoroSettings";
 import { playSound, SOUND_OPTIONS, type SoundName } from "../lib/sounds";
 

@@ -28,7 +28,7 @@ const steps = [
     args: ["test", "--manifest-path", "services/usage-tracker/Cargo.toml"],
   },
   {
-    name: "@kosmos/ark typecheck",
+    name: "@kepler/ark typecheck",
     command: "bun",
     args: ["run", "--cwd", "packages/ark", "typecheck"],
   },

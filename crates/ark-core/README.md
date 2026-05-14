@@ -9,7 +9,7 @@ ARK Core is the canonical local-first data runtime for Kosmos. It is a Rust libr
 - `packages/ark-core/rust/src/db.rs` - SQLite schema, CRUD, sync storage adapter
 - `packages/ark-core/rust/src/sync_server.rs` and `sync_client.rs` - LAN sync runtime
 - `packages/kosmos-ark` - canonical TypeScript SDK for Electron main/Node callers
-- `packages/arksync-node` - compatibility package that re-exports `@kosmos/ark`
+- `packages/arksync-node` - compatibility package that re-exports `@kepler/ark`
 
 ## Build And Test
 
@@ -39,10 +39,10 @@ When `relay_url` is provided, `ark-core-rpc` starts a relay bridge beside LAN sy
 
 ## TypeScript Integration
 
-Use `@kosmos/ark` from Electron main or another trusted Node process:
+Use `@kepler/ark` from Electron main or another trusted Node process:
 
 ```ts
-import { ArkClient } from "@kosmos/ark";
+import { ArkClient } from "@kepler/ark";
 
 const ark = new ArkClient({
   spaceId: "main",
@@ -95,7 +95,7 @@ Delete propagation depends on durable tombstones in `sync_tombstones`. Apply err
 
 - Renderer processes should not talk to ARK directly.
 - Electron preload should expose narrow app-specific APIs.
-- Electron main should use `@kosmos/ark` or app-specific wrappers around it.
+- Electron main should use `@kepler/ark` or app-specific wrappers around it.
 - Apps should not write directly into ARK SQLite tables.
 - Migration scripts may read source databases directly, but target ARK writes should go through ARK RPC/SDK.
 - If a Rust process must write directly, it must call `ark_core::db` helpers that update sync state.

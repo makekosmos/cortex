@@ -5,7 +5,7 @@
 // chooseDatabase / resetDatabase / getPlatform недоступны extension'у).
 
 import { createApp } from "vue";
-import "@kosmos/visuals/theme/css";
+import "@kepler/visuals/theme/css";
 import "./styles.css";
 import App from "./App.vue";
 

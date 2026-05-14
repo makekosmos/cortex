@@ -20,7 +20,7 @@ function goBack() {
 // ARK connection status — точка-индикатор в topbar.
 // Каждые 10 секунд (и при mount) дёргаем дешёвую операцию `list_object_types`,
 // успех → connected, ошибка → error. Используем такой же визуал как в Delphi
-// extension'е (8px dot, 32x32 button, oklch tokens из @kosmos/visuals).
+// extension'е (8px dot, 32x32 button, oklch tokens из @kepler/visuals).
 // ---------------------------------------------------------------------------
 
 type ArkStatus = "connected" | "connecting" | "error";
@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
 
 /* ARK status indicator — single-line dot, без popover'а.
    Совпадает с Delphi extension'ом: 32x32 transparent button + 8px dot,
-   цвета из @kosmos/visuals (--status-success / --destructive). */
+   цвета из @kepler/visuals (--status-success / --destructive). */
 .ark-status-btn {
     display: inline-flex;
     align-items: center;

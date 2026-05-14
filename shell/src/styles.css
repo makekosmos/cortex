@@ -1,6 +1,6 @@
-@import "@kosmos/visuals/theme/css";
+@import "@kepler/visuals/theme/css";
 
-/* Accent наследуется из @kosmos/visuals theme; никаких локальных override'ов. */
+/* Accent наследуется из @kepler/visuals theme; никаких локальных override'ов. */
 
 html,
 body,

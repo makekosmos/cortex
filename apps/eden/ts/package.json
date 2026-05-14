@@ -20,7 +20,7 @@
     "benchmark:typing-stress:compare": "bun run scripts/compareTypingStress.ts"
   },
   "dependencies": {
-    "@kosmos/ark": "workspace:*",
+    "@kepler/ark": "workspace:*",
     "@tiptap/extension-code-block-lowlight": "^3.20.1",
     "@tiptap/extension-mention": "^3.20.1",
     "@tiptap/extension-placeholder": "^3.20.1",

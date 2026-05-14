@@ -1,4 +1,4 @@
-// Eden ARK bridge — Phase 2 cutover на @kosmos/ark с kepler-aware resolution.
+// Eden ARK bridge — Phase 2 cutover на @kepler/ark с kepler-aware resolution.
 //
 // Поведение:
 //   1. При первом вызове `runArkRequest` (или явном `initArkRuntime()` из main.ts)
@@ -11,7 +11,7 @@
 //
 // Public API `runArkRequest` / `shutdownArk` сохранена для обратной совместимости
 // с `store.ts` (там 30+ call-sites через `runArkRequest({operation: ..., ...})`).
-// Постепенная миграция на typed API @kosmos/ark (`client.objects.list()` и т.п.) —
+// Постепенная миграция на typed API @kepler/ark (`client.objects.list()` и т.п.) —
 // отдельная follow-up задача.
 
 import fs from "node:fs";
@@ -25,7 +25,7 @@ import {
   ensureKeplerRunning,
   getArkDbPathForSelectedSpace,
   readSharedSelectedSpace,
-} from "@kosmos/ark";
+} from "@kepler/ark";
 
 const { app, BrowserWindow } = electron;
 

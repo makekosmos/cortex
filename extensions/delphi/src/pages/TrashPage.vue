@@ -4,7 +4,7 @@ import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
-import { TodoRow } from "@kosmos/visuals";
+import { TodoRow } from "@kepler/visuals";
 import { useSidebarState } from "@/composables/useSidebarState";
 
 const {

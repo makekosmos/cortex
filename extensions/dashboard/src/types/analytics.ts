@@ -1,5 +1,5 @@
 // Shape of `get_usage_analytics` operation в ARK runtime. Совпадает с
-// ArkUsageAnalyticsSnapshot из @kosmos/ark — продублирован локально, чтобы
+// ArkUsageAnalyticsSnapshot из @kepler/ark — продублирован локально, чтобы
 // extension не зависел от типов SDK при сборке.
 
 export interface UsageSummary {

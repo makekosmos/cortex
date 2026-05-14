@@ -28,8 +28,8 @@ Eden.exe — остаётся standalone Electron + общий backend чере�
 |---|---|
 | Ecosystem (monorepo, ARK SDK, AppData) | **Kosmos** |
 | Launcher app (Electron host) | **Kepler** |
-| TS package SDK | `@kosmos/ark` |
-| Visuals (CSS tokens + Vue components) | `@kosmos/visuals` |
+| TS package SDK | `@kepler/ark` |
+| Visuals (CSS tokens + Vue components) | `@kepler/visuals` |
 | Backend binary | `kepler-backend.exe` |
 
 `%APPDATA%\Kosmos\` — все user data (ark.db, lock-файлы, settings). `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db` — actual per-space DB.
@@ -62,7 +62,7 @@ Eden.exe — остаётся standalone Electron + общий backend чере�
   - Operations: `commands.register / unregister / list / invoke`.
   - Events: `command_invoked` / `commands_changed` broadcast.
   - Auto-unregister на WS disconnect.
-- `@kosmos/ark` SDK: `client.commands.{register,unregister,list,invoke,onInvoked,onChanged}` namespace + types (`CommandManifest`, `CommandInvokedEvent`).
+- `@kepler/ark` SDK: `client.commands.{register,unregister,list,invoke,onInvoked,onChanged}` namespace + types (`CommandManifest`, `CommandInvokedEvent`).
 - Apps (Horologion / Delphi / Eden) регистрируют свои «ручки» при подключении в kepler-mode.
 
 ### Phase 3 — Real action handlers
@@ -100,7 +100,7 @@ Eden.exe — остаётся standalone Electron + общий backend чере�
 
 ### Inter-app communication
 
-- `@kosmos/ark` cosmos-mode — apps подключаются к single `kepler-backend` WS, делят `ark-core-rpc`. Один sync node на машину (-3 ark-core-rpc).
+- `@kepler/ark` cosmos-mode — apps подключаются к single `kepler-backend` WS, делят `ark-core-rpc`. Один sync node на машину (-3 ark-core-rpc).
 - Command bus: launcher → backend → apps event broadcast → handler execute.
 - Selected space DB resolution — `kepler-shell` передаёт `KOSMOS_DB_PATH` в backend (читает `selected-space.json`).
 
@@ -154,12 +154,12 @@ LRU eviction, RAM budget management, lazy extension load/unload. Имеет см
 
 ### Phase 9 — Delphi UI на plain CSS (open question)
 
-Delphi extension использует **Tailwind v4** (наследие legacy `apps/delphi/ts/`). Все остальные extension'ы + Kepler launcher / settings — на **plain scoped CSS + `@kosmos/visuals` CSS variables**.
+Delphi extension использует **Tailwind v4** (наследие legacy `apps/delphi/ts/`). Все остальные extension'ы + Kepler launcher / settings — на **plain scoped CSS + `@kepler/visuals` CSS variables**.
 
 Что нужно для Phase 9 (open question):
 
 - ~30 .vue файлов в `apps/kepler-shell/extensions/delphi/src/` — удалить Tailwind utility classes из templates.
-- Переписать стили в `<style scoped>` с CSS vars из `@kosmos/visuals`.
+- Переписать стили в `<style scoped>` с CSS vars из `@kepler/visuals`.
 - Удалить `@import "tailwindcss"` + `@source` из `extensions/delphi/src/global.css`.
 - Удалить `@tailwindcss/vite` plugin из vite configs.
 - Удалить tailwind deps.

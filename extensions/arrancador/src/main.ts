@@ -15,7 +15,7 @@
 import { createApp } from "vue";
 
 // eslint-disable-next-line import/no-unassigned-import
-import "@kosmos/visuals/theme/css";
+import "@kepler/visuals/theme/css";
 // eslint-disable-next-line import/no-unassigned-import
 import "./styles.css";
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { Modal, DateTimePicker } from "@kosmos/visuals";
+import { Modal, DateTimePicker } from "@kepler/visuals";
 import { Trash2 } from "lucide-vue-next";
 import type { TimeEntry } from "../types";
 import { formatDuration } from "../lib/format";

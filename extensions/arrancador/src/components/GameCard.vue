@@ -2,7 +2,7 @@
 // GameCard для extension'а.
 //
 // Адаптация vs `apps/arrancador/src-vue/components/GameCard.vue`:
-//   - legacy использует `@kosmos/visuals/GamePosterCard` + RouterLink + i18n
+//   - legacy использует `@kepler/visuals/GamePosterCard` + RouterLink + i18n
 //     перевод жанров. Здесь — самостоятельная карточка + router-link на
 //     детальную страницу.
 //   - Cover берётся из `propsJson.background_image` либо `propsJson.cover_image`

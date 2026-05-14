@@ -11,7 +11,7 @@
 /* Arrancador extension — plain CSS layer.
    Legacy `apps/arrancador/` использовал tailwind; миграция компонентов
    на utility-классы — Phase 5 follow-up. Сейчас все цвета/радиусы
-   через `var(--*)` из `@kosmos/visuals/theme/css`. */
+   через `var(--*)` из `@kepler/visuals/theme/css`. */
 
 *,
 *::before,

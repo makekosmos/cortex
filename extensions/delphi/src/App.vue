@@ -36,7 +36,7 @@ import {
   DesktopContentSurface,
   TitlebarHistoryControls,
   type TitlebarPlatform,
-} from "@kosmos/visuals";
+} from "@kepler/visuals";
 import { setSidebarHidden, useSidebarState } from "@/composables/useSidebarState";
 import {
   activeSpaceCode,

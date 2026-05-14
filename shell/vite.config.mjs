@@ -35,12 +35,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@kosmos/ark": path.resolve(__dirname, "../packages/ark/src/index.ts"),
-      "@kosmos/visuals/theme/css": path.resolve(
+      "@kepler/ark": path.resolve(__dirname, "../packages/ark/src/index.ts"),
+      "@kepler/visuals/theme/css": path.resolve(
         __dirname,
         "../packages/visuals/theme/css-variables.css",
       ),
-      "@kosmos/visuals": path.resolve(__dirname, "../packages/visuals"),
+      "@kepler/visuals": path.resolve(__dirname, "../packages/visuals"),
       "@shared": path.resolve(__dirname, "./shared"),
     },
     dedupe: ["vue"],

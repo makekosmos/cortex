@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { Trash2, ChevronDown } from "lucide-vue-next";
-import { ContextMenu, ContextMenuItem, useContextMenu } from "@kosmos/visuals";
+import { ContextMenu, ContextMenuItem, useContextMenu } from "@kepler/visuals";
 import type { TimeEntry } from "../types";
 import { formatDuration, formatDayHeader, dayKey } from "../lib/format";
 import { entriesChangedAt, notifyEntriesChanged } from "../lib/store";

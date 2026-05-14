@@ -21,7 +21,7 @@ import { computed, onBeforeUnmount, ref, watch, nextTick } from "vue";
  * </ContextMenu>
  * ```
  *
- * Хелпер `useContextMenu<T>()` экспортируется из `@kosmos/visuals`.
+ * Хелпер `useContextMenu<T>()` экспортируется из `@kepler/visuals`.
  */
 
 interface Props {
