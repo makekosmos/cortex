@@ -1,14 +1,5 @@
-// Типы Dashboard view'ев. SpaceMeta совпадает с тем, что отдаёт IPC
-// `kepler:spaces:list` (см. shell/electron/main.ts).
-
-export interface SpaceMeta {
-  id: string;
-  name: string;
-  objectCount: number | null;
-  lastAccessedAt: number;
-  label: string;
-  isSelected: boolean;
-}
+// Типы Dashboard view'ев. Концепция spaces убрана 2026-05-15 — одна БД на
+// юзера, Dashboard сразу открывается на единственный список объектов.
 
 export interface DashboardObjectType {
   id: string;

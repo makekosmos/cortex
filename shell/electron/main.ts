@@ -32,27 +32,16 @@ import path from "node:path";
 import {
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   renameSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { fileURLToPath } from "node:url";
-import {
-  ArkClient,
-  buildPersonalSelectedSpace,
-  deriveSpaceIdFromCode,
-  ensureKeplerRunning,
-  getArkDbPathForSelectedSpace,
-  readSharedSelectedSpace,
-  writeSharedSelectedSpace,
-} from "@kepler/ark";
+import { ArkClient, ensureKeplerRunning } from "@kepler/ark";
 import type {
   BackendStatus,
   CommandRecord,
   SearchResult,
-  SpaceMeta,
 } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
 import { setExtensionArkBridge } from "./extension-host";
@@ -108,26 +97,6 @@ function resolveBackendExe(): string {
   return path.join(process.resourcesPath ?? __dirname, "kepler-backend.exe");
 }
 
-function resolveSpaceDbPath(): string | null {
-  // Backend defaults to %APPDATA%/Kosmos/ark.db; но user data реально лежит в
-  // %APPDATA%/Kosmos/spaces/<spaceId>/ark.db (selected space). Читаем
-  // selected-space.json (если есть) и резолвим через @kepler/ark helper.
-  // Возвращаем null если space не выбран — backend использует default.
-  //
-  // ВАЖНО: helper'ы (read/getArkDbPathForSelectedSpace) сами джойнят "Kosmos"
-  // к переданному пути. Передавать сюда нужно RAW appData (Roaming),
-  // иначе получится Roaming/Kosmos/Kosmos/... и файл «не найдётся».
-  try {
-    const appDataPath = app.getPath("appData");
-    const space = readSharedSelectedSpace(appDataPath);
-    if (!space) return null;
-    return getArkDbPathForSelectedSpace(appDataPath, space);
-  } catch (e) {
-    console.error("[kepler-shell] resolveSpaceDbPath failed:", e);
-    return null;
-  }
-}
-
 function spawnBackend() {
   const exe = resolveBackendExe();
   if (!existsSync(exe)) {
@@ -139,17 +108,11 @@ function spawnBackend() {
     "Kosmos",
     "kepler.lock.json",
   );
-  const spaceDbPath = resolveSpaceDbPath();
-  const env = { ...process.env } as Record<string, string>;
-  if (spaceDbPath) {
-    env.KOSMOS_DB_PATH = spaceDbPath;
-    console.error(`[kepler-shell] using selected space DB: ${spaceDbPath}`);
-  }
   console.error("[kepler-shell] spawning backend:", exe);
   backendProc = spawn(exe, [], {
     detached: false,
     stdio: ["ignore", "pipe", "pipe"],
-    env,
+    env: process.env,
   });
   backendProc.stdout?.on("data", (b) =>
     process.stderr.write(`[kepler-backend] ${b.toString()}`),
@@ -376,20 +339,14 @@ function createTray() {
 
 // --- ArkClient (WS to kepler-backend) ---------------------------------------
 
-function ensureSelectedSpace(): { spaceId: string; dbPath: string } {
-  const appDataPath = app.getPath("appData");
-  let selection = readSharedSelectedSpace(appDataPath);
-  if (!selection) {
-    selection = buildPersonalSelectedSpace(appDataPath, "kepler-shell");
-    writeSharedSelectedSpace(appDataPath, selection);
-  }
-  const dbPath = getArkDbPathForSelectedSpace(appDataPath, selection);
-  return { spaceId: selection.spaceId, dbPath };
-}
+// Global space id для всех apps: концепция spaces убрана 2026-05-15, БД одна
+// на юзера. Передаём backend'у через ArkClient как фиксированный id, чтобы LAN
+// sync namespace был стабильным между запусками.
+const KEPLER_SPACE_ID = "kepler-default";
 
 async function initArkClient(): Promise<void> {
   try {
-    const { spaceId } = ensureSelectedSpace();
+    const spaceId = KEPLER_SPACE_ID;
     // kepler-shell сам спавнит kepler-backend выше (spawnBackend), здесь
     // только ждём lock-файл и коннектимся через WS. autoLaunch=false — повторно
     // не запускаем.
@@ -557,175 +514,6 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
   hideLauncher();
 });
 
-// --- Dashboard (embedded view) ----------------------------------------------
-
-interface SpaceRegistryEntry {
-  code: string;
-  name?: string;
-  createdAt?: string;
-}
-
-interface SpaceRegistry {
-  active?: string;
-  spaces?: SpaceRegistryEntry[];
-}
-
-// Counter SQLite-connection'ов — мы открываем space DB read-only только для
-// подсчёта объектов в welcome screen'е. Используется `node:sqlite` (стабилен в
-// Node 22.x — runtime Electron 41), без native modules / electron-rebuild.
-//
-// Lazy import: модуль experimental, печатает warning при первом require'е.
-// Грузим через dynamic import только когда реально нужно — listSpaces.
-let cachedDatabaseSync: typeof import("node:sqlite").DatabaseSync | null = null;
-async function loadDatabaseSync(): Promise<typeof import("node:sqlite").DatabaseSync | null> {
-  if (cachedDatabaseSync) return cachedDatabaseSync;
-  try {
-    const mod = await import("node:sqlite");
-    cachedDatabaseSync = mod.DatabaseSync;
-    return cachedDatabaseSync;
-  } catch (e) {
-    console.error("[kepler-shell] node:sqlite unavailable:", e);
-    return null;
-  }
-}
-
-async function countObjectsInSpaceDb(dbPath: string): Promise<number | null> {
-  if (!existsSync(dbPath)) return null;
-  const DatabaseSync = await loadDatabaseSync();
-  if (!DatabaseSync) return null;
-  try {
-    const db = new DatabaseSync(dbPath, { readOnly: true });
-    try {
-      const row = db
-        .prepare("SELECT COUNT(*) AS n FROM objects WHERE deleted_at IS NULL")
-        .get() as { n: number | bigint } | undefined;
-      if (!row) return null;
-      const n = typeof row.n === "bigint" ? Number(row.n) : row.n;
-      return Number.isFinite(n) ? n : null;
-    } finally {
-      db.close();
-    }
-  } catch (e) {
-    // DB файл может существовать, но без schema (backend ни разу не открывал
-    // этот space) — sqlite кинет «no such table: objects». Показываем 0,
-    // чтобы subheader всё равно отрисовался — так UI понятнее.
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/no such table/i.test(msg)) return 0;
-    console.warn(`[kepler-shell] objectCount failed for ${dbPath}:`, e);
-    return null;
-  }
-}
-
-function readSpacesRegistry(baseDir: string): SpaceRegistry | null {
-  const p = path.join(baseDir, "spaces.json");
-  if (!existsSync(p)) return null;
-  try {
-    // PowerShell может оставить UTF-8 BOM (см. selected-space.json fix в @kepler/ark) — стрипаем.
-    const raw = readFileSync(p, "utf8").replace(/^﻿/, "");
-    const parsed = JSON.parse(raw) as SpaceRegistry;
-    if (!parsed || !Array.isArray(parsed.spaces)) return null;
-    return parsed;
-  } catch (e) {
-    console.error("[kepler-shell] readSpacesRegistry failed:", e);
-    return null;
-  }
-}
-
-// Компактный label из 12-символьного spaceCode: «DCE9X21A8HYT» → «DCE9.X21A»
-// (4 + dot + 4 = 9 chars). Помещается в orange pill SpaceCard'а.
-function labelFromSpaceCode(code: string): string {
-  const upper = code.toUpperCase();
-  if (upper.length >= 8) return `${upper.slice(0, 4)}.${upper.slice(4, 8)}`;
-  return upper;
-}
-
-async function listSpaces(): Promise<SpaceMeta[]> {
-  const baseDir = path.join(app.getPath("appData"), "Kosmos");
-  const spacesDir = path.join(baseDir, "spaces");
-  const selected = readSharedSelectedSpace(baseDir);
-  const registry = readSpacesRegistry(baseDir);
-  const out: SpaceMeta[] = [];
-
-  if (registry?.spaces && registry.spaces.length > 0) {
-    // Registry — source of truth. Игнорируем «осиротевшие» spaces/<id> директории
-    // (могут оставаться от предыдущих кодов или ручных экспериментов).
-    for (const entry of registry.spaces) {
-      if (!entry || typeof entry.code !== "string" || entry.code.length === 0) continue;
-      const id = deriveSpaceIdFromCode(entry.code);
-      const dbPath = path.join(spacesDir, id, "ark.db");
-      let lastAccessedAt: number;
-      if (existsSync(dbPath)) {
-        try {
-          lastAccessedAt = statSync(dbPath).mtimeMs;
-        } catch {
-          lastAccessedAt = entry.createdAt ? Date.parse(entry.createdAt) : Date.now();
-        }
-      } else {
-        lastAccessedAt = entry.createdAt ? Date.parse(entry.createdAt) : Date.now();
-      }
-      const objectCount = await countObjectsInSpaceDb(dbPath);
-      out.push({
-        id,
-        name: entry.name && entry.name.length > 0 ? entry.name : entry.code,
-        objectCount,
-        lastAccessedAt: Number.isFinite(lastAccessedAt) ? lastAccessedAt : Date.now(),
-        label: labelFromSpaceCode(entry.code),
-        isSelected: selected?.spaceId === id,
-      });
-    }
-  } else if (existsSync(spacesDir)) {
-    // Fallback: registry отсутствует — scan по spaces/ dir (legacy путь, без
-    // spaceCode мы не знаем человекочитаемое имя и label берём из id).
-    try {
-      for (const entry of readdirSync(spacesDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const id = entry.name;
-        const dir = path.join(spacesDir, id);
-        let mtime = Date.now();
-        try {
-          mtime = statSync(dir).mtimeMs;
-        } catch {
-          /* unreadable — оставляем now */
-        }
-        const objectCount = await countObjectsInSpaceDb(path.join(dir, "ark.db"));
-        out.push({
-          id,
-          name: id,
-          objectCount,
-          lastAccessedAt: mtime,
-          label: id.slice(0, 8).toUpperCase(),
-          isSelected: selected?.spaceId === id,
-        });
-      }
-    } catch (e) {
-      console.error("[kepler-shell] listSpaces fallback scan failed:", e);
-    }
-  }
-
-  // Если selected space ещё не в результате (например выбран space, которого
-  // нет в registry), добавим запись на основе selected-space.json.
-  if (selected && !out.some((s) => s.id === selected.spaceId)) {
-    const dbPath = path.join(spacesDir, selected.spaceId, "ark.db");
-    const objectCount = await countObjectsInSpaceDb(dbPath);
-    out.push({
-      id: selected.spaceId,
-      name: selected.spaceCode || selected.spaceId,
-      objectCount,
-      lastAccessedAt: Date.parse(selected.updatedAt) || Date.now(),
-      label: labelFromSpaceCode(selected.spaceCode || selected.spaceId),
-      isSelected: true,
-    });
-  }
-
-  // Sort: selected первым, далее по lastAccessedAt desc.
-  out.sort((a, b) => {
-    if (a.isSelected !== b.isSelected) return a.isSelected ? -1 : 1;
-    return b.lastAccessedAt - a.lastAccessedAt;
-  });
-  return out;
-}
-
-ipcMain.handle("kepler:spaces:list", (): Promise<SpaceMeta[]> => listSpaces());
 
 ipcMain.handle(
   "kepler:ark:request",

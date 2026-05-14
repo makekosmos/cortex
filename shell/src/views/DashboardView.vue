@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, onMounted } from "vue";
 import { DesktopChrome, DesktopContentSurface } from "@kepler/visuals";
 import SidebarItem from "../dashboard/SidebarItem.vue";
 import ObjectTable from "../dashboard/ObjectTable.vue";
@@ -10,12 +10,7 @@ import {
   objects,
   objectsLoading,
   objectTypes,
-  selectedSpaceId,
 } from "../dashboard/store";
-
-const props = defineProps<{
-  spaceId: string;
-}>();
 
 const TYPE_COLORS = [
   "#ef4444",
@@ -43,22 +38,10 @@ const titleLabel = computed(() => {
   return t?.name ?? currentTypeId.value;
 });
 
-async function init() {
-  selectedSpaceId.value = props.spaceId;
+onMounted(async () => {
   await loadObjectTypes();
   await loadObjects(null);
-}
-
-onMounted(() => {
-  void init();
 });
-
-watch(
-  () => props.spaceId,
-  () => {
-    void init();
-  },
-);
 
 function selectAll(): void {
   void loadObjects(null);
@@ -70,10 +53,6 @@ function selectSettings(): void {
 
 function selectType(id: string): void {
   void loadObjects(id);
-}
-
-function goBack(): void {
-  window.location.hash = "#/dashboard/welcome";
 }
 </script>
 
@@ -110,9 +89,6 @@ function goBack(): void {
           />
         </div>
 
-        <div class="sidebar-bottom">
-          <button class="back" type="button" @click="goBack">← К spaces</button>
-        </div>
       </aside>
     </template>
 
@@ -126,7 +102,7 @@ function goBack(): void {
       </header>
       <div class="main-body">
         <div v-if="showSettings" class="settings-stub">
-          Настройки space'а — в разработке.
+          Настройки — в разработке.
         </div>
         <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
       </div>
@@ -165,27 +141,6 @@ function goBack(): void {
   text-transform: uppercase;
   color: color-mix(in srgb, var(--foreground) 45%, transparent);
   padding: 4px 10px 6px;
-}
-
-.sidebar-bottom {
-  margin-top: auto;
-  padding-top: 12px;
-}
-
-.back {
-  width: 100%;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: color-mix(in srgb, var(--foreground) 70%, transparent);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.back:hover {
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  color: var(--foreground);
 }
 
 .main-surface {

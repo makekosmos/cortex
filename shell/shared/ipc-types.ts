@@ -17,19 +17,18 @@ export interface SearchResult {
   snippet?: string;
 }
 
-/** Метаинформация о ARK space — основа welcome screen встроенного Dashboard'а. */
+/**
+ * @deprecated 2026-05-15: концепция spaces убрана, single DB per user.
+ * Тип оставлен временно чтобы legacy consumers (если ещё импортируют) не
+ * падали с typecheck-ошибкой. Удалить когда `legacy/dashboard-extension`
+ * перестанет ссылаться.
+ */
 export interface SpaceMeta {
-  /** Stable id (spaceId) — обычно hex(sha256(spaceCode))[:16]. */
   id: string;
-  /** Человекочитаемое имя (из space-meta.json или fallback на id). */
   name: string;
-  /** Кол-во объектов в space (если известно; null если scan по directory). */
   objectCount: number | null;
-  /** Unix ms — последний access к space, для сортировки и «X назад». */
   lastAccessedAt: number;
-  /** Label для orange pill (по умолчанию первые 8 символов id). */
   label: string;
-  /** Текущий выбранный space (из selected-space.json). */
   isSelected: boolean;
 }
 
@@ -74,11 +73,6 @@ export interface KeplerApi {
       command registry). Зарезервировано на будущее. */
   objects: {
     listRecent(limit?: number): Promise<SearchResult[]>;
-  };
-
-  /** Spaces — встроенный Dashboard рисует welcome screen по spaces. */
-  spaces: {
-    list(): Promise<SpaceMeta[]>;
   };
 
   /** Generic ARK RPC bridge — используется встроенным Dashboard view'ом

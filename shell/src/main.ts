@@ -9,8 +9,7 @@ document.documentElement.classList.add("dark");
 // грузит URL с разным hash, рендер ниже выбирает соответствующий root view.
 //   (no hash)                  → launcher (App.vue → LauncherView)
 //   #settings                  → SettingsView
-//   #/dashboard/welcome        → DashboardRoot (welcome view)
-//   #/dashboard/space/<id>     → DashboardRoot (space view)
+//   #/dashboard                → DashboardRoot (DashboardView)
 const hash = window.location.hash;
 
 function rootView() {

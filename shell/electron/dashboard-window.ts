@@ -1,9 +1,10 @@
 // Dashboard window для Kepler — отдельный BrowserWindow, грузит тот же
-// renderer-bundle с hash `#/dashboard/welcome`, src/main.ts по hash рендерит
-// DashboardWelcomeView / DashboardSpaceView вместо LauncherView.
+// renderer-bundle с hash `#/dashboard`, src/main.ts по hash рендерит
+// DashboardView вместо LauncherView.
 //
 // Dashboard теперь встроен в shell (не extension), это ARK browser:
-//   welcome → space picker, space view → sidebar + objects table.
+// sidebar по типам объектов + таблица содержимого. Концепция spaces убрана
+// 2026-05-15 — одна БД на юзера, никакого welcome-screen'а.
 //
 // Открывается через `openDashboardWindow()` (вызов из tray menu или из
 // внутренней static command `dashboard:open`).
@@ -182,10 +183,10 @@ export function openDashboardWindow(): void {
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
   if (devUrl) {
-    void dashboardWin.loadURL(`${devUrl}#/dashboard/welcome`);
+    void dashboardWin.loadURL(`${devUrl}#/dashboard`);
   } else {
     void dashboardWin.loadFile(path.join(__dirname, "../dist/index.html"), {
-      hash: "/dashboard/welcome",
+      hash: "/dashboard",
     });
   }
 }
