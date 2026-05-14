@@ -7,7 +7,7 @@
 // директории Kepler.
 //
 // Usage:
-//   bun run --cwd apps/kepler-shell ext:uninstall <id>
+//   bun run --cwd shell ext:uninstall <id>
 
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";

@@ -13,7 +13,7 @@
 // откатывает обратно на bundled.
 //
 // Usage:
-//   bun run --cwd apps/kepler-shell ext:install <path-to-extension-dir>
+//   bun run --cwd shell ext:install <path-to-extension-dir>
 //
 // `<path-to-extension-dir>` должен быть готовый built extension: содержать
 // `manifest.json`, `dist/` (для Vue) или `index.html` (для static), `icon.png`.

@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readdirSync, statSync } from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const extensionsRoot = path.resolve(__dirname, "extensions");
+const extensionsRoot = path.resolve(__dirname, "..", "extensions");
 
 function discoverVueExtensions() {
   if (!existsSync(extensionsRoot)) return [];
@@ -72,15 +72,15 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(extensionDir, "src"),
         "@kosmos/ark": path.resolve(
           __dirname,
-          "../../packages/kosmos-ark/src/index.ts",
+          "../packages/kosmos-ark/src/index.ts",
         ),
         "@kosmos/visuals/theme/css": path.resolve(
           __dirname,
-          "../../packages/kosmos-visuals/theme/css-variables.css",
+          "../packages/kosmos-visuals/theme/css-variables.css",
         ),
         "@kosmos/visuals": path.resolve(
           __dirname,
-          "../../packages/kosmos-visuals",
+          "../packages/kosmos-visuals",
         ),
       },
       dedupe: ["vue"],

@@ -12,6 +12,8 @@
     "docs:check": "node scripts/check-docs-freshness.mjs"
   },
   "workspaces": [
+    "shell",
+    "extensions/*",
     "apps/*",
     "apps/eden/ts",
     "services/*",

@@ -16,7 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const extensionsRoot = path.resolve(__dirname, "..", "extensions");
+const extensionsRoot = path.resolve(__dirname, "..", "..", "extensions");
 
 const extensions = readdirSync(extensionsRoot, { withFileTypes: true })
   .filter((d) => d.isDirectory())

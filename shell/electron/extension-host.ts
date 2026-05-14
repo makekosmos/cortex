@@ -134,7 +134,7 @@ function isDeveloperModeActive(): boolean {
 
 // Priority chain для resolution extension-папок. Higher priority first.
 //
-//   1. Dev source tree (`apps/kepler-shell/extensions/`) — если папка
+//   1. Dev source tree (`<repoRoot>/extensions/`) — если папка
 //      существует. Это означает, что мы запущены из repo (developer flow).
 //   2. User-installed (`%APPDATA%\Kosmos\extensions\<id>\`) — основной канал
 //      для prod: пользователь устанавливает / обновляет extension через CLI
@@ -148,7 +148,9 @@ function isDeveloperModeActive(): boolean {
 // быть user-installed, а Horologion — bundled.
 function resolveExtensionRoots(): string[] {
   const roots: string[] = [];
-  const dev = path.resolve(__dirname, "..", "extensions");
+  // Repo dev tree: __dirname is shell/electron/ (or shell/dist-electron/),
+  // extensions are at <repoRoot>/extensions/ — i.e. ../../extensions/ from here.
+  const dev = path.resolve(__dirname, "..", "..", "extensions");
   if (existsSync(dev)) roots.push(dev);
   const userRoot = path.join(
     app.getPath("appData"),
