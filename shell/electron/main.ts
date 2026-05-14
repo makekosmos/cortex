@@ -65,6 +65,13 @@ let backendProc: ChildProcess | null = null;
 let backendLockPath = "";
 let isQuiting = false;
 let arkClient: ArkClient | null = null;
+// Promise который резолвится когда arkClient готов принимать request'ы.
+// Renderer может стрелять kepler:ark:request как только подняло окно —
+// до того как initArkClient прошёл handshake. Handler ниже await'ит ready
+// (с таймаутом), вместо моментального throw "ArkClient not ready".
+let arkClientReady: Promise<ArkClient> | null = null;
+let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
+let arkClientReadyReject: ((e: Error) => void) | null = null;
 let windowStateSaveTimer: NodeJS.Timeout | null = null;
 
 // --- single instance ---------------------------------------------------------
@@ -344,9 +351,31 @@ function createTray() {
 // sync namespace был стабильным между запусками.
 const KEPLER_SPACE_ID = "kepler-default";
 
+function ensureArkReadyPromise(): Promise<ArkClient> {
+  if (arkClient) return Promise.resolve(arkClient);
+  if (arkClientReady) return arkClientReady;
+  arkClientReady = new Promise<ArkClient>((resolve, reject) => {
+    arkClientReadyResolve = resolve;
+    arkClientReadyReject = reject;
+  });
+  return arkClientReady;
+}
+
+async function awaitArkReady(timeoutMs = 15000): Promise<ArkClient> {
+  if (arkClient) return arkClient;
+  const p = ensureArkReadyPromise();
+  return Promise.race([
+    p,
+    new Promise<ArkClient>((_, rej) =>
+      setTimeout(() => rej(new Error("ArkClient not ready (timeout)")), timeoutMs),
+    ),
+  ]);
+}
+
 async function initArkClient(): Promise<void> {
   try {
     const spaceId = KEPLER_SPACE_ID;
+    ensureArkReadyPromise(); // создаём promise до handshake'а если ещё нет
     // kepler-shell сам спавнит kepler-backend выше (spawnBackend), здесь
     // только ждём lock-файл и коннектимся через WS. autoLaunch=false — повторно
     // не запускаем.
@@ -370,6 +399,7 @@ async function initArkClient(): Promise<void> {
     });
     await client.start();
     arkClient = client;
+    arkClientReadyResolve?.(client);
     console.error(
       `[kepler-shell] ArkClient connected to kepler-backend (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
     );
@@ -398,6 +428,7 @@ async function initArkClient(): Promise<void> {
     });
   } catch (e) {
     console.error("[kepler-shell] ArkClient init failed:", e);
+    arkClientReadyReject?.(e instanceof Error ? e : new Error(String(e)));
   }
 }
 
@@ -522,12 +553,14 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
 ipcMain.handle(
   "kepler:ark:request",
   async (_e, operation: string, params?: Record<string, unknown>) => {
-    if (!arkClient) throw new Error("ArkClient not ready");
     if (typeof operation !== "string" || operation.length === 0) {
       throw new Error("kepler:ark:request: operation must be a non-empty string");
     }
+    // Renderer (Dashboard / extensions) может стрелять до того как initArkClient
+    // прошёл handshake — ждём ready (up to 15s) вместо моментального throw.
+    const client = await awaitArkReady();
     const req: Record<string, unknown> = { operation, ...(params ?? {}) };
-    return arkClient.invokeOperation(req as { operation: string; [key: string]: unknown });
+    return client.invokeOperation(req as { operation: string; [key: string]: unknown });
   },
 );
 
