@@ -566,6 +566,52 @@ interface SpaceRegistry {
   spaces?: SpaceRegistryEntry[];
 }
 
+// Counter SQLite-connection'ов — мы открываем space DB read-only только для
+// подсчёта объектов в welcome screen'е. Используется `node:sqlite` (стабилен в
+// Node 22.x — runtime Electron 41), без native modules / electron-rebuild.
+//
+// Lazy import: модуль experimental, печатает warning при первом require'е.
+// Грузим через dynamic import только когда реально нужно — listSpaces.
+let cachedDatabaseSync: typeof import("node:sqlite").DatabaseSync | null = null;
+async function loadDatabaseSync(): Promise<typeof import("node:sqlite").DatabaseSync | null> {
+  if (cachedDatabaseSync) return cachedDatabaseSync;
+  try {
+    const mod = await import("node:sqlite");
+    cachedDatabaseSync = mod.DatabaseSync;
+    return cachedDatabaseSync;
+  } catch (e) {
+    console.error("[kepler-shell] node:sqlite unavailable:", e);
+    return null;
+  }
+}
+
+async function countObjectsInSpaceDb(dbPath: string): Promise<number | null> {
+  if (!existsSync(dbPath)) return null;
+  const DatabaseSync = await loadDatabaseSync();
+  if (!DatabaseSync) return null;
+  try {
+    const db = new DatabaseSync(dbPath, { readOnly: true });
+    try {
+      const row = db
+        .prepare("SELECT COUNT(*) AS n FROM objects WHERE deleted_at IS NULL")
+        .get() as { n: number | bigint } | undefined;
+      if (!row) return null;
+      const n = typeof row.n === "bigint" ? Number(row.n) : row.n;
+      return Number.isFinite(n) ? n : null;
+    } finally {
+      db.close();
+    }
+  } catch (e) {
+    // DB файл может существовать, но без schema (backend ни разу не открывал
+    // этот space) — sqlite кинет «no such table: objects». Показываем 0,
+    // чтобы subheader всё равно отрисовался — так UI понятнее.
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/no such table/i.test(msg)) return 0;
+    console.warn(`[kepler-shell] objectCount failed for ${dbPath}:`, e);
+    return null;
+  }
+}
+
 function readSpacesRegistry(baseDir: string): SpaceRegistry | null {
   const p = path.join(baseDir, "spaces.json");
   if (!existsSync(p)) return null;
@@ -589,7 +635,7 @@ function labelFromSpaceCode(code: string): string {
   return upper;
 }
 
-function listSpaces(): SpaceMeta[] {
+async function listSpaces(): Promise<SpaceMeta[]> {
   const baseDir = path.join(app.getPath("appData"), "Kosmos");
   const spacesDir = path.join(baseDir, "spaces");
   const selected = readSharedSelectedSpace(baseDir);
@@ -613,10 +659,11 @@ function listSpaces(): SpaceMeta[] {
       } else {
         lastAccessedAt = entry.createdAt ? Date.parse(entry.createdAt) : Date.now();
       }
+      const objectCount = await countObjectsInSpaceDb(dbPath);
       out.push({
         id,
         name: entry.name && entry.name.length > 0 ? entry.name : entry.code,
-        objectCount: null,
+        objectCount,
         lastAccessedAt: Number.isFinite(lastAccessedAt) ? lastAccessedAt : Date.now(),
         label: labelFromSpaceCode(entry.code),
         isSelected: selected?.spaceId === id,
@@ -636,10 +683,11 @@ function listSpaces(): SpaceMeta[] {
         } catch {
           /* unreadable — оставляем now */
         }
+        const objectCount = await countObjectsInSpaceDb(path.join(dir, "ark.db"));
         out.push({
           id,
           name: id,
-          objectCount: null,
+          objectCount,
           lastAccessedAt: mtime,
           label: id.slice(0, 8).toUpperCase(),
           isSelected: selected?.spaceId === id,
@@ -653,10 +701,12 @@ function listSpaces(): SpaceMeta[] {
   // Если selected space ещё не в результате (например выбран space, которого
   // нет в registry), добавим запись на основе selected-space.json.
   if (selected && !out.some((s) => s.id === selected.spaceId)) {
+    const dbPath = path.join(spacesDir, selected.spaceId, "ark.db");
+    const objectCount = await countObjectsInSpaceDb(dbPath);
     out.push({
       id: selected.spaceId,
       name: selected.spaceCode || selected.spaceId,
-      objectCount: null,
+      objectCount,
       lastAccessedAt: Date.parse(selected.updatedAt) || Date.now(),
       label: labelFromSpaceCode(selected.spaceCode || selected.spaceId),
       isSelected: true,
@@ -671,7 +721,7 @@ function listSpaces(): SpaceMeta[] {
   return out;
 }
 
-ipcMain.handle("kepler:spaces:list", (): SpaceMeta[] => listSpaces());
+ipcMain.handle("kepler:spaces:list", (): Promise<SpaceMeta[]> => listSpaces());
 
 ipcMain.handle(
   "kepler:ark:request",
