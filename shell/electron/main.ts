@@ -617,6 +617,18 @@ function listSpaces(): SpaceMeta[] {
 ipcMain.handle("kepler:spaces:list", (): SpaceMeta[] => listSpaces());
 
 ipcMain.handle(
+  "kepler:ark:request",
+  async (_e, operation: string, params?: Record<string, unknown>) => {
+    if (!arkClient) throw new Error("ArkClient not ready");
+    if (typeof operation !== "string" || operation.length === 0) {
+      throw new Error("kepler:ark:request: operation must be a non-empty string");
+    }
+    const req: Record<string, unknown> = { operation, ...(params ?? {}) };
+    return arkClient.invokeOperation(req as { operation: string; [key: string]: unknown });
+  },
+);
+
+ipcMain.handle(
   "kepler:objects:listRecent",
   async (_e, limit?: number): Promise<SearchResult[]> => {
     if (!arkClient) return [];

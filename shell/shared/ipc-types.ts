@@ -81,6 +81,16 @@ export interface KeplerApi {
     list(): Promise<SpaceMeta[]>;
   };
 
+  /** Generic ARK RPC bridge — используется встроенным Dashboard view'ом
+      для list_object_types / list_objects / list_objects_by_type. Main
+      проксирует на ArkClient (см. main.ts). */
+  ark: {
+    request<T = unknown>(
+      operation: string,
+      params?: Record<string, unknown>,
+    ): Promise<T>;
+  };
+
   /** Command registry — то что показывает launcher: список запуска апок +
       их action-ручки (Pomodoro start, create note и т.п.). Action-команды
       приходят dynamic от running апок через backend; static open-команды

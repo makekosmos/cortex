@@ -32,6 +32,10 @@ const api: KeplerApi = {
   spaces: {
     list: () => ipcRenderer.invoke("kepler:spaces:list"),
   },
+  ark: {
+    request: (operation, params) =>
+      ipcRenderer.invoke("kepler:ark:request", operation, params),
+  },
   commands: {
     list: () => ipcRenderer.invoke("kepler:commands:list"),
     invoke: (id) => ipcRenderer.invoke("kepler:commands:invoke", id),
