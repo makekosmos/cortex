@@ -11,6 +11,20 @@ export {
   writeSharedSelectedSpace,
 } from './selected-space.js'
 export type { SharedSelectedSpace } from './selected-space.js'
+export {
+  KOSMOS_LOCK_FILENAME,
+  ensureKosmosRunning,
+  isPidAlive,
+  readLockIfAlive,
+  resolveKosmosExe,
+  resolveLockPath,
+} from './ensure-kosmos.js'
+export type {
+  EnsureKosmosOptions,
+  KosmosLockInfo,
+  KosmosProtocolVersion,
+  KosmosState,
+} from './ensure-kosmos.js'
 export type {
   ArkClientOptions,
   ArkDailyTrendPoint,

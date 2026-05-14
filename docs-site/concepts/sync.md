@@ -2,6 +2,12 @@
 
 ARK поддерживает два транспорта синхронизации поверх одного протокола: **LAN** (peer-to-peer в локальной сети) и **relay** (через WebSocket-сервер, нужен для прохождения NAT).
 
+::: info Sync = opt-in
+Kepler-приложения по умолчанию **не запускают sync**. Sync активируется только когда установлен [Kosmos host](../apps/kosmos.md) — он сам вызывает `start_sync` при старте. Apps в standalone mode (без Kosmos) пишут в локальную DB без репликации между устройствами.
+
+Для explicit standalone sync без Kosmos — можно вызвать `ArkClient.startSyncLegacy()` явно (rare use case, например для тестов).
+:::
+
 ## Запуск sync
 
 Из TypeScript:
@@ -78,6 +84,64 @@ const ark = new ArkClient({
 ::: warning Это аутентификация, не шифрование
 HMAC доказывает знание секрета, но **трафик не шифруется**. Для шифрования используй WSS / TLS-туннель.
 :::
+
+## Schema drift — hold-and-replay (Phase 2)
+
+**Сценарий:** Eden 1.5 ввёл новый `object_type`. Delphi 1.4 этот type ещё не знает. Sync приносит `object` с `type_id` неизвестным локально.
+
+**Раньше** (pre-Phase-2): `apply_entity` вызывал `upsert_object` → SQLite FK constraint падал → entity silently dropped, version_vector **не** обновлялся. Получали тихую потерю данных.
+
+**Phase 2:** entity сохраняется в новой таблице `sync_pending_objects` и version_vector обновляется (entity считается принятым). При появлении соответствующего `object_type` (через `upsert_object_type` — собственная миграция или sync) — автоматический replay.
+
+### Таблица
+
+```sql
+CREATE TABLE sync_pending_objects (
+    id TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,        -- JSON-encoded SyncEntity
+    awaited_type_id TEXT NOT NULL,
+    received_at TEXT NOT NULL
+);
+CREATE INDEX idx_sync_pending_awaited_type
+    ON sync_pending_objects(awaited_type_id);
+```
+
+### Поток
+
+```mermaid
+sequenceDiagram
+    participant Peer
+    participant ARK
+    participant App
+    Peer->>ARK: SyncEntity object{type_id=X}
+    ARK->>ARK: is_object_type_known(X)? → false
+    ARK->>ARK: INSERT INTO sync_pending_objects
+    ARK->>App: event sync_error{code=unknown_type_id, awaited_type_id=X}
+    Note over Peer,App: время идёт, потом...
+    Peer->>ARK: SyncEntity object_type{id=X}
+    ARK->>ARK: upsert_object_type
+    ARK->>ARK: replay_pending_for_type(X) → upsert_object + DELETE из pending
+    ARK->>App: event sync_replay{entity_id=..., type_id=X}
+```
+
+### Новые события (с Phase 2)
+
+| Event | Поля | Когда |
+|---|---|---|
+| `sync_error` | `code, entity_type, entity_id, awaited_type_id` | object с unknown type_id попадает в `sync_pending_objects` |
+| `sync_replay` | `entity_type, entity_id, type_id` | pending object успешно replayed после появления type |
+
+Apps подписываются через `ArkClient.onArkEvent()`:
+
+```ts
+ark.onArkEvent((event) => {
+  if (event.event === 'sync_error' && event.code === 'unknown_type_id') {
+    // показать тост / лог
+  } else if (event.event === 'sync_replay') {
+    // обновить UI — объект стал виден
+  }
+});
+```
 
 ## Фреймы протокола
 

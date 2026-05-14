@@ -27,6 +27,7 @@ use tokio::sync::{mpsc, Mutex as TokioMutex};
 
 use ark_core::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use ark_core::db::{self, SqliteStorageBackend};
+use ark_core::events::{emit_event, set_event_sender};
 use ark_core::host::{get_host_device_name, get_own_addresses};
 use ark_core::net::is_address_routable;
 use ark_core::protocol::LAN_SYNC_PORT;
@@ -56,19 +57,9 @@ struct SyncRuntime {
 
 static SYNC: TokioMutex<Option<Arc<SyncRuntime>>> = TokioMutex::const_new(None);
 
-// The event sender is set once at startup; every callback forwards events
-// into this channel. The stdout writer task drains the channel and writes
-// JSON lines. Stored under a std Mutex so callbacks that are not in the
-// async context can still clone it.
-static EVENT_TX: StdMutex<Option<mpsc::UnboundedSender<Value>>> = StdMutex::new(None);
-
-fn emit_event(event: Value) {
-    if let Ok(guard) = EVENT_TX.lock() {
-        if let Some(tx) = guard.as_ref() {
-            let _ = tx.send(event);
-        }
-    }
-}
+// Event emitter moved to `ark_core::events` so that lib modules (notably
+// `db::apply_entity_blocking` for schema-drift sync_error/sync_replay events)
+// can emit too. Binary registers the sender at startup via `set_event_sender`.
 
 // ---------------------------------------------------------------------------
 // Request enum
@@ -278,7 +269,7 @@ fn main() {
 async fn serve() -> Result<(), String> {
     // Event channel + stdout writer
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<Value>();
-    *EVENT_TX.lock().unwrap() = Some(event_tx);
+    set_event_sender(event_tx);
 
     tokio::spawn(async move {
         while let Some(event) = event_rx.recv().await {

@@ -570,6 +570,8 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
         ],
     )
     .map_err(|e| e.to_string())?;
+    // Phase 2: после появления типа replay'ить objects, которые ждали этот type_id.
+    replay_pending_for_type(conn, &object_type.id)?;
     Ok(())
 }
 
@@ -577,6 +579,92 @@ pub fn delete_object_type(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM object_types WHERE id = ?1", params![id])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: schema drift hold-and-replay (sync_pending_objects)
+// ---------------------------------------------------------------------------
+
+/// Проверить, существует ли `object_type` с указанным id.
+pub fn is_object_type_known(conn: &Connection, type_id: &str) -> Result<bool, String> {
+    conn.query_row(
+        "SELECT 1 FROM object_types WHERE id = ?1",
+        params![type_id],
+        |_| Ok(true),
+    )
+    .optional()
+    .map(|opt| opt.unwrap_or(false))
+    .map_err(|e| e.to_string())
+}
+
+/// Сохранить SyncEntity типа "object" в `sync_pending_objects` до появления нужного type.
+pub fn insert_pending_object(
+    conn: &Connection,
+    entity: &SyncEntity,
+    awaited_type_id: &str,
+) -> Result<(), String> {
+    let payload = serde_json::to_string(entity).map_err(|e| e.to_string())?;
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT OR REPLACE INTO sync_pending_objects (id, payload, awaited_type_id, received_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        params![entity.id, payload, awaited_type_id, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Replay'нуть все pending objects, ожидающие указанного `type_id`. Для каждого:
+///   1. parse payload → SyncEntity → ArkObject
+///   2. upsert_object
+///   3. DELETE из pending
+///   4. emit `sync_replay` event
+/// Возвращает количество replayed.
+pub fn replay_pending_for_type(conn: &Connection, type_id: &str) -> Result<usize, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, payload FROM sync_pending_objects WHERE awaited_type_id = ?1")
+        .map_err(|e| e.to_string())?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map(params![type_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let mut replayed = 0usize;
+    for (entity_id, payload_json) in rows {
+        let entity: SyncEntity =
+            serde_json::from_str(&payload_json).map_err(|e| e.to_string())?;
+        let mut data = entity.data.clone();
+        data.insert("id".to_string(), Value::String(entity.id.clone()));
+        let object: ArkObject = serde_json::from_value(Value::Object(data))
+            .map_err(|e| e.to_string())?;
+        upsert_object(conn, &object)?;
+        conn.execute(
+            "DELETE FROM sync_pending_objects WHERE id = ?1",
+            params![entity_id],
+        )
+        .map_err(|e| e.to_string())?;
+        crate::events::emit_event(json!({
+            "event": "sync_replay",
+            "entity_type": "object",
+            "entity_id": entity_id,
+            "type_id": type_id,
+        }));
+        replayed += 1;
+    }
+    Ok(replayed)
+}
+
+/// Сколько объектов сейчас ждёт указанный type_id (utility для тестов / observability).
+pub fn count_pending_for_type(conn: &Connection, type_id: &str) -> Result<i64, String> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM sync_pending_objects WHERE awaited_type_id = ?1",
+        params![type_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 pub fn list_object_types(conn: &Connection) -> Result<Vec<ObjectType>, String> {
@@ -2755,9 +2843,25 @@ impl SqliteStorageBackend {
             "object_type" => serde_json::from_value::<ObjectType>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|object_type| upsert_object_type(conn, &object_type)),
-            "object" => serde_json::from_value::<ArkObject>(value)
-                .map_err(|e| e.to_string())
-                .and_then(|object| upsert_object(conn, &object)),
+            "object" => (|| -> Result<(), String> {
+                let object = serde_json::from_value::<ArkObject>(value.clone())
+                    .map_err(|e| e.to_string())?;
+                // Phase 2: hold-and-replay для schema drift. Если type_id неизвестен,
+                // кладём payload в sync_pending_objects, эмитим sync_error, treat as applied
+                // (version_vector advances). При появлении object_type — replay в upsert_object_type.
+                if !is_object_type_known(conn, &object.type_id)? {
+                    insert_pending_object(conn, entity, &object.type_id)?;
+                    crate::events::emit_event(json!({
+                        "event": "sync_error",
+                        "code": "unknown_type_id",
+                        "entity_type": "object",
+                        "entity_id": entity.id,
+                        "awaited_type_id": object.type_id,
+                    }));
+                    return Ok(());
+                }
+                upsert_object(conn, &object)
+            })(),
             "object_link" => serde_json::from_value::<ObjectLink>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|link| upsert_object_link(conn, &link)),
@@ -4083,5 +4187,149 @@ mod tests {
             "2026-03-01T00:00:00.000Z:000005:peer-b".to_string(),
             "load_entities should prefer HLC from the passed version vector",
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 2: hold-and-replay (sync_pending_objects)
+    // -----------------------------------------------------------------------
+
+    fn phase2_make_object_type(id: &str, name: &str) -> ObjectType {
+        ObjectType {
+            id: id.to_string(),
+            name: name.to_string(),
+            schema_json: "{}".to_string(),
+            ui_schema_json: "{}".to_string(),
+            created_at: "2026-01-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-01-01T00:00:00.000Z".to_string(),
+            system_locked: false,
+        }
+    }
+
+    fn phase2_make_sync_entity_object(id: &str, type_id: &str, title: &str) -> SyncEntity {
+        let mut data = serde_json::Map::new();
+        data.insert("typeId".to_string(), Value::String(type_id.to_string()));
+        data.insert("title".to_string(), Value::String(title.to_string()));
+        data.insert("contentJson".to_string(), json!({}));
+        data.insert("propsJson".to_string(), json!({}));
+        data.insert(
+            "createdAt".to_string(),
+            Value::String("2026-01-01T00:00:00.000Z".to_string()),
+        );
+        data.insert(
+            "updatedAt".to_string(),
+            Value::String("2026-01-01T00:00:00.000Z".to_string()),
+        );
+        SyncEntity {
+            entity_type: "object".to_string(),
+            id: id.to_string(),
+            data,
+            hlc: "2026-01-01T00:00:00.000Z:000001:test".to_string(),
+            deleted: None,
+        }
+    }
+
+    #[test]
+    fn phase2_is_object_type_known_false_when_missing() {
+        let conn = setup_db();
+        assert_eq!(is_object_type_known(&conn, "nonexistent").unwrap(), false);
+    }
+
+    #[test]
+    fn phase2_is_object_type_known_true_after_upsert() {
+        let conn = setup_db();
+        let object_type = phase2_make_object_type("type_x", "Type X");
+        upsert_object_type(&conn, &object_type).unwrap();
+        assert_eq!(is_object_type_known(&conn, "type_x").unwrap(), true);
+    }
+
+    #[test]
+    fn phase2_insert_pending_object_persists_payload() {
+        let conn = setup_db();
+        let entity = phase2_make_sync_entity_object("obj-1", "future_type", "Pending object");
+        insert_pending_object(&conn, &entity, "future_type").unwrap();
+        assert_eq!(count_pending_for_type(&conn, "future_type").unwrap(), 1);
+        assert_eq!(count_pending_for_type(&conn, "other_type").unwrap(), 0);
+    }
+
+    #[test]
+    fn phase2_insert_pending_overwrites_same_id() {
+        // Если sync приносит обновлённую version того же object'а, REPLACE'ит,
+        // не дублирует.
+        let conn = setup_db();
+        let e1 = phase2_make_sync_entity_object("obj-1", "future_type", "First");
+        let e2 = phase2_make_sync_entity_object("obj-1", "future_type", "Second");
+        insert_pending_object(&conn, &e1, "future_type").unwrap();
+        insert_pending_object(&conn, &e2, "future_type").unwrap();
+        assert_eq!(count_pending_for_type(&conn, "future_type").unwrap(), 1);
+    }
+
+    #[test]
+    fn phase2_replay_runs_when_type_appears() {
+        let conn = setup_db();
+        // 1. Pending object для типа, который ещё не существует.
+        let entity = phase2_make_sync_entity_object("obj-1", "type_late", "Awaiting type");
+        insert_pending_object(&conn, &entity, "type_late").unwrap();
+        assert_eq!(count_pending_for_type(&conn, "type_late").unwrap(), 1);
+
+        // Object table должна быть пустой.
+        let objects_before = list_objects(&conn).unwrap();
+        assert_eq!(objects_before.len(), 0);
+
+        // 2. Создаём тип — должен сработать auto-replay.
+        let object_type = phase2_make_object_type("type_late", "Late Type");
+        upsert_object_type(&conn, &object_type).unwrap();
+
+        // 3. Pending очищен, object материализован.
+        assert_eq!(count_pending_for_type(&conn, "type_late").unwrap(), 0);
+        let objects_after = list_objects(&conn).unwrap();
+        assert_eq!(objects_after.len(), 1);
+        assert_eq!(objects_after[0].id, "obj-1");
+        assert_eq!(objects_after[0].title, "Awaiting type");
+        assert_eq!(objects_after[0].type_id, "type_late");
+    }
+
+    #[test]
+    fn phase2_replay_handles_multiple_pending_same_type() {
+        let conn = setup_db();
+        for i in 0..5 {
+            let e = phase2_make_sync_entity_object(
+                &format!("obj-{i}"),
+                "batch_type",
+                &format!("Obj {i}"),
+            );
+            insert_pending_object(&conn, &e, "batch_type").unwrap();
+        }
+        assert_eq!(count_pending_for_type(&conn, "batch_type").unwrap(), 5);
+
+        upsert_object_type(&conn, &phase2_make_object_type("batch_type", "Batch")).unwrap();
+
+        assert_eq!(count_pending_for_type(&conn, "batch_type").unwrap(), 0);
+        assert_eq!(list_objects(&conn).unwrap().len(), 5);
+    }
+
+    #[test]
+    fn phase2_replay_only_targets_matching_type() {
+        let conn = setup_db();
+        insert_pending_object(
+            &conn,
+            &phase2_make_sync_entity_object("obj-a", "type_a", "A"),
+            "type_a",
+        )
+        .unwrap();
+        insert_pending_object(
+            &conn,
+            &phase2_make_sync_entity_object("obj-b", "type_b", "B"),
+            "type_b",
+        )
+        .unwrap();
+
+        upsert_object_type(&conn, &phase2_make_object_type("type_a", "Type A")).unwrap();
+
+        // Только obj-a replayed; obj-b всё ещё в pending.
+        assert_eq!(count_pending_for_type(&conn, "type_a").unwrap(), 0);
+        assert_eq!(count_pending_for_type(&conn, "type_b").unwrap(), 1);
+        let objects = list_objects(&conn).unwrap();
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].id, "obj-a");
     }
 }

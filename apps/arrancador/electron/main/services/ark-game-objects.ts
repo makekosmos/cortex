@@ -4,12 +4,22 @@ import path from "node:path";
 
 import {
   ArkClient,
+  ensureKosmosRunning,
   type ArkObjectRecord,
   type ArkObjectsApi,
   type ArkObjectTypesApi,
   type JsonValue,
 } from "@kepler/ark";
 import electron from "electron";
+
+/** Kosmos optional by default. KEPLER_REQUIRE_KOSMOS=1 для строгого режима. */
+function isKosmosRequired(): boolean {
+  return process.env.KEPLER_REQUIRE_KOSMOS === "1";
+}
+
+function isKosmosOptional(): boolean {
+  return !isKosmosRequired();
+}
 
 import type { Game } from "./games/types";
 
@@ -350,39 +360,94 @@ export function createArkGameObjectService(
 ): ArkGameObjectService {
   const now = options.now ?? (() => new Date());
   let arkClient: ArkClient | null = null;
+  let arkClientPromise: Promise<ArkClient> | null = null;
 
-  const getArkObjects = (): Pick<ArkObjectsApi, "list" | "listByType" | "get" | "getMany" | "upsert"> => {
+  const resolveArkClient = async (): Promise<ArkClient> => {
+    if (arkClient) return arkClient;
+    if (arkClientPromise) return arkClientPromise;
+    arkClientPromise = (async () => {
+      const spaceId = options.spaceId ?? "arrancador";
+      const deviceId = options.deviceId ?? "arrancador-main";
+      const deviceName = options.deviceName ?? "Arrancador";
+      const requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
+
+      // Phase 3: cosmos-aware resolution.
+      const state = await ensureKosmosRunning({
+        appDataPath: app.getPath("appData"),
+        waitMs: 10000,
+        autoLaunch: !isKosmosOptional(),
+      });
+
+      switch (state.kind) {
+        case "connected": {
+          console.log(
+            `[arrancador.ark] using Kosmos host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+          );
+          const client = new ArkClient({
+            spaceId,
+            deviceId,
+            deviceName,
+            cosmosLock: state.lock,
+            requestTimeoutMs,
+          });
+          arkClient = client;
+          return client;
+        }
+        case "incompatible-version": {
+          throw new Error(
+            `Kosmos protocol mismatch: server ${state.cosmosVersion.major}.${state.cosmosVersion.minor}.${state.cosmosVersion.patch}, ` +
+              `client expects ${state.clientMajor}.x.`,
+          );
+        }
+        case "launch-failed":
+        case "not-installed": {
+          if (isKosmosRequired()) {
+            const detail =
+              state.kind === "not-installed"
+                ? `checked: ${state.checkedPaths.join(", ") || "(no candidates)"}`
+                : state.reason;
+            throw new Error(
+              `Arrancador запущен с KEPLER_REQUIRE_KOSMOS=1, но Kosmos ${state.kind} (${detail}). ` +
+                `Установи Kepler Kosmos или сними флаг.`,
+            );
+          }
+          console.log(
+            `[arrancador.ark] Kosmos ${state.kind} — standalone mode, sync disabled`,
+          );
+          const client = new ArkClient({
+            spaceId,
+            deviceId,
+            deviceName,
+            dbPath: options.arkDbPath,
+            sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(options),
+            requestTimeoutMs,
+          });
+          arkClient = client;
+          return client;
+        }
+      }
+    })();
+    return arkClientPromise;
+  };
+
+  const getArkObjects = async (): Promise<
+    Pick<ArkObjectsApi, "list" | "listByType" | "get" | "getMany" | "upsert">
+  > => {
     if (options.arkObjects) {
       return options.arkObjects;
     }
-
-    arkClient ??= new ArkClient({
-      spaceId: options.spaceId ?? "arrancador",
-      deviceId: options.deviceId ?? "arrancador-main",
-      deviceName: options.deviceName ?? "Arrancador",
-      dbPath: options.arkDbPath,
-      sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(options),
-      requestTimeoutMs: options.requestTimeoutMs ?? 10_000,
-    });
-
-    return arkClient.objects;
+    const client = await resolveArkClient();
+    return client.objects;
   };
 
-  const getArkObjectTypes = (): Pick<ArkObjectTypesApi, "get" | "upsert"> => {
+  const getArkObjectTypes = async (): Promise<
+    Pick<ArkObjectTypesApi, "get" | "upsert">
+  > => {
     if (options.arkObjectTypes) {
       return options.arkObjectTypes;
     }
-
-    arkClient ??= new ArkClient({
-      spaceId: options.spaceId ?? "arrancador",
-      deviceId: options.deviceId ?? "arrancador-main",
-      deviceName: options.deviceName ?? "Arrancador",
-      dbPath: options.arkDbPath,
-      sidecarPath: options.arkCoreRpcPath ?? getArkCoreRpcBinaryPath(options),
-      requestTimeoutMs: options.requestTimeoutMs ?? 10_000,
-    });
-
-    return arkClient.objectTypes;
+    const client = await resolveArkClient();
+    return client.objectTypes;
   };
 
   return {
@@ -392,7 +457,7 @@ export function createArkGameObjectService(
       }
 
       try {
-        const arkObjects = getArkObjects();
+        const arkObjects = await getArkObjects();
         const linkedIds = games
           .map((game) => game.ark_object_id)
           .filter((value): value is string => typeof value === "string" && value.length > 0);
@@ -428,11 +493,11 @@ export function createArkGameObjectService(
 
     async syncGame(game: Game): Promise<string | null> {
       try {
-        const arkObjects = getArkObjects();
+        const arkObjects = await getArkObjects();
         const existing = await loadExistingObjectForSync(arkObjects, game);
         const objectId = existing?.id ?? game.ark_object_id ?? randomUUID();
         const timestamp = now().toISOString();
-        await ensureGameObjectType(getArkObjectTypes(), timestamp);
+        await ensureGameObjectType(await getArkObjectTypes(), timestamp);
         const createdAt = existing?.createdAt ?? timestamp;
         const contentJson = existing?.contentJson ?? DEFAULT_CONTENT_JSON;
         const propsJson = buildGameObjectProps(game, existing?.propsJson ?? {});

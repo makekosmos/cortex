@@ -1,23 +1,25 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+// Phase 3 cutover: SidecarClient переписан на thin wrapper над @kepler/ark
+// ArkClient. По умолчанию ходим через Kosmos host (WS), при KEPLER_KOSMOS_OPTIONAL=1
+// и недоступном Kosmos — fallback на self-managed ark-core-rpc child.
+//
+// Public API (request / onEvent / reinit / releaseAndReset / shutdown / currentDbPath)
+// сохранён по сигнатуре, но `reinit`/`releaseAndReset`/`shutdown` стали async
+// (Promise<void> вместо void). Callsites уже либо внутри async, либо
+// fire-and-forget — typecheck покажет, если где-то нужен `await`.
+
 import fs from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 
+import {
+  ArkClient,
+  ensureKosmosRunning,
+  readSharedSelectedSpace,
+} from '@kepler/ark'
+
 interface SidecarRequest {
   operation: string;
   [key: string]: unknown;
-}
-
-interface SidecarResponse<T> {
-  ok: boolean;
-  data?: T;
-  error?: string;
-}
-
-interface PendingRequest<T> {
-  request: SidecarRequest;
-  resolve: (value: T) => void;
-  reject: (error: Error) => void;
 }
 
 /** Event payloads pushed asynchronously by the ark-core-rpc sidecar. */
@@ -53,17 +55,29 @@ function getSidecarBinaryPath() {
   return arkCorePaths[0]
 }
 
-const MAX_QUEUE_SIZE = 500
+/** Kosmos optional by default. `KEPLER_REQUIRE_KOSMOS=1` для строгого режима. */
+function isKosmosRequired(): boolean {
+  return process.env.KEPLER_REQUIRE_KOSMOS === '1'
+}
+
+function isKosmosOptional(): boolean {
+  return !isKosmosRequired()
+}
+
+function defaultSpaceId(): string {
+  try {
+    const selection = readSharedSelectedSpace(getAppDataPath())
+    return selection?.spaceId ?? 'delphi-default'
+  } catch {
+    return 'delphi-default'
+  }
+}
 
 class SidecarClient {
-  private child: ChildProcessWithoutNullStreams | null = null
-  private stdoutChunks: Buffer[] = []
-  private stdoutLength = 0
-  private stderrBuffer = ''
-  private requestQueue: Array<PendingRequest<unknown>> = []
-  private activeRequest: PendingRequest<unknown> | null = null
-  private initialized = false
+  private arkClient: ArkClient | null = null
+  private arkClientPromise: Promise<ArkClient> | null = null
   private dbPathOverride: string | null = null
+  private eventUnsubscribe: (() => void) | null = null
   private eventListeners: Set<SidecarEventListener> = new Set()
 
   /** Subscribe to async events pushed by the ark-core-rpc sidecar. */
@@ -84,226 +98,133 @@ class SidecarClient {
     }
   }
 
-  private ensureChild() {
-    if (this.child) {
-      return this.child
-    }
+  /** Получить ArkClient в нужном режиме (Kosmos cosmos-mode или self-managed fallback). */
+  async getArkClient(): Promise<ArkClient> {
+    if (this.arkClient) return this.arkClient
+    if (this.arkClientPromise) return this.arkClientPromise
 
-    const binaryPath = getSidecarBinaryPath()
-    const child = spawn(binaryPath, [], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
+    this.arkClientPromise = (async () => {
+      const spaceId = defaultSpaceId()
+      const deviceId = `delphi-${process.platform}`
+      const deviceName = 'Delphi'
 
-    child.stderr.setEncoding('utf8')
+      const state = await ensureKosmosRunning({
+        appDataPath: getAppDataPath(),
+        waitMs: 10000,
+        autoLaunch: !isKosmosOptional(),
+      })
 
-    child.stdout.on('data', (chunk: Buffer | string) => {
-      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-      this.stdoutChunks.push(buf)
-      this.stdoutLength += buf.length
-      this.flushStdout()
-    })
-
-    child.stderr.on('data', (chunk: string) => {
-      this.stderrBuffer += chunk
-    })
-
-    child.on('error', error => {
-      this.failAll(error instanceof Error ? error : new Error(String(error)))
-    })
-
-    child.on('close', code => {
-      const reason = this.stderrBuffer.trim() || `ark-core-rpc exited with ${code}`
-      this.failAll(new Error(reason))
-    })
-
-    this.child = child
-    this.stdoutChunks = []
-    this.stdoutLength = 0
-    this.stderrBuffer = ''
-
-    if (!this.initialized) {
-      this.initialized = true
-      const dbPath = this.dbPathOverride ?? path.join(getAppDataPath(), 'Kepler', 'ark.db')
-      // Ensure parent directory exists (for per-space paths)
-      fs.mkdirSync(path.dirname(dbPath), { recursive: true })
-      const initMsg = JSON.stringify({ operation: 'init', dbPath })
-      child.stdin.write(`${initMsg}\n`)
-    }
-
-    return child
-  }
-
-  private flushStdout() {
-    // Merge chunks into a single buffer to find newlines
-    const merged = Buffer.concat(this.stdoutChunks, this.stdoutLength)
-    this.stdoutChunks = []
-    this.stdoutLength = 0
-
-    let searchFrom = 0
-    while (true) {
-      const newlineIndex = merged.indexOf(0x0a, searchFrom) // '\n'
-      if (newlineIndex === -1) {
-        // Put remaining data back as a single chunk
-        if (searchFrom < merged.length) {
-          const remaining = merged.subarray(searchFrom)
-          this.stdoutChunks.push(remaining)
-          this.stdoutLength = remaining.length
+      let client: ArkClient
+      switch (state.kind) {
+        case 'connected': {
+          console.log(
+            `[delphi.sidecar] using Kosmos host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+          )
+          client = new ArkClient({
+            spaceId,
+            deviceId,
+            deviceName,
+            cosmosLock: state.lock,
+          })
+          break
         }
-        return
-      }
-
-      const rawLine = merged.subarray(searchFrom, newlineIndex).toString('utf8').trim()
-      searchFrom = newlineIndex + 1
-
-      if (!rawLine) {
-        continue
-      }
-
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(rawLine)
-      } catch (error) {
-        // If we're mid-request, fail it; otherwise drop the garbage line.
-        const pending = this.activeRequest
-        this.activeRequest = null
-        if (pending) {
-          pending.reject(error instanceof Error ? error : new Error(String(error)))
-          this.dispatchNext()
+        case 'incompatible-version': {
+          throw new Error(
+            `Kosmos protocol mismatch: server ${state.cosmosVersion.major}.${state.cosmosVersion.minor}.${state.cosmosVersion.patch}, ` +
+              `client expects ${state.clientMajor}.x.`,
+          )
         }
-        continue
+        case 'launch-failed':
+        case 'not-installed': {
+          if (isKosmosRequired()) {
+            const detail =
+              state.kind === 'not-installed'
+                ? `checked: ${state.checkedPaths.join(', ') || '(no candidates)'}`
+                : state.reason
+            throw new Error(
+              `Delphi запущен с KEPLER_REQUIRE_KOSMOS=1, но Kosmos ${state.kind} (${detail}). ` +
+                `Установи Kepler Kosmos или сними флаг.`,
+            )
+          }
+          console.log(
+            `[delphi.sidecar] Kosmos ${state.kind} — standalone mode, sync disabled`,
+          )
+          const dbPath =
+            this.dbPathOverride ?? path.join(getAppDataPath(), 'Kepler', 'ark.db')
+          fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+          client = new ArkClient({
+            spaceId,
+            deviceId,
+            deviceName,
+            dbPath,
+            sidecarPath: getSidecarBinaryPath(),
+          })
+          break
+        }
       }
 
-      // Event frames are distinguished by having an `event` field (and no `ok`
-      // field). They flow on the same stdout stream as responses but must not
-      // consume the activeRequest slot.
-      if (parsed && typeof parsed === 'object' && 'event' in (parsed as Record<string, unknown>) && !('ok' in (parsed as Record<string, unknown>))) {
-        this.dispatchEvent(parsed as SidecarEvent)
-        continue
-      }
+      this.eventUnsubscribe = client.onArkEvent((event) => {
+        this.dispatchEvent(event as SidecarEvent)
+      })
 
-      const pending = this.activeRequest
-      this.activeRequest = null
-
-      if (!pending) {
-        // Spurious response — no caller is waiting. Drop it quietly to
-        // avoid wedging the queue.
-        continue
-      }
-
-      const response = parsed as SidecarResponse<unknown>
-      if (!response.ok) {
-        pending.reject(new Error(response.error || 'ark-core-rpc request failed'))
-      } else {
-        pending.resolve(response.data)
-      }
-
-      this.dispatchNext()
-    }
-  }
-
-  private dispatchNext() {
-    if (this.activeRequest || this.requestQueue.length === 0) {
-      return
-    }
-
-    const nextRequest = this.requestQueue.shift()
-    if (!nextRequest) {
-      return
-    }
-
-    const child = this.ensureChild()
-    this.activeRequest = nextRequest
+      this.arkClient = client
+      return client
+    })()
 
     try {
-      child.stdin.write(`${JSON.stringify(nextRequest.request)}\n`)
-    } catch (error) {
-      this.activeRequest = null
-      nextRequest.reject(error instanceof Error ? error : new Error(String(error)))
-      this.resetChild()
-      this.dispatchNext()
+      return await this.arkClientPromise
+    } catch (e) {
+      this.arkClientPromise = null
+      throw e
     }
   }
 
-  private failAll(error: Error) {
-    const pending = this.activeRequest
-    const queued = this.requestQueue.splice(0)
-
-    this.activeRequest = null
-    this.resetChild()
-
-    if (pending) {
-      pending.reject(error)
-    }
-
-    queued.forEach(request => request.reject(error))
+  async request<T>(request: SidecarRequest): Promise<T> {
+    const client = await this.getArkClient()
+    return client.invokeOperation<T>(request)
   }
 
-  private resetChild() {
-    if (this.child) {
-      this.child.stdout.removeAllListeners()
-      this.child.stderr.removeAllListeners()
-      this.child.removeAllListeners()
-
-      if (!this.child.killed) {
-        this.child.kill()
-      }
-    }
-
-    this.child = null
-    this.stdoutChunks = []
-    this.stdoutLength = 0
-    this.stderrBuffer = ''
-    this.initialized = false
-  }
-
-  request<T>(request: SidecarRequest): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      if (this.requestQueue.length >= MAX_QUEUE_SIZE) {
-        reject(new Error(`ark-core-rpc request queue overflow (${MAX_QUEUE_SIZE})`))
-        return
-      }
-      this.requestQueue.push({
-        request,
-        resolve: resolve as (value: unknown) => void,
-        reject,
-      })
-      this.dispatchNext()
-    })
-  }
-
-  /** Get the current DB path (for checking if sidecar holds a specific file). */
+  /** Get the current DB path override. */
   get currentDbPath(): string | null {
     return this.dbPathOverride
   }
 
-  /** Reinitialize the sidecar with a different DB path (used for space switching). */
-  reinit(dbPath: string): void {
+  /**
+   * Re-init под другой DB path. В cosmos-mode Kosmos владеет DB — `dbPath`
+   * запоминается, но фактически Kosmos нужно switch отдельным op'ом (Phase 5+).
+   * В self-managed mode — пересоздаём ArkClient с новым dbPath.
+   */
+  async reinit(dbPath: string): Promise<void> {
     this.dbPathOverride = dbPath
-    this.resetChild()
+    await this.disposeClient()
   }
 
   /** Kill the sidecar process and reset to default DB path. */
-  releaseAndReset(): void {
+  async releaseAndReset(): Promise<void> {
     this.dbPathOverride = null
-    this.resetChild()
+    await this.disposeClient()
   }
 
-  shutdown() {
-    this.requestQueue.splice(0).forEach(request => {
-      request.reject(new Error('ark-core-rpc client shut down'))
-    })
-
-    if (this.activeRequest) {
-      this.activeRequest.reject(new Error('ark-core-rpc client shut down'))
-      this.activeRequest = null
-    }
-
-    if (this.child && !this.child.killed) {
-      this.child.kill()
-    }
-
-    this.resetChild()
+  async shutdown(): Promise<void> {
+    await this.disposeClient()
     this.eventListeners.clear()
+  }
+
+  private async disposeClient(): Promise<void> {
+    if (this.eventUnsubscribe) {
+      this.eventUnsubscribe()
+      this.eventUnsubscribe = null
+    }
+    const client = this.arkClient
+    this.arkClient = null
+    this.arkClientPromise = null
+    if (client) {
+      try {
+        await client.stop()
+      } catch {
+        // ignore — best-effort cleanup
+      }
+    }
   }
 }
 
@@ -646,7 +567,7 @@ export async function dbSwitchSpace(spaceId: string): Promise<void> {
     }
     console.log(`[Sidecar] Migrated delphi.db → ark.db for space ${spaceId}`)
   }
-  sidecar.reinit(newDbPath)
+  await sidecar.reinit(newDbPath)
   // Trigger initialization by doing a lightweight operation
   await dbGetSyncKv('__init__').catch(() => {})
 }

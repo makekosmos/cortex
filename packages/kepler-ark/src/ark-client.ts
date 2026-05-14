@@ -2,6 +2,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import type { KosmosLockInfo } from './ensure-kosmos.js'
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -58,6 +60,17 @@ export interface ArkClientOptions {
    * Returns an unsubscribe function.
    */
   onEventFn?: (listener: (event: SidecarEvent) => void) => (() => void)
+  /**
+   * Phase 2: Cosmos mode. Когда задан — ArkClient не спавнит собственный
+   * ark-core-rpc child, а коннектится к долгоиграющему Kosmos host через
+   * WebSocket. Получается из `ensureKosmosRunning()` helper.
+   *
+   * Wire-протокол JSON-RPC тот же что у self-managed, плюс hello-handshake
+   * (token + pid + protocolVersion) на первом сообщении.
+   */
+  cosmosLock?: KosmosLockInfo
+  /** Override PID для PID-binding handshake. Default — `process.pid`. */
+  cosmosPidForHandshake?: number
 }
 
 interface SidecarRequest {
@@ -390,10 +403,16 @@ export class ArkClient {
   private readonly delegateRequest: (<T>(req: Record<string, unknown>) => Promise<T>) | null
   private delegateUnsubscribe: (() => void) | null = null
 
+  // ---- Cosmos mode (Phase 2) ----
+  private cosmosWs: WebSocket | null = null
+  private cosmosHandshakeDone = false
+  private cosmosConnectPromise: Promise<void> | null = null
+
   // ---- Event callbacks ----
   private peerConnectedCallbacks: Set<PeerConnectedCallback> = new Set()
   private peerDisconnectedCallbacks: Set<PeerDisconnectedCallback> = new Set()
   private entityChangedCallbacks: Set<EntityChangedCallback> = new Set()
+  private arkEventCallbacks: Set<(event: SidecarEvent) => void> = new Set()
 
   constructor(opts: ArkClientOptions) {
     this.opts = opts
@@ -567,6 +586,25 @@ export class ArkClient {
       })
     }
 
+    // Architectural change: sync — opt-in feature, активируется только когда
+    // запущен Kosmos host (Kosmos сам вызывает start_sync). Standalone-apps
+    // (без Kosmos installed) работают как локальные DB clients без LAN/relay
+    // sync. Это позволяет single-machine usage без overhead Kosmos installer'а.
+    //
+    // Apps что explicitly хотят standalone sync (rare case — например, для
+    // тестов или специальных deployments) — могут вызвать `startSyncLegacy()`
+    // напрямую.
+  }
+
+  /**
+   * Legacy explicit `start_sync` для apps, которые хотят запустить sync без
+   * Kosmos host'а. В обычном flow — Kosmos владеет sync, apps его не дёргают.
+   */
+  async startSyncLegacy(): Promise<void> {
+    if (this.opts.cosmosLock) {
+      // Kosmos уже владеет sync — повторный start_sync только нарушит state.
+      return
+    }
     await this.request<boolean>({
       operation: 'start_sync',
       space_id: this.opts.spaceId,
@@ -582,13 +620,18 @@ export class ArkClient {
 
   async stop(): Promise<void> {
     try {
-      await this.request<boolean>({ operation: 'stop_sync' })
+      if (!this.opts.cosmosLock) {
+        // В cosmos-режиме stop_sync владеет Kosmos, апка не имеет права его дёргать.
+        await this.request<boolean>({ operation: 'stop_sync' })
+      }
     } catch {
       // Ignore errors on stop
     }
     this.delegateUnsubscribe?.()
     this.delegateUnsubscribe = null
-    if (!this.delegateRequest) {
+    if (this.opts.cosmosLock) {
+      this.closeCosmosConnection()
+    } else if (!this.delegateRequest) {
       this.killChild()
     }
   }
@@ -619,6 +662,20 @@ export class ArkClient {
     return this.request<ConnectedPeer[]>({ operation: 'get_connected_peers' })
   }
 
+  /**
+   * Public escape-hatch: прямой проход в ARK ops без typed wrapper. Используется
+   * legacy callsites (Eden's main/store.ts) на время Phase 2 cutover — там
+   * сотни вызовов через `runArkRequest({operation: "...", ...})`, переписывать
+   * всё на typed API одновременно с переключением транспорта — слишком большой
+   * blast radius. Когда Eden постепенно мигрирует на `client.objects.list()`
+   * etc. — этот метод можно будет deprecate.
+   *
+   * Гарантирует, что connection (cosmos или self-managed child) инициализирован.
+   */
+  async invokeOperation<T>(req: { operation: string; [key: string]: unknown }): Promise<T> {
+    return this.requestAfterInit<T>(req as SidecarRequest)
+  }
+
   // -------------------------------------------------------------------------
   // Event subscriptions (return unsubscribe function)
   // -------------------------------------------------------------------------
@@ -638,6 +695,22 @@ export class ArkClient {
     return () => { this.entityChangedCallbacks.delete(cb) }
   }
 
+  /**
+   * Generic event subscription — получает все события от ark-core-rpc (любого
+   * `event` field). Используется для Phase 2 sync_error / sync_replay events,
+   * у которых нет типизированного callback'а. Apps подписываются и фильтруют:
+   *
+   *   client.onArkEvent(e => {
+   *     if (e.event === "sync_error") { ... }
+   *   })
+   *
+   * Возвращает unsubscribe.
+   */
+  onArkEvent(cb: (event: SidecarEvent) => void): () => void {
+    this.arkEventCallbacks.add(cb)
+    return () => { this.arkEventCallbacks.delete(cb) }
+  }
+
   // -------------------------------------------------------------------------
   // Internal: request routing
   // -------------------------------------------------------------------------
@@ -646,6 +719,10 @@ export class ArkClient {
     if (this.delegateRequest) {
       // Use the injected request function (external sidecar management).
       return this.delegateRequest<T>(req as Record<string, unknown>)
+    }
+    if (this.opts.cosmosLock) {
+      // Phase 2: Cosmos mode — WS к долгоиграющему Kosmos host.
+      return this.requestViaCosmos<T>(req)
     }
     // Use built-in child-process sidecar.
     return this.requestViaChild<T>(req)
@@ -858,6 +935,14 @@ export class ArkClient {
   private async ensureInitialized(): Promise<void> {
     if (this.delegateRequest || this.initialized) return
 
+    if (this.opts.cosmosLock) {
+      // Kosmos host уже init'нул ark-core-rpc — нам не нужно слать init.
+      // Просто гарантируем что WS-handshake завершён, после чего готовы.
+      await this.ensureCosmosConnection()
+      this.initialized = true
+      return
+    }
+
     const dbPath = this.opts.dbPath
     if (!dbPath) {
       throw new Error('@kepler/ark: dbPath is required when requestFn is not provided')
@@ -869,6 +954,11 @@ export class ArkClient {
   }
 
   private dispatchSidecarEvent(event: SidecarEvent): void {
+    // Generic subscribers first — получают ВСЕ события, в том числе те, у которых
+    // нет типизированного callback'а (например, `sync_error`, `sync_replay`).
+    for (const cb of this.arkEventCallbacks) {
+      try { cb(event) } catch { /* ignore */ }
+    }
     switch (event.event) {
       case 'entity_changed': {
         const entityJson = typeof event.entity === 'object'
@@ -904,5 +994,200 @@ export class ArkClient {
     const now = new Date().toISOString()
     const counter = String(Math.floor(Math.random() * 999999)).padStart(6, '0')
     return `${now}:${counter}:${this.opts.deviceId}`
+  }
+
+  // -------------------------------------------------------------------------
+  // Internal: Cosmos mode (WebSocket → Kosmos host)
+  // -------------------------------------------------------------------------
+
+  private async ensureCosmosConnection(): Promise<void> {
+    if (
+      this.cosmosHandshakeDone &&
+      this.cosmosWs &&
+      this.cosmosWs.readyState === WebSocket.OPEN
+    ) {
+      return
+    }
+    if (this.cosmosConnectPromise) {
+      return this.cosmosConnectPromise
+    }
+    this.cosmosConnectPromise = this.openCosmosConnection()
+    try {
+      await this.cosmosConnectPromise
+    } finally {
+      this.cosmosConnectPromise = null
+    }
+  }
+
+  private async openCosmosConnection(): Promise<void> {
+    const lock = this.opts.cosmosLock
+    if (!lock) {
+      throw new Error('@kepler/ark: cosmosLock is required for cosmos mode')
+    }
+
+    const url = `ws://127.0.0.1:${lock.ws_port}`
+    const ws = new WebSocket(url)
+
+    await new Promise<void>((resolve, reject) => {
+      const onOpen = () => {
+        ws.removeEventListener('error', onError as never)
+        resolve()
+      }
+      const onError = (_e: Event) => {
+        ws.removeEventListener('open', onOpen as never)
+        reject(new Error(`Kosmos WS open failed at ${url}`))
+      }
+      ws.addEventListener('open', onOpen, { once: true })
+      ws.addEventListener('error', onError, { once: true })
+    })
+
+    const protocolVersionString = `${lock.protocol_version.major}.${lock.protocol_version.minor}.${lock.protocol_version.patch}`
+    const helloPayload = {
+      kind: 'hello',
+      protocolVersion: protocolVersionString,
+      token: lock.auth_token,
+      pid: this.opts.cosmosPidForHandshake ?? process.pid,
+      clientId: this.opts.deviceId,
+    }
+    ws.send(JSON.stringify(helloPayload))
+
+    const helloResponse = await new Promise<Record<string, unknown>>((resolve, reject) => {
+      const onMessage = (evt: MessageEvent) => {
+        ws.removeEventListener('message', onMessage as never)
+        try {
+          resolve(JSON.parse(String(evt.data)) as Record<string, unknown>)
+        } catch (e) {
+          reject(e instanceof Error ? e : new Error(String(e)))
+        }
+      }
+      ws.addEventListener('message', onMessage, { once: true })
+    })
+
+    if (helloResponse.kind !== 'hello_ok') {
+      ws.close()
+      const code = String(helloResponse.code ?? 'unknown')
+      const message = String(helloResponse.message ?? '')
+      throw new Error(`Kosmos rejected handshake (${code}): ${message}`)
+    }
+
+    // Ongoing message handler — обрабатывает все frames после hello_ok.
+    ws.addEventListener('message', (evt) => {
+      this.handleCosmosFrame(String(evt.data))
+    })
+    ws.addEventListener('close', () => {
+      this.cosmosWs = null
+      this.cosmosHandshakeDone = false
+      // Pending requests fail с явной ошибкой; апка должна implement reconnect
+      // через ensureKosmosRunning + новый ArkClient. AC2 на этом уровне.
+      const error = new Error('Kosmos connection closed')
+      for (const pending of this.pendingRequests.values()) {
+        clearTimeout(pending.timeout)
+        pending.reject(error)
+      }
+      this.pendingRequests.clear()
+    })
+    ws.addEventListener('error', () => {
+      // 'close' followed обычно — single handler. Здесь — просто log/noop.
+    })
+
+    this.cosmosWs = ws
+    this.cosmosHandshakeDone = true
+  }
+
+  private handleCosmosFrame(text: string): void {
+    if (!text.trim()) return
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      return
+    }
+    const obj = parsed as Record<string, unknown>
+
+    // Async events (no `ok`).
+    if ('event' in obj && !('ok' in obj)) {
+      this.dispatchSidecarEvent(obj as unknown as SidecarEvent)
+      return
+    }
+
+    const resp = obj as unknown as SidecarResponse<unknown>
+    const respReqId =
+      typeof obj._req_id === 'string'
+        ? (obj._req_id as string)
+        : typeof obj.id === 'string'
+          ? (obj.id as string)
+          : undefined
+    const pending = this.takePendingRequest(respReqId)
+    if (!pending) return
+
+    if (!resp.ok) {
+      pending.reject(new Error(resp.error ?? 'kosmos error'))
+    } else {
+      pending.resolve(resp.data)
+    }
+  }
+
+  private async requestViaCosmos<T>(req: SidecarRequest): Promise<T> {
+    await this.ensureCosmosConnection()
+    const ws = this.cosmosWs
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      throw new Error('Kosmos WS not connected')
+    }
+    if (this.pendingRequests.size >= MAX_QUEUE_SIZE) {
+      return Promise.reject(
+        new Error(`@kepler/ark request queue overflow (${MAX_QUEUE_SIZE})`),
+      )
+    }
+
+    const id = this.makeRequestId()
+    const request = { ...req, _req_id: id }
+    const timeoutMs = this.opts.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
+
+    const promise = new Promise<T>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const pending = this.pendingRequests.get(id)
+        if (!pending) return
+        this.pendingRequests.delete(id)
+        reject(
+          new Error(`@kepler/ark request timed out after ${timeoutMs}ms: ${req.operation}`),
+        )
+      }, timeoutMs)
+      this.pendingRequests.set(id, {
+        id,
+        request,
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        timeout,
+      })
+    })
+
+    try {
+      ws.send(JSON.stringify(request))
+    } catch (err) {
+      const pending = this.pendingRequests.get(id)
+      if (pending) {
+        clearTimeout(pending.timeout)
+        this.pendingRequests.delete(id)
+      }
+      return Promise.reject(err instanceof Error ? err : new Error(String(err)))
+    }
+
+    return promise
+  }
+
+  private closeCosmosConnection(): void {
+    if (this.cosmosWs) {
+      try {
+        this.cosmosWs.close()
+      } catch {
+        // ignore
+      }
+      this.cosmosWs = null
+    }
+    this.cosmosHandshakeDone = false
+    for (const pending of this.pendingRequests.values()) {
+      clearTimeout(pending.timeout)
+    }
+    this.pendingRequests.clear()
   }
 }

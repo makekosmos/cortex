@@ -58,6 +58,62 @@ await ark.start();
 
 В injected mode владелец `requestFn` отвечает за инициализацию БД и жизненный цикл бинаря. `@kepler/ark` сохраняет legacy-совместимый формат запросов и **не** добавляет request id'ы в injected calls.
 
+### Cosmos mode (Phase 2+)
+
+Когда на машине запущен [Kosmos host](../apps/kosmos.md), `ArkClient` коннектится к нему через локальный WebSocket вместо spawn'а собственного `ark-core-rpc`. Это даёт single sidecar на машине.
+
+```ts
+import { ArkClient, ensureKosmosRunning } from '@kepler/ark';
+
+const state = await ensureKosmosRunning({
+  appDataPath: app.getPath('appData'),
+  waitMs: 10000,
+  autoLaunch: true,  // если Kosmos exe найден, но не запущен — стартуем
+});
+
+if (state.kind === 'connected') {
+  const ark = new ArkClient({
+    spaceId: 'default',
+    deviceId: 'device-1',
+    cosmosLock: state.lock,  // ← включает cosmos mode
+  });
+  await ark.start();
+}
+```
+
+`ensureKosmosRunning()` возвращает `KosmosState` (discriminated union):
+
+| `kind` | Когда | Что делать |
+|---|---|---|
+| `connected` | lock-file есть, PID жив, MAJOR матчит | использовать `state.lock` в `cosmosLock` |
+| `not-installed` | Kosmos exe не найден в conventional paths | показать modal «Скачать Kosmos» (Phase 6) или fallback (transitional) |
+| `launch-failed` | exe найден, spawn'нулся, но lock-file не появился за `waitMs` | toast «Kosmos не отвечает», fallback |
+| `incompatible-version` | MAJOR mismatch между Kosmos и клиентом | modal «Update Kosmos/app» |
+
+В cosmos mode `ArkClient` **не** вызывает `init` (Kosmos уже init'нул ARK) и **не** вызывает `start_sync` (Kosmos владеет LAN sync — Phase 5 централизация).
+
+### Wire-формат cosmos mode
+
+Тот же JSON-RPC что self-managed, плюс hello-handshake (см. [kosmos.md](../apps/kosmos.md#protocol-hello-handshake)). После handshake:
+
+```json
+// Request:  { "operation": "<name>", "_req_id": "...", ...params }
+// Response: { "_req_id": "...", "ok": true, "data": {...} }
+// Event:    { "event": "<kind>", ... }  // нет _req_id, нет ok
+```
+
+### `invokeOperation` escape-hatch
+
+Legacy callsites (например `apps/eden/ts/main/store.ts`) используют 30+ `runArkRequest({operation: ..., ...})`. Чтобы не переписывать всё одновременно с cutover'ом, `ArkClient` имеет public:
+
+```ts
+const result = await ark.invokeOperation<MyType>({
+  operation: 'list_objects',
+});
+```
+
+Постепенная миграция на typed API (`ark.objects.list()`) — отдельная follow-up задача.
+
 ## Sync API
 
 ```ts

@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import {
   ArkClient,
   buildPersonalSelectedSpace,
+  ensureKosmosRunning,
   getArkDbPathForSelectedSpace,
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
@@ -82,6 +83,18 @@ let arkClient: ArkClient | null = null;
 let arkClientPromise: Promise<ArkClient> | null = null;
 let arkStatus: ArkStatus = { status: "connecting" };
 
+/**
+ * Architectural model: Kosmos optional by default. Без него — standalone mode
+ * (self-managed sidecar, без sync). `KEPLER_REQUIRE_KOSMOS=1` для строгого режима.
+ */
+function isKosmosRequired(): boolean {
+  return process.env.KEPLER_REQUIRE_KOSMOS === "1";
+}
+
+function isKosmosOptional(): boolean {
+  return !isKosmosRequired();
+}
+
 async function getArk(): Promise<ArkClient> {
   if (arkClient) return arkClient;
   if (arkClientPromise) return arkClientPromise;
@@ -89,13 +102,64 @@ async function getArk(): Promise<ArkClient> {
     const { spaceId, dbPath } = ensureSelectedSpace();
     arkStatus = { status: "connecting", dbPath };
     try {
-      const client = new ArkClient({
-        spaceId,
-        deviceId: `horologion-${app.getPath("userData").slice(-12)}`,
-        deviceName: "Horologion",
-        dbPath,
-        sidecarPath: resolveSidecarPath(),
+      const deviceId = `horologion-${app.getPath("userData").slice(-12)}`;
+      const deviceName = "Horologion";
+
+      // Phase 3: cosmos-aware resolution. По умолчанию ходим к Kosmos host через WS.
+      // Если Kosmos недоступен И env KEPLER_KOSMOS_OPTIONAL=1 — fallback на self-managed
+      // sidecar (legacy режим до Phase 6).
+      const state = await ensureKosmosRunning({
+        appDataPath: app.getPath("appData"),
+        waitMs: 10000,
+        autoLaunch: !isKosmosOptional(),
       });
+
+      let client: ArkClient;
+      switch (state.kind) {
+        case "connected": {
+          console.log(
+            `[horologion.ark] using Kosmos host (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
+          );
+          client = new ArkClient({
+            spaceId,
+            deviceId,
+            deviceName,
+            cosmosLock: state.lock,
+          });
+          break;
+        }
+        case "incompatible-version": {
+          throw new Error(
+            `Kosmos protocol mismatch: server ${state.cosmosVersion.major}.${state.cosmosVersion.minor}.${state.cosmosVersion.patch}, ` +
+              `client expects ${state.clientMajor}.x. Update Kosmos or Horologion.`,
+          );
+        }
+        case "launch-failed":
+        case "not-installed": {
+          if (isKosmosRequired()) {
+            const detail =
+              state.kind === "not-installed"
+                ? `checked: ${state.checkedPaths.join(", ") || "(no candidates)"}`
+                : state.reason;
+            throw new Error(
+              `Horologion запущен с KEPLER_REQUIRE_KOSMOS=1, но Kosmos ${state.kind} (${detail}). ` +
+                `Установи Kepler Kosmos или сними флаг.`,
+            );
+          }
+          console.log(
+            `[horologion.ark] Kosmos ${state.kind} — standalone mode, sync disabled`,
+          );
+          client = new ArkClient({
+            spaceId,
+            deviceId,
+            deviceName,
+            dbPath,
+            sidecarPath: resolveSidecarPath(),
+          });
+          break;
+        }
+      }
+
       await client.start();
       arkClient = client;
       arkStatus = { status: "connected", dbPath };

@@ -22,7 +22,15 @@ Eden — основное приложение для записей: дневн
 
 - **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kepler/visuals`.
 - **main/** — Electron main process: IPC handlers, SQLite storage (`store.ts`), Heart integration, Hevy sync, мост на ARK через `ark.ts`.
-- **heart/** — Rust binary: полнотекстовый поиск через Tantivy, stdin/stdout sidecar.
+- **heart/** — Rust binary: vault filesystem manager (note types, folders, save/move/delete с hardening), stdin/stdout sidecar. **Не** search engine — search мигрирован на ARK FTS5 в `store.ts:searchEntries`.
+
+### ARK transport (Phase 2 cutover)
+
+`main/ark.ts` использует `@kepler/ark` с cosmos-aware resolution:
+
+- По умолчанию пытается подключиться к [Kosmos host](./kosmos.md) через WebSocket. Если Kosmos запущен — Eden не спавнит собственный `ark-core-rpc`.
+- Env-флаг `KEPLER_KOSMOS_OPTIONAL=1` включает **fallback** на self-managed sidecar (legacy режим), если Kosmos недоступен. Это transitional флаг — будет убран в Phase 6.
+- Eden подписывается на `sync_error`/`sync_replay` events для observability schema drift'а (см. [sync hold-and-replay](../concepts/sync.md#schema-drift-hold-and-replay-phase-2)).
 
 ## Стек
 
