@@ -132,6 +132,23 @@ function isKeplerOptional(): boolean {
   return !isKeplerRequired();
 }
 
+async function registerHorologionCommands(client: ArkClient): Promise<void> {
+  try {
+    await client.commands.register([
+      { id: "horologion:pomodoro:25", title: "Pomodoro 25 минут", subtitle: "Horologion", category: "action" },
+      { id: "horologion:pomodoro:50", title: "Pomodoro 50 минут", subtitle: "Horologion", category: "action" },
+      { id: "horologion:stopwatch:start", title: "Запустить секундомер", subtitle: "Horologion", category: "action" },
+    ]);
+    client.commands.onInvoked((event) => {
+      if (!event.id.startsWith("horologion:")) return;
+      console.log(`[horologion] command invoked: ${event.id}`, event.params);
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[horologion.ark] command registration skipped: ${msg}`);
+  }
+}
+
 async function getArk(): Promise<ArkClient> {
   if (arkClient) return arkClient;
   if (arkClientPromise) return arkClientPromise;
@@ -198,6 +215,9 @@ async function getArk(): Promise<ArkClient> {
       }
 
       await client.start();
+      if (state.kind === "connected") {
+        await registerHorologionCommands(client);
+      }
       arkClient = client;
       arkStatus = { status: "connected", dbPath };
       return client;

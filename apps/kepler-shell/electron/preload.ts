@@ -25,6 +25,19 @@ const api: KeplerApi = {
   search: {
     query: (text) => ipcRenderer.invoke("kepler:search:query", text),
   },
+  objects: {
+    listRecent: (limit) =>
+      ipcRenderer.invoke("kepler:objects:listRecent", limit),
+  },
+  commands: {
+    list: () => ipcRenderer.invoke("kepler:commands:list"),
+    invoke: (id) => ipcRenderer.invoke("kepler:commands:invoke", id),
+    onUpdated: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:commands:updated", handler);
+      return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld("kepler", api);

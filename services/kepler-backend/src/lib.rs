@@ -13,6 +13,7 @@
 
 pub mod ark_host;
 pub mod auth;
+pub mod command_bus;
 pub mod lock_file;
 pub mod protocol_version;
 pub mod singleton;

@@ -1,9 +1,6 @@
 @import "@kosmos/visuals/theme/css";
 
-:root {
-  --kepler-accent: oklch(0.66 0.245 305);
-  --accent: var(--kepler-accent);
-}
+/* Accent наследуется из @kosmos/visuals theme; никаких локальных override'ов. */
 
 html,
 body,

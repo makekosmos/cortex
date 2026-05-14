@@ -73,6 +73,22 @@ function defaultSpaceId(): string {
   }
 }
 
+async function registerDelphiCommands(client: ArkClient): Promise<void> {
+  try {
+    await client.commands.register([
+      { id: 'delphi:task:create', title: 'Создать задачу', subtitle: 'Delphi', category: 'action' },
+      { id: 'delphi:task:today', title: 'Открыть сегодняшние задачи', subtitle: 'Delphi', category: 'action' },
+    ])
+    client.commands.onInvoked((event) => {
+      if (!event.id.startsWith('delphi:')) return
+      console.log(`[delphi] command invoked: ${event.id}`, event.params)
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.warn(`[delphi.sidecar] command registration skipped: ${msg}`)
+  }
+}
+
 class SidecarClient {
   private arkClient: ArkClient | null = null
   private arkClientPromise: Promise<ArkClient> | null = null
@@ -166,6 +182,10 @@ class SidecarClient {
       this.eventUnsubscribe = client.onArkEvent((event) => {
         this.dispatchEvent(event as SidecarEvent)
       })
+
+      if (state.kind === 'connected') {
+        await registerDelphiCommands(client)
+      }
 
       this.arkClient = client
       return client

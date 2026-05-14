@@ -8,6 +8,7 @@
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::net::TcpListener;
@@ -15,6 +16,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::ark_host::ArkHost;
 use crate::auth;
+use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
 
 /// Закрывающие коды (соответствуют codes в hello-error response).
@@ -167,6 +169,8 @@ pub struct WsServer {
     listener: TcpListener,
     ark_host: Arc<ArkHost>,
     auth_token: Arc<String>,
+    command_bus: Arc<CommandBus>,
+    next_client_id: Arc<AtomicU64>,
 }
 
 impl WsServer {
@@ -178,6 +182,8 @@ impl WsServer {
             listener,
             ark_host,
             auth_token: Arc::new(auth_token),
+            command_bus: Arc::new(CommandBus::new()),
+            next_client_id: Arc::new(AtomicU64::new(1)),
         })
     }
 
@@ -199,8 +205,10 @@ impl WsServer {
             let (stream, _peer) = self.listener.accept().await?;
             let ark_host = self.ark_host.clone();
             let token = self.auth_token.clone();
+            let bus = self.command_bus.clone();
+            let client_id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
             tokio::spawn(async move {
-                if let Err(e) = handle_connection(stream, ark_host, token).await {
+                if let Err(e) = handle_connection(stream, ark_host, token, bus, client_id).await {
                     eprintln!("[kepler.ws] connection error: {e}");
                 }
             });
@@ -212,6 +220,8 @@ async fn handle_connection(
     stream: tokio::net::TcpStream,
     ark_host: Arc<ArkHost>,
     expected_token: Arc<String>,
+    command_bus: Arc<CommandBus>,
+    client_id: ClientId,
 ) -> Result<(), WsServerError> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
     let (mut sink, mut stream) = ws.split();
@@ -266,87 +276,248 @@ async fn handle_connection(
     // Ответ:
     //    {"id": "...", "ok": ..., "data"?, "error"?}
     //
-    // Phase 1: forward'им всё что не "subscribe_events" в ark_host напрямую,
-    // event-subscription dispatch — Phase 2.
+    // Также слушаем `command_bus` broadcast и форвардим events клиенту в том же
+    // wire-формате что и существующие ARK события (peer_connected/entity_changed):
+    //   {"event":"commands_changed","commands":[...]}
+    //   {"event":"command_invoked","id":...,"params":...}
+    // SDK (@kosmos/ark dispatchSidecarEvent) переключается по полю `event`.
+    //
+    // Operations с префиксом `commands.` обрабатываются локально через
+    // CommandBus, в ark_host не уходят.
 
-    while let Some(frame) = stream.next().await {
-        let text = match frame {
-            Ok(Message::Text(t)) => t,
-            Ok(Message::Close(_)) => break,
-            Ok(Message::Ping(p)) => {
-                let _ = sink.send(Message::Pong(p)).await;
-                continue;
-            }
-            Ok(_) => continue, // binary/pong — игнор
-            Err(_) => break,
-        };
+    let mut bus_rx = command_bus.subscribe();
 
-        let value: serde_json::Value = match serde_json::from_str(&text) {
-            Ok(v) => v,
-            Err(e) => {
-                let _ = sink
-                    .send(Message::Text(format!(
-                        r#"{{"ok":false,"error":"malformed JSON: {e}"}}"#
-                    )))
-                    .await;
-                continue;
-            }
-        };
+    loop {
+        tokio::select! {
+            biased;
 
-        let client_id = value
-            .get("id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let operation = match value.get("operation").and_then(|v| v.as_str()) {
-            Some(op) => op.to_string(),
-            None => {
-                let response = serde_json::json!({
-                    "id": client_id,
-                    "ok": false,
-                    "error": "missing 'operation' field"
-                });
-                let _ = sink.send(Message::Text(response.to_string())).await;
-                continue;
-            }
-        };
-
-        // Передаём всё кроме `id` и `operation` в ark_host как params.
-        let mut params = value.clone();
-        if let Some(map) = params.as_object_mut() {
-            map.remove("id");
-            map.remove("operation");
-        }
-
-        match ark_host.request(&operation, params).await {
-            Ok(ark_response) => {
-                let mut envelope = serde_json::Map::new();
-                if let Some(id) = client_id {
-                    envelope.insert("id".into(), serde_json::Value::String(id));
-                }
-                envelope.insert("ok".into(), serde_json::Value::Bool(ark_response.ok));
-                envelope.insert("data".into(), ark_response.data);
-                if let Some(err) = ark_response.error {
-                    envelope.insert("error".into(), serde_json::Value::String(err));
-                }
-                let payload = serde_json::Value::Object(envelope).to_string();
-                if sink.send(Message::Text(payload)).await.is_err() {
-                    break;
+            // 2a. Outgoing: events from command_bus → client.
+            evt = bus_rx.recv() => {
+                match evt {
+                    Ok(CommandBusEvent::Changed(list)) => {
+                        let payload = serde_json::json!({
+                            "event": "commands_changed",
+                            "commands": list,
+                        });
+                        if sink.send(Message::Text(payload.to_string())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(CommandBusEvent::Invoked { id, params }) => {
+                        let payload = serde_json::json!({
+                            "event": "command_invoked",
+                            "id": id,
+                            "params": params,
+                        });
+                        if sink.send(Message::Text(payload.to_string())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        // Resubscribe-friendly: drop the lagged event, continue.
+                        continue;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
-            Err(e) => {
-                let response = serde_json::json!({
-                    "id": client_id,
-                    "ok": false,
-                    "error": format!("ark_host: {e}")
-                });
-                if sink.send(Message::Text(response.to_string())).await.is_err() {
-                    break;
+
+            // 2b. Incoming: WS frame from client → dispatch.
+            frame = stream.next() => {
+                let frame = match frame {
+                    Some(f) => f,
+                    None => break,
+                };
+
+                let text = match frame {
+                    Ok(Message::Text(t)) => t,
+                    Ok(Message::Close(_)) => break,
+                    Ok(Message::Ping(p)) => {
+                        let _ = sink.send(Message::Pong(p)).await;
+                        continue;
+                    }
+                    Ok(_) => continue, // binary/pong — игнор
+                    Err(_) => break,
+                };
+
+                let value: serde_json::Value = match serde_json::from_str(&text) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let _ = sink
+                            .send(Message::Text(format!(
+                                r#"{{"ok":false,"error":"malformed JSON: {e}"}}"#
+                            )))
+                            .await;
+                        continue;
+                    }
+                };
+
+                let req_id = value
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let operation = match value.get("operation").and_then(|v| v.as_str()) {
+                    Some(op) => op.to_string(),
+                    None => {
+                        let response = serde_json::json!({
+                            "id": req_id,
+                            "ok": false,
+                            "error": "missing 'operation' field"
+                        });
+                        let _ = sink.send(Message::Text(response.to_string())).await;
+                        continue;
+                    }
+                };
+
+                // Передаём всё кроме `id` и `operation` в params.
+                let mut params = value.clone();
+                if let Some(map) = params.as_object_mut() {
+                    map.remove("id");
+                    map.remove("operation");
+                }
+
+                // Intercept commands.* — обрабатываем локально.
+                if let Some(rest) = operation.strip_prefix("commands.") {
+                    let resp =
+                        handle_command_op(rest, params, &command_bus, client_id).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
+                match ark_host.request(&operation, params).await {
+                    Ok(ark_response) => {
+                        let mut envelope = serde_json::Map::new();
+                        if let Some(id) = req_id {
+                            envelope.insert("id".into(), serde_json::Value::String(id));
+                        }
+                        envelope.insert("ok".into(), serde_json::Value::Bool(ark_response.ok));
+                        envelope.insert("data".into(), ark_response.data);
+                        if let Some(err) = ark_response.error {
+                            envelope.insert("error".into(), serde_json::Value::String(err));
+                        }
+                        let payload = serde_json::Value::Object(envelope).to_string();
+                        if sink.send(Message::Text(payload)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        let response = serde_json::json!({
+                            "id": req_id,
+                            "ok": false,
+                            "error": format!("ark_host: {e}")
+                        });
+                        if sink.send(Message::Text(response.to_string())).await.is_err() {
+                            break;
+                        }
+                    }
                 }
             }
         }
     }
 
+    // Disconnect: drop client's commands, notify everyone else.
+    command_bus.unregister_all(client_id).await;
+    command_bus.broadcast_changed().await;
+
     Ok(())
+}
+
+/// Локальный response от `commands.*` обработчика. Та же форма что у
+/// `ArkResponse`, но конструируется без обращения к ark-core-rpc.
+struct LocalResponse {
+    ok: bool,
+    data: serde_json::Value,
+    error: Option<String>,
+}
+
+impl LocalResponse {
+    fn ok(data: serde_json::Value) -> Self {
+        Self {
+            ok: true,
+            data,
+            error: None,
+        }
+    }
+
+    fn err(msg: impl Into<String>) -> Self {
+        Self {
+            ok: false,
+            data: serde_json::Value::Null,
+            error: Some(msg.into()),
+        }
+    }
+}
+
+/// Диспатч `commands.<subop>` — обрабатывает register / unregister / list /
+/// invoke, эмитит broadcast events где нужно.
+async fn handle_command_op(
+    subop: &str,
+    params: serde_json::Value,
+    bus: &CommandBus,
+    client_id: ClientId,
+) -> LocalResponse {
+    match subop {
+        "register" => {
+            let manifests = match params.get("commands") {
+                Some(v) => match serde_json::from_value::<Vec<CommandManifest>>(v.clone()) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        return LocalResponse::err(format!(
+                            "commands.register: invalid 'commands' array: {e}"
+                        ))
+                    }
+                },
+                None => return LocalResponse::err("commands.register: missing 'commands' array"),
+            };
+            bus.register(client_id, manifests).await;
+            bus.broadcast_changed().await;
+            LocalResponse::ok(serde_json::json!({ "ok": true }))
+        }
+        "unregister" => {
+            let ids = match params.get("ids") {
+                Some(v) => match serde_json::from_value::<Vec<String>>(v.clone()) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return LocalResponse::err(format!(
+                            "commands.unregister: invalid 'ids' array: {e}"
+                        ))
+                    }
+                },
+                None => return LocalResponse::err("commands.unregister: missing 'ids' array"),
+            };
+            bus.unregister(client_id, &ids).await;
+            bus.broadcast_changed().await;
+            LocalResponse::ok(serde_json::json!({ "ok": true }))
+        }
+        "list" => {
+            let list = bus.list().await;
+            LocalResponse::ok(serde_json::json!({ "commands": list }))
+        }
+        "invoke" => {
+            let id = match params.get("id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("commands.invoke: missing 'id'"),
+            };
+            let invoke_params = params
+                .get("params")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            bus.broadcast_invoked(id, invoke_params);
+            LocalResponse::ok(serde_json::json!({ "ok": true }))
+        }
+        other => LocalResponse::err(format!("commands.{other}: unknown sub-operation")),
+    }
 }
 
 async fn send_hello_error<S>(

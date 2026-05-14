@@ -122,6 +122,33 @@ export interface ArkObjectRecord {
   deletedAt: string | null
 }
 
+export interface CommandManifest {
+  id: string
+  title: string
+  subtitle?: string
+  category: 'open' | 'action'
+}
+
+export interface CommandInvokedEvent {
+  id: string
+  params?: Record<string, unknown>
+  invokerClientId?: string
+}
+
+export type CommandInvokedCallback = (event: CommandInvokedEvent) => void
+export type CommandsChangedCallback = (commands: CommandManifest[]) => void
+
+export interface ArkCommandsApi {
+  register(commands: CommandManifest[]): Promise<void>
+  unregister(ids: string[]): Promise<void>
+  list(): Promise<CommandManifest[]>
+  invoke(id: string, params?: Record<string, unknown>): Promise<void>
+  /** Подписаться на событие command_invoked. Возвращает unsubscribe-функцию. */
+  onInvoked(handler: CommandInvokedCallback): () => void
+  /** Подписаться на event commands_changed (изменился список доступных). */
+  onChanged(handler: CommandsChangedCallback): () => void
+}
+
 export interface ArkObjectTypeRecord {
   id: string
   name: string
@@ -389,6 +416,7 @@ export class ArkClient {
   readonly links: ArkLinksApi
   readonly usage: ArkUsageApi
   readonly kv: ArkKvApi
+  readonly commands: ArkCommandsApi
 
   // ---- Built-in sidecar child-process (used when requestFn is absent) ----
   private child: ChildProcessWithoutNullStreams | null = null
@@ -413,6 +441,8 @@ export class ArkClient {
   private peerDisconnectedCallbacks: Set<PeerDisconnectedCallback> = new Set()
   private entityChangedCallbacks: Set<EntityChangedCallback> = new Set()
   private arkEventCallbacks: Set<(event: SidecarEvent) => void> = new Set()
+  private commandInvokedCallbacks: Set<CommandInvokedCallback> = new Set()
+  private commandsChangedCallbacks: Set<CommandsChangedCallback> = new Set()
 
   constructor(opts: ArkClientOptions) {
     this.opts = opts
@@ -568,6 +598,41 @@ export class ArkClient {
             device_id: this.opts.deviceId,
           })
         },
+      },
+    }
+    this.commands = {
+      register: async (commands) => {
+        await this.requestAfterInit<boolean>({
+          operation: 'commands.register',
+          commands,
+        })
+      },
+      unregister: async (ids) => {
+        await this.requestAfterInit<boolean>({
+          operation: 'commands.unregister',
+          ids,
+        })
+      },
+      list: async () => {
+        const result = await this.requestAfterInit<{ commands: CommandManifest[] }>({
+          operation: 'commands.list',
+        })
+        return result.commands
+      },
+      invoke: async (id, params) => {
+        await this.requestAfterInit<boolean>({
+          operation: 'commands.invoke',
+          id,
+          ...(params !== undefined ? { params } : {}),
+        })
+      },
+      onInvoked: (handler) => {
+        this.commandInvokedCallbacks.add(handler)
+        return () => { this.commandInvokedCallbacks.delete(handler) }
+      },
+      onChanged: (handler) => {
+        this.commandsChangedCallbacks.add(handler)
+        return () => { this.commandsChangedCallbacks.delete(handler) }
       },
     }
   }
@@ -982,6 +1047,36 @@ export class ArkClient {
         const remaining = typeof event.remaining === 'number' ? event.remaining : 0
         for (const cb of this.peerDisconnectedCallbacks) {
           try { cb(deviceId, remaining) } catch { /* ignore */ }
+        }
+        break
+      }
+      case 'command_invoked': {
+        const id = String(event.id ?? '')
+        const rawParams = event.params
+        const params =
+          rawParams && typeof rawParams === 'object' && !Array.isArray(rawParams)
+            ? (rawParams as Record<string, unknown>)
+            : undefined
+        const invokerClientId =
+          typeof event.invokerClientId === 'string'
+            ? event.invokerClientId
+            : typeof event.invoker_client_id === 'string'
+              ? (event.invoker_client_id as string)
+              : undefined
+        const payload: CommandInvokedEvent = {
+          id,
+          ...(params !== undefined ? { params } : {}),
+          ...(invokerClientId !== undefined ? { invokerClientId } : {}),
+        }
+        for (const cb of this.commandInvokedCallbacks) {
+          try { cb(payload) } catch { /* ignore */ }
+        }
+        break
+      }
+      case 'commands_changed': {
+        const list = Array.isArray(event.commands) ? (event.commands as CommandManifest[]) : []
+        for (const cb of this.commandsChangedCallbacks) {
+          try { cb(list) } catch { /* ignore */ }
         }
         break
       }

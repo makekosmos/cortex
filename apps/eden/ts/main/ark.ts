@@ -173,6 +173,7 @@ async function resolveClient(): Promise<ArkClient> {
           keplerLock: state.lock,
         });
         wireDriftEventLogging(client);
+        await registerEdenCommands(client);
         clientInstance = client;
         return client;
       }
@@ -224,6 +225,22 @@ async function resolveClient(): Promise<ArkClient> {
     // Reset чтобы можно было retry на следующем requeste.
     clientPromise = null;
     throw e;
+  }
+}
+
+async function registerEdenCommands(client: ArkClient): Promise<void> {
+  try {
+    await client.commands.register([
+      { id: "eden:note:create", title: "Создать заметку", subtitle: "Eden", category: "action" },
+      { id: "eden:note:search", title: "Поиск по заметкам", subtitle: "Eden", category: "action" },
+    ]);
+    client.commands.onInvoked((event) => {
+      if (!event.id.startsWith("eden:")) return;
+      console.log(`[eden] command invoked: ${event.id}`, event.params);
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[eden.ark] command registration skipped: ${msg}`);
   }
 }
 

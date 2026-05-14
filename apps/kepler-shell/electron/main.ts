@@ -24,6 +24,7 @@ import {
   Tray,
   Menu,
   nativeImage,
+  nativeTheme,
   screen,
 } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -44,14 +45,14 @@ import {
   readSharedSelectedSpace,
   writeSharedSelectedSpace,
 } from "@kosmos/ark";
-import type { BackendStatus, SearchResult } from "../shared/ipc-types";
+import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
+import { COMMANDS, findCommand } from "./commands";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 720;
-const WINDOW_HEIGHT_COMPACT = 76;
-const WINDOW_HEIGHT_EXPANDED = 460;
+const WINDOW_HEIGHT = 460;
 const WINDOW_STATE_FILENAME = "kepler-shell-window-state.json";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
@@ -63,7 +64,6 @@ let backendLockPath = "";
 let isQuiting = false;
 let arkClient: ArkClient | null = null;
 let windowStateSaveTimer: NodeJS.Timeout | null = null;
-let isExpanded = false;
 
 // --- single instance ---------------------------------------------------------
 
@@ -209,12 +209,15 @@ function createLauncher() {
 
   mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT_COMPACT,
+    height: WINDOW_HEIGHT,
     x: pos.x,
     y: pos.y,
     show: false,
     frame: false,
-    transparent: true,
+    // Acrylic / mica игнорируется при transparent:true. На Win11 22H2+ окно
+    // автоматически получает rounded corners. Acrylic intense чем mica —
+    // лучше визуально для launcher'а (как PowerToys Run / Raycast).
+    transparent: false,
     resizable: false,
     movable: true,
     minimizable: false,
@@ -222,10 +225,9 @@ function createLauncher() {
     fullscreenable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    // Mica на Win11; на старых Windows / других OS Electron сам fallback'ит
-    // на плоский background. См. Electron BrowserWindow docs.
-    backgroundMaterial: "mica",
+    backgroundMaterial: "acrylic",
     backgroundColor: "#00000000",
+    roundedCorners: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
@@ -233,8 +235,20 @@ function createLauncher() {
     },
   });
 
-  // hide вместо close при потере фокуса / Esc / окно скрыто по умолчанию
-  mainWindow.on("blur", () => hideLauncher());
+  // Явный вызов после create — иногда constructor option backgroundMaterial
+  // не применяется на frameless+alwaysOnTop комбинации; setBackgroundMaterial
+  // прямо дёргает DwmSetWindowAttribute. Безопасно: no-op на non-Win11.
+  try {
+    mainWindow.setBackgroundMaterial("acrylic");
+  } catch (e) {
+    console.error("[kepler-shell] setBackgroundMaterial failed:", e);
+  }
+
+  // В prod hide вместо close при потере фокуса; в dev — оставляем открытым
+  // чтобы переключаться в DevTools / IDE без потери launcher'а.
+  if (!isDev) {
+    mainWindow.on("blur", () => hideLauncher());
+  }
   mainWindow.on("close", (e) => {
     if (!isQuiting) {
       e.preventDefault();
@@ -245,6 +259,8 @@ function createLauncher() {
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    // detached DevTools — отдельное окно, не блокирует launcher.
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     void mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
@@ -255,12 +271,11 @@ function showLauncher() {
   if (!mainWindow) return;
   const saved = loadWindowState();
   const pos = saved ?? defaultLauncherPosition();
-  isExpanded = false;
   mainWindow.setBounds({
     x: pos.x,
     y: pos.y,
     width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT_COMPACT,
+    height: WINDOW_HEIGHT,
   });
   mainWindow.show();
   mainWindow.focus();
@@ -273,17 +288,11 @@ function hideLauncher() {
   }
 }
 
-function setLauncherExpanded(expanded: boolean) {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  if (isExpanded === expanded) return;
-  isExpanded = expanded;
-  const bounds = mainWindow.getBounds();
-  mainWindow.setBounds({
-    x: bounds.x,
-    y: bounds.y,
-    width: WINDOW_WIDTH,
-    height: expanded ? WINDOW_HEIGHT_EXPANDED : WINDOW_HEIGHT_COMPACT,
-  });
+// Окно теперь fixed-size (WINDOW_HEIGHT) — никакой compact/expanded логики.
+// Renderer показывает список объектов всегда; на typing просто фильтрует.
+// IPC обработчик оставлен для backward-compat с preload bridge, но noop.
+function setLauncherExpanded(_expanded: boolean) {
+  // no-op
 }
 
 // --- tray --------------------------------------------------------------------
@@ -366,6 +375,14 @@ async function initArkClient(): Promise<void> {
     console.error(
       `[kepler-shell] ArkClient connected to kepler-backend (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
     );
+    // Subscribe на commands_changed → пушим renderer'у сигнал перефетчить
+    // список (он сам вызовет kepler:commands:list). Сам список не шлём —
+    // renderer должен пройти через тот же merge-pipeline (static + dynamic).
+    client.commands.onChanged(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("kepler:commands:updated");
+      }
+    });
   } catch (e) {
     console.error("[kepler-shell] ArkClient init failed:", e);
   }
@@ -424,9 +441,96 @@ ipcMain.handle(
   },
 );
 
+function staticCommands(): CommandRecord[] {
+  return COMMANDS.map((c) => ({
+    id: c.id,
+    title: c.title,
+    subtitle: c.subtitle,
+    category: c.category,
+  }));
+}
+
+ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
+  const statics = staticCommands();
+  if (!arkClient) return statics;
+  try {
+    const dynamic = await arkClient.commands.list();
+    const byId = new Map<string, CommandRecord>();
+    for (const c of statics) byId.set(c.id, c);
+    for (const c of dynamic) {
+      // Static open-commands имеют приоритет (их id типа "eden:open" не должны
+      // переопределяться апкой). Если апка регистрирует уникальный id —
+      // добавляем; иначе static побеждает.
+      if (!byId.has(c.id)) {
+        byId.set(c.id, {
+          id: c.id,
+          title: c.title,
+          subtitle: c.subtitle,
+          category: c.category,
+        });
+      }
+    }
+    return Array.from(byId.values());
+  } catch (e) {
+    console.error("[kepler-shell] commands.list (dynamic) failed:", e);
+    return statics;
+  }
+});
+
+ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> => {
+  const cmd = findCommand(id);
+  if (cmd) {
+    try {
+      await cmd.exec();
+    } catch (e) {
+      console.error(`[kepler-shell] command ${id} failed:`, e);
+    }
+  } else if (arkClient) {
+    // Dynamic command — backend broadcast'нёт command_invoked, апка handle'нёт.
+    try {
+      await arkClient.commands.invoke(id);
+    } catch (e) {
+      console.error(`[kepler-shell] dynamic command ${id} invoke failed:`, e);
+    }
+  } else {
+    console.warn(`[kepler-shell] unknown command (no arkClient): ${id}`);
+  }
+  // Спрятать launcher после успешного / неуспешного invoke — стандартное
+  // поведение Spotlight/Raycast: command выполнен → окно уходит.
+  hideLauncher();
+});
+
+ipcMain.handle(
+  "kepler:objects:listRecent",
+  async (_e, limit?: number): Promise<SearchResult[]> => {
+    if (!arkClient) return [];
+    const cap = typeof limit === "number" && limit > 0 ? Math.min(limit, 500) : 200;
+    try {
+      const records = await arkClient.objects.list();
+      const sorted = records
+        .filter((r) => !r.deletedAt)
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+        .slice(0, cap);
+      return sorted.map((r) => ({
+        id: r.id,
+        title: r.title && r.title.length > 0 ? r.title : r.id,
+        type_id: r.typeId,
+      }));
+    } catch (e) {
+      console.error("[kepler-shell] objects.list failed:", e);
+      return [];
+    }
+  },
+);
+
 // --- lifecycle ---------------------------------------------------------------
 
 app.whenReady().then(async () => {
+  // Принудительно темная тема — чтобы acrylic backgroundMaterial использовал
+  // dark variant независимо от Windows system theme (иначе на light theme
+  // launcher просвечивает белым).
+  nativeTheme.themeSource = "dark";
+
   spawnBackend();
   createLauncher();
   createTray();
@@ -442,6 +546,14 @@ app.whenReady().then(async () => {
       showLauncher();
     }
   });
+  // F12 toggle DevTools (dev mode только) — глобальный hotkey удобнее чем
+  // accelerator menu, т.к. меню у frameless окна нет.
+  if (isDev) {
+    globalShortcut.register("F12", () => {
+      mainWindow?.webContents.toggleDevTools();
+    });
+  }
+
   if (!ok) {
     console.error(`[kepler-shell] globalShortcut ${accelerator} register failed`);
   } else {

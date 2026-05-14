@@ -27,6 +27,7 @@ export type {
 } from './ensure-kepler.js'
 export type {
   ArkClientOptions,
+  ArkCommandsApi,
   ArkDailyTrendPoint,
   ArkHourlyHeatmapCell,
   ArkKvApi,
@@ -55,6 +56,10 @@ export type {
   ArkUsageSessionRecord,
   ArkUsageSnapshot,
   ArkUsageSummary,
+  CommandInvokedCallback,
+  CommandInvokedEvent,
+  CommandManifest,
+  CommandsChangedCallback,
   ConnectedPeer,
   PeerConnectedCallback,
   PeerDisconnectedCallback,
