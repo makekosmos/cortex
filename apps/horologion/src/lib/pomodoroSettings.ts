@@ -1,5 +1,5 @@
 import { reactive, watch } from "vue";
-import type { SoundName } from "./sounds";
+import { setVolumeMultiplier, type SoundName } from "./sounds";
 
 export interface PomodoroSettings {
   /** Длительность рабочего фокус-сегмента, минуты. */
@@ -21,10 +21,18 @@ export interface PomodoroSettings {
   autoStartBreak: boolean;
   /** Системные уведомления (через Web Notification API) при смене фазы. */
   systemNotifications: boolean;
+  /**
+   * Отключить паузу рендеринга при перекрытии окна другим окном (для стримов).
+   * Применяется после перезапуска: main процессу нужны command-line switches
+   * до `app.ready`.
+   */
+  streamerMode: boolean;
   /** Звук в конце work-сегмента. */
   workEndSound: SoundName;
   /** Звук в конце break-сегмента. */
   breakEndSound: SoundName;
+  /** Громкость рингтона, 0..1. Умножается на peak gain каждого тона. */
+  ringtoneVolume: number;
 }
 
 export const DEFAULT_POMODORO_SETTINGS: PomodoroSettings = {
@@ -36,8 +44,10 @@ export const DEFAULT_POMODORO_SETTINGS: PomodoroSettings = {
   autoStartWork: false,
   autoStartBreak: true,
   systemNotifications: true,
+  streamerMode: false,
   workEndSound: "bell",
   breakEndSound: "chime",
+  ringtoneVolume: 1,
 };
 
 const STORAGE_KEY = "horologion.pomodoro.settings.v1";
@@ -56,6 +66,9 @@ function load(): PomodoroSettings {
 // Singleton reactive store. Все view'и работают с одним и тем же объектом.
 export const pomodoroSettings = reactive<PomodoroSettings>(load());
 
+// Initial sync громкости с sounds-модулем.
+setVolumeMultiplier(pomodoroSettings.ringtoneVolume);
+
 watch(
   pomodoroSettings,
   (next) => {
@@ -64,9 +77,13 @@ watch(
     } catch {
       /* ignore */
     }
+    setVolumeMultiplier(next.ringtoneVolume);
+    void window.horologion?.streamerMode?.set(next.streamerMode);
   },
   { deep: true },
 );
+
+void window.horologion?.streamerMode?.set(pomodoroSettings.streamerMode);
 
 export function resetPomodoroSettings(): void {
   Object.assign(pomodoroSettings, DEFAULT_POMODORO_SETTINGS);

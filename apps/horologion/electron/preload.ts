@@ -28,6 +28,9 @@ const api: HorologionApi = {
   settings: {
     open: () => ipcRenderer.invoke("horologion:settings:open"),
   },
+  streamerMode: {
+    set: (enabled: boolean) => ipcRenderer.invoke("horologion:streamerMode:set", enabled),
+  },
 };
 
 contextBridge.exposeInMainWorld("horologion", api);

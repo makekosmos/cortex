@@ -40,47 +40,6 @@ async function refreshArkStatus() {
 // Класс точки соответствует тону подключения: success / warning / danger.
 const arkDotClass = computed(() => `dot dot--${arkStatus.value}`);
 
-// --- scroll: fade scrollbar after idle ---
-const contentRef = ref<HTMLElement | null>(null);
-
-// JS-driven fade для скроллбара. CSS transition на webkit-scrollbar-thumb
-// в Chromium не пересчитывается на toggle класса — поэтому анимируем CSS-var
-// `--sb-alpha` через rAF, и webkit-scrollbar-thumb читает его в background-color.
-// Логика: scroll → alpha=1 мгновенно. Idle 500ms → 300ms fade alpha=1→0.
-let scrollIdleTimer: ReturnType<typeof setTimeout> | null = null;
-let scrollFadeRaf: number | null = null;
-
-function setSbAlpha(a: number) {
-    const el = contentRef.value;
-    if (!el) return;
-    el.style.setProperty("--sb-alpha", a.toFixed(3));
-}
-
-function onContentScroll() {
-    if (scrollIdleTimer) clearTimeout(scrollIdleTimer);
-    if (scrollFadeRaf !== null) {
-        cancelAnimationFrame(scrollFadeRaf);
-        scrollFadeRaf = null;
-    }
-    setSbAlpha(1);
-    scrollIdleTimer = setTimeout(() => {
-        const start = performance.now();
-        const FADE_MS = 300;
-        const step = (now: number) => {
-            const elapsed = now - start;
-            const p = Math.min(1, elapsed / FADE_MS);
-            const eased = 1 - Math.pow(1 - p, 3);
-            setSbAlpha(1 - eased);
-            if (p < 1) {
-                scrollFadeRaf = requestAnimationFrame(step);
-            } else {
-                scrollFadeRaf = null;
-            }
-        };
-        scrollFadeRaf = requestAnimationFrame(step);
-    }, 500);
-}
-
 onMounted(() => {
     void refreshArkStatus();
     arkPollHandle = setInterval(refreshArkStatus, 2000);
@@ -133,7 +92,7 @@ async function openSettingsWindow() {
         </template>
 
         <DesktopContentSurface :padding-top="'0'" :padding-inline="'0'" :padding-bottom="'0'" :scrollable="false">
-            <main ref="contentRef" class="content" @scroll="onContentScroll">
+            <main class="content">
                 <div v-if="errMsg" class="errbar">⚠ {{ errMsg }}</div>
                 <RouterView />
             </main>
@@ -232,7 +191,6 @@ async function openSettingsWindow() {
      8px scrollbar-gutter. */
     padding: 0 0.5rem;
     scrollbar-gutter: stable both-edges;
-    --sb-alpha: 0;
 }
 
 .content::-webkit-scrollbar {
@@ -244,18 +202,7 @@ async function openSettingsWindow() {
 }
 
 .content::-webkit-scrollbar-thumb {
-    background-color: color-mix(in srgb,
-            var(--foreground) calc(30% * var(--sb-alpha)),
-            transparent);
-    border-radius: 999px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
-}
-
-.content::-webkit-scrollbar-thumb:hover {
-    background-color: color-mix(in srgb,
-            var(--foreground) calc(50% * var(--sb-alpha)),
-            transparent);
+    background: transparent;
 }
 
 .errbar {

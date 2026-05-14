@@ -81,6 +81,14 @@ function testSound(s: SoundName) {
                 <span class="toggle__cap" />
                 <span class="toggle__text">Системные уведомления</span>
             </label>
+            <label class="toggle">
+                <input v-model="pomodoroSettings.streamerMode" type="checkbox" />
+                <span class="toggle__cap" />
+                <span class="toggle__text">
+                    Режим стримера
+                    <span class="toggle__hint">Не приостанавливать отрисовку, когда окно перекрыто другим. Приложение перезапустится.</span>
+                </span>
+            </label>
         </section>
 
         <section class="group">
@@ -109,6 +117,25 @@ function testSound(s: SoundName) {
                     />
                     <button type="button" class="iconbtn" title="Прослушать"
                         @click="testSound(pomodoroSettings.breakEndSound)">
+                        <Play :size="12" :stroke-width="2" />
+                    </button>
+                </span>
+            </label>
+            <label class="row">
+                <span>Громкость</span>
+                <span class="row__control row__control--volume">
+                    <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        class="volume-slider"
+                        :value="Math.round(pomodoroSettings.ringtoneVolume * 100)"
+                        @input="(e) => (pomodoroSettings.ringtoneVolume = Number((e.target as HTMLInputElement).value) / 100)"
+                    />
+                    <span class="row__unit">{{ Math.round(pomodoroSettings.ringtoneVolume * 100) }}%</span>
+                    <button type="button" class="iconbtn" title="Прослушать"
+                        @click="testSound(pomodoroSettings.workEndSound)">
                         <Play :size="12" :stroke-width="2" />
                     </button>
                 </span>
@@ -218,6 +245,50 @@ function testSound(s: SoundName) {
     min-width: 160px;
 }
 
+/* Volume row растянут — slider занимает основное место. */
+.row__control--volume {
+    flex: 1;
+    min-width: 0;
+    gap: 0.75rem;
+}
+
+.volume-slider {
+    flex: 1;
+    min-width: 0;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: color-mix(in srgb, var(--foreground) 15%, transparent);
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--accent);
+    cursor: pointer;
+    transition: transform 120ms var(--easing-standard);
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+.volume-slider::-webkit-slider-thumb:active {
+    transform: scale(1.25);
+}
+
+.row__control--volume .row__unit {
+    min-width: 40px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
 .iconbtn {
     display: inline-flex;
     align-items: center;
@@ -298,6 +369,15 @@ function testSound(s: SoundName) {
     flex: 1;
     font-size: 0.9375rem;
     color: var(--foreground);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.toggle__hint {
+    font-size: 0.8125rem;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    line-height: 1.35;
 }
 
 .settings__foot {

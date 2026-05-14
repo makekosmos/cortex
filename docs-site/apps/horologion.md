@@ -126,8 +126,9 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 
 ### Settings
 - Длительности (work / short / long), сколько помидорок до длинного.
-- 4 toggle'а: трекать брейки как «Отдых», автостарт work, автостарт break, системные уведомления.
+- 5 toggle'ей: трекать брейки как «Отдых», автостарт work, автостарт break, системные уведомления, режим стримера.
 - Звук конца work и конца break — 4 опции через Web Audio (без файлов): «Колокольчик» / «Перелив» / «Стук» / «Сигнал» + ▶ для прослушивания.
+- Громкость рингтона — slider 0–100%, общий множитель ко всем тонам.
 
 ## Объектная модель в ARK
 
@@ -145,8 +146,8 @@ Settings — **отдельное Electron BrowserWindow** (не модалка,
 
 В Settings:
 - Длительности (work / shortBreak / longBreak / pomodorosUntilLongBreak) — input[type=number] с 2px border, без spin-button'ов.
-- Поведение — toggles (трекать break как «Отдых» / autostart work / autostart break / системные уведомления).
-- Звуки — kepler-visuals `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования.
+- Поведение — toggles (трекать break как «Отдых» / autostart work / autostart break / системные уведомления / режим стримера — отключает паузу рендеринга при перекрытии окна; toggle мирорится из renderer'а в `userData/horologion-settings.json` через IPC `horologion:streamerMode:set`, main применяет `disable-features=CalculateNativeWinOcclusion` + `disable-backgrounding-occluded-windows` ДО `app.whenReady`; на toggle в проде делаем `app.relaunch()`, в деве авто-рестарт пропускаем — `VITE_DEV_SERVER_URL` теряется при self-relaunch).
+- Звуки — kepler-visuals `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования + slider громкости (`pomodoroSettings.ringtoneVolume`, sync'ится через `setVolumeMultiplier` в `lib/sounds.ts`).
 - Reset — кнопка стиля `.pomo__secbtn` в destructive-цвете.
 
 ## Close-to-tray

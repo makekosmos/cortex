@@ -32,6 +32,43 @@ import type {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
+interface HorologionMainSettings {
+  streamerMode?: boolean;
+}
+
+function horologionSettingsFile(): string {
+  return path.join(app.getPath("userData"), "horologion-settings.json");
+}
+
+function readHorologionMainSettings(): HorologionMainSettings {
+  try {
+    const raw = fs.readFileSync(horologionSettingsFile(), "utf-8");
+    return JSON.parse(raw) as HorologionMainSettings;
+  } catch {
+    return {};
+  }
+}
+
+function writeHorologionMainSettings(next: HorologionMainSettings): void {
+  try {
+    fs.writeFileSync(horologionSettingsFile(), JSON.stringify(next));
+  } catch (e) {
+    console.error("[horologion-settings] failed to save:", e);
+  }
+}
+
+// Применяем switches ДО `app.whenReady` — Chromium их читает один раз при инициализации.
+// `CalculateNativeWinOcclusion` определяет, что окно перекрыто другим, и Chromium
+// прекращает рендерить кадры; при стриме это даёт замороженную картинку. Два switch'а
+// вместе гарантируют, что и occlusion detection, и backgrounding отключены.
+{
+  const persisted = readHorologionMainSettings();
+  if (persisted.streamerMode === true) {
+    app.commandLine.appendSwitch("disable-features", "CalculateNativeWinOcclusion");
+    app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+  }
+}
+
 function resolveSidecarPath(): string {
   // Explicit override (test/e2e) wins
   if (process.env.ARK_SIDECAR_PATH && process.env.ARK_SIDECAR_PATH.trim().length > 0) {
@@ -300,6 +337,24 @@ function registerIpc(): void {
   ipcMain.handle("horologion:tasks:list", () => listDelphiTasks());
   ipcMain.handle("horologion:ark:status", (): ArkStatus => arkStatus);
   ipcMain.handle("horologion:settings:open", () => openSettingsWindow());
+  ipcMain.handle(
+    "horologion:streamerMode:set",
+    (_event: IpcMainInvokeEvent, enabled: boolean) => {
+      const current = readHorologionMainSettings();
+      const next = Boolean(enabled);
+      const prev = Boolean(current.streamerMode);
+      if (prev === next) return;
+      writeHorologionMainSettings({ ...current, streamerMode: next });
+      // Chromium switches применяются один раз при инициализации, поэтому
+      // тоггл требует перезапуск процесса. В деве `VITE_DEV_SERVER_URL`
+      // теряется при self-relaunch (его задаёт обёрточный bun-скрипт) — потому
+      // авто-рестарт делаем только в проде.
+      if (!isDev) {
+        app.relaunch();
+        app.exit(0);
+      }
+    },
+  );
 }
 
 // Прогреваем ArkClient при старте окна, чтобы статус становился `connected`
@@ -346,6 +401,7 @@ function openSettingsWindow(): void {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
   settingsWindow = win;
@@ -502,6 +558,7 @@ function createWindow(): void {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
