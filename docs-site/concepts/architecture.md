@@ -132,23 +132,15 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Horologion. Никогда не п
 
 ### SQLite
 
-Одна база на пространство данных (`space`), путь типа `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db` (или `%APPDATA%\Kosmos\ark.db` для usage-tracker и default space, когда никакой `space` не выбран).
+Одна база на юзера — `%APPDATA%\Kosmos\ark.db`. Концепция multi-space убрана 2026-05-15: больше нет welcome screen / space picker, больше нет `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`, больше нет `KOSMOS_DB_PATH` / `selected-space.json`. Все apps (Eden, Delphi, Horologion, Arrancador, usage-tracker, Dashboard) работают на одной DB.
 
 Схема — additive: `init_schema` мигрирует существующие БД на месте через `CREATE TABLE IF NOT EXISTS` без перезаписи файла.
 
+LAN sync namespace = глобальный `kepler-default` (фиксированный `spaceId` в ArkClient / backend `resolve_space_id`). Сменить через env `KOSMOS_SPACE_ID` если требуется изоляция мешей (advanced).
+
 См. [Модель данных ARK](/concepts/ark-objects).
 
-### Selected space DB resolution
-
-kepler-shell спавнит `kepler-backend.exe` с переменной окружения **`KOSMOS_DB_PATH=<spaceDir>/ark.db`**, если выбран space. Резолв:
-
-1. `resolveSpaceDbPath()` в `shell/electron/main.ts` читает `%APPDATA%\Kosmos\selected-space.json` через `readSharedSelectedSpace(baseDir)` из `@kepler/ark`.
-2. Если space выбран — собирает путь `getArkDbPathForSelectedSpace(baseDir, space)` (обычно `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`).
-3. Передаёт в `env.KOSMOS_DB_PATH` при `spawn(kepler-backend.exe)`.
-
-Если selected-space.json отсутствует или повреждён — переменная не выставляется, и `kepler-backend` использует свой default fallback: `%APPDATA%\Kosmos\ark.db`. Так старые установки (без selected space) продолжают работать.
-
-Apps (`@kepler/ark` в kepler-mode) уже не резолвят DB path самостоятельно — они коннектятся к `kepler-backend` по WS из `kepler.lock.json`, а backend владеет путём к SQLite.
+Apps (`@kepler/ark` в kepler-mode) не открывают SQLite напрямую — они коннектятся к `kepler-backend` по WS из `kepler.lock.json`, а backend владеет путём к SQLite.
 
 ## Communication primitives
 

@@ -58,9 +58,10 @@
 - [ ] Renderer не открывает SQLite напрямую.
 - [ ] ARK queries — только через `window.kepler.ark.request(...)`.
 - [ ] Никаких writes в ARK таблицы (Dashboard — read-only inspector).
-- [ ] `@kepler/visuals` через import/alias, не скопирован.
+- [ ] `@kepler/visuals` (`DesktopChrome`, `DesktopContentSurface`) через import/alias, не скопирован.
 - [ ] Tray menu всё ещё содержит «Dashboard» entry.
 - [ ] Закрытие dashboard окна не закрывает Kepler shell.
+- [ ] Hash routing остался `#/dashboard` (без `/welcome` / `/space/<id>` — spaces убраны 2026-05-15).
 
 ## Я правил Horologion extension (`extensions/horologion`)
 

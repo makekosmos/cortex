@@ -1,19 +1,23 @@
 # Dashboard — встроенный ARK browser
 
 ::: tip Источник правды
-`shell/src/views/Dashboard*.vue`, `shell/src/dashboard/`,
-`shell/electron/dashboard-window.ts`
+`shell/src/views/DashboardRoot.vue`, `shell/src/views/DashboardView.vue`,
+`shell/src/dashboard/`, `shell/electron/dashboard-window.ts`
 :::
 
-Dashboard — встроенная часть Kepler shell'а (не extension). Это entry point в
-данные ARK: пользователь видит карточки spaces (welcome screen), кликает
-карточку и попадает в space view — sidebar с object_types + таблица объектов.
+Dashboard — встроенная часть Kepler shell'а (не extension). Read-only
+ARK browser: sidebar с object_types + таблица объектов.
 
-::: info Pivot 2026-05-14
+::: info Pivot 2026-05-14 → 2026-05-15
 До 2026-05-14 Dashboard жил как Vue extension и показывал usage analytics
-(foreground sessions, app ranking и т.п.). По решению пользователя Dashboard
-был переосмыслен как ARK browser и встроен в shell. Старый extension
+(foreground sessions, app ranking и т.п.). По решению пользователя
+переосмыслен как ARK browser и встроен в shell. Старый extension
 заморожен в `legacy/dashboard-extension/`.
+
+2026-05-15 — концепция spaces (welcome screen → space picker → space view)
+убрана. Dashboard сразу открывается на единый список объектов поверх
+одной DB на юзера (`%APPDATA%\Kosmos\ark.db`). См.
+[Архитектура — SQLite](/concepts/architecture#sqlite).
 :::
 
 ## Стек
@@ -22,10 +26,11 @@ Dashboard — встроенная часть Kepler shell'а (не extension). 
   renderer-bundle, что launcher и settings.
 - Runtime: отдельный `BrowserWindow` внутри Kepler main process
   (`shell/electron/dashboard-window.ts`).
-- Routing: hash-based, `#/dashboard/welcome` / `#/dashboard/space/<spaceId>`.
-- Data access: `window.kepler.ark.request(...)` + `window.kepler.spaces.list()`
-  через main process IPC.
-- Shared UI: `@kepler/visuals` (CSS tokens).
+- Routing: hash-based, окно грузится с `#/dashboard` — `DashboardRoot.vue`
+  безусловно рендерит `<DashboardView />`.
+- Data access: `window.kepler.ark.request(...)` через main process IPC.
+- Shared UI: `@kepler/visuals` (`DesktopChrome`, `DesktopContentSurface`,
+  CSS tokens).
 
 ## Структура
 
@@ -33,43 +38,32 @@ Dashboard — встроенная часть Kepler shell'а (не extension). 
 shell/
 ├─ electron/
 │  ├─ dashboard-window.ts        # openDashboardWindow() + window state
-│  ├─ main.ts                    # kepler:spaces:list / kepler:ark:request handlers
-│  ├─ preload.ts                 # window.kepler.{spaces,ark} bridges
+│  ├─ main.ts                    # kepler:ark:request handler
+│  ├─ preload.ts                 # window.kepler.ark bridge
 │  └─ commands.ts                # static `dashboard:open` команда
 └─ src/
    ├─ main.ts                    # hash → root view dispatch
    ├─ views/
-   │  ├─ DashboardRoot.vue       # hash router (welcome / space)
-   │  ├─ DashboardWelcomeView.vue
-   │  └─ DashboardSpaceView.vue
+   │  ├─ DashboardRoot.vue       # wrapper, рендерит DashboardView
+   │  └─ DashboardView.vue       # sidebar + main pane
    └─ dashboard/
       ├─ KosmosLogo.vue          # SVG sphere icon
-      ├─ SpaceCard.vue           # iCloud-style карточка space'а
       ├─ SidebarItem.vue         # row для sidebar
       ├─ ObjectTable.vue         # таблица объектов
       ├─ store.ts                # ref'ы + loaders
-      └─ types.ts                # SpaceMeta, DashboardObjectRow, ...
+      └─ types.ts                # DashboardObjectRow, DashboardObjectType
 ```
 
-## Welcome view
+## Содержимое
 
-- Sphere logo + «Kosmos» текст по центру сверху.
-- Space cards (480×240): header (имя space), counter, footer с relative time +
-  green sync pill + orange label pill.
-- Page footer: copyright + tagline.
-- Click карточки → `window.location.hash = "#/dashboard/space/<id>"`.
-
-## Space view
-
-- Grid 240px sidebar + main pane.
-- Sidebar:
+- Sidebar (240px) внутри `<DesktopChrome>` `#sidebar` slot:
   - «Всё» — load all objects (`list_objects`).
   - «Настройки» — placeholder stub.
   - Группа «Типы» — items per `list_object_types`, dot цвет hashed по type id.
-- Main pane:
-  - Header с current selection label.
-  - `ObjectTable`: sticky-header table с пятью columns —
-    Значение / Тип / Добавлено / Данные X / Данные Y.
+- Main pane (`<DesktopContentSurface>` с `border-left`):
+  - Header с current selection label (имя типа / «Всё» / «Настройки»).
+  - `ObjectTable`: sticky-header table с тремя columns —
+    Значение / Тип / Добавлено.
   - Row click → `console.log` (заглушка под будущий object inspector).
 
 ## Жёсткие правила
@@ -83,8 +77,8 @@ shell/
 - Hardcoded `#hex` цвета только для SidebarItem dot'ов (преднамеренно
   избегаем `var(--accent)` чтобы цвета отличались между типами); остальные
   цвета — `var(--*)` из `@kepler/visuals`.
-- Hash routing внутри dashboard window — без `vue-router`. Один listener на
-  `hashchange` в `DashboardRoot.vue`.
+- Окно использует `<DesktopChrome>` + `<DesktopContentSurface>` из
+  `@kepler/visuals` — не дублируй own chrome.
 - Закрытие dashboard окна **не** закрывает Kepler shell.
 :::
 
@@ -96,14 +90,13 @@ bun run --cwd shell typecheck              # tsc --noEmit
 bun run --cwd shell dev                    # backend + extensions + Kepler renderer
 ```
 
-В dev mode dashboard грузится с `${VITE_DEV_SERVER_URL}#/dashboard/welcome`
+В dev mode dashboard грузится с `${VITE_DEV_SERVER_URL}#/dashboard`
 (тот же renderer-bundle, что launcher).
 
 ## IPC API
 
 | Channel | Direction | Описание |
 |---|---|---|
-| `kepler:spaces:list` | renderer → main | Возвращает `SpaceMeta[]` (scan `%APPDATA%/Kosmos/spaces/<id>/`). |
 | `kepler:ark:request` | renderer → main | Generic ARK RPC bridge — `arkClient.invokeOperation({ operation, ...params })`. |
 
 Открытие окна:

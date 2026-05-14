@@ -77,7 +77,7 @@ bun run ark:smoke
 | **Eden** | `apps/eden/ts` | заметки (Vue + Electron + Heart Rust); standalone до Phase 6 |
 | **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
 | **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
-| **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser (welcome / space view). До 2026-05-14 был extension'ом — заморожен в `legacy/dashboard-extension/`. |
+| **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user. |
 | **Horologion** | `extensions/horologion` | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj` |
 | **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](/concepts/command-bus) + [Extension host](/concepts/extension-host) (Phase 4 ✅: Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier; Dashboard — встроенный shell view). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |

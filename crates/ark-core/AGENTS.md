@@ -223,12 +223,23 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 - ❌ Tauri зависимости / Tauri runtime пути.
 - ❌ React зависимости / React runtime пути.
 
+### Spaces concept
+
+- ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user
+  (`%APPDATA%\Kosmos\ark.db`). Никаких welcome screen / space picker /
+  `KOSMOS_DB_PATH` / `selected-space.json` / `spaces.json`.
+- ❌ Использование `@kepler/ark` selected-space helper'ов
+  (read/write/buildPersonal/getArkDb...) в активном коде. Module
+  deprecated, оставлен только для legacy/dashboard-extension и
+  mobile/delphi миграционных сценариев.
+
 ### Dashboard
 
 - ❌ SQLite open в renderer.
 - ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kepler/ark` через main proxy).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/Dashboard*.vue`), старый код заморожен в `legacy/dashboard-extension/`.
+- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый код заморожен в `legacy/dashboard-extension/`.
+- ❌ Возврат welcome screen с карточками spaces. После 2026-05-15 Dashboard сразу открывается на список объектов — single DB per user.
 
 ### Kepler Shell (launcher)
 

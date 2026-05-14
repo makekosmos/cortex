@@ -107,7 +107,7 @@ bun run ark:smoke
 | **Eden** | `apps/eden/ts` | заметки (Vue + Electron + Heart Rust); standalone до Phase 6 |
 | **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
 | **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
-| **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser (welcome / space view). До 2026-05-14 был extension'ом — заморожен в `legacy/dashboard-extension/`. |
+| **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user. |
 | **Horologion** | `extensions/horologion` | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj` |
 | **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 ✅: Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier; Dashboard — встроенный shell view). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
@@ -211,12 +211,23 @@ bun run ark:smoke
 - ❌ Tauri зависимости / Tauri runtime пути.
 - ❌ React зависимости / React runtime пути.
 
+### Spaces concept
+
+- ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user
+  (`%APPDATA%\Kosmos\ark.db`). Никаких welcome screen / space picker /
+  `KOSMOS_DB_PATH` / `selected-space.json` / `spaces.json`.
+- ❌ Использование `@kepler/ark` selected-space helper'ов
+  (read/write/buildPersonal/getArkDb...) в активном коде. Module
+  deprecated, оставлен только для legacy/dashboard-extension и
+  mobile/delphi миграционных сценариев.
+
 ### Dashboard
 
 - ❌ SQLite open в renderer.
 - ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kepler/ark` через main proxy).
 - ❌ Любые **writes** в ARK таблицы.
-- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/Dashboard*.vue`), старый код заморожен в `legacy/dashboard-extension/`.
+- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый код заморожен в `legacy/dashboard-extension/`.
+- ❌ Возврат welcome screen с карточками spaces. После 2026-05-15 Dashboard сразу открывается на список объектов — single DB per user.
 
 ### Kepler Shell (launcher)
 
@@ -361,9 +372,10 @@ bun run ark:smoke
 - [ ] Renderer не открывает SQLite напрямую.
 - [ ] ARK queries — только через `window.kepler.ark.request(...)`.
 - [ ] Никаких writes в ARK таблицы (Dashboard — read-only inspector).
-- [ ] `@kepler/visuals` через import/alias, не скопирован.
+- [ ] `@kepler/visuals` (`DesktopChrome`, `DesktopContentSurface`) через import/alias, не скопирован.
 - [ ] Tray menu всё ещё содержит «Dashboard» entry.
 - [ ] Закрытие dashboard окна не закрывает Kepler shell.
+- [ ] Hash routing остался `#/dashboard` (без `/welcome` / `/space/<id>` — spaces убраны 2026-05-15).
 
 ## Я правил Horologion extension (`extensions/horologion`)
 
