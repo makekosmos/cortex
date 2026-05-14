@@ -20,8 +20,8 @@ pre-commit:
       glob: "apps/eden/ts/heart/**/*.rs"
       run: cd apps/eden/ts/heart && cargo fmt --check
     ark-core-rust:
-      glob: "packages/ark-core/rust/**/*.rs"
-      run: cd packages/ark-core/rust && cargo check --quiet
+      glob: "crates/ark-core/rust/**/*.rs"
+      run: cd crates/ark-core/rust && cargo check --quiet
     typecheck-delphi:
       glob: "apps/delphi/ts/**/*.{ts,tsx}"
       run: cd apps/delphi/ts && bunx tsc --noEmit
@@ -30,7 +30,7 @@ pre-commit:
       run: cd apps/eden/ts && bunx tsc --noEmit
     docs-sync:
       glob: "docs-site/**/*.md"
-      run: bun run docs:sync && git add AGENTS.md CLAUDE.md apps/*/AGENTS.md apps/*/*/AGENTS.md packages/ark-core/AGENTS.md services/usage-tracker/AGENTS.md docs-site/public/llms.txt
+      run: bun run docs:sync && git add AGENTS.md CLAUDE.md apps/*/AGENTS.md apps/*/*/AGENTS.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md services/usage-tracker/AGENTS.md docs-site/public/llms.txt
     docs-check:
       glob: "docs-site/**/*.md"
       run: bun run docs:check
@@ -42,8 +42,8 @@ pre-push:
       glob: "apps/delphi/ts/**/*"
       run: cd apps/delphi/ts && bun run test
     test-ark-core:
-      glob: "packages/ark-core/rust/**/*.rs"
-      run: cd packages/ark-core/rust && cargo test --quiet
+      glob: "crates/ark-core/rust/**/*.rs"
+      run: cd crates/ark-core/rust && cargo test --quiet
     test-eden-heart:
       glob: "apps/eden/ts/heart/**/*"
       run: cd apps/eden/ts/heart && cargo test

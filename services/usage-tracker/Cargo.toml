@@ -5,7 +5,7 @@ edition = "2021"
 description = "Windows foreground usage tracker that writes directly into Ark DB"
 
 [dependencies]
-ark-core = { path = "../../packages/ark-core/rust" }
+ark-core = { path = "../../crates/ark-core/rust" }
 chrono = "0.4"
 hostname = "0.4"
 rusqlite = { version = "0.32", features = ["bundled"] }

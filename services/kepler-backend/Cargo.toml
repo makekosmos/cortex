@@ -13,7 +13,7 @@ name = "kepler-backend"
 path = "src/main.rs"
 
 [dependencies]
-ark-core = { path = "../../packages/ark-core/rust" }
+ark-core = { path = "../../crates/ark-core/rust" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 tokio = { version = "1", features = [
   "rt-multi-thread",

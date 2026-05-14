@@ -7,7 +7,7 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "build:backend": "cargo build --release --manifest-path ../services/kepler-backend/Cargo.toml --bin kepler-backend && cargo build --release --manifest-path ../packages/ark-core/rust/Cargo.toml --bin ark-core-rpc",
+    "build:backend": "cargo build --release --manifest-path ../services/kepler-backend/Cargo.toml --bin kepler-backend && cargo build --release --manifest-path ../crates/ark-core/rust/Cargo.toml --bin ark-core-rpc",
     "build:backend:dev": "cargo build --manifest-path ../services/kepler-backend/Cargo.toml --bin kepler-backend",
     "build:extensions": "node -e \"import('./vite.extensions.config.mjs').then(async (m)=>{const {execSync}=await import('node:child_process');for(const id of m.vueExtensions){console.log('[build:extensions]',id);execSync('vite build --configLoader native --config vite.extensions.config.mjs --mode '+id,{stdio:'inherit'});}if(m.vueExtensions.length===0)console.log('[build:extensions] no Vue extensions to build (only static PoCs present) — skipping');})\"",
     "dev:extensions": "node scripts/dev-extensions.mjs",
@@ -62,7 +62,7 @@
         "to": "kepler-backend.exe"
       },
       {
-        "from": "../packages/ark-core/rust/target/release/ark-core-rpc.exe",
+        "from": "../crates/ark-core/rust/target/release/ark-core-rpc.exe",
         "to": "ark-core-rpc.exe"
       },
       {

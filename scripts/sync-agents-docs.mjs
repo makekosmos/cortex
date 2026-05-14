@@ -204,7 +204,7 @@ const TARGETS = [
   // Android-only (Kotlin Room provider)
   { dest: "mobile/delphi/AGENTS.md", src: "apps/delphi.md", title: "Delphi — Kotlin workspace" },
   // packages / services
-  { dest: "packages/ark-core/AGENTS.md", src: "packages/ark-core.md", title: "ark-core" },
+  { dest: "crates/ark-core/AGENTS.md", src: "packages/ark-core.md", title: "ark-core" },
   { dest: "services/usage-tracker/AGENTS.md", src: "services/usage-tracker.md", title: "usage-tracker" },
 ];
 
