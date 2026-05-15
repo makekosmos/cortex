@@ -19,6 +19,9 @@
     "package:dir": "bun run build:js && electron-builder --dir",
     "ext:install": "node scripts/install-extension.mjs",
     "ext:uninstall": "node scripts/uninstall-extension.mjs",
+    "ext:publish": "node scripts/publish-extension.mjs",
+    "ext:publish-all": "node scripts/publish-extension.mjs --all",
+    "ext:catalog": "node scripts/generate-catalog.mjs",
     "test:e2e": "bun run build:js && playwright test --config playwright.config.ts",
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },
