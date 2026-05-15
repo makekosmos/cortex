@@ -42,6 +42,19 @@ const api: KeplerApi = {
       return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
     },
   },
+  extension: {
+    installPreview: (sourcePath) =>
+      ipcRenderer.invoke("kepler:extension:install:preview", sourcePath),
+    installDo: (sourcePath) =>
+      ipcRenderer.invoke("kepler:extension:install:do", sourcePath),
+    installedList: () =>
+      ipcRenderer.invoke("kepler:extension:installed:list"),
+    revert: (id, timestamp) =>
+      ipcRenderer.invoke("kepler:extension:revert", id, timestamp),
+    backupsList: (id) =>
+      ipcRenderer.invoke("kepler:extension:backups:list", id),
+    uninstall: (id) => ipcRenderer.invoke("kepler:extension:uninstall", id),
+  },
   settings: {
     open: () => ipcRenderer.invoke("kepler:settings:open"),
     close: () => ipcRenderer.invoke("kepler:settings:close"),

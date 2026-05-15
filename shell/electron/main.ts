@@ -50,6 +50,10 @@ import { openExtension, setExtensionArkBridge } from "./extension-host";
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import { openSettings } from "./settings-window";
 import { openDashboardWindow } from "./dashboard-window";
+import {
+  findKextInArgv,
+  openInstallExtensionWindow,
+} from "./install-extension-window";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,7 +86,15 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
-app.on("second-instance", () => {
+app.on("second-instance", (_event, argv) => {
+  // Если второй instance запустился с .kext в argv (file association /
+  // повторный запуск через CLI) — форвардим в running instance, открываем
+  // install dialog и НЕ показываем launcher.
+  const kext = findKextInArgv(argv);
+  if (kext) {
+    openInstallExtensionWindow(kext);
+    return;
+  }
   showLauncher();
 });
 
@@ -617,6 +629,14 @@ app.whenReady().then(async () => {
   createTray();
 
   void initArkClient();
+
+  // Если процесс был запущен с .kext в argv (file association / CLI) —
+  // открываем install dialog сразу после whenReady. Launcher остаётся
+  // hidden (default behavior); пользователь видит только install dialog.
+  const initialKext = findKextInArgv(process.argv);
+  if (initialKext) {
+    openInstallExtensionWindow(initialKext);
+  }
 
   // BENCHMARK: KEPLER_BENCHMARK_OPEN_ALL=1 → автоматически открыть все
   // мигрированные extensions для RAM-измерения. После warmup 5s.

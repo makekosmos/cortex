@@ -14,6 +14,12 @@ const hash = window.location.hash;
 
 function rootView() {
   if (hash.startsWith("#settings")) return SettingsView;
+  if (hash.startsWith("#install-extension")) {
+    const InstallExtensionView = defineAsyncComponent(
+      () => import("./views/InstallExtensionView.vue"),
+    );
+    return InstallExtensionView;
+  }
   if (hash.startsWith("#/dashboard")) {
     // Async — dashboard views и их деревья не нужны для launcher / settings окон.
     const DashboardRoot = defineAsyncComponent(

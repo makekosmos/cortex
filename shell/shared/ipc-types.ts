@@ -32,6 +32,38 @@ export interface SpaceMeta {
   isSelected: boolean;
 }
 
+/**
+ * Manifest preview данные для install dialog'а (.kext / dir).
+ * Соответствует `KextManifestPreview` из `shell/electron/extension-installer.ts`.
+ */
+export interface ExtensionInstallPreview {
+  manifest: {
+    id: string;
+    name: string;
+    version?: string;
+    description?: string;
+    author?: string;
+    permissions?: string[];
+    keplerApiVersion?: string;
+    icon?: string;
+  };
+  iconDataUri: string | null;
+  apiCompatError: string | null;
+  isUpgrade: boolean;
+  currentVersion: string | null;
+}
+
+export interface InstalledExtensionInfo {
+  id: string;
+  name: string;
+  version: string | null;
+  description: string | null;
+  author: string | null;
+  iconDataUri: string | null;
+  backupCount: number;
+  backupTimestamps: string[];
+}
+
 /** Команда в launcher'е — единица того что пользователь может вызвать. */
 export interface CommandRecord {
   id: string;
@@ -96,6 +128,23 @@ export interface KeplerApi {
         новые команды или вышла из эфира). Колбэк вызывается без аргументов —
         renderer'у следует заново вызвать list(). */
     onUpdated(listener: () => void): () => void;
+  };
+
+  /** Управление установкой / список / revert user-extensions. */
+  extension: {
+    /** Прочитать manifest preview из .kext или dir без extract'а. */
+    installPreview(sourcePath: string): Promise<ExtensionInstallPreview>;
+    /** Выполнить установку .kext / dir в `extensions/<id>/` с backup'ом. */
+    installDo(sourcePath: string): Promise<ExtensionInstallPreview>;
+    /** Список installed user-extensions с metadata. */
+    installedList(): Promise<InstalledExtensionInfo[]>;
+    /** Восстановить extension из backup'а. timestamp опционален — без него
+        берётся самый свежий. Возвращает true если revert удался. */
+    revert(id: string, timestamp?: string): Promise<boolean>;
+    /** Список ISO-timestamp'ов доступных backup'ов для id (свежие первыми). */
+    backupsList(id: string): Promise<string[]>;
+    /** Удалить user copy extension'а. */
+    uninstall(id: string): Promise<boolean>;
   };
 
   /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,
