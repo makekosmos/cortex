@@ -90,6 +90,14 @@
       "target": "nsis",
       "signAndEditExecutable": false
     },
+    "fileAssociations": [
+      {
+        "ext": "kext",
+        "name": "Kepler Extension Package",
+        "description": "Установочный пакет расширения Kepler",
+        "role": "Editor"
+      }
+    ],
     "nsis": {
       "oneClick": true,
       "perMachine": false,
