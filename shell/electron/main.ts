@@ -44,7 +44,7 @@ import type {
   SearchResult,
 } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
-import { setExtensionArkBridge } from "./extension-host";
+import { openExtension, setExtensionArkBridge } from "./extension-host";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import { openSettings } from "./settings-window";
@@ -604,8 +604,7 @@ app.whenReady().then(async () => {
   // BENCHMARK: KEPLER_BENCHMARK_OPEN_ALL=1 → автоматически открыть все
   // мигрированные extensions для RAM-измерения. После warmup 5s.
   if (process.env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
-    setTimeout(async () => {
-      const { openExtension } = await import("./extension-host");
+    setTimeout(() => {
       for (const id of ["horologion", "delphi", "arrancador"]) {
         try { openExtension(id); } catch (e) { console.error(`bench open ${id} failed:`, e); }
       }

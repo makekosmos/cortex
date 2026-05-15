@@ -5,8 +5,7 @@
 // Action-commands (Pomodoro start, create note и т.п.) приходят dynamic от
 // running extension'ов через kepler-backend command bus.
 
-import "./extension-host";
-import { extensionIconDataUri } from "./extension-host";
+import { extensionIconDataUri, openExtension } from "./extension-host";
 import { openDashboardWindow } from "./dashboard-window";
 
 import { spawn } from "node:child_process";
@@ -57,8 +56,7 @@ function openAppExe(appLower: string): void {
   spawn(exe, [], { detached: true, stdio: "ignore" }).unref();
 }
 
-async function openAsExtension(id: string): Promise<void> {
-  const { openExtension } = await import("./extension-host");
+function openAsExtension(id: string): void {
   openExtension(id);
 }
 
