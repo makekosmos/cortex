@@ -67,6 +67,34 @@ playwright test
 эту переменную для всех specs и явно отказывается принимать путь внутри
 `%APPDATA%`.
 
+## Dev mode изоляция
+
+`bun run --cwd shell dev` **не пишет** в `%APPDATA%\Kosmos\` — он
+использует `%APPDATA%\Kosmos-dev\` (отдельная директория). Это
+гарантирует, что разработка / эксперименты с кодом не повреждают данные,
+которые видит production install.
+
+Resolution chain в `shell/electron/data-dir.ts` `keplerDataDir()`:
+
+1. `KOSMOS_DATA_DIR` env (если set) — absolute path. Используется для
+   Playwright e2e (test isolation).
+2. `VITE_DEV_SERVER_URL` set (`bun run --cwd shell dev` через Vite) →
+   `<appData>\Kosmos-dev`.
+3. Иначе (production install): `<appData>\Kosmos`.
+
+Shell спавнит kepler-backend с `KOSMOS_DATA_DIR=<resolved>` env, чтобы
+shell и backend смотрели на один dir. Все hardcoded `path.join(appData,
+"Kosmos")` в shell заменены вызовом `keplerDataDir()`.
+
+**Миграция существующих dev данных** (опционально):
+
+```powershell
+Copy-Item -Recurse "$env:APPDATA\Kosmos" "$env:APPDATA\Kosmos-dev"
+```
+
+После этого dev mode подхватит ту же DB. Production install продолжит
+видеть оригинал.
+
 ### Через CLI-флаг
 
 ```powershell

@@ -198,6 +198,8 @@ bun x tsc --noEmit
 - ❌ Запуск Playwright против user vault Eden.
 - ❌ Указывать тестам `KOSMOS_DATA_DIR` равным `%APPDATA%\Kosmos\` (real user data). Backend поддерживает `KOSMOS_DATA_DIR` override именно чтобы тесты могли подсунуть свой dir под `tests/.e2e/<spec>/`. Helper `tests/e2e/helpers/launch.ts` явно отказывается принимать путь внутри `%APPDATA%`.
 - ❌ Запускать Playwright без `KOSMOS_DATA_DIR` override — тогда backend упадёт в user data dir.
+- ❌ Хардкодить `path.join(appData, "Kosmos", ...)` в shell или extension main process. Используй `keplerDataDir()` из `shell/electron/data-dir.ts` — он сам разрешает между production (`Kosmos`), dev (`Kosmos-dev`) и test (`KOSMOS_DATA_DIR` env). Иначе dev/test изоляция тихо ломается.
+- ❌ Включать `bun run --cwd shell dev` в production install path или launcher для конечного юзера. Dev mode пишет в `Kosmos-dev/`, а production install — в `Kosmos/`. Путать их → разные данные у разработчика и установленного приложения.
 
 ## Proof loop
 
