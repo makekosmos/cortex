@@ -69,11 +69,21 @@ function asObject(value: JsonValue | undefined): Record<string, JsonValue> {
 
 function objectToTimeEntry(obj: ArkObjectRecord): TimeEntry {
   const props = asObject(obj.propsJson);
+  // Запись считается валидной только если props.startedAt — non-empty string.
+  // Раньше fallback на obj.createdAt маскировал orphan entries (props пуст,
+  // createdAt всё равно есть → entry «running вечно»). StopwatchView'овский
+  // filter `Boolean(e.startedAt)` после такого fallback'а проходил насквозь.
+  const rawStarted = props.startedAt;
+  const startedAt =
+    typeof rawStarted === "string" && rawStarted.length > 0 ? rawStarted : "";
+  const rawEnded = props.endedAt;
+  const endedAt =
+    typeof rawEnded === "string" && rawEnded.length > 0 ? rawEnded : null;
   return {
     id: obj.id,
     title: obj.title ?? "",
-    startedAt: String(props.startedAt ?? obj.createdAt),
-    endedAt: (props.endedAt as string | null | undefined) ?? null,
+    startedAt,
+    endedAt,
     source: (props.source as TimeEntry["source"]) ?? "manual",
     billable: Boolean(props.billable ?? false),
     tagIds: [],
@@ -92,7 +102,10 @@ async function listTimeEntries(): Promise<TimeEntry[]> {
 
 async function listRunning(): Promise<TimeEntry[]> {
   const all = await listTimeEntries();
-  return all.filter((e) => !e.endedAt);
+  // Кроме «endedAt пуст» — обязательно есть startedAt. Без него entry —
+  // orphan от старого state, его не надо считать running'ом (иначе ломается
+  // StopwatchView tick: new Date("") = Invalid Date → NaN на каждом тике).
+  return all.filter((e) => Boolean(e.startedAt) && !e.endedAt);
 }
 
 function makeId(): string {
