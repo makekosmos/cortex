@@ -36,7 +36,12 @@ interface BackendState {
   isPaused: boolean;
   title?: string;
   tasks?: Array<{ id: string; title: string }>;
+  /** Wallclock (Unix ms) когда фаза кончится; null/undefined когда idle/paused. */
+  phaseEndsAtMs?: number | null;
 }
+
+/** Smooth local interpolation cadence — 30fps достаточно для глаза, дешёво для CPU. */
+const INTERP_INTERVAL_MS = 33;
 
 interface KeplerArk {
   request: <T = unknown>(operation: string, params?: Record<string, unknown>) => Promise<T>;
@@ -61,16 +66,51 @@ function createSessionState() {
   const currentEntryId = ref<string | null>(null);
   const lastContext = ref<PhaseContext | null>(null);
 
+  // Wallclock anchor для local interpolation. `null` ⇒ idle/paused,
+  // remainingMs управляется server'ом напрямую.
+  let phaseEndsAtMs: number | null = null;
+  let interpTimer: ReturnType<typeof setInterval> | null = null;
+
   let initialised = false;
   let unsubFns: Array<() => void> = [];
 
+  function recomputeFromAnchor(): void {
+    if (phaseEndsAtMs == null) return;
+    const next = Math.max(0, phaseEndsAtMs - Date.now());
+    if (remainingMs.value !== next) remainingMs.value = next;
+  }
+
+  function ensureInterpTimer(): void {
+    if (interpTimer != null) return;
+    interpTimer = setInterval(recomputeFromAnchor, INTERP_INTERVAL_MS);
+  }
+
+  function clearInterpTimer(): void {
+    if (interpTimer != null) {
+      clearInterval(interpTimer);
+      interpTimer = null;
+    }
+  }
+
   function applyState(s: BackendState): void {
     phase.value = s.phase;
-    remainingMs.value = s.remainingMs;
     totalMs.value = s.totalMs;
     completedPomodoros.value = s.completedPomodoros;
     isRunning.value = s.isRunning;
     isPaused.value = s.isPaused;
+
+    const anchor = s.phaseEndsAtMs ?? null;
+    if (anchor != null && s.isRunning && !s.isPaused) {
+      // Running phase → setup wallclock anchor; локальный interval двигает remainingMs.
+      phaseEndsAtMs = anchor;
+      remainingMs.value = Math.max(0, anchor - Date.now());
+      ensureInterpTimer();
+    } else {
+      // Idle / paused / finished — server-driven remainingMs (frozen / 0).
+      phaseEndsAtMs = null;
+      clearInterpTimer();
+      remainingMs.value = s.remainingMs;
+    }
   }
 
   async function createArkEntry(p: PomodoroPhase, ctx: PhaseContext): Promise<string | null> {
@@ -244,6 +284,8 @@ function createSessionState() {
       try { u(); } catch { /* ignore */ }
     }
     unsubFns = [];
+    clearInterpTimer();
+    phaseEndsAtMs = null;
     initialised = false;
   }
 
