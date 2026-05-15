@@ -163,6 +163,15 @@ export async function ensureKeplerRunning(
 }
 
 export function resolveLockPath(appDataPath: string): string {
+  // KOSMOS_DATA_DIR env override полностью замещает базовый data dir —
+  // backend пишет lock-файл туда же (см. services/kepler-backend/src/lock_file.rs
+  // kosmos_data_dir() helper). e2e тестам это обязательно — иначе ensureKepler
+  // искал бы lock в %APPDATA%/Kosmos/ и говорил «not-installed» даже когда
+  // backend running под тестовым dir'ом.
+  const override = process.env.KOSMOS_DATA_DIR;
+  if (override && override.length > 0) {
+    return path.join(override, KEPLER_LOCK_FILENAME);
+  }
   return path.join(getKosmosDataDir(appDataPath), KEPLER_LOCK_FILENAME);
 }
 

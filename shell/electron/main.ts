@@ -88,18 +88,26 @@ app.on("second-instance", () => {
 // --- backend spawn -----------------------------------------------------------
 
 function resolveBackendExe(): string {
-  if (isDev) {
-    const dev = path.resolve(
-      __dirname,
-      "../../target/debug/kepler-backend.exe",
-    );
-    if (existsSync(dev)) return dev;
-    const devRelease = path.resolve(
-      __dirname,
-      "../../target/release/kepler-backend.exe",
-    );
-    if (existsSync(devRelease)) return devRelease;
-  }
+  // Override через env — нужен для e2e тестов (Playwright spawns Electron
+  // напрямую, в этом случае process.resourcesPath указывает на electron's
+  // own resources, а не на нашу dist).
+  const fromEnv = process.env.KEPLER_BACKEND_EXE;
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+
+  // Try dev paths first regardless of isDev — Playwright тесты не выставляют
+  // VITE_DEV_SERVER_URL, но cargo build выкладывает binary в target/{debug,release}/
+  // как при dev так и при first-time test run.
+  const devDebug = path.resolve(
+    __dirname,
+    "../../target/debug/kepler-backend.exe",
+  );
+  if (existsSync(devDebug)) return devDebug;
+  const devRelease = path.resolve(
+    __dirname,
+    "../../target/release/kepler-backend.exe",
+  );
+  if (existsSync(devRelease)) return devRelease;
+
   // production: рядом с упакованным приложением (extraResources)
   return path.join(process.resourcesPath ?? __dirname, "kepler-backend.exe");
 }
@@ -636,10 +644,25 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  // не выходим — Kepler tray-resident; закрытие окна только hide
+  // Test mode (KOSMOS_TEST_MODE=1, выставляется tests/e2e/helpers/launch.ts):
+  // выходим, чтобы Playwright app.close() не висел до timeout — обычное
+  // behaviour Kepler'а — tray-resident, не quit'ить, но в тестах окна
+  // не закрываются (launcher hidden default'ом), и quit нужен.
+  if (process.env.KOSMOS_TEST_MODE === "1") {
+    app.quit();
+  }
+  // иначе не выходим — Kepler tray-resident; закрытие окна только hide
+});
+
+// Любой источник app.quit() (Playwright, programmatic, signals) должен
+// взвести isQuiting — иначе mainWindow.close handler делает preventDefault
+// (тarayresident-режим) и quit блокируется.
+app.on("before-quit", () => {
+  isQuiting = true;
 });
 
 app.on("will-quit", () => {
+  console.error("[kepler-shell] will-quit: starting cleanup");
   globalShortcut.unregisterAll();
   setExtensionArkBridge({ request: null, subscribe: null });
   if (windowStateSaveTimer) {
@@ -648,7 +671,21 @@ app.on("will-quit", () => {
     saveWindowStateNow();
   }
   if (backendProc && !backendProc.killed) {
+    console.error(`[kepler-shell] will-quit: killing backend pid=${backendProc.pid}`);
+    // SIGTERM на Windows = TerminateProcess. На некоторых случаях не убивает
+    // grandchild ark-core-rpc — но shell больше не отвечает за это.
     backendProc.kill();
   }
+  // ArkClient WebSocket keeps event loop alive — закрываем явно чтобы
+  // Electron мог exit без timeout (test mode особенно чувствителен).
+  if (arkClient) {
+    try {
+      void arkClient.stop();
+    } catch (e) {
+      console.error("[kepler-shell] arkClient stop error:", e);
+    }
+    arkClient = null;
+  }
+  console.error("[kepler-shell] will-quit: cleanup done");
 });
 
