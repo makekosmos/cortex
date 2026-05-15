@@ -1,5 +1,6 @@
 pub mod beacon;
 pub mod db;
+pub mod delphi;
 pub mod events;
 pub mod ffi;
 pub mod hlc;
