@@ -26,6 +26,22 @@ fn bench_single_tick(c: &mut Criterion) {
     });
 }
 
+/// Snapshot-only bench — отдельно от tick(). Wave 3 переносит UI smoothness
+/// на renderer-side interpolation, backend тикает 1 Hz и в основном
+/// нагрузка приходится на `snapshot()` под broadcast'ом. Должен быть
+/// заведомо <100ns (никакой алокации в hot path кроме clone'ов
+/// `last_config.title`/`tasks` — обычно пустые).
+fn bench_snapshot_only(c: &mut Criterion) {
+    c.bench_function("pomodoro_session_snapshot_only", |b| {
+        let clock = Arc::new(MockClock::new(0));
+        let mut session = Session::new(clock);
+        session.start(SessionConfig::default());
+        b.iter(|| {
+            black_box(session.snapshot());
+        });
+    });
+}
+
 fn bench_lifecycle(c: &mut Criterion) {
     c.bench_function("pomodoro_session_full_work_phase_1500_ticks", |b| {
         b.iter(|| {
@@ -42,5 +58,5 @@ fn bench_lifecycle(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_single_tick, bench_lifecycle);
+criterion_group!(benches, bench_single_tick, bench_lifecycle, bench_snapshot_only);
 criterion_main!(benches);

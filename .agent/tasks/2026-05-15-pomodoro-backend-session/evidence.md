@@ -156,3 +156,121 @@ ef9b7cb  test(e2e): pomodoro session переживает renderer reload + tick
 
 Нет. Все 7 коммитов локально, не pushed. Не использованы `--no-verify` /
 `--no-edit` / push --force.
+
+---
+
+## Wave 3 follow-up: phaseEndsAtMs tech debt closed
+
+Date: 2026-05-15
+Branch: main (всё ещё не pushed)
+
+### Контекст
+
+Wave 2 поднял backend ticker до 250 ms потому что renderer'у нужны были
+частые snapshots чтобы UI заметно «тикал». Это antipattern — backend
+тратил 4× больше CPU/WS frames чем нужно лишь ради smooth UI.
+
+Правильное решение: backend кладёт `phaseEndsAtMs` (Unix ms wallclock)
+в snapshot/events; renderer интерполирует
+`remainingMs = max(0, phaseEndsAtMs - Date.now())` локально каждые
+~33 ms (30 fps); backend тикает 1 Hz keep-alive для consistency
+`is_running` / `completed_pomodoros` и доставки `phase_changed` /
+`finished` событий.
+
+### Acceptance criteria
+
+| AC  | Описание | Статус |
+|-----|----------|--------|
+| AC1 | `SessionState.phase_ends_at_ms: Option<u64>` (`Some` когда running && !paused; `None` иначе). `remaining_ms` остаётся в snapshot для paused/idle. | **PASS** — `crates/ark-core/rust/src/pomodoro/session.rs` (см. impl + 4 новых unit-теста). |
+| AC2 | Backend ticker → 1 Hz. `horologion-pomodoro.spec.ts` продолжает PASS. | **PASS** — `services/kepler-backend/src/pomodoro_host.rs::ticker_loop` (`Duration::from_secs(1)`); Playwright spec ✓ (10s). |
+| AC3 | Renderer `usePomodoroSession.ts` интерполирует remainingMs локально (33 ms timer, server-driven fallback на null anchor, pause→freeze, resume→new anchor). | **PASS** — `extensions/horologion/src/lib/usePomodoroSession.ts` (`applyState` + `recomputeFromAnchor`). |
+| AC4 | Rust unit-тесты на `phase_ends_at_ms` Some/None branches. | **PASS** — 4 новых теста: `snapshot_phase_ends_at_ms_some_when_running`, `_none_when_paused`, `_none_when_idle`, `_updates_on_resume`. Всего 16 unit-тестов в `pomodoro::session::tests`. |
+| AC5 | TS coverage interpolation поведения. | **PASS** — `extensions/horologion/tests/usePomodoroSession.test.ts` (4 теста). Существующий `usePomodoro.test.ts` (11 тестов) оставлен для deprecated impl. |
+| AC6 | `pomodoro-persistence.spec.ts` PASS — backend 1Hz survives renderer close. | **PASS** — 13.5s, time decreases ≥3s между close/reopen. |
+| AC7 | `horologion-pomodoro.spec.ts` PASS — UI ticks visibly через local interpolation, не backend tick rate. | **PASS** — 10.0s. |
+| AC8 | Bench `Session::snapshot()` отдельно, <100ns. | **PASS** — **13.75 ns** (см. raw ниже). |
+| AC9 | Все 14 Playwright PASS. | **PASS** — 14/14 (1.7m). |
+
+**Все 9 AC = PASS.**
+
+### Raw evidence (Wave 3)
+
+#### cargo test (Phase C1)
+
+```
+running 16 tests
+test pomodoro::session::tests::snapshot_phase_ends_at_ms_some_when_running ... ok
+test pomodoro::session::tests::snapshot_phase_ends_at_ms_none_when_paused ... ok
+test pomodoro::session::tests::snapshot_phase_ends_at_ms_none_when_idle ... ok
+test pomodoro::session::tests::snapshot_phase_ends_at_ms_updates_on_resume ... ok
+... (12 baseline tests)
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured
+```
+
+#### cargo test --lib (Phase C2 — kepler-backend)
+
+```
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+```
+
+#### bun test (Phase C4)
+
+```
+tests\usePomodoro.test.ts (11 pass)
+tests\usePomodoroSession.test.ts (4 pass)
+Ran 15 tests across 2 files. [425.00ms]
+```
+
+#### Playwright (Phase C4)
+
+```
+Running 14 tests using 1 worker
+
+[1/14] tests\e2e\delphi-persistence.spec.ts
+[2/14] tests\e2e\delphi-tasks.spec.ts
+[3/14] tests\e2e\delphi.spec.ts
+[4/14] tests\e2e\extension-ark-bridge.spec.ts
+[5/14] tests\e2e\horologion-persistence.spec.ts (pomodoro entry)
+[6/14] tests\e2e\horologion-persistence.spec.ts (stopwatch entry)
+[7/14] tests\e2e\horologion-persistence.spec.ts (mode hint)
+[8/14] tests\e2e\horologion-pomodoro.spec.ts
+[9/14] tests\e2e\horologion-stopwatch.spec.ts
+[10/14] tests\e2e\horologion-toggle-hide.spec.ts
+[11/14] tests\e2e\horologion.spec.ts
+[12/14] tests\e2e\launcher.spec.ts (launcher up)
+[13/14] tests\e2e\launcher.spec.ts (single window)
+[14/14] tests\e2e\pomodoro-persistence.spec.ts
+
+  14 passed (1.7m)
+```
+
+#### cargo bench (Phase C5, --quick)
+
+```
+pomodoro_session_tick_single
+    time:   [15.852 ns 15.906 ns 16.122 ns]
+pomodoro_session_full_work_phase_1500_ticks
+    time:   [39.744 µs 41.012 µs 41.329 µs]
+pomodoro_session_snapshot_only
+    time:   [13.646 ns 13.751 ns 14.175 ns]
+```
+
+`snapshot()` в isolation — **13.75 ns** (далеко <100 ns target).
+`tick() + snapshot()` — **15.9 ns**. На 1Hz ticker'е cost полностью
+поглощается одним WS frame'ом — backend overhead negligible.
+
+### Wave 3 commits
+
+```
+cc2256e  feat(ark-core): SessionState.phase_ends_at_ms — backend wallclock anchor для renderer interpolation
+b999270  feat(kepler-backend): pomodoro ticker 250ms → 1s, events include phaseEndsAtMs
+d5c38cc  feat(horologion): usePomodoroSession интерполирует remainingMs локально по phaseEndsAtMs
+3fa7811  test(horologion): coverage phaseEndsAtMs interpolation в usePomodoroSession
+<this>   docs: phaseEndsAtMs wave 3 follow-up evidence
+```
+
+### Wave 3 open blockers
+
+Нет. 5 коммитов локально, не pushed. Никаких `--no-verify` / `--no-edit` /
+`push --force`. Pre-Wave 3 решение из Wave 2 (250ms ticker) полностью
+отменено — backend снова 1 Hz, UI smoothness через renderer interpolation.
