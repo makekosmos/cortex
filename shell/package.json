@@ -26,6 +26,7 @@
     "@kepler/ark": "workspace:*",
     "@kepler/visuals": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
+    "electron-updater": "^6.3.9",
     "lucide-vue-next": "^0.548.0",
     "tailwindcss": "^4.1.16",
     "vue": "^3.6.0-beta.9"
@@ -52,6 +53,14 @@
       "output": "release",
       "buildResources": "build"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "yoso-industries",
+        "repo": "kepler-releases",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*"
@@ -64,21 +73,6 @@
       {
         "from": "../target/release/ark-core-rpc.exe",
         "to": "ark-core-rpc.exe"
-      },
-      {
-        "from": "../extensions",
-        "to": "extensions",
-        "filter": [
-          "**/manifest.json",
-          "**/icon.png",
-          "**/index.html",
-          "**/dist/**",
-          "!**/node_modules/**",
-          "!**/src/**",
-          "!**/vite.config.mjs",
-          "!**/package.json",
-          "!**/tsconfig*.json"
-        ]
       },
       {
         "from": "build/icon.png",
