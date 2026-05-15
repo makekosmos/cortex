@@ -1,7 +1,7 @@
 {
   "name": "kepler-shell",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Kepler — Electron host для Kosmos ecosystem (global launcher + extension host)",
   "author": "Kazui",
   "type": "module",
@@ -14,7 +14,7 @@
     "dev:kepler": "node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--configLoader','native'],{stdio:'inherit',shell:true,env:process.env});\"",
     "dev": "bun run build:backend:dev && bun run build:extensions && vite --configLoader native",
     "build:js": "tsc && vite build --configLoader native && bun run build:extensions",
-    "build": "bun run build:backend && bun run build:js && electron-builder --win nsis",
+    "build": "bun run build:backend && bun run build:js && electron-builder --win nsis --publish always",
     "typecheck": "tsc --noEmit",
     "package:dir": "bun run build:js && electron-builder --dir",
     "ext:install": "node scripts/install-extension.mjs",
@@ -83,7 +83,7 @@
       }
     ],
     "win": {
-      "icon": "build/icon.ico",
+      "icon": "build/icon.png",
       "target": "nsis",
       "signAndEditExecutable": false
     },
