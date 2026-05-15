@@ -391,8 +391,13 @@ async function initArkClient(): Promise<void> {
     // kepler-shell сам спавнит kepler-backend выше (spawnBackend), здесь
     // только ждём lock-файл и коннектимся через WS. autoLaunch=false — повторно
     // не запускаем.
+    // Передаём dataDir явно — в shell main process env KOSMOS_DATA_DIR
+    // не set (мы его выставляем только для backend child в spawnBackend).
+    // Без этого resolveLockPath fallback'ил к %APPDATA%/Kosmos/ и не
+    // находил lock в Kosmos-dev/ (dev mode) — отсюда «ArkClient not ready».
     const state = await ensureKeplerRunning({
       appDataPath: app.getPath("appData"),
+      dataDir: keplerDataDir(),
       waitMs: 10000,
       autoLaunch: false,
     });

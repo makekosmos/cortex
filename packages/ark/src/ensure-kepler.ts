@@ -61,6 +61,14 @@ export interface EnsureKeplerOptions {
   conventionalPaths?: string[];
   /** Авто-запуск Kepler если установлен но не запущен. Default true. */
   autoLaunch?: boolean;
+  /**
+   * Прямой override базового data dir (где живёт kepler.lock.json).
+   * Используется shell'ом при dev/test mode чтобы lock-файл искался под
+   * %APPDATA%/Kosmos-dev/ или tests/.e2e/<slug>/ соответственно. Если не
+   * задан — fallback к process.env.KOSMOS_DATA_DIR, затем к
+   * getKosmosDataDir(appDataPath).
+   */
+  dataDir?: string;
 }
 
 /**
@@ -73,7 +81,9 @@ export async function ensureKeplerRunning(
   const clientMajor = opts.clientProtocolMajor ?? 1;
   const autoLaunch = opts.autoLaunch ?? true;
 
-  const lockPath = resolveLockPath(opts.appDataPath);
+  const lockPath = opts.dataDir
+    ? path.join(opts.dataDir, KEPLER_LOCK_FILENAME)
+    : resolveLockPath(opts.appDataPath);
 
   // 1. Существующий live lock?
   const existing = readLockIfAlive(lockPath);
