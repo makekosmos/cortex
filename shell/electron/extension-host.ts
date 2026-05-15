@@ -43,6 +43,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
+import {
+  installFromPath,
+  listInstalledUserExtensions,
+  previewSource,
+  revertExtension,
+  listBackups,
+  uninstallExtension,
+} from "./extension-installer";
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles.
 const __filename = fileURLToPath(import.meta.url);
@@ -912,3 +920,53 @@ ipcMain.handle(
     writeFileSync(filePath, content, "utf8");
   },
 );
+
+// ---------------------------------------------------------------------------
+// IPC: .kext install / preview / list / revert / uninstall
+// ---------------------------------------------------------------------------
+//
+// Используется install dialog (`#install-extension`) + Settings → Расширения.
+// install:preview — читает .kext без extract'а, возвращает manifest preview;
+// install:do — собственно установка с backup'ом;
+// list — installed user-extensions для Settings UI;
+// revert — восстановить из backup'а;
+// uninstall — удалить user copy.
+
+ipcMain.handle("kepler:extension:install:preview", (_e, sourcePath: string) => {
+  if (typeof sourcePath !== "string") {
+    throw new Error("install:preview: sourcePath must be a string");
+  }
+  return previewSource(sourcePath);
+});
+
+ipcMain.handle("kepler:extension:install:do", (_e, sourcePath: string) => {
+  if (typeof sourcePath !== "string") {
+    throw new Error("install:do: sourcePath must be a string");
+  }
+  return installFromPath(sourcePath);
+});
+
+ipcMain.handle("kepler:extension:installed:list", () =>
+  listInstalledUserExtensions(),
+);
+
+ipcMain.handle("kepler:extension:revert", (_e, id: string, timestamp?: string) => {
+  if (typeof id !== "string") {
+    throw new Error("revert: id must be a string");
+  }
+  return revertExtension(id, timestamp);
+});
+
+ipcMain.handle("kepler:extension:backups:list", (_e, id: string) => {
+  if (typeof id !== "string") {
+    throw new Error("backups:list: id must be a string");
+  }
+  return listBackups(id);
+});
+
+ipcMain.handle("kepler:extension:uninstall", (_e, id: string) => {
+  if (typeof id !== "string") {
+    throw new Error("uninstall: id must be a string");
+  }
+  return uninstallExtension(id);
+});
