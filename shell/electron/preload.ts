@@ -54,6 +54,10 @@ const api: KeplerApi = {
     backupsList: (id) =>
       ipcRenderer.invoke("kepler:extension:backups:list", id),
     uninstall: (id) => ipcRenderer.invoke("kepler:extension:uninstall", id),
+    catalogFetch: (force) =>
+      ipcRenderer.invoke("kepler:extension:catalog:fetch", force),
+    installFromUrl: (url, expectedSha256) =>
+      ipcRenderer.invoke("kepler:extension:install:fromUrl", url, expectedSha256),
   },
   settings: {
     open: () => ipcRenderer.invoke("kepler:settings:open"),

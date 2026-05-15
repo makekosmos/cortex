@@ -51,6 +51,7 @@ import { openExtension, setExtensionArkBridge } from "./extension-host";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import { openSettings } from "./settings-window";
+import { registerMarketplaceIpc } from "./extension-marketplace";
 import { openDashboardWindow } from "./dashboard-window";
 import {
   findKextInArgv,
@@ -677,6 +678,7 @@ app.whenReady().then(async () => {
 
   void initArkClient();
 
+  registerMarketplaceIpc();
   setupAutoUpdater();
 
   // Если процесс был запущен с .kext в argv (file association / CLI) —

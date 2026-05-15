@@ -53,6 +53,27 @@ export interface ExtensionInstallPreview {
   currentVersion: string | null;
 }
 
+/** Marketplace catalog entry — соответствует `CatalogExtension` из
+    `shell/electron/extension-marketplace.ts`. */
+export interface MarketplaceExtension {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  version: string;
+  keplerApiVersion: string;
+  iconUrl: string | null;
+  downloadUrl: string;
+  sha256: string | null;
+  size: number | null;
+}
+
+export interface MarketplaceCatalog {
+  schemaVersion: number;
+  updatedAt: string;
+  extensions: MarketplaceExtension[];
+}
+
 export interface InstalledExtensionInfo {
   id: string;
   name: string;
@@ -145,6 +166,15 @@ export interface KeplerApi {
     backupsList(id: string): Promise<string[]>;
     /** Удалить user copy extension'а. */
     uninstall(id: string): Promise<boolean>;
+    /** Marketplace: получить catalog.json из kosmos-extensions. Cache 1h в
+        main; `force=true` обходит cache. */
+    catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
+    /** Скачать .kext по URL и установить через existing installFromPath.
+        Validate sha256 если передан. */
+    installFromUrl(
+      url: string,
+      expectedSha256?: string | null,
+    ): Promise<ExtensionInstallPreview>;
   };
 
   /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,
