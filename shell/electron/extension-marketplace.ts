@@ -169,6 +169,29 @@ export async function installFromUrl(
 }
 
 let registered = false;
+let periodicTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Стартует фоновый перефетч catalog.json каждые 24h. Cache TTL fetchCatalog —
+ * 1h, поэтому если юзер открывает Settings часто, периодический check не
+ * мешает. Цель: чтобы Settings → Маркетплейс badge сразу был актуален даже
+ * на свежем старте launcher'а.
+ */
+export function startPeriodicCatalogCheck(): void {
+  if (periodicTimer) return;
+  // initial fetch на старте (не блокирующий)
+  fetchCatalog(false).catch((e) =>
+    console.error("[marketplace] initial catalog fetch failed:", e),
+  );
+  periodicTimer = setInterval(
+    () => {
+      fetchCatalog(true).catch((e) =>
+        console.error("[marketplace] periodic catalog fetch failed:", e),
+      );
+    },
+    24 * 60 * 60 * 1000,
+  );
+}
 
 export function registerMarketplaceIpc(): void {
   if (registered) return;

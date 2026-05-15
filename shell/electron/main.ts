@@ -51,7 +51,10 @@ import { openExtension, setExtensionArkBridge } from "./extension-host";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import { openSettings } from "./settings-window";
-import { registerMarketplaceIpc } from "./extension-marketplace";
+import {
+  registerMarketplaceIpc,
+  startPeriodicCatalogCheck,
+} from "./extension-marketplace";
 import { openDashboardWindow } from "./dashboard-window";
 import {
   findKextInArgv,
@@ -680,6 +683,10 @@ app.whenReady().then(async () => {
 
   registerMarketplaceIpc();
   setupAutoUpdater();
+  // Skip periodic в test mode чтобы Playwright не делал HTTPS вызовов.
+  if (process.env.KOSMOS_TEST_MODE !== "1") {
+    startPeriodicCatalogCheck();
+  }
 
   // Если процесс был запущен с .kext в argv (file association / CLI) —
   // открываем install dialog сразу после whenReady. Launcher остаётся
