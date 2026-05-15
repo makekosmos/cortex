@@ -17,6 +17,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::ark_host::ArkHost;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
+use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
 
 /// Закрывающие коды (соответствуют codes в hello-error response).
@@ -170,6 +171,7 @@ pub struct WsServer {
     ark_host: Arc<ArkHost>,
     auth_token: Arc<String>,
     command_bus: Arc<CommandBus>,
+    pomodoro_host: Arc<PomodoroHost>,
     next_client_id: Arc<AtomicU64>,
 }
 
@@ -183,6 +185,7 @@ impl WsServer {
             ark_host,
             auth_token: Arc::new(auth_token),
             command_bus: Arc::new(CommandBus::new()),
+            pomodoro_host: PomodoroHost::new(),
             next_client_id: Arc::new(AtomicU64::new(1)),
         })
     }
@@ -206,9 +209,12 @@ impl WsServer {
             let ark_host = self.ark_host.clone();
             let token = self.auth_token.clone();
             let bus = self.command_bus.clone();
+            let pomo = self.pomodoro_host.clone();
             let client_id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
             tokio::spawn(async move {
-                if let Err(e) = handle_connection(stream, ark_host, token, bus, client_id).await {
+                if let Err(e) =
+                    handle_connection(stream, ark_host, token, bus, pomo, client_id).await
+                {
                     eprintln!("[kepler.ws] connection error: {e}");
                 }
             });
@@ -221,6 +227,7 @@ async fn handle_connection(
     ark_host: Arc<ArkHost>,
     expected_token: Arc<String>,
     command_bus: Arc<CommandBus>,
+    pomodoro_host: Arc<PomodoroHost>,
     client_id: ClientId,
 ) -> Result<(), WsServerError> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
@@ -286,6 +293,7 @@ async fn handle_connection(
     // CommandBus, в ark_host не уходят.
 
     let mut bus_rx = command_bus.subscribe();
+    let mut pomo_rx = pomodoro_host.subscribe();
 
     loop {
         tokio::select! {
@@ -317,6 +325,19 @@ async fn handle_connection(
                         // Resubscribe-friendly: drop the lagged event, continue.
                         continue;
                     }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+
+            // 2a'. Pomodoro events → forward as wire-formatted JSON.
+            pevt = pomo_rx.recv() => {
+                match pevt {
+                    Ok(payload) => {
+                        if sink.send(Message::Text(payload.to_string())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
@@ -390,6 +411,25 @@ async fn handle_connection(
                     if !has_req_id_field {
                         map.remove("id");
                     }
+                }
+
+                // Intercept pomodoro.* — обрабатываем локально через PomodoroHost.
+                if let Some(rest) = operation.strip_prefix("pomodoro.") {
+                    let resp = handle_pomodoro_op(rest, params, &pomodoro_host).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
                 }
 
                 // Intercept commands.* — обрабатываем локально.
