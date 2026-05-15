@@ -234,11 +234,51 @@ async function arkListTasks(): Promise<TodoItem[]> {
     : [];
 }
 
+// task_obj не сидится в crates/ark-core (builtin types — note/game/time_entry/tag).
+// Поэтому при первом upsert задачи в extension'е мы получим FK constraint:
+// objects.type_id → object_types.id. Регистрируем task_obj лениво один раз
+// перед первым upsert. Идемпотентно — backend сам merge'ает если уже есть.
+let taskObjectTypeReady: Promise<void> | null = null;
+
+function ensureTaskObjectTypeRegistered(ark: KeplerArk): Promise<void> {
+  if (taskObjectTypeReady) return taskObjectTypeReady;
+  const now = isoNow();
+  taskObjectTypeReady = ark
+    .request("upsert_object_type", {
+      object_type: {
+        id: DELPHI_TASK_OBJECT_TYPE_ID,
+        name: "Задача",
+        schemaJson: "{}",
+        uiSchemaJson: "{}",
+        systemLocked: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+    })
+    .then(() => undefined)
+    .catch((err) => {
+      // Reset чтобы повторить попытку на следующем upsert (backend мог быть
+      // not ready). Логируем один раз — иначе спам в консоли.
+      taskObjectTypeReady = null;
+      // eslint-disable-next-line no-console
+      console.warn("[delphi-extension] task_obj type register failed:", err);
+      throw err;
+    });
+  return taskObjectTypeReady;
+}
+
 async function arkUpsertTask(todo: TodoItem): Promise<boolean> {
   const ark = kepler();
   if (!ark) return false;
-  await ark.request("upsert_object", { object: todoToArkTaskObject(todo) });
-  return true;
+  try {
+    await ensureTaskObjectTypeRegistered(ark);
+    await ark.request("upsert_object", { object: todoToArkTaskObject(todo) });
+    return true;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[delphi-extension] arkUpsertTask failed:", err);
+    return false;
+  }
 }
 
 async function arkDeleteTask(id: string): Promise<boolean> {
