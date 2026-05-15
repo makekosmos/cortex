@@ -20,11 +20,13 @@ export default defineConfig({
         },
         // vite-plugin-electron/simple форсит inlineDynamicImports: true,
         // что несовместимо с multi-input. Перебиваем через nested vite-config.
+        // `codeSplitting: true` — новый API (rolldown), подавляет deprecation
+        // warning про `inlineDynamicImports`.
         vite: {
           build: {
             rolldownOptions: {
               output: {
-                inlineDynamicImports: false,
+                codeSplitting: true,
               },
             },
           },
