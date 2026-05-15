@@ -33,7 +33,7 @@
                        │
                        ↓ GitHub-hosted, public
 ┌──────────────────────────────────────────────────────────────────┐
-│ github.com/ksanrse/kepler-releases (PUBLIC)                       │
+│ github.com/yoso-industries/kepler-releases (PUBLIC)                       │
 │  Releases:                                                        │
 │   v0.1.0/                                                         │
 │     Kepler-Setup-0.1.0.exe   ← installer (lean: shell + ark only) │
@@ -48,7 +48,7 @@
 │     autoUpdater.checkForUpdatesAndNotify()  ← kepler-releases     │
 │     setInterval(check, 6h)                                        │
 │   Settings → Extensions → Marketplace:                            │
-│     fetch https://raw.githubusercontent.com/ksanrse/              │
+│     fetch https://raw.githubusercontent.com/yoso-industries/              │
 │       kosmos-extensions/main/catalog.json                         │
 │     show grid: Horologion, Делphi, Arrancador, ...                │
 │     [Install] → download .kext from kosmos-extensions release     │
@@ -57,7 +57,7 @@
                        ↑
                        │ HTTPS pull
 ┌──────────────────────────────────────────────────────────────────┐
-│ github.com/ksanrse/kosmos-extensions (PUBLIC, RAYCAST-STYLE)      │
+│ github.com/yoso-industries/kosmos-extensions (PUBLIC, RAYCAST-STYLE)      │
 │  catalog.json              ← auto-generated на каждом publish     │
 │  extensions/               ← metadata + README + icon per ext      │
 │    horologion/{manifest.json, icon.png, README.md}                │
@@ -76,7 +76,7 @@
 
 | # | Решение | Value |
 |---|---|---|
-| 1 | Owner | `ksanrse` |
+| 1 | Owner | `yoso-industries` (GitHub organization; commits всё ещё под `ksanrse` user) |
 | 2 | Repo names | `kepler-releases` + `kosmos-extensions` |
 | 3 | Visibility | оба public |
 | 4 | autoUpdater interval | start-up + 6h |
@@ -89,13 +89,13 @@
 
 ### Phase A — Kepler launcher distribution
 
-- **AC1**: `github.com/ksanrse/kepler-releases` создан, public, пустой.
+- **AC1**: `github.com/yoso-industries/kepler-releases` создан, public, пустой.
 - **AC2**: `shell/package.json` build config:
   ```json
   "build": {
     "publish": [{
       "provider": "github",
-      "owner": "ksanrse",
+      "owner": "yoso-industries",
       "repo": "kepler-releases",
       "releaseType": "release"
     }],
@@ -130,7 +130,7 @@
 
 ### Phase C — Kosmos extensions marketplace repo
 
-- **AC9**: `github.com/ksanrse/kosmos-extensions` создан, public, пустой.
+- **AC9**: `github.com/yoso-industries/kosmos-extensions` создан, public, пустой.
 - **AC10**: Initial commit в `kosmos-extensions` через `ext:publish-all`:
   - `README.md` с submission guide.
   - `extensions/<id>/` папки с manifest.json + README.md + icon.png — копии из
@@ -147,7 +147,7 @@
   2. vite build extension → dist/
   3. zip into <id>-<version>.kext (используя shell/scripts/zip-utils.mjs from .kext infra)
   4. Compute SHA-256 hash.
-  5. gh release create <id>-v<version> -R ksanrse/kosmos-extensions <id>-<version>.kext
+  5. gh release create <id>-v<version> -R yoso-industries/kosmos-extensions <id>-<version>.kext
   6. Re-generate catalog.json (см. AC12) → commit + push в kosmos-extensions.
   ```
 - **AC12**: `shell/scripts/generate-catalog.mjs`:
@@ -164,11 +164,11 @@
           "id": "horologion",
           "name": "Horologion",
           "description": "...",
-          "author": "ksanrse",
+          "author": "yoso-industries",
           "version": "0.3.0",
           "keplerApiVersion": "^1.0.0",
-          "iconUrl": "https://raw.githubusercontent.com/ksanrse/kosmos-extensions/main/extensions/horologion/icon.png",
-          "downloadUrl": "https://github.com/ksanrse/kosmos-extensions/releases/download/horologion-v0.3.0/horologion-0.3.0.kext",
+          "iconUrl": "https://raw.githubusercontent.com/yoso-industries/kosmos-extensions/main/extensions/horologion/icon.png",
+          "downloadUrl": "https://github.com/yoso-industries/kosmos-extensions/releases/download/horologion-v0.3.0/horologion-0.3.0.kext",
           "sha256": "abc123..."
         }
       ]
@@ -185,7 +185,7 @@
   - Subtab **«Маркетплейс»** (NEW): fetch catalog, render grid из extension cards
     (icon, name, version, description, [Install]/[Update]/[Installed] state).
 - **AC16**: IPC `kepler:extension:catalog:fetch()` в main — реальный HTTPS call к
-  `https://raw.githubusercontent.com/ksanrse/kosmos-extensions/main/catalog.json`,
+  `https://raw.githubusercontent.com/yoso-industries/kosmos-extensions/main/catalog.json`,
   cache 1 hour в memory. Force-refresh button — re-fetch.
 - **AC17**: `kepler:extension:install:fromUrl(url)` — download .kext from URL в
   tmp, validate sha256 против catalog'ового, потом передать в existing
@@ -261,8 +261,8 @@ E. (manual verification) on second machine — install Kepler → marketplace
 
 ## Pre-execution checklist (user side)
 
-1. [ ] Создать публичный `github.com/ksanrse/kepler-releases` (пустой).
-2. [ ] Создать публичный `github.com/ksanrse/kosmos-extensions` (пустой).
+1. [ ] Создать публичный `github.com/yoso-industries/kepler-releases` (пустой).
+2. [ ] Создать публичный `github.com/yoso-industries/kosmos-extensions` (пустой).
 3. [ ] GH PAT с `public_repo` scope (один token на оба repo).
 4. [ ] `$env:GH_TOKEN = "ghp_..."` (или `setx GH_TOKEN ...` permanent).
 5. [ ] `gh` CLI установлен и `gh auth login` сделан (используется в
