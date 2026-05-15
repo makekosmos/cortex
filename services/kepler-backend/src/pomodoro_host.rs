@@ -3,9 +3,13 @@
 // сериализуются и форвардятся всем connected WS-клиентам через broadcast.
 //
 // Wire format flat (см. запреты forbidden.md: никаких nested {kind,type,payload}):
-//   {"event":"pomodoro_tick", "phase":"work", "remainingMs":..., ...state}
+//   {"event":"pomodoro_tick", "phase":"work", "remainingMs":..., "phaseEndsAtMs":<unix ms|null>, ...state}
 //   {"event":"pomodoro_phase_changed", "from":"work", "to":"shortBreak", ...state}
 //   {"event":"pomodoro_finished", "finished":"work", ...state}
+//
+// `phaseEndsAtMs` — wallclock end of current phase (`Some` только когда
+// running && !paused). Renderer интерполирует remainingMs локально по
+// этому полю — backend тикает 1 Hz и UI smoothness не зависит от tick rate.
 //
 // ARK ops dispatched в ws_server (см. handle_pomodoro_op):
 //   pomodoro.start { config }
@@ -116,6 +120,8 @@ fn state_to_value(s: &ark_core::pomodoro::SessionState) -> Value {
         "isPaused": s.is_paused,
         "title": s.title,
         "tasks": s.tasks,
+        // null когда idle/paused — renderer падает на server-provided remainingMs.
+        "phaseEndsAtMs": s.phase_ends_at_ms,
     })
 }
 
@@ -163,10 +169,12 @@ fn merge_state(v: &mut Value, state: &ark_core::pomodoro::SessionState) {
 }
 
 async fn ticker_loop(session: Arc<Mutex<Session>>) {
-    // 250ms — parity с TS setInterval(..., 250) в legacy usePomodoro. Ниже —
-    // overkill (ws traffic), выше — UI заметно лагает в e2e тестах которые
-    // ожидают first-tick в 1500ms окне.
-    let mut interval = tokio::time::interval(Duration::from_millis(250));
+    // 1 Hz — keep-alive ticker. UI smoothness даёт renderer'овская
+    // интерполяция по `phaseEndsAtMs`; backend нужен лишь для:
+    //   * consistency `is_running` / `completed_pomodoros` после phase boundary,
+    //   * delivery `pomodoro_phase_changed` / `pomodoro_finished` events,
+    //   * sync state когда renderer закрыт.
+    let mut interval = tokio::time::interval(Duration::from_secs(1));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         interval.tick().await;
