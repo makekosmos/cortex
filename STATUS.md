@@ -1,6 +1,6 @@
-# Kosmos — статус проекта (2026-05-14)
+# Kosmos — статус проекта (2026-05-15)
 
-Итог архитектурного pivot'а от standalone Electron-апок к Kepler-host архитектуре с Vue extensions. Замигрированы 4 из 5 апок (Eden намеренно отложен).
+Итог архитектурного pivot'а от standalone Electron-апок к Kepler-host архитектуре с Vue extensions. Замигрированы 4 из 5 апок (Eden намеренно отложен). После 2026-05-15: концепция spaces убрана (single DB per user), Dashboard встроен в shell, e2e Playwright suite зелёный.
 
 ## Архитектура
 
@@ -8,8 +8,8 @@
 Kepler.exe (Electron host)
   ├─ launcher window (Ctrl+Shift+K, fixed 720×460, acrylic)
   ├─ settings window (tray menu)
+  ├─ Dashboard window (embedded shell view — read-only ARK browser)
   ├─ extension-host
-  │   ├─ extensions/dashboard/   (Vue bundle inside Kepler)
   │   ├─ extensions/horologion/  (Vue bundle inside Kepler)
   │   ├─ extensions/delphi/      (Vue bundle inside Kepler)
   │   └─ extensions/arrancador/  (Vue bundle inside Kepler)
@@ -32,7 +32,20 @@ Eden.exe — остаётся standalone Electron + общий backend чере�
 | Visuals (CSS tokens + Vue components) | `@kepler/visuals` |
 | Backend binary | `kepler-backend.exe` |
 
-`%APPDATA%\Kosmos\` — все user data (ark.db, lock-файлы, settings). `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db` — actual per-space DB.
+## Изоляция data dir (3 уровня)
+
+| Когда | Где live ark.db |
+|---|---|
+| **Production install** (NSIS) | `%APPDATA%\Kosmos\` |
+| **Dev** (`bun run --cwd shell dev`) | `%APPDATA%\Kosmos-dev\` — отдельная от prod |
+| **Test** (Playwright e2e) | `tests/.e2e/<slug>/` — fresh per spec |
+
+Resolution в `shell/electron/data-dir.ts` `keplerDataDir()`:
+1. `KOSMOS_DATA_DIR` env (test) → absolute path
+2. `VITE_DEV_SERVER_URL` set (dev) → `Kosmos-dev`
+3. иначе (prod) → `Kosmos`
+
+Backend получает `KOSMOS_DATA_DIR=<resolved>` env при spawn'е. См. `docs-site/concepts/test-isolation.md` и `docs-site/agents/forbidden.md`.
 
 ## ✅ Сделано
 
@@ -116,11 +129,34 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 
 ### Documentation
 
-- `docs-site/concepts/`: architecture, command-bus, extension-host, extension-dev-mode, ram-benchmarks, sync, ark-objects, write-boundary.
+- `docs-site/concepts/`: architecture, command-bus, extension-host, extension-dev-mode, ram-benchmarks, sync, ark-objects, write-boundary, test-isolation.
 - `docs-site/apps/`: kepler, kepler-roadmap, horologion, delphi, dashboard, arrancador.
 - `docs-site/packages/`: kosmos-ark (с Commands API), kosmos-visuals, ark-core.
 - `docs-site/reference/`: commands, rules, decisions, smoke-matrix.
 - `docs-site/agents/`: index, checklists, forbidden, docs-maintenance.
+
+### Phase 10 — Post-migration stabilization (2026-05-15)
+
+Серия багов после Phase 4 (Vue extensions). См. `.agent/tasks/2026-05-15-post-migration-fixes/{spec,evidence}.md` для proof loop.
+
+- **Drop spaces concept** (single DB per user) — welcome screen и space-picker убраны. Dashboard сразу открывается на список объектов. Делphi shim emits stub `KEPLERDEFAULT` чтобы не показывать SpaceSetup modal.
+- **Master bug — `missing field 'id'`** (`services/kepler-backend/src/ws_server.rs`): backend strip'ил `id` из params как envelope id, ломал `get_object`/`delete_object`/`upsert_object` с top-level id. Fix: чтит `_req_id` для envelope, оставляет `id` нетронутым. Это разблокировало все extension CRUD.
+- **Extension ARK bridge ready-gate** — `kepler:extension:ark:request` ждёт arkClient connect (15s timeout) вместо мгновенного throw. См. commit fdfc8d4.
+- **Делphi task persistence** — lazy ensure `task_obj` object_type перед первым upsert. FK constraint failed → silent swallow в `.catch()` → задача жила in-memory. Fix: registered + warn вместо silent.
+- **Horologion orphan filter + DesktopChrome titlebar + transitionend** — несколько мелких фиксов параллельно (mode-toggle hide, orphan time_entries, animation jank).
+- **Dev mode data isolation** — `keplerDataDir()` returns `Kosmos-dev` в dev, `Kosmos` в prod, `KOSMOS_DATA_DIR` override в test. shell+backend смотрят на один dir.
+
+### Phase 10 — Playwright e2e infrastructure
+
+`tests/e2e/` — 13 specs, single worker, isolated DB per spec под `tests/.e2e/<slug>/`. Helper `tests/e2e/helpers/launch.ts` refuses paths inside `%APPDATA%`. Backend читает `KOSMOS_DATA_DIR` env override.
+
+```powershell
+bun run test:e2e            # full suite (~1.5min, 13/13 PASS)
+bun run test:e2e:headed     # visible Electron
+bunx playwright test --list # parse-check
+```
+
+Покрытие: launcher boot, Делphi sidebar + tasks + persistence, Horologion stopwatch/pomodoro/persistence/toggle-hide, extension ARK bridge ready race.
 
 ### Migration scripts
 
