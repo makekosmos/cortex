@@ -7,6 +7,7 @@ pub mod hlc;
 pub mod host;
 pub mod mesh;
 pub mod net;
+pub mod pomodoro;
 pub mod protocol;
 pub mod relay_sync;
 pub mod relay_transport;
