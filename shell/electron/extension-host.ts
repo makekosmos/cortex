@@ -42,6 +42,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
+import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles.
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +53,35 @@ export type ExtensionKind = "vue" | "static";
 export interface ExtensionManifest {
   id: string;
   name: string;
+  /**
+   * Собственная версия extension'а (semver `MAJOR.MINOR.PATCH`). Показывается
+   * в UI install dialog'а и Settings → Расширения. Используется backup-системой
+   * (`extensions-backups/<id>/<timestamp>/`) для отката на прошлую версию.
+   */
+  version?: string;
+  /**
+   * Краткое описание extension'а (одна строка). Показывается в install dialog.
+   */
+  description?: string;
+  /**
+   * Автор / организация. Только информационно — code-signing нет.
+   */
+  author?: string;
+  /**
+   * Декларируемые permissions. Сейчас только документационно: показываются
+   * в install dialog, но runtime не enforce'ит — extension получает полный
+   * `window.kepler.*` API. Зарезервировано на будущее (capability model).
+   */
+  permissions?: string[];
+  /**
+   * Semver-range той версии Kepler API, на которой extension работает.
+   * Например `"^1.0.0"` — accept любые 1.x.y версии, отвергнуть 2.0.0.
+   * Если поле отсутствует — extension считается legacy и грузится без
+   * проверки (warning в console). Рекомендуется всегда указывать.
+   *
+   * См. [`KEPLER_API_VERSION`](./kepler-api.ts) — текущая версия shell'а.
+   */
+  keplerApiVersion?: string;
   kind?: ExtensionKind;
   entryHtml: string;
   /**
@@ -373,6 +403,85 @@ function resolveEntryHtml(
   return path.join(extensionDir, manifest.entryHtml);
 }
 
+/**
+ * Проверяет совместимость extension'а с текущей Kepler API версией. Если
+ * `manifest.keplerApiVersion` указан и НЕ удовлетворяет current API version —
+ * возвращает строку-причину; иначе null (всё ОК).
+ *
+ * Если поле отсутствует — считается legacy: вернёт null + warn в console.
+ */
+export function checkApiCompat(manifest: ExtensionManifest): string | null {
+  if (!manifest.keplerApiVersion) {
+    console.warn(
+      `[kepler-shell] extension '${manifest.id}' has no keplerApiVersion — ` +
+        `loading anyway (legacy). Add "keplerApiVersion": "^${KEPLER_API_VERSION}" в manifest.`,
+    );
+    return null;
+  }
+  if (satisfiesSemver(KEPLER_API_VERSION, manifest.keplerApiVersion)) {
+    return null;
+  }
+  return (
+    `Расширение «${manifest.name}» несовместимо с этим Kepler. ` +
+    `Требуется Kepler API ${manifest.keplerApiVersion}, установлено ${KEPLER_API_VERSION}. ` +
+    `Обновите расширение (новый .kext).`
+  );
+}
+
+function openIncompatibilityWindow(manifest: ExtensionManifest, reason: string): void {
+  const html = `<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>Расширение несовместимо — ${escapeHtml(manifest.name)}</title>
+  <style>
+    :root { color-scheme: dark; }
+    html,body { margin:0; padding:0; height:100%; background:#1a1a1a; color:#e6e6e6;
+      font: 13px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+    .wrap { padding: 28px 32px; max-width: 520px; margin: 0 auto; }
+    h1 { font-size: 16px; font-weight: 600; margin: 0 0 12px; color: #ff9b8a; }
+    p { margin: 0 0 12px; color: #cfcfcf; }
+    code { background: #2a2a2a; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+    button { margin-top: 14px; background:#2d2d2d; border:1px solid #3d3d3d; color:#e6e6e6;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; font: inherit; }
+    button:hover { background:#383838; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Расширение несовместимо</h1>
+    <p>${escapeHtml(reason)}</p>
+    <p><strong>ID:</strong> <code>${escapeHtml(manifest.id)}</code></p>
+    <p><strong>Версия расширения:</strong> <code>${escapeHtml(manifest.version ?? "не указана")}</code></p>
+    <button onclick="window.close()">Закрыть</button>
+  </div>
+</body>
+</html>`;
+  const win = new BrowserWindow({
+    width: 560,
+    height: 320,
+    title: `Расширение несовместимо — ${manifest.name}`,
+    backgroundColor: "#1a1a1a",
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export function openExtension(id: string): void {
   const existing = extensionWindows.get(id);
   if (existing && !existing.win.isDestroyed()) {
@@ -382,6 +491,14 @@ export function openExtension(id: string): void {
   const manifest = loadExtensionManifest(id);
   if (!manifest) {
     console.warn(`[kepler-shell] extension not found: ${id}`);
+    return;
+  }
+  // Kepler API compat check ДО window create — несовместимые extension'ы
+  // не должны получать live preload bridge (могут сломать инвариант API).
+  const incompat = checkApiCompat(manifest);
+  if (incompat) {
+    console.error(`[kepler-shell] ${incompat}`);
+    openIncompatibilityWindow(manifest, incompat);
     return;
   }
   const extensionDir = resolveExtensionDir(id);
