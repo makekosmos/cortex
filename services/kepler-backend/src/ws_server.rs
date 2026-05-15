@@ -351,10 +351,22 @@ async fn handle_connection(
                     }
                 };
 
-                let req_id = value
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                // Envelope-id: SDK шлёт `_req_id` (новое), legacy clients — `id`.
+                // КРИТИЧНО: если есть `_req_id`, payload-поле `id` оставляем как
+                // есть — оно принадлежит операции (get_object {id}, delete_object {id}
+                // и т.п.). Иначе serde в ark-core-rpc отвалится с "missing field `id`".
+                let has_req_id_field = value.get("_req_id").and_then(|v| v.as_str()).is_some();
+                let req_id = if has_req_id_field {
+                    value
+                        .get("_req_id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                } else {
+                    value
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                };
                 let operation = match value.get("operation").and_then(|v| v.as_str()) {
                     Some(op) => op.to_string(),
                     None => {
@@ -368,11 +380,16 @@ async fn handle_connection(
                     }
                 };
 
-                // Передаём всё кроме `id` и `operation` в params.
+                // Передаём всё кроме envelope-полей и `operation` в params. Когда
+                // envelope-id живёт в `_req_id`, payload `id` НЕ трогаем — это
+                // legitimate поле операции.
                 let mut params = value.clone();
                 if let Some(map) = params.as_object_mut() {
-                    map.remove("id");
+                    map.remove("_req_id");
                     map.remove("operation");
+                    if !has_req_id_field {
+                        map.remove("id");
+                    }
                 }
 
                 // Intercept commands.* — обрабатываем локально.
