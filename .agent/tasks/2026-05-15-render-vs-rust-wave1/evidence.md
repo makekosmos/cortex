@@ -71,32 +71,52 @@ Workaround variants:
 
 ## Архитектурное заключение
 
-**Migration этого particular module — НЕ автоматически выигрыш.**
+**Этот замер — опровержение гипотезы «Rust быстрее, поэтому надо
+мигрировать compute».** Для pure array transforms V8 за 20 лет научился
+hidden classes + inline caching + escape analysis — JIT компилит hot
+loops почти в нативку. Эквивалентный Rust на cloned()-heavy filter не
+обыгрывает. Плюс транспортный налог (JSON serialize × 2 + WS frame +
+TCP loopback) ≈ 1 мс per round-trip — окупается только когда Rust-сторона
+делает СИЛЬНО больше работы (SQLite pushdown), или избегает гонять
+данные туда-сюда вовсе (persistent state, events).
 
-V8 на pure-function filter работает sub-millisecond на 10K items.
-Round-trip через WS IPC будет 1-5 ms сам по себе (serialize TodoItem[] →
-WS frame → deserialize → SQLite query → serialize result → frame →
-deserialize). Поэтому даже идеальный Rust filter overall **проиграет**
-текущему TS pure-function call.
+### Куда мигрировать имеет смысл (Wave 2+)
 
-Где этот port имеет смысл:
-1. **SQLite-backed**: фильтрация ИЗ DB без round-trip за всеми rows.
-   `tasks::list_by_smart_list(view)` запрос делает `SELECT ... WHERE
-   predicate ORDER BY ...` напрямую — wins на больших inbox'ах когда
-   нужно показать только первые 50 / paginated.
-2. **Backend internal use**: usage_tracker / Pomodoro / sync — может
-   запрашивать filtered tasks без TS roundtrip.
-3. **Eliminate divergent state**: если Pinia store удаляется, Делphi
-   reactivity подписывается на ARK events — централизованный filter
-   как single source of truth.
+Не «compute → backend» вообще, а **только** где есть:
 
-**Recommendation для wave 2**: pivot focus с pure functions на
-**state-machine / persistent-state** candidates (Pomodoro usePomodoro,
-Делphi recurrence engine, native scanner) — там Rust persistent
-threads + WS events give real wins.
+1. **SQLite-pushdown** — фильтрация / агрегация / сортировка делает БД,
+   в TS приходят готовые 50 строк, не 10K. Данные не пересекают границу
+   процесса. Win огромный.
+2. **Persistent state machines** — Pomodoro timer, sync workers, indexers.
+   Должны жить **за пределами lifecycle окна**. Renderer закрылся, crash'нулся,
+   reload'нулся — backend держит state. TS в renderer'е принципиально
+   не может.
+3. **Cross-process events / fan-out** — одно изменение в БД должно дойти
+   до N окон. Backend делает за один цикл event loop'а — TS-side это N
+   отдельных IPC.
+4. **CPU-bound parallelism** — image processing, full-text indexing,
+   ML inference. V8 single-threaded, Rust + rayon — параллельно по cores.
 
-**Filters остаются в TS** для now. Port в Rust оставлен в репо как
-foundation для future SQLite-pushdown filter но не switched as default.
+### Куда мигрировать НЕ имеет смысла
+
+Array transforms / value mapping / форматирование строк — оставлять в TS.
+Данные уже в renderer'е, обратно класть не надо — миграция в backend это
+ХУДШИЙ возможный паттерн. Получаем транспортный налог × 2 без compensating
+work.
+
+### Rule of thumb
+
+Мигрировать модуль в Rust имеет смысл если ответ «да» хотя бы на один:
+- Нужно ли state-у пережить renderer crash?
+- Нужен ли fan-out events на несколько окон?
+- Можно ли сделать SELECT/WHERE/ORDER BY вместо TS-loop'а?
+- Нужно ли использовать N CPU cores?
+
+Если все ответы «нет» — оставлять в TS.
+
+**Filters остаются в TS** для now. Rust copy сохранён как foundation
+для будущего SQLite-pushdown (через WHERE/ORDER BY в DB query вместо
+in-memory transform). Не активен.
 
 ## Files changed
 
