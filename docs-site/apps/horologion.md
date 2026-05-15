@@ -169,7 +169,7 @@ bun run --cwd shell dev
 bun run --cwd shell test:e2e
 ```
 
-В dev mode (`KEPLER_DEV=1`) extension поднимается с HMR (см. [Extension dev mode](/concepts/extension-dev-mode)).
+В dev mode (Settings → Developer Mode toggle + `bun run --cwd shell dev:extensions`) extension поднимается с HMR (см. [Extension dev mode](/concepts/extension-dev-mode)).
 
 Иконка в Kepler launcher отображается из `extensions/horologion/icon.png`.
 

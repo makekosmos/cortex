@@ -1,6 +1,32 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick } from "vue";
+import type { Component } from "vue";
+import { Settings as SettingsIcon, Database as DatabaseIcon } from "lucide-vue-next";
+import BuiltInIcon from "../components/BuiltInIcon.vue";
 import type { CommandRecord } from "@shared/ipc-types";
+
+interface BuiltInIconConfig {
+    icon: Component;
+    from: string;
+    to: string;
+}
+
+const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
+    "settings:open": {
+        icon: SettingsIcon,
+        from: "oklch(0.42 0 0)",
+        to: "oklch(0.26 0 0)",
+    },
+    "dashboard:open": {
+        icon: DatabaseIcon,
+        from: "oklch(0.62 0.16 165)",
+        to: "oklch(0.42 0.14 175)",
+    },
+};
+
+function builtInIconFor(cmd: CommandRecord): BuiltInIconConfig | null {
+    return BUILTIN_ICONS[cmd.id] ?? null;
+}
 
 const query = ref("");
 const commands = ref<CommandRecord[]>([]);
@@ -37,15 +63,46 @@ const filtered = computed<CommandRecord[]>(() => {
         .map((x) => x.cmd);
 });
 
+const RECENTS_KEY = "kepler.launcher.recents";
+const RECENTS_LIMIT = 5;
+
+function loadRecents(): string[] {
+    try {
+        const raw = localStorage.getItem(RECENTS_KEY);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+        return [];
+    }
+}
+
+const recentIds = ref<string[]>(loadRecents());
+
+function recordRecent(id: string) {
+    const next = [id, ...recentIds.value.filter((x) => x !== id)].slice(0, RECENTS_LIMIT);
+    recentIds.value = next;
+    try {
+        localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    } catch {
+        /* storage quota — ignore */
+    }
+}
+
 const groupedNoQuery = computed(() => {
     if (query.value.trim()) return null;
-    const actions: CommandRecord[] = [];
-    const opens: CommandRecord[] = [];
-    for (const c of commands.value) {
-        if (c.category === "action") actions.push(c);
-        else opens.push(c);
+    const byId = new Map(commands.value.map((c) => [c.id, c]));
+    const recent: CommandRecord[] = [];
+    const recentSet = new Set<string>();
+    for (const id of recentIds.value) {
+        const c = byId.get(id);
+        if (c) {
+            recent.push(c);
+            recentSet.add(c.id);
+        }
     }
-    return { actions, opens };
+    const all = commands.value.filter((c) => !recentSet.has(c.id));
+    return { recent, all };
 });
 
 function onInput() {
@@ -54,7 +111,7 @@ function onInput() {
 
 function flatList(): CommandRecord[] {
     if (groupedNoQuery.value) {
-        return [...groupedNoQuery.value.actions, ...groupedNoQuery.value.opens];
+        return [...groupedNoQuery.value.recent, ...groupedNoQuery.value.all];
     }
     return filtered.value;
 }
@@ -63,6 +120,7 @@ async function invokeSelected() {
     const list = flatList();
     const target = list[selectedIndex.value];
     if (!target) return;
+    recordRecent(target.id);
     await window.kepler.commands.invoke(target.id);
     query.value = "";
     selectedIndex.value = 0;
@@ -97,7 +155,8 @@ function onKey(e: KeyboardEvent) {
 
 async function refreshCommands() {
     try {
-        commands.value = await window.kepler.commands.list();
+        const all = await window.kepler.commands.list();
+        commands.value = all.filter((c) => c.category !== "action");
     } catch (e) {
         console.warn("commands.list failed", e);
         commands.value = [];
@@ -126,9 +185,6 @@ onUnmounted(() => {
     offCommandsUpdated();
 });
 
-function indexInFlat(cmd: CommandRecord): number {
-    return flatList().findIndex((c) => c.id === cmd.id);
-}
 </script>
 
 <template>
@@ -136,31 +192,37 @@ function indexInFlat(cmd: CommandRecord): number {
         <input ref="inputRef" v-model="query" class="search" type="text"
             placeholder="Поиск команд: pomo, заметка, открыть delphi…" spellcheck="false" autocomplete="off"
             autocorrect="off" autocapitalize="off" @input="onInput" />
-        <div ref="listRef" class="list">
+        <div ref="listRef" class="list kosmos-scroll">
             <template v-if="groupedNoQuery">
-                <template v-if="groupedNoQuery.actions.length > 0">
-                    <div class="section-label">Действия</div>
+                <template v-if="groupedNoQuery.recent.length > 0">
+                    <div class="section-label">Недавние</div>
                     <ul class="results">
-                        <li v-for="cmd in groupedNoQuery.actions" :key="cmd.id" class="result"
-                            :class="{ selected: indexInFlat(cmd) === selectedIndex }"
-                            @click="() => { selectedIndex = indexInFlat(cmd); void invokeSelected(); }">
-                            <img v-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
-                            <span v-else class="icon icon-placeholder" aria-hidden="true" />
+                        <li v-for="(cmd, idx) in groupedNoQuery.recent" :key="`recent-${cmd.id}`" class="result"
+                            :class="{ selected: idx === selectedIndex }"
+                            @click="() => { selectedIndex = idx; void invokeSelected(); }">
+                            <BuiltInIcon v-if="builtInIconFor(cmd)" :icon="builtInIconFor(cmd)!.icon"
+                                :from="builtInIconFor(cmd)!.from" :to="builtInIconFor(cmd)!.to" />
+                            <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                            <BuiltInIcon v-else />
                             <span class="title">{{ cmd.title }}</span>
-                            <span class="subtitle">{{ cmd.subtitle }}</span>
+                            <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{ cmd.appName }}</span>
+                            <span class="kind-label">{{ cmd.kind === 'command' ? 'Команда' : 'Приложение' }}</span>
                         </li>
                     </ul>
                 </template>
-                <template v-if="groupedNoQuery.opens.length > 0">
-                    <div class="section-label">Открыть приложение</div>
+                <template v-if="groupedNoQuery.all.length > 0">
+                    <div class="section-label">Все</div>
                     <ul class="results">
-                        <li v-for="cmd in groupedNoQuery.opens" :key="cmd.id" class="result"
-                            :class="{ selected: indexInFlat(cmd) === selectedIndex }"
-                            @click="() => { selectedIndex = indexInFlat(cmd); void invokeSelected(); }">
-                            <img v-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
-                            <span v-else class="icon icon-placeholder" aria-hidden="true" />
+                        <li v-for="(cmd, idx) in groupedNoQuery.all" :key="`all-${cmd.id}`" class="result"
+                            :class="{ selected: groupedNoQuery.recent.length + idx === selectedIndex }"
+                            @click="() => { selectedIndex = groupedNoQuery!.recent.length + idx; void invokeSelected(); }">
+                            <BuiltInIcon v-if="builtInIconFor(cmd)" :icon="builtInIconFor(cmd)!.icon"
+                                :from="builtInIconFor(cmd)!.from" :to="builtInIconFor(cmd)!.to" />
+                            <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                            <BuiltInIcon v-else />
                             <span class="title">{{ cmd.title }}</span>
-                            <span class="subtitle">{{ cmd.subtitle }}</span>
+                            <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{ cmd.appName }}</span>
+                            <span class="kind-label">{{ cmd.kind === 'command' ? 'Команда' : 'Приложение' }}</span>
                         </li>
                     </ul>
                 </template>
@@ -212,7 +274,7 @@ function indexInFlat(cmd: CommandRecord): number {
     flex: 1;
     overflow-y: auto;
     border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-    padding: 8px;
+    padding: 8px 0;
 }
 
 .section-label {
@@ -235,8 +297,12 @@ function indexInFlat(cmd: CommandRecord): number {
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
-    border-radius: 8px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    background: transparent;
     cursor: pointer;
+    transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+    margin: 1px 0;
 }
 
 .icon {
@@ -251,12 +317,25 @@ function indexInFlat(cmd: CommandRecord): number {
     background: transparent;
 }
 
+.icon-builtin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: linear-gradient(to bottom left,
+            oklch(0.42 0 0),
+            oklch(0.26 0 0));
+    color: oklch(0.96 0 0);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, oklch(1 0 0) 6%, transparent);
+}
+
 .result:hover {
-    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    background: color-mix(in srgb, oklch(1 0 0) 3.5%, transparent);
 }
 
 .result.selected {
-    background: color-mix(in srgb, var(--foreground) 14%, transparent);
+    background: color-mix(in srgb, oklch(1 0 0) 8%, transparent);
+    border-color: color-mix(in srgb, oklch(1 0 0) 12%, transparent);
 }
 
 .title {
@@ -265,7 +344,7 @@ function indexInFlat(cmd: CommandRecord): number {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 0;
 }
 
@@ -274,6 +353,22 @@ function indexInFlat(cmd: CommandRecord): number {
     font-size: 12px;
     flex-shrink: 0;
     margin-left: 12px;
+}
+
+.app-name {
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+    font-size: 14px;
+    font-weight: 400;
+    flex-shrink: 0;
+    margin-left: 10px;
+}
+
+.kind-label {
+    color: color-mix(in srgb, var(--foreground) 32%, transparent);
+    font-size: 12px;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-left: 12px;
 }
 
 .empty {

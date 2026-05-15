@@ -175,3 +175,36 @@
 .kosmos-game-poster-card:focus-visible .kosmos-game-poster-card__overlay {
   opacity: 0.4;
 }
+
+/* ----------------------------------------------------------------------------
+   Утилитный класс .kosmos-scroll — fade-out scrollbar в стиле macOS / Raycast.
+   Thumb прозрачный по дефолту, появляется при hover/focus-within/active,
+   плавно исчезает с задержкой 800ms после ухода фокуса.
+   Без фона track'а. Цвет — тон-в-тон с hover-state result row.
+   ---------------------------------------------------------------------------- */
+@property --kosmos-scroll-alpha {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+.kosmos-scroll {
+  scrollbar-gutter: stable both-edges;
+  --kosmos-scroll-alpha: 0;
+  transition: --kosmos-scroll-alpha 450ms ease;
+}
+.kosmos-scroll[data-scrolling="1"] {
+  --kosmos-scroll-alpha: 0.18;
+  transition: --kosmos-scroll-alpha 100ms ease;
+}
+.kosmos-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.kosmos-scroll::-webkit-scrollbar-track,
+.kosmos-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.kosmos-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(from var(--foreground) r g b / var(--kosmos-scroll-alpha));
+  border-radius: 3px;
+}

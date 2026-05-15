@@ -83,12 +83,12 @@
 
 ## Я правил extension dev mode (`shell/` + `extensions/`)
 
-- [ ] `KEPLER_DEV=1` + `bun run --cwd shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
-- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id)` в `shell/electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно.
+- [ ] Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`) + `bun run --cwd shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
+- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id, route?)` в `shell/electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно и прокидывает `route` как hash в обоих вариантах.
+- [ ] `isDeveloperModeActive()` **не** смотрит на `process.env.KEPLER_DEV` — только на `developerMode` из JSON. `KEPLER_DEV=1` влияет лишь на shell-level dev, не на extension loader.
 - [ ] F12 toggles DevTools на любом extension window (detached, не блокирует).
-- [ ] Settings → Developer Mode toggle persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`.
-- [ ] Если правил manifest format — обновил [Extension dev mode](/concepts/extension-dev-mode) и [Extension host](/concepts/extension-host).
-- [ ] Production build (без `KEPLER_DEV`) грузит extensions из `dist/`, не из dev server'ов.
+- [ ] Если правил manifest format или signature `openExtension` — обновил [Extension dev mode](/concepts/extension-dev-mode) и [Extension host](/concepts/extension-host).
+- [ ] Production build (без Developer Mode toggle) грузит extensions из `dist/`, не из dev server'ов.
 
 ## Я правил extension installer (`shell/scripts/install-extension.mjs`)
 

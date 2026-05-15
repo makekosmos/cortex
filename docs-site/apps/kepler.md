@@ -54,7 +54,7 @@ shell/                     # npm package "kepler-shell"
 │  ├─ main.ts              # backend spawn, BrowserWindow, tray, globalShortcut, IPC
 │  ├─ preload.ts           # window.kepler API (search / invoke / commands)
 │  ├─ extension-preload.ts # preload для extension windows
-│  ├─ commands.ts          # статические команды (kepler:open-app:*, dashboard:open, …)
+│  ├─ commands.ts          # статические команды (open app tiles + builtin Kepler commands)
 │  ├─ settings-window.ts   # отдельное окно настроек + IPC handlers
 │  └─ extension-host.ts    # загрузчик Vue extensions
 ├─ shared/
@@ -64,8 +64,10 @@ shell/                     # npm package "kepler-shell"
 │  ├─ main.ts              # createApp + Inter Variable
 │  ├─ styles.css           # --kepler-accent + локальные токены
 │  └─ views/
-│     ├─ LauncherView.vue  # FTS5 search + dynamic command list
+│     ├─ LauncherView.vue  # секции «Недавние»/«Все» + fuzzy filter
 │     └─ SettingsView.vue  # настройки host'а (hotkey, backend status)
+├─ src/components/
+│  └─ BuiltInIcon.vue      # generic gradient icon (Lucide-based) для builtin команд
 ├─ scripts/
 │  ├─ dev-extensions.mjs   # Vite dev серверы для всех extensions (HMR)
 │  ├─ install-extension.mjs   # CLI: положить extension override в %APPDATA%
@@ -85,7 +87,7 @@ extensions/                   # ← top-level рядом с shell/
 - Центрируется на active display.
 - `nativeTheme.themeSource = 'dark'` — принудительно тёмная тема, независимо от системы.
 - `globalShortcut.register('Ctrl+Shift+K')` (`Cmd+Shift+K` на macOS) — toggle show/hide.
-- При потере фокуса — окно скрывается (focus-trap pattern, как Spotlight).
+- При потере фокуса — окно **всегда** скрывается (focus-trap pattern, как Spotlight). В dev единственное исключение — focus ушёл в DevTools открытого launcher'а (иначе невозможно дебажить renderer); в production hide-on-blur срабатывает безусловно.
 - Tray icon с меню **«Открыть» / «Настройки» / «Выход»**. «Настройки» открывает [отдельное окно настроек](#окно-настроек) через тот же IPC `kepler:settings:open`. Реальный quit — только через tray «Выход».
 
 ## Command bus
@@ -96,12 +98,35 @@ Kepler — точка входа для всех команд экосистем
 - `kepler-backend` хранит in-memory registry команд (`commands.register/unregister/list/invoke`) и эмитит события `command_invoked` / `commands_changed` через WS.
 - Электронные апки при старте делают `ArkClient.commands.register([...])` и подписываются на `command_invoked` события для своих id'шников.
 - `LauncherView` слушает `commands_changed`, держит актуальный список и при выборе вызывает `commands.invoke(id)`.
-- Статические команды (`dashboard:open`, `arrancador:open`, `kepler:settings:open`) живут в `electron/commands.ts` и матчатся локально без backend roundtrip.
+- Статические команды живут в `electron/commands.ts` и матчатся локально без backend roundtrip — см. ниже.
 
-Зарегистрированные сейчас динамические команды (Phase 3):
-- **Horologion** — `horologion:pomodoro:25`, `horologion:pomodoro:50`, `horologion:stopwatch:start`.
-- **Delphi** — `delphi:task:create`, `delphi:task:today`.
-- **Eden** — `eden:note:create`, `eden:search`.
+### Static commands (registry в `shell/electron/commands.ts`)
+
+Каждая запись — `InternalCommand` с полями `id`, `title`, `subtitle`, `category` (`'open' | 'action'`), `kind` (`'app' | 'command'`), `appName?` и `icon?: () => string | undefined`.
+
+| id | kind | title | Что делает |
+|---|---|---|---|
+| `delphi:open` | `app` | Открыть Delphi | `openExtension("delphi")` |
+| `horologion:open` | `app` | Открыть Horologion | `openExtension("horologion")` |
+| `arrancador:open` | `app` | Открыть Arrancador | `openExtension("arrancador")` |
+| `dashboard:open` | `command` (`appName: "Kepler"`) | Открыть таблицу данных | `openDashboardWindow()` |
+| `settings:open` | `command` (`appName: "Kepler"`) | Открыть настройки | `openSettings()` |
+| `kepler:check-updates` | `command` (`appName: "Kepler"`) | Проверить обновления | Открывает Settings + `autoupdater.check()` |
+| `delphi:today` | `command` (`appName: "Delphi"`) | Сегодняшние задачи | `openExtension("delphi", "/today")` |
+| `horologion:pomodoro` | `command` (`appName: "Horologion"`) | Помодоро | `openExtension("horologion", "/?mode=pomodoro")` |
+| `horologion:stopwatch` | `command` (`appName: "Horologion"`) | Секундомер | `openExtension("horologion", "/?mode=stopwatch")` |
+
+::: info Eden команда удалена
+До 2026-05-14 в registry был `eden:open`, запускавший standalone Eden .exe. После brand swap'а удалена — Eden остаётся standalone, но не показывается в launcher'е до миграции в extension (Phase 6).
+:::
+
+::: info `mode=` hash для Horologion — TODO
+Команды `horologion:pomodoro` / `horologion:stopwatch` грузят extension с hash `/?mode=pomodoro` / `/?mode=stopwatch`, но HomeView пока не разбирает параметр — переключение режима будет в следующей итерации. Сама команда уже работает: extension открывается на правильном route.
+:::
+
+### Dynamic (action) commands
+
+Регистрируются running extension'ами через [Command bus](../concepts/command-bus.md) (`category: 'action'`). LauncherView их **не показывает** (фильтр `category !== "action"`) — палитра ограничена open-командами. Action-команды используются программным вызовом из других мест.
 
 ## Extension host (Phase 4 ✅)
 
@@ -114,7 +139,24 @@ Kepler — точка входа для всех команд экосистем
 
 ### Иконки в launcher
 
-Каждое open-command в launcher показывает иконку соответствующего extension'а. `shell/electron/extension-host.ts → extensionIconDataUri(id)` читает `extensions/<id>/icon.png`, кодирует в data-uri и кэширует **по mtime файла**: при изменении иконки на диске cache автоматически инвалидируется (hot-swap без перезапуска Kepler). Если иконки нет — команда показывается без неё. Eden команда **без иконки** (legacy, ещё не extension — см. Phase 6).
+Open-command extension'а показывает PNG иконку соответствующего extension'а. `shell/electron/extension-host.ts → extensionIconDataUri(id)` читает `extensions/<id>/icon.png`, кодирует в data-uri и кэширует **по mtime файла**: при изменении иконки на диске cache автоматически инвалидируется (hot-swap без перезапуска Kepler).
+
+Builtin Kepler-команды без extension PNG (`settings:open`, `dashboard:open`, `kepler:check-updates`) рендерятся через `BuiltInIcon.vue` — gradient-плашка с Lucide-иконкой. Реестр `BUILTIN_ICONS` живёт в `LauncherView.vue` и мапит command id → `{icon, from, to}`: сейчас `settings:open` — серый (`Settings`), `dashboard:open` — teal (`Database`). Команда без записи в реестре получает дефолт компонента — голубой→синий + `HelpCircle`.
+
+`BuiltInIcon` принимает пропсы `icon` (Lucide component), `from` / `to` (gradient stops, OKLCH), `size`, `strokeWidth`. Используется только в launcher; для extension PNG по-прежнему `<img src="data:..." />`.
+
+### Секции и история выбора в launcher
+
+LauncherView показывает две секции, когда строка поиска пустая:
+
+- **Недавние** — до 5 последних invoke'нутых команд в LRU-порядке. Хранится в `localStorage` под ключом `kepler.launcher.recents` (массив id-строк). Запись делается на каждом `invokeSelected()` через `recordRecent(id)`.
+- **Все** — полный список команд в порядке регистрации в `COMMANDS` + dynamic поверх (после фильтра `category !== "action"`).
+
+При непустой строке секции скрываются — показывается единый fuzzy-отсортированный список.
+
+`CommandRecord` (`shell/shared/ipc-types.ts`) расширен полями `kind: 'app' | 'command'` и `appName?`. UI рендерит правую часть row'а так:
+- `kind === 'app'` → лейбл «Приложение».
+- `kind === 'command'` → приглушённое имя приложения справа от title + лейбл «Команда».
 
 ### Crash safety
 
@@ -126,7 +168,7 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
 
 ## Окно настроек
 
-Настройки открываются как **отдельное `BrowserWindow`** через IPC `kepler:settings:open` (паттерн как в [Horologion](./horologion.md#окно-настроек)). Хеш-route `#/settings`, App.vue рендерит `SettingsView` внутри `<DesktopChrome>`.
+Настройки открываются как **отдельное `BrowserWindow`** через IPC `kepler:settings:open` (паттерн как в [Horologion](./horologion.md#окно-настроек)). Хеш-route `#/settings`, App.vue рендерит `SettingsView` внутри `<DesktopChrome>`. Размер окна — **880×560**, resizable (чтобы Extensions-таб с длинным списком и каталогом помещался без скролла).
 
 В Settings:
 
@@ -134,6 +176,14 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
 - **Backend status** — состояние `kepler-backend.exe` child process'а (running / not running) + текущий порт WS.
 - **Версия** — `app.getVersion()`.
 - **Developer Mode** toggle (Phase 5) — persist'ится в `%APPDATA%\Kosmos\kepler-shell-settings.json`. Когда включён, extension-host резолвит `loadURL('http://localhost:<devPort>/')` вместо `loadFile(dist/...)` для extension'ов, у которых в `manifest.json` указан `devPort`. F12 в любом extension window открывает DevTools.
+- **Update banner** (sticky 32px вверху Settings окна) — Raycast-style индикатор состояния autoUpdater'а. Состояния `available` / `downloading` (progress bar) / `downloaded` (click-to-install) / `error`. Иконки `ArrowUpCircle` / `Loader2` из `lucide-vue-next`. Подписан на `window.kepler.settings.update.onStateChanged(...)`. См. [Distribution → autoUpdater](../concepts/distribution.md#kepler-launcher-autoupdater).
+- **Кнопка «Проверить обновления»** (General tab) — вызывает `window.kepler.settings.update.check()`. Тот же эффект, что launcher-команда `kepler:check-updates`.
+- **Расширения** (таб) — плоский список установленных. Для каждого extension'а:
+  - lookup в каталоге: если `catalog.version > installed.version` → кнопка **«Обновить»**;
+  - кнопка **«Откатить»** (если есть backup в `extensions-backups/<id>/`);
+  - кнопка **«Удалить»**.
+  - Сверху таба — кнопка **«Проверить обновления»** (вызывает `loadCatalog(force=true)`).
+  - Отдельной секции «Каталог» / «Прочие установленные» больше нет: каталог сейчас используется только для lookup версий, не как картинная витрина.
 
 ## Selected space DB resolution
 

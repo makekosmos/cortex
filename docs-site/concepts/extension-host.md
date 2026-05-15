@@ -35,7 +35,7 @@ export interface ExtensionManifest {
 
 export function loadExtensionManifest(id: string): ExtensionManifest | null
 export function listExtensions(): ExtensionManifest[]
-export function openExtension(id: string): void              // reuse if already open, иначе create
+export function openExtension(id: string, route?: string): void  // reuse if already open, иначе create; route — опциональный hash для глубоких ссылок
 export function extensionIconDataUri(id: string): string | undefined
 export function readDevModeSetting(): boolean
 export function setExtensionArkBridge(opts: { request, subscribe }): void
@@ -72,6 +72,19 @@ Per-id lookup означает, что Dashboard может быть user-instal
 `listExtensions()` дедуплицирует по `id` — если один и тот же `<id>` присутствует и в user-installed, и в bundled, побеждает первый встреченный (т.е. user-installed override).
 
 Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `focus()`. На `closed` — `delete` из map.
+
+### Deep links через `route`
+
+`openExtension(id, route?)` принимает опциональный второй параметр — фрагмент маршрута внутри extension'а (роут Vue Router'а или произвольный hash/query). Поведение:
+
+- **Dev mode** (active developer mode + `devPort` в manifest) → `win.loadURL('http://localhost:<devPort>/#<route>')`.
+- **Prod** → `win.loadFile(entryHtml, { hash: route })`.
+- **Reuse**: если окно extension'а уже открыто, `openExtension(id, route)` просто фокусирует существующее окно **без навигации** — `route` в этом случае игнорируется. Это known limitation v1; в будущем resolver научится диспатчить `kepler:extension:navigate` IPC в существующее окно.
+
+Используется в `shell/electron/commands.ts` для глубоких open-команд:
+
+- `delphi:today` → `openExtension('delphi', '/today')`.
+- `horologion:pomodoro` / `horologion:stopwatch` → `openExtension('horologion', '/?mode=pomodoro' | '/?mode=stopwatch')`.
 
 ### Manifest format
 
@@ -255,8 +268,12 @@ Extension ничего не делает — это shell-level автомати
 
 `openExtension(id)` resolver выбирает источник renderer'а:
 
-- Если `isDeveloperModeActive()` (т.е. `KEPLER_DEV=1` **или** `developerMode: true` в `<userData>/kepler-shell-settings.json`) **и** manifest содержит `devPort` — `win.loadURL('http://localhost:<devPort>/')` + auto-open DevTools detached.
-- Иначе — `win.loadFile(<root>/<id>/<entryHtml>)` из bundled dist.
+- Если `isDeveloperModeActive()` (только `developerMode: true` в `<userData>/kepler-shell-settings.json` — env var `KEPLER_DEV` **не** активирует extension dev mode, см. ниже) **и** manifest содержит `devPort` — `win.loadURL('http://localhost:<devPort>/#<route>')` + auto-open DevTools detached.
+- Иначе — `win.loadFile(<root>/<id>/<entryHtml>, { hash: route })` из bundled dist.
+
+::: warning KEPLER_DEV больше не включает extension HMR
+Раньше `isDeveloperModeActive()` возвращал `true` при `process.env.KEPLER_DEV === "1"`. Это ломало `bun run --cwd shell dev` (который сам выставляет `KEPLER_DEV=1`): shell пытался грузить extensions с Vite dev server'а, который не запущен → пустые extension окна. Сейчас `isDeveloperModeActive()` смотрит **только** настройку `developerMode` из `kepler-shell-settings.json`. Env var `KEPLER_DEV=1` влияет только на shell-level dev (DevTools шелла, dev URL шелла), но не на extension loader. Settings UI **отображает** `KEPLER_DEV=1 || developerMode` (чтобы toggle в dev-сессии выглядел консистентно), но это исключительно индикатор статуса — extension loader игнорирует env.
+:::
 
 Полная схема — [Extension dev mode](/concepts/extension-dev-mode).
 

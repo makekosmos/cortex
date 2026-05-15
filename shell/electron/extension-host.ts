@@ -219,7 +219,11 @@ export function readDevModeSetting(): boolean {
 }
 
 function isDeveloperModeActive(): boolean {
-  return process.env.KEPLER_DEV === "1" || readDevModeSetting();
+  // KEPLER_DEV=1 включает только shell-уровень dev mode.
+  // Extension dev mode (Vite HMR через manifest.devPort) требует явного
+  // toggle в Settings — иначе extension'ы пытаются грузиться с dev server'а,
+  // который может быть не запущен, и окно остаётся пустым.
+  return readDevModeSetting();
 }
 
 // Priority chain для resolution extension-папок. Higher priority first.
@@ -490,7 +494,7 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function openExtension(id: string): void {
+export function openExtension(id: string, route?: string): void {
   const existing = extensionWindows.get(id);
   if (existing && !existing.win.isDestroyed()) {
     existing.win.focus();
@@ -707,13 +711,14 @@ export function openExtension(id: string): void {
     }
   });
 
+  const hash = route ? (route.startsWith("/") ? route : `/${route}`) : undefined;
   if (useDev && manifest.devPort) {
-    const devUrl = `http://localhost:${manifest.devPort}/`;
+    const devUrl = `http://localhost:${manifest.devPort}/${hash ? `#${hash}` : ""}`;
     console.log(`[kepler-shell] extension '${id}' dev mode → ${devUrl}`);
     void win.loadURL(devUrl);
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    void win.loadFile(entryHtml);
+    void win.loadFile(entryHtml, hash ? { hash } : undefined);
   }
 }
 

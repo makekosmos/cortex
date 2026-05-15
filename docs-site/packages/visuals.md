@@ -270,6 +270,57 @@ import {
 } from "@kepler/visuals";
 ```
 
+## Utility-классы
+
+### `.kosmos-scroll` — fade-on-idle скроллбар
+
+Скроллбар, который виден только когда пользователь активно скроллит контейнер, и плавно (450ms) фейдится после остановки. Глобальный паттерн для всех scrollable-листов в Kepler shell и extension'ах.
+
+**Как пользоваться:**
+
+```vue
+<div class="rows kosmos-scroll">
+  <!-- scrollable content -->
+</div>
+```
+
+Этого достаточно. Не нужно:
+- стилизовать `::-webkit-scrollbar`, `::-webkit-scrollbar-thumb`, `::-webkit-scrollbar-track` руками — класс уже всё закрывает (width/height 5px, border-radius 3px, без фона у track'а);
+- задавать свой `transition` на `background-color` thumb'а — переход управляется через CSS-переменную и `@property`, чтобы цвет thumb'а пересчитывался каждый кадр анимации;
+- ставить `data-scrolling` руками — это делает глобальный listener в `shell/src/main.ts` (scroll event на capture, снимает атрибут через 600ms debounce).
+
+**Как это устроено:**
+
+```css
+@property --kosmos-scroll-alpha {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.kosmos-scroll {
+  transition: --kosmos-scroll-alpha 450ms ease;
+}
+
+.kosmos-scroll[data-scrolling="1"] {
+  --kosmos-scroll-alpha: 0.18;
+  transition: --kosmos-scroll-alpha 100ms ease; /* быстрый ramp-up */
+}
+
+.kosmos-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(from var(--foreground) r g b / var(--kosmos-scroll-alpha));
+}
+```
+
+`@property` обязателен — без него `--kosmos-scroll-alpha` нельзя интерполировать как `<number>`, и thumb просто скачком меняет alpha вместо плавного фейда.
+
+**Где сейчас применяется:**
+
+- `shell/src/views/LauncherView.vue` — `.list.kosmos-scroll`;
+- `shell/src/views/SettingsView.vue` — `.rows.kosmos-scroll`, `.ext-list.kosmos-scroll`.
+
+Любой новый scrollable-контейнер в Kepler/extensions должен использовать этот класс, чтобы скроллбар не торчал на фоне Mica/Acrylic.
+
 ## Правила использования
 
 ::: warning Жёстко

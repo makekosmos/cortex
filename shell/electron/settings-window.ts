@@ -47,8 +47,8 @@ function writeSettings(patch: Partial<KeplerShellSettings>): void {
   }
 }
 
-const SETTINGS_WIDTH = 560;
-const SETTINGS_HEIGHT = 440;
+const SETTINGS_WIDTH = 880;
+const SETTINGS_HEIGHT = 560;
 
 let settingsWindow: BrowserWindow | null = null;
 
@@ -65,7 +65,7 @@ export function openSettings(): void {
     y: Math.round((display.height - SETTINGS_HEIGHT) / 2),
     show: true,
     frame: false,
-    resizable: false,
+    resizable: true,
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -141,7 +141,7 @@ ipcMain.handle("kepler:settings:hotkey", () =>
 
 ipcMain.handle(
   "kepler:settings:developer-mode:get",
-  () => !!readSettings().developerMode,
+  () => process.env.KEPLER_DEV === "1" || !!readSettings().developerMode,
 );
 
 ipcMain.handle(

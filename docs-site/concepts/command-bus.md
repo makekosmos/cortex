@@ -49,16 +49,38 @@ commands.invoke({ id: string, params?: object })   → { ok: true }   // async �
 { event: "commands_changed",  commands: CommandManifest[] }
 ```
 
-### CommandManifest
+### CommandManifest (wire-формат)
 
 ```ts
 interface CommandManifest {
   id: string                              // глобально уникальный, например "horologion:pomodoro:25"
   title: string                           // что показывать в launcher
   subtitle?: string                       // обычно имя апки
-  category: 'open' | 'action'             // 'open' зарезервировано за static commands kepler-shell
+  category: 'open' | 'action'             // 'action' — dynamic ручки апок; 'open' — static от kepler-shell
 }
 ```
+
+### CommandRecord (launcher-side, `shell/shared/ipc-types.ts`)
+
+Static `COMMANDS` в shell + dynamic с backend merge'атся в единый список `CommandRecord`, который видит renderer. Поверх wire-`CommandManifest` добавлены два UI-поля:
+
+```ts
+interface CommandRecord {
+  id: string;
+  title: string;
+  subtitle?: string;
+  category: 'open' | 'action';
+  /** UI-классификация плашки. 'app' → правый лейбл «Приложение».
+      'command' → имя приложения + правый лейбл «Команда». */
+  kind?: 'app' | 'command';
+  /** Имя родительского приложения для command-плашек. */
+  appName?: string;
+  /** Resolved data-uri (PNG для extension'ов), undefined для builtin. */
+  icon?: string;
+}
+```
+
+Поля `kind` / `appName` живут **только** в shell registry и dynamic командах от extension'ов — backend wire-протокол их не описывает, чтобы не ломать обратную совместимость. Если dynamic команда приходит без `kind`, LauncherView обходится без правого лейбла. Поле `kind` важно для UI, а не для роутинга invoke'ов.
 
 ## Lifecycle
 
@@ -105,7 +127,7 @@ sequenceDiagram
 | TS SDK | `packages/ark/src/ark-client.ts` | `ArkCommandsApi`: `register/unregister/list/invoke/onInvoked/onChanged` |
 | Launcher merge | `shell/electron/main.ts` | `kepler:commands:list` IPC = static `COMMANDS` ∪ `arkClient.commands.list()` |
 | Launcher invoke | `shell/electron/main.ts` | `kepler:commands:invoke` — static exec локально, dynamic — `arkClient.commands.invoke(id)` |
-| Static open-commands | `shell/electron/commands.ts` | `COMMANDS: InternalCommand[]` — «Открыть Eden», «Открыть Delphi» и т.п. |
+| Static open-commands | `shell/electron/commands.ts` | `COMMANDS: InternalCommand[]` — open app tiles (Delphi / Horologion / Arrancador), builtin Kepler commands (Settings / Dashboard / Check updates), extension routes (`delphi:today`, `horologion:pomodoro`, …). Полный список — см. [Kepler → Static commands](/apps/kepler#static-commands-registry-в-shell-electron-commands-ts). |
 
 ## Examples
 
@@ -176,7 +198,7 @@ client.commands.onChanged(() => {
 - **Invoke без registrant'а.** Если на момент invoke никто не зарегистрирован под этим `id` — broadcast уходит, никто не handle'ит. Silent drop. Это ожидаемо — например, апка успела disconnect'нуться между фетчем `list` и invoke. Launcher hide-ит окно в любом случае.
 - **App crash в middle of handler.** Событие не retry'ится. Handler идёт идемпотентно или ловит свои ошибки. Backend не знает, что handler'у плохо.
 - **Двойная register.** Last-write-wins по `id` внутри одного клиента. Между клиентами — конфликт `id` решается порядком регистрации (кто первый — тот и виден; повторная register с тем же `id` от другого клиента не вытесняет предыдущего, но добавит entry. Не используй pre-existing `id` из другой апки).
-- **Static commands приоритет.** kepler-shell merge'ит так, что static `COMMANDS` (например `eden:open`) **не** перебиваются dynamic'ом — апка не может зарегистрировать `eden:open` и притвориться launcher'ом. Конвенция: dynamic id содержит namespace апки.
+- **Static commands приоритет.** kepler-shell merge'ит так, что static `COMMANDS` (например `dashboard:open` / `settings:open`) **не** перебиваются dynamic'ом — апка не может зарегистрировать чужой `id` и притвориться launcher'ом. Конвенция: dynamic id содержит namespace апки.
 - **Order.** Перечень не упорядочен между клиентами (`HashMap` iteration). Внутри одного клиента — insertion order сохраняется. Если нужен порядок в UI — сортируй на стороне launcher'а по `title`.
 
 ## Когда использовать command bus, а когда entity event
@@ -184,10 +206,10 @@ client.commands.onChanged(() => {
 | Сценарий | Что использовать |
 |---|---|
 | «Покажи мне task с id X» | ARK objects (get / list), не command bus |
-| «Создай новую заметку с title Y» | command bus (action `eden:note:create`) |
+| «Создай новую заметку с title Y» | command bus (action `<app>:note:create`) |
 | «Запусти Pomodoro 25 минут» | command bus (action `horologion:pomodoro:25`) |
 | «Объект task-1 изменился» | entity events (`onEntityChanged`) |
-| «Открой Eden» | static command в `kepler-shell/electron/commands.ts` (spawn .exe) |
+| «Открой Delphi» | static command в `shell/electron/commands.ts` (`delphi:open` → `openExtension(...)`) |
 
 Идея: command bus = императивный trigger для running апки. ARK objects = stateful data. Entity events = observation channel. Не путай.
 

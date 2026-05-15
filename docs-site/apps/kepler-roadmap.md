@@ -86,8 +86,7 @@ Hot-reload для extensions через Vite dev servers, как `ray develop` �
 Состав:
 
 - `bun run --cwd shell dev:extensions` поднимает Vite dev server на отдельном порту для каждого extension'а (5180–5183).
-- `KEPLER_DEV=1` + поле `devPort` в manifest → extension-host резолвит `loadURL('http://localhost:<port>/')` вместо `loadFile(dist/...)`.
-- Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`).
+- Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`) + поле `devPort` в manifest → extension-host резолвит `loadURL('http://localhost:<port>/')` вместо `loadFile(dist/...)`. `KEPLER_DEV=1` сюда **не** входит — env var управляет только shell-level dev (DevTools шелла), но не extension HMR.
 - F12 toggles DevTools на любом extension window.
 
 ### Cleanup под Phase 5 (выполнено)

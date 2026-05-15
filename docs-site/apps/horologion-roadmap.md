@@ -42,6 +42,7 @@
 
 Открытые проблемы, на которые надо вернуться.
 
+- **HomeView должен читать `query.mode` при mount.** Kepler launcher шлёт `openExtension('horologion', '/?mode=pomodoro' | '/?mode=stopwatch')` для команд `horologion:pomodoro` / `horologion:stopwatch`. Сейчас HomeView игнорирует query, и режим не выставляется автоматически — пользователь попадает в дефолтный режим. Нужно при `onMounted` прочитать `route.query.mode` и переключить mode-store, если значение валидное. Дополнительно: для уже открытого extension-окна route-навигация **не** триггерится (см. [Extension host → Deep links](/concepts/extension-host#deep-links-через-route)) — это known limitation v1; пока route влияет только на cold open.
 - **Sync port 21531 коллизит** между любыми двумя ARK sidecar'ами (Delphi + Horologion, или установленный Horologion + dev Horologion, и т.д.). Второй sidecar падает с «Failed to bind 0.0.0.0:21531» (os error 10048). CRUD продолжает работать, но в трейле горит красный dot + toast с ошибкой при старте. **Воспроизводится регулярно** — особенно когда установленный из MSI Horologion сидит в трее, а юзер запускает dev. Долгосрочный фикс: либо port-discovery (range 21531-21540 с retry на bind), либо разделение port'ов по `appId`, либо вообще централизованный sync-broker. Пока в качестве workaround — убивать «лишний» инстанс перед запуском нужного.
 - **E2E (`test:e2e`) падает** если параллельно крутится dev-сервер любого приложения с ARK sidecar — тот же port 21531. Тесты не изолируют sync-порт.
 

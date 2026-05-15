@@ -240,7 +240,8 @@ bun run ark:smoke
 - ❌ Hardcoded action commands в `shell/electron/commands.ts`. Action-команды приходят dynamic от приложений через command bus, в `commands.ts` хардкодятся только `open`-команды (запуск приложения по имени).
 - ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
 - ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
-- ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
+- ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (Settings → Developer Mode toggle, **не** `KEPLER_DEV=1`) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
+- ❌ Возврат `process.env.KEPLER_DEV === "1"` в `isDeveloperModeActive()` (extension-host.ts). Env var ломала dev-сессию `bun run --cwd shell dev` — shell автоматом выставлял `KEPLER_DEV=1`, extension loader пытался грузить с не-поднятого Vite dev server'а, получались пустые окна. Extension dev mode сейчас управляется **только** настройкой `developerMode` в `kepler-shell-settings.json`. Settings UI смотрит на env только для **отображения** toggle (`kepler:settings:developer-mode:get`).
 - ❌ Дублирование install-flow логики (backup / atomic rename / semver-проверка). Источник правды — `shell/electron/extension-installer.ts`. CLI скрипт `shell/scripts/install-extension.mjs` копирует semver matcher inline (~40 строк) только потому, что mjs скрипт не имеет доступа к dist-electron bundle; не размножай это в третьем месте — дёргай IPC `kepler:extension:install:do` или сам runtime API.
 - ❌ Ослабление `keplerApiVersion` compat check в `extension-host.ts → checkApiCompat()`. Несовместимый extension **не** должен получать live preload bridge — иначе ломается инвариант API contract'а. Если правишь — bump `KEPLER_API_VERSION` в `shell/electron/kepler-api.ts` соответственно (patch/minor/major по семантике).
 - ❌ Path traversal в `.kext` extract'е. `extension-installer.ts → safeEntryName` отвергает `..`, абсолютные пути, drive letter'ы. Не упрощай эту проверку — `.kext` может приехать из untrusted источника.
@@ -415,12 +416,12 @@ bun run ark:smoke
 
 ## Я правил extension dev mode (`shell/` + `extensions/`)
 
-- [ ] `KEPLER_DEV=1` + `bun run --cwd shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
-- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id)` в `shell/electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно.
+- [ ] Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`) + `bun run --cwd shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
+- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id, route?)` в `shell/electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно и прокидывает `route` как hash в обоих вариантах.
+- [ ] `isDeveloperModeActive()` **не** смотрит на `process.env.KEPLER_DEV` — только на `developerMode` из JSON. `KEPLER_DEV=1` влияет лишь на shell-level dev, не на extension loader.
 - [ ] F12 toggles DevTools на любом extension window (detached, не блокирует).
-- [ ] Settings → Developer Mode toggle persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`.
-- [ ] Если правил manifest format — обновил [Extension dev mode](docs-site/concepts/extension-dev-mode.md) и [Extension host](docs-site/concepts/extension-host.md).
-- [ ] Production build (без `KEPLER_DEV`) грузит extensions из `dist/`, не из dev server'ов.
+- [ ] Если правил manifest format или signature `openExtension` — обновил [Extension dev mode](docs-site/concepts/extension-dev-mode.md) и [Extension host](docs-site/concepts/extension-host.md).
+- [ ] Production build (без Developer Mode toggle) грузит extensions из `dist/`, не из dev server'ов.
 
 ## Я правил extension installer (`shell/scripts/install-extension.mjs`)
 

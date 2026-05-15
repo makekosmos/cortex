@@ -143,31 +143,6 @@ async function loadCatalog(force = false) {
   }
 }
 
-function installedById(id: string): InstalledExtensionInfo | undefined {
-  return installed.value.find((x) => x.id === id);
-}
-
-function marketState(ext: MarketplaceExtension): "install" | "update" | "installed" {
-  const cur = installedById(ext.id);
-  if (!cur) return "install";
-  if (cur.version && cur.version !== ext.version) return "update";
-  return "installed";
-}
-
-async function onMarketInstall(ext: MarketplaceExtension) {
-  if (installingId.value) return;
-  installingId.value = ext.id;
-  marketError.value = "";
-  try {
-    await window.kepler.extension.installFromUrl(ext.downloadUrl, ext.sha256);
-    await loadExtensions();
-  } catch (e) {
-    marketError.value = `${ext.id}: ${(e as Error).message}`;
-  } finally {
-    installingId.value = "";
-  }
-}
-
 function onClose() {
   void window.kepler.settings.close();
 }
@@ -187,12 +162,29 @@ function selectTab(t: Tab) {
   }
 }
 
-/** Установленные что НЕ в catalog (3rd-party / legacy / dev). */
-const orphanInstalled = computed<InstalledExtensionInfo[]>(() => {
-  if (!catalog.value) return installed.value;
-  const catalogIds = new Set(catalog.value.extensions.map((e) => e.id));
-  return installed.value.filter((i) => !catalogIds.has(i.id));
-});
+function catalogById(id: string): MarketplaceExtension | undefined {
+  return catalog.value?.extensions.find((e) => e.id === id);
+}
+
+function hasUpdate(i: InstalledExtensionInfo): boolean {
+  const c = catalogById(i.id);
+  return !!(c && i.version && c.version !== i.version);
+}
+
+async function onUpdate(i: InstalledExtensionInfo) {
+  const c = catalogById(i.id);
+  if (!c || installingId.value) return;
+  installingId.value = i.id;
+  marketError.value = "";
+  try {
+    await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
+    await loadExtensions();
+  } catch (e) {
+    marketError.value = `${i.id}: ${(e as Error).message}`;
+  } finally {
+    installingId.value = "";
+  }
+}
 
 // --- autoUpdater state ------------------------------------------------------
 
@@ -332,7 +324,7 @@ onBeforeUnmount(() => {
     <template v-if="tab === 'general'">
       <div v-if="loading" class="empty">Загрузка…</div>
 
-      <div v-else class="rows">
+      <div v-else class="rows kosmos-scroll">
         <div class="row">
           <div class="row-label">
             <div class="label">Глобальный хоткей</div>
@@ -413,45 +405,39 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <!-- Extensions tab — единый список из catalog.json + orphan installed внизу -->
+    <!-- Extensions tab — плоский список установленных. Обновления подтягиваются из catalog.json. -->
     <template v-else>
       <div class="market-header">
-        <span class="hint" v-if="catalog">
-          Каталог обновлён: {{ new Date(catalog.updatedAt).toLocaleString("ru") }}
-        </span>
-        <span class="hint" v-else-if="marketLoading">Загрузка каталога…</span>
+        <span class="hint" v-if="marketLoading">Проверка обновлений…</span>
+        <span class="hint" v-else></span>
         <button
           type="button"
           class="btn ghost"
           :disabled="marketLoading"
           @click="loadCatalog(true)"
         >
-          Обновить
+          Проверить обновления
         </button>
       </div>
 
       <div v-if="marketError" class="error-banner">{{ marketError }}</div>
       <div v-if="extensionsError" class="error-banner">{{ extensionsError }}</div>
 
-      <div class="ext-list">
-        <div
-          v-if="!marketLoading && catalog && catalog.extensions.length === 0"
-          class="empty"
-        >
-          Каталог пуст.
+      <div class="ext-list kosmos-scroll">
+        <div v-if="installed.length === 0" class="empty">
+          Расширений нет.
         </div>
 
         <div
-          v-for="ext in catalog?.extensions ?? []"
+          v-for="ext in installed"
           :key="ext.id"
           class="ext-item"
         >
           <img
-            v-if="ext.iconUrl"
+            v-if="ext.iconDataUri"
             class="ext-icon"
-            :src="ext.iconUrl"
+            :src="ext.iconDataUri"
             alt=""
-            @error="($event.target as HTMLImageElement).style.display = 'none'"
           />
           <div v-else class="ext-icon ext-icon-fallback">
             {{ ext.name.slice(0, 1) }}
@@ -459,25 +445,13 @@ onBeforeUnmount(() => {
           <div class="ext-info">
             <div class="ext-name">{{ ext.name }}</div>
             <div class="ext-meta">
-              <span class="ext-version">v{{ ext.version }}</span>
-              <span class="ext-author">· {{ ext.author }}</span>
-              <span
-                v-if="marketState(ext) === 'update' && installedById(ext.id)"
-                class="ext-author"
-              >
-                · установлено v{{ installedById(ext.id)?.version }}
+              <span class="ext-version">v{{ ext.version ?? "—" }}</span>
+              <span v-if="ext.author" class="ext-author">· {{ ext.author }}</span>
+              <span v-if="hasUpdate(ext)" class="ext-author">
+                · доступно v{{ catalogById(ext.id)?.version }}
               </span>
-              <span
-                v-else-if="marketState(ext) === 'installed'"
-                class="ext-author"
-              >
-                · установлено
-              </span>
-              <span
-                v-if="(installedById(ext.id)?.backupCount ?? 0) > 0"
-                class="ext-backups"
-              >
-                · backup'ов: {{ installedById(ext.id)?.backupCount }}
+              <span v-if="ext.backupCount > 0" class="ext-backups">
+                · backup'ов: {{ ext.backupCount }}
               </span>
             </div>
             <div v-if="ext.description" class="ext-description">
@@ -486,7 +460,17 @@ onBeforeUnmount(() => {
           </div>
           <div class="ext-actions">
             <button
-              v-if="(installedById(ext.id)?.backupCount ?? 0) > 0"
+              v-if="hasUpdate(ext)"
+              type="button"
+              class="btn"
+              :disabled="installingId === ext.id || busyExt === ext.id"
+              @click="onUpdate(ext)"
+            >
+              <template v-if="installingId === ext.id">Обновление…</template>
+              <template v-else>Обновить</template>
+            </button>
+            <button
+              v-if="ext.backupCount > 0"
               type="button"
               class="btn ghost"
               :disabled="busyExt === ext.id || installingId === ext.id"
@@ -495,7 +479,6 @@ onBeforeUnmount(() => {
               Откатить
             </button>
             <button
-              v-if="installedById(ext.id)"
               type="button"
               class="btn ghost danger"
               :disabled="busyExt === ext.id || installingId === ext.id"
@@ -503,77 +486,8 @@ onBeforeUnmount(() => {
             >
               Удалить
             </button>
-            <button
-              type="button"
-              class="btn"
-              :disabled="
-                installingId === ext.id ||
-                busyExt === ext.id ||
-                marketState(ext) === 'installed'
-              "
-              @click="onMarketInstall(ext)"
-            >
-              <template v-if="installingId === ext.id">Установка…</template>
-              <template v-else-if="marketState(ext) === 'update'">
-                Обновить
-              </template>
-              <template v-else-if="marketState(ext) === 'installed'">
-                Установлено
-              </template>
-              <template v-else>Установить</template>
-            </button>
           </div>
         </div>
-
-        <!-- Orphan installed — есть локально, но нет в catalog (3rd-party / legacy / dev install) -->
-        <template v-if="orphanInstalled.length > 0">
-          <div class="ext-section-header">Прочие установленные</div>
-          <div v-for="ext in orphanInstalled" :key="ext.id" class="ext-item">
-            <img
-              v-if="ext.iconDataUri"
-              class="ext-icon"
-              :src="ext.iconDataUri"
-              alt=""
-            />
-            <div v-else class="ext-icon ext-icon-fallback">
-              {{ ext.name.slice(0, 1) }}
-            </div>
-            <div class="ext-info">
-              <div class="ext-name">{{ ext.name }}</div>
-              <div class="ext-meta">
-                <span class="ext-version">v{{ ext.version ?? "—" }}</span>
-                <span v-if="ext.author" class="ext-author">
-                  · {{ ext.author }}
-                </span>
-                <span v-if="ext.backupCount > 0" class="ext-backups">
-                  · backup'ов: {{ ext.backupCount }}
-                </span>
-              </div>
-              <div v-if="ext.description" class="ext-description">
-                {{ ext.description }}
-              </div>
-            </div>
-            <div class="ext-actions">
-              <button
-                v-if="ext.backupCount > 0"
-                type="button"
-                class="btn ghost"
-                :disabled="busyExt === ext.id"
-                @click="onRevert(ext.id)"
-              >
-                Откатить
-              </button>
-              <button
-                type="button"
-                class="btn ghost danger"
-                :disabled="busyExt === ext.id"
-                @click="onUninstall(ext.id)"
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
-        </template>
       </div>
     </template>
   </div>

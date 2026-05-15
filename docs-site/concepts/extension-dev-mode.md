@@ -10,10 +10,14 @@ Hot-reload extension'ов через Vite dev servers. Изменения в `ex
 
 ## Включение
 
-Один из вариантов:
+Extension HMR активируется **только** через явный toggle:
 
-- **Env var** `KEPLER_DEV=1` при запуске kepler-shell.
-- **Settings → Developer Mode** toggle (persist в JSON, см. ниже).
+- **Settings → Developer Mode** toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`, см. ниже).
+- **И** параллельно поднятые Vite dev servers — `bun run --cwd shell dev:extensions`.
+
+::: warning KEPLER_DEV больше НЕ активирует extension dev mode
+Env var `KEPLER_DEV=1` (которую автоматом выставляет `bun run --cwd shell dev`) раньше включала extension HMR. Это ломало dev-сессию без поднятых dev server'ов — extension окна получали URL `http://localhost:5180/...` и были пустые. Сейчас `KEPLER_DEV=1` влияет только на shell-level dev (DevTools шелла, dev URL шелла); extension loader смотрит исключительно на `developerMode: true` в `kepler-shell-settings.json`. Toggle в Settings UI **отображается** включенным при `KEPLER_DEV=1` (для консистентности индикатора), но это только UI-индикатор — реальное поведение управляется JSON-настройкой.
+:::
 
 При включении extension-host резолвит `entryHtml` не из `dist/`, а из `http://localhost:<devPort>/`.
 
@@ -25,8 +29,9 @@ Hot-reload extension'ов через Vite dev servers. Изменения в `ex
 # Terminal 1 — Vite dev servers для каждого extension'а
 bun run --cwd shell dev:extensions
 
-# Terminal 2 — Kepler shell с включённым dev режимом
-$env:KEPLER_DEV = "1"; bun run --cwd shell dev
+# Terminal 2 — Kepler shell (KEPLER_DEV=1 выставляется автоматом, но extension HMR
+# требует ещё включить Developer Mode toggle в Settings UI — единоразово)
+bun run --cwd shell dev
 ```
 
 После этого:
@@ -61,10 +66,10 @@ $env:KEPLER_DEV = "1"; bun run --cwd shell dev
 }
 ```
 
-Resolver `openExtension(id)` в `shell/electron/extension-host.ts`:
+Resolver `openExtension(id, route?)` в `shell/electron/extension-host.ts`:
 
-- Если `KEPLER_DEV=1` **и** в манифесте есть `devPort` → `BrowserWindow.loadURL('http://localhost:<devPort>/')`.
-- Иначе → fallback на `loadFile(<root>/<id>/<entryHtml>)` из bundled dist.
+- Если `developerMode: true` в `kepler-shell-settings.json` **и** в манифесте есть `devPort` → `BrowserWindow.loadURL('http://localhost:<devPort>/#<route>')`.
+- Иначе → fallback на `loadFile(<root>/<id>/<entryHtml>, { hash: route })` из bundled dist.
 
 ## Settings toggle
 
@@ -77,8 +82,8 @@ Settings window kepler-shell имеет checkbox «Developer Mode». Значе�
 ```
 
 - Toggle включает/выключает dev-resolution **на следующий** `openExtension(id)`. Уже открытые окна не перезагружаются автоматически.
-- Без env-перменной значение из JSON — единственный источник.
-- Если **и** env var выставлен, **и** JSON true — оба эквивалентны, флаг ON.
+- `developerMode` в JSON — **единственный** источник правды для extension loader'а.
+- Settings UI **отображает** `KEPLER_DEV=1 || developerMode` (через IPC `kepler:settings:developer-mode:get`), чтобы toggle в dev-сессии не выглядел случайно «выключенным». Это исключительно UI-индикатор — переключатель надо явно щёлкнуть, чтобы JSON обновился и extension loader увидел изменение.
 
 Код: `shell/electron/settings-window.ts` (loader/saver + IPC handler), `shell/src/views/SettingsView.vue` (UI).
 

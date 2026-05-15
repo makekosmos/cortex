@@ -130,7 +130,7 @@ Kepler.exe --ext-install path\to\extension.kext
 └── extensions-data/<id>/                 ← user data, install не трогает
 ```
 
-Revert (Settings → Расширения → «Откатить»):
+Revert (Settings → Расширения → «Откатить» рядом с строкой extension'а в плоском списке установленных):
 
 1. Сохранить текущую копию как **новый** backup (revert reversible).
 2. Скопировать самый свежий backup в `extensions/<id>/` через tmp + atomic rename.

@@ -40,7 +40,7 @@ shell/
 │  ├─ dashboard-window.ts        # openDashboardWindow() + window state
 │  ├─ main.ts                    # kepler:ark:request handler
 │  ├─ preload.ts                 # window.kepler.ark bridge
-│  └─ commands.ts                # static `dashboard:open` команда
+│  └─ commands.ts                # static `dashboard:open` команда (title «Открыть таблицу данных»)
 └─ src/
    ├─ main.ts                    # hash → root view dispatch
    ├─ views/
@@ -101,7 +101,7 @@ bun run --cwd shell dev                    # backend + extensions + Kepler rende
 
 Открытие окна:
 - Через tray menu → «Dashboard».
-- Через static launcher command `dashboard:open` (в `shell/electron/commands.ts`).
+- Через static launcher command `dashboard:open` («Открыть таблицу данных», `kind: "command"`, `appName: "Kepler"`) в `shell/electron/commands.ts`. Иконка в launcher — `BuiltInIcon` (teal `Database` glyph).
 
 ## ARK operations, которые Dashboard использует
 

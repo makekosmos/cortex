@@ -287,11 +287,12 @@ function createLauncher() {
     console.error("[kepler-shell] setBackgroundMaterial failed:", e);
   }
 
-  // В prod hide вместо close при потере фокуса; в dev — оставляем открытым
-  // чтобы переключаться в DevTools / IDE без потери launcher'а.
-  if (!isDev) {
-    mainWindow.on("blur", () => hideLauncher());
-  }
+  // Hide launcher при потере фокуса (клик вне окна / Alt+Tab).
+  // В dev пропускаем если фокус ушёл на DevTools — иначе нечем отлаживать.
+  mainWindow.on("blur", () => {
+    if (isDev && mainWindow?.webContents.isDevToolsFocused()) return;
+    hideLauncher();
+  });
   mainWindow.on("close", (e) => {
     if (!isQuiting) {
       e.preventDefault();
@@ -536,6 +537,8 @@ function staticCommands(): CommandRecord[] {
     title: c.title,
     subtitle: c.subtitle,
     category: c.category,
+    kind: c.kind,
+    appName: c.appName,
     icon: c.icon?.(),
   }));
 }
@@ -552,15 +555,18 @@ ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
       return Array.from(byId.values());
     }
     for (const c of dynamic) {
-      // Static open-commands имеют приоритет (их id типа "eden:open" не должны
+      // Static open-commands имеют приоритет (их id типа "delphi:open" не должны
       // переопределяться апкой). Если апка регистрирует уникальный id —
       // добавляем; иначе static побеждает.
       if (!byId.has(c.id)) {
+        const d = c as CommandRecord & { kind?: "app" | "command"; appName?: string };
         byId.set(c.id, {
           id: c.id,
           title: c.title,
           subtitle: c.subtitle,
           category: c.category,
+          kind: d.kind,
+          appName: d.appName,
         });
       }
     }

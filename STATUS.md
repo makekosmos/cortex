@@ -1,4 +1,14 @@
-# Kosmos — статус проекта (2026-05-15)
+# Kosmos — статус проекта (2026-05-16)
+
+## Текущие версии
+
+| Артефакт | Версия |
+|---|---|
+| Kepler shell (`shell/package.json`) | **0.1.6** |
+| Horologion extension (`extensions/horologion/manifest.json`) | **0.1.1** |
+| Delphi extension | 0.1.0 |
+| Arrancador extension | 0.1.0 |
+| Dashboard | встроен в shell (не extension) |
 
 Итог архитектурного pivot'а от standalone Electron-апок к Kepler-host архитектуре с Vue extensions. Замигрированы 4 из 5 апок (Eden намеренно отложен). После 2026-05-15: концепция spaces убрана (single DB per user), Dashboard встроен в shell, e2e Playwright suite зелёный.
 
@@ -108,7 +118,7 @@ Backend получает `KOSMOS_DATA_DIR=<resolved>` env при spawn'е. См.
 - `electron-builder` NSIS config: `apps/kepler-shell/package.json` `build` section.
 - `extraResources`: `kepler-backend.exe` + `ark-core-rpc.exe` + `extensions/<id>/dist+manifest+icon` + tray icon.
 - `afterPack.cjs` hook — PNG → ICO + rcedit embed metadata в `Kepler.exe`.
-- `bun run --cwd apps/kepler-shell build` → `release/Kepler Setup 0.0.1.exe`.
+- `bun run --cwd apps/kepler-shell build` → `release/Kepler Setup 0.1.6.exe`.
 - Install path: `%LOCALAPPDATA%\Programs\Kepler\` (per-user oneClick).
 
 ### Inter-app communication
@@ -186,7 +196,7 @@ LRU eviction, RAM budget management, lazy extension load/unload. Имеет см
 - `apps/kepler/` (старый Rust gpui launcher) — удалить.
 - `apps/{dashboard,delphi,horologion,arrancador}/` standalone Electron — удалить (extensions cover everything).
 - Eden — оставить пока не сделано Phase 6.
-- Auto-update mechanism (`electron-updater`) — не подключён.
+- Auto-update mechanism (`electron-updater`) — **подключён** (Phase 8b, 2026-05-16): `shell/electron/autoupdater-host.ts` (state machine: idle/checking/available/downloading/downloaded/error), Raycast-style banner в Settings, launcher-команда `kepler:check-updates`, кнопка «Проверить обновления» в General. Distribution через `yoso-industries/kepler-releases`. См. [Distribution](docs-site/concepts/distribution.md#kepler-launcher-autoupdater).
 
 ### Phase 9 — Delphi UI на plain CSS (open question)
 
@@ -245,7 +255,7 @@ bun run --cwd apps/kepler-shell dev
 cd apps\kepler-shell
 bun install
 bun run build
-:: → release/Kepler Setup 0.0.1.exe (3-5 min cold)
+:: → release/Kepler Setup 0.1.6.exe (3-5 min cold)
 ```
 
 ### Verify

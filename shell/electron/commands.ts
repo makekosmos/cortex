@@ -8,21 +8,18 @@
 import { extensionIconDataUri, openExtension } from "./extension-host";
 import { openDashboardWindow } from "./dashboard-window";
 import { openSettings } from "./settings-window";
-
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-// ESM shim — __dirname / __filename не определены в Node ESM bundles.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { check as checkUpdates } from "./autoupdater-host";
 
 export interface InternalCommand {
   id: string;
   title: string;
   subtitle: string;
   category: "open" | "action";
+  /** UI-классификация плашки. 'app' → правый лейбл «Приложение».
+      'command' → «Команда · <appName>». */
+  kind?: "app" | "command";
+  /** Имя родительского приложения для command-плашек. */
+  appName?: string;
   /**
    * Опциональная иконка как data URI. Для open-команд extension'ов берётся
    * из `extensionIconDataUri(<id>)`. Lazy getter — читаем с диска один раз,
@@ -32,58 +29,27 @@ export interface InternalCommand {
   exec: () => Promise<void> | void;
 }
 
-function resolveAppExe(appLower: string): string | null {
-  const cap = appLower.charAt(0).toUpperCase() + appLower.slice(1);
-  const candidates = [
-    path.join(process.env.LOCALAPPDATA ?? "", "Kosmos", cap, `${cap}.exe`),
-    path.join(process.env.LOCALAPPDATA ?? "", "Programs", cap, `${cap}.exe`),
-    path.join(process.env.PROGRAMFILES ?? "", cap, `${cap}.exe`),
-    path.join(process.env.PROGRAMFILES ?? "", "Kosmos", cap, `${cap}.exe`),
-    path.resolve(__dirname, "..", "..", "..", "..", "apps", appLower, "release", `${cap}.exe`),
-    path.resolve(__dirname, "..", "..", "..", "..", "apps", appLower, "ts", "release", `${cap}.exe`),
-  ];
-  for (const c of candidates) {
-    if (c && existsSync(c)) return c;
-  }
-  return null;
+function openAsExtension(id: string, route?: string): void {
+  openExtension(id, route);
 }
 
-function openAppExe(appLower: string): void {
-  const exe = resolveAppExe(appLower);
-  if (!exe) {
-    console.warn(`[kepler-shell] ${appLower}.exe not found (legacy fallback)`);
-    return;
+async function runCheckUpdates(): Promise<void> {
+  openSettings();
+  try {
+    await checkUpdates();
+  } catch (e) {
+    console.warn("[kepler-shell] check updates failed:", e);
   }
-  spawn(exe, [], { detached: true, stdio: "ignore" }).unref();
-}
-
-function openAsExtension(id: string): void {
-  openExtension(id);
 }
 
 export const COMMANDS: InternalCommand[] = [
-  // Dashboard — встроенный shell view (не extension), открывается в
-  // отдельном BrowserWindow через dashboard-window.ts.
-  {
-    id: "dashboard:open",
-    title: "Открыть таблицу данных",
-    subtitle: "Просмотр объектов ARK",
-    category: "open",
-    exec: () => openDashboardWindow(),
-  },
-  {
-    id: "settings:open",
-    title: "Открыть настройки",
-    subtitle: "Kepler",
-    category: "open",
-    exec: () => openSettings(),
-  },
-  // Phase 4 migrated apps — открываются как Vue extension'ы внутри Kepler.
+  // App tiles — открывают приложение/extension в новом окне.
   {
     id: "delphi:open",
     title: "Открыть Delphi",
     subtitle: "Задачи",
     category: "open",
+    kind: "app",
     icon: () => extensionIconDataUri("delphi"),
     exec: () => openAsExtension("delphi"),
   },
@@ -92,6 +58,7 @@ export const COMMANDS: InternalCommand[] = [
     title: "Открыть Horologion",
     subtitle: "Pomodoro + трекер времени",
     category: "open",
+    kind: "app",
     icon: () => extensionIconDataUri("horologion"),
     exec: () => openAsExtension("horologion"),
   },
@@ -100,16 +67,68 @@ export const COMMANDS: InternalCommand[] = [
     title: "Открыть Arrancador",
     subtitle: "Игровая библиотека",
     category: "open",
+    kind: "app",
     icon: () => extensionIconDataUri("arrancador"),
     exec: () => openAsExtension("arrancador"),
   },
-  // Eden намеренно НЕ мигрирован в Phase 4 — остаётся standalone .exe.
+  // Kepler commands — встроенные в shell.
   {
-    id: "eden:open",
-    title: "Открыть Eden",
-    subtitle: "Заметки (legacy standalone)",
+    id: "dashboard:open",
+    title: "Открыть таблицу данных",
+    subtitle: "Просмотр объектов ARK",
     category: "open",
-    exec: () => openAppExe("eden"),
+    kind: "command",
+    appName: "Kepler",
+    exec: () => openDashboardWindow(),
+  },
+  {
+    id: "settings:open",
+    title: "Открыть настройки",
+    subtitle: "Kepler",
+    category: "open",
+    kind: "command",
+    appName: "Kepler",
+    exec: () => openSettings(),
+  },
+  {
+    id: "kepler:check-updates",
+    title: "Проверить обновления",
+    subtitle: "Kepler и расширения",
+    category: "open",
+    kind: "command",
+    appName: "Kepler",
+    exec: () => runCheckUpdates(),
+  },
+  // Extension commands — открывают приложение на конкретной странице.
+  {
+    id: "delphi:today",
+    title: "Сегодняшние задачи",
+    subtitle: "Delphi",
+    category: "open",
+    kind: "command",
+    appName: "Delphi",
+    icon: () => extensionIconDataUri("delphi"),
+    exec: () => openAsExtension("delphi", "/today"),
+  },
+  {
+    id: "horologion:pomodoro",
+    title: "Помодоро",
+    subtitle: "Horologion",
+    category: "open",
+    kind: "command",
+    appName: "Horologion",
+    icon: () => extensionIconDataUri("horologion"),
+    exec: () => openAsExtension("horologion", "/?mode=pomodoro"),
+  },
+  {
+    id: "horologion:stopwatch",
+    title: "Секундомер",
+    subtitle: "Horologion",
+    category: "open",
+    kind: "command",
+    appName: "Horologion",
+    icon: () => extensionIconDataUri("horologion"),
+    exec: () => openAsExtension("horologion", "/?mode=stopwatch"),
   },
 ];
 

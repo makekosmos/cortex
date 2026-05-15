@@ -30,14 +30,121 @@ Launcher и marketplace полностью независимы — пользо
 
 ## Kepler launcher: autoUpdater
 
-`shell/electron/main.ts → setupAutoUpdater()`:
-- Skip в dev mode (`VITE_DEV_SERVER_URL` set) и test mode (`KOSMOS_TEST_MODE=1`).
-- `checkForUpdatesAndNotify()` на старте + каждые **6 часов** (`setInterval`).
-- `update-downloaded` → native dialog «Перезапустить сейчас?» → `quitAndInstall()` если yes.
-- Logging всех событий в console (`update-available`, `download-progress`, `error`).
+Реализация — `shell/electron/autoupdater-host.ts` (state machine поверх
+`electron-updater`). Вызывается из `shell/electron/main.ts` как
+`setupAutoUpdater({ isDev })`.
+
+- Skip в dev mode (`isDev: true`, передаётся из main.ts когда
+  `VITE_DEV_SERVER_URL` set) и test mode (`KOSMOS_TEST_MODE=1`).
+- `check()` на старте + каждые **6 часов** (`setInterval`).
+- `autoDownload = true`, `autoInstallOnAppQuit = false` — установку драйвит
+  пользователь кликом по banner'у.
+- `update-downloaded` → broadcast `kind: "downloaded"`. Native dialog
+  «Перезапустить сейчас?» появляется как **fallback через 5 минут**, если
+  пользователь не нажал banner.
 
 Конфиг publish'а — в `shell/package.json → build.publish[0]` (provider github,
 owner yoso-industries, repo kepler-releases).
+
+### State machine
+
+```
+idle → checking → (available → downloading → downloaded) | not-available | error
+any → checking (manual or periodic)
+```
+
+`UpdateState` (см. `autoupdater-host.ts`):
+
+| kind | поля |
+|---|---|
+| `idle` | — |
+| `checking` | — |
+| `not-available` | `checkedAt: number` |
+| `available` | `version: string` |
+| `downloading` | `version: string`, `percent: number` |
+| `downloaded` | `version: string` |
+| `error` | `message: string` |
+
+Broadcast идёт на IPC канал **`kepler:settings:update:state`** для **всех**
+`BrowserWindow`'ов (launcher / settings / extensions). UI слушает и
+ререндерит banner.
+
+### Public API (main process)
+
+```ts
+import {
+  setupAutoUpdater,
+  check,
+  install,
+  getState,
+} from "./autoupdater-host";
+
+setupAutoUpdater({ isDev });   // init + первый check + 6h interval
+await check();                  // manual force-check (idempotent)
+install();                      // quitAndInstall — для click-to-install
+getState();                     // текущий UpdateState (snapshot)
+```
+
+### IPC handlers / renderer API
+
+| IPC channel | direction | payload |
+|---|---|---|
+| `kepler:settings:update:check` | invoke | → `UpdateState` |
+| `kepler:settings:update:install` | invoke | → `void` |
+| `kepler:settings:update:state` | invoke | → `UpdateState` (snapshot) |
+| `kepler:settings:update:state` | event (main→renderer) | `UpdateState` (push) |
+
+Renderer (через preload `window.kepler.settings.update`):
+
+```ts
+await window.kepler.settings.update.check();
+await window.kepler.settings.update.install();
+const state = await window.kepler.settings.update.state();
+const off = window.kepler.settings.update.onStateChanged((s) => {
+  // re-render banner
+});
+```
+
+### Raycast-style banner UI
+
+`shell/src/views/SettingsView.vue` рендерит sticky banner высотой 32px
+сверху Settings окна, если `state.kind !== "idle"` и `!= "not-available"`.
+
+| State | Текст | Icon | Поведение клика |
+|---|---|---|---|
+| `available` | «Обновление Kepler X.Y.Z — нажми чтобы скачать» | `ArrowUpCircle` | autoDownload уже идёт, click no-op (или повторный check) |
+| `downloading` | progress bar + `{percent}%` | `Loader2` (spin) | disabled |
+| `downloaded` | «Обновление готово — нажми чтобы установить и перезапустить» | `ArrowUpCircle` | `install()` → quitAndInstall |
+| `error` | сообщение error'а | — | retry check |
+
+Иконки — `lucide-vue-next`.
+
+### Manual «Проверить обновления»
+
+Доступно двумя способами:
+
+1. **Settings → General → кнопка «Проверить обновления»** — вызывает
+   `window.kepler.settings.update.check()`.
+2. **Launcher команда `kepler:check-updates`** (Ctrl+Shift+K → «Проверить
+   обновления»). Хендлер `runCheckUpdates()` в `shell/electron/commands.ts`:
+   открывает Settings окно через `openSettings()`, затем триггерит
+   `check()` из autoupdater-host. Banner появится в Settings когда state
+   изменится.
+
+### Tray icon в production
+
+В production окно tray грузит иконку из `process.resourcesPath/icon.png`.
+`shell/electron/main.ts → createTray()` пробует candidate-paths по
+приоритету:
+
+1. `<process.resourcesPath>/icon.png` (production, кладётся через
+   `extraResources` в `shell/package.json → build`).
+2. `<__dirname>/../build/icon.png` (dev fallback).
+3. `<__dirname>/../../build/icon.png` (dev из dist-electron).
+
+Без этого в production install tray icon был чёрным placeholder'ом —
+`__dirname` указывал на `<install>/resources/app.asar/dist-electron/` и
+относительный путь не резолвился.
 
 ### Релиз launcher'а
 
@@ -96,13 +203,14 @@ Launcher tolerant к unknown fields. Breaking change → bump `schemaVersion` +
 
 ### Marketplace UI
 
-Settings → Extensions → **Маркетплейс** (sub-tab):
-- На mount fetch'ит `catalog.json` через
+Settings → **Расширения** — плоский список установленных, каталог используется только для lookup версий (без отдельного «Маркетплейс» sub-tab'а и без grid карточек):
+- На mount таб fetch'ит `catalog.json` через
   `window.kepler.extension.catalogFetch()`.
 - Cache 1h в main process (`extension-marketplace.ts → fetchCatalog`).
-- Per-card state computed sравнением `catalog[i].version` с
-  `installedById(id).version`: «Установить» / «Обновить» / «Установлено».
-- Badge с числом updates available — `computed` от catalog + installed.
+- Per-row: сравнение `catalog[id].version` с `installed.version` — если catalog свежее, появляется кнопка **«Обновить»**.
+- Кнопка **«Проверить обновления»** в шапке таба зовёт `loadCatalog(force=true)` (минует cache).
+- Для каждой установленной строки также доступны **«Откатить»** (если в `extensions-backups/<id>/` есть копия) и **«Удалить»**.
+- Секций «Прочие установленные» / «Каталог пуст» / hint «Каталог обновлён: <date>» больше нет — каталог не показывается как самостоятельная витрина.
 
 ### Periodic check
 
