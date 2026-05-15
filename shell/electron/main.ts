@@ -38,6 +38,7 @@ import {
 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ArkClient, ensureKeplerRunning } from "@kepler/ark";
+import { keplerDataDir } from "./data-dir";
 import type {
   BackendStatus,
   CommandRecord,
@@ -118,16 +119,19 @@ function spawnBackend() {
     console.error("[kepler-shell] kepler-backend.exe not found at", exe);
     return;
   }
-  backendLockPath = path.join(
-    app.getPath("appData"),
-    "Kosmos",
-    "kepler.lock.json",
-  );
+  const dataDir = keplerDataDir();
+  backendLockPath = path.join(dataDir, "kepler.lock.json");
   console.error("[kepler-shell] spawning backend:", exe);
+  console.error("[kepler-shell] data dir:", dataDir);
   backendProc = spawn(exe, [], {
     detached: false,
     stdio: ["ignore", "pipe", "pipe"],
-    env: process.env,
+    // Forwarder KOSMOS_DATA_DIR в backend — обязательно для dev/test
+    // изоляции. Production: env пустой, backend defaults к %APPDATA%/Kosmos.
+    env: {
+      ...process.env,
+      KOSMOS_DATA_DIR: dataDir,
+    },
   });
   backendProc.stdout?.on("data", (b) =>
     process.stderr.write(`[kepler-backend] ${b.toString()}`),
@@ -169,7 +173,7 @@ interface WindowState {
 }
 
 function windowStatePath(): string {
-  return path.join(app.getPath("appData"), "Kosmos", WINDOW_STATE_FILENAME);
+  return path.join(keplerDataDir(), WINDOW_STATE_FILENAME);
 }
 
 function loadWindowState(): WindowState | null {

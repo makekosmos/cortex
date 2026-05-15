@@ -41,6 +41,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { keplerDataDir } from "./data-dir";
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles.
 const __filename = fileURLToPath(import.meta.url);
@@ -159,11 +160,7 @@ function resolveExtensionRoots(): string[] {
   // extensions are at <repoRoot>/extensions/ — i.e. ../../extensions/ from here.
   const dev = path.resolve(__dirname, "..", "..", "extensions");
   if (existsSync(dev)) roots.push(dev);
-  const userRoot = path.join(
-    app.getPath("appData"),
-    "Kosmos",
-    "extensions",
-  );
+  const userRoot = path.join(keplerDataDir(), "extensions");
   if (!roots.includes(userRoot)) roots.push(userRoot);
   if (process.resourcesPath) {
     const bundled = path.join(process.resourcesPath, "extensions");
@@ -178,7 +175,7 @@ function resolveExtensionRoots(): string[] {
  * (а не дублировать path-логику).
  */
 export function userExtensionsRoot(): string {
-  return path.join(app.getPath("appData"), "Kosmos", "extensions");
+  return path.join(keplerDataDir(), "extensions");
 }
 
 /**
@@ -192,7 +189,7 @@ export function userExtensionsRoot(): string {
  *     ...                  (любые user files extension'а)
  */
 export function extensionUserDataDir(id: string): string {
-  return path.join(app.getPath("appData"), "Kosmos", "extensions-data", id);
+  return path.join(keplerDataDir(), "extensions-data", id);
 }
 
 // Path traversal protection: name должно быть «нормальным» basename'ом —

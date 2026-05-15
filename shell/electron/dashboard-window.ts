@@ -9,10 +9,11 @@
 // Открывается через `openDashboardWindow()` (вызов из tray menu или из
 // внутренней static command `dashboard:open`).
 
-import { app, BrowserWindow, screen } from "electron";
+import { BrowserWindow, screen } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { keplerDataDir } from "./data-dir";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,7 +36,7 @@ interface DashboardWindowState {
 }
 
 function stateFilePath(): string {
-  return path.join(app.getPath("appData"), "Kosmos", STATE_FILENAME);
+  return path.join(keplerDataDir(), STATE_FILENAME);
 }
 
 function readState(): Partial<DashboardWindowState> | null {
