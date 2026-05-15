@@ -1,0 +1,50 @@
+                        time:   [12.320 µs 12.500 µs 12.684 µs]
+Benchmarking delphi_filters/filter_inbox/10000
+Benchmarking delphi_filters/filter_inbox/10000: Warming up for 3.0000 s
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 8.4s, enable flat sampling, or reduce sample count to 50.
+Benchmarking delphi_filters/filter_inbox/10000: Collecting 100 samples in estimated 8.4309 s (5050 iterations)
+Benchmarking delphi_filters/filter_inbox/10000: Analyzing
+delphi_filters/filter_inbox/10000
+                        time:   [1.7284 ms 1.7695 ms 1.8158 ms]
+Benchmarking delphi_filters/filter_today/10000
+Benchmarking delphi_filters/filter_today/10000: Warming up for 3.0000 s
+Benchmarking delphi_filters/filter_today/10000: Collecting 100 samples in estimated 7.0101 s (15k iterations)
+Benchmarking delphi_filters/filter_today/10000: Analyzing
+delphi_filters/filter_today/10000
+                        time:   [465.08 µs 471.59 µs 478.67 µs]
+Benchmarking delphi_filters/filter_upcoming/10000
+Benchmarking delphi_filters/filter_upcoming/10000: Warming up for 3.0000 s
+Benchmarking delphi_filters/filter_upcoming/10000: Collecting 100 samples in estimated 6.2906 s (10k iterations)
+Benchmarking delphi_filters/filter_upcoming/10000: Analyzing
+delphi_filters/filter_upcoming/10000
+                        time:   [633.20 µs 641.83 µs 650.45 µs]
+Benchmarking delphi_filters/filter_anytime/10000
+Benchmarking delphi_filters/filter_anytime/10000: Warming up for 3.0000 s
+Benchmarking delphi_filters/filter_anytime/10000: Collecting 100 samples in estimated 5.1922 s (2500 iterations)
+Benchmarking delphi_filters/filter_anytime/10000: Analyzing
+delphi_filters/filter_anytime/10000
+                        time:   [1.9618 ms 1.9950 ms 2.0286 ms]
+Benchmarking delphi_filters/filter_someday/10000
+Benchmarking delphi_filters/filter_someday/10000: Warming up for 3.0000 s
+Benchmarking delphi_filters/filter_someday/10000: Collecting 100 samples in estimated 5.5129 s (25k iterations)
+Benchmarking delphi_filters/filter_someday/10000: Analyzing
+delphi_filters/filter_someday/10000
+                        time:   [214.01 µs 216.34 µs 218.83 µs]
+Benchmarking delphi_filters/filter_logbook/10000
+Benchmarking delphi_filters/filter_logbook/10000: Warming up for 3.0000 s
+Benchmarking delphi_filters/filter_logbook/10000: Collecting 100 samples in estimated 6.0308 s (15k iterations)
+Benchmarking delphi_filters/filter_logbook/10000: Analyzing
+delphi_filters/filter_logbook/10000
+                        time:   [398.88 µs 404.42 µs 410.08 µs]
+Benchmarking delphi_filters/filter_trash/10000
+Benchmarking delphi_filters/filter_trash/10000: Warming up for 3.0000 s
+Benchmarking delphi_filters/filter_trash/10000: Collecting 100 samples in estimated 6.4271 s (20k iterations)
+Benchmarking delphi_filters/filter_trash/10000: Analyzing
+delphi_filters/filter_trash/10000
+                        time:   [314.49 µs 318.90 µs 323.45 µs]
+Benchmarking delphi_filters/count_all/10000
+Benchmarking delphi_filters/count_all/10000: Warming up for 3.0000 s
+Benchmarking delphi_filters/count_all/10000: Collecting 100 samples in estimated 5.0830 s (40k iterations)
+Benchmarking delphi_filters/count_all/10000: Analyzing
+delphi_filters/count_all/10000
+                        time:   [97.705 µs 99.185 µs 100.58 µs]
