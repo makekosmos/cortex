@@ -95,6 +95,13 @@ pub struct SessionState {
     pub title: String,
     /// Tasks — для multi-task split renderer'ом.
     pub tasks: Vec<TaskRef>,
+    /// Wallclock (Unix ms) когда текущая фаза закончится. `Some` только
+    /// если `is_running && !is_paused` — renderer интерполирует
+    /// `remainingMs = max(0, phase_ends_at_ms - Date.now())` локально
+    /// (smooth 30fps), backend тикает 1 Hz только для consistency
+    /// (is_running / completed_pomodoros / phase-boundary).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase_ends_at_ms: Option<u64>,
 }
 
 impl SessionState {
@@ -108,6 +115,7 @@ impl SessionState {
             is_paused: false,
             title: String::new(),
             tasks: Vec::new(),
+            phase_ends_at_ms: None,
         }
     }
 }
@@ -154,6 +162,11 @@ impl Session {
             Some(c) => (c.title.clone(), c.tasks.clone()),
             None => (String::new(), Vec::new()),
         };
+        let phase_ends_at_ms = if self.is_running && !self.is_paused {
+            Some(self.phase_ends_at_ms)
+        } else {
+            None
+        };
         SessionState {
             phase: self.phase,
             remaining_ms: self.remaining_ms,
@@ -163,6 +176,7 @@ impl Session {
             is_paused: self.is_paused,
             title,
             tasks,
+            phase_ends_at_ms,
         }
     }
 
@@ -518,6 +532,60 @@ mod tests {
         let st = s.snapshot();
         assert_eq!(st.phase, Phase::Idle);
         assert!(!st.is_running);
+    }
+
+    #[test]
+    fn snapshot_phase_ends_at_ms_some_when_running() {
+        let clock = Arc::new(MockClock::new(1_000_000));
+        let mut s = Session::new(clock.clone());
+        s.start(cfg_default());
+        let st = s.snapshot();
+        assert_eq!(
+            st.phase_ends_at_ms,
+            Some(1_000_000 + 25 * 60_000),
+            "running session must expose wallclock phase_ends_at_ms"
+        );
+    }
+
+    #[test]
+    fn snapshot_phase_ends_at_ms_none_when_paused() {
+        let clock = Arc::new(MockClock::new(1_000_000));
+        let mut s = Session::new(clock.clone());
+        s.start(cfg_default());
+        clock.advance(60_000);
+        s.tick();
+        s.pause();
+        let st = s.snapshot();
+        assert!(
+            st.phase_ends_at_ms.is_none(),
+            "paused session must hide phase_ends_at_ms — renderer falls back на remaining_ms"
+        );
+        // remaining_ms всё ещё доступен.
+        assert!(st.remaining_ms > 0);
+    }
+
+    #[test]
+    fn snapshot_phase_ends_at_ms_none_when_idle() {
+        let clock = Arc::new(MockClock::new(1_000_000));
+        let s = Session::new(clock);
+        let st = s.snapshot();
+        assert!(st.phase_ends_at_ms.is_none());
+    }
+
+    #[test]
+    fn snapshot_phase_ends_at_ms_updates_on_resume() {
+        let clock = Arc::new(MockClock::new(0));
+        let mut s = Session::new(clock.clone());
+        s.start(cfg_default());
+        clock.advance(60_000);
+        s.tick();
+        s.pause();
+        // в паузе clock уходит вперёд, anchor должен пересчитаться на resume
+        clock.advance(30_000);
+        s.resume();
+        let st = s.snapshot();
+        // remaining_ms был 24*60_000, anchor = now (90_000) + remaining_ms
+        assert_eq!(st.phase_ends_at_ms, Some(90_000 + 24 * 60_000));
     }
 
     #[test]
