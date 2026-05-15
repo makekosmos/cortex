@@ -163,7 +163,10 @@ fn merge_state(v: &mut Value, state: &ark_core::pomodoro::SessionState) {
 }
 
 async fn ticker_loop(session: Arc<Mutex<Session>>) {
-    let mut interval = tokio::time::interval(Duration::from_millis(1000));
+    // 250ms — parity с TS setInterval(..., 250) в legacy usePomodoro. Ниже —
+    // overkill (ws traffic), выше — UI заметно лагает в e2e тестах которые
+    // ожидают first-tick в 1500ms окне.
+    let mut interval = tokio::time::interval(Duration::from_millis(250));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         interval.tick().await;
