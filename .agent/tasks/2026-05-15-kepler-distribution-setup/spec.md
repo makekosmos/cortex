@@ -1,196 +1,296 @@
-# Kepler distribution setup — auto-update через GitHub Releases
+# Kosmos distribution — Raycast-style 2-repo model
 
 ## Цель
 
-Production Kepler приложение должно обновляться **без переустановки**:
-1. Юзер скачивает `Kepler-Setup-X.Y.Z.exe` с GitHub Release.
-2. Запускает, использует.
-3. Через N часов / при следующем старте — autoUpdater проверяет новый
-   release, скачивает diff, при следующем рестарте применяет.
-4. Никакого ручного re-install для minor / patch updates.
+1. **Kepler launcher** — distributed как Windows installer через GitHub
+   Releases. autoUpdater на старте + каждые 6 часов. Юзер не переинсталлит
+   вручную.
+2. **Kosmos extensions** — Raycast-style marketplace. Отдельный публичный
+   repo с `.kext` artifacts + `catalog.json`. Лаунчер тянет catalog,
+   показывает доступные / новые extensions, устанавливает через
+   существующий Wave 1 `.kext` installer flow.
+3. Source code остаётся в **`ksanrse/kepler`** monorepo. Distribution
+   repos — **binary only**.
+
+## Brand convention (per CLAUDE.md)
+
+| Уровень | Имя |
+|---|---|
+| Ecosystem | **Kosmos** |
+| Launcher app | **Kepler** |
+| Distribution repos | `kepler-releases` (launcher), `kosmos-extensions` (marketplace) |
 
 ## Архитектура
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│ Dev machine (Kazui)                                       │
-│  bun run --cwd shell build                                │
-│   ↓                                                       │
-│  electron-builder packs Kepler-Setup-X.Y.Z.exe + latest.yml│
-│   ↓ publish: github                                       │
-│  Pushes assets в GH release tag v{X.Y.Z}                  │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ Dev machine (ksanrse)                                             │
+│  bun run --cwd shell build              → kepler-releases v0.1.0  │
+│  bun run ext:publish horologion         → kosmos-extensions/      │
+│                                            horologion-v0.3.0      │
+│                                          + auto-updated catalog.json│
+└──────────────────────────────────────────────────────────────────┘
                        │
-                       ↓ (GitHub-hosted)
-┌──────────────────────────────────────────────────────────┐
-│ github.com/<OWNER>/kepler-releases (PUBLIC repo)          │
-│  Releases:                                                │
-│   v0.1.0/                                                 │
-│     Kepler-Setup-0.1.0.exe                                │
-│     latest.yml ← metadata file electron-updater reads     │
-│   v0.1.1/ ...                                             │
-└──────────────────────────────────────────────────────────┘
+                       ↓ GitHub-hosted, public
+┌──────────────────────────────────────────────────────────────────┐
+│ github.com/ksanrse/kepler-releases (PUBLIC)                       │
+│  Releases:                                                        │
+│   v0.1.0/                                                         │
+│     Kepler-Setup-0.1.0.exe   ← installer (lean: shell + ark only) │
+│     latest.yml               ← electron-updater метадата          │
+└──────────────────────────────────────────────────────────────────┘
                        │
-                       ↓ HTTPS pull
-┌──────────────────────────────────────────────────────────┐
-│ End-user machine                                          │
-│  Kepler.exe v0.1.0 (installed)                            │
-│   on app.whenReady():                                     │
-│     autoUpdater.checkForUpdatesAndNotify()                │
-│     setInterval(check, N hours)                           │
-│   ↓ if new release detected                               │
-│   downloads installer в %TEMP%\kepler-updater\            │
-│   ↓ at next quit (или prompt)                             │
-│   applies update, restarts с новой версией                │
-└──────────────────────────────────────────────────────────┘
+                       ↓ HTTPS pull (autoUpdater)
+┌──────────────────────────────────────────────────────────────────┐
+│ End-user machine                                                  │
+│  Kepler.exe (launcher + ARK backend, БЕЗ bundled extensions)      │
+│   on whenReady():                                                 │
+│     autoUpdater.checkForUpdatesAndNotify()  ← kepler-releases     │
+│     setInterval(check, 6h)                                        │
+│   Settings → Extensions → Marketplace:                            │
+│     fetch https://raw.githubusercontent.com/ksanrse/              │
+│       kosmos-extensions/main/catalog.json                         │
+│     show grid: Horologion, Делphi, Arrancador, ...                │
+│     [Install] → download .kext from kosmos-extensions release     │
+│     [Update] → бadge if installed.version < catalog.version       │
+└──────────────────────────────────────────────────────────────────┘
+                       ↑
+                       │ HTTPS pull
+┌──────────────────────────────────────────────────────────────────┐
+│ github.com/ksanrse/kosmos-extensions (PUBLIC, RAYCAST-STYLE)      │
+│  catalog.json              ← auto-generated на каждом publish     │
+│  extensions/               ← metadata + README + icon per ext      │
+│    horologion/{manifest.json, icon.png, README.md}                │
+│    delphi/...                                                     │
+│    arrancador/...                                                 │
+│  README.md                  ← submission guide для future contrib  │
+│  Releases (per-extension tagged):                                 │
+│    horologion-v0.3.0/                                             │
+│      horologion-0.3.0.kext                                        │
+│    delphi-v0.2.1/                                                 │
+│      delphi-0.2.1.kext                                            │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Открытые вопросы (decide перед execution)
+## Decisions (confirmed user)
 
-1. **GitHub repo name + owner.** Default: `github.com/ksanrse/kepler-releases`
-   (matches существующий `kepler` repo owner). Confirmed?
-2. **Public или Private?** Public = simpler — electron-updater тянет без
-   auth token на client side. Private = надо передавать GH_TOKEN на каждой
-   installed machine — нерабочий вариант для open distribution.
-   **Recommendation: Public.**
-3. **Update interval.** VS Code = 1 hour, Slack = 4 hours. Recommend:
-   - Start-up check (immediate)
-   - Periodic check каждые 6 hours
-   - Configurable через Settings (Phase 2)
-4. **Code signing.** Без подписи Windows SmartScreen покажет «Unknown
-   Publisher» при первом запуске. Юзер кликает «Run anyway». Это OK для
-   solo-dev стадии. Signing certificate стоит ~$300/year (DigiCert) или
-   бесплатный self-signed (но всё равно warning). **Recommendation:
-   skip signing для v0.x, add when stable + paying users.**
-5. **Auto-download vs prompt-first.** Default electron-updater behaviour:
-   download silently (background) → notification «update готов, рестарт?»
-   На restart applies. **Recommendation: дефолт.**
-6. **Channels (stable / beta / dev).** Пока один channel. Если позже —
-   `channel: "beta"` в `latest.yml` для opt-in beta.
+| # | Решение | Value |
+|---|---|---|
+| 1 | Owner | `ksanrse` |
+| 2 | Repo names | `kepler-releases` + `kosmos-extensions` |
+| 3 | Visibility | оба public |
+| 4 | autoUpdater interval | start-up + 6h |
+| 5 | Marketplace check interval | start-up + 24h (catalog reasonably static) |
+| 6 | Code signing | skip пока v0.x (SmartScreen warning OK) |
+| 7 | Channels | один stable, beta/dev — defer |
+| 8 | Mainставлер bundled extensions | **No** — lean Kepler installer без extensions. Extensions устанавливаются marketplace-driven. (Если переключаемся на bundled — это решение Phase 2.) |
 
 ## Acceptance criteria
 
-### Phase A — Release repo + publish config
+### Phase A — Kepler launcher distribution
 
-- **AC1**: PUBLIC repo `github.com/<OWNER>/kepler-releases` создан.
-  Initial commit с README объясняющим что это binary-only distribution
-  channel.
-- **AC2**: `shell/package.json` build config расширен:
+- **AC1**: `github.com/ksanrse/kepler-releases` создан, public, пустой.
+- **AC2**: `shell/package.json` build config:
   ```json
   "build": {
     "publish": [{
       "provider": "github",
-      "owner": "<OWNER>",
+      "owner": "ksanrse",
       "repo": "kepler-releases",
       "releaseType": "release"
     }],
-    "win": { ... },
-    "nsis": { ... }
+    "extraResources": [
+      "../target/release/kepler-backend.exe",
+      "../target/release/ark-core-rpc.exe"
+      // ← extensions исключены, marketplace flow обеспечит установку
+    ],
+    ...
   }
   ```
-- **AC3**: GH_TOKEN env var на dev machine (`personal access token` с
-  scope `repo` для приватного, `public_repo` для публичного). НЕ
-  commit'ить в repo, добавить в `.gitignore` если случайно.
-- **AC4**: `bun run --cwd shell build` собирает installer **и пушит**
-  его в release. Если GH_TOKEN отсутствует — fail с понятным error.
+- **AC3**: `GH_TOKEN` env установлен на dev machine (PAT `public_repo` scope).
+- **AC4**: `bun run --cwd shell build` собирает + пушит installer в release.
+  Если GH_TOKEN missing — fail с понятным error.
 
-### Phase B — electron-updater integration
+### Phase B — electron-updater интеграция
 
-- **AC5**: `electron-updater` dep добавлен в `shell/package.json`
-  dependencies. `bun install` clean.
-- **AC6**: `shell/electron/main.ts` импортирует `{ autoUpdater } from
-  "electron-updater"`. В `whenReady`:
+- **AC5**: `electron-updater` dep в `shell/package.json`. `bun install` clean.
+- **AC6**: `shell/electron/main.ts` импорт + integration:
   ```ts
-  // Skip в dev / test mode (KOSMOS_TEST_MODE, VITE_DEV_SERVER_URL).
-  if (!isDev && !isTest) {
+  import { autoUpdater } from "electron-updater";
+
+  // Skip в dev / test mode.
+  if (!isDev && process.env.KOSMOS_TEST_MODE !== "1") {
     autoUpdater.checkForUpdatesAndNotify();
     setInterval(() => autoUpdater.checkForUpdatesAndNotify(), 6 * 60 * 60 * 1000);
   }
   ```
-- **AC7**: autoUpdater events logged для debug (update-available,
-  download-progress, update-downloaded, error). Прокинуть `error` в
-  Settings → System log если есть, или просто console.error пока.
-- **AC8**: При получении `update-downloaded` event — показать notification
-  «Kepler X.Y.Z скачан, перезапустить?» с двумя кнопками. Click yes →
-  `autoUpdater.quitAndInstall()`.
+- **AC7**: События logged (update-available, download-progress, downloaded, error).
+- **AC8**: При `update-downloaded` — native notification «Kepler X.Y.Z готов,
+  перезапустить?» → `autoUpdater.quitAndInstall()` если yes.
 
-### Phase C — End-to-end verification
+### Phase C — Kosmos extensions marketplace repo
 
-- **AC9**: На SECOND machine (или VM, или fresh user profile) установить
-  скачанный `Kepler-Setup-0.1.0.exe`. Запустить — приложение работает.
-- **AC10**: На dev machine bump `shell/package.json` version → 0.1.1.
-  `bun run --cwd shell build` пушит v0.1.1 в release repo.
-- **AC11**: На second machine рестартанутый Kepler в течение ~1 минуты
-  detect'ит update, downloads, prompts. Restart → версия v0.1.1.
+- **AC9**: `github.com/ksanrse/kosmos-extensions` создан, public, пустой.
+- **AC10**: Initial commit в `kosmos-extensions` через `ext:publish-all`:
+  - `README.md` с submission guide.
+  - `extensions/<id>/` папки с manifest.json + README.md + icon.png — копии из
+    `extensions/<id>/` source repo (только metadata, не код).
+  - `catalog.json` с пустым `extensions: []`.
 
-### Phase D — Docs
+### Phase D — `ext:publish` workflow scripts
 
-- **AC12**: `docs-site/concepts/distribution.md` — описание flow:
-  - Что Kepler distributed через GitHub Releases.
-  - Как сделать release (`bun run --cwd shell build`).
-  - Как добавить changelog к release.
-  - Что юзеры видят (silent download + restart prompt).
-  - Settings → «Проверить обновления вручную» (Phase 2 — пока через CLI).
-- **AC13**: `docs-site/agents/forbidden.md` дополнен:
-  - ❌ Коммитить GH_TOKEN в repo / settings.
-  - ❌ Менять provider с `github` на что-то иное без обсуждения.
-  - ❌ Пушить release tag manually без `electron-builder publish` —
-    он генерирует `latest.yml` с SHA512 hash, без него
-    electron-updater не сможет validate.
+- **AC11**: `shell/scripts/publish-extension.mjs`:
+  ```
+  Args: <extension-id>
+  Steps:
+  1. Read extensions/<id>/manifest.json → version
+  2. vite build extension → dist/
+  3. zip into <id>-<version>.kext (используя shell/scripts/zip-utils.mjs from .kext infra)
+  4. Compute SHA-256 hash.
+  5. gh release create <id>-v<version> -R ksanrse/kosmos-extensions <id>-<version>.kext
+  6. Re-generate catalog.json (см. AC12) → commit + push в kosmos-extensions.
+  ```
+- **AC12**: `shell/scripts/generate-catalog.mjs`:
+  - Fetch GitHub releases от `kosmos-extensions` через `gh api`.
+  - Group by extension-id (prefix), pick highest semver per group.
+  - Read manifest.json + icon.png paths from `extensions/<id>/` в kosmos-extensions repo.
+  - Output `catalog.json`:
+    ```json
+    {
+      "schemaVersion": 1,
+      "updatedAt": "ISO timestamp",
+      "extensions": [
+        {
+          "id": "horologion",
+          "name": "Horologion",
+          "description": "...",
+          "author": "ksanrse",
+          "version": "0.3.0",
+          "keplerApiVersion": "^1.0.0",
+          "iconUrl": "https://raw.githubusercontent.com/ksanrse/kosmos-extensions/main/extensions/horologion/icon.png",
+          "downloadUrl": "https://github.com/ksanrse/kosmos-extensions/releases/download/horologion-v0.3.0/horologion-0.3.0.kext",
+          "sha256": "abc123..."
+        }
+      ]
+    }
+    ```
+- **AC13**: `bun run ext:publish horologion` end-to-end создаёт release +
+  обновляет catalog.json.
+- **AC14**: `bun run ext:publish-all` итерирует всё extensions в monorepo.
 
-### Phase E — CI / tooling (опционально)
+### Phase E — Launcher Marketplace UI
 
-- **AC14 (optional)**: GitHub Actions workflow на push в `kepler` main →
-  trigger `bun run build`, push release. Solo dev пока всё локально —
-  defer to когда нужно.
-- **AC15 (optional)**: Settings → «Проверить обновления» button —
-  manual trigger `autoUpdater.checkForUpdates()`. Phase 2.
+- **AC15**: `shell/src/views/SettingsView.vue` → Extensions tab расширен:
+  - Subtab «Установленные» (existing): user-installed list + Revert.
+  - Subtab **«Маркетплейс»** (NEW): fetch catalog, render grid из extension cards
+    (icon, name, version, description, [Install]/[Update]/[Installed] state).
+- **AC16**: IPC `kepler:extension:catalog:fetch()` в main — реальный HTTPS call к
+  `https://raw.githubusercontent.com/ksanrse/kosmos-extensions/main/catalog.json`,
+  cache 1 hour в memory. Force-refresh button — re-fetch.
+- **AC17**: `kepler:extension:install:fromUrl(url)` — download .kext from URL в
+  tmp, validate sha256 против catalog'ового, потом передать в existing
+  `installFromPath` (Wave 1 infrastructure).
+- **AC18**: Periodic catalog check каждые 24h — compare installed versions vs
+  catalog.json latest. Если новее → badge в Settings → Extensions «N updates
+  available».
+
+### Phase F — End-to-end verification
+
+- **AC19**: На SECOND machine (или fresh user profile):
+  - Install `Kepler-Setup-0.1.0.exe` from kepler-releases
+  - Открыть Settings → Extensions → Marketplace → install Horologion
+  - Horologion открывается, работает (Pomodoro session backend пишет в DB)
+- **AC20**: На dev machine bump Horologion version в `extensions/horologion/manifest.json` →
+  `bun run ext:publish horologion` → новый release + updated catalog.
+- **AC21**: На second machine рестартанутый Kepler в течение 24h (или manual
+  refresh) detect'ит update Horologion → install → Horologion новая версия.
+- **AC22**: Bump Kepler version в `shell/package.json` → `bun run --cwd shell
+  build` пушит installer → second machine получает autoUpdater notification.
+
+### Phase G — Docs + governance
+
+- **AC23**: `docs-site/concepts/distribution.md` — full flow описание:
+  - 2-repo model
+  - autoUpdater для launcher
+  - Marketplace flow для extensions
+  - Submission guide (для future community contributors)
+- **AC24**: `docs-site/agents/forbidden.md` дополнен:
+  - ❌ Коммитить GH_TOKEN.
+  - ❌ Bundle extensions в Kepler installer (нарушает marketplace pattern).
+  - ❌ Pushing release tag manually без `electron-builder publish` /
+    `ext:publish` — генерируют SHA256 hash и `latest.yml`.
+  - ❌ Менять wire format `catalog.json` без bump `schemaVersion` —
+    installed Kepler'ы продолжат читать старый format.
+- **AC25**: `kosmos-extensions/README.md` — submission guide:
+  - Fork main `kepler` repo, write extension в `extensions/<id>/`
+  - PR с manifest + source. Maintainer (`ksanrse`) reviews + merges
+  - На merge → `ksanrse` запускает `bun run ext:publish <id>` →
+    marketplace получает new release
 
 ## Workflow (план коммитов)
 
 ```
-1. chore(shell): electron-updater dep + build.publish github config
-2. feat(kepler-shell): autoUpdater integration в main.ts
-3. test(e2e): autoUpdater skipped в test mode (regression check)
-4. docs: distribution.md + forbidden.md updates
-5. (manual) первый release v0.1.0 → kepler-releases
-6. (manual) verify on second machine
-7. (manual) bump → 0.1.1 → verify auto-update flow
+A1. chore(shell): electron-updater dep + build.publish github config
+A2. feat(kepler-shell): autoUpdater integration в main.ts (dev/test skip)
+A3. test(e2e): regression — autoUpdater skipped в test mode
+A4. (manual) GH_TOKEN env + первый build → publishes v0.1.0 в kepler-releases
+
+B1. feat(shell/scripts): publish-extension.mjs + generate-catalog.mjs
+B2. feat(shell): IPC kepler:extension:catalog:fetch + installFromUrl
+B3. feat(kepler-shell): Settings → Extensions → Marketplace subtab UI
+B4. test(e2e): marketplace flow — catalog fetch + install + updateflagged
+
+C1. (manual) initial kosmos-extensions seed: README + extensions metadata
+C2. (manual) ext:publish-all → первая партия releases
+C3. (manual) catalog.json первый commit в main
+
+D1. docs: concepts/distribution.md + submission guide + forbidden updates
+
+E. (manual verification) on second machine — install Kepler → marketplace
+   → install ext → bump → auto-update
 ```
 
 ## Ограничения
 
-- **НЕ** включать autoUpdater в dev (VITE_DEV_SERVER_URL) или test
-  (KOSMOS_TEST_MODE) — расход GitHub API + удивление при ручной
-  разработке.
-- **НЕ** force auto-restart без user consent.
-- **НЕ** загружать update если на metered connection (Windows API
-  доступна, но Phase 2 — пока default electron-updater behaviour).
-- Если update download fails (network, GitHub down) — silent, retry next
-  interval. Не показывать error баннер если update не critical.
+- НЕ bundle'ить extensions в Kepler installer — нарушает marketplace flow.
+- НЕ skip'ать `electron-builder publish` (он генерирует sha256 + latest.yml).
+- НЕ commit'ить GH_TOKEN в repo. Если случайно — rotate token immediately.
+- НЕ менять wire format `catalog.json` без `schemaVersion` bump.
+- НЕ автоматически Install extension без consent (banner / list но не
+  silent download for unfamiliar code).
 
-## Pre-execution checklist (для user'а)
+## Pre-execution checklist (user side)
 
-Прежде чем агент начнёт implement:
-
-1. [ ] Создать публичный repo `github.com/<OWNER>/kepler-releases` (пустой
-       OK, agent внесёт README).
-2. [ ] Создать GH Personal Access Token с `public_repo` scope.
-3. [ ] Set env `GH_TOKEN=<token>` или `GITHUB_TOKEN=<token>` (electron-builder
-       читает оба).
-4. [ ] Подтвердить **OWNER** name (`ksanrse` или другой?).
-5. [ ] Подтвердить repo name `kepler-releases` (или другой?).
-6. [ ] Decision: code signing skip (рекомендую да на старте).
-
-После этого agent execute'ит phases A-D atomic commits, плюс manually
-тестируем D.
+1. [ ] Создать публичный `github.com/ksanrse/kepler-releases` (пустой).
+2. [ ] Создать публичный `github.com/ksanrse/kosmos-extensions` (пустой).
+3. [ ] GH PAT с `public_repo` scope (один token на оба repo).
+4. [ ] `$env:GH_TOKEN = "ghp_..."` (или `setx GH_TOKEN ...` permanent).
+5. [ ] `gh` CLI установлен и `gh auth login` сделан (используется в
+       publish-extension.mjs для release create). Если нет — agent
+       fallback'нёт на `curl + GitHub REST API`.
+6. [ ] Сказать «go» — agent execute'ит phases A1-D1 atomic commits.
+       Phase A4 / C1-C3 / E — manual или semi-automated, в зависимости от
+       gh CLI availability.
 
 ## Risks
 
 | Risk | Mitigation |
 |---|---|
-| GitHub rate limit (60 req/hour без auth) | autoUpdater использует releases API, ~1 req/check × 4 check/day = 4 req. Below limit. Auth-via-token enable'ит 5000/hour если надо. |
-| Windows SmartScreen warning без signed installer | User кликает «Run anyway». Documented в README of kepler-releases. Add signed cert later. |
-| Update applies во время unsaved work | electron-updater по дефолту download silently, prompt at user-convenient time. quitAndInstall ждёт user click. Safe. |
-| Bricked update (новая версия крешится на старте) | Юзер может re-install старую `Kepler-Setup-0.1.0.exe` ручным download. Phase 2 — auto-rollback. |
-| Release repo accidentally публичный с приватным token | GH PAT scope minimal (только `public_repo`), не хранится в repo. Rotate token if leaked. |
+| GH rate limit | autoUpdater check ~4/day. Catalog check ~1/day. User load: 5 req/day. Unauth limit 60/h → OK. С PAT 5000/h. |
+| SmartScreen warning | Documented в README. Кликнуть «Run anyway». Cert ~$300/y когда стабильно. |
+| Catalog drift | `schemaVersion` field + Kepler tolerant к unknown fields. Breaking change → bump version + maintain backward read для 1 release. |
+| Brick после update | Manual download предыдущей `Kepler-Setup-X.Y.Z.exe` from kepler-releases. Phase 2: auto-rollback. |
+| Token leak | Scope minimal (только public_repo). Не хранить в repo. Rotate если exposed. |
+| Extension malware (когда community) | Phase 3 — code review process. Сейчас все extensions свои → trust ok. |
+
+## Out of scope (Phase 2+)
+
+- Community PR-based submission flow (когда появится первый внешний
+  contributor)
+- Beta channel
+- Auto-rollback после bad release
+- macOS / Linux installers
+- Mobile companion sync через marketplace
+- Code signing certificate
+- GitHub Actions для auto-build на push (solo dev — всё локально пока)
+- Star / install counts / rating (никакого backend кроме GitHub raw)
