@@ -341,12 +341,18 @@ function setLauncherExpanded(_expanded: boolean) {
 // --- tray --------------------------------------------------------------------
 
 function resolveTrayIconPath(): string | null {
-  // dev: dist-electron/main.js → ../build/icon.png
-  // prod electron-builder asar: resources/app.asar/dist-electron/main.js → ../../build/icon.png
-  const candidates = [
-    path.resolve(__dirname, "../build/icon.png"),
-    path.resolve(__dirname, "../../build/icon.png"),
-  ];
+  // production install: electron-builder копирует build/icon.png в
+  // <install>/resources/icon.png через extraResources. process.resourcesPath
+  // указывает на тот же `resources/` dir в production, поэтому это первый
+  // кандидат и работает в installed Kepler.
+  // dev: __dirname = shell/dist-electron, нужен относительный путь к
+  // build/icon.png в source tree.
+  const candidates: string[] = [];
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, "icon.png"));
+  }
+  candidates.push(path.resolve(__dirname, "../build/icon.png"));
+  candidates.push(path.resolve(__dirname, "../../build/icon.png"));
   for (const c of candidates) {
     if (existsSync(c)) return c;
   }
