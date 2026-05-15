@@ -23,6 +23,7 @@ import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
 
 import App from "./App.vue";
+import { useQuickEntry } from "./composables/useQuickEntry";
 import { routes } from "./router";
 
 // eslint-disable-next-line import/no-unassigned-import
@@ -88,10 +89,10 @@ if (kepler) {
     const event = payload as CommandInvokedEvent | null;
     if (!event || typeof event.id !== "string") return;
     if (event.id === "delphi:task:create") {
-      // Lazy import чтобы не дёргать composables до mount'а Vue app.
-      void import("./composables/useQuickEntry").then((m) =>
-        m.useQuickEntry().show(),
-      );
+      // Static import: useQuickEntry также используется напрямую из App.vue /
+      // QuickEntry.vue / *Page.vue — dynamic import здесь только триггерил
+      // INEFFECTIVE_DYNAMIC_IMPORT warning, не давал реальной lazy-выгоды.
+      useQuickEntry().show();
     } else if (event.id === "delphi:task:today") {
       void router.push("/today");
     }
