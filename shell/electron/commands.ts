@@ -7,6 +7,7 @@
 
 import { extensionIconDataUri, openExtension } from "./extension-host";
 import { openDashboardWindow } from "./dashboard-window";
+import { openSettings } from "./settings-window";
 
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -65,10 +66,17 @@ export const COMMANDS: InternalCommand[] = [
   // отдельном BrowserWindow через dashboard-window.ts.
   {
     id: "dashboard:open",
-    title: "Открыть Dashboard",
-    subtitle: "ARK browser",
+    title: "Открыть таблицу данных",
+    subtitle: "Просмотр объектов ARK",
     category: "open",
     exec: () => openDashboardWindow(),
+  },
+  {
+    id: "settings:open",
+    title: "Открыть настройки",
+    subtitle: "Kepler",
+    category: "open",
+    exec: () => openSettings(),
   },
   // Phase 4 migrated apps — открываются как Vue extension'ы внутри Kepler.
   {

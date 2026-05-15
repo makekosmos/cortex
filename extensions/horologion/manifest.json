@@ -1,7 +1,7 @@
 {
   "id": "horologion",
   "name": "Horologion",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Трекер времени и pomodoro",
   "author": "Kazui",
   "keplerApiVersion": "^1.0.0",
