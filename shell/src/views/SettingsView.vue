@@ -8,10 +8,8 @@ import type {
 } from "@shared/ipc-types";
 
 type Tab = "general" | "extensions";
-type ExtTab = "installed" | "marketplace";
 
 const tab = ref<Tab>("general");
-const extTab = ref<ExtTab>("installed");
 
 // --- General ----------------------------------------------------------------
 
@@ -168,13 +166,6 @@ async function onMarketInstall(ext: MarketplaceExtension) {
   }
 }
 
-function selectExtTab(t: ExtTab) {
-  extTab.value = t;
-  if (t === "marketplace" && !catalog.value) {
-    void loadCatalog();
-  }
-}
-
 function onClose() {
   void window.kepler.settings.close();
 }
@@ -188,18 +179,17 @@ function onKey(e: KeyboardEvent) {
 
 function selectTab(t: Tab) {
   tab.value = t;
-  if (t === "extensions" && installed.value.length === 0) {
+  if (t === "extensions") {
     void loadExtensions();
+    if (!catalog.value) void loadCatalog();
   }
 }
 
-const updatesAvailableCount = computed(() => {
-  if (!catalog.value) return 0;
-  let n = 0;
-  for (const ext of catalog.value.extensions) {
-    if (marketState(ext) === "update") n++;
-  }
-  return n;
+/** Установленные что НЕ в catalog (3rd-party / legacy / dev). */
+const orphanInstalled = computed<InstalledExtensionInfo[]>(() => {
+  if (!catalog.value) return installed.value;
+  const catalogIds = new Set(catalog.value.extensions.map((e) => e.id));
+  return installed.value.filter((i) => !catalogIds.has(i.id));
 });
 
 onMounted(() => {
@@ -310,52 +300,45 @@ onMounted(() => {
       </div>
     </template>
 
-    <!-- Extensions tab -->
+    <!-- Extensions tab — единый список из catalog.json + orphan installed внизу -->
     <template v-else>
-      <nav class="subtabs">
+      <div class="market-header">
+        <span class="hint" v-if="catalog">
+          Каталог обновлён: {{ new Date(catalog.updatedAt).toLocaleString("ru") }}
+        </span>
+        <span class="hint" v-else-if="marketLoading">Загрузка каталога…</span>
         <button
           type="button"
-          class="subtab"
-          :class="{ active: extTab === 'installed' }"
-          @click="selectExtTab('installed')"
+          class="btn ghost"
+          :disabled="marketLoading"
+          @click="loadCatalog(true)"
         >
-          Установленные
+          Обновить
         </button>
-        <button
-          type="button"
-          class="subtab"
-          :class="{ active: extTab === 'marketplace' }"
-          @click="selectExtTab('marketplace')"
-        >
-          Маркетплейс
-          <span v-if="updatesAvailableCount > 0" class="badge">
-            {{ updatesAvailableCount }}
-          </span>
-        </button>
-      </nav>
+      </div>
 
-      <div v-if="extTab === 'installed'">
-      <div v-if="extensionsLoading" class="empty">Загрузка списка…</div>
-      <div v-else class="ext-list">
-        <div v-if="extensionsError" class="error-banner">
-          {{ extensionsError }}
-        </div>
-        <div v-if="installed.length === 0" class="empty">
-          Установленных расширений нет.
-          <br />
-          Двойной клик по .kext или
-          <code>bun run --cwd shell ext:install &lt;path&gt;</code>.
-        </div>
+      <div v-if="marketError" class="error-banner">{{ marketError }}</div>
+      <div v-if="extensionsError" class="error-banner">{{ extensionsError }}</div>
+
+      <div class="ext-list">
         <div
-          v-for="ext in installed"
+          v-if="!marketLoading && catalog && catalog.extensions.length === 0"
+          class="empty"
+        >
+          Каталог пуст.
+        </div>
+
+        <div
+          v-for="ext in catalog?.extensions ?? []"
           :key="ext.id"
           class="ext-item"
         >
           <img
-            v-if="ext.iconDataUri"
+            v-if="ext.iconUrl"
             class="ext-icon"
-            :src="ext.iconDataUri"
+            :src="ext.iconUrl"
             alt=""
+            @error="($event.target as HTMLImageElement).style.display = 'none'"
           />
           <div v-else class="ext-icon ext-icon-fallback">
             {{ ext.name.slice(0, 1) }}
@@ -363,12 +346,25 @@ onMounted(() => {
           <div class="ext-info">
             <div class="ext-name">{{ ext.name }}</div>
             <div class="ext-meta">
-              <span class="ext-version">v{{ ext.version ?? "—" }}</span>
-              <span v-if="ext.author" class="ext-author">
-                · {{ ext.author }}
+              <span class="ext-version">v{{ ext.version }}</span>
+              <span class="ext-author">· {{ ext.author }}</span>
+              <span
+                v-if="marketState(ext) === 'update' && installedById(ext.id)"
+                class="ext-author"
+              >
+                · установлено v{{ installedById(ext.id)?.version }}
               </span>
-              <span v-if="ext.backupCount > 0" class="ext-backups">
-                · backup'ов: {{ ext.backupCount }}
+              <span
+                v-else-if="marketState(ext) === 'installed'"
+                class="ext-author"
+              >
+                · установлено
+              </span>
+              <span
+                v-if="(installedById(ext.id)?.backupCount ?? 0) > 0"
+                class="ext-backups"
+              >
+                · backup'ов: {{ installedById(ext.id)?.backupCount }}
               </span>
             </div>
             <div v-if="ext.description" class="ext-description">
@@ -377,61 +373,54 @@ onMounted(() => {
           </div>
           <div class="ext-actions">
             <button
-              v-if="ext.backupCount > 0"
+              v-if="(installedById(ext.id)?.backupCount ?? 0) > 0"
               type="button"
               class="btn ghost"
-              :disabled="busyExt === ext.id"
+              :disabled="busyExt === ext.id || installingId === ext.id"
               @click="onRevert(ext.id)"
             >
               Откатить
             </button>
             <button
+              v-if="installedById(ext.id)"
               type="button"
               class="btn ghost danger"
-              :disabled="busyExt === ext.id"
+              :disabled="busyExt === ext.id || installingId === ext.id"
               @click="onUninstall(ext.id)"
             >
               Удалить
             </button>
-          </div>
-        </div>
-      </div>
-      </div>
-
-      <div v-else-if="extTab === 'marketplace'">
-        <div v-if="marketLoading" class="empty">Загрузка каталога…</div>
-        <div v-else class="ext-list">
-          <div v-if="marketError" class="error-banner">{{ marketError }}</div>
-          <div class="market-header">
-            <span class="hint" v-if="catalog">
-              Обновлено: {{ new Date(catalog.updatedAt).toLocaleString("ru") }}
-            </span>
             <button
               type="button"
-              class="btn ghost"
-              :disabled="marketLoading"
-              @click="loadCatalog(true)"
+              class="btn"
+              :disabled="
+                installingId === ext.id ||
+                busyExt === ext.id ||
+                marketState(ext) === 'installed'
+              "
+              @click="onMarketInstall(ext)"
             >
-              Обновить
+              <template v-if="installingId === ext.id">Установка…</template>
+              <template v-else-if="marketState(ext) === 'update'">
+                Обновить
+              </template>
+              <template v-else-if="marketState(ext) === 'installed'">
+                Установлено
+              </template>
+              <template v-else>Установить</template>
             </button>
           </div>
-          <div
-            v-if="catalog && catalog.extensions.length === 0"
-            class="empty"
-          >
-            Каталог пуст.
-          </div>
-          <div
-            v-for="ext in catalog?.extensions ?? []"
-            :key="ext.id"
-            class="ext-item"
-          >
+        </div>
+
+        <!-- Orphan installed — есть локально, но нет в catalog (3rd-party / legacy / dev install) -->
+        <template v-if="orphanInstalled.length > 0">
+          <div class="ext-section-header">Прочие установленные</div>
+          <div v-for="ext in orphanInstalled" :key="ext.id" class="ext-item">
             <img
-              v-if="ext.iconUrl"
+              v-if="ext.iconDataUri"
               class="ext-icon"
-              :src="ext.iconUrl"
+              :src="ext.iconDataUri"
               alt=""
-              @error="($event.target as HTMLImageElement).style.display = 'none'"
             />
             <div v-else class="ext-icon ext-icon-fallback">
               {{ ext.name.slice(0, 1) }}
@@ -439,13 +428,12 @@ onMounted(() => {
             <div class="ext-info">
               <div class="ext-name">{{ ext.name }}</div>
               <div class="ext-meta">
-                <span class="ext-version">v{{ ext.version }}</span>
-                <span class="ext-author">· {{ ext.author }}</span>
-                <span
-                  v-if="marketState(ext) === 'update' && installedById(ext.id)"
-                  class="ext-author"
-                >
-                  · установлено v{{ installedById(ext.id)?.version }}
+                <span class="ext-version">v{{ ext.version ?? "—" }}</span>
+                <span v-if="ext.author" class="ext-author">
+                  · {{ ext.author }}
+                </span>
+                <span v-if="ext.backupCount > 0" class="ext-backups">
+                  · backup'ов: {{ ext.backupCount }}
                 </span>
               </div>
               <div v-if="ext.description" class="ext-description">
@@ -454,25 +442,25 @@ onMounted(() => {
             </div>
             <div class="ext-actions">
               <button
+                v-if="ext.backupCount > 0"
                 type="button"
-                class="btn"
-                :disabled="
-                  installingId === ext.id || marketState(ext) === 'installed'
-                "
-                @click="onMarketInstall(ext)"
+                class="btn ghost"
+                :disabled="busyExt === ext.id"
+                @click="onRevert(ext.id)"
               >
-                <template v-if="installingId === ext.id">Установка…</template>
-                <template v-else-if="marketState(ext) === 'update'">
-                  Обновить
-                </template>
-                <template v-else-if="marketState(ext) === 'installed'">
-                  Установлено
-                </template>
-                <template v-else>Установить</template>
+                Откатить
+              </button>
+              <button
+                type="button"
+                class="btn ghost danger"
+                :disabled="busyExt === ext.id"
+                @click="onUninstall(ext.id)"
+              >
+                Удалить
               </button>
             </div>
           </div>
-        </div>
+        </template>
       </div>
     </template>
   </div>
@@ -698,50 +686,21 @@ onMounted(() => {
   transform: translateX(16px);
 }
 
-.subtabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 14px 0;
-}
-
-.subtab {
-  font: inherit;
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: color-mix(in srgb, var(--foreground) 55%, transparent);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.subtab:hover {
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  color: var(--foreground);
-}
-
-.subtab.active {
-  background: color-mix(in srgb, var(--foreground) 10%, transparent);
-  color: var(--foreground);
-}
-
-.badge {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: var(--accent, oklch(0.7 0.18 250));
-  color: oklch(0.1 0 0);
-  font-weight: 600;
-}
-
 .market-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 4px 4px;
+  padding: 10px 14px 0;
+}
+
+.ext-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  margin: 16px 0 4px;
+  padding: 0 2px;
 }
 
 /* Extensions list */
