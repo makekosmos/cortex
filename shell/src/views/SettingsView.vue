@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import type { BackendStatus, InstalledExtensionInfo } from "@shared/ipc-types";
+import { computed, onMounted, ref } from "vue";
+import type {
+  BackendStatus,
+  InstalledExtensionInfo,
+  MarketplaceCatalog,
+  MarketplaceExtension,
+} from "@shared/ipc-types";
 
 type Tab = "general" | "extensions";
+type ExtTab = "installed" | "marketplace";
 
 const tab = ref<Tab>("general");
+const extTab = ref<ExtTab>("installed");
 
 // --- General ----------------------------------------------------------------
 
@@ -117,6 +124,57 @@ async function onUninstall(id: string) {
   }
 }
 
+// --- Marketplace ------------------------------------------------------------
+
+const catalog = ref<MarketplaceCatalog | null>(null);
+const marketLoading = ref<boolean>(false);
+const marketError = ref<string>("");
+const installingId = ref<string>("");
+
+async function loadCatalog(force = false) {
+  marketLoading.value = true;
+  marketError.value = "";
+  try {
+    catalog.value = await window.kepler.extension.catalogFetch(force);
+  } catch (e) {
+    marketError.value = (e as Error).message;
+  } finally {
+    marketLoading.value = false;
+  }
+}
+
+function installedById(id: string): InstalledExtensionInfo | undefined {
+  return installed.value.find((x) => x.id === id);
+}
+
+function marketState(ext: MarketplaceExtension): "install" | "update" | "installed" {
+  const cur = installedById(ext.id);
+  if (!cur) return "install";
+  if (cur.version && cur.version !== ext.version) return "update";
+  return "installed";
+}
+
+async function onMarketInstall(ext: MarketplaceExtension) {
+  if (installingId.value) return;
+  installingId.value = ext.id;
+  marketError.value = "";
+  try {
+    await window.kepler.extension.installFromUrl(ext.downloadUrl, ext.sha256);
+    await loadExtensions();
+  } catch (e) {
+    marketError.value = `${ext.id}: ${(e as Error).message}`;
+  } finally {
+    installingId.value = "";
+  }
+}
+
+function selectExtTab(t: ExtTab) {
+  extTab.value = t;
+  if (t === "marketplace" && !catalog.value) {
+    void loadCatalog();
+  }
+}
+
 function onClose() {
   void window.kepler.settings.close();
 }
@@ -134,6 +192,15 @@ function selectTab(t: Tab) {
     void loadExtensions();
   }
 }
+
+const updatesAvailableCount = computed(() => {
+  if (!catalog.value) return 0;
+  let n = 0;
+  for (const ext of catalog.value.extensions) {
+    if (marketState(ext) === "update") n++;
+  }
+  return n;
+});
 
 onMounted(() => {
   void loadGeneral();
@@ -245,6 +312,29 @@ onMounted(() => {
 
     <!-- Extensions tab -->
     <template v-else>
+      <nav class="subtabs">
+        <button
+          type="button"
+          class="subtab"
+          :class="{ active: extTab === 'installed' }"
+          @click="selectExtTab('installed')"
+        >
+          Установленные
+        </button>
+        <button
+          type="button"
+          class="subtab"
+          :class="{ active: extTab === 'marketplace' }"
+          @click="selectExtTab('marketplace')"
+        >
+          Маркетплейс
+          <span v-if="updatesAvailableCount > 0" class="badge">
+            {{ updatesAvailableCount }}
+          </span>
+        </button>
+      </nav>
+
+      <div v-if="extTab === 'installed'">
       <div v-if="extensionsLoading" class="empty">Загрузка списка…</div>
       <div v-else class="ext-list">
         <div v-if="extensionsError" class="error-banner">
@@ -303,6 +393,84 @@ onMounted(() => {
             >
               Удалить
             </button>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div v-else-if="extTab === 'marketplace'">
+        <div v-if="marketLoading" class="empty">Загрузка каталога…</div>
+        <div v-else class="ext-list">
+          <div v-if="marketError" class="error-banner">{{ marketError }}</div>
+          <div class="market-header">
+            <span class="hint" v-if="catalog">
+              Обновлено: {{ new Date(catalog.updatedAt).toLocaleString("ru") }}
+            </span>
+            <button
+              type="button"
+              class="btn ghost"
+              :disabled="marketLoading"
+              @click="loadCatalog(true)"
+            >
+              Обновить
+            </button>
+          </div>
+          <div
+            v-if="catalog && catalog.extensions.length === 0"
+            class="empty"
+          >
+            Каталог пуст.
+          </div>
+          <div
+            v-for="ext in catalog?.extensions ?? []"
+            :key="ext.id"
+            class="ext-item"
+          >
+            <img
+              v-if="ext.iconUrl"
+              class="ext-icon"
+              :src="ext.iconUrl"
+              alt=""
+              @error="($event.target as HTMLImageElement).style.display = 'none'"
+            />
+            <div v-else class="ext-icon ext-icon-fallback">
+              {{ ext.name.slice(0, 1) }}
+            </div>
+            <div class="ext-info">
+              <div class="ext-name">{{ ext.name }}</div>
+              <div class="ext-meta">
+                <span class="ext-version">v{{ ext.version }}</span>
+                <span class="ext-author">· {{ ext.author }}</span>
+                <span
+                  v-if="marketState(ext) === 'update' && installedById(ext.id)"
+                  class="ext-author"
+                >
+                  · установлено v{{ installedById(ext.id)?.version }}
+                </span>
+              </div>
+              <div v-if="ext.description" class="ext-description">
+                {{ ext.description }}
+              </div>
+            </div>
+            <div class="ext-actions">
+              <button
+                type="button"
+                class="btn"
+                :disabled="
+                  installingId === ext.id || marketState(ext) === 'installed'
+                "
+                @click="onMarketInstall(ext)"
+              >
+                <template v-if="installingId === ext.id">Установка…</template>
+                <template v-else-if="marketState(ext) === 'update'">
+                  Обновить
+                </template>
+                <template v-else-if="marketState(ext) === 'installed'">
+                  Установлено
+                </template>
+                <template v-else>Установить</template>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -528,6 +696,52 @@ onMounted(() => {
 
 .toggle input:checked + .track .thumb {
   transform: translateX(16px);
+}
+
+.subtabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px 0;
+}
+
+.subtab {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subtab:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+
+.subtab.active {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  color: var(--foreground);
+}
+
+.badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--accent, oklch(0.7 0.18 250));
+  color: oklch(0.1 0 0);
+  font-weight: 600;
+}
+
+.market-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px 4px;
 }
 
 /* Extensions list */
