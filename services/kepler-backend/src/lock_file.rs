@@ -46,9 +46,26 @@ pub enum LockFileError {
 }
 
 /// Resolve %APPDATA%\Kosmos\kepler.lock.json (Win) / $XDG_CONFIG_HOME/Kosmos/... (Unix).
+///
+/// Test override: если выставлен `KOSMOS_DATA_DIR` env, она полностью заменяет
+/// base directory (lock-файл, singleton, ark.db — всё под этим dir). Это
+/// единственный безопасный способ переопределить путь в Playwright/e2e тестах
+/// — иначе тесты случайно укажут на реальный user data dir и потрут данные.
 pub fn default_lock_file_path() -> Result<std::path::PathBuf, LockFileError> {
-    let base = kosmos_config_dir()?;
+    let base = kosmos_data_dir()?;
     Ok(base.join(LOCK_FILE_NAME))
+}
+
+/// Resolve base directory для всех Kosmos backend файлов: lock, singleton,
+/// дефолтный ark.db. Уважает `KOSMOS_DATA_DIR` env override (тесты),
+/// иначе — `%APPDATA%\Kosmos` (Win) / `$XDG_CONFIG_HOME/Kosmos` (Unix).
+pub fn kosmos_data_dir() -> Result<std::path::PathBuf, LockFileError> {
+    if let Ok(override_dir) = std::env::var("KOSMOS_DATA_DIR") {
+        if !override_dir.is_empty() {
+            return Ok(std::path::PathBuf::from(override_dir));
+        }
+    }
+    kosmos_config_dir()
 }
 
 #[cfg(windows)]
@@ -203,6 +220,29 @@ mod tests {
             auth_token: "deadbeef".repeat(8),
             started_at: "2026-05-13T15:00:00Z".into(),
             db_path: "C:\\Users\\Kazui\\AppData\\Roaming\\Kosmos\\ark.db".into(),
+        }
+    }
+
+    #[test]
+    fn kosmos_data_dir_respects_env_override() {
+        // SAFETY: env var, доступ серилизуется через std::env api.
+        // Other tests в этом mod не читают KOSMOS_DATA_DIR.
+        let dir = tempdir().unwrap();
+        let override_path = dir.path().to_path_buf();
+        std::env::set_var("KOSMOS_DATA_DIR", &override_path);
+        let resolved = kosmos_data_dir().expect("data dir resolves with override");
+        std::env::remove_var("KOSMOS_DATA_DIR");
+        assert_eq!(resolved, override_path);
+
+        let lock_path = default_lock_file_path_with_env(Some(override_path.clone()));
+        assert_eq!(lock_path, override_path.join(LOCK_FILE_NAME));
+    }
+
+    // Хелпер только для тестов — детерминированно вычисляет lock-path без env race.
+    fn default_lock_file_path_with_env(override_dir: Option<std::path::PathBuf>) -> std::path::PathBuf {
+        match override_dir {
+            Some(p) => p.join(LOCK_FILE_NAME),
+            None => kosmos_config_dir().unwrap().join(LOCK_FILE_NAME),
         }
     }
 
