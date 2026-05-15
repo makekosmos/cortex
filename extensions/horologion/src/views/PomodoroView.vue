@@ -101,6 +101,8 @@ const primaryLabel = computed(() => {
             </div>
         </div>
 
+        <span class="pomo__hint">помодоро</span>
+
         <div class="pomo__dots" :title="`${pomodorosDone} из ${pomodorosTotal}`">
             <span v-for="i in pomodorosTotal" :key="i" class="pomo__dot"
                 :class="{ 'pomo__dot--done': i <= pomodorosDone }" />
@@ -226,6 +228,15 @@ const primaryLabel = computed(() => {
 .pomo__status {
     font-size: 0.8125rem;
     color: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+/* Подпись режима под кольцом — визуальная parity с .sw__hint в стопвотче.
+   Юзер ожидает видеть «секундомер»/«помодоро» подпись постоянно в каждом
+   режиме, чтобы понимать что таймер показывает. */
+.pomo__hint {
+    font-size: 0.8125rem;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    margin-bottom: 0.25rem;
 }
 
 .pomo__dots {
