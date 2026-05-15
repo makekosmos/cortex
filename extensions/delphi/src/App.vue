@@ -22,7 +22,7 @@ import {
   setActiveSpace,
 } from "@/services/space/space-manager";
 import type { SyncEntity } from "@/services/sync/lan-protocol";
-import type { TodoItem } from "@/types/task";
+import type { Area, Heading, Project, Tag, TodoItem } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import SideBar from "@/components/SideBar.vue";
 import QuickEntry from "@/components/QuickEntry.vue";
@@ -360,35 +360,50 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
   store.setHeadings([]);
   store.setHydrated(false);
 
+  // Если есть local DB (legacy standalone Delphi) — грузим оттуда + merge
+  // с ARK. В extension context'е local DB unavailable, поэтому ARK load
+  // должен происходить ВСЕГДА, независимо от isLocalDbAvailable —
+  // раньше всё было внутри if (isLocalDbAvailable()) → в extension store
+  // оставался пустым даже когда в ARK есть задачи.
+  let mergedTodos: TodoItem[] = [];
+  let mergedProjects: Project[] = [];
+  let mergedAreas: Area[] = [];
+  let mergedTags: Tag[] = [];
+  let mergedHeadings: Heading[] = [];
+
   if (isLocalDbAvailable()) {
     try {
       const { todos, projects, areas, tags, headings } =
         await loadAllFromLocalDb();
-      let mergedTodos = todos;
-
-      if (window.electronAPI?.invoke) {
-        try {
-          const arkTodos = (await window.electronAPI.invoke(
-            "ark:listDelphiTasks",
-          )) as TodoItem[];
-          if (Array.isArray(arkTodos) && arkTodos.length > 0) {
-            mergedTodos = mergeTodosById(todos, arkTodos);
-          }
-        } catch (err) {
-          console.warn("[App] Ark task load failed:", err);
-        }
-      }
-
-      store.setTodos(mergedTodos);
-      store.setProjects(projects);
-      store.setAreas(areas);
-      store.setTags(tags);
-      if (headings)
-        store.setHeadings(headings as import("@/types/task").Heading[]);
+      mergedTodos = todos;
+      mergedProjects = projects;
+      mergedAreas = areas;
+      mergedTags = tags;
+      mergedHeadings = (headings ?? []) as Heading[];
     } catch (err) {
       console.warn("[App] Space DB load failed:", err);
     }
   }
+
+  // ARK task load — всегда, не зависит от local DB availability.
+  if (window.electronAPI?.invoke) {
+    try {
+      const arkTodos = (await window.electronAPI.invoke(
+        "ark:listDelphiTasks",
+      )) as TodoItem[];
+      if (Array.isArray(arkTodos) && arkTodos.length > 0) {
+        mergedTodos = mergeTodosById(mergedTodos, arkTodos);
+      }
+    } catch (err) {
+      console.warn("[App] Ark task load failed:", err);
+    }
+  }
+
+  store.setTodos(mergedTodos);
+  store.setProjects(mergedProjects);
+  store.setAreas(mergedAreas);
+  store.setTags(mergedTags);
+  store.setHeadings(mergedHeadings);
 
   store.setHydrated(true);
   connectionState.value = "syncing";
