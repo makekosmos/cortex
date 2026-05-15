@@ -101,10 +101,49 @@ type ArkSubscribeFn = (
 let arkRequest: ArkRequestFn | null = null;
 let arkSubscribe: ArkSubscribeFn | null = null;
 
+// Ready-gate для extension ARK bridge. Extension windows могут открыться раньше,
+// чем main.ts успеет вызвать `setExtensionArkBridge(...)` после handshake'а
+// ArkClient'а. Если в этот момент extension probe'нет ARK (как Horologion делает
+// в onMounted), он получит «ark bridge not ready» и UI запомнит status=error
+// до следующего probe-интервала (10s) — отсюда «горит индикатор не подключено».
+//
+// Решение: handler не throws сразу, а await'ит resolve этого promise (с
+// timeout'ом), точно так же как `awaitArkReady()` для `kepler:ark:request`
+// в main.ts. Reset (`setExtensionArkBridge({request: null, ...})` при shutdown)
+// создаёт новый pending promise — следующие запросы зависнут до нового resolve
+// или timeout'нутся.
+let arkBridgeReady: Promise<void> = new Promise(() => {
+  /* never resolves until setExtensionArkBridge с non-null request */
+});
+let arkBridgeReadyResolve: (() => void) | null = null;
+function resetArkBridgeReady(): void {
+  arkBridgeReady = new Promise<void>((resolve) => {
+    arkBridgeReadyResolve = resolve;
+  });
+}
+resetArkBridgeReady();
+
+async function awaitArkBridgeReady(timeoutMs = 15000): Promise<void> {
+  if (arkRequest) return;
+  await Promise.race([
+    arkBridgeReady,
+    new Promise<void>((_, rej) =>
+      setTimeout(
+        () => rej(new Error("ark bridge not ready (timeout)")),
+        timeoutMs,
+      ),
+    ),
+  ]);
+}
+
 /**
  * Регистрируется из main.ts после init ArkClient'а. extension-host остаётся
  * loosely-coupled — не импортирует ArkClient напрямую и не дублирует логику
  * выбора self-managed / kepler-managed режима.
+ *
+ * Когда `opts.request` non-null — bridge переходит в ready-состояние, и все
+ * pending IPC-запросы из extension'ов resume'ятся. Когда null (shutdown) —
+ * bridge возвращается в not-ready, новые запросы будут ждать следующего init.
  */
 export function setExtensionArkBridge(opts: {
   request: ArkRequestFn | null;
@@ -112,6 +151,11 @@ export function setExtensionArkBridge(opts: {
 }): void {
   arkRequest = opts.request;
   arkSubscribe = opts.subscribe;
+  if (opts.request) {
+    arkBridgeReadyResolve?.();
+  } else {
+    resetArkBridgeReady();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -571,6 +615,7 @@ ipcMain.handle("kepler:extension:open", (_e, id: string) => openExtension(id));
 ipcMain.handle(
   "kepler:extension:ark:request",
   async (_e, operation: string, params?: Record<string, unknown>) => {
+    await awaitArkBridgeReady();
     if (!arkRequest) {
       throw new Error("ark bridge not ready");
     }
@@ -586,7 +631,8 @@ const extensionEventUnsubscribers = new Map<string, () => void>();
 
 ipcMain.handle(
   "kepler:extension:ark:subscribe",
-  (e, event: string) => {
+  async (e, event: string) => {
+    await awaitArkBridgeReady();
     if (!arkSubscribe) {
       throw new Error("ark bridge not ready");
     }
