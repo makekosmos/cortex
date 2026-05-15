@@ -43,6 +43,30 @@ New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 $env:ARK_DB_PATH = "$env:KOSMOS_SMOKE_ROOT\usage-tracker\ark.db"
 ```
 
+### `KOSMOS_DATA_DIR` — backend-wide override (Playwright/e2e)
+
+`kepler-backend` поддерживает env-переменную `KOSMOS_DATA_DIR`, которая
+**полностью** заменяет базовую директорию backend'а (`%APPDATA%\Kosmos\` /
+`$XDG_CONFIG_HOME/Kosmos/`). Под этим dir живут:
+
+- `kepler.lock.json` — lock-файл discovery.
+- `kepler-singleton.lock.db` — singleton guard.
+- `ark.db` — дефолтная ARK DB (если не задан `KOSMOS_DB_PATH`).
+- `device.id`, `space.id` и прочая state-метадата.
+
+Это **единственный** безопасный способ изолировать Playwright/e2e от user data:
+
+```powershell
+$env:KOSMOS_DATA_DIR = "D:\repo\tests\.e2e\my-spec"
+$env:KOSMOS_TEST_MODE = "1"
+playwright test
+```
+
+Реализовано в `services/kepler-backend/src/lock_file.rs`
+(`kosmos_data_dir()`). Test helper `tests/e2e/helpers/launch.ts` форсит
+эту переменную для всех specs и явно отказывается принимать путь внутри
+`%APPDATA%`.
+
 ### Через CLI-флаг
 
 ```powershell

@@ -9,7 +9,10 @@
     "docs:build": "bun run docs:sync && bun run --cwd docs-site build",
     "docs:preview": "bun run --cwd docs-site preview",
     "docs:sync": "node scripts/sync-agents-docs.mjs",
-    "docs:check": "node scripts/check-docs-freshness.mjs"
+    "docs:check": "node scripts/check-docs-freshness.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug"
   },
   "workspaces": [
     "shell",
@@ -23,7 +26,10 @@
   ],
   "dependencies": {},
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "electron": "^42.1.0",
     "oxfmt": "^0.43.0",
+    "playwright": "^1.60.0",
     "vue": "^3.5.31",
     "vue-router": "^4.6.4"
   }

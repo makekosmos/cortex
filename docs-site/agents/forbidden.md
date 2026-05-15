@@ -24,6 +24,8 @@
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
 - ❌ Запуск Playwright против user vault Eden.
+- ❌ Указывать тестам `KOSMOS_DATA_DIR` равным `%APPDATA%\Kosmos\` (real user data). Backend поддерживает `KOSMOS_DATA_DIR` override именно чтобы тесты могли подсунуть свой dir под `tests/.e2e/<spec>/`. Helper `tests/e2e/helpers/launch.ts` явно отказывается принимать путь внутри `%APPDATA%`.
+- ❌ Запускать Playwright без `KOSMOS_DATA_DIR` override — тогда backend упадёт в user data dir.
 
 ## Proof loop
 

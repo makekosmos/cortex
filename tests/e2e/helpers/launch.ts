@@ -1,0 +1,75 @@
+// Helper для Kepler shell Electron launch в e2e тестах.
+//
+// Жёсткое правило (см. docs-site/concepts/test-isolation.md):
+//   - НИКОГДА не указывать KOSMOS_DATA_DIR на user dir (%APPDATA%\Kosmos).
+//   - Каждый тест получает свежий dir под `tests/.e2e/<spec>/<test>/`,
+//     pre-cleaned before тестом.
+//   - Backend читает KOSMOS_DATA_DIR (см. kepler-backend/src/lock_file.rs);
+//     lock-файл, singleton.lock, default ark.db — всё под этим dir.
+
+import path from "node:path";
+import fs from "node:fs";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { _electron as electron, type ElectronApplication } from "playwright";
+
+const require = createRequire(import.meta.url);
+const electronBinary = require("electron") as string;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
+export const SHELL_ROOT = path.join(REPO_ROOT, "shell");
+export const E2E_ROOT = path.join(REPO_ROOT, "tests", ".e2e");
+
+export interface LaunchOptions {
+  /** Имя tмп-dir под `tests/.e2e/<slug>/`. Pre-cleaned. */
+  slug: string;
+  /** Доп. env поверх process.env. KOSMOS_DATA_DIR форсится автоматически. */
+  env?: Record<string, string>;
+}
+
+export function freshDataDir(slug: string): string {
+  const dir = path.join(E2E_ROOT, slug);
+  // Sanity: убеждаемся что dir НЕ ведёт в user data dir.
+  const appData = process.env.APPDATA ?? "";
+  if (appData && dir.toLowerCase().startsWith(appData.toLowerCase())) {
+    throw new Error(
+      `freshDataDir refuses: target ${dir} находится внутри %APPDATA% (${appData}). ` +
+        `Это нарушает test isolation policy.`,
+    );
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export async function launchKepler(opts: LaunchOptions): Promise<ElectronApplication> {
+  const dataDir = freshDataDir(opts.slug);
+  const userDataDir = path.join(dataDir, "electron-userdata");
+  fs.mkdirSync(userDataDir, { recursive: true });
+
+  const mainJs = path.join(SHELL_ROOT, "dist-electron", "main.js");
+  if (!fs.existsSync(mainJs)) {
+    throw new Error(
+      `${mainJs} не существует. Сначала запусти 'bun run --cwd shell build:js'.`,
+    );
+  }
+
+  return electron.launch({
+    executablePath: electronBinary,
+    cwd: SHELL_ROOT,
+    args: [mainJs, `--user-data-dir=${userDataDir}`],
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      KOSMOS_DATA_DIR: dataDir,
+      KOSMOS_TEST_MODE: "1",
+      KEPLER_SKIP_SYNC: "1",
+      KEPLER_USAGE_TRACKER: "0",
+      ...(opts.env ?? {}),
+    },
+    timeout: 20_000,
+  });
+}

@@ -81,6 +81,7 @@ apps/arrancador/example/
 apps/arrancador/.zenflow/
 apps/dashboard/.e2e/
 apps/dashboard/.tmp/
+tests/.e2e/
 
 # === Workspace policy ===
 apps/delphi/ts/bun.lock
