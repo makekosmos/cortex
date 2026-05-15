@@ -281,6 +281,17 @@ await arkClient.commands.register([
 - ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
 - ❌ Возврат npm scope `@kosmos/*`. После Phase B4 — единый `@kepler/*` (`@kepler/ark`, `@kepler/visuals`).
 
+### Distribution
+
+См. [Distribution](docs-site/concepts/distribution.md).
+
+- ❌ Коммитить `GH_TOKEN` (или любой PAT) в repo. Если случайно — rotate immediately.
+- ❌ Bundle'ить extensions в Kepler installer (`shell/package.json → build.extraResources`). Lean installer — marketplace flow обеспечивает установку. Нарушение → лишний размер инсталлера + рассинхрон версий extension'ов между installer'ом и marketplace.
+- ❌ Push release tag в `yoso-industries/kepler-releases` или `yoso-industries/kosmos-extensions` manually без `electron-builder publish` (launcher) / `ext:publish` (extensions). Эти скрипты генерируют `sha256` + `latest.yml` — autoUpdater сломается без них.
+- ❌ Менять wire format `catalog.json` без bump `schemaVersion`. Installed Kepler'ы должны продолжать читать старый format (tolerant к unknown fields).
+- ❌ Удалять published GitHub releases retroactive. Installed Kepler'ы (или offline users) могут пытаться downgrade / re-install; ломается trust в URL'ы из cached catalog.json.
+- ❌ Менять owner с `yoso-industries` на что-то ещё без обновления `shell/package.json → build.publish[0].owner` + `extension-marketplace.ts → CATALOG_URL` + `publish-extension.mjs → RELEASES_REPO` + `generate-catalog.mjs → RELEASES_REPO`. Все 4 источника must match.
+
 ### usage-tracker
 
 - ❌ Превращение в Windows Service.
