@@ -118,10 +118,23 @@ test.describe(".kext installer + backup", () => {
   });
 
   test("AC: invalid .kext (no manifest) — install fails, target untouched", async () => {
-    fs.rmSync(dataDir, { recursive: true, force: true });
-    fs.rmSync(userDataDir, { recursive: true, force: true });
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.mkdirSync(userDataDir, { recursive: true });
+    // Используем отдельный dataDir чтобы не зависеть от cleanup'а предыдущего
+    // теста (на Windows .old-<stamp> dirs могут быть кратко-locked после rmSync
+    // если предыдущий process ещё не отпустил file handles).
+    const isolatedData = path.join(e2eRoot, "kepler-data-kext-bad");
+    const isolatedUser = path.join(e2eRoot, "kepler-shell-userdata-kext-bad");
+    try {
+      fs.rmSync(isolatedData, { recursive: true, force: true });
+    } catch {
+      /* may be locked — overwrite is fine */
+    }
+    try {
+      fs.rmSync(isolatedUser, { recursive: true, force: true });
+    } catch {
+      /* same */
+    }
+    fs.mkdirSync(isolatedData, { recursive: true });
+    fs.mkdirSync(isolatedUser, { recursive: true });
 
     const badKext = path.join(e2eRoot, "mocha-bad.kext");
     writeZip(badKext, [{ name: "index.html", data: "no manifest" }]);
@@ -131,14 +144,14 @@ test.describe(".kext installer + backup", () => {
       cwd: appRoot,
       args: [
         path.join(appRoot, "dist-electron", "main.js"),
-        `--user-data-dir=${userDataDir}`,
+        `--user-data-dir=${isolatedUser}`,
       ],
       env: {
         ...process.env,
         NODE_ENV: "test",
         KEPLER_SKIP_SYNC: "1",
         KOSMOS_TEST_MODE: "1",
-        KOSMOS_DATA_DIR: dataDir,
+        KOSMOS_DATA_DIR: isolatedData,
       },
       timeout: 20_000,
     });

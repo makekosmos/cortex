@@ -65,12 +65,15 @@ test("AC: spawn с --ext-install <kext> открывает install dialog window
     const wins = await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().map((w) => ({
         title: w.getTitle(),
+        url: w.webContents.getURL(),
         visible: w.isVisible(),
       })),
     );
 
+    // Install dialog opens via loadFile(...) с hash 'install-extension?path=...'
+    // — index.html единый, отличаем окна по hash в URL.
     const hasInstallDialog = wins.some((w) =>
-      w.title.toLowerCase().includes("установка расширения"),
+      w.url.includes("install-extension"),
     );
     expect(hasInstallDialog).toBe(true);
   } finally {
