@@ -21,7 +21,7 @@
 
 @font-face {
   font-family: "Zed Mono";
-  src: url("/fonts/zed-mono-extended.ttf") format("truetype");
+  src: url("./assets/fonts/zed-mono-extended.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
 }
