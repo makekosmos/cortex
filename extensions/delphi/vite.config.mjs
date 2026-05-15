@@ -26,13 +26,16 @@ export default defineConfig({
         "packages/visuals/theme/css-variables.css",
       ),
       "@kepler/visuals": path.resolve(repoRoot, "packages/visuals"),
+      // КРИТИЧНО: force vue-router и pinia resolve к extension'овской
+      // копии. Bun устанавливает vue-router@4 в packages/visuals/node_modules
+      // (peer satisfy) и vue-router@5 в extensions/delphi/node_modules —
+      // разные версии. dedupe не помогает (разные диск-пути). Alias
+      // принудительно сводит к одной копии — visuals' SidebarButton.vue
+      // RouterLink теперь видит app router instance и рендерит anchor'ы
+      // для primaryItems (Inbox/Today) и footerItems (Logbook/Trash).
+      "vue-router": path.resolve(__dirname, "node_modules/vue-router"),
+      pinia: path.resolve(__dirname, "node_modules/pinia"),
     },
-    // КРИТИЧНО: vue-router и pinia должны быть дедуплицированы, иначе
-    // @kepler/visuals (SidebarButton.vue → RouterLink) получает СВОЮ копию
-    // vue-router, а app — свою. RouterLink тихо не рендерит anchor потому
-    // что injection symbols различаются. Симптом: sidebar primaryItems
-    // (Inbox, Today) и footerItems (Logbook, Trash) исчезают, project
-    // group header (без RouterLink) виден.
     dedupe: ["vue", "vue-router", "pinia"],
   },
   build: {

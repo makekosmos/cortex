@@ -25,6 +25,7 @@ export default defineConfig({
         "packages/visuals/theme/css-variables.css",
       ),
       "@kepler/visuals": path.resolve(repoRoot, "packages/visuals"),
+      "vue-router": path.resolve(__dirname, "node_modules/vue-router"),
     },
     dedupe: ["vue", "vue-router", "pinia"],
   },

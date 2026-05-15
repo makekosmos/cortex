@@ -91,6 +91,19 @@ export default defineConfig(({ mode }) => {
           __dirname,
           "node_modules/lucide-vue-next",
         ),
+        // Force vue-router/pinia resolve к extension'овской копии
+        // (extensions/<id>/node_modules/). Bun pinning creates separate
+        // copies in packages/visuals/node_modules (peer satisfy) → разные
+        // RouterLink injection symbols → primary/footer sidebar items не
+        // рендерятся. Alias привязывает к одной копии. Только для extension'ов
+        // у которых эта зависимость реально установлена (horologion и
+        // arrancador не используют pinia, например).
+        ...(existsSync(path.join(extensionDir, "node_modules/vue-router"))
+          ? { "vue-router": path.resolve(extensionDir, "node_modules/vue-router") }
+          : {}),
+        ...(existsSync(path.join(extensionDir, "node_modules/pinia"))
+          ? { pinia: path.resolve(extensionDir, "node_modules/pinia") }
+          : {}),
       },
       dedupe: ["vue", "vue-router", "pinia"],
     },

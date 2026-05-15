@@ -119,12 +119,8 @@
       "peerDependencies": {
         "lucide-vue-next": "*",
         "vue": "^3.0.0",
-        "vue-router": "^4.0.0 || ^5.0.0",
+        "vue-router": "^5.0.4",
       },
-    },
-    "services/usage-tracker": {
-      "name": "usage-tracker",
-      "version": "0.1.0",
     },
     "shell": {
       "name": "kepler-shell",
@@ -1691,8 +1687,6 @@
     "unplugin-utils": ["unplugin-utils@0.3.1", "", { "dependencies": { "pathe": "^2.0.3", "picomatch": "^4.0.3" } }, "sha512-5lWVjgi6vuHhJ526bI4nlCOmkCIF3nnfXkCMDeMJrtdvxTs6ZFCM8oNufGTsDbKv/tJ/xj8RpvXjRuPBZJuJog=="],
 
     "uri-js": ["uri-js@4.4.1", "", { "dependencies": { "punycode": "^2.1.0" } }, "sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg=="],
-
-    "usage-tracker": ["usage-tracker@workspace:services/usage-tracker"],
 
     "utf8-byte-length": ["utf8-byte-length@1.0.5", "", {}, "sha512-Xn0w3MtiQ6zoz2vFyUVruaCL53O/DwUvkEeOvj+uulMm0BkUGYWmBYVyElqZaSLhY6ZD0ulfU3aBra2aVT4xfA=="],
 
