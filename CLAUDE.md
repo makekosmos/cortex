@@ -241,6 +241,9 @@ bun run ark:smoke
 - ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
 - ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
 - ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (`KEPLER_DEV=1` или Settings → Developer Mode) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
+- ❌ Дублирование install-flow логики (backup / atomic rename / semver-проверка). Источник правды — `shell/electron/extension-installer.ts`. CLI скрипт `shell/scripts/install-extension.mjs` копирует semver matcher inline (~40 строк) только потому, что mjs скрипт не имеет доступа к dist-electron bundle; не размножай это в третьем месте — дёргай IPC `kepler:extension:install:do` или сам runtime API.
+- ❌ Ослабление `keplerApiVersion` compat check в `extension-host.ts → checkApiCompat()`. Несовместимый extension **не** должен получать live preload bridge — иначе ломается инвариант API contract'а. Если правишь — bump `KEPLER_API_VERSION` в `shell/electron/kepler-api.ts` соответственно (patch/minor/major по семантике).
+- ❌ Path traversal в `.kext` extract'е. `extension-installer.ts → safeEntryName` отвергает `..`, абсолютные пути, drive letter'ы. Не упрощай эту проверку — `.kext` может приехать из untrusted источника.
 
 ### Command bus
 
