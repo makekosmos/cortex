@@ -1,3 +1,10 @@
+// @deprecated — после Wave 2 (2026-05-15) state machine живёт в kepler-backend
+// (services/kepler-backend/src/pomodoro_host.rs + crates/ark-core/src/pomodoro/),
+// а renderer использует thin wrapper `usePomodoroSession.ts`. Этот файл
+// оставлен временно для возможного отката; см. .agent/tasks/
+// 2026-05-15-pomodoro-backend-session/. PomodoroView / HomeView / main.ts
+// больше не импортируют отсюда.
+
 import { computed, ref } from "vue";
 import { pomodoroSettings } from "./pomodoroSettings";
 import { playSound } from "./sounds";

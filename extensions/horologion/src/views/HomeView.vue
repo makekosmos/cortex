@@ -10,7 +10,7 @@ import {
     timerMode,
     type PomodoroDraftTask,
 } from "../lib/store";
-import { usePomodoro } from "../lib/usePomodoro";
+import { usePomodoroSession as usePomodoro } from "../lib/usePomodoroSession";
 
 const p = usePomodoro();
 

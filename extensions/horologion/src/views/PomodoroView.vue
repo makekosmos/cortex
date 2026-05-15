@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { Play, Pause, SkipForward, Square, Settings } from "lucide-vue-next";
-import { usePomodoro, type PomodoroPhase } from "../lib/usePomodoro";
+import { usePomodoroSession as usePomodoro, type PomodoroPhase } from "../lib/usePomodoroSession";
 import { pomodoroDraft } from "../lib/store";
 import { pomodoroSettings } from "../lib/pomodoroSettings";
 

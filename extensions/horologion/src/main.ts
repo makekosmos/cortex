@@ -22,7 +22,7 @@ import "./styles.css";
 import "./lib/horologionApi"; // side-effect: устанавливает window.horologion shim
 import App from "./App.vue";
 import { pomodoroDraft, timerMode } from "./lib/store";
-import { usePomodoro } from "./lib/usePomodoro";
+import { usePomodoroSession as usePomodoro } from "./lib/usePomodoroSession";
 
 // Horologion использует тёмную тему kosmos-visuals (класс `.dark` в css-variables).
 document.documentElement.classList.add("dark");
