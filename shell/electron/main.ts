@@ -19,7 +19,6 @@
 import {
   app,
   BrowserWindow,
-  dialog,
   globalShortcut,
   ipcMain,
   Tray,
@@ -28,7 +27,6 @@ import {
   nativeTheme,
   screen,
 } from "electron";
-import electronUpdater from "electron-updater";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import {
@@ -60,6 +58,12 @@ import {
   findKextInArgv,
   openInstallExtensionWindow,
 } from "./install-extension-window";
+import {
+  check as checkForUpdates,
+  getState as getUpdateState,
+  install as installUpdate,
+  setupAutoUpdater,
+} from "./autoupdater-host";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -622,50 +626,16 @@ ipcMain.handle(
   },
 );
 
-// --- autoUpdater -------------------------------------------------------------
+// --- autoUpdater IPC ----------------------------------------------------------
+// Implementation в `./autoupdater-host.ts` — state machine + broadcast.
+// Settings UI subscribes к `kepler:settings:update:state` event channel.
 
-function setupAutoUpdater(): void {
-  if (isDev) {
-    console.error("[kepler-shell] autoUpdater skipped в dev mode");
-    return;
-  }
-  if (process.env.KOSMOS_TEST_MODE === "1") {
-    console.error("[kepler-shell] autoUpdater skipped в test mode");
-    return;
-  }
-  const { autoUpdater } = electronUpdater;
-  autoUpdater.logger = console;
-  autoUpdater.on("update-available", (info) =>
-    console.error("[autoUpdater] available:", info.version),
-  );
-  autoUpdater.on("download-progress", (p) =>
-    console.error(`[autoUpdater] download ${p.percent.toFixed(0)}%`),
-  );
-  autoUpdater.on("update-downloaded", (info) => {
-    console.error("[autoUpdater] downloaded:", info.version);
-    void dialog
-      .showMessageBox({
-        type: "info",
-        title: "Kepler обновление готово",
-        message: `Версия ${info.version} скачана. Перезапустить сейчас?`,
-        buttons: ["Перезапустить", "Позже"],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      .then((result) => {
-        if (result.response === 0) autoUpdater.quitAndInstall();
-      });
-  });
-  autoUpdater.on("error", (err) =>
-    console.error("[autoUpdater] error:", err),
-  );
-
-  void autoUpdater.checkForUpdatesAndNotify();
-  setInterval(
-    () => void autoUpdater.checkForUpdatesAndNotify(),
-    6 * 60 * 60 * 1000,
-  );
-}
+ipcMain.handle("kepler:settings:update:check", () => checkForUpdates());
+ipcMain.handle("kepler:settings:update:install", () => {
+  installUpdate();
+  return true;
+});
+ipcMain.handle("kepler:settings:update:state", () => getUpdateState());
 
 // --- lifecycle ---------------------------------------------------------------
 
@@ -682,7 +652,7 @@ app.whenReady().then(async () => {
   void initArkClient();
 
   registerMarketplaceIpc();
-  setupAutoUpdater();
+  setupAutoUpdater({ isDev });
   // Skip periodic в test mode чтобы Playwright не делал HTTPS вызовов.
   if (process.env.KOSMOS_TEST_MODE !== "1") {
     startPeriodicCatalogCheck();

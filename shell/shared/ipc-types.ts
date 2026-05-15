@@ -199,5 +199,26 @@ export interface KeplerApi {
     version(): Promise<string>;
     /** Текущий глобальный хоткей (read-only Phase 1). */
     hotkey(): Promise<string>;
+    /** autoUpdater control + state subscription. */
+    update: {
+      /** Manual trigger checkForUpdates. Returns current state после check. */
+      check(): Promise<UpdateState>;
+      /** quitAndInstall — клик по banner'у в downloaded состоянии. */
+      install(): Promise<boolean>;
+      /** Snapshot текущего state (для initial UI hydrate). */
+      state(): Promise<UpdateState>;
+      /** Подписка на state changes. Returns unsubscribe. */
+      onStateChanged(listener: (state: UpdateState) => void): () => void;
+    };
   };
 }
+
+/** autoUpdater state machine. См. shell/electron/autoupdater-host.ts. */
+export type UpdateState =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "not-available"; checkedAt: number }
+  | { kind: "available"; version: string }
+  | { kind: "downloading"; version: string; percent: number }
+  | { kind: "downloaded"; version: string }
+  | { kind: "error"; message: string };

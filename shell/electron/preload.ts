@@ -74,6 +74,18 @@ const api: KeplerApi = {
     },
     version: () => ipcRenderer.invoke("kepler:settings:version"),
     hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
+    update: {
+      check: () => ipcRenderer.invoke("kepler:settings:update:check"),
+      install: () => ipcRenderer.invoke("kepler:settings:update:install"),
+      state: () => ipcRenderer.invoke("kepler:settings:update:state"),
+      onStateChanged: (listener) => {
+        const handler = (_e: unknown, state: unknown) =>
+          listener(state as never);
+        ipcRenderer.on("kepler:settings:update:state", handler);
+        return () =>
+          ipcRenderer.removeListener("kepler:settings:update:state", handler);
+      },
+    },
   },
 };
 

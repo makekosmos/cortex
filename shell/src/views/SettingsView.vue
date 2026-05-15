@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { ArrowUpCircle, Loader2 } from "lucide-vue-next";
 import type {
   BackendStatus,
   InstalledExtensionInfo,
   MarketplaceCatalog,
   MarketplaceExtension,
+  UpdateState,
 } from "@shared/ipc-types";
 
 type Tab = "general" | "extensions";
@@ -192,13 +194,113 @@ const orphanInstalled = computed<InstalledExtensionInfo[]>(() => {
   return installed.value.filter((i) => !catalogIds.has(i.id));
 });
 
+// --- autoUpdater state ------------------------------------------------------
+
+const updateState = ref<UpdateState>({ kind: "idle" });
+const updateChecking = ref<boolean>(false);
+let unsubscribeUpdateState: (() => void) | null = null;
+
+async function refreshUpdateState() {
+  try {
+    updateState.value = await window.kepler.settings.update.state();
+  } catch (e) {
+    console.warn("update state fetch failed", e);
+  }
+}
+
+async function onCheckUpdates() {
+  if (updateChecking.value) return;
+  updateChecking.value = true;
+  try {
+    updateState.value = await window.kepler.settings.update.check();
+  } catch (e) {
+    console.warn("update check failed", e);
+  } finally {
+    updateChecking.value = false;
+  }
+}
+
+async function onInstallUpdate() {
+  try {
+    await window.kepler.settings.update.install();
+  } catch (e) {
+    console.warn("update install failed", e);
+  }
+}
+
+const updateBanner = computed<null | {
+  text: string;
+  clickable: boolean;
+  progress?: number;
+}>(() => {
+  const s = updateState.value;
+  if (s.kind === "available") {
+    return { text: `Доступно обновление Kepler ${s.version}`, clickable: false };
+  }
+  if (s.kind === "downloading") {
+    return {
+      text: `Скачивание Kepler ${s.version} (${s.percent}%)`,
+      clickable: false,
+      progress: s.percent,
+    };
+  }
+  if (s.kind === "downloaded") {
+    return {
+      text: `Обновление Kepler ${s.version} готово — нажмите чтобы перезапустить`,
+      clickable: true,
+    };
+  }
+  return null;
+});
+
+const checkResultLabel = computed<string>(() => {
+  const s = updateState.value;
+  if (s.kind === "checking") return "Проверяем…";
+  if (s.kind === "not-available") {
+    return `Последняя версия (проверено ${new Date(s.checkedAt).toLocaleTimeString("ru")})`;
+  }
+  if (s.kind === "error") return `Ошибка: ${s.message}`;
+  return "";
+});
+
 onMounted(() => {
   void loadGeneral();
+  void refreshUpdateState();
+  unsubscribeUpdateState = window.kepler.settings.update.onStateChanged((s) => {
+    updateState.value = s;
+  });
+});
+
+onBeforeUnmount(() => {
+  unsubscribeUpdateState?.();
+  unsubscribeUpdateState = null;
 });
 </script>
 
 <template>
   <div class="settings" tabindex="0" @keydown="onKey">
+    <!-- Raycast-style update banner. Шириной во всё окно, height ~32px. -->
+    <button
+      v-if="updateBanner"
+      type="button"
+      class="update-banner"
+      :class="{ clickable: updateBanner.clickable }"
+      :disabled="!updateBanner.clickable"
+      @click="updateBanner.clickable && onInstallUpdate()"
+    >
+      <component
+        :is="updateState.kind === 'downloading' ? Loader2 : ArrowUpCircle"
+        :size="14"
+        :class="{ spin: updateState.kind === 'downloading' }"
+      />
+      <span class="update-banner-text">{{ updateBanner.text }}</span>
+      <span
+        v-if="updateBanner.progress !== undefined"
+        class="update-banner-progress"
+        :style="{ width: `${updateBanner.progress}%` }"
+      />
+    </button>
+
     <header class="header">
       <div class="header-left">
         <h1>Настройки</h1>
@@ -294,8 +396,19 @@ onMounted(() => {
         <div class="row">
           <div class="row-label">
             <div class="label">Версия Kepler</div>
+            <div v-if="checkResultLabel" class="hint">{{ checkResultLabel }}</div>
           </div>
-          <code class="value">{{ version }}</code>
+          <div class="row-actions">
+            <code class="value">{{ version }}</code>
+            <button
+              type="button"
+              class="btn ghost"
+              :disabled="updateChecking || updateState.kind === 'downloading'"
+              @click="onCheckUpdates"
+            >
+              {{ updateChecking ? "Проверяем…" : "Проверить обновления" }}
+            </button>
+          </div>
         </div>
       </div>
     </template>
@@ -474,6 +587,66 @@ onMounted(() => {
   flex-direction: column;
   background: color-mix(in srgb, oklch(0.04 0 0) 75%, transparent);
   outline: none;
+}
+
+/* Raycast-style update banner — высота ~32px, во всю ширину, прижат к
+   самому верху над header. Прогресс-бар — нижняя полоска заполняется. */
+.update-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  border: none;
+  background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 20%, transparent);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+  -webkit-app-region: no-drag;
+  overflow: hidden;
+}
+
+.update-banner.clickable {
+  cursor: pointer;
+  background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 35%, transparent);
+}
+
+.update-banner.clickable:hover {
+  background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 50%, transparent);
+}
+
+.update-banner-text {
+  flex-shrink: 1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.update-banner-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent, oklch(0.7 0.18 250));
+  transition: width 200ms ease-out;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .header {
