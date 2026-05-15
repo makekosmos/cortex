@@ -19,6 +19,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   globalShortcut,
   ipcMain,
   Tray,
@@ -27,6 +28,7 @@ import {
   nativeTheme,
   screen,
 } from "electron";
+import electronUpdater from "electron-updater";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import {
@@ -616,6 +618,51 @@ ipcMain.handle(
   },
 );
 
+// --- autoUpdater -------------------------------------------------------------
+
+function setupAutoUpdater(): void {
+  if (isDev) {
+    console.error("[kepler-shell] autoUpdater skipped в dev mode");
+    return;
+  }
+  if (process.env.KOSMOS_TEST_MODE === "1") {
+    console.error("[kepler-shell] autoUpdater skipped в test mode");
+    return;
+  }
+  const { autoUpdater } = electronUpdater;
+  autoUpdater.logger = console;
+  autoUpdater.on("update-available", (info) =>
+    console.error("[autoUpdater] available:", info.version),
+  );
+  autoUpdater.on("download-progress", (p) =>
+    console.error(`[autoUpdater] download ${p.percent.toFixed(0)}%`),
+  );
+  autoUpdater.on("update-downloaded", (info) => {
+    console.error("[autoUpdater] downloaded:", info.version);
+    void dialog
+      .showMessageBox({
+        type: "info",
+        title: "Kepler обновление готово",
+        message: `Версия ${info.version} скачана. Перезапустить сейчас?`,
+        buttons: ["Перезапустить", "Позже"],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then((result) => {
+        if (result.response === 0) autoUpdater.quitAndInstall();
+      });
+  });
+  autoUpdater.on("error", (err) =>
+    console.error("[autoUpdater] error:", err),
+  );
+
+  void autoUpdater.checkForUpdatesAndNotify();
+  setInterval(
+    () => void autoUpdater.checkForUpdatesAndNotify(),
+    6 * 60 * 60 * 1000,
+  );
+}
+
 // --- lifecycle ---------------------------------------------------------------
 
 app.whenReady().then(async () => {
@@ -629,6 +676,8 @@ app.whenReady().then(async () => {
   createTray();
 
   void initArkClient();
+
+  setupAutoUpdater();
 
   // Если процесс был запущен с .kext в argv (file association / CLI) —
   // открываем install dialog сразу после whenReady. Launcher остаётся
