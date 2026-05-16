@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick } from "vue";
 import type { Component } from "vue";
-import { Settings as SettingsIcon, Database as DatabaseIcon } from "lucide-vue-next";
+import {
+    Settings as SettingsIcon,
+    Database as DatabaseIcon,
+    ArrowUpCircle,
+    Loader2,
+} from "lucide-vue-next";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
-import type { CommandRecord } from "@shared/ipc-types";
+import type { CommandRecord, UpdateState } from "@shared/ipc-types";
 
 interface BuiltInIconConfig {
     icon: Component;
@@ -79,6 +84,57 @@ function loadRecents(): string[] {
 
 const recentIds = ref<string[]>(loadRecents());
 
+// --- Update banner state ----------------------------------------------------
+const updateState = ref<UpdateState>({ kind: "idle" });
+let unsubUpdateState: (() => void) | null = null;
+
+const updateBanner = computed<
+    | null
+    | {
+        title: string;
+        subtitle: string;
+        icon: Component;
+        spinning: boolean;
+        clickable: boolean;
+    }
+>(() => {
+    const s = updateState.value;
+    if (s.kind === "downloaded") {
+        return {
+            title: `Обновить Kepler до ${s.version}`,
+            subtitle: "Установить и перезапустить",
+            icon: ArrowUpCircle,
+            spinning: false,
+            clickable: true,
+        };
+    }
+    if (s.kind === "downloading") {
+        return {
+            title: `Скачивается Kepler ${s.version}`,
+            subtitle: `${Math.round(s.percent)}%`,
+            icon: Loader2,
+            spinning: true,
+            clickable: false,
+        };
+    }
+    if (s.kind === "available") {
+        return {
+            title: `Доступно обновление Kepler ${s.version}`,
+            subtitle: "Скачивается в фоне",
+            icon: ArrowUpCircle,
+            spinning: false,
+            clickable: false,
+        };
+    }
+    return null;
+});
+
+async function onBannerClick() {
+    const b = updateBanner.value;
+    if (!b?.clickable) return;
+    await window.kepler.settings.update.install();
+}
+
 function recordRecent(id: string) {
     const next = [id, ...recentIds.value.filter((x) => x !== id)].slice(0, RECENTS_LIMIT);
     recentIds.value = next;
@@ -109,31 +165,74 @@ function onInput() {
     selectedIndex.value = 0;
 }
 
-function flatList(): CommandRecord[] {
+// Шаблон уважает «виртуальный» banner-item впереди: selectedIndex 0 — это
+// banner, далее recent, далее all. flatList используется для invocation
+// (banner не реальная команда, потому фильтруется).
+function totalRows(): number {
+    const banner = updateBanner.value ? 1 : 0;
     if (groupedNoQuery.value) {
-        return [...groupedNoQuery.value.recent, ...groupedNoQuery.value.all];
+        return banner + groupedNoQuery.value.recent.length + groupedNoQuery.value.all.length;
     }
-    return filtered.value;
+    return banner + filtered.value.length;
+}
+
+function rowAt(idx: number): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | null {
+    const banner = updateBanner.value ? 1 : 0;
+    if (banner && idx === 0) return { kind: "banner" };
+    const i = idx - banner;
+    if (groupedNoQuery.value) {
+        const rec = groupedNoQuery.value.recent;
+        const all = groupedNoQuery.value.all;
+        if (i < rec.length) return { kind: "cmd", cmd: rec[i]! };
+        const j = i - rec.length;
+        if (j < all.length) return { kind: "cmd", cmd: all[j]! };
+        return null;
+    }
+    const c = filtered.value[i];
+    return c ? { kind: "cmd", cmd: c } : null;
 }
 
 async function invokeSelected() {
-    const list = flatList();
-    const target = list[selectedIndex.value];
-    if (!target) return;
-    recordRecent(target.id);
-    await window.kepler.commands.invoke(target.id);
+    const row = rowAt(selectedIndex.value);
+    if (!row) return;
+    if (row.kind === "banner") {
+        await onBannerClick();
+        return;
+    }
+    recordRecent(row.cmd.id);
+    await window.kepler.commands.invoke(row.cmd.id);
     query.value = "";
     selectedIndex.value = 0;
 }
 
 function moveSelection(delta: number) {
-    const list = flatList();
-    if (list.length === 0) return;
-    const n = list.length;
-    selectedIndex.value = (selectedIndex.value + delta + n) % n;
+    const n = totalRows();
+    if (n === 0) return;
+    const next = selectedIndex.value + delta;
+    // Clamp без wrap — упереться в границы.
+    selectedIndex.value = Math.max(0, Math.min(n - 1, next));
     void nextTick(() => {
-        const el = listRef.value?.querySelector<HTMLElement>(".result.selected");
-        el?.scrollIntoView({ block: "nearest" });
+        const list = listRef.value;
+        if (!list) return;
+        // Для самого верхнего ряда (banner / первый item) — упираемся в top.
+        if (selectedIndex.value === 0) {
+            list.scrollTop = 0;
+            return;
+        }
+        const selectedEl = list.querySelector<HTMLElement>(".result.selected");
+        if (!selectedEl) return;
+        // Когда выделение — первый <li> в своей <ul>, прокручиваем к заголовку
+        // секции (sibling <ul> → previousElementSibling = .section-label).
+        const isFirstInUl = selectedEl.parentElement?.firstElementChild === selectedEl;
+        if (isFirstInUl) {
+            const header = selectedEl.parentElement!
+                .previousElementSibling as HTMLElement | null;
+            if (header?.classList.contains("section-label")) {
+                header.scrollIntoView({ block: "start" });
+                return;
+            }
+        }
+        selectedEl.scrollIntoView({ block: "nearest" });
     });
 }
 
@@ -166,7 +265,7 @@ async function refreshCommands() {
 let offShow = () => { };
 let offCommandsUpdated = () => { };
 
-onMounted(() => {
+onMounted(async () => {
     offShow = window.kepler.window.onShow(() => {
         query.value = "";
         selectedIndex.value = 0;
@@ -176,6 +275,14 @@ onMounted(() => {
     offCommandsUpdated = window.kepler.commands.onUpdated(() => {
         void refreshCommands();
     });
+    try {
+        updateState.value = await window.kepler.settings.update.state();
+    } catch {
+        /* main may not be ready yet — ignore */
+    }
+    unsubUpdateState = window.kepler.settings.update.onStateChanged((s) => {
+        updateState.value = s;
+    });
     void refreshCommands();
     void nextTick(() => inputRef.value?.focus());
 });
@@ -183,6 +290,7 @@ onMounted(() => {
 onUnmounted(() => {
     offShow();
     offCommandsUpdated();
+    unsubUpdateState?.();
 });
 
 </script>
@@ -193,13 +301,27 @@ onUnmounted(() => {
             placeholder="Поиск команд: pomo, заметка, открыть delphi…" spellcheck="false" autocomplete="off"
             autocorrect="off" autocapitalize="off" @input="onInput" />
         <div ref="listRef" class="list kosmos-scroll">
+            <template v-if="updateBanner">
+                <div class="section-label">Обновление</div>
+                <ul class="results">
+                    <li class="result update-tile" :class="{ selected: selectedIndex === 0, disabled: !updateBanner.clickable }"
+                        @click="() => { selectedIndex = 0; void invokeSelected(); }">
+                        <span class="update-icon">
+                            <component :is="updateBanner.icon" :size="14" :stroke-width="2"
+                                :class="{ spin: updateBanner.spinning }" />
+                        </span>
+                        <span class="title">{{ updateBanner.title }}</span>
+                        <span class="kind-label">{{ updateBanner.subtitle }}</span>
+                    </li>
+                </ul>
+            </template>
             <template v-if="groupedNoQuery">
                 <template v-if="groupedNoQuery.recent.length > 0">
                     <div class="section-label">Недавние</div>
                     <ul class="results">
                         <li v-for="(cmd, idx) in groupedNoQuery.recent" :key="`recent-${cmd.id}`" class="result"
-                            :class="{ selected: idx === selectedIndex }"
-                            @click="() => { selectedIndex = idx; void invokeSelected(); }">
+                            :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+                            @click="() => { selectedIndex = (updateBanner ? 1 : 0) + idx; void invokeSelected(); }">
                             <BuiltInIcon v-if="builtInIconFor(cmd)" :icon="builtInIconFor(cmd)!.icon"
                                 :from="builtInIconFor(cmd)!.from" :to="builtInIconFor(cmd)!.to" />
                             <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
@@ -214,8 +336,8 @@ onUnmounted(() => {
                     <div class="section-label">Все</div>
                     <ul class="results">
                         <li v-for="(cmd, idx) in groupedNoQuery.all" :key="`all-${cmd.id}`" class="result"
-                            :class="{ selected: groupedNoQuery.recent.length + idx === selectedIndex }"
-                            @click="() => { selectedIndex = groupedNoQuery!.recent.length + idx; void invokeSelected(); }">
+                            :class="{ selected: (updateBanner ? 1 : 0) + groupedNoQuery.recent.length + idx === selectedIndex }"
+                            @click="() => { selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery!.recent.length + idx; void invokeSelected(); }">
                             <BuiltInIcon v-if="builtInIconFor(cmd)" :icon="builtInIconFor(cmd)!.icon"
                                 :from="builtInIconFor(cmd)!.from" :to="builtInIconFor(cmd)!.to" />
                             <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
@@ -231,8 +353,8 @@ onUnmounted(() => {
                 <div v-if="filtered.length === 0" class="empty">Ничего не найдено</div>
                 <ul v-else class="results">
                     <li v-for="(cmd, idx) in filtered" :key="cmd.id" class="result"
-                        :class="{ selected: idx === selectedIndex }"
-                        @click="() => { selectedIndex = idx; void invokeSelected(); }">
+                        :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+                        @click="() => { selectedIndex = (updateBanner ? 1 : 0) + idx; void invokeSelected(); }">
                         <img v-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
                         <span v-else class="icon icon-placeholder" aria-hidden="true" />
                         <span class="title">{{ cmd.title }}</span>
@@ -315,6 +437,32 @@ onUnmounted(() => {
 
 .icon-placeholder {
     background: transparent;
+}
+
+.update-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: oklch(0.55 0.15 250);
+    color: oklch(0.98 0 0);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, oklch(1 0 0) 12%, transparent);
+    flex-shrink: 0;
+}
+
+.update-tile.disabled {
+    cursor: default;
+}
+
+.spin {
+    animation: kepler-spin 1s linear infinite;
+}
+
+@keyframes kepler-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 .icon-builtin {
