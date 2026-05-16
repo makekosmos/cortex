@@ -1,7 +1,7 @@
 {
   "id": "delphi",
   "name": "Delphi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Менеджер задач",
   "author": "Kazui",
   "keplerApiVersion": "^1.0.0",
