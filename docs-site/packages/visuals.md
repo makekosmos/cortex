@@ -19,10 +19,10 @@
 ## Структура
 
 ```
-packages/kosmos-visuals/
+packages/visuals/
 ├─ tokens/                  # colors, typography, radius, spacing, animations
 │  ├─ colors.ts             # OKLCH палитры (light + dark + status + smartList)
-│  ├─ typography.ts         # SF Pro / Inter, Zed Mono, sizes, weights
+│  ├─ typography.ts         # SF Pro / Inter, IBM Plex Mono, sizes, weights
 │  ├─ radius.ts
 │  ├─ spacing.ts
 │  ├─ animations.ts
@@ -32,10 +32,32 @@ packages/kosmos-visuals/
 │  └─ index.ts              # ThemeMode, ColorToken, getColor
 ├─ components/              # Vue компоненты
 ├─ patterns/                # композиционные паттерны
-├─ react/                   # React биндинги (минимально)
+├─ composables/             # useContextMenu и т.п.
+├─ stories/                 # Histoire stories (см. ниже)
+├─ histoire.config.ts       # конфиг story-сервера
+├─ histoire.setup.ts        # vue-router + theme bridging
 ├─ index.ts                 # public API
 └─ package.json
 ```
+
+## Story-сервер (Histoire)
+
+Локальный playground всей дизайн-системы — 23 story-файла, 62 варианта, покрывают
+все 19 компонентов + 5 наборов токенов. См. `packages/visuals/stories/README.md`.
+
+```bash
+bun install
+bun run --cwd packages/visuals story:dev      # http://localhost:6006
+bun run --cwd packages/visuals story:build    # static → .histoire/dist
+bun run --cwd packages/visuals story:preview
+```
+
+Toggle light/dark в правом верхнем углу Histoire UI зеркалит `data-color-mode` в
+`class="dark"` на body — все CSS-vars из `theme/css-variables.css` переключаются
+синхронно. По умолчанию открывается dark-тема.
+
+Почему **Histoire**, не Storybook: Vue-only стек, существующая Vite-инфраструктура,
+встроенный theme toggle под наши light/dark токены, минимум deps (~30 MB vs 200+).
 
 ## Дизайн-токены
 
@@ -340,4 +362,6 @@ import {
 ## Связанные документы
 
 - [Архитектура](/concepts/architecture).
+- `packages/visuals/stories/README.md` — как запустить локальный Histoire-playground
+  и добавить новую story.
 - `apps/eden/AGENTS.md` и `apps/dashboard/AGENTS.md` — где именно применяются shared компоненты.
