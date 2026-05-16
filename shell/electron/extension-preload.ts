@@ -61,6 +61,22 @@ const api = {
     invoke: (action: string, payload?: unknown): Promise<boolean> =>
       ipcRenderer.invoke("kepler:extension:invoke-host", action, payload),
   },
+  navigation: {
+    /** Subscribe to navigation events (`router.push(route)`). Initial route
+        приходит сразу после `did-finish-load`, для уже открытого окна — при
+        повторном `openExtension(id, route)` из лаунчера. */
+    onNavigate: (handler: (route: string) => void): Unsubscribe => {
+      const wrapped = (_e: unknown, route: unknown) => {
+        if (typeof route === "string") handler(route);
+      };
+      ipcRenderer.on("kepler:extension:navigation", wrapped);
+      return () => ipcRenderer.removeListener("kepler:extension:navigation", wrapped);
+    },
+    /** Synchronous read of initial route stashed by host before page load.
+        Returns null если route не задан (обычное открытие). */
+    initialRoute: (): Promise<string | null> =>
+      ipcRenderer.invoke("kepler:extension:navigation:initial") as Promise<string | null>,
+  },
   userData: {
     readJson: <T = unknown>(name: string): Promise<T | null> =>
       ipcRenderer.invoke("kepler:extension:userData:readJson", name) as Promise<

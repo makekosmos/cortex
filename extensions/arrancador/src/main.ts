@@ -25,3 +25,23 @@ import { router } from "./router";
 document.documentElement.classList.add("dark");
 
 createApp(App).use(router).mount("#app");
+
+// Deep links через IPC. См. extensions/delphi/src/main.ts для пояснения.
+const keplerNav = (
+  window as unknown as {
+    kepler?: {
+      navigation?: {
+        initialRoute: () => Promise<string | null>;
+        onNavigate: (h: (route: string) => void) => () => void;
+      };
+    };
+  }
+).kepler?.navigation;
+if (keplerNav) {
+  void keplerNav.initialRoute().then((r) => {
+    if (r) void router.push(r);
+  });
+  keplerNav.onNavigate((r) => {
+    void router.push(r);
+  });
+}

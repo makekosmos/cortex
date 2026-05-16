@@ -13,6 +13,10 @@ declare global {
         minimize(): Promise<void>;
         maximize(): Promise<void>;
       };
+      navigation?: {
+        onNavigate(handler: (route: string) => void): () => void;
+        initialRoute(): Promise<string | null>;
+      };
     };
   }
 }

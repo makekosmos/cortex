@@ -75,16 +75,28 @@ Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `fo
 
 ### Deep links через `route`
 
-`openExtension(id, route?)` принимает опциональный второй параметр — фрагмент маршрута внутри extension'а (роут Vue Router'а или произвольный hash/query). Поведение:
+`openExtension(id, route?)` принимает опциональный второй параметр — Vue Router path (включая query). Доставка route'а **не через URL hash** (extension'ы используют `createMemoryHistory()`, и hash не разбирается роутером), а через IPC:
 
-- **Dev mode** (active developer mode + `devPort` в manifest) → `win.loadURL('http://localhost:<devPort>/#<route>')`.
-- **Prod** → `win.loadFile(entryHtml, { hash: route })`.
-- **Reuse**: если окно extension'а уже открыто, `openExtension(id, route)` просто фокусирует существующее окно **без навигации** — `route` в этом случае игнорируется. Это known limitation v1; в будущем resolver научится диспатчить `kepler:extension:navigate` IPC в существующее окно.
+1. **Cold start** — `openExtension` сохраняет `route` в `extensionWindows.get(id).initialRoute`. После `did-finish-load` main отправляет `kepler:extension:navigation` event в renderer.
+2. **Existing window** — `openExtension(id, route)` фокусирует окно и **сразу** отправляет тот же event (без перезагрузки).
+3. **Renderer-side** — extension main.ts подписывается через `window.kepler.navigation.onNavigate(route → router.push(route))` и читает initial value через `window.kepler.navigation.initialRoute()` на mount.
+
+Это работает с любым vue-router `history` mode и не зависит от того, передаётся ли в URL hash. Контракт `kepler.navigation` экспортируется через extension preload (см. `shell/electron/extension-preload.ts`).
 
 Используется в `shell/electron/commands.ts` для глубоких open-команд:
 
 - `delphi:today` → `openExtension('delphi', '/today')`.
-- `horologion:pomodoro` / `horologion:stopwatch` → `openExtension('horologion', '/?mode=pomodoro' | '/?mode=stopwatch')`.
+- `horologion:pomodoro` / `horologion:stopwatch` → `openExtension('horologion', '/?mode=pomodoro' | '/?mode=stopwatch')` — Horologion HomeView читает `route.query.mode` и переключает `timerMode`.
+
+Если extension хочет принимать deep links, его `main.ts` должен явно подписаться:
+
+```ts
+const nav = window.kepler?.navigation;
+if (nav) {
+  void nav.initialRoute().then((r) => { if (r) void router.push(r); });
+  nav.onNavigate((r) => void router.push(r));
+}
+```
 
 ### Manifest format
 

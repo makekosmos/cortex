@@ -41,6 +41,17 @@ const app = createApp(App);
 app.use(router);
 app.mount("#app");
 
+// Deep links: Kepler shell делает `openExtension(id, route)` и доставляет route
+// через IPC. Hash в URL не используется — memoryHistory его не разбирает.
+if (window.kepler?.navigation) {
+  void window.kepler.navigation.initialRoute().then((r) => {
+    if (r) void router.push(r);
+  });
+  window.kepler.navigation.onNavigate((r) => {
+    void router.push(r);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Command bus — kepler.ark.subscribe("command_invoked", ...)
 // ---------------------------------------------------------------------------

@@ -121,6 +121,9 @@ export interface ExtensionManifest {
 interface ExtensionWindowEntry {
   win: BrowserWindow;
   id: string;
+  /** Initial route переданный в `openExtension(id, route)` для cold start.
+      Renderer читает через `kepler.navigation.initialRoute()` на mount. */
+  initialRoute?: string;
 }
 
 const extensionWindows = new Map<string, ExtensionWindowEntry>();
@@ -150,9 +153,7 @@ let arkSubscribe: ArkSubscribeFn | null = null;
 // в main.ts. Reset (`setExtensionArkBridge({request: null, ...})` при shutdown)
 // создаёт новый pending promise — следующие запросы зависнут до нового resolve
 // или timeout'нутся.
-let arkBridgeReady: Promise<void> = new Promise(() => {
-  /* never resolves until setExtensionArkBridge с non-null request */
-});
+let arkBridgeReady!: Promise<void>;
 let arkBridgeReadyResolve: (() => void) | null = null;
 function resetArkBridgeReady(): void {
   arkBridgeReady = new Promise<void>((resolve) => {
@@ -498,6 +499,9 @@ export function openExtension(id: string, route?: string): void {
   const existing = extensionWindows.get(id);
   if (existing && !existing.win.isDestroyed()) {
     existing.win.focus();
+    if (route) {
+      existing.win.webContents.send("kepler:extension:navigation", route);
+    }
     return;
   }
   const manifest = loadExtensionManifest(id);
@@ -689,7 +693,19 @@ export function openExtension(id: string, route?: string): void {
     webContentsToExtensionId.delete(wcId);
     extensionWindows.delete(id);
   });
-  extensionWindows.set(id, { win, id });
+  extensionWindows.set(id, { win, id, initialRoute: route });
+
+  // После полной загрузки renderer'а отправляем initial route — extension
+  // ловит через `kepler.navigation.onNavigate` и делает `router.push(route)`.
+  if (route) {
+    win.webContents.once("did-finish-load", () => {
+      try {
+        win.webContents.send("kepler:extension:navigation", route);
+      } catch {
+        /* окно могло быть закрыто во время загрузки */
+      }
+    });
+  }
 
   // F12 toggles DevTools для extension window (без модификаторов).
   // try/catch — на случай race condition при закрытии окна, когда event ещё
@@ -711,14 +727,15 @@ export function openExtension(id: string, route?: string): void {
     }
   });
 
-  const hash = route ? (route.startsWith("/") ? route : `/${route}`) : undefined;
+  // Route доставляется через IPC после did-finish-load (см. выше) — это
+  // работает с любым vue-router history mode (memory / hash / web).
   if (useDev && manifest.devPort) {
-    const devUrl = `http://localhost:${manifest.devPort}/${hash ? `#${hash}` : ""}`;
+    const devUrl = `http://localhost:${manifest.devPort}/`;
     console.log(`[kepler-shell] extension '${id}' dev mode → ${devUrl}`);
     void win.loadURL(devUrl);
     win.webContents.openDevTools({ mode: "detach" });
   } else {
-    void win.loadFile(entryHtml, hash ? { hash } : undefined);
+    void win.loadFile(entryHtml);
   }
 }
 
@@ -808,6 +825,13 @@ ipcMain.handle(
 // ---------------------------------------------------------------------------
 
 ipcMain.handle("kepler:extension:meta:id", (e) => extensionIdForSender(e.sender));
+
+ipcMain.handle("kepler:extension:navigation:initial", (e): string | null => {
+  const id = extensionIdForSender(e.sender);
+  if (!id) return null;
+  const entry = extensionWindows.get(id);
+  return entry?.initialRoute ?? null;
+});
 
 ipcMain.handle("kepler:extension:window:close", (e) => {
   const win = windowForSender(e.sender);

@@ -41,6 +41,28 @@ app.use(createPinia());
 app.use(router);
 app.mount("#root");
 
+// Deep links через IPC: Kepler делает `openExtension("delphi", "/today")` —
+// initialRoute() возвращает "/today" при cold start, onNavigate триггерится
+// при повторном invoke'е уже открытого окна.
+const keplerNav = (
+  window as unknown as {
+    kepler?: {
+      navigation?: {
+        initialRoute: () => Promise<string | null>;
+        onNavigate: (h: (route: string) => void) => () => void;
+      };
+    };
+  }
+).kepler?.navigation;
+if (keplerNav) {
+  void keplerNav.initialRoute().then((r) => {
+    if (r) void router.push(r);
+  });
+  keplerNav.onNavigate((r) => {
+    void router.push(r);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Command bus — kepler.ark.subscribe("command_invoked", ...)
 // ---------------------------------------------------------------------------

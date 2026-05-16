@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import PomodoroView from "./PomodoroView.vue";
 import StopwatchView from "./StopwatchView.vue";
 import ListView from "./ListView.vue";
@@ -11,6 +12,22 @@ import {
     type PomodoroDraftTask,
 } from "../lib/store";
 import { usePomodoroSession as usePomodoro } from "../lib/usePomodoroSession";
+
+const route = useRoute();
+
+// Deep links из Kepler launcher: `?mode=pomodoro|stopwatch` переключает таб.
+// Подписан и при mount, и реактивно — повторный invoke "Помодоро" / "Секундомер"
+// при уже открытом окне меняет режим.
+function applyModeQuery(value: unknown) {
+    if (value === "pomodoro" || value === "stopwatch") {
+        timerMode.value = value;
+    }
+}
+watch(
+    () => route.query.mode,
+    (mode) => applyModeQuery(mode),
+    { immediate: true },
+);
 
 const p = usePomodoro();
 
