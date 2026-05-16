@@ -25,6 +25,9 @@
     "docs-site"
   ],
   "dependencies": {},
+  "overrides": {
+    "vite": "^8.0.3"
+  },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "electron": "^42.1.0",

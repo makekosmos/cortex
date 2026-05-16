@@ -72,6 +72,11 @@ const api: KeplerApi = {
       set: (enabled) =>
         ipcRenderer.invoke("kepler:settings:developer-mode:set", enabled),
     },
+    usageTracker: {
+      get: () => ipcRenderer.invoke("kepler:settings:usage-tracker:get"),
+      set: (enabled) =>
+        ipcRenderer.invoke("kepler:settings:usage-tracker:set", enabled),
+    },
     version: () => ipcRenderer.invoke("kepler:settings:version"),
     hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
     hotkeySet: (value) =>

@@ -53,6 +53,7 @@ import {
   openSettings,
   getStoredHotkey,
   setHotkeyReregisterCallback,
+  isUsageTrackerEnabled,
 } from "./settings-window";
 import {
   registerMarketplaceIpc,
@@ -149,14 +150,18 @@ function spawnBackend() {
   backendLockPath = path.join(dataDir, "kepler.lock.json");
   console.error("[kepler-shell] spawning backend:", exe);
   console.error("[kepler-shell] data dir:", dataDir);
+  const trackerEnabled = isUsageTrackerEnabled();
   backendProc = spawn(exe, [], {
     detached: false,
     stdio: ["ignore", "pipe", "pipe"],
     // Forwarder KOSMOS_DATA_DIR в backend — обязательно для dev/test
     // изоляции. Production: env пустой, backend defaults к %APPDATA%/Kosmos.
+    // KEPLER_USAGE_TRACKER — toggle из Settings; "0" выключает фоновый
+    // трекинг активных окон. Изменения применяются после рестарта Kepler.
     env: {
       ...process.env,
       KOSMOS_DATA_DIR: dataDir,
+      KEPLER_USAGE_TRACKER: trackerEnabled ? "1" : "0",
     },
   });
   backendProc.stdout?.on("data", (b) =>
@@ -315,11 +320,12 @@ function createLauncher() {
   }
 }
 
-// Instant show/hide: окно держится живым, прячется off-screen + opacity:0
-// (вместо BrowserWindow.hide() который триггерит DWM fade-out на Win11).
-// hidden state tracked явно, чтобы blur handler не закрывал окно повторно.
+// Instant show/hide без Windows DWM fade. Окно остаётся в нужной позиции,
+// но при hide ставится opacity 0 + setIgnoreMouseEvents(true) (клики
+// проходят сквозь). При show — opacity 1 + setIgnoreMouseEvents(false) +
+// focus. Бounds не двигаем — это вызывало пропадание контента (Chromium
+// прекращал painting когда окно полностью off-screen).
 let launcherHidden = true;
-const OFFSCREEN_X = -32000;
 
 function showLauncher() {
   if (!mainWindow) createLauncher();
@@ -332,6 +338,7 @@ function showLauncher() {
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
   });
+  mainWindow.setIgnoreMouseEvents(false);
   mainWindow.setOpacity(1);
   if (!mainWindow.isVisible()) {
     mainWindow.showInactive();
@@ -346,8 +353,7 @@ function hideLauncher() {
   if (launcherHidden) return;
   launcherHidden = true;
   mainWindow.setOpacity(0);
-  const b = mainWindow.getBounds();
-  mainWindow.setBounds({ x: OFFSCREEN_X, y: b.y, width: b.width, height: b.height });
+  mainWindow.setIgnoreMouseEvents(true);
 }
 
 // Окно теперь fixed-size (WINDOW_HEIGHT) — никакой compact/expanded логики.
@@ -718,7 +724,18 @@ app.whenReady().then(async () => {
     }, 5000);
   }
 
+  // Anti-repeat по delta-времени между fire'ами. Windows key-repeat шлёт
+  // WM_HOTKEY каждые ~33 мс пока сочетание зажато; тап-тап (с реальным
+  // отпусканием пробела) даёт паузу >>=100 мс. Threshold 80 мс отрезает
+  // auto-repeat но пропускает быстрые тапы (>12 Hz всё равно бывает редко).
+  // Глобальный accelerator при этом всегда зарегистрирован — Windows не
+  // выдаёт Alt+Space в системные меню окна.
+  let lastFireAt = 0;
   const showHide = () => {
+    const now = Date.now();
+    const gap = now - lastFireAt;
+    lastFireAt = now;
+    if (gap < 80) return; // auto-repeat от удержания
     if (launcherHidden) showLauncher();
     else hideLauncher();
   };

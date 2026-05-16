@@ -200,6 +200,12 @@ export interface KeplerApi {
       get(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
+    /** Трекать активные приложения (usage-tracker в kepler-backend).
+        Изменения применяются после рестарта Kepler. */
+    usageTracker: {
+      get(): Promise<boolean>;
+      set(enabled: boolean): Promise<void>;
+    };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
     /** Текущий глобальный хоткей. По умолчанию `Alt+Space`. */

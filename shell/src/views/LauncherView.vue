@@ -6,15 +6,43 @@ import {
     Database as DatabaseIcon,
     ArrowUpCircle,
     Loader2,
+    RefreshCw,
 } from "lucide-vue-next";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
+import holoSvg from "../assets/holo.svg";
+import holoPomoSvg from "../assets/holo-pomo.svg";
+import holoSecoSvg from "../assets/holo-seco.svg";
+import delphiSvg from "../assets/delphi.svg";
+import delphiAddSvg from "../assets/delphi-add.svg";
+import arraSvg from "../assets/arra.svg";
 import type { CommandRecord, UpdateState } from "@shared/ipc-types";
 
 interface BuiltInIconConfig {
-    icon: Component;
+    icon?: Component;
+    svgSrc?: string;
     from: string;
     to: string;
+    iconColor?: string;
 }
+
+// Horologion accent gradient — соответствует --horologion-accent
+// (`oklch(0.66 0.245 305)`) из extensions/horologion/src/styles.css.
+const HOROLOGION_GRADIENT = {
+    from: "oklch(0.66 0.245 305)",
+    to: "oklch(0.42 0.20 305)",
+};
+
+// Delphi accent gradient — sky blue.
+const DELPHI_GRADIENT = {
+    from: "oklch(0.78 0.14 230)",
+    to: "oklch(0.5 0.18 245)",
+};
+
+// Arrancador accent gradient — crimson/red (игровая библиотека).
+const ARRANCADOR_GRADIENT = {
+    from: "oklch(0.7 0.2 25)",
+    to: "oklch(0.45 0.18 20)",
+};
 
 const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     "settings:open": {
@@ -26,6 +54,18 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
         icon: DatabaseIcon,
         from: "oklch(0.62 0.16 165)",
         to: "oklch(0.42 0.14 175)",
+    },
+    "horologion:open": { svgSrc: holoSvg, ...HOROLOGION_GRADIENT },
+    "horologion:pomodoro": { svgSrc: holoPomoSvg, ...HOROLOGION_GRADIENT },
+    "horologion:stopwatch": { svgSrc: holoSecoSvg, ...HOROLOGION_GRADIENT },
+    "delphi:open": { svgSrc: delphiSvg, ...DELPHI_GRADIENT },
+    "delphi:inbox": { svgSrc: delphiAddSvg, ...DELPHI_GRADIENT },
+    "arrancador:open": { svgSrc: arraSvg, ...ARRANCADOR_GRADIENT },
+    "kepler:check-updates": {
+        icon: RefreshCw,
+        from: "oklch(0.98 0 0)",
+        to: "oklch(0.86 0 0)",
+        iconColor: "oklch(0.22 0 0)",
     },
 };
 
@@ -90,7 +130,7 @@ let unsubUpdateState: (() => void) | null = null;
 
 // TEMP HARDCODE для визуальной проверки большого update-tile.
 // TODO: убрать `HARDCODE_UPDATE_FOR_PREVIEW = true` после approval.
-const HARDCODE_UPDATE_FOR_PREVIEW = true;
+const HARDCODE_UPDATE_FOR_PREVIEW = false;
 
 const updateBanner = computed<
     | null
@@ -350,6 +390,8 @@ onUnmounted(() => {
                             :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
                             @click="() => { selectedIndex = (updateBanner ? 1 : 0) + idx; void invokeSelected(); }">
                             <BuiltInIcon v-if="builtInIconFor(cmd)" :icon="builtInIconFor(cmd)!.icon"
+                                :svg-src="builtInIconFor(cmd)!.svgSrc"
+                                :icon-color="builtInIconFor(cmd)!.iconColor"
                                 :from="builtInIconFor(cmd)!.from" :to="builtInIconFor(cmd)!.to" />
                             <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
                             <BuiltInIcon v-else />
@@ -366,6 +408,8 @@ onUnmounted(() => {
                             :class="{ selected: (updateBanner ? 1 : 0) + groupedNoQuery.recent.length + idx === selectedIndex }"
                             @click="() => { selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery!.recent.length + idx; void invokeSelected(); }">
                             <BuiltInIcon v-if="builtInIconFor(cmd)" :icon="builtInIconFor(cmd)!.icon"
+                                :svg-src="builtInIconFor(cmd)!.svgSrc"
+                                :icon-color="builtInIconFor(cmd)!.iconColor"
                                 :from="builtInIconFor(cmd)!.from" :to="builtInIconFor(cmd)!.to" />
                             <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
                             <BuiltInIcon v-else />

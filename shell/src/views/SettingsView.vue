@@ -75,6 +75,7 @@ async function resetHotkey() {
 const version = ref<string>("");
 const autostart = ref<boolean>(false);
 const developerMode = ref<boolean>(false);
+const usageTracker = ref<boolean>(true);
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
 const loading = ref<boolean>(true);
 const autostartError = ref<string>("");
@@ -82,17 +83,19 @@ const autostartError = ref<string>("");
 async function loadGeneral() {
   loading.value = true;
   try {
-    const [h, v, a, d, b] = await Promise.all([
+    const [h, v, a, d, u, b] = await Promise.all([
       window.kepler.settings.hotkey(),
       window.kepler.settings.version(),
       window.kepler.settings.autostart.get(),
       window.kepler.settings.developerMode.get(),
+      window.kepler.settings.usageTracker.get(),
       window.kepler.backend.status(),
     ]);
     hotkey.value = h;
     version.value = v;
     autostart.value = a;
     developerMode.value = d;
+    usageTracker.value = u;
     backend.value = b;
   } catch (e) {
     console.warn("settings load failed", e);
@@ -127,6 +130,18 @@ async function onToggleDeveloperMode(e: Event) {
   } catch (err) {
     console.warn("developerMode set failed", err);
     developerMode.value = await window.kepler.settings.developerMode.get();
+  }
+}
+
+async function onToggleUsageTracker(e: Event) {
+  const target = e.target as HTMLInputElement;
+  const desired = target.checked;
+  try {
+    await window.kepler.settings.usageTracker.set(desired);
+    usageTracker.value = await window.kepler.settings.usageTracker.get();
+  } catch (err) {
+    console.warn("usageTracker set failed", err);
+    usageTracker.value = await window.kepler.settings.usageTracker.get();
   }
 }
 
@@ -432,6 +447,25 @@ onBeforeUnmount(() => {
               type="checkbox"
               :checked="developerMode"
               @change="onToggleDeveloperMode"
+            />
+            <span class="track"><span class="thumb" /></span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="label">Трекать активные приложения</div>
+            <div class="hint">
+              Записывает в ARK какое окно сейчас активно (process + title).
+              Password manager'ы и окна с «password» в title исключаются.
+              Изменение применится после перезапуска Kepler.
+            </div>
+          </div>
+          <label class="toggle">
+            <input
+              type="checkbox"
+              :checked="usageTracker"
+              @change="onToggleUsageTracker"
             />
             <span class="track"><span class="thumb" /></span>
           </label>

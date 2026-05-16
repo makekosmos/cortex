@@ -50,7 +50,7 @@ export const COMMANDS: InternalCommand[] = [
     category: "open",
     kind: "app",
     icon: () => extensionIconDataUri("delphi"),
-    exec: () => openAsExtension("delphi"),
+    exec: () => openAsExtension("delphi", "/today"),
   },
   {
     id: "horologion:open",
@@ -100,14 +100,14 @@ export const COMMANDS: InternalCommand[] = [
   },
   // Extension commands — открывают приложение на конкретной странице.
   {
-    id: "delphi:today",
-    title: "Сегодняшние задачи",
+    id: "delphi:inbox",
+    title: "Открыть входящие",
     subtitle: "Delphi",
     category: "open",
     kind: "command",
     appName: "Delphi",
     icon: () => extensionIconDataUri("delphi"),
-    exec: () => openAsExtension("delphi", "/today"),
+    exec: () => openAsExtension("delphi", "/"),
   },
   {
     id: "horologion:pomodoro",

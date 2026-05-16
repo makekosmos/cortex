@@ -22,6 +22,15 @@ const __dirname = path.dirname(__filename);
 interface KeplerShellSettings {
   developerMode?: boolean;
   hotkey?: string;
+  /** Трекать активные приложения (usage-tracker модуль в kepler-backend).
+      Default = true (трекинг включён). Toggle off → backend стартует с
+      `KEPLER_USAGE_TRACKER=0` и не пишет данные. Изменение применяется
+      после рестарта Kepler. */
+  usageTrackerEnabled?: boolean;
+}
+
+export function isUsageTrackerEnabled(): boolean {
+  return readSettings().usageTrackerEnabled !== false;
 }
 
 export const DEFAULT_HOTKEY = "Alt+Space";
@@ -187,5 +196,14 @@ ipcMain.handle(
   "kepler:settings:developer-mode:set",
   (_e, enabled: boolean) => {
     writeSettings({ developerMode: !!enabled });
+  },
+);
+
+ipcMain.handle("kepler:settings:usage-tracker:get", () => isUsageTrackerEnabled());
+
+ipcMain.handle(
+  "kepler:settings:usage-tracker:set",
+  (_e, enabled: boolean) => {
+    writeSettings({ usageTrackerEnabled: !!enabled });
   },
 );

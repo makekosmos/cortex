@@ -28,12 +28,28 @@ const TRACKER_DEVICE_ID_KEY: &str = "usage_tracker.device_id";
 const DEFAULT_POLL_MS: u64 = 5_000;
 const DEFAULT_IDLE_SECS: u64 = 60;
 
+/// Дефолтный blocklist для privacy. Match — case-insensitive substring в
+/// process name или window title. Если sample матчится — он не пишется в БД
+/// (ни tracked_app, ни session, ни event). Юзер не увидит password manager'ы
+/// в Dashboard.
+const DEFAULT_EXCLUDE_PATTERNS: &[&str] = &[
+    "1password",
+    "keepass",
+    "bitwarden",
+    "lastpass",
+    "password",
+    "credential",
+];
+
 /// Конфиг tracker'а. `from_env()` читает те же ENV-ключи, что и старый standalone
 /// usage-tracker, чтобы операционные привычки и smoke-тесты не сломались.
 #[derive(Debug, Clone)]
 pub struct UsageTrackerOpts {
     pub poll_interval: Duration,
     pub idle_threshold: Duration,
+    /// Lowercased substrings; sample матчится если ЛЮБОЙ из паттернов входит
+    /// в process_name ИЛИ в window_title. Дефолт — DEFAULT_EXCLUDE_PATTERNS.
+    pub exclude_patterns: Vec<String>,
 }
 
 impl Default for UsageTrackerOpts {
@@ -41,6 +57,10 @@ impl Default for UsageTrackerOpts {
         Self {
             poll_interval: Duration::from_millis(DEFAULT_POLL_MS),
             idle_threshold: Duration::from_secs(DEFAULT_IDLE_SECS),
+            exclude_patterns: DEFAULT_EXCLUDE_PATTERNS
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect(),
         }
     }
 }
@@ -57,10 +77,41 @@ impl UsageTrackerOpts {
             .and_then(|v| v.parse::<u64>().ok())
             .filter(|v| *v > 0)
             .unwrap_or(DEFAULT_IDLE_SECS);
+        // KEPLER_USAGE_TRACKER_EXCLUDE_EXTRA — comma-separated user добавки
+        // поверх дефолтного списка. Пустая строка / отсутствие = только дефолт.
+        let mut excludes: Vec<String> = DEFAULT_EXCLUDE_PATTERNS
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        if let Ok(extra) = std::env::var("KEPLER_USAGE_TRACKER_EXCLUDE_EXTRA") {
+            for token in extra.split(',') {
+                let trimmed = token.trim().to_lowercase();
+                if !trimmed.is_empty() && !excludes.contains(&trimmed) {
+                    excludes.push(trimmed);
+                }
+            }
+        }
         Self {
             poll_interval: Duration::from_millis(poll_ms),
             idle_threshold: Duration::from_secs(idle_secs),
+            exclude_patterns: excludes,
         }
+    }
+
+    fn matches_exclude(&self, process_name: &str, window_title: Option<&str>) -> bool {
+        let proc_lower = process_name.to_lowercase();
+        let title_lower = window_title.map(|t| t.to_lowercase());
+        for pat in &self.exclude_patterns {
+            if proc_lower.contains(pat) {
+                return true;
+            }
+            if let Some(t) = &title_lower {
+                if t.contains(pat) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
@@ -106,9 +157,15 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
 
     loop {
         let idle = opts.idle_threshold;
-        let sample = tokio::task::spawn_blocking(move || capture_foreground_window(idle))
+        let raw_sample = tokio::task::spawn_blocking(move || capture_foreground_window(idle))
             .await
             .map_err(|e| format!("capture join: {e}"))??;
+        // Privacy filter — password manager'ы и подобные не пишем в БД.
+        // Treat'им как «нет foreground окна» → текущая сессия finalize'нется,
+        // новая не стартует пока exclude активен.
+        let sample = raw_sample.filter(|s| {
+            !opts.matches_exclude(&s.process_name, s.window_title.as_deref())
+        });
         let captured_at = iso_now();
         let delta_ms = previous_tick.elapsed().as_millis().min(i64::MAX as u128) as i64;
 
@@ -577,8 +634,30 @@ mod tests {
     fn opts_from_env_uses_defaults_when_unset() {
         std::env::remove_var("USAGE_TRACKER_POLL_MS");
         std::env::remove_var("USAGE_TRACKER_IDLE_SECS");
+        std::env::remove_var("KEPLER_USAGE_TRACKER_EXCLUDE_EXTRA");
         let opts = UsageTrackerOpts::from_env();
         assert_eq!(opts.poll_interval, Duration::from_millis(DEFAULT_POLL_MS));
         assert_eq!(opts.idle_threshold, Duration::from_secs(DEFAULT_IDLE_SECS));
+        assert!(opts.exclude_patterns.iter().any(|p| p == "1password"));
+    }
+
+    #[test]
+    fn matches_exclude_catches_password_manager() {
+        let opts = UsageTrackerOpts::default();
+        assert!(opts.matches_exclude("1Password.exe", Some("Vault")));
+        assert!(opts.matches_exclude("chrome.exe", Some("Login — Password Manager")));
+        assert!(!opts.matches_exclude("chrome.exe", Some("github.com")));
+    }
+
+    #[test]
+    fn matches_exclude_picks_up_extra_patterns() {
+        let opts = UsageTrackerOpts {
+            poll_interval: Duration::from_millis(DEFAULT_POLL_MS),
+            idle_threshold: Duration::from_secs(DEFAULT_IDLE_SECS),
+            exclude_patterns: vec!["telegram".into(), "signal".into()],
+        };
+        assert!(opts.matches_exclude("telegram.exe", None));
+        assert!(opts.matches_exclude("signal.exe", None));
+        assert!(!opts.matches_exclude("chrome.exe", None));
     }
 }
