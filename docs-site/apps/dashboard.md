@@ -100,8 +100,8 @@ bun run --cwd shell dev                    # backend + extensions + Kepler rende
 | `kepler:ark:request` | renderer → main | Generic ARK RPC bridge — `arkClient.invokeOperation({ operation, ...params })`. |
 
 Открытие окна:
-- Через tray menu → «Dashboard».
 - Через static launcher command `dashboard:open` («Открыть таблицу данных», `kind: "command"`, `appName: "Kepler"`) в `shell/electron/commands.ts`. Иконка в launcher — `BuiltInIcon` (teal `Database` glyph).
+- Из tray menu Dashboard убран (2026-05-16) — теперь там только «Открыть», «Настройки», «Выход».
 
 ## ARK operations, которые Dashboard использует
 

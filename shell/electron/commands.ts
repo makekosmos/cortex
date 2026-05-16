@@ -34,7 +34,6 @@ function openAsExtension(id: string, route?: string): void {
 }
 
 async function runCheckUpdates(): Promise<void> {
-  openSettings();
   try {
     await checkUpdates();
   } catch (e) {

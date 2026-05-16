@@ -126,10 +126,11 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 1. **Settings → General → кнопка «Проверить обновления»** — вызывает
    `window.kepler.settings.update.check()`.
 2. **Launcher команда `kepler:check-updates`** (Ctrl+Shift+K → «Проверить
-   обновления»). Хендлер `runCheckUpdates()` в `shell/electron/commands.ts`:
-   открывает Settings окно через `openSettings()`, затем триггерит
-   `check()` из autoupdater-host. Banner появится в Settings когда state
-   изменится.
+   обновления»). Хендлер `runCheckUpdates()` в `shell/electron/commands.ts`
+   только вызывает `check()` из autoupdater-host — окно настроек не
+   открывается. Обновлённый state приходит в launcher через update banner
+   (pinned tile в секции «Обновление») и параллельно в Settings, если оно
+   уже открыто.
 
 ### Tray icon в production
 

@@ -53,7 +53,6 @@ import {
   registerMarketplaceIpc,
   startPeriodicCatalogCheck,
 } from "./extension-marketplace";
-import { openDashboardWindow } from "./dashboard-window";
 import {
   findKextInArgv,
   openInstallExtensionWindow,
@@ -370,7 +369,6 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Открыть", click: () => showLauncher() },
-      { label: "Dashboard", click: () => openDashboardWindow() },
       { label: "Настройки", click: () => openSettings() },
       { type: "separator" },
       {

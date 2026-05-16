@@ -111,7 +111,7 @@ Kepler — точка входа для всех команд экосистем
 | `arrancador:open` | `app` | Открыть Arrancador | `openExtension("arrancador")` |
 | `dashboard:open` | `command` (`appName: "Kepler"`) | Открыть таблицу данных | `openDashboardWindow()` |
 | `settings:open` | `command` (`appName: "Kepler"`) | Открыть настройки | `openSettings()` |
-| `kepler:check-updates` | `command` (`appName: "Kepler"`) | Проверить обновления | Открывает Settings + `autoupdater.check()` |
+| `kepler:check-updates` | `command` (`appName: "Kepler"`) | Проверить обновления | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
 | `delphi:today` | `command` (`appName: "Delphi"`) | Сегодняшние задачи | `openExtension("delphi", "/today")` |
 | `horologion:pomodoro` | `command` (`appName: "Horologion"`) | Помодоро | `openExtension("horologion", "/?mode=pomodoro")` |
 | `horologion:stopwatch` | `command` (`appName: "Horologion"`) | Секундомер | `openExtension("horologion", "/?mode=stopwatch")` |

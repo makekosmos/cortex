@@ -149,16 +149,13 @@ const groupedNoQuery = computed(() => {
     if (query.value.trim()) return null;
     const byId = new Map(commands.value.map((c) => [c.id, c]));
     const recent: CommandRecord[] = [];
-    const recentSet = new Set<string>();
     for (const id of recentIds.value) {
         const c = byId.get(id);
-        if (c) {
-            recent.push(c);
-            recentSet.add(c.id);
-        }
+        if (c) recent.push(c);
     }
-    const all = commands.value.filter((c) => !recentSet.has(c.id));
-    return { recent, all };
+    // «Все» намеренно содержит все команды — в том числе те, что уже есть в
+    // «Недавние». Это дублирование запрошено: список «Все» должен быть полным.
+    return { recent, all: commands.value };
 });
 
 function onInput() {
