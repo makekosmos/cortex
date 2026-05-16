@@ -31,6 +31,10 @@ test-results/
 coverage/
 blob-report/
 
+# === Histoire (component stories build artifacts) ===
+.histoire/
+histoire-dist/
+
 # === Bun ===
 bun.lockb
 .bun_cache/
