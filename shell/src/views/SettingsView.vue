@@ -16,6 +16,62 @@ const tab = ref<Tab>("general");
 // --- General ----------------------------------------------------------------
 
 const hotkey = ref<string>("");
+const hotkeyError = ref<string>("");
+const capturing = ref<boolean>(false);
+
+function startCapture() {
+  capturing.value = true;
+  hotkeyError.value = "";
+}
+
+function cancelCapture() {
+  capturing.value = false;
+}
+
+function keyEventToAccelerator(e: KeyboardEvent): string | null {
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push("Control");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  if (e.metaKey) parts.push("Super");
+  const key = e.key;
+  if (key === "Control" || key === "Alt" || key === "Shift" || key === "Meta") {
+    return null; // ждём не-модификатор
+  }
+  let main: string;
+  if (key === " ") main = "Space";
+  else if (key === "Escape") return "ESC_CANCEL";
+  else if (key.length === 1) main = key.toUpperCase();
+  else main = key;
+  parts.push(main);
+  return parts.join("+");
+}
+
+async function onCaptureKey(e: KeyboardEvent) {
+  if (!capturing.value) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const acc = keyEventToAccelerator(e);
+  if (!acc) return;
+  if (acc === "ESC_CANCEL") {
+    capturing.value = false;
+    return;
+  }
+  const r = await window.kepler.settings.hotkeySet(acc);
+  if (r.ok) {
+    hotkey.value = acc;
+    hotkeyError.value = "";
+  } else {
+    hotkeyError.value = `Не удалось зарегистрировать (${r.error ?? "unknown"})`;
+  }
+  capturing.value = false;
+}
+
+async function resetHotkey() {
+  const v = await window.kepler.settings.hotkeyReset();
+  hotkey.value = v;
+  hotkeyError.value = "";
+}
 const version = ref<string>("");
 const autostart = ref<boolean>(false);
 const developerMode = ref<boolean>(false);
@@ -329,8 +385,22 @@ onBeforeUnmount(() => {
           <div class="row-label">
             <div class="label">Глобальный хоткей</div>
             <div class="hint">Показать или скрыть launcher</div>
+            <div v-if="hotkeyError" class="error">{{ hotkeyError }}</div>
           </div>
-          <code class="value">{{ hotkey }}</code>
+          <div class="hotkey-control">
+            <button
+              type="button"
+              class="hotkey-capture"
+              :class="{ capturing }"
+              @click="startCapture"
+              @keydown="onCaptureKey"
+              @blur="cancelCapture"
+            >
+              <span v-if="capturing">Нажми сочетание…</span>
+              <code v-else class="value">{{ hotkey }}</code>
+            </button>
+            <button type="button" class="btn ghost" @click="resetHotkey">Сброс</button>
+          </div>
         </div>
 
         <div class="row">
@@ -407,19 +477,6 @@ onBeforeUnmount(() => {
 
     <!-- Extensions tab — плоский список установленных. Обновления подтягиваются из catalog.json. -->
     <template v-else>
-      <div class="market-header">
-        <span class="hint" v-if="marketLoading">Проверка обновлений…</span>
-        <span class="hint" v-else></span>
-        <button
-          type="button"
-          class="btn ghost"
-          :disabled="marketLoading"
-          @click="loadCatalog(true)"
-        >
-          Проверить обновления
-        </button>
-      </div>
-
       <div v-if="marketError" class="error-banner">{{ marketError }}</div>
       <div v-if="extensionsError" class="error-banner">{{ extensionsError }}</div>
 
@@ -488,6 +545,17 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+      </div>
+
+      <div class="ext-footer">
+        <button
+          type="button"
+          class="btn ghost"
+          :disabled="marketLoading"
+          @click="loadCatalog(true)"
+        >
+          {{ marketLoading ? "Проверка…" : "Проверить обновления" }}
+        </button>
       </div>
     </template>
   </div>
@@ -771,6 +839,38 @@ onBeforeUnmount(() => {
 
 .toggle input:checked + .track .thumb {
   transform: translateX(16px);
+}
+
+.hotkey-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hotkey-capture {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  min-width: 110px;
+  text-align: center;
+}
+
+.hotkey-capture.capturing {
+  background: color-mix(in srgb, oklch(0.55 0.15 250) 28%, transparent);
+  border-color: oklch(0.55 0.15 250);
+  outline: none;
+}
+
+.ext-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding: 12px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .market-header {

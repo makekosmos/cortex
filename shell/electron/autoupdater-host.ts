@@ -10,8 +10,10 @@
 //   idle → checking → (available → downloading → downloaded) | not-available | error
 //   any → checking (manual or periodic)
 
-import { BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
 import electronUpdater from "electron-updater";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
 
 export type UpdateState =
   | { kind: "idle" }
@@ -119,6 +121,15 @@ export async function check(): Promise<UpdateState> {
 
 export function install(): void {
   if (!initialized) return;
+  // Флаг для post-update first-launch: при следующем старте main.ts его
+  // прочитает, откроет launcher и покажет changelog модалку. После чтения
+  // флаг очищается.
+  try {
+    const flag = path.join(app.getPath("userData"), "post-update.flag");
+    writeFileSync(flag, String(Date.now()), "utf8");
+  } catch (e) {
+    console.warn("[autoUpdater] failed to write post-update flag:", e);
+  }
   electronUpdater.autoUpdater.quitAndInstall();
 }
 

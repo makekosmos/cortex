@@ -21,6 +21,17 @@ const __dirname = path.dirname(__filename);
 
 interface KeplerShellSettings {
   developerMode?: boolean;
+  hotkey?: string;
+}
+
+export const DEFAULT_HOTKEY = "Alt+Space";
+
+export function getStoredHotkey(): string {
+  return readSettings().hotkey ?? DEFAULT_HOTKEY;
+}
+
+export function setStoredHotkey(value: string): void {
+  writeSettings({ hotkey: value });
 }
 
 function settingsFilePath(): string {
@@ -135,9 +146,37 @@ ipcMain.handle(
 
 ipcMain.handle("kepler:settings:version", () => app.getVersion());
 
-ipcMain.handle("kepler:settings:hotkey", () =>
-  process.platform === "darwin" ? "Cmd+Shift+K" : "Ctrl+Shift+K",
+ipcMain.handle("kepler:settings:hotkey", () => getStoredHotkey());
+
+ipcMain.handle(
+  "kepler:settings:hotkey:set",
+  (_e, value: string): { ok: boolean; error?: string } => {
+    const normalized = String(value || "").trim();
+    if (!normalized) return { ok: false, error: "empty" };
+    try {
+      const success = reregisterHotkeyCallback?.(normalized) ?? false;
+      if (!success) return { ok: false, error: "register-failed" };
+      setStoredHotkey(normalized);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  },
 );
+
+ipcMain.handle("kepler:settings:hotkey:reset", () => {
+  reregisterHotkeyCallback?.(DEFAULT_HOTKEY);
+  setStoredHotkey(DEFAULT_HOTKEY);
+  return DEFAULT_HOTKEY;
+});
+
+// main.ts регистрирует callback, который умеет переcнять globalShortcut.
+let reregisterHotkeyCallback: ((accelerator: string) => boolean) | null = null;
+export function setHotkeyReregisterCallback(
+  cb: (accelerator: string) => boolean,
+): void {
+  reregisterHotkeyCallback = cb;
+}
 
 ipcMain.handle(
   "kepler:settings:developer-mode:get",

@@ -34,6 +34,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -48,7 +49,11 @@ import { COMMANDS, findCommand } from "./commands";
 import { openExtension, setExtensionArkBridge } from "./extension-host";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
-import { openSettings } from "./settings-window";
+import {
+  openSettings,
+  getStoredHotkey,
+  setHotkeyReregisterCallback,
+} from "./settings-window";
 import {
   registerMarketplaceIpc,
   startPeriodicCatalogCheck,
@@ -255,6 +260,7 @@ function createLauncher() {
     x: pos.x,
     y: pos.y,
     show: false,
+    paintWhenInitiallyHidden: true,
     frame: false,
     // Acrylic / mica игнорируется при transparent:true. На Win11 22H2+ окно
     // автоматически получает rounded corners. Acrylic intense чем mica —
@@ -309,6 +315,12 @@ function createLauncher() {
   }
 }
 
+// Instant show/hide: окно держится живым, прячется off-screen + opacity:0
+// (вместо BrowserWindow.hide() который триггерит DWM fade-out на Win11).
+// hidden state tracked явно, чтобы blur handler не закрывал окно повторно.
+let launcherHidden = true;
+const OFFSCREEN_X = -32000;
+
 function showLauncher() {
   if (!mainWindow) createLauncher();
   if (!mainWindow) return;
@@ -320,15 +332,22 @@ function showLauncher() {
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
   });
-  mainWindow.show();
+  mainWindow.setOpacity(1);
+  if (!mainWindow.isVisible()) {
+    mainWindow.showInactive();
+  }
   mainWindow.focus();
+  launcherHidden = false;
   mainWindow.webContents.send("kepler:window:show");
 }
 
 function hideLauncher() {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.hide();
-  }
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (launcherHidden) return;
+  launcherHidden = true;
+  mainWindow.setOpacity(0);
+  const b = mainWindow.getBounds();
+  mainWindow.setBounds({ x: OFFSCREEN_X, y: b.y, width: b.width, height: b.height });
 }
 
 // Окно теперь fixed-size (WINDOW_HEIGHT) — никакой compact/expanded логики.
@@ -663,6 +682,19 @@ app.whenReady().then(async () => {
 
   registerMarketplaceIpc();
   setupAutoUpdater({ isDev });
+
+  // Post-update first launch: если только что обновились через
+  // quitAndInstall (autoupdater-host пишет флаг в userData/post-update.flag),
+  // открываем launcher автоматически и показываем changelog модалку.
+  try {
+    const flag = path.join(app.getPath("userData"), "post-update.flag");
+    if (existsSync(flag)) {
+      unlinkSync(flag);
+      showLauncher();
+    }
+  } catch (e) {
+    console.warn("[kepler-shell] post-update flag handling failed:", e);
+  }
   // Skip periodic в test mode чтобы Playwright не делал HTTPS вызовов.
   if (process.env.KOSMOS_TEST_MODE !== "1") {
     startPeriodicCatalogCheck();
@@ -686,15 +718,32 @@ app.whenReady().then(async () => {
     }, 5000);
   }
 
-  const accelerator =
-    process.platform === "darwin" ? "Command+Shift+K" : "Control+Shift+K";
-  const ok = globalShortcut.register(accelerator, () => {
-    if (mainWindow?.isVisible()) {
-      hideLauncher();
-    } else {
-      showLauncher();
+  const showHide = () => {
+    if (launcherHidden) showLauncher();
+    else hideLauncher();
+  };
+  let currentAccelerator = getStoredHotkey();
+  function tryRegister(accelerator: string): boolean {
+    try {
+      if (globalShortcut.isRegistered(currentAccelerator)) {
+        globalShortcut.unregister(currentAccelerator);
+      }
+      const reg = globalShortcut.register(accelerator, showHide);
+      if (reg) {
+        currentAccelerator = accelerator;
+        console.log(`[kepler-shell] globalShortcut ${accelerator} registered`);
+        return true;
+      }
+      // Откатываемся на предыдущий, если новая регистрация не удалась.
+      globalShortcut.register(currentAccelerator, showHide);
+      return false;
+    } catch (e) {
+      console.error(`[kepler-shell] globalShortcut register error:`, e);
+      return false;
     }
-  });
+  }
+  const ok = tryRegister(currentAccelerator);
+  setHotkeyReregisterCallback(tryRegister);
   // F12 toggle DevTools (dev mode только) — глобальный hotkey удобнее чем
   // accelerator menu, т.к. меню у frameless окна нет.
   if (isDev) {
@@ -704,9 +753,7 @@ app.whenReady().then(async () => {
   }
 
   if (!ok) {
-    console.error(`[kepler-shell] globalShortcut ${accelerator} register failed`);
-  } else {
-    console.error(`[kepler-shell] globalShortcut ${accelerator} registered`);
+    console.error(`[kepler-shell] globalShortcut ${currentAccelerator} register failed`);
   }
 });
 

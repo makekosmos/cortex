@@ -88,21 +88,34 @@ const recentIds = ref<string[]>(loadRecents());
 const updateState = ref<UpdateState>({ kind: "idle" });
 let unsubUpdateState: (() => void) | null = null;
 
+// TEMP HARDCODE для визуальной проверки большого update-tile.
+// TODO: убрать `HARDCODE_UPDATE_FOR_PREVIEW = true` после approval.
+const HARDCODE_UPDATE_FOR_PREVIEW = true;
+
 const updateBanner = computed<
     | null
     | {
         title: string;
-        subtitle: string;
+        description: string;
         icon: Component;
         spinning: boolean;
         clickable: boolean;
     }
 >(() => {
+    if (HARDCODE_UPDATE_FOR_PREVIEW) {
+        return {
+            title: "Обновить Kepler до 0.1.8",
+            description: "Установить новую версию и перезапустить",
+            icon: ArrowUpCircle,
+            spinning: false,
+            clickable: true,
+        };
+    }
     const s = updateState.value;
     if (s.kind === "downloaded") {
         return {
             title: `Обновить Kepler до ${s.version}`,
-            subtitle: "Установить и перезапустить",
+            description: "Установить новую версию и перезапустить",
             icon: ArrowUpCircle,
             spinning: false,
             clickable: true,
@@ -111,7 +124,7 @@ const updateBanner = computed<
     if (s.kind === "downloading") {
         return {
             title: `Скачивается Kepler ${s.version}`,
-            subtitle: `${Math.round(s.percent)}%`,
+            description: `Загружено ${Math.round(s.percent)}%. После завершения можно установить.`,
             icon: Loader2,
             spinning: true,
             clickable: false,
@@ -120,7 +133,7 @@ const updateBanner = computed<
     if (s.kind === "available") {
         return {
             title: `Доступно обновление Kepler ${s.version}`,
-            subtitle: "Скачивается в фоне",
+            description: "Скачивается в фоне. Подожди немного.",
             icon: ArrowUpCircle,
             spinning: false,
             clickable: false,
@@ -202,12 +215,17 @@ async function invokeSelected() {
     selectedIndex.value = 0;
 }
 
+const SCROLL_EDGE_PADDING = 8;
+
 function moveSelection(delta: number) {
     const n = totalRows();
     if (n === 0) return;
-    const next = selectedIndex.value + delta;
+    const prevIdx = selectedIndex.value;
+    const next = prevIdx + delta;
     // Clamp без wrap — упереться в границы.
     selectedIndex.value = Math.max(0, Math.min(n - 1, next));
+    const direction: "up" | "down" =
+        selectedIndex.value < prevIdx ? "up" : "down";
     void nextTick(() => {
         const list = listRef.value;
         if (!list) return;
@@ -229,7 +247,17 @@ function moveSelection(delta: number) {
                 return;
             }
         }
-        selectedEl.scrollIntoView({ block: "nearest" });
+        // Custom scrollIntoView с 8px padding к краю по направлению движения.
+        const listRect = list.getBoundingClientRect();
+        const elRect = selectedEl.getBoundingClientRect();
+        const topOverflow = listRect.top + SCROLL_EDGE_PADDING - elRect.top;
+        const bottomOverflow =
+            elRect.bottom - (listRect.bottom - SCROLL_EDGE_PADDING);
+        if (direction === "up" && topOverflow > 0) {
+            list.scrollTop -= topOverflow;
+        } else if (direction === "down" && bottomOverflow > 0) {
+            list.scrollTop += bottomOverflow;
+        }
     });
 }
 
@@ -303,12 +331,14 @@ onUnmounted(() => {
                 <ul class="results">
                     <li class="result update-tile" :class="{ selected: selectedIndex === 0, disabled: !updateBanner.clickable }"
                         @click="() => { selectedIndex = 0; void invokeSelected(); }">
-                        <span class="update-icon">
-                            <component :is="updateBanner.icon" :size="14" :stroke-width="2"
+                        <span class="update-icon update-icon-large">
+                            <component :is="updateBanner.icon" :size="22" :stroke-width="2"
                                 :class="{ spin: updateBanner.spinning }" />
                         </span>
-                        <span class="title">{{ updateBanner.title }}</span>
-                        <span class="kind-label">{{ updateBanner.subtitle }}</span>
+                        <div class="update-body">
+                            <div class="update-title">{{ updateBanner.title }}</div>
+                            <div class="update-description">{{ updateBanner.description }}</div>
+                        </div>
                     </li>
                 </ul>
             </template>
@@ -420,8 +450,8 @@ onUnmounted(() => {
     border: 1px solid transparent;
     background: transparent;
     cursor: pointer;
-    transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
     margin: 1px 0;
+    /* Без transition: выделение должно срабатывать моментально. */
 }
 
 .icon {
@@ -447,6 +477,38 @@ onUnmounted(() => {
     color: oklch(0.98 0 0);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, oklch(1 0 0) 12%, transparent);
     flex-shrink: 0;
+}
+
+.update-icon-large {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    align-self: stretch;
+}
+
+.update-tile {
+    align-items: stretch;
+    padding: 12px 14px;
+}
+
+.update-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.update-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+.update-description {
+    font-size: 12px;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    line-height: 1.4;
 }
 
 .update-tile.disabled {

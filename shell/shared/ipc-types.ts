@@ -202,8 +202,13 @@ export interface KeplerApi {
     };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
-    /** Текущий глобальный хоткей (read-only Phase 1). */
+    /** Текущий глобальный хоткей. По умолчанию `Alt+Space`. */
     hotkey(): Promise<string>;
+    /** Зарегистрировать новый accelerator. Возвращает `{ok: true}` если
+        OS приняла регистрацию; иначе `{ok: false, error}`. */
+    hotkeySet(value: string): Promise<{ ok: boolean; error?: string }>;
+    /** Сбросить хоткей в дефолт (`Alt+Space`). Возвращает применённое значение. */
+    hotkeyReset(): Promise<string>;
     /** autoUpdater control + state subscription. */
     update: {
       /** Manual trigger checkForUpdates. Returns current state после check. */

@@ -74,6 +74,9 @@ const api: KeplerApi = {
     },
     version: () => ipcRenderer.invoke("kepler:settings:version"),
     hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
+    hotkeySet: (value) =>
+      ipcRenderer.invoke("kepler:settings:hotkey:set", value),
+    hotkeyReset: () => ipcRenderer.invoke("kepler:settings:hotkey:reset"),
     update: {
       check: () => ipcRenderer.invoke("kepler:settings:update:check"),
       install: () => ipcRenderer.invoke("kepler:settings:update:install"),
