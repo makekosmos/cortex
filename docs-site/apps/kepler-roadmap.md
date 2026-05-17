@@ -15,6 +15,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 6 | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit) | ✅ |
 | 7 | Universal per-type data export (notes → md, runs → GPX+zip, …) — pipeline в Kepler shell | ⏳ |
 | 7.5 | Adaptive lifecycle (optional) | ⏳ |
+| 11 | Backup / Disaster Recovery ARK DB (multi-disk + GitHub + encryption) | ⏳ |
 | 8 | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅ | ⏳ |
 | 9 | Delphi UI: Tailwind → plain CSS (открытый вопрос) | ⏳ |
 | 10 | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳ | ⏳ |
@@ -170,6 +171,73 @@ Delphi extension сейчас использует Tailwind v4 в templates (н�
 - Verify build + manual UI smoke (Delphi выглядит OK на acrylic Mica background).
 
 Скоуп — несколько часов сфокусированной работы (или один agent). Откладываем до момента когда Delphi UI стабилизируется (project / area / settings flows не меняются часто) — иначе придётся переделывать дважды.
+
+## Phase 11 ⏳ — Backup / Disaster Recovery ARK DB
+
+User-story: после смены ПК / переустановки Windows / умершего диска **данные ARK** (`%APPDATA%\Kosmos\ark.db`) восстанавливаются без потерь. Сейчас бэкапа нет, всё лежит на одном диске → 2026-05-17 user потерял часть истории сменой машины.
+
+### Технический фон
+
+ARK = SQLite в WAL-режиме. Просто `cp ark.db` рисково — WAL может содержать незакоммиченные транзакции. Нужен consistent snapshot:
+- `VACUUM INTO 'dest.db'` — атомарно копирует БД в новый файл, без WAL и idle pages. Single-statement.
+- Или `sqlite3_backup_init/step/finish` API — для online backup'а без блокировок.
+
+Реализация — Rust в `kepler-backend`, потому что у него уже есть открытое соединение с ARK и оно знает корректный путь.
+
+### Сценарий destinations
+
+Backup destination — любой writable path. Это покрывает:
+
+- **Multi-disk**: пользователь добавляет несколько локальных путей (`D:\backup\kosmos`, `E:\external\kosmos`).
+- **Cloud sync folders**: Google Drive (`G:\My Drive\kosmos-backup`), Yandex.Disk (`Y:\kosmos-backup`), Dropbox, OneDrive — это всё локальные mount points для kepler-backend, не специальные API.
+- **Network share**: SMB / NFS path работает прозрачно.
+
+GitHub — отдельный destination type (не path). Auto-push в private repo через libgit2-rs или git CLI shell-out. ARK DB обычно <100MB → влезает без LFS.
+
+### Фазы реализации
+
+**Phase 11.0 — MVP**
+
+- `services/kepler-backend/src/backup.rs`: функция `snapshot_to(dest: PathBuf) → Result` через `VACUUM INTO`.
+- WS endpoint `backup.snapshot {dest}` для shell.
+- UI: `BackupsSettings.vue` в Kepler shell — кнопка «Создать бекап сейчас» + path picker.
+- Storage: `%APPDATA%\Kosmos\backup-config.json` хранит список destinations + history `[{dest, started_at, finished_at, size_bytes, ok, error}]`.
+- Manual только, без scheduler'а.
+
+**Phase 11.1 — Multi-destination + scheduler**
+
+- Несколько destinations одновременно в config'е.
+- Scheduler в kepler-backend (раз в N часов / при shutdown).
+- Auto-rotation: хранить N последних backup'ов на каждом destination, удалять старые.
+- Если один destination недоступен (диск отключён) — продолжать с остальными, не падать.
+
+**Phase 11.2 — GitHub destination**
+
+- Destination type `github`: PAT + repo + branch.
+- Push: compress (`ark.db.zst`), git commit, force-push в branch `kosmos-backup`.
+- Хранить PAT encrypted в OS keychain (`keyring-rs`).
+
+**Phase 11.3 — Restore UI + integrity verification**
+
+- «Восстановить из бекапа»: выбрать destination → проверить integrity (SQLite `PRAGMA integrity_check`) → atomic replace `ark.db` (через backend shutdown + swap + restart).
+- При плановых backup'ах — verify integrity на свежем snapshot'е.
+
+**Phase 11.4 — Encryption at rest**
+
+- Cloud destinations (особенно GitHub) хранят user-personal data → должны быть encrypted.
+- `age` (через `age-encryption.rs`) — простой формат, по passphrase или X25519 key.
+- Восстановление требует passphrase / key file.
+
+### Открытые вопросы
+
+- **Версионирование**: snapshot replaces или append-history (git commits каждого snapshot'а — full history)? MVP — replace, V3 — добавить retain-N-versions.
+- **Where to schedule**: kepler-backend (Rust cron) или kepler-shell main process (Node timer)? Backend честнее — работает даже если shell закрыт; но требует kepler-backend running как service / autostart.
+- **UI размещение**: Settings → Backups, или отдельный extension `backup-manager`? Скорее всего Settings → Backups (это core data resilience, не extension'ская функция).
+
+### Связано
+
+- [Граница записи](../concepts/write-boundary.md) — backend держит exclusive write handle, поэтому он же делает snapshot.
+- [Изоляция тестовых БД](../concepts/test-isolation.md) — тесты для backup используют свой `KOSMOS_DATA_DIR`, не реальный.
 
 ## Phase 10 ⏳ — Extension installer
 

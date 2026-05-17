@@ -102,6 +102,7 @@ const KNOWN_NONEXISTENT = new Set([
   "apps/eden",              // удалён в Phase 6.0.A (Eden теперь extension)
   "apps/eden/ts",
   "apps/eden/kotlin",
+  "services/kepler-backend/src/backup.rs",  // Phase 11 backup module — TBD
 ]);
 
 // внутренние markdown-ссылки `/section/page` (с возможным якорем)
