@@ -31,7 +31,10 @@ const search = useSearchQuery();
     </AppTitlebar>
 
     <div class="arrancador-shell__body">
-      <AppSidebar :hidden="sidebarHidden" />
+      <AppSidebar
+        :hidden="sidebarHidden"
+        @update:hidden="(val) => (sidebarHidden = val)"
+      />
 
       <div class="arrancador-content">
         <router-view />

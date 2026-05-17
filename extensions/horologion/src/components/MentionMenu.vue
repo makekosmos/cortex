@@ -63,8 +63,8 @@ defineExpose({ filtered });
   border-radius: calc(var(--radius) * 0.85);
   corner-shape: var(--corner-shape);
   box-shadow:
-    0 12px 32px rgb(0 0 0 / 28%),
-    0 4px 12px rgb(0 0 0 / 14%);
+    0 12px 32px color-mix(in srgb, #000 28%, transparent),
+    0 4px 12px color-mix(in srgb, #000 14%, transparent);
   z-index: 80;
 }
 

@@ -1,10 +1,10 @@
 <template>
   <!-- my-space -->
   <section v-if="activeSpace === 'my-space'" class="spaces-view" data-testid="space-view-my-space">
-    <div class="space-empty-block">
-      <h3>Открываю заметку пространства</h3>
-      <p>Это пространство является обычной заметкой, а не отдельным обзорным экраном.</p>
-    </div>
+    <EmptyState
+      title="Открываю заметку пространства"
+      description="Это пространство является обычной заметкой, а не отдельным обзорным экраном."
+    />
   </section>
 
   <!-- all-objects -->
@@ -41,13 +41,17 @@
           <time>{{ formatDate(row.updatedAt) }}</time>
         </button>
       </div>
-      <SpaceEmptyBlock
+      <EmptyState
         v-else
         title="Нет объектов"
         description="Добавь заметки или объектные свойства, чтобы здесь появилась таблица."
-        action-label="Создать заметку"
-        @action="emit('createEntry')"
-      />
+      >
+        <template #action>
+          <button class="space-primary-btn" type="button" @click="emit('createEntry')">
+            Создать заметку
+          </button>
+        </template>
+      </EmptyState>
     </section>
   </section>
 
@@ -86,7 +90,7 @@
           <span>{{ entries.filter((e) => e.type_id === nt.id).length }}</span>
         </div>
       </div>
-      <SpaceEmptyBlock
+      <EmptyState
         v-else
         title="Нет типов"
         description="Создайте типы объектов в настройках."
@@ -144,13 +148,17 @@
         <time>{{ formatDate(entry.updated_at) }}</time>
       </button>
     </div>
-    <SpaceEmptyBlock
+    <EmptyState
       v-else
       title="Нет заметок"
       description="Создай первую заметку, и здесь появится полноценная таблица."
-      action-label="Создать заметку"
-      @action="emit('createEntry')"
-    />
+    >
+      <template #action>
+        <button class="space-primary-btn" type="button" @click="emit('createEntry')">
+          Создать заметку
+        </button>
+      </template>
+    </EmptyState>
   </section>
 
   <!-- diary -->
@@ -186,9 +194,11 @@
           <span>{{ getHeaderProp(entry, "exercise_count") }}</span>
         </button>
       </div>
-      <div v-else class="space-empty-block">
-        <p>Сегодня тренировок пока нет. Синхронизируйте данные из связанных программ.</p>
-      </div>
+      <EmptyState
+        v-else
+        title="Сегодня тренировок пока нет"
+        description="Синхронизируйте данные из связанных программ."
+      />
 
       <template v-if="todayExercises.length > 0">
         <h3 class="diary-section-subtitle">Упражнения за сегодня</h3>
@@ -239,7 +249,7 @@
           <span>{{ getHeaderProp(entry, "volume_kg") }} кг</span>
         </button>
       </div>
-      <SpaceEmptyBlock
+      <EmptyState
         v-else
         title="Нет тренировок"
         description="Тренировки появятся когда внешний сервис (например Olympia) начнёт писать workout_obj."
@@ -249,28 +259,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h } from "vue";
+import { computed } from "vue";
+import { EmptyState } from "@kepler/visuals";
 import type { SpaceId } from "@/components/sidebar/types";
 import { sortEntries, type SortMode } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { SYSTEM_TYPE_WORKOUT_ID, SYSTEM_TYPE_EXERCISE_ID } from "@/lib/systemTypes";
-
-// Inline empty-block helper using render function (no runtime compiler needed)
-const SpaceEmptyBlock = (
-  props: { title: string; description: string; actionLabel?: string },
-  { emit }: { emit: (event: string) => void },
-) =>
-  h("div", { class: "space-empty-block" }, [
-    h("h3", props.title),
-    h("p", props.description),
-    props.actionLabel
-      ? h(
-          "button",
-          { class: "space-primary-btn", type: "button", onClick: () => emit("action") },
-          props.actionLabel,
-        )
-      : null,
-  ]);
 
 const props = defineProps<{
   activeSpace: SpaceId;

@@ -10,6 +10,8 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
+import { EmptyState } from "@kepler/visuals";
+
 import { useGames } from "../composables/useGames";
 
 const route = useRoute();
@@ -68,19 +70,13 @@ function goBack() {
 
     <div v-if="error" class="arrancador-error">{{ error }}</div>
 
-    <div
-      v-if="loading && games.length === 0"
-      class="arrancador-empty"
-    >
-      <p class="arrancador-empty__title">Загрузка…</p>
-    </div>
+    <EmptyState v-if="loading && games.length === 0" title="Загрузка…" />
 
-    <div v-else-if="!game" class="arrancador-empty">
-      <p class="arrancador-empty__title">Игра не найдена</p>
-      <p class="arrancador-empty__hint">
-        Возможно, она была удалена из ARK. Вернитесь в Библиотеку.
-      </p>
-    </div>
+    <EmptyState
+      v-else-if="!game"
+      title="Игра не найдена"
+      description="Возможно, она была удалена из ARK. Вернитесь в Библиотеку."
+    />
 
     <article v-else class="arrancador-detail">
       <div

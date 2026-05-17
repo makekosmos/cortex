@@ -1,6 +1,12 @@
 <script setup lang="ts">
 // Упрощённая titlebar Arrancador'а для Kepler-shell extension'а.
 //
+// TODO: рассмотреть миграцию на `Titlebar` / `DesktopChrome` из
+// `@kepler/visuals` после того как extension'у понадобятся history-controls
+// или native window-buttons. Сейчас visuals.Titlebar не покрывает наш
+// частный case (sidebar-toggle слева + slot для AppSpotlight справа без
+// back/forward), поэтому держим custom вариант.
+//
 // Адаптация vs `apps/arrancador/src-vue/components/AppTitlebar.vue`:
 //   - убраны зависимости от Vue Router (back/forward — placeholder no-op).
 //   - убраны вызовы `window.electronAPI.windowControls.*` — kepler-shell

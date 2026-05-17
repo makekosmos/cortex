@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Play } from "lucide-vue-next";
-import { Dropdown } from "@kepler/visuals";
+import { Dropdown, SettingsRow, Toggle } from "@kepler/visuals";
 import { pomodoroSettings, resetPomodoroSettings } from "../lib/pomodoroSettings";
 import { playSound, SOUND_OPTIONS, type SoundName } from "../lib/sounds";
 
@@ -25,113 +25,132 @@ function testSound(s: SoundName) {
     <div class="settings">
         <section class="group">
             <h3 class="group__title">Длительности</h3>
-            <label class="row">
-                <span>Рабочее время</span>
-                <span class="row__control">
-                    <input type="number" min="1" max="180" :value="pomodoroSettings.workMin"
-                        @change="(e) => (pomodoroSettings.workMin = clampMin(Number((e.target as HTMLInputElement).value)))" />
-                    <span class="row__unit">мин</span>
-                </span>
-            </label>
-            <label class="row">
-                <span>Короткий перерыв</span>
-                <span class="row__control">
-                    <input type="number" min="1" max="60" :value="pomodoroSettings.shortBreakMin"
-                        @change="(e) => (pomodoroSettings.shortBreakMin = clampMin(Number((e.target as HTMLInputElement).value)))" />
-                    <span class="row__unit">мин</span>
-                </span>
-            </label>
-            <label class="row">
-                <span>Длинный перерыв</span>
-                <span class="row__control">
-                    <input type="number" min="1" max="120" :value="pomodoroSettings.longBreakMin"
-                        @change="(e) => (pomodoroSettings.longBreakMin = clampMin(Number((e.target as HTMLInputElement).value)))" />
-                    <span class="row__unit">мин</span>
-                </span>
-            </label>
-            <label class="row">
-                <span>Помидорок до длинного перерыва</span>
-                <span class="row__control">
-                    <input type="number" min="1" max="20" :value="pomodoroSettings.pomodorosUntilLongBreak"
-                        @change="(e) => (pomodoroSettings.pomodorosUntilLongBreak = clampCount(Number((e.target as HTMLInputElement).value)))" />
-                    <span class="row__unit">шт</span>
-                </span>
-            </label>
+            <SettingsRow title="Рабочее время">
+                <template #control>
+                    <span class="row__control">
+                        <input type="number" min="1" max="180" :value="pomodoroSettings.workMin"
+                            @change="(e) => (pomodoroSettings.workMin = clampMin(Number((e.target as HTMLInputElement).value)))" />
+                        <span class="row__unit">мин</span>
+                    </span>
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Короткий перерыв">
+                <template #control>
+                    <span class="row__control">
+                        <input type="number" min="1" max="60" :value="pomodoroSettings.shortBreakMin"
+                            @change="(e) => (pomodoroSettings.shortBreakMin = clampMin(Number((e.target as HTMLInputElement).value)))" />
+                        <span class="row__unit">мин</span>
+                    </span>
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Длинный перерыв">
+                <template #control>
+                    <span class="row__control">
+                        <input type="number" min="1" max="120" :value="pomodoroSettings.longBreakMin"
+                            @change="(e) => (pomodoroSettings.longBreakMin = clampMin(Number((e.target as HTMLInputElement).value)))" />
+                        <span class="row__unit">мин</span>
+                    </span>
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Помидорок до длинного перерыва">
+                <template #control>
+                    <span class="row__control">
+                        <input type="number" min="1" max="20" :value="pomodoroSettings.pomodorosUntilLongBreak"
+                            @change="(e) => (pomodoroSettings.pomodorosUntilLongBreak = clampCount(Number((e.target as HTMLInputElement).value)))" />
+                        <span class="row__unit">шт</span>
+                    </span>
+                </template>
+            </SettingsRow>
         </section>
 
         <section class="group">
             <h3 class="group__title">Поведение</h3>
-            <label class="toggle">
-                <input v-model="pomodoroSettings.trackBreaksAsRest" type="checkbox" />
-                <span class="toggle__cap" />
-                <span class="toggle__text">Трекать перерывы как «Отдых»</span>
-            </label>
-            <label class="toggle">
-                <input v-model="pomodoroSettings.autoStartWork" type="checkbox" />
-                <span class="toggle__cap" />
-                <span class="toggle__text">Автостарт рабочего времени</span>
-            </label>
-            <label class="toggle">
-                <input v-model="pomodoroSettings.autoStartBreak" type="checkbox" />
-                <span class="toggle__cap" />
-                <span class="toggle__text">Автостарт перерыва</span>
-            </label>
-            <label class="toggle">
-                <input v-model="pomodoroSettings.systemNotifications" type="checkbox" />
-                <span class="toggle__cap" />
-                <span class="toggle__text">Системные уведомления</span>
-            </label>
+            <SettingsRow title="Трекать перерывы как «Отдых»">
+                <template #control>
+                    <Toggle
+                        v-model="pomodoroSettings.trackBreaksAsRest"
+                        aria-label="Трекать перерывы как «Отдых»"
+                    />
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Автостарт рабочего времени">
+                <template #control>
+                    <Toggle
+                        v-model="pomodoroSettings.autoStartWork"
+                        aria-label="Автостарт рабочего времени"
+                    />
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Автостарт перерыва">
+                <template #control>
+                    <Toggle
+                        v-model="pomodoroSettings.autoStartBreak"
+                        aria-label="Автостарт перерыва"
+                    />
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Системные уведомления">
+                <template #control>
+                    <Toggle
+                        v-model="pomodoroSettings.systemNotifications"
+                        aria-label="Системные уведомления"
+                    />
+                </template>
+            </SettingsRow>
         </section>
 
         <section class="group">
             <h3 class="group__title">Звуки</h3>
-            <label class="row">
-                <span>Конец рабочего времени</span>
-                <span class="row__control">
-                    <Dropdown
-                        v-model="pomodoroSettings.workEndSound"
-                        :options="soundOptions"
-                        class="dd"
-                    />
-                    <button type="button" class="iconbtn" title="Прослушать"
-                        @click="testSound(pomodoroSettings.workEndSound)">
-                        <Play :size="12" :stroke-width="2" />
-                    </button>
-                </span>
-            </label>
-            <label class="row">
-                <span>Конец перерыва</span>
-                <span class="row__control">
-                    <Dropdown
-                        v-model="pomodoroSettings.breakEndSound"
-                        :options="soundOptions"
-                        class="dd"
-                    />
-                    <button type="button" class="iconbtn" title="Прослушать"
-                        @click="testSound(pomodoroSettings.breakEndSound)">
-                        <Play :size="12" :stroke-width="2" />
-                    </button>
-                </span>
-            </label>
-            <label class="row">
-                <span>Громкость</span>
-                <span class="row__control row__control--volume">
-                    <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        class="volume-slider"
-                        :value="Math.round(pomodoroSettings.ringtoneVolume * 100)"
-                        @input="(e) => (pomodoroSettings.ringtoneVolume = Number((e.target as HTMLInputElement).value) / 100)"
-                    />
-                    <span class="row__unit">{{ Math.round(pomodoroSettings.ringtoneVolume * 100) }}%</span>
-                    <button type="button" class="iconbtn" title="Прослушать"
-                        @click="testSound(pomodoroSettings.workEndSound)">
-                        <Play :size="12" :stroke-width="2" />
-                    </button>
-                </span>
-            </label>
+            <SettingsRow title="Конец рабочего времени">
+                <template #control>
+                    <span class="row__control">
+                        <Dropdown
+                            v-model="pomodoroSettings.workEndSound"
+                            :options="soundOptions"
+                            class="dd"
+                        />
+                        <button type="button" class="iconbtn" title="Прослушать"
+                            @click="testSound(pomodoroSettings.workEndSound)">
+                            <Play :size="12" :stroke-width="2" />
+                        </button>
+                    </span>
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Конец перерыва">
+                <template #control>
+                    <span class="row__control">
+                        <Dropdown
+                            v-model="pomodoroSettings.breakEndSound"
+                            :options="soundOptions"
+                            class="dd"
+                        />
+                        <button type="button" class="iconbtn" title="Прослушать"
+                            @click="testSound(pomodoroSettings.breakEndSound)">
+                            <Play :size="12" :stroke-width="2" />
+                        </button>
+                    </span>
+                </template>
+            </SettingsRow>
+            <SettingsRow title="Громкость">
+                <template #control>
+                    <span class="row__control row__control--volume">
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            class="volume-slider"
+                            :value="Math.round(pomodoroSettings.ringtoneVolume * 100)"
+                            @input="(e) => (pomodoroSettings.ringtoneVolume = Number((e.target as HTMLInputElement).value) / 100)"
+                        />
+                        <span class="row__unit">{{ Math.round(pomodoroSettings.ringtoneVolume * 100) }}%</span>
+                        <button type="button" class="iconbtn" title="Прослушать"
+                            @click="testSound(pomodoroSettings.workEndSound)">
+                            <Play :size="12" :stroke-width="2" />
+                        </button>
+                    </span>
+                </template>
+            </SettingsRow>
         </section>
 
         <footer class="settings__foot">
@@ -170,18 +189,16 @@ function testSound(s: SoundName) {
     font-weight: 600;
 }
 
-.row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
+/* SettingsRow приходит из @kepler/visuals — она уже задаёт layout (title/desc слева,
+   control справа) и border-bottom. Здесь только аккуратим padding'и, чтобы строки
+   не «торчали» из карточки группы. */
+:deep(.kosmos-settings-row) {
     padding: 0.5rem 0;
-    font-size: 0.9375rem;
-    color: var(--foreground);
+    border-bottom: none;
     border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
 
-.row:first-of-type {
+:deep(.kosmos-settings-row:first-child) {
     border-top: none;
     padding-top: 0;
 }
@@ -298,73 +315,6 @@ function testSound(s: SoundName) {
 .iconbtn:hover {
     background: color-mix(in srgb, var(--foreground) 8%, transparent);
     color: var(--foreground);
-}
-
-.toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.5rem 0;
-    cursor: pointer;
-    border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-}
-
-.toggle:first-of-type {
-    border-top: none;
-    padding-top: 0;
-}
-
-.toggle input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.toggle__cap {
-    position: relative;
-    flex-shrink: 0;
-    width: 36px;
-    height: 20px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--foreground) 18%, transparent);
-    transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
-    order: 2;
-}
-
-.toggle__cap::after {
-    content: "";
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    border-radius: 999px;
-    background: var(--background);
-    transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.toggle input:checked~.toggle__cap {
-    background: var(--accent);
-}
-
-.toggle input:checked~.toggle__cap::after {
-    transform: translateX(16px);
-}
-
-.toggle__text {
-    flex: 1;
-    font-size: 0.9375rem;
-    color: var(--foreground);
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.toggle__hint {
-    font-size: 0.8125rem;
-    color: color-mix(in srgb, var(--foreground) 55%, transparent);
-    line-height: 1.35;
 }
 
 .settings__foot {

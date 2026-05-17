@@ -1,14 +1,12 @@
 <script setup lang="ts">
 // SettingsPage — минимальные настройки extension'а.
 //
-// Адаптация vs `apps/arrancador/src-vue/pages/SettingsPage.vue`:
-//   - убраны секции, требующие native API: AutoStart, ARK connection panel
-//     (open database / directory), Backup directory chooser, Compression,
-//     SQOBA manifest, RAWG API key, theme switcher (theme — global shell-level).
-//   - оставлены только локальные user-preference переключатели, которые
-//     сохраняются в `localStorage`. Native-зависимые секции — Phase 5+.
+// Использует `SettingsRow` + `Toggle` из `@kepler/visuals`. Native-зависимые
+// секции (autostart, RAWG-ключ, backup dir, ...) — Phase 5+, пока только
+// localStorage-настройки.
 
 import { computed, onMounted, ref, watch } from "vue";
+import { SettingsRow, Toggle } from "@kepler/visuals";
 
 const STORAGE_KEY = "arrancador-extension-settings-v1";
 
@@ -91,28 +89,33 @@ const savedLabel = computed(() => {
     </p>
 
     <div class="arrancador-settings">
-      <label class="arrancador-settings__row">
-        <input
-          v-model="settings.showLegacyHints"
-          type="checkbox"
-          class="arrancador-settings__checkbox"
-        />
-        <span class="arrancador-settings__label">
-          Показывать подсказки про legacy Arrancador.exe
-        </span>
-      </label>
+      <SettingsRow
+        title="Показывать подсказки про legacy Arrancador.exe"
+        description="Информационные баннеры на страницах extension'а."
+      >
+        <template #control>
+          <Toggle
+            v-model="settings.showLegacyHints"
+            aria-label="Показывать подсказки про legacy Arrancador.exe"
+          />
+        </template>
+      </SettingsRow>
 
-      <div class="arrancador-settings__row">
-        <span class="arrancador-settings__label">Стартовый раздел</span>
-        <select
-          v-model="settings.defaultSection"
-          class="arrancador-settings__select"
-        >
-          <option value="library">Библиотека</option>
-          <option value="scan">Сканер</option>
-          <option value="stats">Статистика</option>
-        </select>
-      </div>
+      <SettingsRow
+        title="Стартовый раздел"
+        description="Какой раздел открывается первым при запуске extension'а."
+      >
+        <template #control>
+          <select
+            v-model="settings.defaultSection"
+            class="arrancador-settings__select"
+          >
+            <option value="library">Библиотека</option>
+            <option value="scan">Сканер</option>
+            <option value="stats">Статистика</option>
+          </select>
+        </template>
+      </SettingsRow>
 
       <div class="arrancador-settings__actions">
         <button

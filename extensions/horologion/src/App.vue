@@ -198,7 +198,7 @@ onBeforeUnmount(() => {
 }
 
 .dot--connecting {
-    color: oklch(0.75 0.14 75);
+    color: var(--status-warning);
 }
 
 .dot--error {

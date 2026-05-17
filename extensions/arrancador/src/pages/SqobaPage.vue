@@ -5,6 +5,7 @@
 // чтение saved-games manifest, copy / restore save files, compression.
 // Всё требует main-process IPC, которого extension renderer не имеет.
 // Phase 5 решит, где хост этих операций.
+import { EmptyState } from "@kepler/visuals";
 </script>
 
 <template>
@@ -15,11 +16,9 @@
       пока только в legacy Arrancador.exe. Раздел появится здесь после
       Phase 5 (file IO через kepler-backend extension).
     </p>
-    <div class="arrancador-empty">
-      <p class="arrancador-empty__title">Раздел недоступен</p>
-      <p class="arrancador-empty__hint">
-        Откройте Arrancador.exe → SQOBA для управления бэкапами сохранений.
-      </p>
-    </div>
+    <EmptyState
+      title="Раздел недоступен"
+      description="Откройте Arrancador.exe → SQOBA для управления бэкапами сохранений."
+    />
   </section>
 </template>

@@ -1,40 +1,64 @@
 <script setup lang="ts">
-// Sidebar Arrancador-extension'а.
+// Sidebar Arrancador-extension'а — поверх `Sidebar` из `@kepler/visuals`.
 //
-// Адаптация vs `apps/arrancador/src-vue/components/AppSidebar.vue`:
-//   - legacy 302-строчный sidebar (resize / persistent-config / i18n /
-//     sidebar-config Pinia store) сведён к статичному списку router-link'ов.
-//   - active-state определяется Vue Router'ом (`router-link-active`).
+// active-state определяется матчем `route.path` против `to` каждого
+// nav-item'а (Sidebar сам не подписан на router).
+import { computed } from "vue";
+import { useRoute } from "vue-router";
+import {
+  Gamepad2,
+  LayoutGrid,
+  Search,
+  Save,
+  BarChart3,
+  Settings,
+} from "lucide-vue-next";
+import { Sidebar } from "@kepler/visuals";
+import type { SidebarNavItem } from "@kepler/visuals";
 
-defineProps<{
+const props = defineProps<{
   hidden: boolean;
 }>();
 
-const items = [
-  { to: "/", label: "Библиотека" },
-  { to: "/catalogue", label: "Каталог" },
-  { to: "/scan", label: "Сканер" },
-  { to: "/sqoba", label: "SQOBA" },
-  { to: "/stats", label: "Статистика" },
-  { to: "/settings", label: "Настройки" },
+const emit = defineEmits<{
+  "update:hidden": [hidden: boolean];
+}>();
+
+const route = useRoute();
+
+const items: Array<{ id: string; to: string; label: string; icon: SidebarNavItem["icon"] }> = [
+  { id: "library", to: "/", label: "Библиотека", icon: Gamepad2 },
+  { id: "catalogue", to: "/catalogue", label: "Каталог", icon: LayoutGrid },
+  { id: "scan", to: "/scan", label: "Сканер", icon: Search },
+  { id: "sqoba", to: "/sqoba", label: "SQOBA", icon: Save },
+  { id: "stats", to: "/stats", label: "Статистика", icon: BarChart3 },
+  { id: "settings", to: "/settings", label: "Настройки", icon: Settings },
 ];
+
+const primaryItems = computed<SidebarNavItem[]>(() =>
+  items.map((it) => ({
+    id: it.id,
+    icon: it.icon,
+    to: it.to,
+    label: it.label,
+    active:
+      it.to === "/"
+        ? route.path === "/" || route.path.startsWith("/game/")
+        : route.path === it.to || route.path.startsWith(`${it.to}/`),
+    testId: `arrancador-sidebar-${it.id}`,
+  })),
+);
 </script>
 
 <template>
-  <nav
-    v-if="!hidden"
-    class="arrancador-sidebar"
-    aria-label="Навигация Arrancador"
-  >
-    <div class="arrancador-sidebar__heading">Разделы</div>
-    <router-link
-      v-for="item in items"
-      :key="item.to"
-      :to="item.to"
-      class="arrancador-sidebar__item"
-      exact-active-class="arrancador-sidebar__item--active"
-    >
-      {{ item.label }}
-    </router-link>
-  </nav>
+  <Sidebar
+    :primary-items="primaryItems"
+    :hidden="props.hidden"
+    :show-toggle="false"
+    :reserve-top-inset="false"
+    :default-width="200"
+    :min-width="160"
+    :max-width="280"
+    @update:hidden="(val) => emit('update:hidden', val)"
+  />
 </template>

@@ -3,10 +3,10 @@
  * shared vite.extensions.config.mjs. */
 @import "tailwindcss";
 
-/* @source — расширяет content scan на shared visuals package.
- * Текущие arrancador компоненты используют BEM-классы, не tailwind,
- * но плагин подключён для будущего использования и parity с legacy. */
-@source "../../../../packages/kosmos-visuals/**/*.{vue,ts}";
+/* @source — расширяет content scan на shared visuals package
+ * (после миграции на @kepler/visuals.GamePosterCard utility-классы
+ * патернов резолвятся именно отсюда). */
+@source "../../../../packages/visuals/**/*.{vue,ts}";
 
 /* Arrancador extension — plain CSS layer.
    Legacy `apps/arrancador/` использовал tailwind; миграция компонентов
@@ -118,54 +118,7 @@ input {
   cursor: not-allowed;
 }
 
-/* ---------- Sidebar ---------- */
-
-.arrancador-sidebar {
-  display: flex;
-  flex-direction: column;
-  width: 220px;
-  flex-shrink: 0;
-  padding: 16px 12px;
-  gap: 4px;
-  border-right: 1px solid var(--border);
-  background: var(--card);
-  overflow-y: auto;
-}
-
-.arrancador-sidebar__heading {
-  padding: 0 8px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-}
-
-.arrancador-sidebar__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--radius-input);
-  font-size: 13px;
-  color: var(--foreground);
-  text-align: left;
-  transition: background 120ms var(--easing-standard);
-}
-
-.arrancador-sidebar__item:hover {
-  background: var(--muted);
-}
-
-.arrancador-sidebar__item--active {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.arrancador-sidebar__item--active:hover {
-  background: var(--accent);
-}
+/* Sidebar — теперь поверх `Sidebar` из `@kepler/visuals` (см. components/AppSidebar.vue). */
 
 /* ---------- Spotlight ---------- */
 
@@ -238,37 +191,15 @@ input {
   line-height: 1.5;
 }
 
-.arrancador-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 16px;
-  text-align: center;
-  color: var(--muted-foreground);
-}
-
-.arrancador-empty__title {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--foreground);
-}
-
-.arrancador-empty__hint {
-  margin: 0;
-  font-size: 13px;
-  max-width: 420px;
-  line-height: 1.5;
-}
+/* Empty-state — теперь `EmptyState` из `@kepler/visuals`. */
 
 .arrancador-error {
   margin: 0 0 16px;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--destructive, #ef4444) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
   border-radius: var(--radius-input);
-  background: color-mix(in srgb, var(--destructive, #ef4444) 12%, transparent);
-  color: var(--destructive-foreground, var(--foreground));
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive-foreground);
   font-size: 13px;
 }
 
@@ -280,78 +211,9 @@ input {
   gap: 16px;
 }
 
-.arrancador-card {
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--radius-card);
-  background: var(--card);
-  border: 1px solid var(--border);
-  overflow: hidden;
-  transition: transform 160ms var(--easing-emphasized),
-    border-color 160ms var(--easing-standard);
-  cursor: default;
-}
-
-.arrancador-card:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
-}
-
-.arrancador-card__cover {
-  aspect-ratio: 3 / 4;
-  width: 100%;
-  background: var(--muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-}
-
-.arrancador-card__cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
 .arrancador-card__placeholder {
   font-size: 28px;
   color: var(--muted-foreground);
-}
-
-.arrancador-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px 12px;
-}
-
-.arrancador-card__eyebrow {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted-foreground);
-}
-
-.arrancador-card__title {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--foreground);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.arrancador-card {
-  text-decoration: none;
-  color: inherit;
-}
-
-.arrancador-sidebar__item {
-  text-decoration: none;
 }
 
 /* ---------- Scan list ---------- */
@@ -470,26 +332,7 @@ input {
   max-width: 480px;
 }
 
-.arrancador-settings__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-input);
-  background: var(--card);
-}
-
-.arrancador-settings__label {
-  font-size: 13px;
-  color: var(--foreground);
-  flex: 1;
-}
-
-.arrancador-settings__checkbox {
-  width: 16px;
-  height: 16px;
-}
+/* Settings rows — `SettingsRow` + `Toggle` из `@kepler/visuals`. */
 
 .arrancador-settings__select {
   height: 30px;
@@ -570,23 +413,19 @@ input {
   justify-content: flex-end;
   gap: 6px;
   padding: 20px;
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.75) 0%,
-    rgba(0, 0, 0, 0) 100%
-  );
+  background: var(--scrim-gradient);
 }
 
 .arrancador-detail__title {
   margin: 0;
   font-size: 24px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--foreground);
 }
 
 .arrancador-detail__genres {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
 }
 
 .arrancador-detail__meta {

@@ -194,7 +194,7 @@ watch(
     >
       <div class="flex items-start gap-3 border-b border-(--border) px-5 pb-4 pt-5">
         <div
-          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-500/12 text-blue-500"
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-(--primary)/12 text-(--primary)"
         >
           <FolderPlus :size="18" />
         </div>

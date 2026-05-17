@@ -9,6 +9,8 @@
 
 import { computed } from "vue";
 
+import { EmptyState } from "@kepler/visuals";
+
 import { useGames } from "../composables/useGames";
 
 const { games, loading, error } = useGames();
@@ -60,9 +62,7 @@ function formatHours(seconds: number): string {
 
     <div v-if="error" class="arrancador-error">{{ error }}</div>
 
-    <div v-if="loading && games.length === 0" class="arrancador-empty">
-      <p class="arrancador-empty__title">Загрузка…</p>
-    </div>
+    <EmptyState v-if="loading && games.length === 0" title="Загрузка…" />
 
     <div v-else class="arrancador-stats">
       <div class="arrancador-stats__grid">
@@ -92,11 +92,12 @@ function formatHours(seconds: number): string {
 
       <h2 class="arrancador-stats__subtitle">Топ-10 по времени</h2>
 
-      <div v-if="topPlayed.length === 0" class="arrancador-empty">
-        <p class="arrancador-empty__hint">
-          Нет данных о наигранных часах. Запустите игру из Arrancador.exe.
-        </p>
-      </div>
+      <EmptyState
+        v-if="topPlayed.length === 0"
+        compact
+        title="Нет данных о наигранных часах"
+        description="Запустите игру из Arrancador.exe."
+      />
       <ol v-else class="arrancador-stats__top">
         <li
           v-for="game in topPlayed"

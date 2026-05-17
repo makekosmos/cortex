@@ -1,14 +1,12 @@
 <script setup lang="ts">
-// GameCard для extension'а.
+// GameCard — обёртка над `GamePosterCard` из `@kepler/visuals`.
 //
-// Адаптация vs `apps/arrancador/src-vue/components/GameCard.vue`:
-//   - legacy использует `@kepler/visuals/GamePosterCard` + RouterLink + i18n
-//     перевод жанров. Здесь — самостоятельная карточка + router-link на
-//     детальную страницу.
-//   - Cover берётся из `propsJson.background_image` либо `propsJson.cover_image`
-//     (см. `lib/arkGames.ts.projectGame`).
-
+// Адаптация: на route `/game/:id` через RouterLink (linkComponent),
+// cover берётся из `propsJson.background_image` либо `propsJson.cover_image`
+// (см. `lib/arkGames.ts.projectGame`). Жанр — eyebrow.
 import { computed } from "vue";
+import { RouterLink } from "vue-router";
+import { GamePosterCard } from "@kepler/visuals";
 
 import type { ArrancadorGame } from "../lib/arkGames";
 
@@ -19,27 +17,27 @@ const props = defineProps<{
 const cover = computed(
   () => props.game.backgroundImage ?? props.game.coverImage ?? null,
 );
+
 const primaryGenre = computed(() => {
   const genres = props.game.genres;
   if (!genres) return "Игра";
   const first = genres.split(",").map((s) => s.trim()).filter(Boolean)[0];
   return first ?? "Игра";
 });
+
+const to = computed(() => `/game/${props.game.id}`);
 </script>
 
 <template>
-  <router-link
-    :to="`/game/${game.id}`"
-    class="arrancador-card"
-    :title="`Открыть страницу игры`"
+  <GamePosterCard
+    :to="to"
+    :title="game.name"
+    :eyebrow="primaryGenre"
+    :cover-src="cover"
+    :link-component="RouterLink"
   >
-    <div class="arrancador-card__cover">
-      <img v-if="cover" :src="cover" :alt="game.name" />
-      <span v-else class="arrancador-card__placeholder" aria-hidden="true">🎮</span>
-    </div>
-    <div class="arrancador-card__body">
-      <span class="arrancador-card__eyebrow">{{ primaryGenre }}</span>
-      <span class="arrancador-card__title">{{ game.name }}</span>
-    </div>
-  </router-link>
+    <template #placeholder>
+      <span class="arrancador-card__placeholder" aria-hidden="true">🎮</span>
+    </template>
+  </GamePosterCard>
 </template>

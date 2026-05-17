@@ -2,7 +2,7 @@
 import { useRouter } from "vue-router";
 import { FolderOpen } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
-import { CommandPalette, TodoRow } from "@kepler/visuals";
+import { CommandPalette, EmptyState, TodoRow } from "@kepler/visuals";
 import { useTodoStore } from "@/store/todos";
 
 const props = defineProps<{ open: boolean }>();
@@ -87,22 +87,22 @@ function selectProject(project: { id: string }, close: () => void) {
   >
     <template #default="{ query, close }">
       <!-- Empty state -->
-      <div
+      <EmptyState
         v-if="!query.trim()"
-        class="px-4 py-8 text-center text-sm text-(--muted-foreground) select-none"
-      >
-        Начните вводить для поиска
-      </div>
+        compact
+        title="Начните вводить для поиска"
+      />
 
       <!-- No results -->
-      <div
+      <EmptyState
         v-else-if="
           matchTodos(query).length === 0 && matchProjects(query).length === 0
         "
-        class="px-4 py-8 text-center text-sm text-(--muted-foreground) select-none"
-      >
-        Ничего не найдено по «{{ query }}»
-      </div>
+        compact
+        title="Ничего не найдено"
+        :description="`По запросу «${query}» совпадений нет`"
+      />
+
 
       <template v-else>
         <!-- Todos -->

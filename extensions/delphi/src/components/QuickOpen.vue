@@ -1,17 +1,10 @@
 <script setup lang="ts">
 /* eslint-disable no-console */
-import {
-  computed,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  shallowRef,
-  useTemplateRef,
-  watch,
-} from "vue";
-import { CheckCircle, Folder, Search, Tag } from "lucide-vue-next";
-import { useTodoStore } from "@/store/todos";
+import { computed, onMounted, onUnmounted, shallowRef } from "vue";
+import { CheckCircle, Folder, Tag } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
+import { CommandPalette, EmptyState } from "@kepler/visuals";
+import { useTodoStore } from "@/store/todos";
 import type { Project, Tag as TagType, TodoItem } from "@/types/task";
 
 // ---------------------------------------------------------------------------
@@ -58,65 +51,32 @@ function fuzzyScore(text: string, query: string): number {
 // ---------------------------------------------------------------------------
 
 const open = shallowRef(false);
-const searchText = shallowRef("");
-const debouncedQuery = shallowRef("");
-const selectedIndex = shallowRef(0);
-
-const inputRef = useTemplateRef<HTMLInputElement>("searchInput");
 
 const store = useTodoStore();
 const { todos, projects, tags } = storeToRefs(store);
 
-function close() {
-  open.value = false;
-  searchText.value = "";
-  debouncedQuery.value = "";
-  selectedIndex.value = 0;
-}
-
 // Cmd+K to toggle
+let handler: ((e: KeyboardEvent) => void) | undefined;
+
 onMounted(() => {
-  const handler = (e: KeyboardEvent) => {
-    if (e.metaKey && e.key === "k") {
+  handler = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault();
-      if (open.value) {
-        searchText.value = "";
-        debouncedQuery.value = "";
-        selectedIndex.value = 0;
-        open.value = false;
-      } else {
-        open.value = true;
-      }
+      open.value = !open.value;
     }
   };
   window.addEventListener("keydown", handler);
-  onUnmounted(() => window.removeEventListener("keydown", handler));
 });
 
-// Focus on open
-watch(open, (val) => {
-  if (val) {
-    nextTick(() => inputRef.value?.focus());
-  }
+onUnmounted(() => {
+  if (handler) window.removeEventListener("keydown", handler);
 });
 
-// Debounce search text (200ms)
-let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-watch(searchText, (val) => {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    debouncedQuery.value = val;
-    selectedIndex.value = 0;
-  }, 200);
-});
-
-// Compute results
-const results = computed<QuickOpenResult[]>(() => {
-  if (!debouncedQuery.value.trim()) return [];
-  const q = debouncedQuery.value.trim();
+function computeResults(query: string): QuickOpenResult[] {
+  if (!query.trim()) return [];
+  const q = query.trim();
   const items: QuickOpenResult[] = [];
 
-  // Todos (top 8)
   const scoredTodos = todos.value
     .filter((t) => !t.isTrashed)
     .map((t) => {
@@ -132,7 +92,6 @@ const results = computed<QuickOpenResult[]>(() => {
     ...scoredTodos.map((x) => ({ kind: "todo" as const, item: x.todo })),
   );
 
-  // Projects (top 3)
   const matchedProjects = projects.value
     .filter((p) => fuzzyScore(p.title, q) > 0)
     .slice(0, 3);
@@ -140,19 +99,15 @@ const results = computed<QuickOpenResult[]>(() => {
     ...matchedProjects.map((p) => ({ kind: "project" as const, item: p })),
   );
 
-  // Tags (top 3)
   const matchedTags = tags.value
     .filter((t) => fuzzyScore(t.title, q) > 0)
     .slice(0, 3);
   items.push(...matchedTags.map((t) => ({ kind: "tag" as const, item: t })));
 
   return items;
-});
+}
 
-function activateSelected() {
-  if (selectedIndex.value >= results.value.length) return;
-  const result = results.value[selectedIndex.value];
-
+function activate(result: QuickOpenResult, close: () => void) {
   if (result.kind === "todo") {
     console.log("Selected todo:", result.item.id);
   } else if (result.kind === "project") {
@@ -160,27 +115,7 @@ function activateSelected() {
   } else if (result.kind === "tag") {
     console.log("Selected tag:", result.item.id);
   }
-
   close();
-}
-
-function handleKeyDown(e: KeyboardEvent) {
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    selectedIndex.value = Math.min(
-      results.value.length - 1,
-      selectedIndex.value + 1,
-    );
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    selectedIndex.value = Math.max(0, selectedIndex.value - 1);
-  } else if (e.key === "Enter") {
-    e.preventDefault();
-    activateSelected();
-  } else if (e.key === "Escape") {
-    e.preventDefault();
-    close();
-  }
 }
 
 function getResultSubtitle(result: QuickOpenResult): string {
@@ -211,80 +146,49 @@ function getResultSubtitle(result: QuickOpenResult): string {
 </script>
 
 <template>
-  <div
-    v-if="open"
-    class="fixed inset-0 z-50 flex items-start justify-center pt-[18vh]"
+  <CommandPalette
+    :open="open"
+    placeholder="Поиск задач, проектов, тегов..."
+    @update:open="open = $event"
   >
-    <!-- Backdrop -->
-    <div class="absolute inset-0 bg-black/40" @click="close" />
-
-    <!-- Panel -->
-    <div
-      class="relative z-10 w-[480px] overflow-hidden rounded-xl border border-(--border) bg-(--popover) shadow-2xl"
-    >
-      <!-- Search input -->
-      <div class="flex items-center gap-2.5 px-4 py-3.5">
-        <Search :size="16" class="shrink-0 text-(--muted-foreground)" />
-        <input
-          ref="searchInput"
-          type="text"
-          placeholder="Поиск задач, проектов, тегов..."
-          :value="searchText"
-          class="w-full text-base text-(--foreground) placeholder:text-(--muted-foreground)"
-          @input="searchText = ($event.target as HTMLInputElement).value"
-          @keydown="handleKeyDown"
-        />
-      </div>
-
-      <!-- Results -->
-      <template v-if="results.length > 0">
-        <div class="h-px bg-(--border) opacity-50" />
-        <div class="max-h-[280px] overflow-y-auto py-1">
-          <div
-            v-for="(result, index) in results"
-            :key="resultId(result)"
-            :class="[
-              'flex cursor-pointer items-center gap-2.5 px-4 py-2',
-              index === selectedIndex ? 'bg-blue-500/10' : '',
-            ]"
-            @click="
-              selectedIndex = index;
-              activateSelected();
-            "
-            @mouseenter="selectedIndex = index"
-          >
-            <div class="shrink-0">
-              <CheckCircle
-                v-if="result.kind === 'todo'"
-                :size="16"
-                class="text-blue-500"
-              />
-              <Folder
-                v-else-if="result.kind === 'project'"
-                :size="16"
-                class="text-purple-500"
-              />
-              <Tag v-else :size="16" class="text-orange-500" />
+    <template #default="{ query, close }">
+      <template v-if="computeResults(query).length > 0">
+        <button
+          v-for="result in computeResults(query)"
+          :key="resultId(result)"
+          data-cmd-item
+          class="flex w-full items-center gap-2.5 px-4 py-2 text-left outline-none hover:bg-(--surface) focus:bg-(--surface)"
+          @click="activate(result, close)"
+        >
+          <div class="shrink-0">
+            <CheckCircle
+              v-if="result.kind === 'todo'"
+              :size="16"
+              class="text-(--primary)"
+            />
+            <Folder
+              v-else-if="result.kind === 'project'"
+              :size="16"
+              class="text-(--muted-foreground)"
+            />
+            <Tag v-else :size="16" class="text-(--muted-foreground)" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="truncate text-sm text-(--foreground)">
+              {{ result.item.title }}
             </div>
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-sm text-(--foreground)">
-                {{ result.item.title }}
-              </div>
-              <div class="truncate text-xs text-(--muted-foreground)">
-                {{ getResultSubtitle(result) }}
-              </div>
+            <div class="truncate text-xs text-(--muted-foreground)">
+              {{ getResultSubtitle(result) }}
             </div>
           </div>
-        </div>
+        </button>
       </template>
 
-      <!-- Empty state -->
-      <div
-        v-if="results.length === 0 && debouncedQuery.trim() !== ''"
-        class="px-4 py-3.5 text-center text-sm text-(--muted-foreground)"
-      >
-        Ничего не найдено
-      </div>
-    </div>
-  </div>
+      <EmptyState
+        v-else-if="query.trim() !== ''"
+        compact
+        title="Ничего не найдено"
+      />
+    </template>
+  </CommandPalette>
 </template>

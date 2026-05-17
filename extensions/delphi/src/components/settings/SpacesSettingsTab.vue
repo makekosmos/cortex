@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { Globe2, Radio } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import QRCode from "qrcode";
+import { EmptyState } from "@kepler/visuals";
 import {
   type Space,
   deriveSpaceId,
@@ -234,9 +235,11 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div v-if="spaces.length === 0" class="settings-empty">
-        Сохранённых пространств пока нет.
-      </div>
+      <EmptyState
+        v-if="spaces.length === 0"
+        compact
+        title="Сохранённых пространств пока нет"
+      />
 
       <div v-else class="settings-space-list">
         <article

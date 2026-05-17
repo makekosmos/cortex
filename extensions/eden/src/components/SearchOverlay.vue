@@ -28,20 +28,10 @@
             </div>
           </button>
         </div>
-        <div
-          v-else
-          class="px-4 py-8 text-center text-sm text-(--muted-foreground) select-none"
-        >
-          Ничего не найдено
-        </div>
+        <EmptyState v-else title="Ничего не найдено" compact />
       </div>
 
-      <div
-        v-else
-        class="px-4 py-8 text-center text-sm text-(--muted-foreground) select-none"
-      >
-        Начните вводить для поиска
-      </div>
+      <EmptyState v-else title="Начните вводить для поиска" compact />
 
       <div class="mt-2 flex items-center justify-end gap-4 border-t border-(--border) px-4 py-3 text-xs text-(--muted-foreground)">
         <span><kbd>↑</kbd><kbd>↓</kbd> навигация</span>
@@ -53,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { CommandPalette } from "@kepler/visuals";
+import { CommandPalette, EmptyState } from "@kepler/visuals";
 
 defineProps<{
   isOpen: boolean;

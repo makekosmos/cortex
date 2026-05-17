@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { Trash2, ChevronDown } from "lucide-vue-next";
-import { ContextMenu, ContextMenuItem, useContextMenu } from "@kepler/visuals";
+import {
+    ContextMenu,
+    ContextMenuItem,
+    EmptyState,
+    useContextMenu,
+} from "@kepler/visuals";
 import type { TimeEntry } from "../types";
 import { formatDuration, formatDayHeader, dayKey } from "../lib/format";
 import { entriesChangedAt, notifyEntriesChanged } from "../lib/store";
@@ -218,9 +223,11 @@ function titleParts(g: EntryGroup): Array<{ type: "text" | "task"; text: string 
     <div class="list">
 
 
-        <div v-if="entries.length === 0" class="empty">
-            Записей пока нет. Введи что-то в поле выше и нажми старт.
-        </div>
+        <EmptyState
+            v-if="entries.length === 0"
+            title="Записей пока нет"
+            description="Введи что-то в поле выше и нажми старт."
+        />
 
         <div v-else class="days">
             <div v-for="d in groupedByDay" :key="d.day" class="day"
@@ -316,13 +323,6 @@ function titleParts(g: EntryGroup): Array<{ type: "text" | "task"; text: string 
     font-variant-numeric: tabular-nums;
     color: var(--foreground);
     font-weight: 600;
-}
-
-.empty {
-    padding: 4rem 0;
-    text-align: center;
-    color: color-mix(in srgb, var(--foreground) 45%, transparent);
-    font-size: 0.875rem;
 }
 
 .days {

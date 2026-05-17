@@ -34,6 +34,8 @@ import {
   CustomCaret,
   DesktopChrome,
   DesktopContentSurface,
+  StatusDot,
+  type StatusDotTone,
   TitlebarHistoryControls,
   type TitlebarPlatform,
 } from "@kepler/visuals";
@@ -86,8 +88,6 @@ const authError = shallowRef<string | null>(null);
 const isElectron = typeof window !== "undefined" && !!window.electronAPI;
 const spaceRequired = shallowRef(false);
 
-const arkDotClass = computed(() => `dot dot--${arkStatus.value}`);
-
 const arkStatusMessage = computed(() => {
   switch (arkStatus.value) {
     case "connected":
@@ -97,6 +97,18 @@ const arkStatusMessage = computed(() => {
     case "error":
     default:
       return "ARK недоступен";
+  }
+});
+
+const arkStatusTone = computed<StatusDotTone>(() => {
+  switch (arkStatus.value) {
+    case "connected":
+      return "success";
+    case "connecting":
+      return "warning";
+    case "error":
+    default:
+      return "danger";
   }
 });
 
@@ -639,14 +651,7 @@ function leaveSpaceListener() {
       </template>
 
       <template #titlebar-trailing>
-        <button
-          type="button"
-          class="ark-status-btn"
-          :title="arkStatusMessage"
-          :aria-label="arkStatusMessage"
-        >
-          <span :class="arkDotClass" />
-        </button>
+        <StatusDot :tone="arkStatusTone" :label="arkStatusMessage" />
       </template>
 
       <template #sidebar>
@@ -707,9 +712,9 @@ function leaveSpaceListener() {
   opacity: 0.9;
   text-align: left;
   transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 120ms cubic-bezier(0.2, 0, 0, 1);
+    background-color 120ms var(--easing-emphasized),
+    color 120ms var(--easing-emphasized),
+    opacity 120ms var(--easing-emphasized);
 }
 
 .titlebar-settings-button:hover {
@@ -720,49 +725,5 @@ function leaveSpaceListener() {
   background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
   color: var(--foreground);
   opacity: 1;
-}
-
-/* ARK status indicator — single-line dot, no popover.
-   Matches Horologion's titlebar indicator (32x32 transparent button + 8px dot). */
-.ark-status-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 10px;
-  cursor: default;
-  flex-shrink: 0;
-  color: color-mix(in srgb, var(--sidebar-foreground) 55%, transparent);
-  transition:
-    color 120ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.ark-status-btn:hover {
-  color: var(--sidebar-foreground);
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
-}
-
-.dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.dot--connected {
-  color: var(--status-success);
-}
-
-.dot--connecting {
-  color: oklch(0.75 0.14 75);
-}
-
-.dot--error {
-  color: var(--destructive);
 }
 </style>

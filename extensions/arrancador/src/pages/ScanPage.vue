@@ -8,6 +8,8 @@
 //
 // Здесь — listing того, что уже в ARK + объяснение, куда жмать "Scan".
 
+import { EmptyState } from "@kepler/visuals";
+
 import { useGames } from "../composables/useGames";
 
 const { games, loading, error } = useGames();
@@ -23,17 +25,13 @@ const { games, loading, error } = useGames();
 
     <div v-if="error" class="arrancador-error">{{ error }}</div>
 
-    <div v-if="loading && games.length === 0" class="arrancador-empty">
-      <p class="arrancador-empty__title">Загрузка…</p>
-    </div>
+    <EmptyState v-if="loading && games.length === 0" title="Загрузка…" />
 
-    <div v-else-if="games.length === 0" class="arrancador-empty">
-      <p class="arrancador-empty__title">Сканер не находил игр</p>
-      <p class="arrancador-empty__hint">
-        Откройте Arrancador.exe → «Добавление игр» → «Выбрать папку», чтобы
-        запустить сканер.
-      </p>
-    </div>
+    <EmptyState
+      v-else-if="games.length === 0"
+      title="Сканер не находил игр"
+      description="Откройте Arrancador.exe → «Добавление игр» → «Выбрать папку», чтобы запустить сканер."
+    />
 
     <div v-else class="arrancador-scan-list">
       <article

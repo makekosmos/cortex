@@ -10,6 +10,8 @@
 
 import { computed } from "vue";
 
+import { EmptyState } from "@kepler/visuals";
+
 import GameCard from "../components/GameCard.vue";
 import { useGames } from "../composables/useGames";
 import { useSearchQuery } from "../composables/useSearchQuery";
@@ -36,24 +38,19 @@ const filteredGames = computed(() => {
 
     <div v-if="error" class="arrancador-error">{{ error }}</div>
 
-    <div v-if="loading && games.length === 0" class="arrancador-empty">
-      <p class="arrancador-empty__title">Загрузка…</p>
-    </div>
+    <EmptyState v-if="loading && games.length === 0" title="Загрузка…" />
 
-    <div v-else-if="!loading && games.length === 0" class="arrancador-empty">
-      <p class="arrancador-empty__title">Библиотека пуста</p>
-      <p class="arrancador-empty__hint">
-        Добавьте игры через legacy Arrancador.exe — они появятся здесь
-        автоматически после синхронизации в ARK.
-      </p>
-    </div>
+    <EmptyState
+      v-else-if="!loading && games.length === 0"
+      title="Библиотека пуста"
+      description="Добавьте игры через legacy Arrancador.exe — они появятся здесь автоматически после синхронизации в ARK."
+    />
 
-    <div v-else-if="filteredGames.length === 0" class="arrancador-empty">
-      <p class="arrancador-empty__title">Ничего не найдено</p>
-      <p class="arrancador-empty__hint">
-        Сбросьте поисковый запрос, чтобы увидеть всю библиотеку.
-      </p>
-    </div>
+    <EmptyState
+      v-else-if="filteredGames.length === 0"
+      title="Ничего не найдено"
+      description="Сбросьте поисковый запрос, чтобы увидеть всю библиотеку."
+    />
 
     <div v-else class="arrancador-grid">
       <GameCard
