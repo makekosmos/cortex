@@ -1,0 +1,14 @@
+{
+  "task_id": "2026-05-17-eden-cleanup-and-hardening",
+  "verified_at": "2026-05-17T00:00:00Z",
+  "results": [
+    { "ac": "AC1", "verdict": "PASS", "command": "grep -RiE 'hevy' extensions/eden/src/" },
+    { "ac": "AC2", "verdict": "PASS", "command": "grep -RE 'lintCodeBlock|formatCodeBlock|getCodeToolsSettings|updateCodeToolsSettings|CodeToolsSettings|CodeLintResult|CodeFormatResult' extensions/eden/src/" },
+    { "ac": "AC3", "verdict": "PASS", "command": "read shim listTrashEntries/restoreEntry/permanentDeleteEntry impls — ARK upsert with deletedAt=null + ARK delete_object" },
+    { "ac": "AC4", "verdict": "PASS", "command": "bun run --cwd shell build:extensions (main chunk 353KB < 800KB target)" },
+    { "ac": "AC5", "verdict": "PASS", "command": "test -d apps/eden → removed" },
+    { "ac": "AC6", "verdict": "PASS", "command": "package.json + Cargo.toml + lefthook.yml + scripts/*.mjs cleaned" },
+    { "ac": "AC7", "verdict": "PASS", "command": "bun run docs:sync && bun run docs:check (clean)" },
+    { "ac": "AC8", "verdict": "PASS", "command": "bun run --cwd shell build:js && typecheck && ark:guard:writes && cargo build --workspace" }
+  ]
+}

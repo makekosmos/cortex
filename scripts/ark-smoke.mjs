@@ -32,39 +32,18 @@ const steps = [
     args: ["run", "--cwd", "packages/ark", "typecheck"],
   },
   {
-    name: "Eden ARK migration test",
+    name: "shell + extensions build",
     command: "bun",
-    args: ["run", "--cwd", "apps/eden/ts", "test:ark-migration"],
-  },
-  {
-    name: "Eden build",
-    command: "bun",
-    args: ["run", "build"],
-    cwd: path.join(repoRoot, "apps", "eden", "ts"),
-  },
-  {
-    name: "Eden typed-note e2e",
-    command: "bunx",
-    args: [
-      "playwright",
-      "test",
-      "tests/app.spec.ts",
-      "--config",
-      "playwright.config.ts",
-      "--grep",
-      "custom note type",
-    ],
-    cwd: path.join(repoRoot, "apps", "eden", "ts"),
+    args: ["run", "--cwd", "shell", "build:js"],
   },
 ];
 
-// Заметка: после Phase B-E смок-матрица сжалась.
-// — Arrancador / Dashboard / Delphi / Horologion теперь Vue-экстеншены в `extensions/<name>`,
+// Заметка: после Phase B-E + 6.0.A смок-матрица сжалась.
+// — Eden, Dashboard, Delphi, Horologion, Arrancador — Vue extensions в `extensions/<name>`,
 //   у них нет отдельных Electron unit / e2e наборов (host берёт на себя через Kepler shell).
-// — Standalone сценарии теперь покрывает `bun run --cwd shell test:e2e`,
+// — Standalone Eden удалён в Phase 6.0.A, миграции из vault'а Heart больше нет.
+// — Standalone сценарии покрывает `bun run --cwd shell test:e2e`,
 //   но он тяжёлый и должен запускаться явно, не как часть smoke.
-// — Dashboard seed/analytics скрипты переехали в архив (`legacy/`) и временно
-//   не подключены к смоку до Phase 6 (Eden + visuals refactor).
 //
 // Если нужно добавить шаг — извлекай `cwd` через `path.join(repoRoot, ...)`,
 // чтобы не зависеть от запуска из корня.

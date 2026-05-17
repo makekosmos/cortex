@@ -500,3 +500,20 @@ const w = window as unknown as Record<string, unknown>;
 if (!w.electronAPI) {
   w.electronAPI = electronApiShim;
 }
+
+// Eager регистрация `task_obj` object_type на boot extension'а.
+//
+// Раньше registration шла лениво, перед первым `arkUpsertTask`. Это ломало
+// universal extensions-contract spec'у, который пытается upsert sample
+// `task_obj` сразу после открытия окна — backend получал FK constraint failed.
+//
+// Идемпотентно (backend merge'ает при повторе) и не блокирует UI: fire-and-
+// forget. При первом реальном upsert'е `ensureTaskObjectTypeRegistered` всё
+// равно проверит/повторит, если этот ранний вызов потерпел fail из-за ARK
+// bridge race.
+const initialArk = kepler();
+if (initialArk) {
+  void ensureTaskObjectTypeRegistered(initialArk).catch(() => {
+    // Лог уже выписан внутри ensureTaskObjectTypeRegistered.
+  });
+}

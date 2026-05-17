@@ -1,0 +1,169 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&display=swap");
+@import "@kepler/visuals/theme/css";
+
+:root {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-display:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-text-primary: var(--foreground);
+  --color-text-secondary: var(--muted-foreground);
+  --color-text-tertiary: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+  --color-text-inversion: var(--background);
+  --color-text-primary-inversion: var(--foreground);
+  --color-text-secondary-inversion: var(--muted-foreground);
+  --color-text-tertiary-inversion: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
+
+  --color-very-light-grey: #313131;
+  --color-light-grey: #292929;
+  --color-grey: #737373;
+  --color-dark-grey: #414141;
+  --color-orange: #ffb522;
+  --color-light-orange: #5f430a;
+
+  --color-shape-primary: var(--border);
+  --color-shape-secondary: var(--border);
+  --color-shape-secondary-inversion: var(--border);
+  --color-shape-tertiary: #232323;
+  --color-shape-highlight-dark: rgba(255, 255, 255, 0.11);
+  --color-shape-highlight-medium: rgba(255, 255, 255, 0.05);
+  --color-shape-highlight-light: rgba(255, 255, 255, 0.03);
+  --color-shape-highlight-light-solid: var(--surface);
+
+  --color-bg-primary: var(--background);
+  --color-bg-primary-90: color-mix(in srgb, var(--background) 90%, transparent);
+  --color-bg-primary-inversion: var(--background);
+
+  --color-control-accent: #d4d4d4;
+  --color-control-active: #737373;
+  --color-control-active-inversion: #b6b6b6;
+  --color-control-inactive: #414141;
+  --color-control-bg: #171717;
+
+  --accent-hover: var(--primary);
+  --accent-muted: color-mix(in srgb, var(--primary) 16%, transparent);
+  --accent-strong: color-mix(in srgb, var(--primary) 22%, transparent);
+  --danger: #f55522;
+  --danger-muted: rgba(245, 85, 34, 0.14);
+
+  --bg-app: var(--background);
+  --bg-sidebar: var(--sidebar);
+  --bg-sidebar-hover: var(--secondary);
+  --bg-sidebar-active: var(--surface);
+  --bg-editor: var(--background);
+  --bg-elevated: var(--card);
+  --bg-surface: var(--surface);
+  --bg-input: var(--input);
+  --bg-input-focus: var(--surface);
+
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-tertiary: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+  --text-quaternary: color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+
+  --border-subtle: var(--border);
+  --border-default: var(--border);
+  --border-focus: rgba(255, 255, 255, 0.2);
+  --border-divider: var(--border);
+  --border-glass: var(--border);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 18px;
+
+  --blur-sm: blur(4px);
+  --blur-md: blur(8px);
+  --blur-lg: blur(12px);
+  --blur-xl: blur(18px);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.32);
+  --shadow-xl: 0 18px 56px rgba(0, 0, 0, 0.4);
+  --shadow-glass: 0 0 0 1px var(--color-shape-secondary) inset, 0 8px 24px rgba(0, 0, 0, 0.24);
+  --shadow-window: 0 0 0 1px var(--color-shape-secondary) inset, 0 18px 48px rgba(0, 0, 0, 0.3);
+
+  --transition-fast: 0ms linear;
+  --transition-normal: 0ms linear;
+  --transition-slow: 0ms linear;
+  --titlebar-height: 28px;
+  --titlebar-bg: #232323;
+  --kosmos-mac-sidebar-top-safe-area: 52px;
+  --kosmos-mac-traffic-light-left-safe-area: 92px;
+  --kosmos-mac-traffic-light-top-safe-area: 38px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.57;
+  color: var(--text-primary);
+  background: var(--bg-app);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  letter-spacing: -0.12px;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-control-active);
+}

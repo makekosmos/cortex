@@ -4,30 +4,18 @@
 pre-commit:
   parallel: true
   commands:
-    eden-ts-lint:
-      glob: "apps/eden/ts/**/*.{ts,tsx}"
-      run: cd apps/eden/ts && bun run lint
-    eden-ts-format:
-      glob: "apps/eden/ts/**/*.{ts,tsx,vue}"
-      run: cd apps/eden/ts && bun run format:check
-    eden-heart-fmt:
-      glob: "apps/eden/ts/heart/**/*.rs"
-      run: cd apps/eden/ts/heart && cargo fmt --check
     ark-core-rust:
       glob: "crates/ark-core/rust/**/*.rs"
       run: cd crates/ark-core/rust && cargo check --quiet
     kepler-backend-rust:
       glob: "services/kepler-backend/src/**/*.rs"
       run: cd services/kepler-backend && cargo check --quiet
-    typecheck-eden:
-      glob: "apps/eden/ts/**/*.{ts,tsx}"
-      run: cd apps/eden/ts && bunx tsc --noEmit
     typecheck-shell:
       glob: "shell/**/*.{ts,tsx,vue}"
       run: cd shell && bunx tsc --noEmit
     docs-sync:
       glob: "docs-site/**/*.md"
-      run: bun run docs:sync && git add AGENTS.md CLAUDE.md apps/eden/AGENTS.md apps/eden/ts/AGENTS.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md docs-site/public/llms.txt
+      run: bun run docs:sync && git add AGENTS.md CLAUDE.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md docs-site/public/llms.txt
     docs-check:
       glob: "docs-site/**/*.md"
       run: bun run docs:check
@@ -41,6 +29,3 @@ pre-push:
     test-kepler-backend:
       glob: "services/kepler-backend/src/**/*.rs"
       run: cd services/kepler-backend && cargo test --lib --quiet
-    test-eden-heart:
-      glob: "apps/eden/ts/heart/**/*"
-      run: cd apps/eden/ts/heart && cargo test

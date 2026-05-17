@@ -198,9 +198,6 @@ async function buildRootAgents() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TARGETS = [
-  // standalone Electron app (legacy, до Phase 6 migration в extension)
-  { dest: "apps/eden/AGENTS.md", src: "apps/eden.md", title: "Eden" },
-  { dest: "apps/eden/ts/AGENTS.md", src: "apps/eden.md", title: "Eden — TS workspace" },
   // Android-only (Kotlin Room provider)
   { dest: "mobile/delphi/AGENTS.md", src: "apps/delphi.md", title: "Delphi — Kotlin workspace" },
   // packages / services

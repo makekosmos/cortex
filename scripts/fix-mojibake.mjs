@@ -75,7 +75,6 @@ const broken = [
   "legacy/usage-tracker/src/spool.rs",
   "legacy/usage-tracker/src/kepler_client.rs",
   "legacy/usage-tracker/Cargo.toml",
-  "apps/eden/ts/main/store.ts",
 ];
 
 let fixed = 0;

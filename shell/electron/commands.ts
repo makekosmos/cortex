@@ -1,6 +1,5 @@
-// Static command registry — open-commands ("Открыть <App>") теперь открывают
-// апки как Vue extension'ы внутри Kepler через extension-host (Phase 4).
-// Spawn .exe path остаётся fallback'ом для Eden (она ещё standalone Electron).
+// Static command registry — open-commands ("Открыть <App>") открывают
+// апки как Vue extension'ы внутри Kepler через extension-host (Phase 4 + 6).
 //
 // Action-commands (Pomodoro start, create note и т.п.) приходят dynamic от
 // running extension'ов через kepler-backend command bus.
@@ -69,6 +68,15 @@ export const COMMANDS: InternalCommand[] = [
     kind: "app",
     icon: () => extensionIconDataUri("arrancador"),
     exec: () => openAsExtension("arrancador"),
+  },
+  {
+    id: "eden:open",
+    title: "Открыть Eden",
+    subtitle: "Заметки и дневник",
+    category: "open",
+    kind: "app",
+    icon: () => extensionIconDataUri("eden"),
+    exec: () => openAsExtension("eden"),
   },
   // Kepler commands — встроенные в shell.
   {
