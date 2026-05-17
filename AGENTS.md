@@ -156,6 +156,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 - [Шаблоны спецификаций](docs-site/agents/spec-templates.md) — типовые `spec.md` для proof loop.
 - [Testing](docs-site/agents/testing.md) — как писать e2e (headless mode, universal contract, ловушки).
 - [Estimation](docs-site/agents/estimation.md) — калибровка оценок времени через skill.
+- [Manual tests waiting](docs-site/agents/manual-tests-pending.md) — твой TODO-чек-лист визуальных проверок, не покрытых автоматическими тестами.
 
 Полный справочник правил — [Правила репозитория](docs-site/reference/rules.md).
 
