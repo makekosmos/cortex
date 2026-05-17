@@ -175,6 +175,25 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 - Standalone `apps/eden/ts/` (вместе с Heart Rust + main process + preload) удалён полностью.
 - Workspace + tooling cleanup: `package.json`, `Cargo.toml`, `lefthook.yml`, scripts/*.mjs.
 
+### Phase 7 — Universal per-type data export (2026-05-18)
+
+См. `.agent/tasks/2026-05-18-phase-7-universal-export/spec.md` и `docs-site/concepts/data-export.md`.
+
+- Rust `Converter` trait + registry в `services/kepler-backend/src/export/` + WS endpoints `export.list` / `export.run`.
+- 6 первых конвертеров: `note_md` (TipTap → markdown с YAML frontmatter), `task_md`, `task_csv`, `time_entry_csv`, `tag_json`, `game_json`.
+- Shell UI: новый таб «Экспорт» в `shell/src/views/SettingsView.vue` — per-converter карта, native directory picker, история экспортов (10 шт в localStorage).
+- 17 unit tests для converters; cargo test 75/75 зелёный.
+- ARK guard:writes остался clean (export — read-only через `list_objects_by_type`).
+- Eden export-to-markdown заменён этим универсальным механизмом.
+
+### Lock-file test isolation (2026-05-17)
+
+env-флаг `KOSMOS_LOCK_PERMISSIONS_DISABLED=1` в `services/kepler-backend/src/lock_file.rs` пропускает icacls/chmod ACL-хардинг в test mode. `tests/e2e/helpers/launch.ts` выставляет автоматически. Решает проблему stale ACL lock-файлов при смене Windows account'а.
+
+### Visuals unification (2026-05-18)
+
+3 новых компонента в `@kepler/visuals`: `Toggle`, `SettingsRow`, `EmptyState`. 4 новых tokens (`--destructive-foreground`, `--status-warning`, `--status-connecting`, `--scrim-gradient`). Все 4 extensions мигрированы где возможно (Horologion StatusDot оставлен для e2e compat, Arrancador Tailwind plugin сохранён транзитивно через GamePosterCard).
+
 ### Phase 10 — Playwright e2e infrastructure
 
 `tests/e2e/` — 13 specs, single worker, isolated DB per spec под `tests/.e2e/<slug>/`. Helper `tests/e2e/helpers/launch.ts` refuses paths inside `%APPDATA%`. Backend читает `KOSMOS_DATA_DIR` env override.

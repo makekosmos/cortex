@@ -13,7 +13,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 4 | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador) | ✅ |
 | 5 | Extension developer mode (Vite HMR per extension, Raycast-style) | ✅ |
 | 6 | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit) | ✅ |
-| 7 | Universal per-type data export (notes → md, runs → GPX+zip, …) — pipeline в Kepler shell | ⏳ |
+| 7 | Universal per-type data export (notes → md, tasks → md/CSV, time entries → CSV, tags/games → JSON) — Rust converter framework + Settings UI | ✅ |
 | 7.5 | Adaptive lifecycle (optional) | ⏳ |
 | 11 | Backup / Disaster Recovery ARK DB (multi-disk + GitHub + encryption) | ⏳ |
 | 8 | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅ | ⏳ |
@@ -122,17 +122,24 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 
 См. `.agent/tasks/2026-05-17-eden-cleanup-and-hardening/spec.md`.
 
-## Phase 7 ⏳ — Universal per-type data export
+## Phase 7 ✅ — Universal per-type data export
 
-Идея: единый export pipeline в Kepler shell, разные типы данных уходят в разные форматы:
+Реализовано 2026-05-18. См. [Data export](/concepts/data-export) для полного описания механизма.
 
-- `note_obj` → markdown файлы (один файл = одна заметка)
-- `time_entry_obj` → CSV / JSON
-- `run_obj` (future, Olympia/Strava-likes) → GPX + zip с маршрутом и метаданными
-- `game_obj` (Arrancador) → JSON библиотека + ссылки на assets
-- `task_obj` → markdown с фронтматтером / CSV
+**Что есть:**
 
-Реализация — `kepler.export.<type>(filter, format)` API в shell preload + UI «Экспорт» в Settings, доступный из любого extension'а. Per-type конвертеры регистрируются как plugins в shell. Текущий Eden export-to-markdown заменяется этим механизмом.
+- Rust `Converter` trait + registry в `services/kepler-backend/src/export/`.
+- 6 первых конвертеров: `note_md`, `task_md`, `task_csv`, `time_entry_csv`, `tag_json`, `game_json`.
+- WS endpoints `export.list` / `export.run`.
+- UI секция «Экспорт» в `shell/src/views/SettingsView.vue` с per-converter картой, native directory picker, история экспортов в localStorage.
+- 17 unit tests для converters (cargo test 75/75 зелёный).
+
+**Что НЕ в Phase 7** (отложено):
+
+- Import обратно (collision rules + merge) — Phase 7.X если понадобится.
+- Filter API по date range / tags — Phase 7.1.
+- GPX для `run_obj` — нужен Olympia extension (отдельный proof loop).
+- Encryption / scheduled export — Phase 11 backup перекрывает.
 
 ## Phase 7.5 ⏳ — Adaptive lifecycle (optional)
 

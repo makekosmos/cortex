@@ -74,6 +74,22 @@ export interface MarketplaceCatalog {
   extensions: MarketplaceExtension[];
 }
 
+/** Один зарегистрированный converter в backend export registry. Phase 7. */
+export interface ExportConverterInfo {
+  converter_id: string;
+  object_type: string;
+  display_name: string;
+  default_format: string;
+  supported_formats: string[];
+}
+
+/** Результат `export.run` — что записано на диск и какие были ошибки. */
+export interface ExportResult {
+  files_written: string[];
+  bytes: number;
+  errors: string[];
+}
+
 export interface InstalledExtensionInfo {
   id: string;
   name: string;
@@ -180,6 +196,23 @@ export interface KeplerApi {
       url: string,
       expectedSha256?: string | null,
     ): Promise<ExtensionInstallPreview>;
+  };
+
+  /** Универсальный per-type data export. Phase 7. Конвертеры регистрируются
+      в kepler-backend (`services/kepler-backend/src/export/`). Shell-only —
+      extensions не получают доступ к export API. */
+  export: {
+    /** Список зарегистрированных converters (метадата для UI). */
+    list(): Promise<ExportConverterInfo[]>;
+    /** Запустить конкретный converter в указанный dest_dir. */
+    run(args: {
+      converter_id: string;
+      format: string;
+      dest_dir: string;
+    }): Promise<ExportResult>;
+    /** Открыть native directory picker и вернуть выбранный путь
+        (или null если пользователь отменил). */
+    pickDir(): Promise<string | null>;
   };
 
   /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,

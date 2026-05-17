@@ -3,13 +3,29 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ArrowUpCircle, Loader2 } from "lucide-vue-next";
 import type {
   BackendStatus,
+  ExportConverterInfo,
+  ExportResult,
   InstalledExtensionInfo,
   MarketplaceCatalog,
   MarketplaceExtension,
   UpdateState,
 } from "@shared/ipc-types";
 
-type Tab = "general" | "extensions";
+type Tab = "general" | "extensions" | "export";
+
+interface ExportHistoryEntry {
+  converter_id: string;
+  display_name: string;
+  format: string;
+  dest_dir: string;
+  timestamp: number;
+  ok: boolean;
+  file_count: number;
+  bytes: number;
+}
+
+const EXPORT_HISTORY_KEY = "kepler-export-history";
+const EXPORT_HISTORY_LIMIT = 10;
 
 const tab = ref<Tab>("general");
 
@@ -214,6 +230,131 @@ async function loadCatalog(force = false) {
   }
 }
 
+// --- Export (Phase 7) -------------------------------------------------------
+// Универсальный per-type export. Список конвертеров приходит из
+// kepler-backend через `window.kepler.export.list()`. UI ничего не знает
+// о конкретных object_type'ах — просто показывает что зарегистрировано.
+
+const exportConverters = ref<ExportConverterInfo[]>([]);
+const exportLoading = ref<boolean>(false);
+const exportError = ref<string>("");
+const exportSelectedFormat = ref<Record<string, string>>({});
+const exportBusyId = ref<string>("");
+const exportStatusByConverter = ref<Record<string, string>>({});
+const exportHistory = ref<ExportHistoryEntry[]>([]);
+
+function loadExportHistory(): ExportHistoryEntry[] {
+  try {
+    const raw = localStorage.getItem(EXPORT_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(0, EXPORT_HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function pushExportHistory(entry: ExportHistoryEntry) {
+  const next = [entry, ...exportHistory.value].slice(0, EXPORT_HISTORY_LIMIT);
+  exportHistory.value = next;
+  try {
+    localStorage.setItem(EXPORT_HISTORY_KEY, JSON.stringify(next));
+  } catch {
+    // ignore quota / unavailable
+  }
+}
+
+async function loadExportConverters() {
+  exportLoading.value = true;
+  exportError.value = "";
+  try {
+    const list = await window.kepler.export.list();
+    exportConverters.value = list;
+    const sel = { ...exportSelectedFormat.value };
+    for (const c of list) {
+      if (!sel[c.converter_id]) {
+        sel[c.converter_id] = c.default_format;
+      }
+    }
+    exportSelectedFormat.value = sel;
+  } catch (e) {
+    exportError.value = (e as Error).message;
+    exportConverters.value = [];
+  } finally {
+    exportLoading.value = false;
+  }
+}
+
+async function onRunExport(c: ExportConverterInfo) {
+  if (exportBusyId.value) return;
+  const format =
+    exportSelectedFormat.value[c.converter_id] ?? c.default_format;
+  let destDir: string | null = null;
+  try {
+    destDir = await window.kepler.export.pickDir();
+  } catch (e) {
+    exportStatusByConverter.value = {
+      ...exportStatusByConverter.value,
+      [c.converter_id]: `Ошибка диалога: ${(e as Error).message}`,
+    };
+    return;
+  }
+  if (!destDir) return; // отменили
+
+  exportBusyId.value = c.converter_id;
+  exportStatusByConverter.value = {
+    ...exportStatusByConverter.value,
+    [c.converter_id]: "Экспортирую…",
+  };
+  try {
+    const r: ExportResult = await window.kepler.export.run({
+      converter_id: c.converter_id,
+      format,
+      dest_dir: destDir,
+    });
+    const ok = r.errors.length === 0;
+    const sizeKb = (r.bytes / 1024).toFixed(1);
+    const parts: string[] = [
+      `Готово: ${r.files_written.length} файлов, ${sizeKb} KB`,
+    ];
+    if (r.errors.length > 0) {
+      parts.push(`Ошибок: ${r.errors.length}`);
+      const sample = r.errors.slice(0, 3).join("; ");
+      parts.push(sample);
+    }
+    exportStatusByConverter.value = {
+      ...exportStatusByConverter.value,
+      [c.converter_id]: parts.join(" · "),
+    };
+    pushExportHistory({
+      converter_id: c.converter_id,
+      display_name: c.display_name,
+      format,
+      dest_dir: destDir,
+      timestamp: Date.now(),
+      ok,
+      file_count: r.files_written.length,
+      bytes: r.bytes,
+    });
+  } catch (e) {
+    exportStatusByConverter.value = {
+      ...exportStatusByConverter.value,
+      [c.converter_id]: `Ошибка: ${(e as Error).message}`,
+    };
+  } finally {
+    exportBusyId.value = "";
+  }
+}
+
+function formatHistoryTime(ts: number): string {
+  const d = new Date(ts);
+  return `${d.toLocaleDateString("ru")} ${d.toLocaleTimeString("ru", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
 function onClose() {
   void window.kepler.settings.close();
 }
@@ -230,6 +371,10 @@ function selectTab(t: Tab) {
   if (t === "extensions") {
     void loadExtensions();
     if (!catalog.value) void loadCatalog();
+  }
+  if (t === "export") {
+    void loadExportConverters();
+    exportHistory.value = loadExportHistory();
   }
 }
 
@@ -384,6 +529,14 @@ onBeforeUnmount(() => {
           >
             Расширения
           </button>
+          <button
+            type="button"
+            class="tab"
+            :class="{ active: tab === 'export' }"
+            @click="selectTab('export')"
+          >
+            Экспорт
+          </button>
         </nav>
       </div>
       <button class="close" type="button" @click="onClose" aria-label="Закрыть">
@@ -510,7 +663,7 @@ onBeforeUnmount(() => {
     </template>
 
     <!-- Extensions tab — плоский список установленных. Обновления подтягиваются из catalog.json. -->
-    <template v-else>
+    <template v-else-if="tab === 'extensions'">
       <div v-if="marketError" class="error-banner">{{ marketError }}</div>
       <div v-if="extensionsError" class="error-banner">{{ extensionsError }}</div>
 
@@ -590,6 +743,95 @@ onBeforeUnmount(() => {
         >
           {{ marketLoading ? "Проверка…" : "Проверить обновления" }}
         </button>
+      </div>
+    </template>
+
+    <!-- Export tab — список зарегистрированных converters + history -->
+    <template v-else-if="tab === 'export'">
+      <div v-if="exportError" class="error-banner">{{ exportError }}</div>
+
+      <div v-if="exportLoading" class="empty">Загрузка…</div>
+
+      <div v-else class="rows kosmos-scroll">
+        <div v-if="exportConverters.length === 0" class="empty">
+          Нет доступных конвертеров. Backend ещё не зарегистрировал ни одного.
+        </div>
+
+        <div
+          v-for="c in exportConverters"
+          :key="c.converter_id"
+          class="row export-row"
+        >
+          <div class="row-label">
+            <div class="label">{{ c.display_name }}</div>
+            <div class="hint">
+              {{ c.object_type }} → {{ exportSelectedFormat[c.converter_id] ?? c.default_format }}
+            </div>
+            <div
+              v-if="exportStatusByConverter[c.converter_id]"
+              class="hint export-status"
+            >
+              {{ exportStatusByConverter[c.converter_id] }}
+            </div>
+          </div>
+          <div class="row-actions">
+            <select
+              v-if="c.supported_formats.length > 1"
+              v-model="exportSelectedFormat[c.converter_id]"
+              class="export-format-select"
+              :disabled="exportBusyId === c.converter_id"
+            >
+              <option
+                v-for="f in c.supported_formats"
+                :key="f"
+                :value="f"
+              >
+                {{ f }}
+              </option>
+            </select>
+            <button
+              type="button"
+              class="btn"
+              :disabled="exportBusyId === c.converter_id"
+              @click="onRunExport(c)"
+            >
+              {{ exportBusyId === c.converter_id ? "Экспорт…" : "Экспортировать" }}
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="exportHistory.length > 0"
+          class="ext-section-header"
+        >
+          Последние экспорты
+        </div>
+        <div
+          v-for="(h, i) in exportHistory"
+          :key="i"
+          class="row export-history-row"
+        >
+          <div class="row-label">
+            <div class="label">
+              {{ h.display_name }}
+              <span class="hint">({{ h.format }})</span>
+            </div>
+            <div class="hint">
+              {{ formatHistoryTime(h.timestamp) }} ·
+              {{ h.file_count }} файлов ·
+              {{ (h.bytes / 1024).toFixed(1) }} KB
+            </div>
+            <code class="value lock">{{ h.dest_dir }}</code>
+          </div>
+          <div class="row-actions">
+            <span
+              class="value"
+              :class="{ muted: !h.ok }"
+            >
+              {{ h.ok ? "ok" : "с ошибками" }}
+            </span>
+          </div>
+        </div>
       </div>
     </template>
   </div>
@@ -1022,5 +1264,32 @@ onBeforeUnmount(() => {
 
 .btn.danger:hover:not(:disabled) {
   background: color-mix(in srgb, oklch(0.65 0.22 25) 14%, transparent);
+}
+
+/* Export tab */
+
+.export-row .export-status {
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+  margin-top: 4px;
+}
+
+.export-format-select {
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.export-history-row {
+  opacity: 0.85;
+}
+
+.export-history-row .row-label code.value.lock {
+  margin-top: 4px;
+  max-width: 100%;
 }
 </style>

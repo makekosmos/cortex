@@ -59,6 +59,11 @@ const api: KeplerApi = {
     installFromUrl: (url, expectedSha256) =>
       ipcRenderer.invoke("kepler:extension:install:fromUrl", url, expectedSha256),
   },
+  export: {
+    list: () => ipcRenderer.invoke("kepler:export:list"),
+    run: (args) => ipcRenderer.invoke("kepler:export:run", args),
+    pickDir: () => ipcRenderer.invoke("kepler:export:pickDir"),
+  },
   settings: {
     open: () => ipcRenderer.invoke("kepler:settings:open"),
     close: () => ipcRenderer.invoke("kepler:settings:close"),

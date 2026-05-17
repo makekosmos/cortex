@@ -17,6 +17,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::ark_host::ArkHost;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
+use crate::export;
 use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
 
@@ -432,6 +433,25 @@ async fn handle_connection(
                     continue;
                 }
 
+                // Intercept export.* — Phase 7 universal export dispatch.
+                if let Some(rest) = operation.strip_prefix("export.") {
+                    let resp = handle_export_op(rest, params, &ark_host).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
                 // Intercept commands.* — обрабатываем локально.
                 if let Some(rest) = operation.strip_prefix("commands.") {
                     let resp =
@@ -574,6 +594,98 @@ async fn handle_command_op(
             LocalResponse::ok(serde_json::json!({ "ok": true }))
         }
         other => LocalResponse::err(format!("commands.{other}: unknown sub-operation")),
+    }
+}
+
+/// Dispatch `export.<subop>` (Phase 7).
+///
+/// Sub-operations:
+///   - `export.list` → `{ converters: [...] }`
+///   - `export.run { converter_id, format?, dest_dir }` → `{ files_written, bytes, errors }`
+///
+/// Read-only от ARK: fetch objects через `list_objects_by_type`, передаём в
+/// converter, который пишет в dest_dir. Никаких writes в ARK.
+async fn handle_export_op(
+    subop: &str,
+    params: serde_json::Value,
+    ark_host: &ArkHost,
+) -> LocalResponse {
+    match subop {
+        "list" => {
+            let converters = export::list_converters();
+            LocalResponse::ok(serde_json::json!({ "converters": converters }))
+        }
+        "run" => {
+            let converter_id = match params.get("converter_id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("export.run: missing 'converter_id'"),
+            };
+            let dest_dir = match params.get("dest_dir").and_then(|v| v.as_str()) {
+                Some(s) => std::path::PathBuf::from(s),
+                None => return LocalResponse::err("export.run: missing 'dest_dir'"),
+            };
+            let converter = match export::find_converter(&converter_id) {
+                Some(c) => c,
+                None => {
+                    return LocalResponse::err(format!(
+                        "export.run: unknown converter '{converter_id}'"
+                    ))
+                }
+            };
+            let format = params
+                .get("format")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| converter.default_format().to_string());
+            if !converter
+                .supported_formats()
+                .iter()
+                .any(|f| *f == format.as_str())
+            {
+                return LocalResponse::err(format!(
+                    "export.run: format '{format}' not supported by '{converter_id}'"
+                ));
+            }
+
+            // Ensure dest_dir exists.
+            if let Err(e) = std::fs::create_dir_all(&dest_dir) {
+                return LocalResponse::err(format!("export.run: create dest_dir: {e}"));
+            }
+
+            // Fetch objects of converter's object_type через ark_host.
+            let ark_resp = match ark_host
+                .request(
+                    "list_objects_by_type",
+                    serde_json::json!({ "type_id": converter.object_type() }),
+                )
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => return LocalResponse::err(format!("export.run: ark_host: {e}")),
+            };
+            if !ark_resp.ok {
+                return LocalResponse::err(format!(
+                    "export.run: ark list_objects_by_type failed: {}",
+                    ark_resp.error.unwrap_or_default()
+                ));
+            }
+            let objects: Vec<ark_core::types::ArkObject> = match serde_json::from_value(ark_resp.data)
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    return LocalResponse::err(format!(
+                        "export.run: parse ArkObject array: {e}"
+                    ))
+                }
+            };
+
+            let result = converter.convert(&objects, &format, &dest_dir);
+            match serde_json::to_value(&result) {
+                Ok(v) => LocalResponse::ok(v),
+                Err(e) => LocalResponse::err(format!("export.run: serialize result: {e}")),
+            }
+        }
+        other => LocalResponse::err(format!("export.{other}: unknown sub-operation")),
     }
 }
 

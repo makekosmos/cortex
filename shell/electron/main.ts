@@ -19,6 +19,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   globalShortcut,
   ipcMain,
   Tray,
@@ -637,6 +638,50 @@ ipcMain.handle(
     return client.invokeOperation(req as { operation: string; [key: string]: unknown });
   },
 );
+
+// --- Phase 7: Universal per-type data export ---------------------------------
+// Тонкая прокси на backend WS operations `export.list` / `export.run`.
+// Конвертеры регистрируются в kepler-backend, shell ничего о них не знает —
+// просто показывает список и запускает.
+
+ipcMain.handle("kepler:export:list", async () => {
+  const client = await awaitArkReady();
+  return client.invokeOperation({ operation: "export.list" });
+});
+
+ipcMain.handle(
+  "kepler:export:run",
+  async (
+    _e,
+    args: { converter_id: string; format: string; dest_dir: string },
+  ) => {
+    if (!args || typeof args.converter_id !== "string") {
+      throw new Error("kepler:export:run: invalid args");
+    }
+    const client = await awaitArkReady();
+    return client.invokeOperation({
+      operation: "export.run",
+      converter_id: args.converter_id,
+      format: args.format,
+      dest_dir: args.dest_dir,
+    });
+  },
+);
+
+ipcMain.handle("kepler:export:pickDir", async (e): Promise<string | null> => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const result = win
+    ? await dialog.showOpenDialog(win, {
+        title: "Выберите папку для экспорта",
+        properties: ["openDirectory", "createDirectory"],
+      })
+    : await dialog.showOpenDialog({
+        title: "Выберите папку для экспорта",
+        properties: ["openDirectory", "createDirectory"],
+      });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
 
 ipcMain.handle(
   "kepler:objects:listRecent",
