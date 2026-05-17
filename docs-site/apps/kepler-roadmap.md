@@ -68,7 +68,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 - **Dashboard** — полная Vue migration, build ~83 KB JS. Read-only аналитика, ARK через preload bridge. <span class="kbadge warn">после 2026-05-14 Dashboard rewritten — теперь встроенный shell view (ARK browser), не extension. См. [Dashboard](/apps/dashboard).</span>
 - **Horologion** — полная Vue migration с `horologionApi` shim над `window.kepler.*`. Build ~102 KB chunk `pomodoroSettings`. Pomodoro/stopwatch state работает.
 - **Delphi** — Vue + memory router, build 3483 modules. После Phase 5 cleanup: `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request` — все existing call sites работают. Tailwind plugin подключён (Phase 5). **Открытый вопрос** — переписать Delphi UI с Tailwind utility classes на plain CSS + `@kepler/visuals` tokens (как остальные extension'ы). См. Phase 9 ниже.
-- **Arrancador** — UI subset (LayoutPage + GameCard). Catalogue / Scan / Sqoba / Stats / Settings pages **не мигрированы** — native scanner остаётся в legacy standalone .exe.
+- **Arrancador** — изначально UI subset (LayoutPage + GameCard). После full completion (2026-05-18): scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG metadata, SQOBA save backups, все 4 страницы оживлены. См. [Arrancador](./arrancador.md).
 
 RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / −4 процесса. Полная таблица — [RAM benchmarks](/concepts/ram-benchmarks).
 

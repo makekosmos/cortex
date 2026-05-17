@@ -12,6 +12,7 @@
 // поверх; headless binary только ждёт Ctrl+C / parent kill.
 
 pub mod ark_host;
+pub mod arrancador;
 pub mod auth;
 pub mod command_bus;
 pub mod export;

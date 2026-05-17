@@ -77,6 +77,57 @@ const api = {
     initialRoute: (): Promise<string | null> =>
       ipcRenderer.invoke("kepler:extension:navigation:initial") as Promise<string | null>,
   },
+  arrancador: {
+    // Arrancador-specific operations. Тонкие обёртки над ark.request — backend
+    // регистрирует операции под namespace `arrancador.*`. Если backend ещё не
+    // реализован (Phase A/B/C subagent'ы), вызовы вернут «Unknown operation»
+    // — это OK для UI smoke до merge.
+    scan: <T = unknown>(): Promise<T> =>
+      ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.scan", {}) as Promise<T>,
+    launch: <T = unknown>(gameId: string): Promise<T> =>
+      ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.launch", {
+        game_id: gameId,
+      }) as Promise<T>,
+    rawg: {
+      search: <T = unknown>(query: string): Promise<T> =>
+        ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.rawg.search", {
+          query,
+        }) as Promise<T>,
+      apply: <T = unknown>(gameId: string, rawgId: number): Promise<T> =>
+        ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.rawg.apply", {
+          game_id: gameId,
+          rawg_id: rawgId,
+        }) as Promise<T>,
+    },
+    sqoba: {
+      backup: <T = unknown>(gameId: string): Promise<T> =>
+        ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.sqoba.backup", {
+          game_id: gameId,
+        }) as Promise<T>,
+      list: <T = unknown>(gameId: string): Promise<T> =>
+        ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.sqoba.list", {
+          game_id: gameId,
+        }) as Promise<T>,
+      restore: <T = unknown>(backupId: string): Promise<T> =>
+        ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.sqoba.restore", {
+          backup_id: backupId,
+        }) as Promise<T>,
+    },
+    config: {
+      getRawgKey: <T = unknown>(): Promise<T> =>
+        ipcRenderer.invoke(
+          "kepler:extension:ark:request",
+          "arrancador.config.get_rawg_key",
+          {},
+        ) as Promise<T>,
+      setRawgKey: <T = unknown>(key: string): Promise<T> =>
+        ipcRenderer.invoke(
+          "kepler:extension:ark:request",
+          "arrancador.config.set_rawg_key",
+          { key },
+        ) as Promise<T>,
+    },
+  },
   userData: {
     readJson: <T = unknown>(name: string): Promise<T | null> =>
       ipcRenderer.invoke("kepler:extension:userData:readJson", name) as Promise<

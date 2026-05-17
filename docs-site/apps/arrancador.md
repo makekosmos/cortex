@@ -68,13 +68,13 @@ Arrancador использует:
 
 | Страница | Файл | Состояние |
 |---|---|---|
-| Library | `src/pages/LibraryPage.vue` | ✅ list из `game_obj` через `useGames` |
-| Catalogue | `src/pages/CataloguePage.vue` | ⏳ stub (RAWG metadata не подключен) |
-| Scan | `src/pages/ScanPage.vue` | ✅ read-only (native scanner spawn — stub) |
-| Sqoba | `src/pages/SqobaPage.vue` | ⏳ stub |
+| Library | `src/pages/LibraryPage.vue` | ✅ list + кнопка «Запустить» (Steam URL или прямой exe) |
+| Catalogue | `src/pages/CataloguePage.vue` | ✅ RAWG search + apply-to-library через Modal+Dropdown |
+| Scan | `src/pages/ScanPage.vue` | ✅ «Сканировать сейчас» + Steam/Epic, история last 10 |
+| Sqoba | `src/pages/SqobaPage.vue` | ✅ per-game backup list + create + restore с confirmation |
 | Statistics | `src/pages/StatisticsPage.vue` | ✅ JS-агрегация по списку игр (heatmap по `usage_sessions` — stub) |
-| Settings | `src/pages/SettingsPage.vue` | ✅ localStorage |
-| GameDetail | `src/pages/GameDetailPage.vue` | ✅ read-only (game launch — stub) |
+| Settings | `src/pages/SettingsPage.vue` | ✅ RAWG API key (password input + eye-toggle + status) + localStorage |
+| GameDetail | `src/pages/GameDetailPage.vue` | ✅ read-only (доп. actions — follow-up) |
 
 Routing — Vue Router с `createMemoryHistory` (нет file-system URLs внутри extension'а).
 
@@ -84,20 +84,37 @@ Routing — Vue Router с `createMemoryHistory` (нет file-system URLs вну�
 - **`src/composables/useGames.ts`** — shared store на vue refs (без Pinia). Singleton с ref-count, подписывается на `entity_changed` через `kepler.ark.subscribe` и автоматически refresh'ит список.
 - **`src/composables/useSearchQuery.ts`** — query state для Library / Catalogue фильтрации.
 
-### Что НЕ мигрировано (stubs)
+### Backend (kepler-backend Rust)
 
-Эти функции в extension'е отсутствуют, ожидают либо расширения preload API, либо отдельной Phase 5+ работы:
+После Arrancador full completion (2026-05-18) в `services/kepler-backend/src/arrancador/`:
 
-- **RAWG metadata** — fetch'а нет, Catalogue показывает заглушку.
-- **Native scanner spawn** — sidecar для сканирования диска (Steam/Epic/GOG) недоступен из extension renderer'а напрямую. План — мигрировать в `services/kepler-backend` Rust либо в shell sidecar (см. [Decisions → 2026-05-14 Arrancador native scanner](/reference/decisions#2026-05-14-arrancador-native-scanner-остался-в-legacy)).
-- **Game launch** — `ShellExecute(exePath)` требует Electron main / Rust shell — в extension renderer'е нет такого канала.
-- **Heatmap по `usage_sessions`** — Statistics показывает суммарный playtime, но визуальный heatmap по дням / часам не подключен.
+- **`scanner.rs`** — Steam libraryfolders.vdf + appmanifest.acf custom parser (без deps), Epic Games Launcher `Data/Manifests/*.item` JSON. GOG скипнут в MVP.
+- **`launcher.rs`** — `steam://rungameid/<app_id>` через `cmd /c start` для Steam, прямой `Command::new(exe).spawn()` для Epic/manual. Fire-and-forget tracking (process polling в `usage_tracker` подхватывает по имени exe).
+- **`rawg.rs`** — RAWG.io HTTP client через `reqwest`, search + get_details + apply (merge metadata в `game_obj.propsJson`). API key хранится в `arrancador-config.json`.
+- **`sqoba.rs`** — discover save paths (Saved Games / My Games / LocalAppData / Roaming) + zip backup в `<data_dir>/sqoba/<game_id>/<timestamp>.zip` с `_sqoba_meta.json` внутри, restore с path traversal protection, rotation keep N=10.
+- **`config.rs`** — typed `ArrancadorConfig { rawg_api_key, custom_scan_paths, sqoba_dest_dir, keep_backups }` в `%APPDATA%\Kosmos\arrancador-config.json`.
+
+WS namespace `arrancador.*` (через preload — `window.kepler.arrancador.*`):
+
+- `scan()` → `{added, updated, skipped, errors[]}`
+- `launch({game_id})` → `{ok, pid, started_at, method}`
+- `rawg.search({query})`, `rawg.apply({game_id, rawg_id})`
+- `sqoba.backup({game_id})`, `sqoba.list({game_id})`, `sqoba.restore({backup_id})`
+- `config.get()`, `config.set_rawg_key({key})`
+
+### Out of scope (после Arrancador completion)
+
+- **GOG scanner** — GOG Galaxy SQLite DB парс. Skip'нуто из MVP, добавится при необходимости.
+- **3rd-party launcher'ы** (Battle.net, Riot, EA Origin) — не покрыты.
+- **Heatmap по `usage_sessions`** — Statistics показывает суммарный playtime, визуальный heatmap по дням/часам не подключен.
+- **Achievement tracking** / In-game overlay — нет.
+- **Steam path discovery через registry** (HKCU `Software\Valve\Steam\SteamPath`) — сейчас hardcode `C:\Program Files (x86)\Steam`. Override через config `custom_scan_paths` или env для тестов.
 
 ## Command bus integration
 
-Arrancador сейчас интегрирован в [Kepler launcher](/apps/kepler) **как static "open" команда** — `arrancador:open` открывает extension window. Команда живёт в `shell/electron/commands.ts`.
+Arrancador интегрирован в [Kepler launcher](/apps/kepler) **как static "open" команда** — `arrancador:open` открывает extension window. Команда живёт в `shell/electron/commands.ts`.
 
-Dynamic action commands (`arrancador:game:launch:<id>`, `arrancador:backup:run`) пока не реализованы.
+Dynamic action commands (`arrancador:game:launch:<id>`, `arrancador:backup:run`) — follow-up; сейчас вызывается всё через UI в самом extension'е через `window.kepler.arrancador.*` preload bridge.
 
 ## Связанные документы
 

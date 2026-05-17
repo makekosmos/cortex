@@ -175,6 +175,20 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 - Standalone `apps/eden/ts/` (вместе с Heart Rust + main process + preload) удалён полностью.
 - Workspace + tooling cleanup: `package.json`, `Cargo.toml`, `lefthook.yml`, scripts/*.mjs.
 
+### Arrancador full completion (2026-05-18)
+
+См. `.agent/tasks/2026-05-18-arrancador-full-completion/spec.md`.
+
+- Backend `services/kepler-backend/src/arrancador/` — 5 modules (scanner, launcher, rawg, sqoba, config), 32 unit tests + 3 integration tests с synthetic Steam library (Dota 2 / Cairn / Outlast).
+- Scanner: Steam VDF/ACF custom parser (без новых deps) + Epic JSON manifests. GOG skip.
+- Launcher: `steam://rungameid/<id>` через `cmd /c start` + прямой exe spawn для Epic/manual.
+- RAWG client: search + get_details + apply (merge в game_obj.propsJson), httpmock тесты.
+- SQOBA: discover save paths heuristics, zip с `_sqoba_meta.json`, restore с path traversal protection, rotation keep N=10.
+- WS namespace `arrancador.*` (scan/launch/rawg.*/sqoba.*/config.*).
+- UI: все 4 stub'нутые страницы оживлены (Library launch button, Scan кнопка + history, Catalogue RAWG search+apply Modal, Sqoba per-game backup/restore, Settings RAWG key).
+- Preload bridge `window.kepler.arrancador.*`.
+- cargo test 110/110, typecheck/build/ark-guard зелёные.
+
 ### Phase 7 — Universal per-type data export (2026-05-18)
 
 См. `.agent/tasks/2026-05-18-phase-7-universal-export/spec.md` и `docs-site/concepts/data-export.md`.

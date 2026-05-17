@@ -15,6 +15,7 @@ use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::ark_host::ArkHost;
+use crate::arrancador;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
 use crate::export;
@@ -452,6 +453,27 @@ async fn handle_connection(
                     continue;
                 }
 
+                // Intercept arrancador.* — scan + launch (+ rawg.* / sqoba.* через
+                // соседние subagent'ы B/C). Read-only части (config get) и write
+                // паттерны идут через ark_host где нужно.
+                if let Some(rest) = operation.strip_prefix("arrancador.") {
+                    let resp = handle_arrancador_op(rest, params, &ark_host).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
                 // Intercept commands.* — обрабатываем локально.
                 if let Some(rest) = operation.strip_prefix("commands.") {
                     let resp =
@@ -686,6 +708,345 @@ async fn handle_export_op(
             }
         }
         other => LocalResponse::err(format!("export.{other}: unknown sub-operation")),
+    }
+}
+
+/// Dispatch `arrancador.<subop>`.
+///
+/// Sub-operations (subagent A scope):
+///   - `arrancador.scan` → сканирует Steam/Epic, upsert'ит game_obj в ARK.
+///   - `arrancador.launch { game_id }` → fetch game_obj через ark_host, spawn
+///     процесс через `launcher::launch`.
+///
+/// `arrancador.rawg.*` и `arrancador.sqoba.*` будут добавлены subagent'ами B/C
+/// в этот же match (один namespace, один диспатчер).
+async fn handle_arrancador_op(
+    subop: &str,
+    params: serde_json::Value,
+    ark_host: &ArkHost,
+) -> LocalResponse {
+    match subop {
+        "scan" => {
+            // Override path — для тестов / non-standard Steam install.
+            let override_path: Option<std::path::PathBuf> = params
+                .get("steam_library_override")
+                .and_then(|v| v.as_str())
+                .map(std::path::PathBuf::from)
+                .or_else(|| {
+                    let cfg = arrancador::config::load();
+                    cfg.steam_library_override
+                });
+            let discovered = arrancador::scanner::scan_all(override_path.as_deref());
+
+            // Fetch existing game_obj для matching по (source, source_app_id).
+            let ark_resp = match ark_host
+                .request(
+                    "list_objects_by_type",
+                    serde_json::json!({ "type_id": "game_obj" }),
+                )
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => return LocalResponse::err(format!("arrancador.scan: ark_host: {e}")),
+            };
+            let existing: Vec<ark_core::types::ArkObject> = if ark_resp.ok {
+                serde_json::from_value(ark_resp.data).unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            let mut added = 0u32;
+            let mut updated = 0u32;
+            let mut skipped = 0u32;
+            let mut errors: Vec<String> = Vec::new();
+
+            for game in &discovered {
+                let existing_match = existing.iter().find(|obj| {
+                    let src = obj
+                        .props_json
+                        .get("source")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let app_id = obj
+                        .props_json
+                        .get("source_app_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    src == game.source && app_id == game.source_app_id
+                });
+
+                let props = serde_json::json!({
+                    "source": game.source,
+                    "source_app_id": game.source_app_id,
+                    "install_dir": game.install_dir.to_string_lossy(),
+                    "exe_path": game.exe_candidate.as_ref().map(|p| p.to_string_lossy().to_string()),
+                    "install_size_bytes": game.install_size_bytes,
+                    "name": game.name,
+                });
+
+                let upsert_obj = if let Some(existing) = existing_match {
+                    // Merge: сохраняем content_json + RAWG-метадату которая уже есть.
+                    let mut merged_props = existing.props_json.clone();
+                    if let Some(map) = merged_props.as_object_mut() {
+                        if let Some(new_map) = props.as_object() {
+                            for (k, v) in new_map {
+                                map.insert(k.clone(), v.clone());
+                            }
+                        }
+                    } else {
+                        merged_props = props.clone();
+                    }
+                    serde_json::json!({
+                        "id": existing.id,
+                        "type_id": "game_obj",
+                        "title": game.name,
+                        "content_json": existing.content_json,
+                        "props_json": merged_props,
+                    })
+                } else {
+                    serde_json::json!({
+                        "type_id": "game_obj",
+                        "title": game.name,
+                        "content_json": {},
+                        "props_json": props,
+                    })
+                };
+
+                let is_new = existing_match.is_none();
+                match ark_host
+                    .request("upsert_object", serde_json::json!({ "object": upsert_obj }))
+                    .await
+                {
+                    Ok(r) if r.ok => {
+                        if is_new {
+                            added += 1;
+                        } else {
+                            updated += 1;
+                        }
+                    }
+                    Ok(r) => {
+                        skipped += 1;
+                        errors.push(format!(
+                            "{}: upsert failed: {}",
+                            game.name,
+                            r.error.unwrap_or_default()
+                        ));
+                    }
+                    Err(e) => {
+                        skipped += 1;
+                        errors.push(format!("{}: ark_host: {e}", game.name));
+                    }
+                }
+            }
+
+            LocalResponse::ok(serde_json::json!({
+                "added": added,
+                "updated": updated,
+                "skipped": skipped,
+                "discovered": discovered.len(),
+                "errors": errors,
+            }))
+        }
+        "launch" => {
+            let game_id = match params.get("game_id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("arrancador.launch: missing 'game_id'"),
+            };
+            let ark_resp = match ark_host
+                .request("get_object", serde_json::json!({ "id": game_id }))
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => return LocalResponse::err(format!("arrancador.launch: ark_host: {e}")),
+            };
+            if !ark_resp.ok {
+                return LocalResponse::err(format!(
+                    "arrancador.launch: get_object failed: {}",
+                    ark_resp.error.unwrap_or_default()
+                ));
+            }
+            let game: ark_core::types::ArkObject = match serde_json::from_value(ark_resp.data) {
+                Ok(g) => g,
+                Err(e) => {
+                    return LocalResponse::err(format!(
+                        "arrancador.launch: parse ArkObject: {e}"
+                    ))
+                }
+            };
+            match arrancador::launcher::launch(&game) {
+                Ok(result) => match serde_json::to_value(&result) {
+                    Ok(v) => LocalResponse::ok(v),
+                    Err(e) => LocalResponse::err(format!("arrancador.launch: serialize: {e}")),
+                },
+                Err(e) => LocalResponse::err(format!("arrancador.launch: {e}")),
+            }
+        }
+        "config.get" => {
+            let cfg = arrancador::config::load();
+            // Не возвращаем raw rawg_api_key — только статус.
+            let payload = serde_json::json!({
+                "rawg_api_key_set": cfg.rawg_api_key.as_deref().map(|s| !s.is_empty()).unwrap_or(false),
+                "custom_scan_paths": cfg.custom_scan_paths,
+                "sqoba_dest_dir": cfg.sqoba_dest_dir,
+                "keep_backups": cfg.keep_backups,
+            });
+            LocalResponse::ok(payload)
+        }
+        "config.set_rawg_key" => {
+            let key = params
+                .get("key")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let mut cfg = arrancador::config::load();
+            cfg.rawg_api_key = key.filter(|s| !s.is_empty());
+            match arrancador::config::save(&cfg) {
+                Ok(()) => LocalResponse::ok(serde_json::json!({ "ok": true })),
+                Err(e) => LocalResponse::err(format!("arrancador.config.set_rawg_key: {e}")),
+            }
+        }
+        "rawg.search" => {
+            let query = match params.get("query").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("arrancador.rawg.search: missing 'query'"),
+            };
+            let cfg = arrancador::config::load();
+            let api_key = match cfg.rawg_api_key.as_deref() {
+                Some(k) if !k.is_empty() => k.to_string(),
+                _ => return LocalResponse::err("RAWG API key not configured"),
+            };
+            match arrancador::rawg::search(&query, &api_key).await {
+                Ok(results) => match serde_json::to_value(&results) {
+                    Ok(v) => LocalResponse::ok(serde_json::json!({ "results": v })),
+                    Err(e) => {
+                        LocalResponse::err(format!("arrancador.rawg.search: serialize: {e}"))
+                    }
+                },
+                Err(e) => LocalResponse::err(format!("arrancador.rawg.search: {e}")),
+            }
+        }
+        "rawg.apply" => {
+            let game_id = match params.get("game_id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("arrancador.rawg.apply: missing 'game_id'"),
+            };
+            let rawg_id = match params.get("rawg_id").and_then(|v| v.as_u64()) {
+                Some(n) => n as u32,
+                None => return LocalResponse::err("arrancador.rawg.apply: missing 'rawg_id'"),
+            };
+            let cfg = arrancador::config::load();
+            let api_key = match cfg.rawg_api_key.as_deref() {
+                Some(k) if !k.is_empty() => k.to_string(),
+                _ => return LocalResponse::err("RAWG API key not configured"),
+            };
+            match arrancador::rawg::apply_to_game_obj(ark_host, &game_id, rawg_id, &api_key).await {
+                Ok(()) => LocalResponse::ok(serde_json::json!({ "ok": true })),
+                Err(e) => LocalResponse::err(format!("arrancador.rawg.apply: {e}")),
+            }
+        }
+        "sqoba.backup" => {
+            let game_id = match params.get("game_id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("arrancador.sqoba.backup: missing 'game_id'"),
+            };
+            let ark_resp = match ark_host
+                .request("get_object", serde_json::json!({ "id": game_id }))
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    return LocalResponse::err(format!("arrancador.sqoba.backup: ark_host: {e}"))
+                }
+            };
+            if !ark_resp.ok {
+                return LocalResponse::err(format!(
+                    "arrancador.sqoba.backup: get_object failed: {}",
+                    ark_resp.error.unwrap_or_default()
+                ));
+            }
+            let game: ark_core::types::ArkObject = match serde_json::from_value(ark_resp.data) {
+                Ok(g) => g,
+                Err(e) => {
+                    return LocalResponse::err(format!(
+                        "arrancador.sqoba.backup: parse ArkObject: {e}"
+                    ))
+                }
+            };
+            // Имя берём из ArkObject.title (canonical), fallback — props_json.name.
+            let game_name = if !game.title.is_empty() {
+                game.title.clone()
+            } else {
+                game.props_json
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(&game.id)
+                    .to_string()
+            };
+            // Manual save paths из propsJson.save_paths (массив строк) если есть.
+            let manual_paths: Option<Vec<std::path::PathBuf>> = game
+                .props_json
+                .get("save_paths")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|x| x.as_str().map(std::path::PathBuf::from))
+                        .collect()
+                });
+            match arrancador::sqoba::backup(
+                &game_id,
+                &game_name,
+                manual_paths.as_deref(),
+            ) {
+                Ok(b) => match serde_json::to_value(&b) {
+                    Ok(v) => LocalResponse::ok(v),
+                    Err(e) => {
+                        LocalResponse::err(format!("arrancador.sqoba.backup: serialize: {e}"))
+                    }
+                },
+                Err(e) => LocalResponse::err(format!("arrancador.sqoba.backup: {e}")),
+            }
+        }
+        "sqoba.list" => {
+            let game_id = match params.get("game_id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("arrancador.sqoba.list: missing 'game_id'"),
+            };
+            let backups = arrancador::sqoba::list_backups(&game_id);
+            match serde_json::to_value(&backups) {
+                Ok(v) => LocalResponse::ok(serde_json::json!({ "backups": v })),
+                Err(e) => LocalResponse::err(format!("arrancador.sqoba.list: serialize: {e}")),
+            }
+        }
+        "sqoba.restore" => {
+            let backup_id = match params.get("backup_id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("arrancador.sqoba.restore: missing 'backup_id'"),
+            };
+            // game_id опционален; если задан — резолвим через list_backups,
+            // иначе принимаем backup_id как уже полный path.
+            let path = if let Some(game_id) = params.get("game_id").and_then(|v| v.as_str()) {
+                match arrancador::sqoba::resolve_backup_path(game_id, &backup_id) {
+                    Some(p) => p,
+                    None => {
+                        return LocalResponse::err(format!(
+                            "arrancador.sqoba.restore: backup '{}' not found for game '{}'",
+                            backup_id, game_id
+                        ))
+                    }
+                }
+            } else {
+                std::path::PathBuf::from(&backup_id)
+            };
+            match arrancador::sqoba::restore(&path) {
+                Ok(r) => match serde_json::to_value(&r) {
+                    Ok(v) => LocalResponse::ok(v),
+                    Err(e) => {
+                        LocalResponse::err(format!("arrancador.sqoba.restore: serialize: {e}"))
+                    }
+                },
+                Err(e) => LocalResponse::err(format!("arrancador.sqoba.restore: {e}")),
+            }
+        }
+        other => LocalResponse::err(format!("arrancador.{other}: unknown sub-operation")),
     }
 }
 
