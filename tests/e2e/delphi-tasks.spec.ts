@@ -105,6 +105,12 @@ test("delphi: inbox shows task created via ARK", async () => {
     // Дать активации space + ARK load завершиться.
     await delphiWindow.waitForTimeout(5000);
 
+    // delphi:open deep-link'ает в /today; seed-задача не isToday → она в
+    // Inbox (/). Переходим явно, иначе assertion на body упрётся в "На сегодня
+    // задач нет".
+    await delphiWindow.getByText("Входящие", { exact: true }).first().click();
+    await delphiWindow.waitForTimeout(800);
+
     const bodyText = (await delphiWindow.locator("body").textContent()) ?? "";
 
     if (!bodyText.includes(TASK_TITLE)) {

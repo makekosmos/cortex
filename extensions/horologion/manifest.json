@@ -12,5 +12,18 @@
   "width": 480,
   "height": 560,
   "minWidth": 320,
-  "minHeight": 280
+  "minHeight": 280,
+  "tests": {
+    "commands": [
+      "horologion:pomodoro:25",
+      "horologion:pomodoro:50",
+      "horologion:stopwatch:start"
+    ],
+    "smoke": {
+      "objectType": "time_entry_obj",
+      "sample": {
+        "title": "contract-smoke-horologion"
+      }
+    }
+  }
 }

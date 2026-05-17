@@ -126,6 +126,11 @@ test("delphi: задача создана через addTodo сохраняет�
     // Дать ARK load завершиться (activateSpace + ark:listDelphiTasks).
     await delphi.waitForTimeout(2500);
 
+    // delphi:open deep-link'ает в /today; созданная задача isToday=false →
+    // показывается в Inbox (/). Переходим явно.
+    await delphi.getByText("Входящие", { exact: true }).first().click();
+    await delphi.waitForTimeout(800);
+
     const bodyText = (await delphi.locator("body").textContent()) ?? "";
     if (!bodyText.includes(TASK_TITLE)) {
       throw new Error(

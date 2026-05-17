@@ -42,11 +42,16 @@ test("horologion: stopwatch start → tick → stop", async () => {
       name: "Секундомер",
     });
     await stopwatchToggle.click();
-    await horoWindow.waitForTimeout(500);
+    // Vue <transition> между PomodoroView ↔ StopwatchView держит обе view'хи
+    // в DOM на время анимации. Ждём пока pomo__primary detach'нется —
+    // иначе getByRole("button", { name: /Начать сессию/ }) находит обе кнопки
+    // (pomo + sw) и strict-mode fails.
+    await horoWindow.waitForSelector(".pomo__primary", { state: "detached", timeout: 3_000 });
 
     // Initial state: timer = 00:00:00, primary button = «Начать сессию».
-    const startBtn = horoWindow.getByRole("button", { name: /Начать сессию/ });
+    const startBtn = horoWindow.locator(".sw__primary");
     await expect(startBtn).toBeVisible({ timeout: 3_000 });
+    await expect(startBtn).toHaveText(/Начать сессию/);
 
     const timerText = horoWindow.locator(".sw__time");
     await expect(timerText).toHaveText("00:00:00");
@@ -67,8 +72,9 @@ test("horologion: stopwatch start → tick → stop", async () => {
     }
 
     // Кнопка теперь «Стоп».
-    const stopBtn = horoWindow.getByRole("button", { name: /Стоп/ });
+    const stopBtn = horoWindow.locator(".sw__primary");
     await expect(stopBtn).toBeVisible({ timeout: 3_000 });
+    await expect(stopBtn).toHaveText(/Стоп/);
 
     // Стоп.
     await stopBtn.click();
@@ -76,7 +82,7 @@ test("horologion: stopwatch start → tick → stop", async () => {
 
     // Timer reset, кнопка снова «Начать сессию».
     await expect(timerText).toHaveText("00:00:00", { timeout: 3_000 });
-    await expect(horoWindow.getByRole("button", { name: /Начать сессию/ })).toBeVisible();
+    await expect(startBtn).toHaveText(/Начать сессию/);
 
     // No `missing field id` errors throughout.
     const missingFieldErrors = consoleErrors.filter((e) =>

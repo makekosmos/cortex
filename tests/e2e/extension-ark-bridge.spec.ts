@@ -45,22 +45,34 @@ test.describe("extension ark bridge", () => {
 
       // Триггерим открытие Horologion как можно раньше — через invoke
       // open-команды из launcher window. Если launcher ещё не имеет
-      // commands API — поднимаем напрямую из main процесса через
-      // openExtension (это эквивалент тому, что делает command handler).
+      // commands API (race с preload exposure), коротко поллим до 3s.
+      // Это всё ещё минимальный warm-up vs нормальные 2.5s — оставляем
+      // условиям test'а максимально близкими к real-world cold launch.
       const triggered = await app.evaluate(async ({ BrowserWindow }) => {
         const wins = BrowserWindow.getAllWindows();
         const launcher = wins[0];
-        if (!launcher) return false;
-        try {
-          await launcher.webContents.executeJavaScript(
-            `window.kepler?.commands?.invoke?.("horologion:open")`,
-          );
-          return true;
-        } catch {
-          return false;
+        if (!launcher) return "no-launcher";
+        const start = Date.now();
+        while (Date.now() - start < 3000) {
+          const ok = await launcher.webContents.executeJavaScript(`
+            (async () => {
+              if (typeof window.kepler?.commands?.invoke !== "function") {
+                return "no-api";
+              }
+              try {
+                await window.kepler.commands.invoke("horologion:open");
+                return "ok";
+              } catch (e) {
+                return "throw:" + (e && e.message ? e.message : String(e));
+              }
+            })()
+          `) as string;
+          if (ok === "ok") return ok;
+          await new Promise((r) => setTimeout(r, 100));
         }
+        return "timeout";
       });
-      expect(triggered).toBe(true);
+      expect(triggered, `commands.invoke status: ${triggered}`).toBe("ok");
 
       const horoWindow = await app.waitForEvent("window", { timeout: 10_000 });
       await horoWindow.waitForLoadState("domcontentloaded");

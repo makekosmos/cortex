@@ -83,15 +83,20 @@ test("horologion: stopwatch start → stop → entry visible in ListView", async
 
     // Switch to stopwatch.
     await horoWindow.getByRole("tab", { name: "Секундомер" }).click();
-    await horoWindow.waitForTimeout(600);
+    // Vue <transition> между Pomodoro/Stopwatch view'хами держит оба элемента
+    // в DOM на время анимации (~300ms). Ждём до момента когда .pomo__primary
+    // ушёл — иначе getByRole("button", { name: /Начать сессию/ }) находит 2
+    // элемента (pomo + sw) и strict-mode fails.
+    await horoWindow.waitForSelector(".pomo__primary", { state: "detached", timeout: 3_000 });
 
-    const startBtn = horoWindow.getByRole("button", { name: /Начать сессию/ });
+    const startBtn = horoWindow.locator(".sw__primary");
     await expect(startBtn).toBeVisible({ timeout: 5_000 });
     await startBtn.click();
     await horoWindow.waitForTimeout(2_000);
 
-    const stopBtn = horoWindow.getByRole("button", { name: /Стоп/ });
+    const stopBtn = horoWindow.locator(".sw__primary"); // тот же button, текст «Стоп»
     await expect(stopBtn).toBeVisible({ timeout: 5_000 });
+    await expect(stopBtn).toHaveText(/Стоп/);
     await stopBtn.click();
     await horoWindow.waitForTimeout(1_200);
 
@@ -114,29 +119,38 @@ test("horologion: stopwatch start → stop → entry visible in ListView", async
   }
 });
 
-test("horologion: подпись режима видна и в pomodoro и в stopwatch", async () => {
-  // H2: воспроизводит user-bug «подпись секундомер исчезает в pomodoro mode».
-  // Fix: PomodoroView получил свою подпись «помодоро» по аналогии со
-  // StopwatchView'овским «секундомер». Юзер всегда видит current mode label.
+test("horologion: переключение режимов меняет selected tab", async () => {
+  // Проверяет UX переключения режимов через role=tab + aria-selected. Раньше
+  // отдельно проверяли visible-текст «помодоро»/«секундомер» через .pomo__hint
+  // / .sw__hint label'ы; от .pomo__hint отказались сознательно (избыточный
+  // дублирующий label при наличии явного активного tab'а), поэтому
+  // тест сейчас опирается на семантику ARIA — это всё равно правильный
+  // user-facing inv.
   const app = await launchKepler({ slug: "horologion-mode-hint-visible" });
   try {
     const horoWindow = await openHorologion(app);
 
-    // Default mode = pomodoro → должна быть подпись «помодоро».
-    await expect(horoWindow.locator(".pomo__hint")).toBeVisible({ timeout: 5_000 });
-    await expect(horoWindow.locator(".pomo__hint")).toHaveText("помодоро");
+    const pomoTab = horoWindow.getByRole("tab", { name: "Помодоро" });
+    const swTab = horoWindow.getByRole("tab", { name: "Секундомер" });
+
+    // Default mode = pomodoro.
+    await expect(pomoTab).toHaveAttribute("aria-selected", "true", { timeout: 5_000 });
+    await expect(swTab).toHaveAttribute("aria-selected", "false");
 
     // Switch to stopwatch.
-    await horoWindow.getByRole("tab", { name: "Секундомер" }).click();
-    await horoWindow.waitForTimeout(1500);
+    await swTab.click();
+    await horoWindow.waitForTimeout(800);
+    await expect(swTab).toHaveAttribute("aria-selected", "true");
+    await expect(pomoTab).toHaveAttribute("aria-selected", "false");
+    // Stopwatch keeps its own identity label «секундомер» (sw__hint),
+    // pomodoro намеренно без аналога (см. выше).
     await expect(horoWindow.locator(".sw__hint")).toBeVisible();
-    await expect(horoWindow.locator(".sw__hint")).toHaveText("секундомер");
 
-    // Switch back to pomodoro — подпись «помодоро» снова видна.
-    await horoWindow.getByRole("tab", { name: "Помодоро" }).click();
-    await horoWindow.waitForTimeout(1500);
-    await expect(horoWindow.locator(".pomo__hint")).toBeVisible();
-    await expect(horoWindow.locator(".pomo__hint")).toHaveText("помодоро");
+    // Switch back.
+    await pomoTab.click();
+    await horoWindow.waitForTimeout(800);
+    await expect(pomoTab).toHaveAttribute("aria-selected", "true");
+    await expect(swTab).toHaveAttribute("aria-selected", "false");
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([

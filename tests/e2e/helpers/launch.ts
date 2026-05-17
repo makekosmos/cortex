@@ -66,6 +66,10 @@ export async function launchKepler(opts: LaunchOptions): Promise<ElectronApplica
       NODE_ENV: "test",
       KOSMOS_DATA_DIR: dataDir,
       KOSMOS_TEST_MODE: "1",
+      // Headless mode: extension windows создаются с show:false + skipTaskbar.
+      // Playwright всё равно может evaluate() и locator() работать через
+      // webContents без visible render. См. shell/electron/extension-host.ts.
+      KOSMOS_HEADLESS: "1",
       KEPLER_SKIP_SYNC: "1",
       KEPLER_USAGE_TRACKER: "0",
       ...(opts.env ?? {}),

@@ -116,6 +116,32 @@ export interface ExtensionManifest {
   height?: number;
   minWidth?: number;
   minHeight?: number;
+  /**
+   * Test contract — опционально. Используется universal `tests/e2e/extensions-contract.spec.ts`
+   * чтобы автоматически проверять архитектурный baseline extension'а: команды
+   * appear в `commands.list` после boot'а, ARK smoke round-trip по объявленному
+   * object type работает. Per-app UI flow'ы — отдельные spec'и.
+   */
+  tests?: {
+    /**
+     * Список command id, которые extension обязан зарегистрировать через
+     * `commands.register` к моменту первого render. Universal contract spec
+     * после boot'а делает `commands.list` и сравнивает.
+     */
+    commands?: string[];
+    /**
+     * ARK round-trip smoke: type id + (опционально) sample payload. Spec
+     * делает `upsert_object` → `get_object` → `delete_object`.
+     */
+    smoke?: {
+      objectType: string;
+      sample?: {
+        title?: string;
+        content?: unknown;
+        props?: Record<string, unknown>;
+      };
+    };
+  };
 }
 
 interface ExtensionWindowEntry {
@@ -498,7 +524,7 @@ function escapeHtml(s: string): string {
 export function openExtension(id: string, route?: string): void {
   const existing = extensionWindows.get(id);
   if (existing && !existing.win.isDestroyed()) {
-    existing.win.focus();
+    if (process.env.KOSMOS_HEADLESS !== "1") existing.win.focus();
     if (route) {
       existing.win.webContents.send("kepler:extension:navigation", route);
     }
@@ -603,6 +629,11 @@ export function openExtension(id: string, route?: string): void {
     initialY = savedState.y;
   }
 
+  // KOSMOS_HEADLESS=1 (test mode) — окна создаются с show:false и skipTaskbar.
+  // Playwright всё равно может evaluate() и locator() работать через
+  // webContents без visible render. См. tests/e2e/helpers/launch.ts.
+  const headless = process.env.KOSMOS_HEADLESS === "1";
+
   const win = new BrowserWindow({
     width,
     height,
@@ -610,7 +641,8 @@ export function openExtension(id: string, route?: string): void {
     minHeight: manifest.minHeight ?? 600,
     x: initialX,
     y: initialY,
-    show: true,
+    show: !headless,
+    skipTaskbar: headless,
     title: manifest.name,
     backgroundColor: "#1a1a1a",
     // Стандартное окно с custom titlebar (overlay для управления окном).

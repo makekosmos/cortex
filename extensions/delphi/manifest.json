@@ -12,5 +12,14 @@
   "width": 1100,
   "height": 720,
   "minWidth": 800,
-  "minHeight": 500
+  "minHeight": 500,
+  "tests": {
+    "commands": ["delphi:task:create", "delphi:task:today"],
+    "smoke": {
+      "objectType": "task_obj",
+      "sample": {
+        "title": "contract-smoke-delphi"
+      }
+    }
+  }
 }
