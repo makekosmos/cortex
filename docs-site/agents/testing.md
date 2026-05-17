@@ -156,7 +156,13 @@ if (initialArk) {
 
 **Причина:** `kepler-backend.exe` создаёт `kepler.lock.json` через `icacls /inheritance:r /grant:r %USERNAME%:F` (security: lock содержит auth token). Если username от прошлого test run отличается (другой Windows user account) — текущий user не может прочитать/удалить файл.
 
-**Решение** (одноразовый cleanup, требует admin):
+**Решение (штатное):** backend поддерживает env-флаг `KOSMOS_LOCK_PERMISSIONS_DISABLED=1` — при нём `apply_owner_only_permissions` пропускает `icacls` (Win) / `chmod 0600` (Unix). `launchKepler` helper выставляет его автоматически рядом с `KOSMOS_HEADLESS=1`, поэтому новые `tests/.e2e/<slug>/` lock-файлы не имеют жёсткого ACL и удаляются `freshDataDir` без проблем.
+
+::: warning Prod НИКОГДА не выставляет этот флаг
+Lock содержит auth token к ARK DB. Без ACL он читаем любым процессом текущей машины. Флаг — строго test-only, ставится только из `tests/e2e/helpers/launch.ts`.
+:::
+
+**Одноразовый cleanup для уже накопленных stale lock-файлов** (требует admin, нужен один раз после первого pull этого fix'а):
 
 ```powershell
 Get-ChildItem tests\.e2e -Recurse -Force -Filter kepler.lock.json | ForEach-Object {
@@ -165,8 +171,6 @@ Get-ChildItem tests\.e2e -Recurse -Force -Filter kepler.lock.json | ForEach-Obje
   Remove-Item $_.FullName -Force
 }
 ```
-
-**Открытый вопрос:** добавить env-флаг `KOSMOS_LOCK_PERMISSIONS_DISABLED=1` (test only) в `lock_file.rs` чтобы не применять ACL при `KOSMOS_TEST_MODE=1`. Отдельный proof loop.
 
 ## Чек-лист: я написал/правил e2e spec
 

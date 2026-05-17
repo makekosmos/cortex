@@ -1,0 +1,16 @@
+{
+  "task_id": "2026-05-17-lock-file-test-isolation",
+  "verified_at": "2026-05-17T23:15:00Z",
+  "ac": {
+    "AC1": "PASS",
+    "AC2": "PASS",
+    "AC3": "PASS",
+    "AC4": "PASS",
+    "AC5": "PASS",
+    "AC6": "PASS",
+    "AC7": "PASS",
+    "AC8": "PASS",
+    "AC9": "PASS"
+  },
+  "summary": "All 9 acceptance criteria PASS. cargo test (58 passed), shell typecheck/build clean, docs:sync + docs:check green."
+}

@@ -70,6 +70,10 @@ export async function launchKepler(opts: LaunchOptions): Promise<ElectronApplica
       // Playwright всё равно может evaluate() и locator() работать через
       // webContents без visible render. См. shell/electron/extension-host.ts.
       KOSMOS_HEADLESS: "1",
+      // Test-only: backend пропускает icacls/chmod hardening на kepler.lock.json.
+      // Без этого stale lock-файл от прошлого Windows account'а блокирует
+      // freshDataDir с EPERM. См. docs-site/agents/testing.md → "Stale ACL".
+      KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       KEPLER_SKIP_SYNC: "1",
       KEPLER_USAGE_TRACKER: "0",
       ...(opts.env ?? {}),

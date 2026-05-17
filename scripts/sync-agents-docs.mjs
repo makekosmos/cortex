@@ -178,6 +178,31 @@ async function buildRootAgents() {
 
   const claudeLabels = ["Старт", "Запреты", "Чек-листы", "Поддержка документации"];
 
+  // CLAUDE.md загружается в контекст каждой сессии Claude Code, поэтому держим
+  // его в пределах ~30k. Старт и Запреты — safety-critical, инлайним полностью.
+  // Чек-листы и docs-maintenance ситуативны (релевантны только когда дошёл до
+  // соответствующей области / закрываешь substantial-задачу) — оставляем
+  // pointer'ы; полный текст есть в AGENTS.md и в docs-site/.
+  const checklistsPointer = [
+    "Чек-листы построены по областям («я правил Eden / Delphi / shell / ARK runtime / тесты / ...»).",
+    "Прочитай соответствующий раздел в `docs-site/agents/checklists.md` **до того как сказать «готово»**",
+    "по области, которую трогал. Общий финальный чек-лист — там же, в конце страницы.",
+    "",
+    "Полный текст также инлайнен в корневой `AGENTS.md`.",
+  ].join("\n");
+
+  const docsMaintenancePointer = [
+    "Документация обновляется в **той же** задаче, что и код. Источник правды — `docs-site/`.",
+    "После любой substantial-правки публичного поведения / API / структуры:",
+    "",
+    "1. Правишь страницы под `docs-site/` (не сгенерированные `AGENTS.md` / `CLAUDE.md` — они затрутся).",
+    "2. `bun run docs:sync` — регенерация `AGENTS.md`, `CLAUDE.md`, per-area `AGENTS.md`, `llms.txt`.",
+    "3. `bun run docs:check` — проверка, что упомянутые пути / команды / ссылки существуют.",
+    "",
+    "Полная таблица «что изменил → где обновить» и чек-лист закрытия задачи —",
+    "в `docs-site/agents/docs-maintenance.md` (также инлайнено в корневой `AGENTS.md`).",
+  ].join("\n");
+
   await write(
     "CLAUDE.md",
     claudeHeader +
@@ -187,8 +212,8 @@ async function buildRootAgents() {
       joinBlocks(
         block("Старт", rewriteLinks(agentIndex)),
         block("Запреты", rewriteLinks(forbidden)),
-        block("Чек-листы", rewriteLinks(checklists)),
-        block("Поддержка документации", rewriteLinks(docsMaintenance)),
+        block("Чек-листы", checklistsPointer),
+        block("Поддержка документации", docsMaintenancePointer),
       ),
   );
 }

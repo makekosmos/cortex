@@ -24,6 +24,18 @@ pub const LOCK_FILE_FORMAT_VERSION: u32 = 1;
 /// или `~/.config/Kosmos/` (Linux/macOS). Resolve в lock_file_path().
 pub const LOCK_FILE_NAME: &str = "kepler.lock.json";
 
+/// Env-флаг (test-only): если выставлен в `1`, hardening permissions
+/// (`icacls /inheritance:r ...` на Win / `chmod 0600` на Unix) пропускается.
+/// Нужен для e2e — иначе stale lock-файл от прошлого Windows account'а
+/// блокирует `freshDataDir` с `EPERM`. Prod НИКОГДА не должен выставлять
+/// этот флаг (lock содержит auth token, без ACL он читаем любым процессом
+/// текущей машины).
+pub const LOCK_PERMISSIONS_DISABLED_ENV: &str = "KOSMOS_LOCK_PERMISSIONS_DISABLED";
+
+fn lock_permissions_disabled() -> bool {
+    std::env::var(LOCK_PERMISSIONS_DISABLED_ENV).as_deref() == Ok("1")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct KeplerLockFile {
     pub format_version: u32,
@@ -124,6 +136,14 @@ pub fn write_atomic(path: &Path, lock: &KeplerLockFile) -> Result<(), LockFileEr
 
 #[cfg(unix)]
 fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
+    if lock_permissions_disabled() {
+        eprintln!(
+            "[kepler-backend] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — chmod 0600 skipped \
+             for {} (test-only path, prod должен не выставлять флаг)",
+            path.display()
+        );
+        return Ok(());
+    }
     use std::os::unix::fs::PermissionsExt;
     let perms = fs::Permissions::from_mode(0o600);
     fs::set_permissions(path, perms).map_err(|e| LockFileError::Permissions(e.to_string()))
@@ -131,6 +151,14 @@ fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
 
 #[cfg(windows)]
 fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
+    if lock_permissions_disabled() {
+        eprintln!(
+            "[kepler-backend] {LOCK_PERMISSIONS_DISABLED_ENV}=1 — icacls hardening skipped \
+             for {} (test-only path, prod должен не выставлять флаг)",
+            path.display()
+        );
+        return Ok(());
+    }
     use std::process::Command;
     // icacls: сначала сбросить inheritance, потом убрать стандартные groups,
     // оставить только current user с full access.
@@ -209,7 +237,13 @@ fn is_pid_alive(pid: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
     use tempfile::tempdir;
+
+    /// Сериализует тесты, которые мутируют process-wide env vars
+    /// (`KOSMOS_DATA_DIR`, `KOSMOS_LOCK_PERMISSIONS_DISABLED`). Без этого
+    /// параллельные тесты cargo могут race на чтение/запись одной переменной.
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     fn sample_lock(pid: u32, port: u16) -> KeplerLockFile {
         KeplerLockFile {
@@ -225,8 +259,8 @@ mod tests {
 
     #[test]
     fn kosmos_data_dir_respects_env_override() {
-        // SAFETY: env var, доступ серилизуется через std::env api.
-        // Other tests в этом mod не читают KOSMOS_DATA_DIR.
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: env var, доступ серилизуется через ENV_MUTEX.
         let dir = tempdir().unwrap();
         let override_path = dir.path().to_path_buf();
         std::env::set_var("KOSMOS_DATA_DIR", &override_path);
@@ -327,6 +361,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_permissions_are_0600() {
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // Гарантируем, что флаг отключения hardening не выставлен из другого теста.
+        std::env::remove_var(LOCK_PERMISSIONS_DISABLED_ENV);
         use std::os::unix::fs::PermissionsExt;
         let dir = tempdir().unwrap();
         let path = dir.path().join("kepler.lock.json");
@@ -337,11 +374,52 @@ mod tests {
         assert_eq!(mode, 0o600, "expected 0600 perms, got {:o}", mode);
     }
 
+    #[test]
+    fn permissions_disabled_env_skips_hardening() {
+        // AC4: при KOSMOS_LOCK_PERMISSIONS_DISABLED=1 запись lock-файла
+        // должна пройти без применения hardening (ACL на Win / chmod 0600 на Unix).
+        // Файл должен существовать и быть читаемым стандартным путём.
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: process-wide env, сериализовано ENV_MUTEX.
+        std::env::set_var(LOCK_PERMISSIONS_DISABLED_ENV, "1");
+
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("kepler.lock.json");
+        let lock = sample_lock(std::process::id(), 12345);
+        let write_result = write_atomic(&path, &lock);
+
+        // Доп. проверка на Unix: режим НЕ 0600 (а дефолтный umask), потому
+        // что мы пропустили chmod.
+        #[cfg(unix)]
+        let mode_after = {
+            use std::os::unix::fs::PermissionsExt;
+            fs::metadata(&path).ok().map(|m| m.permissions().mode() & 0o777)
+        };
+
+        std::env::remove_var(LOCK_PERMISSIONS_DISABLED_ENV);
+
+        write_result.expect("write_atomic with permissions disabled must succeed");
+        assert!(path.exists(), "lock-файл должен быть создан");
+        let read_back = read(&path).expect("должен быть читаемый стандартным путём");
+        assert_eq!(read_back, lock);
+
+        #[cfg(unix)]
+        {
+            // 0600 невозможно для дефолтного umask (обычно 0644 или 0664).
+            // Если бы hardening не пропустился — было бы ровно 0600.
+            let mode = mode_after.expect("mode read");
+            assert_ne!(mode, 0o600, "expected non-0600 mode (hardening skipped), got {:o}", mode);
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_acl_inheritance_disabled() {
         // Спецификация AC3: ACL не должен содержать наследованных ACE для
         // BUILTIN\Users или Authenticated Users. Проверяем через icacls /verify.
+        let _guard = ENV_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+        // Гарантируем, что флаг отключения hardening не выставлен из другого теста.
+        std::env::remove_var(LOCK_PERMISSIONS_DISABLED_ENV);
         let dir = tempdir().unwrap();
         let path = dir.path().join("kepler.lock.json");
         write_atomic(&path, &sample_lock(std::process::id(), 12345)).unwrap();
