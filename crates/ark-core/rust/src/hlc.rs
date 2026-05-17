@@ -105,14 +105,44 @@ impl HLC {
     }
 
     /// Parse from string format. Splits on `:` after the `Z` character.
+    /// Returns a default HLC (empty fields, counter 0) for malformed/empty input
+    /// instead of panicking.
     pub fn from_string(s: &str) -> Self {
+        // Guard against empty input before any indexing.
+        if s.is_empty() {
+            return Self {
+                wall_time: String::new(),
+                counter: 0,
+                device_id: String::new(),
+            };
+        }
         let z_pos = s.find('Z').unwrap_or(0);
-        let first_colon = s[z_pos..].find(':').map(|i| z_pos + i).unwrap_or(0);
+        let first_colon = match s[z_pos..].find(':') {
+            Some(i) => z_pos + i,
+            None => {
+                return Self {
+                    wall_time: s.to_string(),
+                    counter: 0,
+                    device_id: String::new(),
+                }
+            }
+        };
+        // first_colon + 1 is safe because ':' was found within the string.
         let rest = &s[first_colon + 1..];
-        let second_colon = rest.find(':').unwrap_or(0);
+        let second_colon = match rest.find(':') {
+            Some(i) => i,
+            None => {
+                return Self {
+                    wall_time: s[..first_colon].to_string(),
+                    counter: rest.parse::<u64>().unwrap_or(0),
+                    device_id: String::new(),
+                }
+            }
+        };
 
         let wall_time = s[..first_colon].to_string();
         let counter = rest[..second_colon].parse::<u64>().unwrap_or(0);
+        // second_colon + 1 is safe because ':' was found within rest.
         let device_id = rest[second_colon + 1..].to_string();
 
         Self {
@@ -239,5 +269,32 @@ mod tests {
         let a = "2026-01-01T00:00:00.000Z:000005:dev-a";
         let b = "2026-01-01T00:00:00.000Z:000005:dev-b";
         assert_eq!(HLC::compare_str(a, b), Ordering::Less);
+    }
+
+    #[test]
+    fn test_from_string_empty() {
+        // Must not panic.
+        let hlc = HLC::from_string("");
+        assert_eq!(hlc.wall_time, "");
+        assert_eq!(hlc.counter, 0);
+        assert_eq!(hlc.device_id, "");
+    }
+
+    #[test]
+    fn test_from_string_no_colons() {
+        // String with 'Z' but no ':' after it — must not panic.
+        let hlc = HLC::from_string("2026-01-01Z");
+        assert_eq!(hlc.wall_time, "2026-01-01Z");
+        assert_eq!(hlc.counter, 0);
+        assert_eq!(hlc.device_id, "");
+    }
+
+    #[test]
+    fn test_from_string_one_colon_after_z() {
+        // Has Z and one colon but no second colon — must not panic.
+        let hlc = HLC::from_string("2026-01-01T00:00:00.000Z:000042");
+        assert_eq!(hlc.wall_time, "2026-01-01T00:00:00.000Z");
+        assert_eq!(hlc.counter, 42);
+        assert_eq!(hlc.device_id, "");
     }
 }

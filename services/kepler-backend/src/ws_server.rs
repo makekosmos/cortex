@@ -750,7 +750,15 @@ async fn handle_arrancador_op(
                 Err(e) => return LocalResponse::err(format!("arrancador.scan: ark_host: {e}")),
             };
             let existing: Vec<ark_core::types::ArkObject> = if ark_resp.ok {
-                serde_json::from_value(ark_resp.data).unwrap_or_default()
+                match serde_json::from_value(ark_resp.data) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("[arrancador.scan] failed to parse existing games from ARK: {e}");
+                        return LocalResponse::err(format!(
+                            "arrancador.scan: failed to parse existing games: {e}"
+                        ));
+                    }
+                }
             } else {
                 Vec::new()
             };
@@ -930,7 +938,14 @@ async fn handle_arrancador_op(
                 None => return LocalResponse::err("arrancador.rawg.apply: missing 'game_id'"),
             };
             let rawg_id = match params.get("rawg_id").and_then(|v| v.as_u64()) {
-                Some(n) => n as u32,
+                Some(n) => match u32::try_from(n) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        return LocalResponse::err(format!(
+                            "arrancador.rawg.apply: rawg_id {n} exceeds u32 range"
+                        ))
+                    }
+                },
                 None => return LocalResponse::err("arrancador.rawg.apply: missing 'rawg_id'"),
             };
             let cfg = arrancador::config::load();

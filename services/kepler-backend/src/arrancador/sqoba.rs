@@ -369,12 +369,19 @@ pub fn restore(backup_path: &Path) -> Result<RestoreResult, SqobaError> {
                 continue;
             }
         };
-        // Reject path traversal.
-        if rel.contains("..") {
-            errors.push(format!("rejected path traversal: {}", name));
+        // Reject path traversal and absolute paths.
+        // PathBuf::join() replaces the entire base when the argument is absolute,
+        // so we must check before joining.
+        if rel.contains("..") || std::path::Path::new(rel).is_absolute() {
+            errors.push(format!("rejected unsafe path: {}", name));
             continue;
         }
         let target = root.join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+        // Belt-and-suspenders: verify the final target stays inside root.
+        if !target.starts_with(&root) {
+            errors.push(format!("rejected path outside root: {}", name));
+            continue;
+        }
         if let Some(parent) = target.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 errors.push(format!("mkdir {}: {}", parent.display(), e));
@@ -604,5 +611,61 @@ mod tests {
             SqobaError::NoSavePathsFound { game_id } => assert_eq!(game_id, "g6"),
             other => panic!("expected NoSavePathsFound, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn sqoba_restore_rejects_absolute_path_in_zip() {
+        use std::io::Write as IoWrite;
+        use zip::write::{FileOptions, ZipWriter};
+
+        let tmp = TempDir::new().unwrap();
+        let zip_path = tmp.path().join("evil.zip");
+        let games_dir = tmp.path().join("games");
+
+        // Craft a zip with an absolute-path entry and a valid meta.
+        // The absolute entry should be rejected; restore must not write outside root.
+        let meta_json = serde_json::json!({
+            "id": "evil-backup",
+            "game_id": "evil",
+            "timestamp": "20260101T000000Z",
+            "source_paths": [games_dir]
+        })
+        .to_string();
+
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = ZipWriter::new(file);
+        let opts = FileOptions::default();
+
+        // Write valid meta.
+        zw.start_file(META_FILENAME, opts).unwrap();
+        zw.write_all(meta_json.as_bytes()).unwrap();
+
+        // Write a legitimate entry (relative path).
+        zw.start_file("source_0/save.dat", opts).unwrap();
+        zw.write_all(b"safe content").unwrap();
+
+        // Write a malicious entry with absolute path in the relative part.
+        // Entry name format: "source_<idx>/<rel>", so rel = "/evil.txt" is absolute.
+        zw.start_file("source_0//evil.txt", opts).unwrap();
+        zw.write_all(b"evil content").unwrap();
+
+        zw.finish().unwrap();
+
+        let result = restore(&zip_path).unwrap();
+
+        // The absolute-path entry must be in errors, not restored.
+        assert!(
+            result.errors.iter().any(|e| e.contains("unsafe path") || e.contains("outside root")),
+            "expected rejection error, got errors={:?}",
+            result.errors
+        );
+        // The evil file must NOT exist at the absolute path.
+        // On Unix, Path::new("").join("source_0").join("/evil.txt") = /evil.txt
+        let evil_path = tmp.path().join("evil.txt");
+        assert!(!evil_path.exists(), "/evil.txt was written outside root");
+        assert!(!std::path::Path::new("/evil.txt").exists(), "absolute /evil.txt was written");
+
+        // The safe entry should still be restored.
+        assert_eq!(result.restored_files, 1);
     }
 }
