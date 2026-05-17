@@ -2,6 +2,26 @@
 
 Перед тем как сказать «готово» — пройди соответствующий чек-лист. По одному пункту, не пропускай.
 
+## Я писал / правил e2e тесты (`tests/e2e/*.spec.ts`)
+
+- [ ] `launchKepler({ slug })` — slug уникален, не пересекается с другими spec'ами.
+- [ ] `KOSMOS_HEADLESS=1` не overridden в `opts.env` (стартует автоматически из helper'а).
+- [ ] Backend warmup (~2.5s) перед `commands.invoke` если test чувствителен к timing.
+- [ ] Locator'ы scope'ятся к специфичному CSS классу, если возможны множественные match'и (Vue transitions, panes).
+- [ ] `app.close()` / `app.quit()` в `finally`.
+- [ ] Если test покрывает архитектурный baseline (extension boots + commands + ARK) — это уже покрыто `extensions-contract.spec.ts` через `manifest.tests`. Не дублировать.
+- [ ] Если test покрывает UI flow специфичный для extension'а — добавлен `tests` блок в manifest для contract coverage.
+- [ ] Прогон в headless mode (`bun run test:e2e`) — окна не лезут на экран.
+
+Подробнее — [Testing](/agents/testing).
+
+## Я добавил новый extension (`extensions/<id>/`)
+
+- [ ] `manifest.json` имеет поле `tests` (даже минимальное — `{}`).
+- [ ] Если extension использует свой `object_type` — eager registration в shim на boot (не lazy перед первым upsert), иначе universal contract spec падает с FK constraint.
+- [ ] Если extension'у нужен per-app UI spec — `tests/e2e/<id>.spec.ts` с helper-функцией `open<Id>(app)` для повторного использования.
+- [ ] `extensions-contract.spec.ts` автоматически подхватит твой extension — прогнать `bun run test:e2e -- --grep "extension contract: <id>"`.
+
 ## Я правил ARK runtime (`crates/ark-core/rust`)
 
 - [ ] `cargo test --manifest-path crates\ark-core\rust\Cargo.toml` — зелёный.
@@ -21,16 +41,18 @@
 - [ ] Если добавил новый метод — он реальный RPC к sidecar, не SDK-фильтрация.
 - [ ] Self-managed и injected режимы оба работают, request id есть только в self-managed.
 
-## Я правил Eden (`apps/eden/ts`)
+## Я правил Eden extension (`extensions/eden`)
 
-- [ ] `bun run --cwd apps/eden/ts build` — собирается без ошибок.
-- [ ] `bun run --cwd apps/eden/ts test:e2e` — зелёный.
-- [ ] `bun run --cwd apps/eden/ts lint` — без warnings.
-- [ ] `bunx tsc --noEmit` (в `apps/eden/ts`) — зелёный.
-- [ ] Не возвращён ripgrep, поиск через Heart/Tantivy / ARK FTS.
-- [ ] Если трогал `main/store.ts` — hardening для `save/move/delete` не сломан.
+- [ ] `bun run --cwd shell build:extensions` — собирается (Eden — часть extension build pipeline).
+- [ ] `bun run --cwd shell typecheck` — clean.
+- [ ] Все ARK операции идут через `kepler-api-shim` (`extensions/eden/src/lib/kepler-api-shim.ts`), внутри — `window.kepler.ark.request(...)`. Renderer не открывает SQLite напрямую.
+- [ ] `bun run ark:guard:writes` — зелёный.
+- [ ] TipTap CodeBlock + lowlight остаются для синтакс-highlight. Никаких runtime lint/format вызовов.
+- [ ] Search через ARK FTS5 (`search_objects`). Heart Rust / Tantivy / ripgrep — не возвращаем.
+- [ ] Lazy Editor.vue (`defineAsyncComponent`) сохранён — main bundle должен оставаться < 800KB.
 - [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kepler/visuals`. Никаких ручных `--titlebar-height` хаков.
-- [ ] Если трогал тесты — изолированная БД, не user vault.
+- [ ] Trash UI работает поверх ARK soft-delete (`deletedAt != null`).
+- [ ] Hevy / code lint-format / vault picker / Heart sidecar — **не возвращаем** в Phase 6.0.A. См. forbidden.md.
 
 ## Я правил Delphi extension (`extensions/delphi`)
 

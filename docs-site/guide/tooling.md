@@ -5,7 +5,7 @@
 | Слой | Инструменты | Где используется |
 |---|---|---|
 | Пакет-менеджер / runner | **Bun 1.3.5** | весь монорепо |
-| Системный язык | **Rust** (stable) + Cargo | `crates/ark-core`, `services/kepler-backend/src/usage_tracker`, `apps/eden/ts/heart` |
+| Системный язык | **Rust** (stable) + Cargo | `crates/ark-core`, `services/kepler-backend/src/usage_tracker` |
 | Android | **Kotlin** + Gradle + Compose + Room | `mobile/delphi` (UI), `mobile/ark-service` (Room ContentProvider) |
 | Desktop UI | **Vue 3.6 Vapor** | Eden, Arrancador (Vue), Dashboard |
 | Desktop shell | **Electron 38** | Eden, Delphi, Arrancador, Dashboard |

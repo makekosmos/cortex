@@ -45,15 +45,16 @@ bun run --cwd shell test:e2e
 
 `test:e2e` — Playwright smoke по лаунчеру (открытие окна 720×460, выполнение зарегистрированной команды через command bus).
 
-## Eden
+## Eden extension
 
 ```powershell
-bun run --cwd apps/eden/ts test:ark-migration
-bun run --cwd apps/eden/ts build
-bunx playwright test --config apps/eden/ts/playwright.config.ts --grep "custom note type"
+bun run --cwd shell build:extensions
+bun run --cwd shell typecheck
+# Eden-specific e2e (Phase 6.0.5+): tests/e2e/eden.spec.ts
+bunx playwright test --config playwright.config.ts --grep "eden"
 ```
 
-Эти проверки создают свои собственные временные app-data / vault paths и обязаны и дальше избегать main user databases.
+Phase 6.0.A удалил standalone Eden; ARK migration smoke больше не нужен — все writes идут через `kepler-api-shim` поверх ARK (которые покрыты `ark:guard:writes` + cargo tests).
 
 ::: danger
 Не запускай migration / backfill скрипты против реальной ARK DB во время smoke verification. Передавай явные source и target пути под smoke root, когда нужна ручная migration check.

@@ -97,6 +97,18 @@ bun run ark:smoke
 
 Если задача через proof loop — каждый AC должен быть `PASS` в `evidence.md`. Не пиши «готово» в чате, пока это не так.
 
+### 6. Failing тесты исправляются всегда
+
+Если в ходе работы обнаружен failing test / regression / баг — исправляется обязательно. Не важно, был ли он до моих правок или нет. Либо в текущем коммите (если по смыслу подходит), либо отдельным коммитом / proof loop'ом. «Pre-existing» — не оправдание.
+
+### 7. Калибруй оценки времени
+
+Перед тем как назвать пользователю срок («займёт N часов»), сверься со skill'ом `estimate-calibration` (`~/.claude/skills/estimate-calibration/`): прочитал log.jsonl прошлых prediction vs actual → скорректировал gut estimate → записал prediction до начала → закрыл row после AC PASS. Подробно — [Estimation](./estimation).
+
+### 8. Тесты пишутся по стандартному паттерну
+
+E2e в headless mode, universal extension contract через `manifest.tests`, per-app spec только для нетривиальных UI flow'ов. Полный гайд — [Testing](./testing).
+
 ## Карта приложений и пакетов
 
 ::: tip STATUS.md — always-current snapshot
@@ -107,12 +119,12 @@ bun run ark:smoke
 
 | Имя | Где | Что |
 |---|---|---|
-| **Eden** | `apps/eden/ts` | заметки (Vue + Electron + Heart Rust); standalone до Phase 6 |
+| **Eden** | `extensions/eden` | заметки и дневник — Vue-extension в Kepler shell (TipTap editor). Phase 6.0 + 6.0.A done, standalone `apps/eden/ts/` удалён. |
 | **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
 | **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
 | **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user. |
 | **Horologion** | `extensions/horologion` | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj` |
-| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 ✅: Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier; Dashboard — встроенный shell view). |
+| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
 | **Extension host** | `shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md). |
 | **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kepler/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
@@ -151,6 +163,8 @@ bun run ark:smoke
 - [Чек-листы по областям](docs-site/agents/checklists.md) — что прогнать перед сдачей в каждой области.
 - [Запреты и гварды](docs-site/agents/forbidden.md) — список «никогда».
 - [Шаблоны спецификаций](docs-site/agents/spec-templates.md) — типовые `spec.md` для proof loop.
+- [Testing](docs-site/agents/testing.md) — как писать e2e (headless mode, universal contract, ловушки).
+- [Estimation](docs-site/agents/estimation.md) — калибровка оценок времени через skill.
 
 Полный справочник правил — [Правила репозитория](docs-site/reference/rules.md).
 
@@ -954,10 +968,10 @@ bun run ark:guard:writes
 
 - `extensions/arrancador/src/`
 - `extensions/delphi/src/`
+- `extensions/eden/src/`
 - `extensions/horologion/src/`
 - `shell/electron/`
 - `shell/src/dashboard/` (встроенный Dashboard view — read-only ARK browser)
-- `apps/eden/ts/main/`
 
 ## Direct Rust writers — особый случай
 
@@ -1350,6 +1364,10 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 
 ## Тесты
 
+- ❌ Запускать e2e без `KOSMOS_HEADLESS=1`. Окна Kepler / extension'ов не должны лезть на экран и воровать focus у пользователя. `launchKepler` helper выставляет этот env автоматически — не override'ить в `opts.env`.
+- ❌ Создавать BrowserWindow в `shell/electron/` без проверки `process.env.KOSMOS_HEADLESS === "1"`. Любое новое окно должно респектать headless mode (`show: !headless`, `skipTaskbar: headless`).
+- ❌ Полагаться на `getByRole("button", { name: /<text>/ })` strict-mode, если на странице потенциально несколько подходящих кнопок (Vue transitions, multi-pane layouts). Scope'ить к специфичному CSS классу. См. [Testing → ловушки](/agents/testing#vue-transition).
+- ❌ Lazy-регистрировать object_type extension'ом при первом write если extension объявлен в `manifest.tests.smoke`. Eager register на boot в shim'е — иначе universal contract spec падает с FK constraint.
 - ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
@@ -1369,12 +1387,16 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 
 ### Eden
 
-- ❌ Возврат к ripgrep как поисковому движку.
-- ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
+- ❌ Возврат к ripgrep / Tantivy / Heart Rust sidecar. Search 100% через ARK FTS5 (`search_objects`).
+- ❌ Возрождение `apps/eden/ts/` или standalone Eden.exe. Удалены в Phase 6.0.A.
+- ❌ Возврат Hevy fitness integration в Eden. Замена — Olympia (отдельное приложение, ещё не реализовано).
+- ❌ Возврат UI для code lint/format. Code-tools UI удалены в 6.0.A; TipTap CodeBlock + lowlight (синтакс highlight) остаются.
+- ❌ Vault picker UI / welcome screen / multi-vault. Single ARK DB per user после удаления spaces (2026-05-15).
+- ❌ Прямое использование `window.kepler.ark.request` из Eden компонентов и `store/`. Только через `kepler-api-shim` (или `edenApi.ts` фасад над ним) — это единственный мост, чтобы code review мог локально проверить ARK границу.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
 - ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
-- ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
+- ❌ Удаление lazy-load Editor.vue (`defineAsyncComponent`). Main bundle Eden должен оставаться < 800KB.
 
 ### Delphi
 
@@ -1490,7 +1512,7 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 Прогнать **обязательно** в указанных случаях:
 
 ```powershell
-# Перед PR в data services (apps/eden/ts/main, shell/electron, extensions/<id>/src,
+# Перед PR в data services (shell/electron, extensions/<id>/src,
 # services/kepler-backend/src/usage_tracker)
 bun run ark:guard:writes
 
@@ -1506,6 +1528,26 @@ bun run ark:smoke
 # Чек-листы по областям
 
 Перед тем как сказать «готово» — пройди соответствующий чек-лист. По одному пункту, не пропускай.
+
+## Я писал / правил e2e тесты (`tests/e2e/*.spec.ts`)
+
+- [ ] `launchKepler({ slug })` — slug уникален, не пересекается с другими spec'ами.
+- [ ] `KOSMOS_HEADLESS=1` не overridden в `opts.env` (стартует автоматически из helper'а).
+- [ ] Backend warmup (~2.5s) перед `commands.invoke` если test чувствителен к timing.
+- [ ] Locator'ы scope'ятся к специфичному CSS классу, если возможны множественные match'и (Vue transitions, panes).
+- [ ] `app.close()` / `app.quit()` в `finally`.
+- [ ] Если test покрывает архитектурный baseline (extension boots + commands + ARK) — это уже покрыто `extensions-contract.spec.ts` через `manifest.tests`. Не дублировать.
+- [ ] Если test покрывает UI flow специфичный для extension'а — добавлен `tests` блок в manifest для contract coverage.
+- [ ] Прогон в headless mode (`bun run test:e2e`) — окна не лезут на экран.
+
+Подробнее — [Testing](docs-site/agents/testing.md).
+
+## Я добавил новый extension (`extensions/<id>/`)
+
+- [ ] `manifest.json` имеет поле `tests` (даже минимальное — `{}`).
+- [ ] Если extension использует свой `object_type` — eager registration в shim на boot (не lazy перед первым upsert), иначе universal contract spec падает с FK constraint.
+- [ ] Если extension'у нужен per-app UI spec — `tests/e2e/<id>.spec.ts` с helper-функцией `open<Id>(app)` для повторного использования.
+- [ ] `extensions-contract.spec.ts` автоматически подхватит твой extension — прогнать `bun run test:e2e -- --grep "extension contract: <id>"`.
 
 ## Я правил ARK runtime (`crates/ark-core/rust`)
 
@@ -1526,16 +1568,18 @@ bun run ark:smoke
 - [ ] Если добавил новый метод — он реальный RPC к sidecar, не SDK-фильтрация.
 - [ ] Self-managed и injected режимы оба работают, request id есть только в self-managed.
 
-## Я правил Eden (`apps/eden/ts`)
+## Я правил Eden extension (`extensions/eden`)
 
-- [ ] `bun run --cwd apps/eden/ts build` — собирается без ошибок.
-- [ ] `bun run --cwd apps/eden/ts test:e2e` — зелёный.
-- [ ] `bun run --cwd apps/eden/ts lint` — без warnings.
-- [ ] `bunx tsc --noEmit` (в `apps/eden/ts`) — зелёный.
-- [ ] Не возвращён ripgrep, поиск через Heart/Tantivy / ARK FTS.
-- [ ] Если трогал `main/store.ts` — hardening для `save/move/delete` не сломан.
+- [ ] `bun run --cwd shell build:extensions` — собирается (Eden — часть extension build pipeline).
+- [ ] `bun run --cwd shell typecheck` — clean.
+- [ ] Все ARK операции идут через `kepler-api-shim` (`extensions/eden/src/lib/kepler-api-shim.ts`), внутри — `window.kepler.ark.request(...)`. Renderer не открывает SQLite напрямую.
+- [ ] `bun run ark:guard:writes` — зелёный.
+- [ ] TipTap CodeBlock + lowlight остаются для синтакс-highlight. Никаких runtime lint/format вызовов.
+- [ ] Search через ARK FTS5 (`search_objects`). Heart Rust / Tantivy / ripgrep — не возвращаем.
+- [ ] Lazy Editor.vue (`defineAsyncComponent`) сохранён — main bundle должен оставаться < 800KB.
 - [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kepler/visuals`. Никаких ручных `--titlebar-height` хаков.
-- [ ] Если трогал тесты — изолированная БД, не user vault.
+- [ ] Trash UI работает поверх ARK soft-delete (`deletedAt != null`).
+- [ ] Hevy / code lint-format / vault picker / Heart sidecar — **не возвращаем** в Phase 6.0.A. См. forbidden.md.
 
 ## Я правил Delphi extension (`extensions/delphi`)
 
@@ -2167,15 +2211,16 @@ bun run --cwd shell test:e2e
 
 `test:e2e` — Playwright smoke по лаунчеру (открытие окна 720×460, выполнение зарегистрированной команды через command bus).
 
-## Eden
+## Eden extension
 
 ```powershell
-bun run --cwd apps/eden/ts test:ark-migration
-bun run --cwd apps/eden/ts build
-bunx playwright test --config apps/eden/ts/playwright.config.ts --grep "custom note type"
+bun run --cwd shell build:extensions
+bun run --cwd shell typecheck
+# Eden-specific e2e (Phase 6.0.5+): tests/e2e/eden.spec.ts
+bunx playwright test --config playwright.config.ts --grep "eden"
 ```
 
-Эти проверки создают свои собственные временные app-data / vault paths и обязаны и дальше избегать main user databases.
+Phase 6.0.A удалил standalone Eden; ARK migration smoke больше не нужен — все writes идут через `kepler-api-shim` поверх ARK (которые покрыты `ark:guard:writes` + cargo tests).
 
 ::: danger
 Не запускай migration / backfill скрипты против реальной ARK DB во время smoke verification. Передавай явные source и target пути под smoke root, когда нужна ручная migration check.
@@ -2439,7 +2484,7 @@ $env:KEPLER_DEV = "1"; bun run --cwd shell dev
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd shell dev
 ```
 
-Extension bundles лежат в `extensions/<id>/` (Dashboard / Horologion / Delphi / Arrancador). Eden — outlier, остаётся standalone .exe (до Phase 6).
+Extension bundles лежат в `extensions/<id>/` — Eden / Horologion / Delphi / Arrancador. Dashboard — встроенный shell view (`shell/src/views/Dashboard*.vue`).
 
 ## Kepler Backend (Rust)
 
@@ -2448,18 +2493,6 @@ Extension bundles лежат в `extensions/<id>/` (Dashboard / Horologion / Del
 ```powershell
 cargo build --manifest-path services/kepler-backend/Cargo.toml --bin kepler-backend
 cargo test  --manifest-path services/kepler-backend/Cargo.toml --lib
-```
-
-## Eden (standalone)
-
-```powershell
-cd apps/eden/ts
-bun run dev                # сборка Heart sidecar + Vite + Electron
-bun run build              # production NSIS installer
-bun run lint               # oxlint
-bun run format             # oxfmt --check
-bun run test:e2e           # build + Playwright
-bun run test:ark-migration # smoke для ARK миграции
 ```
 
 ## Vue-extensions
@@ -2506,9 +2539,6 @@ cargo test --manifest-path services\kepler-backend\Cargo.toml --lib
 # SDK
 bun run --cwd packages/ark typecheck
 bun run --cwd packages/ark test
-
-# Eden
-bun run --cwd apps/eden/ts test:ark-migration
 
 # Guard
 bun run ark:guard:writes

@@ -64,6 +64,18 @@ bun run ark:smoke
 
 Если задача через proof loop — каждый AC должен быть `PASS` в `evidence.md`. Не пиши «готово» в чате, пока это не так.
 
+### 6. Failing тесты исправляются всегда
+
+Если в ходе работы обнаружен failing test / regression / баг — исправляется обязательно. Не важно, был ли он до моих правок или нет. Либо в текущем коммите (если по смыслу подходит), либо отдельным коммитом / proof loop'ом. «Pre-existing» — не оправдание.
+
+### 7. Калибруй оценки времени
+
+Перед тем как назвать пользователю срок («займёт N часов»), сверься со skill'ом `estimate-calibration` (`~/.claude/skills/estimate-calibration/`): прочитал log.jsonl прошлых prediction vs actual → скорректировал gut estimate → записал prediction до начала → закрыл row после AC PASS. Подробно — [Estimation](./estimation).
+
+### 8. Тесты пишутся по стандартному паттерну
+
+E2e в headless mode, universal extension contract через `manifest.tests`, per-app spec только для нетривиальных UI flow'ов. Полный гайд — [Testing](./testing).
+
 ## Карта приложений и пакетов
 
 ::: tip STATUS.md — always-current snapshot
@@ -74,12 +86,12 @@ bun run ark:smoke
 
 | Имя | Где | Что |
 |---|---|---|
-| **Eden** | `apps/eden/ts` | заметки (Vue + Electron + Heart Rust); standalone до Phase 6 |
+| **Eden** | `extensions/eden` | заметки и дневник — Vue-extension в Kepler shell (TipTap editor). Phase 6.0 + 6.0.A done, standalone `apps/eden/ts/` удалён. |
 | **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
 | **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
 | **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user. |
 | **Horologion** | `extensions/horologion` | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj` |
-| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](/concepts/command-bus) + [Extension host](/concepts/extension-host) (Phase 4 ✅: Horologion / Delphi / Arrancador как Vue extensions, Eden — outlier; Dashboard — встроенный shell view). |
+| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](/concepts/command-bus) + [Extension host](/concepts/extension-host) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
 | **Extension host** | `shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](/concepts/extension-host), [Extension dev mode](/concepts/extension-dev-mode). |
 | **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kepler/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](/concepts/command-bus). |
@@ -118,5 +130,7 @@ bun run ark:smoke
 - [Чек-листы по областям](/agents/checklists) — что прогнать перед сдачей в каждой области.
 - [Запреты и гварды](/agents/forbidden) — список «никогда».
 - [Шаблоны спецификаций](/agents/spec-templates) — типовые `spec.md` для proof loop.
+- [Testing](/agents/testing) — как писать e2e (headless mode, universal contract, ловушки).
+- [Estimation](/agents/estimation) — калибровка оценок времени через skill.
 
 Полный справочник правил — [Правила репозитория](/reference/rules).

@@ -189,6 +189,10 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Тесты
 
+- ❌ Запускать e2e без `KOSMOS_HEADLESS=1`. Окна Kepler / extension'ов не должны лезть на экран и воровать focus у пользователя. `launchKepler` helper выставляет этот env автоматически — не override'ить в `opts.env`.
+- ❌ Создавать BrowserWindow в `shell/electron/` без проверки `process.env.KOSMOS_HEADLESS === "1"`. Любое новое окно должно респектать headless mode (`show: !headless`, `skipTaskbar: headless`).
+- ❌ Полагаться на `getByRole("button", { name: /<text>/ })` strict-mode, если на странице потенциально несколько подходящих кнопок (Vue transitions, multi-pane layouts). Scope'ить к специфичному CSS классу. См. [Testing → ловушки](/agents/testing#vue-transition).
+- ❌ Lazy-регистрировать object_type extension'ом при первом write если extension объявлен в `manifest.tests.smoke`. Eager register на boot в shim'е — иначе universal contract spec падает с FK constraint.
 - ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
 - ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
 - ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
@@ -208,12 +212,16 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ### Eden
 
-- ❌ Возврат к ripgrep как поисковому движку.
-- ❌ Упрощение hardening для `save` / `move` / `delete` в `main/store.ts`.
+- ❌ Возврат к ripgrep / Tantivy / Heart Rust sidecar. Search 100% через ARK FTS5 (`search_objects`).
+- ❌ Возрождение `apps/eden/ts/` или standalone Eden.exe. Удалены в Phase 6.0.A.
+- ❌ Возврат Hevy fitness integration в Eden. Замена — Olympia (отдельное приложение, ещё не реализовано).
+- ❌ Возврат UI для code lint/format. Code-tools UI удалены в 6.0.A; TipTap CodeBlock + lowlight (синтакс highlight) остаются.
+- ❌ Vault picker UI / welcome screen / multi-vault. Single ARK DB per user после удаления spaces (2026-05-15).
+- ❌ Прямое использование `window.kepler.ark.request` из Eden компонентов и `store/`. Только через `kepler-api-shim` (или `edenApi.ts` фасад над ним) — это единственный мост, чтобы code review мог локально проверить ARK границу.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
 - ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
-- ❌ Возврат `vite-plugin-electron` (миграция на `electron-vite` сделана).
+- ❌ Удаление lazy-load Editor.vue (`defineAsyncComponent`). Main bundle Eden должен оставаться < 800KB.
 
 ### Delphi
 
@@ -329,7 +337,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 Прогнать **обязательно** в указанных случаях:
 
 ```powershell
-# Перед PR в data services (apps/eden/ts/main, shell/electron, extensions/<id>/src,
+# Перед PR в data services (shell/electron, extensions/<id>/src,
 # services/kepler-backend/src/usage_tracker)
 bun run ark:guard:writes
 

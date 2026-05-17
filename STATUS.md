@@ -1,16 +1,17 @@
-# Kosmos — статус проекта (2026-05-16)
+# Kosmos — статус проекта (2026-05-17)
 
 ## Текущие версии
 
 | Артефакт | Версия |
 |---|---|
-| Kepler shell (`shell/package.json`) | **0.1.6** |
-| Horologion extension (`extensions/horologion/manifest.json`) | **0.1.1** |
-| Delphi extension | 0.1.0 |
-| Arrancador extension | 0.1.0 |
+| Kepler shell (`shell/package.json`) | **0.1.9** |
+| Horologion extension (`extensions/horologion/manifest.json`) | **0.1.2** |
+| Delphi extension | 0.1.1 |
+| Arrancador extension | 0.1.1 |
+| Eden extension (`extensions/eden/manifest.json`) | **0.1.0** (Phase 6.0 + 6.0.A) |
 | Dashboard | встроен в shell (не extension) |
 
-Итог архитектурного pivot'а от standalone Electron-апок к Kepler-host архитектуре с Vue extensions. Замигрированы 4 из 5 апок (Eden намеренно отложен). После 2026-05-15: концепция spaces убрана (single DB per user), Dashboard встроен в shell, e2e Playwright suite зелёный.
+Итог архитектурного pivot'а от standalone Electron-апок к Kepler-host архитектуре с Vue extensions. **Все 5 апок мигрированы** (Eden — Phase 6.0 + 6.0.A, 2026-05-17). После 2026-05-15: концепция spaces убрана (single DB per user), Dashboard встроен в shell, e2e Playwright suite зелёный. После 2026-05-17 (Phase 6.0.A): standalone `apps/eden/ts/` удалён, Hevy/code-tools убраны из Eden (Hevy → Olympia позже).
 
 ## Архитектура
 
@@ -155,6 +156,24 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 - **Делphi task persistence** — lazy ensure `task_obj` object_type перед первым upsert. FK constraint failed → silent swallow в `.catch()` → задача жила in-memory. Fix: registered + warn вместо silent.
 - **Horologion orphan filter + DesktopChrome titlebar + transitionend** — несколько мелких фиксов параллельно (mode-toggle hide, orphan time_entries, animation jank).
 - **Dev mode data isolation** — `keplerDataDir()` returns `Kosmos-dev` в dev, `Kosmos` в prod, `KOSMOS_DATA_DIR` override в test. shell+backend смотрят на один dir.
+
+### Phase 6.0 / 6.0.A — Eden как extension (2026-05-17)
+
+См. `.agent/tasks/2026-05-17-eden-extension/spec.md` и `.agent/tasks/2026-05-17-eden-cleanup-and-hardening/spec.md`.
+
+**Phase 6.0 — Scaffold + ARK note CRUD**:
+- `extensions/eden/` создан как Vue extension (manifest, package, vite config, src/).
+- `kepler-api-shim` (renderer-side bridge поверх `window.kepler.ark.request`) — emulates `window.api` так, что Eden codebase почти не правился.
+- Note CRUD / folders / typed-notes / search — все ARK операции через shim.
+- Команды `eden:note:create` / `eden:note:search` зарегистрированы в command bus.
+
+**Phase 6.0.A — Cleanup + hardening**:
+- Hevy полностью удалён (UI + API + ConnectedAppsSettings.vue + lib/hevy.ts). Замена — Olympia.
+- Code lint/format удалён полностью (Editor.vue вызовы, settings panel, shim methods, vite-env types).
+- Trash UI реализован поверх ARK soft-delete (`deletedAt != null` фильтр; restore через `upsert_object` с `deletedAt: null`).
+- Bundle codesplit: lazy `Editor.vue` через `defineAsyncComponent` → main bundle **353KB** (gzip 112KB), editor chunk 1.36MB lazy.
+- Standalone `apps/eden/ts/` (вместе с Heart Rust + main process + preload) удалён полностью.
+- Workspace + tooling cleanup: `package.json`, `Cargo.toml`, `lefthook.yml`, scripts/*.mjs.
 
 ### Phase 10 — Playwright e2e infrastructure
 

@@ -1,153 +1,123 @@
 # Eden — заметки и дневник
 
 ::: tip Источник правды
-`apps/eden/AGENTS.md`, `apps/eden/ts/AGENTS.md`, `apps/eden/README.md`
+`extensions/eden/manifest.json`, `extensions/eden/src/`, `.agent/tasks/2026-05-17-eden-extension/` (Phase 6.0 spec), `.agent/tasks/2026-05-17-eden-cleanup-and-hardening/` (Phase 6.0.A spec).
 :::
 
-Eden — основное приложение для записей: дневник, мысли, знания. Offline-first, local-first. Идея: пишешь свободно, AI-анализатор раскладывает информацию по нужным «папкам знаний» и строит персональный RAG.
+Eden — приложение для записей: дневник, мысли, знания. Offline-first, local-first. Идея: пишешь свободно, AI-анализатор раскладывает информацию по нужным «папкам знаний» и строит персональный RAG.
+
+С Phase 6.0 (2026-05-17) Eden — **Vue extension внутри Kepler shell**. До этого был standalone Electron `Eden.exe` (`apps/eden/ts/` со своим Rust Heart sidecar для управления vault). Standalone-версия удалена в Phase 6.0.A.
 
 ## Архитектура
 
-Три слоя:
-
 ```
-┌─────────────────────────────────┐
-│  Vue 3.6 Vapor UI (src/)        │  TipTap editor, компоненты, стили
-├─────────────────────────────────┤
-│  Electron Main Process (main/)  │  IPC, SQLite, интеграции
-├─────────────────────────────────┤
-│  Heart — Rust sidecar (heart/)  │  Tantivy полнотекстовый поиск
-└─────────────────────────────────┘
+Kepler.exe (Electron host)
+  └─ extension-host
+      └─ extensions/eden/  (Vue bundle, TipTap editor)
+            ↕
+            kepler.ark.request(operation, params)  ─→  kepler-backend (WS)
+                                                          ↓
+                                                       ark-core-rpc (SQLite)
 ```
 
-- **src/** — Vue 3.6 Vapor UI: редактор (TipTap), app-specific сайдбары, настройки, typed notes; shared visuals из `@kepler/visuals`.
-- **main/** — Electron main process: IPC handlers, SQLite storage (`store.ts`), Heart integration, Hevy sync, мост на ARK через `ark.ts`.
-- **heart/** — Rust binary: vault filesystem manager (note types, folders, save/move/delete с hardening), stdin/stdout sidecar. **Не** search engine — search мигрирован на ARK FTS5 в `store.ts:searchEntries`.
-
-### ARK transport (Phase 2 cutover)
-
-`main/ark.ts` использует `@kepler/ark` с kepler-aware resolution:
-
-- По умолчанию пытается подключиться к [Kepler host](./kepler.md) через WebSocket. Если Kepler запущен — Eden не спавнит собственный `ark-core-rpc`.
-- Env-флаг `KOSMOS_KEPLER_OPTIONAL=1` включает **fallback** на self-managed sidecar (legacy режим), если Kepler недоступен. Это transitional флаг — будет убран в Phase 6.
-- Eden подписывается на `sync_error`/`sync_replay` events для observability schema drift'а (см. [sync hold-and-replay](../concepts/sync.md#schema-drift-hold-and-replay-phase-2)).
+- **`extensions/eden/src/`** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes; shared visuals из `@kepler/visuals`.
+- **`extensions/eden/src/lib/kepler-api-shim.ts`** — мост: эмулирует `window.api` (как у standalone Eden), внутри роутит ARK операции через `window.kepler.ark.request(...)`. Это позволяет сохранять Eden codebase без массового rewrite call-sites при миграции в extension. Прецедент — Delphi `electron-api-shim.ts`.
+- **`extensions/eden/src/lib/edenApi.ts`** — публичный фасад для note CRUD / folders / search / typed-notes, импортирует функции из shim'а.
+- **Heart Rust sidecar — удалён.** Search полностью через ARK FTS5 (`search_objects`). Vault filesystem manager стал не нужен — single ARK DB per user.
 
 ## Стек
 
 | Слой | Технология |
 |---|---|
 | UI | Vue 3.6 **Vapor** + TipTap + Pinia |
-| Desktop | Electron 38, `electron-vite`, `vite 7` (миграция с `vite-plugin-electron`) |
-| Storage | SQLite (better-sqlite3) |
-| Search | Rust + Tantivy через Eden Heart sidecar |
-| Lint / format | oxlint 1.57, oxfmt 0.36 |
-| E2E | Playwright |
-| Build | Vite + Rolldown, electron-builder |
+| Транспорт | `window.kepler.ark.request` → kepler-backend WS → `ark-core-rpc` |
+| Storage | ARK SQLite (через runtime, не direct access) |
+| Search | ARK FTS5 (`search_objects` endpoint) |
+| Build | Vite + Rolldown (per-extension, через `shell/vite.extensions.config.mjs`) |
 
 ## Структура
 
 ```
-apps/eden/
-├─ AGENTS.md
-└─ ts/
-   ├─ src/
-   │  ├─ App.vue
-   │  ├─ Editor.vue              # TipTap, slash, wikilinks
-   │  ├─ store/                  # eden.ts (бизнес), layout.ts (UI)
-   │  ├─ composables/            # useKeyboard, usePlatform, useSearch, useTitlebarSafeArea
-   │  ├─ components/             # sidebar/, settings/, dialogs/, typed-notes/, spaces/
-   │  └─ lib/                    # edenApi.ts, typedNotes.ts, systemTypes.ts, codeBlocks.ts
-   ├─ main/
-   │  ├─ main.ts                 # init, BrowserWindow, IPC handlers
-   │  ├─ preload.ts
-   │  ├─ store.ts                # SQLite: entries, folders, note types, trash, vault
-   │  ├─ ark.ts                  # мост на @kepler/ark
-   │  ├─ heart.ts                # Eden Heart sidecar
-   │  ├─ hevy.ts                 # Hevy fitness API
-   │  └─ hevySync.ts             # Hevy → Eden entries
-   ├─ heart/                     # Rust + Tantivy
-   ├─ tests/                     # Playwright E2E
-   ├─ docs/                      # архитектурные решения
-   ├─ electron.vite.config.ts
-   ├─ electron-builder.json5
-   ├─ playwright.config.ts
-   └─ AGENTS.md
+extensions/eden/
+├─ manifest.json              # id, kind=vue, devPort, размер окна
+├─ package.json               # workspace @kosmos/extension-eden
+├─ vite.config.mjs            # dev server (HMR на :5184)
+├─ index.html                 # точка входа Vite
+├─ icon.png                   # иконка в launcher
+├─ public/anytype/icon/…      # SVG asset'ы из исторической Eden темы
+└─ src/
+   ├─ main.ts                 # installKeplerApiShim() → createApp(App).use(pinia).mount("#root")
+   ├─ App.vue                 # корневой view
+   ├─ Editor.vue              # TipTap editor (lazy-load chunk)
+   ├─ Titlebar.vue
+   ├─ lib/
+   │  ├─ kepler-api-shim.ts   # window.api эмуляция поверх kepler.ark
+   │  ├─ edenApi.ts           # тонкий фасад над shim
+   │  ├─ codeBlocks.ts        # язык-id mapping для TipTap CodeBlock
+   │  ├─ entryTitles.ts
+   │  ├─ systemTypes.ts       # системные note_obj / game_obj типы
+   │  └─ typedNotes.ts        # zod schemas + header layout
+   ├─ store/
+   │  ├─ eden.ts              # Pinia store: entries, noteTypes, currentEntry, save coordinator
+   │  └─ layout.ts            # UI: sidebar, search, zen mode
+   ├─ components/             # sidebar/, settings/, typed-notes/, objects/, spaces/, dialogs/
+   └─ composables/            # useKeyboard, usePlatform, useSearch, useTheme, useTitlebarSafeArea
 ```
 
 ## Модель данных
 
-Заметки и typed-notes — это ARK-объекты:
+Заметки — это ARK-объекты:
 
 - Обычные заметки — `note_obj`.
-- Custom typed notes — собственные `object_types`, регистрируемые в Eden (через страницу управления типами `src/NoteTypesScreen.tsx`).
-- У `entries` (внутренний формат) есть `type_id`, `header_layout`, `header_props_json`, `schema_version`. Заголовок рендерится через `TypedHeader.vue`, тело — обычный editor body.
+- Custom typed notes — собственные `object_types`, регистрируемые в Eden (через страницу управления типами).
+- `entries` (внутренний формат) имеют `type_id`, `header_layout`, `header_props_json`, `schema_version`. Заголовок рендерится через `TypedHeader.vue`, тело — обычный editor body.
 
-### Что осталось от Heart
-
-После startup migration `note_obj` объекты — **источник правды** для shared note state. Heart остаётся для:
-
-- editor/vault-специфики (специфичные для редактора форматы и поведение)
-- one-time миграции, импорта и экспорта
-- будущий специализированный Eden-only поиск, если ARK object search окажется недостаточным
-
-Текущее runtime правило (`docs/EDEN-HEART-ARK-BOUNDARY.md`):
-
-- `loadEntry`, `listEntries`, `listNoteTypes`, `searchEntries` — читают **только** ARK objects/object types.
-- Heart entry/type reads используются startup migration, не штатными путями чтения.
-
-## Команды
+## Команды и сборка
 
 ```powershell
-cd apps/eden/ts
-bun run dev        # сборка Rust + запуск Electron dev
-bun run build      # production build (Rust release + TS + Vite)
-bun run lint       # oxlint
-bun run format     # oxfmt --check
-bun run test:e2e   # build + Playwright
-bun run package    # создать DMG/installer
+# Сборка Eden extension'а (часть Kepler shell build)
+bun run --cwd shell build:extensions
+
+# Только Eden:
+bunx vite build --config shell/vite.extensions.config.mjs --mode eden
+
+# Dev mode с HMR (поднять Vite dev server отдельно):
+bun run --cwd shell dev:extensions          # все extensions, eden на :5184
+bun run --cwd shell dev                     # shell + extensions вместе
+
+# Open Eden в running Kepler shell:
+# Ctrl+Shift+K → "Открыть Eden"
 ```
 
-Перед сдачей задачи **обязательно**:
+## Что было удалено (Phase 6.0.A)
 
-```powershell
-bun run build           # должен пройти без ошибок
-bun run test:e2e        # должен зелёным
-# минимум, если изменились только типы/локальная логика без UI:
-bun run lint
-bun x tsc --noEmit
-```
+- **Hevy fitness sync** — заменяется Olympia позже (отдельное приложение).
+- **Code lint/format** — UI и API убраны полностью. Возможно вернётся через child_process capability в shell preload.
+- **Vault picker** — single ARK DB per user (после удаления spaces 2026-05-15). Welcome screen не отображается.
+- **Export to markdown** — переносится в Kepler shell как универсальный per-type export (см. [Roadmap](./kepler-roadmap.md)).
+- **Heart Rust sidecar** — search через ARK FTS5, vault filesystem management не нужен.
+- **Standalone `apps/eden/ts/`** — удалён, fallback больше не доступен.
 
 ## Ключевые решения и инварианты
 
-- **Vapor mode**: leaf-компоненты — `<script setup vapor lang="ts">`; TipTap-компоненты — обычный VDOM. Interop включён через `vaporInterop: true` в `vite.config.ts`.
+- **Vapor mode**: leaf-компоненты — `<script setup vapor lang="ts">`; TipTap-компоненты — обычный VDOM. Interop включён через `vaporInterop: true` в `shell/vite.extensions.config.mjs`.
 - **Pinia stores**: `useEdenStore` (бизнес-логика, save coordinator) + `useLayoutStore` (UI/сайдбары).
-- **Heart остаётся**, не возвращаться к ripgrep. Расширение поиска — инкрементальный индекс в Tantivy, не новый JS-хак.
-- **Storage hardening** в `main/store.ts` — не упрощать. Защита для `save`/`move`/`delete` уже есть, не ломай её.
-- **tree-aware path logic**: для markdown-файлов один путь заметки, не плоские пути.
-- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`. **Не возвращай** ручные `--titlebar-height` / `--titlebar-left-safe-area` хаки в shell.
-- **Titlebar history controls** — общий `TitlebarHistoryControls` из `@kepler/visuals`. Состояние — из локальной истории экранов/записей Eden, **не** из vue-router.
-- **Shared visuals**: если компонент есть в `@kepler/visuals` — импорт через public API пакета, не deep import. Локальные `src/components/sidebar/*` — это **app-specific** контейнеры, не дубли shared UI.
-- **Alias** `@/` → `src/`.
-- **preload**: `vite-plugin-electron` (бывший) генерирует `preload.mjs`, не `.js`. В `main.ts` путь — `.mjs`.
-
-## E2E нюансы
-
-- Во время e2e окно Electron **не должно** воровать фокус.
-- Не ломай background launch для тестов при изменении процесса запуска окна.
-- E2E могут проверять не только UI, но и файлы на диске — не упрощай так, чтобы тест перестал ловить регрессии хранилища.
+- **ARK FTS5** — единственный search engine. Не возвращаться к Tantivy/ripgrep.
+- **Storage hardening через ARK** — все писи идут через `upsert_object` с runtime валидацией; никаких прямых SQL write'ов из extension TS (см. [Граница записи](../concepts/write-boundary.md)).
+- **TipTap CodeBlock + lowlight** — синтакс highlight в блоках кода. Никаких runtime lint/format вызовов.
+- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`.
+- **Lazy Editor.vue** — `defineAsyncComponent(() => import("./Editor.vue"))` в App.vue: main bundle ~350KB, editor chunk ~1.36MB lazy-loaded при открытии заметки.
 
 ## Будущее
 
-- `apps/eden/kotlin/` — Android-версия (планируется).
-- Heart не шарится между платформами (в отличие от anytype-heart), живёт внутри `ts/`.
-- Voice notes + расшифровка для дневника.
-- RAG поверх Gemini-embeddings или bge-m3.
-- ripgrep — точный поиск, osgrep — семантический (план).
-- Книги, bookmarks (а-ля mymind), задачи (todofus).
-- Все сущности — объекты ARK. Eden — удобная визуализация.
+- **Voice notes** + расшифровка для дневника (через Kerux).
+- **RAG** поверх Gemini-embeddings или bge-m3.
+- **Universal per-type export** (см. [Kepler Roadmap](./kepler-roadmap.md)) — notes → markdown, runs → GPX + zip, etc.
+- **Olympia** — fitness-приложение (заменит роль Hevy).
 
 ## Связанные документы
 
-- [Модель данных ARK](/concepts/ark-objects)
-- [Граница записи в ARK](/concepts/write-boundary)
-- `docs/EDEN-HEART-ARK-BOUNDARY.md`
+- [Модель данных ARK](../concepts/ark-objects.md)
+- [Граница записи в ARK](../concepts/write-boundary.md)
+- [Extension host](../concepts/extension-host.md)
+- [Command bus](../concepts/command-bus.md)

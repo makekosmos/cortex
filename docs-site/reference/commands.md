@@ -102,7 +102,7 @@ $env:KEPLER_DEV = "1"; bun run --cwd shell dev
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd shell dev
 ```
 
-Extension bundles лежат в `extensions/<id>/` (Dashboard / Horologion / Delphi / Arrancador). Eden — outlier, остаётся standalone .exe (до Phase 6).
+Extension bundles лежат в `extensions/<id>/` — Eden / Horologion / Delphi / Arrancador. Dashboard — встроенный shell view (`shell/src/views/Dashboard*.vue`).
 
 ## Kepler Backend (Rust)
 
@@ -111,18 +111,6 @@ Extension bundles лежат в `extensions/<id>/` (Dashboard / Horologion / Del
 ```powershell
 cargo build --manifest-path services/kepler-backend/Cargo.toml --bin kepler-backend
 cargo test  --manifest-path services/kepler-backend/Cargo.toml --lib
-```
-
-## Eden (standalone)
-
-```powershell
-cd apps/eden/ts
-bun run dev                # сборка Heart sidecar + Vite + Electron
-bun run build              # production NSIS installer
-bun run lint               # oxlint
-bun run format             # oxfmt --check
-bun run test:e2e           # build + Playwright
-bun run test:ark-migration # smoke для ARK миграции
 ```
 
 ## Vue-extensions
@@ -169,9 +157,6 @@ cargo test --manifest-path services\kepler-backend\Cargo.toml --lib
 # SDK
 bun run --cwd packages/ark typecheck
 bun run --cwd packages/ark test
-
-# Eden
-bun run --cwd apps/eden/ts test:ark-migration
 
 # Guard
 bun run ark:guard:writes

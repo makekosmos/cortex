@@ -12,8 +12,9 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 3 | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC | ✅ |
 | 4 | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador) | ✅ |
 | 5 | Extension developer mode (Vite HMR per extension, Raycast-style) | ✅ |
-| 6 | Eden как extension (намеренно отложено) | ⏳ |
-| 7 | Adaptive lifecycle (optional) | ⏳ |
+| 6 | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit) | ✅ |
+| 7 | Universal per-type data export (notes → md, runs → GPX+zip, …) — pipeline в Kepler shell | ⏳ |
+| 7.5 | Adaptive lifecycle (optional) | ⏳ |
 | 8 | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅ | ⏳ |
 | 9 | Delphi UI: Tailwind → plain CSS (открытый вопрос) | ⏳ |
 | 10 | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳ | ⏳ |
@@ -59,7 +60,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 ## Phase 4 ✅ — Apps как Vue extensions
 
-Цель достигнута: 4 апки рендерятся **внутри** Kepler как Vue extensions, без отдельных Electron-процессов. Eden намеренно остался standalone (см. Phase 6).
+Цель достигнута: 4 апки рендерятся **внутри** Kepler как Vue extensions, без отдельных Electron-процессов. Eden мигрирован отдельно в Phase 6.0 / 6.0.A (см. ниже).
 
 Мигрированы:
 
@@ -95,11 +96,44 @@ Hot-reload для extensions через Vite dev servers, как `ray develop` �
 - **Arrancador pages migration** — все 7 страниц мигрированы в extension (Library, Catalogue, Scan, Sqoba, Statistics, Settings, GameDetail). Native scanner / RAWG / game launch / usage heatmap пока stubs. Подробно — [Arrancador](./arrancador.md).
 - **Tailwind restored для Delphi** — `@tailwindcss/vite` plugin подключён обратно в `extensions/delphi/vite.config.mjs`, т.к. оригинальный UI на Tailwind utility classes. Переписывание на plain CSS — открытый вопрос Phase 9.
 
-## Phase 6 ⏳ — Eden как extension
+## Phase 6 ✅ — Eden как extension
 
-Eden — самый сложный кейс (TipTap editor + Heart Rust поиск + широкий preload API: titlebar history, store hardening, FTS, vault). Намеренно отложено пока остальные апки в extensions стабилизируются. Ожидаемый RAM-эффект — ~250 MB save относительно Eden.exe standalone.
+Eden — самый сложный кейс (TipTap editor + Heart Rust поиск + широкий preload API: titlebar history, store hardening, FTS, vault).
 
-## Phase 7 ⏳ — Adaptive lifecycle (optional)
+### Phase 6.0 (2026-05-17) — Scaffold + ARK note CRUD
+
+- `extensions/eden/` создан как Vue extension: manifest (devPort 5184, 1100×750), package.json, vite config, src/ портирован из standalone Eden.
+- `kepler-api-shim` (`extensions/eden/src/lib/kepler-api-shim.ts`) эмулирует `window.api` поверх `window.kepler.ark.request(...)`. Шаблон такой же, как Delphi `electron-api-shim` — позволяет сохранить ~50 call-sites Eden codebase'а без переписывания.
+- Note CRUD / folders (stubs) / typed-notes / search — через ARK операции (`list_objects`, `get_object`, `upsert_object`, `delete_object`, `list_object_types`, `upsert_object_type`, `search_objects`).
+- Команды `eden:note:create`, `eden:note:search` зарегистрированы через command bus.
+- Standalone `Eden.exe` остался временно как fallback.
+
+См. `.agent/tasks/2026-05-17-eden-extension/spec.md`.
+
+### Phase 6.0.A (2026-05-17) — Cleanup + hardening
+
+- **Hevy fitness sync удалён.** Будет заменён отдельным приложением Olympia.
+- **Code lint/format удалён** (UI + API). Возможно вернётся через child_process capability в shell preload.
+- **Trash UI работает** через ARK soft-delete (`deletedAt != null` фильтр + `upsert_object` с `deletedAt: null` для restore + `delete_object` для permanent).
+- **Bundle codesplit**: lazy `Editor.vue` через `defineAsyncComponent` → main bundle ~353KB (gzip 112KB) vs prior 1.7MB, editor chunk ~1.36MB загружается при открытии заметки.
+- **Standalone `apps/eden/ts/` удалён** полностью. Heart Rust sidecar тоже не нужен (ARK FTS5 покрывает search).
+- Workspace cleanup: `package.json` workspaces, `Cargo.toml` exclude, `lefthook.yml` hooks, `scripts/check-ark-write-boundaries.mjs`, `scripts/ark-smoke.mjs`, `scripts/fix-mojibake.mjs`, `scripts/sync-agents-docs.mjs`, `scripts/check-docs-freshness.mjs` — все ссылки на `apps/eden` вычищены.
+
+См. `.agent/tasks/2026-05-17-eden-cleanup-and-hardening/spec.md`.
+
+## Phase 7 ⏳ — Universal per-type data export
+
+Идея: единый export pipeline в Kepler shell, разные типы данных уходят в разные форматы:
+
+- `note_obj` → markdown файлы (один файл = одна заметка)
+- `time_entry_obj` → CSV / JSON
+- `run_obj` (future, Olympia/Strava-likes) → GPX + zip с маршрутом и метаданными
+- `game_obj` (Arrancador) → JSON библиотека + ссылки на assets
+- `task_obj` → markdown с фронтматтером / CSV
+
+Реализация — `kepler.export.<type>(filter, format)` API в shell preload + UI «Экспорт» в Settings, доступный из любого extension'а. Per-type конвертеры регистрируются как plugins в shell. Текущий Eden export-to-markdown заменяется этим механизмом.
+
+## Phase 7.5 ⏳ — Adaptive lifecycle (optional)
 
 Динамическое включение/выключение extensions на основе usage (LRU eviction, RAM budget). Зависит от Phase 4-6.
 
