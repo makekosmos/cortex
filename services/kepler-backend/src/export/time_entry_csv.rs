@@ -1,7 +1,7 @@
 // time_entry_obj → CSV. Один файл time-entries.csv.
 // Колонки: id, title, started_at, ended_at, duration_minutes, task_id, source
 
-use super::{ConvertResult, Converter};
+use super::{csv_safe_cell, ConvertResult, Converter};
 use ark_core::types::ArkObject;
 use std::path::Path;
 
@@ -63,12 +63,12 @@ impl Converter for TimeEntryCsvConverter {
             let source = p.get("source").and_then(|v| v.as_str()).unwrap_or("");
             if let Err(e) = wtr.write_record([
                 obj.id.as_str(),
-                obj.title.as_str(),
+                csv_safe_cell(&obj.title).as_ref(),
                 started,
                 ended,
                 duration.as_str(),
                 task_id,
-                source,
+                csv_safe_cell(source).as_ref(),
             ]) {
                 result.push_error(format!("write row {}: {e}", obj.id));
             }

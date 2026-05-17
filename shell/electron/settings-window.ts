@@ -8,7 +8,7 @@
 // `openSettings()` из main process (tray menu).
 
 import { app, BrowserWindow, ipcMain, screen } from "electron";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,8 +60,11 @@ function readSettings(): KeplerShellSettings {
 function writeSettings(patch: Partial<KeplerShellSettings>): void {
   const current = readSettings();
   const next: KeplerShellSettings = { ...current, ...patch };
+  const target = settingsFilePath();
+  const tmp = target + ".tmp";
   try {
-    writeFileSync(settingsFilePath(), JSON.stringify(next, null, 2), "utf8");
+    writeFileSync(tmp, JSON.stringify(next, null, 2), "utf8");
+    renameSync(tmp, target);
   } catch (e) {
     console.error("[kepler-shell] settings write failed:", e);
   }

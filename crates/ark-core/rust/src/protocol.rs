@@ -84,7 +84,13 @@ pub enum LanSyncMessage {
 // ---------------------------------------------------------------------------
 
 pub fn serialize_message(msg: &LanSyncMessage) -> String {
-    serde_json::to_string(msg).unwrap_or_default()
+    match serde_json::to_string(msg) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[ark-core] serialize_message failed: {e}");
+            String::new()
+        }
+    }
 }
 
 pub fn deserialize_message(raw: &str) -> Option<LanSyncMessage> {

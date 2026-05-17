@@ -128,6 +128,19 @@ pub(crate) fn sanitize_filename(input: &str) -> String {
     out
 }
 
+/// Sanitize CSV cell value to prevent formula injection in spreadsheet apps.
+///
+/// Spreadsheet applications (Excel, Google Sheets) interpret cells that start
+/// with `=`, `+`, `-`, or `@` as formulas, which can execute arbitrary code.
+/// Prefix such values with a TAB character to force literal interpretation.
+pub(crate) fn csv_safe_cell(value: &str) -> std::borrow::Cow<str> {
+    if value.starts_with(['=', '+', '-', '@']) {
+        std::borrow::Cow::Owned(format!("\t{value}"))
+    } else {
+        std::borrow::Cow::Borrowed(value)
+    }
+}
+
 /// Подобрать уникальное имя файла в dest_dir с заданным stem + extension.
 /// Если файл существует — добавляет суффикс `-2`, `-3`, ...
 /// Если все суффиксы до 9999 заняты — использует timestamp суффикс.
@@ -191,6 +204,19 @@ mod tests {
         assert!(std::str::from_utf8(out.as_bytes()).is_ok(), "not valid UTF-8");
         // 120 bytes / 2 bytes-per-char = 60 chars
         assert_eq!(out, "А".repeat(60));
+    }
+
+    #[test]
+    fn csv_safe_cell_sanitizes_formula_prefix() {
+        assert_eq!(csv_safe_cell("=SUM(1+1)"), "\t=SUM(1+1)");
+        assert_eq!(csv_safe_cell("+bad"), "\t+bad");
+        assert_eq!(csv_safe_cell("-also-bad"), "\t-also-bad");
+        assert_eq!(csv_safe_cell("@user"), "\t@user");
+        // Safe values unchanged.
+        assert_eq!(csv_safe_cell("Hello"), "Hello");
+        assert_eq!(csv_safe_cell("Buy milk"), "Buy milk");
+        assert_eq!(csv_safe_cell(""), "");
+        assert_eq!(csv_safe_cell("100"), "100");
     }
 
     #[test]
