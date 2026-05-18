@@ -1,7 +1,7 @@
 {
   "name": "kepler-shell",
   "private": true,
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Kepler — Electron host для Kosmos ecosystem (global launcher + extension host)",
   "author": "Kazui",
   "type": "module",
@@ -77,6 +77,10 @@
       {
         "from": "../target/release/ark-core-rpc.exe",
         "to": "ark-core-rpc.exe"
+      },
+      {
+        "from": "../target/release/kepler-focus-helper.exe",
+        "to": "kepler-focus-helper.exe"
       },
       {
         "from": "build/icon.png",
