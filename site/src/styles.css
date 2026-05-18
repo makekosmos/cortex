@@ -1,0 +1,66 @@
+/* Шрифты — Inter Variable. Загружаем через CDN чтобы не тащить fontsource
+   зависимость отдельно (это marketing site, статика). */
+@import url("https://rsms.me/inter/inter.css");
+
+:root {
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-2: #1a1a1a;
+  --border: #262626;
+  --foreground: #ededed;
+  --muted: #8a8a8a;
+  --muted-2: #5a5a5a;
+  --accent: #2563eb;
+  --accent-bright: #3b82f6;
+  --radius: 12px;
+  --radius-lg: 20px;
+
+  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  /* Edge padding для корнерных лейблов — 20px кроме mobile. */
+  --edge-pad: 20px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-feature-settings:
+    "ss01" 1,
+    "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+a:hover {
+  color: var(--foreground);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
