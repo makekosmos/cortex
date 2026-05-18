@@ -23,6 +23,7 @@
 - **0.1.16** — Horologion task input alignment fix + QuickEntryPanel removed Tailwind + Storybook 8 + handcrafted convention + Focus mode roadmap spec
 
 См.:
+- `docs-site/concepts/system-requirements.md` — что нужно для запуска и сборки (canonical).
 - `docs-site/concepts/performance-experiments.md` — реальные baseline/after measurements (правило: нет цифр → `(не записал)`, **никогда** не выдумывать).
 - `.agent/tasks/2026-05-18-*/evidence.md` — proof loops с calibration.
 - `packages/visuals/STORYBOOK.md` — Storybook contributor guide.

@@ -22,12 +22,13 @@
 Прочитай в указанном порядке:
 
 1. **[Архитектура](/concepts/architecture)** — общая картина.
-2. **[Модель данных ARK](/concepts/ark-objects)** — что за таблицы и типы.
-3. **[Граница записи в ARK](/concepts/write-boundary)** — что можно, что нельзя.
-4. **[Изоляция тестовых БД](/concepts/test-isolation)** — как писать тесты.
-5. **[Proof loop](/concepts/proof-loop)** — как оформлять substantial-задачи.
-6. **[Запреты и гварды](/agents/forbidden)** — список «никогда».
-7. **[Чек-листы по областям](/agents/checklists)** — что прогнать перед сдачей.
+2. **[Системные требования](/concepts/system-requirements)** — что нужно для запуска и сборки (Windows-only сейчас, x64, Node 20+, Rust 1.80+, Bun).
+3. **[Модель данных ARK](/concepts/ark-objects)** — что за таблицы и типы.
+4. **[Граница записи в ARK](/concepts/write-boundary)** — что можно, что нельзя.
+5. **[Изоляция тестовых БД](/concepts/test-isolation)** — как писать тесты.
+6. **[Proof loop](/concepts/proof-loop)** — как оформлять substantial-задачи.
+7. **[Запреты и гварды](/agents/forbidden)** — список «никогда».
+8. **[Чек-листы по областям](/agents/checklists)** — что прогнать перед сдачей.
 
 ## Принципы работы
 
