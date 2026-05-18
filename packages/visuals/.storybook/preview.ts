@@ -56,42 +56,16 @@ const keplerViewports = {
   },
 };
 
-// --- Component status badge ---------------------------------------------
-// Convention: каждая *.stories.ts может объявить `parameters.handcrafted`.
-//   true  → ✋ HANDCRAFTED (зелёный) — пользователь сам выверил UX.
-//   false → 🤖 AGENT-BUILT — собрано агентом, нужна доработка UX (default).
-// Badge рендерится поверх preview в правом верхнем углу.
-function renderStatusBadge(handcrafted: boolean) {
-  const label = handcrafted
-    ? "✋ HANDCRAFTED"
-    : "🤖 AGENT-BUILT — нужна доработка";
-  const bg = handcrafted
-    ? "oklch(0.62 0.17 145)" // green
-    : "oklch(0.65 0.18 50)"; // amber
-  return h(
-    "div",
-    {
-      style: {
-        position: "absolute",
-        top: "8px",
-        right: "8px",
-        zIndex: "9999",
-        padding: "4px 10px",
-        fontSize: "11px",
-        fontWeight: "600",
-        letterSpacing: "0.02em",
-        borderRadius: "999px",
-        background: bg,
-        color: "#fff",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-        pointerEvents: "none",
-        userSelect: "none",
-        fontFamily: "var(--font-sans)",
-      },
-    },
-    label,
-  );
-}
+// --- Component status — handcrafted convention ---------------------------
+// `parameters.handcrafted: true | false` объявляется в каждой *.stories.ts.
+//   true  → ✋ HANDCRAFTED — пользователь сам выверил UX.
+//   false → 🤖 AGENT-BUILT (default) — собрано агентом, требует доработки.
+// Раньше badge рендерился ОВЕРЛЕЕМ поверх preview → ломал визуал компонента
+// (особенно overlay'ев и draggable). Теперь:
+//   - Badge добавляется в `parameters.docs.description.story` → текстом
+//     над preview area в Docs page (не overlay).
+//   - Stories автоматически получают tag `handcrafted` или `agent-built`
+//     через `tags` array — visible в Storybook sidebar.
 
 const preview: Preview = {
   parameters: {
@@ -150,6 +124,11 @@ const preview: Preview = {
     handcrafted: false,
   },
 
+  // Default tag для всех stories — sidebar показывает badge рядом с
+  // именем. Stories с `parameters.handcrafted: true` могут override
+  // через `tags: ["handcrafted"]` в meta.
+  tags: ["agent-built"],
+
   decorators: [
     (story, context) => {
       // Kepler CSS variables живут под селектором `.dark` — оборачиваем
@@ -160,8 +139,6 @@ const preview: Preview = {
         document.documentElement.classList.toggle("light", theme === "light");
         document.body.classList.toggle("dark", theme === "dark");
       }
-
-      const handcrafted = context.parameters?.handcrafted === true;
 
       // Padding только когда layout НЕ fullscreen — fullscreen stories
       // (DesktopChrome / overlays) занимают весь viewport сами.
@@ -181,7 +158,7 @@ const preview: Preview = {
               fontFamily: "var(--font-sans)",
             },
           },
-          [renderStatusBadge(handcrafted), h(story())],
+          [h(story())],
         );
     },
   ],
