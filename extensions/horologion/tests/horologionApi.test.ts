@@ -7,17 +7,7 @@
 
 import { beforeEach, describe, expect, test } from "bun:test";
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
-interface ArkObjectRecord {
-  id: string;
-  typeId: string;
-  title: string | null;
-  contentJson?: JsonValue;
-  propsJson?: JsonValue;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-}
+import type { ArkObjectRecord } from "@kosmos/ark";
 
 // ARK store — простая map по id.
 const store = new Map<string, ArkObjectRecord>();

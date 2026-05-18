@@ -19,6 +19,8 @@
 //   - `settings.open()` намеренно не реализован — settings рисуется внутри
 //     основного окна (route /settings).
 
+import type { ArkObjectRecord, JsonValue } from "@kosmos/ark";
+
 import type {
   CreateTimeEntryInput,
   DelphiTask,
@@ -27,19 +29,6 @@ import type {
   TimeEntry,
   UpdateTimeEntryInput,
 } from "../types";
-
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-interface ArkObjectRecord {
-  id: string;
-  typeId: string;
-  title: string | null;
-  contentJson?: JsonValue;
-  propsJson?: JsonValue;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-}
 
 interface KeplerArk {
   request: <T = unknown>(operation: string, params?: Record<string, unknown>) => Promise<T>;

@@ -7,6 +7,8 @@
 //   - legacy: Pinia store + electronAPI.gamesApi.* (full CRUD).
 //   - extension: read-only projection из `list_objects_by_type`.
 
+import type { ArkObjectRecord } from "@kosmos/ark";
+
 export interface ArrancadorGame {
   id: string;
   name: string;
@@ -23,17 +25,6 @@ export interface ArrancadorGame {
   playStatus: string | null;
   exePath: string | null;
   rawgId: number | null;
-}
-
-export interface ArkObjectRecord {
-  id: string;
-  typeId: string;
-  title: string | null;
-  contentJson: unknown;
-  propsJson: unknown;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
 }
 
 export interface KeplerArkBridge {
