@@ -106,25 +106,19 @@ watch(showProjectMenu, (val) => {
 </script>
 
 <template>
-  <div
-    v-if="open"
-    class="absolute inset-0 z-40 flex items-start justify-center pt-[15vh]"
-  >
-    <!-- Backdrop — only covers content area, not titlebar/sidebar -->
-    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close" />
+  <div v-if="open" class="qep-root">
+    <!-- Backdrop -->
+    <div class="qep-backdrop" @click="close" />
 
     <!-- Panel -->
-    <div
-      class="relative z-10 w-full max-w-(--bringhurst-wide) overflow-visible rounded-xl border border-(--border) shadow-2xl"
-      style="background: var(--color-shape-highlight-light-solid)"
-    >
-      <div class="flex flex-col gap-3 px-4 pt-3">
+    <div class="qep-panel">
+      <div class="qep-content">
         <input
           ref="titleInput"
           type="text"
           placeholder="Новая задача"
           :value="title"
-          class="w-full bg-transparent text-sm font-semibold text-(--foreground) placeholder:text-(--muted-foreground) outline-none"
+          class="qep-title"
           @input="title = ($event.target as HTMLInputElement).value"
           @keydown="onTitleKeyDown"
         />
@@ -133,33 +127,26 @@ watch(showProjectMenu, (val) => {
           placeholder="Заметки"
           :value="notes"
           :rows="2"
-          class="w-full resize-none bg-transparent text-xs text-(--muted-foreground) placeholder:text-(--muted-foreground)/60 outline-none"
+          class="qep-notes"
           @input="notes = ($event.target as HTMLTextAreaElement).value"
           @keydown="onNotesKeyDown"
         />
       </div>
 
-      <div class="h-px bg-(--border)" />
+      <div class="qep-divider" />
 
-      <!-- Metadata row -->
-      <div class="px-4 py-2">
-        <div class="flex flex-wrap items-center gap-2">
-          <!-- Schedule date -->
+      <div class="qep-meta">
+        <div class="qep-meta-row">
           <DateChip
             :value="scheduledDate"
             placeholder="Без даты"
             @update:value="scheduledDate = $event"
           />
 
-          <!-- Billable toggle -->
           <button
             type="button"
-            :class="[
-              'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors',
-              billable
-                ? 'bg-emerald-500/15 text-emerald-500'
-                : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
-            ]"
+            class="qep-chip"
+            :class="{ 'qep-chip--billable': billable }"
             :title="billable ? 'Оплачиваемая задача' : 'Сделать оплачиваемой'"
             @click="billable = !billable"
           >
@@ -167,11 +154,7 @@ watch(showProjectMenu, (val) => {
             <span>Оплачиваемая</span>
           </button>
 
-          <!-- Price input (only when billable) -->
-          <label
-            v-if="billable"
-            class="flex items-center gap-1.5 rounded-full bg-(--secondary) px-3 py-1.5 text-xs"
-          >
+          <label v-if="billable" class="qep-chip qep-chip--input">
             <input
               type="number"
               inputmode="decimal"
@@ -179,40 +162,29 @@ watch(showProjectMenu, (val) => {
               step="0.01"
               placeholder="Цена"
               :value="priceInput"
-              class="w-20 bg-transparent text-xs outline-none placeholder:text-(--muted-foreground)/60"
+              class="qep-price-input"
               @input="priceInput = ($event.target as HTMLInputElement).value"
             />
           </label>
 
-          <div class="flex-1" />
+          <div class="qep-spacer" />
 
-          <!-- Project picker -->
-          <div ref="projectMenu" class="relative">
+          <div ref="projectMenu" class="qep-project-wrap">
             <button
               type="button"
-              :class="[
-                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors',
-                selectedProject()
-                  ? 'bg-(--accent)/15 text-(--accent)'
-                  : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
-              ]"
+              class="qep-chip"
+              :class="{ 'qep-chip--active': selectedProject() }"
               @click="showProjectMenu = !showProjectMenu"
             >
               <Folder :size="12" />
               <span>{{ selectedProject()?.title ?? "Входящие" }}</span>
             </button>
 
-            <div
-              v-if="showProjectMenu"
-              class="absolute right-0 top-full z-20 mt-1 min-w-45 max-h-64 overflow-y-auto rounded-lg border border-(--border) py-1 shadow-lg"
-              style="background: var(--color-shape-highlight-light-solid)"
-            >
+            <div v-if="showProjectMenu" class="qep-menu">
               <button
                 type="button"
-                :class="[
-                  'w-full px-3 py-1.5 text-left text-xs hover:bg-(--surface)',
-                  selectedProjectId === null ? 'text-(--accent)' : 'text-(--foreground)',
-                ]"
+                class="qep-menu-item"
+                :class="{ 'qep-menu-item--selected': selectedProjectId === null }"
                 @click="selectedProjectId = null; billable = false; showProjectMenu = false"
               >
                 Входящие
@@ -221,10 +193,8 @@ watch(showProjectMenu, (val) => {
                 v-for="project in (projects ?? [])"
                 :key="project.id"
                 type="button"
-                :class="[
-                  'w-full px-3 py-1.5 text-left text-xs hover:bg-(--surface)',
-                  selectedProjectId === project.id ? 'text-(--accent)' : 'text-(--foreground)',
-                ]"
+                class="qep-menu-item"
+                :class="{ 'qep-menu-item--selected': selectedProjectId === project.id }"
                 @click="selectedProjectId = project.id; billable = Boolean(project.billable); showProjectMenu = false"
               >
                 {{ project.title }}
@@ -234,13 +204,210 @@ watch(showProjectMenu, (val) => {
         </div>
       </div>
 
-      <button
-        type="button"
-        class="absolute right-2.5 top-2.5 rounded-md p-1 text-(--muted-foreground) hover:bg-(--surface) hover:text-(--foreground)"
-        @click="close"
-      >
+      <button type="button" class="qep-close" @click="close">
         <X :size="14" />
       </button>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* QuickEntryPanel — modal for task creation. Использует @kepler/visuals
+   tokens, никакого Tailwind. Временный handcrafted-кандидат — стиль будет
+   дополирован, см. STORYBOOK handcrafted tag. */
+
+.qep-root {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+}
+
+.qep-backdrop {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, #000 40%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.qep-panel {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: var(--bringhurst-wide);
+  background: var(--color-shape-highlight-light-solid, var(--background));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px color-mix(in srgb, #000 40%, transparent);
+  overflow: visible;
+}
+
+.qep-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 0;
+}
+
+.qep-title,
+.qep-notes {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  color: var(--foreground);
+}
+
+.qep-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.qep-title::placeholder {
+  color: var(--muted-foreground);
+}
+
+.qep-notes {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  resize: none;
+}
+.qep-notes::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
+}
+
+.qep-divider {
+  height: 1px;
+  background: var(--border);
+  margin-top: 12px;
+}
+
+.qep-meta {
+  padding: 8px 16px;
+}
+
+.qep-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.qep-spacer {
+  flex: 1;
+}
+
+.qep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 12px;
+  background: var(--secondary);
+  color: var(--muted-foreground);
+  border: none;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.qep-chip:hover {
+  background: var(--surface);
+}
+.qep-chip--billable {
+  background: color-mix(in srgb, var(--status-success) 15%, transparent);
+  color: var(--status-success);
+}
+.qep-chip--billable:hover {
+  background: color-mix(in srgb, var(--status-success) 22%, transparent);
+}
+.qep-chip--active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+.qep-chip--active:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.qep-chip--input {
+  padding: 0 10px;
+  cursor: text;
+}
+
+.qep-price-input {
+  width: 70px;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--foreground);
+}
+.qep-price-input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
+}
+
+.qep-project-wrap {
+  position: relative;
+}
+
+.qep-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  margin-top: 4px;
+  min-width: 180px;
+  max-height: 256px;
+  overflow-y: auto;
+  padding: 4px 0;
+  background: var(--color-shape-highlight-light-solid, var(--background));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 28%, transparent);
+}
+
+.qep-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.qep-menu-item:hover {
+  background: var(--surface);
+}
+.qep-menu-item--selected {
+  color: var(--accent);
+}
+
+.qep-close {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 100ms, color 100ms;
+}
+.qep-close:hover {
+  background: var(--surface);
+  color: var(--foreground);
+}
+</style>
