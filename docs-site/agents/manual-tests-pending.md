@@ -101,6 +101,191 @@ bun run --cwd shell dev
 
 ---
 
+## 🟡 Pending — EXPTOTRY batch experiments (2026-05-18)
+
+См. `EXPTOTRY.md` + `.agent/tasks/2026-05-18-exp08-electron-languages/` + следующие proof loop'ы.
+
+### Exp 08 — `electronLanguages` (применён, нужен GUI smoke)
+
+После переустановки `release/Kepler Setup 0.1.9.exe`:
+
+- [ ] **Запуск.** Установка проходит, Kepler стартует с tray icon, главное окно (Ctrl+Shift+K) показывается, acrylic фон на месте.
+- [ ] **Settings.** Tray menu → «Настройки» → окно открывается, все табы рендерятся, нативные диалоги (filepicker в табе «Экспорт») показывают строки без тарабарщины (en-US fallback для не-ru систем).
+- [ ] **Context menu.** ПКМ в Eden editor / Delphi textarea → нативное контекстное меню Chromium показывает читаемые подписи (Cut/Copy/Paste либо локализованные).
+
+Если что-то сломано — откатить: убрать строку `"electronLanguages": [...]` из `shell/package.json` build блока.
+
+### Exp 7 — explicit `backgroundThrottling: true` (применён, проверка нерегрессии)
+
+Применено к settings/install-extension/dashboard окнам. Defensive (default уже true в Electron).
+
+- [ ] **Settings window background behavior.** Открой Settings → переключи фокус на другое окно → проверь, что Settings не тормозит при возврате (default throttling ожидаемо).
+- [ ] **Dashboard background behavior.** Открой Dashboard (tray menu) → фокус на другое окно → возврат не должен показать визуальные глитчи / stale данные.
+
+### Exp 30 — CSS `contain: layout style` на extension roots (применён, проверка нерегрессии)
+
+Добавлено в `extensions/{horologion,arrancador,delphi}/src/...css` + `extensions/eden/src/App.css`.
+
+- [ ] **Horologion.** Pomodoro + Stopwatch работают, переключение между HomeView/SettingsView без layout-смещений.
+- [ ] **Arrancador.** Library scroll, переключение pages — нет clipped overflow.
+- [ ] **Delphi.** Sidebar + main pane, drag&drop задач, modal'ы (QuickEntry / QuickOpen) — нет визуальных регрессий.
+- [ ] **Eden.** Editor + sidebar resize, modal overlays (search, settings) — нет clipped content.
+
+CSS `contain: layout style` изолирует reflow scope, но не paint scope (`contain: paint` мог бы обрезать тени / outline'ы — поэтому не выставлен).
+
+### Exp 39 — TS `incremental` (применён, не требует UI smoke)
+
+Cold typecheck 1650ms → warm 1177ms (−28%). Effect для DX в watch-mode.
+
+---
+
+## ✅ DONE — RAM baseline (2026-05-18)
+
+Собран agent'ом через production build + isolated data dir. См. `.agent/tasks/2026-05-18-ram-baseline-harness/baseline-results.md`.
+
+| Scenario | Private bytes (mean) | Verdict |
+|---|---:|---|
+| launcher-only | 235.3 MB | baseline |
+| all-extensions-idle (5 ext + dashboard) | **453.5 MB** | ✅ Exp 5 правильно deferred (<600 MB) |
+| exp23-acrylic | 291.2 MB | — |
+| exp23-mica | 305.4 MB | RAM Δ ~5%, в пределах шума |
+
+**Остаётся manual (GPU% при visible launcher):** Exp 23 final decision. См. блок «Exp 23 — Mica» ниже.
+
+---
+
+## ⏸️ Pending — RAM baseline collection (historical instructions)
+
+**Это первый блокер для всех defer-experiments.** Без baseline все «применим если будет signal» бессмысленны — никто никогда не соберёт data без явного запуска.
+
+### Цель
+
+Собрать numeric baseline для 4 сценариев — это даёт **trigger thresholds** для defer-experiments (Exp 4, 5, 23, 27, 50).
+
+### Подготовка
+
+- Закрой все апки кроме браузера + терминал (минимальная фоновая нагрузка).
+- Power plan: «Балансированный» или выше (не Power Saver — он throttles CPU/GPU).
+- Один монитор активен (multi-display добавляет DWM overhead).
+
+### Запуск
+
+```powershell
+pwsh scripts/run-baseline-scenarios.ps1
+```
+
+Orchestrator проведёт через 4 сценария:
+
+#### Scenario 1: launcher-only
+
+```powershell
+bun run --cwd shell dev
+# дождись когда launcher открылся (Ctrl+Shift+K, увидел launcher окно).
+# нажми Enter в orchestrator. Жди 30s warmup + 30s samples.
+```
+
+#### Scenario 2: all-extensions-idle
+
+```powershell
+$env:KEPLER_BENCHMARK_OPEN_ALL = "1"
+bun run --cwd shell dev
+# через ~5s launcher автоматически откроет Horologion + Delphi + Arrancador + Eden + Dashboard.
+# Подожди 30s чтобы окна полностью загрузились + 5min idle для стабилизации памяти.
+# Нажми Enter в orchestrator (warmup 30s ещё подождёт).
+```
+
+#### Scenario 3+4: Exp 23 A/B (Mica vs Acrylic)
+
+```powershell
+# Сначала acrylic вариант:
+$env:KEPLER_BG_MATERIAL = "acrylic"; bun run --cwd shell dev
+# Открой Task Manager → Performance → GPU. Засеки:
+#   - dwm.exe %GPU
+#   - kepler-shell.exe %GPU
+# Запиши на бумажку. Нажми Enter в orchestrator.
+
+# Закрой Kepler. Перезапусти с mica:
+$env:KEPLER_BG_MATERIAL = "mica"; bun run --cwd shell dev
+# Снова Task Manager → запиши те же метрики.
+# Сравни.
+```
+
+### Чек-лист после baseline
+
+- [ ] 4 JSON отчёта в `.tmp/ram-kepler-<scenario>-<ts>.json`.
+- [ ] Зафиксированы цифры dwm.exe %GPU для acrylic vs mica (Task Manager).
+- [ ] Перенесены summary в `docs-site/concepts/ram-benchmarks.md` (раздел «Trigger thresholds»).
+
+### Decision tree
+
+После сбора:
+
+```
+all-extensions-idle.totals.mean_private_mb:
+  > 900 MB  → 🚨 critical, applied Exp 5 (WebContentsView) сейчас
+  600-900   → ⚠️  применять Exp 5 в следующий sprint
+  < 600     → ✅ OK, Exp 5 остаётся deferred
+
+exp23-acrylic dwm.exe %GPU sustained:
+  > 15%     → переключиться на Mica (Exp 23 apply)
+  10-15%    → marginal, выбор по эстетике
+  < 10%     → оставить Acrylic
+```
+
+---
+
+## 🔵 Ready-to-apply (требуют GUI verification ПЕРЕД применением)
+
+### Exp 46 — `shallowRef` для Delphi todos store
+
+**Statics:** semantic анализ показал безопасность (`updateTodo` reassigns array; нет прямых `todos.value[i].field = x` мутаций). Win: меньше Proxy overhead для больших списков задач.
+
+Файл: `extensions/delphi/src/store/todos.ts` — `todos = ref<TodoItem[]>([])` → `shallowRef<TodoItem[]>([])`. Аналогично projects/areas/tags/headings.
+
+**Что нужно проверить перед commit'ом:**
+- [ ] Создание/редактирование/удаление задачи в TodayPage / AllTaskPage обновляет UI немедленно.
+- [ ] Drag-and-drop порядка задач сохраняется и виден в UI.
+- [ ] Markdown task content / tags / due date — реактивные изменения видны без force-refresh.
+- [ ] Logbook (completed tasks) обновляется при completion.
+- [ ] Project sidebar обновляется при создании / переименовании проекта.
+
+Если хоть один пункт не отрисовывается — откат, либо переход на triggerRef + manual reactivity.
+
+### Exp 27 — виртуализация списков (Delphi / Dashboard)
+
+Не применять, пока нет реальных списков **>500 items** у юзера. До этого момента — net loss (overhead > gain). Триггер: пользователь сообщил, что в Delphi >300 задач или Dashboard >500 objects тормозит scroll.
+
+При имплементации — `@vueuse/core` `useVirtualList` + замена `<TodoRow v-for>` на virtualized container.
+
+### ~~Exp 23 — Mica vs Acrylic~~ ✅ DONE 2026-05-18
+
+Принято решение использовать **Mica** как default backdrop (современный Win11 22H2+ выбор, дешевле DWM чем acrylic, согласован с native Win11 chrome — Settings app, File Explorer).
+
+- `shell/electron/main.ts` → `resolveLauncherBgMaterial()` default = `"mica"`.
+- `shell/electron/settings-window.ts` → `"mica"`.
+- `shell/electron/install-extension-window.ts` → `"mica"`.
+- Dashboard оставлен solid (frame + titleBarOverlay — Mica с overlay'ем выглядит странно).
+- Env override `KEPLER_BG_MATERIAL=acrylic|mica|none` доступен.
+
+### Exp 4 — Hide/Show window pool для extensions
+
+**Архитектурный.** Сейчас extension-host создаёт BrowserWindow при openExtension() и уничтожает при close. Pool бы держал hidden window'у per extension, переоткрытие — `show()` вместо нового spawn.
+
+Trade-off: 70-80% быстрее переоткрытие vs 100-150 MB per hidden window. Для 4 extensions = ~400-600 MB постоянно занятых. Net loss если юзер редко переоткрывает.
+
+Не применять без четкого user signal (например: «extension'ы открываются заметно медленно»).
+
+### Exp 5 — `WebContentsView` migration (WHOLE архитектура)
+
+**Большая работа (1-2 недели).** Эффект: −30% RAM на extension за счёт shared GPU process. Требует:
+- Замена BrowserWindow per extension на BaseWindow + WebContentsView внутри Kepler shell.
+- Manual управление z-index / bounds / визуальной целостности.
+- Пересмотр extension-host'а целиком.
+
+Не приступать без чёткого RAM-bottleneck signal в продакшене.
+
+---
+
 ## ✅ Закрытые
 
 (перенеси сюда пункты после прохождения — с датой и комментариями если важно)

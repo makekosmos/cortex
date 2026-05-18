@@ -29,25 +29,62 @@
 
 ## Воспроизведение
 
-Скрипт: `scripts/measure-kepler-ram.ps1`.
+Скрипт: `scripts/measure-kepler-ram.ps1` + `scripts/run-baseline-scenarios.ps1` (orchestrator).
+
+### Одиночный snapshot
 
 ```powershell
 # Standalone baseline — поднимает все 4 standalone .exe и снимает метрики
-pwsh scripts/measure-kepler-ram.ps1 -Mode baseline
+pwsh scripts/measure-kepler-ram.ps1 -Mode baseline -Scenario standalone-baseline
 
-# Kepler + extensions — поднимает kepler-shell, авто-открывает все 4 extensions
-pwsh scripts/measure-kepler-ram.ps1 -Mode kepler
+# Kepler — single snapshot
+pwsh scripts/measure-kepler-ram.ps1 -Mode kepler -Scenario launcher-only
+
+# Multi-sample averaging (3 snapshots с 10s интервалом → mean RSS / mean Private)
+pwsh scripts/measure-kepler-ram.ps1 -Mode kepler -Scenario all-extensions-idle -Samples 3 -SampleInterval 10
 ```
 
-Для kepler-режима нужно, чтобы launcher автоматически открыл все 4 extension-окна. Это делается через env var:
+### Сценарии baseline (для defer-experiments trigger thresholds)
 
 ```powershell
+# 1. Launcher only — голый Kepler
+bun run --cwd shell dev
+# через 30s:
+pwsh scripts/measure-kepler-ram.ps1 -Mode kepler -Scenario launcher-only -Samples 3
+
+# 2. All extensions idle — launcher + 4 extensions + Dashboard, 5min idle
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"
 bun run --cwd shell dev
-# через 5s после старта launcher вызовет openExtension('dashboard'|'horologion'|'delphi'|'arrancador')
+# через 5min:
+pwsh scripts/measure-kepler-ram.ps1 -Mode kepler -Scenario all-extensions-idle -Warmup 30 -Samples 3
+
+# 3. Exp 23 Mica vs Acrylic A/B
+$env:KEPLER_BG_MATERIAL = "acrylic"; bun run --cwd shell dev
+# → measure → close → open again with mica:
+$env:KEPLER_BG_MATERIAL = "mica"; bun run --cwd shell dev
+# Сравни в Task Manager: dwm.exe %GPU + kepler-shell.exe %GPU
 ```
 
-После стабилизации (~30s) измеряются Working Set / Private Bytes / process count по дереву процессов host'а и его child'ов.
+### Orchestrator (все 4 сценария sequentially)
+
+```powershell
+pwsh scripts/run-baseline-scenarios.ps1
+```
+
+Интерактивный: на каждом сценарии скрипт паузится с инструкцией что запустить вручную, ты нажимаешь Enter когда готов. Дампит 4 JSON отчёта в `.tmp/ram-kepler-<scenario>-<ts>.json`.
+
+### Trigger thresholds для defer-experiments
+
+После baseline:
+
+| Сценарий | Threshold | Триггерит |
+|---|---|---|
+| `all-extensions-idle` Private > **600 MB** | RAM bottleneck | **Exp 5** (WebContentsView) приоритет |
+| `all-extensions-idle` Private > **900 MB** | Critical | Exp 5 + Exp 4 (window pool) |
+| `exp23-acrylic` dwm.exe %GPU > **15%** sustained | DWM overhead | **Exp 23** (переход на Mica) |
+| `exp23-mica` dwm.exe %GPU < **8%** | Mica win | Применить Mica |
+
+После стабилизации (~30s warmup в orchestrator) измеряются Working Set / Private Bytes / process count по дереву процессов host'а и его child'ов.
 
 ## Что **не** измеряли (TODO для следующих бенчмарков)
 
