@@ -58,6 +58,20 @@ pub struct Blocklist {
     pub domains: Vec<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
+    /// Built-in preset (re-created on startup if missing, unless soft-deleted).
+    #[serde(default)]
+    pub preset: bool,
+    /// Emoji/icon shorthand. Empty if not set.
+    #[serde(default)]
+    pub icon: String,
+    /// "domains" — strictly parsed domain list; "raw" — список может содержать
+    /// `@list-id` references (резолвится через `focus.resolve_blocklist_domains`).
+    #[serde(default = "default_kind")]
+    pub kind: String,
+}
+
+fn default_kind() -> String {
+    "domains".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -204,11 +218,25 @@ fn blocklist_from_ark_object(obj: &Value) -> Option<Blocklist> {
         .or_else(|| obj.get("createdAt").and_then(|v| v.as_str()))
         .unwrap_or("")
         .to_string();
+    let preset = props.get("preset").and_then(|v| v.as_bool()).unwrap_or(false);
+    let icon = props
+        .get("icon")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let kind = props
+        .get("kind")
+        .and_then(|v| v.as_str())
+        .unwrap_or("domains")
+        .to_string();
     Some(Blocklist {
         id,
         name,
         domains,
         created_at,
+        preset,
+        icon,
+        kind,
     })
 }
 
@@ -221,6 +249,7 @@ fn is_soft_deleted(obj: &Value) -> bool {
 
 pub async fn list_blocklists<R: FocusArkRequester>(ark: &R) -> Result<Vec<Blocklist>, String> {
     ensure_blocklist_object_type(ark).await?;
+    ensure_presets(ark).await?;
     let raw = ark
         .request(
             "list_objects_by_type",
@@ -240,13 +269,169 @@ pub async fn list_blocklists<R: FocusArkRequester>(ark: &R) -> Result<Vec<Blockl
     Ok(out)
 }
 
-#[derive(Debug, Deserialize)]
+// ---------- Presets ----------
+
+/// Описание built-in пресета.
+struct PresetDef {
+    id: &'static str,
+    name: &'static str,
+    icon: &'static str,
+    domains: &'static [&'static str],
+}
+
+const PRESETS: &[PresetDef] = &[
+    PresetDef {
+        id: "preset:distractions",
+        name: "Distractions",
+        icon: "🛡️",
+        domains: &[
+            "tiktok.com",
+            "www.tiktok.com",
+            "twitter.com",
+            "www.twitter.com",
+            "x.com",
+            "www.x.com",
+            "reddit.com",
+            "www.reddit.com",
+            "youtube.com",
+            "www.youtube.com",
+            "instagram.com",
+            "www.instagram.com",
+            "facebook.com",
+            "www.facebook.com",
+        ],
+    },
+    PresetDef {
+        id: "preset:news",
+        name: "News",
+        icon: "📰",
+        domains: &[
+            "news.ycombinator.com",
+            "techcrunch.com",
+            "theverge.com",
+            "arstechnica.com",
+        ],
+    },
+];
+
+/// Idempotent: вставляет недостающие пресеты. Если объект существует (даже
+/// soft-deleted) — пропускаем. Юзер мог удалить preset или отредактировать
+/// его — мы не перезаписываем.
+pub async fn ensure_presets<R: FocusArkRequester>(ark: &R) -> Result<(), String> {
+    for def in PRESETS {
+        // Проверяем — есть ли уже объект с таким id (любой, включая soft-deleted).
+        let existing = ark
+            .request("get_object", json!({ "id": def.id }))
+            .await
+            .ok();
+        if existing.is_some() {
+            continue;
+        }
+        let now = now_iso();
+        let domains: Vec<String> = def.domains.iter().map(|s| (*s).to_string()).collect();
+        let props = json!({
+            "name": def.name,
+            "domains": domains,
+            "createdAt": now,
+            "preset": true,
+            "icon": def.icon,
+            "kind": "domains",
+        });
+        let object = json!({
+            "id": def.id,
+            "typeId": BLOCKLIST_OBJ_TYPE_ID,
+            "title": def.name,
+            "contentJson": {},
+            "propsJson": props,
+            "createdAt": now,
+            "updatedAt": now,
+            "deletedAt": null,
+        });
+        ark.request("upsert_object", json!({ "object": object }))
+            .await?;
+    }
+    Ok(())
+}
+
+// ---------- Resolve `@references` ----------
+
+/// Рекурсивно разворачивает `@list-id` references в плоский deduped список
+/// доменов. Cycle detection через `visited` set.
+pub async fn resolve_blocklist_domains<R: FocusArkRequester>(
+    ark: &R,
+    id: &str,
+) -> Result<Vec<String>, String> {
+    ensure_blocklist_object_type(ark).await?;
+    let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    resolve_recursive(ark, id, &mut visited, &mut out, &mut seen).await?;
+    Ok(out)
+}
+
+fn resolve_recursive<'a, R: FocusArkRequester>(
+    ark: &'a R,
+    id: &'a str,
+    visited: &'a mut std::collections::HashSet<String>,
+    out: &'a mut Vec<String>,
+    seen: &'a mut std::collections::HashSet<String>,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + 'a>> {
+    Box::pin(async move {
+        if !visited.insert(id.to_string()) {
+            return Err(format!("cycle detected at blocklist {id:?}"));
+        }
+        let obj = ark
+            .request("get_object", json!({ "id": id }))
+            .await
+            .map_err(|e| format!("get_object({id}): {e}"))?;
+        if is_soft_deleted(&obj) {
+            return Err(format!("blocklist {id:?} is deleted"));
+        }
+        let bl = blocklist_from_ark_object(&obj)
+            .ok_or_else(|| format!("blocklist {id:?}: invalid shape"))?;
+        for entry in &bl.domains {
+            if let Some(ref_id) = entry.strip_prefix('@') {
+                resolve_recursive(ark, ref_id, visited, out, seen).await?;
+            } else if seen.insert(entry.clone()) {
+                out.push(entry.clone());
+            }
+        }
+        Ok(())
+    })
+}
+
+#[derive(Debug, Deserialize, Default)]
 pub struct UpsertParams {
     #[serde(default)]
     pub id: Option<String>,
+    #[serde(default)]
     pub name: String,
     #[serde(default)]
     pub domains: Vec<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
+    pub preset: Option<bool>,
+}
+
+/// Validate domain entries with optional `@reference` support for raw kind.
+fn validate_entries(raw: &[String], kind: &str) -> Result<Vec<String>, String> {
+    let mut out = Vec::with_capacity(raw.len());
+    for d in raw {
+        let trimmed = d.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if kind == "raw" && trimmed.starts_with('@') {
+            // Reference — keep as-is (validated at resolve time).
+            out.push(trimmed.to_string());
+        } else {
+            out.push(validate_domain(trimmed)?);
+        }
+    }
+    Ok(out)
 }
 
 pub async fn upsert_blocklist<R: FocusArkRequester>(
@@ -257,7 +442,13 @@ pub async fn upsert_blocklist<R: FocusArkRequester>(
     if name.is_empty() {
         return Err("name must be non-empty".into());
     }
-    let domains = validate_domains(&params.domains)?;
+    let kind = params.kind.clone().unwrap_or_else(|| "domains".into());
+    if kind != "domains" && kind != "raw" {
+        return Err(format!("unknown kind {kind:?}"));
+    }
+    let domains = validate_entries(&params.domains, &kind)?;
+    let icon = params.icon.clone().unwrap_or_default();
+    let preset_flag = params.preset.unwrap_or(false);
 
     ensure_blocklist_object_type(ark).await?;
 
@@ -284,6 +475,9 @@ pub async fn upsert_blocklist<R: FocusArkRequester>(
         "name": name,
         "domains": domains,
         "createdAt": created_at,
+        "preset": preset_flag,
+        "icon": icon,
+        "kind": kind,
     });
     let object = json!({
         "id": id,
@@ -303,6 +497,9 @@ pub async fn upsert_blocklist<R: FocusArkRequester>(
         name,
         domains,
         created_at,
+        preset: preset_flag,
+        icon,
+        kind,
     })
 }
 
@@ -453,6 +650,26 @@ pub async fn handle_focus_op(subop: &str, params: Value, ark: &ArkHost) -> Focus
             match set_active_state(ark, p).await {
                 Ok(()) => FocusResponse::ok(json!({ "ok": true })),
                 Err(e) => FocusResponse::err(format!("focus.set_active_state: {e}")),
+            }
+        }
+        "ensure_presets" => match ensure_presets(ark).await {
+            Ok(()) => FocusResponse::ok(json!({ "ok": true })),
+            Err(e) => FocusResponse::err(format!("focus.ensure_presets: {e}")),
+        },
+        "resolve_blocklist_domains" => {
+            let id = match params.get("id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => {
+                    return FocusResponse::err(
+                        "focus.resolve_blocklist_domains: missing 'id'",
+                    )
+                }
+            };
+            match resolve_blocklist_domains(ark, &id).await {
+                Ok(domains) => FocusResponse::ok(json!({ "domains": domains })),
+                Err(e) => {
+                    FocusResponse::err(format!("focus.resolve_blocklist_domains: {e}"))
+                }
             }
         }
         other => FocusResponse::err(format!("focus.{other}: unknown sub-operation")),
@@ -611,6 +828,9 @@ mod tests {
                 id: None,
                 name: "Soc nets".into(),
                 domains: vec!["twitter.com".into(), "Reddit.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
@@ -643,6 +863,9 @@ mod tests {
                 id: None,
                 name: "Initial".into(),
                 domains: vec!["x.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
@@ -654,6 +877,9 @@ mod tests {
                 id: Some(first.id.clone()),
                 name: "Renamed".into(),
                 domains: vec!["x.com".into(), "y.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
@@ -676,6 +902,9 @@ mod tests {
                 id: None,
                 name: "   ".into(),
                 domains: vec!["x.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
@@ -692,6 +921,9 @@ mod tests {
                 id: None,
                 name: "Test".into(),
                 domains: vec!["valid.com".into(), "not a domain".into()],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
@@ -708,6 +940,9 @@ mod tests {
                 id: None,
                 name: "Empty list".into(),
                 domains: vec![],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
@@ -726,6 +961,9 @@ mod tests {
                 id: None,
                 name: "A".into(),
                 domains: vec!["a.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
@@ -736,18 +974,25 @@ mod tests {
                 id: None,
                 name: "B".into(),
                 domains: vec!["b.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
             },
         )
         .await
         .unwrap();
 
         let listed = list_blocklists(&ark).await.unwrap();
-        assert_eq!(listed.len(), 2);
+        // list_blocklists auto-creates two preset rows on first call.
+        let user_listed: Vec<&Blocklist> = listed.iter().filter(|b| !b.preset).collect();
+        assert_eq!(user_listed.len(), 2);
 
         delete_blocklist(&ark, &a.id).await.unwrap();
         let listed_after = list_blocklists(&ark).await.unwrap();
-        assert_eq!(listed_after.len(), 1);
-        assert_eq!(listed_after[0].name, "B");
+        let user_after: Vec<&Blocklist> =
+            listed_after.iter().filter(|b| !b.preset).collect();
+        assert_eq!(user_after.len(), 1);
+        assert_eq!(user_after[0].name, "B");
     }
 
     // ---- Active state ----
@@ -790,6 +1035,211 @@ mod tests {
         assert!(!state.active);
         assert!(state.blocklist_id.is_none());
         assert!(state.started_at.is_none());
+    }
+
+    // ---- Presets ----
+
+    #[tokio::test]
+    async fn ensure_presets_creates_both_when_missing() {
+        let ark = FakeArk::new();
+        ensure_presets(&ark).await.unwrap();
+        let objs = ark.objects.lock().unwrap();
+        assert!(objs.contains_key("preset:distractions"));
+        assert!(objs.contains_key("preset:news"));
+        assert_eq!(objs.len(), 2);
+        // Both flagged as preset, with icons.
+        let d = objs.get("preset:distractions").unwrap();
+        assert_eq!(
+            d.get("propsJson").unwrap().get("preset").unwrap(),
+            &json!(true)
+        );
+        assert_eq!(
+            d.get("propsJson").unwrap().get("icon").unwrap(),
+            &json!("🛡️")
+        );
+    }
+
+    #[tokio::test]
+    async fn ensure_presets_idempotent() {
+        let ark = FakeArk::new();
+        ensure_presets(&ark).await.unwrap();
+        ensure_presets(&ark).await.unwrap();
+        ensure_presets(&ark).await.unwrap();
+        let objs = ark.objects.lock().unwrap();
+        assert_eq!(objs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn ensure_presets_skips_soft_deleted() {
+        let ark = FakeArk::new();
+        ensure_presets(&ark).await.unwrap();
+        // Soft-delete preset:distractions.
+        delete_blocklist(&ark, "preset:distractions").await.unwrap();
+        // Re-run — must NOT re-create.
+        ensure_presets(&ark).await.unwrap();
+        let objs = ark.objects.lock().unwrap();
+        let d = objs.get("preset:distractions").unwrap();
+        assert!(d.get("deletedAt").is_some_and(|v| !v.is_null()));
+    }
+
+    #[tokio::test]
+    async fn ensure_presets_does_not_overwrite_user_edits() {
+        let ark = FakeArk::new();
+        ensure_presets(&ark).await.unwrap();
+        // Simulate user editing preset (change domains).
+        upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: Some("preset:distractions".into()),
+                name: "My version".into(),
+                domains: vec!["custom.com".into()],
+                icon: Some("🚫".into()),
+                kind: None,
+                preset: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+        // Re-run ensure — must not overwrite.
+        ensure_presets(&ark).await.unwrap();
+        let listed = list_blocklists(&ark).await.unwrap();
+        let edited = listed
+            .iter()
+            .find(|b| b.id == "preset:distractions")
+            .unwrap();
+        assert_eq!(edited.name, "My version");
+        assert_eq!(edited.domains, vec!["custom.com"]);
+    }
+
+    #[tokio::test]
+    async fn list_blocklists_auto_creates_presets() {
+        let ark = FakeArk::new();
+        let listed = list_blocklists(&ark).await.unwrap();
+        // Both presets should now appear.
+        assert!(listed.iter().any(|b| b.id == "preset:distractions"));
+        assert!(listed.iter().any(|b| b.id == "preset:news"));
+    }
+
+    // ---- Resolve @references ----
+
+    #[tokio::test]
+    async fn resolve_returns_plain_domains_for_simple_list() {
+        let ark = FakeArk::new();
+        let bl = upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: None,
+                name: "A".into(),
+                domains: vec!["a.com".into(), "b.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
+            },
+        )
+        .await
+        .unwrap();
+        let resolved = resolve_blocklist_domains(&ark, &bl.id).await.unwrap();
+        assert_eq!(resolved, vec!["a.com", "b.com"]);
+    }
+
+    #[tokio::test]
+    async fn resolve_expands_references() {
+        let ark = FakeArk::new();
+        let base = upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: None,
+                name: "Base".into(),
+                domains: vec!["base.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
+            },
+        )
+        .await
+        .unwrap();
+        let parent = upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: None,
+                name: "Parent".into(),
+                domains: vec![format!("@{}", base.id), "extra.com".into()],
+                icon: None,
+                kind: Some("raw".into()),
+                preset: None,
+            },
+        )
+        .await
+        .unwrap();
+        let resolved = resolve_blocklist_domains(&ark, &parent.id).await.unwrap();
+        assert_eq!(resolved, vec!["base.com", "extra.com"]);
+    }
+
+    #[tokio::test]
+    async fn resolve_detects_cycle() {
+        let ark = FakeArk::new();
+        // Create A referencing B, then patch B to reference A.
+        let a = upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: Some("bl-a".into()),
+                name: "A".into(),
+                domains: vec!["@bl-b".into()],
+                icon: None,
+                kind: Some("raw".into()),
+                preset: None,
+            },
+        )
+        .await
+        .unwrap();
+        let _b = upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: Some("bl-b".into()),
+                name: "B".into(),
+                domains: vec!["@bl-a".into()],
+                icon: None,
+                kind: Some("raw".into()),
+                preset: None,
+            },
+        )
+        .await
+        .unwrap();
+        let err = resolve_blocklist_domains(&ark, &a.id).await.unwrap_err();
+        assert!(err.contains("cycle"));
+    }
+
+    #[tokio::test]
+    async fn resolve_dedupes_overlapping_references() {
+        let ark = FakeArk::new();
+        let a = upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: Some("bl-x".into()),
+                name: "X".into(),
+                domains: vec!["dup.com".into()],
+                icon: None,
+                kind: None,
+                preset: None,
+            },
+        )
+        .await
+        .unwrap();
+        let parent = upsert_blocklist(
+            &ark,
+            UpsertParams {
+                id: None,
+                name: "P".into(),
+                domains: vec![format!("@{}", a.id), "dup.com".into()],
+                icon: None,
+                kind: Some("raw".into()),
+                preset: None,
+            },
+        )
+        .await
+        .unwrap();
+        let resolved = resolve_blocklist_domains(&ark, &parent.id).await.unwrap();
+        assert_eq!(resolved, vec!["dup.com"]);
     }
 
     #[tokio::test]
