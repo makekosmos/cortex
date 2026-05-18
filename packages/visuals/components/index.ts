@@ -61,3 +61,5 @@ export { default as Toggle } from "./Toggle.vue";
 export { default as SettingsRow } from "./SettingsRow.vue";
 
 export { default as EmptyState } from "./EmptyState.vue";
+
+export { default as BlocklistCard } from "./BlocklistCard.vue";

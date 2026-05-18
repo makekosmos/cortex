@@ -43,6 +43,7 @@ export {
   Toggle,
   SettingsRow,
   EmptyState,
+  BlocklistCard,
 } from "./components";
 
 // Composables
