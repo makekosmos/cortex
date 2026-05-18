@@ -105,6 +105,19 @@ let backendProc: ChildProcess | null = null;
 let backendLockPath = "";
 let isQuiting = false;
 let arkClient: ArkClient | null = null;
+
+// --- Backend supervisor (hardening proof loop #5) ---------------------------
+// Backend crash → exponential backoff respawn (1s → 5s → 30s → 1min → 2min).
+// После 5 неудачных попыток подряд — error dialog, manual restart required.
+// Counter сбрасывается если backend проработал > 5 минут (значит crash был
+// transient, не permanent).
+const BACKEND_RESPAWN_DELAYS_MS = [1000, 5000, 30_000, 60_000, 120_000];
+const BACKEND_SUCCESSFUL_RUN_MS = 5 * 60 * 1000;
+const BACKEND_MAX_CRASH_STREAK = BACKEND_RESPAWN_DELAYS_MS.length;
+let backendCrashStreak = 0;
+let backendStartedAt = 0;
+let backendRespawnTimer: NodeJS.Timeout | null = null;
+let backendCrashDialogShown = false;
 // Promise который резолвится когда arkClient готов принимать request'ы.
 // Renderer может стрелять kepler:ark:request как только подняло окно —
 // до того как initArkClient прошёл handshake. Handler ниже await'ит ready
@@ -190,15 +203,81 @@ function spawnBackend() {
   backendProc.stderr?.on("data", (b) =>
     process.stderr.write(`[kepler-backend] ${b.toString()}`),
   );
+  backendStartedAt = Date.now();
   backendProc.on("exit", (code) => {
-    console.error(`[kepler-shell] backend exited code=${code}`);
+    const ranForMs = Date.now() - backendStartedAt;
+    console.error(
+      `[kepler-shell] backend exited code=${code} after ${(ranForMs / 1000).toFixed(1)}s`,
+    );
     backendProc = null;
     // Без cleanup ArkClient остаётся "connected" к мёртвому WS, все
     // последующие invokeOperation либо висят на reconnect, либо падают.
     // Reset кладёт его в исходное состояние; новый initArkClient() будет
-    // вызван при следующем spawnBackend (вручную через restart IPC).
-    void resetArkClient("backend exited");
+    // вызван при следующем spawnBackend (через supervisor ниже).
+    void resetArkClient(`backend exited code=${code}`);
+    // Supervisor decision.
+    if (isQuiting) return; // shutdown — no respawn
+    if (code === 0) return; // clean exit (manual stop / restart IPC) — no respawn
+    scheduleBackendRespawn(ranForMs);
   });
+}
+
+function scheduleBackendRespawn(lastRanForMs: number): void {
+  if (backendRespawnTimer) {
+    clearTimeout(backendRespawnTimer);
+    backendRespawnTimer = null;
+  }
+  // Если последний запуск backend проработал > 5min — это transient crash,
+  // не цепочка failures. Сбрасываем counter.
+  if (lastRanForMs > BACKEND_SUCCESSFUL_RUN_MS) {
+    backendCrashStreak = 0;
+    backendCrashDialogShown = false;
+  }
+  if (backendCrashStreak >= BACKEND_MAX_CRASH_STREAK) {
+    showBackendCrashDialog();
+    return;
+  }
+  const delay = BACKEND_RESPAWN_DELAYS_MS[backendCrashStreak] ?? 120_000;
+  backendCrashStreak += 1;
+  console.error(
+    `[kepler-shell] supervisor: respawn attempt ${backendCrashStreak}/${BACKEND_MAX_CRASH_STREAK} in ${delay / 1000}s`,
+  );
+  backendRespawnTimer = setTimeout(() => {
+    backendRespawnTimer = null;
+    if (isQuiting) return;
+    console.error("[kepler-shell] supervisor: respawning backend");
+    spawnBackend();
+    // Дёргаем ARK reinit — старый promise сброшен в resetArkClient,
+    // initArkClient создаст новый.
+    void initArkClient();
+  }, delay);
+}
+
+function showBackendCrashDialog(): void {
+  if (backendCrashDialogShown) return;
+  backendCrashDialogShown = true;
+  console.error(
+    "[kepler-shell] supervisor: backend crashed 5 times in a row, giving up",
+  );
+  const crashesDir = path.join(keplerDataDir(), "crashes");
+  // dialog.showMessageBox — async, не блокирует event loop. Отдельный
+  // import dialog уже есть в shell.
+  void dialog
+    .showMessageBox({
+      type: "error",
+      title: "Kepler — backend не запускается",
+      message:
+        "kepler-backend упал 5 раз подряд. Автоматический перезапуск приостановлен.",
+      detail:
+        "Откройте Настройки → Диагностика и посмотрите последние crash-логи.\n\n" +
+        `Папка с отчётами: ${crashesDir}\n\n` +
+        "После проверки попробуйте: Настройки → Перезапустить backend.",
+      buttons: ["OK"],
+      defaultId: 0,
+    })
+    .catch((e) => {
+      console.error("[kepler-shell] supervisor: dialog failed:", e);
+    });
 }
 
 function readBackendStatus(): BackendStatus {
@@ -567,6 +646,15 @@ async function initArkClient(): Promise<void> {
 ipcMain.handle("kepler:backend:status", () => readBackendStatus());
 
 ipcMain.handle("kepler:backend:restart", async () => {
+  // Manual restart — это user action, не supervisor failure. Сбрасываем
+  // crash streak counter чтобы dialog не показывался если backend упадёт
+  // позже (даём свежий window of opportunity).
+  backendCrashStreak = 0;
+  backendCrashDialogShown = false;
+  if (backendRespawnTimer) {
+    clearTimeout(backendRespawnTimer);
+    backendRespawnTimer = null;
+  }
   await resetArkClient("backend restart");
   if (backendProc && !backendProc.killed) {
     backendProc.kill();
