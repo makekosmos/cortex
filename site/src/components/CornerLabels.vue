@@ -2,10 +2,9 @@
 // 4 corner labels — fixed position, 20px padding от краёв экрана независимо
 // от размера. На mobile (<= 720px) скрываем bottom labels, оставляем top.
 
-const DOCS_URL = "https://github.com/ksanrse/kepler#readme";
-const REPO_URL = "https://github.com/ksanrse/kepler";
-const PERSONAL_URL = "https://github.com/ksanrse";
-const GITHUB_URL = "https://github.com/ksanrse/kepler";
+const DOCS_URL = "https://docs-site-beige-phi.vercel.app/";
+const ORG_URL = "https://github.com/yoso-industries";
+const GITHUB_URL = "https://github.com/ksanrse";
 </script>
 
 <template>
@@ -13,7 +12,7 @@ const GITHUB_URL = "https://github.com/ksanrse/kepler";
   <div class="corner top-left">
     <a :href="DOCS_URL" target="_blank" rel="noopener">Документация</a>
     <span class="sep">,</span>
-    <a :href="REPO_URL" target="_blank" rel="noopener">Репозиторий</a>
+    <a :href="ORG_URL" target="_blank" rel="noopener">Yoso</a>
   </div>
 
   <!-- Top-right -->
@@ -37,11 +36,11 @@ const GITHUB_URL = "https://github.com/ksanrse/kepler";
 .corner {
   position: fixed;
   z-index: 10;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--muted);
   user-select: none;
   pointer-events: auto;
-  font-weight: 400;
 }
 
 .corner a {
@@ -81,7 +80,7 @@ const GITHUB_URL = "https://github.com/ksanrse/kepler";
 
 @media (max-width: 720px) {
   .corner {
-    font-size: 12px;
+    font-size: 13px;
   }
   .hide-on-mobile {
     display: none;

@@ -39,7 +39,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { ArkClient, ensureKeplerRunning } from "@kepler/ark";
+import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
 import { keplerDataDir } from "./data-dir";
 import type {
   BackendStatus,

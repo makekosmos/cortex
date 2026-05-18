@@ -8,7 +8,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 |---|---|---|
 | 0 | Backend extracted в `services/kepler-backend/` (lib + bin `kepler-backend.exe`) | ✅ |
 | 1 | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state) | ✅ |
-| 2 | Command bus (Rust в backend + `@kepler/ark` SDK + apps register + dynamic launcher) | ✅ |
+| 2 | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher) | ✅ |
 | 3 | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC | ✅ |
 | 4 | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador) | ✅ |
 | 5 | Extension developer mode (Vite HMR per extension, Raycast-style) | ✅ |
@@ -42,7 +42,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 Полноценный dynamic command flow:
 - `kepler-backend` Rust: in-memory registry, WS-операции `commands.{register,unregister,list,invoke}`, события `command_invoked` / `commands_changed`.
-- `@kepler/ark` TypeScript: `ArkClient.commands` namespace + типизированные payloads + event subscription.
+- `@kosmos/ark` TypeScript: `ArkClient.commands` namespace + типизированные payloads + event subscription.
 - Электронные апки регистрируют команды при старте; backend роутит invoke к нужному client'у через события.
 - `LauncherView.vue` слушает `commands_changed`, рендерит filtered список, при выборе делает invoke.
 
@@ -67,7 +67,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 - **Dashboard** — полная Vue migration, build ~83 KB JS. Read-only аналитика, ARK через preload bridge. <span class="kbadge warn">после 2026-05-14 Dashboard rewritten — теперь встроенный shell view (ARK browser), не extension. См. [Dashboard](/apps/dashboard).</span>
 - **Horologion** — полная Vue migration с `horologionApi` shim над `window.kepler.*`. Build ~102 KB chunk `pomodoroSettings`. Pomodoro/stopwatch state работает.
-- **Delphi** — Vue + memory router, build 3483 modules. После Phase 5 cleanup: `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request` — все existing call sites работают. Tailwind plugin подключён (Phase 5). **Открытый вопрос** — переписать Delphi UI с Tailwind utility classes на plain CSS + `@kepler/visuals` tokens (как остальные extension'ы). См. Phase 9 ниже.
+- **Delphi** — Vue + memory router, build 3483 modules. После Phase 5 cleanup: `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request` — все existing call sites работают. Tailwind plugin подключён (Phase 5). **Открытый вопрос** — переписать Delphi UI с Tailwind utility classes на plain CSS + `@kosmos/visuals` tokens (как остальные extension'ы). См. Phase 9 ниже.
 - **Arrancador** — изначально UI subset (LayoutPage + GameCard). После full completion (2026-05-18): scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG metadata, SQOBA save backups, все 4 страницы оживлены. См. [Arrancador](./arrancador.md).
 
 RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / −4 процесса. Полная таблица — [RAM benchmarks](/concepts/ram-benchmarks).
@@ -79,7 +79,7 @@ RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / �
 - **App icons в launcher** — каждое open-command (Dashboard / Horologion / Delphi / Arrancador) показывает иконку extension'а в результатах launcher'а. `extensionIconDataUri(id)` в `extension-host.ts` читает `extensions/<id>/icon.png` и кэширует по **mtime файла** — hot-swap иконки без рестарта Kepler. Eden команда без иконки (legacy, не extension).
 - **Crash on close fix** — `BrowserWindow.on("closed", …)` теперь использует captured `wcId` (захваченный **до** регистрации listener'а), а не `win.webContents.id` после destroy. До фикса Kepler падал при закрытии extension-окна.
 - **Status dot в Horologion topbar** — точка статуса подключения к ARK (probe `list_object_types` каждые 10с), визуально совпадает с Delphi extension'ом.
-- **Selected-space DB resolution** — `kepler-shell` main читает `%APPDATA%\Kosmos\selected-space.json` (через `@kepler/ark` хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace`) и передаёт `KOSMOS_DB_PATH=<spaceDir>/ark.db` в env при `spawnBackend()`. Backend пишет в выбранный space, а не в дефолтный `%APPDATA%\Kosmos\ark.db`.
+- **Selected-space DB resolution** — `kepler-shell` main читает `%APPDATA%\Kosmos\selected-space.json` (через `@kosmos/ark` хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace`) и передаёт `KOSMOS_DB_PATH=<spaceDir>/ark.db` в env при `spawnBackend()`. Backend пишет в выбранный space, а не в дефолтный `%APPDATA%\Kosmos\ark.db`.
 
 ## Phase 5 ✅ — Extension developer mode
 
@@ -165,13 +165,13 @@ Eden — самый сложный кейс (TipTap editor + Heart Rust поис
 
 ## Phase 9 ⏳ — Delphi UI: Tailwind → plain CSS (открытый вопрос)
 
-Delphi extension сейчас использует Tailwind v4 в templates (наследие legacy standalone Delphi). Все остальные extension'ы (Horologion, Dashboard, Arrancador, Kepler launcher / settings) написаны на **plain scoped CSS + `@kepler/visuals` CSS variables** — единый стиль через ecosystem.
+Delphi extension сейчас использует Tailwind v4 в templates (наследие legacy standalone Delphi). Все остальные extension'ы (Horologion, Dashboard, Arrancador, Kepler launcher / settings) написаны на **plain scoped CSS + `@kosmos/visuals` CSS variables** — единый стиль через ecosystem.
 
 Что нужно для Phase 9:
 
 - Пройти ~30 .vue файлов в `extensions/delphi/src/{App.vue, components, pages}`.
 - Удалить Tailwind utility classes (`flex items-center gap-2 px-3 rounded-lg ...`) из шаблонов.
-- Переписать стили в `<style scoped>` с `var(--background) / --foreground / --border / --radius-*` из `@kepler/visuals`.
+- Переписать стили в `<style scoped>` с `var(--background) / --foreground / --border / --radius-*` из `@kosmos/visuals`.
 - Удалить `@import "tailwindcss"` + `@source` directive из `src/global.css`.
 - Удалить `@tailwindcss/vite` plugin из `extensions/delphi/vite.config.mjs` + `vite.extensions.config.mjs`.
 - Удалить `tailwindcss` + `@tailwindcss/vite` deps из `extensions/delphi/package.json` (и shared kepler-shell deps если нет других пользователей).

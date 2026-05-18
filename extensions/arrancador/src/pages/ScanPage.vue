@@ -5,7 +5,7 @@
 import { onMounted, ref } from "vue";
 import { RefreshCw } from "lucide-vue-next";
 
-import { EmptyState } from "@kepler/visuals";
+import { EmptyState } from "@kosmos/visuals";
 
 import { useGames } from "../composables/useGames";
 import { requireArrancadorApi, type ScanResult } from "../lib/arrancadorApi";

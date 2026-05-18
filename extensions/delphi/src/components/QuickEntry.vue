@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
-import { QuickEntryPanel } from "@kepler/visuals";
-import type { QuickEntrySavePayload } from "@kepler/visuals";
+import { QuickEntryPanel } from "@kosmos/visuals";
+import type { QuickEntrySavePayload } from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { useQuickEntry } from "@/composables/useQuickEntry";

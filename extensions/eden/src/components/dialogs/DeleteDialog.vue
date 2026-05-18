@@ -37,7 +37,7 @@
 </template>
 
 <script setup vapor lang="ts">
-import { Modal } from "@kepler/visuals";
+import { Modal } from "@kosmos/visuals";
 
 export interface DeleteDialogTarget {
   kind: "entry" | "folder";

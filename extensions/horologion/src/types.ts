@@ -5,7 +5,7 @@
 // все ARK-операции идут через `window.kepler.ark.request(operation, params)`.
 // Типы остаются полезными как DTO для всех composable / view'ов.
 
-export type TimeEntrySource = "manual" | "imported";
+export type TimeEntrySource = "manual" | "imported" | "pomodoro" | "pomodoro_break";
 
 export interface TimeEntry {
   id: string;
@@ -18,6 +18,12 @@ export interface TimeEntry {
   taskId: string | null;
   /** Заголовок связанной Delphi-задачи (cached в propsJson для рендера). */
   taskTitle: string | null;
+  /**
+   * true только если pomodoro work-фаза дошла до конца (natural finish).
+   * false / undefined — отмена/стоп/пауза/незавершённый, либо source != "pomodoro".
+   * Используется для дневного счётчика «помидоров за сегодня».
+   */
+  completed?: boolean;
 }
 
 export interface Tag {
@@ -32,6 +38,7 @@ export interface StartTimerInput {
   taskId?: string | null;
   taskTitle?: string | null;
   billable?: boolean;
+  source?: TimeEntrySource;
 }
 
 export interface UpdateTimeEntryInput {
@@ -42,6 +49,7 @@ export interface UpdateTimeEntryInput {
   billable?: boolean;
   taskId?: string | null;
   taskTitle?: string | null;
+  completed?: boolean;
 }
 
 export interface CreateTimeEntryInput {
@@ -51,6 +59,8 @@ export interface CreateTimeEntryInput {
   billable?: boolean;
   taskId?: string | null;
   taskTitle?: string | null;
+  source?: TimeEntrySource;
+  completed?: boolean;
 }
 
 export interface DelphiTask {

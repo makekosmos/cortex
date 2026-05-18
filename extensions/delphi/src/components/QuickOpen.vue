@@ -3,7 +3,7 @@
 import { computed, onMounted, onUnmounted, shallowRef } from "vue";
 import { CheckCircle, Folder, Tag } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
-import { CommandPalette, EmptyState } from "@kepler/visuals";
+import { CommandPalette, EmptyState } from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";
 import type { Project, Tag as TagType, TodoItem } from "@/types/task";
 

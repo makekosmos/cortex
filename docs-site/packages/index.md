@@ -5,14 +5,14 @@
 | Пакет | Что это |
 |---|---|
 | [ark-core](/packages/ark-core) | Rust crate + бинарь `ark-core-rpc`. Сам runtime ARK (SQLite + sync + relay-bridge). Embedded в Electron main как child process. |
-| [@kepler/ark](/packages/ark) | TypeScript SDK, говорящий с `ark-core-rpc` по JSON-RPC. Канонический клиент к ARK для Electron main и Node-сервисов. |
-| [@kepler/visuals](/packages/visuals) | UI: токены OKLCH, тема, общие Vue-компоненты (Sidebar, Titlebar, DesktopChrome, CommandPalette…). Используется всеми Electron-приложениями и этим сайтом. |
+| [@kosmos/ark](/packages/ark) | TypeScript SDK, говорящий с `ark-core-rpc` по JSON-RPC. Канонический клиент к ARK для Electron main и Node-сервисов. |
+| [@kosmos/visuals](/packages/visuals) | UI: токены OKLCH, тема, общие Vue-компоненты (Sidebar, Titlebar, DesktopChrome, CommandPalette…). Используется всеми Electron-приложениями и этим сайтом. |
 
 ::: tip Соглашение об именах
 - **Rust crate** — без scope: `ark-core` (у Cargo нет npm-style scopes).
 - **TypeScript-пакет** — `@kosmos/*` (npm scope монорепо).
 
-Папка в `packages/` может отличаться от npm-имени: `packages/ark/` → `@kepler/ark`, `packages/visuals/` → `@kepler/visuals`. В коде импортируется по **npm-имени**, в файловой системе и docs-ссылках — по **папке**.
+Папка в `packages/` может отличаться от npm-имени: `packages/ark/` → `@kosmos/ark`, `packages/visuals/` → `@kosmos/visuals`. В коде импортируется по **npm-имени**, в файловой системе и docs-ссылках — по **папке**.
 :::
 
 ## Граф зависимостей
@@ -20,8 +20,8 @@
 ```mermaid
 flowchart LR
   arkcore["ark-core"]
-  kosmosark["@kepler/ark"]
-  visuals["@kepler/visuals"]
+  kosmosark["@kosmos/ark"]
+  visuals["@kosmos/visuals"]
 
   eden["Eden"]
   delphi["Delphi"]
@@ -47,22 +47,22 @@ flowchart LR
   class eden,delphi,arrancador,dashboard app
 ```
 
-- `ark-core` — Rust crate + бинарь `ark-core-rpc`. Стрелка к `@kepler/ark` — JSON-RPC поверх stdin/stdout.
-- `@kepler/ark` — TS SDK, через который Electron-приложения говорят с runtime'ом.
-- `@kepler/visuals` — общие UI-компоненты и токены.
+- `ark-core` — Rust crate + бинарь `ark-core-rpc`. Стрелка к `@kosmos/ark` — JSON-RPC поверх stdin/stdout.
+- `@kosmos/ark` — TS SDK, через который Electron-приложения говорят с runtime'ом.
+- `@kosmos/visuals` — общие UI-компоненты и токены.
 
 Сервисы (`usage-tracker`, `ark-relay-server`) тоже работают с ARK, но не импортируются из приложений — они **запускаются** независимо. См. [`/services/`](/services/).
 
 ## Правило выбора SDK
 
-- Новая интеграция → **`@kepler/ark`**.
+- Новая интеграция → **`@kosmos/ark`**.
 - Direct Rust (внутри одного процесса с runtime) → `ark_core::db` хелперы.
-- Renderer → preload API (`window.<app>Api`), **не** `@kepler/ark`.
+- Renderer → preload API (`window.<app>Api`), **не** `@kosmos/ark`.
 
 ## Workspace-имена
 
 | Папка | Имя в `package.json` / `Cargo.toml` | Язык |
 |---|---|---|
 | `crates/ark-core` | `ark-core` (Rust crate) | Rust |
-| `packages/ark` | `@kepler/ark` | TypeScript |
-| `packages/visuals` | `@kepler/visuals` | TypeScript + Vue |
+| `packages/ark` | `@kosmos/ark` | TypeScript |
+| `packages/visuals` | `@kosmos/visuals` | TypeScript + Vue |

@@ -4,14 +4,14 @@
 @import "tailwindcss";
 
 /* @source — расширяет content scan на shared visuals package
- * (после миграции на @kepler/visuals.GamePosterCard utility-классы
+ * (после миграции на @kosmos/visuals.GamePosterCard utility-классы
  * патернов резолвятся именно отсюда). */
 @source "../../../../packages/visuals/**/*.{vue,ts}";
 
 /* Arrancador extension — plain CSS layer.
    Legacy `apps/arrancador/` использовал tailwind; миграция компонентов
    на utility-классы — Phase 5 follow-up. Сейчас все цвета/радиусы
-   через `var(--*)` из `@kepler/visuals/theme/css`. */
+   через `var(--*)` из `@kosmos/visuals/theme/css`. */
 
 *,
 *::before,
@@ -122,7 +122,7 @@ input {
   cursor: not-allowed;
 }
 
-/* Sidebar — теперь поверх `Sidebar` из `@kepler/visuals` (см. components/AppSidebar.vue). */
+/* Sidebar — теперь поверх `Sidebar` из `@kosmos/visuals` (см. components/AppSidebar.vue). */
 
 /* ---------- Spotlight ---------- */
 
@@ -195,7 +195,7 @@ input {
   line-height: 1.5;
 }
 
-/* Empty-state — теперь `EmptyState` из `@kepler/visuals`. */
+/* Empty-state — теперь `EmptyState` из `@kosmos/visuals`. */
 
 .arrancador-error {
   margin: 0 0 16px;
@@ -336,7 +336,7 @@ input {
   max-width: 480px;
 }
 
-/* Settings rows — `SettingsRow` + `Toggle` из `@kepler/visuals`. */
+/* Settings rows — `SettingsRow` + `Toggle` из `@kosmos/visuals`. */
 
 .arrancador-settings__select {
   height: 30px;

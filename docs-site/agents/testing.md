@@ -9,7 +9,7 @@
 | Уровень | Где | Что | Когда писать |
 |---|---|---|---|
 | Rust unit | `crates/ark-core/rust`, `services/kepler-backend` | `cargo test` — ARK runtime, lock-file, WS handshake, sync | Новый Rust код / refactor |
-| TS unit | `packages/ark/tests/` | `bun test` — `@kepler/ark` SDK contracts | Новый SDK метод / lock-file resolver |
+| TS unit | `packages/ark/tests/` | `bun test` — `@kosmos/ark` SDK contracts | Новый SDK метод / lock-file resolver |
 | **Extension contract (universal)** | `tests/e2e/extensions-contract.spec.ts` | Manifest-driven: boot + commands.register + ARK round-trip | **Автоматически** для каждого extension с `manifest.tests` |
 | **Per-app UI spec** | `tests/e2e/<app>.spec.ts` | Конкретный UI flow (TipTap render, Pomodoro tick) | Когда фича не покрывается архитектурным contract'ом |
 

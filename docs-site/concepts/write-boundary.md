@@ -3,7 +3,7 @@
 ## Правило
 
 ::: danger Жёстко
-**Все записи** в ARK-данные идут через `@kepler/ark` (TS) или `ark_core::db` хелперы (Rust). Прямые SQL writes в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events` или `sync_kv` из app services **запрещены**.
+**Все записи** в ARK-данные идут через `@kosmos/ark` (TS) или `ark_core::db` хелперы (Rust). Прямые SQL writes в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events` или `sync_kv` из app services **запрещены**.
 :::
 
 Это политика репо, закреплена в `docs/ARK-READONLY-SQL-BOUNDARY.md` и в `AGENTS.md` всех приложений.
@@ -24,8 +24,8 @@
 | Кто | Что разрешено |
 |---|---|
 | Electron renderer | Только preload API (`window.<app>Api`). Никакого SQLite вообще. |
-| Electron main (app services) | `@kepler/ark`. Read-only SQLite — только как fallback, явно отделённый от writes. |
-| Rust app code | `@kepler/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
+| Electron main (app services) | `@kosmos/ark`. Read-only SQLite — только как fallback, явно отделённый от writes. |
+| Rust app code | `@kosmos/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
 | `services/kepler-backend/src/usage_tracker` (Rust) | Прямые писи через `ark_core::db` **с** обновлением `version_vector`. |
 | Migration scripts | Могут читать **источник** напрямую, но writes в target ARK идут через ARK RPC/SDK. |
 | Dashboard | Read-only SQLite инспекция. **Никаких** writes. |
@@ -34,7 +34,7 @@
 flowchart TD
     R["Renderer"]
     M["Electron main"]
-    SDK["@kepler/ark"]
+    SDK["@kosmos/ark"]
     CORE["ark_core::db"]
     UT["usage-tracker"]
     DB[("ARK SQLite")]
@@ -57,7 +57,7 @@ flowchart TD
     linkStyle 5,6 stroke:#a05050,stroke-width:2px,stroke-dasharray:4 3
 ```
 
-- `M` (Electron main, app services) → `SDK` (`@kepler/ark`) → `CORE` (`ark_core::db` через `ark-core-rpc`) → `DB` (`ARK SQLite`: `objects`, `usage_*`, `sync_kv` …).
+- `M` (Electron main, app services) → `SDK` (`@kosmos/ark`) → `CORE` (`ark_core::db` через `ark-core-rpc`) → `DB` (`ARK SQLite`: `objects`, `usage_*`, `sync_kv` …).
 - `UT` (`usage-tracker`, Rust) — единственный, кому можно писать напрямую в `ark_core::db`, и **только** с вызовом `bump_sync_version_vector` (на схеме `bump VV`) после каждой записи в синхронизируемую таблицу.
 - Пунктир с ❌ — то, что **запрещено**: и renderer, и Electron main не имеют права открывать SQLite напрямую.
 
@@ -82,7 +82,7 @@ db.prepare("DELETE FROM tracked_apps WHERE id = ?").run(...);
 ## Как делать правильно
 
 ```ts
-import { ArkClient } from '@kepler/ark';
+import { ArkClient } from '@kosmos/ark';
 
 const ark = new ArkClient({ /* ... */ });
 await ark.start();

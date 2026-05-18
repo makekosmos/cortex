@@ -11,7 +11,7 @@ Delphi — приложение для управления задачами в 
 - Канонический desktop sidecar — `ark-core-rpc` из `crates/ark-core/rust`.
 - **Старый Delphi-specific Rust DB sidecar удалён.** Не пересобирать, не восстанавливать, не упаковывать.
 - Задачи Delphi хранятся как обобщённые ARK-объекты с `type_id = task_obj`.
-- Extension обращается к ARK через `@kepler/ark` (через `window.kepler.ark.request(...)` из Kepler shell preload).
+- Extension обращается к ARK через `@kosmos/ark` (через `window.kepler.ark.request(...)` из Kepler shell preload).
 - На входе при смене shared-space **legacy todos мигрируются в `task_obj`**. После миграции object-данные — источник правды.
 
 ## Текущая модель
@@ -19,7 +19,7 @@ Delphi — приложение для управления задачами в 
 - `objects` с `type_id = task_obj` — сами задачи.
 - `object_types` — typed/schema metadata.
 - `object_links` — связи.
-- App access — через `@kepler/ark` SDK.
+- App access — через `@kosmos/ark` SDK.
 
 См. `docs/DELPHI-LEGACY-DB-DECISION.md`.
 
@@ -37,8 +37,8 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 
 ## Boundaries
 
-- Renderer **только** через `@kepler/ark` SDK (либо через `window.electronAPI` shim — см. ниже).
-- Никаких прямых SQL writes (`@kepler/ark` → kepler-backend → ark-core-rpc).
+- Renderer **только** через `@kosmos/ark` SDK (либо через `window.electronAPI` shim — см. ниже).
+- Никаких прямых SQL writes (`@kosmos/ark` → kepler-backend → ark-core-rpc).
 - Новые task writes идут в ARK `task_obj`, **не** в legacy todo таблицы.
 - Тесты используют изолированные тестовые БД, **никогда** — main user ARK DB.
 
@@ -60,7 +60,7 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 Текущая модель форм / списков:
 
 - **Sidebar:** только «Входящие» и «Сегодня» как top-level nav.
-- **QuickEntry** (⌘N / Ctrl+N) — модалка. Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kepler/visuals`), проект (dropdown + «Входящие»), `billable` toggle + опциональный `price`.
+- **QuickEntry** (⌘N / Ctrl+N) — модалка. Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kosmos/visuals`), проект (dropdown + «Входящие»), `billable` toggle + опциональный `price`.
 - **TodoRow** — клик разворачивает inline-форму, правый клик открывает `<ContextMenu>` с пунктом «Удалить».
 - **ProjectPage** — список задач, бейдж «оплачиваемый + бюджет», суммарное оплачиваемое время по задачам проекта, расчётный `$/час`.
 
@@ -159,4 +159,4 @@ await arkClient.commands.register([
 - [Command bus](/concepts/command-bus) — протокол dynamic commands.
 - [Модель данных ARK](/concepts/ark-objects).
 - [Horologion](/apps/horologion) — трекер времени, который привязывается к Delphi-задачам.
-- [@kepler/ark](/packages/ark).
+- [@kosmos/ark](/packages/ark).

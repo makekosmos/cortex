@@ -18,7 +18,7 @@
 |---|---|
 | Добавил/убрал команду в `package.json` | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md` |
 | Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md` |
-| Добавил/изменил метод в `@kepler/ark` | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
+| Добавил/изменил метод в `@kosmos/ark` | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
 | Изменил структуру папок приложения | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md` |
 | Удалил/перенёс файл, упомянутый в доке | grep по `docs-site/` на имя файла → обновить или удалить упоминание |
 | Изменил sync-протокол / HLC / relay | `docs-site/concepts/sync.md` |
@@ -26,7 +26,7 @@
 | Добавил smoke-команду | `docs-site/reference/smoke-matrix.md` |
 | Изменил правило/запрет | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md` |
 | Принял архитектурное решение | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md` |
-| Изменил дизайн-токены `@kepler/visuals` | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
+| Изменил дизайн-токены `@kosmos/visuals` | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
 | Создал/убрал `object_type` | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
 | Запланировал фичу / нашёл баг приложения | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap)) |
 
@@ -50,7 +50,7 @@
 
 - [ ] Я перечитал `docs-site/apps/<которые трогал>.md` — там нет устаревших фактов?
 - [ ] Если добавил/убрал команду — отразил в `docs-site/reference/commands.md`?
-- [ ] Если изменил публичный API (ARK endpoint, `@kepler/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
+- [ ] Если изменил публичный API (ARK endpoint, `@kosmos/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
 - [ ] Если ввёл новое архитектурное решение — есть ADR в `docs/` и ссылка в `docs-site/reference/decisions.md`?
 - [ ] `bun run docs:sync` прошёл без ошибок.
 - [ ] `bun run docs:check` зелёный (нет stale-references).

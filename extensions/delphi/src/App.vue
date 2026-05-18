@@ -37,7 +37,7 @@ import {
   type StatusDotTone,
   TitlebarHistoryControls,
   type TitlebarPlatform,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 import { setSidebarHidden, useSidebarState } from "@/composables/useSidebarState";
 import {
   activeSpaceCode,

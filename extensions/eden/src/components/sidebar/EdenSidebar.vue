@@ -28,7 +28,7 @@ import {
   type SidebarConfig,
   type SidebarNavItem,
   type SidebarProjectItem,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypeCollectionName } from "@/lib/typedNotes";
 import { isSystemType } from "@/lib/systemTypes";

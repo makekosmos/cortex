@@ -56,6 +56,7 @@ const ringColorClass = computed(() => {
 
 const pomodorosDone = computed(() => p.completedPomodoros.value);
 const pomodorosTotal = computed(() => pomodoroSettings.pomodorosUntilLongBreak);
+const todayCompleted = computed(() => p.todayCompleted.value);
 
 async function onPrimary() {
     if (p.isRunning.value) {
@@ -102,9 +103,14 @@ const primaryLabel = computed(() => {
         </div>
 
 
-        <div class="pomo__dots" :title="`${pomodorosDone} из ${pomodorosTotal}`">
-            <span v-for="i in pomodorosTotal" :key="i" class="pomo__dot"
-                :class="{ 'pomo__dot--done': i <= pomodorosDone }" />
+        <div class="pomo__progress">
+            <div class="pomo__dots" :title="`${pomodorosDone} из ${pomodorosTotal} до длинного перерыва`">
+                <span v-for="i in pomodorosTotal" :key="i" class="pomo__dot"
+                    :class="{ 'pomo__dot--done': i <= pomodorosDone }" />
+            </div>
+            <span class="pomo__today" :title="'Завершённых помодоров за сегодня'">
+                Сегодня: {{ todayCompleted }}
+            </span>
         </div>
 
         <div class="pomo__actions">
@@ -229,9 +235,23 @@ const primaryLabel = computed(() => {
     color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
+.pomo__progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
 .pomo__dots {
     display: flex;
     gap: 6px;
+}
+
+.pomo__today {
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+    letter-spacing: 0.02em;
 }
 
 .pomo__dot {

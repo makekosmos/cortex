@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
-import { DesktopChrome, DesktopContentSurface } from "@kepler/visuals";
+import { DesktopChrome, DesktopContentSurface } from "@kosmos/visuals";
 import SidebarItem from "../dashboard/SidebarItem.vue";
 import ObjectTable from "../dashboard/ObjectTable.vue";
 import {

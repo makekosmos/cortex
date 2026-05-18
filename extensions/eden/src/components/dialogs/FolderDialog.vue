@@ -43,7 +43,7 @@
 
 <script setup vapor lang="ts">
 import { useTemplateRef } from "vue";
-import { Modal } from "@kepler/visuals";
+import { Modal } from "@kosmos/visuals";
 
 defineProps<{
   isOpen: boolean;

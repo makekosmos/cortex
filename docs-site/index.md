@@ -22,7 +22,7 @@ features:
     link: /packages/ark-core
     linkText: ark-core
   - title: Один SDK на всех
-    details: "@kepler/ark — канонический TypeScript-клиент к sidecar. Apps говорят только через него. Прямые SQL writes в ARK-таблицы запрещены."
+    details: "@kosmos/ark — канонический TypeScript-клиент к sidecar. Apps говорят только через него. Прямые SQL writes в ARK-таблицы запрещены."
     link: /concepts/write-boundary
     linkText: Граница записи
   - title: Electron-приложения
@@ -38,9 +38,9 @@ features:
     link: /concepts/test-isolation
     linkText: Test isolation
   - title: Дизайн-система
-    details: "@kepler/visuals — общие токены OKLCH, тема, компоненты Sidebar / Titlebar / DesktopChrome / CommandPalette. Источник дизайна (включая этот сайт)."
+    details: "@kosmos/visuals — общие токены OKLCH, тема, компоненты Sidebar / Titlebar / DesktopChrome / CommandPalette. Источник дизайна (включая этот сайт)."
     link: /packages/visuals
-    linkText: "@kepler/visuals"
+    linkText: "@kosmos/visuals"
   - title: Документация-как-код
     details: Все страницы — markdown в docs-site/. Источник правды для разработчиков и AI-агентов одновременно. Заменяет AGENTS.md / CLAUDE.md.
     link: /agents/

@@ -8,7 +8,7 @@ import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { Search } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 
-import { EmptyState, Dropdown, Modal } from "@kepler/visuals";
+import { EmptyState, Dropdown, Modal } from "@kosmos/visuals";
 
 import { useGames } from "../composables/useGames";
 import {

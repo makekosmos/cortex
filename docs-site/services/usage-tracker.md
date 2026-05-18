@@ -16,9 +16,9 @@
 
 ## Зачем «напрямую»
 
-Это одно из редких исключений правила [«всё через @kepler/ark»](/concepts/write-boundary): tracker — **Rust**, линкуется с `ark_core` как библиотека и использует `ark_core::db` хелперы, которые сами обновляют sync state. Это допустимо.
+Это одно из редких исключений правила [«всё через @kosmos/ark»](/concepts/write-boundary): tracker — **Rust**, линкуется с `ark_core` как библиотека и использует `ark_core::db` хелперы, которые сами обновляют sync state. Это допустимо.
 
-`Arrancador` и любое другое **TS-приложение / extension** должны потреблять usage data **только через ARK** (`@kepler/ark` SDK), никогда не запуская собственный tracker и не открывая raw SQLite на запись.
+`Arrancador` и любое другое **TS-приложение / extension** должны потреблять usage data **только через ARK** (`@kosmos/ark` SDK), никогда не запуская собственный tracker и не открывая raw SQLite на запись.
 
 ## Структура модуля
 
@@ -81,7 +81,7 @@ Standalone бинарь `usage-tracker.exe` со собственным installe
 ## Заметки
 
 - Tracker остаётся user-level — внутри backend процесса, который spawn'ит Kepler shell.
-- `Arrancador` extension потребляет результирующую ARK usage data через `@kepler/ark`, не запускает и не владеет процессом.
+- `Arrancador` extension потребляет результирующую ARK usage data через `@kosmos/ark`, не запускает и не владеет процессом.
 - Windows-only capture. Поздний macOS backend подключается за тем же capture/persistence split.
 - `tracked_apps` обновляются на session boundaries; `usage_sessions` и `usage_events` несут fine-grained usage stream.
 

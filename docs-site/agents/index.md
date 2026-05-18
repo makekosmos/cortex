@@ -11,7 +11,7 @@
 - **Kosmos** = монорепо / экосистема для личного софта. Bun workspaces + Cargo workspace.
 - **Kepler** = имя лаунчера (`shell/`, npm name `kepler-shell`) и его shared backend (`services/kepler-backend/`).
 - **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, бинарь `ark-core-rpc`).
-- **Apps** говорят с ARK **только** через `@kepler/ark` или `ark_core::db` (Rust direct writers).
+- **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
 - **Прямые SQL writes в ARK** из app services — **запрещены**.
 - **Apps интегрируются с лаунчером через command bus** (apps регистрируют commands, Kepler invoke'ает).
 - **Тесты** — только на изолированных БД.
@@ -95,13 +95,13 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 | **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](/concepts/command-bus) + [Extension host](/concepts/extension-host) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
 | **Extension host** | `shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](/concepts/extension-host), [Extension dev mode](/concepts/extension-dev-mode). |
-| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kepler/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](/concepts/command-bus). |
+| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](/concepts/command-bus). |
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **Kerux** | `apps/kerux` | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано) |
 | **ark-service (Android)** | `mobile/ark-service` | Android Room ContentProvider для `mobile/delphi` (отдельно от desktop ARK) |
 | **ark-core** | `crates/ark-core/rust` | Rust runtime + ark-core-rpc bin |
-| **@kepler/ark** | `packages/ark` | TS SDK |
-| **@kepler/visuals** | `packages/visuals` | UI токены, тема, компоненты |
+| **@kosmos/ark** | `packages/ark` | TS SDK |
+| **@kosmos/visuals** | `packages/visuals` | UI токены, тема, компоненты |
 | **ark-relay-server** | `services/ark-relay-server` | WebSocket relay (опционально, для NAT) |
 | **kepler-watcher** | `services/kepler-watcher` | watcher-демон над `crates/ark-core` |
 | **usage-tracker** | `services/kepler-backend/src/usage_tracker/` | модуль внутри kepler-backend (был standalone до Phase E3 → `legacy/usage-tracker`) |
@@ -109,7 +109,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 ## Что считается substantial (нужен proof loop)
 
 - Новая фича приложения.
-- Новый ARK endpoint в `ark-core-rpc` или метод в `@kepler/ark`.
+- Новый ARK endpoint в `ark-core-rpc` или метод в `@kosmos/ark`.
 - Изменение схемы SQLite.
 - Изменение sync-протокола.
 - Изменение write-boundary (правил доступа к данным).

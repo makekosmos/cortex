@@ -10,7 +10,7 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import { EmptyState } from "@kepler/visuals";
+import { EmptyState } from "@kosmos/visuals";
 
 import { useGames } from "../composables/useGames";
 

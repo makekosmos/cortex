@@ -1,4 +1,4 @@
-# `@kepler/visuals` — stories
+# `@kosmos/visuals` — stories
 
 Полный набор Histoire-историй для дизайн-системы Kosmos. Запускается локально, не
 требует backend / extensions / Electron.
@@ -25,7 +25,7 @@ bun run --cwd packages/visuals story:preview
 stories/
 ├── _preview.css          — стили под preview-канвас (использует CSS-vars темы)
 ├── tokens/               — токены design-system (colors, spacing, typography, radius, animations)
-└── components/           — все компоненты из @kepler/visuals/components
+└── components/           — все компоненты из @kosmos/visuals/components
 ```
 
 Histoire конфиг — `packages/visuals/histoire.config.ts`. Setup-файл с подключением
@@ -69,7 +69,7 @@ Toggle в правом верхнем углу UI Histoire переключае�
 
 ## Покрытие
 
-23 story-файла, 62 варианта. Каждый экспортируемый компонент `@kepler/visuals/components`
+23 story-файла, 62 варианта. Каждый экспортируемый компонент `@kosmos/visuals/components`
 (19 шт, включая `ContextMenuItem` и `DesktopContentSurface` в составе родительских историй)
 и каждый набор токенов имеют как минимум одну story.
 

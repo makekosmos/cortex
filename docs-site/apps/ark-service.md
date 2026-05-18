@@ -71,4 +71,4 @@ cd apps/ark-service
 
 - `mobile/delphi/AGENTS.md` — Android-приложение Delphi, потребитель ContentProvider.
 - [Архитектура](/concepts/architecture) — общая картина desktop ARK.
-- [@kepler/ark](/packages/ark) — desktop TS-клиент к `ark-core-rpc` (аналог `ark-service` для desktop).
+- [@kosmos/ark](/packages/ark) — desktop TS-клиент к `ark-core-rpc` (аналог `ark-service` для desktop).

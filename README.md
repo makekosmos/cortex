@@ -6,7 +6,7 @@ Kosmos is a monorepo for local-first personal software: a shared ARK data runtim
 
 ### [ARK](./packages/ark-core/README.md) - local-first data runtime
 
-ARK is the shared Rust + SQLite runtime for long-lived personal data. The canonical desktop binary is `ark-core-rpc`; Electron apps should talk to it through `@kepler/ark` from Electron main/preload facades instead of writing directly into ARK SQLite tables.
+ARK is the shared Rust + SQLite runtime for long-lived personal data. The canonical desktop binary is `ark-core-rpc`; Electron apps should talk to it through `@kosmos/ark` from Electron main/preload facades instead of writing directly into ARK SQLite tables.
 
 ### [Eden](./apps/eden/README.md) - journal/editor
 
@@ -38,4 +38,4 @@ Nutrition tracking.
 
 ## Current ARK Integration Rule
 
-New Electron integrations should use `@kepler/ark` and `ark-core-rpc`. `@arksync/node` is compatibility-only. Direct writes into ARK SQLite tables are legacy or migration-only paths; if a process must write directly, it must use `ark_core::db` helpers so sync state is updated consistently.
+New Electron integrations should use `@kosmos/ark` and `ark-core-rpc`. `@arksync/node` is compatibility-only. Direct writes into ARK SQLite tables are legacy or migration-only paths; if a process must write directly, it must use `ark_core::db` helpers so sync state is updated consistently.

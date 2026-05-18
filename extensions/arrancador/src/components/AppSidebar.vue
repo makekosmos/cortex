@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Sidebar Arrancador-extension'а — поверх `Sidebar` из `@kepler/visuals`.
+// Sidebar Arrancador-extension'а — поверх `Sidebar` из `@kosmos/visuals`.
 //
 // active-state определяется матчем `route.path` против `to` каждого
 // nav-item'а (Sidebar сам не подписан на router).
@@ -13,8 +13,8 @@ import {
   BarChart3,
   Settings,
 } from "lucide-vue-next";
-import { Sidebar } from "@kepler/visuals";
-import type { SidebarNavItem } from "@kepler/visuals";
+import { Sidebar } from "@kosmos/visuals";
+import type { SidebarNavItem } from "@kosmos/visuals";
 
 const props = defineProps<{
   hidden: boolean;

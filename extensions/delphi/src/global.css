@@ -5,12 +5,12 @@
 
 /* @source — Tailwind v4 directive, расширяет content scan на shared visuals
  * package'и (где живут .vue компоненты с tailwind classes). Без этого
- * утилиты, используемые только в @kepler/visuals/*.vue, не попадут в bundle. */
+ * утилиты, используемые только в @kosmos/visuals/*.vue, не попадут в bundle. */
 @source "../../../../packages/kosmos-visuals/**/*.{vue,ts}";
 
-/* Theme CSS variables from @kepler/visuals — single source of truth.
- * Резолвится через alias `@kepler/visuals/theme/css` (см. shared vite config). */
-@import "@kepler/visuals/theme/css";
+/* Theme CSS variables from @kosmos/visuals — single source of truth.
+ * Резолвится через alias `@kosmos/visuals/theme/css` (см. shared vite config). */
+@import "@kosmos/visuals/theme/css";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -41,7 +41,7 @@ Auto-generated файл с контекстом работы над Kosmos дл�
 - **Kosmos** = монорепо / экосистема для личного софта. Bun workspaces + Cargo workspace.
 - **Kepler** = имя лаунчера (`shell/`, npm name `kepler-shell`) и его shared backend (`services/kepler-backend/`).
 - **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, бинарь `ark-core-rpc`).
-- **Apps** говорят с ARK **только** через `@kepler/ark` или `ark_core::db` (Rust direct writers).
+- **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
 - **Прямые SQL writes в ARK** из app services — **запрещены**.
 - **Apps интегрируются с лаунчером через command bus** (apps регистрируют commands, Kepler invoke'ает).
 - **Тесты** — только на изолированных БД.
@@ -125,13 +125,13 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 | **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view). |
 | **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
 | **Extension host** | `shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md). |
-| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kepler/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
+| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
 | **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
 | **Kerux** | `apps/kerux` | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано) |
 | **ark-service (Android)** | `mobile/ark-service` | Android Room ContentProvider для `mobile/delphi` (отдельно от desktop ARK) |
 | **ark-core** | `crates/ark-core/rust` | Rust runtime + ark-core-rpc bin |
-| **@kepler/ark** | `packages/ark` | TS SDK |
-| **@kepler/visuals** | `packages/visuals` | UI токены, тема, компоненты |
+| **@kosmos/ark** | `packages/ark` | TS SDK |
+| **@kosmos/visuals** | `packages/visuals` | UI токены, тема, компоненты |
 | **ark-relay-server** | `services/ark-relay-server` | WebSocket relay (опционально, для NAT) |
 | **kepler-watcher** | `services/kepler-watcher` | watcher-демон над `crates/ark-core` |
 | **usage-tracker** | `services/kepler-backend/src/usage_tracker/` | модуль внутри kepler-backend (был standalone до Phase E3 → `legacy/usage-tracker`) |
@@ -139,7 +139,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 ## Что считается substantial (нужен proof loop)
 
 - Новая фича приложения.
-- Новый ARK endpoint в `ark-core-rpc` или метод в `@kepler/ark`.
+- Новый ARK endpoint в `ark-core-rpc` или метод в `@kosmos/ark`.
 - Изменение схемы SQLite.
 - Изменение sync-протокола.
 - Изменение write-boundary (правил доступа к данным).
@@ -226,7 +226,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 - ❌ Прямое использование `window.kepler.ark.request` из Eden компонентов и `store/`. Только через `kepler-api-shim` (или `edenApi.ts` фасад над ним) — это единственный мост, чтобы code review мог локально проверить ARK границу.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Удаление lazy-load Editor.vue (`defineAsyncComponent`). Main bundle Eden должен оставаться < 800KB.
 - ❌ `await props.onSave(...)` в `Editor.vue` без try/catch. Throw'и из onSave (network error, ARK недоступен) при отсутствии catch'а превращают autosave в silent retry storm — `lastPersisted*` не обновляется, autosave таймер ретраит каждые 800ms бесконечно, пользователю никаких индикаторов. На failure — выставить `saveConflict` с human-readable текстом.
 - ❌ `void save()` в `onBeforeUnmount` без `.catch(...)`. Promise rejected после unmount'а компонента → unhandled rejection. Component-instance-aware error handling не сработает (компонент уже размонтирован).
@@ -259,7 +259,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kepler/ark` через main proxy).
+- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kosmos/ark` через main proxy).
 - ❌ Любые **writes** в ARK таблицы.
 - ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый код заморожен в `legacy/dashboard-extension/`.
 - ❌ Возврат welcome screen с карточками spaces. После 2026-05-15 Dashboard сразу открывается на список объектов — single DB per user.
@@ -284,13 +284,13 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 - ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
 - ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kepler/ark` SDK.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
 
 ### Brand consistency
 
 - ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
 - ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
-- ❌ Возврат npm scope `@kosmos/*`. После Phase B4 — единый `@kepler/*` (`@kepler/ark`, `@kepler/visuals`).
+- ❌ Возврат npm scope `@kepler/*` для shared пакетов. Runtime и UI общие для всей экосистемы используют **`@kosmos/*`**: `@kosmos/ark`, `@kosmos/visuals`. Между Phase B4 (2026-05-14) и 2026-05-18 они некоторое время жили под `@kepler/*` — это была ошибка naming'а (ARK и visuals shared across all apps, не launcher-specific). `@kepler/*` зарезервирован для launcher-specific пакетов, если такие появятся.
 
 ### Distribution
 
@@ -334,7 +334,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 - ❌ Nested interactive elements: `role="button"` (или любой другой interactive role) на `<span>` / `<div>` **внутри** `<button>`. HTML это запрещает; screen reader'ы collapse'ят в одну кнопку и inner action становится недоступным с клавиатуры. Решение — два sibling `<button>` в композитной обёртке (см. `DateChip.vue` после 2026-05-18 фикса).
 - ❌ Outside-click listener'ы через nested `watch(..., { once: true })` для cleanup'а. Паттерн ломается при quick open→close→open: новый handler регистрируется до того как старый отпишется. Используй symmetric `watch(isOpen, (val) => val ? addEventListener : removeEventListener)` + `onBeforeUnmount → removeEventListener` (mirror `ContextMenu.vue`).

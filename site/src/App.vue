@@ -29,7 +29,7 @@ import LauncherMockup from "./components/LauncherMockup.vue";
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 40px;
+  gap: 60px;
   padding: 80px 24px;
   /* Минимальные top/bottom отступы, чтобы CornerLabels не наезжали на контент */
   padding-top: max(120px, 14vh);

@@ -1,6 +1,6 @@
-# Storybook — `@kepler/visuals`
+# Storybook — `@kosmos/visuals`
 
-Storybook 8 — основная площадка для review UI компонентов `@kepler/visuals`:
+Storybook 8 — основная площадка для review UI компонентов `@kosmos/visuals`:
 кнопки, sidebar, primitives, patterns. Histoire (`histoire.config.ts`) остаётся
 в репо как альтернативный быстрый preview, но canonical UI review — здесь.
 

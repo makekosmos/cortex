@@ -33,7 +33,7 @@
 - [ ] Self-peer filtering и routable-address filtering не ослаблены.
 - [ ] `bun run --cwd packages/ark typecheck` — зелёный (если правил публичные типы).
 
-## Я правил `@kepler/ark` (`packages/ark`)
+## Я правил `@kosmos/ark` (`packages/ark`)
 
 - [ ] `bun run --cwd packages/ark typecheck` — зелёный.
 - [ ] `bun run --cwd packages/ark build` — собирается.
@@ -50,7 +50,7 @@
 - [ ] TipTap CodeBlock + lowlight остаются для синтакс-highlight. Никаких runtime lint/format вызовов.
 - [ ] Search через ARK FTS5 (`search_objects`). Heart Rust / Tantivy / ripgrep — не возвращаем.
 - [ ] Lazy Editor.vue (`defineAsyncComponent`) сохранён — main bundle должен оставаться < 800KB.
-- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kepler/visuals`. Никаких ручных `--titlebar-height` хаков.
+- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kosmos/visuals`. Никаких ручных `--titlebar-height` хаков.
 - [ ] Trash UI работает поверх ARK soft-delete (`deletedAt != null`).
 - [ ] Hevy / code lint-format / vault picker / Heart sidecar — **не возвращаем** в Phase 6.0.A. См. forbidden.md.
 
@@ -71,7 +71,7 @@
 - [ ] Native scanner (`child_process` + FS-сканирование Steam/Epic/GOG) **не переписывай в renderer**.
 - [ ] Game launch / catalogue / scan — TODO в extension, не возвращай stub'ы как «работающие».
 - [ ] Не добавлены Tauri или React зависимости.
-- [ ] ARK writes идут через `@kepler/ark`.
+- [ ] ARK writes идут через `@kosmos/ark`.
 
 ## Я правил Dashboard (встроенный shell view, `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`)
 
@@ -80,7 +80,7 @@
 - [ ] Renderer не открывает SQLite напрямую.
 - [ ] ARK queries — только через `window.kepler.ark.request(...)`.
 - [ ] Никаких writes в ARK таблицы (Dashboard — read-only inspector).
-- [ ] `@kepler/visuals` (`DesktopChrome`, `DesktopContentSurface`) через import/alias, не скопирован.
+- [ ] `@kosmos/visuals` (`DesktopChrome`, `DesktopContentSurface`) через import/alias, не скопирован.
 - [ ] Tray menu всё ещё содержит «Dashboard» entry.
 - [ ] Закрытие dashboard окна не закрывает Kepler shell.
 - [ ] Hash routing остался `#/dashboard` (без `/welcome` / `/space/<id>` — spaces убраны 2026-05-15).
@@ -119,7 +119,7 @@
 - [ ] `bun run --cwd shell ext:uninstall <id>` корректно убирает override.
 - [ ] Если правил формат manifest'а — обновил [Extension installer](/concepts/extension-installer).
 
-## Я правил command bus (`services/kepler-backend` + `@kepler/ark`)
+## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
 
 - [ ] Backend (`services/kepler-backend/src/command_bus.rs` + `ws_server.rs`) — `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.
 - [ ] SDK (`packages/ark/src/ark-client.ts`) — `bun test` зелёный.
@@ -137,7 +137,7 @@
 - [ ] Tracker-модуль стартует/останавливается из `services/kepler-backend/src/main.rs` (Phase E2). Standalone-бинарь — frozen в `legacy/usage-tracker/`.
 - [ ] Tracker остаётся user-level, не Windows Service.
 
-## Я правил `@kepler/visuals` (`packages/visuals`)
+## Я правил `@kosmos/visuals` (`packages/visuals`)
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).
 - [ ] Если меняешь CSS-переменные в `theme/css-variables.css` — сразу отрази в `docs-site/.vitepress/theme/custom.css`.

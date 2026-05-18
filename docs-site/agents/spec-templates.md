@@ -63,7 +63,7 @@ AC3. <…>
 Не в задаче:
 
 - Покрытие смежных приложений.
-- Изменения в ARK runtime / `@kepler/ark` API.
+- Изменения в ARK runtime / `@kosmos/ark` API.
 
 ## Acceptance Criteria
 

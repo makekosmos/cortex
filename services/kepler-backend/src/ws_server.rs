@@ -290,7 +290,7 @@ async fn handle_connection(
     // wire-формате что и существующие ARK события (peer_connected/entity_changed):
     //   {"event":"commands_changed","commands":[...]}
     //   {"event":"command_invoked","id":...,"params":...}
-    // SDK (@kepler/ark dispatchSidecarEvent) переключается по полю `event`.
+    // SDK (@kosmos/ark dispatchSidecarEvent) переключается по полю `event`.
     //
     // Operations с префиксом `commands.` обрабатываются локально через
     // CommandBus, в ark_host не уходят.

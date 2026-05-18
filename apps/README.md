@@ -5,12 +5,12 @@ desktop integration path is:
 
 1. Renderer displays UI and calls a narrow preload API.
 2. Electron main owns app orchestration.
-3. Electron main talks to `ark-core-rpc` through `@kepler/ark`.
+3. Electron main talks to `ark-core-rpc` through `@kosmos/ark`.
 4. ARK owns shared SQLite schema, object storage, usage storage, search, and sync.
 
 Direct writes into ARK SQLite tables are not an app integration path. If an app
 needs to write shared data, add or use an ARK runtime operation and call it
-through `@kepler/ark`.
+through `@kosmos/ark`.
 
 ## App Boundaries
 

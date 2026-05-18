@@ -135,7 +135,7 @@ sequenceDiagram
 
 ```ts
 // apps/horologion/electron/main.ts
-import { ArkClient } from '@kepler/ark'
+import { ArkClient } from '@kosmos/ark'
 
 const client = new ArkClient({ /* kepler-mode */ })
 await client.start()
@@ -177,7 +177,7 @@ const off = client.commands.onInvoked((e) => {
 app.on('before-quit', () => off())
 ```
 
-### Invoke (от launcher через `@kepler/ark`)
+### Invoke (от launcher через `@kosmos/ark`)
 
 ```ts
 // shell/electron/main.ts (упрощённо)
@@ -217,4 +217,4 @@ client.commands.onChanged(() => {
 
 - [Архитектура](/concepts/architecture) — общая картина.
 - [Extension host](/concepts/extension-host) — Phase 4 foundation для in-shell extensions.
-- [@kepler/ark](/packages/ark) — TS SDK с `ArkCommandsApi`.
+- [@kosmos/ark](/packages/ark) — TS SDK с `ArkCommandsApi`.

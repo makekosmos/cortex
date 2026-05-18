@@ -2,7 +2,7 @@
 
 ## Brand'ы
 
-- **Kosmos** — название экосистемы. Под Kosmos живут продуктовые приложения (Eden, Delphi, Arrancador, Horologion, Dashboard) и shared-пакеты (`@kepler/ark`, `@kepler/visuals`).
+- **Kosmos** — название экосистемы. Под Kosmos живут продуктовые приложения (Eden, Delphi, Arrancador, Horologion, Dashboard) и shared-пакеты (`@kosmos/ark`, `@kosmos/visuals`).
 - **Kepler** — Electron-launcher + shared Rust runtime (`kepler-backend`), который держит один `ark-core-rpc` child на машину, gateway-WS для апок, command bus и LAN/relay sync.
 
 Раньше "Kepler" обозначал отдельный Rust+gpui фоновый sync host. Сейчас это имя перешло на Electron launcher (`shell/`, npm package `kepler-shell`) + его Rust backend (`services/kepler-backend`). Шилд старой архитектуры — снят. Phase B-E (2026-05-14) свели весь stack в плоский top-level layout: `shell/`, `extensions/`, `crates/`, `mobile/`, `services/`.
@@ -40,13 +40,13 @@
  standalone   extensions/<id>/ (Vue-extensions внутри shell/)
 
 Eden — standalone Electron .exe (apps/eden). Остальные — Vue-extensions,
-открываются внутри Kepler shell, общаются с kepler-backend через @kepler/ark.
+открываются внутри Kepler shell, общаются с kepler-backend через @kosmos/ark.
 ```
 
 - `shell/` (Electron, npm `kepler-shell`) — оркестратор: launcher окно, tray, settings, extension loader, спавн `kepler-backend`.
 - `kepler-backend` (Rust) — shared runtime: supervisor для `ark-core-rpc`, WS gateway, command bus, sync, встроенный usage tracker.
 - `ark-core-rpc` (Rust, `crates/ark-core`) — канонический ARK runtime: SQLite, миграции, sync protocol.
-- Extensions (`extensions/<id>/`) — Vue-bundles внутри Kepler shell. Общаются с `kepler-backend` через `@kepler/ark`.
+- Extensions (`extensions/<id>/`) — Vue-bundles внутри Kepler shell. Общаются с `kepler-backend` через `@kosmos/ark`.
 - Eden — пока standalone (`apps/eden/ts`), миграция в extensions — Phase 6.
 
 ## Роли
@@ -56,7 +56,7 @@ Eden — standalone Electron .exe (apps/eden). Остальные — Vue-extens
 `shell/electron/main.ts` — Electron host:
 
 - Спавнит `kepler-backend.exe` как child (`spawnBackend`).
-- Подключается к нему через `@kepler/ark` в kepler-mode (`ensureKeplerRunning`).
+- Подключается к нему через `@kosmos/ark` в kepler-mode (`ensureKeplerRunning`).
 - Показывает launcher окно (frameless, acrylic background, alwaysOnTop) по `Ctrl+Shift+K`.
 - Tray-иконка с menu (Открыть / Настройки / Выход).
 - Список команд в launcher = **static open-commands** (`COMMANDS` из `electron/commands.ts`) + **dynamic action-commands** (через `arkClient.commands.list()` — приходят от running апок).
@@ -83,8 +83,8 @@ Eden — standalone Electron .exe (apps/eden). Остальные — Vue-extens
 
 Eden (`apps/eden/ts`) — standalone Electron .exe. Остальные (Delphi, Arrancador, Dashboard, Horologion) — Vue-extensions в `extensions/<id>/`, открываются внутри Kepler shell. Связи:
 
-- **Renderer**: Vue 3 Vapor через `@kepler/visuals` (`Sidebar`, `Titlebar`, `DesktopChrome`, `CommandPalette` и т.п.). Никакого SQLite, всё через preload IPC.
-- **Electron main** (Eden) / **extension host** (Kepler shell main): коннектится к `kepler-backend` через `@kepler/ark` (kepler-mode). Спавн собственного sidecar — **не делает**. Sync — **не запускает** (backend сам делает).
+- **Renderer**: Vue 3 Vapor через `@kosmos/visuals` (`Sidebar`, `Titlebar`, `DesktopChrome`, `CommandPalette` и т.п.). Никакого SQLite, всё через preload IPC.
+- **Electron main** (Eden) / **extension host** (Kepler shell main): коннектится к `kepler-backend` через `@kosmos/ark` (kepler-mode). Спавн собственного sidecar — **не делает**. Sync — **не запускает** (backend сам делает).
 - **Consumers**: читают/пишут ARK objects через `arkClient.objects.*` / `arkClient.links.*`. Подписываются на entity events.
 - **Producers**: регистрируют action-commands через `arkClient.commands.register(...)` и слушают `arkClient.commands.onInvoked(...)`. Пример — Horologion регистрирует `horologion:pomodoro:25` и при invoke стартует таймер.
 
@@ -96,20 +96,20 @@ Eden (`apps/eden/ts`) — standalone Electron .exe. Остальные (Delphi, 
 
 Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Horologion. Никогда не пишет напрямую в SQLite. Общается с Electron main через preload API.
 
-Использует общие UI-примитивы из `@kepler/visuals`: `Sidebar`, `Titlebar`, `TitlebarHistoryControls`, `DesktopChrome`, `DesktopContentSurface`, `CommandPalette`, `StatusDot`, `TodoRow`, `GamePosterCard`, `QuickEntryPanel`, `CustomCaret`.
+Использует общие UI-примитивы из `@kosmos/visuals`: `Sidebar`, `Titlebar`, `TitlebarHistoryControls`, `DesktopChrome`, `DesktopContentSurface`, `CommandPalette`, `StatusDot`, `TodoRow`, `GamePosterCard`, `QuickEntryPanel`, `CustomCaret`.
 
 ### Electron main (per-app)
 
-Оркестрирует приложение, держит IPC, держит `ArkClient` в kepler-mode. **Единственный** слой, который вызывает `@kepler/ark`. Renderer его не видит — он работает через `window.<appName>Api` (`window.dashboardApi`, `window.arrancador`, и т.п.).
+Оркестрирует приложение, держит IPC, держит `ArkClient` в kepler-mode. **Единственный** слой, который вызывает `@kosmos/ark`. Renderer его не видит — он работает через `window.<appName>Api` (`window.dashboardApi`, `window.arrancador`, и т.п.).
 
-### @kepler/ark
+### @kosmos/ark
 
 Канонический TS-клиент. Два режима:
 
 - **kepler-mode (default сейчас)** — `ArkClient` коннектится к `kepler-backend` через WS, используя `kepler.lock.json` (bearer token, port). Шейринг одного backend'а с другими апками.
 - **self-managed sidecar (legacy)** — `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`. Использовалось до Kepler как brand swap; сейчас live только для тестов и fallback.
 
-См. [@kepler/ark](/packages/ark).
+См. [@kosmos/ark](/packages/ark).
 
 ### ark-core-rpc (Rust)
 
@@ -140,14 +140,14 @@ LAN sync namespace = глобальный `kepler-default` (фиксирован
 
 См. [Модель данных ARK](/concepts/ark-objects).
 
-Apps (`@kepler/ark` в kepler-mode) не открывают SQLite напрямую — они коннектятся к `kepler-backend` по WS из `kepler.lock.json`, а backend владеет путём к SQLite.
+Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрямую — они коннектятся к `kepler-backend` по WS из `kepler.lock.json`, а backend владеет путём к SQLite.
 
 ## Communication primitives
 
 | Primitive | Где определён | Когда |
 |---|---|---|
 | **ARK objects** | `objects` + `object_links` в SQLite | Долгоживущие данные, репликация sync'ом |
-| **Entity events** | `onArkEvent` / `onEntityChanged` в `@kepler/ark` | Подписка на изменения объектов |
+| **Entity events** | `onArkEvent` / `onEntityChanged` в `@kosmos/ark` | Подписка на изменения объектов |
 | **Command bus** | `commands.*` в WS protocol | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](/concepts/command-bus) |
 | **Extension host** | `kepler:extension:*` IPC в kepler-shell | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](/concepts/extension-host) |
 
@@ -163,7 +163,7 @@ Apps (`@kepler/ark` в kepler-mode) не открывают SQLite напрям�
 
 ### 3. Narrow contract
 
-Приложения говорят с ARK **только** через `@kepler/ark` (TS) или `ark_core::db` (Rust-writers). Прямые SQL writes в app services запрещены. См. [Граница записи](/concepts/write-boundary).
+Приложения говорят с ARK **только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust-writers). Прямые SQL writes в app services запрещены. См. [Граница записи](/concepts/write-boundary).
 
 ### 4. Auditable changes
 
@@ -178,12 +178,12 @@ Substantial-правки проходят через proof loop с явными 
 | Кусок | Где | Тип | Роль |
 |---|---|---|---|
 | ark-core | `crates/ark-core/rust` | Rust crate + бинарь | runtime данных |
-| @kepler/ark | `packages/ark` | TS SDK | клиент к sidecar / kepler-backend |
+| @kosmos/ark | `packages/ark` | TS SDK | клиент к sidecar / kepler-backend |
 | kepler-shell | `shell/` (npm `kepler-shell`) | TS + Electron | launcher host, tray, settings, extension loader |
 | kepler-backend | `services/kepler-backend` | Rust binary | shared runtime supervisor + WS gateway + command bus + sync + usage_tracker модуль |
 | ark-relay-server | `services/ark-relay-server` | Rust server | WebSocket relay (NAT-обход p2p sync) |
 | kepler-watcher | `services/kepler-watcher` | Rust | watcher-демон над ark-core |
-| @kepler/visuals | `packages/visuals` | TS + Vue | дизайн-система |
+| @kosmos/visuals | `packages/visuals` | TS + Vue | дизайн-система |
 | Eden (standalone) | `apps/eden/ts` | TS + Electron | заметки, пока вне shell (Phase 6 — миграция) |
 | Vue-extensions | `extensions/{delphi,arrancador,dashboard,horologion}` | TS + Vue | продуктовые оболочки внутри Kepler shell |
 | ark-service (Android) | `mobile/ark-service` | Kotlin + Room | Android ContentProvider, держит данные Android Delphi (`mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |

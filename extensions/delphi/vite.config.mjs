@@ -20,12 +20,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
-      "@kepler/ark": path.resolve(repoRoot, "packages/ark/src/index.ts"),
-      "@kepler/visuals/theme/css": path.resolve(
+      "@kosmos/ark": path.resolve(repoRoot, "packages/ark/src/index.ts"),
+      "@kosmos/visuals/theme/css": path.resolve(
         repoRoot,
         "packages/visuals/theme/css-variables.css",
       ),
-      "@kepler/visuals": path.resolve(repoRoot, "packages/visuals"),
+      "@kosmos/visuals": path.resolve(repoRoot, "packages/visuals"),
       // КРИТИЧНО: force vue-router и pinia resolve к extension'овской
       // копии. Bun устанавливает vue-router@4 в packages/visuals/node_modules
       // (peer satisfy) и vue-router@5 в extensions/delphi/node_modules —

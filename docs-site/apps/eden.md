@@ -20,7 +20,7 @@ Kepler.exe (Electron host)
                                                        ark-core-rpc (SQLite)
 ```
 
-- **`extensions/eden/src/`** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes; shared visuals из `@kepler/visuals`.
+- **`extensions/eden/src/`** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes; shared visuals из `@kosmos/visuals`.
 - **`extensions/eden/src/lib/kepler-api-shim.ts`** — мост: эмулирует `window.api` (как у standalone Eden), внутри роутит ARK операции через `window.kepler.ark.request(...)`. Это позволяет сохранять Eden codebase без массового rewrite call-sites при миграции в extension. Прецедент — Delphi `electron-api-shim.ts`.
 - **`extensions/eden/src/lib/edenApi.ts`** — публичный фасад для note CRUD / folders / search / typed-notes, импортирует функции из shim'а.
 - **Heart Rust sidecar — удалён.** Search полностью через ARK FTS5 (`search_objects`). Vault filesystem manager стал не нужен — single ARK DB per user.
@@ -105,7 +105,7 @@ bun run --cwd shell dev                     # shell + extensions вместе
 - **ARK FTS5** — единственный search engine. Не возвращаться к Tantivy/ripgrep.
 - **Storage hardening через ARK** — все писи идут через `upsert_object` с runtime валидацией; никаких прямых SQL write'ов из extension TS (см. [Граница записи](../concepts/write-boundary.md)).
 - **TipTap CodeBlock + lowlight** — синтакс highlight в блоках кода. Никаких runtime lint/format вызовов.
-- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kepler/visuals`.
+- **Desktop shell** строится через shared `DesktopChrome` и `DesktopContentSurface` из `@kosmos/visuals`.
 - **Lazy Editor.vue** — `defineAsyncComponent(() => import("./Editor.vue"))` в App.vue: main bundle ~350KB, editor chunk ~1.36MB lazy-loaded при открытии заметки.
 
 ## Будущее

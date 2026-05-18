@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { Globe2, Radio } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 import QRCode from "qrcode";
-import { EmptyState } from "@kepler/visuals";
+import { EmptyState } from "@kosmos/visuals";
 import {
   type Space,
   deriveSpaceId,

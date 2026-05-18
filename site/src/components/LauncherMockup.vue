@@ -1,14 +1,14 @@
 <script setup lang="ts">
-// Launcher mockup — статическая визуализация LauncherView.vue из shell/src/
-// которая всегда отражает реальный UI приложения. При изменении launcher'а
-// тут обновляются те же классы + структура.
+// Launcher mockup — статическая визуализация LauncherView.vue из shell/src/.
+// Структура и стили подобраны под реальный launcher (см. image #10).
+// Один rounded window с тенью, без внешнего "desktop bezel".
 
 interface Cmd {
   id: string;
   title: string;
-  subtitle?: string; // appName на правой части
+  appName?: string; // справа от title, мутный
   kind: "app" | "command";
-  icon: string; // emoji or short label
+  icon: string;
   iconColor: string;
 }
 
@@ -18,7 +18,7 @@ const commands: Cmd[] = [
     title: "Открыть Delphi",
     kind: "app",
     icon: "★",
-    iconColor: "#1e90ff",
+    iconColor: "#1d8eff",
   },
   {
     id: "horologion:open",
@@ -30,7 +30,7 @@ const commands: Cmd[] = [
   {
     id: "dashboard:open",
     title: "Открыть таблицу данных",
-    subtitle: "Kepler",
+    appName: "Kepler",
     kind: "command",
     icon: "▤",
     iconColor: "#22c55e",
@@ -38,7 +38,7 @@ const commands: Cmd[] = [
   {
     id: "settings:open",
     title: "Открыть настройки",
-    subtitle: "Kepler",
+    appName: "Kepler",
     kind: "command",
     icon: "⚙",
     iconColor: "#737373",
@@ -46,23 +46,23 @@ const commands: Cmd[] = [
   {
     id: "kepler:check-updates",
     title: "Проверить обновления",
-    subtitle: "Kepler",
+    appName: "Kepler",
     kind: "command",
     icon: "↻",
-    iconColor: "#0ea5e9",
+    iconColor: "#1d8eff",
   },
   {
     id: "delphi:inbox",
     title: "Открыть входящие",
-    subtitle: "Delphi",
+    appName: "Delphi",
     kind: "command",
     icon: "★",
-    iconColor: "#1e90ff",
+    iconColor: "#1d8eff",
   },
   {
     id: "horologion:pomodoro",
     title: "Помодоро",
-    subtitle: "Horologion",
+    appName: "Horologion",
     kind: "command",
     icon: "◐",
     iconColor: "#a855f7",
@@ -70,7 +70,7 @@ const commands: Cmd[] = [
   {
     id: "horologion:stopwatch",
     title: "Секундомер",
-    subtitle: "Horologion",
+    appName: "Horologion",
     kind: "command",
     icon: "◐",
     iconColor: "#a855f7",
@@ -82,31 +82,27 @@ const kindLabel = (k: Cmd["kind"]) => (k === "app" ? "Приложение" : "�
 
 <template>
   <div class="mockup-frame">
-    <!-- "Desktop frame" — внешняя рамка вокруг launcher'а -->
-    <div class="desktop-bezel">
-      <!-- Real launcher rendered inside -->
-      <div class="launcher" aria-label="Kepler launcher preview">
-        <input
-          class="search"
-          type="text"
-          placeholder="Поиск команд: pomo, заметка, открыть delphi…"
-          readonly
-          tabindex="-1"
-        />
+    <div class="launcher" aria-label="Kepler launcher preview">
+      <input
+        class="search"
+        type="text"
+        placeholder="Поиск команд: pomo, заметка, открыть delphi…"
+        readonly
+        tabindex="-1"
+      />
 
-        <div class="list">
-          <div class="section-label">Все</div>
-          <ul class="results">
-            <li v-for="c in commands" :key="c.id" class="result">
-              <span class="icon" :style="{ background: c.iconColor }">{{ c.icon }}</span>
-              <div class="row-main">
-                <span class="title">{{ c.title }}</span>
-                <span v-if="c.subtitle" class="subtitle">{{ c.subtitle }}</span>
-              </div>
-              <span class="kind-label">{{ kindLabel(c.kind) }}</span>
-            </li>
-          </ul>
-        </div>
+      <div class="list">
+        <div class="section-label">ВСЕ</div>
+        <ul class="results">
+          <li v-for="c in commands" :key="c.id" class="result">
+            <span class="icon" :style="{ background: c.iconColor }">{{ c.icon }}</span>
+            <div class="row-main">
+              <span class="title">{{ c.title }}</span>
+              <span v-if="c.appName" class="app-name">{{ c.appName }}</span>
+            </div>
+            <span class="kind-label">{{ kindLabel(c.kind) }}</span>
+          </li>
+        </ul>
       </div>
     </div>
   </div>
@@ -121,29 +117,16 @@ const kindLabel = (k: Cmd["kind"]) => (k === "app" ? "Приложение" : "�
   justify-content: center;
 }
 
-/* External "desktop bezel" — тёмная рамка вокруг launcher'а, как macbook frame */
-.desktop-bezel {
-  width: 100%;
-  background: linear-gradient(180deg, #1a1a1a 0%, #0e0e0e 100%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 40px 60px 80px;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 30px 80px rgba(0, 0, 0, 0.5),
-    0 8px 24px rgba(0, 0, 0, 0.3);
-}
-
-/* Launcher window — фон/border соответствует реальному shell launcher'у */
 .launcher {
   width: 100%;
-  max-width: 720px;
-  margin: 0 auto;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: var(--radius);
-  padding: 12px 0;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  background: oklch(0.18 0 0);
+  border: 1px solid oklch(0.23 0 0);
+  border-radius: 24px;
+  padding: 16px 0;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    0 8px 24px rgba(0, 0, 0, 0.4);
   font-family: var(--font-sans);
 }
 
@@ -152,14 +135,15 @@ const kindLabel = (k: Cmd["kind"]) => (k === "app" ? "Приложение" : "�
   background: transparent;
   border: none;
   outline: none;
-  padding: 12px 20px;
+  padding: 12px 32px;
   color: var(--foreground);
-  font-size: 15px;
+  font-size: 16px;
   font-family: inherit;
-  caret-color: var(--accent-bright);
+  font-weight: 400;
+  caret-color: var(--accent);
 }
 .search::placeholder {
-  color: var(--muted-2);
+  color: oklch(0.5 0 0);
 }
 
 .list {
@@ -167,31 +151,25 @@ const kindLabel = (k: Cmd["kind"]) => (k === "app" ? "Приложение" : "�
 }
 
 .section-label {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--muted-2);
-  padding: 8px 20px 4px;
+  color: oklch(0.45 0 0);
+  padding: 12px 32px 8px;
 }
 
 .results {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
 }
 
 .result {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 20px;
-  cursor: default;
-  border-radius: 8px;
-  margin: 0 8px;
+  gap: 14px;
+  padding: 9px 32px;
 }
 
 .icon {
@@ -205,6 +183,7 @@ const kindLabel = (k: Cmd["kind"]) => (k === "app" ? "Приложение" : "�
   color: white;
   font-size: 12px;
   font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .row-main {
@@ -224,9 +203,9 @@ const kindLabel = (k: Cmd["kind"]) => (k === "app" ? "Приложение" : "�
   text-overflow: ellipsis;
 }
 
-.row-main .subtitle {
+.row-main .app-name {
   font-size: 13px;
-  color: var(--muted-2);
+  color: oklch(0.5 0 0);
   white-space: nowrap;
   font-weight: 400;
 }
@@ -234,29 +213,32 @@ const kindLabel = (k: Cmd["kind"]) => (k === "app" ? "Приложение" : "�
 .kind-label {
   flex-shrink: 0;
   font-size: 13px;
-  color: var(--muted-2);
+  color: oklch(0.5 0 0);
   font-weight: 400;
 }
 
 @media (max-width: 720px) {
-  .desktop-bezel {
-    padding: 20px 16px 40px;
-    border-radius: var(--radius);
-  }
   .launcher {
-    max-width: 100%;
+    border-radius: 16px;
+    padding: 12px 0;
+  }
+  .search {
+    padding: 10px 20px;
+    font-size: 14px;
+  }
+  .section-label {
+    padding: 8px 20px 6px;
   }
   .result {
-    margin: 0 4px;
-    padding: 8px 12px;
+    padding: 8px 20px;
     gap: 10px;
-  }
-  .row-main .subtitle,
-  .kind-label {
-    font-size: 11px;
   }
   .row-main .title {
     font-size: 13px;
+  }
+  .row-main .app-name,
+  .kind-label {
+    font-size: 11px;
   }
 }
 </style>

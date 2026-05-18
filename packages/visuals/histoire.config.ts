@@ -10,7 +10,7 @@ export default defineConfig({
   storyMatch: ["stories/**/*.story.vue"],
 
   theme: {
-    title: "@kepler/visuals",
+    title: "@kosmos/visuals",
     favicon: undefined,
     logo: undefined,
     colors: {

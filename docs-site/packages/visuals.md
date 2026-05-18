@@ -1,19 +1,19 @@
 # kosmos-visuals
 
 - **Path**: `packages/visuals`
-- **Имя**: `@kepler/visuals`
+- **Имя**: `@kosmos/visuals`
 
 Общая UI-система для **всех** Electron-приложений Kosmos (Eden, Delphi, Arrancador, Dashboard, Horologion) и для этого сайта документации. Источник дизайна, токенов, и shared компонентов чрома.
 
 ::: danger Обязательно для приложений
 Каждое Electron-приложение Kosmos **обязано**:
 
-1. Подключить `@kepler/visuals/theme/css` в renderer entry — это даёт все CSS-переменные (`--background`, `--foreground`, `--border`, `--accent`, `--radius`, `--corner-shape`, шрифты и т.д.).
+1. Подключить `@kosmos/visuals/theme/css` в renderer entry — это даёт все CSS-переменные (`--background`, `--foreground`, `--border`, `--accent`, `--radius`, `--corner-shape`, шрифты и т.д.).
 2. Оборачивать root в `<DesktopChrome>` + `<DesktopContentSurface>` — не делать свой titlebar / safe-area.
 3. Использовать только токены (`var(--*)`) для цветов / радиусов / шрифтов в собственных компонентах — никаких hardcoded `#hex`, `rgb()`, `font-family: "Inter"` и тому подобного.
 4. Брать готовые компоненты (`Sidebar`, `Titlebar`, `StatusDot`, `CommandPalette`, и т.д.) вместо своих копий.
 
-Свой UI пишется в `apps/<name>/src/` и должен **только** использовать токены и компоненты из `@kepler/visuals`. App-specific компоненты (например, `TimeEntryRow` в Horologion) — это потребители kosmos-visuals токенов, не альтернатива им.
+Свой UI пишется в `apps/<name>/src/` и должен **только** использовать токены и компоненты из `@kosmos/visuals`. App-specific компоненты (например, `TimeEntryRow` в Horologion) — это потребители kosmos-visuals токенов, не альтернатива им.
 :::
 
 ## Структура
@@ -289,7 +289,7 @@ import {
   QuickEntryPanel, type QuickEntryProject, type QuickEntrySavePayload,
   ContextMenu, ContextMenuItem, useContextMenu, type ContextMenuState,
   Modal, Calendar, DateChip, TimeColumn, DateTimePicker,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 ```
 
 ## Utility-классы
@@ -346,7 +346,7 @@ import {
 ## Правила использования
 
 ::: warning Жёстко
-- Если компонент есть в `@kepler/visuals` — **импортируй через public API** пакета, не через deep import.
+- Если компонент есть в `@kosmos/visuals` — **импортируй через public API** пакета, не через deep import.
 - Не копируй shared sidebar / titlebar / токены внутрь `apps/<name>/`.
 - Локальные `src/components/sidebar/*` в приложениях — это **app-specific контейнеры**, не дубли shared UI.
 - Desktop chrome — через `DesktopChrome` + `DesktopContentSurface`. Не возвращай ручные `--titlebar-height` хаки.

@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* QuickEntryPanel — modal for task creation. Использует @kepler/visuals
+/* QuickEntryPanel — modal for task creation. Использует @kosmos/visuals
    tokens, никакого Tailwind. Временный handcrafted-кандидат — стиль будет
    дополирован, см. STORYBOOK handcrafted tag. */
 

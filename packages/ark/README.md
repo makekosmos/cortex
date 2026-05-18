@@ -1,4 +1,4 @@
-# @kepler/ark
+# @kosmos/ark
 
 Node/Electron-main SDK for the Ark runtime.
 
@@ -14,7 +14,7 @@ Use this mode when the caller wants `ArkClient` to spawn and own
 `ark-core-rpc`.
 
 ```ts
-import { ArkClient } from '@kepler/ark'
+import { ArkClient } from '@kosmos/ark'
 
 const ark = new ArkClient({
   spaceId: 'default',
@@ -50,7 +50,7 @@ await ark.start()
 ```
 
 In injected mode, the owner of `requestFn` is responsible for initializing the
-database and managing the binary lifecycle. `@kepler/ark` keeps request shapes
+database and managing the binary lifecycle. `@kosmos/ark` keeps request shapes
 legacy-compatible and does not add request ids to injected calls.
 
 ## Sync API

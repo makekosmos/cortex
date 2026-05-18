@@ -144,7 +144,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Связанные документы
 
-- [@kepler/ark](/packages/ark) — TS SDK.
+- [@kosmos/ark](/packages/ark) — TS SDK.
 - [Модель данных ARK](/concepts/ark-objects).
 - [Синхронизация](/concepts/sync).
 - [Граница записи в ARK](/concepts/write-boundary).

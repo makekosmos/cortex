@@ -1,27 +1,25 @@
-/* Шрифты — Inter Variable. Загружаем через CDN чтобы не тащить fontsource
-   зависимость отдельно (это marketing site, статика). */
-@import url("https://rsms.me/inter/inter.css");
+/* Реальные tokens из @kosmos/visuals — НЕ дублируем. Если в основном
+   приложении изменится цвет/радиус/шрифт — сайт автоматически подхватит.
+   Импорт через относительный путь работает потому что Vercel deploy
+   клонит весь репо, не только site/. */
+@import "../../packages/visuals/theme/css-variables.css";
 
 :root {
-  --bg: #0a0a0a;
-  --surface: #141414;
-  --surface-2: #1a1a1a;
-  --border: #262626;
-  --foreground: #ededed;
-  --muted: #8a8a8a;
-  --muted-2: #5a5a5a;
-  --accent: #2563eb;
-  --accent-bright: #3b82f6;
+  /* Site-specific только: отступы корнерных лейблов. */
+  --edge-pad: 20px;
+
+  /* Alias'ы для удобства чтобы не править все местоупотребления в site
+     компонентах. Указывают на токены @kosmos/visuals. */
+  --bg: var(--background);
+  --surface: var(--color-shape-highlight-light-solid);
+  --surface-2: oklch(0.2 0 0);
+  --foreground: var(--foreground);
+  --muted: var(--muted-foreground);
+  --muted-2: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+  --accent: var(--accent);
+  --accent-bright: color-mix(in srgb, var(--accent) 110%, white);
   --radius: 12px;
   --radius-lg: 20px;
-
-  --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Helvetica, Arial, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
-    monospace;
-
-  /* Edge padding для корнерных лейблов — 20px кроме mobile. */
-  --edge-pad: 20px;
 }
 
 * {
@@ -33,7 +31,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-feature-settings:
@@ -42,6 +40,17 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* @kosmos/visuals tokens живут под селектором .dark. Включаем dark
+   глобально — site всегда dark theme. */
+html {
+  color-scheme: dark;
+}
+html,
+body {
+  /* Подменяем класс через CSS — добавлять .dark на html в JS было бы
+     лишним runtime side-effect для статической страницы. */
 }
 
 #app {

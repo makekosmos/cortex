@@ -21,9 +21,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@kepler/ark": ["../packages/ark/src/index.ts"],
-      "@kepler/visuals": ["../packages/visuals/index.ts"],
-      "@kepler/visuals/*": ["../packages/visuals/*"],
+      "@kosmos/ark": ["../packages/ark/src/index.ts"],
+      "@kosmos/visuals": ["../packages/visuals/index.ts"],
+      "@kosmos/visuals/*": ["../packages/visuals/*"],
       "@shared/*": ["shared/*"]
     }
   },

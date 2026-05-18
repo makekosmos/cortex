@@ -70,15 +70,15 @@ export default defineConfig(({ mode }) => {
         // legacy apps (Delphi, Eden, Horologion), упрощает миграцию исходников
         // как Vue extension без массового rewrite import-путей.
         "@": path.resolve(extensionDir, "src"),
-        "@kepler/ark": path.resolve(
+        "@kosmos/ark": path.resolve(
           __dirname,
           "../packages/ark/src/index.ts",
         ),
-        "@kepler/visuals/theme/css": path.resolve(
+        "@kosmos/visuals/theme/css": path.resolve(
           __dirname,
           "../packages/visuals/theme/css-variables.css",
         ),
-        "@kepler/visuals": path.resolve(
+        "@kosmos/visuals": path.resolve(
           __dirname,
           "../packages/visuals",
         ),

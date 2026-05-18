@@ -234,7 +234,7 @@ const TARGETS = [
 const RULES_TLDR = [
   "## Сжатые правила репозитория (TL;DR)",
   "",
-  "- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.",
+  "- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.",
   "- **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.",
   "- **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.",
   "- **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.",

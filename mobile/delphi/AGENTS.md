@@ -25,7 +25,7 @@ Delphi — приложение для управления задачами в 
 - Канонический desktop sidecar — `ark-core-rpc` из `crates/ark-core/rust`.
 - **Старый Delphi-specific Rust DB sidecar удалён.** Не пересобирать, не восстанавливать, не упаковывать.
 - Задачи Delphi хранятся как обобщённые ARK-объекты с `type_id = task_obj`.
-- Extension обращается к ARK через `@kepler/ark` (через `window.kepler.ark.request(...)` из Kepler shell preload).
+- Extension обращается к ARK через `@kosmos/ark` (через `window.kepler.ark.request(...)` из Kepler shell preload).
 - На входе при смене shared-space **legacy todos мигрируются в `task_obj`**. После миграции object-данные — источник правды.
 
 ## Текущая модель
@@ -33,7 +33,7 @@ Delphi — приложение для управления задачами в 
 - `objects` с `type_id = task_obj` — сами задачи.
 - `object_types` — typed/schema metadata.
 - `object_links` — связи.
-- App access — через `@kepler/ark` SDK.
+- App access — через `@kosmos/ark` SDK.
 
 См. `docs/DELPHI-LEGACY-DB-DECISION.md`.
 
@@ -51,8 +51,8 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 
 ## Boundaries
 
-- Renderer **только** через `@kepler/ark` SDK (либо через `window.electronAPI` shim — см. ниже).
-- Никаких прямых SQL writes (`@kepler/ark` → kepler-backend → ark-core-rpc).
+- Renderer **только** через `@kosmos/ark` SDK (либо через `window.electronAPI` shim — см. ниже).
+- Никаких прямых SQL writes (`@kosmos/ark` → kepler-backend → ark-core-rpc).
 - Новые task writes идут в ARK `task_obj`, **не** в legacy todo таблицы.
 - Тесты используют изолированные тестовые БД, **никогда** — main user ARK DB.
 
@@ -74,7 +74,7 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 Текущая модель форм / списков:
 
 - **Sidebar:** только «Входящие» и «Сегодня» как top-level nav.
-- **QuickEntry** (⌘N / Ctrl+N) — модалка. Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kepler/visuals`), проект (dropdown + «Входящие»), `billable` toggle + опциональный `price`.
+- **QuickEntry** (⌘N / Ctrl+N) — модалка. Поля: title, notes, дата (через `<DateChip>` — попап с `<Calendar>` из `@kosmos/visuals`), проект (dropdown + «Входящие»), `billable` toggle + опциональный `price`.
 - **TodoRow** — клик разворачивает inline-форму, правый клик открывает `<ContextMenu>` с пунктом «Удалить».
 - **ProjectPage** — список задач, бейдж «оплачиваемый + бюджет», суммарное оплачиваемое время по задачам проекта, расчётный `$/час`.
 
@@ -173,7 +173,7 @@ await arkClient.commands.register([
 - [Command bus](docs-site/concepts/command-bus.md) — протокол dynamic commands.
 - [Модель данных ARK](docs-site/concepts/ark-objects.md).
 - [Horologion](docs-site/apps/horologion.md) — трекер времени, который привязывается к Delphi-задачам.
-- [@kepler/ark](docs-site/packages/ark.md).
+- [@kosmos/ark](docs-site/packages/ark.md).
 
 ---
 
@@ -234,7 +234,7 @@ await arkClient.commands.register([
 - ❌ Прямое использование `window.kepler.ark.request` из Eden компонентов и `store/`. Только через `kepler-api-shim` (или `edenApi.ts` фасад над ним) — это единственный мост, чтобы code review мог локально проверить ARK границу.
 - ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
+- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
 - ❌ Удаление lazy-load Editor.vue (`defineAsyncComponent`). Main bundle Eden должен оставаться < 800KB.
 - ❌ `await props.onSave(...)` в `Editor.vue` без try/catch. Throw'и из onSave (network error, ARK недоступен) при отсутствии catch'а превращают autosave в silent retry storm — `lastPersisted*` не обновляется, autosave таймер ретраит каждые 800ms бесконечно, пользователю никаких индикаторов. На failure — выставить `saveConflict` с human-readable текстом.
 - ❌ `void save()` в `onBeforeUnmount` без `.catch(...)`. Promise rejected после unmount'а компонента → unhandled rejection. Component-instance-aware error handling не сработает (компонент уже размонтирован).
@@ -267,7 +267,7 @@ await arkClient.commands.register([
 ### Dashboard
 
 - ❌ SQLite open в renderer.
-- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kepler/ark` через main proxy).
+- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kosmos/ark` через main proxy).
 - ❌ Любые **writes** в ARK таблицы.
 - ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый код заморожен в `legacy/dashboard-extension/`.
 - ❌ Возврат welcome screen с карточками spaces. После 2026-05-15 Dashboard сразу открывается на список объектов — single DB per user.
@@ -292,13 +292,13 @@ await arkClient.commands.register([
 
 - ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
 - ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kepler/ark` SDK.
+- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
 
 ### Brand consistency
 
 - ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
 - ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
-- ❌ Возврат npm scope `@kosmos/*`. После Phase B4 — единый `@kepler/*` (`@kepler/ark`, `@kepler/visuals`).
+- ❌ Возврат npm scope `@kepler/*` для shared пакетов. Runtime и UI общие для всей экосистемы используют **`@kosmos/*`**: `@kosmos/ark`, `@kosmos/visuals`. Между Phase B4 (2026-05-14) и 2026-05-18 они некоторое время жили под `@kepler/*` — это была ошибка naming'а (ARK и visuals shared across all apps, не launcher-specific). `@kepler/*` зарезервирован для launcher-specific пакетов, если такие появятся.
 
 ### Distribution
 
@@ -342,7 +342,7 @@ await arkClient.commands.register([
 ## UI
 
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
+- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
 - ❌ Nested interactive elements: `role="button"` (или любой другой interactive role) на `<span>` / `<div>` **внутри** `<button>`. HTML это запрещает; screen reader'ы collapse'ят в одну кнопку и inner action становится недоступным с клавиатуры. Решение — два sibling `<button>` в композитной обёртке (см. `DateChip.vue` после 2026-05-18 фикса).
 - ❌ Outside-click listener'ы через nested `watch(..., { once: true })` для cleanup'а. Паттерн ломается при quick open→close→open: новый handler регистрируется до того как старый отпишется. Используй symmetric `watch(isOpen, (val) => val ? addEventListener : removeEventListener)` + `onBeforeUnmount → removeEventListener` (mirror `ContextMenu.vue`).
@@ -376,7 +376,7 @@ bun run ark:smoke
 
 ## Сжатые правила репозитория (TL;DR)
 
-- **ARK writes** — только через `@kepler/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
+- **ARK writes** — только через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` запрещены.
 - **Read-only SQL** — renderer никогда не открывает SQLite; read-only fallback в Electron main отделён от write paths и не ходит в user DB из тестов.
 - **Тестовая изоляция** — только `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/` или OS temp. User data dir в автотестах — отказ на ревью.
 - **Proof loop** — substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`: spec → реализация → evidence → (problems → fix → reverify). Каждый AC = `PASS`.

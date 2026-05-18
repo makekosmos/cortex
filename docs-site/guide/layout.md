@@ -15,8 +15,8 @@ kepler/
 ├─ crates/                 # Rust crates
 │  └─ ark-core/            # ⭐ Rust runtime + ark-core-rpc sidecar
 ├─ packages/               # TS пакеты (npm scope @kepler/*)
-│  ├─ ark/                 # ⭐ @kepler/ark — канонический TS SDK
-│  └─ visuals/             # @kepler/visuals — UI-токены, тема, компоненты
+│  ├─ ark/                 # ⭐ @kosmos/ark — канонический TS SDK
+│  └─ visuals/             # @kosmos/visuals — UI-токены, тема, компоненты
 ├─ services/               # Долгоживущие Rust-сервисы
 │  ├─ ark-relay-server/    # WebSocket relay для p2p sync через NAT
 │  ├─ kepler-backend/      # ⭐ supervisor для ark-core-rpc + WS gateway + command bus + usage_tracker

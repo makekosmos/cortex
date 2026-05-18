@@ -127,8 +127,8 @@ export default defineConfig({
           items: [
             { text: "Обзор", link: "/packages/" },
             { text: "ark-core (Rust runtime)", link: "/packages/ark-core" },
-            { text: "@kepler/ark (TS SDK)", link: "/packages/ark" },
-            { text: "@kepler/visuals", link: "/packages/visuals" },
+            { text: "@kosmos/ark (TS SDK)", link: "/packages/ark" },
+            { text: "@kosmos/visuals", link: "/packages/visuals" },
           ],
         },
         {

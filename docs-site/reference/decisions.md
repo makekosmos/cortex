@@ -13,7 +13,7 @@
 - task data: `objects` с `type_id = task_obj`
 - typed/schema metadata: `object_types`
 - relationships: `object_links`
-- app access: `@kepler/ark` / `ark-core-rpc`
+- app access: `@kosmos/ark` / `ark-core-rpc`
 
 Правила:
 
@@ -52,7 +52,7 @@ Search-решение:
 1. **Write rule** — жёсткий: app TS services **не** пишут напрямую в ARK таблицы.
 2. **Read inspection** — мягче:
    - Dashboard — read-only inspector, может открывать любую выбранную ARK SQLite-БД.
-   - Arrancador — `@kepler/ark` сначала; raw SQLite допустим как fallback когда runtime недоступен.
+   - Arrancador — `@kosmos/ark` сначала; raw SQLite допустим как fallback когда runtime недоступен.
    - Renderer — никогда не открывает SQLite напрямую.
 
 Будущий шаг — заменить оставшиеся fallback SQLite paths специализированными ARK endpoints. Уже добавлены:
@@ -70,7 +70,7 @@ Search-решение:
 Поменяли семантику бренда:
 
 - **Kepler** теперь — имя **лаунчера** и его shell (`shell/`, `services/kepler-backend/`).
-- **Kosmos** теперь — имя **экосистемы / монорепо** (`@kepler/ark`, `@kepler/visuals`, ARK runtime, документация).
+- **Kosmos** теперь — имя **экосистемы / монорепо** (`@kosmos/ark`, `@kosmos/visuals`, ARK runtime, документация).
 
 Раньше было наоборот. Все references в коде, конфигах, документации и токенах прошли через `scripts/migrate-kepler-to-kosmos.ps1`. Гард — `scripts/check-swap-completeness.ps1`.
 
@@ -82,7 +82,7 @@ Search-решение:
 
 ### 2026-05-14 — Command bus как primary integration primitive
 
-Apps **регистрируют** свои commands в shared backend (через `@kepler/ark` SDK), launcher **invoke**'ает их. Это заменяет более ранний план «ARK FTS5 search в launcher» — поиск в Kepler-shell теперь идёт по зарегистрированным командам, а не по индексу заметок/задач.
+Apps **регистрируют** свои commands в shared backend (через `@kosmos/ark` SDK), launcher **invoke**'ает их. Это заменяет более ранний план «ARK FTS5 search в launcher» — поиск в Kepler-shell теперь идёт по зарегистрированным командам, а не по индексу заметок/задач.
 
 - Wire format: flat events `{event: "...", ...fields}` (не nested).
 - Registration в `kepler-mode` only, под `try/catch`.
@@ -97,7 +97,7 @@ Open question — после Phase 9 перевести Delphi на kosmos-visua
 
 Native game scanner Arrancador'а (сканирование Steam / Epic / GOG библиотек, запуск .exe) остался в **legacy standalone Electron main**, не мигрирован в extension. Причина: extension renderer не имеет доступа к node API, а scanner требует `child_process` и FS-сканирование с правами user'а.
 
-Phase 5+ план — либо вынести scanner в `kepler-backend` (Rust) с capability-API через `@kepler/ark`, либо в отдельный sidecar в `kepler-shell` electron main. До этого Arrancador-extension содержит только UI subset (LayoutPage + GameCard), все catalogue / scan / launch операции — stub'ы или disabled.
+Phase 5+ план — либо вынести scanner в `kepler-backend` (Rust) с capability-API через `@kosmos/ark`, либо в отдельный sidecar в `kepler-shell` electron main. До этого Arrancador-extension содержит только UI subset (LayoutPage + GameCard), все catalogue / scan / launch операции — stub'ы или disabled.
 
 ### 2026-05-14 — Extension icons через base64 data URI + mtime cache
 

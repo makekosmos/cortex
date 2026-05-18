@@ -5,7 +5,7 @@
 ## 1. Граница записи в ARK
 
 ::: danger
-- Все ARK writes через `@kepler/ark` (TS) или `ark_core::db` (Rust).
+- Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
 - **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
 - Dashboard — read-only.
 - Перед PR в data services: `bun run ark:guard:writes`.
@@ -58,7 +58,7 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 7. UI и Visuals
 
-- Используй `@kepler/visuals` для shared chrome / сайдбара / titlebar.
+- Используй `@kosmos/visuals` для shared chrome / сайдбара / titlebar.
 - **Не копируй** shared компоненты внутрь приложения.
 - Не возвращай ручные titlebar-offset / safe-area хаки — есть `DesktopChrome` / `DesktopContentSurface`.
 
@@ -78,7 +78,7 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 После swap 2026-05-14:
 
 - **Kepler** — имя лаунчера и его UI-shell. `shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
-- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kepler/ark`, `@kepler/visuals`, ARK runtime, doc-site, общий бренд.
+- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kosmos/ark`, `@kosmos/visuals`, ARK runtime, doc-site, общий бренд.
 - Не смешивай: «Kosmos launcher» — неверно, это **Kepler**. «Kepler ARK» — неверно, ARK живёт в **Kosmos**.
 - Перед PR прогоняй `pwsh scripts/check-swap-completeness.ps1` если правил что-то рядом с брендом.
 

@@ -5,7 +5,7 @@
 import { ref, watch } from "vue";
 import { ChevronDown, ChevronRight, Archive, RotateCcw } from "lucide-vue-next";
 
-import { EmptyState, Modal } from "@kepler/visuals";
+import { EmptyState, Modal } from "@kosmos/visuals";
 
 import { useGames } from "../composables/useGames";
 import {

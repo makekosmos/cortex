@@ -16,7 +16,7 @@ import {
   type SidebarNavItem,
   type SidebarProjectGroup,
   type SidebarProjectItem,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";

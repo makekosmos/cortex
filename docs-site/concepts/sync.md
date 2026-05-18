@@ -65,7 +65,7 @@ Self-peer фильтрация и фильтрация routable addresses — **
 Используется когда пиров разделяет NAT или они в разных сетях.
 
 ```ts
-// в @kepler/ark
+// в @kosmos/ark
 const ark = new ArkClient({
   spaceId: 'default',
   deviceId: 'device-1',

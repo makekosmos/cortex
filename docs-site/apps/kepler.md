@@ -32,7 +32,7 @@
    └───────┘ └─────────┘    └──────────┘ └──────────┘ └─────────┘
 ```
 
-Каждая Electron-апка коннектится к `kepler-backend` через WebSocket (`@kepler/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kepler launcher и выбирает команду — backend роутит её к нужной апке.
+Каждая Electron-апка коннектится к `kepler-backend` через WebSocket (`@kosmos/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kepler launcher и выбирает команду — backend роутит её к нужной апке.
 
 ## Стек
 
@@ -42,8 +42,8 @@
 | Renderer | Vue 3.6 + TypeScript + Vite 8 (electron-vite) |
 | Bundler | Vite environments (renderer / main / preload через `vite.config.mjs` в `shell/`) |
 | Backend | `kepler-backend.exe` (Rust, lib + bin из `services/kepler-backend/`) |
-| ARK SDK | `@kepler/ark` (kepler mode, hello-handshake, command bus client) |
-| UI | `@kepler/visuals` (DesktopChrome, токены, компоненты) |
+| ARK SDK | `@kosmos/ark` (kepler mode, hello-handshake, command bus client) |
+| UI | `@kosmos/visuals` (DesktopChrome, токены, компоненты) |
 | Tray / hotkey | Electron `Tray` + `globalShortcut` |
 
 ## Структура
@@ -256,5 +256,5 @@ bun run dev                 # build:backend:dev + extensions + vite + Electron
 
 - [Roadmap](./kepler-roadmap.md) — фазы миграции и план Phase 4-6.
 - [Command bus](../concepts/command-bus.md) — протокол dynamic commands.
-- [@kepler/ark](../packages/ark.md) — TS SDK с `commands` namespace.
+- [@kosmos/ark](../packages/ark.md) — TS SDK с `commands` namespace.
 - [Architecture](../concepts/architecture.md) — общая картина Kosmos.

@@ -66,7 +66,7 @@ docs-site/
 
 ## Тема
 
-Кастомная тема в `.vitepress/theme/custom.css` использует OKLCH-переменные из `packages/visuals/theme/css-variables.css`. При смене дизайн-токенов в `@kepler/visuals` отрази их и здесь.
+Кастомная тема в `.vitepress/theme/custom.css` использует OKLCH-переменные из `packages/visuals/theme/css-variables.css`. При смене дизайн-токенов в `@kosmos/visuals` отрази их и здесь.
 
 ## Mermaid + pan/zoom
 

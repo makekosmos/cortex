@@ -6,7 +6,7 @@ import {
     ContextMenuItem,
     EmptyState,
     useContextMenu,
-} from "@kepler/visuals";
+} from "@kosmos/visuals";
 import type { TimeEntry } from "../types";
 import { formatDuration, formatDayHeader, dayKey } from "../lib/format";
 import { entriesChangedAt, notifyEntriesChanged } from "../lib/store";

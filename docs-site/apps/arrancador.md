@@ -10,7 +10,7 @@ Arrancador — лаунчер для локальной игровой библ�
 
 - Frontend: Vue 3 + TypeScript + Vite (renderer внутри extension window).
 - Runtime: `extensions/arrancador/` — Vue-bundle, открывается через Kepler shell `extension-host.ts`.
-- Persistence: ARK objects + `@kepler/ark` SDK (никаких локальных SQLite в extension).
+- Persistence: ARK objects + `@kosmos/ark` SDK (никаких локальных SQLite в extension).
 
 ## Структура
 
@@ -35,7 +35,7 @@ extensions/arrancador/
 
 - **Игры** — ARK-объекты `game_obj`.
 - **Playtime / usage** — usage-слой ARK (`tracked_apps`, `usage_sessions`, `usage_events`), captured модулем `services/kepler-backend/src/usage_tracker/` (Phase E).
-- **Бэкапы и process search** — через `@kepler/ark`.
+- **Бэкапы и process search** — через `@kosmos/ark`.
 
 ## Команды
 
@@ -49,7 +49,7 @@ bun run --cwd shell dev
 
 ## Правила
 
-- ARK reads/writes — **только** через `@kepler/ark`. Никаких прямых SQL writes (см. [Граница записи](/concepts/write-boundary)).
+- ARK reads/writes — **только** через `@kosmos/ark`. Никаких прямых SQL writes (см. [Граница записи](/concepts/write-boundary)).
 - Игры мапятся на process bindings внутри Arrancador, дальше ARK runtime агрегирует usage.
 - **Не возвращай** в Arrancador собственный in-process tracker, window polling loop или Arrancador-owned usage SQLite. Usage capture теперь живёт в `services/kepler-backend/src/usage_tracker/`.
 - React и Tauri **не** активные runtime пути для Arrancador.

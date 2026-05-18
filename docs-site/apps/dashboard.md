@@ -29,7 +29,7 @@ ARK browser: sidebar с object_types + таблица объектов.
 - Routing: hash-based, окно грузится с `#/dashboard` — `DashboardRoot.vue`
   безусловно рендерит `<DashboardView />`.
 - Data access: `window.kepler.ark.request(...)` через main process IPC.
-- Shared UI: `@kepler/visuals` (`DesktopChrome`, `DesktopContentSurface`,
+- Shared UI: `@kosmos/visuals` (`DesktopChrome`, `DesktopContentSurface`,
   CSS tokens).
 
 ## Структура
@@ -72,13 +72,13 @@ shell/
 - Renderer **никогда** не открывает SQLite напрямую. Все DB reads — через
   `window.kepler.ark.request(...)`.
 - Dashboard — **read-only**. Никаких writes в ARK таблицы.
-- Когда возможно — `@kepler/ark` operations (`list_object_types`,
+- Когда возможно — `@kosmos/ark` operations (`list_object_types`,
   `list_objects_by_type`, `list_objects`). Raw SQL — запрещено.
 - Hardcoded `#hex` цвета только для SidebarItem dot'ов (преднамеренно
   избегаем `var(--accent)` чтобы цвета отличались между типами); остальные
-  цвета — `var(--*)` из `@kepler/visuals`.
+  цвета — `var(--*)` из `@kosmos/visuals`.
 - Окно использует `<DesktopChrome>` + `<DesktopContentSurface>` из
-  `@kepler/visuals` — не дублируй own chrome.
+  `@kosmos/visuals` — не дублируй own chrome.
 - Закрытие dashboard окна **не** закрывает Kepler shell.
 :::
 
@@ -116,5 +116,5 @@ bun run --cwd shell dev                    # backend + extensions + Kepler rende
 
 - [Kepler](/apps/kepler) — host, который держит Dashboard window.
 - [Граница записи в ARK](/concepts/write-boundary)
-- [@kepler/visuals](/packages/visuals)
+- [@kosmos/visuals](/packages/visuals)
 - `docs/ARK-READONLY-SQL-BOUNDARY.md`

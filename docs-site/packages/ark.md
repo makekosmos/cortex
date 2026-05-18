@@ -1,10 +1,10 @@
-# @kepler/ark — TypeScript SDK
+# @kosmos/ark — TypeScript SDK
 
 ::: tip Источник правды
 `packages/ark/README.md`
 :::
 
-`@kepler/ark` — канонический TypeScript-клиент для ARK runtime. Используется в Electron main и в Node-сервисах. Renderer'ы **не** используют его напрямую — для renderer'ов поднимается узкий preload API в Electron main.
+`@kosmos/ark` — канонический TypeScript-клиент для ARK runtime. Используется в Electron main и в Node-сервисах. Renderer'ы **не** используют его напрямую — для renderer'ов поднимается узкий preload API в Electron main.
 
 ## Установка
 
@@ -13,7 +13,7 @@
 ```json
 {
   "dependencies": {
-    "@kepler/ark": "workspace:*"
+    "@kosmos/ark": "workspace:*"
   }
 }
 ```
@@ -25,7 +25,7 @@
 `ArkClient` спавнит и владеет процессом `ark-core-rpc.exe`. Legacy режим для апок вне Kepler-экосистемы.
 
 ```ts
-import { ArkClient } from '@kepler/ark';
+import { ArkClient } from '@kosmos/ark';
 
 const ark = new ArkClient({
   spaceId: 'default',
@@ -40,7 +40,7 @@ await ark.start();
 
 ### Injected sidecar
 
-Sidecar уже владеется другим слоем. `ArkClient` получает `requestFn` и `onEventFn`. В injected mode владелец отвечает за инициализацию БД и жизненный цикл бинаря; `@kepler/ark` сохраняет legacy-совместимый формат запросов и **не** добавляет request id'ы.
+Sidecar уже владеется другим слоем. `ArkClient` получает `requestFn` и `onEventFn`. В injected mode владелец отвечает за инициализацию БД и жизненный цикл бинаря; `@kosmos/ark` сохраняет legacy-совместимый формат запросов и **не** добавляет request id'ы.
 
 ```ts
 const ark = new ArkClient({ spaceId: 'default', deviceId: 'device-1', requestFn: sidecar.request, onEventFn: sidecar.onEvent });
@@ -52,7 +52,7 @@ await ark.start();
 Когда на машине запущен [Kepler host](../apps/kepler.md), `ArkClient` коннектится к нему через локальный WebSocket вместо spawn'а собственного `ark-core-rpc`. Это даёт single sidecar на машине.
 
 ```ts
-import { ArkClient, ensureKeplerRunning } from '@kepler/ark';
+import { ArkClient, ensureKeplerRunning } from '@kosmos/ark';
 
 const state = await ensureKeplerRunning({
   appDataPath: app.getPath('appData'),
@@ -147,7 +147,7 @@ interface ArkCommandsApi {
 ### Пример: app-side (провайдер команд)
 
 ```ts
-import { ArkClient } from '@kepler/ark';
+import { ArkClient } from '@kosmos/ark';
 
 await ark.commands.register([
   {

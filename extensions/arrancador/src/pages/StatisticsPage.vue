@@ -9,7 +9,7 @@
 
 import { computed } from "vue";
 
-import { EmptyState } from "@kepler/visuals";
+import { EmptyState } from "@kosmos/visuals";
 
 import { useGames } from "../composables/useGames";
 

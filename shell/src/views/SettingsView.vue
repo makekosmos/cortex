@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ArrowUpCircle, Loader2 } from "lucide-vue-next";
-import { BlocklistCard } from "@kepler/visuals";
+import { BlocklistCard } from "@kosmos/visuals";
 import type {
   BackendStatus,
   ExportConverterInfo,

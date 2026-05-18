@@ -30,7 +30,7 @@
   /* Порядок: macOS берёт системный SF Pro (-apple-system / BlinkMacSystemFont),
      Windows и Linux — Inter Variable (подгружается через @fontsource-variable/
      inter, импорт в самом начале этого файла — автоматически для всех
-     consumers @kepler/visuals). Дальше Segoe UI как Windows-fallback,
+     consumers @kosmos/visuals). Дальше Segoe UI как Windows-fallback,
      затем нейтральные Helvetica/Arial. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter Variable", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

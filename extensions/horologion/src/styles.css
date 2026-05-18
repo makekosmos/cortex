@@ -2,7 +2,7 @@
  * Horologion-локальные CSS-токены (extension build).
  *
  * Общие токены (--background, --foreground, --accent, --status-success,
- * --destructive, и т.д.) берутся из @kepler/visuals/theme/css-variables.css
+ * --destructive, и т.д.) берутся из @kosmos/visuals/theme/css-variables.css
  * (импортируется в main.ts). Тут только Horologion-domain-specific цвета.
  */
 

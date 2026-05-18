@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Play } from "lucide-vue-next";
-import { Dropdown, SettingsRow, Toggle } from "@kepler/visuals";
+import { Dropdown, SettingsRow, Toggle } from "@kosmos/visuals";
 import { pomodoroSettings, resetPomodoroSettings } from "../lib/pomodoroSettings";
 import { playSound, SOUND_OPTIONS, type SoundName } from "../lib/sounds";
 
@@ -189,7 +189,7 @@ function testSound(s: SoundName) {
     font-weight: 600;
 }
 
-/* SettingsRow приходит из @kepler/visuals — она уже задаёт layout (title/desc слева,
+/* SettingsRow приходит из @kosmos/visuals — она уже задаёт layout (title/desc слева,
    control справа) и border-bottom. Здесь только аккуратим padding'и, чтобы строки
    не «торчали» из карточки группы. */
 :deep(.kosmos-settings-row) {

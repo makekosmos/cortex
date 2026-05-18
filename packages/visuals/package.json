@@ -1,5 +1,5 @@
 {
-  "name": "@kepler/visuals",
+  "name": "@kosmos/visuals",
   "version": "0.1.0",
   "private": true,
   "main": "index.ts",

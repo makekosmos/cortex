@@ -9,7 +9,7 @@
 :::
 
 - **Path**: `extensions/horologion/`
-- **Стек**: Vue 3.6 Vapor + `@kepler/ark` + `@kepler/visuals`. Открывается через Kepler shell `extension-host.ts` в отдельном `BrowserWindow`.
+- **Стек**: Vue 3.6 Vapor + `@kosmos/ark` + `@kosmos/visuals`. Открывается через Kepler shell `extension-host.ts` в отдельном `BrowserWindow`.
 - **Аналог**: Toggl Track — без социалки, без web-app, локально, с интеграцией Delphi-задач.
 
 ## Список фич, которые планируется/нужно сделать
@@ -52,7 +52,7 @@ extensions/horologion/
 
 ## UI и дизайн
 
-Horologion полностью использует [`@kepler/visuals`](/packages/visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные `@kepler/visuals`. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
+Horologion полностью использует [`@kosmos/visuals`](/packages/visuals): `<DesktopChrome>` + `<DesktopContentSurface>` обёртка, все цвета / шрифты / радиусы — только через CSS-переменные `@kosmos/visuals`. **Никакого hardcoded `#hex` или собственного titlebar-кода.**
 
 ### Структура окна
 
@@ -108,7 +108,7 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 - $-badge для billable.
 
 ### Edit modal
-- `<Modal>` из `@kepler/visuals`.
+- `<Modal>` из `@kosmos/visuals`.
 - Поле «Описание» — `<MentionInput>` (можно поменять / добавить задачу через `@`).
 - Preview под input'ом показывает task-pill.
 - Два `<DateTimePicker>` (С / По) — кастомный недельный календарь + текстовый ввод HH:MM.
@@ -120,6 +120,7 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 - Точки `[● ● ○ ○]` показывают сколько помидорок до длинного перерыва.
 - Кнопки: primary «Начать сессию» (по статусу: Пауза / Продолжить / Старт фокуса / Старт перерыва), Skip, Stop.
 - **Состояние сохраняется при сворачивании в трей** — таймер тикает в фоне.
+- **Пауза = stop текущего сегмента, resume = новый сегмент** (Toggl-style). На `pause()` `usePomodoroSession` закрывает активный `time_entry_obj` с `endedAt = моментом паузы`, на `resume()` открывает свежий entry. Время в паузе **не учитывается** в длительности записей. Один pomodoro с N паузами = N+1 `time_entry_obj`, сумма их `endedAt - startedAt` = чистое отработанное время. Backend (`ark-core::pomodoro::Session`) одновременно замораживает `remainingMs` / `phase_ends_at_ms` — таймер визуально стоит.
 
 ### Settings
 - Длительности (work / short / long), сколько помидорок до длинного.
@@ -141,7 +142,7 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 
 В Horologion-extension'е topbar содержит два UI-элемента справа от заголовка:
 
-- **Status dot** — круглая точка (8px), цвет показывает состояние подключения к `kepler-backend`. Логика в `extensions/horologion/src/App.vue`: при mount и каждые 10 секунд дёргает дешёвую операцию `kepler.ark.request("list_object_types")` — успех → `connected` (зелёный), ошибка → `error` (красный), стартовое состояние → `connecting`. Tooltip переключается между «ARK подключен» / «Подключение к ARK…» / «ARK недоступен». Визуально совпадает с Delphi extension status dot (одни и те же oklch-токены из `@kepler/visuals`).
+- **Status dot** — круглая точка (8px), цвет показывает состояние подключения к `kepler-backend`. Логика в `extensions/horologion/src/App.vue`: при mount и каждые 10 секунд дёргает дешёвую операцию `kepler.ark.request("list_object_types")` — успех → `connected` (зелёный), ошибка → `error` (красный), стартовое состояние → `connecting`. Tooltip переключается между «ARK подключен» / «Подключение к ARK…» / «ARK недоступен». Визуально совпадает с Delphi extension status dot (одни и те же oklch-токены из `@kosmos/visuals`).
 - **Кнопка ⚙ Настройки** — `router.push("/settings")` в memory-router'е extension'а. На route `/settings` App.vue прячет dot и кнопку, показывает «Назад» (`router.push("/")`) и заголовок «Настройки помодоро».
 
 ## Настройки
@@ -149,7 +150,7 @@ Horologion полностью использует [`@kepler/visuals`](/packages
 В Settings:
 - Длительности (work / shortBreak / longBreak / pomodorosUntilLongBreak) — input[type=number] с 2px border, без spin-button'ов.
 - Поведение — toggles (трекать break как «Отдых» / autostart work / autostart break / системные уведомления / режим стримера — отключает паузу рендеринга при перекрытии окна; toggle мирорится из renderer'а в `userData/horologion-settings.json` через IPC `horologion:streamerMode:set`, main применяет `disable-features=CalculateNativeWinOcclusion` + `disable-backgrounding-occluded-windows` ДО `app.whenReady`; на toggle в проде делаем `app.relaunch()`, в деве авто-рестарт пропускаем — `VITE_DEV_SERVER_URL` теряется при self-relaunch).
-- Звуки — `@kepler/visuals` `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования + slider громкости (`pomodoroSettings.ringtoneVolume`, sync'ится через `setVolumeMultiplier` в `lib/sounds.ts`).
+- Звуки — `@kosmos/visuals` `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования + slider громкости (`pomodoroSettings.ringtoneVolume`, sync'ится через `setVolumeMultiplier` в `lib/sounds.ts`).
 - Reset — кнопка стиля `.pomo__secbtn` в destructive-цвете.
 
 ## Persistence pomodoro
@@ -202,5 +203,5 @@ Horologion регистрируется в [Kepler command bus](/concepts/comman
 - [Command bus](/concepts/command-bus) — протокол dynamic commands.
 - [Модель данных ARK](/concepts/ark-objects) — `time_entry_obj`, `tag_obj`.
 - [Delphi](/apps/delphi) — задачи (для `@`-mention).
-- [@kepler/ark](/packages/ark) — TS SDK.
-- [@kepler/visuals](/packages/visuals) — UI-система.
+- [@kosmos/ark](/packages/ark) — TS SDK.
+- [@kosmos/visuals](/packages/visuals) — UI-система.

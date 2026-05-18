@@ -212,7 +212,7 @@ UsageSession { id, tracked_app_id, started_at, ended_at, duration_ms, ... }
 
 `lan_sync.version_vector` — это запись в `sync_kv` под фиксированным ключом, обновляется на каждой записи в синхронизируемую сущность.
 
-## TypeScript API через `@kepler/ark`
+## TypeScript API через `@kosmos/ark`
 
 ```ts
 // CRUD объектов

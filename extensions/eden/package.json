@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Eden (заметки + TipTap editor) — Vue extension для Kepler shell.",
   "dependencies": {
-    "@kepler/ark": "workspace:*",
-    "@kepler/visuals": "workspace:*",
+    "@kosmos/ark": "workspace:*",
+    "@kosmos/visuals": "workspace:*",
     "@tiptap/extension-code-block-lowlight": "^3.20.1",
     "@tiptap/extension-mention": "^3.20.1",
     "@tiptap/extension-placeholder": "^3.20.1",

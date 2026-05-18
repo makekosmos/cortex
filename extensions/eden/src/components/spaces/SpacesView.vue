@@ -260,7 +260,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { EmptyState } from "@kepler/visuals";
+import { EmptyState } from "@kosmos/visuals";
 import type { SpaceId } from "@/components/sidebar/types";
 import { sortEntries, type SortMode } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";

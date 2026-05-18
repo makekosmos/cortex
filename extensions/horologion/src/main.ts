@@ -16,7 +16,7 @@
 import { createApp } from "vue";
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from "vue-router";
 
-import "@kepler/visuals/theme/css";
+import "@kosmos/visuals/theme/css";
 import "./styles.css";
 import "./lib/horologionApi"; // side-effect: устанавливает window.horologion shim
 import App from "./App.vue";

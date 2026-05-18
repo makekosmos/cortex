@@ -34,7 +34,7 @@
 - ❌ Возврат старого Delphi DB sidecar.
 - ❌ Возврат собственного usage tracker внутри Arrancador (он живёт в `services/kepler-backend/src/usage_tracker`).
 - ❌ Возврат ripgrep как поискового движка Eden — он на Tantivy через Eden Heart.
-- ❌ Дублирование UI-компонентов, которые уже есть в `@kepler/visuals` (Sidebar, Titlebar, DesktopChrome).
+- ❌ Дублирование UI-компонентов, которые уже есть в `@kosmos/visuals` (Sidebar, Titlebar, DesktopChrome).
 - ❌ `--no-verify` при коммите.
 
 ## Когда нужно

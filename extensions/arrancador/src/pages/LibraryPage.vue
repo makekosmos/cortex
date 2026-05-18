@@ -7,7 +7,7 @@
 import { computed, ref } from "vue";
 import { Play } from "lucide-vue-next";
 
-import { EmptyState } from "@kepler/visuals";
+import { EmptyState } from "@kosmos/visuals";
 
 import GameCard from "../components/GameCard.vue";
 import { useGames } from "../composables/useGames";

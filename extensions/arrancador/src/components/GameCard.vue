@@ -1,12 +1,12 @@
 <script setup lang="ts">
-// GameCard — обёртка над `GamePosterCard` из `@kepler/visuals`.
+// GameCard — обёртка над `GamePosterCard` из `@kosmos/visuals`.
 //
 // Адаптация: на route `/game/:id` через RouterLink (linkComponent),
 // cover берётся из `propsJson.background_image` либо `propsJson.cover_image`
 // (см. `lib/arkGames.ts.projectGame`). Жанр — eyebrow.
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
-import { GamePosterCard } from "@kepler/visuals";
+import { GamePosterCard } from "@kosmos/visuals";
 
 import type { ArrancadorGame } from "../lib/arkGames";
 

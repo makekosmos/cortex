@@ -9,8 +9,8 @@ Kosmos — это **monorepo для личного софта одного че�
 ## Зачем монорепо
 
 - **Один контракт хранения.** ARK владеет схемой и форматом синхронизации. Приложения не изобретают каждый раз своё.
-- **Один SDK.** Все Electron-приложения говорят с ARK через `@kepler/ark`. Один тип ошибок, один API, одно место для эволюции.
-- **Общий UI.** Sidebar, Titlebar, DesktopChrome, CommandPalette берутся из `@kepler/visuals` и выглядят одинаково в Eden / Delphi / Arrancador / Dashboard.
+- **Один SDK.** Все Electron-приложения говорят с ARK через `@kosmos/ark`. Один тип ошибок, один API, одно место для эволюции.
+- **Общий UI.** Sidebar, Titlebar, DesktopChrome, CommandPalette берутся из `@kosmos/visuals` и выглядят одинаково в Eden / Delphi / Arrancador / Dashboard.
 - **Один процесс правок.** Substantial-задачи проходят через [proof loop](/concepts/proof-loop), правила едины для всех приложений.
 
 ## Требования

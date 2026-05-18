@@ -5,7 +5,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { Eye, EyeOff, ExternalLink } from "lucide-vue-next";
 
-import { SettingsRow, Toggle } from "@kepler/visuals";
+import { SettingsRow, Toggle } from "@kosmos/visuals";
 
 import { arrancadorApi } from "../lib/arrancadorApi";
 

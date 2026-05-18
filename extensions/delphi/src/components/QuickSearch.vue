@@ -2,7 +2,7 @@
 import { useRouter } from "vue-router";
 import { FolderOpen } from "lucide-vue-next";
 import { storeToRefs } from "pinia";
-import { CommandPalette, EmptyState, TodoRow } from "@kepler/visuals";
+import { CommandPalette, EmptyState, TodoRow } from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";
 
 const props = defineProps<{ open: boolean }>();

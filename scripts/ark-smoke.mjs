@@ -27,7 +27,7 @@ const steps = [
     args: ["test", "--manifest-path", "services/kepler-backend/Cargo.toml", "--lib"],
   },
   {
-    name: "@kepler/ark typecheck",
+    name: "@kosmos/ark typecheck",
     command: "bun",
     args: ["run", "--cwd", "packages/ark", "typecheck"],
   },

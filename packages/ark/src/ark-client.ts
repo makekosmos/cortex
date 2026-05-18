@@ -816,7 +816,7 @@ export class ArkClient {
     if (this.child) return this.child
 
     const binaryPath = this.opts.sidecarPath
-    if (!binaryPath) throw new Error('@kepler/ark: sidecarPath is required when requestFn is not provided')
+    if (!binaryPath) throw new Error('@kosmos/ark: sidecarPath is required when requestFn is not provided')
 
     const child = spawn(binaryPath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -950,7 +950,7 @@ export class ArkClient {
 
   private sendRequest<T>(req: SidecarRequest): Promise<T> {
     if (this.pendingRequests.size >= MAX_QUEUE_SIZE) {
-      return Promise.reject(new Error(`@kepler/ark request queue overflow (${MAX_QUEUE_SIZE})`))
+      return Promise.reject(new Error(`@kosmos/ark request queue overflow (${MAX_QUEUE_SIZE})`))
     }
 
     const child = this.ensureChild()
@@ -967,7 +967,7 @@ export class ArkClient {
         const pending = this.pendingRequests.get(id)
         if (!pending) return
         this.pendingRequests.delete(id)
-        reject(new Error(`@kepler/ark request timed out after ${timeoutMs}ms: ${req.operation}`))
+        reject(new Error(`@kosmos/ark request timed out after ${timeoutMs}ms: ${req.operation}`))
       }, timeoutMs)
       this.pendingRequests.set(id, {
         id,
@@ -1020,7 +1020,7 @@ export class ArkClient {
 
     const dbPath = this.opts.dbPath
     if (!dbPath) {
-      throw new Error('@kepler/ark: dbPath is required when requestFn is not provided')
+      throw new Error('@kosmos/ark: dbPath is required when requestFn is not provided')
     }
 
     fs.mkdirSync(path.dirname(dbPath), { recursive: true })
@@ -1127,7 +1127,7 @@ export class ArkClient {
   private async openKeplerConnection(): Promise<void> {
     const lock = this.opts.keplerLock
     if (!lock) {
-      throw new Error('@kepler/ark: keplerLock is required for kepler mode')
+      throw new Error('@kosmos/ark: keplerLock is required for kepler mode')
     }
 
     const url = `ws://127.0.0.1:${lock.ws_port}`
@@ -1240,7 +1240,7 @@ export class ArkClient {
     }
     if (this.pendingRequests.size >= MAX_QUEUE_SIZE) {
       return Promise.reject(
-        new Error(`@kepler/ark request queue overflow (${MAX_QUEUE_SIZE})`),
+        new Error(`@kosmos/ark request queue overflow (${MAX_QUEUE_SIZE})`),
       )
     }
 
@@ -1254,7 +1254,7 @@ export class ArkClient {
         if (!pending) return
         this.pendingRequests.delete(id)
         reject(
-          new Error(`@kepler/ark request timed out after ${timeoutMs}ms: ${req.operation}`),
+          new Error(`@kosmos/ark request timed out after ${timeoutMs}ms: ${req.operation}`),
         )
       }, timeoutMs)
       this.pendingRequests.set(id, {

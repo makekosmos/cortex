@@ -2,7 +2,7 @@
 // Упрощённая titlebar Arrancador'а для Kepler-shell extension'а.
 //
 // TODO: рассмотреть миграцию на `Titlebar` / `DesktopChrome` из
-// `@kepler/visuals` после того как extension'у понадобятся history-controls
+// `@kosmos/visuals` после того как extension'у понадобятся history-controls
 // или native window-buttons. Сейчас visuals.Titlebar не покрывает наш
 // частный case (sidebar-toggle слева + slot для AppSpotlight справа без
 // back/forward), поэтому держим custom вариант.
