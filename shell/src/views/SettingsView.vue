@@ -861,9 +861,40 @@ const checkResultLabel = computed<string>(() => {
   return "";
 });
 
+// --- Diagnostics / crashes ------------------------------------------------
+const crashFiles = ref<Array<{ name: string; size: number; mtime: string }>>([]);
+const crashesError = ref<string>("");
+
+async function refreshCrashes() {
+  crashesError.value = "";
+  try {
+    crashFiles.value = await window.kepler.crashes.list();
+  } catch (e) {
+    crashesError.value = (e as Error).message;
+  }
+}
+
+async function onOpenCrashesFolder() {
+  try {
+    await window.kepler.crashes.openFolder();
+  } catch (e) {
+    crashesError.value = (e as Error).message;
+  }
+}
+
+async function onClearCrashes() {
+  try {
+    await window.kepler.crashes.clear();
+    await refreshCrashes();
+  } catch (e) {
+    crashesError.value = (e as Error).message;
+  }
+}
+
 onMounted(() => {
   void loadGeneral();
   void refreshUpdateState();
+  void refreshCrashes();
   unsubscribeUpdateState = window.kepler.settings.update.onStateChanged((s) => {
     updateState.value = s;
   });
@@ -1042,6 +1073,39 @@ onBeforeUnmount(() => {
           </div>
           <code class="value lock">{{ backend.lockFilePath }}</code>
         </div>
+
+        <!-- Диагностика — crash reports (hardening proof loop #1) -->
+        <div class="row">
+          <div class="row-label">
+            <div class="label">Отчёты об ошибках</div>
+            <div class="hint">
+              <template v-if="crashFiles.length === 0">
+                Crash-логов нет. Если Kepler упадёт, файлы появятся здесь.
+              </template>
+              <template v-else>
+                {{ crashFiles.length }} {{ crashFiles.length === 1 ? "файл" : "файла(-ов)" }} в папке отчётов.
+              </template>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button
+              type="button"
+              class="btn ghost"
+              @click="onOpenCrashesFolder"
+            >
+              Открыть папку
+            </button>
+            <button
+              type="button"
+              class="btn ghost"
+              :disabled="crashFiles.length === 0"
+              @click="onClearCrashes"
+            >
+              Очистить
+            </button>
+          </div>
+        </div>
+        <div v-if="crashesError" class="error-banner">{{ crashesError }}</div>
 
         <div class="row">
           <div class="row-label">

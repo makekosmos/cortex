@@ -130,6 +130,11 @@ const api: KeplerApi = {
       },
     },
   },
+  crashes: {
+    list: () => ipcRenderer.invoke("kepler:crashes:list"),
+    openFolder: () => ipcRenderer.invoke("kepler:crashes:openFolder"),
+    clear: () => ipcRenderer.invoke("kepler:crashes:clear"),
+  },
 };
 
 contextBridge.exposeInMainWorld("kepler", api);

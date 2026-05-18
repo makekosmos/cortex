@@ -304,6 +304,15 @@ export interface KeplerApi {
       onStateChanged(listener: (state: UpdateState) => void): () => void;
     };
   };
+  /** Crash reports — locations + management для Settings → Диагностика. */
+  crashes: {
+    /** List files в `<data_dir>/crashes/`. Sorted newest first. */
+    list(): Promise<Array<{ name: string; size: number; mtime: string }>>;
+    /** Открыть директорию `<data_dir>/crashes/` в file explorer. */
+    openFolder(): Promise<void>;
+    /** Удалить все crash файлы. Возвращает количество удалённых. */
+    clear(): Promise<{ removed: number }>;
+  };
 }
 
 /** autoUpdater state machine. См. shell/electron/autoupdater-host.ts. */

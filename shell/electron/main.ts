@@ -19,9 +19,11 @@
 import {
   app,
   BrowserWindow,
+  crashReporter,
   dialog,
   globalShortcut,
   ipcMain,
+  shell,
   Tray,
   Menu,
   nativeImage,
@@ -146,6 +148,18 @@ app.on("second-instance", (_event, argv) => {
   showLauncher();
 });
 
+// --- Electron crash reporter ------------------------------------------------
+// Должен быть инициализирован ДО app.whenReady. uploadToServer: false —
+// minidump'ы остаются локально в app.getPath("crashDumps") (по умолчанию
+// %APPDATA%/<productName>/Crashpad/). Submit вручную из Settings UI.
+crashReporter.start({
+  productName: "Kepler",
+  companyName: "Kosmos",
+  uploadToServer: false,
+  submitURL: "",
+  compress: false,
+});
+
 // --- backend spawn -----------------------------------------------------------
 
 function resolveBackendExe(): string {
@@ -195,6 +209,10 @@ function spawnBackend() {
       ...process.env,
       KOSMOS_DATA_DIR: dataDir,
       KEPLER_USAGE_TRACKER: trackerEnabled ? "1" : "0",
+      // RUST_BACKTRACE=1 → crash_reporter::install получает полный backtrace
+      // в `<data_dir>/crashes/panic-*.log`. Production cost ~50KB на panic,
+      // приемлемо для responsible shipping.
+      RUST_BACKTRACE: "1",
     },
   });
   backendProc.stdout?.on("data", (b) =>
@@ -644,6 +662,70 @@ async function initArkClient(): Promise<void> {
 // --- IPC handlers ------------------------------------------------------------
 
 ipcMain.handle("kepler:backend:status", () => readBackendStatus());
+
+// --- Diagnostics / crashes IPC (hardening #1) -------------------------------
+function crashesDirPath(): string {
+  return path.join(keplerDataDir(), "crashes");
+}
+
+function listCrashLogs(): Array<{ name: string; size: number; mtime: string }> {
+  const dir = crashesDirPath();
+  if (!existsSync(dir)) return [];
+  try {
+    // Lazy readdir — небольшая директория, sync OK.
+    const entries = require("node:fs").readdirSync(dir) as string[];
+    return entries
+      .filter((f) => f.endsWith(".log") || f.endsWith(".dmp"))
+      .map((f) => {
+        const full = path.join(dir, f);
+        const stats = require("node:fs").statSync(full);
+        return {
+          name: f,
+          size: stats.size,
+          mtime: new Date(stats.mtimeMs).toISOString(),
+        };
+      })
+      .sort((a, b) => b.mtime.localeCompare(a.mtime));
+  } catch (e) {
+    console.error("[kepler-shell] listCrashLogs failed:", e);
+    return [];
+  }
+}
+
+ipcMain.handle("kepler:crashes:list", () => listCrashLogs());
+
+ipcMain.handle("kepler:crashes:openFolder", async () => {
+  const dir = crashesDirPath();
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (e) {
+    console.error("[kepler-shell] crashes:openFolder mkdir failed:", e);
+  }
+  const result = await shell.openPath(dir);
+  if (result) {
+    console.error("[kepler-shell] crashes:openFolder error:", result);
+  }
+});
+
+ipcMain.handle("kepler:crashes:clear", () => {
+  const dir = crashesDirPath();
+  if (!existsSync(dir)) return { removed: 0 };
+  let removed = 0;
+  try {
+    const entries = require("node:fs").readdirSync(dir) as string[];
+    for (const f of entries) {
+      try {
+        unlinkSync(path.join(dir, f));
+        removed += 1;
+      } catch (e) {
+        console.error(`[kepler-shell] crashes:clear failed for ${f}:`, e);
+      }
+    }
+  } catch (e) {
+    console.error("[kepler-shell] crashes:clear readdir failed:", e);
+  }
+  return { removed };
+});
 
 ipcMain.handle("kepler:backend:restart", async () => {
   // Manual restart — это user action, не supervisor failure. Сбрасываем

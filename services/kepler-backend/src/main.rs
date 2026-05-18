@@ -19,7 +19,7 @@ use chrono::Utc;
 
 use kepler_backend::{
     ark_host::{self, ArkHost},
-    auth, db_backup,
+    auth, crash_reporter, db_backup,
     lock_file::{self, KeplerLockFile, LOCK_FILE_FORMAT_VERSION},
     protocol_version::{ProtocolVersion, PROTOCOL_VERSION},
     singleton::SingletonGuard,
@@ -114,6 +114,11 @@ async fn setup() -> Result<SetupState, DynError> {
         .parent()
         .ok_or("lock-file path has no parent")?
         .to_path_buf();
+
+    // Install panic hook ASAP — любой последующий panic пишется в
+    // <data_dir>/crashes/panic-*.log. Требует RUST_BACKTRACE=1 для
+    // backtrace; Kepler shell сетит этот env при spawn'е backend.
+    crash_reporter::install(lock_dir.clone());
     let singleton_path = lock_dir.join("kepler-singleton.lock.db");
 
     if let Some(existing) = lock_file::read_if_alive(&lock_path)? {
