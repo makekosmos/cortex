@@ -128,6 +128,18 @@ const api = {
         ) as Promise<T>,
     },
   },
+  focusWidget: {
+    /** Push partial state update to host. Active=true → widget show, false → hide.
+        Шлите `{active:true, remainingSec, label, mode}` каждую секунду пока
+        pomodoro идёт, `{active:false}` при stop. */
+    setState: (patch: {
+      active?: boolean;
+      remainingSec?: number;
+      label?: string;
+      mode?: "work" | "break" | "stopwatch";
+    }): Promise<void> =>
+      ipcRenderer.invoke("kepler:focus-widget:set-state", patch) as Promise<void>,
+  },
   userData: {
     readJson: <T = unknown>(name: string): Promise<T | null> =>
       ipcRenderer.invoke("kepler:extension:userData:readJson", name) as Promise<

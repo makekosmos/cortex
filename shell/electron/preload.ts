@@ -64,6 +64,27 @@ const api: KeplerApi = {
     run: (args) => ipcRenderer.invoke("kepler:export:run", args),
     pickDir: () => ipcRenderer.invoke("kepler:export:pickDir"),
   },
+  focusWidget: {
+    setState: (patch) =>
+      ipcRenderer.invoke("kepler:focus-widget:set-state", patch),
+    getState: () => ipcRenderer.invoke("kepler:focus-widget:get-state"),
+    hide: () => ipcRenderer.invoke("kepler:focus-widget:hide"),
+    openHorologion: () =>
+      ipcRenderer.invoke("kepler:focus-widget:open-horologion"),
+    onState: (handler) => {
+      const wrapper = (_e: Electron.IpcRendererEvent, state: unknown) =>
+        handler(
+          state as {
+            active: boolean;
+            remainingSec: number;
+            label: string;
+            mode: "work" | "break" | "stopwatch";
+          },
+        );
+      ipcRenderer.on("kepler:focus-widget:state", wrapper);
+      return () => ipcRenderer.removeListener("kepler:focus-widget:state", wrapper);
+    },
+  },
   settings: {
     open: () => ipcRenderer.invoke("kepler:settings:open"),
     close: () => ipcRenderer.invoke("kepler:settings:close"),

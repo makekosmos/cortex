@@ -74,10 +74,33 @@ function createSessionState() {
   let initialised = false;
   let unsubFns: Array<() => void> = [];
 
+  // Throttle: push в focus widget только при смене целой секунды
+  // (виджет показывает MM:SS, нет смысла спамить IPC 30 раз / sec).
+  let lastFocusPushedSec = -1;
+
+  function pushFocusWidgetState(force = false): void {
+    const api = typeof window !== "undefined" ? window.kepler?.focusWidget : null;
+    if (!api?.setState) return;
+
+    const active = isRunning.value && !isPaused.value && phase.value !== "idle";
+    const remainingSec = Math.ceil(remainingMs.value / 1000);
+    if (!force && active && remainingSec === lastFocusPushedSec) return;
+    lastFocusPushedSec = active ? remainingSec : -1;
+
+    const mode: "work" | "break" | "stopwatch" =
+      phase.value === "work" ? "work" : "break";
+    const ctxTitle = (lastContext.value?.title ?? pomodoroDraft.value.title ?? "").trim();
+    const firstTask = lastContext.value?.tasks?.[0] ?? pomodoroDraft.value.tasks?.[0];
+    const label = ctxTitle || firstTask?.title || (mode === "work" ? "Фокус" : "Перерыв");
+
+    void api.setState({ active, remainingSec, label, mode });
+  }
+
   function recomputeFromAnchor(): void {
     if (phaseEndsAtMs == null) return;
     const next = Math.max(0, phaseEndsAtMs - Date.now());
     if (remainingMs.value !== next) remainingMs.value = next;
+    pushFocusWidgetState();
   }
 
   function ensureInterpTimer(): void {
@@ -111,6 +134,10 @@ function createSessionState() {
       clearInterpTimer();
       remainingMs.value = s.remainingMs;
     }
+
+    // Push в focus widget на каждом state change (start/pause/stop/phase-flip).
+    // Force=true чтобы стейт точно дошёл даже если remainingSec совпадает.
+    pushFocusWidgetState(true);
   }
 
   async function createArkEntry(p: PomodoroPhase, ctx: PhaseContext): Promise<string | null> {

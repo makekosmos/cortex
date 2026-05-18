@@ -61,6 +61,8 @@ import {
   registerMarketplaceIpc,
   startPeriodicCatalogCheck,
 } from "./extension-marketplace";
+// Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
+import "./focus-widget";
 import {
   findKextInArgv,
   openInstallExtensionWindow,

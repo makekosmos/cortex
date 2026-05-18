@@ -215,6 +215,34 @@ export interface KeplerApi {
     pickDir(): Promise<string | null>;
   };
 
+  /** Floating focus widget — Spotify-mini-player style always-on-top
+      окно для активной pomodoro сессии. */
+  focusWidget: {
+    setState(patch: {
+      active?: boolean;
+      remainingSec?: number;
+      label?: string;
+      mode?: "work" | "break" | "stopwatch";
+    }): Promise<void>;
+    getState(): Promise<{
+      active: boolean;
+      remainingSec: number;
+      label: string;
+      mode: "work" | "break" | "stopwatch";
+    } | null>;
+    hide(): Promise<void>;
+    openHorologion(): Promise<void>;
+    /** Subscribe на push state updates от main. Returns unsubscribe. */
+    onState(
+      handler: (state: {
+        active: boolean;
+        remainingSec: number;
+        label: string;
+        mode: "work" | "break" | "stopwatch";
+      }) => void,
+    ): () => void;
+  };
+
   /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,
       autostart toggle, версия и backend-статус (через backend.status()). */
   settings: {

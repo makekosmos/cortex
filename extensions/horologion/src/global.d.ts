@@ -17,6 +17,14 @@ declare global {
         onNavigate(handler: (route: string) => void): () => void;
         initialRoute(): Promise<string | null>;
       };
+      focusWidget?: {
+        setState(patch: {
+          active?: boolean;
+          remainingSec?: number;
+          label?: string;
+          mode?: "work" | "break" | "stopwatch";
+        }): Promise<void>;
+      };
     };
   }
 }

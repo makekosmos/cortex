@@ -44,6 +44,14 @@ function rootView() {
     );
     return DashboardRoot;
   }
+  if (hash.startsWith("#focus-widget")) {
+    // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы
+    // не тащить в launcher bundle.
+    const FocusWidgetView = defineAsyncComponent(
+      () => import("./views/FocusWidgetView.vue"),
+    );
+    return FocusWidgetView;
+  }
   return App;
 }
 
