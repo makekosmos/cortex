@@ -13,6 +13,8 @@
 ## Sync
 
 - ❌ Direct Rust writer пишет в ARK без вызова `ark_core::db::bump_sync_version_vector`.
+- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
+- ❌ Batch upsert handler без bump'а `record_local_upsert` per-entity. Один общий bump на батч недостаточен — peer-side sync проверяет HLC entity-id'шно.
 - ❌ Ослабление self-peer filtering при изменениях в sync startup.
 - ❌ Ослабление routable-address filtering при изменениях в peer persistence.
 - ❌ Изменение sync wire-протокола из `snake_case` в что-то другое.
@@ -53,6 +55,8 @@
 - ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
 - ❌ Deep import shared компонентов вместо public API `@kepler/visuals`.
 - ❌ Удаление lazy-load Editor.vue (`defineAsyncComponent`). Main bundle Eden должен оставаться < 800KB.
+- ❌ `await props.onSave(...)` в `Editor.vue` без try/catch. Throw'и из onSave (network error, ARK недоступен) при отсутствии catch'а превращают autosave в silent retry storm — `lastPersisted*` не обновляется, autosave таймер ретраит каждые 800ms бесконечно, пользователю никаких индикаторов. На failure — выставить `saveConflict` с human-readable текстом.
+- ❌ `void save()` в `onBeforeUnmount` без `.catch(...)`. Promise rejected после unmount'а компонента → unhandled rejection. Component-instance-aware error handling не сработает (компонент уже размонтирован).
 
 ### Delphi
 
@@ -65,6 +69,13 @@
 - ❌ Arrancador-owned usage SQLite.
 - ❌ Tauri зависимости / Tauri runtime пути.
 - ❌ React зависимости / React runtime пути.
+
+### Horologion
+
+- ❌ `window.horologion.timeEntries.listRunning()` без `{ source: "manual" }` в `StopwatchView.vue` и для команды `horologion:stopwatch:start`. Без фильтра подхватывается pomodoro_break entry (созданная pomodoro session при `trackBreaksAsRest=true`), и кнопка «Стоп» в StopwatchView закрывает её в обход pomodoro lifecycle. Pomodoro session теряет синхронизацию с ARK.
+- ❌ Side-effect операции над ARK time_entry (createArkEntry / closeArkEntry) в `usePomodoroSession.ts` фоном через `void (async () => {...})()`. Pause + phase_changed handler могут гоняться → двойной stopTimer / создание дубликата entry. Все side effects идут через `enqueueSideEffect()` (serial queue) — гарантирует строгий порядок и единственного владельца `currentEntryId`.
+- ❌ Создание `currentEntryId` без проверки `currentEntryId.value == null` в phase_changed handler'е. Двойной phase_changed (quick double-click «Старт» / backend retry) создаёт два entry, первый orphan'ится с null id-references.
+- ❌ Пропустить `rehydrateCurrentEntryId(phase)` в `ensureInit()` когда backend сообщил `isRunning && phase !== "idle"`. После reload extension'а renderer теряет id открытого ARK entry — последующий pause/stop становится no-op'ом, entry «running вечно». Фикс: смотрим `listRunning({ source: 'pomodoro' | 'pomodoro_break' })` и берём последнюю.
 
 ### Spaces concept
 
@@ -96,6 +107,9 @@
 - ❌ Дублирование install-flow логики (backup / atomic rename / semver-проверка). Источник правды — `shell/electron/extension-installer.ts`. CLI скрипт `shell/scripts/install-extension.mjs` копирует semver matcher inline (~40 строк) только потому, что mjs скрипт не имеет доступа к dist-electron bundle; не размножай это в третьем месте — дёргай IPC `kepler:extension:install:do` или сам runtime API.
 - ❌ Ослабление `keplerApiVersion` compat check в `extension-host.ts → checkApiCompat()`. Несовместимый extension **не** должен получать live preload bridge — иначе ломается инвариант API contract'а. Если правишь — bump `KEPLER_API_VERSION` в `shell/electron/kepler-api.ts` соответственно (patch/minor/major по семантике).
 - ❌ Path traversal в `.kext` extract'е. `extension-installer.ts → safeEntryName` отвергает `..`, абсолютные пути, drive letter'ы. Не упрощай эту проверку — `.kext` может приехать из untrusted источника.
+- ❌ Выход из `initArkClient()` без вызова `arkClientReadyReject?.()` когда `state.kind !== "connected"`. До 2026-05-18 функция тихо `return`'ила и все pending `awaitArkReady()` висели 15 секунд до generic timeout. Каждый failure path в `initArkClient` должен либо reject'нуть resolver, либо успешно его resolve'нуть.
+- ❌ Перезапуск `kepler-backend` (через `kepler:backend:restart`) или его exit без вызова cleanup'а `arkClient` (stop + null + сброс `arkClientReady`). Без этого WS-соединение указывает на мёртвый порт и `invokeOperation` зависает на reconnect-логике клиента, не возвращая ошибки. См. `resetArkClient` helper в `shell/electron/main.ts`.
+- ❌ `setTimeout` в `Promise.race([..., new Promise((_, rej) => setTimeout(rej, ms))])` без `clearTimeout` на successful resolve. Таймер продолжает держать event loop до полного TTL даже после того как race выиграла другая ветка.
 
 ### Command bus
 
@@ -153,6 +167,9 @@
 - ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
 - ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kepler/visuals`.
 - ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
+- ❌ Nested interactive elements: `role="button"` (или любой другой interactive role) на `<span>` / `<div>` **внутри** `<button>`. HTML это запрещает; screen reader'ы collapse'ят в одну кнопку и inner action становится недоступным с клавиатуры. Решение — два sibling `<button>` в композитной обёртке (см. `DateChip.vue` после 2026-05-18 фикса).
+- ❌ Outside-click listener'ы через nested `watch(..., { once: true })` для cleanup'а. Паттерн ломается при quick open→close→open: новый handler регистрируется до того как старый отпишется. Используй symmetric `watch(isOpen, (val) => val ? addEventListener : removeEventListener)` + `onBeforeUnmount → removeEventListener` (mirror `ContextMenu.vue`).
+- ❌ `addEventListener` в `onMounted` без соответствующего `removeEventListener` в `onBeforeUnmount`. Component re-mount (HMR, route navigation) накапливает duplicate listeners на `document` / `window`.
 
 ## Общая дисциплина
 

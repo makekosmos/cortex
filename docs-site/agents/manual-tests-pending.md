@@ -227,7 +227,7 @@ Cold typecheck 1650ms → warm 1177ms (−28%). Effect для DX в watch-mode.
 
 **Когда чинить:** после того как user сообщит что extensions marketplace работает (current priority). Возвращаем Экспорт tab + правим renderer crash.
 
-См. `.agent/tasks/2026-05-18-export-bug-tech-debt/` (TBD при возврате).
+См. proof loop задачи `2026-05-18-export-bug-tech-debt` — будет создана при возврате к восстановлению Экспорт tab.
 
 ---
 
