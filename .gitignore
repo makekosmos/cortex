@@ -35,6 +35,10 @@ blob-report/
 .histoire/
 histoire-dist/
 
+# === Storybook ===
+storybook-static/
+*storybook.log
+
 # === Bun ===
 bun.lockb
 .bun_cache/
