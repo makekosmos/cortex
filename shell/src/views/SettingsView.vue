@@ -402,6 +402,26 @@ async function onUpdate(i: InstalledExtensionInfo) {
   }
 }
 
+async function onInstallNew(c: MarketplaceExtension) {
+  if (installingId.value) return;
+  installingId.value = c.id;
+  marketError.value = "";
+  try {
+    await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
+    await loadExtensions();
+  } catch (e) {
+    marketError.value = `${c.id}: ${(e as Error).message}`;
+  } finally {
+    installingId.value = "";
+  }
+}
+
+const availableInCatalog = computed<MarketplaceExtension[]>(() => {
+  if (!catalog.value) return [];
+  const installedIds = new Set(installed.value.map((i) => i.id));
+  return catalog.value.extensions.filter((c) => !installedIds.has(c.id));
+});
+
 // --- autoUpdater state ------------------------------------------------------
 
 const updateState = ref<UpdateState>({ kind: "idle" });
@@ -529,6 +549,8 @@ onBeforeUnmount(() => {
           >
             Расширения
           </button>
+          <!-- Экспорт tab временно скрыт — техдолг, см. STATUS.md / manual-tests-pending -->
+          <!--
           <button
             type="button"
             class="tab"
@@ -537,6 +559,7 @@ onBeforeUnmount(() => {
           >
             Экспорт
           </button>
+          -->
         </nav>
       </div>
       <button class="close" type="button" @click="onClose" aria-label="Закрыть">
@@ -668,8 +691,61 @@ onBeforeUnmount(() => {
       <div v-if="extensionsError" class="error-banner">{{ extensionsError }}</div>
 
       <div class="ext-list kosmos-scroll">
-        <div v-if="installed.length === 0" class="empty">
-          Расширений нет.
+        <!-- Доступные из marketplace, ещё не установленные -->
+        <div v-if="availableInCatalog.length > 0" class="ext-section-title">
+          Доступные расширения
+        </div>
+        <div
+          v-for="c in availableInCatalog"
+          :key="`catalog-${c.id}`"
+          class="ext-item"
+        >
+          <img
+            v-if="c.iconUrl"
+            class="ext-icon"
+            :src="c.iconUrl"
+            alt=""
+            @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+          />
+          <div v-else class="ext-icon ext-icon-fallback">
+            {{ c.name.slice(0, 1) }}
+          </div>
+          <div class="ext-info">
+            <div class="ext-name">{{ c.name }}</div>
+            <div class="ext-meta">
+              <span class="ext-version">v{{ c.version }}</span>
+              <span v-if="c.author" class="ext-author">· {{ c.author }}</span>
+            </div>
+            <div v-if="c.description" class="ext-description">
+              {{ c.description }}
+            </div>
+          </div>
+          <div class="ext-actions">
+            <button
+              type="button"
+              class="btn"
+              :disabled="installingId === c.id"
+              @click="onInstallNew(c)"
+            >
+              <template v-if="installingId === c.id">Установка…</template>
+              <template v-else>Установить</template>
+            </button>
+          </div>
+        </div>
+
+        <!-- Установленные -->
+        <div
+          v-if="installed.length > 0 && availableInCatalog.length > 0"
+          class="ext-section-title"
+        >
+          Установленные
+        </div>
+        <div
+          v-if="installed.length === 0 && availableInCatalog.length === 0"
+          class="empty"
+        >
+          <template v-if="marketLoading">Загрузка каталога…</template>
+          <template v-else>Расширений нет. Каталог пуст или недоступен.</template>
         </div>
 
         <div
@@ -1175,6 +1251,18 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.ext-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  padding: 8px 4px 4px;
+  margin-top: 4px;
+}
+.ext-section-title:first-child {
+  margin-top: 0;
 }
 
 .ext-item {
