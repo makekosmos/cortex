@@ -25,9 +25,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
 import { KEPLER_API_VERSION, satisfiesSemver } from "./kepler-api";
 import type { ExtensionManifest } from "./extension-host";
+
+// ESM shim — __dirname / __filename не определены в Node ESM bundles
+// (extension-installer.ts bundle'ится через vite-plugin-electron в .mjs).
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const MAX_BACKUPS = 5;
 
