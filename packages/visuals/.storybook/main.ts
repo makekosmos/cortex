@@ -1,24 +1,19 @@
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 import type { StorybookConfig } from "@storybook/vue3-vite";
+import vue from "@vitejs/plugin-vue";
 
 const config: StorybookConfig = {
   framework: {
-    name: "@storybook/vue3-vite",
+    name: getAbsolutePath("@storybook/vue3-vite"),
     options: {},
   },
 
   stories: [
-    "../components/**/*.mdx",
     "../components/**/*.stories.@(js|jsx|mjs|ts|tsx)",
   ],
 
-  addons: [
-    "@storybook/addon-essentials",
-    "@storybook/addon-interactions",
-  ],
-
-  docs: {
-    autodocs: "tag",
-  },
+  addons: [getAbsolutePath("@storybook/addon-docs")],
 
   core: {
     disableTelemetry: true,
@@ -29,6 +24,11 @@ const config: StorybookConfig = {
   // дефолт. Inline noExternal для пакетов которые vite-node не может
   // resolve при bun-isolated node_modules (аналогично histoire.config.ts).
   async viteFinal(config) {
+    // Storybook v10 upgrade удалил vue plugin из default config —
+    // добавляем явно. Без него .vue файлы выдают "Failed to parse source"
+    // в vite:import-analysis.
+    config.plugins = [...(config.plugins ?? []), vue()];
+
     config.optimizeDeps = config.optimizeDeps ?? {};
     config.optimizeDeps.include = [
       ...(config.optimizeDeps.include ?? []),
@@ -42,7 +42,11 @@ const config: StorybookConfig = {
       "vue-router",
     ];
     return config;
-  },
+  }
 };
 
 export default config;
+
+function getAbsolutePath(value: string): any {
+  return dirname(fileURLToPath(import.meta.resolve(`${value}/package.json`)));
+}
