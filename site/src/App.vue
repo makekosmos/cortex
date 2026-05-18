@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import CornerLabels from "./components/CornerLabels.vue";
 import Hero from "./components/Hero.vue";
-import LauncherMockup from "./components/LauncherMockup.vue";
+// Launcher showcase / DesktopMockup временно скрыты — оставляем импорты
+// закомментированными для будущего возврата без потери wire-up'а.
+// import DesktopMockup from "./components/DesktopMockup.vue";
+// import LauncherView from "@/views/LauncherView.vue";
 </script>
 
 <template>
@@ -10,7 +13,6 @@ import LauncherMockup from "./components/LauncherMockup.vue";
 
     <main class="main">
       <Hero />
-      <LauncherMockup />
     </main>
   </div>
 </template>
@@ -31,14 +33,13 @@ import LauncherMockup from "./components/LauncherMockup.vue";
   justify-content: center;
   gap: 60px;
   padding: 80px 24px;
-  /* Минимальные top/bottom отступы, чтобы CornerLabels не наезжали на контент */
   padding-top: max(120px, 14vh);
   padding-bottom: max(80px, 8vh);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .main {
-    gap: 24px;
+    gap: 32px;
     padding-top: max(80px, 10vh);
     padding-bottom: max(40px, 5vh);
   }

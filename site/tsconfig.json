@@ -10,9 +10,20 @@
     "noEmit": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../shell/src/*"],
+      "@shared/*": ["../shell/shared/*"],
+      "@kosmos/visuals": ["../packages/visuals/index.ts"],
+      "@kosmos/visuals/*": ["../packages/visuals/*"]
+    },
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo"
   },
-  "include": ["src/**/*", "vite.config.ts"]
+  "include": [
+    "src/**/*",
+    "vite.config.ts",
+    "../shell/src/global.d.ts"
+  ]
 }

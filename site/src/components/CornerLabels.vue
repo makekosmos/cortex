@@ -45,9 +45,10 @@ const GITHUB_URL = "https://github.com/ksanrse";
 
 .corner a {
   color: var(--muted);
+  transition: color 120ms ease;
 }
 .corner a:hover {
-  color: var(--foreground);
+  color: #095fff;
 }
 
 .sep {
