@@ -51,6 +51,7 @@
   "build": {
     "appId": "com.kazui.kepler",
     "productName": "Kepler",
+    "electronLanguages": ["en-US", "ru"],
     "afterPack": "./build/afterPack.cjs",
     "directories": {
       "output": "release",
