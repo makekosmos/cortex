@@ -79,3 +79,7 @@ li {
 
   --font-mono: "Zed Mono", sans-serif;
 }
+
+#app {
+  contain: layout style;
+}

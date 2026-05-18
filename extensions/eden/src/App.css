@@ -6,6 +6,7 @@
   position: relative;
   border-radius: var(--radius-xl);
   overflow: hidden;
+  contain: layout style;
 }
 
 .sidebar-layout {

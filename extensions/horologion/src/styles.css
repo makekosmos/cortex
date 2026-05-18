@@ -33,6 +33,10 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
+#app {
+  contain: layout style;
+}
+
 * {
   box-sizing: border-box;
 }
