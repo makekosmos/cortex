@@ -9,7 +9,12 @@ const elapsedSec = ref(0);
 let tickHandle: ReturnType<typeof setInterval> | null = null;
 
 async function refreshRunning() {
-    const list = await window.horologion.timeEntries.listRunning();
+    // source: "manual" — иначе StopwatchView подхватит pomodoro_break entry
+    // (созданную usePomodoroSession при trackBreaksAsRest=true) и кнопка «Стоп»
+    // её закроет в обход pomodoro lifecycle. pomodoro session не узнает, что
+    // entry уже не running, и при следующем pause/phase_changed второй stopTimer
+    // пойдёт на уже удалённый id.
+    const list = await window.horologion.timeEntries.listRunning({ source: "manual" });
     // listRunning может вернуть orphan entries без `startedAt` (или с уже
     // выставленным `endedAt` из-за рассогласованного состояния БД). Такие
     // записи ломают tick: `new Date("").getTime()` → NaN → таймер рисует

@@ -15,6 +15,7 @@
 //     window.horologion.timeEntries.* (как usePomodoro раньше).
 
 import { computed, ref } from "vue";
+import type { TimeEntry } from "../types";
 import { pomodoroSettings } from "./pomodoroSettings";
 import { playSound } from "./sounds";
 import { notifyEntriesChanged, pomodoroDraft } from "./store";
@@ -62,9 +63,22 @@ function createSessionState() {
   const isRunning = ref(false);
   const isPaused = ref(false);
 
+  // Дневной счётчик завершённых pomodoros (live за сегодня, локальная дата).
+  // Считается из ARK через time_entry_obj с source="pomodoro" + completed=true.
+  // Hydrate на init, инкрементируется на pomodoro_finished work,
+  // ре-hydrate ещё раз чтобы перейти через полночь / учесть ручные edit'ы.
+  const todayCompleted = ref(0);
+
   // Side-effect state — owned by renderer (как раньше в usePomodoro).
   const currentEntryId = ref<string | null>(null);
   const lastContext = ref<PhaseContext | null>(null);
+
+  // Wallclock natural-finish сигнал: backend emit'ит `pomodoro_finished`
+  // строго перед `pomodoro_phase_changed`. Здесь поднимаем флаг во время
+  // finished-хэндлера и снимаем в phase_changed → closeArkEntry помечает
+  // entry completed=true. Любой другой переход (stop, pause) флаг не
+  // поднимает → entry остаётся completed=false (как «брошенный»).
+  let pendingWorkCompletion = false;
 
   // Wallclock anchor для local interpolation. `null` ⇒ idle/paused,
   // remainingMs управляется server'ом напрямую.
@@ -73,6 +87,21 @@ function createSessionState() {
 
   let initialised = false;
   let unsubFns: Array<() => void> = [];
+
+  // Serial queue для всех side-effect операций над ARK time_entry
+  // (createArkEntry / closeArkEntry). Без неё pause() и phase_changed handler
+  // могут одновременно дёргать close → race условие: двойной stopTimer на
+  // одном id, либо create нового entry в момент когда предыдущий ещё не
+  // закрыт. Очередь гарантирует строгий порядок и единственного владельца
+  // currentEntryId в любой момент времени.
+  let sideEffectQueue: Promise<void> = Promise.resolve();
+  function enqueueSideEffect(work: () => Promise<void>): Promise<void> {
+    const next = sideEffectQueue.then(work, work).catch((e) => {
+      console.error("[pomodoroSession] side-effect failed:", e);
+    });
+    sideEffectQueue = next;
+    return next;
+  }
 
   // Throttle: push в focus widget только при смене целой секунды
   // (виджет показывает MM:SS, нет смысла спамить IPC 30 раз / sec).
@@ -192,6 +221,7 @@ function createSessionState() {
         title: ctx.title || "Помодоро",
         taskId: firstTask?.id ?? null,
         taskTitle: firstTask?.title ?? null,
+        source: "pomodoro",
       });
       notifyEntriesChanged();
       return entry.id;
@@ -201,6 +231,7 @@ function createSessionState() {
         title: "Отдых",
         taskId: null,
         taskTitle: null,
+        source: "pomodoro_break",
       });
       notifyEntriesChanged();
       return entry.id;
@@ -208,7 +239,50 @@ function createSessionState() {
     return null;
   }
 
-  async function closeArkEntry(finishedPhase: PomodoroPhase): Promise<void> {
+  /**
+   * Найти ARK time_entry соответствующий активной pomodoro фазе и восстановить
+   * `currentEntryId`. Вызывается после reload extension'а в `ensureInit`,
+   * когда backend сообщил что session running, но renderer потерял id.
+   *
+   * Берём самую свежую running entry с подходящим source:
+   *   work / pomodoro → "pomodoro"
+   *   shortBreak / longBreak → "pomodoro_break" (если trackBreaksAsRest)
+   *
+   * Если ничего не нашли — currentEntryId остаётся null; следующий close/
+   * pause просто будет no-op. Это лучше чем привязать чужой entry.
+   */
+  async function rehydrateCurrentEntryId(p: PomodoroPhase): Promise<void> {
+    try {
+      const wantSource: TimeEntry["source"] = p === "work" ? "pomodoro" : "pomodoro_break";
+      const running = await window.horologion.timeEntries.listRunning({ source: wantSource });
+      // listRunning сортирует по startedAt desc — берём первую (самую свежую).
+      const candidate = running[0];
+      if (candidate) {
+        currentEntryId.value = candidate.id;
+        lastContext.value = {
+          title: candidate.title || "Помодоро",
+          tasks: candidate.taskId
+            ? [{ id: candidate.taskId, title: candidate.taskTitle ?? candidate.title ?? "" }]
+            : [],
+        };
+      }
+    } catch (e) {
+      console.warn("[pomodoroSession] rehydrate currentEntryId failed:", e);
+    }
+  }
+
+  async function refreshTodayCompleted(): Promise<void> {
+    try {
+      todayCompleted.value = await window.horologion.timeEntries.countTodayCompletedPomodoros();
+    } catch (e) {
+      console.warn("[pomodoroSession] countTodayCompletedPomodoros failed:", e);
+    }
+  }
+
+  async function closeArkEntry(
+    finishedPhase: PomodoroPhase,
+    completed: boolean,
+  ): Promise<void> {
     const id = currentEntryId.value;
     if (!id) return;
 
@@ -240,6 +314,12 @@ function createSessionState() {
               endedAt: sliceEnd,
               taskId: t.id,
               taskTitle: t.title,
+              // multi-task split — это всегда работа, source наследуется из
+              // оригинальной work-фазы. completed раскидывается на все slice'ы:
+              // если основная фаза завершилась natural — каждый slice тоже
+              // считается завершённым (они представляют одну непрерывную работу).
+              source: "pomodoro",
+              completed,
             });
           }
         }
@@ -257,6 +337,7 @@ function createSessionState() {
           title: effectiveTitle,
           taskId: t?.id ?? null,
           taskTitle: t?.title ?? null,
+          completed,
         });
       } catch (e) {
         console.error("[pomodoroSession] failed update before stop:", e);
@@ -272,6 +353,9 @@ function createSessionState() {
 
     currentEntryId.value = null;
     notifyEntriesChanged();
+    if (isWork && completed) {
+      todayCompleted.value += 1;
+    }
   }
 
   function notifyEnd(p: PomodoroPhase) {
@@ -305,9 +389,18 @@ function createSessionState() {
     try {
       const s = await kepler().request<BackendState>("pomodoro.get_state");
       applyState(s);
+      // Восстановление currentEntryId после reload extension'а. Backend
+      // знает что sessions running, но id ARK time_entry живёт в renderer'е.
+      // Без re-hydration после reload pause/resume не закроет entry — она
+      // повиснет «running вечно» в ARK.
+      if (s.isRunning && s.phase !== "idle") {
+        await rehydrateCurrentEntryId(s.phase);
+      }
     } catch (e) {
       console.error("[pomodoroSession] get_state failed:", e);
     }
+
+    void refreshTodayCompleted();
 
     unsubFns.push(
       kepler().subscribe("pomodoro_tick", (payload) => {
@@ -321,17 +414,29 @@ function createSessionState() {
         const to = s.to ?? s.phase;
         applyState(s);
 
-        // Side-effect: при смене work-фазы → закрыть прошлый time_entry, открыть новый.
-        // Если current → idle (stop) — просто close + reset.
-        void (async () => {
+        // Captures флаг до async work — finished event приходит строго перед
+        // phase_changed, успевает выставить pendingWorkCompletion=true.
+        // Для не-work фаз completed не имеет смысла (всегда false).
+        const wasNaturalWorkFinish = from === "work" && pendingWorkCompletion;
+        pendingWorkCompletion = false;
+
+        // Серилизуем через sideEffectQueue: pause / phase_changed / resume
+        // могут гоняться. Без очереди два close одновременно дадут двойной
+        // stopTimer на одном id, либо create нового entry в момент когда
+        // предыдущий не закрыт.
+        enqueueSideEffect(async () => {
           if (from === "work" || (from !== "idle" && pomodoroSettings.trackBreaksAsRest)) {
-            await closeArkEntry(from);
+            await closeArkEntry(from, wasNaturalWorkFinish);
           }
           if (to === "idle") {
             currentEntryId.value = null;
             return;
           }
-          if (s.isRunning) {
+          // Защита от двойного create: если из-за быстрого start/restart два
+          // phase_changed пришли подряд и для текущей фазы уже есть entry —
+          // не дублировать. currentEntryId сбрасывается в closeArkEntry выше,
+          // так что если он не null здесь — значит entry актуален для `to`.
+          if (s.isRunning && currentEntryId.value == null) {
             const ctx: PhaseContext = {
               title: s.title || lastContext.value?.title || "Помодоро",
               tasks: s.tasks ?? lastContext.value?.tasks ?? [],
@@ -339,13 +444,17 @@ function createSessionState() {
             lastContext.value = ctx;
             currentEntryId.value = await createArkEntry(to, ctx);
           }
-        })();
+        });
       }),
     );
     unsubFns.push(
       kepler().subscribe("pomodoro_finished", (payload) => {
         const s = payload as BackendState & { finished?: PomodoroPhase };
         applyState(s);
+        // Поднимаем флаг ровно для work natural-finish. Следующий
+        // phase_changed (work → break) консьюмит его и пометит entry
+        // как completed=true.
+        if (s.finished === "work") pendingWorkCompletion = true;
         if (s.finished) notifyEnd(s.finished);
       }),
     );
@@ -359,6 +468,23 @@ function createSessionState() {
     clearInterpTimer();
     phaseEndsAtMs = null;
     initialised = false;
+    // Полный reset state — иначе singleton (см. module-level `session`)
+    // протаскивает stale данные между тестами и пользователю при reload:
+    // currentEntryId, lastContext, pendingWorkCompletion остаются от предыдущей
+    // session. Очередь side effects — сбрасываем на свежий Promise.resolve().
+    phase.value = "idle";
+    remainingMs.value = 0;
+    totalMs.value = 0;
+    completedPomodoros.value = 0;
+    todayCompleted.value = 0;
+    isRunning.value = false;
+    isPaused.value = false;
+    currentEntryId.value = null;
+    lastContext.value = null;
+    pendingWorkCompletion = false;
+    lastFocusPushedSec = -1;
+    lastBlockingApplied = null;
+    sideEffectQueue = Promise.resolve();
   }
 
   async function start(ctx: PhaseContext): Promise<void> {
@@ -386,8 +512,17 @@ function createSessionState() {
   async function pause(): Promise<void> {
     await ensureInit();
     try {
+      const phaseAtPause = phase.value;
       const s = await kepler().request<BackendState>("pomodoro.pause");
       applyState(s);
+      // Toggl Track-style: pause закрывает текущий time_entry с
+      // endedAt = моментом паузы. Иначе backend замораживает remainingMs,
+      // но ARK entry остаётся «running» и при последующем stopTimer
+      // вбирает в себя всю паузу — итоговая длительность раздувается.
+      // pause никогда не считается natural-finish'ем pomodoro — completed=false.
+      // Серилизуем через sideEffectQueue чтобы pause не гонялся с
+      // phase_changed handler'ом (см. enqueueSideEffect в ensureInit).
+      await enqueueSideEffect(() => closeArkEntry(phaseAtPause, false));
     } catch (e) { console.error("[pomodoroSession] pause failed:", e); }
   }
 
@@ -396,6 +531,19 @@ function createSessionState() {
     try {
       const s = await kepler().request<BackendState>("pomodoro.resume");
       applyState(s);
+      // На resume открываем новый сегмент time_entry — startedAt = now.
+      // Сумма сегментов = реально отработанное время без пауз.
+      if (s.isRunning && !s.isPaused && s.phase !== "idle") {
+        await enqueueSideEffect(async () => {
+          if (currentEntryId.value != null) return;
+          const ctx: PhaseContext = {
+            title: s.title || lastContext.value?.title || "Помодоро",
+            tasks: s.tasks ?? lastContext.value?.tasks ?? [],
+          };
+          lastContext.value = ctx;
+          currentEntryId.value = await createArkEntry(s.phase, ctx);
+        });
+      }
     } catch (e) { console.error("[pomodoroSession] resume failed:", e); }
   }
 
@@ -428,11 +576,19 @@ function createSessionState() {
   // backend события (например, активная сессия после reload).
   void ensureInit();
 
+  // Test-only helper для deterministic дрейна serial очереди. В production коде
+  // не нужен — Vue реактивность и собственные awaits хватает. В тестах
+  // `await drainSideEffects()` заменяет хрупкие `for (...) await Promise.resolve()`.
+  async function drainSideEffects(): Promise<void> {
+    await sideEffectQueue;
+  }
+
   return {
     phase,
     remainingMs,
     totalMs,
     completedPomodoros,
+    todayCompleted,
     isRunning,
     isPaused,
     progress: computed(() =>
@@ -444,6 +600,7 @@ function createSessionState() {
     skip,
     stop,
     dispose,
+    drainSideEffects,
   };
 }
 

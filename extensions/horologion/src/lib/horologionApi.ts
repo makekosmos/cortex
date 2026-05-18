@@ -89,6 +89,8 @@ function objectToTimeEntry(obj: ArkObjectRecord): TimeEntry {
     tagIds: [],
     taskId: (props.taskId as string | null | undefined) ?? null,
     taskTitle: (props.taskTitle as string | null | undefined) ?? null,
+    completed:
+      typeof props.completed === "boolean" ? (props.completed as boolean) : undefined,
   };
 }
 
@@ -100,12 +102,20 @@ async function listTimeEntries(): Promise<TimeEntry[]> {
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
-async function listRunning(): Promise<TimeEntry[]> {
+async function listRunning(opts?: {
+  /** Фильтр по source. Передай "manual" чтобы получить только обычные stopwatch
+   * сессии без pomodoro work/break (StopwatchView нельзя показывать pomodoro_break
+   * — её «стоп» закроет entry в обход pomodoro session lifecycle). */
+  source?: TimeEntry["source"] | TimeEntry["source"][];
+}): Promise<TimeEntry[]> {
   const all = await listTimeEntries();
   // Кроме «endedAt пуст» — обязательно есть startedAt. Без него entry —
   // orphan от старого state, его не надо считать running'ом (иначе ломается
   // StopwatchView tick: new Date("") = Invalid Date → NaN на каждом тике).
-  return all.filter((e) => Boolean(e.startedAt) && !e.endedAt);
+  const running = all.filter((e) => Boolean(e.startedAt) && !e.endedAt);
+  if (!opts?.source) return running;
+  const allowed = Array.isArray(opts.source) ? new Set(opts.source) : new Set([opts.source]);
+  return running.filter((e) => allowed.has(e.source));
 }
 
 function makeId(): string {
@@ -122,10 +132,13 @@ async function startTimer(input: StartTimerInput): Promise<TimeEntry> {
     propsJson: {
       startedAt: now,
       endedAt: null,
-      source: "manual",
+      source: input.source ?? "manual",
       billable: Boolean(input.billable),
       taskId: input.taskId ?? null,
       taskTitle: input.taskTitle ?? null,
+      // completed выставляется отдельным update'ом из usePomodoroSession при
+      // natural finish; на старте — false по умолчанию (отсутствие = не завершён).
+      completed: false,
     },
     createdAt: now,
     updatedAt: now,
@@ -155,6 +168,7 @@ async function updateTimeEntry(input: UpdateTimeEntryInput): Promise<TimeEntry> 
   if (input.billable !== undefined) props.billable = input.billable;
   if (input.taskId !== undefined) props.taskId = input.taskId;
   if (input.taskTitle !== undefined) props.taskTitle = input.taskTitle;
+  if (input.completed !== undefined) props.completed = input.completed;
   const record: ArkObjectRecord = {
     ...existing,
     title: input.title !== undefined ? input.title : existing.title,
@@ -175,10 +189,11 @@ async function createTimeEntry(input: CreateTimeEntryInput): Promise<TimeEntry> 
     propsJson: {
       startedAt: input.startedAt,
       endedAt: input.endedAt,
-      source: "manual",
+      source: input.source ?? "manual",
       billable: Boolean(input.billable),
       taskId: input.taskId ?? null,
       taskTitle: input.taskTitle ?? null,
+      completed: input.completed ?? false,
     },
     createdAt: input.startedAt,
     updatedAt: now,
@@ -190,6 +205,36 @@ async function createTimeEntry(input: CreateTimeEntryInput): Promise<TimeEntry> 
 
 async function deleteTimeEntry(id: string): Promise<void> {
   await ark("delete_object", { id });
+}
+
+/**
+ * Сколько pomodoro work-фаз дошло до конца сегодня (локальная дата).
+ *
+ * Считается только запись с source="pomodoro" И completed=true.
+ * Прерванный pomodoro (stop / pause-без-resume) остаётся как time_entry,
+ * но не учитывается — будущая статистика «отменённые» возьмёт его как
+ * source="pomodoro" + completed=false.
+ */
+async function countTodayCompletedPomodoros(): Promise<number> {
+  const list = await ark<ArkObjectRecord[]>("list_objects_by_type", {
+    type_id: "time_entry_obj",
+  });
+  const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+  let n = 0;
+  for (const o of list) {
+    if (o.deletedAt) continue;
+    const props = asObject(o.propsJson);
+    if (props.source !== "pomodoro") continue;
+    if (props.completed !== true) continue;
+    const started = typeof props.startedAt === "string" ? props.startedAt : "";
+    if (!started) continue;
+    const t = Date.parse(started);
+    if (Number.isNaN(t)) continue;
+    if (t >= dayStart && t < dayEnd) n++;
+  }
+  return n;
 }
 
 async function listTags(): Promise<Tag[]> {
@@ -228,12 +273,15 @@ async function listDelphiTasks(): Promise<DelphiTask[]> {
 export interface HorologionExtensionApi {
   timeEntries: {
     list(): Promise<TimeEntry[]>;
-    listRunning(): Promise<TimeEntry[]>;
+    listRunning(opts?: {
+      source?: TimeEntry["source"] | TimeEntry["source"][];
+    }): Promise<TimeEntry[]>;
     startTimer(input: StartTimerInput): Promise<TimeEntry>;
     stopTimer(id: string): Promise<TimeEntry>;
     update(input: UpdateTimeEntryInput): Promise<TimeEntry>;
     create(input: CreateTimeEntryInput): Promise<TimeEntry>;
     delete(id: string): Promise<void>;
+    countTodayCompletedPomodoros(): Promise<number>;
   };
   tags: { list(): Promise<Tag[]> };
   tasks: { list(): Promise<DelphiTask[]> };
@@ -248,6 +296,7 @@ export const horologionApi: HorologionExtensionApi = {
     update: updateTimeEntry,
     create: createTimeEntry,
     delete: deleteTimeEntry,
+    countTodayCompletedPomodoros,
   },
   tags: { list: listTags },
   tasks: { list: listDelphiTasks },

@@ -118,7 +118,9 @@ if (kepler) {
     if (event.id === "horologion:stopwatch:start") {
       timerMode.value = "stopwatch";
       void (async () => {
-        const running = await window.horologion.timeEntries.listRunning();
+        // source: "manual" — pomodoro_break / pomodoro running не считается
+        // конфликтом для stopwatch start (это разные dimensions).
+        const running = await window.horologion.timeEntries.listRunning({ source: "manual" });
         if (running.length > 0) return;
         const draft = pomodoroDraft.value;
         const firstTask = draft.tasks[0];
