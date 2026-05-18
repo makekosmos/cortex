@@ -246,6 +246,19 @@ export interface KeplerApi {
     ): () => void;
   };
 
+  /** Focus mode Windows Service control. Service устанавливается опционально
+      (Settings → Focus → «Установить daemon»). Когда running — hosts
+      модификации идут через named pipe (no UAC). Без service — fallback
+      на helper bin с UAC per toggle. */
+  focusService: {
+    status(): Promise<{ installed: boolean; running: boolean }>;
+    ping(): Promise<boolean>;
+    install(): Promise<{ ok: boolean; error?: string }>;
+    uninstall(): Promise<{ ok: boolean; error?: string }>;
+    start(): Promise<{ ok: boolean; error?: string }>;
+    stop(): Promise<{ ok: boolean; error?: string }>;
+  };
+
   /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,
       autostart toggle, версия и backend-статус (через backend.status()). */
   settings: {

@@ -171,8 +171,29 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
 }
 
 async function runHelper(req: HelperRequest): Promise<HelperResponse> {
+  // 1. Service path: пытаемся через named pipe (если service installed
+  //    и запущен — без UAC, instant). focus-service умеет ping check'нуть
+  //    но мы сразу шлём настоящий request — service вернёт error если не
+  //    в нужном состоянии.
+  try {
+    const { sendViaPipe, pingService } = await import("./focus-service");
+    const alive = await pingService();
+    if (alive) {
+      const resp = await sendViaPipe(req);
+      // sendViaPipe возвращает ServiceResponse — совместимый по shape.
+      if (resp.ok || resp.error) {
+        return { ok: !!resp.ok, active_domains: resp.active_domains, error: resp.error };
+      }
+    }
+  } catch (e) {
+    console.warn("[focus-block] service path failed, fallback to helper:", (e as Error).message);
+  }
+
+  // 2. Helper fallback: direct spawn (если Kepler сам admin → no UAC).
   const direct = await runHelperDirect(req);
   if (direct !== "needs_elevation") return direct;
+
+  // 3. Elevated helper fallback: PowerShell RunAs (UAC prompt).
   return runHelperElevated(req);
 }
 

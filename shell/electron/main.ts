@@ -64,6 +64,11 @@ import {
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
 import "./focus-widget";
 import {
+  getServiceStatus,
+  runServiceCliElevated,
+  pingService,
+} from "./focus-service";
+import {
   findKextInArgv,
   openInstallExtensionWindow,
 } from "./install-extension-window";
@@ -782,6 +787,18 @@ ipcMain.handle("kepler:settings:update:install", () => {
   return true;
 });
 ipcMain.handle("kepler:settings:update:state", () => getUpdateState());
+
+// --- Focus service control (Phase 2) -----------------------------------------
+// Soft Windows Service для hosts file management — опционально устанавливается
+// юзером через Settings → Focus. Когда running → focus-block.ts использует
+// pipe path (no UAC). Не установлен → helper bin fallback path (UAC per toggle).
+
+ipcMain.handle("kepler:focus-service:status", () => getServiceStatus());
+ipcMain.handle("kepler:focus-service:ping", () => pingService());
+ipcMain.handle("kepler:focus-service:install", () => runServiceCliElevated("install"));
+ipcMain.handle("kepler:focus-service:uninstall", () => runServiceCliElevated("uninstall"));
+ipcMain.handle("kepler:focus-service:start", () => runServiceCliElevated("start"));
+ipcMain.handle("kepler:focus-service:stop", () => runServiceCliElevated("stop"));
 
 // --- lifecycle ---------------------------------------------------------------
 

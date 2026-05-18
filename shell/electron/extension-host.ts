@@ -835,17 +835,29 @@ async function onFocusStateChanged(
     return;
   }
 
-  // Resolve domains для blocklist_id.
+  // Resolve domains для blocklist_id. Use focus.resolve_blocklist_domains
+  // которое разворачивает @-references (kind: "raw") — fallback на
+  // list_blocklists raw domains если op не известна.
   try {
-    const resp = (await request({ operation: "focus.list_blocklists" })) as {
-      blocklists?: Array<{ id: string; domains: string[] }>;
-    } | null;
-    const list = resp?.blocklists ?? [];
-    const found = list.find((b) => b.id === blocklistId);
-    const domains = found?.domains ?? [];
+    let domains: string[] = [];
+    try {
+      const resolved = (await request({
+        operation: "focus.resolve_blocklist_domains",
+        id: blocklistId,
+      })) as { domains?: string[] } | null;
+      domains = resolved?.domains ?? [];
+    } catch {
+      // Older backend без resolve op — fallback на raw list.
+      const resp = (await request({ operation: "focus.list_blocklists" })) as {
+        blocklists?: Array<{ id: string; domains: string[] }>;
+      } | null;
+      const list = resp?.blocklists ?? [];
+      const found = list.find((b) => b.id === blocklistId);
+      domains = found?.domains ?? [];
+    }
     await applyFocusBlock({ active: true, domains });
   } catch (e) {
-    console.warn("[extension-host] focus.list_blocklists failed:", e);
+    console.warn("[extension-host] focus resolve failed:", e);
     await applyFocusBlock({ active: false, domains: [] });
   }
 }

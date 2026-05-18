@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ArrowUpCircle, Loader2 } from "lucide-vue-next";
+import { BlocklistCard } from "@kepler/visuals";
 import type {
   BackendStatus,
   ExportConverterInfo,
@@ -18,7 +19,18 @@ interface FocusBlocklist {
   name: string;
   domains: string[];
   createdAt: string;
+  preset?: boolean;
+  icon?: string;
+  kind?: "domains" | "raw";
 }
+
+const ICON_CHOICES = [
+  "🛡️", "🚫", "🎮", "🧠", "📰",
+  "📺", "🎬", "💬", "🐦", "📷",
+  "🛒", "⚽", "🎰", "🍔", "💸",
+  "🎵", "📚", "⚙️", "🔒", "🎯",
+  "⏰", "🌐", "✨", "🔥", "⚡",
+];
 
 interface FocusActiveState {
   active: boolean;
@@ -396,11 +408,20 @@ const focusError = ref<string>("");
 const focusBackendMissing = ref<boolean>(false);
 const focusActive = ref<FocusActiveState>({ active: false });
 const focusBusy = ref<string>("");
-const focusCreating = ref<boolean>(false);
+const focusEditing = ref<boolean>(false);
+const focusEditingId = ref<string | null>(null);
 const focusDraftName = ref<string>("");
 const focusDraftDomains = ref<string>("");
+const focusDraftIcon = ref<string>("");
 const focusDraftError = ref<string>("");
 const focusDragOver = ref<boolean>(false);
+
+// @-mention autocomplete state
+const mentionOpen = ref<boolean>(false);
+const mentionQuery = ref<string>("");
+const mentionAnchor = ref<number>(0); // index of `@` in textarea
+const mentionTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const mentionHighlight = ref<number>(0);
 
 function isUnknownOperationError(err: unknown): boolean {
   const msg = (err as Error)?.message ?? String(err);
@@ -448,34 +469,86 @@ async function loadActiveState() {
   }
 }
 
-function parseDomains(raw: string): { valid: string[]; invalid: string[] } {
+/**
+ * Парсит текст blocklist textarea в `{ domains, kind, invalid }`.
+ *
+ * - Строки начинающиеся с `#` — комментарии, игнорируются.
+ * - Строки начинающиеся с `@` — references на другой blocklist (валидируем
+ *   что это `@<id>`). Их наличие → kind="raw".
+ * - Остальное — должно быть валидным доменом.
+ */
+function parseRawList(raw: string): {
+  domains: string[];
+  kind: "domains" | "raw";
+  invalid: string[];
+} {
   const lines = raw.split("\n");
   const valid: string[] = [];
   const invalid: string[] = [];
+  let hasReferences = false;
   for (const line of lines) {
     const stripped = line.replace(/#.*$/, "").trim();
     if (!stripped) continue;
-    if (DOMAIN_PATTERN.test(stripped)) {
+    if (stripped.startsWith("@")) {
+      const refId = stripped.slice(1).trim();
+      if (!refId) {
+        invalid.push(stripped);
+        continue;
+      }
+      hasReferences = true;
+      valid.push(`@${refId}`);
+    } else if (DOMAIN_PATTERN.test(stripped)) {
       valid.push(stripped.toLowerCase());
     } else {
       invalid.push(stripped);
     }
   }
-  return { valid, invalid };
+  return {
+    domains: valid,
+    kind: hasReferences ? "raw" : "domains",
+    invalid,
+  };
 }
 
-const focusDraftParsed = computed(() => parseDomains(focusDraftDomains.value));
+const focusDraftParsed = computed(() => parseRawList(focusDraftDomains.value));
+
+// Кандидаты для @-mention dropdown.
+const mentionCandidates = computed<FocusBlocklist[]>(() => {
+  const q = mentionQuery.value.toLowerCase();
+  return focusBlocklists.value
+    .filter((b) => b.id !== focusEditingId.value)
+    .filter(
+      (b) =>
+        !q ||
+        b.id.toLowerCase().includes(q) ||
+        b.name.toLowerCase().includes(q),
+    )
+    .slice(0, 6);
+});
 
 function openCreateBlocklist() {
-  focusCreating.value = true;
+  focusEditing.value = true;
+  focusEditingId.value = null;
   focusDraftName.value = "";
   focusDraftDomains.value = "";
+  focusDraftIcon.value = "";
+  focusDraftError.value = "";
+}
+
+function openEditBlocklist(bl: FocusBlocklist) {
+  focusEditing.value = true;
+  focusEditingId.value = bl.id;
+  focusDraftName.value = bl.name;
+  focusDraftDomains.value = bl.domains.join("\n");
+  focusDraftIcon.value = bl.icon ?? "";
   focusDraftError.value = "";
 }
 
 function cancelCreateBlocklist() {
-  focusCreating.value = false;
+  focusEditing.value = false;
+  focusEditingId.value = null;
   focusDraftError.value = "";
+  mentionOpen.value = false;
 }
 
 async function onCreateBlocklist() {
@@ -484,9 +557,9 @@ async function onCreateBlocklist() {
     focusDraftError.value = "Укажи название блок-листа";
     return;
   }
-  const { valid, invalid } = focusDraftParsed.value;
-  if (valid.length === 0) {
-    focusDraftError.value = "Добавь хотя бы один валидный домен";
+  const { domains, kind, invalid } = focusDraftParsed.value;
+  if (domains.length === 0) {
+    focusDraftError.value = "Добавь хотя бы один домен или @ссылку";
     return;
   }
   if (invalid.length > 0) {
@@ -497,15 +570,85 @@ async function onCreateBlocklist() {
   focusDraftError.value = "";
   try {
     await focusRequest<FocusBlocklist>("focus.upsert_blocklist", {
+      id: focusEditingId.value ?? undefined,
       name,
-      domains: valid,
+      domains,
+      kind,
+      icon: focusDraftIcon.value,
     });
-    focusCreating.value = false;
+    focusEditing.value = false;
+    focusEditingId.value = null;
     await loadBlocklists();
   } catch (e) {
     focusDraftError.value = (e as Error).message;
   } finally {
     focusBusy.value = "";
+  }
+}
+
+// --- @-mention autocomplete ---
+
+function onDomainsInput(e: Event) {
+  const ta = e.target as HTMLTextAreaElement;
+  const pos = ta.selectionStart;
+  const text = ta.value;
+  // Найти ближайший `@` слева от cursor'а, без whitespace между.
+  let i = pos - 1;
+  let at = -1;
+  while (i >= 0) {
+    const ch = text[i];
+    if (ch === "@") {
+      at = i;
+      break;
+    }
+    if (ch === " " || ch === "\n" || ch === "\t") break;
+    i--;
+  }
+  if (at >= 0 && (at === 0 || /[\s\n]/.test(text[at - 1] ?? ""))) {
+    mentionOpen.value = true;
+    mentionAnchor.value = at;
+    mentionQuery.value = text.slice(at + 1, pos);
+    mentionHighlight.value = 0;
+  } else {
+    mentionOpen.value = false;
+  }
+}
+
+function insertMention(bl: FocusBlocklist) {
+  const ta = mentionTextareaRef.value;
+  if (!ta) return;
+  const text = focusDraftDomains.value;
+  const before = text.slice(0, mentionAnchor.value);
+  const after = text.slice(ta.selectionStart);
+  const inserted = `@${bl.id}`;
+  focusDraftDomains.value = before + inserted + after;
+  mentionOpen.value = false;
+  // Restore cursor after the inserted token.
+  void Promise.resolve().then(() => {
+    const newPos = before.length + inserted.length;
+    ta.focus();
+    ta.setSelectionRange(newPos, newPos);
+  });
+}
+
+function onMentionKey(e: KeyboardEvent) {
+  if (!mentionOpen.value) return;
+  const list = mentionCandidates.value;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    mentionHighlight.value = (mentionHighlight.value + 1) % Math.max(list.length, 1);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    mentionHighlight.value =
+      (mentionHighlight.value - 1 + list.length) % Math.max(list.length, 1);
+  } else if (e.key === "Enter") {
+    if (list.length > 0) {
+      e.preventDefault();
+      insertMention(list[mentionHighlight.value]!);
+    }
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    mentionOpen.value = false;
   }
 }
 
@@ -1126,61 +1269,36 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- Список блок-листов -->
+        <!-- Список блок-листов как grid карточек -->
         <div class="ext-section-title">Блок-листы</div>
 
         <div v-if="focusLoading" class="empty">Загрузка…</div>
-        <div
-          v-else-if="focusBlocklists.length === 0 && !focusCreating"
-          class="empty"
-        >
-          Пока ни одного блок-листа. Создай первый.
+
+        <div v-else class="focus-grid">
+          <BlocklistCard
+            v-for="bl in focusBlocklists"
+            :key="bl.id"
+            :name="bl.name"
+            :domains="bl.domains"
+            :icon="bl.icon ?? ''"
+            :preset="bl.preset ?? false"
+            :active="focusActive.active && focusActive.blocklist_id === bl.id"
+            :count="bl.domains.length"
+            @click="openEditBlocklist(bl)"
+            @delete="onDeleteBlocklist(bl.id)"
+          />
+          <button
+            type="button"
+            class="add-card"
+            :disabled="focusEditing || focusBackendMissing"
+            @click="openCreateBlocklist"
+          >
+            + Создать блок-лист
+          </button>
         </div>
 
-        <div
-          v-for="b in focusBlocklists"
-          :key="b.id"
-          class="ext-item focus-item"
-        >
-          <div class="ext-info">
-            <div class="ext-name">{{ b.name }}</div>
-            <div class="ext-meta">
-              {{ b.domains.length }} доменов
-              <span
-                v-if="focusActive.active && focusActive.blocklist_id === b.id"
-                class="ext-author"
-              >
-                · активен
-              </span>
-            </div>
-            <div class="ext-description focus-domains-preview">
-              {{ b.domains.slice(0, 4).join(", ")
-              }}{{ b.domains.length > 4 ? "…" : "" }}
-            </div>
-          </div>
-          <div class="ext-actions">
-            <button
-              v-if="!focusActive.active || focusActive.blocklist_id !== b.id"
-              type="button"
-              class="btn"
-              :disabled="focusBusy === b.id || focusBackendMissing"
-              @click="onActivate(b.id)"
-            >
-              Включить
-            </button>
-            <button
-              type="button"
-              class="btn ghost danger"
-              :disabled="focusBusy === b.id || focusBackendMissing"
-              @click="onDeleteBlocklist(b.id)"
-            >
-              {{ focusBusy === b.id ? "…" : "Удалить" }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Inline expandable форма создания -->
-        <div v-if="focusCreating" class="focus-create-form">
+        <!-- Edit modal/inline form -->
+        <div v-if="focusEditing" class="focus-create-form">
           <div class="focus-create-row">
             <label class="label" for="focus-blocklist-name">Название</label>
             <input
@@ -1192,24 +1310,64 @@ onBeforeUnmount(() => {
               autocomplete="off"
             />
           </div>
+
           <div class="focus-create-row">
+            <label class="label">Иконка</label>
+            <div class="icon-picker">
+              <button
+                v-for="ic in ICON_CHOICES"
+                :key="ic"
+                type="button"
+                class="icon-choice"
+                :class="{ selected: focusDraftIcon === ic }"
+                @click="focusDraftIcon = focusDraftIcon === ic ? '' : ic"
+              >
+                {{ ic }}
+              </button>
+            </div>
+          </div>
+
+          <div class="focus-create-row mention-host">
             <label class="label" for="focus-blocklist-domains">
-              Домены (по одному на строку, # — комментарии)
+              Домены (по одному на строку, # — комментарии, @ — ссылка на другой блок-лист)
             </label>
             <textarea
               id="focus-blocklist-domains"
+              ref="mentionTextareaRef"
               v-model="focusDraftDomains"
               class="focus-textarea"
               :class="{ 'drag-over': focusDragOver }"
               spellcheck="false"
               rows="8"
-              placeholder="# перетащи .txt сюда или вставь список&#10;twitter.com&#10;www.youtube.com&#10;reddit.com"
+              placeholder="# перетащи .txt сюда или вставь список&#10;twitter.com&#10;@preset:distractions"
+              @input="onDomainsInput"
+              @keydown="onMentionKey"
               @dragover="onDraftDragOver"
               @dragleave="onDraftDragLeave"
               @drop="onDraftDrop"
             />
+            <div
+              v-if="mentionOpen && mentionCandidates.length > 0"
+              class="mention-dropdown"
+            >
+              <button
+                v-for="(bl, i) in mentionCandidates"
+                :key="bl.id"
+                type="button"
+                class="mention-item"
+                :class="{ active: i === mentionHighlight }"
+                @mousedown.prevent="insertMention(bl)"
+              >
+                <span class="mention-icon">{{ bl.icon || "📁" }}</span>
+                <span class="mention-name">{{ bl.name }}</span>
+                <code class="mention-id">@{{ bl.id }}</code>
+              </button>
+            </div>
             <div class="hint focus-parse-stats">
-              Валидных: {{ focusDraftParsed.valid.length }}
+              Записей: {{ focusDraftParsed.domains.length }}
+              <span v-if="focusDraftParsed.kind === 'raw'" class="ext-author">
+                · содержит ссылки
+              </span>
               <span
                 v-if="focusDraftParsed.invalid.length > 0"
                 class="focus-invalid-count"
@@ -1229,6 +1387,15 @@ onBeforeUnmount(() => {
               Отмена
             </button>
             <button
+              v-if="focusEditingId && !focusActive.active"
+              type="button"
+              class="btn"
+              :disabled="focusBusy === '__create__' || focusBackendMissing"
+              @click="onActivate(focusEditingId)"
+            >
+              Включить
+            </button>
+            <button
               type="button"
               class="btn"
               :disabled="focusBusy === '__create__' || focusBackendMissing"
@@ -1238,17 +1405,6 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-      </div>
-
-      <div class="ext-footer">
-        <button
-          type="button"
-          class="btn"
-          :disabled="focusCreating || focusBackendMissing"
-          @click="openCreateBlocklist"
-        >
-          Создать блок-лист
-        </button>
       </div>
     </template>
 
@@ -1895,5 +2051,132 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* Focus grid (карточки BlocklistCard) */
+
+.focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 12px 4px;
+}
+
+.add-card {
+  min-height: 140px;
+  border: 2px dashed
+    color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 12px;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.add-card:hover:not(:disabled) {
+  border-color: var(--accent, oklch(0.7 0.18 250));
+  color: var(--foreground);
+}
+
+.add-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Icon picker */
+
+.icon-picker {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+  max-width: 360px;
+}
+
+.icon-choice {
+  font: inherit;
+  font-size: 16px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  cursor: pointer;
+}
+
+.icon-choice:hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.icon-choice.selected {
+  border-color: var(--accent, oklch(0.7 0.18 250));
+  background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 18%, transparent);
+}
+
+/* Mention autocomplete dropdown */
+
+.mention-host {
+  position: relative;
+}
+
+.mention-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 32px;
+  z-index: 20;
+  background: color-mix(in srgb, oklch(0.04 0 0) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.mention-icon {
+  font-size: 14px;
+}
+
+.mention-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mention-id {
+  font-size: 10px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 </style>
