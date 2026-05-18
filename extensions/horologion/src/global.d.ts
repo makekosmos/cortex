@@ -23,6 +23,7 @@ declare global {
           remainingSec?: number;
           label?: string;
           mode?: "work" | "break" | "stopwatch";
+          blockingActive?: boolean;
         }): Promise<void>;
       };
     };

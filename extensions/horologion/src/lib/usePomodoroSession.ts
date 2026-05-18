@@ -78,6 +78,42 @@ function createSessionState() {
   // (виджет показывает MM:SS, нет смысла спамить IPC 30 раз / sec).
   let lastFocusPushedSec = -1;
 
+  // Track last applied focus-blocking state to avoid spamming
+  // `focus.set_active_state` каждый tick — обновляем только при изменении.
+  let lastBlockingApplied: { active: boolean; blocklistId: string | null } | null = null;
+
+  async function applyFocusBlocking(): Promise<void> {
+    const blocklistId = pomodoroDraft.value.focusProfileId;
+    const shouldBlock =
+      phase.value === "work" &&
+      isRunning.value &&
+      !isPaused.value &&
+      blocklistId != null;
+    const next = { active: shouldBlock, blocklistId: shouldBlock ? blocklistId : null };
+    if (
+      lastBlockingApplied &&
+      lastBlockingApplied.active === next.active &&
+      lastBlockingApplied.blocklistId === next.blocklistId
+    ) {
+      return;
+    }
+    lastBlockingApplied = next;
+    try {
+      const k = (window as unknown as { kepler?: { ark?: KeplerArk } }).kepler;
+      if (!k?.ark) return;
+      if (shouldBlock) {
+        await k.ark.request("focus.set_active_state", {
+          active: true,
+          blocklist_id: blocklistId,
+        });
+      } else {
+        await k.ark.request("focus.set_active_state", { active: false });
+      }
+    } catch (e) {
+      console.warn("[pomodoroSession] focus.set_active_state unavailable:", e);
+    }
+  }
+
   function pushFocusWidgetState(force = false): void {
     const api = typeof window !== "undefined" ? window.kepler?.focusWidget : null;
     if (!api?.setState) return;
@@ -93,7 +129,13 @@ function createSessionState() {
     const firstTask = lastContext.value?.tasks?.[0] ?? pomodoroDraft.value.tasks?.[0];
     const label = ctxTitle || firstTask?.title || (mode === "work" ? "Фокус" : "Перерыв");
 
-    void api.setState({ active, remainingSec, label, mode });
+    const blockingActive =
+      phase.value === "work" &&
+      isRunning.value &&
+      !isPaused.value &&
+      pomodoroDraft.value.focusProfileId != null;
+
+    void api.setState({ active, remainingSec, label, mode, blockingActive });
   }
 
   function recomputeFromAnchor(): void {
@@ -138,6 +180,9 @@ function createSessionState() {
     // Push в focus widget на каждом state change (start/pause/stop/phase-flip).
     // Force=true чтобы стейт точно дошёл даже если remainingSec совпадает.
     pushFocusWidgetState(true);
+    // Declarative focus-blocking state. Idempotent — обновит backend только
+    // если состояние реально изменилось.
+    void applyFocusBlocking();
   }
 
   async function createArkEntry(p: PomodoroPhase, ctx: PhaseContext): Promise<string | null> {

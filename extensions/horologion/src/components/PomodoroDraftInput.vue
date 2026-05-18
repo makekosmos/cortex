@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import type { DelphiTask } from "../types";
 import { tasks as tasksRef, loadTasksOnce, ensureFreshTasks } from "../lib/store";
 import type { PomodoroDraftTask } from "../lib/store";
@@ -8,18 +8,66 @@ import MentionMenu from "./MentionMenu.vue";
 interface Props {
     modelValue: string;
     tasks: PomodoroDraftTask[];
+    focusProfileId?: string | null;
     placeholder?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     placeholder: "Над чем работаем? @ для задачи",
+    focusProfileId: null,
 });
 
 const emit = defineEmits<{
     "update:modelValue": [v: string];
     "update:tasks": [v: PomodoroDraftTask[]];
+    "update:focusProfileId": [v: string | null];
     submit: [];
 }>();
+
+interface Blocklist { id: string; name: string }
+const blocklists = ref<Blocklist[]>([]);
+const blocklistsAvailable = ref(false);
+const profileMenuOpen = ref(false);
+const profileMenuRef = ref<HTMLDivElement | null>(null);
+
+onMounted(async () => {
+    const k = (window as unknown as { kepler?: { ark?: { request: (op: string, params?: Record<string, unknown>) => Promise<unknown> } } }).kepler;
+    if (!k?.ark) return;
+    try {
+        const res = await k.ark.request("focus.list_blocklists") as { blocklists?: Blocklist[] } | Blocklist[];
+        const list = Array.isArray(res) ? res : (res?.blocklists ?? []);
+        blocklists.value = list.filter((b) => b && typeof b.id === "string" && typeof b.name === "string");
+        blocklistsAvailable.value = true;
+    } catch (e) {
+        // Backend not ready (Unknown operation) — silently hide dropdown.
+        blocklistsAvailable.value = false;
+        console.warn("[horologion] focus.list_blocklists unavailable:", e);
+    }
+    document.addEventListener("click", onDocClick);
+});
+
+function onDocClick(e: MouseEvent) {
+    if (!profileMenuOpen.value) return;
+    const t = e.target as Node | null;
+    if (profileMenuRef.value && t && !profileMenuRef.value.contains(t)) {
+        profileMenuOpen.value = false;
+    }
+}
+
+const selectedProfileLabel = computed(() => {
+    const id = props.focusProfileId;
+    if (id == null) return "Без блокировки";
+    return blocklists.value.find((b) => b.id === id)?.name ?? "Без блокировки";
+});
+
+function toggleProfileMenu() {
+    profileMenuOpen.value = !profileMenuOpen.value;
+}
+
+function pickProfile(id: string | null) {
+    emit("update:focusProfileId", id);
+    profileMenuOpen.value = false;
+}
 
 const inputRef = ref<HTMLInputElement | null>(null);
 const menuRef = ref<InstanceType<typeof MentionMenu> | null>(null);
@@ -153,6 +201,27 @@ function onKeyDown(e: KeyboardEvent) {
             </button>
             <input ref="inputRef" v-model="draft" class="pdi__input"
                 :placeholder="tasks.length === 0 ? placeholder : ''" @input="onInput" @keydown="onKeyDown" />
+            <div v-if="blocklistsAvailable" ref="profileMenuRef" class="pdi__profile">
+                <button type="button" class="pdi__profile-chip"
+                    :class="{ 'pdi__profile-chip--active': focusProfileId != null }"
+                    :aria-label="`Профиль блокировки: ${selectedProfileLabel}`"
+                    :aria-expanded="profileMenuOpen" @click.stop="toggleProfileMenu">
+                    <span class="pdi__profile-icon" aria-hidden="true">🛡️</span>
+                    <span class="pdi__profile-label">{{ selectedProfileLabel }}</span>
+                </button>
+                <div v-if="profileMenuOpen" class="pdi__profile-menu" role="menu">
+                    <button type="button" class="pdi__profile-item"
+                        :class="{ 'pdi__profile-item--selected': focusProfileId == null }"
+                        role="menuitem" @click="pickProfile(null)">
+                        Без блокировки
+                    </button>
+                    <button v-for="b in blocklists" :key="b.id" type="button" class="pdi__profile-item"
+                        :class="{ 'pdi__profile-item--selected': focusProfileId === b.id }"
+                        role="menuitem" @click="pickProfile(b.id)">
+                        {{ b.name }}
+                    </button>
+                </div>
+            </div>
         </div>
         <MentionMenu ref="menuRef" :open="open" :query="query" :tasks="tasksSrc" :highlighted-index="highlight"
             @pick="pickTask" @hover="(i) => (highlight = i)" />
@@ -228,5 +297,95 @@ function onKeyDown(e: KeyboardEvent) {
 
 .pdi__input::placeholder {
     color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+.pdi__profile {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.pdi__profile-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 28px;
+    padding: 0 0.625rem;
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+    color: color-mix(in srgb, var(--foreground) 75%, transparent);
+    border: none;
+    border-radius: 999px;
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    max-width: 160px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms;
+}
+
+.pdi__profile-chip:hover {
+    background: color-mix(in srgb, var(--foreground) 14%, transparent);
+    color: var(--foreground);
+}
+
+.pdi__profile-chip--active {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--accent);
+}
+
+.pdi__profile-chip--active:hover {
+    background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.pdi__profile-icon {
+    font-size: 0.875rem;
+    line-height: 1;
+}
+
+.pdi__profile-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pdi__profile-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 200px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 0.25rem;
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 1.5);
+    box-shadow: 0 8px 24px color-mix(in srgb, #000 28%, transparent);
+}
+
+.pdi__profile-item {
+    display: block;
+    width: 100%;
+    padding: 0.4rem 0.625rem;
+    background: transparent;
+    border: none;
+    border-radius: calc(var(--radius));
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 100ms;
+}
+
+.pdi__profile-item:hover {
+    background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.pdi__profile-item--selected {
+    color: var(--accent);
+    font-weight: 600;
 }
 </style>
