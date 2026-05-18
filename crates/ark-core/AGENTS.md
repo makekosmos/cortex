@@ -251,10 +251,6 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 - ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user
   (`%APPDATA%\Kosmos\ark.db`). Никаких welcome screen / space picker /
   `KOSMOS_DB_PATH` / `selected-space.json` / `spaces.json`.
-- ❌ Использование `@kepler/ark` selected-space helper'ов
-  (read/write/buildPersonal/getArkDb...) в активном коде. Module
-  deprecated, оставлен только для legacy/dashboard-extension и
-  mobile/delphi миграционных сценариев.
 
 ### Dashboard
 

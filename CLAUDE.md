@@ -52,12 +52,13 @@ Auto-generated файл с контекстом работы над Kosmos дл�
 Прочитай в указанном порядке:
 
 1. **[Архитектура](docs-site/concepts/architecture.md)** — общая картина.
-2. **[Модель данных ARK](docs-site/concepts/ark-objects.md)** — что за таблицы и типы.
-3. **[Граница записи в ARK](docs-site/concepts/write-boundary.md)** — что можно, что нельзя.
-4. **[Изоляция тестовых БД](docs-site/concepts/test-isolation.md)** — как писать тесты.
-5. **[Proof loop](docs-site/concepts/proof-loop.md)** — как оформлять substantial-задачи.
-6. **[Запреты и гварды](docs-site/agents/forbidden.md)** — список «никогда».
-7. **[Чек-листы по областям](docs-site/agents/checklists.md)** — что прогнать перед сдачей.
+2. **[Системные требования](docs-site/concepts/system-requirements.md)** — что нужно для запуска и сборки (Windows-only сейчас, x64, Node 20+, Rust 1.80+, Bun).
+3. **[Модель данных ARK](docs-site/concepts/ark-objects.md)** — что за таблицы и типы.
+4. **[Граница записи в ARK](docs-site/concepts/write-boundary.md)** — что можно, что нельзя.
+5. **[Изоляция тестовых БД](docs-site/concepts/test-isolation.md)** — как писать тесты.
+6. **[Proof loop](docs-site/concepts/proof-loop.md)** — как оформлять substantial-задачи.
+7. **[Запреты и гварды](docs-site/agents/forbidden.md)** — список «никогда».
+8. **[Чек-листы по областям](docs-site/agents/checklists.md)** — что прогнать перед сдачей.
 
 ## Принципы работы
 
@@ -254,10 +255,6 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 - ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user
   (`%APPDATA%\Kosmos\ark.db`). Никаких welcome screen / space picker /
   `KOSMOS_DB_PATH` / `selected-space.json` / `spaces.json`.
-- ❌ Использование `@kepler/ark` selected-space helper'ов
-  (read/write/buildPersonal/getArkDb...) в активном коде. Module
-  deprecated, оставлен только для legacy/dashboard-extension и
-  mobile/delphi миграционных сценариев.
 
 ### Dashboard
 
