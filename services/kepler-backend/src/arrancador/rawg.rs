@@ -113,6 +113,7 @@ pub enum RawgError {
 fn build_client() -> Result<reqwest::Client, RawgError> {
     Ok(reqwest::Client::builder()
         .user_agent(USER_AGENT)
+        .timeout(std::time::Duration::from_secs(30))
         .build()?)
 }
 

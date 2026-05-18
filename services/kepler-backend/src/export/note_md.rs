@@ -103,7 +103,10 @@ fn yaml_scalar(input: &str) -> String {
         || input.starts_with('{')
         || input.starts_with('}');
     if needs_quote {
-        let escaped = input.replace('\\', "\\\\").replace('"', "\\\"");
+        let escaped = input
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n");
         format!("\"{escaped}\"")
     } else {
         input.to_string()
@@ -317,7 +320,11 @@ fn render_text_node(node: &Value) -> String {
             out = format!("*{out}*");
         }
         if let Some(href) = link_href {
-            out = format!("[{out}]({href})");
+            if href.starts_with("http://") || href.starts_with("https://") {
+                out = format!("[{out}]({href})");
+            } else {
+                out = format!("[{out}](about:blank)");
+            }
         }
     }
     out
@@ -459,5 +466,33 @@ mod tests {
         n.deleted_at = Some("2026-05-18T11:00:00Z".to_string());
         let res = NoteMdConverter.convert(&[n], "md", dir.path());
         assert!(res.files_written.is_empty());
+    }
+
+    #[test]
+    fn yaml_scalar_escapes_newlines() {
+        assert_eq!(super::yaml_scalar("line1\nline2"), "\"line1\\nline2\"");
+        assert_eq!(super::yaml_scalar("no newline"), "no newline");
+    }
+
+    #[test]
+    fn unsafe_link_href_replaced_with_blank() {
+        let dir = tempdir().unwrap();
+        let note = sample_note(
+            "lnk1",
+            "Link test",
+            json!({
+                "type": "doc",
+                "content": [{ "type": "paragraph", "content": [
+                    { "type": "text", "text": "click", "marks": [
+                        { "type": "link", "attrs": { "href": "javascript:alert(1)" } }
+                    ]}
+                ]}]
+            }),
+        );
+        let res = NoteMdConverter.convert(&[note], "md", dir.path());
+        assert!(res.errors.is_empty());
+        let content = std::fs::read_to_string(&res.files_written[0]).unwrap();
+        assert!(content.contains("[click](about:blank)"), "unsafe href not sanitized: {content}");
+        assert!(!content.contains("javascript:"), "javascript: href leaked: {content}");
     }
 }

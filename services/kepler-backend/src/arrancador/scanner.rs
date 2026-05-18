@@ -76,7 +76,7 @@ impl VdfNode {
 pub fn parse_vdf(text: &str) -> VdfNode {
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0usize;
-    parse_object_body(&chars, &mut i, /* top */ true)
+    parse_object_body(&chars, &mut i, /* top */ true, 0)
 }
 
 fn skip_ws_and_comments(chars: &[char], i: &mut usize) {
@@ -125,7 +125,10 @@ fn parse_quoted(chars: &[char], i: &mut usize) -> Option<String> {
     Some(out)
 }
 
-fn parse_object_body(chars: &[char], i: &mut usize, top: bool) -> VdfNode {
+fn parse_object_body(chars: &[char], i: &mut usize, top: bool, depth: usize) -> VdfNode {
+    if depth > 64 {
+        return VdfNode::Null;
+    }
     let mut entries: Vec<(String, VdfNode)> = Vec::new();
     loop {
         skip_ws_and_comments(chars, i);
@@ -153,7 +156,7 @@ fn parse_object_body(chars: &[char], i: &mut usize, top: bool) -> VdfNode {
         }
         if chars[*i] == '{' {
             *i += 1;
-            let nested = parse_object_body(chars, i, false);
+            let nested = parse_object_body(chars, i, false, depth + 1);
             entries.push((key, nested));
             continue;
         }
@@ -664,5 +667,20 @@ mod tests {
             .unwrap()
             .to_string_lossy()
             .contains("big_thing"));
+    }
+
+    #[test]
+    fn vdf_depth_limit_prevents_stack_overflow() {
+        // 200 levels of nesting — well beyond the 64-level cap.
+        let mut vdf = String::new();
+        for _ in 0..200 {
+            vdf.push_str("\"k\" {\n");
+        }
+        for _ in 0..200 {
+            vdf.push('}');
+        }
+        // Should not panic/stack-overflow; just returns a truncated tree.
+        let result = parse_vdf(&vdf);
+        assert!(matches!(result, VdfNode::Object(_) | VdfNode::Null));
     }
 }

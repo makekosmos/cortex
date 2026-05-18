@@ -8,6 +8,7 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
+use crate::hlc::HLC;
 use crate::protocol::LanSyncMessage;
 
 // ---------------------------------------------------------------------------
@@ -98,8 +99,10 @@ impl MeshCoordinator {
     pub fn dedup_key_from_message(msg: &LanSyncMessage) -> Option<(String, String, String)> {
         match msg {
             LanSyncMessage::LiveChange { entity, .. } => {
-                // Extract device_id from HLC: last segment after the second colon.
-                let device_id = entity.hlc.splitn(3, ':').nth(2).unwrap_or("").to_string();
+                // HLC format: `<ISO8601>:<counter:06d>:<device_id>`.
+                // ISO8601 contains colons (e.g. "T14:30:00"), so splitn(3, ':') would
+                // split inside the timestamp — use HLC::from_string instead.
+                let device_id = HLC::from_string(&entity.hlc).device_id;
                 Some((device_id, entity.id.clone(), entity.hlc.clone()))
             }
             LanSyncMessage::SyncChanges { entities, .. } => {
@@ -110,5 +113,49 @@ impl MeshCoordinator {
             }
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::LanSyncMessage;
+    use crate::types::SyncEntity;
+
+    fn make_live_change(hlc: &str) -> LanSyncMessage {
+        LanSyncMessage::LiveChange {
+            change_id: "cid1".to_string(),
+            entity: SyncEntity {
+                id: "entity-1".to_string(),
+                entity_type: "object".to_string(),
+                hlc: hlc.to_string(),
+                data: serde_json::Map::new(),
+                deleted: None,
+            },
+            origin_device_id: None,
+        }
+    }
+
+    #[test]
+    fn dedup_key_extracts_device_id_correctly() {
+        // ISO8601 timestamps contain colons: T14:30:00 — splitn(3,':') would
+        // wrongly return seconds+Z+counter+device as the third segment.
+        let hlc = "2026-03-28T14:30:00.123Z:000042:my-device-abc";
+        let msg = make_live_change(hlc);
+        let (device_id, entity_id, _hlc) =
+            MeshCoordinator::dedup_key_from_message(&msg).unwrap();
+        assert_eq!(device_id, "my-device-abc", "device_id extracted incorrectly");
+        assert_eq!(entity_id, "entity-1");
+    }
+
+    #[test]
+    fn dedup_key_returns_none_for_sync_changes() {
+        let msg = LanSyncMessage::SyncChanges {
+            batch_id: "b1".to_string(),
+            entities: vec![],
+            is_last: true,
+            origin_device_id: Some("dev".to_string()),
+        };
+        assert!(MeshCoordinator::dedup_key_from_message(&msg).is_none());
     }
 }

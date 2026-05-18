@@ -118,13 +118,32 @@ pub(crate) fn sanitize_filename(input: &str) -> String {
         out = "untitled".to_string();
     }
     if out.len() > 120 {
-        out.truncate(120);
+        // Truncate at char boundary to avoid splitting multi-byte characters.
+        let mut boundary = 120;
+        while !out.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        out.truncate(boundary);
     }
     out
 }
 
+/// Sanitize CSV cell value to prevent formula injection in spreadsheet apps.
+///
+/// Spreadsheet applications (Excel, Google Sheets) interpret cells that start
+/// with `=`, `+`, `-`, or `@` as formulas, which can execute arbitrary code.
+/// Prefix such values with a TAB character to force literal interpretation.
+pub(crate) fn csv_safe_cell(value: &str) -> std::borrow::Cow<str> {
+    if value.starts_with(['=', '+', '-', '@']) {
+        std::borrow::Cow::Owned(format!("\t{value}"))
+    } else {
+        std::borrow::Cow::Borrowed(value)
+    }
+}
+
 /// Подобрать уникальное имя файла в dest_dir с заданным stem + extension.
 /// Если файл существует — добавляет суффикс `-2`, `-3`, ...
+/// Если все суффиксы до 9999 заняты — использует timestamp суффикс.
 pub(crate) fn unique_path(dest_dir: &Path, stem: &str, ext: &str) -> PathBuf {
     let candidate = dest_dir.join(format!("{stem}.{ext}"));
     if !candidate.exists() {
@@ -136,7 +155,12 @@ pub(crate) fn unique_path(dest_dir: &Path, stem: &str, ext: &str) -> PathBuf {
             return c;
         }
     }
-    dest_dir.join(format!("{stem}.{ext}"))
+    // All numeric suffixes exhausted — use epoch-millis as guaranteed-unique fallback.
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    dest_dir.join(format!("{stem}-{ts}.{ext}"))
 }
 
 #[cfg(test)]
@@ -168,5 +192,45 @@ mod tests {
         assert_eq!(sanitize_filename(""), "untitled");
         assert_eq!(sanitize_filename("...."), "untitled");
         assert_eq!(sanitize_filename("Привет мир"), "Привет мир");
+    }
+
+    #[test]
+    fn sanitize_filename_truncates_at_char_boundary() {
+        // Each Cyrillic character is 2 bytes. 61 chars = 122 bytes > 120.
+        // truncate(120) would split the 61st char without boundary check → panic.
+        let input = "А".repeat(61);
+        let out = sanitize_filename(&input);
+        assert!(out.len() <= 120, "len={}", out.len());
+        assert!(std::str::from_utf8(out.as_bytes()).is_ok(), "not valid UTF-8");
+        // 120 bytes / 2 bytes-per-char = 60 chars
+        assert_eq!(out, "А".repeat(60));
+    }
+
+    #[test]
+    fn csv_safe_cell_sanitizes_formula_prefix() {
+        assert_eq!(csv_safe_cell("=SUM(1+1)"), "\t=SUM(1+1)");
+        assert_eq!(csv_safe_cell("+bad"), "\t+bad");
+        assert_eq!(csv_safe_cell("-also-bad"), "\t-also-bad");
+        assert_eq!(csv_safe_cell("@user"), "\t@user");
+        // Safe values unchanged.
+        assert_eq!(csv_safe_cell("Hello"), "Hello");
+        assert_eq!(csv_safe_cell("Buy milk"), "Buy milk");
+        assert_eq!(csv_safe_cell(""), "");
+        assert_eq!(csv_safe_cell("100"), "100");
+    }
+
+    #[test]
+    fn test_unique_path_exhaustion_fallback() {
+        use tempfile::TempDir;
+        let tmp = TempDir::new().unwrap();
+        let dir = tmp.path();
+        // Create stem.ext and stem-2.ext … stem-9999.ext.
+        std::fs::write(dir.join("title.md"), b"").unwrap();
+        for n in 2..10_000u32 {
+            std::fs::write(dir.join(format!("title-{n}.md")), b"").unwrap();
+        }
+        let path = unique_path(dir, "title", "md");
+        // Must not return a path that already exists.
+        assert!(!path.exists(), "unique_path returned an existing path: {:?}", path);
     }
 }

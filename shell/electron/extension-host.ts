@@ -369,7 +369,8 @@ export function extensionIconDataUri(id: string): string | undefined {
   if (!manifest || !manifest.icon) return undefined;
   const dir = resolveExtensionDir(id);
   if (!dir) return undefined;
-  const iconPath = path.join(dir, manifest.icon);
+  const iconPath = path.resolve(path.join(dir, manifest.icon));
+  if (!iconPath.startsWith(path.resolve(dir) + path.sep) && iconPath !== path.resolve(dir)) return undefined;
   if (!existsSync(iconPath)) return undefined;
   const stat = statSync(iconPath);
   const cached = iconDataUriCache.get(id);

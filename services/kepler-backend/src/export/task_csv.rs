@@ -1,7 +1,7 @@
 // task_obj → CSV. Один файл tasks.csv.
 // Колонки: id, title, project_id, area_id, scheduled_date, deadline, completed, priority, tags
 
-use super::{ConvertResult, Converter};
+use super::{csv_safe_cell, ConvertResult, Converter};
 use ark_core::types::ArkObject;
 use std::path::Path;
 
@@ -79,14 +79,14 @@ impl Converter for TaskCsvConverter {
                 .unwrap_or_default();
             if let Err(e) = wtr.write_record([
                 obj.id.as_str(),
-                obj.title.as_str(),
+                csv_safe_cell(&obj.title).as_ref(),
                 project_id,
                 area_id,
                 scheduled,
                 deadline,
                 if completed { "true" } else { "false" },
                 priority.as_str(),
-                tags.as_str(),
+                csv_safe_cell(&tags).as_ref(),
             ]) {
                 result.push_error(format!("write row {}: {e}", obj.id));
             }

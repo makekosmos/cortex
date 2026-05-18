@@ -227,12 +227,16 @@ impl RelayTransport {
     }
 
     /// Enqueue a message. If the transport is connected, it goes immediately;
-    /// if disconnected, it is stored in the offline outbox.
+    /// if disconnected, it is stored in the offline outbox (capped at 500 entries).
     pub fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
         let tx = self.send_tx.lock().unwrap();
         if tx.send(msg.clone()).is_err() {
             // Channel closed (not yet started or stopped) — use offline outbox.
-            self.outbox.lock().unwrap().push_back(msg);
+            const MAX_OUTBOX_SIZE: usize = 500;
+            let mut outbox = self.outbox.lock().unwrap();
+            if outbox.len() < MAX_OUTBOX_SIZE {
+                outbox.push_back(msg);
+            }
         }
         Ok(())
     }

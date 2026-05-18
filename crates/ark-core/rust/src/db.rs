@@ -631,28 +631,44 @@ pub fn replay_pending_for_type(conn: &Connection, type_id: &str) -> Result<usize
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
+    drop(stmt);
 
+    conn.execute_batch("BEGIN IMMEDIATE").map_err(|e| e.to_string())?;
     let mut replayed = 0usize;
-    for (entity_id, payload_json) in rows {
-        let entity: SyncEntity =
-            serde_json::from_str(&payload_json).map_err(|e| e.to_string())?;
-        let mut data = entity.data.clone();
-        data.insert("id".to_string(), Value::String(entity.id.clone()));
-        let object: ArkObject = serde_json::from_value(Value::Object(data))
+    let result = (|| {
+        for (entity_id, payload_json) in &rows {
+            let entity: SyncEntity =
+                serde_json::from_str(payload_json).map_err(|e| e.to_string())?;
+            let mut data = entity.data.clone();
+            data.insert("id".to_string(), Value::String(entity.id.clone()));
+            let object: ArkObject = serde_json::from_value(Value::Object(data))
+                .map_err(|e| e.to_string())?;
+            upsert_object(conn, &object)?;
+            conn.execute(
+                "DELETE FROM sync_pending_objects WHERE id = ?1",
+                params![entity_id],
+            )
             .map_err(|e| e.to_string())?;
-        upsert_object(conn, &object)?;
-        conn.execute(
-            "DELETE FROM sync_pending_objects WHERE id = ?1",
-            params![entity_id],
-        )
-        .map_err(|e| e.to_string())?;
+            replayed += 1;
+        }
+        Ok::<_, String>(())
+    })();
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(e);
+        }
+    }
+    for (entity_id, _) in &rows {
         crate::events::emit_event(json!({
             "event": "sync_replay",
             "entity_type": "object",
             "entity_id": entity_id,
             "type_id": type_id,
         }));
-        replayed += 1;
     }
     Ok(replayed)
 }

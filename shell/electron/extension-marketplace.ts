@@ -72,7 +72,15 @@ function httpsGetText(url: string, timeoutMs = 15000): Promise<string> {
 
 function httpsDownload(url: string, destPath: string, timeoutMs = 60000): Promise<void> {
   return new Promise((resolve, reject) => {
-    const fetchUrl = (u: string) => {
+    const fetchUrl = (u: string, depth = 0) => {
+      if (depth > 5) {
+        reject(new Error(`too many redirects downloading ${url}`));
+        return;
+      }
+      if (!u.startsWith("https://")) {
+        reject(new Error(`redirect to non-HTTPS URL blocked: ${u}`));
+        return;
+      }
       const req = https.get(u, { headers: { "User-Agent": "Kepler-Shell" } }, (res) => {
         if (
           res.statusCode &&
@@ -81,7 +89,7 @@ function httpsDownload(url: string, destPath: string, timeoutMs = 60000): Promis
           res.headers.location
         ) {
           res.resume();
-          fetchUrl(res.headers.location);
+          fetchUrl(res.headers.location, depth + 1);
           return;
         }
         if (!res.statusCode || res.statusCode >= 400) {
