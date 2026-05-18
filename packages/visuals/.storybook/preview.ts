@@ -103,7 +103,18 @@ const preview: Preview = {
     },
     options: {
       storySort: {
-        order: ["Intro", "Tokens", "Primitives", "Components", "Patterns", "*"],
+        // Логический порядок: токены → low-level → composed UI → context demos.
+        order: [
+          "Intro",
+          "Tokens",
+          "Inputs",   // Toggle, Dropdown, DateChip, calendar…
+          "Display",  // StatusDot, EmptyState, BlocklistCard, GamePosterCard
+          "Lists",    // TodoRow
+          "Overlays", // Modal, ContextMenu, CommandPalette, QuickEntryPanel
+          "Window",   // DesktopChrome, Titlebar — chrome для окон
+          "Patterns", // composed examples — title bar в реальном окне etc.
+          "*",
+        ],
       },
     },
     // Default convention: agent-built. Stories помечают handcrafted: true,
@@ -124,6 +135,11 @@ const preview: Preview = {
 
       const handcrafted = context.parameters?.handcrafted === true;
 
+      // Padding только когда layout НЕ fullscreen — fullscreen stories
+      // (DesktopChrome / overlays) занимают весь viewport сами.
+      const layout = (context.parameters?.layout as string) ?? "padded";
+      const isFullscreen = layout === "fullscreen";
+
       return () =>
         h(
           "div",
@@ -131,8 +147,7 @@ const preview: Preview = {
             class: theme === "dark" ? "dark" : "light",
             style: {
               position: "relative",
-              padding: "1rem",
-              minHeight: "100vh",
+              padding: isFullscreen ? "0" : "16px",
               color: "var(--foreground)",
               background: "var(--background)",
               fontFamily: "var(--font-sans)",

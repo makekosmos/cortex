@@ -1,10 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import Toggle from "./Toggle.vue";
 
 const meta: Meta<typeof Toggle> = {
-  title: "Components/Toggle",
+  title: "Inputs/Toggle",
   component: Toggle,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     modelValue: { control: "boolean" },
     disabled: { control: "boolean" },

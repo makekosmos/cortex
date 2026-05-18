@@ -1,11 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import BlocklistCard from "./BlocklistCard.vue";
 
 const meta: Meta<typeof BlocklistCard> = {
-  title: "Components/BlocklistCard",
+  title: "Display/BlocklistCard",
   component: BlocklistCard,
   tags: ["autodocs"],
-  parameters: {
+  parameters: { layout: "centered",
     // Этот компонент свежий — agent-built, не handcrafted.
     // После того как юзер allowed UX → мы переключим на true.
     handcrafted: false,

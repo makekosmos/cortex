@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import QuickEntryPanel from "./QuickEntryPanel.vue";
 
 const meta: Meta<typeof QuickEntryPanel> = {
-  title: "Components/QuickEntryPanel",
+  title: "Overlays/QuickEntryPanel",
   component: QuickEntryPanel,
   tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
 };
 export default meta;
 type Story = StoryObj<typeof QuickEntryPanel>;

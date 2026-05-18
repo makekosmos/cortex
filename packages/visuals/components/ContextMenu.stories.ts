@@ -1,12 +1,13 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import ContextMenu from "./ContextMenu.vue";
 import ContextMenuItem from "./ContextMenuItem.vue";
 
 const meta: Meta<typeof ContextMenu> = {
-  title: "Components/ContextMenu",
+  title: "Overlays/ContextMenu",
   component: ContextMenu,
   tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
 };
 export default meta;
 type Story = StoryObj<typeof ContextMenu>;

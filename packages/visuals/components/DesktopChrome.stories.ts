@@ -1,9 +1,9 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import DesktopChrome from "./DesktopChrome.vue";
 import DesktopContentSurface from "./DesktopContentSurface.vue";
 
 const meta: Meta<typeof DesktopChrome> = {
-  title: "Components/DesktopChrome",
+  title: "Window/DesktopChrome",
   component: DesktopChrome,
   tags: ["autodocs"],
   argTypes: {

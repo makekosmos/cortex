@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import SettingsRow from "./SettingsRow.vue";
 import Toggle from "./Toggle.vue";
 
 const meta: Meta<typeof SettingsRow> = {
-  title: "Components/SettingsRow",
+  title: "Inputs/SettingsRow",
   component: SettingsRow,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     title: { control: "text" },
     description: { control: "text" },

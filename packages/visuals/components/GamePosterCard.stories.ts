@@ -1,10 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import GamePosterCard from "./GamePosterCard.vue";
 
 const meta: Meta<typeof GamePosterCard> = {
-  title: "Components/GamePosterCard",
+  title: "Display/GamePosterCard",
   component: GamePosterCard,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     to: { control: "text" },
     title: { control: "text" },

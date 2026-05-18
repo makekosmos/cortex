@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import Titlebar from "./Titlebar.vue";
 
 const meta: Meta<typeof Titlebar> = {
-  title: "Components/Titlebar",
+  title: "Window/Titlebar",
   component: Titlebar,
   tags: ["autodocs"],
   argTypes: {

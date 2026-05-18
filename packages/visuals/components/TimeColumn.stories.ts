@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import TimeColumn from "./TimeColumn.vue";
 
 const meta: Meta<typeof TimeColumn> = {
-  title: "Components/TimeColumn",
+  title: "Inputs/TimeColumn",
   component: TimeColumn,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     min: { control: "number" },
     max: { control: "number" },

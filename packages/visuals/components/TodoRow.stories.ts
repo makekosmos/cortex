@@ -1,10 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import TodoRow, { type TodoRowItem } from "./TodoRow.vue";
 
 const meta: Meta<typeof TodoRow> = {
-  title: "Components/TodoRow",
+  title: "Lists/TodoRow",
   component: TodoRow,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     draggable: { control: "boolean" },
     editable: { control: "boolean" },

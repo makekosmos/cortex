@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import Calendar from "./Calendar.vue";
 
 const meta: Meta<typeof Calendar> = {
-  title: "Components/Calendar",
+  title: "Inputs/Calendar",
   component: Calendar,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     today: { control: "text" },
   },

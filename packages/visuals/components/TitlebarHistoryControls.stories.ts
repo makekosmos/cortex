@@ -1,10 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import TitlebarHistoryControls from "./TitlebarHistoryControls.vue";
 
 const meta: Meta<typeof TitlebarHistoryControls> = {
-  title: "Components/TitlebarHistoryControls",
+  title: "Window/TitlebarHistoryControls",
   component: TitlebarHistoryControls,
   tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
   argTypes: {
     backDisabled: { control: "boolean" },
     forwardDisabled: { control: "boolean" },

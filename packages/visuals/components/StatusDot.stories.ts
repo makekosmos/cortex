@@ -1,10 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import StatusDot from "./StatusDot.vue";
 
 const meta: Meta<typeof StatusDot> = {
-  title: "Components/StatusDot",
+  title: "Display/StatusDot",
   component: StatusDot,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     tone: {
       control: "select",

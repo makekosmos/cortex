@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import DateChip from "./DateChip.vue";
 
 const meta: Meta<typeof DateChip> = {
-  title: "Components/DateChip",
+  title: "Inputs/DateChip",
   component: DateChip,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     placeholder: { control: "text" },
     compact: { control: "boolean" },

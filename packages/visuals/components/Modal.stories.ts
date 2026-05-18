@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import Modal from "./Modal.vue";
 
 const meta: Meta<typeof Modal> = {
-  title: "Components/Modal",
+  title: "Overlays/Modal",
   component: Modal,
   tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
   argTypes: {
     title: { control: "text" },
     width: { control: "text" },

@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import Dropdown from "./Dropdown.vue";
 
 const meta: Meta<typeof Dropdown> = {
-  title: "Components/Dropdown",
+  title: "Inputs/Dropdown",
   component: Dropdown,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     placeholder: { control: "text" },
     matchTriggerWidth: { control: "boolean" },

@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref, computed } from "vue";
 import CommandPalette from "./CommandPalette.vue";
 
 const meta: Meta<typeof CommandPalette> = {
-  title: "Components/CommandPalette",
+  title: "Overlays/CommandPalette",
   component: CommandPalette,
   tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
   argTypes: {
     placeholder: { control: "text" },
   },

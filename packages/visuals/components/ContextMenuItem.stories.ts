@@ -1,10 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import ContextMenuItem from "./ContextMenuItem.vue";
 
 const meta: Meta<typeof ContextMenuItem> = {
-  title: "Components/ContextMenuItem",
+  title: "Overlays/ContextMenuItem",
   component: ContextMenuItem,
   tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
   argTypes: {
     destructive: { control: "boolean" },
     disabled: { control: "boolean" },

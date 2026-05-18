@@ -1,10 +1,11 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import DesktopContentSurface from "./DesktopContentSurface.vue";
 
 const meta: Meta<typeof DesktopContentSurface> = {
-  title: "Components/DesktopContentSurface",
+  title: "Window/DesktopContentSurface",
   component: DesktopContentSurface,
   tags: ["autodocs"],
+  parameters: { layout: "fullscreen" },
   argTypes: {
     paddingTop: { control: "text" },
     paddingInline: { control: "text" },

@@ -1,11 +1,12 @@
-import type { Meta, StoryObj } from "@storybook/vue3";
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import { ref } from "vue";
 import DateTimePicker from "./DateTimePicker.vue";
 
 const meta: Meta<typeof DateTimePicker> = {
-  title: "Components/DateTimePicker",
+  title: "Inputs/DateTimePicker",
   component: DateTimePicker,
   tags: ["autodocs"],
+  parameters: { layout: "centered" },
   argTypes: {
     placeholder: { control: "text" },
     label: { control: "text" },
