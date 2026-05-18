@@ -426,7 +426,11 @@ onUnmounted(() => {
                     <li v-for="(cmd, idx) in filtered" :key="cmd.id" class="result"
                         :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
                         @click="() => { selectedIndex = (updateBanner ? 1 : 0) + idx; void invokeSelected(); }">
-                        <img v-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                        <BuiltInIcon v-if="builtInIconFor(cmd)" :icon="builtInIconFor(cmd)!.icon"
+                            :svg-src="builtInIconFor(cmd)!.svgSrc"
+                            :icon-color="builtInIconFor(cmd)!.iconColor"
+                            :from="builtInIconFor(cmd)!.from" :to="builtInIconFor(cmd)!.to" />
+                        <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
                         <span v-else class="icon icon-placeholder" aria-hidden="true" />
                         <span class="title">{{ cmd.title }}</span>
                         <span class="subtitle">{{ cmd.subtitle }}</span>
