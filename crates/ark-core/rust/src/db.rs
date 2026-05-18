@@ -29,7 +29,21 @@ pub fn open_db(path: &str) -> Result<Connection, String> {
     Ok(conn)
 }
 
+/// Online SQLite integrity check. Возвращает Err если DB corrupted.
+/// Вызывается из init_schema до миграций — silent corruption хуже чем
+/// fail-loud при старте (см. 2026-05-18 hardening loop AC2).
+pub fn check_integrity(conn: &Connection) -> Result<(), String> {
+    let result: String = conn
+        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+        .map_err(|e| format!("integrity_check query failed: {e}"))?;
+    if result != "ok" {
+        return Err(format!("ARK DB integrity check failed: {result}"));
+    }
+    Ok(())
+}
+
 pub fn init_schema(conn: &Connection) -> Result<(), String> {
+    check_integrity(conn)?;
     conn.execute_batch(CREATE_TABLES)
         .map_err(|e| e.to_string())?;
     let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
@@ -38,6 +52,15 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         rebuild_object_search_fts(conn)?;
     }
     Ok(())
+}
+
+/// Online backup ARK DB в указанный destination path. Source connection
+/// может оставаться live (SQLite Online Backup API safe для concurrent
+/// readers/writer). Вызывается из db_backup scheduler в kepler-backend
+/// через `Request::DbBackup`.
+pub fn backup_to_file(conn: &Connection, dest_path: &str) -> Result<(), String> {
+    conn.backup(rusqlite::DatabaseName::Main, dest_path, None)
+        .map_err(|e| format!("backup_to_file failed: {e}"))
 }
 
 #[allow(dead_code)]
@@ -4347,5 +4370,93 @@ mod tests {
         let objects = list_objects(&conn).unwrap();
         assert_eq!(objects.len(), 1);
         assert_eq!(objects[0].id, "obj-a");
+    }
+
+    // --- Hardening (2026-05-18) ---
+
+    #[test]
+    fn check_integrity_passes_on_fresh_db() {
+        let conn = Connection::open_in_memory().unwrap();
+        check_integrity(&conn).expect("пустая DB должна проходить integrity_check");
+    }
+
+    #[test]
+    fn check_integrity_passes_after_init_schema() {
+        let conn = setup_db();
+        check_integrity(&conn).expect("DB после init_schema должна быть целостной");
+    }
+
+    #[test]
+    fn init_schema_fails_on_corrupted_db() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let path = tmp.path().to_path_buf();
+        // Создаём валидную DB и наполняем данными (нужно ≥ 1 data page чтобы
+        // повредить не header).
+        {
+            let conn = open_db(path.to_str().unwrap()).unwrap();
+            init_schema(&conn).unwrap();
+            let object_type = make_object_type("note_obj", "Note");
+            upsert_object_type(&conn, &object_type).unwrap();
+            for i in 0..100 {
+                let mut obj = make_object(&format!("obj-{i}"), "note_obj", &format!("Title {i}"));
+                obj.props_json = json!({ "n": i, "padding": "x".repeat(200) });
+                upsert_object(&conn, &obj).unwrap();
+            }
+        }
+        // Портим data pages (offset 8192+, после header page и schema page) —
+        // SQLite header останется валидным, integrity_check обнаружит
+        // повреждённые btree pages.
+        {
+            use std::io::{Seek, SeekFrom, Write};
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap();
+            file.seek(SeekFrom::Start(8192)).unwrap();
+            file.write_all(&[0xFF; 4096]).unwrap();
+            file.flush().unwrap();
+        }
+        // Открываем снова. open_db может пройти (header интактен) или fail
+        // на PRAGMA journal_mode. Если открыт — init_schema fail'ит на
+        // integrity_check. Любой путь — fail-loud.
+        let open_result = open_db(path.to_str().unwrap());
+        if let Ok(conn) = open_result {
+            let result = init_schema(&conn);
+            assert!(
+                result.is_err(),
+                "init_schema должен fail при corrupted DB; результат: {result:?}"
+            );
+            let err = result.unwrap_err();
+            assert!(
+                err.contains("integrity")
+                    || err.contains("corruption")
+                    || err.contains("malformed"),
+                "ошибка должна упоминать integrity/corruption/malformed, получили: {err}"
+            );
+        }
+        // else: open_db уже fail'ил — тоже acceptable fail-loud path.
+    }
+
+    #[test]
+    fn backup_to_file_creates_valid_copy() {
+        let conn = setup_db();
+        // Положим test данные.
+        let object_type = make_object_type("note_obj", "Note");
+        upsert_object_type(&conn, &object_type).unwrap();
+        let mut object = make_object("obj-backup", "note_obj", "Backup test");
+        object.props_json = json!({"tag": "test"});
+        upsert_object(&conn, &object).unwrap();
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = tmp.path().join("ark.db.backup");
+        let dest_str = dest.to_str().unwrap();
+        backup_to_file(&conn, dest_str).expect("backup должен пройти");
+
+        assert!(dest.exists(), "файл backup'а должен существовать");
+        let backup_conn = open_db(dest_str).unwrap();
+        let objects = list_objects(&backup_conn).unwrap();
+        assert_eq!(objects.len(), 1, "backup должен содержать оригинальный объект");
+        assert_eq!(objects[0].id, "obj-backup");
+        assert_eq!(objects[0].title, "Backup test");
     }
 }

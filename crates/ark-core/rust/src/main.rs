@@ -231,6 +231,13 @@ enum Request {
     ClearAll,
     DeleteTrashed,
 
+    /// SQLite Online Backup в указанный path. Source DB остаётся live —
+    /// concurrent readers/writer safe. Используется db_backup scheduler
+    /// в kepler-backend (раз в 24h). См. hardening proof loop 2026-05-18.
+    DbBackup {
+        dest_path: String,
+    },
+
     // --- Sync ops (new) ---
     StartSync {
         space_id: String,
@@ -675,6 +682,11 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         Request::DeleteTrashed => with_conn(|conn| {
             let count = db::delete_trashed(conn)?;
             Ok(json!(count))
+        }),
+
+        Request::DbBackup { dest_path } => with_conn(|conn| {
+            db::backup_to_file(conn, &dest_path)?;
+            Ok(json!({ "dest": dest_path }))
         }),
 
         Request::StartSync {

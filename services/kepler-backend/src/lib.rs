@@ -15,6 +15,7 @@ pub mod ark_host;
 pub mod arrancador;
 pub mod auth;
 pub mod command_bus;
+pub mod db_backup;
 pub mod export;
 pub mod focus;
 pub mod lock_file;

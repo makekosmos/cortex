@@ -19,7 +19,7 @@ use chrono::Utc;
 
 use kepler_backend::{
     ark_host::{self, ArkHost},
-    auth,
+    auth, db_backup,
     lock_file::{self, KeplerLockFile, LOCK_FILE_FORMAT_VERSION},
     protocol_version::{ProtocolVersion, PROTOCOL_VERSION},
     singleton::SingletonGuard,
@@ -72,6 +72,20 @@ async fn main() -> ExitCode {
     } else {
         eprintln!("[kepler-backend] KEPLER_USAGE_TRACKER=0 — usage_tracker disabled");
     }
+    // Periodic DB backup. На каждом старте проверяем — если прошло >= 24h
+    // с последнего, делаем online backup в `<data_dir>/backups/`. fire-and-forget
+    // (background task), failure НЕ блокирует startup (см. db_backup module).
+    {
+        let ark_for_backup = ark.clone();
+        let backup_dir = lock_path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
+        tokio::spawn(async move {
+            db_backup::maybe_backup_on_startup(ark_for_backup, backup_dir).await;
+        });
+    }
+
     // ARK Host остаётся живым через clone (или базовый Arc) до конца main.
     let _keep_ark_alive = ark;
 

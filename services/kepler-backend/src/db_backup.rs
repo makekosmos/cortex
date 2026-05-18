@@ -1,0 +1,237 @@
+// Periodic DB backup scheduler.
+//
+// Делает SQLite Online Backup ARK базы в `<data_dir>/backups/ark.db.backup-YYYY-MM-DD-HHMMSS`
+// раз в N часов (default 24, override через KEPLER_BACKUP_INTERVAL_HOURS).
+// Online Backup API не блокирует concurrent readers/writer — safe для live DB.
+//
+// Rotation: после успешного backup'а удаляем старые, оставляя последние
+// `KEPLER_BACKUP_RETAIN_COUNT` (default 7).
+//
+// Last-backup timestamp хранится в sync_kv под ключом `kepler.last_backup_ts`.
+// Если backup упал — логируем eprintln и продолжаем; следующий запуск
+// попробует снова. Failure не должен блокировать backend startup.
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use chrono::{DateTime, Utc};
+use serde_json::json;
+
+use crate::ark_host::ArkHost;
+
+const SYNC_KV_LAST_BACKUP: &str = "kepler.last_backup_ts";
+const BACKUPS_SUBDIR: &str = "backups";
+const BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
+
+fn interval_hours() -> u64 {
+    std::env::var("KEPLER_BACKUP_INTERVAL_HOURS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(24)
+}
+
+fn retain_count() -> usize {
+    std::env::var("KEPLER_BACKUP_RETAIN_COUNT")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(7)
+}
+
+fn backup_filename(now: DateTime<Utc>) -> String {
+    format!("{}{}", BACKUP_FILE_PREFIX, now.format("%Y-%m-%d-%H%M%S"))
+}
+
+fn parse_backup_timestamp(name: &str) -> Option<DateTime<Utc>> {
+    let stripped = name.strip_prefix(BACKUP_FILE_PREFIX)?;
+    let parsed = chrono::NaiveDateTime::parse_from_str(stripped, "%Y-%m-%d-%H%M%S").ok()?;
+    Some(parsed.and_utc())
+}
+
+async fn read_last_backup_ts(ark: &ArkHost) -> Option<DateTime<Utc>> {
+    let resp = ark
+        .request("get_sync_kv", json!({ "key": SYNC_KV_LAST_BACKUP }))
+        .await
+        .ok()?;
+    let value = resp.data.as_str()?;
+    DateTime::parse_from_rfc3339(value).ok().map(|d| d.with_timezone(&Utc))
+}
+
+async fn write_last_backup_ts(ark: &ArkHost, ts: DateTime<Utc>) -> Result<(), String> {
+    ark.request(
+        "set_sync_kv",
+        json!({ "key": SYNC_KV_LAST_BACKUP, "value": ts.to_rfc3339() }),
+    )
+    .await
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// Ensure `<data_dir>/backups/` exists and return path.
+fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
+    let dir = data_dir.join(BACKUPS_SUBDIR);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all {dir:?}: {e}"))?;
+    Ok(dir)
+}
+
+/// Удалить все backup'ы кроме последних `retain` (sorted by parsed timestamp
+/// descending). Возвращает count удалённых.
+fn rotate_backups(backups_dir: &Path, retain: usize) -> Result<usize, String> {
+    let mut entries: Vec<(PathBuf, DateTime<Utc>)> = std::fs::read_dir(backups_dir)
+        .map_err(|e| format!("read_dir {backups_dir:?}: {e}"))?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = path.file_name()?.to_str()?.to_string();
+            let ts = parse_backup_timestamp(&name)?;
+            Some((path, ts))
+        })
+        .collect();
+    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    let mut removed = 0;
+    for (path, _) in entries.iter().skip(retain) {
+        match std::fs::remove_file(path) {
+            Ok(()) => removed += 1,
+            Err(e) => eprintln!("[db-backup] failed to remove {path:?}: {e}"),
+        }
+    }
+    Ok(removed)
+}
+
+/// Сделать backup сейчас (без проверки interval). Используется в тестах и
+/// при manual trigger через future IPC. Возвращает path созданного файла.
+pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, String> {
+    let backups_dir = ensure_backups_dir(data_dir)?;
+    let now = Utc::now();
+    let filename = backup_filename(now);
+    let dest = backups_dir.join(&filename);
+    let dest_str = dest.to_str().ok_or("backup dest path is not UTF-8")?.to_string();
+
+    eprintln!("[db-backup] starting → {dest_str}");
+    ark.request("db_backup", json!({ "dest_path": dest_str.clone() }))
+        .await
+        .map_err(|e| format!("db_backup RPC failed: {e}"))?;
+
+    write_last_backup_ts(ark, now).await?;
+
+    match rotate_backups(&backups_dir, retain_count()) {
+        Ok(n) if n > 0 => eprintln!("[db-backup] rotated {n} old backup(s)"),
+        Ok(_) => {}
+        Err(e) => eprintln!("[db-backup] rotation failed: {e}"),
+    }
+
+    eprintln!("[db-backup] success → {dest:?}");
+    Ok(dest)
+}
+
+/// Проверить когда был последний backup, и если прошло >= interval —
+/// сделать backup. Вызывается на старте backend (не как periodic timer —
+/// backend каждый restart дёргает; для long-running daemon процессов
+/// можно добавить отдельный tick'нутый scheduler позже).
+pub async fn maybe_backup_on_startup(ark: Arc<ArkHost>, data_dir: PathBuf) {
+    let interval = chrono::Duration::hours(interval_hours() as i64);
+    let last = read_last_backup_ts(&ark).await;
+    let should_backup = match last {
+        Some(ts) => {
+            let elapsed = Utc::now().signed_duration_since(ts);
+            if elapsed >= interval {
+                eprintln!(
+                    "[db-backup] last backup was {:.1}h ago (interval {}h), running",
+                    elapsed.num_minutes() as f64 / 60.0,
+                    interval_hours()
+                );
+                true
+            } else {
+                eprintln!(
+                    "[db-backup] last backup was {:.1}h ago (interval {}h), skipping",
+                    elapsed.num_minutes() as f64 / 60.0,
+                    interval_hours()
+                );
+                false
+            }
+        }
+        None => {
+            eprintln!("[db-backup] no previous backup recorded, running");
+            true
+        }
+    };
+    if !should_backup {
+        return;
+    }
+    if let Err(e) = run_backup_now(&ark, &data_dir).await {
+        eprintln!("[db-backup] failed: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_backup_timestamp_round_trip() {
+        let ts = DateTime::parse_from_rfc3339("2026-05-18T15:30:45Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let name = backup_filename(ts);
+        let parsed = parse_backup_timestamp(&name).expect("должен распарситься");
+        assert_eq!(parsed, ts);
+    }
+
+    #[test]
+    fn rejects_non_backup_filename() {
+        assert!(parse_backup_timestamp("ark.db").is_none());
+        assert!(parse_backup_timestamp("ark.db.backup-not-a-date").is_none());
+        assert!(parse_backup_timestamp("random.txt").is_none());
+    }
+
+    #[test]
+    fn rotate_keeps_newest_n() {
+        let dir = tempfile::tempdir().unwrap();
+        let backups_dir = dir.path().to_path_buf();
+
+        // 10 fake backup'ов с разными timestamps.
+        let times: Vec<DateTime<Utc>> = (0..10)
+            .map(|i| {
+                Utc::now()
+                    - chrono::Duration::hours(i as i64 * 24)
+            })
+            .collect();
+        for t in &times {
+            std::fs::write(backups_dir.join(backup_filename(*t)), b"fake").unwrap();
+        }
+
+        let removed = rotate_backups(&backups_dir, 7).unwrap();
+        assert_eq!(removed, 3, "должны были удалить 3 старейших");
+
+        let remaining: Vec<_> = std::fs::read_dir(&backups_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(remaining.len(), 7, "ровно 7 должно остаться");
+    }
+
+    #[test]
+    fn rotate_noop_when_under_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let now = Utc::now();
+        for i in 0..3 {
+            let t = now - chrono::Duration::hours(i as i64);
+            std::fs::write(dir.path().join(backup_filename(t)), b"x").unwrap();
+        }
+        let removed = rotate_backups(dir.path(), 7).unwrap();
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn rotate_ignores_unrelated_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("README.md"), b"doc").unwrap();
+        std::fs::write(dir.path().join("ark.db"), b"db").unwrap();
+        let now = Utc::now();
+        std::fs::write(dir.path().join(backup_filename(now)), b"backup").unwrap();
+        let removed = rotate_backups(dir.path(), 7).unwrap();
+        assert_eq!(removed, 0);
+        assert!(dir.path().join("README.md").exists());
+        assert!(dir.path().join("ark.db").exists());
+    }
+}
