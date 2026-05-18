@@ -11,8 +11,7 @@
 //   4. Command bus — регистрируем `horologion:pomodoro:25`, `:50`, и
 //      `stopwatch:start` через `kepler.ark.request("commands.register", ...)`
 //      и слушаем `command_invoked` через `kepler.ark.subscribe(...)`.
-//   5. Streamer mode / tray icon — out of scope для extension'а
-//      (требовали command-line switches до `app.ready` + tray API).
+//   5. Tray icon — out of scope для extension'а (требует tray API).
 
 import { createApp } from "vue";
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from "vue-router";

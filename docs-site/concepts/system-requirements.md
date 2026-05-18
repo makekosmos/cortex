@@ -92,7 +92,6 @@
 | **Focus mode: активация blocklist** | ✅ (UAC на каждый toggle если helper-mode; ОДИН раз если service installed) |
 | Установка focus service (опционально) | ✅ (UAC один раз через UI кнопку) |
 | AutoUpdater download + install | ❌ (per-user install) |
-| Streamer mode toggle | ❌ (sets `kepler-shell-settings.json`, app.relaunch) |
 
 ## Известные ограничения
 

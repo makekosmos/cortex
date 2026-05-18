@@ -27,18 +27,10 @@ interface KeplerShellSettings {
       `KEPLER_USAGE_TRACKER=0` и не пишет данные. Изменение применяется
       после рестарта Kepler. */
   usageTrackerEnabled?: boolean;
-  /** Режим стримера: Chromium flags чтобы окно продолжало рендерить когда
-      occluded (для OBS scene capture). Default false. Изменение требует
-      рестарта Kepler (flag применяется до app.ready). */
-  streamerMode?: boolean;
 }
 
 export function isUsageTrackerEnabled(): boolean {
   return readSettings().usageTrackerEnabled !== false;
-}
-
-export function isStreamerModeEnabled(): boolean {
-  return !!readSettings().streamerMode;
 }
 
 export const DEFAULT_HOTKEY = "Alt+Space";
@@ -220,17 +212,3 @@ ipcMain.handle(
   },
 );
 
-ipcMain.handle("kepler:settings:streamer-mode:get", () => isStreamerModeEnabled());
-
-ipcMain.handle(
-  "kepler:settings:streamer-mode:set",
-  (_e, enabled: boolean) => {
-    writeSettings({ streamerMode: !!enabled });
-    // Chromium flag применяется ДО app.whenReady — поэтому нужен relaunch.
-    // В dev (VITE_DEV_SERVER_URL) skip — env vars теряются при self-relaunch.
-    if (!process.env.VITE_DEV_SERVER_URL) {
-      app.relaunch();
-      app.exit(0);
-    }
-  },
-);

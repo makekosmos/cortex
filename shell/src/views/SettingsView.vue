@@ -119,7 +119,6 @@ const version = ref<string>("");
 const autostart = ref<boolean>(false);
 const developerMode = ref<boolean>(false);
 const usageTracker = ref<boolean>(true);
-const streamerMode = ref<boolean>(false);
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
 const loading = ref<boolean>(true);
 const autostartError = ref<string>("");
@@ -127,13 +126,12 @@ const autostartError = ref<string>("");
 async function loadGeneral() {
   loading.value = true;
   try {
-    const [h, v, a, d, u, s, b] = await Promise.all([
+    const [h, v, a, d, u, b] = await Promise.all([
       window.kepler.settings.hotkey(),
       window.kepler.settings.version(),
       window.kepler.settings.autostart.get(),
       window.kepler.settings.developerMode.get(),
       window.kepler.settings.usageTracker.get(),
-      window.kepler.settings.streamerMode.get(),
       window.kepler.backend.status(),
     ]);
     hotkey.value = h;
@@ -141,7 +139,6 @@ async function loadGeneral() {
     autostart.value = a;
     developerMode.value = d;
     usageTracker.value = u;
-    streamerMode.value = s;
     backend.value = b;
   } catch (e) {
     console.warn("settings load failed", e);
@@ -188,21 +185,6 @@ async function onToggleUsageTracker(e: Event) {
   } catch (err) {
     console.warn("usageTracker set failed", err);
     usageTracker.value = await window.kepler.settings.usageTracker.get();
-  }
-}
-
-async function onToggleStreamerMode(e: Event) {
-  const target = e.target as HTMLInputElement;
-  const desired = target.checked;
-  try {
-    // Backend сам делает app.relaunch() при изменении — UI больше не будет
-    // доступен. В dev (VITE_DEV_SERVER_URL) relaunch пропускается, value
-    // ниже отразит новое состояние после refetch.
-    streamerMode.value = desired;
-    await window.kepler.settings.streamerMode.set(desired);
-  } catch (err) {
-    console.warn("streamerMode set failed", err);
-    streamerMode.value = await window.kepler.settings.streamerMode.get();
   }
 }
 
@@ -1038,25 +1020,6 @@ onBeforeUnmount(() => {
               type="checkbox"
               :checked="usageTracker"
               @change="onToggleUsageTracker"
-            />
-            <span class="track"><span class="thumb" /></span>
-          </label>
-        </div>
-
-        <div class="row">
-          <div class="row-label">
-            <div class="label">Режим стримера</div>
-            <div class="hint">
-              Отключает Chromium occlusion throttling — окна продолжают рендерить
-              когда перекрыты (для OBS scene capture / overlay). Применится после
-              автоматического перезапуска Kepler.
-            </div>
-          </div>
-          <label class="toggle">
-            <input
-              type="checkbox"
-              :checked="streamerMode"
-              @change="onToggleStreamerMode"
             />
             <span class="track"><span class="thumb" /></span>
           </label>

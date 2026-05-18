@@ -16,10 +16,8 @@
 // Главное отличие от legacy main процесса:
 //   - Никакого command-bus registration здесь не делается (живёт в main.ts
 //     extension'а через kepler.ark.subscribe).
-//   - `settings.open()` и `streamerMode.set()` намеренно не реализованы —
-//     settings рисуется внутри основного окна (route /settings), а streamer
-//     mode требовал command-line switches до app.ready, что вне scope'а
-//     extension renderer'а.
+//   - `settings.open()` намеренно не реализован — settings рисуется внутри
+//     основного окна (route /settings).
 
 import type {
   CreateTimeEntryInput,
@@ -268,7 +266,7 @@ async function listDelphiTasks(): Promise<DelphiTask[]> {
 /**
  * Минимальная форма-имитация `window.horologion.*` API. Только те части,
  * которые реально используются portированными composable'ами и view'ами.
- * Settings open / streamerMode / onCommand вырезаны — см. module-doc выше.
+ * Settings open / onCommand вырезаны — см. module-doc выше.
  */
 export interface HorologionExtensionApi {
   timeEntries: {
@@ -304,7 +302,6 @@ export const horologionApi: HorologionExtensionApi = {
 
 // Глобальный shim — все portированные модули обращаются к `window.horologion`
 // (legacy конвенция). В extension'е этот объект формируется здесь, а не
-// preload'ом. Settings open / streamerMode не реализованы — call-site'ы
-// (App.vue, PomodoroView, pomodoroSettings) обновлены, чтобы не использовать
-// эти ветки.
+// preload'ом. Settings open не реализован — call-site'ы (App.vue, PomodoroView,
+// pomodoroSettings) обновлены, чтобы не использовать эти ветки.
 (window as unknown as { horologion: HorologionExtensionApi }).horologion = horologionApi;

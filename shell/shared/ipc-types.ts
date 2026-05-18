@@ -283,12 +283,6 @@ export interface KeplerApi {
       get(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
-    /** Режим стримера — Chromium flags для OBS scene capture.
-        Toggle вызывает app.relaunch() в prod. */
-    streamerMode: {
-      get(): Promise<boolean>;
-      set(enabled: boolean): Promise<void>;
-    };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
     /** Текущий глобальный хоткей. По умолчанию `Alt+Space`. */
