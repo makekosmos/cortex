@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { shallowRef, watch, nextTick, useTemplateRef } from "vue";
+import { shallowRef, watch, nextTick, useTemplateRef, onBeforeUnmount } from "vue";
 import { DollarSign, Folder, X } from "lucide-vue-next";
 import DateChip from "./DateChip.vue";
 
@@ -93,15 +93,27 @@ watch(() => props.open, (val) => {
   }
 });
 
+// Outside-click для project menu. Раньше использовался nested watch({ once: true })
+// для cleanup'а — он ломался при последовательных open/close (новый handler
+// добавлялся раньше чем предыдущий cleanup'ался) и не отписывался на unmount.
+// Идиома `watch open ⇒ add/remove` + `onBeforeUnmount → remove` — symmetric и
+// безопасна (mirror ContextMenu.vue).
+function onProjectMenuOutsideClick(e: MouseEvent) {
+  if (projectMenuRef.value && !projectMenuRef.value.contains(e.target as Node)) {
+    showProjectMenu.value = false;
+  }
+}
+
 watch(showProjectMenu, (val) => {
-  if (!val) return;
-  const handler = (e: MouseEvent) => {
-    if (projectMenuRef.value && !projectMenuRef.value.contains(e.target as Node)) {
-      showProjectMenu.value = false;
-    }
-  };
-  document.addEventListener("mousedown", handler);
-  watch(showProjectMenu, () => document.removeEventListener("mousedown", handler), { once: true });
+  if (val) {
+    document.addEventListener("mousedown", onProjectMenuOutsideClick);
+  } else {
+    document.removeEventListener("mousedown", onProjectMenuOutsideClick);
+  }
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("mousedown", onProjectMenuOutsideClick);
 });
 </script>
 

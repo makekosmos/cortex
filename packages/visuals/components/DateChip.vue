@@ -81,28 +81,38 @@ onUnmounted(() => {
 
 <template>
   <div ref="anchorRef" class="kosmos-datechip-anchor">
-    <button
-      type="button"
+    <!--
+      Composite chip = 2 sibling button'а в одном flex-контейнере. Раньше
+      clear был `<span role="button">` внутри `<button>` — невалидный
+      nested interactive, screen reader'ы collapse'или в одну кнопку и
+      «Очистить дату» становилась недоступна с клавиатуры. Теперь две
+      нормальные кнопки, контейнер только визуально объединяет их.
+    -->
+    <div
       :class="[
         'kosmos-datechip',
         props.value ? 'kosmos-datechip--active' : '',
         compact ? 'kosmos-datechip--compact' : '',
       ]"
-      @click="toggle"
     >
-      <CalendarIcon :size="compact ? 11 : 12" class="kosmos-datechip__icon" />
-      <span class="kosmos-datechip__label">{{ label }}</span>
-      <span
+      <button
+        type="button"
+        class="kosmos-datechip__toggle"
+        @click="toggle"
+      >
+        <CalendarIcon :size="compact ? 11 : 12" class="kosmos-datechip__icon" />
+        <span class="kosmos-datechip__label">{{ label }}</span>
+      </button>
+      <button
         v-if="props.value"
+        type="button"
         class="kosmos-datechip__clear"
-        role="button"
-        tabindex="-1"
         aria-label="Очистить дату"
-        @click="clear"
+        @click.stop="clear"
       >
         <X :size="10" />
-      </span>
-    </button>
+      </button>
+    </div>
 
     <div v-if="open" class="kosmos-datechip__popover">
       <Calendar :value="props.value" :today="todayIso" @pick="pick" />
@@ -119,14 +129,10 @@ onUnmounted(() => {
 .kosmos-datechip {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border: none;
   border-radius: 999px;
   background: var(--secondary);
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
   font-size: 0.75rem;
-  cursor: pointer;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),
     color 120ms cubic-bezier(0.2, 0, 0, 1);
@@ -146,7 +152,20 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
-.kosmos-datechip--compact {
+.kosmos-datechip__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+.kosmos-datechip--compact .kosmos-datechip__toggle {
   padding: 0.25rem 0.55rem;
   font-size: 0.7rem;
 }
@@ -166,15 +185,26 @@ onUnmounted(() => {
   justify-content: center;
   width: 14px;
   height: 14px;
+  margin-right: 0.5rem;
+  border: none;
   border-radius: 999px;
+  background: transparent;
   color: color-mix(in srgb, currentColor 70%, transparent);
-  margin-left: 0.1rem;
   cursor: pointer;
+}
+
+.kosmos-datechip--compact .kosmos-datechip__clear {
+  margin-right: 0.35rem;
 }
 
 .kosmos-datechip__clear:hover {
   background: color-mix(in srgb, currentColor 18%, transparent);
   color: currentColor;
+}
+
+.kosmos-datechip__clear:focus-visible {
+  outline: 2px solid var(--accent, currentColor);
+  outline-offset: 1px;
 }
 
 .kosmos-datechip__popover {
