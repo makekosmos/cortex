@@ -6,6 +6,7 @@ members = [
     "services/ark-relay-server",
     "services/kepler-watcher",
     "services/kepler-focus-helper",
+    "services/kepler-focus-svc",
 ]
 # Замороженный код. Не build'ится по умолчанию; реактивация требует
 # proof-loop (см. legacy/README.md).
