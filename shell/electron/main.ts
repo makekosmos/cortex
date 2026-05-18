@@ -657,7 +657,16 @@ ipcMain.handle(
 
 ipcMain.handle("kepler:export:list", async () => {
   const client = await awaitArkReady();
-  return client.invokeOperation({ operation: "export.list" });
+  // Backend returns `{ converters: [...] }`. Renderer ожидает плоский массив.
+  const resp = (await client.invokeOperation({ operation: "export.list" })) as
+    | { converters?: unknown }
+    | unknown[]
+    | null;
+  if (Array.isArray(resp)) return resp;
+  if (resp && typeof resp === "object" && Array.isArray((resp as { converters?: unknown }).converters)) {
+    return (resp as { converters: unknown[] }).converters;
+  }
+  return [];
 });
 
 ipcMain.handle(
