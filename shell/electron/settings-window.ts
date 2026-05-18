@@ -95,18 +95,19 @@ export function openSettings(): void {
     skipTaskbar: false,
     alwaysOnTop: false,
     backgroundColor: "#00000000",
-    backgroundMaterial: "acrylic",
+    backgroundMaterial: "mica",
     roundedCorners: true,
     title: "Kepler — Настройки",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: true,
     },
   });
 
   try {
-    settingsWindow.setBackgroundMaterial("acrylic");
+    settingsWindow.setBackgroundMaterial("mica");
   } catch (e) {
     console.error("[kepler-shell] settings setBackgroundMaterial failed:", e);
   }

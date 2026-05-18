@@ -43,13 +43,14 @@ export function openInstallExtensionWindow(sourcePath: string): void {
     skipTaskbar: false,
     alwaysOnTop: false,
     backgroundColor: "#1a1a1a",
-    backgroundMaterial: "acrylic",
+    backgroundMaterial: "mica",
     roundedCorners: true,
     title: "Kepler — Установка расширения",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: true,
       // Передаём sourcePath через additionalArguments — renderer читает
       // его при mount'е, не нужно дополнительного round-trip через IPC.
       additionalArguments: [`--kext-source=${sourcePath}`],
@@ -57,7 +58,7 @@ export function openInstallExtensionWindow(sourcePath: string): void {
   });
 
   try {
-    installWindow.setBackgroundMaterial("acrylic");
+    installWindow.setBackgroundMaterial("mica");
   } catch {
     /* non-Win11 ignored */
   }

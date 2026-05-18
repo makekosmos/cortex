@@ -140,6 +140,7 @@ export function openDashboardWindow(): void {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: true,
     },
   });
 

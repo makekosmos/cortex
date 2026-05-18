@@ -80,6 +80,17 @@ const WINDOW_STATE_FILENAME = "kepler-shell-window-state.json";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
+// Mica — modern Win11 22H2+ backdrop (static texture от desktop wallpaper,
+// дешевле acrylic'а в DWM). Env override `KEPLER_BG_MATERIAL=acrylic|mica|none`
+// для experiment'ов / fallback. Non-Win11 systems: setBackgroundMaterial no-op'ит,
+// окно остаётся opaque (acceptable graceful fallback).
+type LauncherBgMaterial = "acrylic" | "mica" | "none";
+function resolveLauncherBgMaterial(): LauncherBgMaterial {
+  const v = (process.env.KEPLER_BG_MATERIAL ?? "").toLowerCase();
+  if (v === "mica" || v === "none" || v === "acrylic") return v;
+  return "mica";
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let backendProc: ChildProcess | null = null;
@@ -279,7 +290,7 @@ function createLauncher() {
     fullscreenable: false,
     skipTaskbar: true,
     alwaysOnTop: true,
-    backgroundMaterial: "acrylic",
+    backgroundMaterial: resolveLauncherBgMaterial(),
     backgroundColor: "#00000000",
     roundedCorners: true,
     webPreferences: {
@@ -293,7 +304,7 @@ function createLauncher() {
   // не применяется на frameless+alwaysOnTop комбинации; setBackgroundMaterial
   // прямо дёргает DwmSetWindowAttribute. Безопасно: no-op на non-Win11.
   try {
-    mainWindow.setBackgroundMaterial("acrylic");
+    mainWindow.setBackgroundMaterial(resolveLauncherBgMaterial());
   } catch (e) {
     console.error("[kepler-shell] setBackgroundMaterial failed:", e);
   }
@@ -760,12 +771,17 @@ app.whenReady().then(async () => {
   }
 
   // BENCHMARK: KEPLER_BENCHMARK_OPEN_ALL=1 → автоматически открыть все
-  // мигрированные extensions для RAM-измерения. После warmup 5s.
+  // мигрированные extensions + Dashboard для RAM-измерения. После warmup 5s.
   if (process.env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
     setTimeout(() => {
-      for (const id of ["horologion", "delphi", "arrancador"]) {
+      for (const id of ["horologion", "delphi", "arrancador", "eden"]) {
         try { openExtension(id); } catch (e) { console.error(`bench open ${id} failed:`, e); }
       }
+      // Dashboard — встроенный shell view (не extension); открывается через
+      // tray-команду. Импорт здесь чтобы не возить dependency в hot path.
+      try {
+        import("./dashboard-window").then((m) => m.openDashboardWindow());
+      } catch (e) { console.error("bench open dashboard failed:", e); }
     }, 5000);
   }
 
