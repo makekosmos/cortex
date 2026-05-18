@@ -76,30 +76,48 @@ enum Request {
     LoadAll,
     UpsertTodo {
         todo: TodoItem,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteTodo {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     BatchUpsertTodos {
         todos: Vec<TodoItem>,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     UpsertProject {
         project: Project,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteProject {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     UpsertArea {
         area: Area,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     UpsertTag {
         tag: Tag,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     UpsertHeading {
         heading: Heading,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     DeleteHeading {
         id: String,
+        #[serde(default)]
+        device_id: Option<String>,
     },
     UpsertTrackedApp {
         tracked_app: TrackedApp,
@@ -430,48 +448,65 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             serde_json::to_value(data).map_err(|e| e.to_string())
         }),
 
-        Request::UpsertTodo { todo } => with_conn(|conn| {
+        // Legacy entity write handlers: до 2026-05-18 они не вызывали
+        // record_local_upsert/record_local_delete → sync_kv.version_vector не
+        // двигался, peers не видели локальных правок todo/project/area/tag/
+        // heading через LAN sync. Тихий data loss bug. Все новые handler'ы
+        // (UpsertObject, UpsertUsageSession и т.д.) делают это правильно;
+        // приводим legacy к тому же контракту.
+        Request::UpsertTodo { todo, device_id } => with_conn(|conn| {
             db::upsert_todo(conn, &todo)?;
+            record_local_upsert(conn, "todo", &todo.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::DeleteTodo { id } => with_conn(|conn| {
+        Request::DeleteTodo { id, device_id } => with_conn(|conn| {
             db::delete_todo(conn, &id)?;
+            record_local_delete(conn, "todo", &id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::BatchUpsertTodos { todos } => with_conn(|conn| {
+        Request::BatchUpsertTodos { todos, device_id } => with_conn(|conn| {
             db::batch_upsert_todos(conn, &todos)?;
+            for todo in &todos {
+                record_local_upsert(conn, "todo", &todo.id, device_id.clone())?;
+            }
             Ok(json!(true))
         }),
 
-        Request::UpsertProject { project } => with_conn(|conn| {
+        Request::UpsertProject { project, device_id } => with_conn(|conn| {
             db::upsert_project(conn, &project)?;
+            record_local_upsert(conn, "project", &project.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::DeleteProject { id } => with_conn(|conn| {
+        Request::DeleteProject { id, device_id } => with_conn(|conn| {
             db::delete_project(conn, &id)?;
+            record_local_delete(conn, "project", &id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::UpsertArea { area } => with_conn(|conn| {
+        Request::UpsertArea { area, device_id } => with_conn(|conn| {
             db::upsert_area(conn, &area)?;
+            record_local_upsert(conn, "area", &area.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::UpsertTag { tag } => with_conn(|conn| {
+        Request::UpsertTag { tag, device_id } => with_conn(|conn| {
             db::upsert_tag(conn, &tag)?;
+            record_local_upsert(conn, "tag", &tag.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::UpsertHeading { heading } => with_conn(|conn| {
+        Request::UpsertHeading { heading, device_id } => with_conn(|conn| {
             db::upsert_heading(conn, &heading)?;
+            record_local_upsert(conn, "heading", &heading.id, device_id)?;
             Ok(json!(true))
         }),
 
-        Request::DeleteHeading { id } => with_conn(|conn| {
+        Request::DeleteHeading { id, device_id } => with_conn(|conn| {
             db::delete_heading(conn, &id)?;
+            record_local_delete(conn, "heading", &id, device_id)?;
             Ok(json!(true))
         }),
 
@@ -1560,5 +1595,179 @@ mod tests {
             )
             .unwrap();
         assert_eq!(type_tombstone_count, 1);
+    }
+
+    /// Regression for 2026-05-18 audit finding: legacy entity write handlers
+    /// (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading и их
+    /// Delete*, BatchUpsertTodos) пропускали bump_sync_version_vector. Локальные
+    /// правки тихо терялись для LAN sync. Тест проверяет что каждый legacy
+    /// entity получает HLC в version vector и delete'ы пишут tombstone.
+    #[tokio::test]
+    async fn legacy_entity_writes_bump_version_vector() {
+        let _guard = TEST_DB_MUTEX.lock().await;
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("ark.db");
+        handle_request(Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
+
+        let device = Some("device-legacy".to_string());
+        let timestamp = "2026-05-18T00:00:00.000Z".to_string();
+
+        let area = Area {
+            id: "area-legacy".to_string(),
+            title: "Area".to_string(),
+            sort_order: 0,
+            created_at: timestamp.clone(),
+        };
+        handle_request(Request::UpsertArea {
+            area,
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+
+        let project = Project {
+            id: "project-legacy".to_string(),
+            title: "Project".to_string(),
+            notes: None,
+            status: "active".to_string(),
+            scheduled_date: None,
+            deadline: None,
+            sort_order: 0,
+            color_tag: None,
+            area_id: Some("area-legacy".to_string()),
+            created_at: timestamp.clone(),
+        };
+        handle_request(Request::UpsertProject {
+            project,
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+
+        let tag = Tag {
+            id: "tag-legacy".to_string(),
+            title: "Tag".to_string(),
+            color: None,
+            created_at: timestamp.clone(),
+        };
+        handle_request(Request::UpsertTag {
+            tag,
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+
+        let heading = Heading {
+            id: "heading-legacy".to_string(),
+            title: "Heading".to_string(),
+            sort_order: 0,
+            project_id: "project-legacy".to_string(),
+        };
+        handle_request(Request::UpsertHeading {
+            heading,
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+
+        let make_todo = |id: &str| TodoItem {
+            id: id.to_string(),
+            title: "Todo".to_string(),
+            notes: None,
+            priority: 0,
+            scheduled_date: None,
+            deadline: None,
+            reminder_date: None,
+            is_today: false,
+            is_evening: false,
+            is_someday: false,
+            is_completed: false,
+            completed_at: None,
+            is_cancelled: false,
+            cancelled_at: None,
+            is_trashed: false,
+            sort_order: 0,
+            heading_id: None,
+            project_id: None,
+            area_id: None,
+            tag_ids: vec![],
+            checklist_items: json!([]),
+            recurrence_rule: None,
+            created_at: timestamp.clone(),
+        };
+
+        handle_request(Request::UpsertTodo {
+            todo: make_todo("todo-legacy"),
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+
+        // Batch upsert тоже должен bump'ать version vector per-entity.
+        handle_request(Request::BatchUpsertTodos {
+            todos: vec![make_todo("todo-batch-1"), make_todo("todo-batch-2")],
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+
+        // Delete legacy — должен записать tombstone.
+        handle_request(Request::DeleteHeading {
+            id: "heading-legacy".to_string(),
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+        handle_request(Request::DeleteTodo {
+            id: "todo-batch-1".to_string(),
+            device_id: device.clone(),
+        })
+        .await
+        .unwrap();
+
+        let shared = get_shared_conn().unwrap();
+        let guard = shared.lock().unwrap();
+        let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+            .unwrap()
+            .expect("version vector should be stored");
+        let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+        for id in [
+            "area-legacy",
+            "project-legacy",
+            "tag-legacy",
+            "heading-legacy",
+            "todo-legacy",
+            "todo-batch-1",
+            "todo-batch-2",
+        ] {
+            assert!(
+                vector
+                    .get(id)
+                    .is_some_and(|hlc| hlc.ends_with(":device-legacy")),
+                "{id} should have a local HLC in the version vector after legacy upsert",
+            );
+        }
+
+        let heading_tombstone: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["heading-legacy", "heading"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(heading_tombstone, 1, "DeleteHeading должен записать tombstone");
+
+        let todo_tombstone: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["todo-batch-1", "todo"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
     }
 }
