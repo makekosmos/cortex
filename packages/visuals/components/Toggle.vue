@@ -103,7 +103,7 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 .kosmos-toggle--checked .kosmos-toggle__track {
-  background: var(--status-success);
+  background: var(--primary);
 }
 
 .kosmos-toggle--checked .kosmos-toggle__thumb {
