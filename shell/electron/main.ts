@@ -223,6 +223,11 @@ function spawnBackend() {
   backendProc.on("exit", (code) => {
     console.error(`[kepler-shell] backend exited code=${code}`);
     backendProc = null;
+    // Без cleanup ArkClient остаётся "connected" к мёртвому WS, все
+    // последующие invokeOperation либо висят на reconnect, либо падают.
+    // Reset кладёт его в исходное состояние; новый initArkClient() будет
+    // вызван при следующем spawnBackend (вручную через restart IPC).
+    void resetArkClient("backend exited");
   });
 }
 
@@ -475,15 +480,42 @@ function ensureArkReadyPromise(): Promise<ArkClient> {
   return arkClientReady;
 }
 
+// Сбрасывает state ArkClient'а и резолверы. Звать при backend exit / restart /
+// init failure. После reset следующий ensureArkReadyPromise() создаст свежий
+// promise — иначе старые pending awaitArkReady() висят пока не отвалятся по
+// 15-секундному таймауту.
+async function resetArkClient(reason: string): Promise<void> {
+  const err = new Error(`ArkClient reset: ${reason}`);
+  arkClientReadyReject?.(err);
+  arkClientReadyResolve = null;
+  arkClientReadyReject = null;
+  arkClientReady = null;
+  const prev = arkClient;
+  arkClient = null;
+  setExtensionArkBridge({ request: null, subscribe: null });
+  if (prev) {
+    try {
+      await prev.stop();
+    } catch (e) {
+      console.error("[kepler-shell] ArkClient stop failed:", e);
+    }
+  }
+}
+
 async function awaitArkReady(timeoutMs = 15000): Promise<ArkClient> {
   if (arkClient) return arkClient;
   const p = ensureArkReadyPromise();
-  return Promise.race([
-    p,
-    new Promise<ArkClient>((_, rej) =>
-      setTimeout(() => rej(new Error("ArkClient not ready (timeout)")), timeoutMs),
-    ),
-  ]);
+  let timer: NodeJS.Timeout | null = null;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<ArkClient>((_, rej) => {
+        timer = setTimeout(() => rej(new Error("ArkClient not ready (timeout)")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 async function initArkClient(): Promise<void> {
@@ -505,8 +537,17 @@ async function initArkClient(): Promise<void> {
     });
     if (state.kind !== "connected") {
       console.error(
-        `[kepler-shell] kepler-backend ${state.kind}: search will return empty`,
+        `[kepler-shell] kepler-backend ${state.kind}: ArkClient unavailable`,
       );
+      // Без reject pending awaitArkReady() висят 15s и потом получают
+      // generic "timeout" вместо реальной причины. Сбрасываем promise чтобы
+      // следующий ensureArkReadyPromise() (после backend respawn) попробовал
+      // заново.
+      const err = new Error(`kepler-backend ${state.kind}`);
+      arkClientReadyReject?.(err);
+      arkClientReadyResolve = null;
+      arkClientReadyReject = null;
+      arkClientReady = null;
       return;
     }
     const deviceId = `kepler-shell-${app.getPath("userData").slice(-12)}`;
@@ -555,11 +596,15 @@ async function initArkClient(): Promise<void> {
 
 ipcMain.handle("kepler:backend:status", () => readBackendStatus());
 
-ipcMain.handle("kepler:backend:restart", () => {
+ipcMain.handle("kepler:backend:restart", async () => {
+  await resetArkClient("backend restart");
   if (backendProc && !backendProc.killed) {
     backendProc.kill();
   }
   spawnBackend();
+  // initArkClient() сам await'ит lock-файл; не блокируем restart handler
+  // на всё время handshake'а — renderer покажет "загрузка" через ark:request.
+  void initArkClient();
 });
 
 ipcMain.handle("kepler:window:hide", () => hideLauncher());
