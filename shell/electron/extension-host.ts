@@ -1001,11 +1001,27 @@ ipcMain.handle("kepler:extension:install:preview", (_e, sourcePath: string) => {
   return previewSource(sourcePath);
 });
 
+/**
+ * Broadcast `kepler:commands:updated` ко всем BrowserWindow'ам — launcher,
+ * settings и т.п. Чтобы их UI перефетчил commands list после install /
+ * uninstall (static команды фильтруются по тому, какие extensions
+ * установлены — см. `commands.ts` `requiresExtension`).
+ */
+function notifyCommandsChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try { win.webContents.send("kepler:commands:updated"); } catch {}
+    }
+  }
+}
+
 ipcMain.handle("kepler:extension:install:do", (_e, sourcePath: string) => {
   if (typeof sourcePath !== "string") {
     throw new Error("install:do: sourcePath must be a string");
   }
-  return installFromPath(sourcePath);
+  const result = installFromPath(sourcePath);
+  notifyCommandsChanged();
+  return result;
 });
 
 ipcMain.handle("kepler:extension:installed:list", () =>
@@ -1016,7 +1032,9 @@ ipcMain.handle("kepler:extension:revert", (_e, id: string, timestamp?: string) =
   if (typeof id !== "string") {
     throw new Error("revert: id must be a string");
   }
-  return revertExtension(id, timestamp);
+  const result = revertExtension(id, timestamp);
+  notifyCommandsChanged();
+  return result;
 });
 
 ipcMain.handle("kepler:extension:backups:list", (_e, id: string) => {
@@ -1030,5 +1048,7 @@ ipcMain.handle("kepler:extension:uninstall", (_e, id: string) => {
   if (typeof id !== "string") {
     throw new Error("uninstall: id must be a string");
   }
-  return uninstallExtension(id);
+  const result = uninstallExtension(id);
+  notifyCommandsChanged();
+  return result;
 });

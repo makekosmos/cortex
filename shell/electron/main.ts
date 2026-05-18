@@ -48,6 +48,7 @@ import type {
 } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
 import { openExtension, setExtensionArkBridge } from "./extension-host";
+import { listInstalledUserExtensions } from "./extension-installer";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import {
@@ -567,15 +568,28 @@ ipcMain.handle(
 );
 
 function staticCommands(): CommandRecord[] {
-  return COMMANDS.map((c) => ({
-    id: c.id,
-    title: c.title,
-    subtitle: c.subtitle,
-    category: c.category,
-    kind: c.kind,
-    appName: c.appName,
-    icon: c.icon?.(),
-  }));
+  // Filter: команды с requiresExtension показываются только если этот
+  // extension реально установлен (manifest.json в %APPDATA%\Kosmos\extensions\).
+  // Snapshot installed ids per-call — listInstalledUserExtensions делает
+  // disk scan, дёшево (4-10 dir entries).
+  let installedIds: Set<string>;
+  try {
+    installedIds = new Set(listInstalledUserExtensions().map((e) => e.id));
+  } catch {
+    installedIds = new Set();
+  }
+
+  return COMMANDS.filter((c) => !c.requiresExtension || installedIds.has(c.requiresExtension)).map(
+    (c) => ({
+      id: c.id,
+      title: c.title,
+      subtitle: c.subtitle,
+      category: c.category,
+      kind: c.kind,
+      appName: c.appName,
+      icon: c.icon?.(),
+    }),
+  );
 }
 
 ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {

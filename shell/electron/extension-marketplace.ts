@@ -5,7 +5,7 @@
 //
 // Cache: in-memory, 1h TTL. Force refresh — параметр `force` в catalogFetch.
 
-import { ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -219,7 +219,15 @@ export function registerMarketplaceIpc(): void {
       url: string,
       expectedSha256?: string | null,
     ): Promise<KextManifestPreview> => {
-      return installFromUrl(url, expectedSha256 ?? null);
+      const result = await installFromUrl(url, expectedSha256 ?? null);
+      // Notify all windows: static commands list зависит от установленных
+      // extension'ов (см. requiresExtension в commands.ts).
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          try { win.webContents.send("kepler:commands:updated"); } catch {}
+        }
+      }
+      return result;
     },
   );
 }

@@ -20,6 +20,13 @@ export interface InternalCommand {
   /** Имя родительского приложения для command-плашек. */
   appName?: string;
   /**
+   * Если задано — команда видна только когда extension с этим id установлен
+   * (`%APPDATA%\Kosmos\extensions\<id>\manifest.json` существует). Kepler-
+   * internal команды (settings/dashboard/check-updates) оставляют поле
+   * undefined и видны всегда.
+   */
+  requiresExtension?: string;
+  /**
    * Опциональная иконка как data URI. Для open-команд extension'ов берётся
    * из `extensionIconDataUri(<id>)`. Lazy getter — читаем с диска один раз,
    * результат кешируется в extension-host.
@@ -48,6 +55,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Задачи",
     category: "open",
     kind: "app",
+    requiresExtension: "delphi",
     icon: () => extensionIconDataUri("delphi"),
     exec: () => openAsExtension("delphi", "/today"),
   },
@@ -57,6 +65,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Pomodoro + трекер времени",
     category: "open",
     kind: "app",
+    requiresExtension: "horologion",
     icon: () => extensionIconDataUri("horologion"),
     exec: () => openAsExtension("horologion"),
   },
@@ -66,6 +75,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Игровая библиотека",
     category: "open",
     kind: "app",
+    requiresExtension: "arrancador",
     icon: () => extensionIconDataUri("arrancador"),
     exec: () => openAsExtension("arrancador"),
   },
@@ -75,6 +85,7 @@ export const COMMANDS: InternalCommand[] = [
     subtitle: "Заметки и дневник",
     category: "open",
     kind: "app",
+    requiresExtension: "eden",
     icon: () => extensionIconDataUri("eden"),
     exec: () => openAsExtension("eden"),
   },
@@ -114,6 +125,7 @@ export const COMMANDS: InternalCommand[] = [
     category: "open",
     kind: "command",
     appName: "Delphi",
+    requiresExtension: "delphi",
     icon: () => extensionIconDataUri("delphi"),
     exec: () => openAsExtension("delphi", "/"),
   },
@@ -124,6 +136,7 @@ export const COMMANDS: InternalCommand[] = [
     category: "open",
     kind: "command",
     appName: "Horologion",
+    requiresExtension: "horologion",
     icon: () => extensionIconDataUri("horologion"),
     exec: () => openAsExtension("horologion", "/?mode=pomodoro"),
   },
@@ -134,6 +147,7 @@ export const COMMANDS: InternalCommand[] = [
     category: "open",
     kind: "command",
     appName: "Horologion",
+    requiresExtension: "horologion",
     icon: () => extensionIconDataUri("horologion"),
     exec: () => openAsExtension("horologion", "/?mode=stopwatch"),
   },
