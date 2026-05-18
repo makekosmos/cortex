@@ -107,6 +107,36 @@ let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
 let arkClientReadyReject: ((e: Error) => void) | null = null;
 let windowStateSaveTimer: NodeJS.Timeout | null = null;
 
+// --- Streamer mode (must apply ДО app.whenReady) -----------------------------
+// Disables Chromium occlusion-based throttling — окна продолжают рендерить
+// когда перекрыты другими окнами (OBS scene capture / stream overlay).
+// Persisted в kepler-shell-settings.json под key `streamerMode`.
+try {
+  const settingsPath = path.join(
+    process.env.KOSMOS_DATA_DIR && process.env.KOSMOS_DATA_DIR.length > 0
+      ? process.env.KOSMOS_DATA_DIR
+      : path.join(
+          process.env.APPDATA ?? "",
+          process.env.VITE_DEV_SERVER_URL ? "Kosmos-dev" : "Kosmos",
+        ),
+    "kepler-shell-settings.json",
+  );
+  if (existsSync(settingsPath)) {
+    const cfg = JSON.parse(readFileSync(settingsPath, "utf8")) as {
+      streamerMode?: boolean;
+    };
+    if (cfg.streamerMode) {
+      app.commandLine.appendSwitch(
+        "disable-features",
+        "CalculateNativeWinOcclusion,BackgroundOccludedWindows",
+      );
+      app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+    }
+  }
+} catch {
+  // Ignore — невалидный/отсутствующий settings file. Default = streamer off.
+}
+
 // --- single instance ---------------------------------------------------------
 
 if (!app.requestSingleInstanceLock()) {
