@@ -2655,11 +2655,18 @@ impl SqliteStorageBackend {
     /// one in the version vector. Matches the TS `DelphiStorage` behaviour
     /// (`HLC.now(deviceId)` when `vector[id]` is missing).
     pub fn set_device_id(&self, device_id: &str) {
-        *self.device_id.lock().unwrap() = device_id.to_string();
+        // Poison recovery: device_id — простой String, poison невозможен от
+        // sane code path, но защита cheap и согласована с остальными
+        // SqliteStorageBackend lock'ами (см. load_entities / apply_entity).
+        let mut guard = self.device_id.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = device_id.to_string();
     }
 
     pub fn device_id(&self) -> String {
-        self.device_id.lock().unwrap().clone()
+        self.device_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     fn collect_entities_blocking(
@@ -2918,7 +2925,12 @@ impl StorageBackend for SqliteStorageBackend {
         let vector = vector.clone();
         let device_id = self.device_id();
         tokio::task::spawn_blocking(move || {
-            let guard = conn.lock().unwrap();
+            // Poison recovery: если earlier panic заполучил lock, мы всё
+            // равно можем читать. Это backend для load (read-only path),
+            // данные внутри guard'а целы. Без recovery каждый последующий
+            // sync round возвращает empty list → multi-device sync silent
+            // фейлится навсегда после первого panic'а в этом процессе.
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             Self::collect_entities_blocking(&guard, &vector, &device_id)
         })
         .await
@@ -2929,7 +2941,11 @@ impl StorageBackend for SqliteStorageBackend {
         let conn = self.conn.clone();
         let entity = entity.clone();
         tokio::task::spawn_blocking(move || {
-            let guard = conn.lock().map_err(|e| e.to_string())?;
+            // Apply — write path. Poison recovery acceptable: SQLite
+            // transactions atomic, partially-applied state не возможен.
+            // Альтернатива (return Err) делает sync неработоспособным до
+            // process restart.
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             Self::apply_entity_blocking(&guard, &entity)
         })
         .await
@@ -2940,7 +2956,7 @@ impl StorageBackend for SqliteStorageBackend {
         let conn = self.conn.clone();
         let key = key.to_string();
         tokio::task::spawn_blocking(move || {
-            let guard = conn.lock().unwrap();
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             get_sync_kv(&guard, &key).unwrap_or(None)
         })
         .await
@@ -2952,7 +2968,7 @@ impl StorageBackend for SqliteStorageBackend {
         let key = key.to_string();
         let value = value.to_string();
         let _ = tokio::task::spawn_blocking(move || {
-            let guard = conn.lock().unwrap();
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             let _ = set_sync_kv(&guard, &key, &value);
         })
         .await;
