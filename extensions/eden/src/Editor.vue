@@ -756,16 +756,29 @@ async function save() {
     return;
   }
 
-  const saveResult = await props.onSave({
-    ...props.entry,
-    title: normalizedTitle,
-    content_json,
-    type_id: noteTypeId.value,
-    header_layout: headerLayout.value,
-    header_props_json: normalizedHeaderPropsJson,
-    schema_version: 1,
-    updated_at: Date.now(),
-  });
+  // Throw'ы из onSave (network error, ARK недоступен, преload сбойнул) до
+  // 2026-05-18 пропускались наружу как unhandled rejection — autosave таймер
+  // молча ретраил один и тот же контент каждые 800ms бесконечно, lastPersisted*
+  // не обновлялся, пользователь не видел никаких индикаторов. Surface через
+  // saveConflict; autosave всё равно повторит на следующую правку.
+  let saveResult: Awaited<ReturnType<typeof props.onSave>>;
+  try {
+    saveResult = await props.onSave({
+      ...props.entry,
+      title: normalizedTitle,
+      content_json,
+      type_id: noteTypeId.value,
+      header_layout: headerLayout.value,
+      header_props_json: normalizedHeaderPropsJson,
+      schema_version: 1,
+      updated_at: Date.now(),
+    });
+  } catch (e) {
+    if (currentSaveRunId !== saveRunId) return;
+    console.error("[eden] save failed:", e);
+    saveConflict.value = "Не удалось сохранить — нет связи с ARK";
+    return;
+  }
 
   if (!saveResult) return;
   if (currentSaveRunId !== saveRunId) return;
@@ -1035,7 +1048,13 @@ watchEffect((onCleanup) => {
 
 onBeforeUnmount(() => {
   if (isDirty()) {
-    void save();
+    // Async save fire-and-forget — Vue не поддерживает await в unmount хуке,
+    // мы не можем заблокировать destroy. Catch на rejection чтобы не было
+    // unhandled rejection (save() сам логирует через saveConflict, но к
+    // моменту его resolve компонент уже unmounted — никто не увидит).
+    void save().catch((e) => {
+      console.error("[eden] save on unmount failed:", e);
+    });
   }
 
   clearScheduledWork();
