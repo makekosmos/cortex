@@ -23,7 +23,6 @@
     "packages/*",
     "docs-site"
   ],
-  "dependencies": {},
   "overrides": {
     "vite": "^8.0.3"
   },
