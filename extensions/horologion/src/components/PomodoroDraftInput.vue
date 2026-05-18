@@ -223,7 +223,7 @@ function onKeyDown(e: KeyboardEvent) {
     font-family: inherit;
     font-size: 1rem;
     font-weight: 600;
-    text-align: center;
+    text-align: left;
 }
 
 .pdi__input::placeholder {
