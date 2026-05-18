@@ -177,6 +177,15 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 - ❌ **Открытие ARK SQLite на запись** в app services через `better-sqlite3`, `sqlite3`, `node:sqlite` и т.п.
 - ❌ Renderer открывает SQLite (любой) напрямую.
 
+## Rust panic / Mutex discipline
+
+- ❌ `Mutex::lock().unwrap()` в production code paths (вне `#[cfg(test)]`). Используй `lock().unwrap_or_else(|e| e.into_inner())` для poison recovery — SQLite transactions atomic, данные внутри guard'а валидны после panic'а другого thread'а. Без recovery один panic делает sync неработоспособным **forever до process restart**. См. [DB resilience](/concepts/db-resilience#mutex-poison-recovery).
+- ❌ Удалять `crash_reporter::install(data_dir)` из `services/kepler-backend/src/main.rs::setup`. Это early init для panic_hook'а — без него panic'ы остаются только в stderr (который пропадает после process exit), real user не сможет прислать artifact.
+- ❌ Spawn'ить `kepler-backend` без `RUST_BACKTRACE=1` env. Backtrace в crash log = readability для diagnosability.
+- ❌ Снижать `BACKEND_MAX_CRASH_STREAK` ниже 3 или удалять supervisor logic в `shell/electron/main.ts::scheduleBackendRespawn`. Без supervisor backend crash = dead app для пользователя; renderer окна виснут "загрузка" forever.
+- ❌ Удалять `db_backup::maybe_backup_on_startup` из `main.rs`. Real user data loss — это раз и навсегда; backup это единственный recovery path.
+- ❌ Удалять `db::check_integrity` из `init_schema`. Silent corruption хуже чем fail-loud — пользователь не узнает что DB битая, пока данные не разъедутся через sync.
+
 ## Sync
 
 - ❌ Direct Rust writer пишет в ARK без вызова `ark_core::db::bump_sync_version_vector`.

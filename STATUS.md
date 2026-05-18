@@ -29,6 +29,21 @@
 - `packages/visuals/STORYBOOK.md` — Storybook contributor guide.
 - `.agent/tasks/2026-05-18-focus-mode-digital-cave-spec/spec.md` — roadmap для digital-cave merger.
 
+## 🛡 Production hardening (2026-05-18)
+
+Подготовлен safety net для distributed local-first продукта с real users.
+Proof loop: `.agent/tasks/2026-05-18-pre-in-process-hardening/`. Детали:
+[docs-site/concepts/db-resilience.md](./docs-site/concepts/db-resilience.md).
+
+- **DB backup** на старте backend — раз в 24h, rotation 7. `<data_dir>/backups/`.
+- **`PRAGMA integrity_check`** в `init_schema` — fail loud на corruption.
+- **Backend auto-respawn supervisor** в Electron main — exponential backoff (1s→5s→30s→1m→2m), error dialog после 5 streak'ов.
+- **Crash reporter** — Rust panic_hook → `<data_dir>/crashes/panic-*.log` + Electron `crashReporter.start()`. Settings UI секция "Отчёты об ошибках".
+- **Mutex poison recovery** — SqliteStorageBackend методы.
+- **Property-based tests** — `cargo test --test proptest_invariants` (3 properties × 64 cases).
+
+In-process facade (subprocess removal) — отложено: subprocess нужен пока как crash isolation layer. Hardening это **prerequisite**, не subprocess removal сам.
+
 ## 🟡 Хранимый техдолг (2026-05-18)
 
 - **Export tab** скрыт в Settings (whitescreen на production 0.1.11). См. `docs-site/agents/manual-tests-pending.md` → tech debt entry. Возврат после DevTools debug.
