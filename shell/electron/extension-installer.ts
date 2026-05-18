@@ -535,10 +535,48 @@ export interface InstalledExtensionInfo {
   iconDataUri: string | null;
   backupCount: number;
   backupTimestamps: string[];
+  /** "installed" — user-installed в <dataDir>/extensions/<id>/.
+   *  "dev" — repo dev tree, auto-detect'ится при запуске из repo. */
+  source: "installed" | "dev";
 }
 
-export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
-  const root = userExtensionsRoot();
+/** Repo dev tree root для extensions. Если папка существует — мы запущены
+ *  из repo (developer flow), и extension'ы оттуда автоматически считаются
+ *  "installed". Это устраняет нужду качать extension с marketplace в dev. */
+function repoDevExtensionsRoot(): string | null {
+  // shell/electron/ → shell/ → <repoRoot>/, extensions at <repoRoot>/extensions/
+  const candidate = path.resolve(__dirname, "..", "..", "extensions");
+  return existsSync(candidate) ? candidate : null;
+}
+
+function readManifestSafe(dir: string): ExtensionManifest | null {
+  const manifestPath = path.join(dir, "manifest.json");
+  if (!existsSync(manifestPath)) return null;
+  try {
+    return JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
+  } catch {
+    return null;
+  }
+}
+
+function readIconDataUri(dir: string, manifest: ExtensionManifest): string | null {
+  if (!manifest.icon) return null;
+  const iconPath = path.join(dir, manifest.icon);
+  if (!existsSync(iconPath)) return null;
+  const ext = path.extname(manifest.icon).toLowerCase();
+  const mime =
+    ext === ".svg"
+      ? "image/svg+xml"
+      : ext === ".jpg" || ext === ".jpeg"
+        ? "image/jpeg"
+        : "image/png";
+  return `data:${mime};base64,${readFileSync(iconPath).toString("base64")}`;
+}
+
+function scanExtensionsDir(
+  root: string,
+  source: "installed" | "dev",
+): InstalledExtensionInfo[] {
   if (!existsSync(root)) return [];
   const out: InstalledExtensionInfo[] = [];
   for (const id of readdirSync(root)) {
@@ -550,29 +588,19 @@ export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
       continue;
     }
     if (!stat.isDirectory()) continue;
-    const manifestPath = path.join(dir, "manifest.json");
-    if (!existsSync(manifestPath)) continue;
-    let manifest: ExtensionManifest;
-    try {
-      manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
-    } catch {
-      continue;
+    const manifest = readManifestSafe(dir);
+    if (!manifest) continue;
+    // Dev-source extensions могут быть в repo но без built dist/ —
+    // не показываем их как "installed" пока bun run build:extensions не сделан.
+    // Иначе UI повёл бы юзера в landing где openExtension падает на "entryHtml not found".
+    if (source === "dev") {
+      const entryHtml = manifest.entryHtml ?? "dist/index.html";
+      const entryPath = path.join(dir, entryHtml);
+      if (!existsSync(entryPath)) continue;
     }
-    let iconDataUri: string | null = null;
-    if (manifest.icon) {
-      const iconPath = path.join(dir, manifest.icon);
-      if (existsSync(iconPath)) {
-        const ext = path.extname(manifest.icon).toLowerCase();
-        const mime =
-          ext === ".svg"
-            ? "image/svg+xml"
-            : ext === ".jpg" || ext === ".jpeg"
-              ? "image/jpeg"
-              : "image/png";
-        iconDataUri = `data:${mime};base64,${readFileSync(iconPath).toString("base64")}`;
-      }
-    }
-    const backups = listBackups(id);
+    const iconDataUri = readIconDataUri(dir, manifest);
+    // backupCount только для installed — у dev-source это repo state, revert не имеет смысла.
+    const backups = source === "installed" ? listBackups(id) : [];
     out.push({
       id,
       name: manifest.name,
@@ -582,9 +610,29 @@ export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
       iconDataUri,
       backupCount: backups.length,
       backupTimestamps: backups,
+      source,
     });
   }
   return out;
+}
+
+export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
+  // Resolution priority согласована с extension-host.ts::resolveExtensionRoots:
+  //   1. Repo dev tree — если запущены из repo (developer flow).
+  //   2. User-installed — production flow через marketplace / .kext install.
+  // Dev shadow'ит installed (dedup по id): если extension есть и в repo и
+  // в %APPDATA%, в списке показывается repo version с source="dev".
+  // Это значит в dev mode user видит свои repo extensions как "installed"
+  // и launcher commands работают сразу — без marketplace download.
+  const dev = repoDevExtensionsRoot();
+  const devList = dev ? scanExtensionsDir(dev, "dev") : [];
+  const installedList = scanExtensionsDir(userExtensionsRoot(), "installed");
+  const seen = new Set(devList.map((e) => e.id));
+  const merged = [
+    ...devList,
+    ...installedList.filter((e) => !seen.has(e.id)),
+  ];
+  return merged;
 }
 
 /**

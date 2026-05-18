@@ -1208,8 +1208,9 @@ onBeforeUnmount(() => {
             <div class="ext-name">{{ ext.name }}</div>
             <div class="ext-meta">
               <span class="ext-version">v{{ ext.version ?? "—" }}</span>
+              <span v-if="ext.source === 'dev'" class="ext-dev-badge">dev</span>
               <span v-if="ext.author" class="ext-author">· {{ ext.author }}</span>
-              <span v-if="hasUpdate(ext)" class="ext-author">
+              <span v-if="hasUpdate(ext) && ext.source !== 'dev'" class="ext-author">
                 · доступно v{{ catalogById(ext.id)?.version }}
               </span>
               <span v-if="ext.backupCount > 0" class="ext-backups">
@@ -1221,33 +1222,40 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="ext-actions">
-            <button
-              v-if="hasUpdate(ext)"
-              type="button"
-              class="btn"
-              :disabled="installingId === ext.id || busyExt === ext.id"
-              @click="onUpdate(ext)"
-            >
-              <template v-if="installingId === ext.id">Обновление…</template>
-              <template v-else>Обновить</template>
-            </button>
-            <button
-              v-if="ext.backupCount > 0"
-              type="button"
-              class="btn ghost"
-              :disabled="busyExt === ext.id || installingId === ext.id"
-              @click="onRevert(ext.id)"
-            >
-              Откатить
-            </button>
-            <button
-              type="button"
-              class="btn ghost danger"
-              :disabled="busyExt === ext.id || installingId === ext.id"
-              @click="onUninstall(ext.id)"
-            >
-              Удалить
-            </button>
+            <!-- Dev-source extension'ы (из repo) НЕ имеют update/revert/uninstall —
+                 source code управляется git'ом, не Kepler installer'ом. -->
+            <span v-if="ext.source === 'dev'" class="ext-dev-hint">
+              источник: репозиторий
+            </span>
+            <template v-else>
+              <button
+                v-if="hasUpdate(ext)"
+                type="button"
+                class="btn"
+                :disabled="installingId === ext.id || busyExt === ext.id"
+                @click="onUpdate(ext)"
+              >
+                <template v-if="installingId === ext.id">Обновление…</template>
+                <template v-else>Обновить</template>
+              </button>
+              <button
+                v-if="ext.backupCount > 0"
+                type="button"
+                class="btn ghost"
+                :disabled="busyExt === ext.id || installingId === ext.id"
+                @click="onRevert(ext.id)"
+              >
+                Откатить
+              </button>
+              <button
+                type="button"
+                class="btn ghost danger"
+                :disabled="busyExt === ext.id || installingId === ext.id"
+                @click="onUninstall(ext.id)"
+              >
+                Удалить
+              </button>
+            </template>
           </div>
         </div>
       </div>

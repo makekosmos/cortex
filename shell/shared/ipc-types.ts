@@ -99,6 +99,12 @@ export interface InstalledExtensionInfo {
   iconDataUri: string | null;
   backupCount: number;
   backupTimestamps: string[];
+  /** Источник кода extension'а:
+   * - `"installed"` — user-installed в `<dataDir>/extensions/<id>/` (production flow)
+   * - `"dev"` — repo dev tree (`<repoRoot>/extensions/<id>/`); auto-detect'ится
+   *   когда Kepler shell запущен из репо. UI скрывает revert/uninstall кнопки
+   *   для dev-source extensions (они tracked git'ом, не Kepler'ом). */
+  source: "installed" | "dev";
 }
 
 /** Команда в launcher'е — единица того что пользователь может вызвать. */
