@@ -137,6 +137,7 @@ const api = {
       remainingSec?: number;
       label?: string;
       mode?: "work" | "break" | "stopwatch";
+      blockingActive?: boolean;
     }): Promise<void> =>
       ipcRenderer.invoke("kepler:focus-widget:set-state", patch) as Promise<void>,
   },

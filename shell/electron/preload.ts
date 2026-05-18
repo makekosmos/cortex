@@ -79,6 +79,7 @@ const api: KeplerApi = {
             remainingSec: number;
             label: string;
             mode: "work" | "break" | "stopwatch";
+            blockingActive: boolean;
           },
         );
       ipcRenderer.on("kepler:focus-widget:state", wrapper);

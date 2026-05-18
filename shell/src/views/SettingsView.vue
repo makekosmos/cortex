@@ -11,7 +11,22 @@ import type {
   UpdateState,
 } from "@shared/ipc-types";
 
-type Tab = "general" | "extensions" | "export";
+type Tab = "general" | "extensions" | "focus" | "export";
+
+interface FocusBlocklist {
+  id: string;
+  name: string;
+  domains: string[];
+  createdAt: string;
+}
+
+interface FocusActiveState {
+  active: boolean;
+  blocklist_id?: string | null;
+  started_at?: string | null;
+}
+
+const DOMAIN_PATTERN = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i;
 
 interface ExportHistoryEntry {
   converter_id: string;
@@ -373,6 +388,213 @@ function formatHistoryTime(ts: number): string {
   })}`;
 }
 
+// --- Focus ------------------------------------------------------------------
+
+const focusBlocklists = ref<FocusBlocklist[]>([]);
+const focusLoading = ref<boolean>(false);
+const focusError = ref<string>("");
+const focusBackendMissing = ref<boolean>(false);
+const focusActive = ref<FocusActiveState>({ active: false });
+const focusBusy = ref<string>("");
+const focusCreating = ref<boolean>(false);
+const focusDraftName = ref<string>("");
+const focusDraftDomains = ref<string>("");
+const focusDraftError = ref<string>("");
+const focusDragOver = ref<boolean>(false);
+
+function isUnknownOperationError(err: unknown): boolean {
+  const msg = (err as Error)?.message ?? String(err);
+  return /unknown operation|unknown_operation|not.?found/i.test(msg);
+}
+
+async function focusRequest<T>(
+  op: string,
+  params?: Record<string, unknown>,
+): Promise<T | null> {
+  try {
+    const r = await window.kepler.ark.request<T>(op, params);
+    return r;
+  } catch (e) {
+    if (isUnknownOperationError(e)) {
+      focusBackendMissing.value = true;
+      return null;
+    }
+    throw e;
+  }
+}
+
+async function loadBlocklists() {
+  focusLoading.value = true;
+  focusError.value = "";
+  try {
+    const r = await focusRequest<{ blocklists: FocusBlocklist[] }>(
+      "focus.list_blocklists",
+    );
+    focusBlocklists.value = r?.blocklists ?? [];
+  } catch (e) {
+    focusError.value = (e as Error).message;
+    focusBlocklists.value = [];
+  } finally {
+    focusLoading.value = false;
+  }
+}
+
+async function loadActiveState() {
+  try {
+    const r = await focusRequest<FocusActiveState>("focus.get_active_state");
+    focusActive.value = r ?? { active: false };
+  } catch (e) {
+    console.warn("focus.get_active_state failed", e);
+  }
+}
+
+function parseDomains(raw: string): { valid: string[]; invalid: string[] } {
+  const lines = raw.split("\n");
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  for (const line of lines) {
+    const stripped = line.replace(/#.*$/, "").trim();
+    if (!stripped) continue;
+    if (DOMAIN_PATTERN.test(stripped)) {
+      valid.push(stripped.toLowerCase());
+    } else {
+      invalid.push(stripped);
+    }
+  }
+  return { valid, invalid };
+}
+
+const focusDraftParsed = computed(() => parseDomains(focusDraftDomains.value));
+
+function openCreateBlocklist() {
+  focusCreating.value = true;
+  focusDraftName.value = "";
+  focusDraftDomains.value = "";
+  focusDraftError.value = "";
+}
+
+function cancelCreateBlocklist() {
+  focusCreating.value = false;
+  focusDraftError.value = "";
+}
+
+async function onCreateBlocklist() {
+  const name = focusDraftName.value.trim();
+  if (!name) {
+    focusDraftError.value = "Укажи название блок-листа";
+    return;
+  }
+  const { valid, invalid } = focusDraftParsed.value;
+  if (valid.length === 0) {
+    focusDraftError.value = "Добавь хотя бы один валидный домен";
+    return;
+  }
+  if (invalid.length > 0) {
+    focusDraftError.value = `Невалидных строк: ${invalid.length}. Исправь или удали их`;
+    return;
+  }
+  focusBusy.value = "__create__";
+  focusDraftError.value = "";
+  try {
+    await focusRequest<FocusBlocklist>("focus.upsert_blocklist", {
+      name,
+      domains: valid,
+    });
+    focusCreating.value = false;
+    await loadBlocklists();
+  } catch (e) {
+    focusDraftError.value = (e as Error).message;
+  } finally {
+    focusBusy.value = "";
+  }
+}
+
+async function onDeleteBlocklist(id: string) {
+  if (focusBusy.value) return;
+  focusBusy.value = id;
+  focusError.value = "";
+  try {
+    await focusRequest<{ ok: boolean }>("focus.delete_blocklist", { id });
+    if (focusActive.value.blocklist_id === id) {
+      focusActive.value = { active: false };
+    }
+    await loadBlocklists();
+  } catch (e) {
+    focusError.value = (e as Error).message;
+  } finally {
+    focusBusy.value = "";
+  }
+}
+
+async function onDeactivate() {
+  focusBusy.value = "__deactivate__";
+  focusError.value = "";
+  try {
+    await focusRequest<{ ok: boolean }>("focus.set_active_state", {
+      active: false,
+    });
+    focusActive.value = { active: false };
+  } catch (e) {
+    focusError.value = (e as Error).message;
+  } finally {
+    focusBusy.value = "";
+  }
+}
+
+async function onActivate(id: string) {
+  focusBusy.value = id;
+  focusError.value = "";
+  try {
+    await focusRequest<{ ok: boolean }>("focus.set_active_state", {
+      active: true,
+      blocklist_id: id,
+    });
+    await loadActiveState();
+  } catch (e) {
+    focusError.value = (e as Error).message;
+  } finally {
+    focusBusy.value = "";
+  }
+}
+
+function onDraftDragOver(e: DragEvent) {
+  e.preventDefault();
+  focusDragOver.value = true;
+}
+
+function onDraftDragLeave() {
+  focusDragOver.value = false;
+}
+
+async function onDraftDrop(e: DragEvent) {
+  e.preventDefault();
+  focusDragOver.value = false;
+  const file = e.dataTransfer?.files?.[0];
+  if (!file) return;
+  if (!/\.txt$/i.test(file.name)) {
+    focusDraftError.value = "Поддерживаются только .txt файлы";
+    return;
+  }
+  try {
+    const text = await file.text();
+    focusDraftDomains.value = focusDraftDomains.value
+      ? `${focusDraftDomains.value}\n${text}`
+      : text;
+    if (!focusDraftName.value) {
+      focusDraftName.value = file.name.replace(/\.txt$/i, "");
+    }
+  } catch (err) {
+    focusDraftError.value = `Не удалось прочитать файл: ${(err as Error).message}`;
+  }
+}
+
+const focusActiveBlocklist = computed<FocusBlocklist | undefined>(() => {
+  if (!focusActive.value.active || !focusActive.value.blocklist_id) return undefined;
+  return focusBlocklists.value.find(
+    (b) => b.id === focusActive.value.blocklist_id,
+  );
+});
+
 function onClose() {
   void window.kepler.settings.close();
 }
@@ -393,6 +615,11 @@ function selectTab(t: Tab) {
   if (t === "export") {
     void loadExportConverters();
     exportHistory.value = loadExportHistory();
+  }
+  if (t === "focus") {
+    focusBackendMissing.value = false;
+    void loadBlocklists();
+    void loadActiveState();
   }
 }
 
@@ -566,6 +793,14 @@ onBeforeUnmount(() => {
             @click="selectTab('extensions')"
           >
             Расширения
+          </button>
+          <button
+            type="button"
+            class="tab"
+            :class="{ active: tab === 'focus' }"
+            @click="selectTab('focus')"
+          >
+            Фокус
           </button>
           <!-- Экспорт tab временно скрыт — техдолг, см. STATUS.md / manual-tests-pending -->
           <!--
@@ -855,6 +1090,164 @@ onBeforeUnmount(() => {
           @click="loadCatalog(true)"
         >
           {{ marketLoading ? "Проверка…" : "Проверить обновления" }}
+        </button>
+      </div>
+    </template>
+
+    <!-- Focus tab — управление блок-листами доменов и активной блокировкой -->
+    <template v-else-if="tab === 'focus'">
+      <div v-if="focusBackendMissing" class="error-banner">
+        Backend ещё не поддерживает focus.*. Обнови Kepler.
+      </div>
+      <div v-if="focusError" class="error-banner">{{ focusError }}</div>
+
+      <div class="rows kosmos-scroll">
+        <!-- Активная блокировка -->
+        <div class="row focus-active-row">
+          <div class="row-label">
+            <div class="label">Активная блокировка</div>
+            <div class="hint" v-if="focusActive.active && focusActiveBlocklist">
+              «{{ focusActiveBlocklist.name }}» — {{ focusActiveBlocklist.domains.length }} доменов
+            </div>
+            <div class="hint" v-else-if="focusActive.active">
+              Включена (блок-лист id: {{ focusActive.blocklist_id }})
+            </div>
+            <div class="hint" v-else>Сейчас блокировка не активна</div>
+          </div>
+          <div class="row-actions">
+            <button
+              type="button"
+              class="btn ghost danger"
+              :disabled="!focusActive.active || focusBusy === '__deactivate__'"
+              @click="onDeactivate"
+            >
+              {{ focusBusy === "__deactivate__" ? "Отключение…" : "Отключить" }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Список блок-листов -->
+        <div class="ext-section-title">Блок-листы</div>
+
+        <div v-if="focusLoading" class="empty">Загрузка…</div>
+        <div
+          v-else-if="focusBlocklists.length === 0 && !focusCreating"
+          class="empty"
+        >
+          Пока ни одного блок-листа. Создай первый.
+        </div>
+
+        <div
+          v-for="b in focusBlocklists"
+          :key="b.id"
+          class="ext-item focus-item"
+        >
+          <div class="ext-info">
+            <div class="ext-name">{{ b.name }}</div>
+            <div class="ext-meta">
+              {{ b.domains.length }} доменов
+              <span
+                v-if="focusActive.active && focusActive.blocklist_id === b.id"
+                class="ext-author"
+              >
+                · активен
+              </span>
+            </div>
+            <div class="ext-description focus-domains-preview">
+              {{ b.domains.slice(0, 4).join(", ")
+              }}{{ b.domains.length > 4 ? "…" : "" }}
+            </div>
+          </div>
+          <div class="ext-actions">
+            <button
+              v-if="!focusActive.active || focusActive.blocklist_id !== b.id"
+              type="button"
+              class="btn"
+              :disabled="focusBusy === b.id || focusBackendMissing"
+              @click="onActivate(b.id)"
+            >
+              Включить
+            </button>
+            <button
+              type="button"
+              class="btn ghost danger"
+              :disabled="focusBusy === b.id || focusBackendMissing"
+              @click="onDeleteBlocklist(b.id)"
+            >
+              {{ focusBusy === b.id ? "…" : "Удалить" }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline expandable форма создания -->
+        <div v-if="focusCreating" class="focus-create-form">
+          <div class="focus-create-row">
+            <label class="label" for="focus-blocklist-name">Название</label>
+            <input
+              id="focus-blocklist-name"
+              v-model="focusDraftName"
+              type="text"
+              class="focus-input"
+              placeholder="Например: Соцсети"
+              autocomplete="off"
+            />
+          </div>
+          <div class="focus-create-row">
+            <label class="label" for="focus-blocklist-domains">
+              Домены (по одному на строку, # — комментарии)
+            </label>
+            <textarea
+              id="focus-blocklist-domains"
+              v-model="focusDraftDomains"
+              class="focus-textarea"
+              :class="{ 'drag-over': focusDragOver }"
+              spellcheck="false"
+              rows="8"
+              placeholder="# перетащи .txt сюда или вставь список&#10;twitter.com&#10;www.youtube.com&#10;reddit.com"
+              @dragover="onDraftDragOver"
+              @dragleave="onDraftDragLeave"
+              @drop="onDraftDrop"
+            />
+            <div class="hint focus-parse-stats">
+              Валидных: {{ focusDraftParsed.valid.length }}
+              <span
+                v-if="focusDraftParsed.invalid.length > 0"
+                class="focus-invalid-count"
+              >
+                · невалидных: {{ focusDraftParsed.invalid.length }}
+              </span>
+            </div>
+          </div>
+          <div v-if="focusDraftError" class="error">{{ focusDraftError }}</div>
+          <div class="focus-create-actions">
+            <button
+              type="button"
+              class="btn ghost"
+              :disabled="focusBusy === '__create__'"
+              @click="cancelCreateBlocklist"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              class="btn"
+              :disabled="focusBusy === '__create__' || focusBackendMissing"
+              @click="onCreateBlocklist"
+            >
+              {{ focusBusy === "__create__" ? "Сохранение…" : "Сохранить" }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ext-footer">
+        <button
+          type="button"
+          class="btn"
+          :disabled="focusCreating || focusBackendMissing"
+          @click="openCreateBlocklist"
+        >
+          Создать блок-лист
         </button>
       </div>
     </template>
@@ -1416,5 +1809,91 @@ onBeforeUnmount(() => {
 .export-history-row .row-label code.value.lock {
   margin-top: 4px;
   max-width: 100%;
+}
+
+/* Focus tab */
+
+.focus-active-row {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.focus-item {
+  align-items: flex-start;
+}
+
+.focus-domains-preview {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  word-break: break-all;
+}
+
+.focus-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  margin-top: 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.focus-create-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.focus-input {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: color-mix(in srgb, oklch(0.04 0 0) 60%, transparent);
+  color: var(--foreground);
+  outline: none;
+}
+
+.focus-input:focus {
+  border-color: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 60%, transparent);
+}
+
+.focus-textarea {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  background: color-mix(in srgb, oklch(0.04 0 0) 60%, transparent);
+  color: var(--foreground);
+  outline: none;
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.5;
+}
+
+.focus-textarea:focus {
+  border-color: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 60%, transparent);
+}
+
+.focus-textarea.drag-over {
+  border-color: var(--accent, oklch(0.7 0.18 250));
+  background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 12%, transparent);
+}
+
+.focus-parse-stats {
+  margin-top: 2px;
+}
+
+.focus-invalid-count {
+  color: oklch(0.65 0.22 25);
+}
+
+.focus-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

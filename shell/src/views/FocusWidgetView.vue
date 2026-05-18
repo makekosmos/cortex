@@ -14,6 +14,8 @@ interface FocusState {
   label: string;
   /** 'work' (red accent) | 'break' (green accent) | 'stopwatch' (neutral). */
   mode: "work" | "break" | "stopwatch";
+  /** Применён ли активный блоклист — 🛡️ индикатор показывается слева от времени. */
+  blockingActive: boolean;
 }
 
 const state = ref<FocusState>({
@@ -21,6 +23,7 @@ const state = ref<FocusState>({
   remainingSec: 0,
   label: "",
   mode: "work",
+  blockingActive: false,
 });
 
 let unsubscribe: (() => void) | null = null;
@@ -70,6 +73,12 @@ function onClose(): void {
   <div class="widget" :class="modeClass">
     <!-- Drag handle covers most of the widget -->
     <div class="drag-area" @dblclick="onClick">
+      <span
+        v-if="state.blockingActive"
+        class="shield"
+        :title="'Блокировка активна'"
+        aria-label="Блокировка активна"
+      >🛡️</span>
       <div class="time">{{ timeText }}</div>
       <div class="separator" />
       <div class="label" :title="labelText">{{ labelText }}</div>
@@ -128,6 +137,13 @@ function onClose(): void {
   height: 100%;
   -webkit-app-region: drag;
   cursor: grab;
+}
+
+.shield {
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0.85;
+  margin-right: -4px;
 }
 
 .time {

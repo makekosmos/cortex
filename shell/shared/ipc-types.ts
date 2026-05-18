@@ -223,12 +223,14 @@ export interface KeplerApi {
       remainingSec?: number;
       label?: string;
       mode?: "work" | "break" | "stopwatch";
+      blockingActive?: boolean;
     }): Promise<void>;
     getState(): Promise<{
       active: boolean;
       remainingSec: number;
       label: string;
       mode: "work" | "break" | "stopwatch";
+      blockingActive: boolean;
     } | null>;
     hide(): Promise<void>;
     openHorologion(): Promise<void>;
@@ -239,6 +241,7 @@ export interface KeplerApi {
         remainingSec: number;
         label: string;
         mode: "work" | "break" | "stopwatch";
+        blockingActive: boolean;
       }) => void,
     ): () => void;
   };

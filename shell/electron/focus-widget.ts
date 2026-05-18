@@ -41,6 +41,8 @@ export interface FocusState {
   remainingSec: number;
   label: string;
   mode: "work" | "break" | "stopwatch";
+  /** Применён ли активный блоклист (focus mode blocking). Управляет 🛡️ индикатором в widget. */
+  blockingActive: boolean;
 }
 
 interface PersistedBounds {
@@ -53,6 +55,7 @@ const DEFAULT_STATE: FocusState = {
   remainingSec: 0,
   label: "",
   mode: "work",
+  blockingActive: false,
 };
 
 let widgetWindow: BrowserWindow | null = null;

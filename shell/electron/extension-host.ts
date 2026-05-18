@@ -800,9 +800,55 @@ ipcMain.handle(
       throw new Error("ark bridge not ready");
     }
     const req: Record<string, unknown> = { operation, ...(params ?? {}) };
-    return arkRequest(req);
+    const result = await arkRequest(req);
+
+    // Post-process: focus.set_active_state → spawn helper bin для модификации
+    // hosts. Fire-and-forget — UI не блокируем на admin elevation prompt.
+    if (operation === "focus.set_active_state" && arkRequest) {
+      void onFocusStateChanged(params, arkRequest).catch((e) => {
+        console.warn("[extension-host] focus block apply failed:", e);
+      });
+    }
+
+    return result;
   },
 );
+
+async function onFocusStateChanged(
+  params: Record<string, unknown> | undefined,
+  request: (req: Record<string, unknown>) => Promise<unknown>,
+): Promise<void> {
+  const active = !!params?.active;
+  const blocklistId = (params?.blocklist_id as string | null | undefined) ?? null;
+
+  // Lazy import — avoid cycle на startup time.
+  const { applyFocusBlock } = await import("./focus-block");
+
+  if (!active) {
+    await applyFocusBlock({ active: false, domains: [] });
+    return;
+  }
+
+  if (!blocklistId) {
+    // active=true но нет blocklist_id → nothing to block.
+    await applyFocusBlock({ active: false, domains: [] });
+    return;
+  }
+
+  // Resolve domains для blocklist_id.
+  try {
+    const resp = (await request({ operation: "focus.list_blocklists" })) as {
+      blocklists?: Array<{ id: string; domains: string[] }>;
+    } | null;
+    const list = resp?.blocklists ?? [];
+    const found = list.find((b) => b.id === blocklistId);
+    const domains = found?.domains ?? [];
+    await applyFocusBlock({ active: true, domains });
+  } catch (e) {
+    console.warn("[extension-host] focus.list_blocklists failed:", e);
+    await applyFocusBlock({ active: false, domains: [] });
+  }
+}
 
 // Extension subscribes; main forwards events to that extension's webContents.
 // Channel name encodes event name so multiple subscriptions on the same
