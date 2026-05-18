@@ -1,3 +1,12 @@
+/* Загрузка шрифтов через @fontsource — ОДИН раз для всех consumers
+   visuals (shell, extensions, storybook). Vite резолвит bare-specifier
+   @import через CSS pipeline. Без этих @import'ов на Windows
+   fallback'ил на Segoe UI / Consolas — не Kepler design intent. */
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
 :root {
   --radius: 0.85rem;
   /* Семантические radii для повторного использования:
@@ -19,8 +28,9 @@
   --accent-foreground: oklch(0.985 0 0);
 
   /* Порядок: macOS берёт системный SF Pro (-apple-system / BlinkMacSystemFont),
-     Windows и Linux — Inter Variable (подгружается через @fontsource-variable/inter,
-     импортируется в `src/main.ts` приложения). Дальше Segoe UI как Windows-fallback,
+     Windows и Linux — Inter Variable (подгружается через @fontsource-variable/
+     inter, импорт в самом начале этого файла — автоматически для всех
+     consumers @kepler/visuals). Дальше Segoe UI как Windows-fallback,
      затем нейтральные Helvetica/Arial. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter Variable", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

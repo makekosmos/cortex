@@ -1,10 +1,9 @@
-import type { Preview } from "@storybook/vue3";
+import type { Preview } from "@storybook/vue3-vite";
 import { h } from "vue";
 
 // Global tokens / theme variables — обязательно для всех stories.
-// Совпадает с histoire.setup.ts чтобы preview между двумя инструментами
-// смотрелся одинаково.
-import "@fontsource-variable/inter";
+// `css-variables.css` сам загружает Inter Variable + IBM Plex Mono через
+// fontsource @import'ы — единый источник правды для шрифтов visuals.
 import "../theme/css-variables.css";
 import "../components/sidebar.css";
 
@@ -70,18 +69,17 @@ function renderStatusBadge(handcrafted: boolean) {
 const preview: Preview = {
   parameters: {
     backgrounds: {
-      default: "kepler-dark",
-      values: [
-        // Подвязано к --background из theme/css-variables.css (dark).
+      options: {
+        "kepler-dark": // Подвязано к --background из theme/css-variables.css (dark).
         { name: "kepler-dark", value: "oklch(0.145 0 0)" },
-        // TODO(light-theme): когда появится light theme — подвязать сюда
+
+        "kepler-light": // TODO(light-theme): когда появится light theme — подвязать сюда
         //   реальное значение --background светлой темы.
-        { name: "kepler-light", value: "oklch(1 0 0)" },
-      ],
+        { name: "kepler-light", value: "oklch(1 0 0)" }
+      }
     },
     viewport: {
-      viewports: keplerViewports,
-      defaultViewport: "extension",
+      options: keplerViewports
     },
     controls: {
       matchers: {
@@ -163,6 +161,17 @@ const preview: Preview = {
       },
     },
   },
+
+  initialGlobals: {
+    viewport: {
+      value: "extension",
+      isRotated: false
+    },
+
+    backgrounds: {
+      value: "kepler-dark"
+    }
+  }
 };
 
 export default preview;
