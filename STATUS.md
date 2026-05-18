@@ -1,15 +1,39 @@
-# Kosmos — статус проекта (2026-05-17)
+# Kosmos — статус проекта (2026-05-18)
 
 ## Текущие версии
 
 | Артефакт | Версия |
 |---|---|
-| Kepler shell (`shell/package.json`) | **0.1.9** |
+| Kepler shell (`shell/package.json`) | **0.1.16** (bump в этом коммите) |
 | Horologion extension (`extensions/horologion/manifest.json`) | **0.1.2** |
 | Delphi extension | 0.1.1 |
 | Arrancador extension | 0.1.1 |
 | Eden extension (`extensions/eden/manifest.json`) | **0.1.0** (Phase 6.0 + 6.0.A) |
 | Dashboard | встроен в shell (не extension) |
+
+## 2026-05-18 — performance sweep + UX полировка (Kepler 0.1.10 → 0.1.16)
+
+Серия release'ов за день:
+- **0.1.10** — Mica backdrop + electronLanguages shrink (−45 MB disk) + CSS contain + TS incremental
+- **0.1.11** — Export bug fix (unwrap `{converters: [...]}`) + extensions catalog populated
+- **0.1.12** — Marketplace UI (Settings → Расширения → catalog с кнопкой Установить) + Export tab скрыт (техдолг)
+- **0.1.13** — Launcher commands filtered by installed extensions (Eden / Delphi / etc не показываются если не установлен)
+- **0.1.14** — Toggle цвет = акцент (был зелёный) + streamer mode (Chromium occlusion off, shell-wide)
+- **0.1.15** — **Focus widget** — Spotify-mini-player-style плавающий always-on-top окно для активной pomodoro
+- **0.1.16** — Horologion task input alignment fix + QuickEntryPanel removed Tailwind + Storybook 8 + handcrafted convention + Focus mode roadmap spec
+
+См.:
+- `docs-site/concepts/performance-experiments.md` — реальные baseline/after measurements (правило: нет цифр → `(не записал)`, **никогда** не выдумывать).
+- `.agent/tasks/2026-05-18-*/evidence.md` — proof loops с calibration.
+- `packages/visuals/STORYBOOK.md` — Storybook contributor guide.
+- `.agent/tasks/2026-05-18-focus-mode-digital-cave-spec/spec.md` — roadmap для digital-cave merger.
+
+## 🟡 Хранимый техдолг (2026-05-18)
+
+- **Export tab** скрыт в Settings (whitescreen на production 0.1.11). См. `docs-site/agents/manual-tests-pending.md` → tech debt entry. Возврат после DevTools debug.
+- **QuickEntryPanel** в @kepler/visuals — **handcrafted: false** (agent-built temp). Стилистика на токенах, но детали UX к доработке (badge показывает в Storybook).
+- **`vue-router` mock в Storybook preview** — Sidebar/SidebarButton stories skipped (зависят от RouterLink).
+- **Light theme** — TODO в `packages/visuals/.storybook/preview.ts` (theme toolbar item закомментирован).
 
 Итог архитектурного pivot'а от standalone Electron-апок к Kepler-host архитектуре с Vue extensions. **Все 5 апок мигрированы** (Eden — Phase 6.0 + 6.0.A, 2026-05-17). После 2026-05-15: концепция spaces убрана (single DB per user), Dashboard встроен в shell, e2e Playwright suite зелёный. После 2026-05-17 (Phase 6.0.A): standalone `apps/eden/ts/` удалён, Hevy/code-tools убраны из Eden (Hevy → Olympia позже).
 
