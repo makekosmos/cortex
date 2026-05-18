@@ -1,17 +1,5 @@
 export { ArkClient } from './ark-client.js'
 export {
-  buildPersonalSelectedSpace,
-  buildSharedSelectedSpaceFromCode,
-  derivePersonalSpaceCodeFromVaultPath,
-  deriveSpaceIdFromCode,
-  getArkDbPathForSelectedSpace,
-  getKosmosDataDir,
-  getSharedSelectedSpacePath,
-  readSharedSelectedSpace,
-  writeSharedSelectedSpace,
-} from './selected-space.js'
-export type { SharedSelectedSpace } from './selected-space.js'
-export {
   KEPLER_LOCK_FILENAME,
   ensureKeplerRunning,
   isPidAlive,

@@ -16,9 +16,13 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-import { getKosmosDataDir } from "./selected-space.js";
-
 export const KEPLER_LOCK_FILENAME = "kepler.lock.json";
+
+/** Базовый Kosmos data dir под appData (ранее жил в selected-space.ts; теперь
+ *  локальный helper — единственным consumer'ом был этот файл). */
+function getKosmosDataDir(appDataPath: string): string {
+  return path.join(appDataPath, "Kosmos");
+}
 
 export interface KeplerProtocolVersion {
   major: number;

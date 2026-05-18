@@ -126,7 +126,7 @@ Delphi портирован в `extensions/delphi/` **как есть** из sta
 
 - `lan-sync:start` → `false`, `lan-sync:getStatus` → `{ active: false, peers: 0, peerNames: [] }`.
 - `sync:getOwnAddresses` → `[]`, `sync:getQrPayload` → `undefined`.
-- `space:*` → `undefined` (в extension'е база одна — глобальная ARK shell'а, переключение space — ответственность Kepler host'а через `KOSMOS_DB_PATH` env, см. [Kepler → Selected space DB resolution](./kepler.md#selected-space-db-resolution)).
+- `space:*` → `undefined` (концепция spaces удалена 2026-05-15 — single DB per user; Delphi shim просто отвечает no-op'ом legacy call-site'ам).
 - `db:switchSpace`, `db:deleteSpace`, `db:getSyncKv`, `db:setSyncKv`, `db:clearAll` — `warnOnce()` + no-op.
 
 ### Tailwind

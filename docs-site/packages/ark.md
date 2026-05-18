@@ -212,21 +212,6 @@ await ark.usage.sessions.delete('session-1');
 
 Usage process и game playtime summary — Rust/SQLite агрегация в `ark-core-rpc`. Caller передаёт app-specific bindings, не SQL.
 
-## Selected-space helpers
-
-Identity-слой для shared selected space (`appData/Kosmos/selected-space.json`). Используется всеми Electron-приложениями, чтобы Eden / Delphi / Arrancador резолвили один и тот же ARK DB path.
-
-```ts
-import { readSharedSelectedSpace, getArkDbPathForSelectedSpace } from '@kepler/ark';
-
-const selection = readSharedSelectedSpace(app.getPath('appData'));
-const dbPath = getArkDbPathForSelectedSpace(app.getPath('appData'), selection);
-```
-
-Полный набор экспортов: `buildPersonalSelectedSpace`, `buildSharedSelectedSpaceFromCode`, `writeSharedSelectedSpace`, `getKosmosDataDir`, `derivePersonalSpaceCodeFromVaultPath`, `deriveSpaceIdFromCode`, тип `SharedSelectedSpace`. `spaceCode` — Crockford-base32 от хэша нормализованного vault path (12 символов); `spaceId` — первые 16 hex-символов SHA-256 от нормализованного `spaceCode`.
-
-kepler-shell вызывает `readSharedSelectedSpace` + `getArkDbPathForSelectedSpace` при spawn'е `kepler-backend.exe` и передаёт результат как переменную окружения **`KOSMOS_DB_PATH`**. Backend использует её как путь к ARK SQLite; если переменная не выставлена — fallback на default `%APPDATA%\Kosmos\ark.db`. Код: `shell/electron/main.ts` → `resolveSpaceDbPath` / `spawnBackend`. См. [Архитектура → Selected space DB resolution](/concepts/architecture#selected-space-db-resolution).
-
 ## Правила интеграции
 
 ::: danger
@@ -249,4 +234,3 @@ kepler-shell вызывает `readSharedSelectedSpace` + `getArkDbPathForSelect
 
 - `packages/ark/src/ark-client.ts` — `ArkClient`, `ArkCommandsApi`, dispatch событий.
 - `packages/ark/src/ensure-kepler.ts` — `ensureKeplerRunning`, discovery + auto-launch.
-- `packages/ark/src/selected-space.ts` — selected-space helpers.

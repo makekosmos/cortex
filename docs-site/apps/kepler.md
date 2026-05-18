@@ -185,15 +185,6 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
   - Сверху таба — кнопка **«Проверить обновления»** (вызывает `loadCatalog(force=true)`).
   - Отдельной секции «Каталог» / «Прочие установленные» больше нет: каталог сейчас используется только для lookup версий, не как картинная витрина.
 
-## Selected space DB resolution
-
-`kepler-backend` по умолчанию пишет в `%APPDATA%\Kosmos\ark.db`, но реальные данные пользователя живут в **выбранном space'е** — `%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`. Чтобы backend читал правильную базу, Kepler shell резолвит путь сам:
-
-1. `shell/electron/main.ts → resolveSpaceDbPath()` читает `%APPDATA%\Kosmos\selected-space.json` через хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace` из [`@kepler/ark`](../packages/ark.md).
-2. Если space выбран — `spawnBackend()` передаёт env-переменную `KOSMOS_DB_PATH=<spaceDir>/ark.db` дочернему процессу `kepler-backend.exe`.
-3. Backend использует `KOSMOS_DB_PATH` вместо дефолта.
-4. Если файла `selected-space.json` нет / он битый — backend падает на default. Это нормальное поведение для свежей инсталляции до создания первого space'а.
-
 ## Production packaging (Phase 8)
 
 `bun run build` собирает финальный **NSIS one-click** установщик через electron-builder. Конфиг — в `shell/package.json → build`.
