@@ -19,6 +19,7 @@ use crate::arrancador;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
 use crate::export;
+use crate::focus::handle_focus_op;
 use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
 
@@ -458,6 +459,25 @@ async fn handle_connection(
                 // паттерны идут через ark_host где нужно.
                 if let Some(rest) = operation.strip_prefix("arrancador.") {
                     let resp = handle_arrancador_op(rest, params, &ark_host).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
+                // Intercept focus.* — focus-mode блоклисты (ARK-backed) + active state в sync_kv.
+                if let Some(rest) = operation.strip_prefix("focus.") {
+                    let resp = handle_focus_op(rest, params, &ark_host).await;
                     let mut envelope = serde_json::Map::new();
                     if let Some(id) = req_id {
                         envelope.insert("id".into(), serde_json::Value::String(id));

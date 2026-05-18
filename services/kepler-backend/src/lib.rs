@@ -16,6 +16,7 @@ pub mod arrancador;
 pub mod auth;
 pub mod command_bus;
 pub mod export;
+pub mod focus;
 pub mod lock_file;
 pub mod pomodoro_host;
 pub mod protocol_version;
