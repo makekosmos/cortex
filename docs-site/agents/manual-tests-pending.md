@@ -139,6 +139,28 @@ Cold typecheck 1650ms → warm 1177ms (−28%). Effect для DX в watch-mode.
 
 ---
 
+## 🔴 Tech debt — Export tab disabled (2026-05-18)
+
+**Симптом:** На production install 0.1.11 страница «Экспорт» падает на whitescreen / catch-all error. Tab временно закомментирован в `shell/src/views/SettingsView.vue` (tab nav + content), функциональность доступна через WS API напрямую но не через UI.
+
+**Что уже сделано:**
+- 0.1.10 fix: `main.ts` IPC handler `kepler:export:list` unwraps `{converters: [...]}` → array (backend returns wrapped object). Это починило "e is not iterable" в loadExportConverters().
+- 0.1.11 не помог по user-репорту — есть ещё какая-то ошибка в renderer'е страницы.
+
+**Что нужно отдебажить:**
+- Запустить production build, открыть DevTools (F12 if not blocked), переключиться на Экспорт → смотреть console errors.
+- Возможные причины:
+  - `c.supported_formats` undefined (template `v-for in c.supported_formats`) — если backend converters почему-то имеют разные shape.
+  - `exportSelectedFormat[c.converter_id]` undefined при первой загрузке.
+  - `exportHistory` malformed в localStorage от прошлых версий.
+- Hardening: добавить `v-if="c.supported_formats && c.supported_formats.length > 0"` guard'ы; safe-default для exportSelectedFormat.
+
+**Когда чинить:** после того как user сообщит что extensions marketplace работает (current priority). Возвращаем Экспорт tab + правим renderer crash.
+
+См. `.agent/tasks/2026-05-18-export-bug-tech-debt/` (TBD при возврате).
+
+---
+
 ## ✅ DONE — RAM baseline (2026-05-18)
 
 Собран agent'ом через production build + isolated data dir. См. `.agent/tasks/2026-05-18-ram-baseline-harness/baseline-results.md`.
