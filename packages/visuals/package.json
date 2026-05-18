@@ -37,7 +37,7 @@
   "peerDependencies": {
     "lucide-vue-next": "*",
     "vue": "^3.0.0",
-    "vue-router": "^5.0.4"
+    "vue-router": "^4.5.0"
   },
   "exports": {
     ".": "./index.ts",
