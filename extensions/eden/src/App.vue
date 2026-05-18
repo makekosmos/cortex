@@ -224,8 +224,6 @@
     </main>
 
   </div>
-
-  <CustomCaret />
 </template>
 
 <script setup lang="ts">
@@ -233,7 +231,6 @@ import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, shall
 import {
   DesktopChrome,
   DesktopContentSurface,
-  CustomCaret,
   TitlebarHistoryControls,
   type TitlebarPlatform,
 } from "@kepler/visuals";

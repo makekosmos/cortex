@@ -31,7 +31,6 @@ import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 import {
-  CustomCaret,
   DesktopChrome,
   DesktopContentSurface,
   StatusDot,
@@ -678,7 +677,6 @@ function leaveSpaceListener() {
     </DesktopChrome>
 
     <QuickSearch v-model:open="quickSearchOpen" />
-    <CustomCaret />
 
     <AuthOverlay
       v-if="!isElectron && authRequired"

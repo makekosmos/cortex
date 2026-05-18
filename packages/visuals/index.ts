@@ -9,7 +9,6 @@ export { type ThemeMode, type ColorToken, getColor } from "./theme";
 // Components
 
 export {
-  CustomCaret,
   type SidebarConfig,
   CommandPalette,
   GamePosterCard,

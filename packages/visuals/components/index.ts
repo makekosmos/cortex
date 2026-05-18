@@ -1,5 +1,3 @@
-export { default as CustomCaret } from "./CustomCaret.vue";
-
 export { default as CommandPalette } from "./CommandPalette.vue";
 
 export { default as GamePosterCard } from "./GamePosterCard.vue";
