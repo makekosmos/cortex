@@ -50,7 +50,21 @@ param(
 
     [string]$OutFile,
 
-    [switch]$Compare
+    [switch]$Compare,
+
+    # Метка сценария — попадает в JSON и в filename. Примеры:
+    #   "launcher-only"        — голый Kepler без extensions
+    #   "all-extensions-idle"  — launcher + 4 ext + dashboard, 5min idle
+    #   "exp23-acrylic"        — A/B Mica vs Acrylic, acrylic вариант
+    #   "exp23-mica"           — то же, mica
+    [string]$Scenario = 'default',
+
+    # Сколько snapshot'ов снять с интервалом $SampleInterval секунд.
+    # >1 даёт mean/median/min/max — устойчиво к моментальным GC скачкам.
+    [int]$Samples = 1,
+
+    # Интервал между samples в секундах.
+    [int]$SampleInterval = 5
 )
 
 $ErrorActionPreference = 'Stop'
@@ -68,8 +82,11 @@ $BaselineRoleMap = @{
 }
 
 # Kepler ecosystem: главный shell, backend, ark sidecar.
+# 'kepler-shell' — dev mode (vite + electron-vite spawn).
+# 'Kepler'       — production build (electron-builder NSIS productName).
 $KeplerMainRoleMap = @{
     'kepler-shell'   = 'electron-main'
+    'Kepler'         = 'electron-main'
     'kepler-backend' = 'kepler-backend'
     'ark-core-rpc'   = 'ark-core-rpc'
 }
@@ -348,8 +365,10 @@ function Save-Report {
 
     $report = [PSCustomObject]@{
         mode      = $Mode
+        scenario  = $Scenario
         timestamp = (Get-Date).ToString('o')
         warmup_s  = $WarmupSeconds
+        bg_material = ($env:KEPLER_BG_MATERIAL ?? 'acrylic')
         processes = @($Samples)
         totals    = $Totals
     }
@@ -412,22 +431,48 @@ if ($Compare) {
 
 if ([string]::IsNullOrWhiteSpace($OutFile)) {
     $ts = (Get-Date).ToString('yyyyMMdd-HHmmss')
-    $OutFile = Join-Path (Get-Location) (".tmp/ram-measurement-{0}-{1}.json" -f $Mode, $ts)
+    $OutFile = Join-Path (Get-Location) (".tmp/ram-{0}-{1}-{2}.json" -f $Mode, $Scenario, $ts)
 }
 
-switch ($Mode) {
-    'baseline' {
-        $samples = Collect-Baseline
+# Multi-sample: усредняем totals по $Samples snapshot'ам с интервалом
+# $SampleInterval. Это сглаживает моментальные GC скачки.
+$allTotals = New-Object System.Collections.ArrayList
+$lastSamples = $null
+for ($i = 0; $i -lt $Samples; $i++) {
+    if ($i -gt 0) {
+        Write-Host ("[sample {0}/{1}] sleep {2}s..." -f ($i+1), $Samples, $SampleInterval) -ForegroundColor DarkGray
+        Start-Sleep -Seconds $SampleInterval
     }
-    'kepler' {
-        $samples = Collect-Kepler
+    $snap = switch ($Mode) {
+        'baseline' { Collect-Baseline }
+        'kepler'   { Collect-Kepler }
+    }
+    if ($snap -and @($snap).Count -gt 0) {
+        $lastSamples = $snap
+        $sumWs = ($snap | Measure-Object -Property working_set_bytes -Sum).Sum
+        $sumPb = ($snap | Measure-Object -Property private_bytes -Sum).Sum
+        [void]$allTotals.Add([PSCustomObject]@{
+            working_set_bytes = [long]$sumWs
+            private_bytes     = [long]$sumPb
+        })
     }
 }
 
-if ($samples.Count -eq 0) {
+if ($null -eq $lastSamples -or @($lastSamples).Count -eq 0) {
     Write-Host "Не собрано ни одного сэмпла." -ForegroundColor Red
     exit 1
 }
 
-$totals = Print-Summary -Samples $samples -Mode $Mode
-Save-Report -Path $OutFile -Mode $Mode -WarmupSeconds $Warmup -Samples $samples -Totals $totals
+$meanWs = [Math]::Round((($allTotals | Measure-Object -Property working_set_bytes -Average).Average) / 1MB, 1)
+$meanPb = [Math]::Round((($allTotals | Measure-Object -Property private_bytes -Average).Average) / 1MB, 1)
+
+Write-Host ""
+Write-Host ("[multi-sample] {0} snapshots, mean RSS = {1} MB, mean Private = {2} MB" -f $allTotals.Count, $meanWs, $meanPb) -ForegroundColor Cyan
+
+$totals = Print-Summary -Samples $lastSamples -Mode $Mode
+$totals | Add-Member -NotePropertyName 'mean_working_set_mb' -NotePropertyValue $meanWs -Force
+$totals | Add-Member -NotePropertyName 'mean_private_mb'     -NotePropertyValue $meanPb -Force
+$totals | Add-Member -NotePropertyName 'samples_taken'       -NotePropertyValue $allTotals.Count -Force
+$totals | Add-Member -NotePropertyName 'scenario'            -NotePropertyValue $Scenario -Force
+
+Save-Report -Path $OutFile -Mode $Mode -WarmupSeconds $Warmup -Samples $lastSamples -Totals $totals
