@@ -1,25 +1,36 @@
-/* Реальные tokens из @kosmos/visuals — НЕ дублируем. Если в основном
-   приложении изменится цвет/радиус/шрифт — сайт автоматически подхватит.
-   Импорт через относительный путь работает потому что Vercel deploy
-   клонит весь репо, не только site/. */
-@import "../../packages/visuals/theme/css-variables.css";
+/* Шрифты bundled локально через @fontsource — гарантированный
+   variable-axis 100-900, не fallback на Segoe UI / Consolas. */
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 
+/* Vendored tokens — соответствуют @kosmos/visuals/theme/css-variables.css
+   (dark theme). Site clone-only deploy на Vercel не имеет доступа к
+   ../packages, поэтому cross-directory @import невозможен. При изменении
+   токенов в visuals нужно вручную обновить и здесь. */
 :root {
-  /* Site-specific только: отступы корнерных лейблов. */
-  --edge-pad: 20px;
+  --background: oklch(0.17 0 0);
+  --foreground: oklch(0.985 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --border: oklch(0.23 0.00004 271);
+  --accent: oklch(0.546 0.229 264.1);
+  --color-shape-highlight-light-solid: oklch(0.17 0.003 251);
 
-  /* Alias'ы для удобства чтобы не править все местоупотребления в site
-     компонентах. Указывают на токены @kosmos/visuals. */
+  --font-sans:
+    "Inter Variable", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+    "SF Pro Text", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Site-specific aliases используемые в компонентах. */
   --bg: var(--background);
   --surface: var(--color-shape-highlight-light-solid);
-  --surface-2: oklch(0.2 0 0);
-  --foreground: var(--foreground);
   --muted: var(--muted-foreground);
   --muted-2: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
-  --accent: var(--accent);
-  --accent-bright: color-mix(in srgb, var(--accent) 110%, white);
-  --radius: 12px;
-  --radius-lg: 20px;
+
+  /* Корнерные лейблы — 20px от краёв на desktop. */
+  --edge-pad: 20px;
 }
 
 * {
@@ -42,15 +53,8 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* @kosmos/visuals tokens живут под селектором .dark. Включаем dark
-   глобально — site всегда dark theme. */
 html {
   color-scheme: dark;
-}
-html,
-body {
-  /* Подменяем класс через CSS — добавлять .dark на html в JS было бы
-     лишним runtime side-effect для статической страницы. */
 }
 
 #app {
@@ -64,9 +68,6 @@ a {
   color: inherit;
   text-decoration: none;
   transition: color 120ms ease;
-}
-a:hover {
-  color: var(--foreground);
 }
 
 button {
