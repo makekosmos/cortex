@@ -1,11 +1,38 @@
 import type { Preview } from "@storybook/vue3-vite";
 import { h } from "vue";
+import { create } from "storybook/theming";
 
 // Global tokens / theme variables — обязательно для всех stories.
 // `css-variables.css` сам загружает Inter Variable + IBM Plex Mono через
 // fontsource @import'ы — единый источник правды для шрифтов visuals.
 import "../theme/css-variables.css";
 import "../components/sidebar.css";
+
+// Dark theme для Docs page (autodocs) — синхронизирован с manager.ts.
+// Без этого argTypes table / story sub-nav рендерятся на белом.
+const keplerDocsTheme = create({
+  base: "dark",
+  appBg: "#1a1a1a",
+  appContentBg: "#1a1a1a",
+  appPreviewBg: "#1a1a1a",
+  appBorderColor: "#2d2d2d",
+  appBorderRadius: 8,
+  textColor: "#ededed",
+  textMutedColor: "#9ca3af",
+  textInverseColor: "#1a1a1a",
+  barBg: "#1a1a1a",
+  barTextColor: "#9ca3af",
+  barHoverColor: "#3b82f6",
+  barSelectedColor: "#ededed",
+  colorPrimary: "#3b82f6",
+  colorSecondary: "#3b82f6",
+  inputBg: "#252525",
+  inputBorder: "#2d2d2d",
+  inputTextColor: "#ededed",
+  inputBorderRadius: 6,
+  fontBase: '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  fontCode: '"IBM Plex Mono", ui-monospace, Consolas, monospace',
+});
 
 // --- Kepler viewports ---------------------------------------------------
 // Фиксированные размеры окон лаунчера / extension'ов. Полезно при review
@@ -89,6 +116,7 @@ const preview: Preview = {
       expanded: true,
     },
     docs: {
+      theme: keplerDocsTheme,
       toc: true,
       source: {
         // Source code блок в docs скрыт по умолчанию — он замусоривает страницу.
