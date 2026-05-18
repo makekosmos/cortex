@@ -1,7 +1,11 @@
 //! kepler-focus-helper: elevated short-lived process. Читает один JSON
-//! request с stdin, выполняет op над `C:\Windows\System32\drivers\etc\hosts`,
-//! печатает один JSON response на stdout, выходит.
+//! request — со stdin (если запущен из админ-родителя с pipe) либо из
+//! файла, переданного `--input <path>` (когда родитель запустил helper
+//! через ShellExecuteEx/Start-Process `runas` verb — stdin недоступен).
+//! Выполняет op над `C:\Windows\System32\drivers\etc\hosts`, печатает
+//! один JSON response на stdout (либо в `--output <path>` если указан).
 
+use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
@@ -61,11 +65,42 @@ fn hosts_path() -> PathBuf {
     }
 }
 
-fn run() -> Response {
-    let mut buf = String::new();
-    if let Err(e) = io::stdin().read_to_string(&mut buf) {
-        return Response::err(format!("stdin read failed: {e}"));
+struct CliArgs {
+    input_file: Option<PathBuf>,
+    output_file: Option<PathBuf>,
+}
+
+fn parse_cli_args() -> CliArgs {
+    let mut input_file = None;
+    let mut output_file = None;
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--input" => input_file = args.next().map(PathBuf::from),
+            "--output" => output_file = args.next().map(PathBuf::from),
+            _ => {}
+        }
     }
+    CliArgs { input_file, output_file }
+}
+
+fn read_request(args: &CliArgs) -> Result<String, String> {
+    if let Some(p) = &args.input_file {
+        fs::read_to_string(p).map_err(|e| format!("input file read failed: {e}"))
+    } else {
+        let mut buf = String::new();
+        io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| format!("stdin read failed: {e}"))?;
+        Ok(buf)
+    }
+}
+
+fn run(args: &CliArgs) -> Response {
+    let buf = match read_request(args) {
+        Ok(b) => b,
+        Err(e) => return Response::err(e),
+    };
     let req: Request = match serde_json::from_str(buf.trim()) {
         Ok(r) => r,
         Err(e) => return Response::err(format!("invalid request: {e}")),
@@ -86,13 +121,21 @@ fn run() -> Response {
 }
 
 fn main() {
-    let resp = run();
-    let stdout = io::stdout();
-    let mut out = stdout.lock();
+    let args = parse_cli_args();
+    let resp = run(&args);
     let json = serde_json::to_string(&resp).unwrap_or_else(|e| {
         format!(r#"{{"ok":false,"error":"serialize failed: {e}"}}"#)
     });
-    let _ = writeln!(out, "{json}");
+
+    // Write response — либо в --output file, либо stdout.
+    if let Some(out_path) = &args.output_file {
+        let _ = fs::write(out_path, &json);
+    } else {
+        let stdout = io::stdout();
+        let mut out = stdout.lock();
+        let _ = writeln!(out, "{json}");
+    }
+
     let exit = if resp.ok { 0 } else { 1 };
     std::process::exit(exit);
 }

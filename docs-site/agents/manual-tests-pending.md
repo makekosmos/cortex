@@ -13,6 +13,76 @@
 
 ---
 
+## 🟠 Pending — Focus mode end-to-end (2026-05-18, Kepler 0.1.18+)
+
+Полная реализация focus mode shipped: helper bin + ARK schema + Settings UI +
+Horologion integration + PowerShell elevation fallback + NSIS uninstall hook.
+
+Тесты ниже **требуют admin rights** на машине (helper.exe запускается с UAC).
+
+### Prep
+
+1. Установи `Kepler Setup 0.1.18.exe` (или новее).
+2. Backup своего `C:\Windows\System32\drivers\etc\hosts` (на всякий — `copy hosts hosts.user-backup`).
+3. Открой Settings (tray icon → Настройки) → видишь tab **«Фокус»**.
+
+### Чек-лист
+
+#### Базовый flow
+
+- [ ] Settings → Фокус → «Создать блок-лист» → name «Test», textarea:
+  ```
+  tiktok.com
+  twitter.com
+  # этот сайт сейчас не блокируется
+  reddit.com
+  ```
+  → нажми «Сохранить». В списке появилась запись «Test · 3 домена».
+- [ ] Нажми «Включить» на «Test» → **UAC prompt** появляется → одобри → запись «Активна» появилась в верхней секции.
+- [ ] Открой `C:\Windows\System32\drivers\etc\hosts` в Блокноте (admin) → видишь блок:
+  ```
+  # === kepler-focus BEGIN ===
+  127.0.0.1 tiktok.com
+  127.0.0.1 www.tiktok.com
+  127.0.0.1 twitter.com
+  127.0.0.1 www.twitter.com
+  127.0.0.1 reddit.com
+  127.0.0.1 www.reddit.com
+  # === kepler-focus END ===
+  ```
+- [ ] Также появился `hosts.kepler-backup` — это backup оригинала.
+- [ ] Открой браузер → https://tiktok.com → **ERR_CONNECTION_REFUSED / Connection refused** (mini HTTP server для friendly block page — на v2). Это ОК — блокировка работает.
+- [ ] Settings → Фокус → «Отключить» → UAC снова (или может cached) → одобри → hosts очищен от kepler-section.
+- [ ] Перезагрузи браузер DNS cache (`Ctrl+Shift+Delete` или просто перезапусти браузер) → tiktok.com снова открывается.
+
+#### Horologion integration
+
+- [ ] Открой Horologion → создай pomodoro: title «Focus test», добавь любую задачу.
+- [ ] Справа от input → 🛡️ chip → выбери «Test» blocklist.
+- [ ] Старт pomodoro → UAC prompt → одобри.
+- [ ] Focus widget (320×52, всегда сверху) показывает 🛡️ слева от MM:SS.
+- [ ] hosts модифицирован, tiktok.com заблокирован.
+- [ ] Stop pomodoro → блокировка автоматически снимается, 🛡️ исчезает с widget'а.
+
+#### Кейсы edge
+
+- [ ] **Перезапуск Kepler во время активной блокировки.** Активируй blocklist → закрой Kepler (tray → Quit). hosts остаётся модифицирован (известная limitation). Запусти Kepler снова → Settings → Фокус показывает active state → можно «Отключить» → hosts очищен.
+- [ ] **Uninstall Kepler с активной блокировкой.** Активируй blocklist → запусти uninstaller (`Программы и компоненты → Kepler → Удалить`) → во время uninstall NSIS hook запускает helper reset → hosts очищен. Проверь hosts после uninstall — должен быть без kepler-section.
+- [ ] **Re-install после uninstall.** Поставь Kepler 0.1.18 снова → создай blocklist → активируй → UAC появляется → работает корректно.
+
+#### Edge-case: невалидные домены
+
+- [ ] Settings → Фокус → «Создать блок-лист» → textarea: `not-a-valid-thing` + `tiktok.com` → видишь label «Валидных: 1 · невалидных: 1». Save — сохраняется только `tiktok.com`.
+- [ ] Drag&drop .txt файла с доменами в textarea → текст подставлен.
+
+### Если что-то не работает
+
+- **UAC не появляется** → Kepler возможно уже запущен от админа (тогда helper spawn'ится direct без UAC). Проверь Task Manager → Kepler.exe → User name column.
+- **hosts не меняется после UAC одобрения** → проверь `kepler-focus-helper.exe` существует в `%LOCALAPPDATA%\Programs\Kepler\resources\`. Если нет — переустанови.
+- **PowerShell error в logs** → открой Kepler DevTools (`F12` в launcher если включен dev mode), смотри console → `[focus-block] helper failed: <reason>`. Часто это «User cancelled UAC» (норм) или path issue.
+
+---
+
 ## 🟡 Pending — Arrancador full completion (2026-05-18)
 
 См. `.agent/tasks/2026-05-18-arrancador-full-completion/spec.md` AC11.

@@ -1,15 +1,23 @@
 // Focus block applier — спавнит `kepler-focus-helper.exe` для модификации
 // hosts файла когда юзер активирует/деактивирует focus blocklist.
 //
-// Helper bin требует admin elevation (`requireAdministrator` manifest).
-// Если Kepler запущен НЕ от админа — Windows показывает UAC prompt при
-// первом спавне. Юзер должен одобрить (раз за сессию OS обычно).
+// Elevation flow:
+//   Helper bin имеет `requireAdministrator` manifest. Если Kepler уже
+//   запущен от админа → direct spawn + stdin pipe (быстро, тихо). Если
+//   Kepler НЕ-админ → CreateProcess fails ERROR_ELEVATION_REQUIRED (740);
+//   тогда фоллбэк на PowerShell `Start-Process -Verb RunAs` который
+//   triggers UAC prompt и запускает helper из новой shell. UAC даёт нам
+//   stdin недоступен → передаём request через `--input <file>` арг,
+//   читаем response из `--output <file>`. Cleanup temp файлов.
 //
 // Wire-up: extension-host.ts hooks `kepler:extension:ark:request` →
 // после успешного `focus.set_active_state` вызывает `applyFocusBlock(...)`.
 
 import { spawn } from "node:child_process";
+import { promises as fsp } from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 
@@ -28,17 +36,22 @@ interface HelperResponse {
 }
 
 function helperBinaryPath(): string {
-  // Production install: helper.exe лежит рядом с resources/.
-  // app.getAppPath() → .asar или dev source.
-  // Используем `process.resourcesPath` в production, dev path → target/release/.
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "kepler-focus-helper.exe");
   }
-  // Dev: relative от <repo>/shell/electron/main.ts → ../../target/release/.
-  return path.resolve(__dirname, "..", "..", "target", "release", "kepler-focus-helper.exe");
+  return path.resolve(
+    __dirname,
+    "..",
+    "..",
+    "target",
+    "release",
+    "kepler-focus-helper.exe",
+  );
 }
 
-function runHelper(req: HelperRequest): Promise<HelperResponse> {
+// --- Direct spawn (Kepler уже admin) ---------------------------------------
+
+function runHelperDirect(req: HelperRequest): Promise<HelperResponse | "needs_elevation"> {
   return new Promise((resolve) => {
     const bin = helperBinaryPath();
     let stdout = "";
@@ -47,19 +60,31 @@ function runHelper(req: HelperRequest): Promise<HelperResponse> {
     let child;
     try {
       child = spawn(bin, [], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
-    } catch (e) {
+    } catch (e: unknown) {
+      const code = (e as NodeJS.ErrnoException).code;
+      // ERROR_ELEVATION_REQUIRED (740) → нужен RunAs flow.
+      if (code === "UNKNOWN" || (e as Error).message.includes("740")) {
+        resolve("needs_elevation");
+        return;
+      }
       resolve({ ok: false, error: `spawn failed: ${(e as Error).message}` });
       return;
     }
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString("utf8");
-    });
+    child.stdout?.on("data", (c: Buffer) => (stdout += c.toString("utf8")));
+    child.stderr?.on("data", (c: Buffer) => (stderr += c.toString("utf8")));
 
-    child.on("error", (err) => {
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      // EACCES / EPERM / UNKNOWN при ERROR_ELEVATION_REQUIRED.
+      const isElevation =
+        err.code === "EACCES" ||
+        err.code === "EPERM" ||
+        err.code === "UNKNOWN" ||
+        (err.message ?? "").includes("740");
+      if (isElevation) {
+        resolve("needs_elevation");
+        return;
+      }
       resolve({ ok: false, error: `child error: ${err.message}` });
     });
 
@@ -83,24 +108,76 @@ function runHelper(req: HelperRequest): Promise<HelperResponse> {
     try {
       child.stdin?.write(JSON.stringify(req));
       child.stdin?.end();
-    } catch (e) {
-      resolve({ ok: false, error: `stdin write failed: ${(e as Error).message}` });
+    } catch {
+      // Ignore — close handler уже зарезолвит.
     }
   });
 }
 
+// --- Elevated spawn через PowerShell Start-Process -Verb RunAs --------------
+
+async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
+  const bin = helperBinaryPath();
+  const id = crypto.randomBytes(6).toString("hex");
+  const inputPath = path.join(os.tmpdir(), `kepler-focus-req-${id}.json`);
+  const outputPath = path.join(os.tmpdir(), `kepler-focus-resp-${id}.json`);
+
+  try {
+    await fsp.writeFile(inputPath, JSON.stringify(req), "utf8");
+
+    // PowerShell escapes:
+    //   ' внутри single-quoted string → дублируем
+    //   паски с пробелами OK потому что в Argument-List используем single quotes
+    const psCommand = [
+      "Start-Process",
+      "-FilePath",
+      `'${bin.replace(/'/g, "''")}'`,
+      "-ArgumentList",
+      `@('--input','${inputPath.replace(/'/g, "''")}','--output','${outputPath.replace(/'/g, "''")}')`,
+      "-Verb",
+      "RunAs",
+      "-WindowStyle",
+      "Hidden",
+      "-Wait",
+    ].join(" ");
+
+    await new Promise<void>((resolve, reject) => {
+      const ps = spawn(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", psCommand],
+        { windowsHide: true },
+      );
+      let psStderr = "";
+      ps.stderr?.on("data", (c) => (psStderr += c.toString("utf8")));
+      ps.on("error", reject);
+      ps.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`powershell exited ${code}: ${psStderr.slice(0, 300)}`));
+      });
+    });
+
+    const respText = await fsp.readFile(outputPath, "utf8");
+    return JSON.parse(respText.trim()) as HelperResponse;
+  } catch (e) {
+    return {
+      ok: false,
+      error: `elevated run failed: ${(e as Error).message}`,
+    };
+  } finally {
+    // Cleanup temp файлов — best effort.
+    await fsp.unlink(inputPath).catch(() => undefined);
+    await fsp.unlink(outputPath).catch(() => undefined);
+  }
+}
+
+async function runHelper(req: HelperRequest): Promise<HelperResponse> {
+  const direct = await runHelperDirect(req);
+  if (direct !== "needs_elevation") return direct;
+  return runHelperElevated(req);
+}
+
 // --- Public API -------------------------------------------------------------
 
-/**
- * Применить блокировку доменов. Вызывается из extension-host после
- * `focus.set_active_state` приходящего от Horologion / Settings UI.
- *
- * - `active=true, domains=[...]` → helper.exe op=add, domains добавлены в hosts.
- * - `active=false` → helper.exe op=reset, kepler-managed section в hosts очищена.
- *
- * Результат log'ируется и broadcast'ится всем BrowserWindow'ам через
- * `kepler:focus:applied` event (для UI feedback в Settings).
- */
 export async function applyFocusBlock(args: {
   active: boolean;
   domains: string[];
@@ -121,7 +198,6 @@ export async function applyFocusBlock(args: {
     );
   }
 
-  // Broadcast результат всем окнам — UI может показать status / error.
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
       try {
@@ -137,14 +213,4 @@ export async function applyFocusBlock(args: {
   }
 
   return result;
-}
-
-/** Reset на app shutdown / uninstall — гарантируем что hosts не остаётся
-    модифицированным после Kepler exit. */
-export async function resetFocusBlockOnShutdown(): Promise<void> {
-  try {
-    await runHelper({ op: "reset" });
-  } catch (e) {
-    console.warn("[focus-block] shutdown reset failed:", e);
-  }
 }
