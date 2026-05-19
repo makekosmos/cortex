@@ -18,7 +18,6 @@
   <!-- Main app -->
   <div v-else :class="['app-container', { 'focus-mode-active': layout.isZenMode }]">
     <SearchOverlay
-      v-if="!layout.isZenMode"
       :is-open="layout.isSearchOpen"
       :query="pendingQuery"
       :results="layout.searchResults"
@@ -29,46 +28,65 @@
     />
 
     <DesktopChrome
-      v-if="!layout.isZenMode"
       class="app-shell"
       :platform="chromePlatform"
     >
       <template #titlebar-leading>
-        <button
-          type="button"
-          class="sidebar-head-icon withBackground eden-titlebar-toggle"
-          data-testid="sidebar-toggle"
-          :title="layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
-          @click="layout.toggleWidgetSidebar()"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
+        <template v-if="!layout.isZenMode">
+          <button
+            type="button"
+            class="sidebar-head-icon withBackground eden-titlebar-toggle"
+            data-testid="sidebar-toggle"
+            :title="layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
+            @click="layout.toggleWidgetSidebar()"
           >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <path d="M9 3v18" />
-          </svg>
-        </button>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M9 3v18" />
+            </svg>
+          </button>
 
-        <TitlebarHistoryControls
-          :back-disabled="!canGoBack"
-          :forward-disabled="!canGoForward"
-          back-title="Назад"
-          forward-title="Вперёд"
-          @back="navigateBack"
-          @forward="navigateForward"
-        />
+          <TitlebarHistoryControls
+            :back-disabled="!canGoBack"
+            :forward-disabled="!canGoForward"
+            back-title="Назад"
+            forward-title="Вперёд"
+            @back="navigateBack"
+            @forward="navigateForward"
+          />
+        </template>
+        <button
+          v-else
+          type="button"
+          class="eden-titlebar-toggle eden-zen-exit"
+          data-testid="zen-mode-exit"
+          title="Выйти из режима фокуса (Esc Esc или Ctrl+K Z)"
+          @click="layout.disableZenMode()"
+        >
+          <LoaderPinwheel :size="14" :stroke-width="2" />
+        </button>
+      </template>
+
+      <template #titlebar-center>
+        <span v-if="titlebarTitle" class="eden-titlebar-title">{{ titlebarTitle }}</span>
+      </template>
+
+      <template #titlebar-trailing>
+        <WindowControls :hide-minimize="layout.isZenMode" :hide-maximize="layout.isZenMode" />
       </template>
 
       <template
-        v-if="showSidebarChrome"
+        v-if="showSidebarChrome && !layout.isZenMode"
         #sidebar
       >
         <div class="sidebar-layout">
@@ -90,6 +108,7 @@
             @toggle-search="layout.isSearchOpen = !layout.isSearchOpen"
             @create-entry="eden.createNewEntry()"
             @open-entry="(id) => eden.navigateTo(id)"
+            @entry-context-menu="onEntryContextMenu"
             @open-settings-tab="openSettingsTab"
             @open-object-types="openObjectTypes()"
             @open-object-type="eden.openTypeCollection($event)"
@@ -104,8 +123,8 @@
         padding-top="0"
         padding-inline="0"
         padding-bottom="0"
-        :show-left-border="showSidebarChrome && !layout.widgetSidebarHidden"
-        :radius-top-left="showSidebarChrome && !layout.widgetSidebarHidden ? '16px' : '0px'"
+        :show-left-border="false"
+        radius-top-left="0px"
       >
         <main class="app-main">
           <div
@@ -166,73 +185,40 @@
       </DesktopContentSurface>
     </DesktopChrome>
 
-    <main v-else class="app-main app-main--zen">
-      <div
-        v-if="eden.isHydratingVault && eden.activeScreen !== 'settings' && eden.activeScreen !== 'object-types' && !eden.currentEntry"
-        class="app-main-loading"
-      >
-        Загрузка данных...
-      </div>
-      <ObjectTypesSettings
-        v-else-if="eden.activeScreen === 'object-types'"
-        :note-types="eden.noteTypes"
-        :initial-selected-type-id="eden.activeNoteTypeId"
-        :create-draft-token="objectTypeCreateToken"
-        :on-note-type-save="eden.saveNoteType"
-        :on-note-type-delete="eden.deleteNoteType"
-        @selected-type-change="onSelectedTypeChange"
-      />
-      <TypeObjectsView
-        v-else-if="eden.activeScreen === 'type-collection' && activeCollectionType"
-        :note-type="activeCollectionType"
-        :entries="eden.entries"
-        @open-entry="(id) => eden.navigateTo(id)"
-        @create-entry="eden.createNewEntry(activeCollectionType.id)"
-        @edit-type="openTypeSettings(activeCollectionType.id)"
-      />
-      <SettingsPage
-        v-else-if="eden.activeScreen === 'settings'"
-        :vault-path="eden.vaultPath"
-        :active-space="eden.activeSpace"
-        :initial-tab="settingsInitialTab"
-        @select-vault="eden.selectFolder()"
-        @select-space="onSelectSpace"
-        @refresh-data="eden.refreshData()"
-      />
-      <Editor
-        v-else-if="eden.currentEntry"
-        :key="eden.currentEntry.id"
-        :entry="eden.currentEntry"
-        :all-entries="eden.entries"
-        :note-types="eden.noteTypes"
-        :zen-mode="layout.isZenMode"
-        :on-save="eden.handleSave"
-        :on-navigate="eden.navigateTo"
-        :on-open-type-settings="openTypeSettings"
-        @exit-zen="layout.disableZenMode()"
-      />
-      <SpacesView
-        v-else
-        :active-space="eden.activeSpace"
-        :entries="eden.entries"
-        :note-types="eden.noteTypes"
-        :sort-mode="eden.sortMode"
-        @sort-mode-change="eden.sortMode = $event"
-        @create-entry="eden.createNewEntry()"
-        @open-entry="(id) => eden.navigateTo(id)"
-      />
-    </main>
+    <div
+      v-if="layout.isZenMode && currentEntryCharCount !== null"
+      class="eden-char-counter"
+      data-testid="eden-char-counter"
+    >
+      {{ currentEntryCharCount }} {{ pluralizeCharacters(currentEntryCharCount) }}
+    </div>
+
+    <ContextMenu
+      :open="entryMenu.isOpen.value"
+      :x="entryMenu.x.value"
+      :y="entryMenu.y.value"
+      @close="entryMenu.close"
+    >
+      <ContextMenuItem data-testid="eden-entry-delete" @click="onDeleteContextEntry">
+        Удалить
+      </ContextMenuItem>
+    </ContextMenu>
 
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, shallowRef, watch } from "vue";
+import { LoaderPinwheel } from "lucide-vue-next";
 import {
+  ContextMenu,
+  ContextMenuItem,
   DesktopChrome,
   DesktopContentSurface,
   TitlebarHistoryControls,
+  WindowControls,
   type TitlebarPlatform,
+  useContextMenu,
 } from "@kosmos/visuals";
 import { useEdenStore } from "@/store/eden";
 import { useLayoutStore } from "@/store/layout";
@@ -241,6 +227,7 @@ import { usePlatform } from "@/composables/usePlatform";
 import { useSearch } from "@/composables/useSearch";
 import type { SpaceId } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
+import { getNoteTypeCollectionName } from "@/lib/typedNotes";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
@@ -270,6 +257,28 @@ const MAX_NAVIGATION_HISTORY = 30;
 usePlatform();
 useKeyboard();
 const { pendingQuery } = useSearch();
+
+// ПКМ-меню на entries в sidebar — пункт «Удалить» soft-delete'ит запись.
+const entryMenu = useContextMenu<string>();
+
+function onEntryContextMenu(event: MouseEvent, entryId: string) {
+  entryMenu.open(event, entryId);
+}
+
+async function onDeleteContextEntry() {
+  const id = entryMenu.payload.value;
+  entryMenu.close();
+  if (!id || !window.api) return;
+  try {
+    await window.api.deleteEntry(id);
+    await eden.refreshData();
+    if (eden.currentEntry?.id === id) {
+      eden.currentEntry = null;
+    }
+  } catch (err) {
+    console.error("[eden] deleteEntry failed:", err);
+  }
+}
 const backStack = shallowRef<EdenHistorySnapshot[]>([]);
 const forwardStack = shallowRef<EdenHistorySnapshot[]>([]);
 const historyReady = shallowRef(false);
@@ -314,6 +323,62 @@ function pickRecentEntries(entries: Entry[], limit: number) {
 const recentSidebarEntries = computed(() =>
   pickRecentEntries(eden.entries, 10),
 );
+
+/**
+ * Extract plain text length from ProseMirror JSON. Считаем только `text` node'ы
+ * — все символы суммируются. Возвращает null если doc нечитаем.
+ */
+function countCharsInProseMirrorDoc(json: string | null | undefined): number | null {
+  if (!json) return null;
+  try {
+    const doc = JSON.parse(json) as unknown;
+    let total = 0;
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== "object") return;
+      const n = node as { type?: string; text?: string; content?: unknown[] };
+      if (n.type === "text" && typeof n.text === "string") {
+        total += n.text.length;
+      }
+      if (Array.isArray(n.content)) {
+        for (const child of n.content) walk(child);
+      }
+    };
+    walk(doc);
+    return total;
+  } catch {
+    return null;
+  }
+}
+
+const currentEntryCharCount = computed<number | null>(() => {
+  if (!eden.currentEntry) return null;
+  return countCharsInProseMirrorDoc(eden.currentEntry.content_json);
+});
+
+function pluralizeCharacters(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "символ";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "символа";
+  return "символов";
+}
+
+const titlebarTitle = computed<string>(() => {
+  if (eden.activeScreen === "settings") return "Настройки";
+  if (eden.activeScreen === "object-types") return "Типы объектов";
+  if (eden.activeScreen === "type-collection") {
+    return activeCollectionType.value
+      ? getNoteTypeCollectionName(activeCollectionType.value)
+      : "Коллекция";
+  }
+  if (eden.currentEntry) {
+    return getEntryDisplayTitle(
+      eden.currentEntry.title,
+      eden.currentEntry.header_props_json,
+    );
+  }
+  return "";
+});
 
 const entryTitlesById = computed<Record<string, string>>(() =>
   Object.fromEntries(
@@ -454,9 +519,21 @@ onMounted(() => {
         if (layout.isZenMode) layout.disableZenMode();
         void eden.createNewEntry();
       }),
-      window.api.onCommand("eden:cmd:note:search", () => {
-        if (layout.isZenMode) layout.disableZenMode();
-        layout.openSearch();
+      window.api.onCommand("eden:cmd:note:open-today", () => {
+        console.log("[eden] open-today command received");
+        if (layout.isSearchOpen) layout.closeSearch();
+        void (async () => {
+          try {
+            await eden.openTodayJournal();
+            console.log("[eden] openTodayJournal ok, currentEntry:", eden.currentEntry?.id);
+            // Команда открывает заметку как чистый текст без header'а — zen mode
+            // скрывает title + тип, оставляет только редактор. Полное расширение
+            // открывается обычным путём (Alt+Space → Eden) → zen mode off.
+            layout.enableZenMode();
+          } catch (err) {
+            console.error("[eden] openTodayJournal failed:", err);
+          }
+        })();
       }),
     );
   }

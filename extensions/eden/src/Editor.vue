@@ -1,15 +1,5 @@
 <template>
-  <div :class="['editor-wrapper', { 'focus-mode': zenMode }]">
-    <button
-      v-if="zenMode"
-      class="focus-exit-btn is-visible"
-      data-testid="zen-mode-exit"
-      type="button"
-      title="Выйти из режима фокуса (⌘/Ctrl+Alt+Z или Esc)"
-      @click.stop="emit('exitZen')"
-    >
-      Выйти из фокус-режима
-    </button>
+  <div :class="['editor-wrapper', 'kosmos-scroll', { 'focus-mode': zenMode }]">
     <div class="editor-header">
       <div class="editor-rail editor-header-rail">
         <div class="editor-header-main">
@@ -115,7 +105,10 @@ import { all, createLowlight } from "lowlight";
 import Typography from "@tiptap/extension-typography";
 import type { Editor as TiptapEditor, Range } from "@tiptap/vue-3";
 import { Wikilink } from "./Wikilink";
-import { InlineCaret } from "./InlineCaret";
+// InlineCaret удалён — widget-decoration на каждом cursor position ломал
+// drag-selection (mousedown на widget → ProseMirror не разрешал mouse
+// position в text offset, drag только перемещал каретку). Native browser
+// caret и так работает корректно.
 import WikilinkList from "./WikilinkList.vue";
 import { SlashCommand } from "./SlashCommand";
 import SlashCommandList from "./SlashCommandList.vue";
@@ -128,6 +121,7 @@ import {
   validateHeaderProps,
 } from "@/lib/typedNotes";
 import { SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
+import { objectIconUri } from "@/lib/iconResolver";
 import {
   getEditableEntryTitle,
   resolveStoredEntryTitle,
@@ -217,7 +211,7 @@ const activeNoteType = computed(
 const typePickerOptions = computed(() => props.noteTypes.filter((noteType) => Boolean(noteType.id)));
 
 function getNoteTypeIconSrc(noteType: NoteType | null) {
-  return noteType?.icon ? `/anytype/icon/type/default/${noteType.icon}.svg` : "";
+  return noteType?.icon ? objectIconUri(noteType.icon) : "";
 }
 
 const lowlight = createLowlight(all);
@@ -251,7 +245,6 @@ const extensions = [
     defaultLanguage: null,
   }),
   Typography,
-  InlineCaret,
   Wikilink.configure({
     suggestion: {
       items: ({ query }: { query: string }) =>

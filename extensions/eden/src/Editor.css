@@ -33,7 +33,7 @@
   width: 100%;
   max-width: var(--kosmos-page-max-width, 700px);
   margin: 0 auto;
-  padding-inline: var(--editor-inline-gutter, 48px);
+  padding-inline: var(--editor-inline-gutter);
 }
 
 .editor-header {
@@ -316,9 +316,6 @@
   pointer-events: none;
 }
 
-.focus-mode .editor-content-area {
-  padding-bottom: 42vh;
-}
 
 .focus-mode .editor-content-rail {
   min-height: 0;
@@ -430,9 +427,7 @@
   transform: translateY(-10px);
 }
 
-.focus-mode .editor-content-area {
-  padding-bottom: 42vh;
-}
+
 
 .focus-mode .editor-content-rail {
   min-height: 0;

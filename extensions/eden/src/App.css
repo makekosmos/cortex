@@ -9,6 +9,41 @@
   contain: layout style;
 }
 
+/* Acrylic — только в zen mode.
+   Класс `focus-mode-active` ставится Vue на тот же элемент что и
+   `.app-container` (`class="app-container focus-mode-active"`), поэтому
+   селектор без пробела: `.app-container.focus-mode-active`. С пробелом
+   искал бы вложенный `.app-container` — не матчит.
+
+   Причина scope'а: `backdrop-filter` создаёт containing block для
+   fixed-positioned descendants. Глобально он бы ломал SearchOverlay
+   (`position: fixed inset-0`). В zen CommandPalette не открыт. */
+.app-container.focus-mode-active {
+  background-color: var(--sidebar-bg-acrylic);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+}
+
+/* В zen — все вложенные surface'ы transparent, чтобы acrylic был один
+   слой без накопления opacity. Вне zen — defaults. */
+.app-container.focus-mode-active .kosmos-titlebar,
+.app-container.focus-mode-active .kosmos-desktop-chrome,
+.app-container.focus-mode-active .kosmos-desktop-chrome__sidebar,
+.app-container.focus-mode-active .kosmos-desktop-content-surface,
+.app-container.focus-mode-active .sidebar-layout,
+.app-container.focus-mode-active .kosmos-sidebar-shell,
+.app-container.focus-mode-active .kosmos-sidebar-content,
+.app-container.focus-mode-active .kosmos-sidebar-wrapper,
+.app-container.focus-mode-active .widget-sidebar-wrapper,
+.app-container.focus-mode-active .eden-content-surface,
+.app-container.focus-mode-active .app-main,
+.app-container.focus-mode-active .editor-wrapper,
+.app-container.focus-mode-active .editor-content-area,
+.app-container.focus-mode-active .ProseMirror {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 .sidebar-layout {
   display: flex;
   height: 100%;
@@ -2425,13 +2460,19 @@
 }
 
 .focus-mode .editor-header {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-10px);
+  display: none;
 }
 
+/* Zen mode: padding-top минимальный (6px), горизонтально — `--kosmos-titlebar-inline-padding`
+   (0.75rem = 12px), чтобы текст начинался в той же горизонтальной позиции,
+   что иконки sidebar'а / window controls в обычном режиме. */
 .focus-mode .editor-content-area {
-  padding-bottom: 42vh;
+  padding: 6px var(--kosmos-titlebar-inline-padding, 0.75rem) 42vh;
+}
+
+.focus-mode .ProseMirror,
+.focus-mode .ProseMirror p {
+  font-weight: 500;
 }
 
 .focus-mode .editor-content-rail {
@@ -2539,13 +2580,19 @@
 }
 
 .focus-mode .editor-header {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-10px);
+  display: none;
 }
 
+/* Zen mode: padding-top минимальный (6px), горизонтально — `--kosmos-titlebar-inline-padding`
+   (0.75rem = 12px), чтобы текст начинался в той же горизонтальной позиции,
+   что иконки sidebar'а / window controls в обычном режиме. */
 .focus-mode .editor-content-area {
-  padding-bottom: 42vh;
+  padding: 6px var(--kosmos-titlebar-inline-padding, 0.75rem) 42vh;
+}
+
+.focus-mode .ProseMirror,
+.focus-mode .ProseMirror p {
+  font-weight: 500;
 }
 
 .focus-mode .editor-content-rail {
@@ -3625,7 +3672,7 @@ span[data-wikilink]:hover {
 .editor-wrapper,
 .editor-content-area,
 .ProseMirror {
-  background: var(--color-bg-primary);
+  background: var(--sidebar-bg);
   color: var(--text-primary);
 }
 
@@ -3869,6 +3916,9 @@ span[data-wikilink]:hover {
 
 /* Anytype Dark Exactness */
 
+/* Сurface'ы которые сидят внутри DesktopChrome (titlebar + sidebar — общий
+   sidebar-bg). app-container/app-main/editor-* сливаются с этим фоном,
+   чтобы между titlebar/sidebar и контентом не было визуального шва. */
 .app-container,
 .app-main,
 .editor-wrapper,
@@ -3876,13 +3926,19 @@ span[data-wikilink]:hover {
 .settings-screen,
 .setup-container,
 .setup-box,
+.ProseMirror {
+  background: var(--sidebar-bg);
+  color: var(--color-text-primary);
+}
+
+/* Elevation surfaces (popover'ы / диалоги / меню) — отдельный elevation
+   tone, чтобы выделяться над flat-фоном. */
 .dialog-card,
 .search-overlay,
 .note-type-menu,
 .wikilink-suggestions,
 .slash-commands,
-.code-tools-menu,
-.ProseMirror {
+.code-tools-menu {
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
 }
@@ -4076,24 +4132,6 @@ span[data-wikilink]:hover {
   color: var(--color-text-primary);
 }
 
-.anytype-icon {
-  display: block;
-  width: 20px;
-  height: 20px;
-  background-position: 50% 50%;
-  background-repeat: no-repeat;
-  background-size: 20px 20px;
-}
-
-.anytype-icon.toggleVault {
-  background-image: url("/anytype/icon/widget/toggle0.svg");
-}
-
-.sidebar-head-icon.active .anytype-icon.toggleVault,
-.sidebar-head-icon:hover .anytype-icon.toggleVault {
-  background-image: url("/anytype/icon/widget/toggle1.svg");
-}
-
 .recently-opened-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -4202,61 +4240,6 @@ span[data-wikilink]:hover {
   font-size: 12px;
 }
 
-.anytype-icon.toggleWidget {
-  background-image: url("/anytype/icon/header/widget0.svg");
-}
-
-.anytype-icon.search {
-  background-image: url("/anytype/icon/sidebar/search.svg");
-}
-
-.anytype-icon.clock {
-  background-image: url("/anytype/icon/sidebar/clock.svg");
-}
-
-.anytype-icon.settings {
-  background-image: url("/anytype/icon/sidebar/settings.svg");
-}
-
-.anytype-icon.expand {
-  background-image: url("/anytype/icon/widget/button/expand.svg");
-}
-
-.anytype-icon.plus {
-  background-image: url("/anytype/icon/widget/plus0.svg");
-}
-
-.sidebar-bottom-icon:hover .anytype-icon.plus,
-.sidebar-section-icon:hover .anytype-icon.plus,
-.vault-bottom-icon:hover .anytype-icon.plus {
-  background-image: url("/anytype/icon/widget/plus1.svg");
-}
-
-.anytype-icon.more {
-  background-image: url("/anytype/icon/widget/sectionMore0.svg");
-}
-
-.anytype-icon.collapseArrow {
-  width: 12px;
-  height: 12px;
-  background-size: 12px 12px;
-  background-image: url("/anytype/arrow/widgetSection0.svg");
-  transform: rotate(-90deg);
-  transition: transform var(--transition-fast);
-}
-
-.widgetSection .name:hover .anytype-icon.collapseArrow {
-  background-image: url("/anytype/arrow/widgetSection1.svg");
-}
-
-.anytype-icon.create {
-  background-image: url("/anytype/icon/widget/button/create.svg");
-}
-
-.anytype-icon.gallery {
-  background-image: url("/anytype/icon/vault/gallery.svg");
-}
-
 .widgetSettings {
   position: relative;
   width: 32px;
@@ -4270,16 +4253,8 @@ span[data-wikilink]:hover {
   transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.widgetSettings .anytype-icon.settings {
-  background-image: url("/anytype/icon/widget/button/widgetSettings0.svg");
-}
-
 .widgetSettings:hover {
   background-color: var(--color-shape-secondary);
-}
-
-.widgetSettings:hover .anytype-icon.settings {
-  background-image: url("/anytype/theme/dark/icon/widget/button/widgetSettings1.svg");
 }
 
 .section {
@@ -4358,14 +4333,6 @@ span[data-wikilink]:hover {
 
 .widgetSection:hover .buttons {
   opacity: 1;
-}
-
-.widgetSection.isOpen .anytype-icon.collapseArrow {
-  transform: rotate(0deg);
-}
-
-.widgetSection:not(.isOpen) .anytype-icon.collapseArrow {
-  transform: rotate(-90deg);
 }
 
 .item {
@@ -4712,19 +4679,6 @@ span[data-wikilink]:hover {
   background: var(--color-shape-highlight-dark);
 }
 
-.vault-rail .item.add .icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--color-shape-highlight-medium) url("/anytype/icon/widget/plus0.svg") 50% 50%
-    no-repeat;
-  background-size: 20px 20px;
-}
-
-.vault-rail .item.add:hover .icon {
-  background-image: url("/anytype/icon/widget/plus1.svg");
-}
-
 .vault-rail > .bottom {
   height: 56px;
 }
@@ -4828,11 +4782,14 @@ span[data-wikilink]:hover {
   min-height: 0;
 }
 
-.eden-content-surface {
+/* Override scoped стилей DesktopContentSurface: убираем верхнюю границу,
+   фон не задаём — он унаследуется от `.app-container` (single acrylic layer). */
+.eden-content-surface.kosmos-desktop-content-surface {
   display: flex;
   flex: 1;
   min-width: 0;
   min-height: 0;
+  border-top: none !important;
 }
 
 .eden-titlebar-toggle {
@@ -4842,10 +4799,62 @@ span[data-wikilink]:hover {
   -webkit-app-region: no-drag;
 }
 
+.eden-zen-exit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.eden-zen-exit:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+.eden-char-counter {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  font-size: 11px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--sidebar-foreground) 55%, transparent);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.eden-titlebar-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--sidebar-foreground) 82%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .sidebar-layout {
   height: 100%;
   margin-top: 0;
   background: var(--sidebar-bg);
+}
+
+/* Когда Sidebar collapsed (Sidebar.vue добавляет `hidden collapsed` на
+   wrapper при _hidden=true), `.sidebar-layout` оставляет за собой видимый
+   серый блок, потому что у него background и inherited width. Делаем
+   контейнер прозрачным и без размера — `<aside>` сворачивается до 0px,
+   серого артефакта рядом с content не видно. Toggle-кнопка в titlebar
+   продолжает менять `widgetSidebarHidden` → reactive Sidebar разворачивается. */
+.sidebar-layout:has(.kosmos-sidebar-wrapper.hidden) {
+  background: transparent;
+  width: 0;
+  overflow: hidden;
 }
 
 .widget-sidebar-wrapper {
