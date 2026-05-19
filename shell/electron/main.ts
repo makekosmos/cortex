@@ -1272,10 +1272,26 @@ app.on("will-quit", () => {
     saveWindowStateNow();
   }
   if (backendProc && !backendProc.killed) {
-    console.error(`[kepler-shell] will-quit: killing backend pid=${backendProc.pid}`);
-    // SIGTERM на Windows = TerminateProcess. На некоторых случаях не убивает
-    // grandchild ark-core-rpc — но shell больше не отвечает за это.
-    backendProc.kill();
+    const pid = backendProc.pid;
+    console.error(`[kepler-shell] will-quit: killing backend tree pid=${pid}`);
+    // SIGTERM на Windows = TerminateProcess, не trim grandchild'ов. Backend
+    // спавнит `ark-core-rpc` как child — без tree-kill он остаётся висеть в
+    // task manager после quit, держит lock на ark.db и блокирует следующий
+    // запуск Kepler ("database is locked"). taskkill /T /F убивает всё
+    // дерево разом.
+    if (process.platform === "win32" && pid) {
+      try {
+        spawn("taskkill", ["/T", "/F", "/PID", String(pid)], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+      } catch (e) {
+        console.error("[kepler-shell] taskkill failed:", e);
+        backendProc.kill();
+      }
+    } else {
+      backendProc.kill();
+    }
   }
   // ArkClient WebSocket keeps event loop alive — закрываем явно чтобы
   // Electron мог exit без timeout (test mode особенно чувствителен).

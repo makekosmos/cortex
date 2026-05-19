@@ -299,4 +299,146 @@ test.describe("eden extension", () => {
       await app.close();
     }
   });
+
+  // Regression guard: journal entry content disappearing.
+  // User report (2026-05-19): "написал в дневнике несколько строк, закрыл,
+  // снова открыл — вместо чего-либо '/'. Так только с дневником".
+  //
+  // Закрывает три потенциальных причины из defense-in-depth fix:
+  //   1) Race в openTodayJournal (void saveEntry с пустым контентом vs
+  //      autosave Editor.vue) — теперь await синхронный.
+  //   2) Stale entries.value при повторном open-today — теперь loadEntry
+  //      даёт fresh state из ARK.
+  //   3) Случайный ввод в title input — для journal type readonly + tabindex=-1.
+  //
+  // Сценарий:
+  //   1) Invoke `eden:note:open-today` → создать journal с today-title.
+  //   2) Записать контент в editor через ProseMirror API.
+  //   3) Дать autosave fire (debounce 800ms + buffer).
+  //   4) Invoke `eden:note:open-today` снова (имитация повторного открытия).
+  //   5) Verify: editor показывает сохранённый контент, не пустой/"/" doc.
+  test("eden:note:open-today — journal content survives reopen", async () => {
+    const app = await launchKepler({ slug: "eden-journal-persist" });
+    try {
+      const edenWindow = await openEden(app);
+      const launcher = await app.firstWindow();
+
+      // First open — создаст today's journal entry.
+      const firstInvoke = await launcher.evaluate(async () => {
+        try {
+          await (window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }).kepler.commands.invoke("eden:note:open-today");
+          return "ok";
+        } catch (e) {
+          return "throw:" + (e instanceof Error ? e.message : String(e));
+        }
+      });
+      expect(firstInvoke).toBe("ok");
+      await edenWindow.waitForTimeout(2000);
+
+      // Подтверждаем что journal entry создан и его id — фиксируем для
+      // последующих сверок.
+      const journalIdBefore = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
+        }).api;
+        const entries = await api.listEntries();
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const journal = entries.find(
+          (e) => e.type_id === "system-type-journal" && e.title.trim() === today,
+        );
+        return journal?.id ?? null;
+      });
+      expect(journalIdBefore, "journal entry должна быть создана с today-title").not.toBeNull();
+
+      // Записать тестовый контент в ProseMirror. TipTap editor exposed
+      // через window.editor в dev? Альтернатива — typing через keyboard.
+      // Проще: напрямую через editor.commands.setContent в renderer.
+      const TEST_CONTENT = "регрессионный тест journal";
+      const typeResult = await edenWindow.evaluate(async (text) => {
+        // Editor.vue mounts ProseMirror в .ProseMirror. Достаём через
+        // editor refs нельзя (refs scoped to component). Эмулируем typing.
+        const pm = document.querySelector(".ProseMirror");
+        if (!pm) return "no-prosemirror";
+        (pm as HTMLElement).focus();
+        // Эмулируем keystroke через InputEvent, ProseMirror подхватит.
+        // Простейший путь — execCommand insertText (deprecated но работает
+        // для contenteditable).
+        document.execCommand("insertText", false, text);
+        return "ok";
+      }, TEST_CONTENT);
+      expect(typeResult).toBe("ok");
+
+      // Debounced autosave Editor.vue — 800ms. Plus буфер на ARK roundtrip.
+      await edenWindow.waitForTimeout(1800);
+
+      // Проверим что контент попал в ARK через listEntries → content_json.
+      const persistedContent = await edenWindow.evaluate(async (id) => {
+        const api = (window as unknown as {
+          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+        }).api;
+        const entry = await api.loadEntry(id!);
+        return entry?.content_json ?? null;
+      }, journalIdBefore);
+      expect(persistedContent, "контент должен быть persist'нут в ARK").toContain(TEST_CONTENT);
+
+      // Второй invoke open-today — имитирует "снова открыл" из багрепорта.
+      // Должен найти existing journal entry и подгрузить его (через
+      // loadEntry — defensive fix #2). НЕ создавать дубликат.
+      const secondInvoke = await launcher.evaluate(async () => {
+        try {
+          await (window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }).kepler.commands.invoke("eden:note:open-today");
+          return "ok";
+        } catch (e) {
+          return "throw:" + (e instanceof Error ? e.message : String(e));
+        }
+      });
+      expect(secondInvoke).toBe("ok");
+      await edenWindow.waitForTimeout(1500);
+
+      // Главная проверка: contents ProseMirror'а содержит наш текст.
+      // Это проверяет что Editor.vue гидратировался от сохранённого
+      // entry, а не от stale/empty snapshot.
+      const visibleText = await edenWindow.evaluate(() => {
+        return document.querySelector(".ProseMirror")?.textContent?.trim() ?? "";
+      });
+      expect(
+        visibleText,
+        `после повторного open-today editor должен показать "${TEST_CONTENT}", а не пустоту/"/"`,
+      ).toContain(TEST_CONTENT);
+
+      // Verify нет дубликатов journal entry для today.
+      const journalCount = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ title: string; type_id?: string | null; deleted_at?: number | null }>> };
+        }).api;
+        const entries = await api.listEntries();
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        return entries.filter(
+          (e) =>
+            e.type_id === "system-type-journal" &&
+            e.title.trim() === today &&
+            !e.deleted_at,
+        ).length;
+      });
+      expect(journalCount, "повторный open-today не должен создавать дубликат").toBe(1);
+
+      // Cleanup.
+      await edenWindow.evaluate(async (id) => {
+        try {
+          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
+            .api.deleteEntry(id!);
+        } catch {
+          /* ignore */
+        }
+      }, journalIdBefore);
+    } finally {
+      await app.close();
+    }
+  });
 });
