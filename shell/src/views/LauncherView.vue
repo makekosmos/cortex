@@ -47,10 +47,10 @@ const ARRANCADOR_GRADIENT = {
     to: "oklch(0.45 0.18 20)",
 };
 
-// Eden accent gradient — глубокий синий.
+// Eden accent gradient — оранжевый #FF5C00.
 const EDEN_GRADIENT = {
-    from: "oklch(0.42 0.18 260)",
-    to: "oklch(0.22 0.14 265)",
+    from: "#ff5c00",
+    to: "#b33800",
 };
 
 const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
