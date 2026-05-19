@@ -1,7 +1,7 @@
 {
   "name": "@kosmos/extension-arrancador",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Arrancador game library — Vue extension для Kepler shell.",
   "//": "Workspace deps (@kosmos/*) приходят через alias'ы в shared vite.extensions.config.mjs. Этот package.json существует только для local `bun install` чтобы получить runtime деп'ы (tailwind-стек), которых нет в hoisted kepler-shell/node_modules.",
