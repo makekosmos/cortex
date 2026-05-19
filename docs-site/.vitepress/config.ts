@@ -62,6 +62,7 @@ export default defineConfig({
     siteTitle: "Kosmos",
 
     nav: [
+      { text: "Что нового", link: "/whats-new" },
       { text: "Старт", link: "/guide/getting-started" },
       { text: "Концепты", link: "/concepts/architecture" },
       { text: "Приложения", link: "/apps/" },
