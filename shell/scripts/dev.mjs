@@ -51,12 +51,15 @@ function shutdown(signal) {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-// 1) Vite dev server'ы для extension'ов (HMR при developerMode toggle).
-//    Запуск опционален: если у extension'ов нет своего vite в node_modules
-//    (workspace без явного devDep) — Vite servers упадут с ERR_MODULE_NOT_FOUND.
-//    Не блокирующий случай: extension'ы и так грузятся из dist/ (oneshot build
-//    выше). Включай через KEPLER_DEV_EXTENSIONS=1 если хочешь HMR.
-if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
+// 1) Vite dev server'ы для extension'ов (HMR live-reload). По дефолту ВКЛЮЧЕНО —
+//    extension-host (`shell/electron/extension-host.ts::resolveExtensionSource`)
+//    через TCP probe сам решает на лету: порт отвечает → грузим с Vite (HMR),
+//    не отвечает → fallback на `dist/index.html`. Так что включение по дефолту
+//    безопасно — если запуск Vite упадёт, окно всё равно откроется из dist.
+//
+//    Opt-out: `KEPLER_DEV_EXTENSIONS=0` (например, если работаешь только над
+//    shell'ом и не хочешь четыре лишних Vite процесса в памяти).
+if (process.env.KEPLER_DEV_EXTENSIONS !== "0") {
   startChild("dev-extensions", "node", ["scripts/dev-extensions.mjs"]);
 }
 

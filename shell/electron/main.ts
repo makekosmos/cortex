@@ -930,14 +930,14 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
   const declared = findDeclaredCommand(id);
   if (declared) {
     if (declared.mode === "open") {
-      openExtension(declared.extensionId, declared.route);
+      await openExtension(declared.extensionId, declared.route);
       hideLauncher();
       return;
     }
     // action mode: dynamic invoke через ARK. Auto-launch если extension
     // не запущен — окно открывается, ждём commands.register, dispatch'им.
     if (!isExtensionRunning(declared.extensionId)) {
-      openExtension(declared.extensionId, declared.route);
+      await openExtension(declared.extensionId, declared.route);
       const ready = await awaitExtensionCommand(declared.extensionId, id);
       if (!ready) {
         console.warn(
@@ -969,7 +969,7 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
     if (colonIdx > 0) {
       const extId = id.slice(0, colonIdx);
       if (!isExtensionRunning(extId)) {
-        openExtension(extId);
+        await openExtension(extId);
         await awaitExtensionCommand(extId, id);
       }
     }
@@ -1184,7 +1184,7 @@ app.whenReady().then(async () => {
   if (process.env.KEPLER_BENCHMARK_OPEN_ALL === "1") {
     setTimeout(() => {
       for (const id of ["horologion", "delphi", "arrancador", "eden"]) {
-        try { openExtension(id); } catch (e) { console.error(`bench open ${id} failed:`, e); }
+        void openExtension(id).catch((e) => console.error(`bench open ${id} failed:`, e));
       }
       // Dashboard — встроенный shell view (не extension); открывается через
       // tray-команду.

@@ -242,7 +242,7 @@ ipcMain.handle("kepler:focus-widget:hide", () => {
 });
 
 ipcMain.handle("kepler:focus-widget:open-horologion", async () => {
-  openExtension("horologion");
+  await openExtension("horologion");
 });
 
 // Cleanup on app quit.
