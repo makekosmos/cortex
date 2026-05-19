@@ -247,6 +247,53 @@ window.kepler.window.onMaximizedChange(cb: (value: boolean) => void): () => void
 
 Native `titleBarOverlay` для extension окон **не используется** — frame убирается полностью (`titleBarStyle: "hidden"`), кнопки управления окном рисует extension через `<WindowControls />`. Это даёт консистентный look across acrylic / non-acrylic extension'ов.
 
+### Maximizable toggle
+
+```ts
+window.kepler.window.setMaximizable(value: boolean): Promise<void>
+```
+
+IPC `kepler:extension:window:set-maximizable` → `win.setMaximizable(value)`.
+Используется Eden в zen mode: `setMaximizable(false)` блокирует Win32
+native поведение «double-click по titlebar → maximize», чтобы dblclick на
+no-drag заголовке отрабатывал кастомный handler (dock-corner toggle), а
+не системный maximize. На выходе из zen — `setMaximizable(true)`.
+
+### Dock-corner mode
+
+```ts
+window.kepler.window.toggleDockCorner(): Promise<boolean>
+window.kepler.window.isDocked(): Promise<boolean>
+window.kepler.window.onDockedChange(cb: (value: boolean) => void): () => void
+```
+
+IPC: `kepler:extension:window:toggle-dock-corner`,
+`kepler:extension:window:is-docked` + push-event
+`kepler:extension:window:docked-changed`.
+
+`toggleDockCorner()`:
+
+- Если окно **не** docked — сохраняет текущие bounds, переводит окно в
+  floating widget: 360×560, прижато к правому верхнему углу активного
+  display'я (`marginX=12`, `marginTop=12`), `setAlwaysOnTop(true)`,
+  `setSkipTaskbar(true)`.
+- Если docked — восстанавливает saved bounds, `setAlwaysOnTop(false)`,
+  `setSkipTaskbar(false)`.
+- В обоих случаях резолвится в новый docked-state + main отправляет
+  `docked-changed` event в renderer.
+
+Используется только Eden (в zen mode по dblclick на title). Если другой
+extension захочет — paттерн полностью переиспользуем, никакой Eden-specific
+логики в shell нет.
+
+::: warning Drag-region и dblclick
+Electron `-webkit-app-region: drag` перехватывает pointer events для
+Win32 window drag — DOM `click` / `dblclick` на таком элементе **не
+срабатывают**. Чтобы dblclick handler сработал, нужен child-элемент с
+явным `-webkit-app-region: no-drag` (у Eden — `.eden-titlebar-title`
+span).
+:::
+
 ## Window backdrop (acrylic / mica)
 
 Когда manifest задаёт `"windowEffect": "acrylic"` (или `"mica"`), `BrowserWindow` создаётся с:

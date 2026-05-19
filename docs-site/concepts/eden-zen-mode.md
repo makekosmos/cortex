@@ -149,7 +149,86 @@ transparent, `.app-container` — единственный полупрозра�
 (`.focus-mode-active .app-container`) ищет вложенный `.app-container`
 внутри `.focus-mode-active` — никогда не матчит.
 
+## Dock-corner widget mode
+
+Phase 6.1.1 (2026-05-19). Расширение zen mode: окно превращается в floating
+widget, прижатый к правому верхнему углу активного display'я и закреплённый
+поверх остальных окон. Удобно для «всегда под рукой» во время другой работы.
+
+### Активация
+
+- **В zen mode** двойной клик по title в titlebar (`.eden-titlebar-title`
+  span) — toggle dock-corner.
+- Повторный двойной клик — возврат к обычному zen-окну (восстанавливает
+  предыдущие bounds + alwaysOnTop=false).
+- Выход из zen (`Esc Esc` / chord / клик по LoaderPinwheel) автоматически
+  снимает dock-corner.
+
+### Bounds
+
+- Ширина / высота: 360 × 560.
+- Позиция: правый верхний угол active display'я, отступы `marginX = 12`,
+  `marginTop = 12`.
+- `alwaysOnTop: true` + `skipTaskbar: true` пока docked.
+
+### Почему нужна no-drag зона
+
+Electron `-webkit-app-region: drag` (используется в titlebar чтобы
+перетаскивать окно курсором) перехватывает pointer events на уровне Win32
+— DOM `click` / `dblclick` **не fire'ятся**. Чтобы dblclick на title
+сработал, span с заголовком явно объявлен `-webkit-app-region: no-drag`
+(`.eden-titlebar-title` в Eden CSS). Это «дырка» в drag-region, где
+браузер видит обычные mouse-события.
+
+### setMaximizable(false) в zen
+
+При входе в zen Eden вызывает `window.kepler.window.setMaximizable(false)`.
+На Windows это блокирует native поведение «double-click по titlebar →
+maximize», которое иначе срабатывало бы поверх нашего dblclick handler'а
+для dock toggle. При выходе из zen — `setMaximizable(true)`.
+
+### IPC и preload API
+
+`shell/electron/extension-host.ts` регистрирует:
+
+```ts
+ipcMain.handle('kepler:extension:window:toggle-dock-corner', ...)
+ipcMain.handle('kepler:extension:window:is-docked', ...)
+ipcMain.handle('kepler:extension:window:set-maximizable', ...)
+// + push-event 'kepler:extension:window:docked-changed'
+```
+
+`extension-preload.ts` exposes:
+
+```ts
+window.kepler.window.toggleDockCorner(): Promise<boolean>  // resolves to new docked state
+window.kepler.window.isDocked(): Promise<boolean>
+window.kepler.window.onDockedChange(cb: (value: boolean) => void): () => void
+window.kepler.window.setMaximizable(value: boolean): Promise<void>
+```
+
+### Visual marker — accent border
+
+Когда `.app-container.eden-docked` активен, через `::before` рисуется
+тонкая 2px полоса по верхней границе окна — gradient от
+`var(--eden-accent-color)` (`#ff5c00`) к темнее. Визуально подчёркивает,
+что окно сейчас в «закреплённом» режиме и поверх других. См.
+`extensions/eden/src/index.css`.
+
+## Eden accent color
+
+`--eden-accent-color: #ff5c00` (Eden orange) определён в
+`extensions/eden/src/index.css`. Применяется к:
+
+- `::marker` bullet / ordered list в редакторе (`.ProseMirror ul li::marker`,
+  `.ProseMirror ol li::marker`) — оранжевые маркеры списков.
+- Gradient в `.app-container.eden-docked::before` — accent-полоса
+  dock-corner mode.
+
+Launcher gradient для Eden (`EDEN_GRADIENT` в `shell/electron/commands.ts`)
+тоже переведён на orange: `#ff5c00 → #b33800`.
+
 ## Связанное
 
-- [Extension host](./extension-host) — `windowEffect` field в manifest, BrowserWindow options
+- [Extension host](./extension-host) — `windowEffect` field в manifest, BrowserWindow options, dock-corner / set-maximizable IPC
 - [Command bus](./command-bus) — static vs dynamic команды

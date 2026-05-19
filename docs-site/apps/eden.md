@@ -215,6 +215,32 @@ Elevation surfaces (`dialog-card`, `search-overlay`, `note-type-menu`, etc.) о�
 
 `InlineCaret` TipTap extension убран из `Editor.vue`: widget decoration ломал drag-selection. Кастомный курсор остаётся через `CustomCaret` из `@kosmos/visuals` (Vapor-friendly overlay над браузерным).
 
+### Accent color
+
+Eden использует свой accent — `--eden-accent-color: #ff5c00` (orange), задан
+в `extensions/eden/src/index.css`. Применяется к:
+
+- `::marker` bullet / ordered list в TipTap редакторе.
+- Gradient border в dock-corner widget mode (`.app-container.eden-docked::before`).
+
+Launcher gradient `EDEN_GRADIENT` (в `shell/electron/commands.ts`) синхронно
+переведён на orange `#ff5c00 → #b33800`. Иконка `extensions/eden/icon.png`
+обновлена (показывается в Settings → Extensions и в static open-командах
+launcher'а).
+
+### Dock-corner widget mode
+
+В zen mode двойной клик по title в titlebar превращает Eden в floating
+widget: 360×560, прижатый к правому верхнему углу, `alwaysOnTop`,
+`skipTaskbar`. Повторный dblclick — обратно в обычное zen-окно. Выход из
+zen автоматически снимает dock. Visual marker — тонкая 2px accent-полоса
+сверху окна.
+
+Под капотом — `window.kepler.window.toggleDockCorner()` +
+`setMaximizable(false)` в zen (чтобы native «double-click → maximize» не
+перехватывал dblclick handler). Полная схема — [Eden zen mode → Dock-corner
+widget mode](../concepts/eden-zen-mode#dock-corner-widget-mode).
+
 ### E2E coverage
 
 `tests/e2e/eden.spec.ts → describe("eden:note:open-today")` — спека проверяет, что:
