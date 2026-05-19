@@ -1006,6 +1006,15 @@ const dockedState = new Map<
 const DOCK_WIDTH = 360;
 const DOCK_HEIGHT = 560;
 
+function broadcastDocked(win: BrowserWindow, isDocked: boolean): void {
+  if (win.isDestroyed()) return;
+  try {
+    win.webContents.send("kepler:extension:window:docked-changed", isDocked);
+  } catch {
+    // renderer not ready — ignore
+  }
+}
+
 ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
   const id = extensionIdForSender(e.sender);
   const win = windowForSender(e.sender);
@@ -1022,6 +1031,7 @@ ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
       height: stored.height,
     });
     dockedState.delete(id);
+    broadcastDocked(win, false);
     return;
   }
 
@@ -1039,17 +1049,16 @@ ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
   if (win.isMaximized()) win.unmaximize();
   const display = screen.getDisplayMatching(current);
   const workArea = display.workArea;
-  // Горизонтальный margin для зазора + компенсация Win11 invisible
-  // resize-borders (`frame: true` + `titleBarStyle: "hidden"` рисует
-  // ~8px невидимых borders, outer bounds setBounds их включает).
-  // Вертикально окно прижимается к верху workArea — taskbar внизу уже
-  // исключён из workArea, дополнительный margin не нужен.
-  const marginX = 24;
+  // Margin'ы для зазора + компенсация Win11 invisible resize-borders
+  // (`frame: true` + `titleBarStyle: "hidden"` рисует ~8px невидимых
+  // borders, outer bounds setBounds их включает).
+  const marginX = 12;
+  const marginTop = 12;
   const width = Math.min(DOCK_WIDTH, workArea.width - marginX * 2);
-  const height = Math.min(DOCK_HEIGHT, workArea.height);
+  const height = Math.min(DOCK_HEIGHT, workArea.height - marginTop);
   win.setBounds({
     x: workArea.x + workArea.width - width - marginX,
-    y: workArea.y,
+    y: workArea.y + marginTop,
     width,
     height,
   });
@@ -1067,6 +1076,12 @@ ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
   }, 0);
 
   win.setAlwaysOnTop(true, "floating");
+  broadcastDocked(win, true);
+});
+
+ipcMain.handle("kepler:extension:window:is-docked", (e): boolean => {
+  const id = extensionIdForSender(e.sender);
+  return id ? dockedState.has(id) : false;
 });
 
 // ---------------------------------------------------------------------------

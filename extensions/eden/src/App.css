@@ -24,6 +24,25 @@
   -webkit-backdrop-filter: blur(24px) saturate(140%);
 }
 
+/* Docked-widget marker: тонкая accent-полоса сверху, gradient от accent
+   в центре к transparent по краям — мягко выделяет dock'нутое окно. */
+.app-container.eden-docked::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+  z-index: 10001;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--eden-accent-color) 50%,
+    transparent 100%
+  );
+}
+
 /* В zen — все вложенные surface'ы transparent, чтобы acrylic был один
    слой без накопления opacity. Вне zen — defaults. */
 .app-container.focus-mode-active .kosmos-titlebar,
@@ -2534,6 +2553,14 @@
 
 .ProseMirror li {
   margin-bottom: 0.2em;
+}
+
+/* Bullet/ordered маркеры — eden accent color. ::marker рендерит только
+   маркер списка (точку/цифру), не текст li — поэтому контент остаётся
+   обычного цвета foreground. */
+.ProseMirror ul > li::marker,
+.ProseMirror ol > li::marker {
+  color: var(--eden-accent-color);
 }
 
 .ProseMirror blockquote {

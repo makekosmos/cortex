@@ -16,7 +16,7 @@
   </div>
 
   <!-- Main app -->
-  <div v-else :class="['app-container', { 'focus-mode-active': layout.isZenMode }]">
+  <div v-else :class="['app-container', { 'focus-mode-active': layout.isZenMode, 'eden-docked': isDocked }]">
     <SearchOverlay
       :is-open="layout.isSearchOpen"
       :query="pendingQuery"
@@ -285,6 +285,44 @@ function onTitleDblClick() {
     kepler?: { window?: { toggleDockCorner?: () => Promise<void> } };
   }).kepler?.window?.toggleDockCorner?.();
 }
+
+// Docked-widget state — для CSS-маркера (.eden-docked) на app-container.
+// Main process broadcast'ит изменения через `onDockedChange`.
+const isDocked = shallowRef(false);
+let offDockedChange: (() => void) | null = null;
+
+interface KeplerWindowApiExt {
+  isDocked?: () => Promise<boolean>;
+  onDockedChange?: (handler: (value: boolean) => void) => () => void;
+}
+
+onMounted(async () => {
+  const winApi = (window as unknown as {
+    kepler?: { window?: KeplerWindowApiExt };
+  }).kepler?.window;
+  if (!winApi) return;
+  if (winApi.isDocked) {
+    try {
+      isDocked.value = await winApi.isDocked();
+    } catch {
+      // ignore
+    }
+  }
+  if (winApi.onDockedChange) {
+    offDockedChange = winApi.onDockedChange((value) => {
+      isDocked.value = value;
+    });
+  }
+});
+
+onUnmounted(() => {
+  try {
+    offDockedChange?.();
+  } catch {
+    // ignore
+  }
+  offDockedChange = null;
+});
 
 // На Windows native double-click-on-titlebar разворачивает окно. В zen mode
 // это не нужно (header и так скрыт, maximize не имеет UX смысла) — отключаем,

@@ -62,6 +62,24 @@ const api = {
         Повторный вызов возвращает окно в исходное положение. */
     toggleDockCorner: (): Promise<void> =>
       ipcRenderer.invoke("kepler:extension:window:toggle-dock-corner"),
+    /** Snapshot текущего docked-состояния (для initial hydrate). */
+    isDocked: (): Promise<boolean> =>
+      ipcRenderer.invoke("kepler:extension:window:is-docked") as Promise<boolean>,
+    /** Подписка на изменение docked-состояния (broadcast при
+        toggleDockCorner). Returns unsubscribe. */
+    onDockedChange: (
+      handler: (isDocked: boolean) => void,
+    ): Unsubscribe => {
+      const wrapped = (_e: unknown, value: unknown) => {
+        if (typeof value === "boolean") handler(value);
+      };
+      ipcRenderer.on("kepler:extension:window:docked-changed", wrapped);
+      return () =>
+        ipcRenderer.removeListener(
+          "kepler:extension:window:docked-changed",
+          wrapped,
+        );
+    },
     /** Включить/выключить maximize. На Windows `false` блокирует native
         double-click-on-titlebar-maximize — даёт нашему dblclick handler
         отработать без флика. */
