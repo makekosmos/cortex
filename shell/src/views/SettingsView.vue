@@ -2023,6 +2023,12 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
   margin-top: 1px;
+  /* gap 4px между токенами (версия / dev badge / автор / backup count) —
+     раньше токены липли друг к другу, выглядело как один слово `v0.1.6·Kazui`. */
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 4px;
+  align-items: baseline;
 }
 
 .ext-description {

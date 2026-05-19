@@ -112,7 +112,7 @@ function createSessionState() {
   let lastBlockingApplied: { active: boolean; blocklistId: string | null } | null = null;
 
   async function applyFocusBlocking(): Promise<void> {
-    const blocklistId = pomodoroDraft.value.focusProfileId;
+    const blocklistId = pomodoroSettings.focusBlocklistId;
     const shouldBlock =
       phase.value === "work" &&
       isRunning.value &&
@@ -162,7 +162,7 @@ function createSessionState() {
       phase.value === "work" &&
       isRunning.value &&
       !isPaused.value &&
-      pomodoroDraft.value.focusProfileId != null;
+      pomodoroSettings.focusBlocklistId != null;
 
     void api.setState({ active, remainingSec, label, mode, blockingActive });
   }

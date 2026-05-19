@@ -159,7 +159,10 @@ async function main() {
       id,
       name: manifest.name ?? id,
       description: manifest.description ?? "",
-      author: manifest.author ?? "yoso-industries",
+      // author — optional. Раньше fallback'или на "yoso-industries", но это
+      // вводило в заблуждение (показывался автор там где manifest его не
+      // объявил). null/undefined → marketplace UI просто не рендерит автора.
+      author: manifest.author ?? null,
       version: info.version,
       keplerApiVersion: manifest.keplerApiVersion ?? "^1.0.0",
       iconUrl: manifest.icon

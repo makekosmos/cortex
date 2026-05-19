@@ -128,12 +128,6 @@ const draftTasks = computed({
         pomodoroDraft.value = { ...pomodoroDraft.value, tasks: v };
     },
 });
-const draftFocusProfileId = computed({
-    get: () => pomodoroDraft.value.focusProfileId,
-    set: (v: string | null) => {
-        pomodoroDraft.value = { ...pomodoroDraft.value, focusProfileId: v };
-    },
-});
 
 async function onSubmit() {
     if (p.isRunning.value) {
@@ -158,7 +152,6 @@ async function onSubmit() {
                 <PomodoroDraftInput
                     v-model="draftV"
                     v-model:tasks="draftTasks"
-                    v-model:focus-profile-id="draftFocusProfileId"
                     placeholder="Над чем работаем? @ для задачи"
                     @submit="onSubmit"
                 />

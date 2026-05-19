@@ -22,9 +22,7 @@ export interface PomodoroDraftTask {
 export const pomodoroDraft = ref<{
   title: string;
   tasks: PomodoroDraftTask[];
-  /** id блоклиста из ARK `blocklist_obj`. `null` ⇒ блокировка не активируется. */
-  focusProfileId: string | null;
-}>({ title: "", tasks: [], focusProfileId: null });
+}>({ title: "", tasks: [] });
 
 // Кэш задач Delphi (`task_obj`) для @-mention.
 export const tasks = ref<DelphiTask[]>([]);

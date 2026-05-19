@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { Play } from "lucide-vue-next";
 import { Dropdown, SettingsRow, Toggle } from "@kosmos/visuals";
 import { pomodoroSettings, resetPomodoroSettings } from "../lib/pomodoroSettings";
@@ -8,6 +8,42 @@ import { playSound, SOUND_OPTIONS, type SoundName } from "../lib/sounds";
 const soundOptions = computed(() =>
     SOUND_OPTIONS.map((s) => ({ value: s.value, label: s.label })),
 );
+
+interface Blocklist { id: string; name: string }
+const blocklists = ref<Blocklist[]>([]);
+const blocklistsAvailable = ref(false);
+
+onMounted(async () => {
+    const k = (window as unknown as {
+        kepler?: { ark?: { request: (op: string, params?: Record<string, unknown>) => Promise<unknown> } };
+    }).kepler;
+    if (!k?.ark) return;
+    try {
+        const res = (await k.ark.request("focus.list_blocklists")) as
+            | { blocklists?: Blocklist[] }
+            | Blocklist[];
+        const list = Array.isArray(res) ? res : res?.blocklists ?? [];
+        blocklists.value = list.filter(
+            (b) => b && typeof b.id === "string" && typeof b.name === "string",
+        );
+        blocklistsAvailable.value = true;
+    } catch (e) {
+        blocklistsAvailable.value = false;
+        console.warn("[horologion] focus.list_blocklists unavailable:", e);
+    }
+});
+
+const blocklistOptions = computed(() => [
+    { value: "", label: "Без блокировки" },
+    ...blocklists.value.map((b) => ({ value: b.id, label: b.name })),
+]);
+
+const blocklistModel = computed<string>({
+    get: () => pomodoroSettings.focusBlocklistId ?? "",
+    set: (v: string) => {
+        pomodoroSettings.focusBlocklistId = v === "" ? null : v;
+    },
+});
 
 function clampMin(v: number): number {
     return Math.max(1, Math.min(180, Math.floor(v)));
@@ -95,6 +131,21 @@ function testSound(s: SoundName) {
                         v-model="pomodoroSettings.systemNotifications"
                         aria-label="Системные уведомления"
                     />
+                </template>
+            </SettingsRow>
+            <SettingsRow
+                v-if="blocklistsAvailable"
+                title="Блокировки во время фокуса"
+                description="Профиль блоклиста, активируется на work-фазе помодоро"
+            >
+                <template #control>
+                    <span class="row__control">
+                        <Dropdown
+                            v-model="blocklistModel"
+                            :options="blocklistOptions"
+                            class="dd"
+                        />
+                    </span>
                 </template>
             </SettingsRow>
         </section>

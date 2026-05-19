@@ -18,7 +18,8 @@ export interface CatalogExtension {
   id: string;
   name: string;
   description: string;
-  author: string;
+  /** Optional — null/undefined значит «автор не указан» (UI просто не рендерит). */
+  author: string | null;
   version: string;
   keplerApiVersion: string;
   iconUrl: string | null;

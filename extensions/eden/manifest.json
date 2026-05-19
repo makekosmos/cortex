@@ -3,7 +3,6 @@
   "name": "Eden",
   "version": "0.1.7",
   "description": "Заметки, дневник, мысли — TipTap editor + ARK objects",
-  "author": "Kazui",
   "keplerApiVersion": "^1.1.0",
   "kind": "vue",
   "icon": "icon.png",

@@ -24,6 +24,9 @@ export interface PomodoroSettings {
   breakEndSound: SoundName;
   /** Громкость рингтона, 0..1. */
   ringtoneVolume: number;
+  /** id блоклиста из ARK `blocklist_obj`. `null` ⇒ блокировка не активируется
+   * во время work-фазы. Настраивается в SettingsView. */
+  focusBlocklistId: string | null;
 }
 
 export const DEFAULT_POMODORO_SETTINGS: PomodoroSettings = {
@@ -38,6 +41,7 @@ export const DEFAULT_POMODORO_SETTINGS: PomodoroSettings = {
   workEndSound: "bell",
   breakEndSound: "chime",
   ringtoneVolume: 1,
+  focusBlocklistId: null,
 };
 
 // В extension'е настройки изолированы по id; раньше ключ был «horologion.pomodoro.settings.v1».
