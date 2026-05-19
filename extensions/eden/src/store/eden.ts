@@ -338,8 +338,40 @@ export const useEdenStore = defineStore("eden", () => {
       return;
     }
 
-    const newEntry = createEntry(todayTitle, SYSTEM_TYPE_JOURNAL_ID);
+    // НЕ используем `createEntry` — он жёстко ставит `__untitledTitle: true`
+    // в header_props_json, и getEntryDisplayTitle тогда подменяет реальный
+    // title "2026-05-19" на placeholder "Без названия". Для дневника title
+    // — это и есть смысл, header_props должны быть пустыми (без flag'а).
+    const newEntry: Entry = {
+      id: uuidv4(),
+      title: todayTitle,
+      content_json: JSON.stringify({
+        type: "doc",
+        content: [{ type: "paragraph" }],
+      }),
+      created_at: Date.now(),
+      updated_at: Date.now(),
+      folder_id: null,
+      type_id: SYSTEM_TYPE_JOURNAL_ID,
+      header_layout: null,
+      header_props_json: "{}",
+      schema_version: 1,
+      deleted_at: null,
+    };
+    entries.value = [newEntry, ...entries.value];
     currentEntry.value = newEntry;
+
+    if (window.api) {
+      void window.api.saveEntry(newEntry).then((result) => {
+        if (!result.ok) {
+          console.warn("[eden] save journal entry failed:", result);
+          entries.value = entries.value.filter((e) => e.id !== newEntry.id);
+          if (currentEntry.value?.id === newEntry.id) {
+            currentEntry.value = null;
+          }
+        }
+      });
+    }
   }
 
   function openTypeCollection(noteTypeId: string) {
