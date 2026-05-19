@@ -61,5 +61,4 @@ libc = "0.2"
 
 [dev-dependencies]
 tempfile.workspace = true
-tokio-test = "0.4"
 httpmock = "0.7"

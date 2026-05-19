@@ -1,0 +1,138 @@
+ Downloading crates ...
+  Downloaded leb128fmt v0.1.0
+  Downloaded bumpalo v3.20.2
+  Downloaded windows-interface v0.59.3
+  Downloaded wit-bindgen-rust-macro v0.51.0
+  Downloaded windows-strings v0.5.1
+  Downloaded prettyplease v0.2.37
+  Downloaded wit-bindgen v0.57.1
+  Downloaded wit-bindgen-rust v0.51.0
+  Downloaded windows-core v0.62.2
+  Downloaded wasm-bindgen-macro-support v0.2.121
+  Downloaded wasip3 v0.4.0+wasi-0.3.0-rc-2026-01-06
+  Downloaded wasm-encoder v0.244.0
+  Downloaded wit-parser v0.244.0
+  Downloaded wit-bindgen v0.51.0
+  Downloaded js-sys v0.3.98
+  Downloaded wasmparser v0.244.0
+  Downloaded wasip2 v1.0.3+wasi-0.2.9
+  Downloaded r-efi v6.0.0
+  Downloaded wit-bindgen-core v0.51.0
+  Downloaded wit-component v0.244.0
+  Downloaded wasm-bindgen v0.2.121
+  Downloaded r-efi v5.3.0
+  Downloaded core-foundation-sys v0.8.7
+  Downloaded wasm-bindgen-shared v0.2.121
+  Downloaded iana-time-zone v0.1.65
+  Downloaded wasm-metadata v0.244.0
+  Downloaded wasm-bindgen-futures v0.4.71
+  Downloaded windows_x86_64_gnullvm v0.52.6
+  Downloaded signal-hook-registry v1.4.8
+  Downloaded windows_aarch64_gnullvm v0.52.6
+  Downloaded redox_users v0.4.6
+  Downloaded redox_syscall v0.5.18
+  Downloaded libredox v0.1.16
+  Downloaded hermit-abi v0.5.2
+  Downloaded windows_i686_gnullvm v0.52.6
+  Downloaded gloo-timers v0.3.0
+  Downloaded async-signal v0.2.14
+  Downloaded windows-result v0.4.1
+  Downloaded windows-implement v0.60.2
+  Downloaded web-time v1.1.0
+  Downloaded web-sys v0.3.98
+  Downloaded android_system_properties v0.1.5
+  Downloaded wasm-bindgen-macro v0.2.121
+  Downloaded wasi v0.11.1+wasi-snapshot-preview1
+  Downloaded id-arena v2.3.0
+  Downloaded iana-time-zone-haiku v0.1.2
+  Downloaded windows_x86_64_gnu v0.52.6
+  Downloaded windows_aarch64_msvc v0.52.6
+  Downloaded windows_i686_msvc v0.52.6
+  Downloaded windows_i686_gnu v0.52.6
+  Downloaded linux-raw-sys v0.12.1
+  Downloaded winapi-x86_64-pc-windows-gnu v0.4.0
+  Downloaded winapi-i686-pc-windows-gnu v0.4.0
+shear/unused_dependency
+
+  × unused dependency `uuid`
+    ╭─[crates/ark-core/rust/Cargo.toml:28:1]
+ 27 │ sha2.workspace = true
+ 28 │ uuid.workspace = true
+    · ──┬─
+    ·   ╰── not used in code
+ 29 │ chrono.workspace = true
+    ╰────
+  help: remove this dependency
+
+shear/unused_dependency
+
+  × unused dependency `axum`
+    ╭─[services/ark-relay-server/Cargo.toml:13:1]
+ 12 │ tokio = { version = "1", features = ["full"] }
+ 13 │ axum = "0.7"
+    · ──┬─
+    ·   ╰── not used in code
+ 14 │ tokio-tungstenite.workspace = true
+    ╰────
+  help: remove this dependency
+
+shear/unused_dependency
+
+  × unused dependency `serde`
+    ╭─[services/ark-relay-server/Cargo.toml:16:1]
+ 15 │ futures-util.workspace = true
+ 16 │ serde.workspace = true
+    · ──┬──
+    ·   ╰── not used in code
+ 17 │ serde_json.workspace = true
+    ╰────
+  help: remove this dependency
+
+shear/unused_dependency
+
+  × unused dependency `uuid`
+    ╭─[services/ark-relay-server/Cargo.toml:19:1]
+ 18 │ rusqlite.workspace = true
+ 19 │ uuid.workspace = true
+    · ──┬─
+    ·   ╰── not used in code
+ 20 │ 
+    ╰────
+  help: remove this dependency
+
+shear/unused_dependency
+
+  × unused dependency `tokio-test`
+    ╭─[services/kepler-backend/Cargo.toml:64:1]
+ 63 │ tempfile.workspace = true
+ 64 │ tokio-test = "0.4"
+    · ─────┬────
+    ·      ╰── not used in code
+ 65 │ httpmock = "0.7"
+    ╰────
+  help: remove this dependency
+
+shear/unused_dependency
+
+  × unused dependency `chrono`
+    ╭─[services/kepler-watcher/Cargo.toml:12:1]
+ 11 │ [dependencies]
+ 12 │ chrono.workspace = true
+    · ───┬──
+    ·    ╰── not used in code
+    ╰────
+  help: remove this dependency
+
+shear/summary
+
+  ✗ 6 errors
+
+Advice:
+  ☞ run with `--fix` to fix 6 issues
+  ☞ to suppress a dependency issue
+   ╭─[Cargo.toml:2:12]
+ 1 │ [package.metadata.cargo-shear] # or [workspace.metadata.cargo-shear]
+ 2 │ ignored = ["crate-name"]
+   ·            ──────┬─────
+   ·                  ╰── add a crate name here
+   ╰────

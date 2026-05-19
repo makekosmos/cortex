@@ -21,6 +21,8 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 10 | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳ | ⏳ |
 | 12 | Password manager (как хранить — TBD) | ⏳ |
 | 13 | Raycast API совместимость — целевая в Kepler **0.5.0** | ⏳ |
+| 14 | Eden state на **Pinia Colada** (auto-cache + dedup + revalidation, минус ~200 строк самопального state-sync) | ⏳ |
+| 16 | **AI semantic search** в ARK — sqlite-vec + fastembed-rs + DirectML на Windows, MiniLM bundle + Qwen3 opt-in | ⏳ |
 
 ## Phase 0 ✅ — Backend extracted
 
@@ -289,6 +291,45 @@ GitHub — отдельный destination type (не path). Auto-push в private
 
 Решение — отдельным spec'ом перед началом реализации.
 
+## Phase 14 ⏳ — Eden state на Pinia Colada
+
+Цель — заменить **самопальный** server-state-management в `extensions/eden/src/store/eden.ts` (saveCoordinator + latestSaveTimestamps + manual `entries.value[idx]` обновления) на queries/mutations [Pinia Colada](https://pinia-colada.esm.dev/) (v1.3.0+, аналог TanStack Query для Vue).
+
+### Что даст
+
+- **Минус ~200 строк** custom state-sync кода (саму идею «когда entry обновился, найти его в entries.value по id и заменить» можно перестать писать руками).
+- **Auto dedup** для конкурентных save (сейчас руками через `saveCoordinator.inFlight/queued`).
+- **Stale-while-revalidate** для `listEntries` (показываем кэш пока ARK refetch'ится).
+- **Background refetch на window focus** — entries автоматически обновляются когда юзер возвращается к Eden.
+- **Optimistic updates** для mutations с auto-rollback при ошибке.
+- **Лишает класса багов** типа [silent-save-skip](https://github.com/ksanrse/kepler/commit/acd31732) — мы перестаём писать stale-detection логику сами, делегируем библиотеке.
+
+### План
+
+Pinia Colada **коэкзистит** с обычной Pinia → миграция инкрементальная, не big-bang:
+
+1. **Pilot** (~30 мин): `bun add @pinia/colada` в `extensions/eden/`, `app.use(PiniaColada)` в `main.ts`. Установка — drop-in, никакого behavior change. Этот шаг можно сделать сейчас (E3 в [experiments harness](/agents/spec-templates#experiments)).
+2. **Query #1**: конвертировать `listEntries` → `useQuery({ key: ['entries'], query: listEntries })`. Удалить ручной `entries.value = await listEntries()` из `initApp` / `openTodayJournal` / `refreshData`.
+3. **Query #2**: `loadEntry(id)` → `useQuery({ key: ['entry', id], query: () => loadEntry(id) })`.
+4. **Mutation #1**: `saveEntry` → `useMutation({ mutation: saveEntry, onSuccess: () => queryCache.invalidate(['entries']) })`. Удалить `saveCoordinator` и `latestSaveTimestamps`.
+5. **Mutation #2**: `deleteEntry`, `saveNoteType` — аналогично.
+6. **Cleanup**: удалить orphan reactive refs (`entries.value` если больше никем не используется).
+
+### Метрики (proof loop обязателен)
+
+| Метрика | До | После | Цель |
+|---|---|---|---|
+| `wc -l extensions/eden/src/store/eden.ts` | 686 | TBD | ≤ 500 |
+| Eden bundle `index.js` gzip | 113 KB | TBD | ≤ 125 KB (стоимость либы ~5-10KB) |
+| `tests/e2e/eden.spec.ts` wall-clock | TBD | TBD | не выросло |
+
+baseline снят в `.agent/experiments/2026-05-19-tooling-pass/` (E3).
+
+### Riски
+
+- Pinia Colada query-key invalidation — нужно правильно подобрать гранулярность ключей. Слишком грубо → лишние refetch'и; слишком тонко → stale data.
+- `useQuery` / `useMutation` — composables, должны вызываться в `setup` Vue компонента. Store-функции `eden.ts` (вне компонента) не могут их звать напрямую — нужен рефакторинг API store'а (либо store возвращает queries/mutations refs, либо переезжаем на queries-from-composables паттерн).
+
 ## Phase 13 ⏳ — Raycast API совместимость <Badge type="tip" text="target: 0.5.0" />
 
 Цель — поддержать **подмножество [Raycast Extension API](https://developers.raycast.com/api-reference)** так, чтобы существующие Raycast extensions могли быть портированы в Kepler с минимальными правками (или вообще без — через адаптер-loader). К релизу Kepler **0.5.0** — обязательно.
@@ -312,6 +353,46 @@ GitHub — отдельный destination type (не path). Auto-push в private
 - **Loader**: реализовать `@raycast/api` shim как npm-пакет в `packages/` + extension просто импортирует? Или JSX/React-runtime внутри extension и адаптер на наш Vue Vapor?
 - **Лицензия**: Raycast API типы (`@raycast/api`) — proprietary. Использовать TypeScript types из их пакета нельзя; нужно объявить совместимый shape в `packages/raycast-compat/` своими силами.
 - **Marketplace**: установка Raycast extensions через `.kext` (после конвертации) vs прямая поддержка `.raycast` бандлов.
+
+## Phase 16 ⏳ — AI semantic search
+
+::: tip Материализация AI-first графа
+[North-star](/memory) проекта — «всё есть объект + AI-friendly граф». Phase 16 — первая конкретная фича в этом направлении: semantic search через embeddings, локально, без сетевых API.
+:::
+
+### Цель
+
+Дать пользователю поиск по смыслу, не только по точному тексту. «Найди заметки про prosemirror save flow» должно работать даже если в заметке слово «prosemirror» вообще не упомянуто — embedding отражает смысл, не лексику.
+
+### Стек
+
+| Компонент | Что | Почему |
+|---|---|---|
+| **sqlite-vec** (extension) | KNN-поиск по векторам в той же SQLite-БД где живёт ARK. Brute-force в MVP, ANN-индексы (DiskANN/IVF) позже когда стабилизируются. | One DB to rule them all. Sync через ARK работает «бесплатно». |
+| **fastembed-rs** | Inference embeddings локально через ONNX Runtime. Multi-platform, без сети. | Pure Rust, без Python deps. Уже на 5.x stable. |
+| **DirectML execution provider** (Windows) | GPU-инференс embedding-моделей через DirectX 12. Любой GPU (Nvidia/AMD/Intel/Qualcomm). | 5-10× быстрее CPU для bulk-reindex (тысячи заметок при первой раскрутке). |
+| **MiniLM-L6-v2** (default) | 22M params, 384-dim, ~30MB q4 на диске. Bundle с installer. | MVP: маленькая модель, посредственно на русском но работает. |
+| **Qwen3-Embedding-0.6B** (opt-in download) | 600M params, 1024-dim, ~300MB q4. **On-demand**, не bundled. | Quality upgrade для RU/EN смешанных заметок. Settings → «Включить умный поиск с RU-поддержкой». |
+
+### Фазы
+
+1. **Phase 16.0 MVP** — sqlite-vec extension load, MiniLM bundled, brute-force KNN, индексация при `upsert_object`. Search-API `semantic_search_objects(query, limit)`. Eden UI: чекбокс «semantic» в SearchOverlay.
+2. **Phase 16.1** — DirectML на Windows (только Windows + GPU fallback на CPU). Bulk reindex для existing entries (фоновая задача, прогресс-бар в Dashboard).
+3. **Phase 16.2** — Qwen3 как opt-in download в Settings → Фокус → Smart Search. Conversion script для re-index'а от MiniLM → Qwen3 (если юзер переключается).
+4. **Phase 16.3** — ANN-индексы (когда sqlite-vec DiskANN/IVF стабилизируется из alpha). До 10k заметок brute-force OK, дальше нужен индекс.
+
+### Открытые вопросы
+
+- **Языковая стратегия**: одна модель на все языки (Qwen3 — да) vs separate по языку (MiniLM EN + RU-специфичная)?
+- **Privacy**: embeddings содержат смысл текста заметок. Хранятся в той же ARK DB, рискуют попасть в backup'ы. Encrypt-at-rest для embeddings — нужен или нет?
+- **Sync**: 1024-dim Qwen3 embeddings — это +4KB на заметку. Для 10k заметок — +40MB к ARK DB. По LAN sync передаётся всё. Acceptable?
+- **Hybrid search**: combining FTS5 (lexical) + sqlite-vec (semantic) с rerank'ом — стандартный паттерн (Reciprocal Rank Fusion). В MVP или позже?
+- **Eden vs другие apps**: search-API универсальный (любой object), но UI сначала в Eden. Когда подключить Delphi (поиск задач) / Horologion (поиск time entries)?
+
+### Connected memories
+
+- [[project-north-star-object-graph]] — обоснование почему вообще делаем.
+- [Roadmap Phase 7 (Universal export)](#phase-7--universal-per-type-data-export) — обратная сторона: данные читаемы для людей в md/csv. Phase 16 — данные читаемы для AI через embeddings/MCP.
 
 ## Баги / замечания
 

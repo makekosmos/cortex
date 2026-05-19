@@ -1,0 +1,35 @@
+=== run 1 ===
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+real	1m24.871s
+user	0m0.092s
+sys	0m0.078s
+=== run 2 ===
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+real	0m8.588s
+user	0m0.015s
+sys	0m0.030s
+=== run 3 ===
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+real	0m8.438s
+user	0m0.047s
+sys	0m0.046s
+=== run 4 ===
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+real	0m8.350s
+user	0m0.015s
+sys	0m0.015s
+=== run 5 ===
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+real	0m8.122s
+user	0m0.015s
+sys	0m0.045s
