@@ -273,7 +273,7 @@ mDNS — zero-config LAN service discovery, поддерживается на в
 
 ### Почему Storybook 10, а не histoire?
 
-Был параллельный histoire — удалён 2026-05-19. Storybook тяжелее (~200MB deps vs ~30MB у histoire), но **экосистема больше**: accessibility addon, vitest integration, MDX docs, viewport addon — всё нужное «искаропки». Histoire были Vue-only и легче, но дублирование двух систем не оправдывало overhead поддержки.
+Потому что histoire — заброшенный проект, а Storybook'ом тупо проще пользоваться. Был параллельный histoire — удалён 2026-05-19.
 
 ### Почему better-sqlite3 в Electron, а не node:sqlite?
 
