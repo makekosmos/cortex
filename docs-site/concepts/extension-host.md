@@ -31,6 +31,9 @@ export interface ExtensionManifest {
   devPort?: number          // optional, порт Vite dev server'а для HMR (см. dev mode)
   width?: number            // default 900
   height?: number           // default 600
+  minWidth?: number         // optional, минимальная ширина (например, Eden = 450)
+  minHeight?: number        // optional, минимальная высота (например, Eden = 400)
+  windowEffect?: "acrylic" | "mica" | "none"  // см. ниже «Window backdrop»
 }
 
 export function loadExtensionManifest(id: string): ExtensionManifest | null
@@ -118,6 +121,8 @@ if (nav) {
 - `icon` — optional, имя файла иконки внутри директории extension'а (`extensions/<id>/icon.png`). Если есть — `extensionIconDataUri(id)` читает файл и возвращает `data:image/<ext>;base64,...` URI; launcher показывает иконку в open-команде. См. ниже [«App icons»](#app-icons).
 - `devPort` — optional, порт Vite dev server'а для HMR. Используется только когда активен developer mode. См. [Extension dev mode](/concepts/extension-dev-mode).
 - `width`, `height` — optional, дефолты `900×600`.
+- `minWidth`, `minHeight` — optional. Передаются в `BrowserWindow` как `minWidth`/`minHeight`. Используются extension'ами, у которых есть собственный layout-breakpoint (например, Eden = `450×400`).
+- `windowEffect` — optional. Включает Win32 system backdrop для окна: `"acrylic"` (blur с прозрачностью, Win10/11), `"mica"` (desktop tint, Win11), `"none"` (default). Если задан, `BrowserWindow` создаётся с `backgroundColor: "#00000000"` + `backgroundMaterial: <effect>`, нативный `titleBarOverlay` не применяется (extension рисует свой titlebar поверх). Renderer обязан использовать прозрачный/полупрозрачный фон body, иначе эффект перекрывается сплошной заливкой. См. [«Window backdrop (acrylic / mica)»](#window-backdrop-acrylic-mica).
 
 ### Структура extension директории
 
@@ -227,6 +232,36 @@ window.kepler.window.maximize()
 ```
 
 Они шлют `kepler:extension:window:{close,minimize,maximize}` IPC. Main resolves окно через `BrowserWindow.fromWebContents(e.sender)` и вызывает соответствующий метод. Это позволяет extension'ам с `titleBarStyle: "hidden"` рисовать свой titlebar и управлять окном без node integration.
+
+Дополнительно к управляющим методам preload exposes текущее состояние maximize:
+
+```ts
+window.kepler.window.isMaximized(): Promise<boolean>
+window.kepler.window.onMaximizedChange(cb: (value: boolean) => void): () => void
+```
+
+- `isMaximized()` → IPC `kepler:extension:window:is-maximized` → `win.isMaximized()` для окна-владельца `webContents`.
+- `onMaximizedChange(cb)` подписывается на push-event `kepler:extension:window:maximized-changed`, который main процесс отправляет конкретному окну при `maximize` / `unmaximize`. Возвращает функцию отписки.
+
+Используется в `WindowControls` из `@kosmos/visuals` (см. [packages/visuals](/packages/visuals#windowcontrols)) — компонент переключает иконку «развернуть»↔«свернуть в окно» реактивно без polling'а.
+
+Native `titleBarOverlay` для extension окон **не используется** — frame убирается полностью (`titleBarStyle: "hidden"`), кнопки управления окном рисует extension через `<WindowControls />`. Это даёт консистентный look across acrylic / non-acrylic extension'ов.
+
+## Window backdrop (acrylic / mica)
+
+Когда manifest задаёт `"windowEffect": "acrylic"` (или `"mica"`), `BrowserWindow` создаётся с:
+
+```ts
+backgroundColor: "#00000000",     // полностью прозрачный
+backgroundMaterial: "acrylic",    // или "mica"
+```
+
+Это включает Win32 системный backdrop под окном. Чтобы он был виден:
+
+1. Renderer body должен иметь прозрачный (или полупрозрачный) фон. В Eden — `.app-container` сплошной только вне zen mode; в zen mode `.app-container.focus-mode-active` получает `backdrop-filter: blur(24px) saturate(140%)` + полупрозрачный фон, а все вложенные surface'ы (titlebar/sidebar/content/editor/ProseMirror) форсятся в `background: transparent !important`.
+2. **Caveat — backdrop-filter и containing block.** `backdrop-filter` создаёт новый containing block для `position: fixed` потомков. Если применить его на верхнем `body` / `#root`, fixed-позиционируемые элементы (overlay'и, поиск, toast'ы) начнут позиционироваться относительно этого узла, а не viewport'а — ломается, например, Eden `SearchOverlay`. Решение — навешивать `backdrop-filter` на промежуточный layer (`.app-container.focus-mode-active`), который сам не содержит fixed overlay'ев.
+
+Используется сейчас только в Eden zen mode. См. [Eden → Zen mode + acrylic](/apps/eden#zen-mode-acrylic).
 
 ## User data
 

@@ -135,7 +135,7 @@ Light и dark темы:
 
 | Компонент | Назначение |
 |---|---|
-| `Sidebar.vue` + `SidebarButton.vue` | Навигация по приложению |
+| `Sidebar.vue` + `SidebarButton.vue` | Навигация по приложению. `SidebarProjectItem` принимает опциональный `onContextMenu?: (event: MouseEvent) => void` — template передаёт `@contextmenu`. Используется в Eden: ПКМ по entry открывает `<ContextMenu>` с пунктом «Удалить» → `window.api.deleteEntry(id)`. |
 | `Titlebar.vue` | Desktop window chrome titlebar |
 | `TitlebarHistoryControls.vue` | Кнопки назад/вперёд для router history |
 | `DesktopChrome.vue` | Обёртка окна (titlebar + content) |
@@ -153,6 +153,7 @@ Light и dark темы:
 | `Modal.vue` | Базовая модалка |
 | `TimeColumn.vue` | Вертикальная шкала времени |
 | `Dropdown.vue` | Generic shadcn-стиль `<select>`-замена: trigger + teleport-popover, поддержка клавиатуры (↑/↓/Enter/Escape), click-outside, чекмарк на выбранном. API: `v-model` + `options: { value, label, description?, disabled? }[]`. |
+| `WindowControls.vue` | Кастомные min/max/close кнопки для extension windows с Lucide иконками (`Minus`/`Square`/`Copy`/`X`). Реактивно подписан на `window.kepler.window.onMaximizedChange` — иконка maximize переключается на restore (`Copy`, зеркалена по X для Win11-look) когда окно maximized. Props `hideMinimize`/`hideMaximize`/`hideClose` для частичного скрытия (например, в Eden zen mode оставляется только close). См. [WindowControls](#windowcontrols). |
 
 ## Визуальный референс компонентов
 
@@ -238,6 +239,41 @@ ASCII-мокапы — чтобы агенту/новому человеку б�
   squircle, hover: overlay opacity 0 → 0.4
 ```
 
+### WindowControls
+
+Кастомные кнопки «Свернуть / Развернуть / Закрыть» для extension windows. Используется в Eden / Delphi / Horologion / Arrancador AppTitlebar (extension сам рисует titlebar, потому что extension-host передаёт окну `titleBarStyle: "hidden"`).
+
+```text
+                                    ┌───┬───┬───┐
+                                    │ ─ │ ☐ │ ✕ │
+                                    └───┴───┴───┘
+                                       │   │
+                                       │   └─ Square / Copy (зеркальная) — реактивно
+                                       │      переключается при maximize/restore
+                                       └─ Minus
+```
+
+API:
+
+```ts
+interface Props {
+  hideMinimize?: boolean
+  hideMaximize?: boolean
+  hideClose?: boolean
+}
+```
+
+Поведение:
+
+- При mount читает `window.kepler.window.isMaximized()` (если доступно — non-extension контекст ignore'ит).
+- Подписывается на `window.kepler.window.onMaximizedChange(cb)` — иконка middle-кнопки переключается между `Square` (готов развернуть) и `Copy` (готов вернуть в окно) реактивно, без polling'а. Unsubscribe в `onBeforeUnmount`.
+- Кнопка close имеет красный hover (`#c42b1c`) под Win11.
+- Все три кнопки имеют `-webkit-app-region: no-drag` чтобы клики не попадали в draggable titlebar.
+
+Пример zen-mode (Eden): hide минимизации и развёртывания, оставлен только close + слева placed свой `<LoaderPinwheel>` для exit'а.
+
+См. также [Extension host → Window controls](/concepts/extension-host#window-controls) (preload API).
+
 ### StatusDot
 
 ```text
@@ -309,7 +345,19 @@ import {
 Этого достаточно. Не нужно:
 - стилизовать `::-webkit-scrollbar`, `::-webkit-scrollbar-thumb`, `::-webkit-scrollbar-track` руками — класс уже всё закрывает (width/height 5px, border-radius 3px, без фона у track'а);
 - задавать свой `transition` на `background-color` thumb'а — переход управляется через CSS-переменную и `@property`, чтобы цвет thumb'а пересчитывался каждый кадр анимации;
-- ставить `data-scrolling` руками — это делает глобальный listener в `shell/src/main.ts` (scroll event на capture, снимает атрибут через 600ms debounce).
+- ставить `data-scrolling` руками — это делает глобальный listener из shared helper'а `installScrollFadeListener()` (см. ниже).
+
+**Shared runtime helper:** `@kosmos/visuals/runtime/scroll-fade.ts` экспортирует:
+
+```ts
+import { installScrollFadeListener } from "@kosmos/visuals/runtime/scroll-fade";
+
+const off = installScrollFadeListener({ idleMs: 600 });  // оба параметра optional, root = document
+// ...
+off();  // unsubscribe (idempotent)
+```
+
+Вызов идемпотентен — повторный `installScrollFadeListener({ root })` с тем же root возвращает прежнюю отписку, новый listener не регистрируется. Это позволяет звать его и в `shell/src/main.ts`, и в каждом extension `main.ts` без риска накопить duplicate handler'ы при HMR. До 2026-05-19 эта логика была inline в `shell/src/main.ts`; теперь она единый источник правды в `@kosmos/visuals` и используется shell'ом и Eden.
 
 **Как это устроено:**
 
@@ -339,7 +387,8 @@ import {
 **Где сейчас применяется:**
 
 - `shell/src/views/LauncherView.vue` — `.list.kosmos-scroll`;
-- `shell/src/views/SettingsView.vue` — `.rows.kosmos-scroll`, `.ext-list.kosmos-scroll`.
+- `shell/src/views/SettingsView.vue` — `.rows.kosmos-scroll`, `.ext-list.kosmos-scroll`;
+- Eden sidebar / entries list (через `installScrollFadeListener` в `extensions/eden/src/main.ts`).
 
 Любой новый scrollable-контейнер в Kepler/extensions должен использовать этот класс, чтобы скроллбар не торчал на фоне Mica/Acrylic.
 

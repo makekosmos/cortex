@@ -109,15 +109,18 @@ Kepler — точка входа для всех команд экосистем
 | `delphi:open` | `app` | Открыть Delphi | `openExtension("delphi")` |
 | `horologion:open` | `app` | Открыть Horologion | `openExtension("horologion")` |
 | `arrancador:open` | `app` | Открыть Arrancador | `openExtension("arrancador")` |
+| `eden:open` | `app` | Открыть Eden | `openExtension("eden")` |
 | `dashboard:open` | `command` (`appName: "Kepler"`) | Открыть таблицу данных | `openDashboardWindow()` |
 | `settings:open` | `command` (`appName: "Kepler"`) | Открыть настройки | `openSettings()` |
 | `kepler:check-updates` | `command` (`appName: "Kepler"`) | Проверить обновления | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
 | `delphi:today` | `command` (`appName: "Delphi"`) | Сегодняшние задачи | `openExtension("delphi", "/today")` |
 | `horologion:pomodoro` | `command` (`appName: "Horologion"`) | Помодоро | `openExtension("horologion", "/?mode=pomodoro")` |
 | `horologion:stopwatch` | `command` (`appName: "Horologion"`) | Секундомер | `openExtension("horologion", "/?mode=stopwatch")` |
+| `eden:note:create` | `command` (`appName: "Eden"`) | Создать заметку | `openExtension("eden", "/new")` |
+| `eden:note:open-today` | `command` (`appName: "Eden"`) | Открыть сегодняшнюю заметку | `openExtension("eden", "/today")` |
 
-::: info Eden команда удалена
-До 2026-05-14 в registry был `eden:open`, запускавший standalone Eden .exe. После brand swap'а удалена — Eden остаётся standalone, но не показывается в launcher'е до миграции в extension (Phase 6).
+::: tip Eden static commands вернулись (2026-05-19)
+После миграции в extension (Phase 6.0) добавлены три static open-команды: `eden:open`, `eden:note:create`, `eden:note:open-today`. Они видны в launcher'е всегда (как `horologion:pomodoro`), не зависят от того, запущен ли Eden — kepler-shell сам открывает extension по route'у через [Deep links через `route`](/concepts/extension-host#deep-links-через-route). Иконки берутся из `extensionIconDataUri("eden")` (через manifest icon).
 :::
 
 ::: info `mode=` hash для Horologion — TODO
@@ -126,7 +129,7 @@ Kepler — точка входа для всех команд экосистем
 
 ### Dynamic (action) commands
 
-Регистрируются running extension'ами через [Command bus](../concepts/command-bus.md) (`category: 'action'`). LauncherView их **не показывает** (фильтр `category !== "action"`) — палитра ограничена open-командами. Action-команды используются программным вызовом из других мест.
+Регистрируются running extension'ами через [Command bus](../concepts/command-bus.md) (`category: 'action'`). **С 2026-05-19** LauncherView показывает их наравне с open-командами — раньше был фильтр `category !== "action"`, который скрывал dynamic-ручки. Теперь любая зарегистрированная action-команда видна в палитре пока соответствующее приложение запущено и держит WS-connection к kepler-backend.
 
 ## Extension host (Phase 4 ✅)
 

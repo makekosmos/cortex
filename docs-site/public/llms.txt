@@ -120,7 +120,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 | Имя | Где | Что |
 |---|---|---|
-| **Eden** | `extensions/eden` | заметки и дневник — Vue-extension в Kepler shell (TipTap editor). Phase 6.0 + 6.0.A done, standalone `apps/eden/ts/` удалён. |
+| **Eden** | `extensions/eden` | заметки и дневник — Vue-extension в Kepler shell (TipTap editor). Phase 6.0 + 6.0.A + **6.1 (2026-05-19)** done. Standalone `apps/eden/ts/` удалён. Phase 6.1: system type «Дневник» + ISO `YYYY-MM-DD` title; static open-команды `eden:note:open-today` / `eden:note:create`; zen-mode chord `Ctrl+K Z` + acrylic backdrop в zen; titlebar page-title + `WindowControls` (без min/max в zen); char counter; ПКМ-меню «Удалить» через `ContextMenu`; иконки Lucide через `iconResolver.ts` (anytype-папка удалена); layout-agnostic hotkeys через `e.code`. |
 | **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
 | **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
 | **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user. |
