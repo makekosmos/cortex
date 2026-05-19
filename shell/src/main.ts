@@ -1,26 +1,12 @@
 import { createApp, defineAsyncComponent, h } from "vue";
+import { installScrollFadeListener } from "@kosmos/visuals";
 import App from "./App.vue";
 import SettingsView from "./views/SettingsView.vue";
 import "./styles.css";
 
 document.documentElement.classList.add("dark");
 
-document.addEventListener(
-  "scroll",
-  (e) => {
-    const target = e.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (!target.classList.contains("kosmos-scroll")) return;
-    target.setAttribute("data-scrolling", "1");
-    const el = target as HTMLElement & { __scrollTimer?: number };
-    if (el.__scrollTimer) window.clearTimeout(el.__scrollTimer);
-    el.__scrollTimer = window.setTimeout(
-      () => target.removeAttribute("data-scrolling"),
-      600,
-    );
-  },
-  { capture: true, passive: true },
-);
+installScrollFadeListener();
 
 // Hash-based dispatch: один renderer-bundle, несколько окон. Каждое окно
 // грузит URL с разным hash, рендер ниже выбирает соответствующий root view.

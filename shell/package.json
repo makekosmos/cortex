@@ -12,7 +12,7 @@
     "build:extensions": "node -e \"import('./vite.extensions.config.mjs').then(async (m)=>{const {execSync}=await import('node:child_process');for(const id of m.vueExtensions){console.log('[build:extensions]',id);execSync('vite build --configLoader native --config vite.extensions.config.mjs --mode '+id,{stdio:'inherit'});}if(m.vueExtensions.length===0)console.log('[build:extensions] no Vue extensions to build (only static PoCs present) — skipping');})\"",
     "dev:extensions": "node scripts/dev-extensions.mjs",
     "dev:kepler": "node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--configLoader','native'],{stdio:'inherit',shell:true,env:process.env});\"",
-    "dev": "bun run build:backend:dev && bun run build:extensions && node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--configLoader','native'],{stdio:'inherit',shell:true,env:process.env});\"",
+    "dev": "bun run build:backend:dev && bun run build:extensions && node scripts/dev.mjs",
     "build:js": "tsc && vite build --configLoader native && bun run build:extensions",
     "build": "bun run build:backend && bun run build:js && electron-builder --win nsis --publish always",
     "typecheck": "tsc --noEmit",

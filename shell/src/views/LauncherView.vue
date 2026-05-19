@@ -15,6 +15,9 @@ import holoSecoSvg from "../assets/holo-seco.svg";
 import delphiSvg from "../assets/delphi.svg";
 import delphiAddSvg from "../assets/delphi-add.svg";
 import arraSvg from "../assets/arra.svg";
+import edenSvg from "../assets/eden.svg";
+import edenAddSvg from "../assets/eden-add.svg";
+import edenDiarySvg from "../assets/eden-diary.svg";
 import type { CommandRecord, UpdateState } from "@shared/ipc-types";
 
 interface BuiltInIconConfig {
@@ -44,6 +47,12 @@ const ARRANCADOR_GRADIENT = {
     to: "oklch(0.45 0.18 20)",
 };
 
+// Eden accent gradient — глубокий синий.
+const EDEN_GRADIENT = {
+    from: "oklch(0.42 0.18 260)",
+    to: "oklch(0.22 0.14 265)",
+};
+
 const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     "settings:open": {
         icon: SettingsIcon,
@@ -61,6 +70,9 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     "delphi:open": { svgSrc: delphiSvg, ...DELPHI_GRADIENT },
     "delphi:inbox": { svgSrc: delphiAddSvg, ...DELPHI_GRADIENT },
     "arrancador:open": { svgSrc: arraSvg, ...ARRANCADOR_GRADIENT },
+    "eden:open": { svgSrc: edenSvg, ...EDEN_GRADIENT },
+    "eden:note:create": { svgSrc: edenAddSvg, ...EDEN_GRADIENT },
+    "eden:note:open-today": { svgSrc: edenDiarySvg, ...EDEN_GRADIENT },
     "kepler:check-updates": {
         icon: RefreshCw,
         from: "oklch(0.98 0 0)",
@@ -320,7 +332,7 @@ function onKey(e: KeyboardEvent) {
 async function refreshCommands() {
     try {
         const all = await window.kepler.commands.list();
-        commands.value = all.filter((c) => c.category !== "action");
+        commands.value = all;
     } catch (e) {
         console.warn("commands.list failed", e);
         commands.value = [];
