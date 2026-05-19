@@ -15,7 +15,7 @@
 // Manifest extension'а обычно объявляет `keplerApiVersion: "^1.0.0"` — это
 // принимает любые 1.x.y версии shell'а, но отвергнет shell с major bump'ом.
 
-export const KEPLER_API_VERSION = "1.0.0";
+export const KEPLER_API_VERSION = "1.1.0";
 
 // ---------------------------------------------------------------------------
 // Минимальный semver matcher: поддерживает то, что реально нужно для

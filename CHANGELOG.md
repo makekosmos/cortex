@@ -4,6 +4,24 @@
 
 Поддерживается вручную: при каждом version bump'е в `shell/package.json` добавляется новая секция с датой и списком изменений.
 
+## [0.2.0] — 2026-05-19
+
+Milestone-релиз, объединяет работу `0.1.20` и `0.1.21` под единым тегом и фиксирует расширение публичного API для extension-разработчиков.
+
+### Изменено
+
+- **Bump `KEPLER_API_VERSION` 1.0.0 → 1.1.0** (additive). Extensions могут просить `keplerApiVersion: "^1.1.0"` чтобы заявить «мне нужны `manifest.commands[]` + dynamic `commands.register`».
+
+### Включено из 0.1.20
+
+- **Three-layer command architecture.** Extension теперь объявляет launcher-команды в `manifest.json` (V1 manifest-declared) либо регистрирует их runtime через `commands.register` WS-операцию (V2 dynamic). Shell мержит три источника (internal > manifest > dynamic) с dedup по id и namespace-prefix `${manifest.id}:`.
+- **Auto-launch action-команд.** Invoke action-команды у не запущенного extension'а поднимает его и dispatch'ит после mount (`awaitExtensionCommand` с 5s timeout).
+- **`commands_changed` event на bus** — подписка из renderer'а через `window.kepler.commands.onCommandsChanged`.
+
+### Включено из 0.1.21
+
+- **Zero-UAC focus mode.** При первой активации блокировки Kepler автоматически устанавливает `KeplerFocusSvc` (Windows Service, AutoStart) — один UAC сейчас, ноль UAC потом. Все последующие активации идут через named pipe `\\.\pipe\kepler-focus-svc`. Карточка «Системный демон» в Settings → Фокус с install/переустановить/удалить.
+
 ## [0.1.21] — 2026-05-19
 
 ### Изменено
