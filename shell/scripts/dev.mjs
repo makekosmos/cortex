@@ -52,7 +52,13 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 // 1) Vite dev server'ы для extension'ов (HMR при developerMode toggle).
-startChild("dev-extensions", "node", ["scripts/dev-extensions.mjs"]);
+//    Запуск опционален: если у extension'ов нет своего vite в node_modules
+//    (workspace без явного devDep) — Vite servers упадут с ERR_MODULE_NOT_FOUND.
+//    Не блокирующий случай: extension'ы и так грузятся из dist/ (oneshot build
+//    выше). Включай через KEPLER_DEV_EXTENSIONS=1 если хочешь HMR.
+if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
+  startChild("dev-extensions", "node", ["scripts/dev-extensions.mjs"]);
+}
 
 // 2) Shell renderer Vite + Electron (KEPLER_DEV=1 → main process знает что
 //    мы в dev-сессии, не загружает production-mode пути).

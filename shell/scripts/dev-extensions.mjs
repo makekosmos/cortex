@@ -17,6 +17,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionsRoot = path.resolve(__dirname, "..", "..", "extensions");
+const shellRoot = path.resolve(__dirname, "..");
+// Vite не установлен внутри extension'овских node_modules (там только
+// workspace symlinks @kosmos/*). Используем bin'арник из shell/node_modules.
+const viteBin = path.join(shellRoot, "node_modules", "vite", "bin", "vite.js");
 
 const extensions = readdirSync(extensionsRoot, { withFileTypes: true })
   .filter((d) => d.isDirectory())
@@ -49,9 +53,9 @@ for (const { id, devPort } of extensions) {
 
 const children = extensions.map(({ id, devPort, dir }) =>
   spawn(
-    "bunx",
+    process.execPath,
     [
-      "vite",
+      viteBin,
       "--port",
       String(devPort),
       "--strictPort",
@@ -63,7 +67,6 @@ const children = extensions.map(({ id, devPort, dir }) =>
     {
       cwd: dir,
       stdio: ["ignore", "inherit", "inherit"],
-      shell: true,
       env: { ...process.env, VITE_KEPLER_EXTENSION_ID: id },
     },
   ),
