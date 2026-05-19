@@ -390,6 +390,47 @@ const focusError = ref<string>("");
 const focusBackendMissing = ref<boolean>(false);
 const focusActive = ref<FocusActiveState>({ active: false });
 const focusBusy = ref<string>("");
+
+// Service daemon status — для secure zero-UAC focus mode.
+const focusServiceStatus = ref<{ installed: boolean; running: boolean }>({
+  installed: false,
+  running: false,
+});
+const focusServiceBusy = ref<string>("");
+const focusServiceError = ref<string>("");
+let unsubscribeFocusServiceStatus: (() => void) | null = null;
+
+async function refreshFocusServiceStatus() {
+  try {
+    focusServiceStatus.value = await window.kepler.focusService.status();
+  } catch (e) {
+    console.warn("focus-service status failed", e);
+  }
+}
+
+async function installFocusService() {
+  focusServiceBusy.value = "install";
+  focusServiceError.value = "";
+  try {
+    const r = await window.kepler.focusService.install();
+    if (!r.ok) focusServiceError.value = r.error ?? "Установка не удалась";
+    await refreshFocusServiceStatus();
+  } finally {
+    focusServiceBusy.value = "";
+  }
+}
+
+async function uninstallFocusService() {
+  focusServiceBusy.value = "uninstall";
+  focusServiceError.value = "";
+  try {
+    const r = await window.kepler.focusService.uninstall();
+    if (!r.ok) focusServiceError.value = r.error ?? "Удаление не удалось";
+    await refreshFocusServiceStatus();
+  } finally {
+    focusServiceBusy.value = "";
+  }
+}
 const focusEditing = ref<boolean>(false);
 const focusEditingId = ref<string | null>(null);
 const focusDraftName = ref<string>("");
@@ -745,6 +786,7 @@ function selectTab(t: Tab) {
     focusBackendMissing.value = false;
     void loadBlocklists();
     void loadActiveState();
+    void refreshFocusServiceStatus();
   }
 }
 
@@ -898,11 +940,16 @@ onMounted(() => {
   unsubscribeUpdateState = window.kepler.settings.update.onStateChanged((s) => {
     updateState.value = s;
   });
+  unsubscribeFocusServiceStatus = window.kepler.focusService.onStatusChanged(() => {
+    void refreshFocusServiceStatus();
+  });
 });
 
 onBeforeUnmount(() => {
   unsubscribeUpdateState?.();
   unsubscribeUpdateState = null;
+  unsubscribeFocusServiceStatus?.();
+  unsubscribeFocusServiceStatus = null;
 });
 </script>
 
@@ -1280,6 +1327,54 @@ onBeforeUnmount(() => {
       <div v-if="focusError" class="error-banner">{{ focusError }}</div>
 
       <div class="rows kosmos-scroll">
+        <!-- Демон фокус-режима — устранит UAC при каждом включении блокировки -->
+        <div class="row focus-service-row">
+          <div class="row-label">
+            <div class="label">Системный демон</div>
+            <div v-if="focusServiceStatus.installed && focusServiceStatus.running" class="hint focus-service-hint-ok">
+              Установлен и работает — блокировка включается без запроса прав администратора.
+            </div>
+            <div v-else-if="focusServiceStatus.installed" class="hint">
+              Установлен, но не запущен. Перезапусти Windows или нажми «Переустановить».
+            </div>
+            <div v-else class="hint">
+              Без демона Windows запрашивает права администратора при каждом включении блокировки.
+              Установи один раз — и все последующие активации будут без UAC.
+            </div>
+            <div v-if="focusServiceError" class="error">{{ focusServiceError }}</div>
+          </div>
+          <div class="row-actions">
+            <button
+              v-if="!focusServiceStatus.installed"
+              type="button"
+              class="btn primary"
+              :disabled="focusServiceBusy === 'install'"
+              @click="installFocusService"
+            >
+              {{ focusServiceBusy === "install" ? "Установка…" : "Установить" }}
+            </button>
+            <template v-else>
+              <button
+                type="button"
+                class="btn ghost"
+                :disabled="focusServiceBusy === 'install'"
+                @click="installFocusService"
+                title="Переустановить если служба перестала работать"
+              >
+                {{ focusServiceBusy === "install" ? "Установка…" : "Переустановить" }}
+              </button>
+              <button
+                type="button"
+                class="btn ghost danger"
+                :disabled="focusServiceBusy === 'uninstall'"
+                @click="uninstallFocusService"
+              >
+                {{ focusServiceBusy === "uninstall" ? "Удаление…" : "Удалить" }}
+              </button>
+            </template>
+          </div>
+        </div>
+
         <!-- Активная блокировка -->
         <div class="row focus-active-row">
           <div class="row-label">
@@ -2006,6 +2101,14 @@ onBeforeUnmount(() => {
 
 .focus-active-row {
   background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.focus-service-row {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.focus-service-hint-ok {
+  color: color-mix(in srgb, #4ade80 65%, var(--foreground) 35%);
 }
 
 .focus-item {

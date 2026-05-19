@@ -27,6 +27,19 @@ interface KeplerShellSettings {
       `KEPLER_USAGE_TRACKER=0` и не пишет данные. Изменение применяется
       после рестарта Kepler. */
   usageTrackerEnabled?: boolean;
+  /** Юзер отклонил auto-install kepler-focus-svc (UAC cancel в этой сессии
+      или раньше). Когда true — runHelper не спросит UAC автоматически,
+      пользователь явно нажимает «Установить» в Settings → Фокус.
+      Сбрасывается через Settings UI. */
+  focusServiceAutoInstallDeclined?: boolean;
+}
+
+export function isFocusServiceAutoInstallDeclined(): boolean {
+  return readSettings().focusServiceAutoInstallDeclined === true;
+}
+
+export function setFocusServiceAutoInstallDeclined(value: boolean): void {
+  writeSettings({ focusServiceAutoInstallDeclined: value });
 }
 
 export function isUsageTrackerEnabled(): boolean {

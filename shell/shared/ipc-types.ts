@@ -263,6 +263,15 @@ export interface KeplerApi {
     uninstall(): Promise<{ ok: boolean; error?: string }>;
     start(): Promise<{ ok: boolean; error?: string }>;
     stop(): Promise<{ ok: boolean; error?: string }>;
+    /** Юзер отклонил auto-install (UAC cancel). Когда true — runHelper не
+        будет повторно триггерить UAC сам, install только через UI кнопку. */
+    autoInstallDeclined: {
+      get(): Promise<boolean>;
+      set(value: boolean): Promise<void>;
+    };
+    /** Listener для изменений status (например, после auto-install service'а
+        в runHelper). UI Settings → Фокус обновляет карточку. */
+    onStatusChanged(cb: () => void): () => void;
   };
 
   /** Настройки Kepler (отдельное окно). Phase 1 — read-only hotkey,

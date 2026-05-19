@@ -74,7 +74,10 @@ pub fn install() -> ! {
         name: OsString::from(SERVICE_NAME),
         display_name: OsString::from(SERVICE_DISPLAY_NAME),
         service_type: ServiceType::OWN_PROCESS,
-        start_type: ServiceStartType::OnDemand,
+        // AutoStart — service поднимается на каждом boot'е без admin.
+        // Гарантирует zero-UAC focus mode после первой установки: pipe всегда
+        // доступен, Kepler не нуждается в правах для запуска service'а.
+        start_type: ServiceStartType::AutoStart,
         error_control: ServiceErrorControl::Normal,
         executable_path: exe,
         launch_arguments: vec![OsString::from("run-as-service")],
@@ -84,7 +87,10 @@ pub fn install() -> ! {
         account_password: None,
     };
 
-    let svc = match scm.create_service(&info, ServiceAccess::CHANGE_CONFIG) {
+    let svc = match scm.create_service(
+        &info,
+        ServiceAccess::CHANGE_CONFIG | ServiceAccess::START | ServiceAccess::QUERY_STATUS,
+    ) {
         Ok(s) => s,
         Err(e) => err(format!("create_service failed: {e}")).print_and_exit(),
     };
@@ -92,13 +98,37 @@ pub fn install() -> ! {
     // Description — best-effort, ignore failure.
     let _ = svc.set_description(SERVICE_DESCRIPTION);
 
+    // Запускаем сразу — мы уже elevated, бесплатно. Юзер сразу получает
+    // working pipe без необходимости вызывать start (который без admin
+    // не сработает на свежеустановленном service'е).
+    let mut running = false;
+    if let Err(e) = svc.start::<&str>(&[]) {
+        let msg = format!("{e}");
+        if msg.contains("1056") || msg.to_lowercase().contains("already running") {
+            running = true;
+        }
+        // Иначе install OK, но start не получился — вернём ok с running=false,
+        // shell сам разберётся (пользователь увидит fallback).
+    } else {
+        // Подождём пока state перейдёт в Running (poll up to 3s).
+        for _ in 0..30 {
+            if let Ok(s) = svc.query_status() {
+                if s.current_state == ServiceState::Running {
+                    running = true;
+                    break;
+                }
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
     let resp = CliResponse {
         ok: true,
         error: None,
         needs_elevation: None,
         service_name: Some(SERVICE_NAME.into()),
         installed: Some(true),
-        running: None,
+        running: Some(running),
     };
     resp.print_and_exit();
 }

@@ -93,6 +93,16 @@ const api: KeplerApi = {
     uninstall: () => ipcRenderer.invoke("kepler:focus-service:uninstall"),
     start: () => ipcRenderer.invoke("kepler:focus-service:start"),
     stop: () => ipcRenderer.invoke("kepler:focus-service:stop"),
+    autoInstallDeclined: {
+      get: () => ipcRenderer.invoke("kepler:focus-service:auto-install-declined:get"),
+      set: (value) =>
+        ipcRenderer.invoke("kepler:focus-service:auto-install-declined:set", value),
+    },
+    onStatusChanged: (cb) => {
+      const wrapper = () => cb();
+      ipcRenderer.on("kepler:focus-service:status-changed", wrapper);
+      return () => ipcRenderer.removeListener("kepler:focus-service:status-changed", wrapper);
+    },
   },
   settings: {
     open: () => ipcRenderer.invoke("kepler:settings:open"),

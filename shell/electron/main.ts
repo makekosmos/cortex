@@ -64,6 +64,8 @@ import {
   getStoredHotkey,
   setHotkeyReregisterCallback,
   isUsageTrackerEnabled,
+  isFocusServiceAutoInstallDeclined,
+  setFocusServiceAutoInstallDeclined,
 } from "./settings-window";
 import {
   registerMarketplaceIpc,
@@ -1088,10 +1090,49 @@ ipcMain.handle("kepler:settings:update:state", () => getUpdateState());
 
 ipcMain.handle("kepler:focus-service:status", () => getServiceStatus());
 ipcMain.handle("kepler:focus-service:ping", () => pingService());
-ipcMain.handle("kepler:focus-service:install", () => runServiceCliElevated("install"));
-ipcMain.handle("kepler:focus-service:uninstall", () => runServiceCliElevated("uninstall"));
+ipcMain.handle("kepler:focus-service:install", async () => {
+  const result = await runServiceCliElevated("install");
+  if (result.ok) {
+    setFocusServiceAutoInstallDeclined(false);
+    // Broadcast чтобы Settings UI обновил статус.
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        try {
+          win.webContents.send("kepler:focus-service:status-changed");
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  return result;
+});
+ipcMain.handle("kepler:focus-service:uninstall", async () => {
+  const result = await runServiceCliElevated("uninstall");
+  if (result.ok) {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        try {
+          win.webContents.send("kepler:focus-service:status-changed");
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  return result;
+});
 ipcMain.handle("kepler:focus-service:start", () => runServiceCliElevated("start"));
 ipcMain.handle("kepler:focus-service:stop", () => runServiceCliElevated("stop"));
+ipcMain.handle("kepler:focus-service:auto-install-declined:get", () =>
+  isFocusServiceAutoInstallDeclined(),
+);
+ipcMain.handle(
+  "kepler:focus-service:auto-install-declined:set",
+  (_e, value: boolean) => {
+    setFocusServiceAutoInstallDeclined(!!value);
+  },
+);
 
 // --- lifecycle ---------------------------------------------------------------
 

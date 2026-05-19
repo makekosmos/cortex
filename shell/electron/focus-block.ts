@@ -170,30 +170,97 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
   }
 }
 
-async function runHelper(req: HelperRequest): Promise<HelperResponse> {
-  // 1. Service path: пытаемся через named pipe (если service installed
-  //    и запущен — без UAC, instant). focus-service умеет ping check'нуть
-  //    но мы сразу шлём настоящий request — service вернёт error если не
-  //    в нужном состоянии.
-  try {
-    const { sendViaPipe, pingService } = await import("./focus-service");
-    const alive = await pingService();
-    if (alive) {
-      const resp = await sendViaPipe(req);
-      // sendViaPipe возвращает ServiceResponse — совместимый по shape.
-      if (resp.ok || resp.error) {
-        return { ok: !!resp.ok, active_domains: resp.active_domains, error: resp.error };
-      }
-    }
-  } catch (e) {
-    console.warn("[focus-block] service path failed, fallback to helper:", (e as Error).message);
+// Session-scoped: пометка что мы уже пытались auto-install service'а в эту
+// сессию и юзер либо отменил UAC, либо install упал. Без этой пометки каждое
+// включение блокировки будет триггерить UAC prompt установки.
+let autoInstallAttemptedThisSession = false;
+
+async function tryAutoInstallService(): Promise<boolean> {
+  const { runServiceCliElevated, getServiceStatus, pingService } = await import(
+    "./focus-service"
+  );
+  const { setFocusServiceAutoInstallDeclined, isFocusServiceAutoInstallDeclined } =
+    await import("./settings-window");
+
+  if (autoInstallAttemptedThisSession) return false;
+  if (isFocusServiceAutoInstallDeclined()) return false;
+  autoInstallAttemptedThisSession = true;
+
+  console.log("[focus-block] auto-install kepler-focus-svc (one-time UAC prompt)");
+  const installResult = await runServiceCliElevated("install");
+  if (!installResult.ok) {
+    // User cancelled UAC, или install реально упал. Persistим decline чтобы
+    // повторно не спрашивать в следующих сессиях — юзер может включить через
+    // Settings UI вручную.
+    console.warn(
+      "[focus-block] auto-install failed/declined:",
+      installResult.error,
+    );
+    setFocusServiceAutoInstallDeclined(true);
+    return false;
   }
 
-  // 2. Helper fallback: direct spawn (если Kepler сам admin → no UAC).
+  // Сбрасываем декланд флаг если он был — install прошёл успешно.
+  setFocusServiceAutoInstallDeclined(false);
+
+  // Notify renderer'ы — Settings → Focus покажет «daemon установлен».
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try {
+        win.webContents.send("kepler:focus-service:status-changed");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // Install handler уже стартанул service (см. cli.rs install). Просто
+  // verify status + ping. Poll до 3s — service handshake'ит pipe чуть-чуть.
+  for (let i = 0; i < 30; i++) {
+    const status = await getServiceStatus();
+    if (status.installed && status.running) {
+      if (await pingService()) return true;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  console.warn("[focus-block] auto-install ok but pipe не отвечает за 3s");
+  return false;
+}
+
+async function trySendViaPipe(req: HelperRequest): Promise<HelperResponse | null> {
+  try {
+    const { sendViaPipe, pingService } = await import("./focus-service");
+    if (!(await pingService())) return null;
+    const resp = await sendViaPipe(req);
+    if (resp.ok || resp.error) {
+      return { ok: !!resp.ok, active_domains: resp.active_domains, error: resp.error };
+    }
+    return null;
+  } catch (e) {
+    console.warn("[focus-block] service path failed:", (e as Error).message);
+    return null;
+  }
+}
+
+async function runHelper(req: HelperRequest): Promise<HelperResponse> {
+  // 1. Service path: pipe всегда даёт zero-UAC если service running.
+  const piped = await trySendViaPipe(req);
+  if (piped) return piped;
+
+  // 2. Auto-install service: один UAC сейчас → zero UAC потом.
+  //    Только если юзер не отклонил это раньше. Промазав, идём дальше на
+  //    helper-фоллбэк (UAC per-call, как было раньше).
+  const installed = await tryAutoInstallService();
+  if (installed) {
+    const retry = await trySendViaPipe(req);
+    if (retry) return retry;
+  }
+
+  // 3. Helper fallback: direct spawn (если Kepler сам admin → no UAC).
   const direct = await runHelperDirect(req);
   if (direct !== "needs_elevation") return direct;
 
-  // 3. Elevated helper fallback: PowerShell RunAs (UAC prompt).
+  // 4. Elevated helper fallback: PowerShell RunAs (UAC prompt).
   return runHelperElevated(req);
 }
 
