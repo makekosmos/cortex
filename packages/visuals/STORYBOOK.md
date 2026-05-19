@@ -1,8 +1,8 @@
 # Storybook — `@kosmos/visuals`
 
-Storybook 8 — основная площадка для review UI компонентов `@kosmos/visuals`:
-кнопки, sidebar, primitives, patterns. Histoire (`histoire.config.ts`) остаётся
-в репо как альтернативный быстрый preview, но canonical UI review — здесь.
+Storybook 10 — единственная площадка для review UI компонентов `@kosmos/visuals`:
+кнопки, sidebar, primitives, patterns. Histoire был параллельно поднят раньше,
+удалён 2026-05-19 как дублирование.
 
 ## Запуск
 

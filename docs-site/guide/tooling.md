@@ -113,7 +113,7 @@
 
 | Слой | Инструменты | Где используется |
 |---|---|---|
-| Visual catalog | **Storybook 10** + **histoire** | `packages/visuals` для документации компонентов |
+| Visual catalog | **Storybook 10** | `packages/visuals` — `.stories.ts` файлы для каждого компонента, `bun run --cwd packages/visuals storybook` |
 
 ### Документация (docs-site)
 

@@ -5,11 +5,8 @@
   "main": "index.ts",
   "types": "index.ts",
   "scripts": {
-    "format": "oxfmt components/ tokens/ stories/ *.ts",
-    "format:check": "oxfmt --check components/ tokens/ stories/ *.ts",
-    "story:dev": "histoire dev",
-    "story:build": "histoire build",
-    "story:preview": "histoire preview",
+    "format": "oxfmt components/ tokens/ *.ts",
+    "format:check": "oxfmt --check components/ tokens/ *.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static",
     "test": "vitest run",
@@ -17,7 +14,6 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@histoire/plugin-vue": "^0.17.17",
     "@storybook/addon-docs": "^10.4.0",
     "@storybook/addon-vitest": "^10.4.0",
     "@storybook/vue3": "^10.4.0",
@@ -25,7 +21,6 @@
     "@vitejs/plugin-vue": "^5.0.5",
     "@vitest/browser-playwright": "^4.1.6",
     "@vitest/coverage-v8": "^4.1.6",
-    "histoire": "^0.17.17",
     "lucide-vue-next": "^0.548.0",
     "oxfmt": "^0.7.0",
     "storybook": "^10.4.0",

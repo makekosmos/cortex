@@ -31,10 +31,6 @@ test-results/
 coverage/
 blob-report/
 
-# === Histoire (component stories build artifacts) ===
-.histoire/
-histoire-dist/
-
 # === Storybook ===
 storybook-static/
 *storybook.log

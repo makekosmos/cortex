@@ -26,7 +26,7 @@ const config: StorybookConfig = {
   // Vite 8 / rolldown overrides уже идут от root workspace; Storybook
   // подхватывает локальный vite.config если есть, иначе использует свой
   // дефолт. Inline noExternal для пакетов которые vite-node не может
-  // resolve при bun-isolated node_modules (аналогично histoire.config.ts).
+  // resolve при bun-isolated node_modules.
   async viteFinal(config) {
     // Storybook v10 upgrade удалил vue plugin из default config —
     // добавляем явно. Без него .vue файлы выдают "Failed to parse source"

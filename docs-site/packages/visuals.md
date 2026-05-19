@@ -33,31 +33,24 @@ packages/visuals/
 ├─ components/              # Vue компоненты
 ├─ patterns/                # композиционные паттерны
 ├─ composables/             # useContextMenu и т.п.
-├─ stories/                 # Histoire stories (см. ниже)
-├─ histoire.config.ts       # конфиг story-сервера
-├─ histoire.setup.ts        # vue-router + theme bridging
+├─ .storybook/              # Storybook конфиг
 ├─ index.ts                 # public API
 └─ package.json
 ```
 
-## Story-сервер (Histoire)
+## Story-сервер (Storybook)
 
-Локальный playground всей дизайн-системы — 23 story-файла, 62 варианта, покрывают
-все 19 компонентов + 5 наборов токенов. См. `packages/visuals/stories/README.md`.
+Локальный playground всей дизайн-системы — `.stories.ts` файл на каждый
+компонент рядом с самим компонентом в `components/`.
 
 ```bash
 bun install
-bun run --cwd packages/visuals story:dev      # http://localhost:6006
-bun run --cwd packages/visuals story:build    # static → .histoire/dist
-bun run --cwd packages/visuals story:preview
+bun run --cwd packages/visuals storybook            # http://localhost:6006
+bun run --cwd packages/visuals build-storybook      # static → storybook-static/
 ```
 
-Toggle light/dark в правом верхнем углу Histoire UI зеркалит `data-color-mode` в
-`class="dark"` на body — все CSS-vars из `theme/css-variables.css` переключаются
-синхронно. По умолчанию открывается dark-тема.
-
-Почему **Histoire**, не Storybook: Vue-only стек, существующая Vite-инфраструктура,
-встроенный theme toggle под наши light/dark токены, минимум deps (~30 MB vs 200+).
+Histoire был параллельно поднят раньше (`.story.vue` файлы в `stories/`), удалён
+2026-05-19 — единственный source of truth теперь Storybook.
 
 ## Дизайн-токены
 
