@@ -62,6 +62,11 @@ const api = {
         Повторный вызов возвращает окно в исходное положение. */
     toggleDockCorner: (): Promise<void> =>
       ipcRenderer.invoke("kepler:extension:window:toggle-dock-corner"),
+    /** Включить/выключить maximize. На Windows `false` блокирует native
+        double-click-on-titlebar-maximize — даёт нашему dblclick handler
+        отработать без флика. */
+    setMaximizable: (value: boolean): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:window:set-maximizable", value),
     onMaximizedChange: (
       handler: (isMaximized: boolean) => void,
     ): Unsubscribe => {

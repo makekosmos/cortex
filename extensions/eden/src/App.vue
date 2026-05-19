@@ -285,6 +285,20 @@ function onChromeDblClick(event: MouseEvent) {
   }).kepler?.window?.toggleDockCorner?.();
 }
 
+// На Windows native double-click-on-titlebar разворачивает окно. В zen mode
+// этот dblclick должен превращать окно в floating-widget (см. onChromeDblClick).
+// `setMaximizable(false)` блокирует native maximize-на-dblclick, чтобы наш
+// Vue-handler сработал без флика "maximize → unmaximize".
+watch(
+  () => layout.isZenMode,
+  (isZen) => {
+    void (window as unknown as {
+      kepler?: { window?: { setMaximizable?: (v: boolean) => Promise<void> } };
+    }).kepler?.window?.setMaximizable?.(!isZen);
+  },
+  { immediate: true },
+);
+
 async function onDeleteContextEntry() {
   const id = entryMenu.payload.value;
   entryMenu.close();

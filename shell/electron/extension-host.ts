@@ -982,6 +982,19 @@ ipcMain.handle("kepler:extension:window:is-maximized", (e): boolean => {
   return win ? win.isMaximized() : false;
 });
 
+// Контроль возможности maximize. Eden использует это в zen mode: после
+// setMaximizable(false) Windows native double-click-on-titlebar
+// больше не разворачивает окно — наш Vue dblclick handler (dock-corner)
+// отрабатывает без флика "maximize → unmaximize".
+ipcMain.handle(
+  "kepler:extension:window:set-maximizable",
+  (e, value: boolean) => {
+    const win = windowForSender(e.sender);
+    if (!win || win.isDestroyed()) return;
+    win.setMaximizable(Boolean(value));
+  },
+);
+
 // "Dock corner" — toggle между floating-widget mode (always-on-top,
 // compact size, top-right corner) и обычным окном (восстановленный bounds).
 // Используется Eden в zen mode по двойному клику на titlebar — превращает
