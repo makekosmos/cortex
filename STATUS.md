@@ -5,7 +5,7 @@
 | Артефакт | Версия |
 |---|---|
 | Kepler shell (`shell/package.json`) | **0.1.16** (bump в этом коммите) |
-| Horologion extension (`extensions/horologion/manifest.json`) | **0.1.2** |
+| Horologion extension (`extensions/horologion/manifest.json`) | **0.1.4** |
 | Delphi extension | 0.1.1 |
 | Arrancador extension | 0.1.1 |
 | Eden extension (`extensions/eden/manifest.json`) | **0.1.0** (Phase 6.0 + 6.0.A) |

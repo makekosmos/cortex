@@ -21,8 +21,8 @@ title.
 
 ## Команды
 
-**Static open-команды** в `shell/electron/commands.ts` (как
-`horologion:pomodoro`). Видны в launcher всегда, не зависят от того что
+**Manifest-declared команды** в `extensions/<id>/manifest.json::commands[]`
+(как `horologion:pomodoro:25`). Видны в launcher всегда, не зависят от того что
 Eden запущен.
 
 | id | route | действие |

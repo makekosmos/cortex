@@ -1,7 +1,7 @@
 {
   "id": "horologion",
   "name": "Horologion",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Трекер времени и pomodoro",
   "keplerApiVersion": "^1.1.0",
   "kind": "vue",
@@ -21,18 +21,25 @@
       "mode": "open"
     },
     {
-      "id": "pomodoro",
-      "title": "Помодоро",
+      "id": "pomodoro:25",
+      "title": "Помодоро 25 минут",
       "subtitle": "Horologion",
-      "route": "/?mode=pomodoro",
-      "mode": "open"
+      "kind": "command",
+      "mode": "action"
     },
     {
-      "id": "stopwatch",
-      "title": "Секундомер",
+      "id": "pomodoro:50",
+      "title": "Помодоро 50 минут",
       "subtitle": "Horologion",
-      "route": "/?mode=stopwatch",
-      "mode": "open"
+      "kind": "command",
+      "mode": "action"
+    },
+    {
+      "id": "stopwatch:start",
+      "title": "Запустить секундомер",
+      "subtitle": "Horologion",
+      "kind": "command",
+      "mode": "action"
     }
   ],
   "tests": {

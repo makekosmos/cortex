@@ -89,7 +89,7 @@ Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `fo
 Используется в `shell/electron/commands.ts` для глубоких open-команд:
 
 - `delphi:today` → `openExtension('delphi', '/today')`.
-- `horologion:pomodoro` / `horologion:stopwatch` → `openExtension('horologion', '/?mode=pomodoro' | '/?mode=stopwatch')` — Horologion HomeView читает `route.query.mode` и переключает `timerMode`.
+- `eden:note:open-today` → `openExtension('eden', ...)` — Eden открывает сегодняшнюю заметку. (Horologion раньше имел открывающие `horologion:pomodoro` / `horologion:stopwatch`, в 2026-05-19 заменены action-командами `horologion:pomodoro:25` / `:50` / `:stopwatch:start` — `mode:"action"` в manifest, handler стартует таймер.)
 
 Если extension хочет принимать deep links, его `main.ts` должен явно подписаться:
 
