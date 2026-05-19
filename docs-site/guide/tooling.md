@@ -213,7 +213,7 @@ Tauri остаётся «watch list» — следим за зрелостью P
 
 ### Почему oxc (oxlint + oxfmt), а не Biome / ESLint + Prettier?
 
-Скорость: oxc в 50-100× быстрее ESLint, в 5× быстрее Biome на наших проектах. Один автор (Boshen) ведёт всю экосистему — oxlint, oxfmt, **cargo-shear**, плюс [`oxc-parser`](https://github.com/oxc-project/oxc) под капотом Vite/Rolldown. Когда инструменты от одной команды — меньше разъездов API. **Biome был параллельно**, но дублирование без пользы — удалили 2026-05-19.
+ESLint точно медленнее, замеров не делали. Между oxc и Biome — взяли oxc ради единой экосистемы (oxlint + oxfmt + cargo-shear от одного автора, `oxc-parser` под капотом Vite/Rolldown). Замеров не делали, в обоих случаях проблем не наблюдалось.
 
 ### Почему cargo-shear, а не cargo-machete?
 
