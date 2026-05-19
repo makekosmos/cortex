@@ -501,13 +501,15 @@ function resolveTrayIconPath(): string | null {
   // указывает на тот же `resources/` dir в production, поэтому это первый
   // кандидат и работает в installed Kepler.
   // dev: __dirname = shell/dist-electron, нужен относительный путь к
-  // build/icon.png в source tree.
+  // build/icon.png в source tree. В dev-сессии используем dev.png — визуально
+  // отличает trayIcon разработческого инстанса от установленного.
+  const iconName = isDev ? "dev.png" : "icon.png";
   const candidates: string[] = [];
   if (process.resourcesPath) {
-    candidates.push(path.join(process.resourcesPath, "icon.png"));
+    candidates.push(path.join(process.resourcesPath, iconName));
   }
-  candidates.push(path.resolve(__dirname, "../build/icon.png"));
-  candidates.push(path.resolve(__dirname, "../../build/icon.png"));
+  candidates.push(path.resolve(__dirname, `../build/${iconName}`));
+  candidates.push(path.resolve(__dirname, `../../build/${iconName}`));
   for (const c of candidates) {
     if (existsSync(c)) return c;
   }

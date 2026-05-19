@@ -46,7 +46,13 @@ export function isUsageTrackerEnabled(): boolean {
   return readSettings().usageTrackerEnabled !== false;
 }
 
-export const DEFAULT_HOTKEY = "Alt+Space";
+export const DEFAULT_HOTKEY_PROD = "Alt+Space";
+export const DEFAULT_HOTKEY_DEV = "Alt+`";
+// Dev-сессия (Vite dev server) использует Alt+` чтобы не конфликтовать
+// с installed Kepler, у которого Alt+Space — иначе оба инстанса дерутся
+// за один accelerator и второй регистрируется молча неудачно.
+export const DEFAULT_HOTKEY =
+  process.env.VITE_DEV_SERVER_URL ? DEFAULT_HOTKEY_DEV : DEFAULT_HOTKEY_PROD;
 
 export function getStoredHotkey(): string {
   return readSettings().hotkey ?? DEFAULT_HOTKEY;
