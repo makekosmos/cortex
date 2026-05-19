@@ -30,7 +30,6 @@
     <DesktopChrome
       class="app-shell"
       :platform="chromePlatform"
-      @dblclick="onChromeDblClick"
     >
       <template #titlebar-leading>
         <template v-if="!layout.isZenMode">
@@ -66,16 +65,26 @@
             @forward="navigateForward"
           />
         </template>
-        <button
-          v-else
-          type="button"
-          class="eden-titlebar-toggle eden-zen-exit"
-          data-testid="zen-mode-exit"
-          title="Выйти из режима фокуса (Esc Esc или Ctrl+K Z)"
-          @click="layout.disableZenMode()"
-        >
-          <LoaderPinwheel :size="14" :stroke-width="2" />
-        </button>
+        <template v-else>
+          <button
+            type="button"
+            class="eden-titlebar-toggle eden-zen-exit"
+            data-testid="zen-mode-exit"
+            title="Выйти из режима фокуса (Esc Esc или Ctrl+K Z)"
+            @click="layout.disableZenMode()"
+          >
+            <LoaderPinwheel :size="14" :stroke-width="2" />
+          </button>
+          <button
+            type="button"
+            class="eden-titlebar-toggle eden-zen-exit"
+            data-testid="zen-mode-dock"
+            title="Закрепить поверх окон (повторный клик — вернуть)"
+            @click="toggleDock"
+          >
+            <PictureInPicture2 :size="14" :stroke-width="2" />
+          </button>
+        </template>
       </template>
 
       <template #titlebar-center>
@@ -210,7 +219,7 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, shallowRef, watch } from "vue";
-import { LoaderPinwheel } from "lucide-vue-next";
+import { LoaderPinwheel, PictureInPicture2 } from "lucide-vue-next";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -267,28 +276,23 @@ function onEntryContextMenu(event: MouseEvent, entryId: string) {
 }
 
 /**
- * Двойной клик по titlebar в zen mode → docked-widget mode:
- * always-on-top + top-right corner + compact size. Повторный dblclick
- * вернёт окно в normal. Вне zen mode — native dblclick maximize, мы не
- * мешаем.
+ * Кнопка PictureInPicture2 в zen mode titlebar (`#titlebar-leading`).
+ * Включает floating-widget mode: окно всегда поверх, top-right угол,
+ * компактные 360×560. Повторный клик возвращает окно в исходные bounds.
  *
- * Целимся в DesktopChrome через event.target: dblclick должен прилететь
- * с `.kosmos-titlebar` (drag region) — клик внутри content не доковит.
+ * Раньше пробовали через dblclick на titlebar — не работает: Electron
+ * drag-region (`-webkit-app-region: drag`) не пропускает DOM click/dblclick
+ * events наверх, нужна явная no-drag кнопка.
  */
-function onChromeDblClick(event: MouseEvent) {
-  if (!layout.isZenMode) return;
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  if (!target.closest(".kosmos-titlebar")) return;
+function toggleDock() {
   void (window as unknown as {
     kepler?: { window?: { toggleDockCorner?: () => Promise<void> } };
   }).kepler?.window?.toggleDockCorner?.();
 }
 
 // На Windows native double-click-on-titlebar разворачивает окно. В zen mode
-// этот dblclick должен превращать окно в floating-widget (см. onChromeDblClick).
-// `setMaximizable(false)` блокирует native maximize-на-dblclick, чтобы наш
-// Vue-handler сработал без флика "maximize → unmaximize".
+// это не нужно (header и так скрыт, maximize не имеет UX смысла) — отключаем,
+// чтобы случайный dblclick не вырывал из режима фокуса.
 watch(
   () => layout.isZenMode,
   (isZen) => {
