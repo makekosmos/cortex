@@ -1039,13 +1039,15 @@ ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
   if (win.isMaximized()) win.unmaximize();
   const display = screen.getDisplayMatching(current);
   const workArea = display.workArea;
-  // Прижимаем к правому краю без зазора. Width/height clamp'им чтобы окно
-  // не оказалось больше дисплея (например compact screen у user'а).
-  const width = Math.min(DOCK_WIDTH, workArea.width);
-  const height = Math.min(DOCK_HEIGHT, workArea.height);
+  // Зазор по всем сторонам. На Windows 11 native frame + invisible
+  // resize-borders добавляют ~8px по бокам поверх setBounds — без
+  // margin'а окно визуально выходит за правый край.
+  const margin = 24;
+  const width = Math.min(DOCK_WIDTH, workArea.width - margin * 2);
+  const height = Math.min(DOCK_HEIGHT, workArea.height - margin * 2);
   win.setBounds({
-    x: workArea.x + workArea.width - width,
-    y: workArea.y,
+    x: workArea.x + workArea.width - width - margin,
+    y: workArea.y + margin,
     width,
     height,
   });
