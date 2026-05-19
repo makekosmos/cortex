@@ -13,6 +13,23 @@
   "height": 720,
   "minWidth": 800,
   "minHeight": 500,
+  "commands": [
+    {
+      "id": "open",
+      "title": "Открыть Delphi",
+      "subtitle": "Задачи",
+      "kind": "app",
+      "route": "/today",
+      "mode": "open"
+    },
+    {
+      "id": "inbox",
+      "title": "Открыть входящие",
+      "subtitle": "Delphi",
+      "route": "/",
+      "mode": "open"
+    }
+  ],
   "tests": {
     "commands": ["delphi:task:create", "delphi:task:today"],
     "smoke": {

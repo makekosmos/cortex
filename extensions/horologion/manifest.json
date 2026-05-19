@@ -13,6 +13,29 @@
   "height": 560,
   "minWidth": 320,
   "minHeight": 280,
+  "commands": [
+    {
+      "id": "open",
+      "title": "Открыть Horologion",
+      "subtitle": "Помодоро + Stopwatch",
+      "kind": "app",
+      "mode": "open"
+    },
+    {
+      "id": "pomodoro",
+      "title": "Помодоро",
+      "subtitle": "Horologion",
+      "route": "/?mode=pomodoro",
+      "mode": "open"
+    },
+    {
+      "id": "stopwatch",
+      "title": "Секундомер",
+      "subtitle": "Horologion",
+      "route": "/?mode=stopwatch",
+      "mode": "open"
+    }
+  ],
   "tests": {
     "commands": [
       "horologion:pomodoro:25",

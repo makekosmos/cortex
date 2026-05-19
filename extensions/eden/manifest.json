@@ -14,8 +14,31 @@
   "minWidth": 450,
   "minHeight": 400,
   "windowEffect": "acrylic",
+  "commands": [
+    {
+      "id": "open",
+      "title": "Открыть Eden",
+      "subtitle": "Заметки и дневник",
+      "kind": "app",
+      "mode": "open"
+    },
+    {
+      "id": "note:create",
+      "title": "Создать заметку",
+      "subtitle": "Eden",
+      "route": "/new",
+      "mode": "open"
+    },
+    {
+      "id": "note:open-today",
+      "title": "Открыть сегодняшнюю заметку",
+      "subtitle": "Eden — Дневник",
+      "route": "/today",
+      "mode": "open"
+    }
+  ],
   "tests": {
-    "commands": ["eden:note:create", "eden:note:search"],
+    "commands": [],
     "smoke": {
       "objectType": "note_obj",
       "sample": {
