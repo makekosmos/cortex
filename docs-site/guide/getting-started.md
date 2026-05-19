@@ -65,18 +65,9 @@ bun run dev                 # backend + extensions + Vite + Electron
 
 `Ctrl+Shift+K` глобально откроет launcher. Tray-иконка появится в трее. Открой extension через launcher (Dashboard, Horologion, Delphi, Arrancador).
 
-## Запуск Eden (standalone, до Phase 6)
-
-```powershell
-cd apps/eden/ts
-bun run dev        # собирает Rust-sidecar Eden Heart, запускает Vite + Electron
-```
-
-Eden — единственное приложение, которое пока остаётся standalone Electron'ом. Остальное живёт внутри Kepler shell как Vue-extensions.
-
 ## Дальше
 
 - [Структура репозитория](/guide/layout) — что где лежит.
-- [Стек и инструменты](/guide/tooling) — Bun, Cargo, Biome, Playwright и пр.
+- [Стек и инструменты](/guide/tooling) — Bun, Cargo, oxc (oxlint/oxfmt), Playwright и пр.
 - [Рабочий процесс](/guide/workflow) — как правильно делать изменения.
 - [Архитектура](/concepts/architecture) — как куски связаны.

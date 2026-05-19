@@ -10,7 +10,7 @@
 | Desktop UI | **Vue 3.6.0-beta.12** (везде) + Vapor (experimental, активно в Eden) | Kepler shell + все 4 Vue-extensions (Eden, Horologion, Delphi, Arrancador) + Dashboard |
 | Desktop shell | **Electron 41** | Kepler launcher + extension windows (Eden, Delphi, Arrancador, Horologion, Dashboard) |
 | Bundler | **Vite 8** (Rolldown) | TS-приложения |
-| Линт / формат | **Biome**, **oxlint**, **oxfmt** | TS/JS |
+| Линт / формат | **oxlint** + **oxfmt** (oxc suite, Rust-based) | TS/JS |
 | Unit-тесты | **Vitest** | TS-пакеты и приложения |
 | E2E | **Playwright** | Electron-приложения |
 | Pre-commit hooks | **lefthook** | весь репо |
@@ -36,7 +36,7 @@ bun run ark:smoke
 ## Линт и формат
 
 ```powershell
-bun run lint        # запускается per-workspace, Biome / oxlint
+bun run lint        # запускается per-workspace, oxlint
 bun run format      # oxfmt --check
 bun run typecheck   # tsc --noEmit (в TS-пакетах)
 ```

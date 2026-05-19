@@ -15,7 +15,7 @@ pre-commit:
       run: cd shell && bunx tsc --noEmit
     docs-sync:
       glob: "docs-site/**/*.md"
-      run: bun run docs:sync && git add AGENTS.md CLAUDE.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md docs-site/public/llms.txt
+      run: bun run docs:sync && git add AGENTS.md CLAUDE.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md docs-site/public/llms.txt docs-site/public/full-llms.txt
     docs-check:
       glob: "docs-site/**/*.md"
       run: bun run docs:check
