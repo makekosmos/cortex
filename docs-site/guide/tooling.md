@@ -192,3 +192,97 @@ bun run docs:dev           # http://localhost:5173, hot reload markdown
 bun run docs:build         # статика в docs-site/.vitepress/dist
 bun run docs:preview       # превью собранного
 ```
+
+## FAQ — почему именно эти инструменты
+
+Здесь — обоснования ключевых выборов, чтобы не возвращаться к спорам «а может Tauri / а может Lexical / а может Biome» каждый раз когда кто-то приходит свежим взглядом. Если хочешь оспорить — открой proof loop с альтернативой и метриками.
+
+### Почему Electron, а не Tauri / Wails / native?
+
+Tauri даёт installer ~10 MB вместо ~370 MB и более «нативное» ощущение, **но это дорого по операционным затратам**:
+
+- **Кроссплатформа на Tauri — боль.** Каждая платформа использует свой WebView (WebView2 на Windows, WebKit на macOS, WebKitGTK на Linux). Расхождения в рендеринге между ними реальные — на одном CSS работает, на другом нет. Чтобы добиться **консистентного дизайна** придётся per-platform отлаживать. На Electron Chromium везде одинаковый, дизайн один раз и работает.
+- **Тулзы экосистемы под вопросом.** Год назад Playwright под Tauri вообще не работал нормально. Сейчас [`tauri-playwright`](https://github.com/tauri-apps/awesome-tauri) подтягивается, но «работает» ≠ «работает как родной для Electron». Пока всё что есть в нашем тестовом контракте (`_electron.launch`, `page.evaluate` на main process, доступ к ARK через preload) — стабильно покрывает Electron.
+- **Не приоритет автора.** Главное сейчас — личная экосистема приложений с быстрой итерацией, не оптимизация installer size. Когда / если product станет публичным и 360 MB начнут жать — пересмотрим, **но это отдельная фаза, не текущая**.
+
+Tauri остаётся «watch list» — следим за зрелостью Playwright/Spectron-replacement инструментов и кроссплатформенной консистентностью. Не сегодня.
+
+### Почему Vue 3.6 beta а не stable 3.5?
+
+Vapor Mode (no-virtual-DOM компиляция) есть только в 3.6. Для TipTap-heavy редактора Eden это ощутимый perf-win. Берём бету осознанно — Vue беты исторически стабильны (Evan You не релизит сырое), к `beta.12` API почти заморожен. Прочие 3 extension'а тоже на 3.6.0-beta.12 — единая версия проще чем фрагментация. Stable 3.6 ждём в Q1-Q2 2026.
+
+### Почему oxc (oxlint + oxfmt), а не Biome / ESLint + Prettier?
+
+Скорость: oxc в 50-100× быстрее ESLint, в 5× быстрее Biome на наших проектах. Один автор (Boshen) ведёт всю экосистему — oxlint, oxfmt, **cargo-shear**, плюс [`oxc-parser`](https://github.com/oxc-project/oxc) под капотом Vite/Rolldown. Когда инструменты от одной команды — меньше разъездов API. **Biome был параллельно**, но дублирование без пользы — удалили 2026-05-19.
+
+### Почему cargo-shear, а не cargo-machete?
+
+cargo-machete застрял на 0.6.2 (последний релиз — 2024), не понимает workspace deps (нужно для нашего multi-crate setup'а). cargo-shear от **того же Boshen что oxc** — активно развивается (`1.12.4` сейчас), `--fix` режим, использует rust-analyzer parser. Применён в oxc, rspack, rolldown, biome, uv, turbopack — production-proven.
+
+### Почему cargo-nextest, если perf-win незаметен?
+
+Wall-clock у нас почти не сдвинулся (тесты CPU-light, bottleneck в test-binary launch, не в исполнении). Взяли за **UX и фичи**: progress-bar, subprocess isolation, `--retries` для flaky e2e, JUnit XML для будущего CI. Замерили — [E1 в experiments](/.agent/experiments/2026-05-19-tooling-pass/baseline.md), 3.5% перерасход в шуме.
+
+### Почему Vitest browser, а не jsdom?
+
+Eden на Vue 3.6 beta + Vapor. **Vapor edge-cases jsdom не воспроизводит** (другой compilation target). На real Chromium через Vitest browser ловим то что иначе всплыло бы только в e2e. Плюс будущие visual regression тесты (`toMatchScreenshot`) для zen-mode / dock-corner / acrylic backdrop ложатся сюда же.
+
+### Почему параллельно bun:test и Vitest?
+
+Сейчас — переходный период. bun:test для pure-JS unit (charCount, lib/*) был там до Vitest browser setup'а. Логичная консолидация — оставить только Vitest. **Запланирована** ([Phase 15-ish](/apps/kepler-roadmap)), но не приоритет — оба работают, миграция cost > benefit пока.
+
+### Почему TipTap, а не Lexical / Slate / ProseMirror raw?
+
+- **Lexical** (Meta) — React-first, Vue-bindings слабые/community-maintained, не подходит.
+- **Slate** — Slate.js строит на ProseMirror-подобной модели но проще, **но менее зрелый** для production. Меньше extension'ов.
+- **ProseMirror raw** — TipTap **поверх ProseMirror**, можно опуститься в любой момент через `@tiptap/pm`. Сразу даёт хорошие defaults (StarterKit, plugins).
+
+TipTap 3 — Vue-нативная обёртка с богатой экосистемой плагинов (markdown, mention, code-block-lowlight, typography) — то что нужно для Eden.
+
+### Почему Pinia + (будущая) Pinia Colada, а не TanStack Query?
+
+TanStack Query (`@tanstack/vue-query`) — мощно, но **TanStack-родом из React**, Vue-биндинги отстают и не Vue-native в плане ergonomics. **Pinia Colada** — это **Vue-native эквивалент TanStack Query**, тот же ментальный модель (queries / mutations / cache), от core Pinia author'а (Eduardo San Martin Morote). Один автор стека = меньше разъездов API.
+
+### Почему ARK на SQLite + FTS5, а не Postgres / SurrealDB / external?
+
+Local-first — главный архитектурный выбор. Данные пользователя живут на его диске, синк через LAN/relay опционален. SQLite — единственный embedded engine с зрелым FTS5, ACID, и < 2MB на диске. Альтернативы (DuckDB, Turso, SurrealDB) либо не embedded, либо требуют отдельный server process.
+
+### Почему UniFFI, а не raw JNI / NDK / cxx-rs?
+
+Android-приложение Delphi mobile должно вызывать ту же ARK logic что desktop. Варианты:
+- **JNI/NDK direct** — boilerplate, manual marshalling, опасно.
+- **cxx-rs** — C++ bridge, не идиомично для Rust↔Kotlin.
+- **UniFFI** (Mozilla) — declarative interface файлы, генерирует Kotlin bindings из Rust сигнатур. Используется в реальных Mozilla-приложениях (Firefox iOS, NSS).
+
+### Почему bonjour-service (mDNS) для LAN-discovery?
+
+mDNS — zero-config LAN service discovery, поддерживается на всех платформах (Avahi на Linux, Bonjour на macOS, Windows). Alternative — broadcast UDP с custom protocol — пришлось бы делать сами, без выигрыша.
+
+### Почему lefthook, а не husky / pre-commit?
+
+- **husky** — JS-based, медленнее (overhead Node startup), не parallel.
+- **pre-commit** (Python) — отличный, но добавляет Python deps в Rust-heavy репо.
+- **lefthook** — Go binary, ~5MB, parallel execution, простой YAML конфиг. Быстрее husky в 3-10×.
+
+### Почему VitePress, а не Docusaurus / MkDocs / mdBook?
+
+- **Docusaurus** (Facebook) — React, тяжёлый, Markdown-only.
+- **MkDocs** (Python) — простой, но slow build, плагины слабые.
+- **mdBook** (Rust) — Rust ecosystem, но Markdown-only, нет Vue компонентов в страницах.
+- **VitePress** — Vite-native, Vue компоненты прямо в md, fast HMR. Подходит к нашему стеку идеально.
+
+### Почему Storybook 10, а не histoire?
+
+Был параллельный histoire — удалён 2026-05-19. Storybook тяжелее (~200MB deps vs ~30MB у histoire), но **экосистема больше**: accessibility addon, vitest integration, MDX docs, viewport addon — всё нужное «искаропки». Histoire были Vue-only и легче, но дублирование двух систем не оправдывало overhead поддержки.
+
+### Почему better-sqlite3 в Electron, а не node:sqlite?
+
+`node:sqlite` (built-in в Node 22+) — реальная альтернатива. Electron 41 использует Node 22.x — миграция возможна, **уберёт native dep** (electron-rebuild), уменьшит installer. **На watch-list** — в Phase 11 (backup feature) пересмотрим.
+
+### Почему ARK FTS5, а не tantivy / meilisearch / sqlite-vec semantic?
+
+- **tantivy** — Rust Lucene-like, мощнее FTS5, но separate process, no embedded API.
+- **meilisearch** — external service, требует daemon.
+- **sqlite-vec** (semantic embeddings) — в [Phase 16 roadmap](/apps/kepler-roadmap), будет работать **поверх** существующего ARK FTS5, не вместо. Hybrid lexical+semantic search.
+
+FTS5 встроен в SQLite, синхронизируется sync'ом ARK автоматически, нет separate process — для local-first что нужно.
