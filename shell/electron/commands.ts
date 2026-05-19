@@ -4,7 +4,9 @@
 // Action-commands (Pomodoro start, create note и т.п.) приходят dynamic от
 // running extension'ов через kepler-backend command bus.
 
-import { extensionIconDataUri, openExtension } from "./extension-host";
+// extensionIconDataUri / openExtension больше не используются здесь —
+// extension-команды объявляются в их manifest.commands[] и резолвятся
+// через `loadDeclaredCommands` (extension-host.ts).
 import { openDashboardWindow } from "./dashboard-window";
 import { openSettings } from "./settings-window";
 import { check as checkUpdates } from "./autoupdater-host";
@@ -35,10 +37,6 @@ export interface InternalCommand {
   exec: () => Promise<void> | void;
 }
 
-function openAsExtension(id: string, route?: string): void {
-  openExtension(id, route);
-}
-
 async function runCheckUpdates(): Promise<void> {
   try {
     await checkUpdates();
@@ -48,48 +46,9 @@ async function runCheckUpdates(): Promise<void> {
 }
 
 export const COMMANDS: InternalCommand[] = [
-  // App tiles — открывают приложение/extension в новом окне.
-  {
-    id: "delphi:open",
-    title: "Открыть Delphi",
-    subtitle: "Задачи",
-    category: "open",
-    kind: "app",
-    requiresExtension: "delphi",
-    icon: () => extensionIconDataUri("delphi"),
-    exec: () => openAsExtension("delphi", "/today"),
-  },
-  {
-    id: "horologion:open",
-    title: "Открыть Horologion",
-    subtitle: "Pomodoro + трекер времени",
-    category: "open",
-    kind: "app",
-    requiresExtension: "horologion",
-    icon: () => extensionIconDataUri("horologion"),
-    exec: () => openAsExtension("horologion"),
-  },
-  {
-    id: "arrancador:open",
-    title: "Открыть Arrancador",
-    subtitle: "Игровая библиотека",
-    category: "open",
-    kind: "app",
-    requiresExtension: "arrancador",
-    icon: () => extensionIconDataUri("arrancador"),
-    exec: () => openAsExtension("arrancador"),
-  },
-  {
-    id: "eden:open",
-    title: "Открыть Eden",
-    subtitle: "Заметки и дневник",
-    category: "open",
-    kind: "app",
-    requiresExtension: "eden",
-    icon: () => extensionIconDataUri("eden"),
-    exec: () => openAsExtension("eden"),
-  },
-  // Kepler commands — встроенные в shell.
+  // Kepler-internal команды (shell-owned, не extensions). Extension'ы
+  // объявляют свои команды в `manifest.commands[]` — см.
+  // `loadDeclaredCommands` в extension-host.ts и docs-site/concepts/command-bus.md.
   {
     id: "dashboard:open",
     title: "Открыть таблицу данных",
@@ -116,68 +75,6 @@ export const COMMANDS: InternalCommand[] = [
     kind: "command",
     appName: "Kepler",
     exec: () => runCheckUpdates(),
-  },
-  // Extension commands — открывают приложение на конкретной странице.
-  {
-    id: "delphi:inbox",
-    title: "Открыть входящие",
-    subtitle: "Delphi",
-    category: "open",
-    kind: "command",
-    appName: "Delphi",
-    requiresExtension: "delphi",
-    icon: () => extensionIconDataUri("delphi"),
-    exec: () => openAsExtension("delphi", "/"),
-  },
-  {
-    id: "horologion:pomodoro",
-    title: "Помодоро",
-    subtitle: "Horologion",
-    category: "open",
-    kind: "command",
-    appName: "Horologion",
-    requiresExtension: "horologion",
-    icon: () => extensionIconDataUri("horologion"),
-    exec: () => openAsExtension("horologion", "/?mode=pomodoro"),
-  },
-  {
-    id: "horologion:stopwatch",
-    title: "Секундомер",
-    subtitle: "Horologion",
-    category: "open",
-    kind: "command",
-    appName: "Horologion",
-    requiresExtension: "horologion",
-    icon: () => extensionIconDataUri("horologion"),
-    exec: () => openAsExtension("horologion", "/?mode=stopwatch"),
-  },
-  // Eden deep-links — открывают Eden на конкретном action'е. По схеме
-  // совпадают с horologion:pomodoro/stopwatch: static open-команды видны
-  // в launcher'е даже когда extension не запущен (а не только после mount
-  // как dynamic action-команды через commands.register). Сами route'ы
-  // (`/today`, `/new`) обрабатываются в `extensions/eden/src/main.ts`
-  // через `kepler.navigation.initialRoute` → `dispatchEdenCommand(...)`.
-  {
-    id: "eden:note:open-today",
-    title: "Открыть сегодняшнюю заметку",
-    subtitle: "Eden — Дневник",
-    category: "open",
-    kind: "command",
-    appName: "Eden",
-    requiresExtension: "eden",
-    icon: () => extensionIconDataUri("eden"),
-    exec: () => openAsExtension("eden", "/today"),
-  },
-  {
-    id: "eden:note:create",
-    title: "Создать заметку",
-    subtitle: "Eden",
-    category: "open",
-    kind: "command",
-    appName: "Eden",
-    requiresExtension: "eden",
-    icon: () => extensionIconDataUri("eden"),
-    exec: () => openAsExtension("eden", "/new"),
   },
 ];
 

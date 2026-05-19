@@ -58,6 +58,34 @@ const __dirname = path.dirname(__filename);
 
 export type ExtensionKind = "vue" | "static";
 
+/**
+ * Объявление команды в `manifest.json` extension'а. Полный id рендерится
+ * как `${extension.id}:${command.id}`.
+ */
+export interface KextManifestCommand {
+  /** Локальный id (без префикса extension'а). [a-z0-9:-]+. */
+  id: string;
+  /** Подпись в launcher'е (RU). */
+  title: string;
+  /** Доп. подпись справа (название extension'а или категория). */
+  subtitle?: string;
+  /** Иконка. Относительный путь от extension dir (например `icons/today.svg`).
+      Если не задано — используется top-level `manifest.icon`. */
+  icon?: string;
+  /** Hash-route для openExtension. Передаётся в Eden через
+      `kepler.navigation.initialRoute` / `onNavigate`. */
+  route?: string;
+  /** UI-классификация плашки. `app` = главное приложение, `command` = команда.
+      По умолчанию `command`. */
+  kind?: "app" | "command";
+  /** Поведение при invoke:
+   *  - `open` (default): открыть extension с route. Не требует running state.
+   *  - `action`: invoke в running extension через ARK commands bus. Если
+   *    extension не запущен — Kepler auto-launch'ит и dispatch'ит после
+   *    mount. */
+  mode?: "open" | "action";
+}
+
 export interface ExtensionManifest {
   id: string;
   name: string;
@@ -126,6 +154,19 @@ export interface ExtensionManifest {
    * - `"none"` — стандартный непрозрачный фон (по умолчанию)
    */
   windowEffect?: "acrylic" | "mica" | "none";
+  /**
+   * Declarative commands extension'а (Raycast-style). Manifest = source of
+   * truth для entry-point команд: открыть extension с конкретным route,
+   * либо триггернуть action который extension обработает через
+   * `kepler.navigation.onNavigate`. Видны в launcher всегда (пока
+   * extension установлен), не требуют running state.
+   *
+   * Полный id команды = `${manifest.id}:${cmd.id}` — security boundary
+   * (extension не может claim'нуть чужой namespace, например `settings:open`).
+   *
+   * Подробнее — `docs-site/concepts/command-bus.md`.
+   */
+  commands?: KextManifestCommand[];
   /**
    * Test contract — опционально. Используется universal `tests/e2e/extensions-contract.spec.ts`
    * чтобы автоматически проверять архитектурный baseline extension'а: команды
@@ -402,6 +443,113 @@ export function extensionIconDataUri(id: string): string | undefined {
   }
 }
 
+/**
+ * Резолвит произвольный icon-path из манифеста (относительно extension dir)
+ * в data:URI. Используется для `commands[].icon`. Возвращает undefined
+ * если файл отсутствует / выходит за пределы extension dir / unreadable.
+ */
+function readManifestIconAsDataUri(id: string, iconRel: string): string | undefined {
+  if (!iconRel || typeof iconRel !== "string") return undefined;
+  const dir = resolveExtensionDir(id);
+  if (!dir) return undefined;
+  const resolved = path.resolve(path.join(dir, iconRel));
+  // Path traversal guard: icon должна оставаться внутри extension dir.
+  const dirResolved = path.resolve(dir);
+  if (!resolved.startsWith(dirResolved + path.sep) && resolved !== dirResolved) return undefined;
+  if (!existsSync(resolved)) return undefined;
+  try {
+    const buf = readFileSync(resolved);
+    const ext = path.extname(resolved).toLowerCase();
+    const mime =
+      ext === ".svg" ? "image/svg+xml"
+      : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg"
+      : ext === ".webp" ? "image/webp"
+      : "image/png";
+    return `data:${mime};base64,${buf.toString("base64")}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Manifest-declared command, обогащённая resolved icon data:URI + metadata
+ * extension'а. Этот формат уже близок к `CommandRecord` из ipc-types.ts.
+ */
+export interface DeclaredCommand {
+  id: string;
+  title: string;
+  subtitle?: string;
+  category: "open" | "action";
+  kind: "app" | "command";
+  appName: string;
+  icon?: string;
+  /** Source extension id (для exec). */
+  extensionId: string;
+  /** Hash-route из manifest (если задан). */
+  route?: string;
+  /** Mode: `open` (openExtension) vs `action` (commands.invoke + auto-launch). */
+  mode: "open" | "action";
+}
+
+const declaredCommandIdRe = /^[a-z0-9][a-z0-9:_-]*$/;
+
+/**
+ * Сканирует все установленные extension'ы (включая dev tree), читает
+ * `manifest.commands[]`, билдит DeclaredCommand[]. Idempotent / lightweight —
+ * можно дёргать на каждом `kepler:commands:list`. Cache не нужен потому что
+ * `listExtensions()` уже relatively cheap (несколько readFileSync).
+ */
+export function loadDeclaredCommands(): DeclaredCommand[] {
+  const out: DeclaredCommand[] = [];
+  for (const manifest of listExtensions()) {
+    if (!Array.isArray(manifest.commands)) continue;
+    for (const cmd of manifest.commands) {
+      if (!cmd || typeof cmd !== "object") continue;
+      if (typeof cmd.id !== "string" || !declaredCommandIdRe.test(cmd.id)) {
+        console.warn(
+          `[kepler-shell] extension '${manifest.id}' command id invalid: ${JSON.stringify(cmd.id)} — skipped`,
+        );
+        continue;
+      }
+      if (typeof cmd.title !== "string" || cmd.title.trim().length === 0) {
+        console.warn(
+          `[kepler-shell] extension '${manifest.id}' command '${cmd.id}' missing title — skipped`,
+        );
+        continue;
+      }
+      const fullId = `${manifest.id}:${cmd.id}`;
+      const icon = cmd.icon
+        ? readManifestIconAsDataUri(manifest.id, cmd.icon)
+        : extensionIconDataUri(manifest.id);
+      out.push({
+        id: fullId,
+        title: cmd.title,
+        subtitle: cmd.subtitle ?? manifest.name,
+        category: cmd.mode === "action" ? "action" : "open",
+        kind: cmd.kind ?? "command",
+        appName: manifest.name,
+        icon,
+        extensionId: manifest.id,
+        route: cmd.route,
+        mode: cmd.mode ?? "open",
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Lookup конкретной DeclaredCommand по полному id (`<ext>:<cmd>`).
+ * Используется `kepler:commands:invoke` для resolve'а нужного route +
+ * extension id перед openExtension/commands.invoke.
+ */
+export function findDeclaredCommand(fullId: string): DeclaredCommand | null {
+  for (const cmd of loadDeclaredCommands()) {
+    if (cmd.id === fullId) return cmd;
+  }
+  return null;
+}
+
 export function listExtensions(): ExtensionManifest[] {
   // Collect ids из всех roots; dedup по id, выигрывает первый встреченный
   // (priority order — см. resolveExtensionRoots).
@@ -530,6 +678,12 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/** Is extension currently running (window exists, not destroyed)? */
+export function isExtensionRunning(id: string): boolean {
+  const entry = extensionWindows.get(id);
+  return !!entry && !entry.win.isDestroyed();
 }
 
 export function openExtension(id: string, route?: string): void {

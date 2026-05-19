@@ -49,7 +49,13 @@ import type {
   SearchResult,
 } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
-import { openExtension, setExtensionArkBridge } from "./extension-host";
+import {
+  findDeclaredCommand,
+  isExtensionRunning,
+  loadDeclaredCommands,
+  openExtension,
+  setExtensionArkBridge,
+} from "./extension-host";
 import { listInstalledUserExtensions } from "./extension-installer";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
@@ -814,50 +820,154 @@ function staticCommands(): CommandRecord[] {
   );
 }
 
+/**
+ * Resolve три источника команд в единый список (priority: internal >
+ * manifest-declared > runtime-dynamic). См.
+ * `docs-site/concepts/command-bus.md`.
+ */
 ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
-  const statics = staticCommands();
-  if (!arkClient) return statics;
+  const byId = new Map<string, CommandRecord>();
+
+  // 1) Kepler-internal (settings/dashboard/check-updates).
+  for (const c of staticCommands()) byId.set(c.id, c);
+
+  // 2) Manifest-declared из всех установленных + dev-tree extension'ов.
   try {
-    const dynamic = await arkClient.commands.list();
-    const byId = new Map<string, CommandRecord>();
-    for (const c of statics) byId.set(c.id, c);
-    if (!Array.isArray(dynamic)) {
-      console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
-      return Array.from(byId.values());
+    for (const cmd of loadDeclaredCommands()) {
+      if (byId.has(cmd.id)) continue; // internal priority
+      byId.set(cmd.id, {
+        id: cmd.id,
+        title: cmd.title,
+        subtitle: cmd.subtitle,
+        category: cmd.category,
+        kind: cmd.kind,
+        appName: cmd.appName,
+        icon: cmd.icon,
+      });
     }
-    for (const c of dynamic) {
-      // Static open-commands имеют приоритет (их id типа "delphi:open" не должны
-      // переопределяться апкой). Если апка регистрирует уникальный id —
-      // добавляем; иначе static побеждает.
-      if (!byId.has(c.id)) {
-        const d = c as CommandRecord & { kind?: "app" | "command"; appName?: string };
-        byId.set(c.id, {
-          id: c.id,
-          title: c.title,
-          subtitle: c.subtitle,
-          category: c.category,
-          kind: d.kind,
-          appName: d.appName,
-        });
-      }
-    }
-    return Array.from(byId.values());
   } catch (e) {
-    console.error("[kepler-shell] commands.list (dynamic) failed:", e);
-    return statics;
+    console.error("[kepler-shell] loadDeclaredCommands failed:", e);
   }
+
+  // 3) Runtime dynamic (commands.register от running extension'ов).
+  //    Видны только пока соответствующий extension запущен.
+  if (arkClient) {
+    try {
+      const dynamic = await arkClient.commands.list();
+      if (Array.isArray(dynamic)) {
+        for (const c of dynamic) {
+          if (byId.has(c.id)) continue; // internal/manifest priority
+          const d = c as CommandRecord & { kind?: "app" | "command"; appName?: string };
+          byId.set(c.id, {
+            id: c.id,
+            title: c.title,
+            subtitle: c.subtitle,
+            category: c.category,
+            kind: d.kind,
+            appName: d.appName,
+          });
+        }
+      } else {
+        console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
+      }
+    } catch (e) {
+      console.error("[kepler-shell] commands.list (dynamic) failed:", e);
+    }
+  }
+
+  return Array.from(byId.values());
 });
 
-ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> => {
-  const cmd = findCommand(id);
-  if (cmd) {
+/**
+ * Auto-launch helper: если extension не запущен, openExtension + ждём пока
+ * mount успеет зарегистрировать command listener'ы. Используется V2
+ * dynamic action invoke flow (см. `kepler:commands:invoke` ниже).
+ *
+ * Через ARK we опрашиваем commands.list пока в нём не появится команда —
+ * это надёжнее чем polling по extensionWindows (window появляется до того
+ * как Vue mount + commands.register IPC отработал).
+ */
+async function awaitExtensionCommand(
+  extensionId: string,
+  fullCommandId: string,
+  timeoutMs = 5000,
+): Promise<boolean> {
+  if (!arkClient) return false;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
     try {
-      await cmd.exec();
+      const list = await arkClient.commands.list();
+      if (Array.isArray(list) && list.some((c) => c.id === fullCommandId)) {
+        return true;
+      }
+    } catch {
+      // ARK rpc race — retry
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+
+ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> => {
+  // 1) Internal commands win — exec локально.
+  const internal = findCommand(id);
+  if (internal) {
+    try {
+      await internal.exec();
     } catch (e) {
       console.error(`[kepler-shell] command ${id} failed:`, e);
     }
-  } else if (arkClient) {
-    // Dynamic command — backend broadcast'нёт command_invoked, апка handle'нёт.
+    hideLauncher();
+    return;
+  }
+
+  // 2) Manifest-declared — open или action mode.
+  const declared = findDeclaredCommand(id);
+  if (declared) {
+    if (declared.mode === "open") {
+      openExtension(declared.extensionId, declared.route);
+      hideLauncher();
+      return;
+    }
+    // action mode: dynamic invoke через ARK. Auto-launch если extension
+    // не запущен — окно открывается, ждём commands.register, dispatch'им.
+    if (!isExtensionRunning(declared.extensionId)) {
+      openExtension(declared.extensionId, declared.route);
+      const ready = await awaitExtensionCommand(declared.extensionId, id);
+      if (!ready) {
+        console.warn(
+          `[kepler-shell] auto-launch для action команды ${id}: extension не зарегистрировал её в течение 5s`,
+        );
+        hideLauncher();
+        return;
+      }
+    }
+    if (arkClient) {
+      try {
+        await arkClient.commands.invoke(id);
+      } catch (e) {
+        console.error(`[kepler-shell] declared action invoke ${id} failed:`, e);
+      }
+    }
+    hideLauncher();
+    return;
+  }
+
+  // 3) Runtime dynamic — backend broadcasts command_invoked.
+  if (arkClient) {
+    // Auto-launch: если id начинается с `<extId>:` и extension установлен
+    // но не running — ткнуть openExtension + ждать. Это покрывает кейс
+    // когда extension через `commands.register` объявил action-команду в
+    // manifest.tests, а пользователь её триггерит из launcher'а после
+    // того как extension успел зарегистрировать (история launcher'а).
+    const colonIdx = id.indexOf(":");
+    if (colonIdx > 0) {
+      const extId = id.slice(0, colonIdx);
+      if (!isExtensionRunning(extId)) {
+        openExtension(extId);
+        await awaitExtensionCommand(extId, id);
+      }
+    }
     try {
       await arkClient.commands.invoke(id);
     } catch (e) {
@@ -866,8 +976,6 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
   } else {
     console.warn(`[kepler-shell] unknown command (no arkClient): ${id}`);
   }
-  // Спрятать launcher после успешного / неуспешного invoke — стандартное
-  // поведение Spotlight/Raycast: command выполнен → окно уходит.
   hideLauncher();
 });
 
