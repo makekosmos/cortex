@@ -1005,7 +1005,6 @@ const dockedState = new Map<
 >();
 const DOCK_WIDTH = 360;
 const DOCK_HEIGHT = 560;
-const DOCK_MARGIN = 12;
 
 ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
   const id = extensionIdForSender(e.sender);
@@ -1026,7 +1025,8 @@ ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
     return;
   }
 
-  // Dock: save current bounds + переместить в top-right.
+  // Dock: save current bounds + переместить в top-right того дисплея,
+  // где сейчас окно (multi-monitor safe).
   const current = win.getNormalBounds();
   dockedState.set(id, {
     x: current.x,
@@ -1037,12 +1037,17 @@ ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
   });
 
   if (win.isMaximized()) win.unmaximize();
-  const workArea = screen.getPrimaryDisplay().workArea;
+  const display = screen.getDisplayMatching(current);
+  const workArea = display.workArea;
+  // Прижимаем к правому краю без зазора. Width/height clamp'им чтобы окно
+  // не оказалось больше дисплея (например compact screen у user'а).
+  const width = Math.min(DOCK_WIDTH, workArea.width);
+  const height = Math.min(DOCK_HEIGHT, workArea.height);
   win.setBounds({
-    x: workArea.x + workArea.width - DOCK_WIDTH - DOCK_MARGIN,
-    y: workArea.y + DOCK_MARGIN,
-    width: DOCK_WIDTH,
-    height: DOCK_HEIGHT,
+    x: workArea.x + workArea.width - width,
+    y: workArea.y,
+    width,
+    height,
   });
   win.setAlwaysOnTop(true, "floating");
 });
