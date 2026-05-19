@@ -62,7 +62,7 @@ export default defineConfig({
     siteTitle: "Kosmos",
 
     nav: [
-      { text: "Что нового", link: "/whats-new" },
+      { text: "Что нового", link: "/whats-new/" },
       { text: "Старт", link: "/guide/getting-started" },
       { text: "Концепты", link: "/concepts/architecture" },
       { text: "Приложения", link: "/apps/" },
@@ -72,6 +72,16 @@ export default defineConfig({
     ],
 
     sidebar: {
+      "/whats-new/": [
+        {
+          text: "Что нового",
+          items: [
+            { text: "Обзор", link: "/whats-new/" },
+            { text: "Kepler", link: "/whats-new/kepler" },
+            { text: "Расширения", link: "/whats-new/extensions" },
+          ],
+        },
+      ],
       "/guide/": [
         {
           text: "Старт",
