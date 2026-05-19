@@ -233,6 +233,7 @@ import { useSearch } from "@/composables/useSearch";
 import type { SpaceId } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypeCollectionName } from "@/lib/typedNotes";
+import { countCharsInProseMirrorDoc } from "@/lib/charCount";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
@@ -395,32 +396,6 @@ function pickRecentEntries(entries: Entry[], limit: number) {
 const recentSidebarEntries = computed(() =>
   pickRecentEntries(eden.entries, 10),
 );
-
-/**
- * Extract plain text length from ProseMirror JSON. Считаем только `text` node'ы
- * — все символы суммируются. Возвращает null если doc нечитаем.
- */
-function countCharsInProseMirrorDoc(json: string | null | undefined): number | null {
-  if (!json) return null;
-  try {
-    const doc = JSON.parse(json) as unknown;
-    let total = 0;
-    const walk = (node: unknown): void => {
-      if (!node || typeof node !== "object") return;
-      const n = node as { type?: string; text?: string; content?: unknown[] };
-      if (n.type === "text" && typeof n.text === "string") {
-        total += n.text.length;
-      }
-      if (Array.isArray(n.content)) {
-        for (const child of n.content) walk(child);
-      }
-    };
-    walk(doc);
-    return total;
-  } catch {
-    return null;
-  }
-}
 
 const currentEntryCharCount = computed<number | null>(() => {
   if (!eden.currentEntry) return null;
