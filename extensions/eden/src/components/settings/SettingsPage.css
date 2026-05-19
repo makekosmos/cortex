@@ -177,32 +177,6 @@
   opacity: 1;
 }
 
-.icon.settings-space {
-  background-image: url("/anytype/icon/settings/home.svg");
-}
-.icon.settings-bin {
-  background-image: url("/anytype/icon/settings/bin.svg");
-}
-.icon.settings-storage {
-  background-image: url("/anytype/icon/settings/storage.svg");
-}
-.icon.settings-type {
-  background-image: url("/anytype/icon/settings/type.svg");
-}
-.icon.settings-members {
-  background-image: url("/anytype/icon/settings/members.svg");
-}
-.icon.settings-import {
-  background-image: url("/anytype/icon/settings/import.svg");
-}
-.icon.settings-export {
-  background-image: url("/anytype/icon/settings/export.svg");
-}
-.icon.back {
-  background-image: url("/anytype/icon/back.svg");
-  background-size: 20px;
-}
-
 .settings-content {
   flex: 1;
   overflow-y: auto;

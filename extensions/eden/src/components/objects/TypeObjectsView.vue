@@ -12,6 +12,7 @@ import {
   type ResolvedNoteTypeField,
   resolveNoteTypeFields,
 } from "@/lib/typedNotes";
+import { objectIconUri } from "@/lib/iconResolver";
 
 const props = defineProps<{
   noteType: NoteType;
@@ -44,7 +45,7 @@ function formatFieldValue(field: ResolvedNoteTypeField, value: unknown): string 
 }
 
 const collectionTitle = computed(() => getNoteTypeCollectionName(props.noteType));
-const iconSrc = computed(() => `/anytype/icon/type/default/${props.noteType.icon || "document"}.svg`);
+const iconSrc = computed(() => objectIconUri(props.noteType.icon));
 
 const collectionEntries = computed(() =>
   props.entries

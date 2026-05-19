@@ -32,6 +32,7 @@ import {
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypeCollectionName } from "@/lib/typedNotes";
 import { isSystemType } from "@/lib/systemTypes";
+import { objectIconUri } from "@/lib/iconResolver";
 import {
   BackIcon,
   GlobeIcon,
@@ -66,6 +67,7 @@ const emit = defineEmits<{
   createEntry: [];
   toggleSearch: [];
   openEntry: [entryId: string];
+  entryContextMenu: [event: MouseEvent, entryId: string];
   openSettingsTab: [tab: SettingsTab];
   openObjectTypes: [];
   openObjectType: [noteTypeId: string];
@@ -93,8 +95,9 @@ function buildEntryItem(entry: Entry, testId: string): SidebarProjectItem {
     active: props.currentEntry?.id === entry.id,
     color: "var(--sidebar-foreground)",
     iconColor: neutralEntryIconColor,
-    iconSrc: `/anytype/icon/type/default/${iconName}.svg`,
+    iconSrc: objectIconUri(iconName),
     onClick: () => emit("openEntry", entry.id),
+    onContextMenu: (event: MouseEvent) => emit("entryContextMenu", event, entry.id),
     testId,
   };
 }
@@ -106,7 +109,7 @@ function buildTypeItem(noteType: NoteType, testId: string): SidebarProjectItem {
     active: props.selectedObjectTypeId === noteType.id,
     color: noteType.color,
     iconColor: noteType.color,
-    iconSrc: `/anytype/icon/type/default/${noteType.icon || "document"}.svg`,
+    iconSrc: objectIconUri(noteType.icon),
     onClick: () => emit("openObjectType", noteType.id),
     testId,
   };

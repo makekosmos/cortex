@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { objectIconUri } from "@/lib/iconResolver";
+
 const props = defineProps<{
   builtInTypes: NoteType[];
   customTypes: NoteType[];
@@ -38,7 +40,7 @@ const emit = defineEmits<{
             <div class="object-types-sidebar__item-icon-wrap">
               <img
                 class="object-types-sidebar__item-icon object-types-item-icon"
-                :src="`/anytype/icon/type/default/${noteType.icon || 'document'}.svg`"
+                :src="objectIconUri(noteType.icon)"
                 alt=""
                 width="18"
                 height="18"
@@ -66,7 +68,7 @@ const emit = defineEmits<{
             <div class="object-types-sidebar__item-icon-wrap">
               <img
                 class="object-types-sidebar__item-icon object-types-item-icon"
-                :src="`/anytype/icon/type/default/${noteType.icon || 'document'}.svg`"
+                :src="objectIconUri(noteType.icon)"
                 alt=""
                 width="18"
                 height="18"

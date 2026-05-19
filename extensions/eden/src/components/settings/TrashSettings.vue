@@ -25,7 +25,7 @@
           <div class="trash-item-info">
             <img
               class="trash-item-icon"
-              src="/anytype/icon/object/page.svg"
+              :src="trashItemIcon"
               alt=""
               width="18"
               height="18"
@@ -60,6 +60,9 @@
 <script setup vapor lang="ts">
 import { ref, onMounted } from "vue";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
+import { objectIconUri } from "@/lib/iconResolver";
+
+const trashItemIcon = objectIconUri("page");
 
 const emit = defineEmits<{ refreshData: [] }>();
 

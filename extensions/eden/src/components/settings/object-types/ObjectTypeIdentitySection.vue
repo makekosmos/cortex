@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import type { TypeDraft } from "./shared";
 import { COLOR_OPTIONS, ICON_OPTIONS } from "./shared";
+import { objectIconUri } from "@/lib/iconResolver";
 
 const props = defineProps<{
   draft: TypeDraft;
@@ -15,9 +16,7 @@ const emit = defineEmits<{
 const pickerOpen = ref(false);
 const pickerRoot = ref<HTMLElement | null>(null);
 
-const iconSrc = computed(
-  () => `/anytype/icon/type/default/${props.draft.icon || "document"}.svg`,
-);
+const iconSrc = computed(() => objectIconUri(props.draft.icon));
 
 function updateDraftValue<K extends keyof TypeDraft>(key: K, value: TypeDraft[K]) {
   emit("patchDraft", { [key]: value });
@@ -125,7 +124,7 @@ onBeforeUnmount(() => {
                 :aria-label="icon"
                 :style="{
                   '--object-type-accent': draft.color || '#2aa7ee',
-                  '--object-type-icon-src': `url(/anytype/icon/type/default/${icon}.svg)`,
+                  '--object-type-icon-src': `url(${objectIconUri(icon)})`,
                 }"
                 @click="selectIcon(icon)"
               >

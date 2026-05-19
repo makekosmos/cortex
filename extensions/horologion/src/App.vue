@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import { Settings, ArrowLeft } from "lucide-vue-next";
-import { DesktopChrome, DesktopContentSurface } from "@kosmos/visuals";
+import { DesktopChrome, DesktopContentSurface, WindowControls } from "@kosmos/visuals";
 
 const route = useRoute();
 const router = useRouter();
@@ -108,6 +108,7 @@ onBeforeUnmount(() => {
             >
                 <Settings :size="16" :stroke-width="1.7" />
             </button>
+            <WindowControls />
         </template>
 
         <DesktopContentSurface

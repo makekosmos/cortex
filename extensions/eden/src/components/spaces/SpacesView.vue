@@ -78,7 +78,7 @@
         <div v-for="nt in propertyTypes" :key="nt.id" class="space-table-row">
           <span style="display: flex; align-items: center; gap: 6px">
             <img
-              :src="`/anytype/icon/type/default/${nt.icon || 'document'}.svg`"
+              :src="objectIconUri(nt.icon)"
               alt=""
               width="16"
               height="16"
@@ -265,6 +265,7 @@ import type { SpaceId } from "@/components/sidebar/types";
 import { sortEntries, type SortMode } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { SYSTEM_TYPE_WORKOUT_ID, SYSTEM_TYPE_EXERCISE_ID } from "@/lib/systemTypes";
+import { objectIconUri } from "@/lib/iconResolver";
 
 const props = defineProps<{
   activeSpace: SpaceId;
