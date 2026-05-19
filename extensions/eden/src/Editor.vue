@@ -121,6 +121,7 @@ import {
   validateHeaderProps,
 } from "@/lib/typedNotes";
 import { SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
+import { countCharsInProseMirrorDoc, countCharsInProseMirrorNode } from "@/lib/charCount";
 import { objectIconUri } from "@/lib/iconResolver";
 import {
   getEditableEntryTitle,
@@ -160,7 +161,16 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   exitZen: [];
+  liveCharCount: [count: number];
 }>();
+
+function emitLiveCharCount() {
+  if (!editor.value) {
+    emit("liveCharCount", countCharsInProseMirrorDoc(lastPersistedContentJson) ?? 0);
+    return;
+  }
+  emit("liveCharCount", countCharsInProseMirrorNode(editor.value.getJSON()));
+}
 
 const title = ref(getEditableEntryTitle(props.entry.title, props.entry.header_props_json));
 const noteTypeId = ref<string>(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
@@ -371,6 +381,7 @@ const editor = useEditor({
   onUpdate: () => {
     const startedAt = performance.now();
     markDocumentDirty();
+    emitLiveCharCount();
     requestAnimationFrame(() => {
       perfTracker.recordMetric("updateToNextPaint", performance.now() - startedAt);
     });
@@ -701,6 +712,7 @@ function hydrateFromEntry(entry: Entry) {
     lastPersistedContentJson = getSerializedEditorContent();
     lastPersistedMarkdown = getSerializedEditorMarkdown();
     isHydrating = false;
+    emitLiveCharCount();
   });
 }
 
@@ -895,6 +907,7 @@ watch(
       lastPersistedContentJson = getSerializedEditorContent();
       lastPersistedMarkdown = getSerializedEditorMarkdown();
       isHydrating = false;
+      emitLiveCharCount();
     });
   },
 );

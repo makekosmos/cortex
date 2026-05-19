@@ -175,6 +175,7 @@
             :on-navigate="eden.navigateTo"
             :on-open-type-settings="openTypeSettings"
             @exit-zen="layout.disableZenMode()"
+            @live-char-count="liveCharCount = $event"
           />
           <SpacesView
             v-else
@@ -213,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, shallowRef, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { LoaderPinwheel } from "lucide-vue-next";
 import {
   ContextMenu,
@@ -397,8 +398,17 @@ const recentSidebarEntries = computed(() =>
   pickRecentEntries(eden.entries, 10),
 );
 
+const liveCharCount = ref<number | null>(null);
+watch(
+  () => eden.currentEntry?.id ?? null,
+  () => {
+    liveCharCount.value = null;
+  },
+);
+
 const currentEntryCharCount = computed<number | null>(() => {
   if (!eden.currentEntry) return null;
+  if (liveCharCount.value !== null) return liveCharCount.value;
   return countCharsInProseMirrorDoc(eden.currentEntry.content_json);
 });
 
