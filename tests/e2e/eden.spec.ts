@@ -198,4 +198,105 @@ test.describe("eden extension", () => {
       await app.close();
     }
   });
+
+  // Regression guard: команда `eden:note:open-today` должна
+  //   1) persist'ить SYSTEM_TYPE_JOURNAL в backend (upsert_object_type)
+  //   2) создать journal entry с today-title
+  //   3) выставить zen mode (renderer state)
+  // До 2026-05-19 проваливалось на (1) — ensureEntryTypeAvailable возвращал
+  // false для client-only "system-type-journal", saveEntry → invalid_type.
+  test("eden:note:open-today — создаёт journal entry и включает zen mode", async () => {
+    const app = await launchKepler({ slug: "eden-open-today" });
+    try {
+      const edenWindow = await openEden(app);
+
+      const launcher = await app.firstWindow();
+
+      // Подсчёт journal entries до вызова — для дельта-проверки.
+      const beforeCount = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ type_id?: string | null }>> };
+        }).api;
+        const entries = await api.listEntries();
+        return entries.filter((e) => e.type_id === "system-type-journal").length;
+      });
+
+      // Invoke команды из launcher window (как делает реальный flow).
+      const invoke = await launcher.evaluate(async () => {
+        try {
+          await (window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }).kepler.commands.invoke("eden:note:open-today");
+          return "ok";
+        } catch (e) {
+          return "throw:" + (e instanceof Error ? e.message : String(e));
+        }
+      });
+      expect(invoke).toBe("ok");
+
+      // Дать Eden время обработать event + async chain (saveNoteType + saveEntry).
+      await edenWindow.waitForTimeout(2000);
+
+      // Должен появиться один новый journal entry с today-title.
+      // Title формат — ISO `YYYY-MM-DD` (см. openTodayJournal в store).
+      const result = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
+        }).api;
+        const entries = await api.listEntries();
+        const journals = entries.filter((e) => e.type_id === "system-type-journal");
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, "0");
+        const dd = String(now.getDate()).padStart(2, "0");
+        const expectedTitle = `${yyyy}-${mm}-${dd}`;
+        return {
+          totalJournals: journals.length,
+          matchingToday: journals.filter((e) => e.title.trim() === expectedTitle),
+          expectedTitle,
+        };
+      });
+
+      expect(
+        result.totalJournals,
+        `journal entries: было ${beforeCount}, стало ${result.totalJournals}`,
+      ).toBeGreaterThanOrEqual(beforeCount + 1);
+      expect(
+        result.matchingToday.length,
+        `должна быть заметка с title "${result.expectedTitle}", вместо нашлось ${result.matchingToday.length}`,
+      ).toBeGreaterThanOrEqual(1);
+
+      // zen mode должен быть включён — проверяем через DOM (.focus-mode class
+      // на .editor-wrapper или .focus-mode-active на .app-container).
+      const zenActive = await edenWindow.evaluate(() => {
+        return Boolean(
+          document.querySelector(".focus-mode-active") ||
+            document.querySelector(".focus-mode"),
+        );
+      });
+      expect(zenActive, "после open-today должен быть включён zen mode").toBe(true);
+
+      // Cleanup — удалить созданную сегодняшнюю заметку (если только её мы и
+      // создали в этом прогоне; если их было >1 — мог быть и pre-existing).
+      const journalIds = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ id: string; type_id?: string | null }>> };
+        }).api;
+        const entries = await api.listEntries();
+        return entries.filter((e) => e.type_id === "system-type-journal").map((e) => e.id);
+      });
+      for (const id of journalIds) {
+        await edenWindow.evaluate(async (entryId) => {
+          try {
+            await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
+              .api.deleteEntry(entryId);
+          } catch {
+            // ignore
+          }
+        }, id);
+      }
+    } finally {
+      await app.close();
+    }
+  });
 });
