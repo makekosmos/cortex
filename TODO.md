@@ -1,5 +1,24 @@
 # TODO
 
+## UX polish (отложенные)
+
+- [ ] **Полоска загрузки снизу при in-app update.** Когда autoUpdater качает новую версию через UI (Settings → Обновление), показывать тонкий progress bar внизу окна Kepler с процентом download'а. Сейчас обновление триггерится из Settings, но визуальной обратной связи о ходе скачивания нет — пользователь не знает, идёт ли загрузка. Источник прогресса: `electron-updater` `download-progress` event (см. `shell/electron/autoupdater-host.ts`). Renderer-side hook через IPC. Делать когда руки дойдут — не блокирует другие фичи.
+
+## AI-first object graph (2026-05-19)
+
+North star: всё есть объект, любые объекты связываются через `object_links`, AI-агенты — first-class consumer. Markdown — рендеринг для людей, не source of truth. См. memory `project_north_star_object_graph.md` и обсуждение от 2026-05-19.
+
+Action items (приоритет сверху вниз):
+
+- [ ] **MCP server поверх `@kosmos/ark`** — обёртка над существующим WS / command bus в `services/kepler-backend`. Эмитит JSON Schema из `object_types.schemaJson` как tool definitions. Подключается одним `claude mcp add` / Cursor / любой LLM-host. Снимает 90% галлюцинаций агента — schema-driven, не угадывание формата.
+- [ ] **`content_md` projection в read/write API.** `get_object` опционально возвращает `content_md` (TipTap JSON → markdown через существующий `note_md` converter из Phase 7). `upsert_object` принимает `content_md` и парсит обратно в TipTap JSON. Source of truth остаётся `content_json`, но для агентов и для человеческого чтения наружу торчит markdown. Нужно достроить обратный конвертер markdown → TipTap, если ещё нет (export-only сейчас).
+- [ ] **`get_neighborhood(id, depth)` ARK endpoint.** Возвращает subgraph: узлы (объекты) + рёбра (links) в радиусе N от заданного id. Сейчас агенту чтобы понять «что связано с этой заметкой» нужно `list_object_links` → фильтр → `get_objects_by_ids`. Один endpoint = multi-hop reasoning возможен в один tool-call.
+- [ ] **Read-only markdown mirror** под `<data_dir>/notes-md/` (и аналогично для других «человекочитаемых» типов: `tasks-md/`?). Регенерируется на save через `note_md` converter. User видит файлы в Explorer, может grep / git commit / открыть в Obsidian для чтения. Контракт: правки в файлах **игнорируются** (или показываются как hint «создать новую заметку из этого файла»). Source of truth — ARK SQLite. Это закрывает психологический запрос на portability без двойного sync'а.
+
+Не делать:
+- ❌ Переход на markdown как primary storage. Ломает typed propsJson + schema, ID-stable wikilinks, cross-type graph, единый sync invariant (HLC + version_vector + tombstones). См. [forbidden.md](docs-site/agents/forbidden.md) и memory `project_north_star_object_graph.md`.
+- ❌ Block-level granularity (Logseq transclusion) через файлы. Если когда-то понадобится — реализуется как `block_obj` тип внутри object model.
+
 ## Legacy Note
 
 The previous contents of this file described an older `packages/ark/` Python/server-era plan. That is no longer the active ARK architecture.
