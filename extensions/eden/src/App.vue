@@ -65,30 +65,25 @@
             @forward="navigateForward"
           />
         </template>
-        <template v-else>
-          <button
-            type="button"
-            class="eden-titlebar-toggle eden-zen-exit"
-            data-testid="zen-mode-exit"
-            title="Выйти из режима фокуса (Esc Esc или Ctrl+K Z)"
-            @click="layout.disableZenMode()"
-          >
-            <LoaderPinwheel :size="14" :stroke-width="2" />
-          </button>
-          <button
-            type="button"
-            class="eden-titlebar-toggle eden-zen-exit"
-            data-testid="zen-mode-dock"
-            title="Закрепить поверх окон (повторный клик — вернуть)"
-            @click="toggleDock"
-          >
-            <PictureInPicture2 :size="14" :stroke-width="2" />
-          </button>
-        </template>
+        <button
+          v-else
+          type="button"
+          class="eden-titlebar-toggle eden-zen-exit"
+          data-testid="zen-mode-exit"
+          title="Выйти из режима фокуса (Esc Esc или Ctrl+K Z)"
+          @click="layout.disableZenMode()"
+        >
+          <LoaderPinwheel :size="14" :stroke-width="2" />
+        </button>
       </template>
 
       <template #titlebar-center>
-        <span v-if="titlebarTitle" class="eden-titlebar-title">{{ titlebarTitle }}</span>
+        <span
+          v-if="titlebarTitle"
+          class="eden-titlebar-title"
+          :title="layout.isZenMode ? 'Двойной клик — закрепить поверх окон' : ''"
+          @dblclick="onTitleDblClick"
+        >{{ titlebarTitle }}</span>
       </template>
 
       <template #titlebar-trailing>
@@ -219,7 +214,7 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, shallowRef, watch } from "vue";
-import { LoaderPinwheel, PictureInPicture2 } from "lucide-vue-next";
+import { LoaderPinwheel } from "lucide-vue-next";
 import {
   ContextMenu,
   ContextMenuItem,
@@ -276,15 +271,16 @@ function onEntryContextMenu(event: MouseEvent, entryId: string) {
 }
 
 /**
- * Кнопка PictureInPicture2 в zen mode titlebar (`#titlebar-leading`).
- * Включает floating-widget mode: окно всегда поверх, top-right угол,
- * компактные 360×560. Повторный клик возвращает окно в исходные bounds.
+ * Двойной клик по тексту title в `#titlebar-center` (только zen mode)
+ * → toggle floating-widget: always-on-top + top-right 360×560.
  *
- * Раньше пробовали через dblclick на titlebar — не работает: Electron
- * drag-region (`-webkit-app-region: drag`) не пропускает DOM click/dblclick
- * events наверх, нужна явная no-drag кнопка.
+ * Сам `.kosmos-titlebar` это drag-region (`-webkit-app-region: drag`) —
+ * DOM click/dblclick events на него не fire'ят. Но дочерний `<span>`
+ * с `-webkit-app-region: no-drag` (см. eden-titlebar-title CSS) события
+ * получает.
  */
-function toggleDock() {
+function onTitleDblClick() {
+  if (!layout.isZenMode) return;
   void (window as unknown as {
     kepler?: { window?: { toggleDockCorner?: () => Promise<void> } };
   }).kepler?.window?.toggleDockCorner?.();

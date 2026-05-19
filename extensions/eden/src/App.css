@@ -4837,6 +4837,11 @@ span[data-wikilink]:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+  /* no-drag — иначе span внутри `.kosmos-titlebar` глотает события для
+     drag-to-move, DOM dblclick не fire'ит. С этим — dblclick по тексту
+     в zen mode превращает окно в floating widget. */
+  -webkit-app-region: no-drag;
+  user-select: none;
 }
 
 .sidebar-layout {
