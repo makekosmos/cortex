@@ -133,7 +133,7 @@ pub(crate) fn sanitize_filename(input: &str) -> String {
 /// Spreadsheet applications (Excel, Google Sheets) interpret cells that start
 /// with `=`, `+`, `-`, or `@` as formulas, which can execute arbitrary code.
 /// Prefix such values with a TAB character to force literal interpretation.
-pub(crate) fn csv_safe_cell(value: &str) -> std::borrow::Cow<str> {
+pub(crate) fn csv_safe_cell(value: &str) -> std::borrow::Cow<'_, str> {
     if value.starts_with(['=', '+', '-', '@']) {
         std::borrow::Cow::Owned(format!("\t{value}"))
     } else {

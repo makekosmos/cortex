@@ -139,14 +139,6 @@ pub fn validate_domain(raw: &str) -> Result<String, String> {
     Ok(lower)
 }
 
-fn validate_domains(raw: &[String]) -> Result<Vec<String>, String> {
-    let mut out = Vec::with_capacity(raw.len());
-    for d in raw {
-        out.push(validate_domain(d)?);
-    }
-    Ok(out)
-}
-
 // ---------- Object_type registration (lazy, idempotent) ----------
 
 fn blocklist_object_type_definition() -> Value {
