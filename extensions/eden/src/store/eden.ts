@@ -326,6 +326,7 @@ export const useEdenStore = defineStore("eden", () => {
       try {
         const fresh = await window.api.listEntries();
         entries.value = fresh;
+        console.log("[eden] openTodayJournal: listEntries refreshed,", fresh.length, "entries");
       } catch (err) {
         console.warn("[eden] listEntries before today-journal failed:", err);
       }
@@ -336,6 +337,12 @@ export const useEdenStore = defineStore("eden", () => {
         entry.type_id === SYSTEM_TYPE_JOURNAL_ID &&
         entry.title.trim() === todayTitle &&
         entry.deleted_at === null,
+    );
+    console.log(
+      "[eden] openTodayJournal: lookup for",
+      todayTitle,
+      "→",
+      existing ? `found id=${existing.id}` : "not found, will create new",
     );
     if (existing) {
       // Fresh state из ARK — entries.value может быть устаревший snapshot
@@ -348,6 +355,12 @@ export const useEdenStore = defineStore("eden", () => {
       const target = fresh ?? existing;
       const idx = entries.value.findIndex((e) => e.id === target.id);
       if (idx >= 0 && fresh) entries.value[idx] = fresh;
+      console.log(
+        "[eden] openTodayJournal: opening existing journal id=",
+        target.id,
+        "content length=",
+        target.content_json?.length ?? 0,
+      );
       currentEntry.value = target;
       return;
     }
@@ -372,6 +385,7 @@ export const useEdenStore = defineStore("eden", () => {
       schema_version: 1,
       deleted_at: null,
     };
+    console.log("[eden] openTodayJournal: creating new journal id=", newEntry.id);
     entries.value = [newEntry, ...entries.value];
     currentEntry.value = newEntry;
 

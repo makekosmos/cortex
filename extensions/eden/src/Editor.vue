@@ -818,6 +818,14 @@ async function save() {
   savedDocumentRevision = documentRevision;
   savedMetadataRevision = metadataRevision;
   perfTracker.recordMetric("saveDuration", performance.now() - saveStartedAt);
+  console.log(
+    "[eden] Editor.save: persisted id=",
+    props.entry.id,
+    "title=",
+    normalizedTitle,
+    "content length=",
+    content_json.length,
+  );
 }
 
 function handleNoteTypeChange(nextTypeId: string) {
