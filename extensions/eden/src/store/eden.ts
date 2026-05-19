@@ -334,7 +334,17 @@ export const useEdenStore = defineStore("eden", () => {
         entry.deleted_at === null,
     );
     if (existing) {
-      currentEntry.value = existing;
+      // Fresh state из ARK — entries.value может быть устаревший snapshot
+      // (autosave в Editor.vue обновляет entries[idx] post-persist, но
+      // если пользователь вызывает open-today до того как autosave успел —
+      // existing.content_json показывает версию ДО его правок). loadEntry
+      // даёт source-of-truth, чтобы Editor.vue гидратировался от ARK,
+      // а не от stale in-memory.
+      const fresh = window.api ? await window.api.loadEntry(existing.id) : null;
+      const target = fresh ?? existing;
+      const idx = entries.value.findIndex((e) => e.id === target.id);
+      if (idx >= 0 && fresh) entries.value[idx] = fresh;
+      currentEntry.value = target;
       return;
     }
 
@@ -361,8 +371,17 @@ export const useEdenStore = defineStore("eden", () => {
     entries.value = [newEntry, ...entries.value];
     currentEntry.value = newEntry;
 
+    // Persist первичную пустую заметку СИНХРОННО до того как редактор начнёт
+    // autosave'ить пользовательский ввод. Раньше был fire-and-forget
+    // `void saveEntry(newEntry)` — он гонялся с Editor.vue handleSave,
+    // которая использует другой saveCoordinator (в shim'е). Если empty-save
+    // приземлялся в ARK после первого autosave с контентом, ARK не мог
+    // надёжно решить кто новее (HLC vs user-provided updated_at) — мог
+    // случиться overwrite контента пустой версией. Await гарантирует
+    // строгий порядок: создание → запись → редактирование.
     if (window.api) {
-      void window.api.saveEntry(newEntry).then((result) => {
+      try {
+        const result = await window.api.saveEntry(newEntry);
         if (!result.ok) {
           console.warn("[eden] save journal entry failed:", result);
           entries.value = entries.value.filter((e) => e.id !== newEntry.id);
@@ -370,7 +389,9 @@ export const useEdenStore = defineStore("eden", () => {
             currentEntry.value = null;
           }
         }
-      });
+      } catch (err) {
+        console.error("[eden] save journal entry threw:", err);
+      }
     }
   }
 
