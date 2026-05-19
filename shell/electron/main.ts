@@ -890,7 +890,7 @@ ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
  * как Vue mount + commands.register IPC отработал).
  */
 async function awaitExtensionCommand(
-  extensionId: string,
+  _extensionId: string,
   fullCommandId: string,
   timeoutMs = 5000,
 ): Promise<boolean> {

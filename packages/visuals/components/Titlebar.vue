@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-
-export type TitlebarPlatform = "mac" | "windows" | "linux";
+import type { TitlebarPlatform } from "./types";
 
 interface Props {
     platform?: TitlebarPlatform;

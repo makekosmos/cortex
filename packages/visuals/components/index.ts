@@ -6,16 +6,7 @@ export { default as SidebarButton } from "./SidebarButton.vue";
 
 export { default as Sidebar } from "./Sidebar.vue";
 
-export type {
-  SidebarConfig,
-  SidebarNavItem,
-  SidebarProjectItem,
-  SidebarProjectGroup,
-} from "./Sidebar.vue";
-
 export { default as Titlebar } from "./Titlebar.vue";
-
-export type { TitlebarPlatform } from "./Titlebar.vue";
 
 export { default as TitlebarHistoryControls } from "./TitlebarHistoryControls.vue";
 
@@ -27,18 +18,23 @@ export { default as DesktopContentSurface } from "./DesktopContentSurface.vue";
 
 export { default as StatusDot } from "./StatusDot.vue";
 
-export type { StatusDotTone } from "./StatusDot.vue";
-
 export { default as TodoRow } from "./TodoRow.vue";
-
-export type { TodoRowItem, TodoDropPayload, TodoRowUpdate } from "./TodoRow.vue";
 
 export { default as QuickEntryPanel } from "./QuickEntryPanel.vue";
 
 export type {
+  SidebarConfig,
+  SidebarNavItem,
+  SidebarProjectItem,
+  SidebarProjectGroup,
+  TitlebarPlatform,
+  StatusDotTone,
+  TodoRowItem,
+  TodoDropPayload,
+  TodoRowUpdate,
   QuickEntryProject,
   QuickEntrySavePayload,
-} from "./QuickEntryPanel.vue";
+} from "./types";
 
 export { default as ContextMenu } from "./ContextMenu.vue";
 

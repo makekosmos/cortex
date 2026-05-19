@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-
-export type StatusDotTone = "success" | "warning" | "danger" | "neutral";
+import type { StatusDotTone } from "./types";
 
 interface Props {
   tone?: StatusDotTone;

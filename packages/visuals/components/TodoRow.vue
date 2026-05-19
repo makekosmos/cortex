@@ -4,31 +4,7 @@ import { Calendar as CalendarIcon, DollarSign } from "lucide-vue-next";
 import ContextMenu from "./ContextMenu.vue";
 import ContextMenuItem from "./ContextMenuItem.vue";
 import DateChip from "./DateChip.vue";
-
-export interface TodoRowItem {
-  id: string;
-  title: string;
-  notes?: string | null;
-  isCompleted?: boolean;
-  isCancelled?: boolean;
-  isTrashed?: boolean;
-  scheduledDate?: string | null;
-  billable?: boolean;
-  price?: number | null;
-}
-
-export interface TodoDropPayload {
-  targetId: string;
-  after: boolean;
-}
-
-export interface TodoRowUpdate {
-  title?: string;
-  notes?: string | null;
-  scheduledDate?: string | null;
-  billable?: boolean;
-  price?: number | null;
-}
+import type { TodoRowItem, TodoDropPayload, TodoRowUpdate } from "./types";
 
 const props = withDefaults(
   defineProps<{

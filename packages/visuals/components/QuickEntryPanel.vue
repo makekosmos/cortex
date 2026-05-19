@@ -2,21 +2,7 @@
 import { shallowRef, watch, nextTick, useTemplateRef, onBeforeUnmount } from "vue";
 import { DollarSign, Folder, X } from "lucide-vue-next";
 import DateChip from "./DateChip.vue";
-
-export interface QuickEntryProject {
-  id: string;
-  title: string;
-  billable?: boolean;
-}
-
-export interface QuickEntrySavePayload {
-  title: string;
-  notes: string | null;
-  scheduledDate: string | null;
-  projectId: string | null;
-  billable: boolean;
-  price: number | null;
-}
+import type { QuickEntryProject, QuickEntrySavePayload } from "./types";
 
 const props = defineProps<{
   open: boolean;

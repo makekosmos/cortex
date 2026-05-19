@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { Component } from "vue";
 import {
   computed,
   shallowRef,
@@ -12,48 +11,12 @@ import { ChevronRight, PanelLeftClose } from "lucide-vue-next";
 // eslint-disable-next-line import/no-unassigned-import
 import "./sidebar.css";
 import SidebarButton from "./SidebarButton.vue";
-
-export interface SidebarConfig {
-  width: number;
-  hidden: boolean;
-}
-
-export interface SidebarNavItem {
-  id: string;
-  icon: Component;
-  to?: string;
-  label?: string;
-  active?: boolean;
-  testId?: string;
-  onClick?: () => void;
-}
-
-export interface SidebarProjectItem {
-  id: string;
-  label: string;
-  to?: string;
-  active?: boolean;
-  colorClass?: string;
-  color?: string;
-  iconSrc?: string;
-  iconColor?: string;
-  testId?: string;
-  onClick?: () => void;
-  /** ПКМ-меню. Receiver сам делает `event.preventDefault()` и
-      открывает `ContextMenu` (см. `useContextMenu` в @kosmos/visuals). */
-  onContextMenu?: (event: MouseEvent) => void;
-}
-
-export interface SidebarProjectGroup {
-  id: string;
-  label: string;
-  items: SidebarProjectItem[];
-  defaultCollapsed?: boolean;
-  actionIcon?: Component;
-  actionLabel?: string;
-  actionTestId?: string;
-  onAction?: () => void;
-}
+import type {
+  SidebarConfig,
+  SidebarNavItem,
+  SidebarProjectItem,
+  SidebarProjectGroup,
+} from "./types";
 
 interface Props {
   primaryItems: SidebarNavItem[];
