@@ -315,10 +315,14 @@ export const useEdenStore = defineStore("eden", () => {
     const dd = String(now.getDate()).padStart(2, "0");
     const todayTitle = `${yyyy}-${mm}-${dd}`;
 
-    // Если entries ещё не загружены (initApp / hydrateVault не закончил) —
-    // подождём, иначе создадим дубликат при следующем mount'е, когда
-    // existing уже подгрузится.
-    if (entries.value.length === 0 && window.api) {
+    // ВСЕГДА перезагружаем entries из ARK перед lookup'ом existing journal.
+    // Раньше делали `if (entries.value.length === 0)` — но это ловило только
+    // cold-start. В реальном dev-сценарии (HMR App.vue, повторный mount,
+    // initApp гонка с user typing) entries.value мог быть устаревшим
+    // snapshot'ом без сегодняшнего journal'а → find возвращал null → создавался
+    // дубликат пустой записи поверх той, куда пользователь только что писал.
+    // listEntries дёшев (in-process WS), стоит лишних ~5ms за надёжность.
+    if (window.api) {
       try {
         const fresh = await window.api.listEntries();
         entries.value = fresh;
