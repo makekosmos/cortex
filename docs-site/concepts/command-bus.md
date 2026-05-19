@@ -2,6 +2,49 @@
 
 Command bus — communication primitive в Kepler, который позволяет launcher'у (kepler-shell) показывать и invoke'ать «ручки» (action commands) running апок без extension architecture. Апки остаются standalone .exe Electron-приложениями, но публикуют свои действия в shared registry через WS, и launcher merge'ит их со static open-commands в общий список.
 
+## Архитектура: три слоя команд (V1 + V2, 2026-05-19)
+
+После Phase 6.2 команды в launcher'е приходят из **трёх** независимых источников. Merge происходит в `shell/electron/main.ts → kepler:commands:list` IPC, дедуп по `id`:
+
+| Слой | Источник | Видимость | Use case |
+|---|---|---|---|
+| **A. Kepler-internal** | `shell/electron/commands.ts` `COMMANDS[]` | всегда | settings/dashboard/check-updates — это сам shell |
+| **B. Manifest-declared** | `extensions/<id>/manifest.json` `commands[]` | пока extension установлен | Entry points (Open Eden, Pomodoro, Open today) — declarative, не требует running state |
+| **C. Runtime dynamic** | `commands.register(...)` через WS из running extension'а | только пока extension запущен | State-aware actions (Stop pomodoro, Save current note) |
+
+Приоритет дедупа: A > B > C. Extension **не может** claim'нуть чужой namespace — manifest-declared команды автоматически префиксуются `${extension.id}:`, registry проверяет.
+
+### Manifest schema
+
+```ts
+interface KextManifestCommand {
+  id: string;                       // [a-z0-9:_-]+, полный id = `${manifest.id}:${cmd.id}`
+  title: string;                    // RU label в launcher'е
+  subtitle?: string;                // подпись (default: extension.name)
+  icon?: string;                    // относительный путь от extension dir
+  route?: string;                   // hash-route для openExtension
+  kind?: "app" | "command";         // UI plate (default: "command")
+  mode?: "open" | "action";         // (default: "open")
+}
+```
+
+`mode: "open"` — invoke вызывает `openExtension(extId, route)`. Покрывает entry points через deep-link route.
+
+`mode: "action"` — invoke вызывает `arkClient.commands.invoke(fullId)` (dynamic action bus). Если extension не запущен — **auto-launch**: shell openExtension'ит, ждёт до 5 секунд пока mount + `commands.register` отработает с нужным id, потом dispatch'ит. См. `awaitExtensionCommand` в `main.ts`.
+
+### Что было до и зачем рефактор
+
+Раньше extension-команды зашивались в `shell/electron/commands.ts` как static `COMMANDS[]`. Минусы: shell coupled с extension internals, новая команда extension'а требовала правки shell, третьесторонние extension'ы не могли публиковать команды, uninstall не очищал launcher. Phase 6.2 — manifest = source of truth, `loadDeclaredCommands` в `extension-host.ts` строит registry на лету при каждом `kepler:commands:list`. `notifyCommandsChanged()` после install/uninstall/revert триггерит launcher refresh через `kepler:commands:updated`.
+
+### Edge cases (cover'ятся в `tests/e2e/commands-architecture.spec.ts`)
+
+- Extension не установлен → команд нет ни в одном слое.
+- Extension удалён → re-scan manifests, команды исчезают через broadcast.
+- Duplicate id между слоями → internal > manifest > dynamic priority.
+- Невалидный icon path / id format → graceful skip с warning.
+- Auto-launch timeout 5s → warning, hide launcher.
+- Invoke unknown id → graceful warning, no crash.
+
 ## Цель
 
 Сценарий: пользователь жмёт `Ctrl+Shift+K`, набирает «pomodoro 25», видит пункт «Pomodoro 25 min — Horologion», нажимает Enter. Horologion (если запущен) получает event и стартует таймер. Если Horologion не запущен — пункта в списке нет.
@@ -209,7 +252,7 @@ client.commands.onChanged(() => {
 | «Создай новую заметку с title Y» | command bus (action `<app>:note:create`) |
 | «Запусти Pomodoro 25 минут» | command bus (action `horologion:pomodoro:25`) |
 | «Объект task-1 изменился» | entity events (`onEntityChanged`) |
-| «Открой Delphi» | static command в `shell/electron/commands.ts` (`delphi:open` → `openExtension(...)`) |
+| «Открой Delphi» | manifest-declared в `extensions/delphi/manifest.json` `commands[]` (`delphi:open` → `openExtension(...)`) |
 
 Идея: command bus = императивный trigger для running апки. ARK objects = stateful data. Entity events = observation channel. Не путай.
 
