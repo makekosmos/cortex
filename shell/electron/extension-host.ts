@@ -1039,18 +1039,33 @@ ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
   if (win.isMaximized()) win.unmaximize();
   const display = screen.getDisplayMatching(current);
   const workArea = display.workArea;
-  // Зазор по всем сторонам. На Windows 11 native frame + invisible
-  // resize-borders добавляют ~8px по бокам поверх setBounds — без
-  // margin'а окно визуально выходит за правый край.
-  const margin = 24;
-  const width = Math.min(DOCK_WIDTH, workArea.width - margin * 2);
-  const height = Math.min(DOCK_HEIGHT, workArea.height - margin * 2);
+  // Горизонтальный margin для зазора + компенсация Win11 invisible
+  // resize-borders (`frame: true` + `titleBarStyle: "hidden"` рисует
+  // ~8px невидимых borders, outer bounds setBounds их включает).
+  // Вертикально окно прижимается к верху workArea — taskbar внизу уже
+  // исключён из workArea, дополнительный margin не нужен.
+  const marginX = 24;
+  const width = Math.min(DOCK_WIDTH, workArea.width - marginX * 2);
+  const height = Math.min(DOCK_HEIGHT, workArea.height);
   win.setBounds({
-    x: workArea.x + workArea.width - width - margin,
-    y: workArea.y + margin,
+    x: workArea.x + workArea.width - width - marginX,
+    y: workArea.y,
     width,
     height,
   });
+
+  // Подстраховка: если actual bounds после setBounds всё равно вылезают
+  // за правый край workArea (бывает при DPI scaling > 100% — Electron
+  // округляет фрейм physical→DIP неточно), сдвинем влево на overflow.
+  setTimeout(() => {
+    if (win.isDestroyed()) return;
+    const actual = win.getBounds();
+    const overflow = actual.x + actual.width - (workArea.x + workArea.width);
+    if (overflow > 0) {
+      win.setBounds({ ...actual, x: actual.x - overflow - marginX });
+    }
+  }, 0);
+
   win.setAlwaysOnTop(true, "floating");
 });
 
