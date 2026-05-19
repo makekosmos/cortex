@@ -618,6 +618,335 @@ test.describe("eden extension", () => {
     }
   });
 
+  // UI-driven regression: реально печатает в редактор через keyboard,
+  // верифицирует что save flow срабатывает (autosave + flush). Раньше
+  // тесты использовали execCommand insertText / window.api.saveEntry
+  // напрямую — это обходило Editor.save → matchesPersistedState и не
+  // ловило баг 2026-05-19 (markdown OR в matchesPersistedState).
+  test("UI-driven: типаем в редактор → autosave → ARK содержит текст", async () => {
+    const app = await launchKepler({ slug: "eden-autosave-ui" });
+    try {
+      const edenWindow = await openEden(app);
+
+      // Создаём заметку через API, чтобы получить deterministic entry id.
+      const entryId = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: {
+            saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
+            loadEntry: (id: string) => Promise<unknown>;
+          };
+          crypto: Crypto;
+        }).api;
+        const id = (window as unknown as { crypto: Crypto }).crypto.randomUUID();
+        const r = await api.saveEntry({
+          id,
+          title: "ui-driven-autosave-test",
+          content_json: JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }),
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          folder_id: null,
+          type_id: "note_obj",
+          header_layout: null,
+          header_props_json: "{}",
+          schema_version: 1,
+          deleted_at: null,
+        });
+        return r.ok ? id : null;
+      });
+      expect(entryId).not.toBeNull();
+
+      // Открываем заметку (через store, имитируя клик в sidebar).
+      // Поскольку eden.navigateTo не exposed, используем глобал store через
+      // window — но Pinia store не доступен глобально. Hack: dispatch event
+      // или вызвать window.api.loadEntry и руками установить currentEntry?
+      // Проще: создаём через API с уникальным title, потом ищем в DOM.
+      // Самый надёжный способ — open via launcher command не работает для
+      // случайного entry, нужен повторный invoke. Используем низкоуровневый
+      // подход: dispatch event в App.vue который установит currentEntry.
+      // Поскольку этот flow сложен, упрощаем: создаём заметку → её id ставим
+      // currentEntry через DOM click по recent entries в sidebar.
+      // Альтернатива: вызвать `kepler:extension:navigation` с #entry/<id> —
+      // но Eden не использует router. Самое простое: использовать API чтобы
+      // напрямую открыть редактор. Editor.vue render условно по
+      // eden.currentEntry. Установим через прокачку в Pinia.
+      //
+      // Решение: добавим test-only глобал для setCurrentEntry. Но это
+      // invasive. Вместо этого: создаём через store, который exposed как
+      // `window.eden` (если экспортируется) или через Pinia globals.
+      //
+      // Pragmatic: используем кликабельную sidebar. Sidebar показывает recent
+      // entries. Открываем search overlay → набираем title → выбираем.
+      // Eden имеет SearchOverlay (Ctrl+K?). Это слишком сложно для теста.
+      //
+      // Финальный choice: создаём заметку через API + затем имитируем
+      // открытие через store reactivity. Хак: dispatch CustomEvent.
+      // Проще: после API create, list entries обновится; открыть через
+      // `kepler.commands.invoke("eden:open")` — это открывает default view,
+      // не нужную заметку.
+      //
+      // ОК — самый чистый способ: расширить тестовый helper. Используем
+      // window-level escape hatch: store метод `_testOpenEntry`. Но я не
+      // хочу мутировать prod код для теста.
+      //
+      // Workaround: создаём заметку → ищем в sidebar по title → клик.
+      // Eden sidebar показывает recent entries через `pickRecentEntries(eden.entries, 10)`.
+      // Если наша заметка свежая — она вверху. Кликаем.
+      //
+      // НО: window не открыто на список заметок (eden:open default opens
+      // first view). Hack: трогаем DOM напрямую через page.locator.
+      const opened = await edenWindow.evaluate(async (id) => {
+        // Wait for sidebar / app to be ready
+        await new Promise((r) => setTimeout(r, 500));
+        // Find an interactive element that opens the entry.
+        // Sidebar entries have data-entry-id attribute (или title-based).
+        const candidates = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-entry-id]"),
+        );
+        const match = candidates.find((el) => el.dataset.entryId === id);
+        if (match) {
+          match.click();
+          return "clicked-sidebar";
+        }
+        // Fallback: try clicking by text
+        const byText = Array.from(document.querySelectorAll<HTMLElement>("*")).find(
+          (el) => (el.textContent ?? "").trim() === "ui-driven-autosave-test",
+        );
+        if (byText) {
+          byText.click();
+          return "clicked-by-text";
+        }
+        return "not-found-in-dom";
+      }, entryId);
+      // Дать App.vue время отреактировать на navigateTo
+      await edenWindow.waitForTimeout(700);
+
+      console.log("[test] open entry result:", opened);
+
+      // Локатор ProseMirror — может или не может быть смонтирован.
+      const pmReady = await edenWindow.evaluate(
+        () => !!document.querySelector(".ProseMirror"),
+      );
+
+      if (!pmReady) {
+        // Если не получилось открыть нашу заметку через sidebar, тест
+        // упростим: открываем journal через open-today, печатаем туда,
+        // проверяем persist по journal id.
+        await app.firstWindow().then((launcher) =>
+          launcher.evaluate(async () => {
+            await (window as unknown as {
+              kepler: { commands: { invoke: (id: string) => Promise<void> } };
+            }).kepler.commands.invoke("eden:note:open-today");
+          }),
+        );
+        await edenWindow.waitForTimeout(2000);
+      }
+
+      // Печатаем через keyboard в реальном редакторе. ProseMirror должен
+      // быть в фокусе после navigateTo.
+      const pm = edenWindow.locator(".ProseMirror").first();
+      await pm.click();
+      const TEXT = "UI-driven autosave-test текст";
+      await edenWindow.keyboard.type(TEXT);
+
+      // Ждём дольше чем AUTOSAVE_DEBOUNCE_MS (300ms) + WS roundtrip +
+      // entries.value[idx] update в handleSave.
+      await edenWindow.waitForTimeout(1200);
+
+      // Verify: текущий открытый entry в ARK содержит наш текст.
+      const persisted = await edenWindow.evaluate(async () => {
+        // Найдём что сейчас открыто. ProseMirror в DOM, читаем text.
+        const pmText = document.querySelector(".ProseMirror")?.textContent ?? "";
+        // Ищем заметку в ARK у которой content содержит наш TEXT.
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ id: string; title: string; content_json?: string }>> };
+        }).api;
+        const entries = await api.listEntries();
+        return {
+          pmText,
+          entries: entries
+            .map((e) => ({ id: e.id, title: e.title, content: e.content_json ?? "" }))
+            .filter((e) => e.content.includes("UI-driven autosave")),
+        };
+      });
+
+      expect(
+        persisted.pmText,
+        "ProseMirror DOM должен содержать напечатанный текст",
+      ).toContain(TEXT);
+      expect(
+        persisted.entries.length,
+        `минимум одна заметка должна содержать "${TEXT}" в content_json. ` +
+          `Найдено: ${persisted.entries.length}, pmText: "${persisted.pmText}"`,
+      ).toBeGreaterThanOrEqual(1);
+
+      // Cleanup
+      await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: {
+            listEntries: () => Promise<Array<{ id: string; content_json?: string }>>;
+            deleteEntry: (id: string) => Promise<unknown>;
+          };
+        }).api;
+        const entries = await api.listEntries();
+        for (const e of entries) {
+          if ((e.content_json ?? "").includes("UI-driven autosave") ||
+              (e as { title?: string }).title === "ui-driven-autosave-test") {
+            try {
+              await api.deleteEntry(e.id);
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  // UI-driven flush test: blur редактора → flush должен случиться сразу,
+  // не дожидаясь debounce 300ms. Проверяем что после blur и waitForTimeout=100
+  // (меньше чем debounce) контент уже в ARK.
+  test("UI-driven: blur редактора → flush save мгновенный", async () => {
+    const app = await launchKepler({ slug: "eden-flush-blur" });
+    try {
+      const edenWindow = await openEden(app);
+      const launcher = await app.firstWindow();
+
+      // Открываем journal — гарантированный путь к редактору.
+      await launcher.evaluate(async () => {
+        await (window as unknown as {
+          kepler: { commands: { invoke: (id: string) => Promise<void> } };
+        }).kepler.commands.invoke("eden:note:open-today");
+      });
+      await edenWindow.waitForTimeout(2000);
+
+      const journalId = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
+        }).api;
+        const entries = await api.listEntries();
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        return entries.find(
+          (e) => e.type_id === "system-type-journal" && e.title.trim() === today,
+        )?.id ?? null;
+      });
+      expect(journalId).not.toBeNull();
+
+      const pm = edenWindow.locator(".ProseMirror").first();
+      await pm.click();
+      const TEXT = "blur-flush-test текст";
+      await edenWindow.keyboard.type(TEXT);
+
+      // Без flush мы должны были бы ждать 300ms+ для autosave. Делаем blur
+      // через keyboard.press(Escape) или клик на тело документа вне
+      // редактора. ESC в zen mode может закрыть zen — поэтому кликаем на
+      // body вне ProseMirror.
+      await edenWindow.evaluate(() => {
+        // Программный blur ProseMirror surface
+        const pm = document.querySelector(".ProseMirror") as HTMLElement | null;
+        pm?.blur();
+      });
+
+      // Ждём МЕНЬШЕ чем debounce (300ms) — если flush сработал, контент
+      // уже должен быть в ARK. Без flush — этого времени не хватит и тест
+      // упадёт.
+      await edenWindow.waitForTimeout(150);
+
+      const content = await edenWindow.evaluate(async (id) => {
+        const api = (window as unknown as {
+          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+        }).api;
+        const e = await api.loadEntry(id!);
+        return e?.content_json ?? "";
+      }, journalId);
+
+      expect(
+        content,
+        `blur должен был flush'нуть save в течение 150ms (меньше debounce). ` +
+          `ARK content_json: "${content.slice(0, 200)}"`,
+      ).toContain(TEXT);
+
+      // Cleanup
+      await edenWindow.evaluate(async (id) => {
+        try {
+          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
+            .api.deleteEntry(id!);
+        } catch {
+          /* ignore */
+        }
+      }, journalId);
+    } finally {
+      await app.close();
+    }
+  });
+
+  // UI-driven flush test: visibilitychange → hidden → flush мгновенный.
+  test("UI-driven: visibilitychange hidden → flush save мгновенный", async () => {
+    const app = await launchKepler({ slug: "eden-flush-vis" });
+    try {
+      const edenWindow = await openEden(app);
+      const launcher = await app.firstWindow();
+
+      await launcher.evaluate(async () => {
+        await (window as unknown as {
+          kepler: { commands: { invoke: (id: string) => Promise<void> } };
+        }).kepler.commands.invoke("eden:note:open-today");
+      });
+      await edenWindow.waitForTimeout(2000);
+
+      const journalId = await edenWindow.evaluate(async () => {
+        const api = (window as unknown as {
+          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
+        }).api;
+        const entries = await api.listEntries();
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        return entries.find(
+          (e) => e.type_id === "system-type-journal" && e.title.trim() === today,
+        )?.id ?? null;
+      });
+      expect(journalId).not.toBeNull();
+
+      const pm = edenWindow.locator(".ProseMirror").first();
+      await pm.click();
+      const TEXT = "visibility-flush-test текст";
+      await edenWindow.keyboard.type(TEXT);
+
+      // Эмулируем visibilitychange. Handler не проверяет visibilityState
+      // (просто всегда flush'ит) — нет нужды переопределять read-only accessor.
+      await edenWindow.evaluate(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // Меньше чем debounce — flush должен был сработать.
+      await edenWindow.waitForTimeout(150);
+
+      const content = await edenWindow.evaluate(async (id) => {
+        const api = (window as unknown as {
+          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+        }).api;
+        const e = await api.loadEntry(id!);
+        return e?.content_json ?? "";
+      }, journalId);
+
+      expect(content).toContain(TEXT);
+
+      // Cleanup
+      await edenWindow.evaluate(async (id) => {
+        try {
+          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
+            .api.deleteEntry(id!);
+        } catch {
+          /* ignore */
+        }
+      }, journalId);
+    } finally {
+      await app.close();
+    }
+  });
+
   // Regression: контент journal должен выдержать **закрытие окна Eden
   // и повторное открытие** (cold-start re-init store).
   //

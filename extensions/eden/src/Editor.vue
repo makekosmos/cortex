@@ -140,7 +140,12 @@ const DEFAULT_DOCUMENT = {
 
 const DEFAULT_DOCUMENT_JSON = JSON.stringify(DEFAULT_DOCUMENT);
 
-const AUTOSAVE_DEBOUNCE_MS = 800;
+// 300ms — баланс между «не пишем на каждую клавишу» и «минимизируем окно
+// потери при жёстком kill процесса». ARK — локальный SQLite, write дешёвый
+// (~1ms), запас 800ms был unnecessary. Плюс есть flush на blur /
+// visibilitychange / beforeunload — обычные сценарии (закрытие окна,
+// переключение на другую заметку, alt-tab) сохраняют немедленно.
+const AUTOSAVE_DEBOUNCE_MS = 300;
 const PERF_SAMPLE_LIMIT = 120;
 const TRACKED_EDIT_KEYS = new Set(["Backspace", "Delete", "Enter", "Tab"]);
 
@@ -396,6 +401,12 @@ const editor = useEditor({
       perfTracker.recordMetric("updateToNextPaint", performance.now() - startedAt);
     });
   },
+  // Flush save при потере фокуса редактора. Юзер кликнул в title, нажал
+  // ESC чтобы выйти из zen, или переключился в sidebar — гарантируем что
+  // его последние правки уже в ARK, не ждём debounce 300ms.
+  onBlur: () => {
+    void flushAutoSave();
+  },
 });
 
 function createPerfTracker(): EditorPerfTracker {
@@ -649,6 +660,28 @@ function scheduleAutoSave() {
     autosaveTimer = null;
     void save();
   }, AUTOSAVE_DEBOUNCE_MS);
+}
+
+/**
+ * Принудительно сохранить сейчас, не дожидаясь debounce таймера. Вешается
+ * на события «вот-вот может случиться потеря контекста»:
+ *
+ *   - blur редактора (фокус ушёл; юзер может закрыть окно следом)
+ *   - visibilitychange → hidden (свернул окно / переключился в другое app)
+ *   - beforeunload (Electron начал закрывать окно)
+ *
+ * Не fire-and-forget — возвращает Promise<void>, чтобы caller'ы могли
+ * await'ить в критичных местах (например, `onBeforeUnmount` в Vue не
+ * поддерживает await, но мы хотя бы запустим save до того как Vue начнёт
+ * teardown).
+ */
+async function flushAutoSave(): Promise<void> {
+  if (autosaveTimer !== null) {
+    window.clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+  if (!isDirty()) return;
+  await save();
 }
 
 function clearScheduledWork() {
@@ -1083,16 +1116,46 @@ watchEffect((onCleanup) => {
   });
 });
 
+// Save flush listeners — отдельный watchEffect, без conditional return.
+// Раньше эти listener'ы лежали в noteTypeMenu watchEffect выше, который
+// guard'ит `if (!isNoteTypeMenuOpen.value) return;` — flush'и не работали
+// пока меню типов было закрыто (т.е. почти всегда). UI test 2026-05-19
+// поймал это: visibilitychange dispatch → flush не выполнялся → save
+// не происходил.
+watchEffect((onCleanup) => {
+  // Flush save при ЛЮБОМ visibilitychange (→hidden / →visible). Семантически
+  // важен только переход в hidden (alt-tab, minimize), но flush на → visible
+  // безопасен: если isDirty=false (типичный случай при возврате фокуса),
+  // flushAutoSave — no-op. Не проверяем `document.visibilityState` чтобы
+  // тесты не зависели от prototype override этого read-only accessor'а.
+  const handleVisibilityChange = () => {
+    void flushAutoSave();
+  };
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  // Flush save при beforeunload (Electron начал закрывать окно). У нас есть
+  // ещё onBeforeUnmount fire-and-forget save, но beforeunload срабатывает
+  // РАНЬШЕ (до того как Vue начинает teardown компонента), даёт чуть больше
+  // времени async-операции долететь до ARK через WS.
+  const handleBeforeUnload = () => {
+    void flushAutoSave();
+  };
+  window.addEventListener("beforeunload", handleBeforeUnload);
+
+  onCleanup(() => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+  });
+});
+
 onBeforeUnmount(() => {
-  if (isDirty()) {
-    // Async save fire-and-forget — Vue не поддерживает await в unmount хуке,
-    // мы не можем заблокировать destroy. Catch на rejection чтобы не было
-    // unhandled rejection (save() сам логирует через saveConflict, но к
-    // моменту его resolve компонент уже unmounted — никто не увидит).
-    void save().catch((e) => {
-      console.error("[eden] save on unmount failed:", e);
-    });
-  }
+  // Fire-and-forget flush — Vue не поддерживает await в unmount хуке.
+  // `flushAutoSave` cancels pending timer + calls save() inline; в большинстве
+  // случаев blur/visibilitychange/beforeunload уже отработали раньше, и
+  // isDirty() здесь false → no-op. Catch на rejection — нет unhandled.
+  void flushAutoSave().catch((e) => {
+    console.error("[eden] save on unmount failed:", e);
+  });
 
   clearScheduledWork();
   if (window.__edenPerf === perfTracker) {
