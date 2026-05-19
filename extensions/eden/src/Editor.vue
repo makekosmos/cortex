@@ -199,7 +199,9 @@ let isHydrating = true;
 let autosaveTimer: number | null = null;
 let reconcileTimer: number | null = null;
 let lastPersistedContentJson = normalizeContentJson(props.entry.content_json);
-let lastPersistedMarkdown = "";
+// lastPersistedMarkdown был удалён 2026-05-19 вместе с OR в matchesPersistedState.
+// `@tiptap/markdown` v3 сменил API, поле всегда оставалось "" → false-positive
+// matches → save'ы пропускались. ContentJson — единственная истина для diff'а.
 let lastPersistedTitle = props.entry.title;
 let lastPersistedNoteTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
 let lastPersistedHeaderLayout = props.entry.header_layout ?? "default";
@@ -497,7 +499,12 @@ function getSerializedEditorContent() {
 }
 
 function getSerializedEditorMarkdown() {
-  return editor.value?.storage?.markdown?.getMarkdown?.() ?? "";
+  // @tiptap/markdown v3 API. Раньше было `storage.markdown.getMarkdown()`,
+  // в v3 manager переехал в `editor.markdown` (или `editor.getMarkdown()`).
+  // Не критично для сохранения (contentJson авторитетен), используется только
+  // для экспорта/копирования если когда-нибудь понадобится. Defensive `?.`.
+  const ed = editor.value as unknown as { getMarkdown?: () => string } | null;
+  return ed?.getMarkdown?.() ?? "";
 }
 
 function getSuggestionClientRect(renderProps: {
@@ -617,7 +624,6 @@ function schedulePersistedStateReconciliation() {
       ),
     );
     const contentJson = getSerializedEditorContent();
-    const markdown = getSerializedEditorMarkdown();
 
     if (
       matchesPersistedState({
@@ -626,7 +632,6 @@ function schedulePersistedStateReconciliation() {
         headerLayout: headerLayout.value,
         headerPropsJson: normalizedHeaderPropsJson,
         contentJson,
-        markdown,
       })
     ) {
       savedDocumentRevision = documentRevision;
@@ -676,7 +681,6 @@ function matchesPersistedState(options: {
   headerLayout: string | null;
   headerPropsJson: string;
   contentJson: string;
-  markdown: string;
 }) {
   const metadataMatches =
     options.title === lastPersistedTitle &&
@@ -684,10 +688,16 @@ function matchesPersistedState(options: {
     options.headerLayout === lastPersistedHeaderLayout &&
     options.headerPropsJson === lastPersistedHeaderPropsJson;
 
-  return (
-    metadataMatches &&
-    (options.contentJson === lastPersistedContentJson || options.markdown === lastPersistedMarkdown)
-  );
+  // ContentJson — единственная авторитетная истина для «изменился ли doc».
+  // Раньше тут был OR с markdown (`options.markdown === lastPersistedMarkdown`),
+  // но `@tiptap/markdown` v3 изменил API: было `storage.markdown.getMarkdown()`,
+  // стало `editor.getMarkdown()`. `getSerializedEditorMarkdown()` поэтому
+  // всегда возвращал "", lastPersistedMarkdown тоже "" → OR всегда true →
+  // `schedulePersistedStateReconciliation` помечал state как persisted без
+  // реальной записи в ARK → save() при autosave timer'е возвращался рано
+  // (isDirty=false). Все правки пользователя терялись. См. 2026-05-19
+  // user report «не сохраняется ни одна заметка в деве».
+  return metadataMatches && options.contentJson === lastPersistedContentJson;
 }
 
 function hydrateFromEntry(entry: Entry) {
@@ -727,7 +737,6 @@ function hydrateFromEntry(entry: Entry) {
 
   queueMicrotask(() => {
     lastPersistedContentJson = getSerializedEditorContent();
-    lastPersistedMarkdown = getSerializedEditorMarkdown();
     isHydrating = false;
     emitLiveCharCount();
   });
@@ -761,7 +770,6 @@ async function save() {
     ),
   );
   const content_json = getSerializedEditorContent();
-  const markdown = getSerializedEditorMarkdown();
 
   if (
     matchesPersistedState({
@@ -770,7 +778,6 @@ async function save() {
       headerLayout: headerLayout.value,
       headerPropsJson: normalizedHeaderPropsJson,
       contentJson: content_json,
-      markdown,
     })
   ) {
     savedDocumentRevision = documentRevision;
@@ -930,8 +937,7 @@ watch(
     resetRevisionBaseline();
     queueMicrotask(() => {
       lastPersistedContentJson = getSerializedEditorContent();
-      lastPersistedMarkdown = getSerializedEditorMarkdown();
-      isHydrating = false;
+        isHydrating = false;
       emitLiveCharCount();
     });
   },
