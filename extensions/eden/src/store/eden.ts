@@ -360,6 +360,8 @@ export const useEdenStore = defineStore("eden", () => {
         target.id,
         "content length=",
         target.content_json?.length ?? 0,
+        "content[:200]=",
+        target.content_json?.slice(0, 200) ?? "",
       );
       currentEntry.value = target;
       return;

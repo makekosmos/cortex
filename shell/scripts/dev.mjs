@@ -51,15 +51,19 @@ function shutdown(signal) {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-// 1) Vite dev server'ы для extension'ов (HMR live-reload). По дефолту ВКЛЮЧЕНО —
-//    extension-host (`shell/electron/extension-host.ts::resolveExtensionSource`)
-//    через TCP probe сам решает на лету: порт отвечает → грузим с Vite (HMR),
-//    не отвечает → fallback на `dist/index.html`. Так что включение по дефолту
-//    безопасно — если запуск Vite упадёт, окно всё равно откроется из dist.
+// 1) Vite dev server'ы для extension'ов (HMR live-reload). По дефолту ВЫКЛЮЧЕНО.
+//    Включил было default-on (2026-05-19), но обнаружилось что HMR трогает
+//    Editor.vue mid-typing: при любом edit'е файла в working tree Vite
+//    реклоадит Eden window, useEditor создаёт новый editor instance, и
+//    напечатанный пользователем но не успевший в autosave (debounce 800ms)
+//    контент теряется. Для агента, активно редактирующего код во время того
+//    как user тестит, это destructive.
 //
-//    Opt-out: `KEPLER_DEV_EXTENSIONS=0` (например, если работаешь только над
-//    shell'ом и не хочешь четыре лишних Vite процесса в памяти).
-if (process.env.KEPLER_DEV_EXTENSIONS !== "0") {
+//    Opt-in: `KEPLER_DEV_EXTENSIONS=1`. Когда сервера подняты — extension-host
+//    автоматически использует их через TCP probe (см. resolveExtensionSource
+//    в extension-host.ts). Без них — fallback на one-shot dist build (быстрый
+//    rebuild через `bun run --cwd shell build:extensions`).
+if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
   startChild("dev-extensions", "node", ["scripts/dev-extensions.mjs"]);
 }
 

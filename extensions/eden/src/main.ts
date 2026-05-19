@@ -59,6 +59,12 @@ function handleRoute(route: string | null): void {
 
 const kepler = (window as unknown as { kepler?: KeplerNamespace }).kepler;
 if (kepler?.navigation) {
-  void kepler.navigation.initialRoute().then(handleRoute);
+  // ВНИМАНИЕ: НЕ используем `initialRoute()` параллельно с `onNavigate()`.
+  // Shell посылает `kepler:extension:navigation` event через did-finish-load
+  // ДЛЯ ВСЕХ открытий, включая cold-launch (см. extension-host.ts ~line 1015).
+  // Если читать ещё и initialRoute() — handleRoute срабатывает ДВА раза на
+  // один открытый extension. Логи user'а 2026-05-19 показали именно это:
+  // openTodayJournal вызывался дважды, создавая race между двумя set
+  // currentEntry. onNavigate — единственный источник правды для route.
   kepler.navigation.onNavigate(handleRoute);
 }

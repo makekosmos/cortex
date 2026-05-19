@@ -695,6 +695,15 @@ function hydrateFromEntry(entry: Entry) {
   const nextNoteType = props.noteTypes.find((noteType) => noteType.id === nextTypeId) ?? null;
   const nextContentJson = normalizeContentJson(entry.content_json);
 
+  console.log(
+    "[eden] Editor.hydrateFromEntry id=",
+    entry.id,
+    "type=",
+    nextTypeId,
+    "content[:200]=",
+    nextContentJson.slice(0, 200),
+  );
+
   isHydrating = true;
   title.value = getEditableEntryTitle(entry.title, entry.header_props_json);
   noteTypeId.value = nextTypeId;
