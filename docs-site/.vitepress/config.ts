@@ -68,7 +68,6 @@ export default defineConfig({
       { text: "Приложения", link: "/apps/" },
       { text: "Пакеты", link: "/packages/" },
       { text: "Справочник", link: "/reference/rules" },
-      { text: "Для агента", link: "/agents/" },
     ],
 
     sidebar: {
@@ -170,7 +169,8 @@ export default defineConfig({
             { text: "Журнал решений (ADR)", link: "/reference/decisions" },
             { text: "Глоссарий", link: "/reference/glossary" },
             { text: "Команды и скрипты", link: "/reference/commands" },
-            { text: "llms.txt", link: "/llms.txt", target: "_blank" },
+            { text: "llms.txt (manifest)", link: "/llms.txt", target: "_blank" },
+            { text: "full-llms.txt (всё inline)", link: "/full-llms.txt", target: "_blank" },
           ],
         },
       ],

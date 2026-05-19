@@ -7,8 +7,8 @@
 | Пакет-менеджер / runner | **Bun 1.3.5** | весь монорепо |
 | Системный язык | **Rust** (stable) + Cargo | `crates/ark-core`, `services/kepler-backend/src/usage_tracker` |
 | Android | **Kotlin** + Gradle + Compose + Room | `mobile/delphi` (UI), `mobile/ark-service` (Room ContentProvider) |
-| Desktop UI | **Vue 3.6 Vapor** | Eden, Arrancador (Vue), Dashboard |
-| Desktop shell | **Electron 38** | Eden, Delphi, Arrancador, Dashboard |
+| Desktop UI | **Vue 3.6.0-beta.12** (везде) + Vapor (experimental, активно в Eden) | Kepler shell + все 4 Vue-extensions (Eden, Horologion, Delphi, Arrancador) + Dashboard |
+| Desktop shell | **Electron 41** | Kepler launcher + extension windows (Eden, Delphi, Arrancador, Horologion, Dashboard) |
 | Bundler | **Vite 8** (Rolldown) | TS-приложения |
 | Линт / формат | **Biome**, **oxlint**, **oxfmt** | TS/JS |
 | Unit-тесты | **Vitest** | TS-пакеты и приложения |
@@ -16,7 +16,7 @@
 | Pre-commit hooks | **lefthook** | весь репо |
 | Storage (Electron) | **better-sqlite3** | Electron main процессы |
 | State (desktop) | **Pinia** | Eden |
-| Search (Eden) | **Tantivy** (Rust) через Eden Heart sidecar | Eden |
+| Search (Eden) | **ARK FTS5** (SQLite встроенный full-text search) через `search_objects` op | Eden |
 | Editor (Eden) | **TipTap** | Eden |
 
 ## Гварды и smoke-скрипты
@@ -65,13 +65,13 @@ bun run typecheck            # tsc --noEmit
 bun run test:e2e             # Playwright
 ```
 
-## Сборка Eden (standalone)
+## Сборка Eden
+
+Eden — Vue extension внутри Kepler shell, отдельной сборки не имеет (`apps/eden/ts/` standalone удалён в Phase 6.0.A). Сборка происходит как часть `shell/`:
 
 ```powershell
-cd apps/eden/ts
-bun run dev                # собирает Heart sidecar + запускает Vite + Electron
-bun run build              # NSIS installer
-bun run test:e2e           # Playwright
+bun run --cwd shell build:extensions   # собирает dist/ всех Vue extensions, включая Eden
+bun run --cwd shell dev                # dev shell (extension HMR — opt-in через KEPLER_DEV_EXTENSIONS=1)
 ```
 
 ## Документация

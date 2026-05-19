@@ -19,6 +19,8 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 | 8 | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅ | ⏳ |
 | 9 | Delphi UI: Tailwind → plain CSS (открытый вопрос) | ⏳ |
 | 10 | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳ | ⏳ |
+| 12 | Password manager (как хранить — TBD) | ⏳ |
+| 13 | Raycast API совместимость — целевая в Kepler **0.5.0** | ⏳ |
 
 ## Phase 0 ✅ — Backend extracted
 
@@ -265,6 +267,51 @@ GitHub — отдельный destination type (не path). Auto-push в private
 - ⏳ **UI manager в Kepler settings** — страница «Расширения»: список installed, кнопки install / remove / update.
 - ⏳ **Auto-update** — checker для новых версий extension'ов (manifest version field + remote URL или local update file).
 - ⏳ **Code signing / manifest validation** — verify publisher signature, schema validation, capability declarations (когда появятся third-party extensions).
+
+## Phase 12 ⏳ — Password manager
+
+::: warning Открытый вопрос
+Целевое поведение и storage backend пока **не определены**. Идея — добавить безопасное хранилище секретов (пароли / API-ключи / personal access tokens), доступное из launcher'а и extension'ов через типизированный API.
+:::
+
+### Что обсуждается
+
+- **Storage**: OS keychain (Windows Credential Manager / Keyring) через `keyring-rs` vs encrypted SQLite в ARK (с master key через `age` или passphrase) vs внешняя интеграция (Bitwarden CLI / 1Password CLI).
+- **API surface**: команды launcher'а (`password:search`, `password:copy`) + extension API (`window.kepler.secrets.{get,set,list}`) с per-extension permission scoping.
+- **Auto-fill**: целевой scope первой версии — copy-to-clipboard с auto-clear через 30s. Auto-fill через accessibility API — Phase 12.1+.
+- **Sync**: если SQLite-based — едет по существующему ARK sync. Если keychain-based — per-machine, без sync.
+- **TOTP**: в первой версии не обязательно, можно после MVP.
+
+### Известные риски
+
+- Хранение чувствительных данных требует тщательной thread-модели (где master key, кто может его прочитать, что попадает в логи / crash dumps / backup'ы).
+- Если SQLite-based — backup-feature из Phase 11 должна понимать «pillaring» (некоторые таблицы не шифруются, password vault — шифруется отдельно).
+
+Решение — отдельным spec'ом перед началом реализации.
+
+## Phase 13 ⏳ — Raycast API совместимость <Badge type="tip" text="target: 0.5.0" />
+
+Цель — поддержать **подмножество [Raycast Extension API](https://developers.raycast.com/api-reference)** так, чтобы существующие Raycast extensions могли быть портированы в Kepler с минимальными правками (или вообще без — через адаптер-loader). К релизу Kepler **0.5.0** — обязательно.
+
+### Что планируется поддержать (минимальный паритет)
+
+- **Commands**: `command` / `view` / `no-view` modes — мапятся на наш `manifest.commands[]` (`open` / `action`) с расширением `view` (full UI).
+- **List / Detail / Form / Grid компоненты** — реализовать поверх `@kosmos/visuals`, чтобы Raycast `<List>` / `<Action>` JSX работал как привычный TipTap UI.
+- **`@raycast/api`**: `Clipboard.copy`, `showToast`, `getPreferenceValues`, `LocalStorage` — поверх `kepler.window` / `kepler.userData` / нового `kepler.clipboard`.
+- **Preferences UI** — Raycast extensions объявляют preferences в manifest, Kepler рендерит автоматически в Settings → Расширения → <Имя>.
+- **Keyboard shortcuts** — Raycast `ActionPanel` `keyboardShortcut` → mapping в наш command bus.
+
+### Что НЕ войдёт в 0.5.0
+
+- AI commands API (Raycast Pro feature) — отложить.
+- Quicklinks / Snippets — overlap с существующими Kepler-командами, обсуждаемо.
+- Cloud sync настроек Raycast — n/a, у нас свой sync.
+
+### Открытые вопросы
+
+- **Loader**: реализовать `@raycast/api` shim как npm-пакет в `packages/` + extension просто импортирует? Или JSX/React-runtime внутри extension и адаптер на наш Vue Vapor?
+- **Лицензия**: Raycast API типы (`@raycast/api`) — proprietary. Использовать TypeScript types из их пакета нельзя; нужно объявить совместимый shape в `packages/raycast-compat/` своими силами.
+- **Marketplace**: установка Raycast extensions через `.kext` (после конвертации) vs прямая поддержка `.raycast` бандлов.
 
 ## Баги / замечания
 
