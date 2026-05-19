@@ -117,6 +117,16 @@ export interface ExtensionManifest {
   minWidth?: number;
   minHeight?: number;
   /**
+   * Windows backdrop material для окна. Если задан, BrowserWindow создаётся
+   * с прозрачным backgroundColor и Win32 system backdrop. Renderer должен
+   * иметь semi-transparent body, иначе эффект не виден.
+   *
+   * - `"acrylic"` — blur с лёгкой прозрачностью (Win11/10)
+   * - `"mica"` — desktop tint Win11
+   * - `"none"` — стандартный непрозрачный фон (по умолчанию)
+   */
+  windowEffect?: "acrylic" | "mica" | "none";
+  /**
    * Test contract — опционально. Используется universal `tests/e2e/extensions-contract.spec.ts`
    * чтобы автоматически проверять архитектурный baseline extension'а: команды
    * appear в `commands.list` после boot'а, ARK smoke round-trip по объявленному
@@ -635,6 +645,15 @@ export function openExtension(id: string, route?: string): void {
   // webContents без visible render. См. tests/e2e/helpers/launch.ts.
   const headless = process.env.KOSMOS_HEADLESS === "1";
 
+  // Windows backdrop material — opt-in через manifest.windowEffect.
+  // Acrylic/mica требуют прозрачного backgroundColor; иначе native renderer
+  // нарисует сплошной цвет поверх backdrop'а и эффект не будет виден.
+  const wantsBackdrop =
+    manifest.windowEffect === "acrylic" || manifest.windowEffect === "mica";
+  const backgroundMaterial: "acrylic" | "mica" | undefined = wantsBackdrop
+    ? (manifest.windowEffect as "acrylic" | "mica")
+    : undefined;
+
   const win = new BrowserWindow({
     width,
     height,
@@ -645,15 +664,12 @@ export function openExtension(id: string, route?: string): void {
     show: !headless,
     skipTaskbar: headless,
     title: manifest.name,
-    backgroundColor: "#1a1a1a",
-    // Стандартное окно с custom titlebar (overlay для управления окном).
+    backgroundColor: wantsBackdrop ? "#00000000" : "#1a1a1a",
+    ...(backgroundMaterial ? { backgroundMaterial } : {}),
+    // Native frame с hidden titlebar — custom controls рисует extension UI
+    // (см. WindowControls в @kosmos/visuals, IPC kepler:extension:window:*).
     frame: true,
     titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: "#1a1a1a",
-      symbolColor: "#cccccc",
-      height: 36,
-    },
     webPreferences: {
       preload,
       contextIsolation: true,
@@ -707,8 +723,25 @@ export function openExtension(id: string, route?: string): void {
 
   win.on("resized", scheduleSave);
   win.on("moved", scheduleSave);
-  win.on("maximize", saveWindowState);
-  win.on("unmaximize", saveWindowState);
+  const broadcastMaximizedState = (): void => {
+    if (win.isDestroyed()) return;
+    try {
+      win.webContents.send(
+        "kepler:extension:window:maximized-changed",
+        win.isMaximized(),
+      );
+    } catch {
+      // renderer may not be ready yet — ignore
+    }
+  };
+  win.on("maximize", () => {
+    saveWindowState();
+    broadcastMaximizedState();
+  });
+  win.on("unmaximize", () => {
+    saveWindowState();
+    broadcastMaximizedState();
+  });
   win.on("close", () => {
     if (saveTimer) {
       clearTimeout(saveTimer);
@@ -942,6 +975,11 @@ ipcMain.handle("kepler:extension:window:maximize", (e) => {
   } else {
     win.maximize();
   }
+});
+
+ipcMain.handle("kepler:extension:window:is-maximized", (e): boolean => {
+  const win = windowForSender(e.sender);
+  return win ? win.isMaximized() : false;
 });
 
 // ---------------------------------------------------------------------------

@@ -56,6 +56,21 @@ const api = {
       ipcRenderer.invoke("kepler:extension:window:minimize"),
     maximize: (): Promise<void> =>
       ipcRenderer.invoke("kepler:extension:window:maximize"),
+    isMaximized: (): Promise<boolean> =>
+      ipcRenderer.invoke("kepler:extension:window:is-maximized") as Promise<boolean>,
+    onMaximizedChange: (
+      handler: (isMaximized: boolean) => void,
+    ): Unsubscribe => {
+      const wrapped = (_e: unknown, value: unknown) => {
+        if (typeof value === "boolean") handler(value);
+      };
+      ipcRenderer.on("kepler:extension:window:maximized-changed", wrapped);
+      return () =>
+        ipcRenderer.removeListener(
+          "kepler:extension:window:maximized-changed",
+          wrapped,
+        );
+    },
   },
   host: {
     invoke: (action: string, payload?: unknown): Promise<boolean> =>

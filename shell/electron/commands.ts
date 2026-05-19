@@ -151,6 +151,34 @@ export const COMMANDS: InternalCommand[] = [
     icon: () => extensionIconDataUri("horologion"),
     exec: () => openAsExtension("horologion", "/?mode=stopwatch"),
   },
+  // Eden deep-links — открывают Eden на конкретном action'е. По схеме
+  // совпадают с horologion:pomodoro/stopwatch: static open-команды видны
+  // в launcher'е даже когда extension не запущен (а не только после mount
+  // как dynamic action-команды через commands.register). Сами route'ы
+  // (`/today`, `/new`) обрабатываются в `extensions/eden/src/main.ts`
+  // через `kepler.navigation.initialRoute` → `dispatchEdenCommand(...)`.
+  {
+    id: "eden:note:open-today",
+    title: "Открыть сегодняшнюю заметку",
+    subtitle: "Eden — Дневник",
+    category: "open",
+    kind: "command",
+    appName: "Eden",
+    requiresExtension: "eden",
+    icon: () => extensionIconDataUri("eden"),
+    exec: () => openAsExtension("eden", "/today"),
+  },
+  {
+    id: "eden:note:create",
+    title: "Создать заметку",
+    subtitle: "Eden",
+    category: "open",
+    kind: "command",
+    appName: "Eden",
+    requiresExtension: "eden",
+    icon: () => extensionIconDataUri("eden"),
+    exec: () => openAsExtension("eden", "/new"),
+  },
 ];
 
 export function findCommand(id: string): InternalCommand | undefined {

@@ -91,6 +91,11 @@ export default defineConfig(({ mode }) => {
           __dirname,
           "node_modules/lucide-vue-next",
         ),
+        // Tailwind CSS — extension'ы могут @import "tailwindcss" (или
+        // его submodules как `tailwindcss/utilities.css`). Bare specifier
+        // не резолвится из <extensionDir>/src без alias'а, потому что
+        // extension'ы не имеют локального node_modules.
+        tailwindcss: path.resolve(__dirname, "node_modules/tailwindcss"),
         // Force vue-router/pinia resolve к extension'овской копии
         // (extensions/<id>/node_modules/). Bun pinning creates separate
         // copies in packages/visuals/node_modules (peer satisfy) → разные
