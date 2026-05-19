@@ -11,8 +11,9 @@
   "devPort": 5184,
   "width": 1100,
   "height": 750,
-  "minWidth": 800,
-  "minHeight": 600,
+  "minWidth": 450,
+  "minHeight": 400,
+  "windowEffect": "acrylic",
   "tests": {
     "commands": ["eden:note:create", "eden:note:search"],
     "smoke": {

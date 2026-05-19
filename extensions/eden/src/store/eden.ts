@@ -9,6 +9,8 @@ import { normalizeSlug } from "@/lib/typedNotes";
 import { createUntitledEntryHeaderProps } from "@/lib/entryTitles";
 
 import {
+  SYSTEM_TYPE_JOURNAL,
+  SYSTEM_TYPE_JOURNAL_ID,
   SYSTEM_TYPE_NOTE_ID,
   SYSTEM_TYPES,
   isSystemType,
@@ -277,6 +279,69 @@ export const useEdenStore = defineStore("eden", () => {
     currentEntry.value = newEntry;
   }
 
+  /**
+   * Найти или создать дневниковую заметку с datestamp = сегодня.
+   * Title формат: ISO `YYYY-MM-DD` (deterministic, locale-independent,
+   * сортируемый). Жёсткое условие — title заметки **всегда** равен текущей
+   * дате, никакой свободной формы.
+   *
+   * Используется командой `eden:note:open-today`. В App.vue после открытия
+   * выставляется zen mode.
+   */
+  async function openTodayJournal() {
+    activeScreen.value = "notes";
+    activeNoteTypeId.value = null;
+    // activeSpace = "diary" — иначе watch в App.vue видит default
+    // "my-space" && currentEntry=null и openMySpace перебивает нашу
+    // загрузку journal entry'и.
+    activeSpace.value = "diary";
+
+    // SYSTEM_TYPE_JOURNAL — client-side system type (определён в systemTypes.ts).
+    // Backend не знает о нём, пока Eden явно не сделает upsert_object_type.
+    // Без persist'а saveEntry проваливается в ensureEntryTypeAvailable.
+    // Idempotent — повторные вызовы перезаписывают то же содержимое.
+    if (window.api) {
+      try {
+        await window.api.saveNoteType(SYSTEM_TYPE_JOURNAL);
+      } catch (err) {
+        console.warn("[eden] persist journal type failed:", err);
+      }
+    }
+
+    // ISO date — `2026-05-19`. `padStart(2, "0")` для месяца/дня.
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const todayTitle = `${yyyy}-${mm}-${dd}`;
+
+    // Если entries ещё не загружены (initApp / hydrateVault не закончил) —
+    // подождём, иначе создадим дубликат при следующем mount'е, когда
+    // existing уже подгрузится.
+    if (entries.value.length === 0 && window.api) {
+      try {
+        const fresh = await window.api.listEntries();
+        entries.value = fresh;
+      } catch (err) {
+        console.warn("[eden] listEntries before today-journal failed:", err);
+      }
+    }
+
+    const existing = entries.value.find(
+      (entry) =>
+        entry.type_id === SYSTEM_TYPE_JOURNAL_ID &&
+        entry.title.trim() === todayTitle &&
+        entry.deleted_at === null,
+    );
+    if (existing) {
+      currentEntry.value = existing;
+      return;
+    }
+
+    const newEntry = createEntry(todayTitle, SYSTEM_TYPE_JOURNAL_ID);
+    currentEntry.value = newEntry;
+  }
+
   function openTypeCollection(noteTypeId: string) {
     activeScreen.value = "type-collection";
     activeNoteTypeId.value = noteTypeId;
@@ -526,6 +591,8 @@ export const useEdenStore = defineStore("eden", () => {
     openMySpace,
 
     createNewEntry,
+
+    openTodayJournal,
 
     openTypeCollection,
 

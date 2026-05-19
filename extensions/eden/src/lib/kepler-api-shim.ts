@@ -756,12 +756,24 @@ function close(): void {
 // Этот метод регистрирует in-memory listener'ы.
 // ---------------------------------------------------------------------------
 
-type EdenCommandChannel = "eden:cmd:note:create" | "eden:cmd:note:search";
+type EdenCommandChannel =
+  | "eden:cmd:note:create"
+  | "eden:cmd:note:search"
+  | "eden:cmd:note:open-today";
 const commandListeners = new Map<EdenCommandChannel, Set<(params: unknown) => void>>();
+// Pending очередь — события, диспатчированные до того как App.vue
+// зарегистрировал onCommand listener. Без буфера initialRoute()-event
+// теряется (deep-link через `eden:note:open-today` приходит раньше mount).
+const pendingDispatches = new Map<EdenCommandChannel, unknown[]>();
 
 export function dispatchEdenCommand(channel: EdenCommandChannel, params: unknown): void {
   const set = commandListeners.get(channel);
-  if (!set) return;
+  if (!set || set.size === 0) {
+    const queue = pendingDispatches.get(channel) ?? [];
+    queue.push(params);
+    pendingDispatches.set(channel, queue);
+    return;
+  }
   for (const handler of set) {
     try {
       handler(params);
@@ -781,6 +793,25 @@ function onCommand(
     commandListeners.set(channel, set);
   }
   set.add(handler);
+
+  // Flush pending events для этого канала. Одноразово — после первого
+  // listener'а очередь очищается. Используем microtask, чтобы caller
+  // успел продолжить выполнение onMounted перед reentrant'ным вызовом
+  // handler'а.
+  const pending = pendingDispatches.get(channel);
+  if (pending && pending.length > 0) {
+    pendingDispatches.delete(channel);
+    queueMicrotask(() => {
+      for (const params of pending) {
+        try {
+          handler(params);
+        } catch (e) {
+          console.warn(`[eden-extension] flushed handler ${channel} threw:`, e);
+        }
+      }
+    });
+  }
+
   return () => {
     set?.delete(handler);
   };

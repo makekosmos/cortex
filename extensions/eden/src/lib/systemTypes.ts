@@ -4,6 +4,7 @@ export const SYSTEM_TYPE_NOTE_ID = "note_obj";
 export const SYSTEM_TYPE_GAME_ID = "game_obj";
 export const SYSTEM_TYPE_WORKOUT_ID = "system-type-workout";
 export const SYSTEM_TYPE_EXERCISE_ID = "system-type-exercise";
+export const SYSTEM_TYPE_JOURNAL_ID = "system-type-journal";
 
 const noteSchemaJson = JSON.stringify({
   fields: [
@@ -389,6 +390,29 @@ const exerciseHeaderTemplateJson = JSON.stringify({
   imageFieldId: null,
 });
 
+export const SYSTEM_TYPE_JOURNAL: NoteType = {
+  id: SYSTEM_TYPE_JOURNAL_ID,
+  name: "Дневник",
+  slug: "journal",
+  icon: "document-text",
+  color: "#a855f7",
+  schema_json: noteSchemaJson,
+  header_template_json: noteHeaderTemplateJson,
+  ui_schema_json: JSON.stringify({
+    featured_fields: [],
+    visible_fields: [],
+    hidden_fields: ["description", "related_notes", "created_at", "updated_at", "deleted_at"],
+    read_only_fields: [],
+    field_order: ["description", "related_notes"],
+    header_layout: "inline",
+    default_layout: "page",
+    default_template_id: null,
+    collection_name: "Дневник",
+  }),
+  created_at: 0,
+  updated_at: 0,
+};
+
 export const SYSTEM_TYPE_NOTE: NoteType = {
   id: SYSTEM_TYPE_NOTE_ID,
   name: "Заметка",
@@ -481,6 +505,7 @@ export const SYSTEM_TYPE_EXERCISE: NoteType = {
 
 export const SYSTEM_TYPES: NoteType[] = [
   SYSTEM_TYPE_NOTE,
+  SYSTEM_TYPE_JOURNAL,
   SYSTEM_TYPE_GAME,
   SYSTEM_TYPE_WORKOUT,
   SYSTEM_TYPE_EXERCISE,
@@ -510,6 +535,7 @@ export function normalizeSystemNoteType(noteType: NoteType): NoteType {
 export function isSystemType(noteTypeId: string): boolean {
   return (
     noteTypeId === SYSTEM_TYPE_NOTE_ID ||
+    noteTypeId === SYSTEM_TYPE_JOURNAL_ID ||
     noteTypeId === SYSTEM_TYPE_GAME_ID ||
     noteTypeId === SYSTEM_TYPE_WORKOUT_ID ||
     noteTypeId === SYSTEM_TYPE_EXERCISE_ID
