@@ -2,26 +2,59 @@
 
 ## Общий стек
 
+### Языки и runtime
+
 | Слой | Инструменты | Где используется |
 |---|---|---|
-| Пакет-менеджер / runner | **Bun 1.3.5** | весь монорепо |
-| Системный язык | **Rust** (stable) + Cargo | `crates/ark-core`, `services/kepler-backend/src/usage_tracker` |
-| Android | **Kotlin** + Gradle + Compose + Room | `mobile/delphi` (UI), `mobile/ark-service` (Room ContentProvider) |
+| Системный язык | **Rust** (stable) + Cargo | `crates/ark-core`, `services/kepler-backend`, `services/kepler-focus-svc`, `services/kepler-focus-helper` |
 | Desktop UI | **Vue 3.6.0-beta.12** (везде) + Vapor (experimental, активно в Eden) | Kepler shell + все 4 Vue-extensions (Eden, Horologion, Delphi, Arrancador) + Dashboard |
-| Desktop shell | **Electron 41** | Kepler launcher + extension windows (Eden, Delphi, Arrancador, Horologion, Dashboard) |
-| Bundler | **Vite 8** (Rolldown) | TS-приложения |
-| Линт / формат | **oxlint** + **oxfmt** (oxc suite, Rust-based) | TS/JS |
-| Cargo workspace hygiene | **cargo-shear** (тот же Boshen что oxc) | Чистка orphan-deps в `Cargo.toml`'ах |
-| Unit-тесты (TS) | **Vitest** | TS-пакеты и приложения |
-| Unit/component-тесты (Vue) | **Vitest** + **`@vitest/browser-playwright`** + **`vitest-browser-vue`** — real Chromium, не jsdom (нужно для надёжного теста Vapor edge-cases) | Eden (component-level smoke выше pure-функций) |
-| Tests runner (Rust) | **cargo-nextest** (через `cargo nextest run`) | workspace tests + lefthook pre-push |
-| E2E | **Playwright** | Electron-приложения |
-| Watch-mode (Rust, опционально) | **bacon** (cargo-watch deprecated, его мейнтейнер сам рекомендует bacon) | dev-tool для разработчика, не проектный артефакт — ставится локально через `cargo install bacon` |
-| Pre-commit hooks | **lefthook** | весь репо |
-| Storage (Electron) | **better-sqlite3** | Electron main процессы |
-| State (desktop) | **Pinia** (миграция на **Pinia Colada** для server-state — Phase 14, см. [Roadmap](/apps/kepler-roadmap)) | Eden |
-| Search (Eden) | **ARK FTS5** (SQLite встроенный full-text search) через `search_objects` op | Eden |
-| Editor (Eden) | **TipTap** | Eden |
+| Desktop shell | **Electron 41** | Kepler launcher + extension windows |
+| Android | **Kotlin** + Gradle + Compose + Room | `mobile/delphi` (UI), `mobile/ark-service` (Room ContentProvider) |
+
+### Менеджеры пакетов и сборка
+
+| Слой | Инструменты | Где используется |
+|---|---|---|
+| Пакет-менеджер / runner (TS) | **Bun 1.3.5** | весь TS-монорепо (workspaces + scripts) |
+| Пакет-менеджер (Rust) | **Cargo** (workspace) | `Cargo.toml` в корне + per-crate |
+| Bundler (TS) | **Vite 8** (Rolldown 1.0.1 — production-stable) | shell renderer, extension dist'ы, docs-site |
+| Электронный installer | **electron-builder** (`shell/package.json::build`) + **electron-updater** для auto-update | Kepler installer (`.exe` NSIS) + auto-update флоу |
+
+### Качество кода
+
+| Слой | Инструменты | Где используется |
+|---|---|---|
+| Lint / format (TS/JS) | **oxlint** + **oxfmt** (oxc suite, Rust-based) | TS-пакеты и приложения |
+| Cargo workspace hygiene | **cargo-shear** (тот же Boshen что oxc) — fail в pre-push если найдены orphan-deps | проверка `Cargo.toml` в lefthook pre-push |
+| TypeScript | `tsc --noEmit` | shell + extensions, в lefthook pre-commit |
+| Pre-commit / pre-push hooks | **lefthook** | весь репо |
+
+### Тестирование
+
+| Слой | Инструменты | Где используется |
+|---|---|---|
+| Unit (TS, pure JS) | **`bun test`** | `extensions/*/tests/*.test.ts` (charCount, lib/*) |
+| Component (Vue, real Chromium) | **Vitest 4** + **`@vitest/browser-playwright`** + **`vitest-browser-vue`** — не jsdom (нужно для Vapor edge-cases) | `extensions/eden/tests/components/*.spec.ts` |
+| Unit (Rust) | **cargo-nextest** (`cargo nextest run`) | все workspace crates, lefthook pre-push |
+| E2E (Electron) | **Playwright** через `_electron.launch` | `tests/e2e/*.spec.ts` (eden, delphi, horologion, arrancador, launcher) |
+| Watch-mode (Rust, опционально) | **bacon** (cargo-watch deprecated, его мейнтейнер рекомендует bacon) | personal dev-tool, не проектный артефакт — `cargo install bacon` локально |
+
+### Данные и состояние
+
+| Слой | Инструменты | Где используется |
+|---|---|---|
+| Storage (ARK) | **SQLite (FTS5)** через `rusqlite` (Rust) | `crates/ark-core` runtime — единый ARK storage для всех apps |
+| Storage (Electron main) | **better-sqlite3** | shell main process для local non-ARK кэшей (e.g., window state) |
+| Search | **ARK FTS5** через `search_objects` op | Eden, потенциально другие apps |
+| State (Vue) | **Pinia** (миграция на **Pinia Colada** для server-state — Phase 14, см. [Roadmap](/apps/kepler-roadmap)) | Eden, Horologion |
+
+### Специфичное для приложений
+
+| Слой | Инструменты | Где используется |
+|---|---|---|
+| Rich-text editor | **TipTap 3** (ProseMirror) + `@tiptap/markdown` для serialize | Eden |
+| Icons | **`lucide-vue-next`** | все Vue extensions + shell |
+| Themes / UI tokens | **`@kosmos/visuals`** (workspace package) | все Vue extensions + shell |
 
 ## Гварды и smoke-скрипты
 
