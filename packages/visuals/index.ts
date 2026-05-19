@@ -20,6 +20,7 @@ export {
   Titlebar,
   type TitlebarPlatform,
   TitlebarHistoryControls,
+  WindowControls,
   DesktopChrome,
   DesktopContentSurface,
   StatusDot,
@@ -48,3 +49,10 @@ export {
 // Composables
 
 export { useContextMenu, type ContextMenuState } from "./composables/useContextMenu";
+
+// Runtime helpers
+
+export {
+  installScrollFadeListener,
+  type InstallScrollFadeOptions,
+} from "./runtime/scroll-fade";

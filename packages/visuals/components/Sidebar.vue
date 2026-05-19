@@ -39,6 +39,9 @@ export interface SidebarProjectItem {
   iconColor?: string;
   testId?: string;
   onClick?: () => void;
+  /** ПКМ-меню. Receiver сам делает `event.preventDefault()` и
+      открывает `ContextMenu` (см. `useContextMenu` в @kosmos/visuals). */
+  onContextMenu?: (event: MouseEvent) => void;
 }
 
 export interface SidebarProjectGroup {
@@ -491,6 +494,7 @@ const wrapperClasses = computed(() =>
                         'widget-nav-item',
                         project.active ? 'kosmos-sidebar-project-link--active' : '',
                       ]"
+                      @contextmenu="project.onContextMenu?.($event)"
                     >
                       <span
                         v-if="project.iconSrc"
@@ -524,6 +528,7 @@ const wrapperClasses = computed(() =>
                         project.active ? 'kosmos-sidebar-project-link--active' : '',
                       ]"
                       @click="'onClick' in project && typeof project.onClick === 'function' ? project.onClick() : undefined"
+                      @contextmenu="project.onContextMenu?.($event)"
                     >
                       <span
                         v-if="project.iconSrc"
