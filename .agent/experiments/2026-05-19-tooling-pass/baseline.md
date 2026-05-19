@@ -140,6 +140,11 @@ Quantitative выигрыш по cold-build около-нулевой — orphan
 | `wc -l extensions/eden/src/store/eden.ts` | 686 |
 | Eden bundle `index.js` raw | 358,873 bytes (351 KB) |
 | Eden bundle `index.js` gzip | 113,089 bytes (110 KB) |
+| `tests/e2e/eden.spec.ts` wall-clock (median последних 3 runs) | **89s (9/9 tests passing)** |
+
+E2e замеры runs 1-2 (5m20s, 4m15s) выпадают — гонялись параллельно с cold-build x3 в фоне, CPU contention. Runs 3-5 (1m30/1m29/1m27) — после освобождения CPU, эти и берём для baseline'а будущей Phase 14 миграции.
+
+raw: `raw/baseline-eden-e2e.txt`
 
 ### After (install + `app.use(PiniaColada)`, без миграции queries)
 
