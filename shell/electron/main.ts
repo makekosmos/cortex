@@ -57,6 +57,7 @@ import {
   setExtensionArkBridge,
 } from "./extension-host";
 import { listInstalledUserExtensions } from "./extension-installer";
+import { openDashboardWindow } from "./dashboard-window";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
 import {
@@ -1186,9 +1187,9 @@ app.whenReady().then(async () => {
         try { openExtension(id); } catch (e) { console.error(`bench open ${id} failed:`, e); }
       }
       // Dashboard — встроенный shell view (не extension); открывается через
-      // tray-команду. Импорт здесь чтобы не возить dependency в hot path.
+      // tray-команду.
       try {
-        import("./dashboard-window").then((m) => m.openDashboardWindow());
+        openDashboardWindow();
       } catch (e) { console.error("bench open dashboard failed:", e); }
     }, 5000);
   }

@@ -118,6 +118,10 @@ export default defineConfig(({ mode }) => {
       // Asset path-ы relative к dist/index.html (base: "./") — нужны для
       // file:// загрузки через BrowserWindow.loadFile().
       assetsDir: "assets",
+      // Eden Editor lazy-chunk весит ~1.3MB (TipTap + lowlight + grammars) —
+      // он async-loaded, в main bundle Eden остаётся ~360KB. Дефолтный
+      // warning порог 500KB здесь бесполезен.
+      chunkSizeWarningLimit: 1500,
     },
     clearScreen: false,
   };

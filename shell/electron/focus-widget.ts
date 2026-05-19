@@ -18,6 +18,7 @@ import {
   screen,
   app,
 } from "electron";
+import { openExtension } from "./extension-host";
 import path from "node:path";
 import {
   existsSync,
@@ -241,8 +242,6 @@ ipcMain.handle("kepler:focus-widget:hide", () => {
 });
 
 ipcMain.handle("kepler:focus-widget:open-horologion", async () => {
-  // Lazy import — extension-host requires shell context, не хочу cycle.
-  const { openExtension } = await import("./extension-host");
   openExtension("horologion");
 });
 
