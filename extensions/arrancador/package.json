@@ -7,6 +7,7 @@
   "//": "Workspace deps (@kosmos/*) приходят через alias'ы в shared vite.extensions.config.mjs. Этот package.json существует только для local `bun install` чтобы получить runtime деп'ы (tailwind-стек), которых нет в hoisted kepler-shell/node_modules.",
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
-    "tailwindcss": "^4.1.16"
+    "tailwindcss": "^4.1.16",
+    "vue": "^3.6.0-beta.12"
   }
 }

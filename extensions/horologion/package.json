@@ -8,7 +8,7 @@
     "@kosmos/ark": "workspace:*",
     "@kosmos/visuals": "workspace:*",
     "lucide-vue-next": "^0.548.0",
-    "vue": "^3.5.31",
+    "vue": "^3.6.0-beta.12",
     "vue-router": "^4.5.0"
   }
 }
