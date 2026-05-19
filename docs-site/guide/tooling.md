@@ -221,7 +221,7 @@ cargo-machete застрял на 0.6.2 (последний релиз — 2024)
 
 ### Почему cargo-nextest, если perf-win незаметен?
 
-Wall-clock у нас почти не сдвинулся (тесты CPU-light, bottleneck в test-binary launch, не в исполнении). Взяли за **UX и фичи**: progress-bar, subprocess isolation, `--retries` для flaky e2e, JUnit XML для будущего CI. Замерили — [E1 в experiments](/.agent/experiments/2026-05-19-tooling-pass/baseline.md), 3.5% перерасход в шуме.
+Wall-clock у нас почти не сдвинулся (тесты CPU-light, bottleneck в test-binary launch, не в исполнении). Взяли за **UX и фичи**: progress-bar, subprocess isolation, `--retries` для flaky e2e, JUnit XML для будущего CI. Замерили — [E1 в Экспериментах](/reference/experiments#e1-cargo-nextest-заменяет-cargo-test), 3.5% разница в шуме.
 
 ### Почему Vitest browser, а не jsdom?
 

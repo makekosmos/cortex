@@ -167,6 +167,7 @@ export default defineConfig({
             { text: "Правила репозитория", link: "/reference/rules" },
             { text: "Smoke-матрица ARK", link: "/reference/smoke-matrix" },
             { text: "Журнал решений (ADR)", link: "/reference/decisions" },
+            { text: "Эксперименты", link: "/reference/experiments" },
             { text: "Глоссарий", link: "/reference/glossary" },
             { text: "Команды и скрипты", link: "/reference/commands" },
             { text: "llms.txt (manifest)", link: "/llms.txt", target: "_blank" },
