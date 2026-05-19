@@ -1,5 +1,12 @@
 # Архитектура
 
+::: info Почему именно Electron, а не Tauri / Wails / etc.
+Решение опирается на эксперимент с замерами:
+[Tauri vs Electron — 2026-05-19](/experiments/tauri-vs-electron). Короткий вывод:
+на Windows WebView2 = тот же Chromium, экономия RAM всего **24%** при цене 3-6
+недель переписывания; на Linux WebKitGTK ломает TipTap в Eden.
+:::
+
 ## Brand'ы
 
 - **Kosmos** — название экосистемы. Под Kosmos живут продуктовые приложения (Eden, Delphi, Arrancador, Horologion, Dashboard) и shared-пакеты (`@kosmos/ark`, `@kosmos/visuals`).

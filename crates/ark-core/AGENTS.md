@@ -351,6 +351,15 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 - ❌ Outside-click listener'ы через nested `watch(..., { once: true })` для cleanup'а. Паттерн ломается при quick open→close→open: новый handler регистрируется до того как старый отпишется. Используй symmetric `watch(isOpen, (val) => val ? addEventListener : removeEventListener)` + `onBeforeUnmount → removeEventListener` (mirror `ContextMenu.vue`).
 - ❌ `addEventListener` в `onMounted` без соответствующего `removeEventListener` в `onBeforeUnmount`. Component re-mount (HMR, route navigation) накапливает duplicate listeners на `document` / `window`.
 
+## Framework выбор
+
+- ❌ Предлагать миграцию с Electron на Tauri / Wails / Neutralino. Решение
+  зафиксировано экспериментом 2026-05-19: на Windows экономия RAM 24% при цене
+  3-6 недель работы; на Linux WebKitGTK ломает TipTap в Eden. Полное обоснование
+  с цифрами — [Tauri vs Electron эксперимент](docs-site/experiments/tauri-vs-electron.md).
+  Если у тебя новые данные, опровергающие выводы — поднимай отдельный proof loop,
+  не молча начинай миграцию.
+
 ## Общая дисциплина
 
 - ❌ «Попутно отрефакторил» вместе с задачей. Один логический change — один коммит.

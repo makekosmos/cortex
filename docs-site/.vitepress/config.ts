@@ -67,6 +67,7 @@ export default defineConfig({
       { text: "Концепты", link: "/concepts/architecture" },
       { text: "Приложения", link: "/apps/" },
       { text: "Пакеты", link: "/packages/" },
+      { text: "Эксперименты", link: "/experiments/" },
       { text: "Справочник", link: "/reference/rules" },
     ],
 
@@ -160,6 +161,15 @@ export default defineConfig({
           ],
         },
       ],
+      "/experiments/": [
+        {
+          text: "Эксперименты",
+          items: [
+            { text: "Обзор", link: "/experiments/" },
+            { text: "Tauri vs Electron (2026-05)", link: "/experiments/tauri-vs-electron" },
+          ],
+        },
+      ],
       "/reference/": [
         {
           text: "Справочник",
@@ -167,7 +177,6 @@ export default defineConfig({
             { text: "Правила репозитория", link: "/reference/rules" },
             { text: "Smoke-матрица ARK", link: "/reference/smoke-matrix" },
             { text: "Журнал решений (ADR)", link: "/reference/decisions" },
-            { text: "Эксперименты", link: "/reference/experiments" },
             { text: "Глоссарий", link: "/reference/glossary" },
             { text: "Команды и скрипты", link: "/reference/commands" },
             { text: "llms.txt (manifest)", link: "/llms.txt", target: "_blank" },

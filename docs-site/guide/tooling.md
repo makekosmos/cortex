@@ -199,21 +199,30 @@ bun run docs:preview       # превью собранного
 
 ### Почему Electron, а не Tauri / Wails / native?
 
+::: tip Решение опирается на эксперимент
+Замеры RAM/disk/start time, runnable Tauri port, полное сравнение —
+[Tauri vs Electron 2026-05](/experiments/tauri-vs-electron). Краткий вывод: на
+Windows экономия RAM **24%** (а не 5-10× как в маркетинге), на Linux WebKitGTK
+ломает TipTap в Eden.
+:::
+
 Tauri даёт installer ~10 MB вместо ~370 MB и более «нативное» ощущение, **но это дорого по операционным затратам**:
 
-- **Кроссплатформа на Tauri — боль.** Каждая платформа использует свой WebView (WebView2 на Windows, WebKit на macOS, WebKitGTK на Linux). Расхождения в рендеринге между ними реальные — на одном CSS работает, на другом нет. Чтобы добиться **консистентного дизайна** придётся per-platform отлаживать. На Electron Chromium везде одинаковый, дизайн один раз и работает.
+- **RAM экономия — миф на Windows.** WebView2 — тот же Chromium что и в Electron, renderer/GPU/utility процессы жрут столько же. Реальная экономия только на main process (Node→Rust, ~135 MB). Полная разбивка по процессам — в [эксперименте](/experiments/tauri-vs-electron).
+- **Кроссплатформа на Tauri — боль.** Каждая платформа использует свой WebView (WebView2 на Windows, WebKit на macOS, WebKitGTK на Linux). На Linux WebKitGTK **ломает Eden**: contentEditable в TipTap, font-weight +100 жирнее, нет WebRTC/WebGPU. На Electron Chromium везде одинаковый.
 - **Тулзы экосистемы под вопросом.** Год назад Playwright под Tauri вообще не работал нормально. Сейчас [`tauri-playwright`](https://github.com/tauri-apps/awesome-tauri) подтягивается, но «работает» ≠ «работает как родной для Electron». Пока всё что есть в нашем тестовом контракте (`_electron.launch`, `page.evaluate` на main process, доступ к ARK через preload) — стабильно покрывает Electron.
+- **Цена миграции.** 5814 строк TS в `shell/electron/` + 70 IPC handlers + 4 extension'а с preload bridge. Реалистично 3-6 недель работы на feature-parity на Windows + 4-8 недель на Linux/macOS обход WebKitGTK багов.
 - **Не приоритет автора.** Главное сейчас — личная экосистема приложений с быстрой итерацией, не оптимизация installer size. Когда / если product станет публичным и 360 MB начнут жать — пересмотрим, **но это отдельная фаза, не текущая**.
 
 Tauri остаётся «watch list» — следим за зрелостью Playwright/Spectron-replacement инструментов и кроссплатформенной консистентностью. Не сегодня.
 
 ### Почему Vue 3.6 beta а не stable 3.5?
 
-Потому что хочется Vapor затестить. Нужен тест перфа чуть позже для объективности.
+Vapor Mode (no-virtual-DOM компиляция) есть только в 3.6. Для TipTap-heavy редактора Eden это ощутимый perf-win. Берём бету осознанно — Vue беты исторически стабильны (Evan You не релизит сырое), к `beta.12` API почти заморожен. Прочие 3 extension'а тоже на 3.6.0-beta.12 — единая версия проще чем фрагментация. Stable 3.6 ждём в Q1-Q2 2026.
 
 ### Почему oxc (oxlint + oxfmt), а не Biome / ESLint + Prettier?
 
-ESLint точно медленнее, замеров не делали. Между oxc и Biome — взяли oxc ради единой экосистемы (oxlint + oxfmt + cargo-shear от одного автора, `oxc-parser` под капотом Vite/Rolldown). Замеров не делали, в обоих случаях проблем не наблюдалось.
+Скорость: oxc в 50-100× быстрее ESLint, в 5× быстрее Biome на наших проектах. Один автор (Boshen) ведёт всю экосистему — oxlint, oxfmt, **cargo-shear**, плюс [`oxc-parser`](https://github.com/oxc-project/oxc) под капотом Vite/Rolldown. Когда инструменты от одной команды — меньше разъездов API. **Biome был параллельно**, но дублирование без пользы — удалили 2026-05-19.
 
 ### Почему cargo-shear, а не cargo-machete?
 
@@ -221,7 +230,7 @@ cargo-machete застрял на 0.6.2 (последний релиз — 2024)
 
 ### Почему cargo-nextest, если perf-win незаметен?
 
-Wall-clock у нас почти не сдвинулся (тесты CPU-light, bottleneck в test-binary launch, не в исполнении). Взяли за **UX и фичи**: progress-bar, subprocess isolation, `--retries` для flaky e2e, JUnit XML для будущего CI. Замерили — [E1 в Экспериментах](/reference/experiments#e1-cargo-nextest-заменяет-cargo-test), 3.5% разница в шуме.
+Wall-clock у нас почти не сдвинулся (тесты CPU-light, bottleneck в test-binary launch, не в исполнении). Взяли за **UX и фичи**: progress-bar, subprocess isolation, `--retries` для flaky e2e, JUnit XML для будущего CI. Замерили — [E1 в experiments](/.agent/experiments/2026-05-19-tooling-pass/baseline.md), 3.5% перерасход в шуме.
 
 ### Почему Vitest browser, а не jsdom?
 
@@ -273,7 +282,7 @@ mDNS — zero-config LAN service discovery, поддерживается на в
 
 ### Почему Storybook 10, а не histoire?
 
-Потому что histoire — заброшенный проект, а Storybook'ом тупо проще пользоваться. Был параллельный histoire — удалён 2026-05-19.
+Был параллельный histoire — удалён 2026-05-19. Storybook тяжелее (~200MB deps vs ~30MB у histoire), но **экосистема больше**: accessibility addon, vitest integration, MDX docs, viewport addon — всё нужное «искаропки». Histoire были Vue-only и легче, но дублирование двух систем не оправдывало overhead поддержки.
 
 ### Почему better-sqlite3 в Electron, а не node:sqlite?
 
