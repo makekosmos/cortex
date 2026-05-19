@@ -30,6 +30,7 @@
     <DesktopChrome
       class="app-shell"
       :platform="chromePlatform"
+      @dblclick="onChromeDblClick"
     >
       <template #titlebar-leading>
         <template v-if="!layout.isZenMode">
@@ -263,6 +264,25 @@ const entryMenu = useContextMenu<string>();
 
 function onEntryContextMenu(event: MouseEvent, entryId: string) {
   entryMenu.open(event, entryId);
+}
+
+/**
+ * Двойной клик по titlebar в zen mode → docked-widget mode:
+ * always-on-top + top-right corner + compact size. Повторный dblclick
+ * вернёт окно в normal. Вне zen mode — native dblclick maximize, мы не
+ * мешаем.
+ *
+ * Целимся в DesktopChrome через event.target: dblclick должен прилететь
+ * с `.kosmos-titlebar` (drag region) — клик внутри content не доковит.
+ */
+function onChromeDblClick(event: MouseEvent) {
+  if (!layout.isZenMode) return;
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.closest(".kosmos-titlebar")) return;
+  void (window as unknown as {
+    kepler?: { window?: { toggleDockCorner?: () => Promise<void> } };
+  }).kepler?.window?.toggleDockCorner?.();
 }
 
 async function onDeleteContextEntry() {

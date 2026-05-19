@@ -982,6 +982,58 @@ ipcMain.handle("kepler:extension:window:is-maximized", (e): boolean => {
   return win ? win.isMaximized() : false;
 });
 
+// "Dock corner" — toggle между floating-widget mode (always-on-top,
+// compact size, top-right corner) и обычным окном (восстановленный bounds).
+// Используется Eden в zen mode по двойному клику на titlebar — превращает
+// дневник в всегда-видимый mini-widget. Повторный dblclick возвращает.
+const dockedState = new Map<
+  string,
+  { x: number; y: number; width: number; height: number; alwaysOnTop: boolean }
+>();
+const DOCK_WIDTH = 360;
+const DOCK_HEIGHT = 560;
+const DOCK_MARGIN = 12;
+
+ipcMain.handle("kepler:extension:window:toggle-dock-corner", (e) => {
+  const id = extensionIdForSender(e.sender);
+  const win = windowForSender(e.sender);
+  if (!id || !win || win.isDestroyed()) return;
+
+  const stored = dockedState.get(id);
+  if (stored) {
+    // Undock: restore.
+    win.setAlwaysOnTop(stored.alwaysOnTop);
+    win.setBounds({
+      x: stored.x,
+      y: stored.y,
+      width: stored.width,
+      height: stored.height,
+    });
+    dockedState.delete(id);
+    return;
+  }
+
+  // Dock: save current bounds + переместить в top-right.
+  const current = win.getNormalBounds();
+  dockedState.set(id, {
+    x: current.x,
+    y: current.y,
+    width: current.width,
+    height: current.height,
+    alwaysOnTop: win.isAlwaysOnTop(),
+  });
+
+  if (win.isMaximized()) win.unmaximize();
+  const workArea = screen.getPrimaryDisplay().workArea;
+  win.setBounds({
+    x: workArea.x + workArea.width - DOCK_WIDTH - DOCK_MARGIN,
+    y: workArea.y + DOCK_MARGIN,
+    width: DOCK_WIDTH,
+    height: DOCK_HEIGHT,
+  });
+  win.setAlwaysOnTop(true, "floating");
+});
+
 // ---------------------------------------------------------------------------
 // IPC: host-action (extension → kepler-shell host action)
 // ---------------------------------------------------------------------------

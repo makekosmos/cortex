@@ -58,6 +58,10 @@ const api = {
       ipcRenderer.invoke("kepler:extension:window:maximize"),
     isMaximized: (): Promise<boolean> =>
       ipcRenderer.invoke("kepler:extension:window:is-maximized") as Promise<boolean>,
+    /** Toggle floating-widget mode: always-on-top + top-right corner.
+        Повторный вызов возвращает окно в исходное положение. */
+    toggleDockCorner: (): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:window:toggle-dock-corner"),
     onMaximizedChange: (
       handler: (isMaximized: boolean) => void,
     ): Unsubscribe => {
