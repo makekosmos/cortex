@@ -15,6 +15,7 @@
     <div
       class="task-ref-row"
       contenteditable="false"
+      @mousedown.stop
       @contextmenu.prevent="openContextMenu"
     >
       <TaskStatusIcon
@@ -22,6 +23,7 @@
         :status="status"
         :disabled="loading || missing"
         :aria-label="TASK_STATUS_LABELS[status]"
+        @mousedown.stop
         @click="toggleDoneStatus"
       />
       <!-- Always-input pattern: ноль mode toggle между display и edit,
@@ -50,6 +52,7 @@
         class="task-ref-open"
         type="button"
         title="Открыть задачу"
+        @mousedown.stop
         @click.stop="openTaskPage"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">

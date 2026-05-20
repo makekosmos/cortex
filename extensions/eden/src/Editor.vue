@@ -1387,11 +1387,24 @@ watchEffect((onCleanup) => {
   // Active только когда есть selection — guard внутри onWindowKeyDown.
   window.addEventListener("keydown", onWindowKeyDown);
 
+  // Global mousedown listener — clearSelection на ЛЮБОЙ mousedown в окне
+  // (capture phase, чтобы отработать до bubble-cancellation от внутренних
+  // элементов с `@mousedown.stop` типа task-ref-row). Покрывает кейс
+  // когда юзер кликает по чекбоксу/inside TaskRef row — там mousedown
+  // не доходит до editor-content-area (.stop на row).
+  const handleGlobalMouseDown = () => {
+    if (blockSelection.hasSelection.value) {
+      blockSelection.clearSelection();
+    }
+  };
+  window.addEventListener("mousedown", handleGlobalMouseDown, { capture: true });
+
   onCleanup(() => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     window.removeEventListener("keydown", onWindowKeyDown);
     window.removeEventListener("mousemove", onWindowMouseMove);
+    window.removeEventListener("mousedown", handleGlobalMouseDown, { capture: true } as EventListenerOptions);
   });
 });
 
