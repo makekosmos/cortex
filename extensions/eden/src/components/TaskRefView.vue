@@ -315,18 +315,19 @@ async function commitAndCreateNew(): Promise<void> {
   await commitInputValue();
 
   const editor = props.editor as {
-    state: { schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } }; tr: unknown };
+    state: { schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } } };
     view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
-    options: { getSourceNoteId?: () => string | null };
   };
+  // TaskRef extension options — на props.extension, а не на editor.options
+  // (editor.options — это EditorOptions, не extension-specific).
+  const extension = props.extension as { options?: { getSourceNoteId?: () => string | null } } | undefined;
   const getPos = props.getPos;
   const node = props.node as { nodeSize: number };
   if (typeof getPos !== "function") return;
   const myPos = getPos();
   if (typeof myPos !== "number") return;
 
-  // Get source note id для нового task_obj.
-  const sourceNoteId = editor.options.getSourceNoteId?.() ?? null;
+  const sourceNoteId = extension?.options?.getSourceNoteId?.() ?? null;
   if (!sourceNoteId) {
     console.warn("[eden TaskRef] commitAndCreateNew: no sourceNoteId");
     return;

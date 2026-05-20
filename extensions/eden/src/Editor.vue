@@ -291,15 +291,17 @@ function onContentMouseDown(e: MouseEvent): void {
 function onWindowMouseMove(e: MouseEvent): void {
   const result = blockSelection.updateDrag(e.clientX, e.clientY);
   if (result === "activated" && editor.value) {
-    // Drag только что активировался: блюрим PM + collapse selection,
-    // чтобы native ::selection не рисовался поверх block-overlay.
-    // Anytype эквивалент: `focus.clear(true)`.
     blockSelection.collapseEditorSelection(editor.value);
   }
   if (result !== null) {
-    // Пока drag активен — запрещаем дефолтное text-selection-extension
-    // браузера (browser native selection через границы блоков).
     e.preventDefault();
+    // Continuous removeAllRanges пока drag активен. Browser/PM пытаются
+    // переустановить native Range на каждый mousemove (mouse button
+    // held = drag mode), removeAllRanges на activation один раз
+    // недостаточно — текстовое выделение возвращается. Чистим каждый
+    // фрейм пока drag не отпустят.
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) sel.removeAllRanges();
   }
 }
 
