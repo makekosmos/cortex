@@ -1,15 +1,71 @@
-# Kosmos — статус проекта (2026-05-18)
+# Kosmos — статус проекта (2026-05-20)
 
 ## Текущие версии
 
 | Артефакт | Версия |
 |---|---|
-| Kepler shell (`shell/package.json`) | **0.1.16** (bump в этом коммите) |
-| Horologion extension (`extensions/horologion/manifest.json`) | **0.1.4** |
-| Delphi extension | 0.1.1 |
-| Arrancador extension | 0.1.1 |
-| Eden extension (`extensions/eden/manifest.json`) | **0.1.0** (Phase 6.0 + 6.0.A) |
+| Kepler shell (`shell/package.json`) | **0.2.1** |
+| Eden extension (`extensions/eden/manifest.json`) | **0.1.8** (Pattern B + Anytype-style block selection + Linear statuses) |
+| Delphi extension | **0.1.3** (live ARK sync + «Когда-нибудь» tab) |
+| Horologion extension | **0.1.5** |
+| Arrancador extension | **0.1.3** |
 | Dashboard | встроен в shell (не extension) |
+
+## 2026-05-20 — Eden Pattern B + Anytype block selection (Kepler 0.2.0 → 0.2.1)
+
+Большая итерация по Eden и cross-extension инфраструктуре.
+
+### Eden 0.1.0 → 0.1.8: TipTap TaskList → Pattern B (task = object)
+
+- **TipTap TaskList → TaskRef NodeView** (Pattern B refactor): task в заметке = ссылка
+  на `task_obj` в ARK, не дубликат текста. Vue NodeView подписан на ARK
+  `object_upserted`/`object_deleted` events, live обновляется когда Delphi меняет
+  task. Title редактируется inline в input. Single click — открыть, Backspace
+  на пустом — soft-delete.
+- **Linear-style 5 статусов задач**: triage (default для новых) / backlog / todo /
+  done / canceled. ПКМ-меню для выбора. Custom SVG icons на TaskStatusIcon.vue.
+- **Anytype-style rubber-band block selection**: composable `useBlockSelection`,
+  document-level mouse handlers с 20px threshold + block-crossing activation
+  (drag в одной строке = native text select, drag через блоки = rubber-band).
+  Visual через PM Decoration API (не direct DOM mutation — стирается на PM
+  re-render). Esc clears, Delete удаляет блоки (для taskRef + soft-delete task_obj).
+- **`/задача` и `- [ ]` markdown shortcut** создают TaskRef.
+- **Persist state**: zen mode + last visited entry в localStorage. Reload
+  возвращает в ту же заметку в том же режиме.
+- **Char counter в zen mode**: IBM Plex Mono, fully transparent footer +
+  border-top при scroll, padding-bottom редактору чтобы text упирался выше.
+- **Brand orange каретка** для всех inputs/contenteditable.
+- **CSS dedupe**: убраны 4 копии `.ProseMirror > * + *` правила, merge resize-handle
+  3 копий, reset `<p>` margin. Unified 2px inter-block gap.
+
+### Foundation (ark-core + shell)
+
+- **`ark-core` local `entity_changed` events**: до 2026-05-20 эмитились только
+  на sync-incoming изменения; теперь и на локальные `upsert_object` /
+  `delete_object`. Cross-app live reactivity (Eden TaskRef ↔ Delphi list) теперь
+  работает без specific protocols.
+- **`ws_server` forward** ark-core events клиентам — был latent gap,
+  forward'ились только command_bus + pomodoro events.
+- **Shell: focus existing extension window** на повторный invoke. Включая
+  minimized/hidden cases через AOT-toggle workaround для Win32
+  `SetForegroundWindow` restriction. Применимо ко всем extension'ам.
+
+### Delphi 0.1.1 → 0.1.3
+
+- **Live sync через ARK events**: подписка на `object_upserted` для `task_obj`
+  → refresh task list. Eden создаёт/меняет задачу — Delphi мгновенно видит.
+- **Вкладка «Когда-нибудь»** в sidebar — задачи с `propsJson.status === "backlog"`
+  (плюс legacy `isSomeday`). Иконка Archive.
+
+### Visuals
+
+- Новый primitive `Checkbox` — outline + inner filled square (Delphi
+  `.check-box` parity). Brand accent через CSS var override (Eden — orange).
+
+### Tooling
+
+- Drive-by fix `scripts/ark-smoke.mjs` — Windows quote bug при `shell:true` +
+  пробелы в path к `node.exe`.
 
 ## 2026-05-18 — performance sweep + UX полировка (Kepler 0.1.10 → 0.1.16)
 

@@ -1,7 +1,7 @@
 {
   "name": "@kosmos/extension-delphi",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Delphi task management — Vue extension для Kepler shell.",
   "//": "Workspace deps (@kosmos/*) приходят через alias'ы в shared vite.extensions.config.mjs, не через npm-resolve. Этот package.json существует только для local `bun install` чтобы получить runtime деп'ы (pinia, vue-router, tailwind-стек, reka-ui), которых нет в hoisted kepler-shell/node_modules.",
