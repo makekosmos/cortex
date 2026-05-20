@@ -301,52 +301,80 @@ function commitAndBlur(): void {
  * (Obsidian-pattern для checked list items). Если current task пустая —
  * выходим из task mode вместо создания (стандартный escape поведение).
  */
-async function commitAndCreateNew(): Promise<void> {
-  // Если текущая task пустая — Enter = «выход из task'ов», создаём
-  // обычный параграф ниже + фокус.
-  if (titleInputValue.value.trim() === "") {
-    exitToNewParagraph();
-    return;
+// Re-entry guard: typematic Enter / IME / queued events могут вызвать
+// commitAndCreateNew дважды пока первый ещё await'ит patchTask, и каждый
+// делает insert → 2 пустых taskRef'а вместо одной. Flag блокирует.
+let creatingNew = false;
+
+function commitAndCreateNew(): void {
+  if (creatingNew) return;
+  creatingNew = true;
+  try {
+    // Пустая task → Enter = «выход в обычный параграф» (Obsidian pattern).
+    if (titleInputValue.value.trim() === "") {
+      exitToNewParagraph();
+      return;
+    }
+
+    const editor = props.editor as {
+      state: { schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } } };
+      view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
+    };
+    const extension = props.extension as { options?: { getSourceNoteId?: () => string | null } } | undefined;
+    const sourceNoteId = extension?.options?.getSourceNoteId?.() ?? null;
+    if (!sourceNoteId) {
+      console.warn("[eden TaskRef] commitAndCreateNew: no sourceNoteId");
+      return;
+    }
+
+    // SYNC flow: getPos сейчас, insert сейчас, async writes — потом.
+    // Раньше был await commitInputValue() до getPos — это создавало
+    // 50-150ms окно re-entry, второй Enter → второй insert.
+    const getPos = props.getPos;
+    if (typeof getPos !== "function") return;
+    const myPos = getPos();
+    if (typeof myPos !== "number") {
+      console.warn("[eden TaskRef] commitAndCreateNew: stale getPos");
+      return;
+    }
+    const node = props.node as { nodeSize: number };
+    const insertPos = myPos + node.nodeSize;
+
+    const newTaskId = crypto.randomUUID();
+    const newNode = editor.state.schema.nodes.taskRef?.create({
+      taskId: newTaskId,
+      autoFocus: true,
+    });
+    if (!newNode) return;
+
+    // 1. SYNC insert — ничего не await'ится, нет окна re-entry.
+    const tr = editor.view.state.tr.insert(insertPos, newNode);
+    editor.view.dispatch(tr);
+
+    // 2. Optimistic local commit + background async ARK writes —
+    //    fire-and-forget. NodeView новой task'и retry'ит loadTask
+    //    пока createTask не завершится.
+    // Захватываем OLD title до set, чтобы потом сравнить (иначе мы
+    // зануляем diff и patch никогда не отрабатывает).
+    const localTitle = titleInputValue.value.trim();
+    const oldDisplayTitle = displayValueFromTitle(title.value);
+    title.value = localTitle || EMPTY_PLACEHOLDER_TITLE;
+    const currentTaskId = taskId.value;
+    void edenApi.createTask(sourceNoteId, "", newTaskId).catch((err) => {
+      console.warn("[eden TaskRef] createTask failed", err);
+    });
+    if (currentTaskId && localTitle !== oldDisplayTitle) {
+      void edenApi.patchTask(currentTaskId, { title: localTitle }).catch((err) => {
+        console.warn("[eden TaskRef] patchTask failed", err);
+      });
+    }
+  } finally {
+    // Snapshot creatingNew clear в next tick, чтобы успеть пройти
+    // potential re-entry events на этом же микро-такте.
+    nextTick(() => {
+      creatingNew = false;
+    });
   }
-
-  const editor = props.editor as {
-    state: { schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } } };
-    view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
-  };
-  const extension = props.extension as { options?: { getSourceNoteId?: () => string | null } } | undefined;
-  const sourceNoteId = extension?.options?.getSourceNoteId?.() ?? null;
-  if (!sourceNoteId) {
-    console.warn("[eden TaskRef] commitAndCreateNew: no sourceNoteId");
-    return;
-  }
-
-  // Pre-generate UUID + async create task_obj. Async create не блокирует
-  // sync insertion node (race покроет NodeView retry в loadTask).
-  const newTaskId = crypto.randomUUID();
-  void edenApi.createTask(sourceNoteId, "", newTaskId);
-
-  // ВАЖНО: await commit BEFORE re-fetching myPos. Patch task_obj
-  // диспатчит tr → positions могут shift'нуться. Берём актуальную
-  // позицию ПОСЛЕ commit.
-  await commitInputValue();
-
-  const getPos = props.getPos;
-  if (typeof getPos !== "function") return;
-  const myPos = getPos();
-  if (typeof myPos !== "number") {
-    console.warn("[eden TaskRef] commitAndCreateNew: stale getPos");
-    return;
-  }
-  const node = props.node as { nodeSize: number };
-
-  const insertPos = myPos + node.nodeSize;
-  const newNode = editor.state.schema.nodes.taskRef?.create({
-    taskId: newTaskId,
-    autoFocus: true,
-  });
-  if (!newNode) return;
-  const tr = editor.view.state.tr.insert(insertPos, newNode);
-  editor.view.dispatch(tr);
 }
 
 /**

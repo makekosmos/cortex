@@ -207,23 +207,37 @@ export function useBlockSelection() {
     const dy = Math.abs(clientY - startY);
     const wasMoved = hasMoved;
     if (!hasMoved) {
-      // Threshold check.
-      if (dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
-        return null;
-      }
-      // Block-crossing check: если mousedown был на блоке И курсор всё
-      // ещё в том же блоке — НЕ активируем drag, даём PM делать native
-      // text selection (юзер копирует кусок текста в одной строке).
-      // Активируем только если cursor вышел в другой блок или margin
-      // (или если mousedown изначально был в margin — startBlockPos null).
+      // Block-crossing check ПЕРВОЙ — если cursor уже ушёл в ДРУГОЙ
+      // блок относительно mousedown'а, активируем drag НЕЗАВИСИМО от
+      // threshold. Task-row высотой 26px: drag вниз на ~13px уже
+      // оказывается в следующем блоке, но dy < 20 threshold — раньше
+      // блокировался. Теперь — block boundary crossed = drag intent
+      // unambiguous, активируем сразу.
       if (startBlockPos !== null) {
         const currentBlock = findBlockAtY(clientY);
-        if (currentBlock === startBlockPos) {
-          return null;
+        if (currentBlock !== startBlockPos) {
+          // crossed block boundary → activate immediately
+          hasMoved = true;
         }
       }
+      if (!hasMoved) {
+        // Same block (или mousedown в margin'е и не двинулся к другому
+        // блоку) — нужен 20px threshold для отличия click от accidental
+        // drag.
+        if (dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
+          return null;
+        }
+        // Threshold passed, но всё ещё в том же блоке — НЕ активируем,
+        // даём PM делать native text-selection в одной строке.
+        if (startBlockPos !== null) {
+          const currentBlock = findBlockAtY(clientY);
+          if (currentBlock === startBlockPos) {
+            return null;
+          }
+        }
+        hasMoved = true;
+      }
     }
-    hasMoved = true;
     const justActivated = !wasMoved;
 
     const x = Math.min(startX, clientX);

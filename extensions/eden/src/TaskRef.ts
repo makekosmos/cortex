@@ -10,6 +10,7 @@
 
 import { Node, mergeAttributes, nodeInputRule } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
+import { Plugin } from "@tiptap/pm/state";
 import TaskRefView from "./components/TaskRefView.vue";
 import { edenApi } from "@/lib/edenApi";
 
@@ -101,6 +102,32 @@ export const TaskRef = Node.create<TaskRefOptions>({
   // подсвечен ли через reactive ref. Это надёжнее чем ProseMirror
   // `Decoration.node`: Vue NodeView перерисовывает wrapper и теряет класс
   // декорации (Decoration.node ставит attr на outer DOM, но Vue им рулит).
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          /**
+           * Defense-in-depth: если PM получает keydown Enter когда фокус
+           * на `<input class="task-ref-title-input">` (через любой обходной
+           * путь — Vue handler не отработал, NodeView.stopEvent override
+           * сломан, etc.), возвращаем true чтобы PM keymap chain
+           * (createParagraphNear / splitBlock) не запускался. Vue handler
+           * уже сделал свою работу — создал новую task, нам не нужны
+           * параллельные PM operations.
+           */
+          handleKeyDown(_view, event) {
+            if (event.key !== "Enter") return false;
+            const target = event.target as HTMLElement | null;
+            if (target?.classList?.contains("task-ref-title-input")) {
+              return true;
+            }
+            return false;
+          },
+        },
+      }),
+    ];
+  },
 
   addInputRules() {
     const getSourceNoteId = this.options.getSourceNoteId;
