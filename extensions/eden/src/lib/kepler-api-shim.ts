@@ -10,6 +10,7 @@
 // Phase 6.0.A (2026-05-17): code tools / vault picker / export — удалены.
 // Trash работает поверх ARK soft-delete (deletedAt != null).
 
+import { normalizeStatus, type TaskStatus } from "./taskStatus";
 import {
   normalizeSlug,
   noteTypeSchema,
@@ -876,7 +877,11 @@ export async function getTask(taskId: string): Promise<ArkObjectRecord | null> {
  */
 export async function patchTask(
   taskId: string,
-  patch: { title?: string; isCompleted?: boolean },
+  patch: {
+    title?: string;
+    isCompleted?: boolean;
+    status?: TaskStatus;
+  },
 ): Promise<void> {
   const existing = await ark<ArkObjectRecord | null>("get_object", { id: taskId });
   if (!existing) {
@@ -886,10 +891,36 @@ export async function patchTask(
   const now = new Date().toISOString();
   const props = (existing.propsJson ?? {}) as Record<string, unknown>;
   const nextProps = { ...props };
-  if (patch.isCompleted !== undefined) {
-    nextProps.is_completed = patch.isCompleted;
-    nextProps.completed_at = patch.isCompleted ? now : null;
+
+  // Resolve next status. Если caller передал status — это source of truth.
+  // Если только isCompleted — derive todo↔done. Иначе оставить existing.
+  let nextStatus: TaskStatus;
+  if (patch.status !== undefined) {
+    nextStatus = patch.status;
+  } else if (patch.isCompleted !== undefined) {
+    nextStatus = patch.isCompleted ? "done" : "todo";
+  } else {
+    nextStatus = normalizeStatus({
+      status: props.status,
+      is_completed: props.is_completed,
+      is_cancelled: props.is_cancelled,
+    });
   }
+
+  nextProps.status = nextStatus;
+  nextProps.is_completed = deriveCompletedFlag(nextStatus);
+  nextProps.is_cancelled = deriveCancelledFlag(nextStatus);
+  if (deriveCompletedFlag(nextStatus) && !props.completed_at) {
+    nextProps.completed_at = now;
+  } else if (!deriveCompletedFlag(nextStatus)) {
+    nextProps.completed_at = null;
+  }
+  if (deriveCancelledFlag(nextStatus) && !props.cancelled_at) {
+    nextProps.cancelled_at = now;
+  } else if (!deriveCancelledFlag(nextStatus)) {
+    nextProps.cancelled_at = null;
+  }
+
   // Если patch явно указал title — нормализуем (пустой/whitespace → placeholder),
   // иначе оставляем existing. Без этого Delphi показывает empty-row.
   const nextTitle = patch.title !== undefined
@@ -918,6 +949,16 @@ export async function patchTask(
  * этот placeholder; Delphi покажет читаемое название вместо пустоты.
  */
 const EDEN_EMPTY_TASK_TITLE = "Пустая задача";
+
+// Derived flags from status — single source of truth: propsJson.status.
+// is_completed / is_cancelled остаются для Delphi back-compat (Delphi
+// читает их в `arkTaskObjectToTodo`).
+function deriveCompletedFlag(status: TaskStatus): boolean {
+  return status === "done";
+}
+function deriveCancelledFlag(status: TaskStatus): boolean {
+  return status === "canceled" || status === "duplicate";
+}
 
 export async function createTask(
   sourceNoteId: string,
@@ -948,6 +989,10 @@ export async function createTask(
         is_cancelled: false,
         cancelled_at: null,
         is_trashed: false,
+        // Linear-style status (2026-05-20): single source of truth для
+        // жизненного цикла задачи. is_completed/is_cancelled derive'ятся
+        // из status в patchTask.
+        status: "todo",
         sort_order: 0,
         heading_id: null,
         project_id: null,
