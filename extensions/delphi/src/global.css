@@ -83,3 +83,8 @@ li {
 #app {
   contain: layout style;
 }
+
+/* Caret color = brand accent (var --accent из visuals для Delphi). */
+* {
+  caret-color: var(--accent);
+}

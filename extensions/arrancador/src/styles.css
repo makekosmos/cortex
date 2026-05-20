@@ -478,3 +478,8 @@ input {
   line-height: 1.5;
   color: var(--foreground);
 }
+
+/* Caret color = brand accent. */
+* {
+  caret-color: var(--accent);
+}

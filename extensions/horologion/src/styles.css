@@ -54,6 +54,11 @@ body,
   border: 2px solid transparent;
   background-clip: padding-box;
 }
+/* Caret color = horologion brand accent (фиолетовый). */
+* {
+  caret-color: var(--horologion-accent);
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--foreground) 35%, transparent);
   background-clip: padding-box;

@@ -172,4 +172,11 @@ input {
   font-family: inherit;
 }
 
+/* Caret color = brand accent для всего extension'а. Eden — orange.
+   Применяется ко всему: contentEditable (ProseMirror text), input,
+   textarea. */
+* {
+  caret-color: var(--eden-accent-color);
+}
+
 /* Скроллбар наследуется глобально из @kosmos/visuals/theme/css. */
