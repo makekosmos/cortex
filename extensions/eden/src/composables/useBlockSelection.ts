@@ -103,8 +103,18 @@ export function useBlockSelection() {
   }
 
   /**
-   * Принудительно очистить PM selection — вызывается из Editor.vue когда
-   * drag только что активировался. Anytype эквивалент: `focus.clear(true)`.
+   * Принудительно очистить PM selection + native browser selection —
+   * вызывается из Editor.vue когда drag только что активировался.
+   * Anytype эквивалент: `focus.clear(true)` + selection-ranges'й
+   * `removeAllRanges()`.
+   *
+   * Три шага (в этом порядке):
+   * 1. PM TextSelection collapse — обновляет PM model.
+   * 2. `editor.commands.blur()` — снимает focus с contentEditable.
+   * 3. `window.getSelection().removeAllRanges()` — убирает browser
+   *    native Range (главное!). Без этого `::selection` продолжает
+   *    рисоваться на тексте даже после PM-blur'а, потому что
+   *    браузерный Range живёт независимо от PM TextSelection.
    */
   function collapseEditorSelection(editor: TiptapEditor): void {
     if (!editor.state.selection.empty) {
@@ -114,6 +124,11 @@ export function useBlockSelection() {
       editor.view.dispatch(tr);
     }
     editor.commands.blur();
+    // Browser-level: разрушаем native Range. Это убирает visible
+    // ::selection на тексте. PM не делает это автоматически — он держит
+    // свою TextSelection, а браузерный Range отдельный артефакт.
+    const sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
   }
 
   // Container nodes — выделять как ОДНО целое не имеет смысла, юзер хочет
