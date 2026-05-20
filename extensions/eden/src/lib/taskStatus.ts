@@ -15,7 +15,6 @@ export const TASK_STATUSES = [
   "in_progress",
   "done",
   "canceled",
-  "duplicate",
 ] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
@@ -29,7 +28,6 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   in_progress: "В работе",
   done: "Готово",
   canceled: "Отменена",
-  duplicate: "Дубликат",
 };
 
 /**
@@ -38,14 +36,13 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
  *   Title без strikethrough, checkbox outline.
  * - "completed" — done. Title затемнён. Checkbox filled accent. Опасити
  *   опускается на весь row.
- * - "terminated" — canceled / duplicate. Title strikethrough. Checkbox
- *   filled gray (muted).
+ * - "terminated" — canceled. Title strikethrough. Checkbox filled gray.
  */
 export type TaskStatusCategory = "open" | "completed" | "terminated";
 
 export function getStatusCategory(status: TaskStatus): TaskStatusCategory {
   if (status === "done") return "completed";
-  if (status === "canceled" || status === "duplicate") return "terminated";
+  if (status === "canceled") return "terminated";
   return "open";
 }
 
@@ -55,14 +52,20 @@ export function getStatusCategory(status: TaskStatus): TaskStatusCategory {
  *   - is_completed=true → done
  *   - is_cancelled=true → canceled
  *   - else → todo (default)
+ *
+ * Legacy: до 2026-05-20 был статус "duplicate". Если встретим его в
+ * старых tasks — нормализуем к "canceled" (та же семантика terminal-fail).
  */
 export function normalizeStatus(input: {
   status?: unknown;
   is_completed?: unknown;
   is_cancelled?: unknown;
 }): TaskStatus {
-  if (typeof input.status === "string" && (TASK_STATUSES as readonly string[]).includes(input.status)) {
-    return input.status as TaskStatus;
+  if (typeof input.status === "string") {
+    if ((TASK_STATUSES as readonly string[]).includes(input.status)) {
+      return input.status as TaskStatus;
+    }
+    if (input.status === "duplicate") return "canceled";
   }
   if (input.is_completed === true) return "done";
   if (input.is_cancelled === true) return "canceled";

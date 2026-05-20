@@ -10,7 +10,6 @@
 //   in_progress — outline + half-pie (handon)
 //   done        — filled solid + ✓ (terminal success)
 //   canceled    — filled muted + × (terminal not-done)
-//   duplicate   — filled muted + ↗ (terminal duplicate)
 //
 // Цвет акцента переопределяется через CSS var `--task-status-accent` на
 // родителе (Eden подсовывает свой orange).
@@ -33,9 +32,7 @@ const emit = defineEmits<{
 }>();
 
 const isCompleted = computed(() => props.status === "done");
-const isTerminated = computed(
-  () => props.status === "canceled" || props.status === "duplicate",
-);
+const isTerminated = computed(() => props.status === "canceled");
 const dim = computed(() => isCompleted.value || isTerminated.value);
 
 function onClick(e: MouseEvent) {
@@ -132,19 +129,6 @@ function onClick(e: MouseEvent) {
           stroke-linecap="round"
         />
       </template>
-
-      <!-- duplicate: filled muted + → -->
-      <template v-else-if="status === 'duplicate'">
-        <rect x="1.5" y="1.5" width="15" height="15" rx="6" fill="currentColor" />
-        <path
-          d="M5 9 L11 9 M9 7 L11 9 L9 11"
-          stroke="var(--task-status-glyph, #fff)"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          fill="none"
-        />
-      </template>
     </svg>
   </button>
 </template>
@@ -182,9 +166,8 @@ function onClick(e: MouseEvent) {
   color: var(--task-status-accent, var(--accent));
 }
 
-/* Canceled / Duplicate — muted gray fill. */
-.task-status-icon--canceled,
-.task-status-icon--duplicate {
+/* Canceled — muted gray fill. */
+.task-status-icon--canceled {
   color: var(--muted-foreground, #888);
 }
 

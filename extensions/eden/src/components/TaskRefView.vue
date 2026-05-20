@@ -90,7 +90,7 @@ const taskId = computed<string | null>(() => {
 const title = ref("");
 const status = ref<TaskStatus>(TASK_STATUS_DEFAULT);
 const isCompleted = computed(() => status.value === "done");
-const isCancelled = computed(() => status.value === "canceled" || status.value === "duplicate");
+const isCancelled = computed(() => status.value === "canceled");
 const isTerminated = computed(() => getStatusCategory(status.value) !== "open");
 const loading = ref(true);
 const contextMenu = useContextMenu<null>();

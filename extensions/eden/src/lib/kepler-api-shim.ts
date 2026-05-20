@@ -957,7 +957,7 @@ function deriveCompletedFlag(status: TaskStatus): boolean {
   return status === "done";
 }
 function deriveCancelledFlag(status: TaskStatus): boolean {
-  return status === "canceled" || status === "duplicate";
+  return status === "canceled";
 }
 
 export async function createTask(
