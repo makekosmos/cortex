@@ -769,6 +769,44 @@ export function isExtensionRunning(id: string): boolean {
   return !!entry && !entry.win.isDestroyed();
 }
 
+/**
+ * Поднять уже существующее окно extension'а на передний план.
+ *
+ * Why not just `win.focus()`:
+ *   - Если minimized — focus() на Windows не разворачивает окно (Electron
+ *     возвращает focus IF taskbar отвечает; без restore() окно остаётся в трее).
+ *   - Если hidden (`win.isVisible() === false`, например после `win.hide()`) —
+ *     focus() no-op'ает; нужен `show()`.
+ *   - Если Kepler не foreground-app (юзер invoke'нул через global hotkey из
+ *     другого приложения) — Win32 запрещает forceForegroundWindow от
+ *     non-foreground процесса. Стандартный workaround — toggle
+ *     `setAlwaysOnTop(true) → setAlwaysOnTop(false)` за один tick: окно
+ *     поднимается, затем флаг снимается, обычный z-order behavior сохраняется.
+ *
+ * Order matters: restore() → show() → AOT-toggle → focus(). Restore первым,
+ * иначе show()/focus() могут опять прилипнуть к taskbar.
+ */
+function focusExistingExtensionWindow(win: BrowserWindow): void {
+  if (win.isDestroyed()) return;
+  try {
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    // Win32 quirk — toggle AOT чтобы поднять окно на передний план даже когда
+    // Kepler не foreground-app. На macOS/Linux обычно достаточно focus(), но
+    // toggle безопасен (короткая вспышка AOT не визуально заметна).
+    const wasAlwaysOnTop = win.isAlwaysOnTop();
+    if (!wasAlwaysOnTop) {
+      win.setAlwaysOnTop(true);
+      win.setAlwaysOnTop(false);
+    }
+    win.focus();
+    win.moveTop();
+  } catch (e) {
+    // Race: окно могло destroy'нуться между isDestroyed-check и операцией.
+    console.warn("[kepler-shell] focusExistingExtensionWindow failed:", e);
+  }
+}
+
 // Dedupe concurrent openExtension calls для одного и того же id. Без этого
 // два быстрых invoke могли создать два BrowserWindow'а: между existing-check
 // и `extensionWindows.set` теперь есть `await resolveExtensionSource` (probe).
@@ -787,9 +825,15 @@ export function openExtension(id: string, route?: string): Promise<void> {
 async function openExtensionImpl(id: string, route?: string): Promise<void> {
   const existing = extensionWindows.get(id);
   if (existing && !existing.win.isDestroyed()) {
-    if (process.env.KOSMOS_HEADLESS !== "1") existing.win.focus();
+    if (process.env.KOSMOS_HEADLESS !== "1") {
+      focusExistingExtensionWindow(existing.win);
+    }
     if (route) {
-      existing.win.webContents.send("kepler:extension:navigation", route);
+      try {
+        existing.win.webContents.send("kepler:extension:navigation", route);
+      } catch {
+        /* webContents could be torn down between isDestroyed-check и send */
+      }
     }
     return;
   }
