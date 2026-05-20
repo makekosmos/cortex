@@ -361,11 +361,27 @@
   position: relative;
 }
 
-/* Когда drag активен (есть видимый overlay) — отключаем user-select на
-   тексте чтобы не было гонки браузерного text selection поверх нашего
-   block selection. */
-.editor-content-area:has(.block-selection-rect) .ProseMirror {
+/* Block-select active state — toggled JS'ом из Editor.vue watch'а на
+   composable's dragRect + hasSelection. Когда true:
+   - user-select на .ProseMirror отключён (нельзя стартовать native
+     text selection mid-drag поверх block-overlay)
+   - ::selection background сделан прозрачным (если PM по какой-то
+     причине всё-таки имеет TextSelection — native highlight не рисуется)
+
+   Это main fix второй итерации: первый раз native ::selection рисовался
+   на тексте параграфов параллельно с нашим block-overlay, юзер видел
+   inconsistency. Теперь любые native text-selection visual'ы скрыты
+   пока в block-mode. */
+.editor-content-area.kepler-block-select-active .ProseMirror,
+.editor-content-area.kepler-block-select-active .ProseMirror * {
   user-select: none;
+  -webkit-user-select: none;
+}
+
+.editor-content-area.kepler-block-select-active .ProseMirror ::selection,
+.editor-content-area.kepler-block-select-active .ProseMirror *::selection {
+  background: transparent;
+  color: inherit;
 }
 
 .ProseMirror > * + * {

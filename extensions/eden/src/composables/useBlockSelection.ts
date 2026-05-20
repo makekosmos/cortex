@@ -15,6 +15,7 @@
 
 import { computed, ref, shallowRef } from "vue";
 import type { Editor as TiptapEditor } from "@tiptap/vue-3";
+import { TextSelection } from "@tiptap/pm/state";
 
 export interface DragRect {
   /** Видимая часть rect в client coords (для overlay рендера). */
@@ -88,8 +89,20 @@ export function useBlockSelection() {
     startY = clientY;
     containerEl = container;
     cache = collectBlocks(editor);
-    // Не чистим selection сразу — если юзер сделал shift+click pattern в
-    // будущем, можно extend. Пока тоже чистим (как Anytype без модификатора).
+    // Очищаем ProseMirror TextSelection чтобы native ::selection не
+    // рисовался поверх нашего block-overlay. Anytype делает это через
+    // `focus.clear()` (у них contentEditable; PM-эквивалент — collapse
+    // selection в первую точку).
+    if (!editor.state.selection.empty) {
+      const tr = editor.state.tr.setSelection(
+        TextSelection.create(editor.state.doc, editor.state.selection.from),
+      );
+      editor.view.dispatch(tr);
+    }
+    // Также blur — освобождаем focus от contentEditable. Без этого
+    // PM может продолжить трэкать mouse и устанавливать TextSelection
+    // на mousemove.
+    editor.commands.blur();
     clearSelection();
   }
 

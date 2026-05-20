@@ -260,6 +260,13 @@ function onContentMouseDown(e: MouseEvent): void {
   if (!editor.value) return;
   const target = e.target as HTMLElement | null;
   if (!target) return;
+  // Если есть активное block-selection (от прошлого drag'а) — клик где-то
+  // в редакторе очищает её. Если start нового drag'а — clearSelection в
+  // startDrag сработает по-новой; если просто клик на текст — селекшен
+  // снимется и PM обработает click нормально.
+  if (blockSelection.hasSelection.value) {
+    blockSelection.clearSelection();
+  }
   // Игнорируем mousedown'ы которые TipTap должен обработать сам:
   // - клик внутри блочного контента (text node, inline elements внутри
   //   ProseMirror block-level child'а).
@@ -273,6 +280,10 @@ function onContentMouseDown(e: MouseEvent): void {
     return;
   }
   if (!contentAreaRef.value) return;
+  // preventDefault — запрещаем PM ставить focus/caret на этот mousedown.
+  // Без этого PM параллельно с нашим drag'ом устанавливает TextSelection
+  // и native ::selection рисуется поверх block-overlay.
+  e.preventDefault();
   blockSelection.startDrag(editor.value, e.clientX, e.clientY, contentAreaRef.value);
   window.addEventListener("mousemove", onWindowMouseMove);
   window.addEventListener("mouseup", onWindowMouseUp, { once: true });
@@ -313,6 +324,20 @@ function onWindowKeyDown(e: KeyboardEvent): void {
     void blockSelection.deleteSelected(editor.value, edenApi.softDeleteTask);
   }
 }
+
+// Container class toggle — `kepler-block-select-active` ставится когда
+// активен drag ИЛИ есть persisted block selection. CSS этого класса
+// отключает `::selection` и `user-select` в .ProseMirror, чтобы native
+// text selection не рисовался параллельно с нашим block-overlay
+// (это была главная косметическая проблема первой итерации).
+watch(
+  () => blockSelection.dragRect.value !== null || blockSelection.hasSelection.value,
+  (active) => {
+    if (!contentAreaRef.value) return;
+    contentAreaRef.value.classList.toggle("kepler-block-select-active", active);
+  },
+  { flush: "post" },
+);
 
 // Reactive applier: следим за selectedPositions, мутируем DOM ноды
 // напрямую через editor.view.nodeDOM(pos). Работает для leaf-block на
