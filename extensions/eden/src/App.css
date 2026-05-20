@@ -4843,14 +4843,21 @@ span[data-wikilink]:hover {
   letter-spacing: 0.02em;
   pointer-events: none;
   user-select: none;
-  /* Opaque подложка: когда текст редактора скроллит вверх под counter,
-     этот border-top + background перекрывают его. Без подложки text
-     просто просвечивал бы насквозь (counter был `position: fixed` без
-     bg → glyphs текста ниже могли совпадать с counter glyphs). */
-  background: var(--background);
-  border-top: 1px solid color-mix(in srgb, var(--sidebar-foreground) 12%, transparent);
   padding: 6px 12px;
   text-align: center;
+  /* Background — фоновый цвет с прозрачностью (80%). Если за counter'ом
+     ничего нет — почти невидим. Если текст наезжает — становится
+     видимый плотный layer. */
+  background: color-mix(in srgb, var(--background) 80%, transparent);
+  border-top: 1px solid transparent;
+  transition: border-color 150ms ease;
+}
+
+/* Класс `has-overlap` ставится JS'ом в App.vue когда блок editor'а
+   доходит до строки counter'а. Тогда border-top появляется — визуально
+   отделяет counter от наезжающего текста. */
+.eden-char-counter.has-overlap {
+  border-top-color: color-mix(in srgb, var(--sidebar-foreground) 18%, transparent);
 }
 
 .eden-titlebar-title {
