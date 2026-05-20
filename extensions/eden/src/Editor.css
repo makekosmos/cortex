@@ -376,19 +376,14 @@
   color: inherit;
 }
 
+/* Inter-block margin намеренно 0 — единый плотный rhythm как в Anytype.
+   Юзер явно попросил убрать gap между блоками. Если в будущем нужно
+   вернуть — `margin-top: <value>` на `.ProseMirror > * + *` + parity
+   на `[data-task-ref]` (Vue scoped CSS специфичнее общего селектора). */
 .ProseMirror > * + * {
-  margin-top: 1em;
+  margin-top: 0;
 }
-
-/* TaskRef margin parity — Vue scoped CSS на `.task-ref-node` (через
-   data-v-* attr) имеет более высокую специфичность чем общее правило
-   выше, поэтому natural margin-top не применяется. Дублируем явно с
-   высокой специфичностью. Между двумя задачами и между задачей и
-   параграфом — одинаковый gap 1em. */
 .ProseMirror > [data-task-ref] {
-  margin-top: 1em;
-}
-.ProseMirror > [data-task-ref]:first-child {
   margin-top: 0;
 }
 
