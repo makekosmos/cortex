@@ -4832,16 +4832,25 @@ span[data-wikilink]:hover {
 
 .eden-char-counter {
   position: fixed;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 50;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   color: color-mix(in srgb, var(--sidebar-foreground) 55%, transparent);
   letter-spacing: 0.02em;
   pointer-events: none;
   user-select: none;
+  /* Opaque подложка: когда текст редактора скроллит вверх под counter,
+     этот border-top + background перекрывают его. Без подложки text
+     просто просвечивал бы насквозь (counter был `position: fixed` без
+     bg → glyphs текста ниже могли совпадать с counter glyphs). */
+  background: var(--background);
+  border-top: 1px solid color-mix(in srgb, var(--sidebar-foreground) 12%, transparent);
+  padding: 6px 12px;
+  text-align: center;
 }
 
 .eden-titlebar-title {
