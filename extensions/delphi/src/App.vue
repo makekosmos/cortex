@@ -24,6 +24,11 @@ import {
 import type { SyncEntity } from "@/services/sync/lan-protocol";
 import type { Area, Heading, Project, Tag, TodoItem } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
+import {
+  arkGetTask,
+  DELPHI_TASK_OBJ_TYPE_ID,
+  subscribeArkObjectChanges,
+} from "@/lib/electron-api-shim";
 import SideBar from "@/components/SideBar.vue";
 import QuickEntry from "@/components/QuickEntry.vue";
 import QuickSearch from "@/components/QuickSearch.vue";
@@ -579,9 +584,43 @@ function refreshPeerStatus() {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// ARK live updates (cross-app: Eden /задача → Delphi UI без reload)
+// ---------------------------------------------------------------------------
+//
+// Подписка на `object_upserted` / `object_deleted` для task_obj. Pattern B —
+// renderer держит cache, ARK events его инвалидируют. См.
+// `lib/electron-api-shim.ts → subscribeArkObjectChanges`.
+
+let cleanupArkObjectListener: (() => void) | null = null;
+
+function setupArkObjectListener() {
+  cleanupArkObjectListener?.();
+  cleanupArkObjectListener = subscribeArkObjectChanges(async (change) => {
+    if (change.event === "object_upserted") {
+      if (change.typeId !== DELPHI_TASK_OBJ_TYPE_ID) return;
+      const todo = await arkGetTask(change.id);
+      if (!todo) {
+        // Объект помечен deleted или type mismatch — снимаем из кэша если был.
+        if (store.todos.some((t) => t.id === change.id)) {
+          store.removeTodoLocal(change.id);
+        }
+        return;
+      }
+      store.upsertTodo(todo);
+      return;
+    }
+    // object_deleted: type_id отсутствует в payload — проверяем по cache.
+    if (store.todos.some((t) => t.id === change.id)) {
+      store.removeTodoLocal(change.id);
+    }
+  });
+}
+
 onMounted(async () => {
   window.addEventListener("keydown", handleGlobalKeydown);
   window.addEventListener(LEAVE_SPACE_EVENT, leaveSpaceListener);
+  setupArkObjectListener();
   if (isElectron) {
     setupCommandBusBridge();
     // Electron: P2P space mode takes priority
@@ -606,6 +645,8 @@ onUnmounted(() => {
   window.removeEventListener(LEAVE_SPACE_EVENT, leaveSpaceListener);
   cleanupLanSyncListener?.();
   cleanupCommandListeners?.();
+  cleanupArkObjectListener?.();
+  cleanupArkObjectListener = null;
 });
 
 function leaveSpaceListener() {

@@ -288,6 +288,76 @@ async function arkDeleteTask(id: string): Promise<boolean> {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Live updates: ARK object_upserted / object_deleted subscription
+// ---------------------------------------------------------------------------
+//
+// Cross-app live sync: когда Eden (через `/задача` slash) или другой extension
+// создаёт / меняет / удаляет `task_obj` — Delphi должен моментально отразить
+// это в UI без reload. Pattern идентичен Eden TaskRef NodeView (см.
+// extensions/eden/src/lib/kepler-api-shim.ts → subscribeObjectChanges).
+//
+// События приходят от ark-core через ws_server forward (см. commit f70d3b8a):
+//   - object_upserted: { event, id, type_id }
+//   - object_deleted:  { event, id }  // type_id отсутствует, фильтруем по cache
+//
+// `object_deleted` без `type_id` — поэтому caller отвечает за проверку
+// «была ли эта id в моём кэше», не type-фильтрует здесь.
+
+/** Re-fetch одной задачи по id из ARK и вернуть как TodoItem (или null). */
+export async function arkGetTask(id: string): Promise<TodoItem | null> {
+  const ark = kepler();
+  if (!ark) return null;
+  try {
+    const obj = await ark.request<ArkObjectRecord | null>("get_object", { id });
+    if (!obj || obj.typeId !== DELPHI_TASK_OBJECT_TYPE_ID) return null;
+    if (obj.deletedAt) return null;
+    return arkTaskObjectToTodo(obj);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[delphi-extension] arkGetTask failed:", err);
+    return null;
+  }
+}
+
+export interface ArkTaskChange {
+  event: "object_upserted" | "object_deleted";
+  id: string;
+  typeId?: string;
+}
+
+/**
+ * Подписаться на ARK upsert/delete события. Возвращает unsubscribe.
+ * Caller должен фильтровать по `typeId === "task_obj"` (для upserted) и/или
+ * по наличию id в локальном кэше (для deleted — type_id в payload отсутствует).
+ */
+export function subscribeArkObjectChanges(
+  handler: (change: ArkTaskChange) => void,
+): () => void {
+  const ark = kepler();
+  if (!ark) return () => {};
+  const offU = ark.subscribe("object_upserted", (payload) => {
+    const p = (payload ?? {}) as { id?: unknown; type_id?: unknown };
+    if (typeof p.id !== "string") return;
+    handler({
+      event: "object_upserted",
+      id: p.id,
+      typeId: typeof p.type_id === "string" ? p.type_id : undefined,
+    });
+  });
+  const offD = ark.subscribe("object_deleted", (payload) => {
+    const p = (payload ?? {}) as { id?: unknown };
+    if (typeof p.id !== "string") return;
+    handler({ event: "object_deleted", id: p.id });
+  });
+  return () => {
+    offU();
+    offD();
+  };
+}
+
+export const DELPHI_TASK_OBJ_TYPE_ID = DELPHI_TASK_OBJECT_TYPE_ID;
+
 interface TimeEntrySummary {
   id: string;
   taskId: string | null;
