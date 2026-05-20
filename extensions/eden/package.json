@@ -13,6 +13,7 @@
     "@kosmos/ark": "workspace:*",
     "@kosmos/visuals": "workspace:*",
     "@pinia/colada": "^1.3.0",
+    "@tiptap/core": "^3.20.1",
     "@tiptap/extension-code-block-lowlight": "^3.20.1",
     "@tiptap/extension-mention": "^3.20.1",
     "@tiptap/extension-list": "^3.20.1",

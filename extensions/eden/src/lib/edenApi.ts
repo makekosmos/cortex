@@ -46,7 +46,16 @@ export const edenApi = {
 
   ensureTaskObjectTypeRegistered: () => shim.ensureTaskObjectTypeRegistered(),
 
-  upsertTaskFromNote: (input: shim.EdenTaskSyncInput) => shim.upsertTaskFromNote(input),
+  softDeleteTask: (taskId: string) => shim.softDeleteTask(taskId),
 
-  softDeleteTaskFromNote: (taskId: string) => shim.softDeleteTaskFromNote(taskId),
+  getTask: (taskId: string) => shim.getTask(taskId),
+
+  patchTask: (taskId: string, patch: { title?: string; isCompleted?: boolean }) =>
+    shim.patchTask(taskId, patch),
+
+  createTask: (sourceNoteId: string, title?: string) => shim.createTask(sourceNoteId, title),
+
+  subscribeObjectChanges: (
+    handler: (payload: { event: "object_upserted" | "object_deleted"; id: string; typeId?: string }) => void,
+  ) => shim.subscribeObjectChanges(handler),
 };

@@ -857,23 +857,62 @@ export function ensureTaskObjectTypeRegistered(): Promise<void> {
   return taskObjectTypeRegisterPromise;
 }
 
-export interface EdenTaskSyncInput {
-  taskId: string;
-  title: string;
-  isCompleted: boolean;
-  sourceNoteId: string;
-  createdAt?: string;
+/**
+ * Получить task_obj из ARK. null если не найден или soft-deleted.
+ * Используется TaskRef NodeView для live-render'а.
+ */
+export async function getTask(taskId: string): Promise<ArkObjectRecord | null> {
+  const obj = await ark<ArkObjectRecord | null>("get_object", { id: taskId });
+  if (!obj) return null;
+  if (obj.typeId !== EDEN_TASK_OBJECT_TYPE_ID) return null;
+  if (obj.deletedAt) return null;
+  return obj;
 }
 
-export async function upsertTaskFromNote(input: EdenTaskSyncInput): Promise<void> {
-  await ensureTaskObjectTypeRegistered();
+/**
+ * Обновить отдельные поля task_obj (title или is_completed). Подтягивает
+ * существующий объект, merge'ит, отправляет upsert. Используется TaskRef
+ * NodeView когда юзер toggle'ит checkbox или меняет title inline.
+ */
+export async function patchTask(
+  taskId: string,
+  patch: { title?: string; isCompleted?: boolean },
+): Promise<void> {
+  const existing = await ark<ArkObjectRecord | null>("get_object", { id: taskId });
+  if (!existing) {
+    console.warn("[eden-extension] patchTask: object not found", taskId);
+    return;
+  }
   const now = new Date().toISOString();
-  const createdAt = input.createdAt ?? now;
+  const props = (existing.propsJson ?? {}) as Record<string, unknown>;
+  const nextProps = { ...props };
+  if (patch.isCompleted !== undefined) {
+    nextProps.is_completed = patch.isCompleted;
+    nextProps.completed_at = patch.isCompleted ? now : null;
+  }
   await ark("upsert_object", {
     object: {
-      id: input.taskId,
+      ...existing,
+      title: patch.title ?? existing.title,
+      propsJson: nextProps,
+      updatedAt: now,
+    },
+  });
+}
+
+/**
+ * Создать новый task_obj (для slash-команды /задача или markdown `- [ ]`).
+ * Возвращает taskId — caller вставляет TaskRef node с этим id.
+ */
+export async function createTask(sourceNoteId: string, title = ""): Promise<string> {
+  await ensureTaskObjectTypeRegistered();
+  const taskId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await ark("upsert_object", {
+    object: {
+      id: taskId,
       typeId: EDEN_TASK_OBJECT_TYPE_ID,
-      title: input.title,
+      title,
       contentJson: { type: "doc", content: [{ type: "paragraph" }] },
       propsJson: {
         description: null,
@@ -884,8 +923,8 @@ export async function upsertTaskFromNote(input: EdenTaskSyncInput): Promise<void
         is_today: false,
         is_evening: false,
         is_someday: false,
-        is_completed: input.isCompleted,
-        completed_at: input.isCompleted ? now : null,
+        is_completed: false,
+        completed_at: null,
         is_cancelled: false,
         cancelled_at: null,
         is_trashed: false,
@@ -898,25 +937,53 @@ export async function upsertTaskFromNote(input: EdenTaskSyncInput): Promise<void
         recurrence_rule: null,
         billable: false,
         price: null,
-        created_at: createdAt,
+        created_at: now,
         source_app: "eden",
-        source_note_id: input.sourceNoteId,
+        source_note_id: sourceNoteId,
         model_version: 1,
       },
-      createdAt,
+      createdAt: now,
       updatedAt: now,
       deletedAt: null,
     },
   });
+  return taskId;
 }
 
-export async function softDeleteTaskFromNote(taskId: string): Promise<void> {
-  // delete_object у ARK — soft delete (выставляет deletedAt). Объект
-  // исчезает из listObjects, но физически остаётся → сохраняется audit trail.
+/**
+ * Подписаться на ARK events `object_upserted` / `object_deleted`. Возвращает
+ * unsubscribe. Filter колбэк вызывается с `{event, id, type_id?}`.
+ *
+ * До 2026-05-20 ws_server не форвардил ark-core events клиентам — было
+ * fixed вместе с этим коммитом. Eden TaskRef NodeView подписывается через
+ * это API чтобы live-обновлять чекбокс/title когда Delphi пишет task_obj.
+ */
+export function subscribeObjectChanges(
+  handler: (payload: { event: "object_upserted" | "object_deleted"; id: string; typeId?: string }) => void,
+): () => void {
+  const bridge = keplerBridge();
+  const offU = bridge.subscribe("object_upserted", (payload) => {
+    const p = payload as { id?: string; type_id?: string };
+    if (typeof p.id === "string") handler({ event: "object_upserted", id: p.id, typeId: p.type_id });
+  });
+  const offD = bridge.subscribe("object_deleted", (payload) => {
+    const p = payload as { id?: string };
+    if (typeof p.id === "string") handler({ event: "object_deleted", id: p.id });
+  });
+  return () => {
+    offU();
+    offD();
+  };
+}
+
+export async function softDeleteTask(taskId: string): Promise<void> {
+  // delete_object у ARK — soft delete (выставляет deletedAt). Объект исчезает
+  // из listObjects, но физически остаётся → audit trail. Backspace на пустом
+  // TaskRef в Eden зовёт это (через edenApi.softDeleteTask).
   try {
     await ark("delete_object", { id: taskId });
   } catch (err) {
-    console.warn("[eden-extension] softDeleteTaskFromNote failed:", taskId, err);
+    console.warn("[eden-extension] softDeleteTask failed:", taskId, err);
     throw err;
   }
 }
