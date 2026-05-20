@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // Square checkbox — единый primitive для всех «галочек» в экосистеме
-// (Eden TaskRef, Delphi todo subitems, settings и т.д.). Anytype-style:
-// 18×18, 4px radius, ✓ glyph при checked.
+// (Eden TaskRef, Delphi todo subitems, settings и т.д.).
+//
+// Style: outline (18×18, 6px radius, 2px border) + inset filled square
+// при checked. Без ✓ glyph'а. Совпадает с Delphi TodoRow `.check-box` —
+// единое визуальное представление task'а в экосистеме.
 //
 // API совместим с v-model: `:model-value` / `@update:modelValue`.
 //
 // Цвет акцента переопределяется через CSS var `--kosmos-checkbox-accent`
 // на родителе — так Eden может подсунуть свой brand orange без хардкода
-// `#hex` внутри компонента. Default — `var(--primary)`.
+// `#hex` внутри компонента. Default — `var(--accent)`.
 
 import { computed } from "vue";
 
@@ -56,25 +59,15 @@ function onKeydown(e: KeyboardEvent) {
     @click="toggle"
     @keydown="onKeydown"
   >
-    <span class="kosmos-checkbox__glyph" aria-hidden="true">
-      <svg
-        v-if="checked"
-        viewBox="0 0 12 12"
-        width="12"
-        height="12"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M2.5 6.5 L5 9 L9.5 3.5" />
-      </svg>
-    </span>
+    <span v-if="checked" class="kosmos-checkbox__inner" aria-hidden="true" />
   </button>
 </template>
 
 <style scoped>
+/* Delphi TodoRow `.check-box` parity: outline-style square с inner filled
+   prefix. `--ring` для outline (нейтральный border при unchecked),
+   `--kosmos-checkbox-accent` (override от родителя) или `--accent` для
+   filled state и hover border. */
 .kosmos-checkbox {
   display: inline-flex;
   align-items: center;
@@ -82,31 +75,28 @@ function onKeydown(e: KeyboardEvent) {
   width: 18px;
   height: 18px;
   padding: 0;
-  border-radius: 4px;
-  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  border: 2px solid var(--ring);
   background: transparent;
   cursor: pointer;
-  color: var(--accent-foreground, var(--background));
   transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
+    border-color 0.15s,
+    background-color 0.15s;
   outline-offset: 2px;
   flex-shrink: 0;
+  position: relative;
 }
 
 .kosmos-checkbox:focus-visible {
-  outline: 2px solid var(--kosmos-checkbox-accent, var(--primary));
-  border-radius: 4px;
+  outline: 2px solid var(--kosmos-checkbox-accent, var(--accent));
 }
 
 .kosmos-checkbox:hover:not(.kosmos-checkbox--disabled) {
-  border-color: var(--kosmos-checkbox-accent, var(--primary));
+  border-color: var(--kosmos-checkbox-accent, var(--accent));
 }
 
 .kosmos-checkbox--checked {
-  background: var(--kosmos-checkbox-accent, var(--primary));
-  border-color: var(--kosmos-checkbox-accent, var(--primary));
+  border-color: var(--kosmos-checkbox-accent, var(--accent));
 }
 
 .kosmos-checkbox--disabled {
@@ -114,10 +104,13 @@ function onKeydown(e: KeyboardEvent) {
   opacity: 0.5;
 }
 
-.kosmos-checkbox__glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 0;
+/* Inner filled square — Delphi `.check-box__inner` parity: inset 2px от
+   outline rim, корпус radius 3px. */
+.kosmos-checkbox__inner {
+  display: block;
+  position: absolute;
+  inset: 2px;
+  border-radius: 3px;
+  background-color: var(--kosmos-checkbox-accent, var(--accent));
 }
 </style>

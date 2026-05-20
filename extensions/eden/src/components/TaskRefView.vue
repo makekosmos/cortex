@@ -26,7 +26,7 @@
         @click="handleTitleClick"
         @dblclick="enterEditMode"
       >
-        {{ title || (missing ? "Задача удалена" : "Без названия") }}
+        {{ title || (missing ? "Задача удалена" : "Пустая задача") }}
       </div>
       <input
         v-else

@@ -890,10 +890,15 @@ export async function patchTask(
     nextProps.is_completed = patch.isCompleted;
     nextProps.completed_at = patch.isCompleted ? now : null;
   }
+  // Если patch явно указал title — нормализуем (пустой/whitespace → placeholder),
+  // иначе оставляем existing. Без этого Delphi показывает empty-row.
+  const nextTitle = patch.title !== undefined
+    ? (patch.title.trim() || EDEN_EMPTY_TASK_TITLE)
+    : existing.title;
   await ark("upsert_object", {
     object: {
       ...existing,
-      title: patch.title ?? existing.title,
+      title: nextTitle,
       propsJson: nextProps,
       updatedAt: now,
     },
@@ -906,6 +911,14 @@ export async function patchTask(
  * (нужно для input rule: synchronously генерируем UUID + вставляем TaskRef
  * node, потом async создаём task_obj с тем же id).
  */
+/**
+ * Default title для свежесозданной задачи без явного текста — чтобы в Delphi
+ * не висели полностью пустые task_obj когда юзер не успел дописать. Юзер
+ * либо переименует inline (autoFocus → input в TaskRefView), либо оставит
+ * этот placeholder; Delphi покажет читаемое название вместо пустоты.
+ */
+const EDEN_EMPTY_TASK_TITLE = "Пустая задача";
+
 export async function createTask(
   sourceNoteId: string,
   title = "",
@@ -914,11 +927,12 @@ export async function createTask(
   await ensureTaskObjectTypeRegistered();
   const taskId = explicitId ?? crypto.randomUUID();
   const now = new Date().toISOString();
+  const effectiveTitle = title.trim() || EDEN_EMPTY_TASK_TITLE;
   await ark("upsert_object", {
     object: {
       id: taskId,
       typeId: EDEN_TASK_OBJECT_TYPE_ID,
-      title,
+      title: effectiveTitle,
       contentJson: { type: "doc", content: [{ type: "paragraph" }] },
       propsJson: {
         description: null,
