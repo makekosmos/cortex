@@ -376,9 +376,19 @@
   color: inherit;
 }
 
-/* Inter-block margin: правил `.ProseMirror > * + *` и `[data-task-ref]`
-   явно нет — все блоки слипаются вплотную (Anytype-style плотный
-   layout). Если нужен gap — раскомментировать с нужным значением. */
+/* Inter-block margin — единый плотный rhythm: 2px между ЛЮБЫМИ
+   соседними блоками (paragraph, heading, taskRef, list, codeBlock).
+   Vue scoped CSS на `.task-ref-node` имеет higher specificity чем
+   `* + *`, поэтому дублируем явно через `[data-task-ref]` атрибут. */
+.ProseMirror > * + * {
+  margin-top: 2px;
+}
+.ProseMirror > [data-task-ref] {
+  margin-top: 2px;
+}
+.ProseMirror > [data-task-ref]:first-child {
+  margin-top: 0;
+}
 
 .ProseMirror h1,
 .ProseMirror h2,
