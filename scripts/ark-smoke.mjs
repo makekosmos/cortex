@@ -53,7 +53,11 @@ function runStep(step) {
     console.log(`\n==> ${step.name}`);
     console.log(`$ ${step.command} ${step.args.join(" ")}`);
 
-    const child = spawn(step.command, step.args, {
+    // На Windows shell:true парсит командную строку через cmd, который
+    // ломается на пробелах в path (`C:\Program Files\nodejs\node.exe`).
+    // Quote'им команду явно — args останутся обычными.
+    const command = isWindows ? `"${step.command}"` : step.command;
+    const child = spawn(command, step.args, {
       cwd: step.cwd ?? repoRoot,
       env: {
         ...process.env,
