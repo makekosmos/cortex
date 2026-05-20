@@ -332,18 +332,21 @@
 }
 
 /* Block selection highlight (Anytype-style). Класс `.kepler-block-selected`
-   ставится на любой top-level child .ProseMirror когда он попадает в
-   rubber-band drag rect (см. useBlockSelection.ts). Через `::after`
-   pseudo-element рендерим полупрозрачный синий overlay поверх блока —
-   так же как Anytype делает с `.isSelectionSelected::after`.
+   ставится на любой leaf block (paragraph, heading, listItem, taskRef,
+   codeBlock, blockquote) когда он попадает в rubber-band drag rect.
+   Через `::after` pseudo-element рендерим полупрозрачный синий overlay
+   поверх блока — так же как Anytype делает с `.isSelectionSelected::after`.
 
    Цвет тот же что Anytype: rgba(55, 122, 255, 0.25). z-index: 10 —
-   ниже rubber-band rect (20) но выше обычного контента. */
-.ProseMirror > .kepler-block-selected {
+   ниже rubber-band rect (20) но выше обычного контента.
+
+   Селектор работает в любом scope внутри .ProseMirror (включая nested
+   listItem внутри bulletList) — не только direct children. */
+.ProseMirror .kepler-block-selected {
   position: relative;
 }
 
-.ProseMirror > .kepler-block-selected::after {
+.ProseMirror .kepler-block-selected::after {
   content: "";
   position: absolute;
   inset: 0;

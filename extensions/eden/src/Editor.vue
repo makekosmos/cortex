@@ -314,28 +314,32 @@ function onWindowKeyDown(e: KeyboardEvent): void {
   }
 }
 
-// Reactive applier: следим за selectedPositions, мутируем DOM .ProseMirror
-// children. Прямое DOM mutation (Anytype pattern) — works для всех block
-// типов (paragraph, heading, taskRef, code, list), не только NodeView'ов.
+// Reactive applier: следим за selectedPositions, мутируем DOM ноды
+// напрямую через editor.view.nodeDOM(pos). Работает для leaf-block на
+// любой глубине (listItem внутри bulletList, etc.) — не только direct
+// children .ProseMirror. Anytype pattern (RAF-based imperative mutation).
+let previouslySelected = new Set<number>();
 watch(
   () => blockSelection.selectedPositions.value,
   (selected) => {
     if (!editor.value) return;
-    const proseMirrorEl = editor.value.view.dom as HTMLElement;
-    const children = Array.from(proseMirrorEl.children) as HTMLElement[];
-    for (const el of children) {
-      let pos: number;
-      try {
-        pos = editor.value.view.posAtDOM(el, 0, -1);
-      } catch {
-        continue;
-      }
-      if (selected.has(pos)) {
-        el.classList.add("kepler-block-selected");
-      } else {
-        el.classList.remove("kepler-block-selected");
+    const view = editor.value.view;
+    // Снимаем класс с тех что вышли из selection.
+    for (const pos of previouslySelected) {
+      if (selected.has(pos)) continue;
+      const dom = view.nodeDOM(pos);
+      if (dom instanceof HTMLElement) {
+        dom.classList.remove("kepler-block-selected");
       }
     }
+    // Ставим на новые.
+    for (const pos of selected) {
+      const dom = view.nodeDOM(pos);
+      if (dom instanceof HTMLElement) {
+        dom.classList.add("kepler-block-selected");
+      }
+    }
+    previouslySelected = new Set(selected);
   },
   { deep: false, flush: "post" },
 );

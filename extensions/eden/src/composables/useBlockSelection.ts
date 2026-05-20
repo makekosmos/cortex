@@ -93,21 +93,39 @@ export function useBlockSelection() {
     clearSelection();
   }
 
+  // Container nodes — выделять как ОДНО целое не имеет смысла, юзер хочет
+  // выделить отдельные элементы внутри. Рекурсивно ныряем в их children.
+  // Anytype model: каждый visual «row» — отдельный selectable блок.
+  const CONTAINER_BLOCK_TYPES = new Set([
+    "bulletList",
+    "orderedList",
+    "taskList",
+    // blockquote НЕ контейнер для наших целей — Anytype его держит как
+    // один блок. То же codeBlock — целиком.
+  ]);
+
   function collectBlocks(editor: TiptapEditor): CachedBlock[] {
     const out: CachedBlock[] = [];
-    const proseMirrorEl = editor.view.dom as HTMLElement;
-    const children = Array.from(proseMirrorEl.children) as HTMLElement[];
-    for (const el of children) {
-      // posAtDOM возвращает позицию в doc для DOM node. side=-1 → начало
-      // блока, что нам и нужно.
-      let pos: number;
-      try {
-        pos = editor.view.posAtDOM(el, 0, -1);
-      } catch {
-        continue;
+    // descendants walk: для container типов return true (recurse), для leaf
+    // block return false (record + не диваем глубже), для inline возвращаем
+    // false и пропускаем.
+    editor.state.doc.descendants((node, pos) => {
+      if (CONTAINER_BLOCK_TYPES.has(node.type.name)) {
+        return true; // recurse в children
       }
-      out.push({ pos, el, rect: el.getBoundingClientRect() });
-    }
+      if (!node.isBlock) {
+        return false; // inline / text — пропускаем, не walk внутрь
+      }
+      const dom = editor.view.nodeDOM(pos);
+      if (dom instanceof HTMLElement) {
+        out.push({ pos, el: dom, rect: dom.getBoundingClientRect() });
+      }
+      // Leaf block записан — не диваем в его внутренности, чтобы не
+      // селектить parent + child одновременно. Если внутри листайтема
+      // есть nested list — пользователь хочет выделить весь list item
+      // как целое, не его части отдельно.
+      return false;
+    });
     return out;
   }
 
