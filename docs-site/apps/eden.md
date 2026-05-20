@@ -241,6 +241,10 @@ zen автоматически снимает dock. Visual marker — тонка
 перехватывал dblclick handler). Полная схема — [Eden zen mode → Dock-corner
 widget mode](../concepts/eden-zen-mode#dock-corner-widget-mode).
 
+### TaskRef × ProseMirror ловушки
+
+`TaskRef` (atom-block с native `<input>` для title) попадает в шесть неочевидных ловушек ProseMirror'а — `props.node.nodeSize` врёт для атомных нод, `StarterKit.trailingNode` навязывает trailing `<p>`, `constructor.name` ломается на минификации, PM крадёт focus через selectionchange listener (не лечится Vue `@mousedown.stop`), rubber-band + click race на классах выделения. Полный разбор и единственное правильное лечение каждой — [TaskRef × ProseMirror ловушки](../concepts/eden-taskref-pm-traps.md). Регрессии проверяются e2e-специфами `eden-task-enter.spec.ts` + `eden-selection-after-click.spec.ts` на **production-build'е** (dev-mode прячет часть багов).
+
 ### E2E coverage
 
 `tests/e2e/eden.spec.ts → describe("eden:note:open-today")` — спека проверяет, что:
