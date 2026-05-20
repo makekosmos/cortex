@@ -4845,19 +4845,19 @@ span[data-wikilink]:hover {
   user-select: none;
   padding: 6px 12px;
   text-align: center;
-  /* Background — фоновый цвет с прозрачностью (80%). Если за counter'ом
-     ничего нет — почти невидим. Если текст наезжает — становится
-     видимый плотный layer. */
-  background: color-mix(in srgb, var(--background) 80%, transparent);
-  border-top: 1px solid transparent;
-  transition: border-color 150ms ease;
+  /* Opaque background — fully covers anything behind. Counter ведёт себя
+     как «полноценный элемент в layout» через padding-bottom редактора
+     (см. ниже), текст физически до него не доходит. */
+  background: var(--background);
+  border-top: 1px solid color-mix(in srgb, var(--sidebar-foreground) 12%, transparent);
 }
 
-/* Класс `has-overlap` ставится JS'ом в App.vue когда блок editor'а
-   доходит до строки counter'а. Тогда border-top появляется — визуально
-   отделяет counter от наезжающего текста. */
-.eden-char-counter.has-overlap {
-  border-top-color: color-mix(in srgb, var(--sidebar-foreground) 18%, transparent);
+/* Когда zen mode активен и counter рендерится — добавляем
+   padding-bottom редактору равный высоте counter'а (~30px). Текст
+   останавливается выше counter'а — он визуально становится частью
+   layout'а, не overlay'ем. */
+.app-container.focus-mode-active .editor-content-area {
+  padding-bottom: 32px;
 }
 
 .eden-titlebar-title {

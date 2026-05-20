@@ -193,9 +193,7 @@
 
     <div
       v-if="layout.isZenMode && currentEntryCharCount !== null"
-      ref="charCounterRef"
       class="eden-char-counter"
-      :class="{ 'has-overlap': charCounterHasOverlap }"
       data-testid="eden-char-counter"
     >
       {{ currentEntryCharCount }} {{ pluralizeCharacters(currentEntryCharCount) }}
@@ -216,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { LoaderPinwheel } from "lucide-vue-next";
 import {
   ContextMenu,
@@ -414,60 +412,6 @@ const currentEntryCharCount = computed<number | null>(() => {
   return countCharsInProseMirrorDoc(eden.currentEntry.content_json);
 });
 
-// Char-counter overlap detection — показать border-top на counter'е
-// только когда контент editor'а доходит до его строки. Проверяем что
-// `block.bottom > counter.top` для любого блока в `.ProseMirror`.
-const charCounterRef = useTemplateRef<HTMLDivElement>("charCounterRef");
-const charCounterHasOverlap = ref(false);
-let overlapRafId: number | null = null;
-
-function recomputeCharCounterOverlap(): void {
-  if (!layout.isZenMode || !charCounterRef.value) {
-    charCounterHasOverlap.value = false;
-    return;
-  }
-  const counterRect = charCounterRef.value.getBoundingClientRect();
-  const proseMirror = document.querySelector(".ProseMirror");
-  if (!proseMirror) {
-    charCounterHasOverlap.value = false;
-    return;
-  }
-  let overlap = false;
-  for (const child of Array.from(proseMirror.children)) {
-    const rect = (child as HTMLElement).getBoundingClientRect();
-    // -1 для tolerance — text touch'ит counter, ещё не overlap'ит.
-    if (rect.bottom > counterRect.top - 1) {
-      overlap = true;
-      break;
-    }
-  }
-  charCounterHasOverlap.value = overlap;
-}
-
-function scheduleCharCounterOverlapCheck(): void {
-  if (overlapRafId !== null) return;
-  overlapRafId = requestAnimationFrame(() => {
-    overlapRafId = null;
-    recomputeCharCounterOverlap();
-  });
-}
-
-// Recheck на scroll (любой ancestor) + resize + content change (через
-// liveCharCount, который меняется на каждое typing).
-watch(liveCharCount, () => scheduleCharCounterOverlapCheck());
-watch(() => layout.isZenMode, () => scheduleCharCounterOverlapCheck());
-
-onMounted(() => {
-  window.addEventListener("scroll", scheduleCharCounterOverlapCheck, { passive: true, capture: true });
-  window.addEventListener("resize", scheduleCharCounterOverlapCheck);
-  scheduleCharCounterOverlapCheck();
-});
-
-onUnmounted(() => {
-  window.removeEventListener("scroll", scheduleCharCounterOverlapCheck, { capture: true } as EventListenerOptions);
-  window.removeEventListener("resize", scheduleCharCounterOverlapCheck);
-  if (overlapRafId !== null) cancelAnimationFrame(overlapRafId);
-});
 
 function pluralizeCharacters(n: number): string {
   const mod10 = n % 10;
