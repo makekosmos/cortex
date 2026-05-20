@@ -297,6 +297,11 @@ async fn handle_connection(
 
     let mut bus_rx = command_bus.subscribe();
     let mut pomo_rx = pomodoro_host.subscribe();
+    // Forward ark-core events (object_upserted/object_deleted/entity_changed/peer_*
+    // и т.п.) — до 2026-05-20 это broadcast channel был не подключён к WS,
+    // events не доходили до клиентов. Cross-app live updates (Eden subscribed
+    // на object_upserted для taskRef) полагаются на этот forward.
+    let mut ark_evt_rx = ark_host.subscribe_events();
 
     loop {
         tokio::select! {
@@ -328,6 +333,21 @@ async fn handle_connection(
                         // Resubscribe-friendly: drop the lagged event, continue.
                         continue;
                     }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+
+            // 2a''. ARK events (object_upserted / object_deleted / entity_changed /
+            // peer_* и т.п.) → forward напрямую как wire JSON. Payload уже содержит
+            // поле "event" — sink его так и шлёт.
+            aevt = ark_evt_rx.recv() => {
+                match aevt {
+                    Ok((_name, payload)) => {
+                        if sink.send(Message::Text(payload.to_string())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }

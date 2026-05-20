@@ -615,16 +615,42 @@ async fn handle_request(request: Request) -> Result<Value, String> {
             let object = db::get_object(conn, &id)?;
             serde_json::to_value(object).map_err(|e| e.to_string())
         }),
-        Request::UpsertObject { object, device_id } => with_conn(|conn| {
-            db::upsert_object(conn, &object)?;
-            record_local_upsert(conn, "object", &object.id, device_id)?;
-            Ok(json!(true))
-        }),
-        Request::DeleteObject { id, device_id } => with_conn(|conn| {
-            db::delete_object(conn, &id)?;
-            record_local_delete(conn, "object", &id, device_id)?;
-            Ok(json!(true))
-        }),
+        Request::UpsertObject { object, device_id } => {
+            let object_id = object.id.clone();
+            let object_type_id = object.type_id.clone();
+            let result = with_conn(|conn| {
+                db::upsert_object(conn, &object)?;
+                record_local_upsert(conn, "object", &object.id, device_id)?;
+                Ok(json!(true))
+            });
+            // Emit ТОЛЬКО на успешный local write. `set_on_change` (sync_server)
+            // эмитит entity_changed на incoming peer-write — это другой код path,
+            // не дублирует это событие. Cross-app live updates (Eden TaskRef
+            // подписан на object_upserted) — это primary consumer.
+            if result.is_ok() {
+                emit_event(json!({
+                    "event": "object_upserted",
+                    "id": object_id,
+                    "type_id": object_type_id,
+                }));
+            }
+            result
+        }
+        Request::DeleteObject { id, device_id } => {
+            let object_id = id.clone();
+            let result = with_conn(|conn| {
+                db::delete_object(conn, &id)?;
+                record_local_delete(conn, "object", &id, device_id)?;
+                Ok(json!(true))
+            });
+            if result.is_ok() {
+                emit_event(json!({
+                    "event": "object_deleted",
+                    "id": object_id,
+                }));
+            }
+            result
+        }
         Request::ListObjectTypes => with_conn(|conn| {
             let object_types = db::list_object_types(conn)?;
             serde_json::to_value(object_types).map_err(|e| e.to_string())
