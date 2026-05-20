@@ -376,6 +376,17 @@
   color: inherit;
 }
 
+/* Пока активен block-drag/selection, выключаем pointer-events на
+   интерактивных частях TaskRef'а (чекбокс, hover-arrow, title input).
+   Без этого браузер на каждый mousemove через таску дёргает :hover,
+   подсвечивая чекбокс/появляя arrow → визуальный шум во время drag.
+   pointer-events: none на drag-time = no hover, no accidental click. */
+.editor-content-area.kepler-block-select-active .task-status-icon,
+.editor-content-area.kepler-block-select-active .task-ref-open,
+.editor-content-area.kepler-block-select-active .task-ref-title-input {
+  pointer-events: none;
+}
+
 /* Inter-block margin — единый плотный rhythm: 2px между ЛЮБЫМИ
    соседними блоками (paragraph, heading, taskRef, list, codeBlock).
    !important нужен потому что `.ProseMirror p { margin: 0 }` (для
