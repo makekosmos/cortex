@@ -374,9 +374,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .task-ref-node {
-  /* Без выраженного outer margin — TipTap paragraph spacing уже создаёт
-     ритм, дополнительный margin делает блок «парящим» относительно текста. */
-  margin: 0;
+  /* НЕ задаём margin: 0 — это убивает `.ProseMirror > * + * { margin-top: 0.85em }`
+     правило (см. Editor.css), из-за чего две задачи подряд слипались без
+     gap'а между ними, а между параграфом и задачей gap присутствовал.
+     Оставляем naturalный flow — TipTap паттерн margin-top: 0.85em
+     одинаково применится к TaskRef и к <p>. */
 }
 
 .task-ref-row {
