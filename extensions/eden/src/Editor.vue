@@ -116,6 +116,11 @@ import { TaskRef } from "./TaskRef";
 import { edenApi } from "@/lib/edenApi";
 import { useBlockSelection } from "@/composables/useBlockSelection";
 import BlockSelectionOverlay from "@/components/BlockSelectionOverlay.vue";
+import {
+  BlockSelectionDecoration,
+  blockSelectionPluginKey,
+  buildBlockSelectionDecorations,
+} from "./BlockSelectionDecoration";
 // InlineCaret удалён — widget-decoration на каждом cursor position ломал
 // drag-selection (mousedown на widget → ProseMirror не разрешал mouse
 // position в text offset, drag только перемещал каретку). Native browser
@@ -335,32 +340,18 @@ watch(
   { flush: "post" },
 );
 
-// Reactive applier: следим за selectedPositions, мутируем DOM ноды
-// напрямую через editor.view.nodeDOM(pos). Работает для leaf-block на
-// любой глубине (listItem внутри bulletList, etc.) — не только direct
-// children .ProseMirror. Anytype pattern (RAF-based imperative mutation).
-let previouslySelected = new Set<number>();
+// Reactive applier: следим за selectedPositions, диспатчим tr с новым
+// DecorationSet'ом в BlockSelectionDecoration plugin. PM сам управляет
+// классами через decorations API — не стирает их на re-render (vs direct
+// DOM mutation, которая ломалась после blur/любого PM update).
 watch(
   () => blockSelection.selectedPositions.value,
   (selected) => {
     if (!editor.value) return;
     const view = editor.value.view;
-    // Снимаем класс с тех что вышли из selection.
-    for (const pos of previouslySelected) {
-      if (selected.has(pos)) continue;
-      const dom = view.nodeDOM(pos);
-      if (dom instanceof HTMLElement) {
-        dom.classList.remove("kepler-block-selected");
-      }
-    }
-    // Ставим на новые.
-    for (const pos of selected) {
-      const dom = view.nodeDOM(pos);
-      if (dom instanceof HTMLElement) {
-        dom.classList.add("kepler-block-selected");
-      }
-    }
-    previouslySelected = new Set(selected);
+    const newDecos = buildBlockSelectionDecorations(view.state.doc, selected);
+    const tr = view.state.tr.setMeta(blockSelectionPluginKey, newDecos);
+    view.dispatch(tr);
   },
   { deep: false, flush: "post" },
 );
@@ -403,6 +394,10 @@ const extensions = [
     // input rule подхватит новый id без re-init Editor.
     getSourceNoteId: () => props.entry.id,
   }),
+  // PM plugin для block-selection декораций. Заменяет direct DOM mutation
+  // (которое стиралось PM на re-render'е, особенно после blur). PM сам
+  // переапплицирует декорации после каждой transaction'и.
+  BlockSelectionDecoration,
   Typography,
   Wikilink.configure({
     suggestion: {
