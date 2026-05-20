@@ -15,7 +15,6 @@
     <div
       class="task-ref-row"
       contenteditable="false"
-      @mousedown.stop
       @contextmenu.prevent="openContextMenu"
     >
       <TaskStatusIcon
@@ -39,8 +38,6 @@
         :placeholder="missing ? 'Задача удалена' : 'Пустая задача'"
         :readonly="missing"
         :title="missing ? 'Задача удалена' : 'ПКМ — статус, → — открыть'"
-        @mousedown.stop
-        @click.stop
         @focus="onTitleFocus"
         @blur="onTitleBlur"
         @keydown.enter.prevent="commitAndCreateNew"
@@ -311,32 +308,36 @@ async function commitAndCreateNew(): Promise<void> {
     exitToNewParagraph();
     return;
   }
-  // Сохраним текущий title (await чтобы не было race с созданием новой).
-  await commitInputValue();
 
   const editor = props.editor as {
     state: { schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } } };
     view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
   };
-  // TaskRef extension options — на props.extension, а не на editor.options
-  // (editor.options — это EditorOptions, не extension-specific).
   const extension = props.extension as { options?: { getSourceNoteId?: () => string | null } } | undefined;
-  const getPos = props.getPos;
-  const node = props.node as { nodeSize: number };
-  if (typeof getPos !== "function") return;
-  const myPos = getPos();
-  if (typeof myPos !== "number") return;
-
   const sourceNoteId = extension?.options?.getSourceNoteId?.() ?? null;
   if (!sourceNoteId) {
     console.warn("[eden TaskRef] commitAndCreateNew: no sourceNoteId");
     return;
   }
 
-  // Pre-generate UUID, sync insert node + async create task_obj
-  // (NodeView retry в loadTask покроет race).
+  // Pre-generate UUID + async create task_obj. Async create не блокирует
+  // sync insertion node (race покроет NodeView retry в loadTask).
   const newTaskId = crypto.randomUUID();
   void edenApi.createTask(sourceNoteId, "", newTaskId);
+
+  // ВАЖНО: await commit BEFORE re-fetching myPos. Patch task_obj
+  // диспатчит tr → positions могут shift'нуться. Берём актуальную
+  // позицию ПОСЛЕ commit.
+  await commitInputValue();
+
+  const getPos = props.getPos;
+  if (typeof getPos !== "function") return;
+  const myPos = getPos();
+  if (typeof myPos !== "number") {
+    console.warn("[eden TaskRef] commitAndCreateNew: stale getPos");
+    return;
+  }
+  const node = props.node as { nodeSize: number };
 
   const insertPos = myPos + node.nodeSize;
   const newNode = editor.state.schema.nodes.taskRef?.create({
@@ -346,7 +347,6 @@ async function commitAndCreateNew(): Promise<void> {
   if (!newNode) return;
   const tr = editor.view.state.tr.insert(insertPos, newNode);
   editor.view.dispatch(tr);
-  // autoFocus в новой TaskRef ноде → её NodeView сам сфокусируется.
 }
 
 /**
