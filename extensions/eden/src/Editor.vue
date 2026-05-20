@@ -103,10 +103,13 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
 import Placeholder from "@tiptap/extension-placeholder";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import TaskList from "@tiptap/extension-task-list";
 import { all, createLowlight } from "lowlight";
 import Typography from "@tiptap/extension-typography";
 import type { Editor as TiptapEditor, Range } from "@tiptap/vue-3";
 import { Wikilink } from "./Wikilink";
+import { TaskItemWithId } from "./TaskItemWithId";
+import { edenApi } from "@/lib/edenApi";
 // InlineCaret удалён — widget-decoration на каждом cursor position ломал
 // drag-selection (mousedown на widget → ProseMirror не разрешал mouse
 // position в text offset, drag только перемещал каретку). Native browser
@@ -212,6 +215,14 @@ let lastPersistedNoteTypeId = props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID;
 let lastPersistedHeaderLayout = props.entry.header_layout ?? "default";
 let lastPersistedHeaderPropsJson = normalizeHeaderPropsJson(props.entry.header_props_json);
 
+// Snapshot taskItem-ов на последний успешно засинканный в ARK момент.
+// Key — taskId (UUID из TipTap attribute), value — текст и checked-флаг.
+// Diff в `syncTaskItemsToArk()` против текущего состояния документа решает
+// создать/обновить/soft-delete task_obj. Map хешируется по строке для O(1)
+// lookup, snapshot фиксируется только после успешного sync (см. ниже).
+type TaskSnapshotEntry = { title: string; checked: boolean };
+let lastTaskSnapshot: Map<string, TaskSnapshotEntry> = walkTaskItemsInJson(lastPersistedContentJson);
+
 const perfTracker = createPerfTracker();
 
 const allEntriesHolder = { current: props.allEntries };
@@ -269,6 +280,11 @@ const extensions = [
     tabSize: 4,
     defaultLanguage: null,
   }),
+  // TaskList + TaskItemWithId: чекбокс-задачи внутри заметки. taskId UUID
+  // привязывает каждую ноду к task_obj в ARK — после save заметки diff'ается
+  // в Editor.vue::syncTaskItems → upsert/soft-delete в Delphi.
+  TaskList,
+  TaskItemWithId.configure({ nested: true }),
   Typography,
   Wikilink.configure({
     suggestion: {
@@ -338,6 +354,12 @@ const extensions = [
             icon: "•",
             command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
               editor.chain().focus().deleteRange(range).toggleBulletList().run(),
+          },
+          {
+            title: "Задача",
+            icon: "☐",
+            command: ({ editor, range }: { editor: TiptapEditor; range: Range }) =>
+              editor.chain().focus().deleteRange(range).toggleTaskList().run(),
           },
           {
             title: "Код",
@@ -755,6 +777,10 @@ function hydrateFromEntry(entry: Entry) {
   headerValidationError.value = null;
   saveConflict.value = null;
   lastPersistedContentJson = nextContentJson;
+  // Task snapshot — derive из загружаемого contentJson. Это baseline для
+  // diff'а: ничего не должно syncn'уться на первом save после открытия
+  // заметки, кроме реальных изменений сделанных юзером.
+  lastTaskSnapshot = walkTaskItemsInJson(nextContentJson);
   updatePersistedMetadataBaseline({
     title: entry.title,
     noteTypeId: nextTypeId,
@@ -773,6 +799,123 @@ function hydrateFromEntry(entry: Entry) {
     isHydrating = false;
     emitLiveCharCount();
   });
+}
+
+/**
+ * Обходит ProseMirror-doc (в виде JSON) и собирает все taskItem ноды в
+ * Map<taskId, {title, checked}>. Title — конкатенация текста внутри ноды
+ * (paragraph children). Если taskId отсутствует — нода пропускается (UUID
+ * проставит appendTransaction-плагин на следующей правке). Если nested
+ * taskList — рекурсивно зайдёт через children.
+ *
+ * O(N) по числу нод doc'а, типичная заметка <1000 нод → ≪1ms.
+ */
+function walkTaskItemsInJson(contentJson: string): Map<string, TaskSnapshotEntry> {
+  const out = new Map<string, TaskSnapshotEntry>();
+  let doc: unknown;
+  try {
+    doc = JSON.parse(contentJson);
+  } catch {
+    return out;
+  }
+  walkNode(doc, out);
+  return out;
+}
+
+function walkNode(node: unknown, out: Map<string, TaskSnapshotEntry>): void {
+  if (!node || typeof node !== "object") return;
+  const n = node as { type?: string; attrs?: { taskId?: string; checked?: boolean }; content?: unknown[] };
+  if (n.type === "taskItem" && n.attrs?.taskId) {
+    out.set(n.attrs.taskId, {
+      title: extractTextContent(n.content ?? []).trim(),
+      checked: Boolean(n.attrs.checked),
+    });
+  }
+  if (Array.isArray(n.content)) {
+    for (const child of n.content) walkNode(child, out);
+  }
+}
+
+function extractTextContent(content: unknown[]): string {
+  let out = "";
+  for (const child of content) {
+    if (!child || typeof child !== "object") continue;
+    const c = child as { type?: string; text?: string; content?: unknown[] };
+    if (c.type === "text" && typeof c.text === "string") {
+      out += c.text;
+    } else if (Array.isArray(c.content)) {
+      out += extractTextContent(c.content);
+    }
+  }
+  return out;
+}
+
+/**
+ * Diff'ает текущее состояние taskItem'ов против `lastTaskSnapshot` и шлёт
+ * upsert/soft-delete в ARK. Вызывается ПОСЛЕ успешного `props.onSave(...)`,
+ * чтобы task_obj не создавались для не-сохранённой заметки.
+ *
+ * Sync failure НЕ пробрасывается — мы логируем warn и НЕ обновляем snapshot
+ * для упавших операций (упавшие задачи ретраются на следующем save'е).
+ * Это гарантирует что временная недоступность ARK не блокирует save заметки
+ * и не теряет sync state.
+ */
+async function syncTaskItemsToArk(): Promise<void> {
+  const currentSnapshot = walkTaskItemsInJson(lastPersistedContentJson);
+  const previous = lastTaskSnapshot;
+  const noteId = props.entry.id;
+
+  const upsertSuccesses: Array<[string, TaskSnapshotEntry]> = [];
+  const deleteSuccesses: string[] = [];
+
+  for (const [taskId, current] of currentSnapshot) {
+    const prev = previous.get(taskId);
+    if (prev && prev.title === current.title && prev.checked === current.checked) {
+      // Без изменений — ничего не шлём.
+      upsertSuccesses.push([taskId, current]);
+      continue;
+    }
+    try {
+      await edenApi.upsertTaskFromNote({
+        taskId,
+        title: current.title || "Без названия",
+        isCompleted: current.checked,
+        sourceNoteId: noteId,
+      });
+      upsertSuccesses.push([taskId, current]);
+    } catch (err) {
+      console.warn("[eden] task sync upsert failed", taskId, err);
+      // Не обновляем snapshot для taskId → следующий save повторит попытку.
+    }
+  }
+
+  for (const taskId of previous.keys()) {
+    if (currentSnapshot.has(taskId)) continue;
+    try {
+      await edenApi.softDeleteTaskFromNote(taskId);
+      deleteSuccesses.push(taskId);
+    } catch (err) {
+      console.warn("[eden] task sync delete failed", taskId, err);
+    }
+  }
+
+  // Реконструируем snapshot из successful operations:
+  // - все upsert'ы (включая без изменений) → попадают
+  // - все delete'ы → исключаются
+  // - upserts с failure → остаются с previous значением (ретрай на следующий save)
+  const nextSnapshot = new Map<string, TaskSnapshotEntry>();
+  for (const [taskId, entry] of upsertSuccesses) {
+    nextSnapshot.set(taskId, entry);
+  }
+  // Failed upserts должны сохранить previous значение, чтобы diff на следующем
+  // save'е увидел разницу с current и повторил upsert.
+  for (const [taskId, prevEntry] of previous) {
+    if (nextSnapshot.has(taskId)) continue;
+    if (deleteSuccesses.includes(taskId)) continue;
+    if (!currentSnapshot.has(taskId)) continue; // объект уже отсутствует и удалён успешно
+    nextSnapshot.set(taskId, prevEntry);
+  }
+  lastTaskSnapshot = nextSnapshot;
 }
 
 async function save() {
@@ -857,6 +1000,11 @@ async function save() {
 
   saveConflict.value = null;
   lastPersistedContentJson = getSerializedEditorContent();
+  // Task sync — после того как заметка успешно сохранена в ARK.
+  // Если упадёт — лог в warn, но save заметки уже committed. Snapshot
+  // обновляется внутри syncTaskItemsToArk только для successful operations
+  // (failed upsert'ы ретраятся на следующем save'е).
+  await syncTaskItemsToArk();
   lastPersistedMarkdown = getSerializedEditorMarkdown();
   updatePersistedMetadataBaseline({
     title: normalizedTitle,

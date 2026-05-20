@@ -43,4 +43,10 @@ export const edenApi = {
   setVaultPath: (path: string) => shim.setVaultPath(path),
 
   selectFolder: () => shim.selectFolder(),
+
+  ensureTaskObjectTypeRegistered: () => shim.ensureTaskObjectTypeRegistered(),
+
+  upsertTaskFromNote: (input: shim.EdenTaskSyncInput) => shim.upsertTaskFromNote(input),
+
+  softDeleteTaskFromNote: (taskId: string) => shim.softDeleteTaskFromNote(taskId),
 };

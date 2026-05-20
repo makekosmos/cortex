@@ -818,6 +818,110 @@ function onCommand(
 }
 
 // ---------------------------------------------------------------------------
+// task_obj sync (Eden TipTap TaskList → Delphi).
+// ---------------------------------------------------------------------------
+//
+// TipTap TaskItem ноды представляются в ARK как task_obj — те же объекты,
+// которыми оперирует Delphi. Eden — write-source через `propsJson.source_app
+// = "eden"` + `propsJson.source_note_id`. propsJson schema совпадает с
+// `extensions/delphi/src/lib/electron-api-shim.ts::todoToArkTaskObject`,
+// чтобы Delphi UI читал эти задачи без специальной логики.
+//
+// Связь: один taskItem ↔ один task_obj по `id == taskId` (UUID v4 из TipTap
+// attribute). Idempotent через `upsert_object`.
+
+const EDEN_TASK_OBJECT_TYPE_ID = "task_obj";
+
+let taskObjectTypeRegisterPromise: Promise<void> | null = null;
+
+export function ensureTaskObjectTypeRegistered(): Promise<void> {
+  if (taskObjectTypeRegisterPromise) return taskObjectTypeRegisterPromise;
+  const now = new Date().toISOString();
+  taskObjectTypeRegisterPromise = ark("upsert_object_type", {
+    object_type: {
+      id: EDEN_TASK_OBJECT_TYPE_ID,
+      name: "Задача",
+      schemaJson: "{}",
+      uiSchemaJson: "{}",
+      systemLocked: false,
+      createdAt: now,
+      updatedAt: now,
+    },
+  })
+    .then(() => undefined)
+    .catch((err) => {
+      taskObjectTypeRegisterPromise = null;
+      console.warn("[eden-extension] task_obj type register failed:", err);
+      throw err;
+    });
+  return taskObjectTypeRegisterPromise;
+}
+
+export interface EdenTaskSyncInput {
+  taskId: string;
+  title: string;
+  isCompleted: boolean;
+  sourceNoteId: string;
+  createdAt?: string;
+}
+
+export async function upsertTaskFromNote(input: EdenTaskSyncInput): Promise<void> {
+  await ensureTaskObjectTypeRegistered();
+  const now = new Date().toISOString();
+  const createdAt = input.createdAt ?? now;
+  await ark("upsert_object", {
+    object: {
+      id: input.taskId,
+      typeId: EDEN_TASK_OBJECT_TYPE_ID,
+      title: input.title,
+      contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+      propsJson: {
+        description: null,
+        priority: 0,
+        scheduled_date: null,
+        deadline: null,
+        reminder_date: null,
+        is_today: false,
+        is_evening: false,
+        is_someday: false,
+        is_completed: input.isCompleted,
+        completed_at: input.isCompleted ? now : null,
+        is_cancelled: false,
+        cancelled_at: null,
+        is_trashed: false,
+        sort_order: 0,
+        heading_id: null,
+        project_id: null,
+        area_id: null,
+        tag_ids: [],
+        checklist_items: [],
+        recurrence_rule: null,
+        billable: false,
+        price: null,
+        created_at: createdAt,
+        source_app: "eden",
+        source_note_id: input.sourceNoteId,
+        model_version: 1,
+      },
+      createdAt,
+      updatedAt: now,
+      deletedAt: null,
+    },
+  });
+}
+
+export async function softDeleteTaskFromNote(taskId: string): Promise<void> {
+  // delete_object у ARK — soft delete (выставляет deletedAt). Объект
+  // исчезает из listObjects, но физически остаётся → сохраняется audit trail.
+  try {
+    await ark("delete_object", { id: taskId });
+  } catch (err) {
+    console.warn("[eden-extension] softDeleteTaskFromNote failed:", taskId, err);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Install.
 // ---------------------------------------------------------------------------
 
