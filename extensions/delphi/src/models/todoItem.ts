@@ -98,9 +98,16 @@ export function createTodoItem(params: CreateTodoParams): TodoItem {
 
 // ---------------------------------------------------------------------------
 
+// Lifecycle status — single source of truth для cross-app sync (Eden
+// читает `propsJson.status` через `normalizeStatus` приоритетнее чем
+// `is_completed` флаг). Если меняем completion state в Delphi — обязаны
+// также синхронизировать status, иначе Eden видит is_completed=true но
+// status="todo" и продолжает рендерить задачу как открытую.
 export function markCompleted(todo: TodoItem): TodoItem {
   return {
     ...todo,
+
+    status: "done",
 
     isCompleted: true,
 
@@ -116,6 +123,8 @@ export function markIncomplete(todo: TodoItem): TodoItem {
   return {
     ...todo,
 
+    status: "todo",
+
     isCompleted: false,
 
     completedAt: null,
@@ -129,6 +138,8 @@ export function markIncomplete(todo: TodoItem): TodoItem {
 export function markCancelled(todo: TodoItem): TodoItem {
   return {
     ...todo,
+
+    status: "canceled",
 
     isCancelled: true,
 

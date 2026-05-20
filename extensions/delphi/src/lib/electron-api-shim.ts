@@ -151,8 +151,12 @@ function todoToArkTaskObject(todo: TodoItem): ArkObjectRecord {
       is_today: todo.isToday,
       is_evening: todo.isEvening,
       is_someday: todo.isSomeday,
-      // Linear-style lifecycle status (writes Eden, читает Delphi). Если поле
-      // не задано в TodoItem — пропускаем, чтобы не затирать чужое значение.
+      // Linear-style lifecycle status (cross-app: пишут Eden И Delphi).
+      // markCompleted/markCancelled/markIncomplete в models/todoItem.ts
+      // обязаны выставлять status в синхрон с isCompleted/isCancelled —
+      // иначе Eden видит несогласованную пару и не пересчитывает state.
+      // Если поле всё же не задано (legacy todo до миграции) — пропускаем,
+      // чтобы не затирать чужое значение.
       ...(todo.status ? { status: todo.status } : {}),
       is_completed: todo.isCompleted,
       completed_at: todo.completedAt ?? null,

@@ -284,9 +284,13 @@ export type TodoItem = {
   isSomeday: boolean;
 
   /**
-   * Linear-style жизненный цикл задачи. Source of truth — Eden (`propsJson.status`
-   * в `task_obj`). Возможные значения: `triage`, `backlog`, `todo`, `done`,
-   * `canceled`. Delphi только читает.
+   * Linear-style жизненный цикл задачи. Cross-app поле — пишут И Eden И Delphi
+   * (двунаправленный sync через ARK `propsJson.status`). Возможные значения:
+   * `triage`, `backlog`, `todo`, `done`, `canceled`. Eden's `normalizeStatus`
+   * приоритезирует `status` над `is_completed` флагом, поэтому Delphi'евские
+   * state transitions (`markCompleted`/`markCancelled`/`markIncomplete`)
+   * ОБЯЗАНЫ синхронизировать status — иначе Eden видит несогласованную пару
+   * (`status: "todo"`, `is_completed: true`) и продолжает рендерить открытую.
    *
    * `backlog` → задача показывается в SmartList «Когда-нибудь» (наряду с legacy
    * `isSomeday=true`). См. todoFilterService.ts → SmartList.Someday.
