@@ -40,9 +40,9 @@
         :title="missing ? 'Задача удалена' : 'ПКМ — статус, → — открыть'"
         @focus="onTitleFocus"
         @blur="onTitleBlur"
-        @keydown.enter.prevent="commitAndCreateNew"
-        @keydown.escape.prevent="cancelAndBlur"
-        @keydown.delete="onTitleKeyDelete"
+        @keydown.enter.prevent.stop="commitAndCreateNew"
+        @keydown.escape.prevent.stop="cancelAndBlur"
+        @keydown.delete.stop="onTitleKeyDelete"
       />
       <button
         v-if="!missing"

@@ -280,9 +280,13 @@ function onContentMouseDown(e: MouseEvent): void {
   if (blockSelection.hasSelection.value) {
     blockSelection.clearSelection();
   }
-  // Drag tracking — только LMB и только на non-interactive areas.
+  // Drag tracking — только LMB и только на действительно interactive
+  // controls (buttons / checkboxes). НЕ фильтруем input/textarea — там
+  // браузер сам обработает focus + caret по click default'у, а drag
+  // через границу блока должен запуститься (юзер тянет от текста
+  // задачи в следующий блок).
   if (e.button !== 0) return;
-  if (target.closest("input, textarea, button, [role=button], [role=checkbox]")) return;
+  if (target.closest("button, [role=button], [role=checkbox]")) return;
   blockSelection.startTracking(editor.value, e.clientX, e.clientY, contentAreaRef.value);
   window.addEventListener("mousemove", onWindowMouseMove);
   window.addEventListener("mouseup", onWindowMouseUp, { once: true });
