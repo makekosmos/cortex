@@ -5,16 +5,14 @@
     :data-task-id="taskId"
   >
     <div class="task-ref-row" contenteditable="false">
-      <button
+      <Checkbox
         class="task-ref-checkbox"
-        type="button"
-        :aria-checked="isCompleted"
-        role="checkbox"
+        :model-value="isCompleted"
         :disabled="loading || missing"
-        @click.stop="toggleCompleted"
-      >
-        <span class="task-ref-check-glyph">{{ isCompleted ? "✓" : "" }}</span>
-      </button>
+        :aria-label="isCompleted ? 'Снять отметку' : 'Отметить выполненной'"
+        @click.stop
+        @update:model-value="toggleCompleted"
+      />
       <div
         v-if="!editingTitle"
         class="task-ref-title"
@@ -42,6 +40,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { NodeViewWrapper, nodeViewProps } from "@tiptap/vue-3";
+import { Checkbox } from "@kosmos/visuals";
 import { edenApi } from "@/lib/edenApi";
 
 const props = defineProps(nodeViewProps);
@@ -214,40 +213,12 @@ onBeforeUnmount(() => {
   background: var(--surface-hover, rgba(0, 0, 0, 0.04));
 }
 
-.task-ref-checkbox {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  border: 1.5px solid var(--border, #c8c8c8);
-  background: var(--surface, transparent);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.task-ref-checkbox:hover {
-  border-color: var(--accent, #5b9bd5);
-}
-
-.task-ref-checkbox:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.is-completed .task-ref-checkbox {
-  background: var(--accent, #5b9bd5);
-  border-color: var(--accent, #5b9bd5);
-}
-
-.task-ref-check-glyph {
-  color: var(--accent-foreground, #fff);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
+/* Унифицированный Checkbox из @kosmos/visuals. Eden подсовывает свой
+   brand orange через CSS var override — `#ff5c00` тот же, что у
+   bullet/ordered list markers в редакторе (см. App.css → `::marker`,
+   index.css → `--eden-accent-color`). */
+.task-ref-row :deep(.kosmos-checkbox) {
+  --kosmos-checkbox-accent: var(--eden-accent-color);
 }
 
 .task-ref-title {

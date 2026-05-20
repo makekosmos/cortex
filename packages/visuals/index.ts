@@ -41,6 +41,7 @@ export {
   DateTimePicker,
   Dropdown,
   Toggle,
+  Checkbox,
   SettingsRow,
   EmptyState,
   BlocklistCard,

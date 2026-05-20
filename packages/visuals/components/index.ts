@@ -54,6 +54,8 @@ export { default as Dropdown } from "./Dropdown.vue";
 
 export { default as Toggle } from "./Toggle.vue";
 
+export { default as Checkbox } from "./Checkbox.vue";
+
 export { default as SettingsRow } from "./SettingsRow.vue";
 
 export { default as EmptyState } from "./EmptyState.vue";
