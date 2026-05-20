@@ -4845,17 +4845,15 @@ span[data-wikilink]:hover {
   user-select: none;
   padding: 6px 12px;
   text-align: center;
-  /* Opaque background — fully covers anything behind. Counter ведёт себя
-     как «полноценный элемент в layout» через padding-bottom редактора
-     (см. ниже), текст физически до него не доходит. */
-  background: var(--background);
-  border-top: 1px solid color-mix(in srgb, var(--sidebar-foreground) 12%, transparent);
+  /* Fully transparent — counter это просто плавающий текст внизу.
+     Текст редактора не упирается в него потому что .editor-content-area
+     имеет padding-bottom (см. ниже) — visually text «упирается» в
+     невидимую границу выше counter'а. */
+  background: transparent;
 }
 
-/* Когда zen mode активен и counter рендерится — добавляем
-   padding-bottom редактору равный высоте counter'а (~30px). Текст
-   останавливается выше counter'а — он визуально становится частью
-   layout'а, не overlay'ем. */
+/* Padding-bottom редактора в zen mode = высота counter'а + breathing.
+   Текст редактора не залезает под counter, останавливается выше. */
 .app-container.focus-mode-active .editor-content-area {
   padding-bottom: 32px;
 }
