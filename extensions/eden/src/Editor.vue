@@ -274,7 +274,11 @@ const extensions = [
   // TaskRef: atomic block node, рендерит task_obj live из ARK через NodeView.
   // Pattern B: source of truth — task_obj, content_json хранит только taskId.
   // Bidir sync с Delphi работает через ARK object_upserted events.
-  TaskRef,
+  TaskRef.configure({
+    // Closure читает текущий entry.id — если юзер откроет другую заметку,
+    // input rule подхватит новый id без re-init Editor.
+    getSourceNoteId: () => props.entry.id,
+  }),
   Typography,
   Wikilink.configure({
     suggestion: {
@@ -528,15 +532,6 @@ function getSerializedEditorContent() {
   }
 
   return JSON.stringify(editor.value.getJSON());
-}
-
-function getSerializedEditorMarkdown() {
-  // @tiptap/markdown v3 API. Раньше было `storage.markdown.getMarkdown()`,
-  // в v3 manager переехал в `editor.markdown` (или `editor.getMarkdown()`).
-  // Не критично для сохранения (contentJson авторитетен), используется только
-  // для экспорта/копирования если когда-нибудь понадобится. Defensive `?.`.
-  const ed = editor.value as unknown as { getMarkdown?: () => string } | null;
-  return ed?.getMarkdown?.() ?? "";
 }
 
 function getSuggestionClientRect(renderProps: {
@@ -954,8 +949,6 @@ async function save() {
   lastPersistedContentJson = getSerializedEditorContent();
   // Pattern B (2026-05-20): Eden больше не диффит taskItem'ы в save flow.
   // task_obj — независимый объект; TaskRef NodeView читает его live из ARK.
-  // Слово «task» в Editor.vue не упоминается — это правильно.
-  lastPersistedMarkdown = getSerializedEditorMarkdown();
   updatePersistedMetadataBaseline({
     title: normalizedTitle,
     noteTypeId: noteTypeId.value,

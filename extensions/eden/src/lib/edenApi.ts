@@ -53,7 +53,8 @@ export const edenApi = {
   patchTask: (taskId: string, patch: { title?: string; isCompleted?: boolean }) =>
     shim.patchTask(taskId, patch),
 
-  createTask: (sourceNoteId: string, title?: string) => shim.createTask(sourceNoteId, title),
+  createTask: (sourceNoteId: string, title?: string, explicitId?: string) =>
+    shim.createTask(sourceNoteId, title, explicitId),
 
   subscribeObjectChanges: (
     handler: (payload: { event: "object_upserted" | "object_deleted"; id: string; typeId?: string }) => void,

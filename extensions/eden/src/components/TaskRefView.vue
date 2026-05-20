@@ -1,7 +1,12 @@
 <template>
   <NodeViewWrapper
     class="task-ref-node"
-    :class="{ 'is-completed': isCompleted, 'is-loading': loading, 'is-missing': missing }"
+    :class="{
+      'is-completed': isCompleted,
+      'is-cancelled': isCancelled,
+      'is-loading': loading,
+      'is-missing': missing,
+    }"
     :data-task-id="taskId"
   >
     <div class="task-ref-row" contenteditable="false">
@@ -29,6 +34,7 @@
         v-model="editingTitleValue"
         class="task-ref-title-input"
         type="text"
+        placeholder="Что нужно сделать?"
         @blur="commitTitle"
         @keydown.enter.prevent="commitTitle"
         @keydown.escape.prevent="cancelEditTitle"
@@ -52,10 +58,12 @@ const taskId = computed<string | null>(() => {
 
 const title = ref("");
 const isCompleted = ref(false);
+const isCancelled = ref(false);
 const loading = ref(true);
 // missing = task_obj был удалён (или never существовал). NodeView показывает
-// strikethrough placeholder вместо тихого исчезновения — юзер видит что
-// ссылка повисла, может удалить node.
+// dimmed placeholder вместо тихого исчезновения — юзер видит что ссылка
+// повисла, может удалить node. Также возникает кратковременно когда input
+// rule `[ ] ` асинхронно создаёт task_obj — см. retryLoad ниже.
 const missing = ref(false);
 
 const editingTitle = ref(false);
@@ -70,7 +78,7 @@ const SINGLE_CLICK_DELAY_MS = 250;
 
 let unsubscribe: (() => void) | null = null;
 
-async function loadTask(): Promise<void> {
+async function loadTask(opts: { allowRetry?: boolean } = {}): Promise<void> {
   const id = taskId.value;
   if (!id) {
     loading.value = false;
@@ -80,15 +88,25 @@ async function loadTask(): Promise<void> {
   try {
     const obj = await edenApi.getTask(id);
     if (!obj) {
+      // Race: input rule `[ ] ` синхронно вставляет TaskRef, потом async
+      // createTask пишет task_obj. NodeView mount'ится первым — get_object
+      // возвращает null. Retry один раз через 350ms покрывает типичный
+      // round-trip (`~30-100ms`).
+      if (opts.allowRetry !== false) {
+        window.setTimeout(() => void loadTask({ allowRetry: false }), 350);
+        return;
+      }
       missing.value = true;
       title.value = "";
       isCompleted.value = false;
+      isCancelled.value = false;
       return;
     }
     missing.value = false;
     title.value = obj.title ?? "";
     const propsRaw = (obj.propsJson ?? {}) as Record<string, unknown>;
     isCompleted.value = Boolean(propsRaw.is_completed);
+    isCancelled.value = Boolean(propsRaw.is_cancelled);
   } catch (err) {
     console.warn("[eden TaskRef] load failed", id, err);
     missing.value = true;
@@ -173,6 +191,15 @@ function cancelEditTitle(): void {
 
 onMounted(() => {
   void loadTask();
+  // Если node только что вставлен (через slash `/задача` или `[ ] ` input
+  // rule) — autoFocus=true. Сразу в edit mode, чтобы юзер начал печатать
+  // title не делая дополнительный double-click. Сбрасываем atrr через
+  // updateAttributes чтобы re-mount (например после autosave reload)
+  // не входил снова в editing.
+  if (props.node?.attrs?.autoFocus) {
+    enterEditMode();
+    props.updateAttributes({ autoFocus: false });
+  }
   unsubscribe = edenApi.subscribeObjectChanges((payload) => {
     if (payload.id !== taskId.value) return;
     if (payload.event === "object_deleted") {
@@ -197,20 +224,21 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .task-ref-node {
-  margin: 0.25rem 0;
+  /* Без выраженного outer margin — TipTap paragraph spacing уже создаёт
+     ритм, дополнительный margin делает блок «парящим» относительно текста. */
+  margin: 0;
 }
 
 .task-ref-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
+  /* Никакого horizontal padding — title должен выравниваться по той же
+     левой кромке что и обычный текст параграфа. Vertical 1px для
+     baseline alignment с paragraph height. */
+  padding: 1px 0;
+  border-radius: 4px;
   transition: background-color 120ms ease;
-}
-
-.task-ref-row:hover {
-  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
 }
 
 /* Унифицированный Checkbox из @kosmos/visuals. Eden подсовывает свой
@@ -228,10 +256,21 @@ onBeforeUnmount(() => {
   font-size: 0.95rem;
   line-height: 1.4;
   color: var(--foreground, #1a1a1a);
+  transition: opacity 120ms ease, color 120ms ease;
 }
 
+/* Completed — только затемнение, без зачёркивания. Зачёркивание оставлено
+   для is-cancelled (отменённая, не выполненная). */
 .is-completed .task-ref-title {
+  opacity: 0.5;
+  color: var(--muted-foreground, #888);
+}
+
+/* Cancelled — зачёркивание + затемнение. Семантически отличается от
+   completed: задача НЕ выполнена, она снята с повестки. */
+.is-cancelled .task-ref-title {
   text-decoration: line-through;
+  opacity: 0.5;
   color: var(--muted-foreground, #888);
 }
 
@@ -243,6 +282,7 @@ onBeforeUnmount(() => {
 .is-missing .task-ref-title {
   color: var(--destructive-foreground, #b14040);
   text-decoration: line-through;
+  opacity: 0.7;
 }
 
 .task-ref-title-input {
@@ -255,6 +295,11 @@ onBeforeUnmount(() => {
   color: var(--foreground, #1a1a1a);
   outline: none;
   font-family: inherit;
+}
+
+.task-ref-title-input::placeholder {
+  color: var(--muted-foreground, #888);
+  opacity: 0.6;
 }
 
 .is-loading .task-ref-title {

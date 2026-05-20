@@ -8,9 +8,20 @@
 // событие для своего taskId — bidir sync с Delphi работает live без любого
 // diff/snapshot кода со стороны Editor.vue.
 
-import { Node, mergeAttributes } from "@tiptap/core";
+import { Node, mergeAttributes, nodeInputRule } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
 import TaskRefView from "./components/TaskRefView.vue";
+import { edenApi } from "@/lib/edenApi";
+
+export interface TaskRefOptions {
+  /**
+   * Возвращает id текущей заметки. Используется input rule'ом
+   * `[ ]` → TaskRef для propsJson.source_note_id нового task_obj.
+   * Editor.vue прокидывает это через configure() из props.entry.id (с
+   * reactive lookup'ом — заметка может смениться).
+   */
+  getSourceNoteId: () => string | null;
+}
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -24,12 +35,18 @@ declare module "@tiptap/core" {
   }
 }
 
-export const TaskRef = Node.create({
+export const TaskRef = Node.create<TaskRefOptions>({
   name: "taskRef",
   group: "block",
   atom: true,
   draggable: true,
   selectable: true,
+
+  addOptions() {
+    return {
+      getSourceNoteId: () => null,
+    };
+  },
 
   addAttributes() {
     return {
@@ -38,6 +55,16 @@ export const TaskRef = Node.create({
         parseHTML: (element) => element.getAttribute("data-task-id"),
         renderHTML: (attributes: { taskId?: string | null }) =>
           attributes.taskId ? { "data-task-id": attributes.taskId } : {},
+      },
+      // Runtime hint: «нода только что вставлена, NodeView должен сразу войти
+      // в edit mode title». Не сериализуется в HTML — это эфемерный flag
+      // только для свежесозданных задач (через slash или input rule). После
+      // первого mount NodeView обнуляет его через updateAttributes.
+      autoFocus: {
+        default: false,
+        parseHTML: () => false,
+        renderHTML: () => ({}),
+        keepOnSplit: false,
       },
     };
   },
@@ -62,10 +89,42 @@ export const TaskRef = Node.create({
           chain()
             .insertContent({
               type: this.name,
-              attrs: { taskId },
+              attrs: { taskId, autoFocus: true },
             })
             .focus()
             .run(),
     };
+  },
+
+  addInputRules() {
+    const getSourceNoteId = this.options.getSourceNoteId;
+    const type = this.type;
+    return [
+      // Markdown shortcut: `- [ ] ` или `[ ] ` в начале текста → TaskRef.
+      // ProseMirror отрабатывает inputRule после ввода каждого char'а. После
+      // того как BulletList (StarterKit) сожрёт `- ` → курсор в пустом
+      // списочном элементе → юзер ввёл `[ ] ` → матчим, заменяем block на
+      // TaskRef. Если пользователь набрал `- [ ]` слитно до того как
+      // BulletList конвертировал `- ` — второй паттерн (`-\s\[\s\]\s`)
+      // ловит его раньше.
+      nodeInputRule({
+        find: /^(?:-\s)?\[\s\]\s$/,
+        type,
+        getAttributes: () => {
+          const taskId = crypto.randomUUID();
+          const sourceNoteId = getSourceNoteId();
+          if (sourceNoteId) {
+            // Side-effect: async создаём task_obj с тем же taskId, который
+            // вставляем синхронно в node. Race: NodeView mount'ится до того
+            // как upsert завершится — loadTask вернёт null. NodeView сам
+            // делает retry через 250ms (см. TaskRefView.vue).
+            void edenApi.createTask(sourceNoteId, "", taskId);
+          } else {
+            console.warn("[eden TaskRef] input rule: sourceNoteId недоступен");
+          }
+          return { taskId, autoFocus: true };
+        },
+      }),
+    ];
   },
 });

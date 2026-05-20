@@ -902,11 +902,17 @@ export async function patchTask(
 
 /**
  * Создать новый task_obj (для slash-команды /задача или markdown `- [ ]`).
- * Возвращает taskId — caller вставляет TaskRef node с этим id.
+ * Возвращает taskId. Если caller передал `explicitId` — используется он
+ * (нужно для input rule: synchronously генерируем UUID + вставляем TaskRef
+ * node, потом async создаём task_obj с тем же id).
  */
-export async function createTask(sourceNoteId: string, title = ""): Promise<string> {
+export async function createTask(
+  sourceNoteId: string,
+  title = "",
+  explicitId?: string,
+): Promise<string> {
   await ensureTaskObjectTypeRegistered();
-  const taskId = crypto.randomUUID();
+  const taskId = explicitId ?? crypto.randomUUID();
   const now = new Date().toISOString();
   await ark("upsert_object", {
     object: {
