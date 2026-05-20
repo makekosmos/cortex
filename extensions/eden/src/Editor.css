@@ -378,16 +378,16 @@
 
 /* Inter-block margin — единый плотный rhythm: 2px между ЛЮБЫМИ
    соседними блоками (paragraph, heading, taskRef, list, codeBlock).
-   Vue scoped CSS на `.task-ref-node` имеет higher specificity чем
-   `* + *`, поэтому дублируем явно через `[data-task-ref]` атрибут. */
+   !important нужен потому что `.ProseMirror p { margin: 0 }` (для
+   reset'а browser default <p>'s margin-bottom) объявлен ниже в файле
+   с той же specificity (0,1,1) — last wins, и без !important `<p>`
+   после задачи теряет свой 2px. Vue scoped CSS на TaskRef тоже не
+   пробьёт без !important. */
 .ProseMirror > * + * {
-  margin-top: 2px;
+  margin-top: 2px !important;
 }
-.ProseMirror > [data-task-ref] {
-  margin-top: 2px;
-}
-.ProseMirror > [data-task-ref]:first-child {
-  margin-top: 0;
+.ProseMirror > *:first-child {
+  margin-top: 0 !important;
 }
 
 .ProseMirror h1,
