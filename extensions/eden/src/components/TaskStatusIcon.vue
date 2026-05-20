@@ -6,8 +6,7 @@
 // Visual conventions:
 //   triage      — dashed outline circle + ? glyph (нужно отсортировать)
 //   backlog     — dotted outline circle (когда-нибудь потом)
-//   todo        — solid outline circle (готово к работе)
-//   in_progress — outline + half-pie (handon)
+//   todo        — solid outline circle (готово к работе, активная)
 //   done        — filled solid + ✓ (terminal success)
 //   canceled    — filled muted + × (terminal not-done)
 //
@@ -99,20 +98,6 @@ function onClick(e: MouseEvent) {
         />
       </template>
 
-      <!-- in_progress: outline + half pie filled -->
-      <template v-else-if="status === 'in_progress'">
-        <rect
-          x="1.5"
-          y="1.5"
-          width="15"
-          height="15"
-          rx="6"
-          stroke="currentColor"
-          stroke-width="2"
-        />
-        <rect x="3.5" y="3.5" width="5.5" height="11" rx="3" fill="currentColor" />
-      </template>
-
       <!-- done: filled accent + check glyph (Delphi checked parity-ish) -->
       <template v-else-if="status === 'done'">
         <rect x="1.5" y="1.5" width="15" height="15" rx="6" fill="currentColor" />
@@ -156,8 +141,7 @@ function onClick(e: MouseEvent) {
 /* Active statuses — нейтральный outline, hover → accent. */
 .task-status-icon--todo,
 .task-status-icon--triage,
-.task-status-icon--backlog,
-.task-status-icon--in_progress {
+.task-status-icon--backlog {
   color: var(--ring);
 }
 

@@ -991,8 +991,9 @@ export async function createTask(
         is_trashed: false,
         // Linear-style status (2026-05-20): single source of truth для
         // жизненного цикла задачи. is_completed/is_cancelled derive'ятся
-        // из status в patchTask.
-        status: "todo",
+        // из status в patchTask. Default — triage (новая задача требует
+        // сортировки перед попаданием в активный todo-лист).
+        status: "triage",
         sort_order: 0,
         heading_id: null,
         project_id: null,

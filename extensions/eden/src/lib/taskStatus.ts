@@ -1,7 +1,9 @@
 // Linear-style task statuses.
 //
-// 7 значений по жизненному циклу задачи: triage → backlog/todo/in_progress
-// → done/canceled/duplicate. Хранится в `task_obj.propsJson.status`.
+// 5 значений жизненного цикла: triage → backlog/todo → done/canceled.
+// Хранится в `task_obj.propsJson.status`. До 2026-05-20 был расширенный
+// набор с `in_progress` и `duplicate` — убраны как избыточные для
+// personal-use; legacy values нормализуются в `normalizeStatus`.
 //
 // Совместимость с Delphi: is_completed / is_cancelled остаются в propsJson
 // (Delphi UI читает их). Мы их derive'им из status: done → is_completed,
@@ -12,20 +14,21 @@ export const TASK_STATUSES = [
   "triage",
   "backlog",
   "todo",
-  "in_progress",
   "done",
   "canceled",
 ] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export const TASK_STATUS_DEFAULT: TaskStatus = "todo";
+// Default — `triage`: новая задача требует сортировки. Юзер через ПКМ
+// решает в какой bucket (todo/backlog/done) переводить. Это снижает
+// «загромождение» todo-листа автоматическими активными задачами.
+export const TASK_STATUS_DEFAULT: TaskStatus = "triage";
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   triage: "Сортировка",
   backlog: "Бэклог",
   todo: "К выполнению",
-  in_progress: "В работе",
   done: "Готово",
   canceled: "Отменена",
 };
@@ -53,8 +56,10 @@ export function getStatusCategory(status: TaskStatus): TaskStatusCategory {
  *   - is_cancelled=true → canceled
  *   - else → todo (default)
  *
- * Legacy: до 2026-05-20 был статус "duplicate". Если встретим его в
- * старых tasks — нормализуем к "canceled" (та же семантика terminal-fail).
+ * Legacy миграции (2026-05-20):
+ *   - "duplicate" → "canceled" (та же семантика terminal-fail).
+ *   - "in_progress" → "todo" (упрощение: убрали отдельный bucket «в работе»,
+ *     активная задача = просто todo).
  */
 export function normalizeStatus(input: {
   status?: unknown;
@@ -66,6 +71,7 @@ export function normalizeStatus(input: {
       return input.status as TaskStatus;
     }
     if (input.status === "duplicate") return "canceled";
+    if (input.status === "in_progress") return "todo";
   }
   if (input.is_completed === true) return "done";
   if (input.is_cancelled === true) return "canceled";

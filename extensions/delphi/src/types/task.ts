@@ -285,8 +285,8 @@ export type TodoItem = {
 
   /**
    * Linear-style жизненный цикл задачи. Source of truth — Eden (`propsJson.status`
-   * в `task_obj`). Возможные значения: `triage`, `backlog`, `todo`, `in_progress`,
-   * `done`, `canceled`, `duplicate`. Delphi только читает.
+   * в `task_obj`). Возможные значения: `triage`, `backlog`, `todo`, `done`,
+   * `canceled`. Delphi только читает.
    *
    * `backlog` → задача показывается в SmartList «Когда-нибудь» (наряду с legacy
    * `isSomeday=true`). См. todoFilterService.ts → SmartList.Someday.
