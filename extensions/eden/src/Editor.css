@@ -376,16 +376,9 @@
   color: inherit;
 }
 
-/* Inter-block margin намеренно 0 — единый плотный rhythm как в Anytype.
-   Юзер явно попросил убрать gap между блоками. Если в будущем нужно
-   вернуть — `margin-top: <value>` на `.ProseMirror > * + *` + parity
-   на `[data-task-ref]` (Vue scoped CSS специфичнее общего селектора). */
-.ProseMirror > * + * {
-  margin-top: 0;
-}
-.ProseMirror > [data-task-ref] {
-  margin-top: 0;
-}
+/* Inter-block margin: правил `.ProseMirror > * + *` и `[data-task-ref]`
+   явно нет — все блоки слипаются вплотную (Anytype-style плотный
+   layout). Если нужен gap — раскомментировать с нужным значением. */
 
 .ProseMirror h1,
 .ProseMirror h2,
