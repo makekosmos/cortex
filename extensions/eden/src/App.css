@@ -4850,6 +4850,15 @@ span[data-wikilink]:hover {
      имеет padding-bottom (см. ниже) — visually text «упирается» в
      невидимую границу выше counter'а. */
   background: transparent;
+  border-top: 1px solid transparent;
+  transition: border-color 150ms ease;
+}
+
+/* Класс `has-overlap` ставится JS'ом когда editor scrollable (content
+   высокий настолько что доходит до counter'а). Тогда border-top
+   появляется — визуально отделяет counter от наезжающего текста. */
+.eden-char-counter.has-overlap {
+  border-top-color: color-mix(in srgb, var(--sidebar-foreground) 18%, transparent);
 }
 
 /* Zen mode: app-container получает padding-bottom = высота counter'а.

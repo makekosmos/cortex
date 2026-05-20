@@ -194,6 +194,7 @@
     <div
       v-if="layout.isZenMode && currentEntryCharCount !== null"
       class="eden-char-counter"
+      :class="{ 'has-overlap': charCounterHasOverlap }"
       data-testid="eden-char-counter"
     >
       {{ currentEntryCharCount }} {{ pluralizeCharacters(currentEntryCharCount) }}
@@ -410,6 +411,61 @@ const currentEntryCharCount = computed<number | null>(() => {
   if (!eden.currentEntry) return null;
   if (liveCharCount.value !== null) return liveCharCount.value;
   return countCharsInProseMirrorDoc(eden.currentEntry.content_json);
+});
+
+// Border-top на counter появляется когда editor content высокий
+// настолько что text доходит до bottom (т.е. editor scrollable).
+// `.editor-content-area.scrollHeight > clientHeight` = overflow.
+const charCounterHasOverlap = ref(false);
+let overlapRafId: number | null = null;
+let overlapResizeObserver: ResizeObserver | null = null;
+
+function recomputeCharCounterOverlap(): void {
+  if (!layout.isZenMode) {
+    charCounterHasOverlap.value = false;
+    return;
+  }
+  const area = document.querySelector(".editor-content-area") as HTMLElement | null;
+  if (!area) {
+    charCounterHasOverlap.value = false;
+    return;
+  }
+  // Tolerance 1px на rounding errors.
+  charCounterHasOverlap.value = area.scrollHeight > area.clientHeight + 1;
+}
+
+function scheduleOverlapCheck(): void {
+  if (overlapRafId !== null) return;
+  overlapRafId = requestAnimationFrame(() => {
+    overlapRafId = null;
+    recomputeCharCounterOverlap();
+  });
+}
+
+watch(liveCharCount, () => scheduleOverlapCheck());
+watch(() => layout.isZenMode, () => scheduleOverlapCheck());
+watch(() => eden.currentEntry?.id ?? null, () => scheduleOverlapCheck());
+
+onMounted(() => {
+  window.addEventListener("resize", scheduleOverlapCheck);
+  // Observer на ProseMirror — re-check когда content (height) меняется
+  // от typing/удаления/insert'а блоков. ResizeObserver надёжнее чем
+  // MutationObserver для тяжёлого typing'а.
+  nextTick(() => {
+    const pm = document.querySelector(".ProseMirror");
+    if (pm) {
+      overlapResizeObserver = new ResizeObserver(scheduleOverlapCheck);
+      overlapResizeObserver.observe(pm);
+    }
+    scheduleOverlapCheck();
+  });
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", scheduleOverlapCheck);
+  overlapResizeObserver?.disconnect();
+  overlapResizeObserver = null;
+  if (overlapRafId !== null) cancelAnimationFrame(overlapRafId);
 });
 
 
