@@ -299,40 +299,53 @@
   transform: scaleX(-1);
 }
 
+/* Resize handle для sidebar'ов. До 2026-05-20 эти правила были объявлены
+   ТРИ раза в App.css (302-336 original, 4701-4736 «Anytype override»,
+   4756-4768 второй override) — last-loaded выигрывал, эффективные
+   значения собирались из всех трёх. Сейчас merged в одно место. */
 .vault-sidebar-resize-handle,
 .widget-sidebar-resize-handle {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 6px;
+  right: -6px;
+  width: 12px;
   height: 100%;
   cursor: col-resize;
-  z-index: 20;
+  z-index: 80;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
+  opacity: 1;
   transition: opacity var(--transition-fast);
 }
 
-.vault-sidebar-wrapper:hover .vault-sidebar-resize-handle,
-.vault-sidebar-wrapper.is-resizing .vault-sidebar-resize-handle,
-.widget-sidebar-wrapper:hover .widget-sidebar-resize-handle,
-.widget-sidebar-wrapper.is-resizing .widget-sidebar-resize-handle {
-  opacity: 1;
+.vault-sidebar-wrapper.hidden .vault-sidebar-resize-handle,
+.widget-sidebar-wrapper.hidden .widget-sidebar-resize-handle {
+  display: none;
 }
 
 .resize-handle-line {
-  width: 2px;
+  width: 6px;
   height: 32px;
-  background: var(--accent);
-  border-radius: 1px;
-  opacity: 0.6;
+  border-radius: 3px;
+  background: var(--color-shape-secondary);
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    background-color var(--transition-fast),
+    height var(--transition-fast);
+}
+
+.vault-sidebar-resize-handle:hover .resize-handle-line,
+.widget-sidebar-resize-handle:hover .resize-handle-line,
+.vault-sidebar-wrapper.is-resizing .resize-handle-line,
+.widget-sidebar-wrapper.is-resizing .resize-handle-line {
+  opacity: 1;
 }
 
 .vault-sidebar-resize-handle:hover .resize-handle-line,
 .widget-sidebar-resize-handle:hover .resize-handle-line {
-  opacity: 1;
+  background: var(--color-shape-primary);
 }
 
 .sidebar,
@@ -4698,42 +4711,8 @@ span[data-wikilink]:hover {
   height: 56px;
 }
 
-.vault-sidebar-resize-handle,
-.widget-sidebar-resize-handle {
-  width: 12px;
-  right: -12px;
-  opacity: 1;
-}
-
-.vault-sidebar-wrapper.hidden .vault-sidebar-resize-handle,
-.widget-sidebar-wrapper.hidden .widget-sidebar-resize-handle {
-  display: none;
-}
-
-.resize-handle-line {
-  width: 6px;
-  height: 32px;
-  border-radius: 3px;
-  background: var(--color-shape-secondary);
-  opacity: 0;
-  transition:
-    opacity var(--transition-fast),
-    background-color var(--transition-fast),
-    height var(--transition-fast);
-}
-
-.vault-sidebar-resize-handle:hover .resize-handle-line,
-.widget-sidebar-resize-handle:hover .resize-handle-line,
-.vault-sidebar-wrapper.is-resizing .resize-handle-line,
-.widget-sidebar-wrapper.is-resizing .resize-handle-line {
-  opacity: 1;
-}
-
-.vault-sidebar-resize-handle:hover .resize-handle-line,
-.widget-sidebar-resize-handle:hover .resize-handle-line {
-  background: var(--color-shape-primary);
-}
-
+/* Resize handle styles merged в одно место выше (line ~302). Старые
+   override-блоки (4701-4769) удалены — больше не нужны. */
 .sidebar-expand-btn {
   top: 12px;
   left: 0;
@@ -4751,20 +4730,6 @@ span[data-wikilink]:hover {
 .pageWidget,
 .pageVault {
   overflow: hidden;
-}
-
-.vault-sidebar-resize-handle,
-.widget-sidebar-resize-handle {
-  right: -6px;
-  width: 12px;
-  z-index: 80;
-}
-
-.vault-sidebar-resize-handle .resize-handle-line,
-.widget-sidebar-resize-handle .resize-handle-line {
-  width: 6px;
-  height: 32px;
-  border-radius: 3px;
 }
 
 /* macOS: no titlebar background, content goes to top edge */
