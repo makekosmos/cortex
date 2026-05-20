@@ -307,8 +307,12 @@ function commitAndBlur(): void {
 let creatingNew = false;
 
 function commitAndCreateNew(): void {
-  if (creatingNew) return;
+  if (creatingNew) {
+    console.log("[eden TaskRef] Enter: re-entry blocked");
+    return;
+  }
   creatingNew = true;
+  console.log("[eden TaskRef] Enter: commitAndCreateNew start, titleInputValue=", JSON.stringify(titleInputValue.value));
   try {
     // Пустая task → Enter = «выход в обычный параграф» (Obsidian pattern).
     if (titleInputValue.value.trim() === "") {
@@ -350,6 +354,7 @@ function commitAndCreateNew(): void {
     // 1. SYNC insert — ничего не await'ится, нет окна re-entry.
     const tr = editor.view.state.tr.insert(insertPos, newNode);
     editor.view.dispatch(tr);
+    console.log("[eden TaskRef] Enter: inserted new task at pos", insertPos, "newTaskId=", newTaskId);
 
     // 2. Optimistic local commit + background async ARK writes —
     //    fire-and-forget. NodeView новой task'и retry'ит loadTask

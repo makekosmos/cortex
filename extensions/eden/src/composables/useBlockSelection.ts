@@ -34,9 +34,11 @@ interface CachedBlock {
   rect: DOMRect;
 }
 
-// 20px = Anytype canonical THRESHOLD. Меньше — drag триггерится случайно
-// при обычных кликах с микро-движением мыши.
+// 20px = Anytype canonical THRESHOLD для same-block case.
+// 8px = minimum для block-crossing activation (отсекает click jitter
+// в 1-2px на boundary между блоками).
 const DRAG_THRESHOLD_PX = 20;
+const CROSSING_MIN_PX = 8;
 
 export function useBlockSelection() {
   /** Set позиций выделенных блоков. Position стабилен в течение drag-session. */
@@ -207,28 +209,28 @@ export function useBlockSelection() {
     const dy = Math.abs(clientY - startY);
     const wasMoved = hasMoved;
     if (!hasMoved) {
-      // Block-crossing check ПЕРВОЙ — если cursor уже ушёл в ДРУГОЙ
-      // блок относительно mousedown'а, активируем drag НЕЗАВИСИМО от
-      // threshold. Task-row высотой 26px: drag вниз на ~13px уже
-      // оказывается в следующем блоке, но dy < 20 threshold — раньше
-      // блокировался. Теперь — block boundary crossed = drag intent
-      // unambiguous, активируем сразу.
+      // Минимальный jitter filter: даже на boundary между блоками
+      // tiny mouse jitter (1-2px) при click без движения может
+      // пересечь findBlockAtY границу. Требуем 8px чтобы это был
+      // реальный drag намерения.
+      if (dx < CROSSING_MIN_PX && dy < CROSSING_MIN_PX) {
+        return null;
+      }
+      // Block-crossing check: если cursor ушёл в ДРУГОЙ блок относительно
+      // mousedown'а — активируем сразу (8px достаточно, не ждём 20px).
+      // Task row ~26px высотой, dy ~13px уже в следующем блоке.
       if (startBlockPos !== null) {
         const currentBlock = findBlockAtY(clientY);
         if (currentBlock !== startBlockPos) {
-          // crossed block boundary → activate immediately
           hasMoved = true;
         }
       }
       if (!hasMoved) {
-        // Same block (или mousedown в margin'е и не двинулся к другому
-        // блоку) — нужен 20px threshold для отличия click от accidental
-        // drag.
+        // Same block (или drag в margin без block-crossing) — нужен
+        // 20px полный threshold чтобы не мешать text-selection в строке.
         if (dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
           return null;
         }
-        // Threshold passed, но всё ещё в том же блоке — НЕ активируем,
-        // даём PM делать native text-selection в одной строке.
         if (startBlockPos !== null) {
           const currentBlock = findBlockAtY(clientY);
           if (currentBlock === startBlockPos) {
