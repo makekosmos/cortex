@@ -424,6 +424,14 @@
 
 .ProseMirror p {
   color: rgba(255, 255, 255, 0.84);
+  /* Ресет браузерного дефолтного `margin: 1em 0` у `<p>`. Без этого
+     gap между двумя параграфами был 16px (через margin collapse:
+     `<p>.margin-bottom: 1em` vs следующий `.margin-top: 0.85em` из
+     общего правила → берётся max). А между task↔task gap был
+     0.85em (=13.6px). Inconsistent. Теперь все gaps управляются
+     только `.ProseMirror > * + * { margin-top: 0.85em }` — единый
+     vertical rhythm. */
+  margin: 0;
 }
 
 .ProseMirror ul,
