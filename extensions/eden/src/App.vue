@@ -644,14 +644,20 @@ watch(
   [
     () => layout.isZenMode,
     () => eden.activeScreen,
-    () => eden.currentEntry,
   ],
-  ([isZenMode, activeScreen, currentEntry]) => {
+  ([isZenMode, activeScreen]) => {
     if (!isZenMode) return;
 
     layout.closeSearch();
 
-    if (activeScreen !== "notes" || !currentEntry) {
+    // Auto-disable zen mode ТОЛЬКО при уходе с notes screen (в Настройки,
+    // типы объектов и т.п.). Не дёргаем на transitions currentEntry
+    // (null → noteB → noteA), потому что во время навигации между
+    // заметками currentEntry кратковременно null'ится, что валило zen
+    // mode мид-navigation и ломало dock-corner dblclick на следующей
+    // странице. Если юзер сам не находится ни на каком entry в notes
+    // screen — пусть смотрит пустой editor, Esc выйдет руками.
+    if (activeScreen !== "notes") {
       layout.disableZenMode();
     }
   },
