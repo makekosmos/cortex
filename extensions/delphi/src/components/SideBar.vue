@@ -194,6 +194,7 @@ const primaryItems = computed<SidebarNavItem[]>(() => {
   return [
     { id: "inbox", icon: Inbox, to: "/", label: "Входящие" },
     { id: "today", icon: Star, to: "/today", label: "Сегодня" },
+    { id: "someday", icon: Archive, to: "/someday", label: "Когда-нибудь" },
   ];
 });
 

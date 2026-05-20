@@ -42,8 +42,16 @@ const predicates: Record<SmartList, (t: TodoItem) => boolean> = {
 
   [SmartList.Anytime]: (t) => isActive(t) && !t.isSomeday,
 
+  // «Когда-нибудь» = Eden Linear-style `status === "backlog"` (single source of
+  // truth) ИЛИ legacy `isSomeday` boolean (для задач, созданных до status'а).
+  // Обычно задача попадает только в один из них; OR оставляет работать legacy
+  // данные после rollout'а status field. Активная задача только — done / canceled /
+  // trashed скрываются.
   [SmartList.Someday]: (t) =>
-    t.isSomeday && !t.isCompleted && !t.isCancelled && !t.isTrashed,
+    (t.status === "backlog" || t.isSomeday) &&
+    !t.isCompleted &&
+    !t.isCancelled &&
+    !t.isTrashed,
 
   [SmartList.Logbook]: (t) => t.isCompleted || t.isCancelled,
 

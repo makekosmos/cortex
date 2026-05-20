@@ -151,6 +151,9 @@ function todoToArkTaskObject(todo: TodoItem): ArkObjectRecord {
       is_today: todo.isToday,
       is_evening: todo.isEvening,
       is_someday: todo.isSomeday,
+      // Linear-style lifecycle status (writes Eden, читает Delphi). Если поле
+      // не задано в TodoItem — пропускаем, чтобы не затирать чужое значение.
+      ...(todo.status ? { status: todo.status } : {}),
       is_completed: todo.isCompleted,
       completed_at: todo.completedAt ?? null,
       is_cancelled: todo.isCancelled,
@@ -191,6 +194,7 @@ function arkTaskObjectToTodo(object: ArkObjectRecord): TodoItem {
     isToday: asBoolean(props.is_today, false),
     isEvening: asBoolean(props.is_evening, false),
     isSomeday: asBoolean(props.is_someday, false),
+    status: asNullableString(props.status),
     isCompleted: asBoolean(props.is_completed, false),
     completedAt: asNullableString(props.completed_at),
     isCancelled: asBoolean(props.is_cancelled, false),

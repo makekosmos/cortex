@@ -101,7 +101,7 @@ export const SmartListTitle: Record<SmartList, string> = {
 
   [SmartList.Anytime]: "Когда угодно",
 
-  [SmartList.Someday]: "Потом",
+  [SmartList.Someday]: "Когда-нибудь",
 
   [SmartList.Logbook]: "Журнал",
 
@@ -282,6 +282,16 @@ export type TodoItem = {
   isEvening: boolean;
 
   isSomeday: boolean;
+
+  /**
+   * Linear-style жизненный цикл задачи. Source of truth — Eden (`propsJson.status`
+   * в `task_obj`). Возможные значения: `triage`, `backlog`, `todo`, `in_progress`,
+   * `done`, `canceled`, `duplicate`. Delphi только читает.
+   *
+   * `backlog` → задача показывается в SmartList «Когда-нибудь» (наряду с legacy
+   * `isSomeday=true`). См. todoFilterService.ts → SmartList.Someday.
+   */
+  status?: string | null;
 
   isCompleted: boolean;
 
