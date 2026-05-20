@@ -4852,10 +4852,14 @@ span[data-wikilink]:hover {
   background: transparent;
 }
 
-/* Padding-bottom редактора в zen mode = высота counter'а + breathing.
-   Текст редактора не залезает под counter, останавливается выше. */
-.app-container.focus-mode-active .editor-content-area {
+/* Zen mode: app-container получает padding-bottom = высота counter'а.
+   Это физически shrинит DesktopChrome (его единственного flex-child'а),
+   editor surface заканчивается на counter'е. Counter сидит в padding
+   zone как fixed footer.
+   box-sizing: border-box должен быть установлен (default в reset'е). */
+.app-container.focus-mode-active {
   padding-bottom: 32px;
+  box-sizing: border-box;
 }
 
 .eden-titlebar-title {
