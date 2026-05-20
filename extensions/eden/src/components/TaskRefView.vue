@@ -41,7 +41,7 @@
         @click.stop
         @focus="onTitleFocus"
         @blur="onTitleBlur"
-        @keydown.enter.prevent="commitAndBlur"
+        @keydown.enter.prevent="commitAndCreateNew"
         @keydown.escape.prevent="cancelAndBlur"
         @keydown.delete="onTitleKeyDelete"
       />
@@ -294,6 +294,78 @@ async function commitInputValue(): Promise<void> {
 
 function commitAndBlur(): void {
   titleInputRef.value?.blur();
+}
+
+/**
+ * Enter в title input — commit + создать НОВУЮ task ниже + фокус на неё
+ * (Obsidian-pattern для checked list items). Если current task пустая —
+ * выходим из task mode вместо создания (стандартный escape поведение).
+ */
+async function commitAndCreateNew(): Promise<void> {
+  // Если текущая task пустая — Enter = «выход из task'ов», создаём
+  // обычный параграф ниже + фокус.
+  if (titleInputValue.value.trim() === "") {
+    exitToNewParagraph();
+    return;
+  }
+  // Сохраним текущий title (await чтобы не было race с созданием новой).
+  await commitInputValue();
+
+  const editor = props.editor as {
+    state: { schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } }; tr: unknown };
+    view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
+    options: { getSourceNoteId?: () => string | null };
+  };
+  const getPos = props.getPos;
+  const node = props.node as { nodeSize: number };
+  if (typeof getPos !== "function") return;
+  const myPos = getPos();
+  if (typeof myPos !== "number") return;
+
+  // Get source note id для нового task_obj.
+  const sourceNoteId = editor.options.getSourceNoteId?.() ?? null;
+  if (!sourceNoteId) {
+    console.warn("[eden TaskRef] commitAndCreateNew: no sourceNoteId");
+    return;
+  }
+
+  // Pre-generate UUID, sync insert node + async create task_obj
+  // (NodeView retry в loadTask покроет race).
+  const newTaskId = crypto.randomUUID();
+  void edenApi.createTask(sourceNoteId, "", newTaskId);
+
+  const insertPos = myPos + node.nodeSize;
+  const newNode = editor.state.schema.nodes.taskRef?.create({
+    taskId: newTaskId,
+    autoFocus: true,
+  });
+  if (!newNode) return;
+  const tr = editor.view.state.tr.insert(insertPos, newNode);
+  editor.view.dispatch(tr);
+  // autoFocus в новой TaskRef ноде → её NodeView сам сфокусируется.
+}
+
+/**
+ * Enter на пустой task — создаём parag ниже + фокусируем editor туда.
+ * Эмулирует Obsidian: Enter на пустом checkbox-item «выходит» из списка.
+ */
+function exitToNewParagraph(): void {
+  const editor = props.editor as {
+    state: { schema: { nodes: { paragraph?: { create: () => unknown } } } };
+    view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
+    commands?: { focus?: (pos: number) => void };
+  };
+  const getPos = props.getPos;
+  const node = props.node as { nodeSize: number };
+  if (typeof getPos !== "function") return;
+  const myPos = getPos();
+  if (typeof myPos !== "number") return;
+  const para = editor.state.schema.nodes.paragraph?.create();
+  if (!para) return;
+  const insertPos = myPos + node.nodeSize;
+  const tr = editor.view.state.tr.insert(insertPos, para);
+  editor.view.dispatch(tr);
+  nextTick(() => editor.commands?.focus?.(insertPos + 1));
 }
 
 function cancelAndBlur(): void {

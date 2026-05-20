@@ -270,19 +270,19 @@ const blockSelection = useBlockSelection();
 // Это даёт: обычный click → PM как раньше, drag → block selection.
 // Никакого preventDefault на mousedown → нет broken intermediate state.
 function onContentMouseDown(e: MouseEvent): void {
-  if (e.button !== 0) return;
   if (!editor.value || !contentAreaRef.value) return;
   const target = e.target as HTMLElement | null;
   if (!target) return;
-  // Не трекаем mousedown на интерактивных контролах (Checkbox, кнопки
-  // в TaskRef inputs и т.п.) — у них своя логика.
-  if (target.closest("input, textarea, button, [role=button], [role=checkbox]")) return;
-  // Если есть persisted block selection от прошлого drag'а — снимаем её
-  // на любом новом mousedown'е (как Anytype: click без модификатора clears).
+  // Clear stale block selection на ЛЮБОЙ mousedown в редакторе — включая
+  // RMB и клики на interactive controls (checkbox, button). Иначе
+  // persistent selection остаётся после прошлого drag'а пока юзер не
+  // нажмёт Esc.
   if (blockSelection.hasSelection.value) {
     blockSelection.clearSelection();
   }
-  // Tracking starts — drag активируется только если mouse уйдёт >20px.
+  // Drag tracking — только LMB и только на non-interactive areas.
+  if (e.button !== 0) return;
+  if (target.closest("input, textarea, button, [role=button], [role=checkbox]")) return;
   blockSelection.startTracking(editor.value, e.clientX, e.clientY, contentAreaRef.value);
   window.addEventListener("mousemove", onWindowMouseMove);
   window.addEventListener("mouseup", onWindowMouseUp, { once: true });
@@ -323,7 +323,38 @@ function onWindowKeyDown(e: KeyboardEvent): void {
     if (!editor.value) return;
     e.preventDefault();
     void blockSelection.deleteSelected(editor.value, edenApi.softDeleteTask);
+    return;
   }
+  if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
+    if (!editor.value) return;
+    e.preventDefault();
+    const text = serializeSelectedBlocks();
+    if (text) void navigator.clipboard.writeText(text);
+  }
+}
+
+/**
+ * Сериализует выделенные блоки в plain text для clipboard. taskRef ноды
+ * читают title прямо из DOM input'а (синхронно, без async getTask).
+ * Параграфы / heading'и / list items — через `node.textContent`.
+ */
+function serializeSelectedBlocks(): string {
+  if (!editor.value) return "";
+  const view = editor.value.view;
+  const positions = Array.from(blockSelection.selectedPositions.value).sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (const pos of positions) {
+    const node = view.state.doc.nodeAt(pos);
+    if (!node) continue;
+    if (node.type.name === "taskRef") {
+      const dom = view.nodeDOM(pos) as HTMLElement | null;
+      const input = dom?.querySelector(".task-ref-title-input") as HTMLInputElement | null;
+      parts.push(`- [ ] ${input?.value ?? ""}`);
+    } else {
+      parts.push(node.textContent || "");
+    }
+  }
+  return parts.join("\n");
 }
 
 // Container class toggle — `kepler-block-select-active` ставится когда
