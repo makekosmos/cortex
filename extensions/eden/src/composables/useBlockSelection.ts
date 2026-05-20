@@ -129,24 +129,35 @@ export function useBlockSelection() {
 
   function collectBlocks(editor: TiptapEditor): CachedBlock[] {
     const out: CachedBlock[] = [];
-    // descendants walk: для container типов return true (recurse), для leaf
-    // block return false (record + не диваем глубже), для inline возвращаем
-    // false и пропускаем.
+    // Hit-test rect для каждого блока расширяем по горизонтали до полной
+    // ширины editor content area. Так drag в левом margin'е (между
+    // редактором и блоком) тоже хитит блок. Anytype эквивалент: они
+    // тоже хитят по Y-overlap, X — full width. По вертикали — реальный
+    // top/height блока (его реальные границы).
+    const containerRect = containerEl?.getBoundingClientRect();
+    const fullLeft = containerRect?.left ?? 0;
+    const fullWidth = containerRect?.width ?? 0;
+
     editor.state.doc.descendants((node, pos) => {
       if (CONTAINER_BLOCK_TYPES.has(node.type.name)) {
         return true; // recurse в children
       }
       if (!node.isBlock) {
-        return false; // inline / text — пропускаем, не walk внутрь
+        return false; // inline / text — пропускаем
       }
       const dom = editor.view.nodeDOM(pos);
       if (dom instanceof HTMLElement) {
-        out.push({ pos, el: dom, rect: dom.getBoundingClientRect() });
+        const blockRect = dom.getBoundingClientRect();
+        // DOMRect конструктор принимает x/y/w/h. Заменяем horizontal
+        // bounds на содержащий контейнер — vertical оставляем реальные.
+        const expandedRect = new DOMRect(
+          fullLeft,
+          blockRect.top,
+          fullWidth,
+          blockRect.height,
+        );
+        out.push({ pos, el: dom, rect: expandedRect });
       }
-      // Leaf block записан — не диваем в его внутренности, чтобы не
-      // селектить parent + child одновременно. Если внутри листайтема
-      // есть nested list — пользователь хочет выделить весь list item
-      // как целое, не его части отдельно.
       return false;
     });
     return out;

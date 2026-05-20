@@ -334,26 +334,18 @@
 /* Block selection highlight (Anytype-style). Класс `.kepler-block-selected`
    ставится на любой leaf block (paragraph, heading, listItem, taskRef,
    codeBlock, blockquote) когда он попадает в rubber-band drag rect.
-   Через `::after` pseudo-element рендерим полупрозрачный синий overlay
-   поверх блока — так же как Anytype делает с `.isSelectionSelected::after`.
 
-   Цвет тот же что Anytype: rgba(55, 122, 255, 0.25). z-index: 10 —
-   ниже rubber-band rect (20) но выше обычного контента.
+   Используем direct background-color на самом элементе (НЕ ::after
+   overlay). ::after не пробивает Vue NodeView wrapping в TipTap'е
+   reliable — direct background работает универсально для любых
+   block-типов: <p>, <h1>, <li>, NodeView <div>'ы.
 
-   Селектор работает в любом scope внутри .ProseMirror (включая nested
-   listItem внутри bulletList) — не только direct children. */
+   Цвет — Anytype's `--color-system-selection`: rgba(55, 122, 255, 0.25).
+   `box-shadow inset` имитирует «border-radius на overlay» без overhead
+   на pseudo-element + position: relative. */
 .ProseMirror .kepler-block-selected {
-  position: relative;
-}
-
-.ProseMirror .kepler-block-selected::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--block-selection-bg, rgba(55, 122, 255, 0.25));
+  background-color: var(--block-selection-bg, rgba(55, 122, 255, 0.25)) !important;
   border-radius: 2px;
-  pointer-events: none;
-  z-index: 10;
 }
 
 /* Editor content area — relative parent для absolute overlay rect. */
