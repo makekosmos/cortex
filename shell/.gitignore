@@ -8,6 +8,10 @@ test-results/
 playwright-report/
 *.log
 
+# Per-worktree dev slot configuration (KEPLER_INSTANCE override).
+# Шаблон — .env.local.example (in tree). См. docs-site/concepts/instances.md.
+.env.local
+
 # buildResources нужны electron-builder — корневой build/ в .gitignore;
 # явно whitelist'им необходимые файлы.
 !build/

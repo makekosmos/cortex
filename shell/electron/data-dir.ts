@@ -1,31 +1,19 @@
-// Single source of truth для базового data dir.
-//
-// Production install: %APPDATA%\Kosmos\
-// Dev mode (`bun run --cwd shell dev`, либо VITE_DEV_SERVER_URL set):
-//   %APPDATA%\Kosmos-dev\
-// Test (Playwright e2e, KOSMOS_DATA_DIR env): абсолютный путь под
-//   tests/.e2e/<slug>/
-//
-// Backend (services/kepler-backend) тоже читает KOSMOS_DATA_DIR — shell
-// передаёт его в env при spawn'е backend'а, чтобы shell+backend смотрели
-// на один и тот же ark.db. dev script (shell/package.json) выставляет
-// KOSMOS_DATA_DIR=%APPDATA%/Kosmos-dev до запуска vite, и main.ts здесь
-// падает в production path только когда install setup'нул нас.
+// Тонкая обёртка над instance.ts — оставлена для back-compat call site'ов,
+// которые исторически звали `keplerDataDir()`. Резолюция (KOSMOS_DATA_DIR
+// override, dev vs prod, slot suffix) живёт в `resolveInstance()`.
 
-import path from "node:path";
-import { app } from "electron";
+import { resolveInstance } from "./instance";
 
 /**
  * Базовый dir под все Kepler-files: ark.db, kepler.lock.json, window
- * states, extensions/, extensions-data/. Каждый caller строит свой
- * sub-path сверху. НЕ хардкодь «Kosmos» нигде вне этого модуля.
+ * states, extensions/, extensions-data/, crashes/, backups/. НЕ хардкодь
+ * «Kosmos» / «Kepler» нигде вне instance.ts.
+ *
+ *   prod:     %APPDATA%/Kosmos
+ *   dev:      %APPDATA%/Kosmos-dev
+ *   dev-<x>:  %APPDATA%/Kosmos-dev-<x>
+ *   test:     значение KOSMOS_DATA_DIR (absolute, из Playwright helper'а)
  */
 export function keplerDataDir(): string {
-  const override = process.env.KOSMOS_DATA_DIR;
-  if (override && override.length > 0) {
-    return override;
-  }
-  const isDev = !!process.env.VITE_DEV_SERVER_URL;
-  const dirName = isDev ? "Kosmos-dev" : "Kosmos";
-  return path.join(app.getPath("appData"), dirName);
+  return resolveInstance().dataDir;
 }

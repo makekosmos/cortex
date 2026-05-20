@@ -83,20 +83,25 @@ Eden.exe — остаётся standalone Electron + общий backend чере�
 | Visuals (CSS tokens + Vue components) | `@kosmos/visuals` |
 | Backend binary | `kepler-backend.exe` |
 
-## Изоляция data dir (3 уровня)
+## Изоляция инстансов (slot system, 2026-05-20)
 
-| Когда | Где live ark.db |
-|---|---|
-| **Production install** (NSIS) | `%APPDATA%\Kosmos\` |
-| **Dev** (`bun run --cwd shell dev`) | `%APPDATA%\Kosmos-dev\` — отдельная от prod |
-| **Test** (Playwright e2e) | `tests/.e2e/<slug>/` — fresh per spec |
+Каждой запущенной копии Kepler присваивается **slot**, на основе которого
+derive'ятся Electron userData, ARK dataDir, productName, hotkey, autoupdater,
+autorun. Цель — installed prod Kepler работает **одновременно** с dev-сессиями
+(и multi-agent worktree разработкой).
 
-Resolution в `shell/electron/data-dir.ts` `keplerDataDir()`:
-1. `KOSMOS_DATA_DIR` env (test) → absolute path
-2. `VITE_DEV_SERVER_URL` set (dev) → `Kosmos-dev`
-3. иначе (prod) → `Kosmos`
+| slot | trigger | Electron userData | ARK dataDir | hotkey | autoupdater |
+|---|---|---|---|---|---|
+| `prod` (default) | installed `Kepler.exe` | `%APPDATA%\Kepler\` | `%APPDATA%\Kosmos\` | `Alt+Space` | on |
+| `dev` | `VITE_DEV_SERVER_URL` (`bun run --cwd shell dev`) | `%APPDATA%\Kepler-dev\` | `%APPDATA%\Kosmos-dev\` | `` Alt+` `` | off |
+| `dev-<x>` | `KEPLER_INSTANCE=dev-<x>` (per-worktree `shell/.env.local`) | `%APPDATA%\Kepler-dev-<x>\` | `%APPDATA%\Kosmos-dev-<x>\` | disabled | off |
+| `test-<x>` | Playwright (`KOSMOS_DATA_DIR` set) | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR` | disabled | off |
 
-Backend получает `KOSMOS_DATA_DIR=<resolved>` env при spawn'е. См. `docs-site/concepts/test-isolation.md` и `docs-site/agents/forbidden.md`.
+Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
+`applyInstanceToApp()` вызывается в самом верху `main.ts` — до
+`requestSingleInstanceLock`, чтобы lock scope'ился по новому userData.
+
+Полная документация — [Instance slots](docs-site/concepts/instances.md).
 
 ## ✅ Сделано
 

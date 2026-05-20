@@ -41,7 +41,9 @@
 - ❌ Запуск Playwright против user vault Eden.
 - ❌ Указывать тестам `KOSMOS_DATA_DIR` равным `%APPDATA%\Kosmos\` (real user data). Backend поддерживает `KOSMOS_DATA_DIR` override именно чтобы тесты могли подсунуть свой dir под `tests/.e2e/<spec>/`. Helper `tests/e2e/helpers/launch.ts` явно отказывается принимать путь внутри `%APPDATA%`.
 - ❌ Запускать Playwright без `KOSMOS_DATA_DIR` override — тогда backend упадёт в user data dir.
-- ❌ Хардкодить `path.join(appData, "Kosmos", ...)` в shell или extension main process. Используй `keplerDataDir()` из `shell/electron/data-dir.ts` — он сам разрешает между production (`Kosmos`), dev (`Kosmos-dev`) и test (`KOSMOS_DATA_DIR` env). Иначе dev/test изоляция тихо ломается.
+- ❌ Хардкодить `path.join(appData, "Kosmos", ...)` или `"Kepler"` userData в shell / extension main process. Используй `resolveInstance()` / `keplerDataDir()` из `shell/electron/instance.ts` — single source of truth для slot-based изоляции (`prod` / `dev` / `dev-<x>` / `test-<x>`). См. [Instance slots](/concepts/instances). Иначе dev/test/multi-dev изоляция тихо ломается.
+- ❌ Звать `app.requestSingleInstanceLock()` ДО `applyInstanceToApp(resolveInstance())` в `shell/electron/main.ts`. Lock scope'ится по `app.getPath('userData')`; если он ещё «Kepler» (default) — prod и dev делят один lock и второй инстанс молча выходит. Порядок в module top-level main.ts критичен.
+- ❌ `setLoginItemSettings({ path: process.execPath, ... })` без проверки `resolveInstance().autorunEnabled`. Из dev процесса `process.execPath` это `electron.exe` из `node_modules/` — нечего прописывать в HKCU Run.
 - ❌ Включать `bun run --cwd shell dev` в production install path или launcher для конечного юзера. Dev mode пишет в `Kosmos-dev/`, а production install — в `Kosmos/`. Путать их → разные данные у разработчика и установленного приложения.
 
 ## Proof loop

@@ -30,6 +30,15 @@ import {
   nativeTheme,
   screen,
 } from "electron";
+import { resolveInstance, applyInstanceToApp } from "./instance";
+
+// КРИТИЧНО: applyInstanceToApp ДОЛЖЕН выполниться до requestSingleInstanceLock
+// и до любого app.getPath('userData') / app.getName() — Electron кэширует эти
+// значения и singleInstanceLock scope'ится по userData. Импорты ниже могут
+// потянуть модули, которые читают app.getPath('userData') на module top-level
+// (settings-window.ts, autoupdater-host.ts), — поэтому здесь, не в bootstrap().
+const KEPLER_INSTANCE = resolveInstance();
+applyInstanceToApp(KEPLER_INSTANCE);
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import {
@@ -162,7 +171,10 @@ app.on("second-instance", (_event, argv) => {
 // minidump'ы остаются локально в app.getPath("crashDumps") (по умолчанию
 // %APPDATA%/<productName>/Crashpad/). Submit вручную из Settings UI.
 crashReporter.start({
-  productName: "Kepler",
+  // productName выбирает поддиректорию для minidump'ов:
+  //   %APPDATA%/<productName>/Crashpad/. Per-slot — не смешиваем dev и prod
+  //   crash'и.
+  productName: KEPLER_INSTANCE.productName,
   companyName: "Kosmos",
   uploadToServer: false,
   submitURL: "",
@@ -217,6 +229,9 @@ function spawnBackend() {
     env: {
       ...process.env,
       KOSMOS_DATA_DIR: dataDir,
+      // KEPLER_INSTANCE прокидывается backend'у чтобы он мог tag'нуть
+      // crash log'и и (в перспективе) device id под slot.
+      KEPLER_INSTANCE: KEPLER_INSTANCE.slot,
       KEPLER_USAGE_TRACKER: trackerEnabled ? "1" : "0",
       // RUST_BACKTRACE=1 → crash_reporter::install получает полный backtrace
       // в `<data_dir>/crashes/panic-*.log`. Production cost ~50KB на panic,
@@ -523,7 +538,7 @@ function createTray() {
     ? nativeImage.createFromPath(iconPath)
     : nativeImage.createEmpty();
   tray = new Tray(icon);
-  tray.setToolTip("Kepler");
+  tray.setToolTip(KEPLER_INSTANCE.productName);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Открыть", click: () => showLauncher() },
@@ -628,7 +643,10 @@ async function initArkClient(): Promise<void> {
       arkClientReady = null;
       return;
     }
-    const deviceId = `kepler-shell-${app.getPath("userData").slice(-12)}`;
+    // DeviceId стабилен внутри slot'а (не зависит от точного userData path,
+    // который меняется между OS / user account'ами). Каждый slot — отдельный
+    // sync identity.
+    const deviceId = `kepler-shell-${KEPLER_INSTANCE.slot}`;
     const client = new ArkClient({
       spaceId,
       deviceId,
@@ -1152,7 +1170,9 @@ app.whenReady().then(async () => {
   void initArkClient();
 
   registerMarketplaceIpc();
-  setupAutoUpdater({ isDev });
+  // autoupdater + periodic marketplace check разрешены только в prod slot'е.
+  // Dev / dev-<x> / test не должны пуллить релизы и спамить GitHub.
+  setupAutoUpdater({ isDev: !KEPLER_INSTANCE.autoupdaterEnabled });
 
   // Post-update first launch: если только что обновились через
   // quitAndInstall (autoupdater-host пишет флаг в userData/post-update.flag),
@@ -1167,7 +1187,11 @@ app.whenReady().then(async () => {
     console.warn("[kepler-shell] post-update flag handling failed:", e);
   }
   // Skip periodic в test mode чтобы Playwright не делал HTTPS вызовов.
-  if (process.env.KOSMOS_TEST_MODE !== "1") {
+  // Skip также в dev / dev-<x> чтобы dev-инстансы не спамили GitHub.
+  if (
+    process.env.KOSMOS_TEST_MODE !== "1" &&
+    KEPLER_INSTANCE.periodicMarketplaceCheckEnabled
+  ) {
     startPeriodicCatalogCheck();
   }
 
@@ -1209,38 +1233,50 @@ app.whenReady().then(async () => {
     if (launcherHidden) showLauncher();
     else hideLauncher();
   };
-  let currentAccelerator = getStoredHotkey();
-  function tryRegister(accelerator: string): boolean {
-    try {
-      if (globalShortcut.isRegistered(currentAccelerator)) {
-        globalShortcut.unregister(currentAccelerator);
+  // Slot'ы без hotkey (dev-<x>, test-<x>) — пропускаем регистрацию вовсе.
+  // Пользователь активирует launcher через tray click. Это критично для
+  // multi-dev: два инстанса не могут поделить один accelerator, второй
+  // молча проиграл бы Windows OS race.
+  if (KEPLER_INSTANCE.hotkey !== null) {
+    let currentAccelerator = getStoredHotkey();
+    function tryRegister(accelerator: string): boolean {
+      try {
+        if (globalShortcut.isRegistered(currentAccelerator)) {
+          globalShortcut.unregister(currentAccelerator);
+        }
+        const reg = globalShortcut.register(accelerator, showHide);
+        if (reg) {
+          currentAccelerator = accelerator;
+          console.log(`[kepler-shell] globalShortcut ${accelerator} registered`);
+          return true;
+        }
+        // Откатываемся на предыдущий, если новая регистрация не удалась.
+        globalShortcut.register(currentAccelerator, showHide);
+        return false;
+      } catch (e) {
+        console.error(`[kepler-shell] globalShortcut register error:`, e);
+        return false;
       }
-      const reg = globalShortcut.register(accelerator, showHide);
-      if (reg) {
-        currentAccelerator = accelerator;
-        console.log(`[kepler-shell] globalShortcut ${accelerator} registered`);
-        return true;
-      }
-      // Откатываемся на предыдущий, если новая регистрация не удалась.
-      globalShortcut.register(currentAccelerator, showHide);
-      return false;
-    } catch (e) {
-      console.error(`[kepler-shell] globalShortcut register error:`, e);
-      return false;
     }
+    const ok = tryRegister(currentAccelerator);
+    setHotkeyReregisterCallback(tryRegister);
+    if (!ok) {
+      console.error(`[kepler-shell] globalShortcut ${currentAccelerator} register failed`);
+    }
+  } else {
+    console.log(
+      `[kepler-shell] hotkey disabled for slot ${KEPLER_INSTANCE.slot} — use tray click`,
+    );
   }
-  const ok = tryRegister(currentAccelerator);
-  setHotkeyReregisterCallback(tryRegister);
   // F12 toggle DevTools (dev mode только) — глобальный hotkey удобнее чем
-  // accelerator menu, т.к. меню у frameless окна нет.
+  // accelerator menu, т.к. меню у frameless окна нет. F12 не конфликтует
+  // между параллельными dev-инстансами потому что Windows route'ит global
+  // accelerator к одному фокусному окну; в multi-dev только активное окно
+  // получит toggle, остальные тихо ничего не делают.
   if (isDev) {
     globalShortcut.register("F12", () => {
       mainWindow?.webContents.toggleDevTools();
     });
-  }
-
-  if (!ok) {
-    console.error(`[kepler-shell] globalShortcut ${currentAccelerator} register failed`);
   }
 });
 

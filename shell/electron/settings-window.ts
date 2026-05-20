@@ -11,6 +11,7 @@ import { app, BrowserWindow, ipcMain, screen } from "electron";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveInstance } from "./instance";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,11 +49,11 @@ export function isUsageTrackerEnabled(): boolean {
 
 export const DEFAULT_HOTKEY_PROD = "Alt+Space";
 export const DEFAULT_HOTKEY_DEV = "Alt+`";
-// Dev-сессия (Vite dev server) использует Alt+` чтобы не конфликтовать
-// с installed Kepler, у которого Alt+Space — иначе оба инстанса дерутся
-// за один accelerator и второй регистрируется молча неудачно.
-export const DEFAULT_HOTKEY =
-  process.env.VITE_DEV_SERVER_URL ? DEFAULT_HOTKEY_DEV : DEFAULT_HOTKEY_PROD;
+// Slot-aware default. prod = Alt+Space; dev = Alt+` (не конфликтует с
+// installed Kepler); dev-<x> / test-<x> = пусто (hotkey запрещён, см.
+// instance.ts → instance.hotkey). main.ts читает instance.hotkey напрямую
+// для решения «регистрировать или нет».
+export const DEFAULT_HOTKEY = resolveInstance().hotkey ?? DEFAULT_HOTKEY_PROD;
 
 export function getStoredHotkey(): string {
   return readSettings().hotkey ?? DEFAULT_HOTKEY;
@@ -149,10 +150,23 @@ export function isAutostartEnabled(): boolean {
 }
 
 export function setAutostartEnabled(enabled: boolean): void {
+  // Только prod slot может писать в HKCU Run. Из dev process.execPath это
+  // electron.exe из node_modules — прописывать его в autorun бессмысленно
+  // и грязно (мусор в реестре). Из dev-<x> / test — silently no-op.
+  if (!resolveInstance().autorunEnabled) {
+    console.warn(
+      `[kepler-shell] autostart toggle ignored for slot ${resolveInstance().slot} (only prod)`,
+    );
+    return;
+  }
   app.setLoginItemSettings({
     openAtLogin: enabled,
     path: process.execPath,
   });
+}
+
+export function isAutostartAllowed(): boolean {
+  return resolveInstance().autorunEnabled;
 }
 
 // --- IPC handlers (eagerly registered on import) -----------------------------
