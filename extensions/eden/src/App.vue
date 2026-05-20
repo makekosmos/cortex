@@ -425,13 +425,15 @@ function recomputeCharCounterOverlap(): void {
     charCounterHasOverlap.value = false;
     return;
   }
-  const area = document.querySelector(".editor-content-area") as HTMLElement | null;
-  if (!area) {
+  // Scroll container — .editor-wrapper (overflow-y: auto). У
+  // .editor-content-area `overflow: visible`, scrollHeight всегда
+  // равен clientHeight там.
+  const scroller = document.querySelector(".editor-wrapper") as HTMLElement | null;
+  if (!scroller) {
     charCounterHasOverlap.value = false;
     return;
   }
-  // Tolerance 1px на rounding errors.
-  charCounterHasOverlap.value = area.scrollHeight > area.clientHeight + 1;
+  charCounterHasOverlap.value = scroller.scrollHeight > scroller.clientHeight + 1;
 }
 
 function scheduleOverlapCheck(): void {
