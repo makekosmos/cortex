@@ -10,8 +10,12 @@
 
 import { Node, mergeAttributes, nodeInputRule } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import TaskRefView from "./components/TaskRefView.vue";
 import { edenApi } from "@/lib/edenApi";
+
+const rangeSelectionPluginKey = new PluginKey("eden-task-ref-range-selection");
 
 export interface TaskRefOptions {
   /**
@@ -94,6 +98,48 @@ export const TaskRef = Node.create<TaskRefOptions>({
             .focus()
             .run(),
     };
+  },
+
+  addProseMirrorPlugins() {
+    // Range-selection awareness: когда юзер тянет text selection через
+    // несколько блоков и selection захватывает таск — навешиваем класс на
+    // node DOM, чтобы CSS показал visual highlight. Это решает проблему
+    // «atom block в range selection ничего не подсвечивает» — пользователь
+    // не видит что taskRef включен, хотя ProseMirror selection технически
+    // его держит. Anytype делает то же самое, но в их own block editor.
+    return [
+      new Plugin({
+        key: rangeSelectionPluginKey,
+        props: {
+          decorations(state) {
+            const sel = state.selection;
+            // Empty selection (просто cursor) — никаких highlights.
+            if (sel.empty) return null;
+            // NodeSelection — обрабатывается отдельно через `selected` prop
+            // в NodeView (ProseMirror-selectednode class). Не дублируем.
+            const isTextSelection = sel.constructor.name === "TextSelection";
+            if (!isTextSelection) return null;
+
+            const { from, to } = sel;
+            const decos: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (node.type.name !== "taskRef") return;
+              const nodeFrom = pos;
+              const nodeTo = pos + node.nodeSize;
+              // Node intersects selection range (full или частично).
+              if (nodeFrom < to && nodeTo > from) {
+                decos.push(
+                  Decoration.node(nodeFrom, nodeTo, {
+                    class: "task-ref-range-selected",
+                  }),
+                );
+              }
+            });
+            return decos.length ? DecorationSet.create(state.doc, decos) : null;
+          },
+        },
+      }),
+    ];
   },
 
   addInputRules() {

@@ -26,9 +26,8 @@
         v-if="!editingTitle"
         class="task-ref-title"
         :class="{ 'task-ref-title-empty': !title }"
-        :title="missing ? 'Задача удалена' : 'Клик — открыть, двойной клик — переименовать, ПКМ — статус'"
-        @click="handleTitleClick"
-        @dblclick="enterEditMode"
+        :title="missing ? 'Задача удалена' : 'Клик — переименовать, → — открыть, ПКМ — статус'"
+        @click="enterEditMode"
       >
         {{ title || (missing ? "Задача удалена" : "Пустая задача") }}
       </div>
@@ -42,7 +41,25 @@
         @blur="commitTitle"
         @keydown.enter.prevent="commitTitle"
         @keydown.escape.prevent="cancelEditTitle"
+        @keydown.delete="onTitleKeyDelete"
       />
+      <button
+        v-if="!missing"
+        class="task-ref-open"
+        type="button"
+        title="Открыть задачу"
+        @click.stop="openTaskPage"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path
+            d="M3 7 L11 7 M7.5 3.5 L11 7 L7.5 10.5"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
     </div>
     <ContextMenu
       :open="contextMenu.isOpen.value"
@@ -103,12 +120,6 @@ const missing = ref(false);
 const editingTitle = ref(false);
 const editingTitleValue = ref("");
 const titleInputRef = useTemplateRef<HTMLInputElement>("titleInputRef");
-
-// Click-with-double-click-detection: одиночный клик ждёт 250ms перед навигацией,
-// чтобы успеть отменить если придёт второй клик. Стандартный паттерн для UI
-// где single и double имеют разный intent.
-let singleClickTimer: number | null = null;
-const SINGLE_CLICK_DELAY_MS = 250;
 
 let unsubscribe: (() => void) | null = null;
 
@@ -181,20 +192,6 @@ function openContextMenu(e: MouseEvent): void {
   contextMenu.open(e, null);
 }
 
-function handleTitleClick(): void {
-  // Если уже есть pending single — пришёл двойной, не дёргаем.
-  // (Браузер сам сгенерит dblclick событие.)
-  if (singleClickTimer !== null) {
-    window.clearTimeout(singleClickTimer);
-    singleClickTimer = null;
-    return;
-  }
-  singleClickTimer = window.setTimeout(() => {
-    singleClickTimer = null;
-    openTaskPage();
-  }, SINGLE_CLICK_DELAY_MS);
-}
-
 function openTaskPage(): void {
   const id = taskId.value;
   if (!id || missing.value) return;
@@ -206,10 +203,6 @@ function openTaskPage(): void {
 }
 
 function enterEditMode(): void {
-  if (singleClickTimer !== null) {
-    window.clearTimeout(singleClickTimer);
-    singleClickTimer = null;
-  }
   if (missing.value) return;
   editingTitleValue.value = title.value;
   editingTitle.value = true;
@@ -217,6 +210,27 @@ function enterEditMode(): void {
     titleInputRef.value?.focus();
     titleInputRef.value?.select();
   });
+}
+
+/**
+ * Backspace на пустом title — удалить TaskRef node (и связанный task_obj
+ * через soft-delete, чтобы не висеть orphan'ом в Delphi).
+ */
+function onTitleKeyDelete(e: KeyboardEvent): void {
+  if (e.key !== "Backspace") return;
+  if (editingTitleValue.value !== "") return;
+  e.preventDefault();
+  editingTitle.value = false;
+  const id = taskId.value;
+  // Soft-delete task_obj в ARK, потом удаляем node. Порядок важен: если
+  // удалить node сначала, NodeView unmount'ится и subscribe не успеет
+  // обработать ack. Делаем async без await — Eden навигация быстрее.
+  if (id) {
+    void edenApi.softDeleteTask(id).catch((err) => {
+      console.warn("[eden TaskRef] soft delete failed", id, err);
+    });
+  }
+  props.deleteNode();
 }
 
 async function commitTitle(): Promise<void> {
@@ -266,10 +280,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unsubscribe?.();
-  if (singleClickTimer !== null) {
-    window.clearTimeout(singleClickTimer);
-    singleClickTimer = null;
-  }
 });
 </script>
 
@@ -290,6 +300,23 @@ onBeforeUnmount(() => {
   padding: 1px 0;
   border-radius: 4px;
   transition: background-color 120ms ease;
+  position: relative;
+}
+
+/* Range selection highlight — когда юзер тянет text selection из
+   соседнего параграфа и захватывает taskRef, ProseMirror plugin вешает
+   класс. Цвет = TipTap дефолтная text selection (через ::selection
+   CSS var доступно не везде, поэтому захардкоженный fallback). */
+.task-ref-range-selected .task-ref-row {
+  background: var(--selection-bg, rgba(53, 132, 228, 0.25));
+  border-radius: 2px;
+}
+
+/* NodeSelection (юзер кликнул на node сам) — ProseMirror ставит класс. */
+.ProseMirror-selectednode.task-ref-node .task-ref-row {
+  background: var(--selection-bg, rgba(53, 132, 228, 0.25));
+  border-radius: 2px;
+  outline: none;
 }
 
 /* TaskStatusIcon подсовывает brand orange (Eden — оранжевый, тот же что
@@ -376,5 +403,35 @@ onBeforeUnmount(() => {
 
 .is-loading .task-ref-title {
   color: var(--muted-foreground, #888);
+}
+
+/* Arrow button «открыть задачу» — появляется только на hover row'а.
+   Inline-flex, чтобы не ломать baseline текста. */
+.task-ref-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--muted-foreground, #888);
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+  flex-shrink: 0;
+}
+
+.task-ref-row:hover .task-ref-open,
+.task-ref-open:focus-visible {
+  opacity: 1;
+}
+
+.task-ref-open:hover {
+  color: var(--eden-accent-color);
+  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
 }
 </style>
