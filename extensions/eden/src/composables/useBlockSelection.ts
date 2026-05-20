@@ -53,6 +53,10 @@ export function useBlockSelection() {
   let active = false;
   /** Container element для координат overlay (содержит overlay absolute). */
   let containerEl: HTMLElement | null = null;
+  /** Pos блока на котором был mousedown (null если в margin'е). Используется
+      чтобы НЕ активировать block-drag пока курсор остаётся в этом же блоке —
+      даём юзеру нормально выделять text в одной строке для copy/paste. */
+  let startBlockPos: number | null = null;
 
   const hasSelection = computed(() => selectedPositions.value.size > 0);
 
@@ -95,11 +99,23 @@ export function useBlockSelection() {
     startY = clientY;
     containerEl = container;
     cache = collectBlocks(editor);
+    // Запомнили на каком блоке (если был) был mousedown. Drag активируется
+    // только когда курсор уходит ИЗ этого блока — иначе юзер просто
+    // выделяет text в одной строке для copy.
+    startBlockPos = findBlockAtY(clientY);
     // НЕ очищаем PM selection здесь — это произойдёт когда drag
     // активируется (см. updateDrag → если justActivated, caller блюрит PM).
-    // НЕ очищаем block selection — может быть юзер shift+click'ает позже.
-    // Caller (Editor.vue) ответственен за clearSelection до startTracking
-    // если это новый чистый drag.
+  }
+
+  /** Возвращает pos блока, в Y-range которого попадает clientY. null если
+      курсор в margin'е (между блоками или вне всех). */
+  function findBlockAtY(clientY: number): number | null {
+    for (const block of cache) {
+      if (clientY >= block.rect.top && clientY <= block.rect.bottom) {
+        return block.pos;
+      }
+    }
+    return null;
   }
 
   /**
@@ -190,8 +206,22 @@ export function useBlockSelection() {
     const dx = Math.abs(clientX - startX);
     const dy = Math.abs(clientY - startY);
     const wasMoved = hasMoved;
-    if (!hasMoved && dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
-      return null;
+    if (!hasMoved) {
+      // Threshold check.
+      if (dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
+        return null;
+      }
+      // Block-crossing check: если mousedown был на блоке И курсор всё
+      // ещё в том же блоке — НЕ активируем drag, даём PM делать native
+      // text selection (юзер копирует кусок текста в одной строке).
+      // Активируем только если cursor вышел в другой блок или margin
+      // (или если mousedown изначально был в margin — startBlockPos null).
+      if (startBlockPos !== null) {
+        const currentBlock = findBlockAtY(clientY);
+        if (currentBlock === startBlockPos) {
+          return null;
+        }
+      }
     }
     hasMoved = true;
     const justActivated = !wasMoved;
@@ -231,6 +261,7 @@ export function useBlockSelection() {
     dragRect.value = null;
     containerEl = null;
     cache = [];
+    startBlockPos = null;
     // selection остаётся (юзер может нажать Delete или Esc).
   }
 
