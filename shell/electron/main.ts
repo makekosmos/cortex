@@ -498,8 +498,14 @@ function hideLauncher() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (launcherHidden) return;
   launcherHidden = true;
-  mainWindow.setOpacity(0);
-  mainWindow.setIgnoreMouseEvents(true);
+  // Раньше делали `setOpacity(0) + setIgnoreMouseEvents(true)` — это
+  // визуально «прятало» окно, но Win32 EnumWindows / GetWindowList всё
+  // ещё видели его как visible top-level window. Скриншот-апы (Snipping
+  // Tool, ShareX) ловили пустой прямоугольник в кадр; Raycast/PowerToys
+  // фильтруют по `IsWindowVisible` (= ShowWindow state) и не видели —
+  // отсюда асимметрия. Настоящий `hide()` вызывает `ShowWindow(SW_HIDE)`,
+  // окно уходит из enum'а для всех инструментов.
+  mainWindow.hide();
 }
 
 // Окно теперь fixed-size (WINDOW_HEIGHT) — никакой compact/expanded логики.
