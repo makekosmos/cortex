@@ -34,7 +34,9 @@ interface CachedBlock {
   rect: DOMRect;
 }
 
-const DRAG_THRESHOLD_PX = 5; // меньше чем Anytype (20) — наш UX чуть отзывчивее
+// 20px = Anytype canonical THRESHOLD. Меньше — drag триггерится случайно
+// при обычных кликах с микро-движением мыши.
+const DRAG_THRESHOLD_PX = 20;
 
 export function useBlockSelection() {
   /** Set позиций выделенных блоков. Position стабилен в течение drag-session. */
@@ -73,11 +75,15 @@ export function useBlockSelection() {
   }
 
   /**
-   * Стартует drag-сессию. clientX/Y — coords в viewport. containerElement
-   * — для overlay расчёта (rect относительно него).
-   * Кеширует все top-level блоки editor'а.
+   * Начать **tracking** потенциального drag'а. НЕ активирует block-selection
+   * сразу — это случится только когда mouse сдвинется >= THRESHOLD (см.
+   * `updateDrag`). До threshold юзер по факту просто кликает, и PM
+   * обрабатывает mousedown как обычно (focus + caret).
+   *
+   * Anytype canonical паттерн: mousedown НЕ preventDefault'ит → browser
+   * focuses contentEditable. Drag активируется только при движении мыши.
    */
-  function startDrag(
+  function startTracking(
     editor: TiptapEditor,
     clientX: number,
     clientY: number,
@@ -89,21 +95,25 @@ export function useBlockSelection() {
     startY = clientY;
     containerEl = container;
     cache = collectBlocks(editor);
-    // Очищаем ProseMirror TextSelection чтобы native ::selection не
-    // рисовался поверх нашего block-overlay. Anytype делает это через
-    // `focus.clear()` (у них contentEditable; PM-эквивалент — collapse
-    // selection в первую точку).
+    // НЕ очищаем PM selection здесь — это произойдёт когда drag
+    // активируется (см. updateDrag → если justActivated, caller блюрит PM).
+    // НЕ очищаем block selection — может быть юзер shift+click'ает позже.
+    // Caller (Editor.vue) ответственен за clearSelection до startTracking
+    // если это новый чистый drag.
+  }
+
+  /**
+   * Принудительно очистить PM selection — вызывается из Editor.vue когда
+   * drag только что активировался. Anytype эквивалент: `focus.clear(true)`.
+   */
+  function collapseEditorSelection(editor: TiptapEditor): void {
     if (!editor.state.selection.empty) {
       const tr = editor.state.tr.setSelection(
         TextSelection.create(editor.state.doc, editor.state.selection.from),
       );
       editor.view.dispatch(tr);
     }
-    // Также blur — освобождаем focus от contentEditable. Без этого
-    // PM может продолжить трэкать mouse и устанавливать TextSelection
-    // на mousemove.
     editor.commands.blur();
-    clearSelection();
   }
 
   // Container nodes — выделять как ОДНО целое не имеет смысла, юзер хочет
@@ -143,19 +153,22 @@ export function useBlockSelection() {
   }
 
   /**
-   * Обновляет drag по mousemove. Возвращает true если drag прошёл threshold
-   * и rect стал visible (caller может предотвратить дефолтное text-selection
-   * через event.preventDefault).
+   * Обновляет tracking по mousemove. Возвращает `"activated"` ровно ОДИН
+   * раз — когда drag только что прошёл threshold (нужно caller'у чтобы
+   * blur'нуть editor + collapse selection). Дальше возвращает `"dragging"`.
+   * До threshold возвращает `null`.
    */
-  function updateDrag(clientX: number, clientY: number): boolean {
-    if (!active) return false;
+  function updateDrag(clientX: number, clientY: number): "activated" | "dragging" | null {
+    if (!active) return null;
 
     const dx = Math.abs(clientX - startX);
     const dy = Math.abs(clientY - startY);
+    const wasMoved = hasMoved;
     if (!hasMoved && dx < DRAG_THRESHOLD_PX && dy < DRAG_THRESHOLD_PX) {
-      return false;
+      return null;
     }
     hasMoved = true;
+    const justActivated = !wasMoved;
 
     const x = Math.min(startX, clientX);
     const y = Math.min(startY, clientY);
@@ -183,7 +196,7 @@ export function useBlockSelection() {
       }
     }
     selectedPositions.value = next;
-    return true;
+    return justActivated ? "activated" : "dragging";
   }
 
   function finishDrag(): void {
@@ -248,10 +261,11 @@ export function useBlockSelection() {
     hasSelection,
     isSelected,
     clearSelection,
-    startDrag,
+    startTracking,
     updateDrag,
     finishDrag,
     cancelDrag,
+    collapseEditorSelection,
     deleteSelected,
   };
 }

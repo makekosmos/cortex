@@ -251,63 +251,59 @@ function getNoteTypeIconSrc(noteType: NoteType | null) {
 const contentAreaRef = useTemplateRef<HTMLDivElement>("contentAreaRef");
 const blockSelection = useBlockSelection();
 
-// Mouse handlers для rubber-band block selection (Anytype-style).
-// Стартуем drag только когда mousedown НЕ внутри текста ProseMirror'а
-// (т.е. в margin области, между блоками или на .ProseMirror корне).
-// Клик внутри блока пускаем в PM как обычно — он ставит каретку.
+// Block-selection mouse flow (Anytype canonical pattern):
+// 1. mousedown: НЕ preventDefault'им — PM нормально обрабатывает (focus
+//    + caret) если клик на текст. Запускаем tracking — никаких visual
+//    изменений пока mouse не сдвинется на 20px.
+// 2. mousemove: до threshold — пропускаем (юзер может просто кликать).
+//    После threshold ("activated") — блюрим PM + collapse selection,
+//    block-selection layer берёт верх. Дальше каждый mousemove обновляет
+//    drag rect + selected blocks.
+// 3. mouseup: finishDrag. Если drag не активировался — selection не
+//    тронута, PM caret где поставил браузер.
+//
+// Это даёт: обычный click → PM как раньше, drag → block selection.
+// Никакого preventDefault на mousedown → нет broken intermediate state.
 function onContentMouseDown(e: MouseEvent): void {
   if (e.button !== 0) return;
-  if (!editor.value) return;
+  if (!editor.value || !contentAreaRef.value) return;
   const target = e.target as HTMLElement | null;
   if (!target) return;
-  // Если есть активное block-selection (от прошлого drag'а) — клик где-то
-  // в редакторе очищает её. Если start нового drag'а — clearSelection в
-  // startDrag сработает по-новой; если просто клик на текст — селекшен
-  // снимется и PM обработает click нормально.
+  // Не трекаем mousedown на интерактивных контролах (Checkbox, кнопки
+  // в TaskRef inputs и т.п.) — у них своя логика.
+  if (target.closest("input, textarea, button, [role=button], [role=checkbox]")) return;
+  // Если есть persisted block selection от прошлого drag'а — снимаем её
+  // на любом новом mousedown'е (как Anytype: click без модификатора clears).
   if (blockSelection.hasSelection.value) {
     blockSelection.clearSelection();
   }
-  // Игнорируем mousedown'ы которые TipTap должен обработать сам:
-  // - клик внутри блочного контента (text node, inline elements внутри
-  //   ProseMirror block-level child'а).
-  // - клик на интерактивный элемент (input, button, [role=checkbox]).
-  const interactive = target.closest("input, textarea, button, [role=button], [role=checkbox], [contenteditable=true] *");
-  if (interactive) return;
-  const proseMirrorDom = editor.value.view.dom as HTMLElement;
-  // Если target — потомок ProseMirror НО не сам .ProseMirror, значит клик
-  // внутри какого-то блока. Пусть PM обрабатывает (caret placement).
-  if (proseMirrorDom.contains(target) && target !== proseMirrorDom) {
-    return;
-  }
-  if (!contentAreaRef.value) return;
-  // preventDefault — запрещаем PM ставить focus/caret на этот mousedown.
-  // Без этого PM параллельно с нашим drag'ом устанавливает TextSelection
-  // и native ::selection рисуется поверх block-overlay.
-  e.preventDefault();
-  blockSelection.startDrag(editor.value, e.clientX, e.clientY, contentAreaRef.value);
+  // Tracking starts — drag активируется только если mouse уйдёт >20px.
+  blockSelection.startTracking(editor.value, e.clientX, e.clientY, contentAreaRef.value);
   window.addEventListener("mousemove", onWindowMouseMove);
   window.addEventListener("mouseup", onWindowMouseUp, { once: true });
 }
 
 function onWindowMouseMove(e: MouseEvent): void {
-  const moved = blockSelection.updateDrag(e.clientX, e.clientY);
-  if (moved) {
-    // Запретить native text selection пока drag активен (иначе ::selection
-    // будет накладываться на наш block selection overlay).
+  const result = blockSelection.updateDrag(e.clientX, e.clientY);
+  if (result === "activated" && editor.value) {
+    // Drag только что активировался: блюрим PM + collapse selection,
+    // чтобы native ::selection не рисовался поверх block-overlay.
+    // Anytype эквивалент: `focus.clear(true)`.
+    blockSelection.collapseEditorSelection(editor.value);
+  }
+  if (result !== null) {
+    // Пока drag активен — запрещаем дефолтное text-selection-extension
+    // браузера (browser native selection через границы блоков).
     e.preventDefault();
   }
 }
 
 function onWindowMouseUp(): void {
-  const wasDragging = blockSelection.dragRect.value !== null;
   blockSelection.finishDrag();
   window.removeEventListener("mousemove", onWindowMouseMove);
-  // Click без drag (movement < threshold) — даём editor'у фокус, чтобы
-  // юзер мог начать печатать сразу. Click в margin без этого оставляет
-  // редактор без фокуса, что путает.
-  if (!wasDragging && editor.value) {
-    editor.value.commands.focus("end");
-  }
+  // Note: НЕ форсим focus здесь. Если был click без drag — PM сам уже
+  // обработал mousedown и поставил caret. Если был drag — юзер сам
+  // решит куда кликнуть дальше.
 }
 
 // Keyboard: Esc → clear selection; Delete/Backspace → delete selected blocks.
