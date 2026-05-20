@@ -2508,10 +2508,6 @@
   color: var(--text-primary);
 }
 
-.ProseMirror > * + * {
-  margin-top: 0.85em;
-}
-
 .ProseMirror h1,
 .ProseMirror h2,
 .ProseMirror h3 {
@@ -2633,10 +2629,6 @@
   font-size: 16px;
   line-height: 1.5;
   color: var(--text-primary);
-}
-
-.ProseMirror > * + * {
-  margin-top: 1em;
 }
 
 .ProseMirror h1,
@@ -3871,10 +3863,6 @@ span[data-wikilink]:hover {
 .ProseMirror {
   font-size: 15px;
   line-height: 1.5;
-}
-
-.ProseMirror > * + * {
-  margin-top: 2px;
 }
 
 .ProseMirror p {

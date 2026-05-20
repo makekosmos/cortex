@@ -495,10 +495,6 @@
   color: var(--text-primary);
 }
 
-.ProseMirror > * + * {
-  margin-top: 1em;
-}
-
 .ProseMirror h1,
 .ProseMirror h2,
 .ProseMirror h3 {
