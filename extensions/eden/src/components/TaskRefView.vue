@@ -27,7 +27,8 @@
         class="task-ref-title"
         :class="{ 'task-ref-title-empty': !title }"
         :title="missing ? 'Задача удалена' : 'Клик — переименовать, → — открыть, ПКМ — статус'"
-        @click="enterEditMode"
+        @mousedown.stop
+        @click.stop="enterEditMode"
       >
         {{ title || (missing ? "Задача удалена" : "Пустая задача") }}
       </div>
@@ -230,7 +231,22 @@ function onTitleKeyDelete(e: KeyboardEvent): void {
       console.warn("[eden TaskRef] soft delete failed", id, err);
     });
   }
+  // ProseMirror NodeView prop: положение node ДО deleteNode. Используем
+  // чтобы вернуть курсор в то же место (фактически в предыдущий блок,
+  // т.к. taskRef был atom).
+  const nodePos = typeof props.getPos === "function" ? props.getPos() : null;
   props.deleteNode();
+  // После удаления node DOM input размонтирован, focus ушёл. Возвращаем
+  // фокус в editor с курсором в позиции удалённого taskRef'а — там
+  // окажется предыдущий блок (paragraph) или начало doc'а.
+  nextTick(() => {
+    const editor = props.editor as { commands?: { focus?: (pos?: number) => void } } | undefined;
+    if (typeof nodePos === "number") {
+      editor?.commands?.focus?.(nodePos);
+    } else {
+      editor?.commands?.focus?.();
+    }
+  });
 }
 
 async function commitTitle(): Promise<void> {
@@ -305,14 +321,17 @@ onBeforeUnmount(() => {
 
 /* Range selection highlight — когда юзер тянет text selection из
    соседнего параграфа и захватывает taskRef, ProseMirror plugin вешает
-   класс. Цвет = TipTap дефолтная text selection (через ::selection
-   CSS var доступно не везде, поэтому захардкоженный fallback). */
+   класс. Класс попадает на outer NodeView wrapper (через Decoration.node).
+   Дублируем фон и на wrapper, и на row — иногда Vue NodeView рендерит
+   дополнительный wrapper уровень, и класс падает не на тот элемент. */
+.task-ref-range-selected,
 .task-ref-range-selected .task-ref-row {
   background: var(--selection-bg, rgba(53, 132, 228, 0.25));
   border-radius: 2px;
 }
 
 /* NodeSelection (юзер кликнул на node сам) — ProseMirror ставит класс. */
+.ProseMirror-selectednode.task-ref-node,
 .ProseMirror-selectednode.task-ref-node .task-ref-row {
   background: var(--selection-bg, rgba(53, 132, 228, 0.25));
   border-radius: 2px;

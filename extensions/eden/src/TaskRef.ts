@@ -10,7 +10,7 @@
 
 import { Node, mergeAttributes, nodeInputRule } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection, AllSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import TaskRefView from "./components/TaskRefView.vue";
 import { edenApi } from "@/lib/edenApi";
@@ -115,10 +115,12 @@ export const TaskRef = Node.create<TaskRefOptions>({
             const sel = state.selection;
             // Empty selection (просто cursor) — никаких highlights.
             if (sel.empty) return null;
-            // NodeSelection — обрабатывается отдельно через `selected` prop
-            // в NodeView (ProseMirror-selectednode class). Не дублируем.
-            const isTextSelection = sel.constructor.name === "TextSelection";
-            if (!isTextSelection) return null;
+            // TextSelection / AllSelection включают atom-блоки в range
+            // и должны их подсветить. NodeSelection — отдельный case
+            // (ProseMirror уже даёт `.ProseMirror-selectednode` класс).
+            if (!(sel instanceof TextSelection) && !(sel instanceof AllSelection)) {
+              return null;
+            }
 
             const { from, to } = sel;
             const decos: Decoration[] = [];
@@ -126,8 +128,14 @@ export const TaskRef = Node.create<TaskRefOptions>({
               if (node.type.name !== "taskRef") return;
               const nodeFrom = pos;
               const nodeTo = pos + node.nodeSize;
-              // Node intersects selection range (full или частично).
-              if (nodeFrom < to && nodeTo > from) {
+              // Node intersects selection range. Для атомарных block'ов
+              // считаем включением если selection полностью покрывает
+              // node (from <= nodeFrom && nodeTo <= to) ИЛИ selection
+              // strictly intersects boundaries (стандартный case
+              // когда юзер тянет курсор сверху или снизу через node).
+              const fullyCovered = from <= nodeFrom && nodeTo <= to;
+              const partialIntersect = nodeFrom < to && nodeTo > from;
+              if (fullyCovered || partialIntersect) {
                 decos.push(
                   Decoration.node(nodeFrom, nodeTo, {
                     class: "task-ref-range-selected",
