@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 
 import { v4 as uuidv4 } from "uuid";
 
@@ -101,6 +101,15 @@ export const useEdenStore = defineStore("eden", () => {
   const noteTypes = ref<NoteType[]>([]);
 
   const currentEntry = ref<Entry | null>(null);
+
+  // Persist last-visited entry id ВСЕГДА при изменении currentEntry,
+  // не только в navigateTo. openTodayJournal / openMySpace / createEntry
+  // / иные code paths тоже ставят currentEntry — без watch'а после
+  // refresh'а hydrateVaultData читает старый `lastEntryId` и открывает
+  // не ту заметку (например — вчерашний journal вместо today).
+  watch(currentEntry, (entry) => {
+    if (entry?.id) writeLastVisitedEntryId(entry.id);
+  });
 
   const vaultPath = ref<string | null>(null);
 
