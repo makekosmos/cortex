@@ -116,6 +116,7 @@ import { TaskRef } from "./TaskRef";
 import { edenApi } from "@/lib/edenApi";
 import { useBlockSelection } from "@/composables/useBlockSelection";
 import BlockSelectionOverlay from "@/components/BlockSelectionOverlay.vue";
+import { TextSelection } from "@tiptap/pm/state";
 import {
   BlockSelectionDecoration,
   blockSelectionPluginKey,
@@ -256,6 +257,13 @@ function getNoteTypeIconSrc(noteType: NoteType | null) {
 const contentAreaRef = useTemplateRef<HTMLDivElement>("contentAreaRef");
 const blockSelection = useBlockSelection();
 
+// Флаг ставится window-level mousedown handler'ом (capture-фаза) когда
+// он очистил block selection. onContentMouseDown в bubble-фазе видит флаг
+// и отказывается стартовать новый drag-tracking — это была «clearing
+// click», без него jitter мыши + CROSSING_MIN_PX=8 запускает drag через
+// границу блока и снова выделяет соседние задачи.
+let justClearedSelection = false;
+
 // Block-selection mouse flow (Anytype canonical pattern):
 // 1. mousedown: НЕ preventDefault'им — PM нормально обрабатывает (focus
 //    + caret) если клик на текст. Запускаем tracking — никаких visual
@@ -273,12 +281,16 @@ function onContentMouseDown(e: MouseEvent): void {
   if (!editor.value || !contentAreaRef.value) return;
   const target = e.target as HTMLElement | null;
   if (!target) return;
-  // Clear stale block selection на ЛЮБОЙ mousedown в редакторе — включая
-  // RMB и клики на interactive controls (checkbox, button). Иначе
-  // persistent selection остаётся после прошлого drag'а пока юзер не
-  // нажмёт Esc.
-  if (blockSelection.hasSelection.value) {
+  // Global mousedown handler в capture-фазе уже мог очистить block
+  // selection до того как событие дошло до bubble-фазы — тогда hasSelection
+  // здесь false, но юзер сделал «clearing click»: новый drag запускать
+  // нельзя (минимальный jitter мыши + CROSSING_MIN_PX=8 → активация
+  // через границу блока → задача под курсором + соседняя оказались бы
+  // выделены).
+  if (blockSelection.hasSelection.value || justClearedSelection) {
     blockSelection.clearSelection();
+    justClearedSelection = false;
+    return;
   }
   // Drag tracking — только LMB и только на действительно interactive
   // controls (buttons / checkboxes). НЕ фильтруем input/textarea — там
@@ -287,6 +299,26 @@ function onContentMouseDown(e: MouseEvent): void {
   // задачи в следующий блок).
   if (e.button !== 0) return;
   if (target.closest("button, [role=button], [role=checkbox]")) return;
+  // Клик в пустое пространство ниже последнего блока (на сам
+  // .editor-content-area или .editor-rail, не на .ProseMirror и его
+  // потомков) → фокус в конец документа. Без этого пользователь не может
+  // «продолжить писать», если последний блок — task с inline input'ом.
+  const clickedEmptySpace =
+    target === contentAreaRef.value ||
+    target.classList.contains("editor-rail") ||
+    (target.classList.contains("ProseMirror") && e.target === target);
+  if (clickedEmptySpace) {
+    const pmEl = contentAreaRef.value.querySelector(".ProseMirror") as HTMLElement | null;
+    if (pmEl) {
+      const rect = pmEl.getBoundingClientRect();
+      // Клик ниже последнего блока — focus в самый конец.
+      if (e.clientY > rect.bottom - 4) {
+        e.preventDefault();
+        editor.value.chain().focus("end").run();
+        return;
+      }
+    }
+  }
   blockSelection.startTracking(editor.value, e.clientX, e.clientY, contentAreaRef.value);
   window.addEventListener("mousemove", onWindowMouseMove);
   window.addEventListener("mouseup", onWindowMouseUp, { once: true });
@@ -414,7 +446,12 @@ const EdenCodeBlock = CodeBlockLowlight.extend({
 });
 
 const extensions = [
-  StarterKit.configure({ codeBlock: false }),
+  // trailingNode: false — StarterKit по умолчанию вставляет пустой
+  // параграф в конец документа («чтобы было куда поставить курсор»).
+  // У Eden это создаёт «висящую» пустую строку под последней task'ой
+  // после каждого Enter. Клик в пустое пространство ниже фокусит editor
+  // в конец через onContentMouseDown — этот UX заменяет автотрейлер.
+  StarterKit.configure({ codeBlock: false, trailingNode: false }),
   Markdown,
   Placeholder.configure({ placeholder: "Начни писать что-нибудь интересное..." }),
   EdenCodeBlock.configure({
@@ -589,6 +626,18 @@ const editor = useEditor({
     void flushAutoSave();
   },
 });
+
+// Test-only: expose editor instance для PM introspection в e2e specs.
+// Не несёт runtime overhead'а, но позволяет тестам читать selection state.
+watch(
+  editor,
+  (instance) => {
+    if (typeof window !== "undefined") {
+      (window as unknown as { __edenEditor?: unknown }).__edenEditor = instance ?? undefined;
+    }
+  },
+  { immediate: true },
+);
 
 function createPerfTracker(): EditorPerfTracker {
   const metrics: Record<PerfMetricKey, number[]> = {
@@ -1401,6 +1450,34 @@ watchEffect((onCleanup) => {
   const handleGlobalMouseDown = () => {
     if (blockSelection.hasSelection.value) {
       blockSelection.clearSelection();
+      // Sync обнуляем DecorationSet прямо здесь — Vue watcher на
+      // selectedPositions имеет flush:"post" и сработает только в
+      // следующем microtask'е, к этому моменту PM уже обработал
+      // mousedown и пользователь видит «застывшие» декорации старых
+      // блоков параллельно с фокусом на новой задаче.
+      if (editor.value) {
+        const view = editor.value.view;
+        let tr = view.state.tr.setMeta(
+          blockSelectionPluginKey,
+          buildBlockSelectionDecorations(view.state.doc, new Set()),
+        );
+        // Дополнительно коллапсим PM TextSelection если она растянулась
+        // через несколько блоков (артефакт rubber-band drag'а). NodeView's
+        // recomputeRangeSelection ставит `.is-range-selected` для каждого
+        // блока который пересекается с sel — multi-block selection делает
+        // несколько задач визуально «выделенными» даже после очистки
+        // rubber-band decoration.
+        const sel = view.state.selection;
+        if (!sel.empty) {
+          tr = tr.setSelection(TextSelection.create(view.state.doc, sel.from));
+        }
+        view.dispatch(tr);
+      }
+      // Помечаем «этот mousedown был clearing click'ом» — onContentMouseDown
+      // увидит флаг и не запустит startTracking (иначе clearSelection
+      // в capture-фазе делает hasSelection=false к моменту bubble-фазы,
+      // и онКонтент видит чистое состояние → создаёт новый drag).
+      justClearedSelection = true;
     }
   };
   window.addEventListener("mousedown", handleGlobalMouseDown, { capture: true });

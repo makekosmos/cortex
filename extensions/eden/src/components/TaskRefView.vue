@@ -15,6 +15,7 @@
     <div
       class="task-ref-row"
       contenteditable="false"
+      @mousedown="onRowMouseDown"
       @contextmenu.prevent="openContextMenu"
     >
       <TaskStatusIcon
@@ -38,6 +39,7 @@
         :placeholder="missing ? 'Задача удалена' : 'Пустая задача'"
         :readonly="missing"
         :title="missing ? 'Задача удалена' : 'ПКМ — статус, → — открыть'"
+        @mousedown="onTitleMouseDown"
         @focus="onTitleFocus"
         @blur="onTitleBlur"
         @keydown.enter.prevent.stop="onEnterKey"
@@ -141,15 +143,23 @@ const isRangeSelected = ref(false);
 function recomputeRangeSelection(): void {
   // props.editor может быть undefined в SSR / edge cases.
   const editor = props.editor as
-    | { state?: { selection?: { from: number; to: number; empty: boolean; constructor: { name: string } } } }
+    | { state?: { selection?: any } }
     | undefined;
   const sel = editor?.state?.selection;
   if (!sel || sel.empty) {
     isRangeSelected.value = false;
     return;
   }
-  // NodeSelection обрабатывается через `selected` prop — не дублируем класс.
-  if (sel.constructor.name === "NodeSelection") {
+  // NodeSelection: PM ставит `from=pos, to=pos+nodeSize`, и `selected`
+  // prop уже отвечает за подсветку самой выбранной ноды. Если делать
+  // intersection-check для соседних блоков — граница `to=from+nodeSize`
+  // touch'ает соседний atom block'а и подсвечивает его как range-selected.
+  // Раньше детектили через `sel.constructor.name === "NodeSelection"`,
+  // но это ломается в production-build после минификации (constructor
+  // names перебиты). Надёжно: проверяем наличие .node property — оно
+  // есть у NodeSelection и AllSelection (всегда не TextSelection), и
+  // оба эти типа должны исключаться из range-overlap-highlight.
+  if ((sel as any).node !== undefined) {
     isRangeSelected.value = false;
     return;
   }
@@ -260,6 +270,107 @@ function openTaskPage(): void {
   );
 }
 
+/**
+ * Защита от PM-кражи focus'а: PM на mouseup внутри view.dom делает
+ * `view.focus()` через свой selection-sync, и каретка уезжает с input
+ * на саму .ProseMirror. Перехватываем mousedown на input ДО PM (через
+ * @mousedown.stop в template), мемоизируем где должна стоять каретка
+ * (по click coords через document.caretRangeFromPoint), и через rAF
+ * (после PM transactions) форсим focus + selectionStart обратно.
+ */
+// Защитник от PM-кражи focus'а. PM на mouseup внутри view.dom через
+// MouseDown class → selectClickedLeaf / Selection.near → updateSelection →
+// view.focus() — focus уезжает с нашего нативного `<input>` на
+// .ProseMirror DIV, каретка теряется. handleClickOn/handleDOMEvents в
+// плагине не помогают полностью (PM использует selectionchange listener
+// + delayed setTimeout selectionToDOM, обходя plugin-handlers).
+//
+// Стратегия: blur-listener на input. Если focus ушёл именно на
+// .ProseMirror — это PM-кража, возвращаем focus + сохранённый caret
+// через rAF. Caret снимаем в onTitleMouseDown (тогда нативный focus
+// уже расставил его по координате клика).
+// Focus-defender: PM-mouseup → selectClickedLeaf / Selection.near →
+// updateSelection → view.focus() уводит focus с нативного input на
+// .ProseMirror DIV. Возвращаем его обратно, НО только если пользователь
+// сам не запросил уход.
+//
+// Активируем defender на mousedown по input'у. Деактивируем как только
+// document получит mousedown с target ВНЕ нашего input (юзер кликнул
+// куда-то ещё намеренно). Document capture-listener срабатывает раньше
+// чем blur события input'а — успеем сбросить флаг до того как defender
+// решит refocus'нуть.
+let focusDefenderActive = false;
+let blurDefenderOff: (() => void) | null = null;
+let mousedownDocumentOff: (() => void) | null = null;
+let lastCaretBeforeBlur: number | null = null;
+
+function onTitleMouseDown(_e: MouseEvent): void {
+  const input = titleInputRef.value;
+  if (!input || missing.value) return;
+  input.focus();
+  focusDefenderActive = true;
+}
+
+/**
+ * mousedown по самой task-ref-row (padding'и между input'ом и кнопками,
+ * пустая правая часть после короткого title'а): пользователь явно хотел
+ * взаимодействовать с задачей. Фокусим input, чтобы клик не «уходил
+ * впустую» в .ProseMirror.
+ */
+function onRowMouseDown(e: MouseEvent): void {
+  const target = e.target as HTMLElement | null;
+  // На сам input или интерактивные кнопки — не вмешиваемся, их собственные
+  // handler'ы отработают.
+  if (target?.closest(".task-ref-title-input, .task-ref-status, .task-ref-open")) return;
+  const input = titleInputRef.value;
+  if (!input || missing.value) return;
+  input.focus();
+  // Кликнули по margin'у справа — каретку в конец текста.
+  const len = input.value.length;
+  input.setSelectionRange(len, len);
+  focusDefenderActive = true;
+}
+
+function defendFocus(): void {
+  const input = titleInputRef.value;
+  if (!input) return;
+
+  // Document mousedown в CAPTURE-фазе: если target — не наш input, юзер
+  // намеренно кликнул в другое место. Сбрасываем defender, focus уйдёт
+  // нормально.
+  const handleDocMouseDown = (event: MouseEvent) => {
+    const target = event.target as HTMLElement | null;
+    // Деактивируем defender только если клик ушёл ВНЕ нашего task-ref-row.
+    // Клик внутри row (input, paddings, buttons) — наше UI, держим input
+    // focused. Если ушёл куда-то ещё (paragraph, другой task) — отпускаем
+    // focus, юзер сам выбрал куда переключиться.
+    const row = input.closest(".task-ref-row");
+    if (!row || !target || !row.contains(target)) {
+      focusDefenderActive = false;
+    }
+  };
+  document.addEventListener("mousedown", handleDocMouseDown, { capture: true });
+  mousedownDocumentOff = () =>
+    document.removeEventListener("mousedown", handleDocMouseDown, { capture: true } as EventListenerOptions);
+
+  const handleBlur = (event: FocusEvent) => {
+    if (!focusDefenderActive) return;
+    lastCaretBeforeBlur = input.selectionStart;
+    const next = event.relatedTarget as HTMLElement | null;
+    if (next && next.classList?.contains("ProseMirror")) {
+      requestAnimationFrame(() => {
+        if (!focusDefenderActive) return;
+        input.focus();
+        if (lastCaretBeforeBlur !== null) {
+          input.setSelectionRange(lastCaretBeforeBlur, lastCaretBeforeBlur);
+        }
+      });
+    }
+  };
+  input.addEventListener("blur", handleBlur);
+  blurDefenderOff = () => input.removeEventListener("blur", handleBlur);
+}
+
 function onTitleFocus(): void {
   isInputFocused.value = true;
 }
@@ -351,8 +462,25 @@ function commitAndCreateNew(): void {
       console.warn("[eden TaskRef] commitAndCreateNew: stale getPos");
       return;
     }
-    const node = props.node as { nodeSize: number };
-    const insertPos = myPos + node.nodeSize;
+    // Находим реальный taskRef в документе по taskId — не доверяем
+    // props.node.nodeSize (PM иногда возвращал 2 вместо 1 для atom node,
+    // и `myPos + 2` падал ВНУТРЬ следующего параграфа → tr.insert split'ил
+    // параграф → 4 блока вместо 3).
+    const doc = editor.view.state.doc as any;
+    const targetTaskId = (props.node as any).attrs?.taskId;
+    let insertPos = -1;
+    doc.descendants((child: any, pos: number) => {
+      if (insertPos !== -1) return false;
+      if (child.type?.name === "taskRef" && child.attrs?.taskId === targetTaskId) {
+        insertPos = pos + child.nodeSize;
+        return false;
+      }
+      return true;
+    });
+    if (insertPos === -1) {
+      console.warn("[eden TaskRef] commitAndCreateNew: не нашли taskRef в документе");
+      return;
+    }
 
     const newTaskId = crypto.randomUUID();
     const newNode = editor.state.schema.nodes.taskRef?.create({
@@ -361,8 +489,34 @@ function commitAndCreateNew(): void {
     });
     if (!newNode) return;
 
-    // 1. SYNC insert — ничего не await'ится, нет окна re-entry.
-    const tr = editor.view.state.tr.insert(insertPos, newNode);
+    // В OLD-документе сразу после нашего taskRef'а: если там пустой
+    // параграф и он же последний блок doc'а — удалим его. Это убирает
+    // «висящую пустую строку» под новой task'ой (slash-команда оставляет
+    // trailing paragraph, каждый Enter создаёт task ПЕРЕД ним).
+    // Если за нашим taskRef'ом висит trailing empty paragraph (например
+    // оставшийся от slash-команды), сразу заменим его новой task'ой —
+    // тогда под текущей фокусной task'ой не висит пустая строка.
+    let deleteTail: { from: number; to: number } | null = null;
+    const tailInOld = doc.nodeAt(insertPos);
+    if (
+      tailInOld &&
+      tailInOld.type?.name === "paragraph" &&
+      tailInOld.content?.size === 0 &&
+      insertPos + tailInOld.nodeSize === doc.content.size
+    ) {
+      deleteTail = { from: insertPos, to: insertPos + tailInOld.nodeSize };
+    }
+
+    // Если за нашим taskRef'ом висит trailing empty paragraph (slash-команда
+    // оставила), используем replaceWith вместо insert — это атомарно
+    // заменит «всё от insertPos до конца» новой task'ой. Иначе обычный
+    // insert, paragraph PM добавит обратно автоматически (gapcursor / схема).
+    const tr = editor.view.state.tr;
+    if (deleteTail) {
+      tr.replaceWith(deleteTail.from, deleteTail.to, newNode);
+    } else {
+      tr.insert(insertPos, newNode);
+    }
     editor.view.dispatch(tr);
 
     // 2. Optimistic local commit + background async ARK writes —
@@ -392,26 +546,40 @@ function commitAndCreateNew(): void {
 }
 
 /**
- * Enter на пустой task — создаём parag ниже + фокусируем editor туда.
- * Эмулирует Obsidian: Enter на пустом checkbox-item «выходит» из списка.
+ * Enter на пустой task — заменяем сам taskRef на пустой paragraph
+ * («Enter чистит строку»). Заодно soft-delete task_obj в ARK, чтобы
+ * пустая задача не висела orphan'ом в Delphi.
  */
 function exitToNewParagraph(): void {
-  const editor = props.editor as {
-    state: { schema: { nodes: { paragraph?: { create: () => unknown } } } };
-    view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
-    commands?: { focus?: (pos: number) => void };
-  };
+  const editor = props.editor as any;
   const getPos = props.getPos;
-  const node = props.node as { nodeSize: number };
   if (typeof getPos !== "function") return;
-  const myPos = getPos();
-  if (typeof myPos !== "number") return;
   const para = editor.state.schema.nodes.paragraph?.create();
   if (!para) return;
-  const insertPos = myPos + node.nodeSize;
-  const tr = editor.view.state.tr.insert(insertPos, para);
+  const doc = editor.view.state.doc;
+  const targetTaskId = (props.node as any).attrs?.taskId;
+  let from = -1;
+  let to = -1;
+  doc.descendants((child: any, pos: number) => {
+    if (from !== -1) return false;
+    if (child.type?.name === "taskRef" && child.attrs?.taskId === targetTaskId) {
+      from = pos;
+      to = pos + child.nodeSize;
+      return false;
+    }
+    return true;
+  });
+  if (from === -1) return;
+  const tr = editor.view.state.tr.replaceWith(from, to, para);
   editor.view.dispatch(tr);
-  nextTick(() => editor.commands?.focus?.(insertPos + 1));
+  nextTick(() => editor.commands?.focus?.(from + 1));
+
+  // Soft-delete task_obj в ARK — пустая задача не должна торчать в Delphi.
+  if (targetTaskId) {
+    void edenApi.softDeleteTask(targetTaskId).catch((err) => {
+      console.warn("[eden TaskRef] softDeleteTask (Enter on empty) failed", err);
+    });
+  }
 }
 
 function cancelAndBlur(): void {
@@ -482,11 +650,15 @@ onMounted(() => {
     recomputeRangeSelection();
     selectionUpdateOff = () => editor.off?.("selectionUpdate", recomputeRangeSelection);
   }
+
+  defendFocus();
 });
 
 onBeforeUnmount(() => {
   unsubscribe?.();
   selectionUpdateOff?.();
+  blurDefenderOff?.();
+  mousedownDocumentOff?.();
 });
 </script>
 
@@ -516,25 +688,14 @@ onBeforeUnmount(() => {
   min-height: 1.65em;
 }
 
-/* Range selection highlight — NodeView сам слушает editor.selectionUpdate
-   и выставляет `is-range-selected` класс на NodeViewWrapper. Reactive
-   refs Vue гарантируют что класс применится корректно (vs Decoration.node,
-   который вешает class на DOM мимо Vue'шного render). */
-.task-ref-node.is-range-selected,
-.task-ref-node.is-node-selected {
-  background: var(--selection-bg, rgba(53, 132, 228, 0.25));
-  border-radius: 2px;
-}
-
-.task-ref-node.is-range-selected .task-ref-row,
-.task-ref-node.is-node-selected .task-ref-row {
-  background: transparent;
-}
-
-/* ProseMirror native NodeSelection — на всякий случай. */
+/* Highlight'ы при PM-NodeSelection / range-overlap НЕ показываем:
+   обычный клик на task случайно ставит NodeSelection (atom block —
+   PM выбирает его целиком), и юзер видит «выделение» хотя он
+   ничего не выделял. Семантика NodeSelection (Delete удалит блок)
+   сохраняется через `selected` prop, просто без визуала. Rubber-band
+   selection даёт свой visual через `.kepler-block-selected` (отдельный
+   слой — PM Decoration plugin). */
 .ProseMirror-selectednode.task-ref-node {
-  background: var(--selection-bg, rgba(53, 132, 228, 0.25));
-  border-radius: 2px;
   outline: none;
 }
 

@@ -270,9 +270,10 @@
 }
 
 .editor-content-area {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-width: 0;
   width: 100%;
+  min-height: 60vh;
   padding: 0 0 var(--space-10);
   overflow: visible;
   cursor: text;

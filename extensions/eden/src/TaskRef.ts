@@ -40,8 +40,12 @@ export const TaskRef = Node.create<TaskRefOptions>({
   name: "taskRef",
   group: "block",
   atom: true,
-  draggable: true,
-  selectable: true,
+  // draggable: false — PM при mousedown на draggable+atom выставляет
+  // `target.draggable = true` через mightDrag flow, ломая нативное
+  // поведение `<input>` (focus/caret). Drag-and-drop задач между
+  // блоками сейчас не используется, отключение безопасно.
+  draggable: false,
+  selectable: false,
 
   addOptions() {
     return {
@@ -79,7 +83,29 @@ export const TaskRef = Node.create<TaskRefOptions>({
   },
 
   addNodeView() {
-    return VueNodeViewRenderer(TaskRefView);
+    return VueNodeViewRenderer(TaskRefView, {
+      /**
+       * PM's DOMObserver слушает document.selectionchange. Когда фокус
+       * переходит на native `<input>` внутри NodeView, browser сбрасывает
+       * doc selection → selectionchange fires → PM.onSelectionChange →
+       * flush → updateSelection → view.focus() → focus уезжает с input
+       * на .ProseMirror DIV.
+       *
+       * `ignoreMutation({type: "selection"})` говорит PM: «selection-
+       * mutation'ы внутри этой NodeView нас не касаются». PM пропускает
+       * `flush()` для них, и focus остаётся на input. Также ignor'им
+       * атрибуты/childList — атомный NodeView рулит своим DOM сам, PM
+       * не должен пересобирать его из model'и.
+       */
+      ignoreMutation: ({ mutation }) => {
+        const type = (mutation as MutationRecord & { type: string }).type;
+        if (type === "selection") return true;
+        if (type === "attributes") return true;
+        if (type === "childList") return true;
+        if (type === "characterData") return true;
+        return false;
+      },
+    });
   },
 
   addCommands() {
@@ -123,6 +149,57 @@ export const TaskRef = Node.create<TaskRefOptions>({
               return true;
             }
             return false;
+          },
+          /**
+           * Перехватываем PM click-обработку для taskRef нод когда клик
+           * пришёлся на native UI внутри (input title / status / open).
+           * PM по умолчанию на mouseup вызывает `selectClickedLeaf` →
+           * `NodeSelection.create` → focus уезжает на .ProseMirror DIV
+           * (PM собирает focus на view.dom когда селекция меняется),
+           * и каретка теряется из нашего `<input>`.
+           *
+           * Возвращая true от handleClickOn — `handleSingleClick` PM'а
+           * считает что мы обработали клик, не зовёт `selectClickedLeaf`,
+           * вызывает `event.preventDefault()` на mouseup. Browser default
+           * мaжhouseDOWN при этом уже сработал (focus input + caret-at-click),
+           * а mouseUP-preventDefault это не отменяет.
+           *
+           * Также: handleDOMEvents.focus возвращаем true чтобы PM не
+           * перевешивал focus на view.dom когда input получил фокус.
+           */
+          handleClickOn(_view, _pos, node, _nodePos, event) {
+            if (node.type.name !== "taskRef") return false;
+            const target = event.target as HTMLElement | null;
+            if (!target) return false;
+            if (target.closest(".task-ref-title-input, .task-ref-status, .task-ref-open")) {
+              return true;
+            }
+            return false;
+          },
+          handleDOMEvents: {
+            /**
+             * mousedown на native UI внутри taskRef → возвращаем true.
+             * PM в dispatchEvent: `if (!runCustomHandler && handlers[type]) handlers[type](...)`.
+             * Если мы вернём true — PM пропускает свой `handlers.mousedown`,
+             * НЕ создаёт `new MouseDown(view, pos, event)`, НЕ навешивает
+             * на root слушатель mouseup → selectClickedLeaf никогда не
+             * запускается. Browser default уже отработал в bubble-стадии
+             * (focus на input + caret-position в input.value).
+             */
+            mousedown(_view, event) {
+              const target = event.target as HTMLElement | null;
+              if (target?.closest(".task-ref-title-input, .task-ref-status, .task-ref-open")) {
+                return true;
+              }
+              return false;
+            },
+            // Если focus переходит на native input — это «хорошо», PM
+            // не должен пытаться отобрать его обратно на свой view.dom.
+            focus(_view, event) {
+              const target = event.target as HTMLElement | null;
+              if (target?.closest(".task-ref-title-input")) return true;
+              return false;
+            },
           },
         },
       }),

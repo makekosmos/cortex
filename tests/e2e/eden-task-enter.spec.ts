@@ -28,6 +28,12 @@ test.describe("Eden TaskRef Enter", () => {
 
       const edenWin = await app.waitForEvent("window", { timeout: 10_000 });
       await edenWin.waitForLoadState("domcontentloaded");
+      edenWin.on("console", (msg) => {
+        const text = msg.text();
+        if (text.includes("eden TaskRef") || text.includes("commitAndCreateNew") || text.includes("AFTER insert")) {
+          console.log("[browser]", text);
+        }
+      });
       await edenWin.waitForTimeout(2000);
 
       // Create a note via API
@@ -37,14 +43,15 @@ test.describe("Eden TaskRef Enter", () => {
           id,
           title: "Task Enter test",
           content_json: JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }),
-          type_id: "system-type-note",
+          created_at: Date.now(),
+          updated_at: Date.now(),
           folder_id: null,
+          type_id: "note_obj",
           header_layout: "default",
           header_props_json: "{}",
           schema_version: 1,
-          updated_at: Date.now(),
         } as any);
-        if (!result?.ok) throw new Error(`saveEntry failed`);
+        if (!result?.ok) throw new Error(`saveEntry failed: ${JSON.stringify(result)}`);
       }, noteId);
 
       // Navigate to it via eden store
@@ -69,14 +76,41 @@ test.describe("Eden TaskRef Enter", () => {
       let taskCount = await edenWin.locator(".task-ref-node").count();
       expect(taskCount).toBeGreaterThanOrEqual(1);
 
-      // Focus on the input of the first task and type title
+      // Focus on the input of the first task and fill title (fill дублирует
+      // type events, гарантированно синкает v-model перед Enter).
       const firstTaskInput = edenWin.locator(".task-ref-title-input").first();
-      await firstTaskInput.focus();
-      await edenWin.keyboard.type("first task");
+      await firstTaskInput.click();
+      await edenWin.waitForTimeout(200);
+      await firstTaskInput.fill("first task");
       await edenWin.waitForTimeout(300);
 
-      // Press Enter ONCE (no typematic / repeat)
-      await edenWin.keyboard.press("Enter");
+      // Sanity: title input should have value
+      const titleBeforeEnter = await firstTaskInput.inputValue();
+      console.log("[e2e] title before Enter:", titleBeforeEnter);
+
+      // Doc structure + PM doc JSON BEFORE Enter
+      const beforeData = await edenWin.evaluate(() => {
+        const pm = document.querySelector(".ProseMirror");
+        const dom = Array.from(pm?.children ?? []).map((el) => ({
+          t: (el as HTMLElement).tagName,
+          cls: (el as HTMLElement).className,
+        }));
+        // Try to get PM doc JSON via global editor reference
+        const editor = (window as any).__edenEditor || null;
+        const docJson = editor?.state?.doc?.toJSON?.() ?? null;
+        return { dom, docJson };
+      });
+      console.log("[e2e] BEFORE Enter DOM:", JSON.stringify(beforeData.dom));
+
+      // activeElement check
+      const activeEl = await edenWin.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        return { tag: el?.tagName, cls: el?.className };
+      });
+      console.log("[e2e] activeElement before Enter:", JSON.stringify(activeEl));
+
+      // Press Enter ON the input element specifically (not just generic keyboard).
+      await firstTaskInput.press("Enter");
       await edenWin.waitForTimeout(1500); // give createTask + loadTask time
 
       // After Enter: exactly 2 task-ref-nodes (original + new), and NO
@@ -88,14 +122,24 @@ test.describe("Eden TaskRef Enter", () => {
       const firstTitle = await edenWin.locator(".task-ref-title-input").nth(0).inputValue();
       expect(firstTitle).toBe("first task");
 
-      // Verify no random empty paragraph between tasks (besides taskRef nodes)
-      const blockCount = await edenWin.evaluate(() => {
+      // Log block structure for diagnosis
+      const blockStructure = await edenWin.evaluate(() => {
         const pm = document.querySelector(".ProseMirror");
-        return pm?.children.length ?? 0;
+        if (!pm) return [];
+        return Array.from(pm.children).map((el) => {
+          const t = (el as HTMLElement).tagName;
+          const cls = (el as HTMLElement).className;
+          const ti = (el as HTMLElement).getAttribute("data-task-id");
+          const text = (el as HTMLElement).textContent?.slice(0, 50);
+          return { t, cls, ti, text };
+        });
       });
-      // Expect: 2 task-ref-nodes (+ maybe the original empty paragraph from
-      // setContent before slash). Allow up to 3 total.
-      expect(blockCount).toBeLessThanOrEqual(3);
+      console.log("[e2e] block structure:", JSON.stringify(blockStructure, null, 2));
+      const blockCount = blockStructure.length;
+      // Ровно 2: [orig taskRef, new taskRef]. Без trailing paragraph —
+      // StarterKit.trailingNode отключён, и наш replaceWith убирает
+      // оставшийся от slash-команды empty paragraph.
+      expect(blockCount).toBe(2);
     } finally {
       await app.close();
     }
