@@ -10,11 +10,54 @@
 // children, чтобы Ctrl+C корректно убивал всё дерево.
 
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shellRoot = path.resolve(__dirname, "..");
+
+// --- .env.local loader (per-worktree dev slot override) ---------------------
+// `shell/.env.local` (gitignored) задаёт `KEPLER_INSTANCE=dev-<slug>` для
+// конкретного worktree. instance.ts резолвит slot и derive'ит userData /
+// dataDir / productName. Без файла KEPLER_INSTANCE не set → default "dev".
+//
+// Minimal parser (без новых deps): KEY=VALUE по строке, # для комментариев,
+// пустые строки skip. Никакой shell interpolation, никаких quote'ов.
+function loadDotenvLocal() {
+  const file = path.join(shellRoot, ".env.local");
+  if (!existsSync(file)) return;
+  try {
+    const content = readFileSync(file, "utf8");
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq <= 0) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      // Допускаем `KEY="value"` / `KEY='value'` чтобы не озадачивать
+      // пользователей привычкой из dotenv.
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      // Process env wins (явный CLI override > .env.local). Это важно для
+      // CI и manual overrides.
+      if (process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+    if (process.env.KEPLER_INSTANCE) {
+      console.log(`[dev] KEPLER_INSTANCE=${process.env.KEPLER_INSTANCE} (from .env.local)`);
+    }
+  } catch (e) {
+    console.error("[dev] .env.local parse failed:", e);
+  }
+}
+loadDotenvLocal();
 
 const children = [];
 

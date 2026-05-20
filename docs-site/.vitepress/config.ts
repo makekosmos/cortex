@@ -110,6 +110,7 @@ export default defineConfig({
             { text: "RAM benchmarks", link: "/concepts/ram-benchmarks" },
             { text: "Proof loop", link: "/concepts/proof-loop" },
             { text: "Изоляция тестовых БД", link: "/concepts/test-isolation" },
+            { text: "Instance slots (prod/dev/multi-dev)", link: "/concepts/instances" },
           ],
         },
       ],
