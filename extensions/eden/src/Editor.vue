@@ -88,10 +88,15 @@
         </div>
       </div>
     </div>
-    <div class="editor-content-area" @click="editor?.commands.focus()">
+    <div
+      ref="contentAreaRef"
+      class="editor-content-area"
+      @mousedown="onContentMouseDown"
+    >
       <div class="editor-rail editor-content-rail">
         <EditorContent :editor="editor ?? null" />
       </div>
+      <BlockSelectionOverlay :rect="blockSelection.dragRect.value" />
     </div>
   </div>
 </template>
@@ -109,6 +114,8 @@ import type { Editor as TiptapEditor, Range } from "@tiptap/vue-3";
 import { Wikilink } from "./Wikilink";
 import { TaskRef } from "./TaskRef";
 import { edenApi } from "@/lib/edenApi";
+import { useBlockSelection } from "@/composables/useBlockSelection";
+import BlockSelectionOverlay from "@/components/BlockSelectionOverlay.vue";
 // InlineCaret удалён — widget-decoration на каждом cursor position ломал
 // drag-selection (mousedown на widget → ProseMirror не разрешал mouse
 // position в text offset, drag только перемещал каретку). Native browser
@@ -240,6 +247,98 @@ const typePickerOptions = computed(() => props.noteTypes.filter((noteType) => Bo
 function getNoteTypeIconSrc(noteType: NoteType | null) {
   return noteType?.icon ? objectIconUri(noteType.icon) : "";
 }
+
+const contentAreaRef = useTemplateRef<HTMLDivElement>("contentAreaRef");
+const blockSelection = useBlockSelection();
+
+// Mouse handlers для rubber-band block selection (Anytype-style).
+// Стартуем drag только когда mousedown НЕ внутри текста ProseMirror'а
+// (т.е. в margin области, между блоками или на .ProseMirror корне).
+// Клик внутри блока пускаем в PM как обычно — он ставит каретку.
+function onContentMouseDown(e: MouseEvent): void {
+  if (e.button !== 0) return;
+  if (!editor.value) return;
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
+  // Игнорируем mousedown'ы которые TipTap должен обработать сам:
+  // - клик внутри блочного контента (text node, inline elements внутри
+  //   ProseMirror block-level child'а).
+  // - клик на интерактивный элемент (input, button, [role=checkbox]).
+  const interactive = target.closest("input, textarea, button, [role=button], [role=checkbox], [contenteditable=true] *");
+  if (interactive) return;
+  const proseMirrorDom = editor.value.view.dom as HTMLElement;
+  // Если target — потомок ProseMirror НО не сам .ProseMirror, значит клик
+  // внутри какого-то блока. Пусть PM обрабатывает (caret placement).
+  if (proseMirrorDom.contains(target) && target !== proseMirrorDom) {
+    return;
+  }
+  if (!contentAreaRef.value) return;
+  blockSelection.startDrag(editor.value, e.clientX, e.clientY, contentAreaRef.value);
+  window.addEventListener("mousemove", onWindowMouseMove);
+  window.addEventListener("mouseup", onWindowMouseUp, { once: true });
+}
+
+function onWindowMouseMove(e: MouseEvent): void {
+  const moved = blockSelection.updateDrag(e.clientX, e.clientY);
+  if (moved) {
+    // Запретить native text selection пока drag активен (иначе ::selection
+    // будет накладываться на наш block selection overlay).
+    e.preventDefault();
+  }
+}
+
+function onWindowMouseUp(): void {
+  const wasDragging = blockSelection.dragRect.value !== null;
+  blockSelection.finishDrag();
+  window.removeEventListener("mousemove", onWindowMouseMove);
+  // Click без drag (movement < threshold) — даём editor'у фокус, чтобы
+  // юзер мог начать печатать сразу. Click в margin без этого оставляет
+  // редактор без фокуса, что путает.
+  if (!wasDragging && editor.value) {
+    editor.value.commands.focus("end");
+  }
+}
+
+// Keyboard: Esc → clear selection; Delete/Backspace → delete selected blocks.
+function onWindowKeyDown(e: KeyboardEvent): void {
+  if (!blockSelection.hasSelection.value) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    blockSelection.clearSelection();
+    return;
+  }
+  if (e.key === "Delete" || e.key === "Backspace") {
+    if (!editor.value) return;
+    e.preventDefault();
+    void blockSelection.deleteSelected(editor.value, edenApi.softDeleteTask);
+  }
+}
+
+// Reactive applier: следим за selectedPositions, мутируем DOM .ProseMirror
+// children. Прямое DOM mutation (Anytype pattern) — works для всех block
+// типов (paragraph, heading, taskRef, code, list), не только NodeView'ов.
+watch(
+  () => blockSelection.selectedPositions.value,
+  (selected) => {
+    if (!editor.value) return;
+    const proseMirrorEl = editor.value.view.dom as HTMLElement;
+    const children = Array.from(proseMirrorEl.children) as HTMLElement[];
+    for (const el of children) {
+      let pos: number;
+      try {
+        pos = editor.value.view.posAtDOM(el, 0, -1);
+      } catch {
+        continue;
+      }
+      if (selected.has(pos)) {
+        el.classList.add("kepler-block-selected");
+      } else {
+        el.classList.remove("kepler-block-selected");
+      }
+    }
+  },
+  { deep: false, flush: "post" },
+);
 
 const lowlight = createLowlight(all);
 
@@ -1233,9 +1332,15 @@ watchEffect((onCleanup) => {
   };
   window.addEventListener("beforeunload", handleBeforeUnload);
 
+  // Block selection keyboard: Esc clears, Delete/Backspace удаляет.
+  // Active только когда есть selection — guard внутри onWindowKeyDown.
+  window.addEventListener("keydown", onWindowKeyDown);
+
   onCleanup(() => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.removeEventListener("keydown", onWindowKeyDown);
+    window.removeEventListener("mousemove", onWindowMouseMove);
   });
 });
 

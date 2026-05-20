@@ -331,6 +331,40 @@
   color: var(--text-primary);
 }
 
+/* Block selection highlight (Anytype-style). Класс `.kepler-block-selected`
+   ставится на любой top-level child .ProseMirror когда он попадает в
+   rubber-band drag rect (см. useBlockSelection.ts). Через `::after`
+   pseudo-element рендерим полупрозрачный синий overlay поверх блока —
+   так же как Anytype делает с `.isSelectionSelected::after`.
+
+   Цвет тот же что Anytype: rgba(55, 122, 255, 0.25). z-index: 10 —
+   ниже rubber-band rect (20) но выше обычного контента. */
+.ProseMirror > .kepler-block-selected {
+  position: relative;
+}
+
+.ProseMirror > .kepler-block-selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--block-selection-bg, rgba(55, 122, 255, 0.25));
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Editor content area — relative parent для absolute overlay rect. */
+.editor-content-area {
+  position: relative;
+}
+
+/* Когда drag активен (есть видимый overlay) — отключаем user-select на
+   тексте чтобы не было гонки браузерного text selection поверх нашего
+   block selection. */
+.editor-content-area:has(.block-selection-rect) .ProseMirror {
+  user-select: none;
+}
+
 .ProseMirror > * + * {
   margin-top: 0.85em;
 }
