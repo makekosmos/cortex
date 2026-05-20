@@ -380,6 +380,18 @@
   margin-top: 0.85em;
 }
 
+/* TaskRef margin parity — Vue scoped CSS на `.task-ref-node` (через
+   data-v-* attr) имеет более высокую специфичность чем общее правило
+   выше, поэтому natural margin-top не применяется. Дублируем явно с
+   высокой специфичностью. Между двумя задачами и между задачей и
+   параграфом — одинаковый gap 0.85em. */
+.ProseMirror > [data-task-ref] {
+  margin-top: 0.85em;
+}
+.ProseMirror > [data-task-ref]:first-child {
+  margin-top: 0;
+}
+
 .ProseMirror h1,
 .ProseMirror h2,
 .ProseMirror h3 {
