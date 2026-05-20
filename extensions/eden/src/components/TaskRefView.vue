@@ -7,6 +7,8 @@
       'is-terminated': isTerminated,
       'is-loading': loading,
       'is-missing': missing,
+      'is-range-selected': isRangeSelected,
+      'is-node-selected': selected,
     }"
     :data-task-id="taskId"
   >
@@ -22,26 +24,25 @@
         :aria-label="TASK_STATUS_LABELS[status]"
         @click="toggleDoneStatus"
       />
-      <div
-        v-if="!editingTitle"
-        class="task-ref-title"
-        :class="{ 'task-ref-title-empty': !title }"
-        :title="missing ? 'Задача удалена' : 'Клик — переименовать, → — открыть, ПКМ — статус'"
-        @mousedown.stop
-        @click.stop="enterEditMode"
-      >
-        {{ title || (missing ? "Задача удалена" : "Пустая задача") }}
-      </div>
+      <!-- Always-input pattern: ноль mode toggle между display и edit,
+           click ставит каретку нативно (как в обычном тексте). Input
+           styled под обычный текст — никаких рамок/выделения, без
+           cursor: pointer. Read-only когда missing (удалённая задача). -->
       <input
-        v-else
         ref="titleInputRef"
-        v-model="editingTitleValue"
+        v-model="titleInputValue"
         class="task-ref-title-input"
+        :class="{ 'task-ref-title-input-empty': !titleInputValue }"
         type="text"
-        placeholder="Что нужно сделать?"
-        @blur="commitTitle"
-        @keydown.enter.prevent="commitTitle"
-        @keydown.escape.prevent="cancelEditTitle"
+        :placeholder="missing ? 'Задача удалена' : 'Пустая задача'"
+        :readonly="missing"
+        :title="missing ? 'Задача удалена' : 'ПКМ — статус, → — открыть'"
+        @mousedown.stop
+        @click.stop
+        @focus="onTitleFocus"
+        @blur="onTitleBlur"
+        @keydown.enter.prevent="commitAndBlur"
+        @keydown.escape.prevent="cancelAndBlur"
         @keydown.delete="onTitleKeyDelete"
       />
       <button
@@ -84,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { NodeViewWrapper, nodeViewProps } from "@tiptap/vue-3";
 import { ContextMenu, ContextMenuItem, useContextMenu } from "@kosmos/visuals";
 import { edenApi } from "@/lib/edenApi";
@@ -97,6 +98,11 @@ import {
   getStatusCategory,
   type TaskStatus,
 } from "@/lib/taskStatus";
+
+// Internal placeholder для пустой задачи (хранится в ARK как title, чтобы
+// Delphi не показывал empty-row). В Eden input трактует его как «пусто»
+// для UX-целей: input value = "" + placeholder вместо реального текста.
+const EMPTY_PLACEHOLDER_TITLE = "Пустая задача";
 
 const props = defineProps(nodeViewProps);
 
@@ -112,14 +118,60 @@ const isCancelled = computed(() => status.value === "canceled");
 const isTerminated = computed(() => getStatusCategory(status.value) !== "open");
 const loading = ref(true);
 const contextMenu = useContextMenu<null>();
+
+// Always-input pattern (см. template). titleInputValue — отображаемая в
+// input строка. Если ARK хранит placeholder ("Пустая задача") — показываем
+// пустоту (input.value = ""), placeholder атрибут подставит текст.
+const titleInputValue = ref("");
+const isInputFocused = ref(false);
+// Flag для отличия «commit on blur» vs «cancel on Escape» — Escape тоже
+// генерит blur, но мы не хотим в этом случае писать в ARK.
+let skipNextBlurCommit = false;
+
+function displayValueFromTitle(t: string): string {
+  return t === EMPTY_PLACEHOLDER_TITLE ? "" : t;
+}
+
+// Selection-aware highlight: каждый NodeView подписан на editor's
+// selectionUpdate, считает свою позицию в текущей selection и помечает
+// isRangeSelected. Это альтернатива `Decoration.node` который теряется
+// в Vue NodeView'ах (Vue рулит wrapper'ом, декорация-class не применяется).
+const isRangeSelected = ref(false);
+
+function recomputeRangeSelection(): void {
+  // props.editor может быть undefined в SSR / edge cases.
+  const editor = props.editor as
+    | { state?: { selection?: { from: number; to: number; empty: boolean; constructor: { name: string } } } }
+    | undefined;
+  const sel = editor?.state?.selection;
+  if (!sel || sel.empty) {
+    isRangeSelected.value = false;
+    return;
+  }
+  // NodeSelection обрабатывается через `selected` prop — не дублируем класс.
+  if (sel.constructor.name === "NodeSelection") {
+    isRangeSelected.value = false;
+    return;
+  }
+  const nodePos = typeof props.getPos === "function" ? props.getPos() : null;
+  if (typeof nodePos !== "number") {
+    isRangeSelected.value = false;
+    return;
+  }
+  const nodeSize = (props.node as { nodeSize?: number })?.nodeSize ?? 1;
+  const nodeFrom = nodePos;
+  const nodeTo = nodePos + nodeSize;
+  // Intersection: либо selection полностью покрывает node, либо
+  // partial overlap. Atom block считается «включён» если хотя бы один
+  // его край внутри selection.
+  isRangeSelected.value = nodeFrom < sel.to && nodeTo > sel.from;
+}
 // missing = task_obj был удалён (или never существовал). NodeView показывает
 // dimmed placeholder вместо тихого исчезновения — юзер видит что ссылка
 // повисла, может удалить node. Также возникает кратковременно когда input
 // rule `[ ] ` асинхронно создаёт task_obj — см. retryLoad ниже.
 const missing = ref(false);
 
-const editingTitle = ref(false);
-const editingTitleValue = ref("");
 const titleInputRef = useTemplateRef<HTMLInputElement>("titleInputRef");
 
 let unsubscribe: (() => void) | null = null;
@@ -149,6 +201,11 @@ async function loadTask(opts: { allowRetry?: boolean } = {}): Promise<void> {
     }
     missing.value = false;
     title.value = obj.title ?? "";
+    // Sync input value с server'ным title, ЕСЛИ юзер сейчас не печатает.
+    // Иначе clobber'ом стер бы его пендинг ввод.
+    if (!isInputFocused.value) {
+      titleInputValue.value = displayValueFromTitle(title.value);
+    }
     const propsRaw = (obj.propsJson ?? {}) as Record<string, unknown>;
     status.value = normalizeStatus({
       status: propsRaw.status,
@@ -203,14 +260,45 @@ function openTaskPage(): void {
   );
 }
 
-function enterEditMode(): void {
-  if (missing.value) return;
-  editingTitleValue.value = title.value;
-  editingTitle.value = true;
-  nextTick(() => {
-    titleInputRef.value?.focus();
-    titleInputRef.value?.select();
-  });
+function onTitleFocus(): void {
+  isInputFocused.value = true;
+}
+
+async function onTitleBlur(): Promise<void> {
+  isInputFocused.value = false;
+  if (skipNextBlurCommit) {
+    skipNextBlurCommit = false;
+    // Revert local value к server'ному title display.
+    titleInputValue.value = displayValueFromTitle(title.value);
+    return;
+  }
+  await commitInputValue();
+}
+
+async function commitInputValue(): Promise<void> {
+  const id = taskId.value;
+  if (!id || missing.value) return;
+  const next = titleInputValue.value.trim();
+  const prevTitleDisplayed = displayValueFromTitle(title.value);
+  if (next === prevTitleDisplayed) return;
+  // Optimistic UI: меняем local title до ack от сервера.
+  // patchTask нормализует empty → "Пустая задача" (см. shim).
+  title.value = next || EMPTY_PLACEHOLDER_TITLE;
+  try {
+    await edenApi.patchTask(id, { title: next });
+  } catch (err) {
+    console.warn("[eden TaskRef] title commit failed", id, err);
+    // Не пытаемся откатить — loadTask на entity_changed выровняет.
+  }
+}
+
+function commitAndBlur(): void {
+  titleInputRef.value?.blur();
+}
+
+function cancelAndBlur(): void {
+  skipNextBlurCommit = true;
+  titleInputRef.value?.blur();
 }
 
 /**
@@ -219,26 +307,16 @@ function enterEditMode(): void {
  */
 function onTitleKeyDelete(e: KeyboardEvent): void {
   if (e.key !== "Backspace") return;
-  if (editingTitleValue.value !== "") return;
+  if (titleInputValue.value !== "") return;
   e.preventDefault();
-  editingTitle.value = false;
   const id = taskId.value;
-  // Soft-delete task_obj в ARK, потом удаляем node. Порядок важен: если
-  // удалить node сначала, NodeView unmount'ится и subscribe не успеет
-  // обработать ack. Делаем async без await — Eden навигация быстрее.
   if (id) {
     void edenApi.softDeleteTask(id).catch((err) => {
       console.warn("[eden TaskRef] soft delete failed", id, err);
     });
   }
-  // ProseMirror NodeView prop: положение node ДО deleteNode. Используем
-  // чтобы вернуть курсор в то же место (фактически в предыдущий блок,
-  // т.к. taskRef был atom).
   const nodePos = typeof props.getPos === "function" ? props.getPos() : null;
   props.deleteNode();
-  // После удаления node DOM input размонтирован, focus ушёл. Возвращаем
-  // фокус в editor с курсором в позиции удалённого taskRef'а — там
-  // окажется предыдущий блок (paragraph) или начало doc'а.
   nextTick(() => {
     const editor = props.editor as { commands?: { focus?: (pos?: number) => void } } | undefined;
     if (typeof nodePos === "number") {
@@ -249,36 +327,20 @@ function onTitleKeyDelete(e: KeyboardEvent): void {
   });
 }
 
-async function commitTitle(): Promise<void> {
-  if (!editingTitle.value) return;
-  const id = taskId.value;
-  const nextTitle = editingTitleValue.value.trim();
-  editingTitle.value = false;
-  if (!id || nextTitle === title.value) return;
-  // Optimistic.
-  const prev = title.value;
-  title.value = nextTitle;
-  try {
-    await edenApi.patchTask(id, { title: nextTitle });
-  } catch (err) {
-    console.warn("[eden TaskRef] title commit failed", id, err);
-    title.value = prev;
-  }
-}
-
-function cancelEditTitle(): void {
-  editingTitle.value = false;
-}
+let selectionUpdateOff: (() => void) | null = null;
 
 onMounted(() => {
   void loadTask();
   // Если node только что вставлен (через slash `/задача` или `[ ] ` input
-  // rule) — autoFocus=true. Сразу в edit mode, чтобы юзер начал печатать
-  // title не делая дополнительный double-click. Сбрасываем atrr через
-  // updateAttributes чтобы re-mount (например после autosave reload)
-  // не входил снова в editing.
+  // rule) — autoFocus=true. Фокусируем input, ставим каретку в конец.
+  // Сбрасываем attr через updateAttributes чтобы re-mount (например после
+  // autosave reload) не фокусил снова.
   if (props.node?.attrs?.autoFocus) {
-    enterEditMode();
+    nextTick(() => {
+      titleInputRef.value?.focus();
+      const len = titleInputValue.value.length;
+      titleInputRef.value?.setSelectionRange(len, len);
+    });
     props.updateAttributes({ autoFocus: false });
   }
   unsubscribe = edenApi.subscribeObjectChanges((payload) => {
@@ -287,15 +349,26 @@ onMounted(() => {
       missing.value = true;
       return;
     }
-    // object_upserted — re-fetch. Не дёргаем если юзер сейчас редактирует
-    // title локально (избегаем перезаписи поверх его ввода).
-    if (editingTitle.value) return;
+    // object_upserted — re-fetch. Skip если юзер сейчас печатает локально
+    // (loadTask внутри проверит isInputFocused и не клобберит ввод).
     void loadTask();
   });
+
+  // Подписка на editor.selectionUpdate для range-highlight. Каждое
+  // изменение selection re-checks включён ли этот node в range.
+  const editor = props.editor as
+    | { on?: (event: string, cb: () => void) => void; off?: (event: string, cb: () => void) => void }
+    | undefined;
+  if (editor?.on && editor.off) {
+    editor.on("selectionUpdate", recomputeRangeSelection);
+    recomputeRangeSelection();
+    selectionUpdateOff = () => editor.off?.("selectionUpdate", recomputeRangeSelection);
+  }
 });
 
 onBeforeUnmount(() => {
   unsubscribe?.();
+  selectionUpdateOff?.();
 });
 </script>
 
@@ -319,20 +392,23 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-/* Range selection highlight — когда юзер тянет text selection из
-   соседнего параграфа и захватывает taskRef, ProseMirror plugin вешает
-   класс. Класс попадает на outer NodeView wrapper (через Decoration.node).
-   Дублируем фон и на wrapper, и на row — иногда Vue NodeView рендерит
-   дополнительный wrapper уровень, и класс падает не на тот элемент. */
-.task-ref-range-selected,
-.task-ref-range-selected .task-ref-row {
+/* Range selection highlight — NodeView сам слушает editor.selectionUpdate
+   и выставляет `is-range-selected` класс на NodeViewWrapper. Reactive
+   refs Vue гарантируют что класс применится корректно (vs Decoration.node,
+   который вешает class на DOM мимо Vue'шного render). */
+.task-ref-node.is-range-selected,
+.task-ref-node.is-node-selected {
   background: var(--selection-bg, rgba(53, 132, 228, 0.25));
   border-radius: 2px;
 }
 
-/* NodeSelection (юзер кликнул на node сам) — ProseMirror ставит класс. */
-.ProseMirror-selectednode.task-ref-node,
-.ProseMirror-selectednode.task-ref-node .task-ref-row {
+.task-ref-node.is-range-selected .task-ref-row,
+.task-ref-node.is-node-selected .task-ref-row {
+  background: transparent;
+}
+
+/* ProseMirror native NodeSelection — на всякий случай. */
+.ProseMirror-selectednode.task-ref-node {
   background: var(--selection-bg, rgba(53, 132, 228, 0.25));
   border-radius: 2px;
   outline: none;
@@ -367,60 +443,52 @@ onBeforeUnmount(() => {
   --task-status-accent: var(--eden-accent-color);
 }
 
-.task-ref-title {
-  flex: 1 1 auto;
-  cursor: pointer;
-  user-select: none;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  color: var(--foreground, #1a1a1a);
-  transition: opacity 120ms ease, color 120ms ease;
-}
-
-/* Completed — только затемнение, без зачёркивания. Зачёркивание оставлено
-   для is-cancelled (отменённая, не выполненная). */
-.is-completed .task-ref-title {
-  opacity: 0.5;
-  color: var(--muted-foreground, #888);
-}
-
-/* Cancelled — зачёркивание + затемнение. Семантически отличается от
-   completed: задача НЕ выполнена, она снята с повестки. */
-.is-cancelled .task-ref-title {
-  text-decoration: line-through;
-  opacity: 0.5;
-  color: var(--muted-foreground, #888);
-}
-
-.task-ref-title-empty {
-  color: var(--muted-foreground, #888);
-  font-style: italic;
-}
-
-.is-missing .task-ref-title {
-  color: var(--destructive-foreground, #b14040);
-  text-decoration: line-through;
-  opacity: 0.7;
-}
-
+/* Always-input title — стилизован как обычный текст. Без border, без bg,
+   cursor: text (по умолчанию у input — самое то). Никакого pointer/select. */
 .task-ref-title-input {
   flex: 1 1 auto;
   font-size: 0.95rem;
   line-height: 1.4;
   padding: 0;
+  margin: 0;
   border: none;
   background: transparent;
   color: var(--foreground, #1a1a1a);
   outline: none;
   font-family: inherit;
+  font-weight: inherit;
+  /* cursor: text у input нативно — не override'им */
+  transition: opacity 120ms ease, color 120ms ease;
+  min-width: 0;
 }
 
 .task-ref-title-input::placeholder {
   color: var(--muted-foreground, #888);
   opacity: 0.6;
+  font-style: italic;
 }
 
-.is-loading .task-ref-title {
+/* Completed — затемнение без зачёркивания. */
+.is-completed .task-ref-title-input {
+  opacity: 0.5;
+  color: var(--muted-foreground, #888);
+}
+
+/* Cancelled — зачёркивание + затемнение. */
+.is-cancelled .task-ref-title-input {
+  text-decoration: line-through;
+  opacity: 0.5;
+  color: var(--muted-foreground, #888);
+}
+
+.is-missing .task-ref-title-input {
+  color: var(--destructive-foreground, #b14040);
+  text-decoration: line-through;
+  opacity: 0.7;
+  cursor: default;
+}
+
+.is-loading .task-ref-title-input {
   color: var(--muted-foreground, #888);
 }
 

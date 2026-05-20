@@ -10,12 +10,8 @@
 
 import { Node, mergeAttributes, nodeInputRule } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
-import { Plugin, PluginKey, TextSelection, AllSelection } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import TaskRefView from "./components/TaskRefView.vue";
 import { edenApi } from "@/lib/edenApi";
-
-const rangeSelectionPluginKey = new PluginKey("eden-task-ref-range-selection");
 
 export interface TaskRefOptions {
   /**
@@ -100,55 +96,11 @@ export const TaskRef = Node.create<TaskRefOptions>({
     };
   },
 
-  addProseMirrorPlugins() {
-    // Range-selection awareness: когда юзер тянет text selection через
-    // несколько блоков и selection захватывает таск — навешиваем класс на
-    // node DOM, чтобы CSS показал visual highlight. Это решает проблему
-    // «atom block в range selection ничего не подсвечивает» — пользователь
-    // не видит что taskRef включен, хотя ProseMirror selection технически
-    // его держит. Anytype делает то же самое, но в их own block editor.
-    return [
-      new Plugin({
-        key: rangeSelectionPluginKey,
-        props: {
-          decorations(state) {
-            const sel = state.selection;
-            // Empty selection (просто cursor) — никаких highlights.
-            if (sel.empty) return null;
-            // TextSelection / AllSelection включают atom-блоки в range
-            // и должны их подсветить. NodeSelection — отдельный case
-            // (ProseMirror уже даёт `.ProseMirror-selectednode` класс).
-            if (!(sel instanceof TextSelection) && !(sel instanceof AllSelection)) {
-              return null;
-            }
-
-            const { from, to } = sel;
-            const decos: Decoration[] = [];
-            state.doc.descendants((node, pos) => {
-              if (node.type.name !== "taskRef") return;
-              const nodeFrom = pos;
-              const nodeTo = pos + node.nodeSize;
-              // Node intersects selection range. Для атомарных block'ов
-              // считаем включением если selection полностью покрывает
-              // node (from <= nodeFrom && nodeTo <= to) ИЛИ selection
-              // strictly intersects boundaries (стандартный case
-              // когда юзер тянет курсор сверху или снизу через node).
-              const fullyCovered = from <= nodeFrom && nodeTo <= to;
-              const partialIntersect = nodeFrom < to && nodeTo > from;
-              if (fullyCovered || partialIntersect) {
-                decos.push(
-                  Decoration.node(nodeFrom, nodeTo, {
-                    class: "task-ref-range-selected",
-                  }),
-                );
-              }
-            });
-            return decos.length ? DecorationSet.create(state.doc, decos) : null;
-          },
-        },
-      }),
-    ];
-  },
+  // Range-selection awareness живёт внутри NodeView (TaskRefView.vue) —
+  // каждый view подписан на `editor.on("selectionUpdate")` и сам решает
+  // подсвечен ли через reactive ref. Это надёжнее чем ProseMirror
+  // `Decoration.node`: Vue NodeView перерисовывает wrapper и теряет класс
+  // декорации (Decoration.node ставит attr на outer DOM, но Vue им рулит).
 
   addInputRules() {
     const getSourceNoteId = this.options.getSourceNoteId;
