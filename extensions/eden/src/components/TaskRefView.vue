@@ -383,13 +383,17 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  /* Никакого horizontal padding — title должен выравниваться по той же
-     левой кромке что и обычный текст параграфа. Vertical 1px для
-     baseline alignment с paragraph height. */
-  padding: 1px 0;
+  padding: 0;
   border-radius: 4px;
   transition: background-color 120ms ease;
   position: relative;
+  /* Inherit от .ProseMirror — то же font-size (16px) и line-height (1.65)
+     что у параграфов. Это даёт visual size + vertical rhythm идентичный
+     <p>. Раньше у row было fixed font-size 0.95rem + line-height 1.4 →
+     ~21px высота vs ~26px у <p>. Юзер видел разницу. */
+  font-size: inherit;
+  line-height: inherit;
+  min-height: 1.65em;
 }
 
 /* Range selection highlight — NodeView сам слушает editor.selectionUpdate
@@ -447,8 +451,9 @@ onBeforeUnmount(() => {
    cursor: text (по умолчанию у input — самое то). Никакого pointer/select. */
 .task-ref-title-input {
   flex: 1 1 auto;
-  font-size: 0.95rem;
-  line-height: 1.4;
+  /* Inherit от .ProseMirror — size и rhythm как у parameter'а. */
+  font-size: inherit;
+  line-height: inherit;
   padding: 0;
   margin: 0;
   border: none;

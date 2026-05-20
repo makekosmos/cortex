@@ -25,6 +25,27 @@ import { useLayoutStore } from "./layout";
 
 type ActiveScreen = "notes" | "settings" | "object-types" | "type-collection";
 
+// Persistence для last-visited entry id. Юзер reload'ит окно (Ctrl+R в
+// dev) и ожидает что вернётся в ту заметку которую читал. Без этого
+// hydrateVaultData всегда открывает дефолтную my-space.
+const LAST_ENTRY_STORAGE_KEY = "eden:nav:lastEntryId";
+
+function readLastVisitedEntryId(): string | null {
+  try {
+    return window.localStorage.getItem(LAST_ENTRY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeLastVisitedEntryId(id: string): void {
+  try {
+    window.localStorage.setItem(LAST_ENTRY_STORAGE_KEY, id);
+  } catch {
+    // localStorage недоступен — silent.
+  }
+}
+
 function mergeNoteTypesWithSystem(noteTypesData: NoteType[]) {
   const byId = new Map<string, NoteType>();
   for (const systemType of SYSTEM_TYPES) {
@@ -143,6 +164,20 @@ export const useEdenStore = defineStore("eden", () => {
       entries.value = entriesData;
       noteTypes.value = mergeNoteTypesWithSystem(noteTypesData);
       pruneTransientSaveState(latestSaveTimestamps, saveCoordinators, entriesData);
+
+      // Restore last visited entry (persisted в navigateTo).
+      // Если id невалидный / entry удалена — fallback на my-space.
+      const lastVisitedId = readLastVisitedEntryId();
+      if (lastVisitedId) {
+        const lastEntry = entriesData.find(
+          (e) => e.id === lastVisitedId && !e.deleted_at,
+        );
+        if (lastEntry) {
+          currentEntry.value = lastEntry;
+          activeSpace.value = "diary"; // не открываем my-space welcome
+          return;
+        }
+      }
 
       const existingMySpace =
         entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
@@ -478,6 +513,7 @@ export const useEdenStore = defineStore("eden", () => {
       activeNoteTypeId.value = null;
 
       currentEntry.value = entry;
+      writeLastVisitedEntryId(entryId);
     }
   }
 
