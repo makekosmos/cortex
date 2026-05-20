@@ -40,7 +40,7 @@
         :title="missing ? 'Задача удалена' : 'ПКМ — статус, → — открыть'"
         @focus="onTitleFocus"
         @blur="onTitleBlur"
-        @keydown.enter.prevent.stop="commitAndCreateNew"
+        @keydown.enter.prevent.stop="onEnterKey"
         @keydown.escape.prevent.stop="cancelAndBlur"
         @keydown.delete.stop="onTitleKeyDelete"
       />
@@ -306,13 +306,23 @@ function commitAndBlur(): void {
 // делает insert → 2 пустых taskRef'а вместо одной. Flag блокирует.
 let creatingNew = false;
 
+/**
+ * Wrapper над commitAndCreateNew который ловит typematic Enter и
+ * IME composition. Browser выставляет `event.repeat = true` для повторов
+ * (после первого ~30ms). Если key.repeat — не делаем ничего. Это
+ * фиксит баг «два пустых блока создаётся когда пользователь долго
+ * жмёт Enter» — typematic Enter на autoFocus'нутой новой task'е
+ * (с пустым title) триггерил `exitToNewParagraph` → пустой `<p>` ниже.
+ */
+function onEnterKey(e: KeyboardEvent): void {
+  if (e.repeat) return;
+  if (e.isComposing) return; // IME composition — Enter подтверждает символ
+  commitAndCreateNew();
+}
+
 function commitAndCreateNew(): void {
-  if (creatingNew) {
-    console.log("[eden TaskRef] Enter: re-entry blocked");
-    return;
-  }
+  if (creatingNew) return;
   creatingNew = true;
-  console.log("[eden TaskRef] Enter: commitAndCreateNew start, titleInputValue=", JSON.stringify(titleInputValue.value));
   try {
     // Пустая task → Enter = «выход в обычный параграф» (Obsidian pattern).
     if (titleInputValue.value.trim() === "") {
@@ -354,7 +364,6 @@ function commitAndCreateNew(): void {
     // 1. SYNC insert — ничего не await'ится, нет окна re-entry.
     const tr = editor.view.state.tr.insert(insertPos, newNode);
     editor.view.dispatch(tr);
-    console.log("[eden TaskRef] Enter: inserted new task at pos", insertPos, "newTaskId=", newTaskId);
 
     // 2. Optimistic local commit + background async ARK writes —
     //    fire-and-forget. NodeView новой task'и retry'ит loadTask

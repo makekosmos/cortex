@@ -370,6 +370,17 @@
   -webkit-user-select: none;
 }
 
+/* Замораживаем scroll в editor-wrapper'е пока активен block-select
+   drag. Cache block rect'ов хранится в client coords при mousedown'е —
+   browser auto-scroll (cursor у edge) сдвинул бы фактические Y, а cache
+   остался бы старым → wrong hit-test → wrong selection.
+   `:has()` selector — editor-wrapper PARENT для editor-content-area;
+   когда внутри есть active class, замораживаем outer scroll. Chromium
+   105+ поддерживает (Electron). */
+.editor-wrapper:has(.editor-content-area.kepler-block-select-active) {
+  overflow: hidden !important;
+}
+
 .editor-content-area.kepler-block-select-active .ProseMirror ::selection,
 .editor-content-area.kepler-block-select-active .ProseMirror *::selection {
   background: transparent;
