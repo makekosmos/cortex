@@ -36,16 +36,12 @@ oxfmt в root devDeps но никогда не вызывался; `.oxfmtrc.jso
 ## Acceptance Criteria
 
 AC1. `bun run lint`, `bun run format`, `bun run format:check` — все три
-     скрипта существуют и работают (exit 0 на clean tree).
+скрипта существуют и работают (exit 0 на clean tree).
 AC2. `bunx oxfmt --check .` → All matched files use the correct format.
-AC3. Massive format commit не сломал ничего:
-     - `bun run --cwd shell typecheck` green,
-     - `bunx oxlint .` 0 errors (warnings same as before),
-     - `bun run ark:guard:writes` passed,
-     - smoke `bunx playwright test tests/e2e/eden.spec.ts` ≥ 9/9 passed.
+AC3. Massive format commit не сломал ничего: - `bun run --cwd shell typecheck` green, - `bunx oxlint .` 0 errors (warnings same as before), - `bun run ark:guard:writes` passed, - smoke `bunx playwright test tests/e2e/eden.spec.ts` ≥ 9/9 passed.
 AC4. `lefthook.yml` содержит oxfmt --check в pre-commit;
-     `bunx lefthook validate` → All good.
+`bunx lefthook validate` → All good.
 AC5. `docs-site/guide/tooling.md` обновлён под реальность; `bun run docs:sync`
-     зелёный; `bun run docs:check` зелёный *по этому файлу* (pre-existing
-     `/memory` link в другом файле — known issue).
+зелёный; `bun run docs:check` зелёный _по этому файлу_ (pre-existing
+`/memory` link в другом файле — known issue).
 AC6. `packages/visuals/package.json` не содержит локальной oxfmt dep.

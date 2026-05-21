@@ -5,16 +5,16 @@
 Документация (`docs-site/guide/tooling.md`) описывала несуществующий
 state. Reality check:
 
-| Утверждение docs | До Phase 2.5 | После |
-|---|---|---|
-| `bun run lint` существует | ❌ нет скрипта | ✅ `oxlint` |
-| `bun run format` существует | ❌ нет | ✅ `oxfmt` |
-| `bun run format:check` | ❌ нет | ✅ `oxfmt --check` |
-| `.oxlintrc.json` в корне | ❌ | ✅ (Phase 2) |
-| `.oxfmtrc.json` | ❌ | ✅ |
-| oxfmt в lefthook | ❌ | ✅ |
-| oxfmt версии унифицированы | ❌ (root 0.43, visuals 0.7) | ✅ только root 0.43 |
-| Massive baseline format | 1106/1430 файлов неформатированы | ✅ 1405/1405 clean |
+| Утверждение docs            | До Phase 2.5                     | После               |
+| --------------------------- | -------------------------------- | ------------------- |
+| `bun run lint` существует   | ❌ нет скрипта                   | ✅ `oxlint`         |
+| `bun run format` существует | ❌ нет                           | ✅ `oxfmt`          |
+| `bun run format:check`      | ❌ нет                           | ✅ `oxfmt --check`  |
+| `.oxlintrc.json` в корне    | ❌                               | ✅ (Phase 2)        |
+| `.oxfmtrc.json`             | ❌                               | ✅                  |
+| oxfmt в lefthook            | ❌                               | ✅                  |
+| oxfmt версии унифицированы  | ❌ (root 0.43, visuals 0.7)      | ✅ только root 0.43 |
+| Massive baseline format     | 1106/1430 файлов неформатированы | ✅ 1405/1405 clean  |
 
 `crates/ark-core/benches` (typo) исправлен на `crates/ark-core/rust/benches`.
 
@@ -30,6 +30,7 @@ $ bun run format:check
 $ oxfmt --check
 All matched files use the correct format.
 ```
+
 PASS.
 
 ### AC2 — oxfmt --check clean
@@ -39,6 +40,7 @@ $ bunx oxfmt --check .
 All matched files use the correct format.
 Finished in 5847ms on 1405 files using 12 threads.
 ```
+
 PASS.
 
 ### AC3 — massive format apply не сломал ничего
@@ -49,6 +51,7 @@ oxlint:            0 errors, 16 warnings (тот же baseline что до forma
 ark:guard:writes:  passed
 playwright eden:   9/9 passed (53.4s)
 ```
+
 PASS.
 
 ### AC4 — lefthook
@@ -58,11 +61,13 @@ oxfmt:
   glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
   run: bunx oxfmt --check {staged_files}
 ```
+
 `bunx lefthook validate` → All good. PASS.
 
 ### AC5 — tooling.md обновлён
 
 После правки секции «Линт и формат»:
+
 - описаны 4 активных guards: oxlint config, oxfmt config, workspace.lints, ark:guard:writes.
 - описаны pre-commit / pre-push фазы lefthook.
 
@@ -77,6 +82,7 @@ PASS (по tooling.md).
 ```diff
 -    "oxfmt": "^0.7.0",
 ```
+
 PASS.
 
 ## Файлы и commits
@@ -89,6 +95,7 @@ ae23ccde docs(tooling): обновить guide/tooling.md под реально�
 ```
 
 Изменено вне format-only:
+
 - `.oxfmtrc.json` (новый)
 - `package.json` (+lint/format/format:check scripts)
 - `bun.lock` (visuals oxfmt removed)
