@@ -30,18 +30,10 @@ bumps признаны актуальными к выполнению одной
 
 AC1. Все 5 bump'ов закоммичены отдельными commit'ами с per-bump verify.
 
-AC2. После всех bump'ов:
-     - `bun run --cwd shell typecheck` → green,
-     - `bun run --cwd packages/ark typecheck` → green,
-     - `bun run --cwd shell build:js` → green,
-     - `bunx oxlint .` → 0 errors (warnings same baseline),
-     - `bunx oxfmt --check .` → all clean,
-     - `bun run ark:guard:writes` → passed,
-     - `cargo clippy --workspace --all-targets` → 0 errors,
-     - `bunx playwright test tests/e2e/eden.spec.ts` → 9/9 passed.
+AC2. После всех bump'ов: - `bun run --cwd shell typecheck` → green, - `bun run --cwd packages/ark typecheck` → green, - `bun run --cwd shell build:js` → green, - `bunx oxlint .` → 0 errors (warnings same baseline), - `bunx oxfmt --check .` → all clean, - `bun run ark:guard:writes` → passed, - `cargo clippy --workspace --all-targets` → 0 errors, - `bunx playwright test tests/e2e/eden.spec.ts` → 9/9 passed.
 
 AC3. TypeScript 6 deprecations не блокируют — `"ignoreDeprecations": "6.0"`
-     добавлен в 3 tsconfig (shell, delphi, site) для `baseUrl`. Долгосрочный
-     fix (relative paths) — отдельная задача до TS 7.
+добавлен в 3 tsconfig (shell, delphi, site) для `baseUrl`. Долгосрочный
+fix (relative paths) — отдельная задача до TS 7.
 
 AC4. `@types/node` остаётся на 24.x — обоснование задокументировано.

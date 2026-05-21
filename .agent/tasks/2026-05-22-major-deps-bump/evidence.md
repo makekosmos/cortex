@@ -2,15 +2,16 @@
 
 ## Сводная таблица
 
-| Пакет | Before | After | Workspaces | Risk | Reality |
-|---|---|---|---|---|---|
-| vue-router | 4.6.4 | **5.0.7** | delphi, horologion, visuals, root | low | no-op в коде |
-| uuid | 13.0.2 | **14.0.0** | extensions/eden | low | named import совместим |
-| lucide-vue-next | 0.548.0 | **1.0.0** | shell, horologion, visuals, site | low-medium | no brand icons → safe |
-| electron | 41.6.0 | **42.2.0** | shell, root | medium | нет native deps → safe |
-| typescript | 5.8.3 | **6.0.3** | shell, packages/ark | medium-high | 1 deprecation (baseUrl) + 1 type discovery fix |
+| Пакет           | Before  | After      | Workspaces                        | Risk        | Reality                                        |
+| --------------- | ------- | ---------- | --------------------------------- | ----------- | ---------------------------------------------- |
+| vue-router      | 4.6.4   | **5.0.7**  | delphi, horologion, visuals, root | low         | no-op в коде                                   |
+| uuid            | 13.0.2  | **14.0.0** | extensions/eden                   | low         | named import совместим                         |
+| lucide-vue-next | 0.548.0 | **1.0.0**  | shell, horologion, visuals, site  | low-medium  | no brand icons → safe                          |
+| electron        | 41.6.0  | **42.2.0** | shell, root                       | medium      | нет native deps → safe                         |
+| typescript      | 5.8.3   | **6.0.3**  | shell, packages/ark               | medium-high | 1 deprecation (baseUrl) + 1 type discovery fix |
 
 **Не сделано: `@types/node` 24 → 25** — потенциально вредно. `@types/node` должен отражать **runtime** который реально доступен. У нас:
+
 - bun 1.3 (реализует Node 22-23 API set).
 - Electron 42 встроенная Node = 22.21.x.
 
@@ -29,6 +30,7 @@ cfa66f04 chore(deps): bump uuid 13.0.2 → 14.0.0 в extensions/eden
 ## Что сломалось по дороге (и как починили)
 
 ### TypeScript 6.0
+
 - **`baseUrl` deprecated** (functioning до TS 7) — добавлен
   `"ignoreDeprecations": "6.0"` в shell, delphi, site tsconfig.
 - **`packages/ark` потерял auto `@types/node`** на `module=NodeNext` —
@@ -39,22 +41,26 @@ cfa66f04 chore(deps): bump uuid 13.0.2 → 14.0.0 в extensions/eden
 явно задают эти опции (не полагаются на defaults).
 
 ### Electron 42
+
 - `clearStorageData({ quotas })` — grep clean.
 - Native node deps — у нас нет (ARK это spawn'ный Rust child process).
   `electron-rebuild` не нужен.
 - postinstall lazy binary download — bun install прошёл без сюрпризов.
 
 ### lucide-vue-next 1.0
+
 - Brand icons (GitHub, Twitter, Figma, etc) удалены — у нас не используются
   (grep clean во всём workspace).
 - NB: lucide теперь также под scope `@lucide/vue@1.16.0`. На переход —
   отдельная задача (rename 40+ импортов), сейчас остались на старом scope.
 
 ### uuid 14.0
+
 - ESM-only, named imports не тронуты. Единственный callsite —
   `extensions/eden/src/store/eden.ts:5` — совместим.
 
 ### vue-router 5.0
+
 - Composition-API API (createRouter, useRoute, useRouter, router-link,
   router-view) — не изменился.
 - unplugin-vue-router (где было бы breaking change на import path) — не
@@ -72,6 +78,7 @@ c1b4222c chore(deps): bump electron 41 → 42
 cfa66f04 chore(deps): bump uuid 13.0.2 → 14.0.0 в extensions/eden
 7dce6a40 chore(deps): bump vue-router 4.x → 5.0.7
 ```
+
 PASS.
 
 ### AC2 — Final verify
@@ -86,11 +93,13 @@ $ bun run ark:guard:writes             → passed
 $ cargo clippy --workspace --all-targets → 0 errors (lib test warnings — known)
 $ bunx playwright test tests/e2e/eden.spec.ts → 9 passed (49.5s)
 ```
+
 PASS.
 
 ### AC3 — TS 6 deprecations handled
 
 `"ignoreDeprecations": "6.0"` добавлен в 3 tsconfig:
+
 - `shell/tsconfig.json`
 - `extensions/delphi/tsconfig.json`
 - `site/tsconfig.json`
@@ -109,9 +118,9 @@ PASS.
 
 ## Smoke timings (для контекста по latency)
 
-| Spec | Phase 1 baseline | Phase 2.6 | Δ |
-|---|---|---|---|
-| eden.spec.ts (9 tests) | 51.5s | 49.5s | −2s (within noise) |
+| Spec                   | Phase 1 baseline | Phase 2.6 | Δ                  |
+| ---------------------- | ---------------- | --------- | ------------------ |
+| eden.spec.ts (9 tests) | 51.5s            | 49.5s     | −2s (within noise) |
 
 Не регрессия по latency после всех bump'ов.
 
