@@ -110,7 +110,7 @@
       "version": "0.1.0",
       "devDependencies": {
         "@types/node": "^24.9.2",
-        "typescript": "~5.8.3",
+        "typescript": "^6.0.3",
       },
     },
     "packages/visuals": {
@@ -162,7 +162,7 @@
         "playwright": "^1.58.2",
         "png-to-ico": "^3.0.1",
         "rcedit": "^5.0.2",
-        "typescript": "~5.8.3",
+        "typescript": "^6.0.3",
         "vite": "^8.0.3",
         "vite-plugin-electron": "1.0.0-beta.2",
         "vite-plugin-electron-renderer": "^0.14.6",
@@ -2045,7 +2045,7 @@
 
     "type-fest": ["type-fest@2.19.0", "", {}, "sha512-RAH822pAdBgcNMAfWnCBU3CFZcfZ/i1eZjwFU/dsLKumyuuP3niueg2UAukXYF0E2AAoc82ZSSf9J0WQBinzHA=="],
 
-    "typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
+    "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "ufo": ["ufo@1.6.4", "", {}, "sha512-JFNbkD1Svwe0KvGi8GOeLcP4kAWQ609twvCdcHxq1oSL8svv39ZuSvajcD8B+5D0eL4+s1Is2D/O6KN3qcTeRA=="],
 

@@ -43,7 +43,7 @@
     "playwright": "^1.58.2",
     "png-to-ico": "^3.0.1",
     "rcedit": "^5.0.2",
-    "typescript": "~5.8.3",
+    "typescript": "^6.0.3",
     "vite": "^8.0.3",
     "vite-plugin-electron": "1.0.0-beta.2",
     "vite-plugin-electron-renderer": "^0.14.6"
