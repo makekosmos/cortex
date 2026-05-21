@@ -399,7 +399,17 @@ function onWindowKeyDown(e: KeyboardEvent): void {
     return;
   }
 
-  // PM selection branch — Ctrl+A→Ctrl+C / range-select→Ctrl+C / Ctrl+X.
+  // Ctrl+A → активируем block selection (как drag-select), не PM-native
+  // selectAll. Это даёт визуальный overlay по всем блокам + унифицирует
+  // copy/cut путь через serializeSelectedBlocksAsMarkdown.
+  if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+    if (!editor.value.view.hasFocus()) return;
+    e.preventDefault();
+    blockSelection.selectAll(editor.value);
+    return;
+  }
+
+  // PM range selection branch — range-select→Ctrl+C / Ctrl+X.
   // Срабатывает только если editor фокусирован (иначе юзер в title input
   // или другом UI — пускаем native handle).
   if (

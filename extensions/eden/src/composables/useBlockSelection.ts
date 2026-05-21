@@ -318,6 +318,23 @@ export function useBlockSelection() {
     );
   }
 
+  /**
+   * Select all top-level blocks — эмулирует drag-select по всему документу.
+   * Используется для Ctrl+A: вместо PM-нативного selectAll (текстовое
+   * выделение которое плохо ложится на markdown copy) подсвечивает все
+   * блоки overlay'ем. Дальше Ctrl+C идёт по той же ветке что и
+   * drag-select → markdown.
+   *
+   * NB: collapses PM selection как side-effect — иначе native ctrl+a
+   * подсветит ещё и текстовый layer, что визуально шумно.
+   */
+  function selectAll(editor: TiptapEditor): void {
+    const blocks = collectBlocks(editor);
+    if (blocks.length === 0) return;
+    selectedPositions.value = new Set(blocks.map((b) => b.pos));
+    collapseEditorSelection(editor);
+  }
+
   return {
     selectedPositions,
     dragRect,
@@ -330,6 +347,7 @@ export function useBlockSelection() {
     cancelDrag,
     collapseEditorSelection,
     deleteSelected,
+    selectAll,
   };
 }
 
