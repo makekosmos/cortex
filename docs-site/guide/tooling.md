@@ -44,7 +44,7 @@
 | Component (Vue, real Chromium) | **Vitest 4** + **`@vitest/browser`** + **`@vitest/browser-playwright`** + **`vitest-browser-vue`** + **`@vitejs/plugin-vue`** — real Chromium, не jsdom (для Vapor edge-cases) | `extensions/eden/tests/components/*.spec.ts`                                                  |
 | Unit (Rust)                    | **cargo-nextest** (`cargo nextest run`)                                                                                                                                        | все workspace crates                                                                          |
 | Property-based (Rust)          | **proptest**                                                                                                                                                                   | sync invariants, ARK CRDT properties                                                          |
-| Benchmarks (Rust)              | **criterion**                                                                                                                                                                  | `crates/ark-core/benches/` (pomodoro_session, delphi_filters)                                 |
+| Benchmarks (Rust)              | **criterion**                                                                                                                                                                  | `crates/ark-core/rust/benches/` (pomodoro_session, delphi_filters)                                 |
 | HTTP mocking (Rust)            | **httpmock**                                                                                                                                                                   | relay-server / arrancador RAWG integration tests                                              |
 | E2E (Electron)                 | **Playwright** + **`@playwright/test`** через `_electron.launch`                                                                                                               | `tests/e2e/*.spec.ts` (eden, delphi, horologion, arrancador, launcher, commands-architecture) |
 | Watch-mode (Rust, опционально) | **bacon** (cargo-watch deprecated)                                                                                                                                             | personal dev-tool, `cargo install bacon` локально                                             |
@@ -147,12 +147,36 @@ bun run ark:smoke
 ## Линт и формат
 
 ```powershell
-bun run lint        # запускается per-workspace, oxlint
-bun run format      # oxfmt --check
-bun run typecheck   # tsc --noEmit (в TS-пакетах)
+bun run lint            # oxlint (корневой .oxlintrc.json)
+bun run format          # oxfmt — пишет в файлы
+bun run format:check    # oxfmt --check (для CI / лефтхука)
+bun run typecheck       # tsc --noEmit (в shell + packages/ark и пр.)
 ```
 
-`lefthook` поднимает форматтер и линт автоматически на pre-commit. Не выключай хуки `--no-verify`; если хук падает — чини причину.
+Активные guards (Phase 2 bug-detection, 2026-05-22):
+
+- **`.oxlintrc.json`** в корне — `categories.correctness = error`,
+  `no-unused-vars` / `no-useless-escape` / `unicorn/no-useless-fallback-in-spread`
+  понижены до warn. Точечные ban'ы под workspace overrides.
+- **`.oxfmtrc.json`** — defaults oxc + ignorePatterns для
+  `dist/`, `.e2e/`, `legacy/`, `sample/`.
+- **`Cargo.toml::[workspace.lints]`** — `clippy.unwrap_used/panic/todo/unimplemented = warn`,
+  `rust.unused_must_use = deny`. Подключаются в каждом crate'е через
+  `[lints]\nworkspace = true`.
+- **`scripts/check-ark-write-boundaries.mjs`** — runtime invariant guard:
+  SQL writes в ARK таблицы, `app.getPath('userData')` outside
+  `shell/electron/instance.ts`, `path.join(..., 'Kosmos'|'Kepler', ...)`
+  outside instance/data-dir, `KOSMOS_DATA_DIR=...APPDATA...` в `tests/e2e`
+  outside `helpers/launch.ts`.
+
+`lefthook` запускает на **pre-commit**: typecheck-shell, oxlint
+(`{staged_files}`), oxfmt --check (`{staged_files}`), ark:guard:writes,
+cargo check в crate'ах, docs:sync / docs:check.
+
+На **pre-push**: cargo nextest, cargo shear, cargo clippy
+`--workspace --all-targets`.
+
+Не выключай хуки через `--no-verify`; если хук падает — чини причину.
 
 ## Сборка ARK runtime
 
