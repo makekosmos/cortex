@@ -7,3 +7,6 @@ description = "Watchdog для Kosmos Kepler — держит kepler.exe child +
 [[bin]]
 name = "kepler-watcher"
 path = "src/main.rs"
+
+[lints]
+workspace = true

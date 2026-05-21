@@ -50,3 +50,6 @@ required-features = ["bench-fixtures"]
 [[bench]]
 name = "pomodoro_session"
 harness = false
+
+[lints]
+workspace = true

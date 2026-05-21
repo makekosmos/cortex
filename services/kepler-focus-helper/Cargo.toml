@@ -20,3 +20,6 @@ embed-manifest = "1.4"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

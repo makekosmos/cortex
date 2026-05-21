@@ -62,3 +62,6 @@ libc = "0.2"
 [dev-dependencies]
 tempfile.workspace = true
 httpmock = "0.7"
+
+[lints]
+workspace = true
