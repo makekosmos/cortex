@@ -611,7 +611,22 @@ function ensureArkReadyPromise(): Promise<ArkClient> {
 // init failure. После reset следующий ensureArkReadyPromise() создаст свежий
 // promise — иначе старые pending awaitArkReady() висят пока не отвалятся по
 // 15-секундному таймауту.
+// Broadcast lifecycle ARK-клиента всем окнам. Renderer / e2e тесты слушают
+// `kepler:backend:ready` вместо polling'а `kepler:backend:status`. Phase 1
+// determinism — см. .agent/tasks/2026-05-21-bug-detection-phase1-determinism/.
+function broadcastBackendEvent(event: "kepler:backend:ready" | "kepler:backend:disconnected"): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.isDestroyed()) continue;
+    try {
+      w.webContents.send(event);
+    } catch {
+      // окно может быть в процессе destroy; игнор.
+    }
+  }
+}
+
 async function resetArkClient(reason: string): Promise<void> {
+  const wasConnected = arkClient !== null;
   const err = new Error(`ArkClient reset: ${reason}`);
   arkClientReadyReject?.(err);
   arkClientReadyResolve = null;
@@ -620,6 +635,7 @@ async function resetArkClient(reason: string): Promise<void> {
   const prev = arkClient;
   arkClient = null;
   setExtensionArkBridge({ request: null, subscribe: null });
+  if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
   // pomodoro-notifier держит ref на старый arkClient через onArkEvent callback —
   // отписываем до stop(), иначе при следующем setupPomodoroNotifier останется
   // double-subscribe на новый клиент.
@@ -694,6 +710,7 @@ async function initArkClient(): Promise<void> {
     await client.start();
     arkClient = client;
     arkClientReadyResolve?.(client);
+    broadcastBackendEvent("kepler:backend:ready");
     console.error(
       `[kepler-shell] ArkClient connected to kepler-backend (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
     );
@@ -737,6 +754,35 @@ async function initArkClient(): Promise<void> {
 // --- IPC handlers ------------------------------------------------------------
 
 ipcMain.handle("kepler:backend:status", () => readBackendStatus());
+
+// --- Test rig (gated by KOSMOS_TEST_MODE=1) ---------------------------------
+// Production preload не зовёт эти каналы; контракт preload exposes их только
+// в test mode. Если случайно вызвал из production — IPC throw'нет «no handler».
+if (process.env.KOSMOS_TEST_MODE === "1") {
+  ipcMain.handle(
+    "kepler:__test:waitForReady",
+    async (_e, timeoutMs?: number): Promise<void> => {
+      const ms = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 15000;
+      await awaitArkReady(ms);
+    },
+  );
+  ipcMain.handle("kepler:__test:getStats", async () => {
+    let commands: string[] = [];
+    if (arkClient) {
+      try {
+        const list = await arkClient.commands.list();
+        if (Array.isArray(list)) commands = list.map((c) => c.id);
+      } catch {
+        // backend может быть в процессе reconnect'а — пустой список.
+      }
+    }
+    return {
+      arkConnected: arkClient !== null,
+      commands,
+      commandsRegistered: commands.length,
+    };
+  });
+}
 
 // --- Diagnostics / crashes IPC (hardening #1) -------------------------------
 function crashesDirPath(): string {

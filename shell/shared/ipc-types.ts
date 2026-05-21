@@ -131,6 +131,24 @@ export interface KeplerApi {
     status(): Promise<BackendStatus>;
     /** Перезапустить backend (если упал). */
     restart(): Promise<void>;
+    /** Subscribe на event «ArkClient handshake done, готов принимать запросы».
+        Срабатывает на каждом успешном reconnect'е. Returns unsubscribe. */
+    onReady(listener: () => void): () => void;
+    /** Subscribe на «ArkClient disconnected» (backend упал / restart инициирован). */
+    onDisconnected(listener: () => void): () => void;
+  };
+
+  /** Test rig — exposed только при `KOSMOS_TEST_MODE=1`. В production
+      `window.kepler.__test` === undefined. См. tests/e2e/helpers/wait.ts. */
+  __test?: {
+    /** Ждёт ArkClient handshake. Резолвится сразу если уже ready. */
+    waitForReady(timeoutMs?: number): Promise<void>;
+    /** Snapshot текущего состояния для assertions в тестах. */
+    getStats(): Promise<{
+      arkConnected: boolean;
+      commands: string[];
+      commandsRegistered: number;
+    }>;
   };
 
   /** Управление окном launcher'а. */

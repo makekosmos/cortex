@@ -186,6 +186,19 @@ const api = {
     }): Promise<void> =>
       ipcRenderer.invoke("kepler:focus-widget:set-state", patch) as Promise<void>,
   },
+  backend: {
+    onReady: (listener: () => void): Unsubscribe => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:backend:ready", handler);
+      return () => ipcRenderer.removeListener("kepler:backend:ready", handler);
+    },
+    onDisconnected: (listener: () => void): Unsubscribe => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:backend:disconnected", handler);
+      return () =>
+        ipcRenderer.removeListener("kepler:backend:disconnected", handler);
+    },
+  },
   userData: {
     readJson: <T = unknown>(name: string): Promise<T | null> =>
       ipcRenderer.invoke("kepler:extension:userData:readJson", name) as Promise<
@@ -213,5 +226,28 @@ const api = {
 };
 
 export type KeplerExtensionApi = typeof api;
+
+// Test rig — exposed только в test mode. Mirror shell/electron/preload.ts.
+if (process.env.KOSMOS_TEST_MODE === "1") {
+  (api as KeplerExtensionApi & {
+    __test?: {
+      waitForReady(timeoutMs?: number): Promise<void>;
+      getStats(): Promise<{
+        arkConnected: boolean;
+        commands: string[];
+        commandsRegistered: number;
+      }>;
+    };
+  }).__test = {
+    waitForReady: (timeoutMs?: number) =>
+      ipcRenderer.invoke("kepler:__test:waitForReady", timeoutMs) as Promise<void>,
+    getStats: () =>
+      ipcRenderer.invoke("kepler:__test:getStats") as Promise<{
+        arkConnected: boolean;
+        commands: string[];
+        commandsRegistered: number;
+      }>,
+  };
+}
 
 contextBridge.exposeInMainWorld("kepler", api);

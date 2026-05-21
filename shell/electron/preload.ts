@@ -11,6 +11,17 @@ const api: KeplerApi = {
   backend: {
     status: () => ipcRenderer.invoke("kepler:backend:status"),
     restart: () => ipcRenderer.invoke("kepler:backend:restart"),
+    onReady: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:backend:ready", handler);
+      return () => ipcRenderer.removeListener("kepler:backend:ready", handler);
+    },
+    onDisconnected: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:backend:disconnected", handler);
+      return () =>
+        ipcRenderer.removeListener("kepler:backend:disconnected", handler);
+    },
   },
   window: {
     hide: () => ipcRenderer.invoke("kepler:window:hide"),
@@ -165,5 +176,16 @@ const api: KeplerApi = {
     },
   },
 };
+
+// Test rig — exposed только в test mode. Production preload не вешает
+// __test, поэтому `window.kepler.__test` === undefined у настоящих
+// пользователей. См. spec: .agent/tasks/2026-05-21-bug-detection-phase1-determinism/.
+if (process.env.KOSMOS_TEST_MODE === "1") {
+  api.__test = {
+    waitForReady: (timeoutMs?: number) =>
+      ipcRenderer.invoke("kepler:__test:waitForReady", timeoutMs),
+    getStats: () => ipcRenderer.invoke("kepler:__test:getStats"),
+  };
+}
 
 contextBridge.exposeInMainWorld("kepler", api);
