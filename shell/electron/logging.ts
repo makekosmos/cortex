@@ -49,7 +49,7 @@ function write(level: LogLevel, scope: string, msg: string, meta?: object): void
       level,
       scope,
       msg,
-      ...(meta ?? {}),
+      ...meta,
     }) + "\n";
 
   // 1. Stderr — для dev visibility и для parent process (если shell спавнен

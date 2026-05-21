@@ -509,7 +509,7 @@ async function invokeChannel(channel: string, args: unknown[]): Promise<unknown>
 // Event channel mapping (electronAPI.on)
 // ---------------------------------------------------------------------------
 
-function subscribeChannel(channel: string, handler: (...args: unknown[]) => void): () => void {
+function subscribeChannel(channel: string, _handler: (...args: unknown[]) => void): () => void {
   const ark = kepler();
   if (!ark) return () => {};
 

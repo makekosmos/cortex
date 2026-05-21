@@ -68,7 +68,7 @@ try {
   // Снять conflict-флаг со старого пути (его не существует в HEAD).
   try {
     execSync(`git rm --cached "${dropdownOldPath}"`, { stdio: "pipe" });
-  } catch (e) {
+  } catch {
     // если файла нет в index — ок
   }
   console.log(`relocated + swapped: ${dropdownOldPath} → ${dropdownNewPath}`);

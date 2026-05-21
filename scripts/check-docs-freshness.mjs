@@ -14,7 +14,7 @@
  * Запускай: bun run docs:check
  */
 
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,7 +58,7 @@ async function collectScripts() {
         try {
           const pkg = JSON.parse(await readFile(full, "utf8"));
           for (const s of Object.keys(pkg.scripts || {})) scripts.add(s);
-        } catch (_) {
+        } catch {
           /* ignore */
         }
       }
@@ -76,7 +76,7 @@ async function collectScripts() {
 // Только пути от корня репо. Относительные внутри приложений (main/, electron/, src/)
 // сюда не попадают — их не проверяем, потому что они контекст-зависимые.
 const PATH_RE =
-  /`((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy)\/[A-Za-z0-9._\-\/]+)`/g;
+  /`((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy)\/[A-Za-z0-9._\-/]+)`/g;
 
 // bun run <name> или bun run --cwd <path> <name>
 // "<name>" не должен содержать `<` (template-плейсхолдер) или `--` (флаг)

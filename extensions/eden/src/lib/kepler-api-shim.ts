@@ -529,7 +529,7 @@ export async function moveEntryToFolder(
 }
 
 export async function moveFolderToFolder(
-  folderId: string,
+  _folderId: string,
   _parentId: string | null,
 ): Promise<MoveFolderResult> {
   return {

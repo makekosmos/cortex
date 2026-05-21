@@ -10,7 +10,7 @@
 //   bun run --cwd shell ext:catalog -- <output-path>
 //   bun run --cwd shell ext:catalog -- .tmp/kosmos-extensions/catalog.json
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -41,14 +41,6 @@ function resolveGh() {
   return "gh";
 }
 const GH = resolveGh();
-
-function ghJson(args) {
-  const r = spawnSync(GH, args, { encoding: "utf8" });
-  if (r.status !== 0) {
-    die(`gh ${args.join(" ")} failed: ${r.stderr}`);
-  }
-  return JSON.parse(r.stdout);
-}
 
 function parseSemver(v) {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(v).trim());
@@ -105,7 +97,7 @@ async function fetchReleases() {
   for (const line of lines) {
     try {
       releases.push(JSON.parse(line));
-    } catch (e) {
+    } catch {
       console.warn(`[ext:catalog] skip malformed line: ${line.slice(0, 80)}`);
     }
   }

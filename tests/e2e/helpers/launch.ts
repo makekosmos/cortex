@@ -76,7 +76,7 @@ async function _launch(
       KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       KEPLER_SKIP_SYNC: "1",
       KEPLER_USAGE_TRACKER: "0",
-      ...(extraEnv ?? {}),
+      ...extraEnv,
     },
     timeout: 20_000,
   });

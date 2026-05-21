@@ -39,7 +39,7 @@ function setLaunchState(id: string, patch: Partial<LaunchState>) {
       busy: false,
       message: null,
       isError: false,
-      ...(launchStates.value[id] ?? {}),
+      ...launchStates.value[id],
       ...patch,
     },
   };

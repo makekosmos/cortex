@@ -48,7 +48,7 @@ function stripFrontmatter(md) {
   return md.slice(end + 4).replace(/^\s*\n/, "");
 }
 
-function rewriteLinks(md, siteOrigin = "/") {
+function rewriteLinks(md, _siteOrigin = "/") {
   // Превращаем относительные ссылки на страницы сайта в указание пути.
   // `/concepts/architecture` → `docs-site/concepts/architecture.md`
   return md.replace(/\]\((\/[a-z0-9\-/]+)\)/gi, (_, p) => {

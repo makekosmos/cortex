@@ -1137,7 +1137,7 @@ safeHandle(
     // Renderer (Dashboard / extensions) может стрелять до того как initArkClient
     // прошёл handshake — ждём ready (up to 15s) вместо моментального throw.
     const client = await awaitArkReady();
-    const req: Record<string, unknown> = { operation, ...(params ?? {}) };
+    const req: Record<string, unknown> = { operation, ...params };
     return client.invokeOperation(req as { operation: string; [key: string]: unknown });
   },
 );

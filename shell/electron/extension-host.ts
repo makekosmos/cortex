@@ -1077,7 +1077,7 @@ ipcMain.handle(
     if (!arkRequest) {
       throw new Error("ark bridge not ready");
     }
-    const req: Record<string, unknown> = { operation, ...(params ?? {}) };
+    const req: Record<string, unknown> = { operation, ...params };
     const result = await arkRequest(req);
 
     // Post-process: focus.set_active_state → spawn helper bin для модификации

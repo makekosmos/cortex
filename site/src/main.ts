@@ -77,7 +77,6 @@ const HARDCODED_COMMANDS = [
   },
 ];
 
-const noop = () => undefined;
 const unsub = () => () => undefined;
 
 // Минимальный stub window.kepler — тоже что preload экспонирует в shell,
