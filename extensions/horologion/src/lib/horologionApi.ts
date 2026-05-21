@@ -95,14 +95,43 @@ async function listRunning(opts?: {
    * — её «стоп» закроет entry в обход pomodoro session lifecycle). */
   source?: TimeEntry["source"] | TimeEntry["source"][];
 }): Promise<TimeEntry[]> {
-  const all = await listTimeEntries();
-  // Кроме «endedAt пуст» — обязательно есть startedAt. Без него entry —
-  // orphan от старого state, его не надо считать running'ом (иначе ломается
-  // StopwatchView tick: new Date("") = Invalid Date → NaN на каждом тике).
-  const running = all.filter((e) => Boolean(e.startedAt) && !e.endedAt);
-  if (!opts?.source) return running;
-  const allowed = Array.isArray(opts.source) ? new Set(opts.source) : new Set([opts.source]);
-  return running.filter((e) => allowed.has(e.source));
+  // Используем dedicated ARK op `list_running_time_entries` — SQL-уровневый
+  // фильтр (endedAt IS NULL + source через json_extract), без обхода ВСЕХ
+  // time_entry_obj. Сортировка startedAt DESC сделана на бэке.
+  //
+  // Для массива source делаем параллельные вызовы — running entries в общей
+  // сложности обычно ≤ 3 (одна manual + одна pomodoro work/break).
+  const sources: Array<TimeEntry["source"] | undefined> = Array.isArray(opts?.source)
+    ? opts!.source
+    : [opts?.source];
+
+  const lists = await Promise.all(
+    sources.map((s) =>
+      ark<ArkObjectRecord[]>(
+        "list_running_time_entries",
+        s ? { source: s } : {},
+      ),
+    ),
+  );
+
+  // Dedup по id (на случай дубликатов между параллельными запросами — в норме
+  // не должно быть, но защита от race condition с upsert'ами между вызовами).
+  const byId = new Map<string, ArkObjectRecord>();
+  for (const list of lists) {
+    for (const o of list) {
+      if (o.deletedAt) continue;
+      byId.set(o.id, o);
+    }
+  }
+
+  const entries = [...byId.values()].map(objectToTimeEntry);
+  // Backend уже сортирует startedAt DESC, но при склейке нескольких source'ов
+  // нужна повторная сортировка. И — orphan filter (startedAt пуст) сохраняется,
+  // потому что StopwatchView tick делает new Date(startedAt) и без guard'а
+  // получит NaN на каждом тике.
+  return entries
+    .filter((e) => Boolean(e.startedAt))
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
 function makeId(): string {

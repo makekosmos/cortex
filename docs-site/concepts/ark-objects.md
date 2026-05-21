@@ -259,6 +259,7 @@ const summary = await ark.usage.gamePlaytime.summary({
 ARK предоставляет специализированные query-операции на стороне Rust:
 
 - `list_objects_by_type` — выборка по типу
+- `list_running_time_entries` — все `time_entry_obj` без `endedAt`, опциональный фильтр `source` (`manual` / `pomodoro` / `pomodoro_break`); SQL `json_extract` — не тащит весь history по wire
 - `get_objects_by_ids` — bulk-получение
 - `list_recent_usage_processes` — последние процессы
 - `search_usage_processes` — поиск по подстроке

@@ -928,6 +928,43 @@ pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkO
         .map_err(|e| e.to_string())
 }
 
+/// Возвращает только running time_entry_obj (props.endedAt IS NULL),
+/// опционально отфильтрованных по props.source. Без обхода всех записей
+/// типа — фильтр на SQL уровне через `json_extract`. Hot path для
+/// Horologion (`listRunning`) и focus widget'а (`stopManualStopwatch`).
+///
+/// `deleted_at IS NULL` — чтобы tombstones не возвращались как running.
+/// Сортировка: новейшие startedAt сверху (DESC), как у callers'ов раньше.
+pub fn list_running_time_entries(
+    conn: &Connection,
+    source_filter: Option<&str>,
+) -> Result<Vec<ArkObject>, String> {
+    let base_sql =
+        "SELECT id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at
+         FROM objects
+         WHERE type_id = 'time_entry_obj'
+           AND deleted_at IS NULL
+           AND json_extract(props_json, '$.endedAt') IS NULL";
+    let order = " ORDER BY json_extract(props_json, '$.startedAt') DESC";
+    if let Some(source) = source_filter {
+        let sql = format!("{base_sql} AND json_extract(props_json, '$.source') = ?1{order}");
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![source], map_ark_object_row)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    } else {
+        let sql = format!("{base_sql}{order}");
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], map_ark_object_row)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+}
+
 pub fn get_objects_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<ArkObject>, String> {
     if ids.is_empty() {
         return Ok(Vec::new());
@@ -3641,6 +3678,117 @@ mod tests {
         assert!(returned_ids.contains(&"obj-3"));
         assert!(returned_ids.contains(&"obj-1"));
         assert!(get_objects_by_ids(&conn, &[]).unwrap().is_empty());
+    }
+
+    fn make_time_entry(
+        id: &str,
+        started_at: &str,
+        ended_at: Option<&str>,
+        source: &str,
+    ) -> ArkObject {
+        ArkObject {
+            id: id.to_string(),
+            type_id: "time_entry_obj".to_string(),
+            title: format!("entry {id}"),
+            content_json: json!({}),
+            props_json: json!({
+                "startedAt": started_at,
+                "endedAt": ended_at,
+                "source": source,
+            }),
+            created_at: started_at.to_string(),
+            updated_at: started_at.to_string(),
+            deleted_at: None,
+        }
+    }
+
+    #[test]
+    fn list_running_time_entries_empty_db_returns_empty() {
+        let conn = setup_db();
+        let result = list_running_time_entries(&conn, None).unwrap();
+        assert!(result.is_empty());
+        let result_filtered = list_running_time_entries(&conn, Some("manual")).unwrap();
+        assert!(result_filtered.is_empty());
+    }
+
+    #[test]
+    fn list_running_time_entries_returns_only_running() {
+        let conn = setup_db();
+        upsert_object(
+            &conn,
+            &make_time_entry("te-running", "2026-05-20T10:00:00.000Z", None, "manual"),
+        )
+        .unwrap();
+        upsert_object(
+            &conn,
+            &make_time_entry(
+                "te-done",
+                "2026-05-20T08:00:00.000Z",
+                Some("2026-05-20T09:00:00.000Z"),
+                "manual",
+            ),
+        )
+        .unwrap();
+
+        let result = list_running_time_entries(&conn, None).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "te-running");
+    }
+
+    #[test]
+    fn list_running_time_entries_filter_by_source() {
+        let conn = setup_db();
+        upsert_object(
+            &conn,
+            &make_time_entry("te-manual", "2026-05-20T10:00:00.000Z", None, "manual"),
+        )
+        .unwrap();
+        upsert_object(
+            &conn,
+            &make_time_entry("te-pomo", "2026-05-20T11:00:00.000Z", None, "pomodoro"),
+        )
+        .unwrap();
+        upsert_object(
+            &conn,
+            &make_time_entry(
+                "te-break",
+                "2026-05-20T12:00:00.000Z",
+                None,
+                "pomodoro_break",
+            ),
+        )
+        .unwrap();
+
+        let manual = list_running_time_entries(&conn, Some("manual")).unwrap();
+        assert_eq!(manual.len(), 1);
+        assert_eq!(manual[0].id, "te-manual");
+
+        let pomo = list_running_time_entries(&conn, Some("pomodoro")).unwrap();
+        assert_eq!(pomo.len(), 1);
+        assert_eq!(pomo[0].id, "te-pomo");
+
+        let breaks = list_running_time_entries(&conn, Some("pomodoro_break")).unwrap();
+        assert_eq!(breaks.len(), 1);
+        assert_eq!(breaks[0].id, "te-break");
+
+        // Без фильтра — все три, отсортированы DESC по startedAt.
+        let all = list_running_time_entries(&conn, None).unwrap();
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0].id, "te-break");
+        assert_eq!(all[1].id, "te-pomo");
+        assert_eq!(all[2].id, "te-manual");
+    }
+
+    #[test]
+    fn list_running_time_entries_excludes_deleted() {
+        let conn = setup_db();
+        let mut deleted =
+            make_time_entry("te-del", "2026-05-20T10:00:00.000Z", None, "manual");
+        deleted.deleted_at = Some("2026-05-20T10:30:00.000Z".to_string());
+        upsert_object(&conn, &deleted).unwrap();
+
+        let result = list_running_time_entries(&conn, None).unwrap();
+        assert!(result.is_empty());
     }
 
     #[test]

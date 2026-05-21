@@ -25,6 +25,22 @@ function listByType(typeId: string): ArkObjectRecord[] {
           const typeId = (params?.type_id as string) ?? "";
           return listByType(typeId);
         }
+        case "list_running_time_entries": {
+          const sourceFilter = params?.source as string | undefined;
+          return listByType("time_entry_obj")
+            .filter((o) => !o.deletedAt)
+            .filter((o) => {
+              const props = (o.propsJson ?? {}) as Record<string, unknown>;
+              if (props.endedAt != null && props.endedAt !== "") return false;
+              if (sourceFilter && props.source !== sourceFilter) return false;
+              return true;
+            })
+            .sort((a, b) => {
+              const ap = ((a.propsJson ?? {}) as Record<string, unknown>).startedAt ?? "";
+              const bp = ((b.propsJson ?? {}) as Record<string, unknown>).startedAt ?? "";
+              return String(bp).localeCompare(String(ap));
+            });
+        }
         case "get_object": {
           const id = (params?.id as string) ?? "";
           return store.get(id) ?? null;

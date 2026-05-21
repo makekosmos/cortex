@@ -367,6 +367,17 @@ export interface ArkUsageApi {
 export interface ArkObjectsApi {
   list(): Promise<ArkObjectRecord[]>
   listByType(typeId: string): Promise<ArkObjectRecord[]>
+  /**
+   * Возвращает только running time_entry_obj (props.endedAt IS NULL),
+   * опционально отфильтрованные по props.source. SQL-уровневый фильтр
+   * через json_extract — без обхода всех записей типа.
+   *
+   * Hot path для Horologion (StopwatchView mount / rehydrate) и focus
+   * widget'а (stopManualStopwatch).
+   */
+  listRunningTimeEntries(opts?: {
+    source?: 'manual' | 'pomodoro' | 'pomodoro_break'
+  }): Promise<ArkObjectRecord[]>
   get(id: string): Promise<ArkObjectRecord | null>
   getMany(ids: readonly string[]): Promise<ArkObjectRecord[]>
   upsert(object: ArkObjectRecord): Promise<void>
@@ -451,6 +462,11 @@ export class ArkClient {
       list: () => this.requestAfterInit<ArkObjectRecord[]>({ operation: 'list_objects' }),
       listByType: (typeId) =>
         this.requestAfterInit<ArkObjectRecord[]>({ operation: 'list_objects_by_type', type_id: typeId }),
+      listRunningTimeEntries: (opts) =>
+        this.requestAfterInit<ArkObjectRecord[]>({
+          operation: 'list_running_time_entries',
+          ...(opts?.source ? { source: opts.source } : {}),
+        }),
       get: (id) => this.requestAfterInit<ArkObjectRecord | null>({ operation: 'get_object', id }),
       getMany: (ids) =>
         this.requestAfterInit<ArkObjectRecord[]>({ operation: 'get_objects_by_ids', ids: [...ids] }),

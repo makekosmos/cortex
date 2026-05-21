@@ -87,6 +87,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 - `upsert_object`, `delete_object`
 - `upsert_object_link`, `delete_object_link`
 - `list_objects_by_type`
+- `list_running_time_entries` — running `time_entry_obj` (endedAt IS NULL), opt. `source` filter
 - `get_objects_by_ids`
 - `search_objects`
 

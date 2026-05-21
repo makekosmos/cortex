@@ -177,6 +177,10 @@ enum Request {
     ListObjectsByType {
         type_id: String,
     },
+    ListRunningTimeEntries {
+        #[serde(default)]
+        source: Option<String>,
+    },
     GetObjectsByIds {
         ids: Vec<String>,
     },
@@ -601,6 +605,10 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         }),
         Request::ListObjectsByType { type_id } => with_conn(|conn| {
             let objects = db::list_objects_by_type(conn, &type_id)?;
+            serde_json::to_value(objects).map_err(|e| e.to_string())
+        }),
+        Request::ListRunningTimeEntries { source } => with_conn(|conn| {
+            let objects = db::list_running_time_entries(conn, source.as_deref())?;
             serde_json::to_value(objects).map_err(|e| e.to_string())
         }),
         Request::GetObjectsByIds { ids } => with_conn(|conn| {
