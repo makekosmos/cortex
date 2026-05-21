@@ -13,6 +13,12 @@ pre-commit:
     typecheck-shell:
       glob: "shell/**/*.{ts,tsx,vue}"
       run: cd shell && bunx tsc --noEmit
+    oxlint:
+      glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx}"
+      run: bunx oxlint {staged_files}
+    ark-guard-writes:
+      glob: "{shell/electron,extensions,tests/e2e}/**/*.{ts,tsx,mjs,cjs,js}"
+      run: bun run ark:guard:writes
     docs-sync:
       glob: "docs-site/**/*.md"
       run: bun run docs:sync && git add AGENTS.md CLAUDE.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md docs-site/public/llms.txt docs-site/public/full-llms.txt
@@ -35,3 +41,6 @@ pre-push:
     cargo-shear:
       glob: "**/Cargo.toml"
       run: cargo shear
+    clippy:
+      glob: "**/*.rs"
+      run: cargo clippy --workspace --all-targets --quiet
