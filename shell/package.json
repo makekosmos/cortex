@@ -38,7 +38,7 @@
     "@playwright/test": "^1.58.2",
     "@types/node": "^24.9.2",
     "@vitejs/plugin-vue": "^6.0.5",
-    "electron": "^41.1.0",
+    "electron": "^42.2.0",
     "electron-builder": "^26.8.1",
     "playwright": "^1.58.2",
     "png-to-ico": "^3.0.1",
