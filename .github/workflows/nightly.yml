@@ -1,0 +1,56 @@
+# Nightly e2e — Windows-only suite. Запускается cron'ом ночью UTC,
+# либо вручную через `workflow_dispatch`. Не блокирует PR.
+#
+# Цель: ловить регрессии до следующего рабочего дня, без burn'а compute
+# на каждом PR (Windows runner на GH = 2× billing multiplier).
+#
+# См. .agent/tasks/2026-05-22-bug-detection-phase3-ci/spec.md.
+
+name: Nightly E2E
+
+on:
+  schedule:
+    # 03:00 UTC = 06:00 МСК. После рабочего дня.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e (full Playwright suite, Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-stable
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: Build backend (debug)
+        run: bun run --cwd shell build:backend:dev
+      - name: Build shell js + extensions
+        run: bun run --cwd shell build:js
+      - name: Playwright install browsers
+        run: bunx playwright install chromium --with-deps
+      - name: Run e2e
+        run: bunx playwright test
+        env:
+          CI: "1"
+      - name: Upload trace.zip on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            test-results/**
+            tests/.e2e/**/crashes/**
+          if-no-files-found: ignore
+          retention-days: 14

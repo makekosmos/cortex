@@ -1,0 +1,92 @@
+# PR CI — fast Ubuntu pipeline. Цель <5 минут на PR.
+#
+# Что НЕ делает:
+#   - e2e (Windows-only, дорого; в .github/workflows/nightly.yml).
+#   - vitest browser (нужен chromium; в nightly).
+#   - electron-builder / release publish (отдельная задача).
+#
+# См. .agent/tasks/2026-05-22-bug-detection-phase3-ci/spec.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel inflight CI на новый push в тот же PR.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    name: guards (oxlint / oxfmt / ark:guard / docs:check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: oxlint
+        run: bunx oxlint .
+      - name: oxfmt --check
+        run: bunx oxfmt --check .
+      - name: ark:guard:writes
+        run: bun run ark:guard:writes
+      - name: docs:check
+        run: bun run docs:check
+
+  typecheck:
+    name: typecheck (shell + packages/ark)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: typecheck shell
+        run: bun run --cwd shell typecheck
+      - name: typecheck packages/ark
+        run: bun run --cwd packages/ark typecheck
+
+  rust:
+    name: rust (clippy + nextest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Кэш per-OS, чтобы Windows nightly не пересекался с Ubuntu PR.
+          shared-key: ubuntu-stable
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets
+      - name: install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: cargo nextest
+        run: cargo nextest run --workspace --lib
+
+  unit-ts:
+    name: unit-ts (bun test per workspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      - name: packages/ark test
+        run: bun run --cwd packages/ark test
+      - name: extensions/eden unit (bun test, без vitest browser)
+        run: bun run --cwd extensions/eden test:unit

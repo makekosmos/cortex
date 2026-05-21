@@ -1,0 +1,80 @@
+# Dependabot для bug-detection Phase 3.
+#
+# Ритм: PR weekly для npm/cargo (groups patch+minor), monthly для actions.
+# Major bumps приходят отдельными PR (ignore semver=major не выставляем —
+# хотим явные PR для major'ов с обзором breaking changes).
+#
+# См. .agent/tasks/2026-05-22-bug-detection-phase3-ci/spec.md.
+
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    groups:
+      tooling:
+        patterns:
+          - "oxlint"
+          - "oxfmt"
+          - "typescript"
+          - "vite*"
+          - "@vitejs/*"
+          - "@playwright/*"
+          - "playwright"
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "patch"
+          - "minor"
+      vue-ecosystem:
+        patterns:
+          - "vue"
+          - "vue-router"
+          - "@vue/*"
+          - "pinia*"
+          - "@pinia/*"
+        update-types:
+          - "patch"
+          - "minor"
+      tiptap:
+        patterns:
+          - "@tiptap/*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    groups:
+      tokio-ecosystem:
+        patterns:
+          - "tokio*"
+          - "tokio-tungstenite"
+          - "futures*"
+        update-types:
+          - "patch"
+          - "minor"
+      serde-ecosystem:
+        patterns:
+          - "serde*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
