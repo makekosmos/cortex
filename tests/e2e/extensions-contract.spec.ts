@@ -24,6 +24,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { launchKepler, REPO_ROOT } from "./helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,11 +72,8 @@ for (const manifest of manifests) {
         const launcher = await app.firstWindow();
         await launcher.waitForLoadState("domcontentloaded");
 
-        // Backend warmup: даём `kepler-backend.exe` поднять WS / ArkClient
-        // успеть подписаться. Без этого `commands.invoke` иногда летит в
-        // not-yet-ready bridge и openExtension не вызывается → window
-        // event не emits → timeout.
-        await launcher.waitForTimeout(2500);
+        // Phase 1 determinism: ждём ArkClient handshake вместо sleep.
+        await waitForBackendReady(launcher);
 
         // Триггерим открытие extension'а через command bus.
         const openCommand = `${manifest.id}:open`;

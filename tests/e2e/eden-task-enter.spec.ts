@@ -10,6 +10,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
 
 test.describe("Eden TaskRef Enter", () => {
   test("Enter в title с текстом создаёт ровно одну новую task", async () => {
@@ -17,7 +18,7 @@ test.describe("Eden TaskRef Enter", () => {
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
-      await launcher.waitForTimeout(2500);
+      await waitForBackendReady(launcher);
 
       await app.evaluate(async ({ BrowserWindow }) => {
         const win = BrowserWindow.getAllWindows()[0];

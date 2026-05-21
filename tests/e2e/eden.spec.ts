@@ -12,6 +12,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
 
 const SAMPLE_TITLE = `eden-e2e-smoke-${Date.now()}`;
 
@@ -25,36 +26,32 @@ interface ArkEntry {
 async function openEden(app: Awaited<ReturnType<typeof launchKepler>>) {
   const launcher = await app.firstWindow();
   await launcher.waitForLoadState("domcontentloaded");
-  // Backend warmup до invoke — иначе command bus race / preload exposure
-  // race могут оставить commands.invoke == undefined.
-  await launcher.waitForTimeout(2500);
+  // Phase 1 determinism: backend handshake → waitForBackendReady, не sleep.
+  await waitForBackendReady(launcher);
 
-  const triggered = await app.evaluate(async ({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (!win) return "no-launcher";
-    const start = Date.now();
-    while (Date.now() - start < 3000) {
-      const ok = await win.webContents.executeJavaScript(`
-        (async () => {
-          if (typeof window.kepler?.commands?.invoke !== "function") return "no-api";
-          try {
-            await window.kepler.commands.invoke("eden:open");
-            return "ok";
-          } catch (e) {
-            return "throw:" + (e && e.message ? e.message : String(e));
-          }
-        })()
-      `) as string;
-      if (ok === "ok") return ok;
-      await new Promise((r) => setTimeout(r, 100));
+  const triggered = await launcher.evaluate(async () => {
+    if (typeof window.kepler?.commands?.invoke !== "function") return "no-api";
+    try {
+      await window.kepler.commands.invoke("eden:open");
+      return "ok";
+    } catch (e) {
+      return "throw:" + (e instanceof Error ? e.message : String(e));
     }
-    return "timeout";
   });
   expect(triggered, `eden:open status: ${triggered}`).toBe("ok");
 
   const edenWindow = await app.waitForEvent("window", { timeout: 10_000 });
   await edenWindow.waitForLoadState("domcontentloaded");
-  await edenWindow.waitForTimeout(1500); // shim install + initApp
+  await waitForBackendReady(edenWindow);
+  // shim install + initApp всё ещё дёргается в Vue lifecycle; ждём что
+  // `window.api.saveEntry` появится (shim установлен).
+  await edenWindow.waitForFunction(
+    () =>
+      typeof (window as unknown as { api?: { saveEntry?: unknown } }).api
+        ?.saveEntry === "function",
+    null,
+    { timeout: 5_000 },
+  );
   return edenWindow;
 }
 

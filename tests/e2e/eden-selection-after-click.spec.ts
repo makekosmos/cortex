@@ -11,6 +11,7 @@
 import { test, expect, type Page, type ElectronApplication } from "@playwright/test";
 import { _electron } from "playwright";
 import { launchKepler } from "./helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
 
 type DiagSnapshot = {
   blockSelected: number;
@@ -71,11 +72,10 @@ async function setupEdenWithTasks(taskCount: number): Promise<{
   const app = await launchKepler({ slug: `eden-sel-${Date.now()}-${Math.floor(Math.random() * 1000)}` });
   const launcher = await app.firstWindow();
   await launcher.waitForLoadState("domcontentloaded");
-  await launcher.waitForTimeout(2500);
+  await waitForBackendReady(launcher);
 
-  await app.evaluate(async ({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    await win!.webContents.executeJavaScript(`window.kepler.commands.invoke("eden:open")`);
+  await launcher.evaluate(async () => {
+    await window.kepler.commands.invoke("eden:open");
   });
 
   const edenWin = await app.waitForEvent("window", { timeout: 10_000 });
@@ -86,7 +86,15 @@ async function setupEdenWithTasks(taskCount: number): Promise<{
       console.log("[browser]", text);
     }
   });
-  await edenWin.waitForTimeout(2000);
+  await waitForBackendReady(edenWin);
+  // shim install + initApp: ждём появления window.api.saveEntry.
+  await edenWin.waitForFunction(
+    () =>
+      typeof (window as unknown as { api?: { saveEntry?: unknown } }).api
+        ?.saveEntry === "function",
+    null,
+    { timeout: 5_000 },
+  );
 
   const noteId = `sel-click-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   await edenWin.evaluate(async (id) => {

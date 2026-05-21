@@ -14,6 +14,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
 
 interface CommandRecord {
   id: string;
@@ -40,7 +41,7 @@ test.describe("commands architecture v1+v2", () => {
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
-      await launcher.waitForTimeout(2500);
+      await waitForBackendReady(launcher);
 
       const list = await commandsList(launcher);
       const ids = list.map((c) => c.id);
@@ -78,7 +79,7 @@ test.describe("commands architecture v1+v2", () => {
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
-      await launcher.waitForTimeout(2500);
+      await waitForBackendReady(launcher);
 
       await launcher.evaluate(async () => {
         const w = window as unknown as {
@@ -102,7 +103,7 @@ test.describe("commands architecture v1+v2", () => {
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
-      await launcher.waitForTimeout(2500);
+      await waitForBackendReady(launcher);
 
       await launcher.evaluate(async () => {
         await (window as unknown as {
@@ -162,7 +163,7 @@ test.describe("commands architecture v1+v2", () => {
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
-      await launcher.waitForTimeout(2500);
+      await waitForBackendReady(launcher);
 
       // Используем eden:note:open-today как proxy auto-launch test —
       // он открывает Eden если не запущен и dispatch'ит action через
@@ -201,7 +202,7 @@ test.describe("commands architecture v1+v2", () => {
     try {
       const launcher = await app.firstWindow();
       await launcher.waitForLoadState("domcontentloaded");
-      await launcher.waitForTimeout(2500);
+      await waitForBackendReady(launcher);
 
       const result = await launcher.evaluate(async () => {
         try {

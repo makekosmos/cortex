@@ -21,6 +21,7 @@
 
 import { expect, type Page } from "@playwright/test";
 import type { ElectronApplication } from "playwright";
+import { waitForBackendReady } from "./wait";
 
 export interface EdenApi {
   saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
@@ -37,34 +38,27 @@ export interface EdenApi {
 export async function openEden(app: ElectronApplication): Promise<Page> {
   const launcher = await app.firstWindow();
   await launcher.waitForLoadState("domcontentloaded");
-  await launcher.waitForTimeout(2500);
+  // Phase 1 determinism: ждём ArkClient handshake вместо waitForTimeout(2500).
+  // Если ready — резолвится мгновенно. См. tests/e2e/helpers/wait.ts.
+  await waitForBackendReady(launcher);
 
-  const triggered = await app.evaluate(async ({ BrowserWindow }) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (!win) return "no-launcher";
-    const start = Date.now();
-    while (Date.now() - start < 3000) {
-      const ok = await win.webContents.executeJavaScript(`
-        (async () => {
-          if (typeof window.kepler?.commands?.invoke !== "function") return "no-api";
-          try {
-            await window.kepler.commands.invoke("eden:open");
-            return "ok";
-          } catch (e) {
-            return "throw:" + (e && e.message ? e.message : String(e));
-          }
-        })()
-      `) as string;
-      if (ok === "ok") return ok;
-      await new Promise((r) => setTimeout(r, 100));
+  const triggered = await launcher.evaluate(async () => {
+    if (typeof window.kepler?.commands?.invoke !== "function") return "no-api";
+    try {
+      await window.kepler.commands.invoke("eden:open");
+      return "ok";
+    } catch (e) {
+      return "throw:" + (e instanceof Error ? e.message : String(e));
     }
-    return "timeout";
   });
   expect(triggered, `eden:open status: ${triggered}`).toBe("ok");
 
   const edenWindow = await app.waitForEvent("window", { timeout: 10_000 });
   await edenWindow.waitForLoadState("domcontentloaded");
-  await edenWindow.waitForTimeout(1500);
+  // Eden extension preload exposes `kepler.__test` под KOSMOS_TEST_MODE.
+  // Ждём что ArkClient видит свой extension window (handshake уже был, но
+  // extension загружается чуть позже).
+  await waitForBackendReady(edenWindow);
   return edenWindow;
 }
 

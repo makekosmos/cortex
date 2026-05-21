@@ -9,6 +9,7 @@
 // но launcher preload exposes window.kepler.ark.request).
 
 import { expect, type ElectronApplication, type Page } from "@playwright/test";
+import { waitForBackendReady } from "./wait";
 
 export interface OpenHorologionResult {
   /** Renderer window открытого Horologion extension'а. */
@@ -34,26 +35,30 @@ export async function openHorologion(
   app: ElectronApplication,
   opts: OpenOptions = {},
 ): Promise<OpenHorologionResult> {
-  const warmupMs = opts.warmupMs ?? 2000;
-  const postLoadWaitMs = opts.postLoadWaitMs ?? 1500;
-
-  await new Promise((r) => setTimeout(r, warmupMs));
+  const postLoadWaitMs = opts.postLoadWaitMs ?? 0;
 
   const launcher = await app.firstWindow();
   await launcher.waitForLoadState("domcontentloaded");
+  // Phase 1 determinism: ждём ArkClient handshake вместо warmupMs.
+  // Параметр warmupMs опционален и оставлен для backwards-compat'а, но больше
+  // не нужен — backend готов когда __test.waitForReady резолвится.
+  await waitForBackendReady(launcher);
+  if (opts.warmupMs && opts.warmupMs > 0) {
+    // Legacy опция: некоторые тесты после ready всё ещё хотят buffer
+    // (например, для side-effects pomodoro state hydrate).
+    await new Promise((r) => setTimeout(r, opts.warmupMs));
+  }
 
-  await app.evaluate(async ({ BrowserWindow }, commandId) => {
-    const wins = BrowserWindow.getAllWindows();
-    const l = wins[0];
-    if (!l) throw new Error("no launcher window");
-    await l.webContents.executeJavaScript(
-      `window.kepler?.commands?.invoke?.(${JSON.stringify(commandId)})`,
-    );
+  await launcher.evaluate(async (commandId: string) => {
+    await window.kepler?.commands?.invoke?.(commandId);
   }, "horologion:open");
 
   const horo = await app.waitForEvent("window", { timeout: 10_000 });
   await horo.waitForLoadState("domcontentloaded");
-  await horo.waitForTimeout(postLoadWaitMs);
+  await waitForBackendReady(horo);
+  if (postLoadWaitMs > 0) {
+    await horo.waitForTimeout(postLoadWaitMs);
+  }
 
   return { horo, launcher };
 }
