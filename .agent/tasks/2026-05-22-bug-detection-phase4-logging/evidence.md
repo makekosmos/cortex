@@ -130,7 +130,7 @@ PASS.
 - Manual click на «Создать отчёт» — UI verify в running shell.
 - Конверсия всех ~48 `eprintln!`/`console.error` — done только горячие
   pathways. Holistic gradual sweep как hygiene отдельно.
-- Конверсия console.* в renderer / Vue — пользовательский браузерный лог
+- Конверсия console.\* в renderer / Vue — пользовательский браузерный лог
   идёт через DevTools, не critical.
 - Log rotation cleanup (старые .log файлы стареют, никто не trim'ит).
   Rolling appender per-day — каждый file ограничен размером per-day.
