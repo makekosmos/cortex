@@ -44,7 +44,7 @@ thiserror.workspace = true
 # Derive opt-in через #[cfg_attr(feature = "ts-rs", derive(TS))] — production
 # build не подтягивает ts-rs runtime (он только для тестов которые экспортят
 # bindings).
-ts-rs = { version = "10", optional = true }
+ts-rs = { version = "10", optional = true, features = ["import-esm"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
