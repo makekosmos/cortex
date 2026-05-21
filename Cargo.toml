@@ -24,17 +24,20 @@ edition = "2021"
 # Per-crate Cargo.toml подключают через:
 #   [lints]
 #   workspace = true
-# Lints применяются ко всем targets (включая tests/benches) — поэтому
-# unwrap_used / panic держим на warn (in tests их использование легитимно).
-# todo/unimplemented — sentinel pattern'ы недоделанного кода: warn чтобы
-# не пропустить случайные `todo!()` в diff'ах.
-# Подъём до deny — отдельный fix-проход с #[allow(clippy::panic)] в тестах.
+# Lints применяются ко всем targets (включая tests/benches). Production
+# paths используют unwrap_or_else(|e| e.into_inner()) для Mutex poison
+# recovery (forbidden.md → Mutex discipline) и expect("invariant") где надо.
+# Тестовый код легитимно использует unwrap() — там действует
+# `#![cfg_attr(test, allow(clippy::unwrap_used))]` на уровне crate root
+# (lib.rs / main.rs) и `#![allow(clippy::unwrap_used)]` для tests/*.rs /
+# benches/*.rs.
+# panic / todo / unimplemented — warn (sentinel недоделанного кода).
 #
 # unused_must_use (rust core): deny — нулевое количество сейчас, новые
 # попадания блокируются (forbidden.md → Sync, bump_sync_version_vector
 # возвращает Result который ОБЯЗАН быть использован).
 [workspace.lints.clippy]
-unwrap_used = "warn"
+unwrap_used = "deny"
 panic = "warn"
 todo = "warn"
 unimplemented = "warn"
