@@ -4,17 +4,18 @@
 
 Три файла под `.github/`:
 
-| Файл | Цель | Запуск |
-|---|---|---|
-| `workflows/ci.yml` | PR-блокатор: 4 jobs (guards, typecheck, rust, unit-ts) на Ubuntu, цель <5 мин | На каждый push в main + каждый PR в main |
-| `workflows/nightly.yml` | Full Playwright e2e на Windows | cron 03:00 UTC + workflow_dispatch |
-| `dependabot.yml` | Weekly npm/cargo, monthly github-actions | автоматически |
+| Файл                    | Цель                                                                          | Запуск                                   |
+| ----------------------- | ----------------------------------------------------------------------------- | ---------------------------------------- |
+| `workflows/ci.yml`      | PR-блокатор: 4 jobs (guards, typecheck, rust, unit-ts) на Ubuntu, цель <5 мин | На каждый push в main + каждый PR в main |
+| `workflows/nightly.yml` | Full Playwright e2e на Windows                                                | cron 03:00 UTC + workflow_dispatch       |
+| `dependabot.yml`        | Weekly npm/cargo, monthly github-actions                                      | автоматически                            |
 
 ## Что найдено и починено
 
 ### Pre-existing test failures (Memory rule: «failing тесты исправляются всегда»)
 
 **`packages/ark/tests/ensure-kepler.test.ts`** — 2 теста падали по таймауту:
+
 - `stale lock (dead PID) + autoLaunch off → cleaned + not-installed`
 - `malformed lock JSON → not-installed`
 
@@ -65,6 +66,7 @@ PASS.
 ### AC4 — dependabot.yml существует
 
 `.github/dependabot.yml` — 3 ecosystems:
+
 - npm weekly (grouped: tooling / vue-ecosystem / tiptap)
 - cargo weekly (grouped: tokio-ecosystem / serde-ecosystem)
 - github-actions monthly
@@ -90,12 +92,12 @@ PASS.
 
 ## Стоимость PR (estimate)
 
-| Job | Estimate |
-|---|---|
-| guards | ~30s (bun install + 4 fast scripts) |
-| typecheck | ~45s (bun install + 2 × tsc) |
-| rust | ~3-5 min (cold cargo build + clippy + nextest). С Swatinem cache на warm — ~30-60s. |
-| unit-ts | ~30s (bun install + 2 × bun test) |
+| Job       | Estimate                                                                            |
+| --------- | ----------------------------------------------------------------------------------- |
+| guards    | ~30s (bun install + 4 fast scripts)                                                 |
+| typecheck | ~45s (bun install + 2 × tsc)                                                        |
+| rust      | ~3-5 min (cold cargo build + clippy + nextest). С Swatinem cache на warm — ~30-60s. |
+| unit-ts   | ~30s (bun install + 2 × bun test)                                                   |
 
 Total wall-clock на PR (parallel): **~3-5 минут** при warm cargo cache, ~5-7 минут при cold.
 
