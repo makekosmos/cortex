@@ -26,8 +26,9 @@
   --kosmos-error: oklch(0.577 0.245 27.325);
   --kosmos-info: #3b82f6;
 
-  --kosmos-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-    "SF Pro Text", Inter, Avenir, Helvetica, Arial, sans-serif;
+  --kosmos-font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Avenir, Helvetica,
+    Arial, sans-serif;
   --kosmos-font-mono: "Zed Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* VitePress mappings — light */
@@ -458,7 +459,9 @@ body {
   border-radius: var(--kosmos-radius);
   border: 1px solid var(--kosmos-border) !important;
   background: var(--vp-c-bg-alt);
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .VPFeature:hover {
@@ -507,11 +510,21 @@ body {
   background: var(--kosmos-muted-fg);
 }
 
-.kbadge.canon::before { background: var(--kosmos-success); }
-.kbadge.legacy::before { background: var(--kosmos-warning); }
-.kbadge.info::before { background: var(--kosmos-info); }
-.kbadge.error::before { background: var(--kosmos-error); }
-.kbadge.accent::before { background: var(--kosmos-accent); }
+.kbadge.canon::before {
+  background: var(--kosmos-success);
+}
+.kbadge.legacy::before {
+  background: var(--kosmos-warning);
+}
+.kbadge.info::before {
+  background: var(--kosmos-info);
+}
+.kbadge.error::before {
+  background: var(--kosmos-error);
+}
+.kbadge.accent::before {
+  background: var(--kosmos-accent);
+}
 
 /* ── Поиск ───────────────────────────────────────────── */
 

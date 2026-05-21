@@ -26,14 +26,8 @@ const objectTypesSettingsSource = readFileSync(
   path.join(repoRoot, "apps/eden/ts/src/components/settings/ObjectTypesSettings.vue"),
   "utf8",
 );
-const editorSource = readFileSync(
-  path.join(repoRoot, "apps/eden/ts/src/Editor.vue"),
-  "utf8",
-);
-const storeSource = readFileSync(
-  path.join(repoRoot, "apps/eden/ts/main/store.ts"),
-  "utf8",
-);
+const editorSource = readFileSync(path.join(repoRoot, "apps/eden/ts/src/Editor.vue"), "utf8");
+const storeSource = readFileSync(path.join(repoRoot, "apps/eden/ts/main/store.ts"), "utf8");
 
 const notePresentation = getNoteTypePresentation(SYSTEM_TYPE_NOTE);
 const gamePresentation = getNoteTypePresentation(SYSTEM_TYPE_GAME);
@@ -52,14 +46,20 @@ const parsedUiSchema = parseNoteTypeUiSchema(
 );
 
 assert(notePresentation.headerLayout === "inline", "note_obj should default to inline header");
-assert(notePresentation.descriptionField?.id === "description", "note_obj should expose description");
+assert(
+  notePresentation.descriptionField?.id === "description",
+  "note_obj should expose description",
+);
 assert(
   notePresentation.secondaryFields.some((field) => field.id === "related_notes"),
   "note_obj should keep related_notes in secondary fields",
 );
 
 assert(gamePresentation.headerLayout === "column", "game_obj should default to column header");
-assert(gamePresentation.descriptionField?.id === "description", "game_obj should expose description");
+assert(
+  gamePresentation.descriptionField?.id === "description",
+  "game_obj should expose description",
+);
 assert(
   gamePresentation.featuredFields.some((field) => field.id === "play_status"),
   "game_obj should expose play_status as featured",
@@ -72,10 +72,16 @@ assert(
   gamePresentation.secondaryFields.some((field) => field.id === "related_notes"),
   "game_obj should keep related_notes available",
 );
-assert(gamePresentation.imageFieldId === "cover_image", "game_obj should use cover_image as hero image");
+assert(
+  gamePresentation.imageFieldId === "cover_image",
+  "game_obj should use cover_image as hero image",
+);
 
 assert(defaultUiSchema.header_layout === "inline", "default ui schema should use inline header");
-assert(parsedUiSchema.header_layout === "column", "ui schema parser should preserve explicit column layout");
+assert(
+  parsedUiSchema.header_layout === "column",
+  "ui schema parser should preserve explicit column layout",
+);
 assert(
   parsedUiSchema.read_only_fields?.includes("total_playtime_seconds"),
   "ui schema parser should preserve read-only fields",
@@ -100,14 +106,19 @@ assert(
 );
 
 const noteTypeIndex = editorSource.indexOf('<div ref="noteTypeMenuRef" class="note-type-inline">');
-const titleIndex = editorSource.indexOf('<input v-model="title" class="title-input" placeholder="Заголовок" />');
+const titleIndex = editorSource.indexOf(
+  '<input v-model="title" class="title-input" placeholder="Заголовок" />',
+);
 const typedHeaderIndex = editorSource.indexOf("<TypedHeader");
-assert(noteTypeIndex !== -1 && titleIndex !== -1 && typedHeaderIndex !== -1, "Editor.vue should render note type, title, and typed header");
+assert(
+  noteTypeIndex !== -1 && titleIndex !== -1 && typedHeaderIndex !== -1,
+  "Editor.vue should render note type, title, and typed header",
+);
 assert(noteTypeIndex < titleIndex, "Editor.vue should render note type before title");
 assert(titleIndex < typedHeaderIndex, "Editor.vue should render title before typed header");
 
 assert(
-  storeSource.includes('related_notes: links') &&
+  storeSource.includes("related_notes: links") &&
     storeSource.includes('operation: "list_object_links"') &&
     storeSource.includes('operation: "upsert_object_link"') &&
     storeSource.includes('operation: "delete_object_link"'),
@@ -117,7 +128,7 @@ assert(
 assert(
   storeSource.includes("uiSchemaJson: arkObjectType.uiSchemaJson") &&
     storeSource.includes("parseNoteTypeUiSchema(noteType.ui_schema_json)") &&
-    storeSource.includes("operation: \"upsert_object_type\""),
+    storeSource.includes('operation: "upsert_object_type"'),
   "store.ts should persist note type presentation into Ark object types",
 );
 

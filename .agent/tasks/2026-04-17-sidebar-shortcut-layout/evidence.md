@@ -15,6 +15,7 @@
 Status: PASS
 
 Proof:
+
 - `Sidebar.vue` now defines `keyLayoutAliases`, `reverseKeyLayoutAliases`, and `expandKeyVariants()`.
 - `matchesShortcut()` now compares shortcut keys against normalized event key variants from both `event.key` and `event.code`.
 - This covers the Latin key `b` and Russian layout value `и` as equivalent variants for the same shortcut.
@@ -27,6 +28,7 @@ Existing consumers that pass `toggle-shortcut="meta+b|ctrl+b"` work without need
 Status: PASS
 
 Proof:
+
 - Delphi and dashboard consumers still pass the unchanged shortcut string `meta+b|ctrl+b`.
 - The fix is inside shared `Sidebar.vue`, not in consumer-specific props.
 - Raw artifact: [consumer-shortcuts.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-shortcut-layout/raw/consumer-shortcuts.txt)
@@ -38,6 +40,7 @@ Current shared sidebar code and Delphi consumer typecheck successfully after the
 Status: PASS
 
 Proof:
+
 - `apps/dashboard` typecheck passed.
 - `apps/delphi/ts` typecheck passed.
 - Raw artifacts:

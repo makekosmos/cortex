@@ -6,12 +6,12 @@
 нарушения slot-based isolation**, которых не видел старый guard (узкий только
 на SQL writes). Это smoking gun зачем Phase 2 был нужен:
 
-| Файл | Что было | Чем было плохо |
-|---|---|---|
+| Файл                                     | Что было                                         | Чем было плохо                                                                                    |
+| ---------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `shell/electron/autoupdater-host.ts:133` | `app.getPath("userData")` для `post-update.flag` | Dev/prod флаги пишутся в разные dir'ы → autoupdater работает в одном, launcher читает из другого. |
-| `shell/electron/main.ts:1290` | Тот же `post-update.flag` на чтении | Сами с собой не согласованы. |
-| `shell/electron/extension-host.ts:289` | `kepler-shell-settings.json` (devMode flag) | Setting'и в dev не читаются prod'ом и наоборот. |
-| `shell/electron/settings-window.ts:67` | Тот же `kepler-shell-settings.json` на записи | Идентично. |
+| `shell/electron/main.ts:1290`            | Тот же `post-update.flag` на чтении              | Сами с собой не согласованы.                                                                      |
+| `shell/electron/extension-host.ts:289`   | `kepler-shell-settings.json` (devMode flag)      | Setting'и в dev не читаются prod'ом и наоборот.                                                   |
+| `shell/electron/settings-window.ts:67`   | Тот же `kepler-shell-settings.json` на записи    | Идентично.                                                                                        |
 
 Все 4 заменены на `keplerDataDir()` (single source of truth через
 `resolveInstance()`). Это не «попутный рефактор» — это фикс реальных багов,
@@ -47,6 +47,7 @@ exit=0
 ```
 
 Warnings (по типам):
+
 - `no-unused-vars` — 12 (большинство `_`-prefixed catch params + неиспользованные
   imports в script'ах). Понижено до `warn` per Phase 2 spec; чистка отдельно.
 - `unicorn/no-useless-fallback-in-spread` — 3 (`{...obj ?? {}}` паттерны).
@@ -67,6 +68,7 @@ Finished `dev` profile [unoptimized + debuginfo]
 Exit 0. Без `-D warnings` — warnings видны, но не блокируют.
 
 Workspace lints в `Cargo.toml`:
+
 - `clippy.unwrap_used = "warn"`, `panic = "warn"`, `todo = "warn"`, `unimplemented = "warn"`.
   Все на warn потому что `[workspace.lints]` применяются ко всем targets включая
   tests/benches, где `unwrap()` / `panic!()` легитимны. Подъём до deny — отдельный
@@ -160,6 +162,7 @@ ARK write boundary guard found 1 violation(s).
 ## Файлы изменены
 
 **Инфраструктура:**
+
 - `package.json`, `bun.lock` — `oxlint@1.66.0` devDep.
 - `.oxlintrc.json` — **new**. Categories + warn-overrides + tests override.
 - `Cargo.toml` — `[workspace.lints.clippy]` + `[workspace.lints.rust]`.
@@ -168,6 +171,7 @@ ARK write boundary guard found 1 violation(s).
 - `lefthook.yml` — oxlint + ark-guard в pre-commit, clippy в pre-push.
 
 **Bug fixes (smoking gun из guard'а):**
+
 - `shell/electron/autoupdater-host.ts` — `app.getPath("userData")` → `keplerDataDir()`.
 - `shell/electron/main.ts` — то же.
 - `shell/electron/extension-host.ts` — то же.

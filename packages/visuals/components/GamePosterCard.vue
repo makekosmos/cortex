@@ -41,11 +41,7 @@ const linkAttrs = computed(() =>
 </script>
 
 <template>
-  <component
-    :is="linkComponent"
-    v-bind="linkAttrs"
-    :class="rootClassName"
-  >
+  <component :is="linkComponent" v-bind="linkAttrs" :class="rootClassName">
     <div :class="gamePosterCardClasses.media">
       <img
         v-if="coverSrc"
@@ -63,16 +59,12 @@ const linkAttrs = computed(() =>
     </div>
 
     <div :class="gamePosterCardClasses.content">
-      <div
-        v-if="eyebrow"
-        :class="gamePosterCardClasses.eyebrow"
-        style="color: #ffffff"
-      >
+      <div v-if="eyebrow" :class="gamePosterCardClasses.eyebrow" style="color: #ffffff">
         {{ eyebrow }}
       </div>
       <div
         :class="gamePosterCardClasses.title"
-        style="color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.38)"
+        style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.38)"
       >
         {{ title }}
       </div>

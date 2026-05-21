@@ -32,9 +32,10 @@ parity'ом.
 - **Rust target**: `crates/ark-core/rust/src/delphi/filters.rs`. ARK op
   `tasks.list_by_smart_list(view: string) → Vec<ArkObjectRecord>`. Внутри
   query `SELECT * FROM objects WHERE type_id='task_obj' AND deleted_at
-  IS NULL` затем apply predicate/sort на Rust-side.
+IS NULL` затем apply predicate/sort на Rust-side.
 
 **AC W1.1:**
+
 - AC1: TS golden tests PASS (16+ test cases covering all 7 SmartList views,
   edge cases: empty, all-trashed, scheduled-today vs scheduled-other).
 - AC2: TS benchmark выдаёт baseline (median ms for 10K todos × 7 lists =
@@ -66,7 +67,7 @@ parity'ом.
 
 ## Out of scope
 
-- W1.1 fully *replacing* TS filter — этап 6 «switch» можно отложить.
+- W1.1 fully _replacing_ TS filter — этап 6 «switch» можно отложить.
   Достаточно доказать parity (AC5) + bench (AC6).
 - Делphi store mutations / Pomodoro state machine — W2+/W3+. High risk.
 

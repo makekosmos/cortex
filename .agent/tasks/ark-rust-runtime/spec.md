@@ -1,6 +1,7 @@
 # Task Spec: ark-rust-runtime
 
 ## Metadata
+
 - Task ID: ark-rust-runtime
 - Created: 2026-04-09T09:49:19+00:00
 - Frozen: 2026-04-08
@@ -8,6 +9,7 @@
 - Working directory at init: /Users/kirill/Documents/projects/kepler
 
 ## Guidance sources
+
 - `/CLAUDE.md` (repo task proof loop)
 - `/apps/delphi/CLAUDE.md` (P2P sync protocol, entity models, sidecar architecture, beacon rules, single-session invariant)
 - `/apps/delphi/kotlin/CLAUDE.md` (Android sync files, beacon dedup, single-session-per-device, edge-to-edge)
@@ -62,6 +64,7 @@ partial completion of later phases without earlier phases is a FAIL.
 ### Phase 1 — Complete the Rust library
 
 **AC1 — `beacon.rs` module exists and implements Syncthing-style UDP discovery.**
+
 - A new module `packages/ark-core/rust/src/beacon.rs` is added and `pub mod beacon;` is declared in `lib.rs`.
 - The module exposes a `BroadcastDiscovery` type (or equivalent) that:
   - Binds a UDP socket on port `LAN_SYNC_PORT + 1` = `21532`.
@@ -80,6 +83,7 @@ partial completion of later phases without earlier phases is a FAIL.
 - The module is **covered by unit tests** that demonstrate: (a) self-reject by `device_id`, (b) dedup of repeat beacons with unchanged addresses, (c) callback re-fires when address list changes, (d) stale eviction after TTL, (e) output `a` array never contains a non-routable address.
 
 **AC2 — Host-level address enumeration in Rust.**
+
 - Add `fn get_own_addresses(port: u16) -> Vec<String>` as a public function reachable from `beacon.rs` and/or a new helper (`net.rs` or a dedicated `host.rs`). It uses `if-addrs` (added to `Cargo.toml`) or equivalent to enumerate host network interfaces.
 - The returned list skips:
   - loopback (`127.0.0.0/8`, `::1`)
@@ -91,6 +95,7 @@ partial completion of later phases without earlier phases is a FAIL.
 - Unit tests cover: filtering of loopback, link-local, unique-local, virtual interface names, and IPv6 zone-id stripping.
 
 **AC3 — `SqliteStorageBackend` implementation.**
+
 - Closes AC12 from the prior task (`ark-core-rust`), which was FAIL.
 - A type `SqliteStorageBackend` is added (in `db.rs`, `sync_server.rs`, or a new `storage.rs`) that implements the existing `#[async_trait] StorageBackend` trait from `sync_server.rs`, wrapping the synchronous `rusqlite::Connection` owned by `db.rs`.
 - All four trait methods (`load_entities`, `apply_entity`, `get_kv`, `set_kv`) are implemented. Synchronous rusqlite calls must be wrapped in `tokio::task::spawn_blocking` (or equivalent) so they do not block the async runtime.
@@ -100,6 +105,7 @@ partial completion of later phases without earlier phases is a FAIL.
 - At least one unit test exercises the roundtrip: insert entities via `apply_entity`, query them via `load_entities(empty_vector)`, and verify the returned set matches.
 
 **AC4 — Host device-name helper.**
+
 - A public function `get_host_device_name() -> String` is added (in `net.rs`, `host.rs`, or a new module) that:
   - On macOS: returns `hostname()` with a trailing `.local` (case-insensitive) stripped, trimmed of whitespace. Falls back to `"Ark Device"` if the call fails or the result is empty. (The Electron TS code used `"Delphi Electron"` as a fallback — the Rust fallback is intentionally more generic because the crate is reused by non-Delphi embedders.)
   - On Linux / other Unix: returns `hostname()` with the same `.local` strip and fallback.
@@ -109,6 +115,7 @@ partial completion of later phases without earlier phases is a FAIL.
 ### Phase 2 — Expand `ark-core-rpc` (Electron path)
 
 **AC5 — New sync operations in the RPC binary.**
+
 - `packages/ark-core/rust/src/main.rs` extends the `Request` enum with at least these new variants (snake_case via existing `#[serde(tag = "operation", rename_all = "snake_case")]`):
   - `start_sync { space_id: String, device_id: String, device_name: Option<String>, port: Option<u16> }`
   - `stop_sync`
@@ -121,6 +128,7 @@ partial completion of later phases without earlier phases is a FAIL.
 - `leave_space` makes `get_connected_peers` return an empty list and stops emitting peer-connected events until the next `start_sync`.
 
 **AC6 — Async event stream on stdout.**
+
 - While sync is running, the sidecar pushes JSON lines to stdout that are **not** responses to prior requests. These event lines are distinguishable from response lines by the **presence of an `event` field and the absence of an `ok` field**. Response lines keep the existing `{"ok": true|false, ...}` shape.
 - At minimum these events are emitted:
   - `{"event": "peer_connected", "device_id": "...", "device_name": "..."}`
@@ -131,6 +139,7 @@ partial completion of later phases without earlier phases is a FAIL.
 - Response ordering with respect to events is **not** guaranteed (events may be interleaved between request submissions and responses), so the Electron client must demux — see AC7.
 
 **AC7 — `sidecar.ts` demuxes events from responses.**
+
 - `apps/delphi/ts/electron/sidecar.ts` parses each complete stdout line and dispatches it by type:
   - If the parsed JSON has `event` field (or lacks `ok`) → route to a subscription callback, **do not** consume the `activeRequest` slot.
   - If it has `ok` → treat as a response to the current `activeRequest`, keeping the existing queue semantics.
@@ -141,26 +150,31 @@ partial completion of later phases without earlier phases is a FAIL.
 ### Phase 3 — Electron migration
 
 **AC8 — `main.ts` stops importing the TS sync runtime.**
+
 - `apps/delphi/ts/electron/main.ts` removes all **runtime** imports from `@arksync/core` and `@arksync/node`. Concretely: after this task, the file must not construct, instantiate, or invoke any of: `SyncServer`, `SyncClient`, `mergePeerRecords`, `BroadcastDiscovery` (the TS class from `./broadcast-discovery`), or `getOwnAddresses`.
 - Type-only imports (`import type { SyncEntity, PeerRecord } from '@arksync/core'`) are permitted if and only if those types are still needed in the renderer IPC shape. If they are removed, equivalent types must be declared locally or imported from `src/services/sync/lan-protocol.ts`.
 - The module-level variables `syncServer`, `syncClients`, `broadcastDiscovery` are removed. Their roles are taken over by sidecar RPC calls and event subscriptions.
 - `./broadcast-discovery.ts` is either deleted or reduced to exported helper types only (no `BroadcastDiscovery` class is instantiated from `main.ts` or anywhere else in the Electron main process).
 
 **AC9 — Sync lifecycle goes through the sidecar.**
+
 - `startSync(spaceId, deviceId, deviceName, seedAddresses)` in `main.ts` is rewritten to call `sidecar.request({operation: 'start_sync', space_id, device_id, device_name, ...})`. Seed addresses, if provided, are either added to the sidecar's known-peer record via a new `add_seed_peer` operation or passed as part of the `start_sync` payload — the spec does not mandate which, but `bun run dev` initial-join from a QR code must still reach the beacon MacBook.
 - `lan-sync:stop` IPC calls `sidecar.request({operation: 'stop_sync'})`.
 - The connection-status dot logic (`lan-sync:getStatus`) now reads from `sidecar.request({operation: 'get_connected_peers'})` instead of the TS `syncServer.getConnectedPeerEntries()` / `syncClients` map.
 - `leave_space` is called when the user leaves a space so the next `start_sync` does not inherit stale peer records.
 
 **AC10 — Renderer mutations flow through the sidecar.**
+
 - The IPC handler for `lan-sync:broadcastChange` forwards the entity to the sidecar via `sidecar.request({operation: 'broadcast_change', entity})`. It does not call any TS `SyncServer.broadcastLiveChange` / `SyncClient.broadcastLiveChange`.
 - HLC assignment for outgoing entities is performed on the Rust side (inside the sidecar). The TS renderer is responsible only for constructing the entity payload.
 
 **AC11 — Incoming changes arrive via the event stream.**
+
 - The sidecar event `entity_changed` is forwarded to the renderer via the existing IPC channel `lan-sync:change`. The renderer handler continues to work unchanged — the entity shape on the IPC is byte-compatible with what the TS `SyncServer.onChange` used to deliver.
 - The sidecar events `peer_connected` / `peer_disconnected` are forwarded to the renderer via existing IPC channels `lan-sync:peerConnected` / `lan-sync:peerDisconnected`, with the same payload shape (`deviceId: string` for connect; `deviceId: string, remaining: number` for disconnect) so the connection-indicator dot logic keeps working without changes to the renderer side.
 
 **AC12 — End-to-end Electron dev run passes.**
+
 - `bun run dev` from `apps/delphi/ts/` starts Electron against the `ark-core-rpc` binary built from `packages/ark-core/rust/`. With an Android peer on the same LAN running the new UniFFI-backed build (Phase 4), the following sync flows succeed end-to-end:
   - Initial sync (both directions — first-time connection with pre-existing data on one or both sides).
   - Live updates on both sides (create, update, complete, move).
@@ -168,12 +182,14 @@ partial completion of later phases without earlier phases is a FAIL.
 - The connection indicator dot on the Electron UI reaches the green state and reflects disconnect + reconnect correctly (yellow → green).
 
 **AC13 — TypeScript typecheck is clean.**
+
 - `cd apps/delphi/ts && bunx tsc --noEmit` passes without introducing any new errors or new `@ts-expect-error` / `@ts-ignore` comments compared to the pre-task baseline.
 - `grep "from ['\"]@arksync/(core|node)['\"]" apps/delphi/ts/electron/` returns zero runtime imports (type-only imports may appear, but each one must be explicitly marked `import type`).
 
 ### Phase 4 — Android UniFFI migration
 
 **AC14 — UniFFI export surface on the Rust crate.**
+
 - The crate exposes a UniFFI surface that Android can consume. At minimum the following are exported via `#[uniffi::export]` (or equivalent UDL / proc-macro annotations):
   - `open_db(path: String)` and all DB CRUD methods currently in `db.rs` (todo / project / area / tag / heading upsert+delete, `load_all`, `batch_upsert_todos`, `get_sync_kv`, `set_sync_kv`, `clear_all`, `delete_trashed`).
   - `start_sync(config: SyncConfig)` where `SyncConfig` carries `space_id, device_id, device_name, port?, db_path?` and any other parameters needed by the caller.
@@ -185,12 +201,14 @@ partial completion of later phases without earlier phases is a FAIL.
 - `cargo build` on the workspace succeeds with the new `#[uniffi::export]` surface, both in `--lib` and in the existing binary target.
 
 **AC15 — Kotlin bindings generate and compile.**
+
 - Running `uniffi-bindgen generate` (or the equivalent build-script / gradle task) against the built cdylib produces a Kotlin source file for the bindings (name and location not strictly mandated, but it must land somewhere under `apps/delphi/kotlin/app/src/main/java/` or an equivalent source set referenced by `app/build.gradle.kts`).
 - The Rust cdylib is cross-compiled for **at least** the `arm64-v8a` Android ABI. `armeabi-v7a` and `x86_64` are nice-to-have; missing them is not a FAIL by itself, but they must not be referenced in `jniLibs/` if they aren't actually built.
 - `apps/delphi/kotlin/app/build.gradle.kts` (or a module-level script it includes) wires the Rust shared library into `jniLibs/<ABI>/libark_core.so` (or equivalent) and includes the generated Kotlin source in the build.
 - The spec does not pin the exact toolchain approach — cargo-ndk, cross, a Gradle plugin (`mozilla/rust-android-gradle`), or a local shell script are all acceptable. It does not pin specific Gradle task names or Kotlin method names.
 
 **AC16 — Android sync classes removed or reduced to facades.**
+
 - `apps/delphi/kotlin/app/src/main/java/com/kazui/delphi/data/sync/SyncServer.kt`, `LanSyncClient.kt`, and `BroadcastDiscovery.kt` are either:
   - **Deleted entirely** (preferred), OR
   - Reduced to thin Kotlin facades that contain no protocol logic (no `hello`, no `version_vector`, no `batch_upsert`, no WebSocket lifecycle, no UDP beacon lifecycle) and delegate every operation to the UniFFI entry points from AC14.
@@ -198,10 +216,12 @@ partial completion of later phases without earlier phases is a FAIL.
 - After this change, `grep "class (SyncServer|LanSyncClient|BroadcastDiscovery)" apps/delphi/kotlin/app/src/main/java/` returns **zero class declarations**, or only delegating facades whose bodies contain only UniFFI calls + logging.
 
 **AC17 — Android build succeeds.**
+
 - `cd apps/delphi/kotlin && ./gradlew :app:compileDebugKotlin` passes without errors. A full `./gradlew :app:assembleDebug` succeeds end-to-end and produces an APK under `app/build/outputs/apk/debug/`.
 - The produced APK bundles the Rust shared library for at least `arm64-v8a` and the generated UniFFI Kotlin source.
 
 **AC18 — Android runtime parity on real device.**
+
 - With Delphi installed on the Nothing A063 phone (or equivalent arm64 Android device), the app:
   - Discovers the Electron MacBook via UDP beacon (port 21532) on the same LAN.
   - Completes the `hello` handshake and enters sync mode.
@@ -224,12 +244,14 @@ The Rust crate enforces, and unit or integration tests verify, every invariant b
 - (f) **Device name defaults to OS host name**, never a process name like `"Delphi Electron"`, `"ark-core-rpc"`, etc. Test: starting the sidecar without an explicit `device_name` results in a hello that carries the OS host name (strip `.local`).
 
 **AC20 — Integration / end-to-end harness.**
+
 - At least one automated integration test exists that exercises the Electron-to-Android sync path end-to-end, in one of these forms:
   - **Preferred**: a Rust integration test or binary harness that boots two `ark-core-rpc` processes (or two in-process sync layers), connects them over loopback using routable addresses, and verifies a full protocol round-trip: `hello` → `peer_list` → `version_vector` exchange → one `sync_changes` batch with ACK → one `live_change` → one `live_ack` → clean shutdown. Entities must be applied to the receiver side and verifiable via `load_entities`.
   - **Alternative**: if true dual-process is infeasible in CI, a single-process test that drives `SyncServer` + `SyncClient` with two distinct `device_id`s against an in-memory `SqliteStorageBackend` is acceptable, provided it covers the same message sequence.
 - The test must explicitly assert the self-connect rejection path (start a client with `device_id == server_device_id` and assert the connection is closed without entering sync).
 
 **AC21 — Cargo test + cargo build green with new modules.**
+
 - `cd packages/ark-core/rust && cargo build` succeeds with zero warnings (excluding UniFFI-generated code warnings out of our control).
 - `cd packages/ark-core/rust && cargo test` passes, including all new tests from AC1–AC4, AC19, AC20. The prior 59 tests continue to pass.
 - `cd packages/ark-core/rust && cargo clippy -- -D warnings` passes (matching the prior task's lint bar).

@@ -13,9 +13,7 @@
     "AC2": {
       "status": "PASS",
       "details": ".codex is now a symlink.",
-      "raw_artifacts": [
-        ".agent/tasks/codex-root-to-agents/raw/post-codex-ls.txt"
-      ]
+      "raw_artifacts": [".agent/tasks/codex-root-to-agents/raw/post-codex-ls.txt"]
     },
     "AC3": {
       "status": "PASS",

@@ -8,10 +8,7 @@ import { ChevronDown, ChevronRight, Archive, RotateCcw } from "lucide-vue-next";
 import { EmptyState, Modal } from "@kosmos/visuals";
 
 import { useGames } from "../composables/useGames";
-import {
-  requireArrancadorApi,
-  type SqobaBackup,
-} from "../lib/arrancadorApi";
+import { requireArrancadorApi, type SqobaBackup } from "../lib/arrancadorApi";
 
 const { games, loading } = useGames();
 
@@ -55,8 +52,7 @@ async function loadBackups(gameId: string) {
   } catch (cause) {
     patchState(gameId, {
       loadingList: false,
-      error:
-        cause instanceof Error ? cause.message : "Не удалось загрузить бэкапы",
+      error: cause instanceof Error ? cause.message : "Не удалось загрузить бэкапы",
     });
   }
 }
@@ -118,12 +114,10 @@ async function onConfirmRestore() {
         restoreModalOpen.value = false;
       }, 1200);
     } else {
-      restoreError.value =
-        (res.errors && res.errors.join("; ")) || "Восстановление не удалось";
+      restoreError.value = (res.errors && res.errors.join("; ")) || "Восстановление не удалось";
     }
   } catch (cause) {
-    restoreError.value =
-      cause instanceof Error ? cause.message : "Ошибка восстановления";
+    restoreError.value = cause instanceof Error ? cause.message : "Ошибка восстановления";
   } finally {
     restoring.value = false;
   }
@@ -165,15 +159,11 @@ watch(games, (list) => {
   <section class="arrancador-page">
     <h1 class="arrancador-page__title">SQOBA</h1>
     <p class="arrancador-page__hint">
-      Резервные копии сохранений (save-файлов) для каждой игры. Backup'ы
-      хранятся локально в директории Kepler. Восстановление перезапишет
-      текущие сохранения.
+      Резервные копии сохранений (save-файлов) для каждой игры. Backup'ы хранятся локально в
+      директории Kepler. Восстановление перезапишет текущие сохранения.
     </p>
 
-    <EmptyState
-      v-if="loading && games.length === 0"
-      title="Загрузка библиотеки…"
-    />
+    <EmptyState v-if="loading && games.length === 0" title="Загрузка библиотеки…" />
 
     <EmptyState
       v-else-if="games.length === 0"
@@ -182,21 +172,14 @@ watch(games, (list) => {
     />
 
     <div v-else class="arrancador-sqoba-list">
-      <article
-        v-for="game in games"
-        :key="game.id"
-        class="arrancador-sqoba-game"
-      >
+      <article v-for="game in games" :key="game.id" class="arrancador-sqoba-game">
         <header class="arrancador-sqoba-game__head">
           <button
             type="button"
             class="arrancador-sqoba-game__toggle"
             @click="toggleExpand(game.id)"
           >
-            <ChevronDown
-              v-if="gameStates[game.id]?.expanded"
-              :size="14"
-            />
+            <ChevronDown v-if="gameStates[game.id]?.expanded" :size="14" />
             <ChevronRight v-else :size="14" />
             <span>{{ game.name }}</span>
           </button>
@@ -207,27 +190,16 @@ watch(games, (list) => {
             @click="onBackup(game.id)"
           >
             <Archive :size="14" />
-            <span>{{
-              gameStates[game.id]?.busy ? "Создаю…" : "Создать бекап"
-            }}</span>
+            <span>{{ gameStates[game.id]?.busy ? "Создаю…" : "Создать бекап" }}</span>
           </button>
         </header>
 
-        <div
-          v-if="gameStates[game.id]?.expanded"
-          class="arrancador-sqoba-game__body"
-        >
-          <div
-            v-if="gameStates[game.id]?.error"
-            class="arrancador-error"
-          >
+        <div v-if="gameStates[game.id]?.expanded" class="arrancador-sqoba-game__body">
+          <div v-if="gameStates[game.id]?.error" class="arrancador-error">
             {{ gameStates[game.id]?.error }}
           </div>
 
-          <div
-            v-if="gameStates[game.id]?.loadingList"
-            class="arrancador-sqoba-loading"
-          >
+          <div v-if="gameStates[game.id]?.loadingList" class="arrancador-sqoba-loading">
             Загрузка списка…
           </div>
 
@@ -267,15 +239,11 @@ watch(games, (list) => {
       </article>
     </div>
 
-    <Modal
-      :open="restoreModalOpen"
-      title="Восстановить сохранения?"
-      @close="closeRestoreModal"
-    >
+    <Modal :open="restoreModalOpen" title="Восстановить сохранения?" @close="closeRestoreModal">
       <div v-if="restoreTarget" class="arrancador-sqoba-restore">
         <p>
-          Текущие save-файлы будут <strong>перезаписаны</strong> содержимым
-          бэкапа от {{ formatTime(restoreTarget.backup.timestamp) }}.
+          Текущие save-файлы будут <strong>перезаписаны</strong> содержимым бэкапа от
+          {{ formatTime(restoreTarget.backup.timestamp) }}.
         </p>
         <p class="arrancador-sqoba-restore__hint">
           Файлов в бэкапе: {{ restoreTarget.backup.files_count }} ·

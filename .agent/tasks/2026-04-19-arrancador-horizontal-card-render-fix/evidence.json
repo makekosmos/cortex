@@ -32,17 +32,13 @@
       "id": "AC1",
       "status": "PASS",
       "summary": "The shared game card now has explicit CSS aspect-ratio and therefore retains visible height after the horizontal redesign.",
-      "evidence": [
-        "packages/kosmos-visuals/theme/css-variables.css"
-      ]
+      "evidence": ["packages/kosmos-visuals/theme/css-variables.css"]
     },
     {
       "id": "AC2",
       "status": "PASS",
       "summary": "Card height no longer depends on the external-package arbitrary Tailwind aspect utility.",
-      "evidence": [
-        "packages/kosmos-visuals/patterns/gamePosterCard.ts"
-      ]
+      "evidence": ["packages/kosmos-visuals/patterns/gamePosterCard.ts"]
     },
     {
       "id": "AC3",

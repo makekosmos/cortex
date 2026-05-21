@@ -175,14 +175,14 @@ apps/eden/ts/
 
 ## Куда складывать что
 
-| Это | Куда |
-|---|---|
-| Новый ARK endpoint (Rust) | `crates/ark-core/rust/src/*.rs` + регистрация в `main.rs` |
-| Новый метод в TS SDK | `packages/ark/src/ark-client.ts` |
-| UI-компонент, переиспользуемый в 2+ приложениях | `packages/visuals/components/` |
-| Локальная фича одного extension'а | внутри `extensions/<id>/src/` |
-| Локальная фича Eden | внутри `apps/eden/ts/` |
-| Новый extension | новая директория `extensions/<id>/` с `manifest.json` |
-| Концепт / архитектурное решение | `docs/` (источник правды) + страница в `docs-site/concepts/` |
-| Артефакты proof-loop задачи | `.agent/tasks/<DATE>-<slug>/` |
-| Smoke-БД для тестов | `.tmp`, `.e2e`, `.agent/tasks/<TASK>/smoke/`, OS temp |
+| Это                                             | Куда                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| Новый ARK endpoint (Rust)                       | `crates/ark-core/rust/src/*.rs` + регистрация в `main.rs`    |
+| Новый метод в TS SDK                            | `packages/ark/src/ark-client.ts`                             |
+| UI-компонент, переиспользуемый в 2+ приложениях | `packages/visuals/components/`                               |
+| Локальная фича одного extension'а               | внутри `extensions/<id>/src/`                                |
+| Локальная фича Eden                             | внутри `apps/eden/ts/`                                       |
+| Новый extension                                 | новая директория `extensions/<id>/` с `manifest.json`        |
+| Концепт / архитектурное решение                 | `docs/` (источник правды) + страница в `docs-site/concepts/` |
+| Артефакты proof-loop задачи                     | `.agent/tasks/<DATE>-<slug>/`                                |
+| Smoke-БД для тестов                             | `.tmp`, `.e2e`, `.agent/tasks/<TASK>/smoke/`, OS temp        |

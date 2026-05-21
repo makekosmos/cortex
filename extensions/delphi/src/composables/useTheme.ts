@@ -16,9 +16,7 @@ function applyTheme(theme: Theme) {
 
 // Module-level shared state (singleton)
 
-const theme = ref<Theme>(
-  (localStorage.getItem(STORAGE_KEY) as Theme) || "system",
-);
+const theme = ref<Theme>((localStorage.getItem(STORAGE_KEY) as Theme) || "system");
 
 // Apply theme immediately on module load and reactively on every change.
 

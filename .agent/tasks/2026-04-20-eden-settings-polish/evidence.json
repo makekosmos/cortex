@@ -6,50 +6,37 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/Editor.css",
-        "apps/eden/ts/src/App.css"
-      ],
+      "evidence": ["apps/eden/ts/src/Editor.css", "apps/eden/ts/src/App.css"],
       "notes": "Editor title input now uses the same title scale as settings headings."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "packages/kosmos-visuals/components/SidebarButton.vue"
-      ],
+      "evidence": ["packages/kosmos-visuals/components/SidebarButton.vue"],
       "notes": "Sidebar buttons now left-align content and truncate labels with ellipsis."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "packages/kosmos-visuals/components/Sidebar.vue"
-      ],
+      "evidence": ["packages/kosmos-visuals/components/Sidebar.vue"],
       "notes": "Sidebar project/object rows now left-align and truncate cleanly."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/components/settings/ConnectedAppsSettings.vue"
-      ],
+      "evidence": ["apps/eden/ts/src/components/settings/ConnectedAppsSettings.vue"],
       "notes": "Connected Apps was rebuilt onto the same settings section/row pattern as the other settings pages."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/components/settings/SettingsPage.css"
-      ],
+      "evidence": ["apps/eden/ts/src/components/settings/SettingsPage.css"],
       "notes": "Shared settings content container now owns the outer spacing."
     },
     {
       "id": "AC6",
       "status": "PASS",
-      "evidence": [
-        ".agent/tasks/2026-04-20-eden-settings-polish/raw/utf8-check.txt"
-      ],
+      "evidence": [".agent/tasks/2026-04-20-eden-settings-polish/raw/utf8-check.txt"],
       "notes": "Touched Russian UI strings were verified via UTF-8 file reads."
     },
     {

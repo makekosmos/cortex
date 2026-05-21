@@ -177,10 +177,7 @@ export interface KeplerApi {
       для list_object_types / list_objects / list_objects_by_type. Main
       проксирует на ArkClient (см. main.ts). */
   ark: {
-    request<T = unknown>(
-      operation: string,
-      params?: Record<string, unknown>,
-    ): Promise<T>;
+    request<T = unknown>(operation: string, params?: Record<string, unknown>): Promise<T>;
   };
 
   /** Command registry — то что показывает launcher: список запуска апок +
@@ -216,10 +213,7 @@ export interface KeplerApi {
     catalogFetch(force?: boolean): Promise<MarketplaceCatalog>;
     /** Скачать .kext по URL и установить через existing installFromPath.
         Validate sha256 если передан. */
-    installFromUrl(
-      url: string,
-      expectedSha256?: string | null,
-    ): Promise<ExtensionInstallPreview>;
+    installFromUrl(url: string, expectedSha256?: string | null): Promise<ExtensionInstallPreview>;
   };
 
   /** Универсальный per-type data export. Phase 7. Конвертеры регистрируются
@@ -229,11 +223,7 @@ export interface KeplerApi {
     /** Список зарегистрированных converters (метадата для UI). */
     list(): Promise<ExportConverterInfo[]>;
     /** Запустить конкретный converter в указанный dest_dir. */
-    run(args: {
-      converter_id: string;
-      format: string;
-      dest_dir: string;
-    }): Promise<ExportResult>;
+    run(args: { converter_id: string; format: string; dest_dir: string }): Promise<ExportResult>;
     /** Открыть native directory picker и вернуть выбранный путь
         (или null если пользователь отменил). */
     pickDir(): Promise<string | null>;

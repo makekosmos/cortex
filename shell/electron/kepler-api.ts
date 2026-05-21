@@ -120,11 +120,7 @@ function matchSingle(range: string, version: SemVer): boolean {
     // 0.x.y → only same minor; 0.0.x → only same patch
     if (base.major === 0) {
       if (base.minor === 0) {
-        return (
-          version.major === 0 &&
-          version.minor === 0 &&
-          version.patch === base.patch
-        );
+        return version.major === 0 && version.minor === 0 && version.patch === base.patch;
       }
       return version.major === 0 && version.minor === base.minor;
     }
@@ -181,7 +177,10 @@ function matchSingle(range: string, version: SemVer): boolean {
 export function satisfiesSemver(version: string, range: string): boolean {
   const v = parseSemver(version);
   if (!v) return false;
-  const branches = range.split("||").map((s) => s.trim()).filter(Boolean);
+  const branches = range
+    .split("||")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (branches.length === 0) return matchSingle(range, v);
   return branches.some((b) => matchSingle(b, v));
 }

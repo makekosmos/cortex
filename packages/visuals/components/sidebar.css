@@ -24,7 +24,6 @@
   border-color: transparent;
 }
 
-
 .kosmos-sidebar-content {
   position: absolute;
   inset: 0;
@@ -32,9 +31,10 @@
   min-height: 0;
   min-width: 0;
   opacity: 1;
-  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-              background 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 
   background: var(--sidebar-bg);
   overflow: hidden;
@@ -66,7 +66,11 @@
   height: var(--kosmos-resize-handle-height, 32px);
   background: var(
     --kosmos-resize-handle-color,
-    color-mix(in oklab, var(--sidebar-foreground, var(--foreground, currentColor)) 60%, transparent),
+    color-mix(
+      in oklab,
+      var(--sidebar-foreground, var(--foreground, currentColor)) 60%,
+      transparent
+    ),
   );
   border-radius: 1px;
   opacity: 0;

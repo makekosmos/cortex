@@ -29,8 +29,7 @@ export function loadTasksFromWebStorage(): Task[] {
 
         title: String(task.title ?? ""),
 
-        description:
-          typeof task.description === "string" ? task.description : null,
+        description: typeof task.description === "string" ? task.description : null,
 
         completed: Boolean(task.completed),
 

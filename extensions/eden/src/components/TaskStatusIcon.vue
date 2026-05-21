@@ -68,7 +68,16 @@ function onClick(e: MouseEvent) {
           stroke-width="2"
           stroke-dasharray="2 2"
         />
-        <text x="9" y="13" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">?</text>
+        <text
+          x="9"
+          y="13"
+          text-anchor="middle"
+          font-size="10"
+          font-weight="600"
+          fill="currentColor"
+        >
+          ?
+        </text>
       </template>
 
       <!-- backlog: dotted outline -->
@@ -101,7 +110,14 @@ function onClick(e: MouseEvent) {
       <!-- done: filled accent + check glyph (Delphi checked parity-ish) -->
       <template v-else-if="status === 'done'">
         <rect x="1.5" y="1.5" width="15" height="15" rx="6" fill="currentColor" />
-        <rect x="3.5" y="3.5" width="11" height="11" rx="3" fill="var(--task-status-fill-inner, currentColor)" />
+        <rect
+          x="3.5"
+          y="3.5"
+          width="11"
+          height="11"
+          rx="3"
+          fill="var(--task-status-fill-inner, currentColor)"
+        />
       </template>
 
       <!-- canceled: filled muted + × -->
@@ -131,7 +147,9 @@ function onClick(e: MouseEvent) {
   cursor: pointer;
   flex-shrink: 0;
   color: var(--ring);
-  transition: color 0.15s ease, opacity 0.15s ease;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .task-status-icon:hover:not(.task-status-icon--disabled) {

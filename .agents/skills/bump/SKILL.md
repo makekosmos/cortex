@@ -62,6 +62,7 @@ bun run --cwd shell ext:publish <id>
 ```
 
 Скрипт сам:
+
 1. Билдит `dist/` через `build:extensions`.
 2. Пакует в `<id>-<version>.kext`.
 3. Считает SHA-256.

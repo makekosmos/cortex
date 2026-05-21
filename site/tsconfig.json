@@ -21,9 +21,5 @@
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo"
   },
-  "include": [
-    "src/**/*",
-    "vite.config.ts",
-    "../shell/src/global.d.ts"
-  ]
+  "include": ["src/**/*", "vite.config.ts", "../shell/src/global.d.ts"]
 }

@@ -8,6 +8,7 @@ description: Ark sync protocol patterns — HLC, version vectors, WebSocket rela
 ## Core Concepts
 
 ### Event Model
+
 Every data change is an **immutable event**. Never mutate events; append new ones.
 
 ```json
@@ -23,12 +24,15 @@ Every data change is an **immutable event**. Never mutate events; append new one
     "source_id": "<entity-uuid>",
     "summary": "Human-readable text",
     "occurred_at": "2025-03-29T10:00:00Z",
-    "data": { /* full entity fields */ }
+    "data": {
+      /* full entity fields */
+    }
   }
 }
 ```
 
 **Critical invariants:**
+
 - `source_id` = idempotency key — same source_id = same entity (server upserts by source_id ALONE, ignoring source)
 - **All UUIDs MUST be lowercase** — Swift `.lowercased()`, TS `.toLowerCase()`, Kotlin `.lowercase()`. Mac UUIDs are uppercase by default; failure to normalize causes duplicate entities.
 - `device_id + device_seq` = unique causal sequence per device
@@ -44,6 +48,7 @@ Example: `2025-03-29T14:30:00.123456Z:000042:mac-a1b2c3d4`
 Purpose: deterministic cross-device ordering without trusting wall clocks.
 
 Operations:
+
 - `tick()` — advance counter for local event
 - `merge(remote)` — incorporate remote causality before comparing
 
@@ -60,6 +65,7 @@ Structure: `{ device_id → last_seq_seen }`
 ```
 
 Rules:
+
 - **Only increases** — never downgrade a vector entry
 - Persisted across restarts (DataStore on Android, localStorage on Web, SQLite on server)
 - On connect: send current vector → server returns missed changes → flush outbox
@@ -79,15 +85,18 @@ CLIENT → SERVER:  pong
 ```
 
 ### server_epoch
+
 - UUID generated once per DB lifetime, stored in `sync_meta` table
 - Included in every `sync_changes` response
 - When client detects epoch change → server DB was wiped → reset vector, push all local data, do NOT delete local data
 
 ### is_full_sync
+
 - `true` when client sent empty vector (first connect or after vector reset)
 - Controls when `sendMissingToServer` and zombie cleanup run
 
 ### Critical Rules
+
 - **Never broadcast to sender** — server must exclude origin device_id
 - Update version vector **after** applying each change, not before
 - Flush outbox **after** processing `sync_changes`, not before
@@ -98,11 +107,13 @@ CLIENT → SERVER:  pong
 ## Offline Queue (Outbox)
 
 ### Invariants
+
 1. Persist change locally before attempting to send
 2. Delete from outbox only after server acknowledgement
 3. Resend outbox in original order on reconnect
 
 ### Android (Room)
+
 ```kotlin
 // Queue (offline):
 pendingChangeDao.insert(PendingChange(payload = json.encodeToString(change), ...))
@@ -117,12 +128,16 @@ pending.forEach { item ->
 ```
 
 ### Web (localStorage)
+
 ```typescript
 // Queue:
-this.outbox.push(change); saveOutbox(this.outbox);
+this.outbox.push(change);
+saveOutbox(this.outbox);
 
 // Flush (in onopen handler):
-const pending = [...this.outbox]; this.outbox = []; saveOutbox([]);
+const pending = [...this.outbox];
+this.outbox = [];
+saveOutbox([]);
 for (const c of pending) this.sendChange(c);
 ```
 
@@ -143,6 +158,7 @@ try {
 ```
 
 ### Event Type Routing
+
 ```kotlin
 when {
     ArkEventMapper.isTaskChange(change) -> {
@@ -156,10 +172,12 @@ when {
 ## P2P Mesh (LAN)
 
 ### mDNS Discovery
+
 - Service type: `_ark-sync._tcp.local.`
 - Python: `server/discovery.py` — `ArkServiceBroadcaster` + `ArkServiceDiscoverer`
 
 ### HMAC Peer Authentication
+
 ```python
 # On connect:
 mesh_id = SHA256(mesh_secret)[:16]
@@ -171,6 +189,7 @@ hmac.compare_digest(expected, provided)  # Never use ==
 ```
 
 ### Loop Prevention
+
 Every forwarded change carries `hop_path: [device_a, relay, ...]`.
 Before forwarding, check: is current device already in hop_path? If yes, drop the message.
 
@@ -179,6 +198,7 @@ Before forwarding, check: is current device already in hop_path? If yes, drop th
 Conflict = same `event_id` modified by two devices while both offline.
 
 Detection (server-side):
+
 ```python
 local_unsent = query(event_id=X, device_id=self, synced=0)
 if local_unsent and change_type in ("update", "delete"):
@@ -186,26 +206,27 @@ if local_unsent and change_type in ("update", "delete"):
 ```
 
 Resolution strategies:
+
 1. **Last-write-wins (auto)**: compare `updated_at` timestamps
 2. **Manual**: store in `sync_conflicts`, surface to user
 3. **Custom**: domain-specific merge (implement per event_type)
 
 ## Common Pitfalls
 
-| Pitfall | Fix |
-|---------|-----|
-| Broadcasting change back to sender | Exclude by `device_id` in `broadcast()` |
-| Not updating vector after apply | Update vector inside the apply loop, not after |
-| Not persisting vector across restarts | DataStore / localStorage / SQLite — always persist |
-| Physical delete instead of soft delete | Use `change_type: "delete"`, never `DELETE FROM` |
-| Confusing `event_id` with `source_id` | `event_id` = server-assigned UUID; `source_id` = client's entity ID |
-| Sending outbox before processing `sync_changes` | Process missed changes first, then flush outbox |
-| Using `==` for HMAC comparison | Always `hmac.compare_digest()` (timing attack prevention) |
-| Uppercase UUIDs from Swift | Always `.lowercased()` on send, `.toLowerCase()` on receive |
-| Server upsert by `(source, source_id)` | Upsert by `source_id` alone — different sources = same entity |
-| `sendMissingToServer` on every reconnect | Only on `is_full_sync` or `epochChanged` — causes duplicate spam |
-| Auto-reset vector by count comparison | NEVER — dangerous, loses data created offline |
-| Zombie cleanup on epoch change | NEVER — client is authority when server was wiped |
+| Pitfall                                         | Fix                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| Broadcasting change back to sender              | Exclude by `device_id` in `broadcast()`                             |
+| Not updating vector after apply                 | Update vector inside the apply loop, not after                      |
+| Not persisting vector across restarts           | DataStore / localStorage / SQLite — always persist                  |
+| Physical delete instead of soft delete          | Use `change_type: "delete"`, never `DELETE FROM`                    |
+| Confusing `event_id` with `source_id`           | `event_id` = server-assigned UUID; `source_id` = client's entity ID |
+| Sending outbox before processing `sync_changes` | Process missed changes first, then flush outbox                     |
+| Using `==` for HMAC comparison                  | Always `hmac.compare_digest()` (timing attack prevention)           |
+| Uppercase UUIDs from Swift                      | Always `.lowercased()` on send, `.toLowerCase()` on receive         |
+| Server upsert by `(source, source_id)`          | Upsert by `source_id` alone — different sources = same entity       |
+| `sendMissingToServer` on every reconnect        | Only on `is_full_sync` or `epochChanged` — causes duplicate spam    |
+| Auto-reset vector by count comparison           | NEVER — dangerous, loses data created offline                       |
+| Zombie cleanup on epoch change                  | NEVER — client is authority when server was wiped                   |
 
 ## Reconnection Backoff
 
@@ -222,12 +243,12 @@ while (shouldReconnect) {
 
 ## Event Type Registry
 
-| Domain | `event_type` | `source` prefix |
-|--------|------------|-----------------|
-| TodoItem | `"task"` | `"delphi-android"`, `"delphi-web"` |
-| Project | `"project"` | `"delphi-web"` |
-| Area | `"area"` | `"delphi-web"` |
-| Tag | `"tag"` | `"delphi-web"` |
+| Domain   | `event_type` | `source` prefix                    |
+| -------- | ------------ | ---------------------------------- |
+| TodoItem | `"task"`     | `"delphi-android"`, `"delphi-web"` |
+| Project  | `"project"`  | `"delphi-web"`                     |
+| Area     | `"area"`     | `"delphi-web"`                     |
+| Tag      | `"tag"`      | `"delphi-web"`                     |
 
 ## Debug SQL
 

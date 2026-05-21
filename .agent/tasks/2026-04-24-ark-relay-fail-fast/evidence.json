@@ -6,11 +6,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "cargo-test-relay.txt",
-        "cargo-test-full.txt"
-      ],
+      "evidence": ["source-evidence.txt", "cargo-test-relay.txt", "cargo-test-full.txt"],
       "summary": "ark-core-rpc start_sync errors when relay_url or relay_api_key is provided."
     },
     {
@@ -36,10 +32,7 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "verify-arksync-node-relay.ts",
-        "verify-arksync-node-relay.txt"
-      ],
+      "evidence": ["verify-arksync-node-relay.ts", "verify-arksync-node-relay.txt"],
       "summary": "Injected requestFn mode remains unchanged except for local relay option validation."
     },
     {

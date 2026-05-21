@@ -22,14 +22,10 @@ const GITHUB_URL = "https://github.com/ksanrse";
   </div>
 
   <!-- Bottom-left -->
-  <div class="corner bottom-left hide-on-mobile">
-    Local-first, agent native
-  </div>
+  <div class="corner bottom-left hide-on-mobile">Local-first, agent native</div>
 
   <!-- Bottom-right -->
-  <div class="corner bottom-right hide-on-mobile">
-    Windows 1809
-  </div>
+  <div class="corner bottom-right hide-on-mobile">Windows 1809</div>
 </template>
 
 <style scoped>

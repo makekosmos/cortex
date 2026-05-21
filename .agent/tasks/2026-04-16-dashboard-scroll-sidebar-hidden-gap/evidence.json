@@ -16,17 +16,12 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "Dashboard now passes hiddenWidth=0 to KosmosSidebar"
-      ]
+      "evidence": ["Dashboard now passes hiddenWidth=0 to KosmosSidebar"]
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "bun run typecheck passed",
-        "direct Node-invoked Vite build passed"
-      ]
+      "evidence": ["bun run typecheck passed", "direct Node-invoked Vite build passed"]
     }
   ],
   "verification": {

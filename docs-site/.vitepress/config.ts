@@ -3,8 +3,7 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
   title: "Kosmos",
   titleTemplate: ":title · Kosmos",
-  description:
-    "Документация Kosmos — local-first монорепо с ARK runtime и Electron-приложениями.",
+  description: "Документация Kosmos — local-first монорепо с ARK runtime и Electron-приложениями.",
   lang: "ru",
   cleanUrls: true,
   lastUpdated: true,

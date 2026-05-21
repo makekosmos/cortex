@@ -13,10 +13,7 @@
 import { describe, expect, test } from "vitest";
 import { render } from "vitest-browser-vue";
 import { defineComponent, computed } from "vue";
-import {
-  getEntryDisplayTitle,
-  getEditableEntryTitle,
-} from "../../src/lib/entryTitles";
+import { getEntryDisplayTitle, getEditableEntryTitle } from "../../src/lib/entryTitles";
 
 const DisplayFixture = defineComponent({
   props: {
@@ -24,12 +21,8 @@ const DisplayFixture = defineComponent({
     headerPropsJson: { type: String, default: "{}" },
   },
   setup(props) {
-    const displayed = computed(() =>
-      getEntryDisplayTitle(props.title, props.headerPropsJson),
-    );
-    const editable = computed(() =>
-      getEditableEntryTitle(props.title, props.headerPropsJson),
-    );
+    const displayed = computed(() => getEntryDisplayTitle(props.title, props.headerPropsJson));
+    const editable = computed(() => getEditableEntryTitle(props.title, props.headerPropsJson));
     return { displayed, editable };
   },
   template: `
@@ -46,9 +39,7 @@ describe("Entry title helpers", () => {
       props: { title: "Моя заметка", headerPropsJson: "{}" },
     });
     await expect.element(screen.getByTestId("displayed")).toHaveTextContent("Моя заметка");
-    const editable = (await screen
-      .getByTestId("editable")
-      .element()) as HTMLInputElement;
+    const editable = (await screen.getByTestId("editable").element()) as HTMLInputElement;
     expect(editable.value).toBe("Моя заметка");
   });
 
@@ -56,12 +47,8 @@ describe("Entry title helpers", () => {
     const screen = render(DisplayFixture, {
       props: { title: "", headerPropsJson: "{}" },
     });
-    await expect
-      .element(screen.getByTestId("displayed"))
-      .toHaveTextContent("Без названия");
-    const editable = (await screen
-      .getByTestId("editable")
-      .element()) as HTMLInputElement;
+    await expect.element(screen.getByTestId("displayed")).toHaveTextContent("Без названия");
+    const editable = (await screen.getByTestId("editable").element()) as HTMLInputElement;
     expect(editable.value).toBe("");
   });
 
@@ -74,12 +61,8 @@ describe("Entry title helpers", () => {
         headerPropsJson: JSON.stringify({ __untitledTitle: true }),
       },
     });
-    await expect
-      .element(screen.getByTestId("displayed"))
-      .toHaveTextContent("Без названия");
-    const editable = (await screen
-      .getByTestId("editable")
-      .element()) as HTMLInputElement;
+    await expect.element(screen.getByTestId("displayed")).toHaveTextContent("Без названия");
+    const editable = (await screen.getByTestId("editable").element()) as HTMLInputElement;
     expect(editable.value).toBe("");
   });
 
@@ -90,9 +73,7 @@ describe("Entry title helpers", () => {
         headerPropsJson: JSON.stringify({ __untitledTitle: false }),
       },
     });
-    await expect
-      .element(screen.getByTestId("displayed"))
-      .toHaveTextContent("Хорошее название");
+    await expect.element(screen.getByTestId("displayed")).toHaveTextContent("Хорошее название");
   });
 
   test("battered header_props_json (invalid JSON) → не падает, fallback на title", async () => {
@@ -103,8 +84,6 @@ describe("Entry title helpers", () => {
       },
     });
     // Не должно крашиться, должен отрисовать title.
-    await expect
-      .element(screen.getByTestId("displayed"))
-      .toHaveTextContent("Что-то осмысленное");
+    await expect.element(screen.getByTestId("displayed")).toHaveTextContent("Что-то осмысленное");
   });
 });

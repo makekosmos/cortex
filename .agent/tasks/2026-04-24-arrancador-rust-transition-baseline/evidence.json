@@ -4,27 +4,19 @@
   "acceptanceCriteria": {
     "AC1": {
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/bench/baselines/pre-rust-ts-electron-main-2026-04-24.json"
-      ]
+      "evidence": ["apps/arrancador/bench/baselines/pre-rust-ts-electron-main-2026-04-24.json"]
     },
     "AC2": {
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/bench/compare-baseline.ts"
-      ]
+      "evidence": ["apps/arrancador/bench/compare-baseline.ts"]
     },
     "AC3": {
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/package.json scripts.bench:compare"
-      ]
+      "evidence": ["apps/arrancador/package.json scripts.bench:compare"]
     },
     "AC4": {
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/docs/backend-baseline.md"
-      ]
+      "evidence": ["apps/arrancador/docs/backend-baseline.md"]
     },
     "AC5": {
       "status": "PASS",
@@ -38,9 +30,7 @@
     },
     "AC6": {
       "status": "PASS",
-      "evidence": [
-        "agent-findings.md"
-      ]
+      "evidence": ["agent-findings.md"]
     }
   },
   "baseline": {

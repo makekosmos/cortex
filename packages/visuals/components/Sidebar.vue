@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  shallowRef,
-  onMounted,
-  onUnmounted,
-  watch,
-} from "vue";
+import { computed, shallowRef, onMounted, onUnmounted, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { ChevronRight, PanelLeftClose } from "lucide-vue-next";
 // eslint-disable-next-line import/no-unassigned-import
@@ -379,7 +373,11 @@ const wrapperClasses = computed(() =>
             class="kosmos-sidebar-top-toggle"
             :data-testid="props.topItem.testId"
             :title="props.topItem.label"
-            @click="'onClick' in props.topItem && typeof props.topItem.onClick === 'function' ? props.topItem.onClick() : undefined"
+            @click="
+              'onClick' in props.topItem && typeof props.topItem.onClick === 'function'
+                ? props.topItem.onClick()
+                : undefined
+            "
           >
             <component :is="props.topItem.icon" :size="16" />
           </button>
@@ -404,7 +402,9 @@ const wrapperClasses = computed(() =>
             :label="item.label"
             :active="item.active"
             :test-id="item.testId"
-            @click="'onClick' in item && typeof item.onClick === 'function' ? item.onClick() : undefined"
+            @click="
+              'onClick' in item && typeof item.onClick === 'function' ? item.onClick() : undefined
+            "
           />
 
           <template v-if="hasProjectGroups">
@@ -462,7 +462,10 @@ const wrapperClasses = computed(() =>
                       <span
                         v-if="project.iconSrc"
                         class="kosmos-sidebar-project-icon-wrap"
-                        :style="{ '--kosmos-project-icon-color': project.iconColor ?? project.color ?? 'var(--muted-foreground)' }"
+                        :style="{
+                          '--kosmos-project-icon-color':
+                            project.iconColor ?? project.color ?? 'var(--muted-foreground)',
+                        }"
                       >
                         <span
                           class="kosmos-sidebar-project-icon"
@@ -490,13 +493,20 @@ const wrapperClasses = computed(() =>
                         'widget-nav-item',
                         project.active ? 'kosmos-sidebar-project-link--active' : '',
                       ]"
-                      @click="'onClick' in project && typeof project.onClick === 'function' ? project.onClick() : undefined"
+                      @click="
+                        'onClick' in project && typeof project.onClick === 'function'
+                          ? project.onClick()
+                          : undefined
+                      "
                       @contextmenu="project.onContextMenu?.($event)"
                     >
                       <span
                         v-if="project.iconSrc"
                         class="kosmos-sidebar-project-icon-wrap"
-                        :style="{ '--kosmos-project-icon-color': project.iconColor ?? project.color ?? 'var(--muted-foreground)' }"
+                        :style="{
+                          '--kosmos-project-icon-color':
+                            project.iconColor ?? project.color ?? 'var(--muted-foreground)',
+                        }"
                       >
                         <span
                           class="kosmos-sidebar-project-icon"
@@ -530,7 +540,9 @@ const wrapperClasses = computed(() =>
             :label="item.label"
             :active="item.active"
             :test-id="item.testId"
-            @click="'onClick' in item && typeof item.onClick === 'function' ? item.onClick() : undefined"
+            @click="
+              'onClick' in item && typeof item.onClick === 'function' ? item.onClick() : undefined
+            "
           />
         </div>
       </aside>

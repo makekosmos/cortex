@@ -27,13 +27,13 @@ Kepler.exe (Electron host)
 
 ## Стек
 
-| Слой | Технология |
-|---|---|
-| UI | Vue 3.6 **Vapor** + TipTap + Pinia |
-| Транспорт | `window.kepler.ark.request` → kepler-backend WS → `ark-core-rpc` |
-| Storage | ARK SQLite (через runtime, не direct access) |
-| Search | ARK FTS5 (`search_objects` endpoint) |
-| Build | Vite + Rolldown (per-extension, через `shell/vite.extensions.config.mjs`) |
+| Слой      | Технология                                                                |
+| --------- | ------------------------------------------------------------------------- |
+| UI        | Vue 3.6 **Vapor** + TipTap + Pinia                                        |
+| Транспорт | `window.kepler.ark.request` → kepler-backend WS → `ark-core-rpc`          |
+| Storage   | ARK SQLite (через runtime, не direct access)                              |
+| Search    | ARK FTS5 (`search_objects` endpoint)                                      |
+| Build     | Vite + Rolldown (per-extension, через `shell/vite.extensions.config.mjs`) |
 
 ## Структура
 
@@ -107,11 +107,11 @@ bun run --cwd shell dev                     # shell + extensions вместе
 
 В `shell/electron/commands.ts` добавлены static open-команды:
 
-| id | route | Что делает |
-|---|---|---|
-| `eden:open` | (default) | Открыть Eden |
-| `eden:note:create` | `/new` | Создать новую заметку — Eden routing видит `/new` → `dispatchEdenCommand("eden:cmd:note:create")` |
-| `eden:note:open-today` | `/today` | Открыть сегодняшнюю заметку дневника — routing → `dispatchEdenCommand("eden:cmd:note:open-today")` → `openTodayJournal()` |
+| id                     | route     | Что делает                                                                                                                |
+| ---------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `eden:open`            | (default) | Открыть Eden                                                                                                              |
+| `eden:note:create`     | `/new`    | Создать новую заметку — Eden routing видит `/new` → `dispatchEdenCommand("eden:cmd:note:create")`                         |
+| `eden:note:open-today` | `/today`  | Открыть сегодняшнюю заметку дневника — routing → `dispatchEdenCommand("eden:cmd:note:open-today")` → `openTodayJournal()` |
 
 Это **static** команды (как `horologion:pomodoro`), они видны в launcher всегда, не зависят от того, запущен ли Eden. Подробнее — [Kepler → Static commands](./kepler#static-commands-registry-в-shell-electron-commands-ts).
 
@@ -191,12 +191,12 @@ Elevation surfaces (`dialog-card`, `search-overlay`, `note-type-menu`, etc.) о�
 
 Папка `public/anytype/` (легаси Anytype-тема) + dist-копии удалены. Создан `src/lib/iconResolver.ts` — mapping `name → Lucide SVG paths inline → data:URI`:
 
-| name | Lucide |
-|---|---|
-| `document` / `document-text` / `page` | `FileText` |
-| `game-controller` | `Gamepad2` |
-| `barbell` | `Dumbbell` |
-| `fitness` | `Dumbbell` (alias) |
+| name                                  | Lucide             |
+| ------------------------------------- | ------------------ |
+| `document` / `document-text` / `page` | `FileText`         |
+| `game-controller`                     | `Gamepad2`         |
+| `barbell`                             | `Dumbbell`         |
+| `fitness`                             | `Dumbbell` (alias) |
 
 `objectIconUri(name)` возвращает `data:image/svg+xml;...`. Все 8 точек использования в Vue/TS перебиты на этот резолвер.
 

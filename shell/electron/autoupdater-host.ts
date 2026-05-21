@@ -85,21 +85,24 @@ export function setupAutoUpdater(opts: { isDev: boolean }): void {
     broadcast({ kind: "downloaded", version: info.version });
     // Не показываем native dialog — UI banner драйвит click-to-install.
     // Native fallback оставляем для случая когда Settings window закрыт >5 min.
-    setTimeout(() => {
-      if (currentState.kind !== "downloaded") return;
-      void dialog
-        .showMessageBox({
-          type: "info",
-          title: "Kepler обновление готово",
-          message: `Версия ${info.version} скачана. Перезапустить сейчас?`,
-          buttons: ["Перезапустить", "Позже"],
-          defaultId: 0,
-          cancelId: 1,
-        })
-        .then((result) => {
-          if (result.response === 0) autoUpdater.quitAndInstall();
-        });
-    }, 5 * 60 * 1000);
+    setTimeout(
+      () => {
+        if (currentState.kind !== "downloaded") return;
+        void dialog
+          .showMessageBox({
+            type: "info",
+            title: "Kepler обновление готово",
+            message: `Версия ${info.version} скачана. Перезапустить сейчас?`,
+            buttons: ["Перезапустить", "Позже"],
+            defaultId: 0,
+            cancelId: 1,
+          })
+          .then((result) => {
+            if (result.response === 0) autoUpdater.quitAndInstall();
+          });
+      },
+      5 * 60 * 1000,
+    );
   });
   autoUpdater.on("error", (err) => {
     console.error("[autoUpdater] error:", err);

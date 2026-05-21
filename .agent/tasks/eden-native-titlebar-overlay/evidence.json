@@ -31,9 +31,7 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        ".agent/tasks/eden-native-titlebar-overlay/raw/tsc-noemit.txt"
-      ]
+      "evidence": [".agent/tasks/eden-native-titlebar-overlay/raw/tsc-noemit.txt"]
     }
   ],
   "commands": [

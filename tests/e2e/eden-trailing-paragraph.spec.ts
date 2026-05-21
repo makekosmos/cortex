@@ -119,7 +119,10 @@ test.describe("eden: TrailingParagraph extension", () => {
 
       if (json) {
         const content = json.content ?? [];
-        expect(content.length, `top-level узлов: ${content.length} — ожидаем >=2`).toBeGreaterThanOrEqual(2);
+        expect(
+          content.length,
+          `top-level узлов: ${content.length} — ожидаем >=2`,
+        ).toBeGreaterThanOrEqual(2);
         const last = content[content.length - 1];
         expect(isEmptyParagraph(last), "последний node — пустой paragraph").toBe(true);
         // Содержимое "hello" должно сохраниться (предпоследний или раньше).
@@ -232,10 +235,15 @@ test.describe("eden: TrailingParagraph extension", () => {
       if (json) {
         const content = json.content ?? [];
         const last = content[content.length - 1];
-        expect(isEmptyParagraph(last), `после reload последний node должен быть пустым paragraph, JSON: ${JSON.stringify(json).slice(0, 300)}`).toBe(true);
+        expect(
+          isEmptyParagraph(last),
+          `после reload последний node должен быть пустым paragraph, JSON: ${JSON.stringify(json).slice(0, 300)}`,
+        ).toBe(true);
         // Точная проверка дедупа: должны быть ровно 2 ноды — `paragraph("первый абзац")` и trailing empty.
         // Если плагин добавил ещё один — будет 3, что bug.
-        expect(content.length, `после reload content.length=${content.length}`).toBeLessThanOrEqual(3);
+        expect(content.length, `после reload content.length=${content.length}`).toBeLessThanOrEqual(
+          3,
+        );
       } else {
         expect(dom?.lastChildIsEmpty).toBe(true);
       }
@@ -258,7 +266,11 @@ test.describe("eden: TrailingParagraph extension", () => {
 
       // Используем shim createTask для task_obj.
       const taskId = await edenWindow.evaluate(async (sourceNoteId) => {
-        const shim = (window as unknown as { api: { createTask?: (s: string, t?: string, e?: string) => Promise<string> } }).api;
+        const shim = (
+          window as unknown as {
+            api: { createTask?: (s: string, t?: string, e?: string) => Promise<string> };
+          }
+        ).api;
         if (typeof shim.createTask !== "function") {
           // Fallback: попробуем напрямую через @kosmos/ark через kepler bridge.
           return "__no-createTask__";
@@ -293,7 +305,10 @@ test.describe("eden: TrailingParagraph extension", () => {
       if (json) {
         const content = json.content ?? [];
         const last = content[content.length - 1];
-        expect(last?.type, `после taskRef должен быть paragraph как trailing, JSON: ${JSON.stringify(json).slice(0, 400)}`).toBe("paragraph");
+        expect(
+          last?.type,
+          `после taskRef должен быть paragraph как trailing, JSON: ${JSON.stringify(json).slice(0, 400)}`,
+        ).toBe("paragraph");
         expect(isEmptyParagraph(last)).toBe(true);
       } else {
         expect(dom?.lastChildTag).toBe("p");

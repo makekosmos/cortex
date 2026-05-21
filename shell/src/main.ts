@@ -25,17 +25,13 @@ function rootView() {
   }
   if (hash.startsWith("#/dashboard")) {
     // Async — dashboard views и их деревья не нужны для launcher / settings окон.
-    const DashboardRoot = defineAsyncComponent(
-      () => import("./views/DashboardRoot.vue"),
-    );
+    const DashboardRoot = defineAsyncComponent(() => import("./views/DashboardRoot.vue"));
     return DashboardRoot;
   }
   if (hash.startsWith("#focus-widget")) {
     // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы
     // не тащить в launcher bundle.
-    const FocusWidgetView = defineAsyncComponent(
-      () => import("./views/FocusWidgetView.vue"),
-    );
+    const FocusWidgetView = defineAsyncComponent(() => import("./views/FocusWidgetView.vue"));
     return FocusWidgetView;
   }
   return App;

@@ -19,8 +19,7 @@ export const SOUND_OPTIONS: readonly SoundOption[] = [
 let audioCtx: AudioContext | null = null;
 function ctx(): AudioContext {
   if (!audioCtx) {
-    const Ctor = (window as unknown as { AudioContext?: typeof AudioContext })
-      .AudioContext;
+    const Ctor = (window as unknown as { AudioContext?: typeof AudioContext }).AudioContext;
     if (!Ctor) throw new Error("AudioContext недоступен");
     audioCtx = new Ctor();
   }
@@ -69,25 +68,29 @@ function playTones(tones: Tone[]): void {
 }
 
 const SOUNDS: Record<Exclude<SoundName, "none">, () => void> = {
-  bell: () => playTones([
-    { freq: 880, duration: 350, type: "sine", gain: 0.55 },
-    { freq: 1320, duration: 280, type: "sine", gain: 0.35, delay: 30 },
-  ]),
-  chime: () => playTones([
-    { freq: 587.33, duration: 220, type: "sine", gain: 0.45 },
-    { freq: 783.99, duration: 240, type: "sine", gain: 0.45, delay: 180 },
-    { freq: 1174.66, duration: 380, type: "sine", gain: 0.35, delay: 360 },
-  ]),
-  tap: () => playTones([
-    { freq: 420, duration: 60, type: "triangle", gain: 0.6 },
-    { freq: 320, duration: 90, type: "triangle", gain: 0.4, delay: 50 },
-  ]),
-  alarm: () => playTones([
-    { freq: 880, duration: 160, type: "square", gain: 0.4 },
-    { freq: 660, duration: 160, type: "square", gain: 0.4, delay: 180 },
-    { freq: 880, duration: 160, type: "square", gain: 0.4, delay: 360 },
-    { freq: 660, duration: 160, type: "square", gain: 0.4, delay: 540 },
-  ]),
+  bell: () =>
+    playTones([
+      { freq: 880, duration: 350, type: "sine", gain: 0.55 },
+      { freq: 1320, duration: 280, type: "sine", gain: 0.35, delay: 30 },
+    ]),
+  chime: () =>
+    playTones([
+      { freq: 587.33, duration: 220, type: "sine", gain: 0.45 },
+      { freq: 783.99, duration: 240, type: "sine", gain: 0.45, delay: 180 },
+      { freq: 1174.66, duration: 380, type: "sine", gain: 0.35, delay: 360 },
+    ]),
+  tap: () =>
+    playTones([
+      { freq: 420, duration: 60, type: "triangle", gain: 0.6 },
+      { freq: 320, duration: 90, type: "triangle", gain: 0.4, delay: 50 },
+    ]),
+  alarm: () =>
+    playTones([
+      { freq: 880, duration: 160, type: "square", gain: 0.4 },
+      { freq: 660, duration: 160, type: "square", gain: 0.4, delay: 180 },
+      { freq: 880, duration: 160, type: "square", gain: 0.4, delay: 360 },
+      { freq: 660, duration: 160, type: "square", gain: 0.4, delay: 540 },
+    ]),
 };
 
 export function playSound(name: SoundName): void {

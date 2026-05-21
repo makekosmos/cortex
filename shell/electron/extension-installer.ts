@@ -63,11 +63,7 @@ function findEOCD(buf: Buffer): { cdOffset: number; cdEntries: number } | null {
       const cdEntries = buf.readUInt16LE(i + 10);
       const cdOffset = buf.readUInt32LE(i + 16);
       const cdSize = buf.readUInt32LE(i + 12);
-      if (
-        cdEntries === 0xffff ||
-        cdOffset === 0xffffffff ||
-        cdSize === 0xffffffff
-      ) {
+      if (cdEntries === 0xffff || cdOffset === 0xffffffff || cdSize === 0xffffffff) {
         throw new Error("zip: ZIP64 not supported");
       }
       return { cdOffset, cdEntries };
@@ -181,9 +177,7 @@ function extensionsTmpRoot(): string {
  */
 export function previewKext(kextPath: string): KextManifestPreview {
   const entries = readZipEntries(kextPath);
-  const manifestEntry = entries.find(
-    (e) => e.name === "manifest.json" && !e.isDir,
-  );
+  const manifestEntry = entries.find((e) => e.name === "manifest.json" && !e.isDir);
   if (!manifestEntry) {
     throw new Error("manifest.json не найден в .kext");
   }
@@ -579,10 +573,7 @@ function readIconDataUri(dir: string, manifest: ExtensionManifest): string | nul
   return `data:${mime};base64,${readFileSync(iconPath).toString("base64")}`;
 }
 
-function scanExtensionsDir(
-  root: string,
-  source: "installed" | "dev",
-): InstalledExtensionInfo[] {
+function scanExtensionsDir(root: string, source: "installed" | "dev"): InstalledExtensionInfo[] {
   if (!existsSync(root)) return [];
   const out: InstalledExtensionInfo[] = [];
   for (const id of readdirSync(root)) {
@@ -634,10 +625,7 @@ export function listInstalledUserExtensions(): InstalledExtensionInfo[] {
   const devList = dev ? scanExtensionsDir(dev, "dev") : [];
   const installedList = scanExtensionsDir(userExtensionsRoot(), "installed");
   const seen = new Set(devList.map((e) => e.id));
-  const merged = [
-    ...devList,
-    ...installedList.filter((e) => !seen.has(e.id)),
-  ];
+  const merged = [...devList, ...installedList.filter((e) => !seen.has(e.id))];
   return merged;
 }
 

@@ -12,19 +12,11 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/dashboard/src/composables/useDashboardData.ts"
-      ],
+      "evidence": ["apps/dashboard/src/composables/useDashboardData.ts"],
       "details": {
         "interval_ms": 5000,
-        "active_when": [
-          "window focus",
-          "document.visibilityState === 'visible'"
-        ],
-        "stops_when": [
-          "window blur",
-          "document hidden"
-        ]
+        "active_when": ["window focus", "document.visibilityState === 'visible'"],
+        "stops_when": ["window blur", "document hidden"]
       }
     },
     {

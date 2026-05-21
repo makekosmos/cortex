@@ -15,6 +15,7 @@
 Status: PASS
 
 Proof:
+
 - `Sidebar.vue` now defaults `toggleShortcut` to `meta+b|ctrl+b`.
 - The shared matcher in the same component still handles layout aliases through `expandKeyVariants()` / `matchesShortcut()`.
 - Raw artifact: [sidebar-default-shortcut.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-default-shortcut/raw/sidebar-default-shortcut.txt)
@@ -26,6 +27,7 @@ Eden keeps using the shared sidebar without extra local shortcut props and recei
 Status: PASS
 
 Proof:
+
 - [`apps/eden/ts/src/components/sidebar/EdenSidebar.vue`](/D:/Personal/Hobby/Coding/kosmos/apps/eden/ts/src/components/sidebar/EdenSidebar.vue) still renders `KosmosSidebar` without a `toggle-shortcut` prop.
 - The fix is centralized in shared `Sidebar.vue`, so Eden now inherits the same default shortcut automatically.
 - Raw artifact: [eden-sidebar-consumer.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-default-shortcut/raw/eden-sidebar-consumer.txt)
@@ -37,6 +39,7 @@ Focused type checks pass for current consumers after the change.
 Status: PASS
 
 Proof:
+
 - `apps/dashboard` typecheck passed.
 - `apps/delphi/ts` typecheck passed.
 - `apps/eden/ts` typecheck passed.

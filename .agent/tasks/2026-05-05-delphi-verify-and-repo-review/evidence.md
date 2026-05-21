@@ -7,6 +7,7 @@
 ## AC1 — Delphi vitest
 
 Command:
+
 ```
 cd apps/delphi/ts
 bunx vitest run
@@ -18,6 +19,7 @@ Raw: `raw/delphi-vitest.txt`.
 ## AC2 — Delphi typecheck
 
 Command:
+
 ```
 cd apps/delphi/ts
 bunx tsc --noEmit
@@ -29,6 +31,7 @@ Raw: `raw/delphi-tsc.txt`.
 ## AC3 — ARK write-boundary guard
 
 Command (repo root):
+
 ```
 node scripts/check-ark-write-boundaries.mjs
 ```

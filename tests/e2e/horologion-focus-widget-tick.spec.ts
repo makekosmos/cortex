@@ -19,11 +19,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
-import {
-  openHorologion,
-  getFocusWidgetState,
-  gracefulQuit,
-} from "./helpers/horologion";
+import { openHorologion, getFocusWidgetState, gracefulQuit } from "./helpers/horologion";
 
 test("horologion focus widget: main-process tick идёт даже когда Horologion окно скрыто", async () => {
   const app = await launchKepler({ slug: "horologion-focus-widget-tick" });

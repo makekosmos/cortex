@@ -72,22 +72,14 @@ function onKey(e: KeyboardEvent) {
   >
     <div class="kosmos-blocklist-card__preview" aria-hidden="true">
       <slot>
-        <div
-          v-for="(domain, i) in previewLines"
-          :key="i"
-          class="kosmos-blocklist-card__domain"
-        >
+        <div v-for="(domain, i) in previewLines" :key="i" class="kosmos-blocklist-card__domain">
           {{ domain }}
         </div>
       </slot>
 
       <span v-if="preset" class="kosmos-blocklist-card__preset-badge">preset</span>
 
-      <span
-        v-if="active"
-        class="kosmos-blocklist-card__active-dot"
-        aria-hidden="true"
-      />
+      <span v-if="active" class="kosmos-blocklist-card__active-dot" aria-hidden="true" />
     </div>
 
     <div class="kosmos-blocklist-card__footer">
@@ -115,7 +107,10 @@ function onKey(e: KeyboardEvent) {
   background: var(--background);
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
   user-select: none;
 }
 

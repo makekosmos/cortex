@@ -53,7 +53,10 @@
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .settings-page__tab:hover,
@@ -1296,7 +1299,6 @@
   background: var(--color-bg-primary);
 }
 
-
 .settings-content .settings-tab {
   max-width: 680px;
 }
@@ -1311,7 +1313,9 @@
   width: 100%;
   text-align: left;
   background: transparent;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .settings-space-row:hover,
@@ -1337,7 +1341,6 @@
   font-size: 11px;
   font-weight: 600;
 }
-
 
 .settings-page--mac .settings-content-header {
   min-height: calc(52px + var(--kosmos-mac-traffic-light-top-safe-area));

@@ -29,8 +29,9 @@
         --status-error: oklch(0.577 0.245 27.325);
         --status-info: #3b82f6;
 
-        --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-          "SF Pro Text", Inter, Avenir, Helvetica, Arial, sans-serif;
+        --font-sans:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Avenir,
+          Helvetica, Arial, sans-serif;
         --font-mono: "Zed Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
         --title-1-size: 34px;
@@ -56,9 +57,12 @@
         --sidebar-border: oklch(1 0 0 / 10%);
       }
 
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
 
-      html, body {
+      html,
+      body {
         margin: 0;
         padding: 0;
         background: var(--background);
@@ -113,7 +117,9 @@
         letter-spacing: -0.2px;
       }
 
-      .nav-group { margin-top: 10px; }
+      .nav-group {
+        margin-top: 10px;
+      }
       .nav-label {
         font-size: 11px;
         text-transform: uppercase;
@@ -134,7 +140,9 @@
         cursor: pointer;
         transition: background 0.12s ease;
       }
-      .nav-item:hover { background: var(--sidebar-surface); }
+      .nav-item:hover {
+        background: var(--sidebar-surface);
+      }
       .nav-item.active {
         background: var(--sidebar-surface);
         font-weight: 600;
@@ -185,7 +193,9 @@
         cursor: pointer;
         transition: background 0.12s ease;
       }
-      .theme-toggle:hover { background: var(--muted); }
+      .theme-toggle:hover {
+        background: var(--muted);
+      }
 
       h2.section {
         font-size: var(--heading-size);
@@ -209,12 +219,23 @@
         display: grid;
         gap: 14px;
       }
-      .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid.cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .grid.cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
       @media (max-width: 860px) {
-        .app { grid-template-columns: 1fr; }
-        .sidebar { display: none; }
-        .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; }
+        .app {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          display: none;
+        }
+        .grid.cols-2,
+        .grid.cols-3 {
+          grid-template-columns: 1fr;
+        }
       }
 
       .stat .label {
@@ -256,10 +277,18 @@
         border-radius: 999px;
         background: var(--muted-foreground);
       }
-      .badge.canon .dot { background: var(--status-success); }
-      .badge.legacy .dot { background: var(--status-warning); }
-      .badge.shared .dot { background: var(--status-info); }
-      .badge.read .dot { background: var(--accent); }
+      .badge.canon .dot {
+        background: var(--status-success);
+      }
+      .badge.legacy .dot {
+        background: var(--status-warning);
+      }
+      .badge.shared .dot {
+        background: var(--status-info);
+      }
+      .badge.read .dot {
+        background: var(--accent);
+      }
 
       /* ── App tiles ──────────────────────────────────── */
 
@@ -273,7 +302,9 @@
         font-size: 12.5px;
         margin-bottom: 10px;
       }
-      .app-tile .desc { font-size: 13.5px; }
+      .app-tile .desc {
+        font-size: 13.5px;
+      }
       .app-tile .tags {
         margin-top: 12px;
         display: flex;
@@ -322,7 +353,9 @@
         color: white;
         border-color: var(--accent);
       }
-      .layer.runtime .layer-sub { color: rgba(255,255,255,0.85); }
+      .layer.runtime .layer-sub {
+        color: rgba(255, 255, 255, 0.85);
+      }
 
       /* ── Lists ───────────────────────────────────────── */
 
@@ -330,9 +363,12 @@
         margin: 0;
         padding-left: 20px;
       }
-      ul.tight li { margin: 4px 0; }
+      ul.tight li {
+        margin: 4px 0;
+      }
 
-      code, .mono {
+      code,
+      .mono {
         font-family: var(--font-mono);
         font-size: 0.85em;
         background: var(--surface);
@@ -341,7 +377,11 @@
         border: 1px solid var(--border);
       }
 
-      .pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
 
       footer {
         margin-top: 48px;
@@ -363,7 +403,9 @@
 
         <div class="nav-group">
           <div class="nav-label">Overview</div>
-          <a class="nav-item active" href="#top"><span class="nav-dot" style="background: var(--accent)"></span>Architecture</a>
+          <a class="nav-item active" href="#top"
+            ><span class="nav-dot" style="background: var(--accent)"></span>Architecture</a
+          >
           <a class="nav-item" href="#stats"><span class="nav-dot"></span>Status</a>
         </div>
 
@@ -386,7 +428,9 @@
         <header class="titlebar">
           <div>
             <h1 class="page-title">Kosmos</h1>
-            <div class="page-subtitle">Local-first personal-software monorepo · ARK runtime + Electron apps</div>
+            <div class="page-subtitle">
+              Local-first personal-software monorepo · ARK runtime + Electron apps
+            </div>
           </div>
           <button class="theme-toggle" id="themeToggle" type="button">Light</button>
         </header>
@@ -400,7 +444,9 @@
           <div class="arrow">│ narrow preload API</div>
           <div class="layer">
             <div class="layer-title">Electron main</div>
-            <div class="layer-sub">App orchestration · talks to sidecar via <span class="mono">@kosmos/ark</span></div>
+            <div class="layer-sub">
+              App orchestration · talks to sidecar via <span class="mono">@kosmos/ark</span>
+            </div>
           </div>
           <div class="arrow">│ newline-delimited JSON · stdin/stdout</div>
           <div class="layer runtime">
@@ -435,7 +481,10 @@
           <div class="card app-tile">
             <h3>eden</h3>
             <div class="meta">Vue + Electron · <span class="mono">apps/eden/ts</span></div>
-            <div class="desc">Заметки и редактор. Сохранение через <span class="mono">note_obj</span> и кастомные ARK-объекты; Heart — только editor/vault-специфика и one-time миграции.</div>
+            <div class="desc">
+              Заметки и редактор. Сохранение через <span class="mono">note_obj</span> и кастомные
+              ARK-объекты; Heart — только editor/vault-специфика и one-time миграции.
+            </div>
             <div class="tags">
               <span class="badge canon"><span class="dot"></span>ARK objects</span>
               <span class="badge"><span class="dot"></span>Vue 3.5</span>
@@ -445,7 +494,10 @@
           <div class="card app-tile">
             <h3>delphi</h3>
             <div class="meta">Electron + Kotlin · <span class="mono">apps/delphi/ts</span></div>
-            <div class="desc">Task tracking. После старта задачи мигрируются в <span class="mono">task_obj</span> ARK-объекты. Legacy DB-sidecar удалён.</div>
+            <div class="desc">
+              Task tracking. После старта задачи мигрируются в
+              <span class="mono">task_obj</span> ARK-объекты. Legacy DB-sidecar удалён.
+            </div>
             <div class="tags">
               <span class="badge canon"><span class="dot"></span>task_obj</span>
               <span class="badge"><span class="dot"></span>auto-migrate</span>
@@ -455,7 +507,10 @@
           <div class="card app-tile">
             <h3>arrancador</h3>
             <div class="meta">Electron · <span class="mono">apps/arrancador</span></div>
-            <div class="desc">Игровая библиотека, playtime, бэкапы. Writes/backfill/process search идут через <span class="mono">@kosmos/ark</span>; read-only SQLite — только fallback.</div>
+            <div class="desc">
+              Игровая библиотека, playtime, бэкапы. Writes/backfill/process search идут через
+              <span class="mono">@kosmos/ark</span>; read-only SQLite — только fallback.
+            </div>
             <div class="tags">
               <span class="badge canon"><span class="dot"></span>game_obj</span>
               <span class="badge"><span class="dot"></span>usage</span>
@@ -465,7 +520,10 @@
           <div class="card app-tile">
             <h3>dashboard</h3>
             <div class="meta">Electron · <span class="mono">apps/dashboard</span></div>
-            <div class="desc">Read-only ARK analytics. Может читать выбранные SQLite-БД из Electron main, но запись в ARK-таблицы запрещена.</div>
+            <div class="desc">
+              Read-only ARK analytics. Может читать выбранные SQLite-БД из Electron main, но запись
+              в ARK-таблицы запрещена.
+            </div>
             <div class="tags">
               <span class="badge read"><span class="dot"></span>read-only</span>
             </div>
@@ -505,43 +563,74 @@
           <div class="card app-tile">
             <h3>ark-core</h3>
             <div class="meta">Rust crate + <span class="mono">ark-core-rpc</span> sidecar</div>
-            <div class="desc">SQLite-схема, CRUD объектов, usage storage, LAN sync (server/client), relay-bridge с HMAC-auth, HLC, beacon, mesh, p2p. Канон рантайма.</div>
-            <div class="tags"><span class="badge canon"><span class="dot"></span>canon</span></div>
+            <div class="desc">
+              SQLite-схема, CRUD объектов, usage storage, LAN sync (server/client), relay-bridge с
+              HMAC-auth, HLC, beacon, mesh, p2p. Канон рантайма.
+            </div>
+            <div class="tags">
+              <span class="badge canon"><span class="dot"></span>canon</span>
+            </div>
           </div>
 
           <div class="card app-tile">
             <h3>@kosmos/ark</h3>
             <div class="meta">TS SDK · <span class="mono">packages/kosmos-ark</span></div>
             <div class="desc">Канонический клиент к sidecar для Electron main / Node.</div>
-            <div class="tags"><span class="badge canon"><span class="dot"></span>canon</span></div>
+            <div class="tags">
+              <span class="badge canon"><span class="dot"></span>canon</span>
+            </div>
           </div>
 
           <div class="card app-tile">
             <h3>@arksync/node</h3>
-            <div class="meta">Compat re-export · <span class="mono">packages/arksync-node</span></div>
-            <div class="desc">Только для совместимости. Новые интеграции идут через <span class="mono">@kosmos/ark</span>.</div>
-            <div class="tags"><span class="badge legacy"><span class="dot"></span>legacy</span></div>
+            <div class="meta">
+              Compat re-export · <span class="mono">packages/arksync-node</span>
+            </div>
+            <div class="desc">
+              Только для совместимости. Новые интеграции идут через
+              <span class="mono">@kosmos/ark</span>.
+            </div>
+            <div class="tags">
+              <span class="badge legacy"><span class="dot"></span>legacy</span>
+            </div>
           </div>
 
           <div class="card app-tile">
             <h3>ark-relay-server</h3>
             <div class="meta">WebSocket relay</div>
-            <div class="desc">Раздаёт <span class="mono">hello</span>, <span class="mono">version_vector</span>, <span class="mono">sync_changes</span>, <span class="mono">live_change</span> между пирами.</div>
-            <div class="tags"><span class="badge"><span class="dot"></span>infra</span></div>
+            <div class="desc">
+              Раздаёт <span class="mono">hello</span>, <span class="mono">version_vector</span>,
+              <span class="mono">sync_changes</span>, <span class="mono">live_change</span> между
+              пирами.
+            </div>
+            <div class="tags">
+              <span class="badge"><span class="dot"></span>infra</span>
+            </div>
           </div>
 
           <div class="card app-tile">
             <h3>kosmos-visuals</h3>
             <div class="meta"><span class="mono">packages/kosmos-visuals</span></div>
-            <div class="desc">Общая UI-система: токены (colors/typography/radius/spacing/animations), CSS-переменные, компоненты <span class="mono">Sidebar</span>, <span class="mono">Titlebar</span>, <span class="mono">DesktopChrome</span>, <span class="mono">CommandPalette</span>, <span class="mono">GamePosterCard</span>…</div>
-            <div class="tags"><span class="badge shared"><span class="dot"></span>shared</span></div>
+            <div class="desc">
+              Общая UI-система: токены (colors/typography/radius/spacing/animations),
+              CSS-переменные, компоненты <span class="mono">Sidebar</span>,
+              <span class="mono">Titlebar</span>, <span class="mono">DesktopChrome</span>,
+              <span class="mono">CommandPalette</span>, <span class="mono">GamePosterCard</span>…
+            </div>
+            <div class="tags">
+              <span class="badge shared"><span class="dot"></span>shared</span>
+            </div>
           </div>
 
           <div class="card app-tile">
             <h3>apple-like · shared-space</h3>
             <div class="meta">UI / data shared layers</div>
-            <div class="desc">Платформенные адаптации и общее пространство данных для приложений.</div>
-            <div class="tags"><span class="badge shared"><span class="dot"></span>shared</span></div>
+            <div class="desc">
+              Платформенные адаптации и общее пространство данных для приложений.
+            </div>
+            <div class="tags">
+              <span class="badge shared"><span class="dot"></span>shared</span>
+            </div>
           </div>
         </div>
 
@@ -551,8 +640,12 @@
           <div class="card app-tile">
             <h3>usage-tracker</h3>
             <div class="meta">Rust · <span class="mono">services/usage-tracker</span></div>
-            <div class="desc">Захват usage data, запись в ARK через RPC (не напрямую в SQLite).</div>
-            <div class="tags"><span class="badge canon"><span class="dot"></span>via RPC</span></div>
+            <div class="desc">
+              Захват usage data, запись в ARK через RPC (не напрямую в SQLite).
+            </div>
+            <div class="tags">
+              <span class="badge canon"><span class="dot"></span>via RPC</span>
+            </div>
           </div>
         </div>
 
@@ -560,31 +653,41 @@
         <h2 class="section" id="rules">Rules of the road</h2>
         <div class="grid cols-2">
           <div class="card">
-            <h3 style="margin-top:0; font-size:15px;">ARK write boundary</h3>
+            <h3 style="margin-top: 0; font-size: 15px">ARK write boundary</h3>
             <ul class="tight">
-              <li>Все записи — через <span class="mono">@kosmos/ark</span> или <span class="mono">ark_core::db</span>.</li>
+              <li>
+                Все записи — через <span class="mono">@kosmos/ark</span> или
+                <span class="mono">ark_core::db</span>.
+              </li>
               <li>Прямые SQL writes в app services запрещены.</li>
               <li>Dashboard — read-only.</li>
               <li>Перед правками data path: <span class="mono">bun run ark:guard:writes</span>.</li>
             </ul>
           </div>
           <div class="card">
-            <h3 style="margin-top:0; font-size:15px;">Test DB isolation</h3>
+            <h3 style="margin-top: 0; font-size: 15px">Test DB isolation</h3>
             <ul class="tight">
               <li>Никогда не указывай тестам user ARK DB.</li>
-              <li>Используй <span class="mono">.tmp</span>, <span class="mono">.e2e</span>, <span class="mono">.agent/tasks/&lt;TASK&gt;/</span>, OS temp.</li>
+              <li>
+                Используй <span class="mono">.tmp</span>, <span class="mono">.e2e</span>,
+                <span class="mono">.agent/tasks/&lt;TASK&gt;/</span>, OS temp.
+              </li>
               <li>Smoke: <span class="mono">bun run ark:smoke</span>.</li>
             </ul>
           </div>
           <div class="card">
-            <h3 style="margin-top:0; font-size:15px;">Proof loop</h3>
+            <h3 style="margin-top: 0; font-size: 15px">Proof loop</h3>
             <ul class="tight">
-              <li><span class="mono">.agent/tasks/&lt;DATE&gt;-&lt;slug&gt;/spec.md</span> → реализация → <span class="mono">evidence.{md,json}</span> → если не PASS → <span class="mono">problems.md</span> → fix → reverify.</li>
+              <li>
+                <span class="mono">.agent/tasks/&lt;DATE&gt;-&lt;slug&gt;/spec.md</span> →
+                реализация → <span class="mono">evidence.{md,json}</span> → если не PASS →
+                <span class="mono">problems.md</span> → fix → reverify.
+              </li>
               <li>Каждый AC должен быть PASS, иначе таск не закрыт.</li>
             </ul>
           </div>
           <div class="card">
-            <h3 style="margin-top:0; font-size:15px;">Tooling</h3>
+            <h3 style="margin-top: 0; font-size: 15px">Tooling</h3>
             <div class="pill-row">
               <span class="badge"><span class="dot"></span>Bun 1.3.5</span>
               <span class="badge"><span class="dot"></span>oxlint</span>
@@ -601,17 +704,34 @@
         <h2 class="section" id="docs">Key docs</h2>
         <div class="card">
           <ul class="tight">
-            <li><span class="mono">packages/ark-core/README.md</span> — RPC контракт, sync, <span class="mono">auth_secret</span>.</li>
-            <li><span class="mono">docs/ARK-SMOKE-MATRIX.md</span> — smoke-команды по компонентам.</li>
-            <li><span class="mono">docs/ARK-READONLY-SQL-BOUNDARY.md</span> — что dashboard'у можно/нельзя.</li>
-            <li><span class="mono">docs/DELPHI-LEGACY-DB-DECISION.md</span> — почему legacy sidecar удалён.</li>
-            <li><span class="mono">docs/EDEN-HEART-ARK-BOUNDARY.md</span> — границы Heart vs ARK в Eden.</li>
-            <li><span class="mono">apps/&lt;name&gt;/AGENTS.md</span> — локальные правила app-уровня.</li>
+            <li>
+              <span class="mono">packages/ark-core/README.md</span> — RPC контракт, sync,
+              <span class="mono">auth_secret</span>.
+            </li>
+            <li>
+              <span class="mono">docs/ARK-SMOKE-MATRIX.md</span> — smoke-команды по компонентам.
+            </li>
+            <li>
+              <span class="mono">docs/ARK-READONLY-SQL-BOUNDARY.md</span> — что dashboard'у
+              можно/нельзя.
+            </li>
+            <li>
+              <span class="mono">docs/DELPHI-LEGACY-DB-DECISION.md</span> — почему legacy sidecar
+              удалён.
+            </li>
+            <li>
+              <span class="mono">docs/EDEN-HEART-ARK-BOUNDARY.md</span> — границы Heart vs ARK в
+              Eden.
+            </li>
+            <li>
+              <span class="mono">apps/&lt;name&gt;/AGENTS.md</span> — локальные правила app-уровня.
+            </li>
           </ul>
         </div>
 
         <footer>
-          Сгенерировано из памяти и текущего состояния репозитория · дизайн-токены из <span class="mono">kosmos-visuals</span>.
+          Сгенерировано из памяти и текущего состояния репозитория · дизайн-токены из
+          <span class="mono">kosmos-visuals</span>.
         </footer>
       </main>
     </div>

@@ -9,9 +9,7 @@ export interface ArkConnection {
   api_key: string;
 }
 
-export function parseConnectionString(
-  connectionString: string,
-): ArkConnection | null {
+export function parseConnectionString(connectionString: string): ArkConnection | null {
   const trimmed = connectionString.trim();
 
   if (!trimmed.startsWith("ark://")) return null;

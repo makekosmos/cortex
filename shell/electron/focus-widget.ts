@@ -12,22 +12,11 @@
 //   - На active=false (pomodoro stopped) → hide(), но window не destroy
 //     чтобы reopen был мгновенным.
 
-import {
-  BrowserWindow,
-  ipcMain,
-  screen,
-  app,
-} from "electron";
+import { BrowserWindow, ipcMain, screen, app } from "electron";
 import { openExtension } from "./extension-host";
 import { awaitArkReady } from "./main";
 import path from "node:path";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { keplerDataDir } from "./data-dir";
 
@@ -143,9 +132,7 @@ function defaultPosition(): PersistedBounds {
 function createWidgetWindow(): BrowserWindow {
   const persisted = readPersistedBounds();
   const pos =
-    persisted && isOnSomeDisplay(persisted.x, persisted.y)
-      ? persisted
-      : defaultPosition();
+    persisted && isOnSomeDisplay(persisted.x, persisted.y) ? persisted : defaultPosition();
 
   const win = new BrowserWindow({
     width: WIDGET_WIDTH,
@@ -206,10 +193,7 @@ function showWidget(): void {
   const win = ensureWindow();
   // Headless / test mode: окно живёт логически (state, tick, IPC), но не
   // показывается визуально. Playwright читает state через main process.
-  if (
-    process.env.KOSMOS_HEADLESS === "1" ||
-    process.env.KOSMOS_TEST_MODE === "1"
-  ) {
+  if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") {
     return;
   }
   if (!win.isVisible()) win.showInactive();
@@ -246,10 +230,7 @@ function broadcastState(): void {
 
 function recomputeRemainingFromAnchor(): boolean {
   if (currentState.phaseEndsAtMs == null) return false;
-  const next = Math.max(
-    0,
-    Math.ceil((currentState.phaseEndsAtMs - Date.now()) / 1000),
-  );
+  const next = Math.max(0, Math.ceil((currentState.phaseEndsAtMs - Date.now()) / 1000));
   if (currentState.remainingSec === next) return false;
   currentState.remainingSec = next;
   return true;
@@ -305,13 +286,10 @@ export function getFocusState(): FocusState {
 
 // --- IPC --------------------------------------------------------------------
 
-ipcMain.handle(
-  "kepler:focus-widget:set-state",
-  (_e, patch: Partial<FocusState>) => {
-    if (!patch || typeof patch !== "object") return;
-    setFocusState(patch);
-  },
-);
+ipcMain.handle("kepler:focus-widget:set-state", (_e, patch: Partial<FocusState>) => {
+  if (!patch || typeof patch !== "object") return;
+  setFocusState(patch);
+});
 
 ipcMain.handle("kepler:focus-widget:get-state", () => getFocusState());
 
@@ -386,7 +364,10 @@ async function stopManualStopwatch(): Promise<void> {
       console.warn("[focus-widget] stopwatch stop: no running manual time_entry");
       return;
     }
-    const props = { ...((target.propsJson ?? target.props_json ?? {}) as Record<string, unknown>), endedAt: nowIso };
+    const props = {
+      ...((target.propsJson ?? target.props_json ?? {}) as Record<string, unknown>),
+      endedAt: nowIso,
+    };
     const record = {
       id: target.id,
       typeId: target.typeId ?? target.type_id ?? "time_entry_obj",

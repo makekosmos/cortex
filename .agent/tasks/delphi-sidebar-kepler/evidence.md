@@ -5,6 +5,7 @@
 **Status: PASS**
 
 ### Proof
+
 - Added `packages/kosmos-visuals/components/Sidebar.vue`.
 - The component encapsulates the sidebar shell and visual structure on top of `ResizableSidebar` and `SidebarButton`.
 - Public typed contracts are defined in the component itself:
@@ -28,12 +29,13 @@
 **Status: PASS**
 
 ### Proof
+
 - `apps/delphi/ts/src/components/SideBar.vue` now imports:
   - `Sidebar as KosmosSidebar`
   - `SidebarConfig`
   - `SidebarNavItem`
   - `SidebarProjectItem`
-  from `@kosmos/visuals/components`.
+    from `@kosmos/visuals/components`.
 - The Delphi component now only:
   - loads/saves persisted sidebar config
   - derives `primaryItems`, `footerItems`, and `projectItems`
@@ -47,6 +49,7 @@
 **Status: PASS**
 
 ### Proof
+
 - Persisted sidebar config remains in `apps/delphi/ts/src/components/SideBar.vue` under `STORAGE_KEY = "delphi-sidebar-config"`.
 - Hidden-state sync remains intact via `saveConfig(config)` -> `setSidebarHidden(config.hidden)`.
 - The package sidebar still renders:
@@ -72,6 +75,7 @@
 **Status: PASS**
 
 ### Proof
+
 - TypeScript check run:
   - Command: `cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc --noEmit`
   - Result: exit code `0`

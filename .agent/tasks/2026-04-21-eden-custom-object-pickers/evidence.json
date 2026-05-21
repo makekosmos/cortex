@@ -51,10 +51,7 @@
     {
       "id": "AC6",
       "status": "PASS",
-      "evidence": [
-        "raw/no-native-select.txt",
-        "raw/ui-strings-utf8.txt"
-      ]
+      "evidence": ["raw/no-native-select.txt", "raw/ui-strings-utf8.txt"]
     }
   ],
   "checks": [

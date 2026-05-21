@@ -22,7 +22,7 @@
 - `KextCommand`: `{ id, title, subtitle?, icon?, route?, kind?, mode?: "open" | "action" }`.
 - Полный id = `${manifest.id}:${cmd.id}` (security boundary).
 - `loadDeclaredCommands()` в extension-host сканирует все установленные
-  + dev-tree extension'ы, читает manifests, билдит `CommandRecord[]`.
+  - dev-tree extension'ы, читает manifests, билдит `CommandRecord[]`.
 - Icon path резолвится относительно extension dir → data URI (как
   `extensionIconDataUri` для top-level icon).
 

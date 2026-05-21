@@ -11,27 +11,17 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 // ---------------------------------------------------------------------------
 
 export function computeMeshId(meshSecret: string): string {
-  return createHmac("sha256", "mesh-id")
-    .update(meshSecret)
-    .digest("hex")
-    .slice(0, 16);
+  return createHmac("sha256", "mesh-id").update(meshSecret).digest("hex").slice(0, 16);
 }
 
 export function computeAuthHmac(meshSecret: string, nonce: string): string {
   return createHmac("sha256", meshSecret).update(nonce).digest("hex");
 }
 
-export function verifyAuthHmac(
-  meshSecret: string,
-  nonce: string,
-  provided: string,
-): boolean {
+export function verifyAuthHmac(meshSecret: string, nonce: string, provided: string): boolean {
   const expected = computeAuthHmac(meshSecret, nonce);
   try {
-    return timingSafeEqual(
-      Buffer.from(expected, "hex"),
-      Buffer.from(provided, "hex"),
-    );
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(provided, "hex"));
   } catch {
     return false;
   }

@@ -6,10 +6,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/src-vue/router.ts:8",
-        "apps/arrancador/src-vue/router.ts:62"
-      ]
+      "evidence": ["apps/arrancador/src-vue/router.ts:8", "apps/arrancador/src-vue/router.ts:62"]
     },
     {
       "id": "AC2",

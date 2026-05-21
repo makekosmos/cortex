@@ -6,17 +6,17 @@
 
 ## Для использования (production)
 
-| Категория | Минимум | Рекомендуется |
-|---|---|---|
-| **OS** | Windows 10 1809 | **Windows 11 22H2+** (Mica backdrop) |
-| **Архитектура** | x64 | x64 |
-| **Disk space** | ~400 MB (installer 103 MB + unpacked ~370 MB) | 500 MB free |
-| **RAM** | 500 MB free | 1+ GB free |
-| **CPU** | любой x64 | dual-core+ |
-| **GPU** | integrated с DirectX 11 (для Mica/Acrylic) | discrete или integrated D3D11 |
-| **Internet** | для install + auto-update + marketplace catalog | для LAN sync extension |
-| **.NET / VC++ Runtime** | не требуется (Electron статически линкуется) | — |
-| **Permissions** | standard user | admin для install + focus mode |
+| Категория               | Минимум                                         | Рекомендуется                        |
+| ----------------------- | ----------------------------------------------- | ------------------------------------ |
+| **OS**                  | Windows 10 1809                                 | **Windows 11 22H2+** (Mica backdrop) |
+| **Архитектура**         | x64                                             | x64                                  |
+| **Disk space**          | ~400 MB (installer 103 MB + unpacked ~370 MB)   | 500 MB free                          |
+| **RAM**                 | 500 MB free                                     | 1+ GB free                           |
+| **CPU**                 | любой x64                                       | dual-core+                           |
+| **GPU**                 | integrated с DirectX 11 (для Mica/Acrylic)      | discrete или integrated D3D11        |
+| **Internet**            | для install + auto-update + marketplace catalog | для LAN sync extension               |
+| **.NET / VC++ Runtime** | не требуется (Electron статически линкуется)    | —                                    |
+| **Permissions**         | standard user                                   | admin для install + focus mode       |
 
 ### Measured baseline (2026-05-18, production build)
 
@@ -35,13 +35,13 @@
 
 ## Для разработки
 
-| Tool | Версия | Зачем |
-|---|---|---|
-| **Node.js** | 20+ | Electron 41 toolchain, vite-plugin-electron |
-| **Bun** | 1.x | Workspace package manager (`bun.lock`) |
-| **Rust** | 1.80+ | Cargo workspace: kepler-backend, ark-core, focus-helper, focus-svc |
-| **Git** | любая | clone + commits |
-| **PowerShell** | 5.1+ или 7+ | `scripts/*.ps1` (RAM measurement, baseline orchestrator) |
+| Tool           | Версия      | Зачем                                                              |
+| -------------- | ----------- | ------------------------------------------------------------------ |
+| **Node.js**    | 20+         | Electron 41 toolchain, vite-plugin-electron                        |
+| **Bun**        | 1.x         | Workspace package manager (`bun.lock`)                             |
+| **Rust**       | 1.80+       | Cargo workspace: kepler-backend, ark-core, focus-helper, focus-svc |
+| **Git**        | любая       | clone + commits                                                    |
+| **PowerShell** | 5.1+ или 7+ | `scripts/*.ps1` (RAM measurement, baseline orchestrator)           |
 
 ### Опционально
 
@@ -51,15 +51,15 @@
 
 ## Зависимости компонентов
 
-| Subsystem | Bundle | Внешние требования |
-|---|---|---|
-| **Electron host** | `Kepler.exe` (Chromium 144 + Node 24) | — |
-| **Backend** | `kepler-backend.exe` (Rust + tokio + WS server) | — |
-| **ARK storage** | `ark-core-rpc.exe` (SQLite WAL + FTS5 in-process) | — |
-| **Focus svc** | `kepler-focus-svc.exe` (Windows Service, AutoStart) | **Один UAC при первой активации блокировки** — Kepler auto-install'ит service (с 0.1.21). Дальше — zero UAC через named pipe. |
-| **Focus helper** (fallback) | `kepler-focus-helper.exe` (admin elevation manifest) | UAC per toggle — используется только если юзер отклонил auto-install service'а |
-| **AutoUpdater** | `electron-updater` | Доступ к `github.com/yoso-industries/kepler-releases` |
-| **Extension marketplace** | github raw + releases | Доступ к `github.com/yoso-industries/kosmos-extensions` |
+| Subsystem                   | Bundle                                               | Внешние требования                                                                                                            |
+| --------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Electron host**           | `Kepler.exe` (Chromium 144 + Node 24)                | —                                                                                                                             |
+| **Backend**                 | `kepler-backend.exe` (Rust + tokio + WS server)      | —                                                                                                                             |
+| **ARK storage**             | `ark-core-rpc.exe` (SQLite WAL + FTS5 in-process)    | —                                                                                                                             |
+| **Focus svc**               | `kepler-focus-svc.exe` (Windows Service, AutoStart)  | **Один UAC при первой активации блокировки** — Kepler auto-install'ит service (с 0.1.21). Дальше — zero UAC через named pipe. |
+| **Focus helper** (fallback) | `kepler-focus-helper.exe` (admin elevation manifest) | UAC per toggle — используется только если юзер отклонил auto-install service'а                                                |
+| **AutoUpdater**             | `electron-updater`                                   | Доступ к `github.com/yoso-industries/kepler-releases`                                                                         |
+| **Extension marketplace**   | github raw + releases                                | Доступ к `github.com/yoso-industries/kosmos-extensions`                                                                       |
 
 ## Размер на диске (после install)
 
@@ -83,16 +83,16 @@
 
 ## Permissions требуемые runtime
 
-| Действие | Требуется admin |
-|---|---|
-| Установка через NSIS installer | ✅ (UAC при install) |
-| Запуск Kepler launcher / extensions | ❌ |
-| ARK operations (read/write objects) | ❌ |
-| Установка extension через marketplace | ❌ |
+| Действие                                   | Требуется admin                                        |
+| ------------------------------------------ | ------------------------------------------------------ |
+| Установка через NSIS installer             | ✅ (UAC при install)                                   |
+| Запуск Kepler launcher / extensions        | ❌                                                     |
+| ARK operations (read/write objects)        | ❌                                                     |
+| Установка extension через marketplace      | ❌                                                     |
 | **Focus mode: первая активация blocklist** | ✅ (один UAC — Kepler auto-install'ит фоновый service) |
-| Focus mode: все последующие активации | ❌ (через named pipe, zero UAC) |
-| Переустановка / удаление focus service | ✅ (через **Настройки → Фокус → Системный демон**) |
-| AutoUpdater download + install | ❌ (per-user install) |
+| Focus mode: все последующие активации      | ❌ (через named pipe, zero UAC)                        |
+| Переустановка / удаление focus service     | ✅ (через **Настройки → Фокус → Системный демон**)     |
+| AutoUpdater download + install             | ❌ (per-user install)                                  |
 
 ## Известные ограничения
 

@@ -15,6 +15,7 @@
 3. **В production** (`VITE_DEV_SERVER_URL` не выставлен) probe не запускается совсем — packaged Kepler **всегда** грузит extension'ы из `dist/`.
 
 Этот подход устраняет три проблемы прошлого дизайна:
+
 - **Двойной opt-in** (env + setting) — теперь zero-config в dev.
 - **Пустые окна при упавшем dev server** — graceful fallback на dist.
 - **Footgun с persisted setting** — раньше `developerMode: true` в settings оставался после dev-сессии, в installed Kepler ломал загрузку extension'ов (localhost:5184 в проде → пустое окно).
@@ -37,13 +38,13 @@ bun run --cwd shell dev
 
 Каждому extension'у назначен фиксированный порт (см. `manifest.json::devPort`):
 
-| Extension | devPort |
-|---|---|
-| Dashboard | 5180 |
-| Horologion | 5181 |
-| Delphi | 5182 |
-| Arrancador | 5183 |
-| Eden | 5184 |
+| Extension  | devPort |
+| ---------- | ------- |
+| Dashboard  | 5180    |
+| Horologion | 5181    |
+| Delphi     | 5182    |
+| Arrancador | 5183    |
+| Eden       | 5184    |
 
 `shell/scripts/dev-extensions.mjs` поднимает по одному Vite dev server'у на порт, используя `extensions/<id>/vite.config.mjs`.
 
@@ -97,14 +98,14 @@ Settings window kepler-shell имеет checkbox «Developer Mode» в `%APPDATA
 
 ## Code refs
 
-| Файл | Что |
-|---|---|
-| `shell/electron/extension-host.ts` | `probeExtensionDevServer`, `resolveExtensionSource`, `openExtension` (async + inflight dedupe) |
-| `shell/scripts/dev.mjs` | Orchestrator: default-on extension Vite servers, opt-out `KEPLER_DEV_EXTENSIONS=0` |
-| `shell/scripts/dev-extensions.mjs` | Per-extension Vite dev server spawn |
-| `shell/vite.extensions.config.mjs` | Vite config для extension build (one-shot dist) |
-| `extensions/<id>/vite.config.mjs` | Per-extension vite config (HMR server, alias) |
-| `shell/electron/settings-window.ts` | `developerMode` setting (legacy, UI hint only) |
+| Файл                                | Что                                                                                            |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `shell/electron/extension-host.ts`  | `probeExtensionDevServer`, `resolveExtensionSource`, `openExtension` (async + inflight dedupe) |
+| `shell/scripts/dev.mjs`             | Orchestrator: default-on extension Vite servers, opt-out `KEPLER_DEV_EXTENSIONS=0`             |
+| `shell/scripts/dev-extensions.mjs`  | Per-extension Vite dev server spawn                                                            |
+| `shell/vite.extensions.config.mjs`  | Vite config для extension build (one-shot dist)                                                |
+| `extensions/<id>/vite.config.mjs`   | Per-extension vite config (HMR server, alias)                                                  |
+| `shell/electron/settings-window.ts` | `developerMode` setting (legacy, UI hint only)                                                 |
 
 ## См. также
 

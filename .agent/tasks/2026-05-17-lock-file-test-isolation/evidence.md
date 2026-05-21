@@ -37,6 +37,7 @@ KEPLER_SKIP_SYNC: "1",
 ## AC4. Rust unit test для skip-сценария
 
 **PASS.** Добавлен `lock_file::tests::permissions_disabled_env_skips_hardening`:
+
 - Сериализован через `ENV_MUTEX` (Mutex local to test mod) — `kosmos_data_dir_respects_env_override`, `unix_permissions_are_0600`, `windows_acl_inheritance_disabled` тоже теперь acquire его, чтобы исключить race.
 - Тест ставит env var, вызывает `write_atomic`, снимает env var, верифицирует что файл создан и читаем, на Unix дополнительно проверяет что mode не 0600.
 

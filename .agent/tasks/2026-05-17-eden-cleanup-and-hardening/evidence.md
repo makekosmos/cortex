@@ -12,6 +12,7 @@ $ grep -RiE "hevy" extensions/eden/src/
 ```
 
 Удалены:
+
 - `extensions/eden/src/lib/hevy.ts`
 - `extensions/eden/src/components/settings/ConnectedAppsSettings.vue`
 - Hevy секция из settings rail (`EdenSidebar.vue`, `SettingsPage.vue`, `App.vue` `SettingsTab` type)
@@ -31,6 +32,7 @@ $ grep -RE "lintCodeBlock|formatCodeBlock|getCodeToolsSettings|updateCodeToolsSe
 ```
 
 Удалены:
+
 - 4 метода из `kepler-api-shim.ts` (`getCodeToolsSettings`, `updateCodeToolsSettings`, `lintCodeBlock`, `formatCodeBlock`)
 - Их установка в `Window.api` (shim install)
 - 5 типов из `vite-env.d.ts` (`CodeToolsSettings`, `CodeToolsPreset`, `CodeLintTrigger`, `CodeLintDiagnostic`, `CodeLintResult`, `CodeFormatResult`)
@@ -82,6 +84,7 @@ README.md          ← apps/ теперь почти пустая
 ```
 
 Repo-wide grep `apps/eden`:
+
 - `scripts/check-docs-freshness.mjs` — добавлен в `KNOWN_NONEXISTENT` (намеренно)
 - `.agent/tasks/2026-05-17-eden-extension/{spec.md, evidence.json}` — исторические артефакты Phase 6.0
 - `extensions/eden/src/{main.ts, lib/kepler-api-shim.ts}` — комментарии вида «standalone Eden имел…»
@@ -125,24 +128,24 @@ Repo-wide grep `apps/eden`:
 
 **PASS.**
 
-| Команда | Результат | Лог |
-|---|---|---|
-| `bun install` | clean (1 package removed — apps/eden/ts) | `raw/bun-install.log` |
+| Команда                                | Результат                                                                  | Лог                         |
+| -------------------------------------- | -------------------------------------------------------------------------- | --------------------------- |
+| `bun install`                          | clean (1 package removed — apps/eden/ts)                                   | `raw/bun-install.log`       |
 | `bun run --cwd shell build:extensions` | все 5 extensions собираются (Eden — 353KB main + 1.36MB editor lazy chunk) | `raw/build-2-codesplit.log` |
-| `bun run --cwd shell build:js` | clean (main process + renderer + extensions) | `raw/final-build.log` |
-| `bun run --cwd shell typecheck` | clean (0 errors) | `raw/typecheck-1.log` |
-| `bun run ark:guard:writes` | «ARK write boundary guard passed» | `raw/ark-guard-writes.log` |
-| `cargo build --workspace` | clean (без apps/eden/ts/heart) | `raw/cargo-build.log` |
+| `bun run --cwd shell build:js`         | clean (main process + renderer + extensions)                               | `raw/final-build.log`       |
+| `bun run --cwd shell typecheck`        | clean (0 errors)                                                           | `raw/typecheck-1.log`       |
+| `bun run ark:guard:writes`             | «ARK write boundary guard passed»                                          | `raw/ark-guard-writes.log`  |
+| `cargo build --workspace`              | clean (без apps/eden/ts/heart)                                             | `raw/cargo-build.log`       |
 
 ## Verification summary
 
-| AC | Verdict |
-|---|---|
-| AC1 Hevy removed | PASS |
-| AC2 Code-tools removed | PASS |
-| AC3 Trash UI ARK soft-delete | PASS (smoke vs реальной ARK DB — оператор) |
-| AC4 Bundle codesplit | PASS (main 353KB, было 1.7MB) |
-| AC5 apps/eden removed | PASS |
-| AC6 Workspace tooling cleanup | PASS |
-| AC7 Docs + roadmap | PASS |
-| AC8 Build + typecheck | PASS |
+| AC                            | Verdict                                    |
+| ----------------------------- | ------------------------------------------ |
+| AC1 Hevy removed              | PASS                                       |
+| AC2 Code-tools removed        | PASS                                       |
+| AC3 Trash UI ARK soft-delete  | PASS (smoke vs реальной ARK DB — оператор) |
+| AC4 Bundle codesplit          | PASS (main 353KB, было 1.7MB)              |
+| AC5 apps/eden removed         | PASS                                       |
+| AC6 Workspace tooling cleanup | PASS                                       |
+| AC7 Docs + roadmap            | PASS                                       |
+| AC8 Build + typecheck         | PASS                                       |

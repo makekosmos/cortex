@@ -70,9 +70,9 @@ function mapTodo(
   return todos.map((t) => (t.id === id ? fn(t) : t));
 }
 
-function getElectronInvoker():
-  | { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
-  | null {
+function getElectronInvoker(): {
+  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+} | null {
   if (
     typeof window === "undefined" ||
     !(window as unknown as Record<string, unknown>).electronAPI
@@ -135,9 +135,7 @@ function persistTodoToArk(todo: TodoItem): void {
   const electronAPI = getElectronInvoker();
   if (!electronAPI) return;
 
-  electronAPI
-    .invoke("ark:upsertDelphiTask", JSON.parse(JSON.stringify(todo)))
-    .catch(() => {});
+  electronAPI.invoke("ark:upsertDelphiTask", JSON.parse(JSON.stringify(todo))).catch(() => {});
 }
 
 function deleteTodoFromArk(id: string): void {
@@ -294,9 +292,7 @@ export const useTodoStore = defineStore("todos", () => {
 
     // Unlink todos from removed project
 
-    todos.value = todos.value.map((t) =>
-      t.projectId === id ? { ...t, projectId: null } : t,
-    );
+    todos.value = todos.value.map((t) => (t.projectId === id ? { ...t, projectId: null } : t));
 
     void localDbDeleteProject(id);
   }
@@ -462,9 +458,7 @@ export const useTodoStore = defineStore("todos", () => {
   }
 
   function toggleChecklistItem(todoId: string, itemId: string) {
-    todos.value = mapTodo(todos.value, todoId, (t) =>
-      toggleChecklist(t, itemId),
-    );
+    todos.value = mapTodo(todos.value, todoId, (t) => toggleChecklist(t, itemId));
     const updated = todos.value.find((t) => t.id === todoId);
     if (updated) {
       persistTodoLocallyAndInArk(updated);
@@ -472,9 +466,7 @@ export const useTodoStore = defineStore("todos", () => {
   }
 
   function removeChecklistItem(todoId: string, itemId: string) {
-    todos.value = mapTodo(todos.value, todoId, (t) =>
-      removeChecklist(t, itemId),
-    );
+    todos.value = mapTodo(todos.value, todoId, (t) => removeChecklist(t, itemId));
     const updated = todos.value.find((t) => t.id === todoId);
     if (updated) {
       persistTodoLocallyAndInArk(updated);
@@ -482,9 +474,7 @@ export const useTodoStore = defineStore("todos", () => {
   }
 
   function reorderChecklistItems(todoId: string, orderedIds: string[]) {
-    todos.value = mapTodo(todos.value, todoId, (t) =>
-      reorderChecklist(t, orderedIds),
-    );
+    todos.value = mapTodo(todos.value, todoId, (t) => reorderChecklist(t, orderedIds));
     const updated = todos.value.find((t) => t.id === todoId);
     if (updated) {
       persistTodoLocallyAndInArk(updated);
@@ -550,9 +540,7 @@ export const useTodoStore = defineStore("todos", () => {
   }
 
   function updateProject(id: string, patch: Partial<Project>) {
-    projects.value = projects.value.map((p) =>
-      p.id === id ? { ...p, ...patch } : p,
-    );
+    projects.value = projects.value.map((p) => (p.id === id ? { ...p, ...patch } : p));
 
     const updated = projects.value.find((p) => p.id === id);
 
@@ -576,9 +564,7 @@ export const useTodoStore = defineStore("todos", () => {
 
     // Unlink todos from removed project
 
-    todos.value = todos.value.map((t) =>
-      t.projectId === id ? { ...t, projectId: null } : t,
-    );
+    todos.value = todos.value.map((t) => (t.projectId === id ? { ...t, projectId: null } : t));
 
     void localDbDeleteProject(id);
 
@@ -608,9 +594,7 @@ export const useTodoStore = defineStore("todos", () => {
   }
 
   function updateArea(id: string, patch: Partial<Area>) {
-    areas.value = areas.value.map((a) =>
-      a.id === id ? { ...a, ...patch } : a,
-    );
+    areas.value = areas.value.map((a) => (a.id === id ? { ...a, ...patch } : a));
   }
 
   function removeArea(id: string) {
@@ -618,13 +602,9 @@ export const useTodoStore = defineStore("todos", () => {
 
     // Unlink projects & todos from removed area
 
-    projects.value = projects.value.map((p) =>
-      p.areaId === id ? { ...p, areaId: null } : p,
-    );
+    projects.value = projects.value.map((p) => (p.areaId === id ? { ...p, areaId: null } : p));
 
-    todos.value = todos.value.map((t) =>
-      t.areaId === id ? { ...t, areaId: null } : t,
-    );
+    todos.value = todos.value.map((t) => (t.areaId === id ? { ...t, areaId: null } : t));
   }
 
   // ---- Tag CRUD ----
@@ -653,9 +633,7 @@ export const useTodoStore = defineStore("todos", () => {
     // Remove tag from all todos
 
     todos.value = todos.value.map((t) =>
-      t.tagIds.includes(id)
-        ? { ...t, tagIds: t.tagIds.filter((tid) => tid !== id) }
-        : t,
+      t.tagIds.includes(id) ? { ...t, tagIds: t.tagIds.filter((tid) => tid !== id) } : t,
     );
   }
 
@@ -670,9 +648,7 @@ export const useTodoStore = defineStore("todos", () => {
   }
 
   function updateHeading(id: string, patch: Partial<Heading>) {
-    headings.value = headings.value.map((h) =>
-      h.id === id ? { ...h, ...patch } : h,
-    );
+    headings.value = headings.value.map((h) => (h.id === id ? { ...h, ...patch } : h));
   }
 
   function removeHeading(id: string) {
@@ -680,9 +656,7 @@ export const useTodoStore = defineStore("todos", () => {
 
     // Clear headingId from todos that referenced it
 
-    todos.value = todos.value.map((t) =>
-      t.headingId === id ? { ...t, headingId: null } : t,
-    );
+    todos.value = todos.value.map((t) => (t.headingId === id ? { ...t, headingId: null } : t));
   }
 
   async function emptyTrash() {

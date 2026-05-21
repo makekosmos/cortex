@@ -21,10 +21,7 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <div
-    class="kosmos-empty-state"
-    :class="{ 'kosmos-empty-state--compact': compact }"
-  >
+  <div class="kosmos-empty-state" :class="{ 'kosmos-empty-state--compact': compact }">
     <div v-if="$slots.icon" class="kosmos-empty-state__icon">
       <slot name="icon" />
     </div>

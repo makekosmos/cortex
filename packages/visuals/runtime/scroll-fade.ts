@@ -26,9 +26,7 @@ export interface InstallScrollFadeOptions {
  * (новый listener не регистрируется), чтобы случайный двойной вызов
  * в Vue setup() не накапливал handler'ы.
  */
-export function installScrollFadeListener(
-  options: InstallScrollFadeOptions = {},
-): () => void {
+export function installScrollFadeListener(options: InstallScrollFadeOptions = {}): () => void {
   const idleMs = options.idleMs ?? 600;
   const root = options.root ?? document;
 

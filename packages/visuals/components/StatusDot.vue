@@ -16,10 +16,7 @@ const props = withDefaults(defineProps<Props>(), {
 const rootRef = ref<HTMLElement | null>(null);
 const open = ref(false);
 
-const buttonClasses = computed(() => [
-  "kosmos-status-dot",
-  `kosmos-status-dot--${props.tone}`,
-]);
+const buttonClasses = computed(() => ["kosmos-status-dot", `kosmos-status-dot--${props.tone}`]);
 
 function toggle() {
   open.value = !open.value;

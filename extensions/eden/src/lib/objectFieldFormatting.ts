@@ -68,15 +68,11 @@ export function formatPlaytimeSeconds(value: unknown): string {
   const minutes = totalMinutes % 60;
 
   if (days > 0) {
-    return hours > 0
-      ? `${days} \u0434 ${hours} \u0447`
-      : `${days} \u0434`;
+    return hours > 0 ? `${days} \u0434 ${hours} \u0447` : `${days} \u0434`;
   }
 
   if (hours > 0) {
-    return minutes > 0
-      ? `${hours} \u0447 ${minutes} \u043c\u0438\u043d`
-      : `${hours} \u0447`;
+    return minutes > 0 ? `${hours} \u0447 ${minutes} \u043c\u0438\u043d` : `${hours} \u0447`;
   }
 
   return `${minutes} \u043c\u0438\u043d`;

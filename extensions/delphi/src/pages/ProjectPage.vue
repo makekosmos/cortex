@@ -1,13 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  shallowRef,
-  watch,
-} from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Circle, DollarSign, MoreHorizontal, Plus } from "lucide-vue-next";
 import { useQuickEntry } from "@/composables/useQuickEntry";
@@ -68,13 +60,9 @@ const project = computed(() => projects.value.find((p) => p.id === id.value));
 
 const todos = computed(() => (id.value ? store.todosForProject(id.value) : []));
 
-const activeTodos = computed(() =>
-  todos.value.filter((t) => !t.isCompleted && !t.isCancelled),
-);
+const activeTodos = computed(() => todos.value.filter((t) => !t.isCompleted && !t.isCancelled));
 
-const completedTodos = computed(() =>
-  todos.value.filter((t) => t.isCompleted || t.isCancelled),
-);
+const completedTodos = computed(() => todos.value.filter((t) => t.isCompleted || t.isCancelled));
 
 // ---------------------------------------------------------------------------
 // Time entries — read from ARK (Horologion / Strontium) and distribute price
@@ -237,10 +225,7 @@ function handleArchive() {
 
 <template>
   <!-- Project not found -->
-  <div
-    v-if="!project"
-    class="flex w-full min-w-0 flex-col items-center justify-center"
-  >
+  <div v-if="!project" class="flex w-full min-w-0 flex-col items-center justify-center">
     <p class="text-(--muted-foreground)">Проект не найден</p>
   </div>
 
@@ -252,17 +237,17 @@ function handleArchive() {
       :class="[wrapClass, 'flex min-h-8 items-center gap-2.5 px-7 pb-3 pt-6']"
       :style="wrapStyle"
     >
-      <Circle
-        :size="12"
-        :class="['shrink-0 fill-current', colorTagClass(project.colorTag)]"
-      />
+      <Circle :size="12" :class="['shrink-0 fill-current', colorTagClass(project.colorTag)]" />
 
       <div ref="titleGroupRef" :class="titleGroupClass" :style="titleGroupStyle">
         <input
           v-if="editing"
           ref="inputRef"
           v-model="editTitle"
-          :class="[titleClass, 'bg-transparent text-2xl font-bold text-(--foreground) outline-none']"
+          :class="[
+            titleClass,
+            'bg-transparent text-2xl font-bold text-(--foreground) outline-none',
+          ]"
           type="text"
           @blur="commitRename"
           @keydown.enter="commitRename"
@@ -294,9 +279,11 @@ function handleArchive() {
         <span
           v-if="totalBillableSeconds > 0"
           class="ml-1 rounded-full bg-(--secondary) px-2.5 py-0.5 text-xs text-(--muted-foreground)"
-          :title="projectHourlyRate !== null
-            ? `${formatPrice(projectHourlyRate)} / час`
-            : 'Сумма оплачиваемого времени по задачам проекта'"
+          :title="
+            projectHourlyRate !== null
+              ? `${formatPrice(projectHourlyRate)} / час`
+              : 'Сумма оплачиваемого времени по задачам проекта'
+          "
         >
           {{ formatHours(totalBillableHours) }}
           <template v-if="projectHourlyRate !== null">

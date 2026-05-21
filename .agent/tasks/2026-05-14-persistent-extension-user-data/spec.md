@@ -49,6 +49,7 @@ Extension installer MVP (см. `2026-05-14-extension-installer-mvp/`) делае
 ## Файлы
 
 **Modify:**
+
 - `shell/electron/extension-host.ts` — userData IPC handlers + window state в `openExtension`.
 - `shell/electron/extension-preload.ts` — `kepler.userData.*` namespace.
 - `shell/scripts/uninstall-extension.mjs` — `--purge-data` флаг.
@@ -57,6 +58,7 @@ Extension installer MVP (см. `2026-05-14-extension-installer-mvp/`) делае
 - `docs-site/apps/kepler-roadmap.md`
 
 **Generated (через `docs:sync`):**
+
 - `AGENTS.md`, `CLAUDE.md`, `docs-site/public/llms.txt`.
 
 ## План коммитов

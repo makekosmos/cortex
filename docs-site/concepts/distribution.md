@@ -1,10 +1,11 @@
 # Distribution
 
 ::: tip TL;DR
+
 - **Kepler launcher** дистрибутится через `yoso-industries/kepler-releases` (NSIS installer + electron-updater).
 - **Расширения** дистрибутятся через `yoso-industries/kosmos-extensions` (per-extension tagged releases + `catalog.json`).
 - **Source code** остаётся в `ksanrse/kepler` monorepo. Distribution repos — binary only.
-:::
+  :::
 
 ## Двухрепозиторная Raycast-style модель
 
@@ -55,15 +56,15 @@ any → checking (manual or periodic)
 
 `UpdateState` (см. `autoupdater-host.ts`):
 
-| kind | поля |
-|---|---|
-| `idle` | — |
-| `checking` | — |
-| `not-available` | `checkedAt: number` |
-| `available` | `version: string` |
-| `downloading` | `version: string`, `percent: number` |
-| `downloaded` | `version: string` |
-| `error` | `message: string` |
+| kind            | поля                                 |
+| --------------- | ------------------------------------ |
+| `idle`          | —                                    |
+| `checking`      | —                                    |
+| `not-available` | `checkedAt: number`                  |
+| `available`     | `version: string`                    |
+| `downloading`   | `version: string`, `percent: number` |
+| `downloaded`    | `version: string`                    |
+| `error`         | `message: string`                    |
 
 Broadcast идёт на IPC канал **`kepler:settings:update:state`** для **всех**
 `BrowserWindow`'ов (launcher / settings / extensions). UI слушает и
@@ -72,27 +73,22 @@ Broadcast идёт на IPC канал **`kepler:settings:update:state`** для
 ### Public API (main process)
 
 ```ts
-import {
-  setupAutoUpdater,
-  check,
-  install,
-  getState,
-} from "./autoupdater-host";
+import { setupAutoUpdater, check, install, getState } from "./autoupdater-host";
 
-setupAutoUpdater({ isDev });   // init + первый check + 6h interval
-await check();                  // manual force-check (idempotent)
-install();                      // quitAndInstall — для click-to-install
-getState();                     // текущий UpdateState (snapshot)
+setupAutoUpdater({ isDev }); // init + первый check + 6h interval
+await check(); // manual force-check (idempotent)
+install(); // quitAndInstall — для click-to-install
+getState(); // текущий UpdateState (snapshot)
 ```
 
 ### IPC handlers / renderer API
 
-| IPC channel | direction | payload |
-|---|---|---|
-| `kepler:settings:update:check` | invoke | → `UpdateState` |
-| `kepler:settings:update:install` | invoke | → `void` |
-| `kepler:settings:update:state` | invoke | → `UpdateState` (snapshot) |
-| `kepler:settings:update:state` | event (main→renderer) | `UpdateState` (push) |
+| IPC channel                      | direction             | payload                    |
+| -------------------------------- | --------------------- | -------------------------- |
+| `kepler:settings:update:check`   | invoke                | → `UpdateState`            |
+| `kepler:settings:update:install` | invoke                | → `void`                   |
+| `kepler:settings:update:state`   | invoke                | → `UpdateState` (snapshot) |
+| `kepler:settings:update:state`   | event (main→renderer) | `UpdateState` (push)       |
 
 Renderer (через preload `window.kepler.settings.update`):
 
@@ -110,12 +106,12 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 `shell/src/views/SettingsView.vue` рендерит sticky banner высотой 32px
 сверху Settings окна, если `state.kind !== "idle"` и `!= "not-available"`.
 
-| State | Текст | Icon | Поведение клика |
-|---|---|---|---|
-| `available` | «Обновление Kepler X.Y.Z — нажми чтобы скачать» | `ArrowUpCircle` | autoDownload уже идёт, click no-op (или повторный check) |
-| `downloading` | progress bar + `{percent}%` | `Loader2` (spin) | disabled |
-| `downloaded` | «Обновление готово — нажми чтобы установить и перезапустить» | `ArrowUpCircle` | `install()` → quitAndInstall |
-| `error` | сообщение error'а | — | retry check |
+| State         | Текст                                                        | Icon             | Поведение клика                                          |
+| ------------- | ------------------------------------------------------------ | ---------------- | -------------------------------------------------------- |
+| `available`   | «Обновление Kepler X.Y.Z — нажми чтобы скачать»              | `ArrowUpCircle`  | autoDownload уже идёт, click no-op (или повторный check) |
+| `downloading` | progress bar + `{percent}%`                                  | `Loader2` (spin) | disabled                                                 |
+| `downloaded`  | «Обновление готово — нажми чтобы установить и перезапустить» | `ArrowUpCircle`  | `install()` → quitAndInstall                             |
+| `error`       | сообщение error'а                                            | —                | retry check                                              |
 
 Иконки — `lucide-vue-next`.
 
@@ -155,6 +151,7 @@ bun run --cwd shell build
 ```
 
 Что делает:
+
 1. `cargo build --release` для `kepler-backend.exe` + `ark-core-rpc.exe`.
 2. `tsc && vite build` для renderer / main / preload.
 3. `vite build` для каждого extension (`build:extensions`).
@@ -171,6 +168,7 @@ Marketplace или drag-and-drop `.kext` файлов.
 
 Single source of truth для launcher'а — что доступно установить.
 Auto-генерируется из GitHub Releases (`gh api releases`):
+
 - Группировка по prefix tag'а (`horologion-`, `delphi-`, …).
 - Per group выбирается **highest semver**.
 - Metadata (name, description, keplerApiVersion) тянется из локального
@@ -205,6 +203,7 @@ Launcher tolerant к unknown fields. Breaking change → bump `schemaVersion` +
 ### Marketplace UI
 
 Settings → **Расширения** — плоский список установленных, каталог используется только для lookup версий (без отдельного «Маркетплейс» sub-tab'а и без grid карточек):
+
 - На mount таб fetch'ит `catalog.json` через
   `window.kepler.extension.catalogFetch()`.
 - Cache 1h в main process (`extension-marketplace.ts → fetchCatalog`).
@@ -216,6 +215,7 @@ Settings → **Расширения** — плоский список устан
 ### Periodic check
 
 `startPeriodicCatalogCheck()`:
+
 - Initial fetch на `whenReady` (вместе с `setupAutoUpdater()`).
 - `setInterval(24h)` для перефетча в фоне.
 - Skip в `KOSMOS_TEST_MODE=1`.
@@ -223,6 +223,7 @@ Settings → **Расширения** — плоский список устан
 ### Install flow
 
 `window.kepler.extension.installFromUrl(downloadUrl, sha256)`:
+
 1. HTTPS GET → tmp файл.
 2. SHA-256 validate (если передан, обычно из catalog).
 3. Delegate в `installFromPath` из `extension-installer.ts` (Wave 1 infra:
@@ -230,12 +231,12 @@ Settings → **Расширения** — плоский список устан
 
 ## Команды
 
-| Команда | Описание |
-|---|---|
-| `bun run --cwd shell build` | Полный build launcher'а + publish в kepler-releases (нужен `GH_TOKEN`) |
-| `bun run --cwd shell ext:publish <id>` | Build extension → .kext → release в kosmos-extensions |
-| `bun run --cwd shell ext:publish-all` | То же для всех extensions |
-| `bun run --cwd shell ext:catalog -- <out-path>` | Регенерация catalog.json из GitHub releases |
+| Команда                                         | Описание                                                               |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
+| `bun run --cwd shell build`                     | Полный build launcher'а + publish в kepler-releases (нужен `GH_TOKEN`) |
+| `bun run --cwd shell ext:publish <id>`          | Build extension → .kext → release в kosmos-extensions                  |
+| `bun run --cwd shell ext:publish-all`           | То же для всех extensions                                              |
+| `bun run --cwd shell ext:catalog -- <out-path>` | Регенерация catalog.json из GitHub releases                            |
 
 `shell/scripts/publish-extension.mjs` использует `gh release create` —
 автоматически берёт `gh auth token` если `KEPLER_GH_PATH` не указан.
@@ -245,12 +246,14 @@ Settings → **Расширения** — плоский список устан
 ### Submission flow
 
 Сейчас (Phase 1):
+
 1. Maintainer (`ksanrse`) пишет / правит extension в `extensions/<id>/`.
 2. `bun run --cwd shell ext:publish <id>` → release в `kosmos-extensions`.
 3. `bun run --cwd shell ext:catalog -- .tmp/kosmos-extensions/catalog.json`.
 4. Commit + push catalog.json в `kosmos-extensions` main branch.
 
 Phase 2 (когда появятся внешние contributors):
+
 - Fork main `yoso-industries/kepler` monorepo.
 - PR с extension'ом в `extensions/<id>/`.
 - Maintainer review + merge + publish.

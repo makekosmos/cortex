@@ -21,13 +21,7 @@ import type { Area, Project, Tag, TodoItem } from "@/types/task";
 // Types & helpers
 // ---------------------------------------------------------------------------
 
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 interface ArkObjectRecord {
   id: string;
@@ -41,10 +35,7 @@ interface ArkObjectRecord {
 }
 
 interface KeplerArk {
-  request: <T = unknown>(
-    operation: string,
-    params?: Record<string, unknown>,
-  ) => Promise<T>;
+  request: <T = unknown>(operation: string, params?: Record<string, unknown>) => Promise<T>;
   subscribe: (event: string, handler: (payload: unknown) => void) => () => void;
 }
 
@@ -67,9 +58,7 @@ function asObject(value: unknown): Record<string, unknown> {
 }
 
 function asStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((v): v is string => typeof v === "string")
-    : [];
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
 function asBoolean(value: unknown, fallback: boolean): boolean {
@@ -91,9 +80,7 @@ function textToArkContentJson(text: string | null | undefined): JsonValue {
   }
   return {
     type: "doc",
-    content: [
-      { type: "paragraph", content: [{ type: "text", text: trimmed }] },
-    ],
+    content: [{ type: "paragraph", content: [{ type: "text", text: trimmed }] }],
   };
 }
 
@@ -125,7 +112,10 @@ function extractPlainTextFromContentJson(value: unknown): string | null {
     }
   }
   visit(value);
-  const normalized = chunks.join("").replace(/\n{3,}/g, "\n\n").trim();
+  const normalized = chunks
+    .join("")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return normalized || null;
 }
 
@@ -185,8 +175,7 @@ function todoToArkTaskObject(todo: TodoItem): ArkObjectRecord {
 function arkTaskObjectToTodo(object: ArkObjectRecord): TodoItem {
   const props = asObject(object.propsJson);
   const description =
-    asNullableString(props.description) ??
-    extractPlainTextFromContentJson(object.contentJson);
+    asNullableString(props.description) ?? extractPlainTextFromContentJson(object.contentJson);
   return {
     id: object.id.toLowerCase(),
     title: object.title ?? "",
@@ -218,10 +207,7 @@ function arkTaskObjectToTodo(object: ArkObjectRecord): TodoItem {
         ? (props.recurrence_rule as TodoItem["recurrenceRule"])
         : null,
     billable: asBoolean(props.billable, false),
-    price:
-      typeof props.price === "number" && Number.isFinite(props.price)
-        ? props.price
-        : null,
+    price: typeof props.price === "number" && Number.isFinite(props.price) ? props.price : null,
   };
 }
 
@@ -339,9 +325,7 @@ export interface ArkTaskChange {
  * Caller должен фильтровать по `typeId === "task_obj"` (для upserted) и/или
  * по наличию id в локальном кэше (для deleted — type_id в payload отсутствует).
  */
-export function subscribeArkObjectChanges(
-  handler: (change: ArkTaskChange) => void,
-): () => void {
+export function subscribeArkObjectChanges(handler: (change: ArkTaskChange) => void): () => void {
   const ark = kepler();
   if (!ark) return () => {};
   const offU = ark.subscribe("object_upserted", (payload) => {
@@ -409,10 +393,7 @@ function warnOnce(channel: string, detail?: string): void {
   );
 }
 
-async function invokeChannel(
-  channel: string,
-  args: unknown[],
-): Promise<unknown> {
+async function invokeChannel(channel: string, args: unknown[]): Promise<unknown> {
   switch (channel) {
     // ---- DB / Ark task ops ----
     case "db:loadAll":
@@ -528,10 +509,7 @@ async function invokeChannel(
 // Event channel mapping (electronAPI.on)
 // ---------------------------------------------------------------------------
 
-function subscribeChannel(
-  channel: string,
-  handler: (...args: unknown[]) => void,
-): () => void {
+function subscribeChannel(channel: string, handler: (...args: unknown[]) => void): () => void {
   const ark = kepler();
   if (!ark) return () => {};
 
@@ -560,8 +538,7 @@ function subscribeChannel(
 // ---------------------------------------------------------------------------
 
 const electronApiShim = {
-  invoke: (channel: string, ...args: unknown[]): Promise<unknown> =>
-    invokeChannel(channel, args),
+  invoke: (channel: string, ...args: unknown[]): Promise<unknown> => invokeChannel(channel, args),
   on: (channel: string, handler: (...args: unknown[]) => void): (() => void) =>
     subscribeChannel(channel, handler),
   // fs / db namespaces намеренно отсутствуют:

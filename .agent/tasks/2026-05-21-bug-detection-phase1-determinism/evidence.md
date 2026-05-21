@@ -2,12 +2,12 @@
 
 ## Summary
 
-| Метрика | Baseline (clean main) | After (Phase 1) | Δ |
-|---|---|---|---|
-| Wall-clock `bun run test:e2e` | **12m45s** | **10m36s** | **−2m09s (−16.9%)** |
-| Passed | 79 | 79 | — |
-| Failed | 2 (pre-existing) | 2 (same) | 0 new |
-| Skipped | 0 | 1 | +1 (`eden-trailing-paragraph.spec.ts:249` — taskRef trailing; не относится к Phase 1) |
+| Метрика                       | Baseline (clean main) | After (Phase 1) | Δ                                                                                     |
+| ----------------------------- | --------------------- | --------------- | ------------------------------------------------------------------------------------- |
+| Wall-clock `bun run test:e2e` | **12m45s**            | **10m36s**      | **−2m09s (−16.9%)**                                                                   |
+| Passed                        | 79                    | 79              | —                                                                                     |
+| Failed                        | 2 (pre-existing)      | 2 (same)        | 0 new                                                                                 |
+| Skipped                       | 0                     | 1               | +1 (`eden-trailing-paragraph.spec.ts:249` — taskRef trailing; не относится к Phase 1) |
 
 Pre-existing failures (одни и те же в baseline и after, не введены Phase 1'ом):
 
@@ -66,6 +66,7 @@ PASS.
 ### AC7 — Никаких regression'ов в `forbidden.md::E2e тесты — всегда невидимые`
 
 В правках main.ts:
+
 - `broadcastBackendEvent` — вызывает `webContents.send(...)`, никаких `.show()` / `.focus()` / `.setAlwaysOnTop()`.
 - Test-rig IPC handlers — pure IPC, без window operations.
 

@@ -40,9 +40,7 @@ const extensions = readdirSync(extensionsRoot, { withFileTypes: true })
   .filter(Boolean);
 
 if (extensions.length === 0) {
-  console.error(
-    "[dev:extensions] no Vue extensions with devPort found — nothing to start",
-  );
+  console.error("[dev:extensions] no Vue extensions with devPort found — nothing to start");
   process.exit(1);
 }
 

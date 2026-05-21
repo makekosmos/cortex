@@ -9,14 +9,12 @@ const config: StorybookConfig = {
     options: {},
   },
 
-  stories: [
-    "../components/**/*.stories.@(js|jsx|mjs|ts|tsx)",
-  ],
+  stories: ["../components/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
 
   addons: [
     getAbsolutePath("@storybook/addon-docs"),
     getAbsolutePath("@storybook/addon-vitest"),
-    getAbsolutePath("@storybook/addon-vitest")
+    getAbsolutePath("@storybook/addon-vitest"),
   ],
 
   core: {
@@ -46,7 +44,7 @@ const config: StorybookConfig = {
       "vue-router",
     ];
     return config;
-  }
+  },
 };
 
 export default config;

@@ -6,49 +6,31 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt"],
       "summary": "StorageBackend::apply_entity returns Result<(), String>."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt",
-        "cargo-test-regression.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt", "cargo-test-regression.txt"],
       "summary": "SqliteStorageBackend apply propagates JSON decode, database CRUD, and unknown entity type errors."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt",
-        "cargo-test-full.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt", "cargo-test-full.txt"],
       "summary": "Sync server/client update vector, accepted count, callbacks, and rebroadcasts only after successful apply."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt",
-        "cargo-check.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt", "cargo-check.txt"],
       "summary": "RPC and UniFFI broadcast paths surface apply failures."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": [
-        "cargo-test-regression.txt",
-        "cargo-test-full.txt"
-      ],
+      "evidence": ["cargo-test-regression.txt", "cargo-test-full.txt"],
       "summary": "Regression tests prove invalid payloads and unknown entity types return errors."
     },
     {

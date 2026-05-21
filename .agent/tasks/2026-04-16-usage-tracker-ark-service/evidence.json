@@ -18,10 +18,7 @@
     },
     "AC2": {
       "status": "PASS",
-      "evidence": [
-        "packages/ark-core/rust/src/db.rs",
-        "services/usage-tracker/src/main.rs"
-      ]
+      "evidence": ["packages/ark-core/rust/src/db.rs", "services/usage-tracker/src/main.rs"]
     },
     "AC3": {
       "status": "PASS",
@@ -33,10 +30,7 @@
     },
     "AC4": {
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/backend.ts",
-        "apps/arrancador/package.json"
-      ]
+      "evidence": ["apps/arrancador/electron/main/backend.ts", "apps/arrancador/package.json"]
     },
     "AC5": {
       "status": "PASS",
@@ -58,11 +52,7 @@
     },
     "AC7": {
       "status": "PASS",
-      "evidence": [
-        "package.json",
-        "bun.lock",
-        "packages/apple-like/package.json"
-      ]
+      "evidence": ["package.json", "bun.lock", "packages/apple-like/package.json"]
     },
     "AC8": {
       "status": "PASS",

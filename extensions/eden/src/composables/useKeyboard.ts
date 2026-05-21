@@ -98,12 +98,7 @@ export function useKeyboard() {
 
     // Chord Ctrl+K → Z — переключить zen mode.
 
-    if (
-      !mod &&
-      e.code === "KeyZ" &&
-      chordExpiresAt > 0 &&
-      Date.now() <= chordExpiresAt
-    ) {
+    if (!mod && e.code === "KeyZ" && chordExpiresAt > 0 && Date.now() <= chordExpiresAt) {
       e.preventDefault();
       chordExpiresAt = 0;
 

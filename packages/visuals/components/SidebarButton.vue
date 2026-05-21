@@ -15,20 +15,31 @@ const emit = defineEmits<{
 }>();
 
 function className(active: boolean) {
-  return active
-    ? "kosmos-sidebar-btn kosmos-sidebar-btn--active"
-    : "kosmos-sidebar-btn";
+  return active ? "kosmos-sidebar-btn kosmos-sidebar-btn--active" : "kosmos-sidebar-btn";
 }
 </script>
 
 <template>
   <RouterLink v-if="to" :to="to" custom v-slot="{ href, navigate, isActive }">
-    <a :href="href" :class="className(active ?? isActive)" :data-testid="testId" :title="label" @click="navigate">
+    <a
+      :href="href"
+      :class="className(active ?? isActive)"
+      :data-testid="testId"
+      :title="label"
+      @click="navigate"
+    >
       <component :is="icon" :size="18" />
       <span v-if="label" class="truncate">{{ label }}</span>
     </a>
   </RouterLink>
-  <button v-else type="button" :class="className(active ?? false)" :data-testid="testId" :title="label" @click="emit('click')">
+  <button
+    v-else
+    type="button"
+    :class="className(active ?? false)"
+    :data-testid="testId"
+    :title="label"
+    @click="emit('click')"
+  >
     <component :is="icon" :size="18" />
     <span v-if="label" class="truncate">{{ label }}</span>
   </button>

@@ -81,6 +81,6 @@ if (purgeData) {
   }
 } else if (existsSync(dataTarget)) {
   console.log(
-    `[ext:uninstall] ${id}: user data preserved at ${dataTarget} (pass --purge-data to also remove)`
+    `[ext:uninstall] ${id}: user data preserved at ${dataTarget} (pass --purge-data to also remove)`,
   );
 }

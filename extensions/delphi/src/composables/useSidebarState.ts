@@ -1,12 +1,4 @@
-import {
-  computed,
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  shallowRef,
-  watch,
-} from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 
 // Module-level singleton — shared across all component instances
 const sidebarHidden = shallowRef(false);
@@ -37,9 +29,7 @@ export function useSidebarState() {
     transform: `translate3d(${titleTranslateX.value}px, 0, 0)`,
     transition: "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)",
   }));
-  const titleClass = computed(() =>
-    sidebarHidden.value ? "text-center" : "text-left",
-  );
+  const titleClass = computed(() => (sidebarHidden.value ? "text-center" : "text-left"));
 
   function updateTitleTranslate() {
     const wrapEl = titleWrapRef.value;

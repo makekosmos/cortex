@@ -19,8 +19,7 @@ const renameMap = {
   "apps/kepler/": "apps/kosmos/",
   "services/kepler-backend/": "services/kosmos-backend/",
   "services/kepler-watcher/": "services/kosmos-watcher/",
-  "legacy/usage-tracker/src/kepler_client.rs":
-    "services/usage-tracker/src/cosmos_client.rs",
+  "legacy/usage-tracker/src/kepler_client.rs": "services/usage-tracker/src/cosmos_client.rs",
 };
 
 function deriveOldPath(newPath) {
@@ -84,10 +83,10 @@ const errors = [];
 for (const newPath of broken) {
   const oldPath = deriveOldPath(newPath);
   try {
-    const headContent = execSync(
-      `git show HEAD:"${oldPath}"`,
-      { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
-    );
+    const headContent = execSync(`git show HEAD:"${oldPath}"`, {
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024,
+    });
     const swapped = swap(headContent);
     writeFileSync(newPath, swapped, { encoding: "utf8" });
     console.log(`fixed: ${newPath}  (HEAD: ${oldPath})`);

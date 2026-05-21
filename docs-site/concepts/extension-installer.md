@@ -34,19 +34,21 @@ extension.kext        (ZIP)
 
 ```jsonc
 {
-  "id": "my-extension",                // required, [\w][\w.-]* — basename-safe
-  "name": "My Extension",              // required, user-facing
-  "version": "1.0.0",                  // semver MAJOR.MINOR.PATCH
-  "description": "Что делает",         // optional, одна строка
-  "author": "Имя автора",              // optional, info only
-  "permissions": ["ark", "userData"],  // optional, documentation only — runtime не enforce
-  "keplerApiVersion": "^1.0.0",        // semver range — см. ниже
-  "kind": "vue",                       // "vue" (default static) — определяет preload
-  "icon": "icon.png",                  // путь к иконке внутри .kext
-  "entryHtml": "dist/index.html",      // для vue — после Vite build; для static — "index.html"
-  "devPort": 5181,                     // optional, Vite dev port (только developer mode)
-  "width": 480, "height": 560,         // default size окна
-  "minWidth": 320, "minHeight": 280
+  "id": "my-extension", // required, [\w][\w.-]* — basename-safe
+  "name": "My Extension", // required, user-facing
+  "version": "1.0.0", // semver MAJOR.MINOR.PATCH
+  "description": "Что делает", // optional, одна строка
+  "author": "Имя автора", // optional, info only
+  "permissions": ["ark", "userData"], // optional, documentation only — runtime не enforce
+  "keplerApiVersion": "^1.0.0", // semver range — см. ниже
+  "kind": "vue", // "vue" (default static) — определяет preload
+  "icon": "icon.png", // путь к иконке внутри .kext
+  "entryHtml": "dist/index.html", // для vue — после Vite build; для static — "index.html"
+  "devPort": 5181, // optional, Vite dev port (только developer mode)
+  "width": 480,
+  "height": 560, // default size окна
+  "minWidth": 320,
+  "minHeight": 280,
 }
 ```
 
@@ -66,7 +68,7 @@ Bump правила:
 - minor (1.x.0): новый method/event, старые работают;
 - major (X.0.0): breaking change.
 
-Поддерживаемые формы range: `1.2.3`, `^1.2.3`, `~1.2.3`, `>=1.2.3`, `>1.2.3`, `<=1.2.3`, `<1.2.3`, `*`, `1.2.3 - 2.0.0`, `1.x`, `1.2.x`, OR через ` || `. Реализация — `shell/electron/kepler-api.ts → satisfiesSemver()` (минимальная, без `node-semver`).
+Поддерживаемые формы range: `1.2.3`, `^1.2.3`, `~1.2.3`, `>=1.2.3`, `>1.2.3`, `<=1.2.3`, `<1.2.3`, `*`, `1.2.3 - 2.0.0`, `1.x`, `1.2.x`, OR через `||`. Реализация — `shell/electron/kepler-api.ts → satisfiesSemver()` (минимальная, без `node-semver`).
 
 ## Install flow
 
@@ -160,14 +162,14 @@ bun run --cwd shell ext:uninstall <id> --purge-data
 
 Через `window.kepler.extension.*` (см. `shell/shared/ipc-types.ts → KeplerApi.extension`):
 
-| Метод | Назначение |
-|---|---|
-| `installPreview(path)` | manifest preview без extract'а — для install dialog |
-| `installDo(path)` | собственно install с backup'ом |
-| `installedList()` | list installed user-extensions для Settings UI |
-| `revert(id, timestamp?)` | restore from backup |
-| `backupsList(id)` | ISO-timestamp'ы доступных backup'ов |
-| `uninstall(id)` | rm `extensions/<id>/` (user data preserved) |
+| Метод                    | Назначение                                          |
+| ------------------------ | --------------------------------------------------- |
+| `installPreview(path)`   | manifest preview без extract'а — для install dialog |
+| `installDo(path)`        | собственно install с backup'ом                      |
+| `installedList()`        | list installed user-extensions для Settings UI      |
+| `revert(id, timestamp?)` | restore from backup                                 |
+| `backupsList(id)`        | ISO-timestamp'ы доступных backup'ов                 |
+| `uninstall(id)`          | rm `extensions/<id>/` (user data preserved)         |
 
 ## Persistent user data
 
@@ -187,7 +189,7 @@ bun run --cwd shell ext:uninstall <id> --purge-data
 - **Install** трогает только `extensions/<id>/`. `extensions-data/<id>/` сохраняется через все обновления.
 - **Revert** возвращает только код, user data не трогает.
 - **Preload API**: `window.kepler.userData.{readJson, writeJson, readFile, writeFile, path}` — см. [Extension host → User data](/concepts/extension-host#user-data).
-:::
+  :::
 
 ## Что НЕ входит
 

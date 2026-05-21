@@ -3,11 +3,7 @@
 declare module "*.vue" {
   import type { DefineComponent } from "vue";
 
-  const component: DefineComponent<
-    Record<string, unknown>,
-    Record<string, unknown>,
-    unknown
-  >;
+  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>;
 
   export default component;
 }
@@ -331,15 +327,9 @@ interface Window {
 
     deleteNoteType: (noteTypeId: string) => Promise<boolean>;
 
-    moveEntryToFolder: (
-      entryId: string,
-      folderId: string | null,
-    ) => Promise<boolean>;
+    moveEntryToFolder: (entryId: string, folderId: string | null) => Promise<boolean>;
 
-    moveFolderToFolder: (
-      folderId: string,
-      parentId: string | null,
-    ) => Promise<MoveFolderResult>;
+    moveFolderToFolder: (folderId: string, parentId: string | null) => Promise<MoveFolderResult>;
 
     deleteEntry: (entryId: string) => Promise<DeleteEntryResult>;
 
@@ -349,9 +339,7 @@ interface Window {
       widget: { width: number; hidden: boolean };
     }>;
 
-    updateSidebarConfig: (config: {
-      widget?: { width?: number; hidden?: boolean };
-    }) => Promise<{
+    updateSidebarConfig: (config: { widget?: { width?: number; hidden?: boolean } }) => Promise<{
       widget: { width: number; hidden: boolean };
     }>;
 
@@ -359,13 +347,9 @@ interface Window {
 
     listTrashEntries: () => Promise<Entry[]>;
 
-    restoreEntry: (
-      entryId: string,
-    ) => Promise<{ ok: boolean; entryId?: string }>;
+    restoreEntry: (entryId: string) => Promise<{ ok: boolean; entryId?: string }>;
 
-    permanentDeleteEntry: (
-      entryId: string,
-    ) => Promise<{ ok: boolean; entryId?: string }>;
+    permanentDeleteEntry: (entryId: string) => Promise<{ ok: boolean; entryId?: string }>;
 
     purgeExpiredTrash: () => Promise<{ ok: boolean; purgedCount: number }>;
 
@@ -396,10 +380,7 @@ interface Window {
   // vite dev server).
   kepler?: {
     ark: {
-      request: <T = unknown>(
-        operation: string,
-        params?: Record<string, unknown>,
-      ) => Promise<T>;
+      request: <T = unknown>(operation: string, params?: Record<string, unknown>) => Promise<T>;
       subscribe: (event: string, handler: (payload: unknown) => void) => () => void;
     };
     window?: {

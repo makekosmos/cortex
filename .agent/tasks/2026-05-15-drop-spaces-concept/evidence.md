@@ -3,6 +3,7 @@
 ## Pre-state
 
 `%APPDATA%\Kosmos\` (2026-05-15 00:30):
+
 - `ark.db` (top-level) — 22.91 MB. objects: 4 note_obj. usage_sessions:
   10018, usage_events: 26734, tracked_apps: 103. Legacy Delphi tables:
   todos / areas / headings / projects / tags (заполнены до Phase 4
@@ -44,6 +45,7 @@ DETACH DATABASE src;
 ```
 
 Post-merge counts top-level ark.db:
+
 - object_types: 5 (game_obj, note_obj, tag_obj, task_obj, time_entry_obj)
 - objects: 33 (17 game_obj + 6 note_obj + 6 time_entry_obj + 4 task_obj)
 - usage_sessions: 10018 (сохранены)
@@ -51,6 +53,7 @@ Post-merge counts top-level ark.db:
 ### 3. Code refactor
 
 Коммиты:
+
 - `0c4c715 feat(shell)!: drop spaces concept — single DB per user`
 - `e70a4c0 chore(@kepler/ark): mark selected-space helpers @deprecated`
 

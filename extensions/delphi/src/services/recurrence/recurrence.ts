@@ -1,9 +1,4 @@
-import {
-  Frequency,
-  type RecurrenceData,
-  RecurrenceType,
-  type TodoItem,
-} from "@/types/task";
+import { Frequency, type RecurrenceData, RecurrenceType, type TodoItem } from "@/types/task";
 
 const uuid = () => crypto.randomUUID();
 

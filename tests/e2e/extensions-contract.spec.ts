@@ -110,19 +110,20 @@ for (const manifest of manifests) {
         // -- commands check --
         if (contract.commands && contract.commands.length > 0) {
           const registered = await extWindow.evaluate(async () => {
-            const kepler = (window as unknown as {
-              kepler?: {
-                ark: {
-                  request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
+            const kepler = (
+              window as unknown as {
+                kepler?: {
+                  ark: {
+                    request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
+                  };
                 };
-              };
-            }).kepler;
+              }
+            ).kepler;
             if (!kepler) return [];
             try {
-              const res = await kepler.ark.request<{ commands?: Array<{ id: string }> } | Array<{ id: string }>>(
-                "commands.list",
-                {},
-              );
+              const res = await kepler.ark.request<
+                { commands?: Array<{ id: string }> } | Array<{ id: string }>
+              >("commands.list", {});
               if (Array.isArray(res)) return res.map((c) => c.id);
               if (res && "commands" in res && Array.isArray(res.commands)) {
                 return res.commands.map((c) => c.id);
@@ -151,13 +152,15 @@ for (const manifest of manifests) {
 
           const result = await extWindow.evaluate(
             async (payload) => {
-              const kepler = (window as unknown as {
-                kepler?: {
-                  ark: {
-                    request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
+              const kepler = (
+                window as unknown as {
+                  kepler?: {
+                    ark: {
+                      request: <T = unknown>(op: string, params?: unknown) => Promise<T>;
+                    };
                   };
-                };
-              }).kepler;
+                }
+              ).kepler;
               if (!kepler) return { stage: "no-kepler", error: "no kepler bridge" };
 
               try {

@@ -5,17 +5,20 @@ import { formatObjectFieldValue } from "@/lib/objectFieldFormatting";
 import type { ResolvedNoteTypeField } from "@/lib/typedNotes";
 import ObjectPropertyPicker from "./ObjectPropertyPicker.vue";
 
-const props = withDefaults(defineProps<{
-  field: ResolvedNoteTypeField;
-  modelValue: unknown;
-  layout: "inline" | "column";
-  relationCandidates: Entry[];
-  entriesById: Map<string, Entry>;
-  readonly?: boolean;
-  variant?: "featured-inline" | "featured-column" | "secondary";
-}>(), {
-  variant: "secondary",
-});
+const props = withDefaults(
+  defineProps<{
+    field: ResolvedNoteTypeField;
+    modelValue: unknown;
+    layout: "inline" | "column";
+    relationCandidates: Entry[];
+    entriesById: Map<string, Entry>;
+    readonly?: boolean;
+    variant?: "featured-inline" | "featured-column" | "secondary";
+  }>(),
+  {
+    variant: "secondary",
+  },
+);
 
 const emit = defineEmits<{
   "update:modelValue": [value: unknown];
@@ -23,10 +26,11 @@ const emit = defineEmits<{
 }>();
 
 const isReadonly = computed(() => props.readonly === true || props.field.read_only);
-const isSelectLike = computed(() =>
-  props.field.kind === "select" ||
-  props.field.kind === "multi_select" ||
-  props.field.kind === "relation",
+const isSelectLike = computed(
+  () =>
+    props.field.kind === "select" ||
+    props.field.kind === "multi_select" ||
+    props.field.kind === "relation",
 );
 const usesCustomPicker = computed(() => isSelectLike.value);
 
@@ -51,9 +55,7 @@ const selectedValues = computed(() =>
       : [],
 );
 
-const relationIds = computed(() =>
-  props.field.kind === "relation" ? selectedValues.value : [],
-);
+const relationIds = computed(() => (props.field.kind === "relation" ? selectedValues.value : []));
 
 const filteredRelationCandidates = computed(() => {
   const allowedTypes = props.field.allowed_object_types?.filter(Boolean) ?? [];
@@ -369,7 +371,10 @@ function formatOptionLabel(option: string) {
   background: var(--background);
   color: var(--foreground);
   font: inherit;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .object-property-field__input:hover {

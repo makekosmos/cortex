@@ -2,13 +2,14 @@
 
 `packages/` — это библиотеки и SDK, **которые что-то импортирует**. Долгоживущие daemon'ы и сервера лежат в [`services/`](/services/).
 
-| Пакет | Что это |
-|---|---|
-| [ark-core](/packages/ark-core) | Rust crate + бинарь `ark-core-rpc`. Сам runtime ARK (SQLite + sync + relay-bridge). Embedded в Electron main как child process. |
-| [@kosmos/ark](/packages/ark) | TypeScript SDK, говорящий с `ark-core-rpc` по JSON-RPC. Канонический клиент к ARK для Electron main и Node-сервисов. |
+| Пакет                                | Что это                                                                                                                                                   |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ark-core](/packages/ark-core)       | Rust crate + бинарь `ark-core-rpc`. Сам runtime ARK (SQLite + sync + relay-bridge). Embedded в Electron main как child process.                           |
+| [@kosmos/ark](/packages/ark)         | TypeScript SDK, говорящий с `ark-core-rpc` по JSON-RPC. Канонический клиент к ARK для Electron main и Node-сервисов.                                      |
 | [@kosmos/visuals](/packages/visuals) | UI: токены OKLCH, тема, общие Vue-компоненты (Sidebar, Titlebar, DesktopChrome, CommandPalette…). Используется всеми Electron-приложениями и этим сайтом. |
 
 ::: tip Соглашение об именах
+
 - **Rust crate** — без scope: `ark-core` (у Cargo нет npm-style scopes).
 - **TypeScript-пакет** — `@kosmos/*` (npm scope монорепо).
 
@@ -61,8 +62,8 @@ flowchart LR
 
 ## Workspace-имена
 
-| Папка | Имя в `package.json` / `Cargo.toml` | Язык |
-|---|---|---|
-| `crates/ark-core` | `ark-core` (Rust crate) | Rust |
-| `packages/ark` | `@kosmos/ark` | TypeScript |
-| `packages/visuals` | `@kosmos/visuals` | TypeScript + Vue |
+| Папка              | Имя в `package.json` / `Cargo.toml` | Язык             |
+| ------------------ | ----------------------------------- | ---------------- |
+| `crates/ark-core`  | `ark-core` (Rust crate)             | Rust             |
+| `packages/ark`     | `@kosmos/ark`                       | TypeScript       |
+| `packages/visuals` | `@kosmos/visuals`                   | TypeScript + Vue |

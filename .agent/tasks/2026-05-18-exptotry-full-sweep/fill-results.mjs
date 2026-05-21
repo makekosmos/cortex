@@ -16,7 +16,7 @@ const results = [
   "⏸️ DEFERRED → manual-tests-pending. 1-2 недели работы; применяется по сигналу RAM-bottleneck в production.",
   "❌ N/A — extensions грузятся через `loadFile()` из локального `dist/` (file://). Cache-savings 20-40% применимы только при HTTP-load. Cookies / localStorage shared partition тоже не нужен — extensions не используют cookies.",
   "✅ DONE 2026-05-18 — explicit `backgroundThrottling: true` в `settings-window.ts`, `install-extension-window.ts`, `dashboard-window.ts`. Launcher и extension windows на default (`true` в Electron 41). Effect: defensive correctness, гарантирует throttling при backgrounding не-критичных окон.",
-  "✅ DONE 2026-05-18 — `\"electronLanguages\": [\"en-US\", \"ru\"]` в `shell/package.json` build. **Измерено:** installer 110.62 MB → **102.78 MB** (−7.84 MB, −7.1%); unpacked locales 46.38 MB → 1.64 MB (−44.74 MB, −96%); disk install footprint ~415 → 370.32 MB (−10.8%).",
+  '✅ DONE 2026-05-18 — `"electronLanguages": ["en-US", "ru"]` в `shell/package.json` build. **Измерено:** installer 110.62 MB → **102.78 MB** (−7.84 MB, −7.1%); unpacked locales 46.38 MB → 1.64 MB (−44.74 MB, −96%); disk install footprint ~415 → 370.32 MB (−10.8%).',
   "❌ SKIP — anti-pattern по самому документу: ручной GC вызывает jank, `--expose-gc` увеличивает attack surface. Применять только при доказанной утечке после profiling. Сейчас нет такого signal.",
   "❌ N/A — Уже Electron 41.1.0 (effective 41.6.0 из bundle). Текущая стабильная линия. Upgrade на 42+ — отдельный proof loop с regression testing.",
 
@@ -46,14 +46,14 @@ const results = [
 
   // 4. Bundle Experiments 31-40
   "⚠️ PARTIAL — Rolldown defaults уже создают per-route code splitting (Horologion HomeView/SettingsView, Eden Editor.vue lazy). Manual `manualChunks` для vendor-vue — добавим reactively если bundle visualizer покажет проблему. Текущие bundles: Horologion 132KB / Arrancador 108KB / Eden main 353KB (gzip 112KB).",
-  "❌ SKIP — Rolldown defaults уже агрессивные. `\"sideEffects\": false` в package.json не выставлено и не должно — Tailwind CSS injections + Vue plugins имеют side effects. Дополнительный treeshake config рискует сломать build.",
+  '❌ SKIP — Rolldown defaults уже агрессивные. `"sideEffects": false` в package.json не выставлено и не должно — Tailwind CSS injections + Vue plugins имеют side effects. Дополнительный treeshake config рискует сломать build.',
   "❌ N/A — `vite-plugin-electron` уже external'ит `electron` автоматически. Native modules (sqlite, etc) — нет в проекте, всё в Rust backend через WS.",
   "❌ N/A — `moment` / `lodash` отсутствуют в зависимостях (только `dayjs` в `docs-site/`, не в runtime extension'ов). Verified через grep package.json.",
   "⏸️ DEFERRED — NSIS уже deflate-сжимает assets. Brotli polyfill в Electron protocol handler — complex, marginal win для local file:// loading.",
   "⏸️ DEFERRED — complex build script, marginal win (5-10% startup). Trigger: profile startup > 1s sustained.",
   "❌ N/A — `differentialPackage: true` — default behavior modern `electron-builder` + NSIS. autoUpdater использует `.blockmap` файлы рядом с installer'ом (см. `release/Kepler Setup 0.1.9.exe.blockmap`).",
   "✅ DONE (existing) — уже Bun (`bun.lockb` в repo, `bun install` 16× быстрее npm).",
-  "✅ DONE 2026-05-18 — `\"incremental\": true` + `\"tsBuildInfoFile\"` в `shell/tsconfig.json` и `packages/ark/tsconfig.json`. **Измерено:** cold typecheck 1650ms → warm 1177ms (−28%).",
+  '✅ DONE 2026-05-18 — `"incremental": true` + `"tsBuildInfoFile"` в `shell/tsconfig.json` и `packages/ark/tsconfig.json`. **Измерено:** cold typecheck 1650ms → warm 1177ms (−28%).',
   "✅ DONE (existing) — Vite default `sourcemap: false` в production build уже выставлен (нет в `vite.config.mjs` overrides). Production bundles без `.map` файлов.",
 
   // 5. Multi-window Experiments 41-42
@@ -86,7 +86,7 @@ const parts = text.split(marker);
 if (parts.length - 1 !== results.length) {
   console.error(
     `[fill-results] mismatch: found ${parts.length - 1} markers, ` +
-    `but ${results.length} results provided.`,
+      `but ${results.length} results provided.`,
   );
   process.exit(1);
 }

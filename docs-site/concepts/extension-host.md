@@ -24,49 +24,49 @@ Phase 4 цель — превратить апки в **extensions**: Vue-бан
 
 ```ts
 export interface ExtensionManifest {
-  id: string
-  name: string
-  entryHtml: string
-  icon?: string             // optional, имя файла иконки (icon.png) рядом с manifest.json
-  devPort?: number          // optional, порт Vite dev server'а для HMR (см. dev mode)
-  width?: number            // default 900
-  height?: number           // default 600
-  minWidth?: number         // optional, минимальная ширина (например, Eden = 450)
-  minHeight?: number        // optional, минимальная высота (например, Eden = 400)
-  windowEffect?: "acrylic" | "mica" | "none"  // см. ниже «Window backdrop»
+  id: string;
+  name: string;
+  entryHtml: string;
+  icon?: string; // optional, имя файла иконки (icon.png) рядом с manifest.json
+  devPort?: number; // optional, порт Vite dev server'а для HMR (см. dev mode)
+  width?: number; // default 900
+  height?: number; // default 600
+  minWidth?: number; // optional, минимальная ширина (например, Eden = 450)
+  minHeight?: number; // optional, минимальная высота (например, Eden = 400)
+  windowEffect?: "acrylic" | "mica" | "none"; // см. ниже «Window backdrop»
 }
 
-export function loadExtensionManifest(id: string): ExtensionManifest | null
-export function listExtensions(): ExtensionManifest[]
-export function openExtension(id: string, route?: string): void  // reuse if already open, иначе create; route — опциональный hash для глубоких ссылок
-export function extensionIconDataUri(id: string): string | undefined
-export function readDevModeSetting(): boolean
-export function setExtensionArkBridge(opts: { request, subscribe }): void
+export function loadExtensionManifest(id: string): ExtensionManifest | null;
+export function listExtensions(): ExtensionManifest[];
+export function openExtension(id: string, route?: string): void; // reuse if already open, иначе create; route — опциональный hash для глубоких ссылок
+export function extensionIconDataUri(id: string): string | undefined;
+export function readDevModeSetting(): boolean;
+export function setExtensionArkBridge(opts: { request; subscribe }): void;
 ```
 
 Resolver. С момента extension installer MVP (2026-05-14) resolution идёт по **priority chain**, а не single root:
 
 ```ts
 function resolveExtensionRoots(): string[] {
-  const roots: string[] = []
+  const roots: string[] = [];
   // 1. Dev source tree — если запущены из repo (highest priority).
-  const dev = path.resolve(__dirname, '..', 'extensions')
-  if (existsSync(dev)) roots.push(dev)
+  const dev = path.resolve(__dirname, "..", "extensions");
+  if (existsSync(dev)) roots.push(dev);
   // 2. User-installed (writable) — основной канал для prod.
-  roots.push(path.join(app.getPath('appData'), 'Kosmos', 'extensions'))
+  roots.push(path.join(app.getPath("appData"), "Kosmos", "extensions"));
   // 3. Bundled — fallback внутри packaged Kepler.
   if (process.resourcesPath) {
-    roots.push(path.join(process.resourcesPath, 'extensions'))
+    roots.push(path.join(process.resourcesPath, "extensions"));
   }
-  return roots
+  return roots;
 }
 
 function resolveExtensionDir(id: string): string | null {
   for (const root of resolveExtensionRoots()) {
-    const dir = path.join(root, id)
-    if (existsSync(path.join(dir, 'manifest.json'))) return dir
+    const dir = path.join(root, id);
+    if (existsSync(path.join(dir, "manifest.json"))) return dir;
   }
-  return null
+  return null;
 }
 ```
 
@@ -96,7 +96,9 @@ Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `fo
 ```ts
 const nav = window.kepler?.navigation;
 if (nav) {
-  void nav.initialRoute().then((r) => { if (r) void router.push(r); });
+  void nav.initialRoute().then((r) => {
+    if (r) void router.push(r);
+  });
   nav.onNavigate((r) => void router.push(r));
 }
 ```
@@ -141,8 +143,8 @@ Shared preload (`extension-preload.mjs`) бандлится отдельно vit
 `extension-host.ts` регистрирует top-level (side-effect import):
 
 ```ts
-ipcMain.handle('kepler:extension:list', () => listExtensions())
-ipcMain.handle('kepler:extension:open', (_e, id: string) => openExtension(id))
+ipcMain.handle("kepler:extension:list", () => listExtensions());
+ipcMain.handle("kepler:extension:open", (_e, id: string) => openExtension(id));
 ```
 
 `commands.ts` имеет static команду `dashboard:extension:demo` → lazy-import `openExtension('dashboard')` — это PoC trigger из launcher'а.
@@ -226,9 +228,9 @@ win.webContents.on("before-input-event", (e, input) => {
 Shared preload exposes:
 
 ```ts
-window.kepler.window.close()
-window.kepler.window.minimize()
-window.kepler.window.maximize()
+window.kepler.window.close();
+window.kepler.window.minimize();
+window.kepler.window.maximize();
 ```
 
 Они шлют `kepler:extension:window:{close,minimize,maximize}` IPC. Main resolves окно через `BrowserWindow.fromWebContents(e.sender)` и вызывает соответствующий метод. Это позволяет extension'ам с `titleBarStyle: "hidden"` рисовать свой titlebar и управлять окном без node integration.
@@ -330,8 +332,9 @@ window.kepler.userData = {
 
 ```ts
 // Пример из extension renderer
-const settings = await window.kepler.userData.readJson<{ accentColor: string }>("settings.json")
-  ?? { accentColor: "#7c3aed" };
+const settings = (await window.kepler.userData.readJson<{ accentColor: string }>(
+  "settings.json",
+)) ?? { accentColor: "#7c3aed" };
 settings.accentColor = "#22c55e";
 await window.kepler.userData.writeJson("settings.json", settings);
 ```
@@ -373,13 +376,13 @@ Extension ничего не делает — это shell-level автомати
 
 ## Итог миграции (Phase 4 + 6.0)
 
-| Апка | Статус | Bundle / замечания |
-|---|---|---|
-| Dashboard | ✅ | Полная Vue migration, ~83 KB JS. Read-only, ARK через preload bridge. |
-| Horologion | ✅ | Полная Vue migration с `horologionApi` shim над `window.kepler.*`. Chunk `pomodoroSettings` ~102 KB. |
-| Delphi | ✅ (с долгами) | Vue + memory router, 3483 modules. `electronAPI` shim над `window.kepler.*`. Tailwind plugin подключён. |
-| Arrancador | ✅ (2026-05-18) | Все 4 страницы оживлены + backend в `services/kepler-backend/src/arrancador/`: scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG client, SQOBA save backups. |
-| Eden | ✅ (Phase 6.0) | TipTap editor + Pinia + `kepler-api-shim` над `window.kepler.ark`. Main bundle ~353KB, lazy Editor chunk ~1.36MB. Hevy / code-tools / vault picker / Heart Rust удалены в Phase 6.0.A. |
+| Апка       | Статус          | Bundle / замечания                                                                                                                                                                     |
+| ---------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard  | ✅              | Полная Vue migration, ~83 KB JS. Read-only, ARK через preload bridge.                                                                                                                  |
+| Horologion | ✅              | Полная Vue migration с `horologionApi` shim над `window.kepler.*`. Chunk `pomodoroSettings` ~102 KB.                                                                                   |
+| Delphi     | ✅ (с долгами)  | Vue + memory router, 3483 modules. `electronAPI` shim над `window.kepler.*`. Tailwind plugin подключён.                                                                                |
+| Arrancador | ✅ (2026-05-18) | Все 4 страницы оживлены + backend в `services/kepler-backend/src/arrancador/`: scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG client, SQOBA save backups.                  |
+| Eden       | ✅ (Phase 6.0)  | TipTap editor + Pinia + `kepler-api-shim` над `window.kepler.ark`. Main bundle ~353KB, lazy Editor chunk ~1.36MB. Hevy / code-tools / vault picker / Heart Rust удалены в Phase 6.0.A. |
 
 ## Open questions (design decisions для Phase 4)
 
@@ -423,12 +426,12 @@ Extension ничего не делает — это shell-level автомати
 
 ## Code refs
 
-| Файл | Что |
-|---|---|
+| Файл                               | Что                                          |
+| ---------------------------------- | -------------------------------------------- |
 | `shell/electron/extension-host.ts` | Loader, IPC handlers, BrowserWindow создание |
-| `shell/electron/commands.ts` | `dashboard:extension:demo` — PoC trigger |
-| `extensions/<id>/manifest.json` | Per-extension манифест |
-| `extensions/<id>/index.html` | Entry HTML |
+| `shell/electron/commands.ts`       | `dashboard:extension:demo` — PoC trigger     |
+| `extensions/<id>/manifest.json`    | Per-extension манифест                       |
+| `extensions/<id>/index.html`       | Entry HTML                                   |
 
 ## Связанные документы
 

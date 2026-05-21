@@ -40,9 +40,11 @@ const emit = defineEmits<{
 const open = ref(false);
 const triggerRef = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
-const panelPosition = ref<{ top: number; left: number; width: number }>(
-  { top: 0, left: 0, width: 0 },
-);
+const panelPosition = ref<{ top: number; left: number; width: number }>({
+  top: 0,
+  left: 0,
+  width: 0,
+});
 const highlightIdx = ref(0);
 
 const selectedOption = computed<Option<T> | null>(() => {
@@ -221,7 +223,9 @@ onBeforeUnmount(() => {
           >
             <span class="kosmos-dd__option-main">
               <span class="kosmos-dd__option-label">{{ opt.label }}</span>
-              <span v-if="opt.description" class="kosmos-dd__option-desc">{{ opt.description }}</span>
+              <span v-if="opt.description" class="kosmos-dd__option-desc">{{
+                opt.description
+              }}</span>
             </span>
             <Check
               v-if="opt.value === modelValue"

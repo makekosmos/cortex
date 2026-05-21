@@ -5,9 +5,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/src/pages/Library.tsx:877-913"
-      ]
+      "evidence": ["apps/arrancador/src/pages/Library.tsx:877-913"]
     },
     {
       "id": "AC2",

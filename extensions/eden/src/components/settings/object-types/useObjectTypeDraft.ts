@@ -27,8 +27,9 @@ export function useObjectTypeDraft(noteTypes: Ref<NoteType[]>) {
       return noteTypes.value;
     }
 
-    return noteTypes.value.filter((noteType) =>
-      normalizedIncludes(noteType.name, query) || normalizedIncludes(noteType.id, query),
+    return noteTypes.value.filter(
+      (noteType) =>
+        normalizedIncludes(noteType.name, query) || normalizedIncludes(noteType.id, query),
     );
   });
 

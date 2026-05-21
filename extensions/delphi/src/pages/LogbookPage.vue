@@ -30,10 +30,7 @@ const filtered = computed(() => filterTodos(SmartList.Logbook, todos.value));
     >
       <div ref="titleGroupRef" :class="titleGroupClass" :style="titleGroupStyle">
         <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">Журнал</h1>
-        <span
-          v-if="filtered.length > 0"
-          class="text-sm text-(--muted-foreground) select-none"
-        >
+        <span v-if="filtered.length > 0" class="text-sm text-(--muted-foreground) select-none">
           {{ filtered.length }}
         </span>
       </div>

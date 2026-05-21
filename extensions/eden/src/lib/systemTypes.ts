@@ -251,12 +251,7 @@ const GAME_READ_ONLY_FIELDS = [
 
 const gameUiSchemaJson = JSON.stringify({
   featured_fields: [],
-  visible_fields: [
-    "play_status",
-    "genres",
-    "total_playtime_seconds",
-    "last_played_at",
-  ],
+  visible_fields: ["play_status", "genres", "total_playtime_seconds", "last_played_at"],
   hidden_fields: [
     "created_at",
     "updated_at",

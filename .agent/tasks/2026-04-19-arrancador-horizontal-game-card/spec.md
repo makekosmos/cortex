@@ -1,9 +1,11 @@
 # Task: Arrancador horizontal game card
 
 ## Goal
+
 Switch Arrancador's shared game card from a portrait poster to a horizontal media card and render basic metadata directly on top of the image.
 
 ## Acceptance Criteria
+
 - AC1: The shared `kosmos-visuals` game card renders in a horizontal aspect ratio suitable for landscape artwork instead of the current portrait poster ratio.
 - AC2: Arrancador prefers a game's wide/background image for the card and falls back to the existing cover image only when a wide image is unavailable.
 - AC3: The card always renders a bottom darkening gradient above the image so overlaid text remains readable.

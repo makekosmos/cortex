@@ -30,6 +30,7 @@ AC7. `stop_sync` stops the relay transport.
 AC8. `@arksync/node` no longer rejects relay options before calling the sidecar.
 
 AC9. Verification artifacts prove:
+
 - relay options reach `ark-core-rpc`;
 - two runtimes can sync an existing entity through relay only;
 - relay live change propagation works;

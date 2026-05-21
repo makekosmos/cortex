@@ -24,20 +24,8 @@
 // kind: "static" (legacy PoC) — preload не используется по умолчанию;
 // extension сам отвечает за всю свою логику.
 
-import {
-  BrowserWindow,
-  ipcMain,
-  screen,
-  type WebContents,
-} from "electron";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { BrowserWindow, ipcMain, screen, type WebContents } from "electron";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
@@ -211,10 +199,7 @@ const webContentsToExtensionId = new Map<number, string>();
 // ArkClient injected lazily из main.ts через `setArkClient`. Если null —
 // extension'ы получают ошибку при попытке ARK-запроса.
 type ArkRequestFn = (req: Record<string, unknown>) => Promise<unknown>;
-type ArkSubscribeFn = (
-  event: string,
-  handler: (payload: unknown) => void,
-) => () => void;
+type ArkSubscribeFn = (event: string, handler: (payload: unknown) => void) => () => void;
 
 let arkRequest: ArkRequestFn | null = null;
 let arkSubscribe: ArkSubscribeFn | null = null;
@@ -244,10 +229,7 @@ async function awaitArkBridgeReady(timeoutMs = 15000): Promise<void> {
   await Promise.race([
     arkBridgeReady,
     new Promise<void>((_, rej) =>
-      setTimeout(
-        () => rej(new Error("ark bridge not ready (timeout)")),
-        timeoutMs,
-      ),
+      setTimeout(() => rej(new Error("ark bridge not ready (timeout)")), timeoutMs),
     ),
   ]);
 }
@@ -445,9 +427,7 @@ const USER_DATA_NAME_RE = /^[\w][\w.-]*$/;
 
 function assertSafeUserDataName(name: unknown): asserts name is string {
   if (typeof name !== "string" || !USER_DATA_NAME_RE.test(name)) {
-    throw new Error(
-      `[kepler-shell] invalid user data file name: ${String(name)}`,
-    );
+    throw new Error(`[kepler-shell] invalid user data file name: ${String(name)}`);
   }
 }
 
@@ -503,7 +483,8 @@ export function extensionIconDataUri(id: string): string | undefined {
   const dir = resolveExtensionDir(id);
   if (!dir) return undefined;
   const iconPath = path.resolve(path.join(dir, manifest.icon));
-  if (!iconPath.startsWith(path.resolve(dir) + path.sep) && iconPath !== path.resolve(dir)) return undefined;
+  if (!iconPath.startsWith(path.resolve(dir) + path.sep) && iconPath !== path.resolve(dir))
+    return undefined;
   if (!existsSync(iconPath)) return undefined;
   const stat = statSync(iconPath);
   const cached = iconDataUriCache.get(id);
@@ -514,7 +495,11 @@ export function extensionIconDataUri(id: string): string | undefined {
     const buf = readFileSync(iconPath);
     const ext = path.extname(iconPath).toLowerCase();
     const mime =
-      ext === ".svg" ? "image/svg+xml" : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : "image/png";
+      ext === ".svg"
+        ? "image/svg+xml"
+        : ext === ".jpg" || ext === ".jpeg"
+          ? "image/jpeg"
+          : "image/png";
     const uri = `data:${mime};base64,${buf.toString("base64")}`;
     iconDataUriCache.set(id, { uri, mtimeMs: stat.mtimeMs });
     return uri;
@@ -543,10 +528,13 @@ function readManifestIconAsDataUri(id: string, iconRel: string): string | undefi
     const buf = readFileSync(resolved);
     const ext = path.extname(resolved).toLowerCase();
     const mime =
-      ext === ".svg" ? "image/svg+xml"
-      : ext === ".jpg" || ext === ".jpeg" ? "image/jpeg"
-      : ext === ".webp" ? "image/webp"
-      : "image/png";
+      ext === ".svg"
+        ? "image/svg+xml"
+        : ext === ".jpg" || ext === ".jpeg"
+          ? "image/jpeg"
+          : ext === ".webp"
+            ? "image/webp"
+            : "image/png";
     return `data:${mime};base64,${buf.toString("base64")}`;
   } catch {
     return undefined;
@@ -674,10 +662,7 @@ function resolvePreloadForManifest(
   return path.join(extensionDir, manifest.preload);
 }
 
-function resolveEntryHtml(
-  manifest: ExtensionManifest,
-  extensionDir: string,
-): string {
+function resolveEntryHtml(manifest: ExtensionManifest, extensionDir: string): string {
   // entryHtml интерпретируется относительно extension dir. Для vue это обычно
   // "dist/index.html" (после vite build), для static — "index.html".
   return path.join(extensionDir, manifest.entryHtml);
@@ -789,10 +774,7 @@ function focusExistingExtensionWindow(win: BrowserWindow): void {
   if (win.isDestroyed()) return;
   // Headless / test mode: окна не показываем, Playwright работает через
   // webContents без paint'а.
-  if (
-    process.env.KOSMOS_HEADLESS === "1" ||
-    process.env.KOSMOS_TEST_MODE === "1"
-  ) {
+  if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") {
     return;
   }
   try {
@@ -887,10 +869,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     try {
       savedState = JSON.parse(readFileSync(stateFile, "utf8")) as typeof savedState;
     } catch (e) {
-      console.warn(
-        `[kepler-shell] extension '${id}' window-state.json invalid, ignoring:`,
-        e,
-      );
+      console.warn(`[kepler-shell] extension '${id}' window-state.json invalid, ignoring:`, e);
     }
   }
 
@@ -898,40 +877,23 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   // подключённый display. Иначе пользователь отключил монитор, на котором
   // окно стояло, и без проверки оно окажется за пределами экранов.
   const displays = screen.getAllDisplays();
-  const isVisibleOnAnyDisplay = (
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-  ): boolean =>
+  const isVisibleOnAnyDisplay = (x: number, y: number, w: number, h: number): boolean =>
     displays.some((d) => {
       const wa = d.workArea;
-      return (
-        x + w > wa.x &&
-        x < wa.x + wa.width &&
-        y + h > wa.y &&
-        y < wa.y + wa.height
-      );
+      return x + w > wa.x && x < wa.x + wa.width && y + h > wa.y && y < wa.y + wa.height;
     });
 
   let width = defaultWidth;
   let height = defaultHeight;
-  let initialX: number | undefined =
-    Math.round((display.width - defaultWidth) / 2);
-  let initialY: number | undefined =
-    Math.round((display.height - defaultHeight) / 2);
+  let initialX: number | undefined = Math.round((display.width - defaultWidth) / 2);
+  let initialY: number | undefined = Math.round((display.height - defaultHeight) / 2);
 
   if (
     typeof savedState.width === "number" &&
     typeof savedState.height === "number" &&
     typeof savedState.x === "number" &&
     typeof savedState.y === "number" &&
-    isVisibleOnAnyDisplay(
-      savedState.x,
-      savedState.y,
-      savedState.width,
-      savedState.height,
-    )
+    isVisibleOnAnyDisplay(savedState.x, savedState.y, savedState.width, savedState.height)
   ) {
     width = savedState.width;
     height = savedState.height;
@@ -947,8 +909,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   // Windows backdrop material — opt-in через manifest.windowEffect.
   // Acrylic/mica требуют прозрачного backgroundColor; иначе native renderer
   // нарисует сплошной цвет поверх backdrop'а и эффект не будет виден.
-  const wantsBackdrop =
-    manifest.windowEffect === "acrylic" || manifest.windowEffect === "mica";
+  const wantsBackdrop = manifest.windowEffect === "acrylic" || manifest.windowEffect === "mica";
   const backgroundMaterial: "acrylic" | "mica" | undefined = wantsBackdrop
     ? (manifest.windowEffect as "acrylic" | "mica")
     : undefined;
@@ -1001,16 +962,9 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
         savedAt: new Date().toISOString(),
       };
       const dir = ensureUserDataDir(id);
-      writeFileSync(
-        path.join(dir, "window-state.json"),
-        JSON.stringify(state, null, 2),
-        "utf8",
-      );
+      writeFileSync(path.join(dir, "window-state.json"), JSON.stringify(state, null, 2), "utf8");
     } catch (e) {
-      console.warn(
-        `[kepler-shell] extension '${id}' save window-state failed:`,
-        e,
-      );
+      console.warn(`[kepler-shell] extension '${id}' save window-state failed:`, e);
     }
   };
 
@@ -1025,10 +979,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   const broadcastMaximizedState = (): void => {
     if (win.isDestroyed()) return;
     try {
-      win.webContents.send(
-        "kepler:extension:window:maximized-changed",
-        win.isMaximized(),
-      );
+      win.webContents.send("kepler:extension:window:maximized-changed", win.isMaximized());
     } catch {
       // renderer may not be ready yet — ignore
     }
@@ -1076,13 +1027,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   // try/catch — на случай race condition при закрытии окна, когда event ещё
   // в очереди, а webContents уже destroyed.
   win.webContents.on("before-input-event", (e, input) => {
-    if (
-      input.key === "F12" &&
-      !input.alt &&
-      !input.control &&
-      !input.shift &&
-      !input.meta
-    ) {
+    if (input.key === "F12" && !input.alt && !input.control && !input.shift && !input.meta) {
       e.preventDefault();
       try {
         win.webContents.toggleDevTools();
@@ -1200,49 +1145,43 @@ async function onFocusStateChanged(
 // webContents do not collide.
 const extensionEventUnsubscribers = new Map<string, () => void>();
 
-ipcMain.handle(
-  "kepler:extension:ark:subscribe",
-  async (e, event: string) => {
-    await awaitArkBridgeReady();
-    if (!arkSubscribe) {
-      throw new Error("ark bridge not ready");
-    }
-    const sender = e.sender;
-    const key = `${sender.id}:${event}`;
-    if (extensionEventUnsubscribers.has(key)) {
-      // Idempotent — повторная подписка no-op.
-      return true;
-    }
-    const unsubscribe = arkSubscribe(event, (payload) => {
-      if (!sender.isDestroyed()) {
-        sender.send(`kepler:extension:ark:event:${event}`, payload);
-      }
-    });
-    extensionEventUnsubscribers.set(key, unsubscribe);
-    // Cleanup при закрытии renderer'а.
-    sender.once("destroyed", () => {
-      const u = extensionEventUnsubscribers.get(key);
-      if (u) {
-        u();
-        extensionEventUnsubscribers.delete(key);
-      }
-    });
+ipcMain.handle("kepler:extension:ark:subscribe", async (e, event: string) => {
+  await awaitArkBridgeReady();
+  if (!arkSubscribe) {
+    throw new Error("ark bridge not ready");
+  }
+  const sender = e.sender;
+  const key = `${sender.id}:${event}`;
+  if (extensionEventUnsubscribers.has(key)) {
+    // Idempotent — повторная подписка no-op.
     return true;
-  },
-);
-
-ipcMain.handle(
-  "kepler:extension:ark:unsubscribe",
-  (e, event: string) => {
-    const key = `${e.sender.id}:${event}`;
-    const unsubscribe = extensionEventUnsubscribers.get(key);
-    if (unsubscribe) {
-      unsubscribe();
+  }
+  const unsubscribe = arkSubscribe(event, (payload) => {
+    if (!sender.isDestroyed()) {
+      sender.send(`kepler:extension:ark:event:${event}`, payload);
+    }
+  });
+  extensionEventUnsubscribers.set(key, unsubscribe);
+  // Cleanup при закрытии renderer'а.
+  sender.once("destroyed", () => {
+    const u = extensionEventUnsubscribers.get(key);
+    if (u) {
+      u();
       extensionEventUnsubscribers.delete(key);
     }
-    return true;
-  },
-);
+  });
+  return true;
+});
+
+ipcMain.handle("kepler:extension:ark:unsubscribe", (e, event: string) => {
+  const key = `${e.sender.id}:${event}`;
+  const unsubscribe = extensionEventUnsubscribers.get(key);
+  if (unsubscribe) {
+    unsubscribe();
+    extensionEventUnsubscribers.delete(key);
+  }
+  return true;
+});
 
 // ---------------------------------------------------------------------------
 // IPC: meta / window controls (extension renderer → main)
@@ -1286,14 +1225,11 @@ ipcMain.handle("kepler:extension:window:is-maximized", (e): boolean => {
 // setMaximizable(false) Windows native double-click-on-titlebar
 // больше не разворачивает окно — наш Vue dblclick handler (dock-corner)
 // отрабатывает без флика "maximize → unmaximize".
-ipcMain.handle(
-  "kepler:extension:window:set-maximizable",
-  (e, value: boolean) => {
-    const win = windowForSender(e.sender);
-    if (!win || win.isDestroyed()) return;
-    win.setMaximizable(Boolean(value));
-  },
-);
+ipcMain.handle("kepler:extension:window:set-maximizable", (e, value: boolean) => {
+  const win = windowForSender(e.sender);
+  if (!win || win.isDestroyed()) return;
+  win.setMaximizable(Boolean(value));
+});
 
 // "Dock corner" — toggle между floating-widget mode (always-on-top,
 // compact size, top-right corner) и обычным окном (восстановленный bounds).
@@ -1390,13 +1326,10 @@ ipcMain.handle("kepler:extension:window:is-docked", (e): boolean => {
 
 // Reserved для будущих host-action типа "show settings", "focus launcher" и т.п.
 // Сейчас просто логирует и возвращает false (action not handled).
-ipcMain.handle(
-  "kepler:extension:invoke-host",
-  (_e, action: string, _payload?: unknown) => {
-    console.error(`[kepler-shell] extension invoke-host: ${action} (no handler)`);
-    return false;
-  },
-);
+ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: unknown) => {
+  console.error(`[kepler-shell] extension invoke-host: ${action} (no handler)`);
+  return false;
+});
 
 // ---------------------------------------------------------------------------
 // IPC: userData (extension renderer → main → <APPDATA>/Kosmos/extensions-data/<id>/)
@@ -1420,66 +1353,48 @@ ipcMain.handle("kepler:extension:userData:path", (e) => {
   return senderUserDataDir(e.sender);
 });
 
-ipcMain.handle(
-  "kepler:extension:userData:readJson",
-  (e, name: string): unknown => {
-    assertSafeUserDataName(name);
-    const dir = senderUserDataDir(e.sender);
-    const filePath = path.join(dir, name);
-    if (!existsSync(filePath)) return null;
-    try {
-      return JSON.parse(readFileSync(filePath, "utf8")) as unknown;
-    } catch (err) {
-      console.warn(
-        `[kepler-shell] userData.readJson failed for ${filePath}:`,
-        err,
-      );
-      return null;
-    }
-  },
-);
+ipcMain.handle("kepler:extension:userData:readJson", (e, name: string): unknown => {
+  assertSafeUserDataName(name);
+  const dir = senderUserDataDir(e.sender);
+  const filePath = path.join(dir, name);
+  if (!existsSync(filePath)) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8")) as unknown;
+  } catch (err) {
+    console.warn(`[kepler-shell] userData.readJson failed for ${filePath}:`, err);
+    return null;
+  }
+});
 
-ipcMain.handle(
-  "kepler:extension:userData:writeJson",
-  (e, name: string, value: unknown): void => {
-    assertSafeUserDataName(name);
-    const dir = senderUserDataDir(e.sender);
-    const filePath = path.join(dir, name);
-    writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
-  },
-);
+ipcMain.handle("kepler:extension:userData:writeJson", (e, name: string, value: unknown): void => {
+  assertSafeUserDataName(name);
+  const dir = senderUserDataDir(e.sender);
+  const filePath = path.join(dir, name);
+  writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
+});
 
-ipcMain.handle(
-  "kepler:extension:userData:readFile",
-  (e, name: string): string | null => {
-    assertSafeUserDataName(name);
-    const dir = senderUserDataDir(e.sender);
-    const filePath = path.join(dir, name);
-    if (!existsSync(filePath)) return null;
-    try {
-      return readFileSync(filePath, "utf8");
-    } catch (err) {
-      console.warn(
-        `[kepler-shell] userData.readFile failed for ${filePath}:`,
-        err,
-      );
-      return null;
-    }
-  },
-);
+ipcMain.handle("kepler:extension:userData:readFile", (e, name: string): string | null => {
+  assertSafeUserDataName(name);
+  const dir = senderUserDataDir(e.sender);
+  const filePath = path.join(dir, name);
+  if (!existsSync(filePath)) return null;
+  try {
+    return readFileSync(filePath, "utf8");
+  } catch (err) {
+    console.warn(`[kepler-shell] userData.readFile failed for ${filePath}:`, err);
+    return null;
+  }
+});
 
-ipcMain.handle(
-  "kepler:extension:userData:writeFile",
-  (e, name: string, content: string): void => {
-    assertSafeUserDataName(name);
-    if (typeof content !== "string") {
-      throw new Error("[kepler-shell] userData.writeFile: content must be a string");
-    }
-    const dir = senderUserDataDir(e.sender);
-    const filePath = path.join(dir, name);
-    writeFileSync(filePath, content, "utf8");
-  },
-);
+ipcMain.handle("kepler:extension:userData:writeFile", (e, name: string, content: string): void => {
+  assertSafeUserDataName(name);
+  if (typeof content !== "string") {
+    throw new Error("[kepler-shell] userData.writeFile: content must be a string");
+  }
+  const dir = senderUserDataDir(e.sender);
+  const filePath = path.join(dir, name);
+  writeFileSync(filePath, content, "utf8");
+});
 
 // ---------------------------------------------------------------------------
 // IPC: .kext install / preview / list / revert / uninstall
@@ -1508,7 +1423,9 @@ ipcMain.handle("kepler:extension:install:preview", (_e, sourcePath: string) => {
 function notifyCommandsChanged(): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      try { win.webContents.send("kepler:commands:updated"); } catch {}
+      try {
+        win.webContents.send("kepler:commands:updated");
+      } catch {}
     }
   }
 }
@@ -1522,9 +1439,7 @@ ipcMain.handle("kepler:extension:install:do", (_e, sourcePath: string) => {
   return result;
 });
 
-ipcMain.handle("kepler:extension:installed:list", () =>
-  listInstalledUserExtensions(),
-);
+ipcMain.handle("kepler:extension:installed:list", () => listInstalledUserExtensions());
 
 ipcMain.handle("kepler:extension:revert", (_e, id: string, timestamp?: string) => {
   if (typeof id !== "string") {

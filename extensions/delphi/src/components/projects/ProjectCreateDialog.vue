@@ -2,14 +2,7 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue";
 import { Check, DollarSign, FolderPlus, X } from "lucide-vue-next";
 
-type ProjectColorTag =
-  | "red"
-  | "orange"
-  | "yellow"
-  | "green"
-  | "blue"
-  | "purple"
-  | "pink";
+type ProjectColorTag = "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "pink";
 
 export type ProjectCreatePayload = {
   title: string;
@@ -178,10 +171,7 @@ watch(
 </script>
 
 <template>
-  <div
-    v-if="open"
-    class="fixed inset-0 z-60 flex items-center justify-center p-4"
-  >
+  <div v-if="open" class="fixed inset-0 z-60 flex items-center justify-center p-4">
     <button
       type="button"
       class="absolute inset-0 bg-black/45 backdrop-blur-sm"
@@ -200,9 +190,7 @@ watch(
         </div>
 
         <div class="min-w-0 flex-1">
-          <h2 class="text-base font-semibold text-(--foreground)">
-            Новый проект
-          </h2>
+          <h2 class="text-base font-semibold text-(--foreground)">Новый проект</h2>
           <p class="mt-1 text-sm text-(--muted-foreground)">
             Создай проект и сразу перейди внутрь него.
           </p>
@@ -220,7 +208,10 @@ watch(
 
       <div class="flex flex-col gap-4 px-5 py-5">
         <div class="flex flex-col gap-2">
-          <label for="project-create-title" class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)">
+          <label
+            for="project-create-title"
+            class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)"
+          >
             Название
           </label>
           <input
@@ -236,14 +227,15 @@ watch(
             <template v-if="hasDuplicateTitle">
               Проект с таким названием уже есть. Создание всё равно доступно.
             </template>
-            <template v-else>
-              `Enter` создаёт проект сразу.
-            </template>
+            <template v-else> `Enter` создаёт проект сразу. </template>
           </p>
         </div>
 
         <div class="flex flex-col gap-2">
-          <label for="project-create-notes" class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)">
+          <label
+            for="project-create-notes"
+            class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)"
+          >
             Описание
           </label>
           <textarea
@@ -294,11 +286,7 @@ watch(
             >
               <span :class="['h-2.5 w-2.5 rounded-full', option.className]" />
               <span class="truncate">{{ option.label }}</span>
-              <Check
-                v-if="colorTag === option.id"
-                :size="14"
-                class="ml-auto"
-              />
+              <Check v-if="colorTag === option.id" :size="14" class="ml-auto" />
             </button>
           </div>
         </div>

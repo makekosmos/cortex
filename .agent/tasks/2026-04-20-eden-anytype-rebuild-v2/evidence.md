@@ -1,16 +1,19 @@
 # Evidence - Eden Anytype object types rebuild v2
 
 ## Result
+
 Overall verification status: `PASS`
 
 ## Acceptance Criteria
 
 ### AC1
+
 The object types screen uses a distinctly Anytype-like composition with a left type library and a right page-like editor workspace.
 
 Status: `PASS`
 
 Evidence:
+
 - `apps/eden/ts/src/components/settings/ObjectTypesSettings.vue`
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue`
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypeEditor.vue`
@@ -19,6 +22,7 @@ Evidence:
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypePreviewRail.vue`
 
 Notes:
+
 - The screen is now structured as a two-pane workspace with:
   - left library
   - right page-like editor
@@ -30,11 +34,13 @@ Notes:
 - The route-level component is orchestration-only.
 
 ### AC2
+
 The rebuilt screen consumes Kosmos visuals theme tokens for background, surface, border, text, sidebar, and hover states; new ad-hoc gray color mixing is removed from the rebuilt object type UI.
 
 Status: `PASS`
 
 Evidence:
+
 - `apps/eden/ts/src/components/settings/ObjectTypesSettings.vue`
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue`
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypeEditor.vue`
@@ -44,19 +50,23 @@ Evidence:
 - `packages/kosmos-visuals/theme/css-variables.css`
 
 Notes:
+
 - Rebuilt object type UI now uses `var(--background)`, `var(--card)`, `var(--surface)`, `var(--border)`, `var(--input)`, `var(--ring)`, and `var(--sidebar-*)`.
 - Where `color-mix(...)` remains, it is derived from existing Kosmos tokens such as `--background`, `--secondary`, or the current accent color, not from ad-hoc black/white gray surfaces.
 
 ### AC3
+
 Object type rows and field rows have clear interactive states inspired by Anytype.
 
 Status: `PASS`
 
 Evidence:
+
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypesSidebar.vue`
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypeFieldsSection.vue`
 
 Notes:
+
 - Sidebar items now have explicit hover/active row states.
 - Field rows now support:
   - hover state
@@ -67,21 +77,25 @@ Notes:
 - Field editing is now organized into visible Anytype-like buckets instead of one flat generic form list.
 
 ### AC4
+
 The preview becomes a dedicated, visually separated rail/pane and mirrors header layout and featured-property presentation more closely to Anytype.
 
 Status: `PASS`
 
 Evidence:
+
 - `apps/eden/ts/src/components/settings/object-types/ObjectTypePreviewRail.vue`
 - `apps/eden/ts/src/components/typed-notes/TypedHeader.vue`
 - `apps/eden/ts/src/components/typed-notes/ObjectPropertyField.vue`
 
 ### AC5
+
 `TypedHeader.vue` and `ObjectPropertyField.vue` use Anytype-inspired lightweight featured-property rendering instead of generic boxed form controls for preview/read flows.
 
 Status: `PASS`
 
 Evidence:
+
 - `apps/eden/ts/src/Editor.vue`
 - `apps/eden/ts/src/lib/entryTitles.ts`
 - `apps/eden/ts/src/store/eden.ts`
@@ -94,6 +108,7 @@ Evidence:
 - `apps/eden/ts/src/components/settings/TrashSettings.vue`
 
 Notes:
+
 - Featured inline properties are rendered as lightweight metadata rows with bullet separators.
 - Readonly preview paths now render plain values/chips instead of generic form-heavy chrome.
 - Relation candidate lists now respect `allowed_object_types` when that metadata is present, reducing vault-wide overrendering for relation fields.
@@ -105,11 +120,13 @@ Notes:
   - the empty square icon tile is suppressed for inline note pages without a cover image
 
 ### AC6
+
 Touched user-facing Russian UI strings are valid UTF-8 and free from mojibake.
 
 Status: `PASS`
 
 Evidence:
+
 - UTF-8-aware reads recorded in:
   - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/utf8-check.txt`
 - Touched files:
@@ -132,11 +149,13 @@ Evidence:
   - `apps/eden/ts/src/components/settings/object-types/useObjectTypeDraft.ts`
 
 ### AC7
+
 Demo Ark seed data exists for at least one ordinary note object and one game object, with links and a custom type available for UI testing.
 
 Status: `PASS`
 
 Evidence:
+
 - `apps/eden/ts/scripts/seedArkObjectDemo.ts`
 - `apps/eden/ts/dev-data/ark-demo-mixed.db`
 - `apps/eden/ts/dev-data/ark-demo-secondary.db`
@@ -145,20 +164,24 @@ Evidence:
   - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed-secondary.txt`
 
 ### AC8
+
 Eden typecheck and production build pass after the rebuild.
 
 Status: `PASS`
 
 Evidence:
+
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/tsc.txt`
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/build.txt`
 
 ### AC9
+
 Current dev-mode/runtime issues are explicitly investigated and summarized with repo-side fixes applied where feasible; any environment-only blockers are documented with evidence.
 
 Status: `PASS`
 
 Evidence:
+
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/dev.txt`
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/dev-web.txt`
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/playwright-note-page.txt`

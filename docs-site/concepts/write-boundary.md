@@ -21,14 +21,14 @@
 
 ## Кому что можно
 
-| Кто | Что разрешено |
-|---|---|
-| Electron renderer | Только preload API (`window.<app>Api`). Никакого SQLite вообще. |
-| Electron main (app services) | `@kosmos/ark`. Read-only SQLite — только как fallback, явно отделённый от writes. |
-| Rust app code | `@kosmos/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
-| `services/kepler-backend/src/usage_tracker` (Rust) | Прямые писи через `ark_core::db` **с** обновлением `version_vector`. |
-| Migration scripts | Могут читать **источник** напрямую, но writes в target ARK идут через ARK RPC/SDK. |
-| Dashboard | Read-only SQLite инспекция. **Никаких** writes. |
+| Кто                                                | Что разрешено                                                                             |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Electron renderer                                  | Только preload API (`window.<app>Api`). Никакого SQLite вообще.                           |
+| Electron main (app services)                       | `@kosmos/ark`. Read-only SQLite — только как fallback, явно отделённый от writes.         |
+| Rust app code                                      | `@kosmos/ark` через sidecar, либо `ark_core::db` (если внутри одного процесса с runtime). |
+| `services/kepler-backend/src/usage_tracker` (Rust) | Прямые писи через `ark_core::db` **с** обновлением `version_vector`.                      |
+| Migration scripts                                  | Могут читать **источник** напрямую, но writes в target ARK идут через ARK RPC/SDK.        |
+| Dashboard                                          | Read-only SQLite инспекция. **Никаких** writes.                                           |
 
 ```mermaid
 flowchart TD
@@ -82,15 +82,22 @@ db.prepare("DELETE FROM tracked_apps WHERE id = ?").run(...);
 ## Как делать правильно
 
 ```ts
-import { ArkClient } from '@kosmos/ark';
+import { ArkClient } from "@kosmos/ark";
 
-const ark = new ArkClient({ /* ... */ });
+const ark = new ArkClient({
+  /* ... */
+});
 await ark.start();
 
 await ark.objects.upsert({
-  id, typeId: 'task_obj', title,
-  contentJson, propsJson,
-  createdAt, updatedAt, deletedAt: null,
+  id,
+  typeId: "task_obj",
+  title,
+  contentJson,
+  propsJson,
+  createdAt,
+  updatedAt,
+  deletedAt: null,
 });
 
 await ark.objects.delete(id);

@@ -79,8 +79,7 @@ async function onScan() {
     // Подсвеживаем список игр, чтобы добавленные сразу появились.
     await refresh();
   } catch (cause) {
-    scanError.value =
-      cause instanceof Error ? cause.message : "Не удалось выполнить сканирование";
+    scanError.value = cause instanceof Error ? cause.message : "Не удалось выполнить сканирование";
   } finally {
     busy.value = false;
   }
@@ -107,19 +106,14 @@ function formatTime(iso: string): string {
     <h1 class="arrancador-page__title">Сканер</h1>
 
     <div class="arrancador-scan-actions">
-      <button
-        type="button"
-        class="arrancador-scan-btn"
-        :disabled="busy"
-        @click="onScan"
-      >
+      <button type="button" class="arrancador-scan-btn" :disabled="busy" @click="onScan">
         <RefreshCw :size="16" :class="{ 'arrancador-scan-btn__spin': busy }" />
         <span>{{ busy ? "Сканирование…" : "Сканировать сейчас" }}</span>
       </button>
       <div v-if="lastResult" class="arrancador-scan-summary">
-        Добавлено: <strong>{{ lastResult.added }}</strong>, обновлено:
-        <strong>{{ lastResult.updated }}</strong>, пропущено:
-        <strong>{{ lastResult.skipped }}</strong
+        Добавлено: <strong>{{ lastResult.added }}</strong
+        >, обновлено: <strong>{{ lastResult.updated }}</strong
+        >, пропущено: <strong>{{ lastResult.skipped }}</strong
         ><span v-if="lastResult.errors.length">
           , ошибок: <strong>{{ lastResult.errors.length }}</strong></span
         >.
@@ -128,10 +122,7 @@ function formatTime(iso: string): string {
 
     <div v-if="scanError" class="arrancador-error">{{ scanError }}</div>
 
-    <div
-      v-if="lastResult && lastResult.errors.length > 0"
-      class="arrancador-scan-errors"
-    >
+    <div v-if="lastResult && lastResult.errors.length > 0" class="arrancador-scan-errors">
       <div class="arrancador-scan-errors__title">Ошибки сканирования:</div>
       <ul class="arrancador-scan-errors__list">
         <li v-for="(err, i) in lastResult.errors" :key="i">{{ err }}</li>
@@ -141,14 +132,8 @@ function formatTime(iso: string): string {
     <section v-if="history.length > 0" class="arrancador-scan-history">
       <h2 class="arrancador-scan-history__title">История</h2>
       <ul class="arrancador-scan-history__list">
-        <li
-          v-for="entry in history"
-          :key="entry.timestamp"
-          class="arrancador-scan-history__row"
-        >
-          <span class="arrancador-scan-history__time">{{
-            formatTime(entry.timestamp)
-          }}</span>
+        <li v-for="entry in history" :key="entry.timestamp" class="arrancador-scan-history__row">
+          <span class="arrancador-scan-history__time">{{ formatTime(entry.timestamp) }}</span>
           <span class="arrancador-scan-history__counts">
             +{{ entry.added }} / ↻{{ entry.updated }} / ={{ entry.skipped
             }}<span v-if="entry.errors > 0"> / !{{ entry.errors }}</span>
@@ -170,11 +155,7 @@ function formatTime(iso: string): string {
     />
 
     <div v-else class="arrancador-scan-list">
-      <article
-        v-for="game in games"
-        :key="game.id"
-        class="arrancador-scan-list__row"
-      >
+      <article v-for="game in games" :key="game.id" class="arrancador-scan-list__row">
         <span class="arrancador-scan-list__name">{{ game.name }}</span>
         <span class="arrancador-scan-list__path">
           {{ game.exePath ?? "exe-путь не задан" }}

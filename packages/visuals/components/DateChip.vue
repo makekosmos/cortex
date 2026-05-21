@@ -25,8 +25,18 @@ const open = shallowRef(false);
 const anchorRef = ref<HTMLElement | null>(null);
 
 const RU_MONTHS_SHORT = [
-  "янв", "фев", "мар", "апр", "май", "июн",
-  "июл", "авг", "сен", "окт", "ноя", "дек",
+  "янв",
+  "фев",
+  "мар",
+  "апр",
+  "май",
+  "июн",
+  "июл",
+  "авг",
+  "сен",
+  "окт",
+  "ноя",
+  "дек",
 ] as const;
 
 const label = computed(() => {
@@ -95,11 +105,7 @@ onUnmounted(() => {
         compact ? 'kosmos-datechip--compact' : '',
       ]"
     >
-      <button
-        type="button"
-        class="kosmos-datechip__toggle"
-        @click="toggle"
-      >
+      <button type="button" class="kosmos-datechip__toggle" @click="toggle">
         <CalendarIcon :size="compact ? 11 : 12" class="kosmos-datechip__icon" />
         <span class="kosmos-datechip__label">{{ label }}</span>
       </button>

@@ -22,10 +22,7 @@ provide("kosmosHasSidebar", hasSidebar);
 
 <template>
   <div class="kosmos-desktop-chrome">
-    <Titlebar
-      :platform="props.platform"
-      :title="props.title"
-    >
+    <Titlebar :platform="props.platform" :title="props.title">
       <template #leading>
         <slot name="titlebar-leading" />
       </template>

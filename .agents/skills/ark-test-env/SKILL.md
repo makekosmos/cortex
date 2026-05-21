@@ -50,15 +50,15 @@ sqlite3 ark.db "SELECT source, COUNT(*) FROM events WHERE is_deleted=0 GROUP BY 
 
 ## Seed task distribution
 
-| GTD Type | Count | Key fields |
-|----------|-------|------------|
-| Inbox | 10 | no project, not today/someday/scheduled |
-| Today | 10 | `isToday=true` |
-| Upcoming | 10 | `scheduledDate` = +7 days |
-| Someday | 10 | `isSomeday=true` |
-| Completed | 10 | `isCompleted=true`, `completedAt` set |
-| Cancelled | 10 | `isCancelled=true`, `cancelledAt` set |
-| Trashed | 10 | `isTrashed=true` |
+| GTD Type  | Count | Key fields                              |
+| --------- | ----- | --------------------------------------- |
+| Inbox     | 10    | no project, not today/someday/scheduled |
+| Today     | 10    | `isToday=true`                          |
+| Upcoming  | 10    | `scheduledDate` = +7 days               |
+| Someday   | 10    | `isSomeday=true`                        |
+| Completed | 10    | `isCompleted=true`, `completedAt` set   |
+| Cancelled | 10    | `isCancelled=true`, `cancelledAt` set   |
+| Trashed   | 10    | `isTrashed=true`                        |
 
 ## After reset: device cleanup
 

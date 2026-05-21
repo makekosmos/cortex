@@ -85,6 +85,7 @@ computing gzip size...
 ```
 
 Артефакты:
+
 - `extensions/eden/dist/index.html`
 - `extensions/eden/dist/assets/index-*.css` (~150KB)
 - `extensions/eden/dist/assets/index-*.js` (~1.7MB — TipTap-heavy, codesplitting follow-up)
@@ -179,15 +180,15 @@ Acceptance остаётся за оператором; автоматизиро�
 
 ## Verification summary
 
-| AC | Verdict |
-|---|---|
-| AC1 manifest fields | PASS |
-| AC2 package.json structure | PASS |
-| AC3 bun install | PASS |
-| AC4 build:extensions | PASS |
-| AC5 shell typecheck | PASS |
-| AC6 edenApi.ts clean | PASS (literal); see problems.md re: repo-wide grep |
-| AC7 ark:guard:writes | PASS |
-| AC8 open:eden command | PASS |
-| AC9 standalone Eden typecheck | PASS |
-| AC10 manual smoke | PENDING_MANUAL — требует оператора |
+| AC                            | Verdict                                            |
+| ----------------------------- | -------------------------------------------------- |
+| AC1 manifest fields           | PASS                                               |
+| AC2 package.json structure    | PASS                                               |
+| AC3 bun install               | PASS                                               |
+| AC4 build:extensions          | PASS                                               |
+| AC5 shell typecheck           | PASS                                               |
+| AC6 edenApi.ts clean          | PASS (literal); see problems.md re: repo-wide grep |
+| AC7 ark:guard:writes          | PASS                                               |
+| AC8 open:eden command         | PASS                                               |
+| AC9 standalone Eden typecheck | PASS                                               |
+| AC10 manual smoke             | PENDING_MANUAL — требует оператора                 |

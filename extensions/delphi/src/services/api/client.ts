@@ -155,8 +155,7 @@ export function getApiUrl() {
     ? /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(stored)
     : false;
 
-  const resolved =
-    stored && !storedLooksLocalhost ? stored : (envValue ?? defaultValue);
+  const resolved = stored && !storedLooksLocalhost ? stored : (envValue ?? defaultValue);
 
   return normalizeApiUrl(resolved);
 }

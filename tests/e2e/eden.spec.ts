@@ -47,8 +47,7 @@ async function openEden(app: Awaited<ReturnType<typeof launchKepler>>) {
   // `window.api.saveEntry` появится (shim установлен).
   await edenWindow.waitForFunction(
     () =>
-      typeof (window as unknown as { api?: { saveEntry?: unknown } }).api
-        ?.saveEntry === "function",
+      typeof (window as unknown as { api?: { saveEntry?: unknown } }).api?.saveEntry === "function",
     null,
     { timeout: 5_000 },
   );
@@ -71,42 +70,51 @@ test.describe("eden extension", () => {
       // Создаём заметку через shim. ID — определяем заранее чтобы потом
       // удалить, даже если test fail'ит на assertion.
       const entryId = `eden-e2e-${Date.now()}`;
-      const saveResult = await edenWindow.evaluate(async (payload) => {
-        const api = (window as unknown as {
-          api: {
-            saveEntry: (e: unknown) => Promise<unknown>;
-          };
-        }).api;
-        try {
-          const res = await api.saveEntry({
-            id: payload.id,
-            title: payload.title,
-            content_json: JSON.stringify({
-              type: "doc",
-              content: [{ type: "paragraph", content: [{ type: "text", text: "hello eden e2e" }] }],
-            }),
-            created_at: Date.now(),
-            updated_at: Date.now(),
-            folder_id: null,
-            type_id: "note_obj",
-            header_layout: "default",
-            header_props_json: "{}",
-            schema_version: 1,
-            deleted_at: null,
-          });
-          return { ok: true, res };
-        } catch (e) {
-          return { ok: false, error: e instanceof Error ? e.message : String(e) };
-        }
-      }, { id: entryId, title: SAMPLE_TITLE });
+      const saveResult = await edenWindow.evaluate(
+        async (payload) => {
+          const api = (
+            window as unknown as {
+              api: {
+                saveEntry: (e: unknown) => Promise<unknown>;
+              };
+            }
+          ).api;
+          try {
+            const res = await api.saveEntry({
+              id: payload.id,
+              title: payload.title,
+              content_json: JSON.stringify({
+                type: "doc",
+                content: [
+                  { type: "paragraph", content: [{ type: "text", text: "hello eden e2e" }] },
+                ],
+              }),
+              created_at: Date.now(),
+              updated_at: Date.now(),
+              folder_id: null,
+              type_id: "note_obj",
+              header_layout: "default",
+              header_props_json: "{}",
+              schema_version: 1,
+              deleted_at: null,
+            });
+            return { ok: true, res };
+          } catch (e) {
+            return { ok: false, error: e instanceof Error ? e.message : String(e) };
+          }
+        },
+        { id: entryId, title: SAMPLE_TITLE },
+      );
 
       expect(saveResult.ok, `saveEntry должен succeed: ${JSON.stringify(saveResult)}`).toBe(true);
 
       // listEntries видит созданную заметку.
       const entries = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<unknown[]> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { listEntries: () => Promise<unknown[]> };
+          }
+        ).api;
         try {
           return await api.listEntries();
         } catch (e) {
@@ -120,9 +128,11 @@ test.describe("eden extension", () => {
 
       // Cleanup — soft delete через shim. Не assertion-блокирующее на ошибки.
       await edenWindow.evaluate(async (id) => {
-        const api = (window as unknown as {
-          api: { deleteEntry: (id: string) => Promise<unknown> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { deleteEntry: (id: string) => Promise<unknown> };
+          }
+        ).api;
         try {
           await api.deleteEntry(id);
         } catch (e) {
@@ -142,26 +152,31 @@ test.describe("eden extension", () => {
       // Создаём заметку и навигируемся к ней — TipTap должен подгрузиться
       // (lazy chunk Editor.vue) и зарендериться.
       const entryId = `eden-editor-${Date.now()}`;
-      await edenWindow.evaluate(async (payload) => {
-        const api = (window as unknown as {
-          api: {
-            saveEntry: (e: unknown) => Promise<unknown>;
-          };
-        }).api;
-        await api.saveEntry({
-          id: payload.id,
-          title: payload.title,
-          content_json: JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }),
-          created_at: Date.now(),
-          updated_at: Date.now(),
-          folder_id: null,
-          type_id: "note_obj",
-          header_layout: "default",
-          header_props_json: "{}",
-          schema_version: 1,
-          deleted_at: null,
-        });
-      }, { id: entryId, title: `${SAMPLE_TITLE}-editor` });
+      await edenWindow.evaluate(
+        async (payload) => {
+          const api = (
+            window as unknown as {
+              api: {
+                saveEntry: (e: unknown) => Promise<unknown>;
+              };
+            }
+          ).api;
+          await api.saveEntry({
+            id: payload.id,
+            title: payload.title,
+            content_json: JSON.stringify({ type: "doc", content: [{ type: "paragraph" }] }),
+            created_at: Date.now(),
+            updated_at: Date.now(),
+            folder_id: null,
+            type_id: "note_obj",
+            header_layout: "default",
+            header_props_json: "{}",
+            schema_version: 1,
+            deleted_at: null,
+          });
+        },
+        { id: entryId, title: `${SAMPLE_TITLE}-editor` },
+      );
 
       // Refresh entries в store — лучше через клик/UI, но проще через прямой
       // refresh-call (это side-effect-free).
@@ -185,8 +200,9 @@ test.describe("eden extension", () => {
       // Cleanup
       await edenWindow.evaluate(async (id) => {
         try {
-          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-            .api.deleteEntry(id);
+          await (
+            window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+          ).api.deleteEntry(id);
         } catch {
           // ignore
         }
@@ -211,9 +227,11 @@ test.describe("eden extension", () => {
 
       // Подсчёт journal entries до вызова — для дельта-проверки.
       const beforeCount = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { listEntries: () => Promise<Array<{ type_id?: string | null }>> };
+          }
+        ).api;
         const entries = await api.listEntries();
         return entries.filter((e) => e.type_id === "system-type-journal").length;
       });
@@ -221,9 +239,11 @@ test.describe("eden extension", () => {
       // Invoke команды из launcher window (как делает реальный flow).
       const invoke = await launcher.evaluate(async () => {
         try {
-          await (window as unknown as {
-            kepler: { commands: { invoke: (id: string) => Promise<void> } };
-          }).kepler.commands.invoke("eden:note:open-today");
+          await (
+            window as unknown as {
+              kepler: { commands: { invoke: (id: string) => Promise<void> } };
+            }
+          ).kepler.commands.invoke("eden:note:open-today");
           return "ok";
         } catch (e) {
           return "throw:" + (e instanceof Error ? e.message : String(e));
@@ -237,9 +257,15 @@ test.describe("eden extension", () => {
       // Должен появиться один новый journal entry с today-title.
       // Title формат — ISO `YYYY-MM-DD` (см. openTodayJournal в store).
       const result = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; type_id?: string | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const journals = entries.filter((e) => e.type_id === "system-type-journal");
         const now = new Date();
@@ -267,8 +293,7 @@ test.describe("eden extension", () => {
       // на .editor-wrapper или .focus-mode-active на .app-container).
       const zenActive = await edenWindow.evaluate(() => {
         return Boolean(
-          document.querySelector(".focus-mode-active") ||
-            document.querySelector(".focus-mode"),
+          document.querySelector(".focus-mode-active") || document.querySelector(".focus-mode"),
         );
       });
       expect(zenActive, "после open-today должен быть включён zen mode").toBe(true);
@@ -276,17 +301,20 @@ test.describe("eden extension", () => {
       // Cleanup — удалить созданную сегодняшнюю заметку (если только её мы и
       // создали в этом прогоне; если их было >1 — мог быть и pre-existing).
       const journalIds = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { listEntries: () => Promise<Array<{ id: string; type_id?: string | null }>> };
+          }
+        ).api;
         const entries = await api.listEntries();
         return entries.filter((e) => e.type_id === "system-type-journal").map((e) => e.id);
       });
       for (const id of journalIds) {
         await edenWindow.evaluate(async (entryId) => {
           try {
-            await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-              .api.deleteEntry(entryId);
+            await (
+              window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+            ).api.deleteEntry(entryId);
           } catch {
             // ignore
           }
@@ -323,9 +351,11 @@ test.describe("eden extension", () => {
       // First open — создаст today's journal entry.
       const firstInvoke = await launcher.evaluate(async () => {
         try {
-          await (window as unknown as {
-            kepler: { commands: { invoke: (id: string) => Promise<void> } };
-          }).kepler.commands.invoke("eden:note:open-today");
+          await (
+            window as unknown as {
+              kepler: { commands: { invoke: (id: string) => Promise<void> } };
+            }
+          ).kepler.commands.invoke("eden:note:open-today");
           return "ok";
         } catch (e) {
           return "throw:" + (e instanceof Error ? e.message : String(e));
@@ -337,9 +367,15 @@ test.describe("eden extension", () => {
       // Подтверждаем что journal entry создан и его id — фиксируем для
       // последующих сверок.
       const journalIdBefore = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; type_id?: string | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -373,9 +409,11 @@ test.describe("eden extension", () => {
 
       // Проверим что контент попал в ARK через listEntries → content_json.
       const persistedContent = await edenWindow.evaluate(async (id) => {
-        const api = (window as unknown as {
-          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+          }
+        ).api;
         const entry = await api.loadEntry(id!);
         return entry?.content_json ?? null;
       }, journalIdBefore);
@@ -386,9 +424,11 @@ test.describe("eden extension", () => {
       // loadEntry — defensive fix #2). НЕ создавать дубликат.
       const secondInvoke = await launcher.evaluate(async () => {
         try {
-          await (window as unknown as {
-            kepler: { commands: { invoke: (id: string) => Promise<void> } };
-          }).kepler.commands.invoke("eden:note:open-today");
+          await (
+            window as unknown as {
+              kepler: { commands: { invoke: (id: string) => Promise<void> } };
+            }
+          ).kepler.commands.invoke("eden:note:open-today");
           return "ok";
         } catch (e) {
           return "throw:" + (e instanceof Error ? e.message : String(e));
@@ -410,17 +450,20 @@ test.describe("eden extension", () => {
 
       // Verify нет дубликатов journal entry для today.
       const journalCount = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ title: string; type_id?: string | null; deleted_at?: number | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ title: string; type_id?: string | null; deleted_at?: number | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
         return entries.filter(
-          (e) =>
-            e.type_id === "system-type-journal" &&
-            e.title.trim() === today &&
-            !e.deleted_at,
+          (e) => e.type_id === "system-type-journal" && e.title.trim() === today && !e.deleted_at,
         ).length;
       });
       expect(journalCount, "повторный open-today не должен создавать дубликат").toBe(1);
@@ -428,8 +471,9 @@ test.describe("eden extension", () => {
       // Cleanup.
       await edenWindow.evaluate(async (id) => {
         try {
-          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-            .api.deleteEntry(id!);
+          await (
+            window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+          ).api.deleteEntry(id!);
         } catch {
           /* ignore */
         }
@@ -457,16 +501,24 @@ test.describe("eden extension", () => {
 
       // Open today's journal.
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
       await edenWindow.waitForTimeout(2000);
 
       const journalId = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; type_id?: string | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -488,12 +540,14 @@ test.describe("eden extension", () => {
 
       // Создадим вторую заметку и navigate туда.
       const otherEntryId = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: {
-            saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
-          };
-          crypto: Crypto;
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
+            };
+            crypto: Crypto;
+          }
+        ).api;
         const id = (window as unknown as { crypto: Crypto }).crypto.randomUUID();
         const result = await api.saveEntry({
           id,
@@ -515,10 +569,10 @@ test.describe("eden extension", () => {
       // Navigate to other note через store.navigateTo (имитация клика
       // по записи в сайдбаре).
       await edenWindow.evaluate(async (id) => {
-        const pinia = (window as unknown as {
+        const pinia = window as unknown as {
           __PINIA__?: unknown;
           eden?: { navigateTo?: (id: string) => Promise<void> };
-        });
+        };
         // Pinia store не на window глобально. Используем lower-level:
         // dispatch event который App.vue слушает? Нет — проще через
         // window.api.loadEntry + setCurrentEntry. Но setCurrentEntry
@@ -535,9 +589,11 @@ test.describe("eden extension", () => {
       // Eden sidebar показывает recent entries. Найдём наш по title.
       const otherClicked = await edenWindow.evaluate(async (id) => {
         // Подождём пока entries refresh и наш entry появится.
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { listEntries: () => Promise<Array<{ id: string; title: string }>> };
+          }
+        ).api;
         await api.listEntries(); // refresh
         // Поскольку navigateTo сложно достать без exposed store,
         // используем sidebar click. Ищем элемент с data-entry-id или
@@ -550,8 +606,8 @@ test.describe("eden extension", () => {
           return "clicked-sidebar";
         }
         // Fallback: попробуем найти по тексту "Другая заметка"
-        const byText = Array.from(document.querySelectorAll("*")).find(
-          (el) => (el.textContent ?? "").includes("Другая заметка для теста nav"),
+        const byText = Array.from(document.querySelectorAll("*")).find((el) =>
+          (el.textContent ?? "").includes("Другая заметка для теста nav"),
         );
         if (byText) {
           (byText as HTMLElement).click();
@@ -567,28 +623,40 @@ test.describe("eden extension", () => {
       // Снова открываем today journal через invoke (моделирует
       // переход обратно).
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
       await edenWindow.waitForTimeout(1500);
 
       // Главная проверка — content_json journal'а в ARK всё ещё
       // содержит наш CONTENT_A.
       const content = await edenWindow.evaluate(async (id) => {
-        const api = (window as unknown as {
-          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+          }
+        ).api;
         const entry = await api.loadEntry(id!);
         return entry?.content_json ?? null;
       }, journalId);
-      expect(content, "journal content должен остаться в ARK после navigation").toContain(CONTENT_A);
+      expect(content, "journal content должен остаться в ARK после navigation").toContain(
+        CONTENT_A,
+      );
 
       // Не должно быть дубликата journal entry для today.
       const todayJournalCount = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ title: string; type_id?: string | null; deleted_at?: number | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ title: string; type_id?: string | null; deleted_at?: number | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -603,8 +671,9 @@ test.describe("eden extension", () => {
         if (!id) continue;
         await edenWindow.evaluate(async (entryId) => {
           try {
-            await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-              .api.deleteEntry(entryId);
+            await (
+              window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+            ).api.deleteEntry(entryId);
           } catch {
             /* ignore */
           }
@@ -627,13 +696,15 @@ test.describe("eden extension", () => {
 
       // Создаём заметку через API, чтобы получить deterministic entry id.
       const entryId = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: {
-            saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
-            loadEntry: (id: string) => Promise<unknown>;
-          };
-          crypto: Crypto;
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
+              loadEntry: (id: string) => Promise<unknown>;
+            };
+            crypto: Crypto;
+          }
+        ).api;
         const id = (window as unknown as { crypto: Crypto }).crypto.randomUUID();
         const r = await api.saveEntry({
           id,
@@ -696,9 +767,7 @@ test.describe("eden extension", () => {
         await new Promise((r) => setTimeout(r, 500));
         // Find an interactive element that opens the entry.
         // Sidebar entries have data-entry-id attribute (или title-based).
-        const candidates = Array.from(
-          document.querySelectorAll<HTMLElement>("[data-entry-id]"),
-        );
+        const candidates = Array.from(document.querySelectorAll<HTMLElement>("[data-entry-id]"));
         const match = candidates.find((el) => el.dataset.entryId === id);
         if (match) {
           match.click();
@@ -720,9 +789,7 @@ test.describe("eden extension", () => {
       console.log("[test] open entry result:", opened);
 
       // Локатор ProseMirror — может или не может быть смонтирован.
-      const pmReady = await edenWindow.evaluate(
-        () => !!document.querySelector(".ProseMirror"),
-      );
+      const pmReady = await edenWindow.evaluate(() => !!document.querySelector(".ProseMirror"));
 
       if (!pmReady) {
         // Если не получилось открыть нашу заметку через sidebar, тест
@@ -730,9 +797,11 @@ test.describe("eden extension", () => {
         // проверяем persist по journal id.
         await app.firstWindow().then((launcher) =>
           launcher.evaluate(async () => {
-            await (window as unknown as {
-              kepler: { commands: { invoke: (id: string) => Promise<void> } };
-            }).kepler.commands.invoke("eden:note:open-today");
+            await (
+              window as unknown as {
+                kepler: { commands: { invoke: (id: string) => Promise<void> } };
+              }
+            ).kepler.commands.invoke("eden:note:open-today");
           }),
         );
         await edenWindow.waitForTimeout(2000);
@@ -754,9 +823,15 @@ test.describe("eden extension", () => {
         // Найдём что сейчас открыто. ProseMirror в DOM, читаем text.
         const pmText = document.querySelector(".ProseMirror")?.textContent ?? "";
         // Ищем заметку в ARK у которой content содержит наш TEXT.
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; content_json?: string }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; content_json?: string }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         return {
           pmText,
@@ -766,10 +841,9 @@ test.describe("eden extension", () => {
         };
       });
 
-      expect(
-        persisted.pmText,
-        "ProseMirror DOM должен содержать напечатанный текст",
-      ).toContain(TEXT);
+      expect(persisted.pmText, "ProseMirror DOM должен содержать напечатанный текст").toContain(
+        TEXT,
+      );
       expect(
         persisted.entries.length,
         `минимум одна заметка должна содержать "${TEXT}" в content_json. ` +
@@ -778,16 +852,20 @@ test.describe("eden extension", () => {
 
       // Cleanup
       await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: {
-            listEntries: () => Promise<Array<{ id: string; content_json?: string }>>;
-            deleteEntry: (id: string) => Promise<unknown>;
-          };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<Array<{ id: string; content_json?: string }>>;
+              deleteEntry: (id: string) => Promise<unknown>;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         for (const e of entries) {
-          if ((e.content_json ?? "").includes("UI-driven autosave") ||
-              (e as { title?: string }).title === "ui-driven-autosave-test") {
+          if (
+            (e.content_json ?? "").includes("UI-driven autosave") ||
+            (e as { title?: string }).title === "ui-driven-autosave-test"
+          ) {
             try {
               await api.deleteEntry(e.id);
             } catch {
@@ -812,22 +890,31 @@ test.describe("eden extension", () => {
 
       // Открываем journal — гарантированный путь к редактору.
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
       await edenWindow.waitForTimeout(2000);
 
       const journalId = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; type_id?: string | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        return entries.find(
-          (e) => e.type_id === "system-type-journal" && e.title.trim() === today,
-        )?.id ?? null;
+        return (
+          entries.find((e) => e.type_id === "system-type-journal" && e.title.trim() === today)
+            ?.id ?? null
+        );
       });
       expect(journalId).not.toBeNull();
 
@@ -852,9 +939,11 @@ test.describe("eden extension", () => {
       await edenWindow.waitForTimeout(150);
 
       const content = await edenWindow.evaluate(async (id) => {
-        const api = (window as unknown as {
-          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+          }
+        ).api;
         const e = await api.loadEntry(id!);
         return e?.content_json ?? "";
       }, journalId);
@@ -868,8 +957,9 @@ test.describe("eden extension", () => {
       // Cleanup
       await edenWindow.evaluate(async (id) => {
         try {
-          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-            .api.deleteEntry(id!);
+          await (
+            window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+          ).api.deleteEntry(id!);
         } catch {
           /* ignore */
         }
@@ -887,22 +977,31 @@ test.describe("eden extension", () => {
       const launcher = await app.firstWindow();
 
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
       await edenWindow.waitForTimeout(2000);
 
       const journalId = await edenWindow.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; type_id?: string | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        return entries.find(
-          (e) => e.type_id === "system-type-journal" && e.title.trim() === today,
-        )?.id ?? null;
+        return (
+          entries.find((e) => e.type_id === "system-type-journal" && e.title.trim() === today)
+            ?.id ?? null
+        );
       });
       expect(journalId).not.toBeNull();
 
@@ -921,9 +1020,11 @@ test.describe("eden extension", () => {
       await edenWindow.waitForTimeout(150);
 
       const content = await edenWindow.evaluate(async (id) => {
-        const api = (window as unknown as {
-          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+          }
+        ).api;
         const e = await api.loadEntry(id!);
         return e?.content_json ?? "";
       }, journalId);
@@ -933,8 +1034,9 @@ test.describe("eden extension", () => {
       // Cleanup
       await edenWindow.evaluate(async (id) => {
         try {
-          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-            .api.deleteEntry(id!);
+          await (
+            window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+          ).api.deleteEntry(id!);
         } catch {
           /* ignore */
         }
@@ -957,22 +1059,31 @@ test.describe("eden extension", () => {
       const launcher = await app.firstWindow();
 
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
       await first.waitForTimeout(2000);
 
       const journalId = await first.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; type_id?: string | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        return entries.find(
-          (e) => e.type_id === "system-type-journal" && e.title.trim() === today,
-        )?.id ?? null;
+        return (
+          entries.find((e) => e.type_id === "system-type-journal" && e.title.trim() === today)
+            ?.id ?? null
+        );
       });
       expect(journalId).not.toBeNull();
 
@@ -986,9 +1097,11 @@ test.describe("eden extension", () => {
 
       // Verify persisted в ARK.
       const persistedAfterFirst = await first.evaluate(async (id) => {
-        const api = (window as unknown as {
-          api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: { loadEntry: (id: string) => Promise<{ content_json?: string } | null> };
+          }
+        ).api;
         const e = await api.loadEntry(id!);
         return e?.content_json ?? null;
       }, journalId);
@@ -1001,9 +1114,11 @@ test.describe("eden extension", () => {
       // Second session — reopen Eden journal, content должен быть на месте.
       const second = await openEden(app);
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
       await second.waitForTimeout(2500);
 
@@ -1018,9 +1133,15 @@ test.describe("eden extension", () => {
 
       // Не должно быть дубликата.
       const dupes = await second.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ title: string; type_id?: string | null; deleted_at?: number | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ title: string; type_id?: string | null; deleted_at?: number | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -1033,8 +1154,9 @@ test.describe("eden extension", () => {
       // Cleanup.
       await second.evaluate(async (id) => {
         try {
-          await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-            .api.deleteEntry(id!);
+          await (
+            window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+          ).api.deleteEntry(id!);
         } catch {
           /* ignore */
         }

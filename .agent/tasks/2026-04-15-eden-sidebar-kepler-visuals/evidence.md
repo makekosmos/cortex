@@ -1,7 +1,9 @@
 # Evidence — Eden sidebar migration to @kosmos/visuals
 
 ## Scope
+
 Relevant files for this sidebar migration pass:
+
 - `packages/kosmos-visuals/components/Sidebar.vue`
 - `packages/kosmos-visuals/components/index.ts`
 - `packages/kosmos-visuals/index.ts`
@@ -19,6 +21,7 @@ Relevant files for this sidebar migration pass:
 - `apps/eden/ts/src/components/sidebar/VaultSidebar.vue` (removed)
 
 ## What changed
+
 - Eden main shell now uses a **thin shared sidebar adapter** (`EdenSidebar.vue`) built on the same `Sidebar` contract shape as Delphi: `primaryItems`, `projectItems`, `footerItems`.
 - Eden ordinary notes UI now renders **one** shared sidebar instead of separate vault + widget sidebars.
 - `SettingsPage.vue` now uses the same shared sidebar contract instead of its own custom left nav.
@@ -34,7 +37,9 @@ Relevant files for this sidebar migration pass:
   - `VaultSidebar.vue`
 
 ## Verification
+
 ### Fresh commands
+
 - `bun run lint` ✅
 - `bunx tsc --noEmit -p tsconfig.json` ✅
 - `bun run build` ✅
@@ -45,6 +50,7 @@ Relevant files for this sidebar migration pass:
   - vault switching available from settings instead of ordinary sidebar
 
 ## Import / contract evidence
+
 - Eden settings sidebar imports shared sidebar through public API:
   - `apps/eden/ts/src/components/settings/SettingsPage.vue`
 - Eden main shell sidebar adapter imports shared sidebar through public API:
@@ -55,6 +61,7 @@ Relevant files for this sidebar migration pass:
   - `packages/kosmos-visuals/index.ts`
 
 ## Behavioral evidence
+
 - Main shell still supports:
   - create note
   - search
@@ -78,4 +85,5 @@ Relevant files for this sidebar migration pass:
 - Slash command popup still works after the migration.
 
 ## Remaining risks
+
 - `main/store.ts` and `layout.ts` still carry legacy vault sidebar persistence fields even though the UI now uses one main shared sidebar; this is non-blocking follow-up cleanup.

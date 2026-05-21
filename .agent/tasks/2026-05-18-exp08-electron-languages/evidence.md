@@ -40,24 +40,24 @@ $ ls -la "release/Kepler Setup 0.1.9.exe"
 
 ## Diff
 
-| Метрика | Baseline | After | Δ | Δ% |
-|---|---:|---:|---:|---:|
-| `locales/` файлов | 55 | 2 | −53 | −96% |
-| `locales/` unpacked | 46.38 MB | 1.64 MB | **−44.74 MB** | **−96%** |
-| `Kepler Setup 0.1.9.exe` (NSIS) | 110.62 MB | **102.78 MB** | **−7.84 MB** | **−7.1%** |
+| Метрика                         |  Baseline |         After |             Δ |        Δ% |
+| ------------------------------- | --------: | ------------: | ------------: | --------: |
+| `locales/` файлов               |        55 |             2 |           −53 |      −96% |
+| `locales/` unpacked             |  46.38 MB |       1.64 MB | **−44.74 MB** |  **−96%** |
+| `Kepler Setup 0.1.9.exe` (NSIS) | 110.62 MB | **102.78 MB** |  **−7.84 MB** | **−7.1%** |
 
 NSIS-installer экономит меньше unpacked: `.pak` — текстовые ресурсы, сильно сжимаются NSIS deflate. Реальная экономия для конечного юзера — **~45 MB на диске после установки** + ~8 MB при скачивании.
 
 ## Acceptance Criteria
 
-| AC | Описание | Статус |
-|---|---|---|
-| AC1 | `bun run package:dir` exit 0 | ✅ PASS — build прошёл, electron-builder отработал чисто |
-| AC2 | `locales/` содержит ровно en-US.pak + ru.pak | ✅ PASS — `ls` показывает 2 файла |
-| AC3 | Суммарный `locales/` < 2 MB | ✅ PASS — 1.64 MB |
-| AC4 | Kepler launcher стартует с production-build | ⏳ MANUAL — нужен прогон exe юзером |
-| AC5 | Нет regressions в UI / нативных диалогах Chromium | ⏳ MANUAL |
-| AC6 | `bun run typecheck` зелёный | ✅ PASS — `tsc --noEmit` exit 0 |
+| AC  | Описание                                          | Статус                                                   |
+| --- | ------------------------------------------------- | -------------------------------------------------------- |
+| AC1 | `bun run package:dir` exit 0                      | ✅ PASS — build прошёл, electron-builder отработал чисто |
+| AC2 | `locales/` содержит ровно en-US.pak + ru.pak      | ✅ PASS — `ls` показывает 2 файла                        |
+| AC3 | Суммарный `locales/` < 2 MB                       | ✅ PASS — 1.64 MB                                        |
+| AC4 | Kepler launcher стартует с production-build       | ⏳ MANUAL — нужен прогон exe юзером                      |
+| AC5 | Нет regressions в UI / нативных диалогах Chromium | ⏳ MANUAL                                                |
+| AC6 | `bun run typecheck` зелёный                       | ✅ PASS — `tsc --noEmit` exit 0                          |
 
 ## Manual smoke checklist (для AC4/AC5)
 

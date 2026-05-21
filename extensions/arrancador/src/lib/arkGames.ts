@@ -28,17 +28,12 @@ export interface ArrancadorGame {
 }
 
 export interface KeplerArkBridge {
-  request: (
-    operation: string,
-    params?: Record<string, unknown>,
-  ) => Promise<unknown>;
+  request: (operation: string, params?: Record<string, unknown>) => Promise<unknown>;
   subscribe: (event: string, handler: (payload: unknown) => void) => () => void;
 }
 
 export function arkBridge(): KeplerArkBridge | null {
-  const kepler = (
-    window as unknown as { kepler?: { ark?: KeplerArkBridge } }
-  ).kepler;
+  const kepler = (window as unknown as { kepler?: { ark?: KeplerArkBridge } }).kepler;
   return kepler?.ark ?? null;
 }
 

@@ -35,7 +35,5 @@
       ]
     }
   ],
-  "raw_artifacts": [
-    ".agent/tasks/2026-04-17-sidebar-drag-layer/raw/verification.txt"
-  ]
+  "raw_artifacts": [".agent/tasks/2026-04-17-sidebar-drag-layer/raw/verification.txt"]
 }

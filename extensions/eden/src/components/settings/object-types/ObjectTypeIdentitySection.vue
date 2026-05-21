@@ -80,9 +80,9 @@ onBeforeUnmount(() => {
         <div class="object-type-section__eyebrow">Основа</div>
         <h3 class="object-type-section__title">Идентичность типа</h3>
         <p class="object-type-section__text">
-          Название, множественное имя и визуальная подача определяют, как тип выглядит в библиотеке и
-          на странице коллекции. Заголовок заметки остается отдельным top-level полем, а свойства ниже
-          управляют верхней частью страницы.
+          Название, множественное имя и визуальная подача определяют, как тип выглядит в библиотеке
+          и на странице коллекции. Заголовок заметки остается отдельным top-level полем, а свойства
+          ниже управляют верхней частью страницы.
         </p>
       </div>
 
@@ -92,14 +92,14 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="object-type-identity__hero">
-      <div
-        ref="pickerRoot"
-        class="object-type-identity__picker"
-      >
+      <div ref="pickerRoot" class="object-type-identity__picker">
         <button
           type="button"
           class="object-type-identity__picker-trigger"
-          :style="{ '--object-type-accent': draft.color || '#2aa7ee', '--object-type-icon-src': `url(${iconSrc})` }"
+          :style="{
+            '--object-type-accent': draft.color || '#2aa7ee',
+            '--object-type-icon-src': `url(${iconSrc})`,
+          }"
           :disabled="isSystemDraft"
           :aria-expanded="pickerOpen ? 'true' : 'false'"
           @click="togglePicker"
@@ -107,10 +107,7 @@ onBeforeUnmount(() => {
           <span class="object-type-identity__icon" aria-hidden="true" />
         </button>
 
-        <div
-          v-if="pickerOpen"
-          class="object-type-identity__picker-panel"
-        >
+        <div v-if="pickerOpen" class="object-type-identity__picker-panel">
           <div class="object-type-identity__picker-section">
             <div class="object-type-identity__picker-label">Иконка</div>
             <div class="object-type-identity__icon-grid">
@@ -207,7 +204,10 @@ onBeforeUnmount(() => {
         >
           <span
             class="object-type-identity__visual-icon"
-            :style="{ '--object-type-accent': draft.color || '#2aa7ee', '--object-type-icon-src': `url(${iconSrc})` }"
+            :style="{
+              '--object-type-accent': draft.color || '#2aa7ee',
+              '--object-type-icon-src': `url(${iconSrc})`,
+            }"
             aria-hidden="true"
           />
           <span class="object-type-identity__visual-copy">
@@ -390,7 +390,9 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--background);
-  transition: border-color 0.16s ease, background-color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .object-type-identity__icon-option.is-active,

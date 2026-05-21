@@ -64,9 +64,7 @@ export const useTaskStore = defineStore("tasks", () => {
       updated_at: new Date(),
     };
 
-    tasks.value = tasks.value.map((item) =>
-      item.id === task.id ? updated : item,
-    );
+    tasks.value = tasks.value.map((item) => (item.id === task.id ? updated : item));
   }
 
   function editTask(task: Task) {
@@ -78,9 +76,7 @@ export const useTaskStore = defineStore("tasks", () => {
       updated_at: new Date(),
     };
 
-    tasks.value = tasks.value.map((item) =>
-      item.id === task.id ? updated : item,
-    );
+    tasks.value = tasks.value.map((item) => (item.id === task.id ? updated : item));
   }
 
   function upsertTask(task: Task) {

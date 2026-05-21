@@ -44,6 +44,7 @@ Verification: `cargo build --release` in `packages/ark-core/rust/` passes; `./gr
 
 **AC2 — Relay transport module**
 File `packages/ark-core/rust/src/relay_transport.rs` exists and `lib.rs` includes `pub mod relay_transport`. It implements:
+
 - Outbound WebSocket client connecting to `wss://<host>/ws?space_id=X&device_id=Y&api_key=Z`
 - Uses `LanSyncMessage` JSON wire format (same as LAN transport)
 - Offline outbox: `VecDeque<LanSyncMessage>` drained on reconnect
@@ -54,6 +55,7 @@ Verification: `cargo build --release` in `packages/ark-core/rust/` succeeds with
 
 **AC3 — Mesh coordinator module**
 File `packages/ark-core/rust/src/mesh.rs` exists and compiles. It contains:
+
 - `MeshConfig { lan_enabled: bool, relay_url: Option<String>, relay_api_key: Option<String> }`
 - A coordinator managing both LAN (sync_server + sync_client + beacon) and relay transport simultaneously
 - Deduplication of incoming changes by `(device_id, entity_id, hlc)` so a change arriving from both transports is processed only once
@@ -64,6 +66,7 @@ Verification: `cargo build --release` succeeds; existing `FfiSyncConfig` constru
 
 **AC4 — ark-relay-server binary**
 Directory `packages/ark-relay-server/` exists with:
+
 - `Cargo.toml` declaring a `[[bin]]` target named `ark-relay-server`; dependencies include `tokio`, one of `axum`/`warp`/`tokio-tungstenite`, `rusqlite`, `serde_json`
 - `src/main.rs` implementing a WebSocket server with endpoint `GET /ws?space_id=X&device_id=Y&api_key=Z`
 - Routes `LanSyncMessage` JSON frames between all devices sharing the same `space_id`
@@ -75,6 +78,7 @@ Verification: `cargo build --release` in `packages/ark-relay-server/` succeeds; 
 
 **AC5 — Swift UniFFI scaffold**
 Directory `packages/ark-core/swift/` exists containing:
+
 - Generated Swift bindings from `packages/ark-core/rust/src/ark_core.udl` (files produced by `uniffi-bindgen generate --language swift`)
 - File `packages/ark-core/swift/ArkCoreExample.swift` — a minimal Swift snippet that creates `ArkCore()`, calls `startSync(config:listener:)`, and prints events
 - No Xcode project file is present
@@ -83,6 +87,7 @@ Verification: Files exist at the stated path; no `.xcodeproj` or `.xcworkspace` 
 
 **AC6 — Integration test: relay round-trip**
 File `packages/ark-core/rust/tests/relay_round_trip.rs` exists and the test passes. The test:
+
 - Starts a local relay server (in-process tokio task or subprocess)
 - Creates two ArkCore instances with `relay_url` pointing to the local server and the same `space_id`
 - Instance A calls `broadcast_change_json` with a test entity
@@ -99,6 +104,7 @@ Directory `packages/arksync-node/` exists with `package.json` declaring `"name":
 
 **AC8 — ArkClient class is complete and type-correct**
 `packages/arksync-node/` exports class `ArkClient` with:
+
 - Constructor: `new ArkClient({ spaceId, deviceId, deviceName?, port?, relayUrl?, relayApiKey?, sidecarPath })`
 - `start(): Promise<void>` — spawns `ark-core-rpc` at `sidecarPath`, sends `start_sync` RPC, subscribes to the event stream
 - `stop(): Promise<void>` — sends `stop_sync`, kills the sidecar process
@@ -111,6 +117,7 @@ Directory `packages/arksync-node/` exists with `package.json` declaring `"name":
 Verification: `bun run build` (or `tsc --noEmit`) in `packages/arksync-node/` produces 0 TypeScript errors.
 
 **AC9 — Delphi Electron uses @arksync/node**
+
 - `apps/delphi/ts/package.json` includes `"@arksync/node": "workspace:*"` in dependencies
 - `apps/delphi/ts/electron/main.ts` imports sync lifecycle (`start`, `stop`, `broadcastChange`, event callbacks) from `@arksync/node`
 - `main.ts` does NOT import from `./peer-manager`, `./sync-server`, `./sync-client`, `./peer-discovery`, `./broadcast-discovery`, or `@arksync/core`
@@ -124,6 +131,7 @@ Verification: `bun run build` in `apps/delphi/ts/` exits 0 with no TypeScript er
 
 **AC10 — Legacy Electron TS sync files deleted**
 The following files do NOT exist in the repository:
+
 - `apps/delphi/ts/electron/peer-manager.ts`
 - `apps/delphi/ts/electron/peer-server.ts`
 - `apps/delphi/ts/electron/peer-discovery.ts`
@@ -136,6 +144,7 @@ Verification: `ls apps/delphi/ts/electron/peer-manager.ts` returns "No such file
 
 **AC11 — Legacy Kotlin sync files deleted**
 The following files do NOT exist:
+
 - `apps/delphi/kotlin/.../data/sync/ArkSyncClient.kt`
 - `apps/delphi/kotlin/.../data/sync/ArkPeerManager.kt`
 - `apps/delphi/kotlin/.../data/sync/ArkPeerProtocol.kt`
@@ -144,6 +153,7 @@ The following files do NOT exist:
 Verification: `./gradlew compileDebugKotlin` exits BUILD SUCCESS; `grep -r "ArkSyncClient\|ArkPeerManager\|ArkPeerProtocol\|ArkEventMapper" apps/delphi/kotlin/` returns empty.
 
 **AC12 — packages/arksync deleted; zero @arksync/core imports remain**
+
 - `packages/arksync/` directory does not exist
 - `packages/arksync` is removed from the root `package.json` workspaces array
 - `grep -r "@arksync/core" apps/ packages/` returns empty output
@@ -159,6 +169,7 @@ Verification: The grep command exits 1 (no matches).
 
 **AC14 — Android APK builds and binds ports**
 `./gradlew assembleDebug` in `apps/delphi/kotlin/` exits BUILD SUCCESS. After APK install and Space activation on a real device:
+
 - `adb logcat -s PeerManager` shows "Starting ark-core sync"
 - `adb shell cat /proc/net/tcp` shows port `5403` (hex for 21531) within 5 seconds
 - `adb shell cat /proc/net/udp` shows port `5404` (hex for 21532) within 5 seconds
@@ -175,6 +186,7 @@ Adding a task on Android causes it to appear in the Electron app within 5 second
 
 **AC17 — packages/ark-core/CLAUDE.md updated**
 The "Runtime status" section in `packages/ark-core/CLAUDE.md` reflects that:
+
 - Sync layer is LIVE (not library-only)
 - Beacon is in Rust (`beacon.rs`)
 - Relay transport exists (`relay_transport.rs`, `mesh.rs`)
@@ -269,23 +281,23 @@ ls "$REPO/packages/ark-core/swift/ArkCoreExample.swift"
 
 ### AC summary table
 
-| AC | Phase | How verified |
-|----|-------|-------------|
-| AC1 | A1 | cargo build + ./gradlew compileDebugKotlin + manual adb check |
-| AC2 | A2 | cargo build --release (ark-core) |
-| AC3 | A3 | cargo build --release + ./gradlew compileDebugKotlin |
-| AC4 | A4 | cargo build --release (relay-server) + cargo test |
-| AC5 | A5 | file existence: ls packages/ark-core/swift/ |
-| AC6 | A6 | cargo test --test relay_round_trip |
-| AC7 | B1 | file existence: ls packages/arksync-node/package.json |
-| AC8 | B1 | bun run build (arksync-node) |
-| AC9 | B2 | bun run build (delphi/ts) |
-| AC10 | C1 | file absence + grep no import |
-| AC11 | C2 | ./gradlew compileDebugKotlin + grep |
-| AC12 | C3 | grep -r "@arksync/core" returns empty |
-| AC13 | D1 | manual: bun run dev + ps |
-| AC14 | D2 | ./gradlew assembleDebug + manual adb |
-| AC15 | D1 | manual: real device sync Electron→Android |
-| AC16 | D2 | manual: real device sync Android→Electron |
-| AC17 | E1 | file content check |
-| AC18 | E1 | file content check |
+| AC   | Phase | How verified                                                  |
+| ---- | ----- | ------------------------------------------------------------- |
+| AC1  | A1    | cargo build + ./gradlew compileDebugKotlin + manual adb check |
+| AC2  | A2    | cargo build --release (ark-core)                              |
+| AC3  | A3    | cargo build --release + ./gradlew compileDebugKotlin          |
+| AC4  | A4    | cargo build --release (relay-server) + cargo test             |
+| AC5  | A5    | file existence: ls packages/ark-core/swift/                   |
+| AC6  | A6    | cargo test --test relay_round_trip                            |
+| AC7  | B1    | file existence: ls packages/arksync-node/package.json         |
+| AC8  | B1    | bun run build (arksync-node)                                  |
+| AC9  | B2    | bun run build (delphi/ts)                                     |
+| AC10 | C1    | file absence + grep no import                                 |
+| AC11 | C2    | ./gradlew compileDebugKotlin + grep                           |
+| AC12 | C3    | grep -r "@arksync/core" returns empty                         |
+| AC13 | D1    | manual: bun run dev + ps                                      |
+| AC14 | D2    | ./gradlew assembleDebug + manual adb                          |
+| AC15 | D1    | manual: real device sync Electron→Android                     |
+| AC16 | D2    | manual: real device sync Android→Electron                     |
+| AC17 | E1    | file content check                                            |
+| AC18 | E1    | file content check                                            |

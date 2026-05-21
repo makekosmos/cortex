@@ -17,12 +17,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
-import {
-  openHorologion,
-  seedTask,
-  seedPomodoroDraft,
-  gracefulQuit,
-} from "./helpers/horologion";
+import { openHorologion, seedTask, seedPomodoroDraft, gracefulQuit } from "./helpers/horologion";
 
 test("horologion pomodoro: tasks из reactive proxy не валят start с clone error", async () => {
   const app = await launchKepler({
@@ -60,9 +55,9 @@ test("horologion pomodoro: tasks из reactive proxy не валят start с cl
     });
 
     // Проверяем chip появился.
-    await expect(
-      horo.locator(`.pdi__chip-label:has-text("Кодинг")`),
-    ).toBeVisible({ timeout: 3_000 });
+    await expect(horo.locator(`.pdi__chip-label:has-text("Кодинг")`)).toBeVisible({
+      timeout: 3_000,
+    });
 
     // Старт — это submit формы → onSubmit → p.start(ctx) → pomodoro.start IPC.
     const startBtn = horo.getByRole("button", { name: /Начать сессию/ });
@@ -83,18 +78,12 @@ test("horologion pomodoro: tasks из reactive proxy не валят start с cl
       e.toLowerCase().includes("could not be cloned"),
     );
     if (cloneErrors.length > 0) {
-      throw new Error(
-        `BUG: ${cloneErrors.length} clone error(s):\n${cloneErrors.join("\n")}`,
-      );
+      throw new Error(`BUG: ${cloneErrors.length} clone error(s):\n${cloneErrors.join("\n")}`);
     }
     // AC: и `start failed` тоже отсутствует.
-    const startFailures = consoleErrors.filter((e) =>
-      e.includes("[pomodoroSession] start failed"),
-    );
+    const startFailures = consoleErrors.filter((e) => e.includes("[pomodoroSession] start failed"));
     if (startFailures.length > 0) {
-      throw new Error(
-        `BUG: pomodoro start failed:\n${startFailures.join("\n")}`,
-      );
+      throw new Error(`BUG: pomodoro start failed:\n${startFailures.join("\n")}`);
     }
 
     // Stop.

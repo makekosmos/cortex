@@ -18,14 +18,7 @@
 //   - gh CLI: либо в PATH, либо absolute path в KEPLER_GH_PATH env.
 //   - GH_TOKEN env (для gh) или предварительный `gh auth login`.
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync, spawnSync } from "node:child_process";
@@ -154,7 +147,9 @@ function publishOne(id, opts) {
       console.log(`[ext:publish] tag ${tag} уже существует — skip`);
       return null;
     }
-    die(`release ${tag} уже существует в ${RELEASES_REPO}. Bump version или удали release manually.`);
+    die(
+      `release ${tag} уже существует в ${RELEASES_REPO}. Bump version или удали release manually.`,
+    );
   }
 
   if (!opts.skipBuild) buildExtensions();
@@ -211,4 +206,6 @@ console.log(`[ext:publish] done. published: ${results.length}/${ids.length}`);
 for (const r of results) {
   console.log(`  - ${r.tag} (sha256 ${r.sha.slice(0, 12)}...)`);
 }
-console.log(`[ext:publish] Не забудь: bun run --cwd shell ext:catalog -- <output-path> и push в kosmos-extensions`);
+console.log(
+  `[ext:publish] Не забудь: bun run --cwd shell ext:catalog -- <output-path> и push в kosmos-extensions`,
+);

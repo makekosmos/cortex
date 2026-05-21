@@ -3,6 +3,7 @@
 ## Original Task Statement
 
 Bring Android (Kotlin/Compose) Delphi to feature parity with TS/Electron on three space-related features:
+
 1. Per-space Room DB isolation (each space = separate SQLite database file)
 2. Space naming/renaming
 3. Empty trash permanently (delete trashed todos from DB)
@@ -83,20 +84,20 @@ Bring Android (Kotlin/Compose) Delphi to feature parity with TS/Electron on thre
 
 ## Key Files to Modify
 
-| File | Change |
-|------|--------|
-| `di/DatabaseModule.kt` | Replace singleton DB with `DatabaseProvider` that supports switching |
-| `data/space/SpaceManager.kt` | Add `renameSpace()`, change default name to "Новое пространство" |
-| `data/db/TodoDao.kt` | Add `deleteTrashed()` query |
-| `ui/screens/trash/TrashScreen.kt` | Add "Очистить корзину" button with confirmation |
-| `ui/screens/trash/TrashViewModel.kt` | Add `emptyTrash()` method |
-| `ui/screens/space/SpaceSetupScreen.kt` | Display space names, add rename UI |
-| `ui/screens/space/SpaceSetupViewModel.kt` | Wire `renameSpace()`, call DB switch on space activation |
-| `ui/screens/settings/SettingsScreen.kt` | Optionally add rename UI |
-| `ui/screens/settings/SettingsViewModel.kt` | Wire DB switch on leave-space |
-| `ui/navigation/NavGraph.kt` | Possibly trigger DB init on space-code change |
-| `ui/screens/SmartListViewModel.kt` | Re-subscribe to DAO flows after DB switch |
-| `ui/components/SmartListScaffold.kt` | Support optional action buttons (for trash empty) |
+| File                                       | Change                                                               |
+| ------------------------------------------ | -------------------------------------------------------------------- |
+| `di/DatabaseModule.kt`                     | Replace singleton DB with `DatabaseProvider` that supports switching |
+| `data/space/SpaceManager.kt`               | Add `renameSpace()`, change default name to "Новое пространство"     |
+| `data/db/TodoDao.kt`                       | Add `deleteTrashed()` query                                          |
+| `ui/screens/trash/TrashScreen.kt`          | Add "Очистить корзину" button with confirmation                      |
+| `ui/screens/trash/TrashViewModel.kt`       | Add `emptyTrash()` method                                            |
+| `ui/screens/space/SpaceSetupScreen.kt`     | Display space names, add rename UI                                   |
+| `ui/screens/space/SpaceSetupViewModel.kt`  | Wire `renameSpace()`, call DB switch on space activation             |
+| `ui/screens/settings/SettingsScreen.kt`    | Optionally add rename UI                                             |
+| `ui/screens/settings/SettingsViewModel.kt` | Wire DB switch on leave-space                                        |
+| `ui/navigation/NavGraph.kt`                | Possibly trigger DB init on space-code change                        |
+| `ui/screens/SmartListViewModel.kt`         | Re-subscribe to DAO flows after DB switch                            |
+| `ui/components/SmartListScaffold.kt`       | Support optional action buttons (for trash empty)                    |
 
 ## Verification Plan
 

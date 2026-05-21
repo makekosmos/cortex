@@ -69,6 +69,7 @@ shell/
 ## Жёсткие правила
 
 ::: danger
+
 - Renderer **никогда** не открывает SQLite напрямую. Все DB reads — через
   `window.kepler.ark.request(...)`.
 - Dashboard — **read-only**. Никаких writes в ARK таблицы.
@@ -80,7 +81,7 @@ shell/
 - Окно использует `<DesktopChrome>` + `<DesktopContentSurface>` из
   `@kosmos/visuals` — не дублируй own chrome.
 - Закрытие dashboard окна **не** закрывает Kepler shell.
-:::
+  :::
 
 ## Команды
 
@@ -95,11 +96,12 @@ bun run --cwd shell dev                    # backend + extensions + Kepler rende
 
 ## IPC API
 
-| Channel | Direction | Описание |
-|---|---|---|
+| Channel              | Direction       | Описание                                                                        |
+| -------------------- | --------------- | ------------------------------------------------------------------------------- |
 | `kepler:ark:request` | renderer → main | Generic ARK RPC bridge — `arkClient.invokeOperation({ operation, ...params })`. |
 
 Открытие окна:
+
 - Через static launcher command `dashboard:open` («Открыть таблицу данных», `kind: "command"`, `appName: "Kepler"`) в `shell/electron/commands.ts`. Иконка в launcher — `BuiltInIcon` (teal `Database` glyph).
 - Из tray menu Dashboard убран (2026-05-16) — теперь там только «Открыть», «Настройки», «Выход».
 

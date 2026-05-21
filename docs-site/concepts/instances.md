@@ -17,12 +17,12 @@
 
 ## Слоты (соглашение)
 
-| slot | trigger | Electron userData | ARK dataDir | productName | hotkey | autoupdater | autorun |
-|---|---|---|---|---|---|---|---|
-| `prod` (default) | installed `Kepler.exe` | `%APPDATA%\Kepler\` | `%APPDATA%\Kosmos\` | Kepler | `Alt+Space` | on | разрешён |
-| `dev` | `VITE_DEV_SERVER_URL` set, нет `KEPLER_INSTANCE` | `%APPDATA%\Kepler-dev\` | `%APPDATA%\Kosmos-dev\` | Kepler [dev] | `` Alt+` `` | off | запрещён |
-| `dev-<x>` | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local`) | `%APPDATA%\Kepler-dev-<x>\` | `%APPDATA%\Kosmos-dev-<x>\` | Kepler [dev-<x>] | disabled | off | запрещён |
-| `test-<x>` | `KOSMOS_DATA_DIR` set (Playwright helper) | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR` (absolute) | Kepler [test] | disabled | off | запрещён |
+| slot             | trigger                                               | Electron userData             | ARK dataDir                  | productName      | hotkey      | autoupdater | autorun  |
+| ---------------- | ----------------------------------------------------- | ----------------------------- | ---------------------------- | ---------------- | ----------- | ----------- | -------- |
+| `prod` (default) | installed `Kepler.exe`                                | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`          | Kepler           | `Alt+Space` | on          | разрешён |
+| `dev`            | `VITE_DEV_SERVER_URL` set, нет `KEPLER_INSTANCE`      | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`      | Kepler [dev]     | `` Alt+` `` | off         | запрещён |
+| `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local`) | `%APPDATA%\Kepler-dev-<x>\`   | `%APPDATA%\Kosmos-dev-<x>\`  | Kepler [dev-<x>] | disabled    | off         | запрещён |
+| `test-<x>`       | `KOSMOS_DATA_DIR` set (Playwright helper)             | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR` (absolute) | Kepler [test]    | disabled    | off         | запрещён |
 
 `<x>` — `[a-z0-9][a-z0-9-]*`. Соглашение по именам: `dev-a`, `dev-b`, `dev-eden`, `dev-issue-42`.
 
@@ -44,10 +44,11 @@ Single source of truth: **`shell/electron/instance.ts`**.
 ```ts
 import { resolveInstance, applyInstanceToApp } from "./instance";
 const KEPLER_INSTANCE = resolveInstance();
-applyInstanceToApp(KEPLER_INSTANCE);  // app.setName + app.setPath('userData') + setAppUserModelId
+applyInstanceToApp(KEPLER_INSTANCE); // app.setName + app.setPath('userData') + setAppUserModelId
 ```
 
 Дальше:
+
 - `keplerDataDir()` в `data-dir.ts` делегирует в `resolveInstance().dataDir`.
 - `crashReporter.start({ productName: KEPLER_INSTANCE.productName, ... })`.
 - Backend spawn env: `KOSMOS_DATA_DIR=<dataDir>`, `KEPLER_INSTANCE=<slot>`.

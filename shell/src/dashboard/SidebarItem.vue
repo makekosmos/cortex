@@ -10,12 +10,7 @@ defineEmits<{
 </script>
 
 <template>
-  <button
-    type="button"
-    class="item"
-    :class="{ active }"
-    @click="$emit('click')"
-  >
+  <button type="button" class="item" :class="{ active }" @click="$emit('click')">
     <span class="dot" :style="{ background: color }"></span>
     <span class="label">{{ label }}</span>
   </button>

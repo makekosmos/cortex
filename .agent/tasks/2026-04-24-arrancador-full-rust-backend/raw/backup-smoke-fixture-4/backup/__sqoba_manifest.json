@@ -1,17 +1,17 @@
 {
-    "version":  2,
-    "files":  [
-                  {
-                      "originalPath":  "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\backup-smoke-fixture-4\\restore\\save-a.bin",
-                      "mtime":  null,
-                      "size":  7,
-                      "backupPath":  "files/root-0/save-a.bin"
-                  },
-                  {
-                      "originalPath":  "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\backup-smoke-fixture-4\\restore\\save-b.bin",
-                      "mtime":  null,
-                      "size":  6,
-                      "backupPath":  "files/root-0/save-b.bin"
-                  }
-              ]
+  "version": 2,
+  "files": [
+    {
+      "originalPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\backup-smoke-fixture-4\\restore\\save-a.bin",
+      "mtime": null,
+      "size": 7,
+      "backupPath": "files/root-0/save-a.bin"
+    },
+    {
+      "originalPath": "D:\\Personal\\Hobby\\Coding\\kosmos\\.agent\\tasks\\2026-04-24-arrancador-full-rust-backend\\raw\\backup-smoke-fixture-4\\restore\\save-b.bin",
+      "mtime": null,
+      "size": 6,
+      "backupPath": "files/root-0/save-b.bin"
+    }
+  ]
 }

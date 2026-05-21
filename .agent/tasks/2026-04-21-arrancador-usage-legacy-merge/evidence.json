@@ -5,9 +5,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/services/ark-usage.ts"
-      ]
+      "evidence": ["apps/arrancador/electron/main/services/ark-usage.ts"]
     },
     {
       "id": "AC2",

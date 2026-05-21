@@ -49,10 +49,7 @@ test("AC: revert восстанавливает предыдущую верси�
   const app = await electron.launch({
     executablePath: electronBinary,
     cwd: appRoot,
-    args: [
-      path.join(appRoot, "dist-electron", "main.js"),
-      `--user-data-dir=${userDataDir}`,
-    ],
+    args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
     env: {
       ...process.env,
       NODE_ENV: "test",
@@ -68,9 +65,11 @@ test("AC: revert восстанавливает предыдущую верси�
     async function call(channel: string, ...args: unknown[]) {
       return app.evaluate(
         async ({ ipcMain }, { ch, a }) => {
-          const handlers = (ipcMain as unknown as {
-            _invokeHandlers: Map<string, (...x: unknown[]) => unknown>;
-          })._invokeHandlers;
+          const handlers = (
+            ipcMain as unknown as {
+              _invokeHandlers: Map<string, (...x: unknown[]) => unknown>;
+            }
+          )._invokeHandlers;
           const h = handlers?.get?.(ch);
           if (!h) throw new Error(`no handler: ${ch}`);
           return await h({} as never, ...a);
@@ -82,19 +81,11 @@ test("AC: revert восстанавливает предыдущую верси�
     await call("kepler:extension:install:do", kV1);
     await call("kepler:extension:install:do", kV2);
 
-    const targetManifest = path.join(
-      dataDir,
-      "extensions",
-      "rev-target",
-      "manifest.json",
-    );
+    const targetManifest = path.join(dataDir, "extensions", "rev-target", "manifest.json");
     const beforeRevert = JSON.parse(fs.readFileSync(targetManifest, "utf8"));
     expect(beforeRevert.version).toBe("1.1.0");
 
-    const backups = (await call(
-      "kepler:extension:backups:list",
-      "rev-target",
-    )) as string[];
+    const backups = (await call("kepler:extension:backups:list", "rev-target")) as string[];
     expect(backups.length).toBeGreaterThanOrEqual(1);
 
     const ok = await call("kepler:extension:revert", "rev-target");
@@ -104,10 +95,7 @@ test("AC: revert восстанавливает предыдущую верси�
     expect(afterRevert.version).toBe("1.0.0");
 
     // После revert'а должен появиться backup с pre-revert v1.1.0.
-    const backupsAfter = (await call(
-      "kepler:extension:backups:list",
-      "rev-target",
-    )) as string[];
+    const backupsAfter = (await call("kepler:extension:backups:list", "rev-target")) as string[];
     expect(backupsAfter.length).toBeGreaterThanOrEqual(backups.length);
   } finally {
     await app.close();

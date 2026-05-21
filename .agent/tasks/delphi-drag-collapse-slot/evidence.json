@@ -31,9 +31,7 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        ".agent/tasks/delphi-drag-collapse-slot/raw/tsc-noemit.txt"
-      ]
+      "evidence": [".agent/tasks/delphi-drag-collapse-slot/raw/tsc-noemit.txt"]
     }
   ],
   "commands": [

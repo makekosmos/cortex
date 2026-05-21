@@ -85,6 +85,7 @@ kepler/
 ```
 
 ::: warning Проблемы baseline'а
+
 - `apps/{dashboard,delphi/ts,horologion,arrancador}/` — мёртвые дубликаты живых extension'ов.
 - `apps/kepler/` — retired Rust binary, нет смысла держать.
 - `packages/{kepler-ark,kepler-visuals}/` — оставлены junction-target'ы после brand swap.
@@ -93,7 +94,7 @@ kepler/
 - `services/usage-tracker/` — standalone, хотя по сути должен быть **модулем** kepler-backend (один процесс, один ARK).
 - `services/kepler-watcher/` — почти пустой, оставлен на всякий случай.
 - Workspace glob `apps/*` + два явных `apps/eden/ts`, `apps/delphi/ts` — leakage внутренней структуры в root config.
-:::
+  :::
 
 ---
 
@@ -102,6 +103,7 @@ kepler/
 ### 3.1 Идея
 
 Не двигать большие папки. Только:
+
 1. Удалить мёртвые дубликаты в `apps/`.
 2. Удалить `packages/kepler-{ark,visuals}/` мусор.
 3. Удалить `apps/kepler/` (Phase 8 retire).
@@ -154,6 +156,7 @@ Remove-Item -Recurse -Force apps\kepler\target -ErrorAction SilentlyContinue
 Шаги (по порядку):
 
 1. **Pre-flight check**:
+
    ```powershell
    git status --short              # должен быть чистый
    git status --short packages/    # ОБЯЗАТЕЛЬНО чисто
@@ -163,34 +166,42 @@ Remove-Item -Recurse -Force apps\kepler\target -ErrorAction SilentlyContinue
 2. **Cleanup node_modules перед удалением** (см. callout выше).
 
 3. **Удалить дубликаты apps**:
+
    ```powershell
    git rm -rf apps/dashboard apps/horologion apps/arrancador
    git rm -rf apps/delphi/ts        # оставить apps/delphi/kotlin (Android)
    ```
+
    Заметка: `apps/delphi/` остаётся как контейнер для `kotlin/`. Альтернативно перенести `apps/delphi/kotlin` → `apps/delphi-android` и удалить весь `apps/delphi/`. См. шаг 5.
 
 4. **Удалить retired Rust launcher**:
+
    ```powershell
    git rm -rf apps/kepler
    ```
 
 5. **Перенести Android модуль** (опционально, но рекомендуется чтобы убрать пустой `apps/delphi/`):
+
    ```powershell
    git mv apps/delphi/kotlin apps/delphi-android
    git rm -rf apps/delphi          # уже пустой
    ```
 
 6. **Удалить junction-target мусор**:
+
    ```powershell
    git rm -rf packages/kepler-ark packages/kepler-visuals
    ```
+
    Перед этим проверить что внутри нет ничего кроме `node_modules/` и `dist/`:
+
    ```powershell
    Get-ChildItem packages\kepler-ark -Force
    Get-ChildItem packages\kepler-visuals -Force
    ```
 
 7. **Обновить root `package.json` workspaces**:
+
    ```diff
    "workspaces": [
      "apps/*",
@@ -201,9 +212,11 @@ Remove-Item -Recurse -Force apps\kepler\target -ErrorAction SilentlyContinue
      "docs-site"
    ]
    ```
+
    Если применён шаг 5 — `apps/eden/ts` тоже можно перенести в `apps/eden-desktop` чтобы убрать второй workspace exception. Это оптяно (см. Variant 2).
 
 8. **Обновить `scripts/sync-agents-docs.mjs`**:
+
    ```diff
    - { dest: "apps/eden/AGENTS.md", src: "apps/eden.md", title: "Eden" },
    - { dest: "apps/delphi/AGENTS.md", src: "apps/delphi.md", title: "Delphi" },
@@ -336,6 +349,7 @@ packages/kepler-visuals/              →  УДАЛИТЬ (мусор)
 
 ::: danger Junction safety
 Каждый `git mv` / `Remove-Item` на папку с `node_modules/` **ОБЯЗАТЕЛЬНО** prefix'нуть удалением `node_modules`. Полный список папок для очистки:
+
 ```powershell
 $dirs = @(
   'apps\kepler-shell\node_modules',
@@ -353,12 +367,14 @@ $dirs = @(
 )
 foreach ($d in $dirs) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
 ```
+
 **Перед** запуском: `git status packages/` ДОЛЖЕН быть чистым (никаких `??`). Иначе stash и затем повторить.
 :::
 
 Шаги:
 
 1. **Pre-flight**:
+
    ```powershell
    git status --short
    git status --short packages/
@@ -369,12 +385,14 @@ foreach ($d in $dirs) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
 2. **Cleanup node_modules** (см. callout).
 
 3. **Сначала удалить дубликаты** (как Variant 1, шаги 3-6):
+
    ```powershell
    git rm -rf apps/dashboard apps/horologion apps/arrancador apps/delphi/ts apps/kepler
    git rm -rf packages/kepler-ark packages/kepler-visuals
    ```
 
 4. **Промоут Eden TS** (избавиться от лишней вложенности):
+
    ```powershell
    # apps/eden/ts/* → apps/eden/* — но apps/eden/ уже занят (AGENTS.md, README.md).
    # Стратегия: переименовать parent в apps/eden-desktop, потом подняться.
@@ -384,9 +402,11 @@ foreach ($d in $dirs) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
    Remove-Item apps/eden -Force
    git mv apps/eden-desktop-tmp apps/eden
    ```
+
    Альтернативно: оставить `apps/eden/ts/` и не трогать до Phase 6 (см. Risks).
 
 5. **Mobile модули**:
+
    ```powershell
    New-Item -ItemType Directory mobile
    git mv apps/delphi/kotlin mobile/delphi
@@ -395,17 +415,20 @@ foreach ($d in $dirs) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
    ```
 
 6. **Промоут shell**:
+
    ```powershell
    git mv apps/kepler-shell shell-tmp
    # extensions поднять до того как shell станет shell/
    git mv shell-tmp/extensions extensions
    git mv shell-tmp shell
    ```
+
    После этого `shell/` содержит electron/, src/, scripts/, build/, package.json, vite configs. `extensions/` — top-level с 4 поддиректориями.
 
 7. **`apps/` теперь почти пустой**. Если внутри только `eden/` — оставить. Если нужен `apps/README.md` — обновить.
 
 8. **Обновить `shell/package.json`**:
+
    ```diff
    "scripts": {
    -  "build:backend": "cargo build --release --manifest-path ../../services/kepler-backend/Cargo.toml ...",
@@ -426,6 +449,7 @@ foreach ($d in $dirs) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
    ```
 
 9. **Обновить `shell/vite.config.mjs` и `shell/vite.extensions.config.mjs`**:
+
    ```diff
    - extensionsRoot = path.resolve(__dirname, "extensions")
    + extensionsRoot = path.resolve(__dirname, "../extensions")
@@ -446,6 +470,7 @@ foreach ($d in $dirs) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
     - Aliasи `@kosmos/ark` и `@kosmos/visuals` — relative path был `../../../packages/...` (extension сидел в `apps/kepler-shell/extensions/<id>/`), теперь стал `../../packages/...` (extension в `extensions/<id>/`).
 
 12. **Обновить root `package.json` workspaces**:
+
     ```diff
     "workspaces": [
     -  "apps/*",
@@ -463,9 +488,11 @@ foreach ($d in $dirs) { if (Test-Path $d) { Remove-Item -Recurse -Force $d } }
     +  "docs-site"
     ]
     ```
+
     Заметка: `mobile/*` — Gradle проекты, у них нет `package.json`. Bun их проигнорирует, но мы оставляем glob для документационной симметрии. Альтернативно — не включать `mobile/*` в bun workspaces, оно нужно только для документации.
 
 13. **Обновить `scripts/sync-agents-docs.mjs`** — все per-app AGENTS.md destinations:
+
     ```diff
     - { dest: "apps/eden/AGENTS.md", ... }
     + { dest: "apps/eden/AGENTS.md", ... }     // не меняется если выбрана опция оставить eden/
@@ -661,9 +688,11 @@ rusqlite = { workspace = true }
      ```
 
 2. **`packages/ark-core/` → `crates/ark-core/`**:
+
    ```powershell
    git mv packages/ark-core crates/ark-core
    ```
+
    Обновить все `Cargo.toml`'ы с `path = "../../packages/ark-core/rust"` → `"../../crates/ark-core/rust"` (или сразу через workspace inheritance).
 
 3. **Eden → extension** (Phase 6 work, не самоочевидно):
@@ -738,10 +767,11 @@ Variant 3 — это многосотенная diff с touched practically ever
 declare global {
   interface Window {
     kepler: {
-      ark: { request, subscribe };           // существующее
-      window: { close, minimize, maximize }; // существующее
-      meta: { id };                          // существующее
-      userData: {                            // НОВОЕ
+      ark: { request; subscribe }; // существующее
+      window: { close; minimize; maximize }; // существующее
+      meta: { id }; // существующее
+      userData: {
+        // НОВОЕ
         readJson<T>(name: string): Promise<T | null>;
         writeJson<T>(name: string, value: T): Promise<void>;
         readFile(name: string): Promise<Buffer | null>;
@@ -795,6 +825,7 @@ ext:uninstall <id> --purge   # удаляет ОБА
 ### 6.5 Install behavior
 
 `shell/scripts/install-extension.mjs`:
+
 - Копирует source → `%APPDATA%\Kosmos\extensions/<id>/` (atomic, как сейчас).
 - **Не трогает** `%APPDATA%\Kosmos\extensions-data/<id>/`.
 - При первой установке `extensions-data/<id>/` не создаётся явно — создаётся lazily при первом write через userData API.
@@ -802,6 +833,7 @@ ext:uninstall <id> --purge   # удаляет ОБА
 ### 6.6 Resolution chain (без изменений)
 
 Существующий приоритет из `extension-host.ts`:
+
 1. Dev: `extensions/<id>/` (repo) — если работает в dev режиме.
 2. User: `%APPDATA%\Kosmos\extensions/<id>/`.
 3. Bundled: `<resourcesPath>/extensions/<id>/`.
@@ -876,6 +908,7 @@ User data path (`extensions-data/<id>/`) — **независим от resolutio
 ### 7.5 ARK API requirements (что должно быть в `@kosmos/ark`)
 
 Существующее достаточно:
+
 - `client.objects.list({ type, limit, offset, query? })`.
 - `client.objects.get(id)`.
 - `client.links.get(objectId)`.
@@ -909,6 +942,7 @@ extensions/dashboard/src/
 ### 7.7 Связь с persistent user data
 
 Dashboard может persist'ить:
+
 - Selected object type (last opened).
 - Column visibility / order.
 - Table page size.
@@ -922,6 +956,7 @@ Dashboard может persist'ить:
 ### 8.1 Цель
 
 Сейчас:
+
 ```
 [usage-tracker.exe]  ←─WS─→  [kepler-backend.exe]  ←─stdio─→  [ark-core-rpc.exe]
                         OR
@@ -929,6 +964,7 @@ Dashboard может persist'ить:
 ```
 
 После refactor'а:
+
 ```
 [kepler-backend.exe]
   ├─ usage_tracker module (tokio::spawn)
@@ -983,16 +1019,19 @@ async fn main() {
 ### 8.4 Direct ARK writes
 
 В сегодняшнем standalone usage-tracker есть два режима:
+
 1. **WS клиент** (`USAGE_TRACKER_USE_KEPLER=1`) — `kepler_client.rs` → WS RPC к backend → backend пишет.
 2. **Direct SQLite** (default до сих пор) — `db.rs` → прямой `rusqlite::Connection::open`.
 
 После merge модуль использует **третий** вариант: in-process direct call в `ark_core::db::*`. Это безопасно потому что:
+
 - Процесс один. Нет ARK lock contention с другим процессом.
 - `ark_core::db::bump_sync_version_vector` вызывается естественно — write-boundary не нарушается.
 - `kepler-backend.exe` уже владеет SQLite-соединением через `ark_host` (его proxy к ark-core-rpc). Modul может либо переиспользовать это соединение, либо открыть свою read-write connection в WAL mode.
 
 ::: warning Архитектурное решение по connection sharing
 Текущий backend проксирует JSON через stdio к ark-core-rpc child. Это нужно потому что ark-core-rpc имеет много логики (sync, FTS, и т.п.). Usage_tracker модуль:
+
 - **Опция A**: открывает свой `rusqlite::Connection` на ту же SQLite (WAL mode позволяет multiple writers через retry). Pros: simple. Cons: `bump_sync_version_vector` нужно вызвать вручную, надо обеспечить корректность HLC.
 - **Опция B**: вызывает ark-core-rpc через тот же stdio channel что и WS клиенты. Не direct.
 - **Опция C**: ark_core exposes "library" interface (`ark_core::db::*`) который usage_tracker импортирует, и kepler-backend ensures что только один writer активен.
@@ -1030,6 +1069,7 @@ windows = { version = "0.58", features = [
 - **Variant 3**: сразу в `legacy/usage-tracker/`.
 
 Файлы которые НЕ переезжают в kepler-backend (потому что они для standalone use case):
+
 - `main.rs` — entrypoint, не нужен.
 - `singleton.rs` — kepler-backend имеет свой singleton.
 - `kepler_client.rs` — WS клиент к backend'у, больше не нужен (мы внутри backend'а).
@@ -1038,6 +1078,7 @@ windows = { version = "0.58", features = [
 - `installer/` — отдельный installer не нужен, поглощается shell installer'ом.
 
 Файлы которые **переезжают**:
+
 - `tracker.rs` — core логика.
 - `sampler.rs` — system polling.
 - `windows_capture.rs` — Win32 wrapper.
@@ -1065,6 +1106,7 @@ Shell читает settings и при spawn backend'а передаёт env var 
 ### 8.8 Risk: regression
 
 Нативная Win32 capture логика и lifecycle тонкие. Merge тратит риск регрессии. Mitigation:
+
 - Keep `services/usage-tracker/` нетронутым в первой версии — merge делается параллельным branche'ом.
 - Verify через A/B: standalone usage-tracker пишет в test DB, backend-merged version — в другой test DB, диф через sql query.
 - Rollback path: `legacy/usage-tracker/` остаётся buildable как standalone exe до окончательного sign-off.
@@ -1089,20 +1131,20 @@ Shell читает settings и при spawn backend'а передаёт env var 
 
 ## 10. Summary comparison
 
-| Параметр | Variant 1 (минимальный) | Variant 2 (средний) | Variant 3 (радикальный) |
-|---|---|---|---|
-| **Effort** | 2–4 часа | 1–2 рабочих дня | 4–7 рабочих дней (+ 2 недели если Eden) |
-| **Risk (junction discharge)** | Низкий | Средний (больше mv операций) | Высокий (Cargo workspace + Eden) |
-| **Risk (build pipeline)** | Минимальный | Средний (vite/electron-builder/scripts) | Высокий (Cargo workspace, electron-builder, scripts, multiple pipelines) |
-| **Reversibility** | Высокая (только `git rm`) | Средняя (много `git mv` + bun.lock) | Низкая (Cargo workspace + multi-Crate edits) |
-| **Aligns with persistent extension data** | Да (нейтрально — не блокирует) | Да (extensions/ top-level упрощает mental model) | Да |
-| **Aligns with new Dashboard** | Да (нейтрально) | Да (extensions/dashboard/ — естественное место) | Да |
-| **Aligns with usage-tracker merge** | Да (нейтрально) | Да | Да (делается в этом же PR) |
-| **Reduces apps/ confusion** | Частично (убирает дубликаты) | Полностью (top-level разделение по ролям) | Полностью (+ Rust vs TS разделение) |
-| **Eden migration coupling** | Не связано | Не связано (eden остаётся в apps/) | Связано (Eden принудительно мигрирует) |
-| **Cognitive simplicity for newcomer** | Средняя (всё ещё `apps/kepler-shell/extensions/`) | Высокая (`shell/`, `extensions/`, `services/` — самообъясняющие) | Высокая, но Cargo workspace добавляет ментальный налог |
-| **Bun.lock churn** | Минимальный | Большой | Очень большой |
-| **Cargo.lock churn** | Нулевой | Нулевой | Большой |
+| Параметр                                  | Variant 1 (минимальный)                           | Variant 2 (средний)                                              | Variant 3 (радикальный)                                                  |
+| ----------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Effort**                                | 2–4 часа                                          | 1–2 рабочих дня                                                  | 4–7 рабочих дней (+ 2 недели если Eden)                                  |
+| **Risk (junction discharge)**             | Низкий                                            | Средний (больше mv операций)                                     | Высокий (Cargo workspace + Eden)                                         |
+| **Risk (build pipeline)**                 | Минимальный                                       | Средний (vite/electron-builder/scripts)                          | Высокий (Cargo workspace, electron-builder, scripts, multiple pipelines) |
+| **Reversibility**                         | Высокая (только `git rm`)                         | Средняя (много `git mv` + bun.lock)                              | Низкая (Cargo workspace + multi-Crate edits)                             |
+| **Aligns with persistent extension data** | Да (нейтрально — не блокирует)                    | Да (extensions/ top-level упрощает mental model)                 | Да                                                                       |
+| **Aligns with new Dashboard**             | Да (нейтрально)                                   | Да (extensions/dashboard/ — естественное место)                  | Да                                                                       |
+| **Aligns with usage-tracker merge**       | Да (нейтрально)                                   | Да                                                               | Да (делается в этом же PR)                                               |
+| **Reduces apps/ confusion**               | Частично (убирает дубликаты)                      | Полностью (top-level разделение по ролям)                        | Полностью (+ Rust vs TS разделение)                                      |
+| **Eden migration coupling**               | Не связано                                        | Не связано (eden остаётся в apps/)                               | Связано (Eden принудительно мигрирует)                                   |
+| **Cognitive simplicity for newcomer**     | Средняя (всё ещё `apps/kepler-shell/extensions/`) | Высокая (`shell/`, `extensions/`, `services/` — самообъясняющие) | Высокая, но Cargo workspace добавляет ментальный налог                   |
+| **Bun.lock churn**                        | Минимальный                                       | Большой                                                          | Очень большой                                                            |
+| **Cargo.lock churn**                      | Нулевой                                           | Нулевой                                                          | Большой                                                                  |
 
 ---
 
@@ -1115,6 +1157,7 @@ Variant 1 — fallback если на refactor сейчас нет окна (мо
 Variant 3 — отложить до момента когда продукт станет более стабильным; нет смысла платить за shared Cargo workspace и Eden migration в один присест когда они не блокируют друг друга. Cargo workspace сделается отдельно когда деплои стабилизируются и cold build time станет заметной болью.
 
 После Variant 2 рекомендуется в следующих proof loop'ах в указанном порядке:
+
 1. **`extensions-data/`** + `userData` preload API (см. секция 6).
 2. **usage-tracker merge** в kepler-backend (см. секция 8).
 3. **Dashboard rework** (см. секция 7) — последним, потому что выигрывает от `userData` API и от merged usage-tracker (Activity tab читает usage напрямую от того же ARK).

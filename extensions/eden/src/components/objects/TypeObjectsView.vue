@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
-import {
-  formatObjectFieldValue,
-  formatReadableRussianDate,
-} from "@/lib/objectFieldFormatting";
+import { formatObjectFieldValue, formatReadableRussianDate } from "@/lib/objectFieldFormatting";
 import {
   getNoteTypeCollectionName,
   parseNoteTypeDefinition,
@@ -156,7 +153,8 @@ const tableColumnsStyle = computed(() => ({
       <div v-else class="type-objects-empty">
         <h2>РџРѕРєР° РЅРµС‚ РѕР±СЉРµРєС‚РѕРІ СЌС‚РѕРіРѕ С‚РёРїР°</h2>
         <p>
-          РЎРѕР·РґР°Р№ РїРµСЂРІС‹Р№ РѕР±СЉРµРєС‚ С‚РёРїР° В«{{ noteType.name }}В», Рё Р·РґРµСЃСЊ РїРѕСЏРІРёС‚СЃСЏ РїРѕР»РЅРѕС†РµРЅРЅР°СЏ РєРѕР»Р»РµРєС†РёСЏ.
+          РЎРѕР·РґР°Р№ РїРµСЂРІС‹Р№ РѕР±СЉРµРєС‚ С‚РёРїР° В«{{ noteType.name }}В», Рё Р·РґРµСЃСЊ
+          РїРѕСЏРІРёС‚СЃСЏ РїРѕР»РЅРѕС†РµРЅРЅР°СЏ РєРѕР»Р»РµРєС†РёСЏ.
         </p>
         <button class="type-objects-primary-btn" type="button" @click="emit('createEntry')">
           РЎРѕР·РґР°С‚СЊ РѕР±СЉРµРєС‚

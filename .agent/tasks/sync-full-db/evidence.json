@@ -19,9 +19,7 @@
       "id": "AC2",
       "text": "Trashed items included in initial sync",
       "status": "PASS",
-      "proof": [
-        "ArkDataRepository.getAllForSync() no longer filters out isTrashed"
-      ],
+      "proof": ["ArkDataRepository.getAllForSync() no longer filters out isTrashed"],
       "gaps": []
     },
     {

@@ -7,6 +7,7 @@ Use this file only when `verdict.json` is not `PASS`.
 ## Template for each non-PASS acceptance criterion
 
 ### ACX: <criterion text>
+
 - Status: FAIL or UNKNOWN
 - Why it is not proven:
 - Minimal reproduction steps:

@@ -8,11 +8,11 @@
 
 Сравнение двух конфигураций — 4 standalone Electron .exe против Kepler-shell с теми же 4 апками как Vue extensions:
 
-| Метрика | Baseline (4 standalone Electron apps) | Kepler + 4 extensions | Diff |
-|---|---|---|---|
-| Working Set | 1092 MB | 968 MB | −124 MB / −11% |
-| Private Bytes | 683 MB | 474 MB | −209 MB / −31% |
-| Processes | 15 | 11 | −4 |
+| Метрика       | Baseline (4 standalone Electron apps) | Kepler + 4 extensions | Diff           |
+| ------------- | ------------------------------------- | --------------------- | -------------- |
+| Working Set   | 1092 MB                               | 968 MB                | −124 MB / −11% |
+| Private Bytes | 683 MB                                | 474 MB                | −209 MB / −31% |
+| Processes     | 15                                    | 11                    | −4             |
 
 Конфигурация: Dashboard + Horologion + Delphi + Arrancador, open одновременно, dev mode, после ~30s стабилизации.
 
@@ -77,12 +77,12 @@ pwsh scripts/run-baseline-scenarios.ps1
 
 После baseline:
 
-| Сценарий | Threshold | Триггерит |
-|---|---|---|
-| `all-extensions-idle` Private > **600 MB** | RAM bottleneck | **Exp 5** (WebContentsView) приоритет |
-| `all-extensions-idle` Private > **900 MB** | Critical | Exp 5 + Exp 4 (window pool) |
-| `exp23-acrylic` dwm.exe %GPU > **15%** sustained | DWM overhead | **Exp 23** (переход на Mica) |
-| `exp23-mica` dwm.exe %GPU < **8%** | Mica win | Применить Mica |
+| Сценарий                                         | Threshold      | Триггерит                             |
+| ------------------------------------------------ | -------------- | ------------------------------------- |
+| `all-extensions-idle` Private > **600 MB**       | RAM bottleneck | **Exp 5** (WebContentsView) приоритет |
+| `all-extensions-idle` Private > **900 MB**       | Critical       | Exp 5 + Exp 4 (window pool)           |
+| `exp23-acrylic` dwm.exe %GPU > **15%** sustained | DWM overhead   | **Exp 23** (переход на Mica)          |
+| `exp23-mica` dwm.exe %GPU < **8%**               | Mica win       | Применить Mica                        |
 
 После стабилизации (~30s warmup в orchestrator) измеряются Working Set / Private Bytes / process count по дереву процессов host'а и его child'ов.
 

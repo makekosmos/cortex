@@ -22,19 +22,9 @@ type Unsubscribe = () => void;
 
 const api = {
   ark: {
-    request: <T = unknown>(
-      operation: string,
-      params?: Record<string, unknown>,
-    ): Promise<T> =>
-      ipcRenderer.invoke(
-        "kepler:extension:ark:request",
-        operation,
-        params,
-      ) as Promise<T>,
-    subscribe: (
-      event: string,
-      handler: (payload: unknown) => void,
-    ): Unsubscribe => {
+    request: <T = unknown>(operation: string, params?: Record<string, unknown>): Promise<T> =>
+      ipcRenderer.invoke("kepler:extension:ark:request", operation, params) as Promise<T>,
+    subscribe: (event: string, handler: (payload: unknown) => void): Unsubscribe => {
       const channel = `kepler:extension:ark:event:${event}`;
       const wrapped = (_e: unknown, payload: unknown) => handler(payload);
       ipcRenderer.on(channel, wrapped);
@@ -46,16 +36,12 @@ const api = {
     },
   },
   meta: {
-    id: (): Promise<string | null> =>
-      ipcRenderer.invoke("kepler:extension:meta:id"),
+    id: (): Promise<string | null> => ipcRenderer.invoke("kepler:extension:meta:id"),
   },
   window: {
-    close: (): Promise<void> =>
-      ipcRenderer.invoke("kepler:extension:window:close"),
-    minimize: (): Promise<void> =>
-      ipcRenderer.invoke("kepler:extension:window:minimize"),
-    maximize: (): Promise<void> =>
-      ipcRenderer.invoke("kepler:extension:window:maximize"),
+    close: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:close"),
+    minimize: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:minimize"),
+    maximize: (): Promise<void> => ipcRenderer.invoke("kepler:extension:window:maximize"),
     isMaximized: (): Promise<boolean> =>
       ipcRenderer.invoke("kepler:extension:window:is-maximized") as Promise<boolean>,
     /** Toggle floating-widget mode: always-on-top + top-right corner.
@@ -67,36 +53,24 @@ const api = {
       ipcRenderer.invoke("kepler:extension:window:is-docked") as Promise<boolean>,
     /** Подписка на изменение docked-состояния (broadcast при
         toggleDockCorner). Returns unsubscribe. */
-    onDockedChange: (
-      handler: (isDocked: boolean) => void,
-    ): Unsubscribe => {
+    onDockedChange: (handler: (isDocked: boolean) => void): Unsubscribe => {
       const wrapped = (_e: unknown, value: unknown) => {
         if (typeof value === "boolean") handler(value);
       };
       ipcRenderer.on("kepler:extension:window:docked-changed", wrapped);
-      return () =>
-        ipcRenderer.removeListener(
-          "kepler:extension:window:docked-changed",
-          wrapped,
-        );
+      return () => ipcRenderer.removeListener("kepler:extension:window:docked-changed", wrapped);
     },
     /** Включить/выключить maximize. На Windows `false` блокирует native
         double-click-on-titlebar-maximize — даёт нашему dblclick handler
         отработать без флика. */
     setMaximizable: (value: boolean): Promise<void> =>
       ipcRenderer.invoke("kepler:extension:window:set-maximizable", value),
-    onMaximizedChange: (
-      handler: (isMaximized: boolean) => void,
-    ): Unsubscribe => {
+    onMaximizedChange: (handler: (isMaximized: boolean) => void): Unsubscribe => {
       const wrapped = (_e: unknown, value: unknown) => {
         if (typeof value === "boolean") handler(value);
       };
       ipcRenderer.on("kepler:extension:window:maximized-changed", wrapped);
-      return () =>
-        ipcRenderer.removeListener(
-          "kepler:extension:window:maximized-changed",
-          wrapped,
-        );
+      return () => ipcRenderer.removeListener("kepler:extension:window:maximized-changed", wrapped);
     },
   },
   host: {
@@ -163,11 +137,9 @@ const api = {
           {},
         ) as Promise<T>,
       setRawgKey: <T = unknown>(key: string): Promise<T> =>
-        ipcRenderer.invoke(
-          "kepler:extension:ark:request",
-          "arrancador.config.set_rawg_key",
-          { key },
-        ) as Promise<T>,
+        ipcRenderer.invoke("kepler:extension:ark:request", "arrancador.config.set_rawg_key", {
+          key,
+        }) as Promise<T>,
     },
   },
   focusWidget: {
@@ -195,31 +167,18 @@ const api = {
     onDisconnected: (listener: () => void): Unsubscribe => {
       const handler = () => listener();
       ipcRenderer.on("kepler:backend:disconnected", handler);
-      return () =>
-        ipcRenderer.removeListener("kepler:backend:disconnected", handler);
+      return () => ipcRenderer.removeListener("kepler:backend:disconnected", handler);
     },
   },
   userData: {
     readJson: <T = unknown>(name: string): Promise<T | null> =>
-      ipcRenderer.invoke("kepler:extension:userData:readJson", name) as Promise<
-        T | null
-      >,
+      ipcRenderer.invoke("kepler:extension:userData:readJson", name) as Promise<T | null>,
     writeJson: <T = unknown>(name: string, value: T): Promise<void> =>
-      ipcRenderer.invoke(
-        "kepler:extension:userData:writeJson",
-        name,
-        value,
-      ) as Promise<void>,
+      ipcRenderer.invoke("kepler:extension:userData:writeJson", name, value) as Promise<void>,
     readFile: (name: string): Promise<string | null> =>
-      ipcRenderer.invoke("kepler:extension:userData:readFile", name) as Promise<
-        string | null
-      >,
+      ipcRenderer.invoke("kepler:extension:userData:readFile", name) as Promise<string | null>,
     writeFile: (name: string, content: string): Promise<void> =>
-      ipcRenderer.invoke(
-        "kepler:extension:userData:writeFile",
-        name,
-        content,
-      ) as Promise<void>,
+      ipcRenderer.invoke("kepler:extension:userData:writeFile", name, content) as Promise<void>,
     path: (): Promise<string> =>
       ipcRenderer.invoke("kepler:extension:userData:path") as Promise<string>,
   },
@@ -229,16 +188,18 @@ export type KeplerExtensionApi = typeof api;
 
 // Test rig — exposed только в test mode. Mirror shell/electron/preload.ts.
 if (process.env.KOSMOS_TEST_MODE === "1") {
-  (api as KeplerExtensionApi & {
-    __test?: {
-      waitForReady(timeoutMs?: number): Promise<void>;
-      getStats(): Promise<{
-        arkConnected: boolean;
-        commands: string[];
-        commandsRegistered: number;
-      }>;
-    };
-  }).__test = {
+  (
+    api as KeplerExtensionApi & {
+      __test?: {
+        waitForReady(timeoutMs?: number): Promise<void>;
+        getStats(): Promise<{
+          arkConnected: boolean;
+          commands: string[];
+          commandsRegistered: number;
+        }>;
+      };
+    }
+  ).__test = {
     waitForReady: (timeoutMs?: number) =>
       ipcRenderer.invoke("kepler:__test:waitForReady", timeoutMs) as Promise<void>,
     getStats: () =>

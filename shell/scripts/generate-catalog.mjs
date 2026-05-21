@@ -10,13 +10,7 @@
 //   bun run --cwd shell ext:catalog -- <output-path>
 //   bun run --cwd shell ext:catalog -- .tmp/kosmos-extensions/catalog.json
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  readdirSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -100,7 +94,9 @@ async function fetchReleases() {
   );
   if (r.status !== 0) {
     // empty repo / no releases — graceful: return empty
-    console.warn(`[ext:catalog] gh api releases failed (assuming empty): ${r.stderr.slice(0, 200)}`);
+    console.warn(
+      `[ext:catalog] gh api releases failed (assuming empty): ${r.stderr.slice(0, 200)}`,
+    );
     return [];
   }
   // jq -q вывод — последовательность JSON objects по одному в строке.
@@ -165,9 +161,7 @@ async function main() {
       author: manifest.author ?? null,
       version: info.version,
       keplerApiVersion: manifest.keplerApiVersion ?? "^1.0.0",
-      iconUrl: manifest.icon
-        ? `${RAW_BASE}/extensions/${id}/${manifest.icon}`
-        : null,
+      iconUrl: manifest.icon ? `${RAW_BASE}/extensions/${id}/${manifest.icon}` : null,
       downloadUrl: `${DOWNLOAD_BASE}/${info.release.tag_name}/${asset.name}`,
       sha256,
       size: asset.size ?? null,

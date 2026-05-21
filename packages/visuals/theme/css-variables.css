@@ -32,7 +32,9 @@
      inter, импорт в самом начале этого файла — автоматически для всех
      consumers @kosmos/visuals). Дальше Segoe UI как Windows-fallback,
      затем нейтральные Helvetica/Arial. */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter Variable", Inter, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter Variable", Inter,
+    "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --color-bg-primary: oklch(0.145 0 0);
@@ -64,7 +66,11 @@
   --status-success: oklch(62.7% 0.194 149.214);
   --status-warning: oklch(75% 0.14 75);
   --status-connecting: oklch(75% 0.14 75);
-  --scrim-gradient: linear-gradient(180deg, color-mix(in srgb, var(--background) 0%, transparent) 0%, color-mix(in srgb, var(--background) 75%, transparent) 100%);
+  --scrim-gradient: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--background) 0%, transparent) 0%,
+    color-mix(in srgb, var(--background) 75%, transparent) 100%
+  );
 
   /* Pomodoro / timer accent stripe цвета. Derive из семантических токенов:
      work — destructive (красный), break — status-success (зелёный),
@@ -139,7 +145,11 @@
   --status-success: oklch(62.7% 0.194 149.214);
   --status-warning: oklch(75% 0.14 75);
   --status-connecting: oklch(75% 0.14 75);
-  --scrim-gradient: linear-gradient(180deg, color-mix(in srgb, #000 0%, transparent) 0%, color-mix(in srgb, #000 75%, transparent) 100%);
+  --scrim-gradient: linear-gradient(
+    180deg,
+    color-mix(in srgb, #000 0%, transparent) 0%,
+    color-mix(in srgb, #000 75%, transparent) 100%
+  );
   --shadow-floating: 0 4px 24px color-mix(in srgb, oklch(0 0 0) 55%, transparent);
 
   --border: oklch(0.23 0.00004 271);
@@ -174,12 +184,7 @@
 
 .kosmos-game-poster-card__scrim {
   height: 62%;
-  background: linear-gradient(
-    to top,
-    rgb(0 0 0 / 82%) 0%,
-    rgb(0 0 0 / 48%) 52%,
-    transparent 100%
-  );
+  background: linear-gradient(to top, rgb(0 0 0 / 82%) 0%, rgb(0 0 0 / 48%) 52%, transparent 100%);
 }
 
 .kosmos-game-poster-card__overlay {
@@ -213,7 +218,7 @@
    Без фона track'а. Цвет — тон-в-тон с hover-state result row.
    ---------------------------------------------------------------------------- */
 @property --kosmos-scroll-alpha {
-  syntax: '<number>';
+  syntax: "<number>";
   inherits: true;
   initial-value: 0;
 }

@@ -91,9 +91,7 @@
       {
         "id": "AC8",
         "status": "PASS",
-        "evidence": [
-          ".agent/tasks/object-model-v1/raw/utf8-mojibake-check.txt"
-        ]
+        "evidence": [".agent/tasks/object-model-v1/raw/utf8-mojibake-check.txt"]
       }
     ]
   },

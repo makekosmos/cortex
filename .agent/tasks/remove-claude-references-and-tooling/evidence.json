@@ -12,9 +12,7 @@
     "AC2": {
       "status": "PASS",
       "details": "repo-task-proof-loop tooling now treats AGENTS.md as canonical and installs project agents into .agents/agents.",
-      "raw_artifacts": [
-        ".agent/tasks/remove-claude-references-and-tooling/raw/verify-package.txt"
-      ]
+      "raw_artifacts": [".agent/tasks/remove-claude-references-and-tooling/raw/verify-package.txt"]
     },
     "AC3": {
       "status": "PASS",
@@ -26,9 +24,7 @@
     "AC4": {
       "status": "PASS",
       "details": "repo-task-proof-loop smoke tests still pass after the AGENTS.md canonicalization changes.",
-      "raw_artifacts": [
-        ".agent/tasks/remove-claude-references-and-tooling/raw/verify-package.txt"
-      ]
+      "raw_artifacts": [".agent/tasks/remove-claude-references-and-tooling/raw/verify-package.txt"]
     },
     "AC5": {
       "status": "PASS",

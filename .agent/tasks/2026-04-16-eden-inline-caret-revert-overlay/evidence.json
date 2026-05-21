@@ -9,21 +9,15 @@
     },
     "AC2": {
       "status": "PASS",
-      "evidence": [
-        "Editor.css restored native-caret fallback styling"
-      ]
+      "evidence": ["Editor.css restored native-caret fallback styling"]
     },
     "AC3": {
       "status": "PASS",
-      "evidence": [
-        "InlineCaret.ts remains present in the codebase"
-      ]
+      "evidence": ["InlineCaret.ts remains present in the codebase"]
     },
     "AC4": {
       "status": "PASS",
-      "evidence": [
-        "TypeScript noEmit passes for apps/eden/ts"
-      ]
+      "evidence": ["TypeScript noEmit passes for apps/eden/ts"]
     }
   }
 }

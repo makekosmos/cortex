@@ -5,24 +5,17 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/windows.ts"
-      ]
+      "evidence": ["apps/arrancador/electron/main/windows.ts"]
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/src-vue/router.ts"
-      ]
+      "evidence": ["apps/arrancador/src-vue/router.ts"]
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/index.html",
-        "apps/arrancador/src-vue/main.ts"
-      ]
+      "evidence": ["apps/arrancador/index.html", "apps/arrancador/src-vue/main.ts"]
     },
     {
       "id": "AC4",

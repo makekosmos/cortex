@@ -30,7 +30,9 @@ test("horologion: pomodoro start → stop → entry visible in ListView", async 
     const horoWindow = await openHorologion(app);
 
     // Set pomodoro draft title via input so we can identify the entry later.
-    const draftInput = horoWindow.locator(".pdi__row input, .pdi__row textarea, .pdi__row [contenteditable]").first();
+    const draftInput = horoWindow
+      .locator(".pdi__row input, .pdi__row textarea, .pdi__row [contenteditable]")
+      .first();
     await draftInput.click();
     await horoWindow.keyboard.type("e2e-pomo-task");
 
@@ -61,9 +63,7 @@ test("horologion: pomodoro start → stop → entry visible in ListView", async 
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
-      new Promise<void>((resolve) =>
-        app.process().once("exit", () => resolve()),
-      ),
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
       new Promise<void>((_, rej) =>
         setTimeout(() => rej(new Error("process exit timeout")), 10_000),
       ),
@@ -77,7 +77,9 @@ test("horologion: stopwatch start → stop → entry visible in ListView", async
     const horoWindow = await openHorologion(app);
 
     // Set draft title.
-    const draftInput = horoWindow.locator(".pdi__row input, .pdi__row textarea, .pdi__row [contenteditable]").first();
+    const draftInput = horoWindow
+      .locator(".pdi__row input, .pdi__row textarea, .pdi__row [contenteditable]")
+      .first();
     await draftInput.click();
     await horoWindow.keyboard.type("e2e-sw-task");
 
@@ -109,9 +111,7 @@ test("horologion: stopwatch start → stop → entry visible in ListView", async
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
-      new Promise<void>((resolve) =>
-        app.process().once("exit", () => resolve()),
-      ),
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
       new Promise<void>((_, rej) =>
         setTimeout(() => rej(new Error("process exit timeout")), 10_000),
       ),
@@ -154,9 +154,7 @@ test("horologion: переключение режимов меняет selected 
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
-      new Promise<void>((resolve) =>
-        app.process().once("exit", () => resolve()),
-      ),
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
       new Promise<void>((_, rej) =>
         setTimeout(() => rej(new Error("process exit timeout")), 10_000),
       ),

@@ -85,9 +85,9 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 ```ts
 type Project = {
   // ...
-  billable: boolean,     // помечает весь проект как оплачиваемый
-  price?: number | null, // общий бюджет проекта (опц.)
-}
+  billable: boolean; // помечает весь проект как оплачиваемый
+  price?: number | null; // общий бюджет проекта (опц.)
+};
 ```
 
 ### Наследование
@@ -110,13 +110,13 @@ Delphi портирован в `extensions/delphi/` **как есть** из sta
 
 ### Mapping legacy каналов → ARK operations
 
-| Legacy channel | Ark operation |
-|---|---|
-| `db:loadAll`, `ark:listDelphiTasks` | `list_objects_by_type` (`task_obj`) → массив `TodoItem` |
-| `db:upsertTodo`, `ark:upsertDelphiTask` | `upsert_object` (`task_obj`) |
-| `db:deleteTodo`, `ark:deleteDelphiTask` | `delete_object` |
-| `db:batchUpsertTodos` | цикл `upsert_object` |
-| `ark:listTimeEntries` | `list_objects_by_type` (`time_entry_obj`) |
+| Legacy channel                          | Ark operation                                           |
+| --------------------------------------- | ------------------------------------------------------- |
+| `db:loadAll`, `ark:listDelphiTasks`     | `list_objects_by_type` (`task_obj`) → массив `TodoItem` |
+| `db:upsertTodo`, `ark:upsertDelphiTask` | `upsert_object` (`task_obj`)                            |
+| `db:deleteTodo`, `ark:deleteDelphiTask` | `delete_object`                                         |
+| `db:batchUpsertTodos`                   | цикл `upsert_object`                                    |
+| `ark:listTimeEntries`                   | `list_objects_by_type` (`time_entry_obj`)               |
 
 `TodoItem ↔ ArkObjectRecord` mapping инлайнен прямо в shim — поля `billable` / `price` / `description` / `dates` / `priority` сериализуются в `propsJson`, plain text — в `contentJson`.
 
@@ -139,17 +139,22 @@ Delphi регистрируется в [Kepler command bus](/concepts/command-bu
 
 ### Зарегистрированные команды
 
-| ID | Что делает |
-|---|---|
-| `delphi:task:create` | Открывает `QuickEntry` модалку |
-| `delphi:task:today` | `router.push('/today')` — страница сегодняшних задач |
+| ID                   | Что делает                                           |
+| -------------------- | ---------------------------------------------------- |
+| `delphi:task:create` | Открывает `QuickEntry` модалку                       |
+| `delphi:task:today`  | `router.push('/today')` — страница сегодняшних задач |
 
 Регистрация — внутри extension'а через `ArkClient.commands.register([...])`:
 
 ```ts
 await arkClient.commands.register([
-  { id: 'delphi:task:create', title: 'Создать задачу', subtitle: 'Delphi', category: 'action' },
-  { id: 'delphi:task:today',  title: 'Открыть сегодняшние задачи', subtitle: 'Delphi', category: 'action' },
+  { id: "delphi:task:create", title: "Создать задачу", subtitle: "Delphi", category: "action" },
+  {
+    id: "delphi:task:today",
+    title: "Открыть сегодняшние задачи",
+    subtitle: "Delphi",
+    category: "action",
+  },
 ]);
 ```
 

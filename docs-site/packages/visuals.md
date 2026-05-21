@@ -60,15 +60,15 @@ Histoire был параллельно поднят раньше (`.story.vue` �
 
 Ключевые токены (light):
 
-| Token | Значение |
-|---|---|
-| `background` | `oklch(1 0 0)` |
-| `foreground` | `oklch(0.145 0 0)` |
-| `muted` | `oklch(0.97 0 0)` |
-| `mutedForeground` | `oklch(0.556 0 0)` |
-| `border` | `oklch(0.922 0 0)` |
-| `ring` | `oklch(0.708 0 0)` |
-| `accent` | `oklch(0.546 0.229 264.1)` (Kosmos-purple) |
+| Token             | Значение                                   |
+| ----------------- | ------------------------------------------ |
+| `background`      | `oklch(1 0 0)`                             |
+| `foreground`      | `oklch(0.145 0 0)`                         |
+| `muted`           | `oklch(0.97 0 0)`                          |
+| `mutedForeground` | `oklch(0.556 0 0)`                         |
+| `border`          | `oklch(0.922 0 0)`                         |
+| `ring`            | `oklch(0.708 0 0)`                         |
+| `accent`          | `oklch(0.546 0.229 264.1)` (Kosmos-purple) |
 
 Полный список — `tokens/colors.ts`.
 
@@ -126,27 +126,27 @@ Light и dark темы:
 
 ## Компоненты
 
-| Компонент | Назначение |
-|---|---|
-| `Sidebar.vue` + `SidebarButton.vue` | Навигация по приложению. `SidebarProjectItem` принимает опциональный `onContextMenu?: (event: MouseEvent) => void` — template передаёт `@contextmenu`. Используется в Eden: ПКМ по entry открывает `<ContextMenu>` с пунктом «Удалить» → `window.api.deleteEntry(id)`. |
-| `Titlebar.vue` | Desktop window chrome titlebar |
-| `TitlebarHistoryControls.vue` | Кнопки назад/вперёд для router history |
-| `DesktopChrome.vue` | Обёртка окна (titlebar + content) |
-| `DesktopContentSurface.vue` | Контент-поверхность с правильными safe-area отступами |
-| `CommandPalette.vue` | Общий ⌘K |
-| `CustomCaret.vue` | Кастомный курсор Eden (overlay над браузерным) |
-| `GamePosterCard.vue` | Карточка игры для Arrancador |
-| `StatusDot.vue` | Статус-индикатор (success / warning / error / info) |
-| `TodoRow.vue` | Строка задачи для Delphi (click → expand, contextmenu → delete) |
-| `QuickEntryPanel.vue` | Быстрый ввод (title / notes / date / project / billable / price) |
-| `ContextMenu.vue` + `ContextMenuItem.vue` | Правая-клик меню. Используется в TodoRow и Horologion ListView |
-| `Calendar.vue` | Inline-недельный date picker (стрип неделя + навигация) |
-| `DateChip.vue` | Chip-кнопка «Дата» + popover с `Calendar`. Замена нативного `<input type="date">` — без чёрной браузерной иконки |
-| `DateTimePicker.vue` | Picker даты + времени. Опциональный проп `reference` (`string \| number \| Date`) даёт компактный формат относительно опорной даты: `HH:MM` тот же день, `DD HH:MM` другой день того же месяца, `DD.MM HH:MM` другой месяц, `DD.MM.YY HH:MM` другой год. |
-| `Modal.vue` | Базовая модалка |
-| `TimeColumn.vue` | Вертикальная шкала времени |
-| `Dropdown.vue` | Generic shadcn-стиль `<select>`-замена: trigger + teleport-popover, поддержка клавиатуры (↑/↓/Enter/Escape), click-outside, чекмарк на выбранном. API: `v-model` + `options: { value, label, description?, disabled? }[]`. |
-| `WindowControls.vue` | Кастомные min/max/close кнопки для extension windows с Lucide иконками (`Minus`/`Square`/`Copy`/`X`). Реактивно подписан на `window.kepler.window.onMaximizedChange` — иконка maximize переключается на restore (`Copy`, зеркалена по X для Win11-look) когда окно maximized. Props `hideMinimize`/`hideMaximize`/`hideClose` для частичного скрытия (например, в Eden zen mode оставляется только close). См. [WindowControls](#windowcontrols). |
+| Компонент                                 | Назначение                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sidebar.vue` + `SidebarButton.vue`       | Навигация по приложению. `SidebarProjectItem` принимает опциональный `onContextMenu?: (event: MouseEvent) => void` — template передаёт `@contextmenu`. Используется в Eden: ПКМ по entry открывает `<ContextMenu>` с пунктом «Удалить» → `window.api.deleteEntry(id)`.                                                                                                                                                                            |
+| `Titlebar.vue`                            | Desktop window chrome titlebar                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `TitlebarHistoryControls.vue`             | Кнопки назад/вперёд для router history                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `DesktopChrome.vue`                       | Обёртка окна (titlebar + content)                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `DesktopContentSurface.vue`               | Контент-поверхность с правильными safe-area отступами                                                                                                                                                                                                                                                                                                                                                                                             |
+| `CommandPalette.vue`                      | Общий ⌘K                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `CustomCaret.vue`                         | Кастомный курсор Eden (overlay над браузерным)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `GamePosterCard.vue`                      | Карточка игры для Arrancador                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `StatusDot.vue`                           | Статус-индикатор (success / warning / error / info)                                                                                                                                                                                                                                                                                                                                                                                               |
+| `TodoRow.vue`                             | Строка задачи для Delphi (click → expand, contextmenu → delete)                                                                                                                                                                                                                                                                                                                                                                                   |
+| `QuickEntryPanel.vue`                     | Быстрый ввод (title / notes / date / project / billable / price)                                                                                                                                                                                                                                                                                                                                                                                  |
+| `ContextMenu.vue` + `ContextMenuItem.vue` | Правая-клик меню. Используется в TodoRow и Horologion ListView                                                                                                                                                                                                                                                                                                                                                                                    |
+| `Calendar.vue`                            | Inline-недельный date picker (стрип неделя + навигация)                                                                                                                                                                                                                                                                                                                                                                                           |
+| `DateChip.vue`                            | Chip-кнопка «Дата» + popover с `Calendar`. Замена нативного `<input type="date">` — без чёрной браузерной иконки                                                                                                                                                                                                                                                                                                                                  |
+| `DateTimePicker.vue`                      | Picker даты + времени. Опциональный проп `reference` (`string \| number \| Date`) даёт компактный формат относительно опорной даты: `HH:MM` тот же день, `DD HH:MM` другой день того же месяца, `DD.MM HH:MM` другой месяц, `DD.MM.YY HH:MM` другой год.                                                                                                                                                                                          |
+| `Modal.vue`                               | Базовая модалка                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `TimeColumn.vue`                          | Вертикальная шкала времени                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `Dropdown.vue`                            | Generic shadcn-стиль `<select>`-замена: trigger + teleport-popover, поддержка клавиатуры (↑/↓/Enter/Escape), click-outside, чекмарк на выбранном. API: `v-model` + `options: { value, label, description?, disabled? }[]`.                                                                                                                                                                                                                        |
+| `WindowControls.vue`                      | Кастомные min/max/close кнопки для extension windows с Lucide иконками (`Minus`/`Square`/`Copy`/`X`). Реактивно подписан на `window.kepler.window.onMaximizedChange` — иконка maximize переключается на restore (`Copy`, зеркалена по X для Win11-look) когда окно maximized. Props `hideMinimize`/`hideMaximize`/`hideClose` для частичного скрытия (например, в Eden zen mode оставляется только close). См. [WindowControls](#windowcontrols). |
 
 ## Визуальный референс компонентов
 
@@ -250,9 +250,9 @@ API:
 
 ```ts
 interface Props {
-  hideMinimize?: boolean
-  hideMaximize?: boolean
-  hideClose?: boolean
+  hideMinimize?: boolean;
+  hideMaximize?: boolean;
+  hideClose?: boolean;
 }
 ```
 
@@ -303,21 +303,48 @@ ABC▌DEF      ← CustomCaret overlay (Vapor-friendly, smooth blink)
 ```ts
 import {
   // Tokens
-  colors, spacing, typography, radius, animations,
+  colors,
+  spacing,
+  typography,
+  radius,
+  animations,
   // Theme
-  type ThemeMode, type ColorToken, getColor,
+  type ThemeMode,
+  type ColorToken,
+  getColor,
   // Components
-  CustomCaret, CommandPalette, GamePosterCard,
-  SidebarButton, Sidebar, type SidebarNavItem,
-  type SidebarProjectItem, type SidebarProjectGroup, type SidebarConfig,
-  Titlebar, type TitlebarPlatform,
+  CustomCaret,
+  CommandPalette,
+  GamePosterCard,
+  SidebarButton,
+  Sidebar,
+  type SidebarNavItem,
+  type SidebarProjectItem,
+  type SidebarProjectGroup,
+  type SidebarConfig,
+  Titlebar,
+  type TitlebarPlatform,
   TitlebarHistoryControls,
-  DesktopChrome, DesktopContentSurface,
-  StatusDot, type StatusDotTone,
-  TodoRow, type TodoRowItem, type TodoDropPayload, type TodoRowUpdate,
-  QuickEntryPanel, type QuickEntryProject, type QuickEntrySavePayload,
-  ContextMenu, ContextMenuItem, useContextMenu, type ContextMenuState,
-  Modal, Calendar, DateChip, TimeColumn, DateTimePicker,
+  DesktopChrome,
+  DesktopContentSurface,
+  StatusDot,
+  type StatusDotTone,
+  TodoRow,
+  type TodoRowItem,
+  type TodoDropPayload,
+  type TodoRowUpdate,
+  QuickEntryPanel,
+  type QuickEntryProject,
+  type QuickEntrySavePayload,
+  ContextMenu,
+  ContextMenuItem,
+  useContextMenu,
+  type ContextMenuState,
+  Modal,
+  Calendar,
+  DateChip,
+  TimeColumn,
+  DateTimePicker,
 } from "@kosmos/visuals";
 ```
 
@@ -336,6 +363,7 @@ import {
 ```
 
 Этого достаточно. Не нужно:
+
 - стилизовать `::-webkit-scrollbar`, `::-webkit-scrollbar-thumb`, `::-webkit-scrollbar-track` руками — класс уже всё закрывает (width/height 5px, border-radius 3px, без фона у track'а);
 - задавать свой `transition` на `background-color` thumb'а — переход управляется через CSS-переменную и `@property`, чтобы цвет thumb'а пересчитывался каждый кадр анимации;
 - ставить `data-scrolling` руками — это делает глобальный listener из shared helper'а `installScrollFadeListener()` (см. ниже).
@@ -345,9 +373,9 @@ import {
 ```ts
 import { installScrollFadeListener } from "@kosmos/visuals/runtime/scroll-fade";
 
-const off = installScrollFadeListener({ idleMs: 600 });  // оба параметра optional, root = document
+const off = installScrollFadeListener({ idleMs: 600 }); // оба параметра optional, root = document
 // ...
-off();  // unsubscribe (idempotent)
+off(); // unsubscribe (idempotent)
 ```
 
 Вызов идемпотентен — повторный `installScrollFadeListener({ root })` с тем же root возвращает прежнюю отписку, новый listener не регистрируется. Это позволяет звать его и в `shell/src/main.ts`, и в каждом extension `main.ts` без риска накопить duplicate handler'ы при HMR. До 2026-05-19 эта логика была inline в `shell/src/main.ts`; теперь она единый источник правды в `@kosmos/visuals` и используется shell'ом и Eden.
@@ -356,7 +384,7 @@ off();  // unsubscribe (idempotent)
 
 ```css
 @property --kosmos-scroll-alpha {
-  syntax: '<number>';
+  syntax: "<number>";
   inherits: true;
   initial-value: 0;
 }
@@ -388,11 +416,12 @@ off();  // unsubscribe (idempotent)
 ## Правила использования
 
 ::: warning Жёстко
+
 - Если компонент есть в `@kosmos/visuals` — **импортируй через public API** пакета, не через deep import.
 - Не копируй shared sidebar / titlebar / токены внутрь `apps/<name>/`.
 - Локальные `src/components/sidebar/*` в приложениях — это **app-specific контейнеры**, не дубли shared UI.
 - Desktop chrome — через `DesktopChrome` + `DesktopContentSurface`. Не возвращай ручные `--titlebar-height` хаки.
-:::
+  :::
 
 ## Эстетика
 

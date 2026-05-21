@@ -72,15 +72,15 @@ const preview: Preview = {
     backgrounds: {
       options: {
         "kepler-dark": // Подвязано к --background из theme/css-variables.css (dark).
-        { name: "kepler-dark", value: "oklch(0.145 0 0)" },
+          { name: "kepler-dark", value: "oklch(0.145 0 0)" },
 
         "kepler-light": // TODO(light-theme): когда появится light theme — подвязать сюда
-        //   реальное значение --background светлой темы.
-        { name: "kepler-light", value: "oklch(1 0 0)" }
-      }
+          //   реальное значение --background светлой темы.
+          { name: "kepler-light", value: "oklch(1 0 0)" },
+      },
     },
     viewport: {
-      options: keplerViewports
+      options: keplerViewports,
     },
     controls: {
       matchers: {
@@ -109,11 +109,11 @@ const preview: Preview = {
         order: [
           "Intro",
           "Tokens",
-          "Inputs",   // Toggle, Dropdown, DateChip, calendar…
-          "Display",  // StatusDot, EmptyState, BlocklistCard, GamePosterCard
-          "Lists",    // TodoRow
+          "Inputs", // Toggle, Dropdown, DateChip, calendar…
+          "Display", // StatusDot, EmptyState, BlocklistCard, GamePosterCard
+          "Lists", // TodoRow
           "Overlays", // Modal, ContextMenu, CommandPalette, QuickEntryPanel
-          "Window",   // DesktopChrome, Titlebar — chrome для окон
+          "Window", // DesktopChrome, Titlebar — chrome для окон
           "Patterns", // composed examples — title bar в реальном окне etc.
           "*",
         ],
@@ -185,13 +185,13 @@ const preview: Preview = {
   initialGlobals: {
     viewport: {
       value: "extension",
-      isRotated: false
+      isRotated: false,
     },
 
     backgrounds: {
-      value: "kepler-dark"
-    }
-  }
+      value: "kepler-dark",
+    },
+  },
 };
 
 export default preview;

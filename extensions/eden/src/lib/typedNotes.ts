@@ -305,10 +305,7 @@ function getLegacyImageFieldId(noteType: NoteType | null): string | null {
   }
 }
 
-function getResolvedFieldOrder(
-  definitionFields: NoteTypeField[],
-  fieldOrder: string[],
-): string[] {
+function getResolvedFieldOrder(definitionFields: NoteTypeField[], fieldOrder: string[]): string[] {
   const orderedIds = fieldOrder.filter((fieldId) =>
     definitionFields.some((field) => field.id === fieldId),
   );
@@ -366,8 +363,10 @@ export function getNoteTypePresentation(noteType: NoteType | null): NoteTypePres
   const resolvedFields = resolveNoteTypeFields(noteType);
   const uiSchema = parseNoteTypeUiSchema(noteType?.ui_schema_json);
   const featuredFields = new Set(
-    (uiSchema.featured_fields?.length ? uiSchema.featured_fields : getLegacyFeaturedFieldIds(noteType))
-      .filter(Boolean),
+    (uiSchema.featured_fields?.length
+      ? uiSchema.featured_fields
+      : getLegacyFeaturedFieldIds(noteType)
+    ).filter(Boolean),
   );
   const fieldOrder = getResolvedFieldOrder(
     noteType ? parseNoteTypeDefinition(noteType.schema_json).fields : [],
@@ -528,10 +527,7 @@ function coerceHeaderFieldValue(field: NoteTypeField, value: unknown) {
   }
 }
 
-function normalizeHeaderPropsRecord(
-  noteType: NoteType | null,
-  rawProps: Record<string, unknown>,
-) {
+function normalizeHeaderPropsRecord(noteType: NoteType | null, rawProps: Record<string, unknown>) {
   if (!noteType) {
     return rawProps;
   }
@@ -546,10 +542,7 @@ function normalizeHeaderPropsRecord(
   return normalized;
 }
 
-export function normalizeHeaderProps(
-  noteType: NoteType | null,
-  rawProps: unknown,
-) {
+export function normalizeHeaderProps(noteType: NoteType | null, rawProps: unknown) {
   if (!rawProps || typeof rawProps !== "object" || Array.isArray(rawProps)) {
     return createDefaultHeaderProps(noteType);
   }

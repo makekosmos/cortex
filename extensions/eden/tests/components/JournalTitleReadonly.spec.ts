@@ -27,9 +27,7 @@ const TitleInputFixture = defineComponent({
   setup(props) {
     const title = ref(props.initialTitle);
     const noteTypeId = ref(props.typeId);
-    const isJournalEntry = computed(
-      () => noteTypeId.value === SYSTEM_TYPE_JOURNAL_ID,
-    );
+    const isJournalEntry = computed(() => noteTypeId.value === SYSTEM_TYPE_JOURNAL_ID);
     return { title, isJournalEntry };
   },
   template: `
@@ -67,9 +65,7 @@ describe("Eden title input — readonly logic", () => {
     const screen = render(TitleInputFixture, {
       props: { initialTitle: "2026-05-19", typeId: SYSTEM_TYPE_JOURNAL_ID },
     });
-    const inputEl = (await screen
-      .getByTestId("title-input")
-      .element()) as HTMLInputElement;
+    const inputEl = (await screen.getByTestId("title-input").element()) as HTMLInputElement;
 
     expect(inputEl.value).toBe("2026-05-19");
     expect(inputEl.readOnly).toBe(true);

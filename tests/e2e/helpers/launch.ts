@@ -54,9 +54,7 @@ async function _launch(
 
   const mainJs = path.join(SHELL_ROOT, "dist-electron", "main.js");
   if (!fs.existsSync(mainJs)) {
-    throw new Error(
-      `${mainJs} не существует. Сначала запусти 'bun run --cwd shell build:js'.`,
-    );
+    throw new Error(`${mainJs} не существует. Сначала запусти 'bun run --cwd shell build:js'.`);
   }
 
   return electron.launch({

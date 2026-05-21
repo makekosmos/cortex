@@ -88,10 +88,7 @@ export const useLayoutStore = defineStore("layout", () => {
     enableZenMode();
   }
 
-  async function onWidgetConfigChange(config: {
-    width: number;
-    hidden: boolean;
-  }) {
+  async function onWidgetConfigChange(config: { width: number; hidden: boolean }) {
     widgetSidebarWidth.value = Math.max(
       MIN_WIDGET_SIDEBAR_WIDTH,
 

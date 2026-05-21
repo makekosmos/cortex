@@ -21,10 +21,10 @@ Relay не хранит данные — он только пересылает 
 
 ```ts
 const ark = new ArkClient({
-  spaceId: 'default',
-  deviceId: 'device-1',
-  authSecret: 'shared-secret',
-  relayUrl: 'wss://relay.example.com/space/default',
+  spaceId: "default",
+  deviceId: "device-1",
+  authSecret: "shared-secret",
+  relayUrl: "wss://relay.example.com/space/default",
 });
 await ark.start();
 ```

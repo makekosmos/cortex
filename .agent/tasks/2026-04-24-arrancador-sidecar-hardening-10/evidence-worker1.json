@@ -18,8 +18,5 @@
       "raw": "raw/cargo-test-sidecar-worker1.txt"
     }
   ],
-  "changedFiles": [
-    "apps/arrancador/sidecar/Cargo.toml",
-    "apps/arrancador/sidecar/src/main.rs"
-  ]
+  "changedFiles": ["apps/arrancador/sidecar/Cargo.toml", "apps/arrancador/sidecar/src/main.rs"]
 }

@@ -57,6 +57,10 @@ export const edenApi = {
     shim.createTask(sourceNoteId, title, explicitId),
 
   subscribeObjectChanges: (
-    handler: (payload: { event: "object_upserted" | "object_deleted"; id: string; typeId?: string }) => void,
+    handler: (payload: {
+      event: "object_upserted" | "object_deleted";
+      id: string;
+      typeId?: string;
+    }) => void,
   ) => shim.subscribeObjectChanges(handler),
 };

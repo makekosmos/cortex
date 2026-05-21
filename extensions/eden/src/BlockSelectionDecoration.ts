@@ -14,7 +14,9 @@ import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
-export const blockSelectionPluginKey = new PluginKey<DecorationSet>("eden-block-selection-decoration");
+export const blockSelectionPluginKey = new PluginKey<DecorationSet>(
+  "eden-block-selection-decoration",
+);
 
 export const BlockSelectionDecoration = Extension.create({
   name: "blockSelectionDecoration",

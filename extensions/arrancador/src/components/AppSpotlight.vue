@@ -19,9 +19,7 @@ defineEmits<{ "update:modelValue": [value: string] }>();
       class="arrancador-spotlight__input"
       placeholder="Поиск по библиотеке"
       :value="modelValue"
-      @input="
-        $emit('update:modelValue', ($event.target as HTMLInputElement).value)
-      "
+      @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
     />
   </div>
 </template>

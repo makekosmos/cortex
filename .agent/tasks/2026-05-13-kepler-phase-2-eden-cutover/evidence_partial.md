@@ -8,14 +8,14 @@
 
 Phase 2 разделён на **lib portion** (этот файл) и **Eden cutover** (отдельный шаг, требует manual smoke).
 
-| AC | Утверждение | Уровень | Статус |
-|----|-------------|---------|--------|
-| AC1 | Eden работает в kepler-mode end-to-end | **Eden cutover** | Pending |
-| AC2 | Kill Kepler → reconnect ≤ 5s | **Eden cutover + integration** | Pending |
-| AC3 | unknown type_id → sync_pending_objects + sync_error | **Lib (Rust)** | **PASS** |
-| AC4 | object_type creation → auto-replay + sync_replay | **Lib (Rust)** | **PASS** |
-| AC5 | MAJOR mismatch → incompatible-version reject | **Lib (TS)** | **PASS** |
-| AC6 | Lock missing + fallback option → not-installed | **Lib (TS)** | **PASS** |
+| AC  | Утверждение                                         | Уровень                        | Статус   |
+| --- | --------------------------------------------------- | ------------------------------ | -------- |
+| AC1 | Eden работает в kepler-mode end-to-end              | **Eden cutover**               | Pending  |
+| AC2 | Kill Kepler → reconnect ≤ 5s                        | **Eden cutover + integration** | Pending  |
+| AC3 | unknown type_id → sync_pending_objects + sync_error | **Lib (Rust)**                 | **PASS** |
+| AC4 | object_type creation → auto-replay + sync_replay    | **Lib (Rust)**                 | **PASS** |
+| AC5 | MAJOR mismatch → incompatible-version reject        | **Lib (TS)**                   | **PASS** |
+| AC6 | Lock missing + fallback option → not-installed      | **Lib (TS)**                   | **PASS** |
 
 ## Доказательства
 
@@ -26,12 +26,14 @@ Phase 2 разделён на **lib portion** (этот файл) и **Eden cuto
 **Schema migration** (additive): `sync_pending_objects` table + index в `schema.rs`.
 
 **New db.rs functions:**
+
 - `is_object_type_known(conn, type_id) -> Result<bool, String>`
 - `insert_pending_object(conn, entity, awaited_type_id) -> Result<(), String>`
 - `replay_pending_for_type(conn, type_id) -> Result<usize, String>` — эмитит `sync_replay` event per object
 - `count_pending_for_type(conn, type_id) -> Result<i64, String>` (observability)
 
 **Modified:**
+
 - `apply_entity_blocking` "object" branch — pre-flight `is_object_type_known`; если false → `insert_pending_object` + emit `sync_error` event + return Ok (version_vector advances)
 - `upsert_object_type` — вызывает `replay_pending_for_type` после INSERT
 
@@ -44,6 +46,7 @@ test result: ok. 125 passed; 0 failed; 0 ignored
 ```
 
 В том числе 7 новых phase2 тестов:
+
 - `phase2_is_object_type_known_false_when_missing`
 - `phase2_is_object_type_known_true_after_upsert`
 - `phase2_insert_pending_object_persists_payload`
@@ -55,10 +58,12 @@ test result: ok. 125 passed; 0 failed; 0 ignored
 ### TS changes (`@kosmos/ark`)
 
 **Новые файлы:**
+
 - `src/ensure-kepler.ts` — `ensureKeplerRunning(opts)` + `readLockIfAlive` + `isPidAlive` + `resolveKeplerExe`. Cross-platform (Win/Mac/Linux) conventional paths.
 - `tests/ensure-kepler.test.ts` — 12 Bun tests.
 
 **Modified:**
+
 - `src/index.ts` — exports `ensureKeplerRunning` + типы.
 - `src/ark-client.ts`:
   - Add `keplerLock?: KeplerLockInfo` + `keplerPidForHandshake?: number` в `ArkClientOptions`
@@ -88,6 +93,7 @@ Ran 12 tests across 1 file. [223.00ms]
 ### Регрессия Phase 1
 
 Re-run Kepler integration tests с обновлённым ark-core-rpc release:
+
 ```
 cargo test --manifest-path apps/kepler/Cargo.toml --test handshake -- --test-threads=1
 

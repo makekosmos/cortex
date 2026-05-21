@@ -22,7 +22,7 @@
 ## Sync
 
 - ❌ Direct Rust writer пишет в ARK без вызова `ark_core::db::bump_sync_version_vector`.
-- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
+- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete\*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
 - ❌ Batch upsert handler без bump'а `record_local_upsert` per-entity. Один общий bump на батч недостаточен — peer-side sync проверяет HLC entity-id'шно.
 - ❌ Ослабление self-peer filtering при изменениях в sync startup.
 - ❌ Ослабление routable-address filtering при изменениях в peer persistence.

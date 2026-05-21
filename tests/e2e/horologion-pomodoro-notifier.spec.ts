@@ -11,11 +11,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
-import {
-  gracefulQuit,
-  startPomodoroViaArk,
-  triggerNotifyNow,
-} from "./helpers/horologion";
+import { gracefulQuit, startPomodoroViaArk, triggerNotifyNow } from "./helpers/horologion";
 
 test("pomodoro notifier: notify-now IPC возвращает false в headless mode", async () => {
   test.setTimeout(45_000);
@@ -92,10 +88,9 @@ test("pomodoro notifier: phase_changed event приходит на skip, notifie
     });
     expect(r2).not.toBeNull();
 
-    expect(
-      mainConsoleErrors,
-      `notifier бросил error'ы:\n${mainConsoleErrors.join("\n")}`,
-    ).toEqual([]);
+    expect(mainConsoleErrors, `notifier бросил error'ы:\n${mainConsoleErrors.join("\n")}`).toEqual(
+      [],
+    );
   } finally {
     await gracefulQuit(app);
   }

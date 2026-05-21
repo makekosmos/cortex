@@ -75,10 +75,7 @@ export interface SeedTaskInput {
  *
  * Возвращает id созданной задачи (== input.id).
  */
-export async function seedTask(
-  app: ElectronApplication,
-  input: SeedTaskInput,
-): Promise<string> {
+export async function seedTask(app: ElectronApplication, input: SeedTaskInput): Promise<string> {
   const now = new Date().toISOString();
   const record = {
     id: input.id,
@@ -142,10 +139,7 @@ export interface SeedPomodoroDraftInput {
  * Требуется чтобы task_obj'ы были предварительно созданы (`seedTask`).
  * Возвращает после того как все chip'ы появились в `.pdi__chip`.
  */
-export async function seedPomodoroDraft(
-  horo: Page,
-  draft: SeedPomodoroDraftInput,
-): Promise<void> {
+export async function seedPomodoroDraft(horo: Page, draft: SeedPomodoroDraftInput): Promise<void> {
   const input = horo.locator(".pdi__input");
   await expect(input).toBeVisible({ timeout: 5_000 });
   await input.click();
@@ -388,10 +382,7 @@ export async function triggerNotifyNow(
   return (await app.evaluate(async ({ ipcMain }, payload) => {
     // Internal Electron API — Map handler'ов. Стабилен на всех 25+ версиях.
     const ipcAny = ipcMain as unknown as {
-      _invokeHandlers?: Map<
-        string,
-        (event: unknown, ...args: unknown[]) => unknown
-      >;
+      _invokeHandlers?: Map<string, (event: unknown, ...args: unknown[]) => unknown>;
     };
     const handlers = ipcAny._invokeHandlers;
     if (!handlers) return null;
@@ -406,4 +397,3 @@ export async function triggerNotifyNow(
     }
   }, args)) as boolean | null;
 }
-

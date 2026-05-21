@@ -85,6 +85,7 @@ Append к log.jsonl:
 
 ```markdown
 ## Sweep 2026-MM-DD (N records)
+
 - Средний variance: +X%
 - Хорошо оцениваю: <теги>
 - Плохо оцениваю: <теги>, особенно <причина>

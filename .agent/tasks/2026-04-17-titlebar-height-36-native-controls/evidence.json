@@ -28,9 +28,7 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "TypeScript checks passed for apps/dashboard, apps/delphi/ts, and apps/eden/ts."
-      ]
+      "evidence": ["TypeScript checks passed for apps/dashboard, apps/delphi/ts, and apps/eden/ts."]
     }
   ],
   "commands": [

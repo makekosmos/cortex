@@ -1,4 +1,4 @@
-export { ArkClient } from './ark-client.js'
+export { ArkClient } from "./ark-client.js";
 export {
   KEPLER_LOCK_FILENAME,
   ensureKeplerRunning,
@@ -6,13 +6,13 @@ export {
   readLockIfAlive,
   resolveKeplerExe,
   resolveLockPath,
-} from './ensure-kepler.js'
+} from "./ensure-kepler.js";
 export type {
   EnsureKeplerOptions,
   KeplerLockInfo,
   KeplerProtocolVersion,
   KeplerState,
-} from './ensure-kepler.js'
+} from "./ensure-kepler.js";
 export type {
   ArkClientOptions,
   ArkCommandsApi,
@@ -53,4 +53,4 @@ export type {
   PeerDisconnectedCallback,
   EntityChangedCallback,
   JsonValue,
-} from './ark-client.js'
+} from "./ark-client.js";

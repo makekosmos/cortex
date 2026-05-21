@@ -13,16 +13,12 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/services/ark-usage.ts"
-      ]
+      "evidence": ["apps/arrancador/electron/main/services/ark-usage.ts"]
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/services/ark-usage.test.ts"
-      ]
+      "evidence": ["apps/arrancador/electron/main/services/ark-usage.test.ts"]
     },
     {
       "id": "AC4",

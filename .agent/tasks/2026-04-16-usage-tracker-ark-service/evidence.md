@@ -1,6 +1,7 @@
 # Evidence
 
 Scope for this pass:
+
 - `packages/ark-core/rust/**`
 - `services/usage-tracker/**`
 - `apps/arrancador/**`
@@ -56,6 +57,7 @@ Scope for this pass:
 ## Verification
 
 PASS
+
 - `cargo test --manifest-path packages/ark-core/rust/Cargo.toml`
 - `cargo test --manifest-path services/usage-tracker/Cargo.toml`
 - `bun run typecheck` in `apps/arrancador`
@@ -65,6 +67,7 @@ PASS
 - `bun install --ignore-scripts` at repo root
 
 Non-blocking failures observed during verification
+
 - `bun run test` in `apps/arrancador` fails in pre-existing UI/provider tests unrelated to usage-tracker extraction:
   - `src/test/ui-primitives.test.tsx` (`missing sheet-close`)
   - `src/test/ui-sidebar.test.tsx` (`missing sidebar-trigger`, mobile sidebar assertion)

@@ -20,6 +20,7 @@ Local-first продукт с real users (не только developer): кажд
 `services/kepler-backend/src/db_backup.rs` (новый модуль).
 
 На startup в `main.rs` (после `db::init_schema`, до spawn'а WS server):
+
 - Прочитать `last_backup_timestamp` из `sync_kv` (или из файла-marker в data-dir).
 - Если timestamp отсутствует ИЛИ `(now - last_backup) > 24h` — скопировать `<data_dir>/ark.db` в `<data_dir>/backups/ark.db.backup-YYYY-MM-DD-HHMMSS`.
 - Создать `<data_dir>/backups/` если не существует.
@@ -32,6 +33,7 @@ Local-first продукт с real users (не только developer): кажд
 ### #4 — PRAGMA integrity_check на init
 
 В `crates/ark-core/rust/src/db.rs` функция `init_schema(conn)`:
+
 - После открытия DB и до миграций — `conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))`.
 - Если результат != "ok" — `return Err(format!("ARK DB corruption detected: {result}"))`.
 - В backend `main.rs` Init handler: если `init_schema` вернул Err — fail loud (eprintln + не записывать lock-файл + return Err через WS).
@@ -40,6 +42,7 @@ Local-first продукт с real users (не только developer): кажд
 ### #5 — Auto-respawn supervisor (Electron main)
 
 `shell/electron/main.ts`:
+
 - Сохранять `let backendRestartAttempts = 0` и `let lastBackendRestartAt = 0`.
 - В `backendProc.on('exit', code)`:
   - Если `isQuiting === true` — exit, no respawn.
@@ -51,6 +54,7 @@ Local-first продукт с real users (не только developer): кажд
 ### #1 — Crash reporter MVP
 
 **Rust side** (`services/kepler-backend/src/crash_reporter.rs`):
+
 - В `main()` early init: `std::panic::set_hook(Box::new(panic_handler))`.
 - `panic_handler(info: &PanicHookInfo)`:
   - Resolve crash dir: `<data_dir>/crashes/`.
@@ -64,11 +68,13 @@ Local-first продукт с real users (не только developer): кажд
   - Re-raise default handler чтобы process всё-таки exit'нулся.
 
 **Electron side** (`shell/electron/main.ts`):
+
 - `crashReporter.start({ uploadToServer: false, productName: "Kepler", companyName: "Kosmos", submitURL: "" })` ДО `app.whenReady()`.
 - Electron сам пишет minidump'ы в `app.getPath("crashDumps")` (по умолчанию `%APPDATA%\Kepler\Crashpad\`). После init move/symlink — оставляем default.
 - В spawnBackend `env: { RUST_BACKTRACE: "1", ... }` чтобы backtraces были захвачены.
 
 **Settings UI** (`shell/src/views/SettingsView.vue`):
+
 - Новая секция "Диагностика" в Settings.
 - Показывает: путь к `<data_dir>/crashes/`, count crash файлов за last 30 days.
 - Кнопка "Открыть папку отчётов" — `kepler:crashes:openFolder` IPC → shell main вызывает `shell.openPath(crashesDir)`.
@@ -80,22 +86,26 @@ Local-first продукт с real users (не только developer): кажд
 Цели в порядке приоритета:
 
 **Critical** (`crates/ark-core/rust/src/db.rs`):
+
 - HIGH-2 finding: `SqliteStorageBackend::load_entities` (line 2898), `get_kv` (2920), `set_kv` (2932) делают `conn.lock().unwrap()`. Mutex poison propagation = panic в spawn_blocking → silent unavailability. Заменить на `lock().unwrap_or_else(|e| e.into_inner())` (recovery path: poisoned lock содержит valid data).
 - `bump_sync_version_vector` — проверить unwrap chain.
 - Все `let row = stmt.query_row(...).unwrap()` → `?`.
 
 **Important** (`services/kepler-backend/src/`):
+
 - `ws_server.rs`: handler-handler propagation. Замена `.unwrap()` на `?` и proper error response.
 - `pomodoro_host.rs`: `Mutex<Session>` lock + `.unwrap()` — heart of pomodoro. Замена на `unwrap_or_else(|e| e.into_inner())`.
 - `usage_tracker/mod.rs`: foreground polling loop — unwrap'ы здесь убивают трекер, теряя текущую сессию.
 - `auth.rs`, `lock_file.rs`: точечные unwrap'ы.
 
 **Acceptable to leave** (контекст требует panic-on-failure):
+
 - `static` initialization (e.g., `STDOUT_LOCK`, `DB`) — Mutex never poisoned at init.
 - Tests / `#[cfg(test)]` — fine.
 - `main.rs` startup (если init fail — panic OK, process exit).
 
 Process:
+
 1. Grep `unwrap()` + `expect(` + `panic!(` в targets (исключая `#[cfg(test)]` блоки).
 2. Для каждого callsite — оценить: error path возможен? recovery возможен?
 3. Заменить с appropriate error propagation.
@@ -104,6 +114,7 @@ Process:
 ### #6 — Property-based tests (proptest)
 
 `crates/ark-core/rust/Cargo.toml` dev-dep:
+
 ```toml
 proptest = "1.5"
 proptest-derive = "0.5"
@@ -114,6 +125,7 @@ proptest-derive = "0.5"
 **Strategy:** генерируем `Vec<Op>` где `Op = Insert(id, props) | Update(id, props) | Delete(id) | Read(id) | List`.
 
 **Invariants checked:**
+
 1. **Read survives random ops:** после любой sequence ops, `list_objects()` не падает; каждый Read возвращает либо Some(obj) либо None (не панического).
 2. **Version vector monotonic:** после каждой Upsert/Delete operation, version vector содержит HLC для затронутого entity. HLC по каждому device-id строго увеличивается.
 3. **Tombstones consistent:** после Delete(id), `sync_tombstones` содержит row для id; повторный Insert(id) удаляет tombstone (см. `delete_sync_tombstone`).

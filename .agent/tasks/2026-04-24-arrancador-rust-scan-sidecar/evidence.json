@@ -12,7 +12,10 @@
     },
     "AC3": {
       "status": "PASS",
-      "evidence": ["apps/arrancador/electron/main/services/scan.ts", "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"]
+      "evidence": [
+        "apps/arrancador/electron/main/services/scan.ts",
+        "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
+      ]
     },
     "AC4": {
       "status": "PASS",
@@ -20,7 +23,11 @@
     },
     "AC5": {
       "status": "PASS",
-      "evidence": ["apps/arrancador/package.json", "apps/arrancador/scripts/build.ps1", "apps/arrancador/electron-builder.yml"]
+      "evidence": [
+        "apps/arrancador/package.json",
+        "apps/arrancador/scripts/build.ps1",
+        "apps/arrancador/electron-builder.yml"
+      ]
     },
     "AC6": {
       "status": "PASS",

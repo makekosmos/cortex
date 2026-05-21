@@ -6,12 +6,12 @@
 
 ## Cценарии
 
-| # | Scenario | Procs | RSS (mean, 3 samples) | Private (mean) | JSON |
-|---|---|---:|---:|---:|---|
-| 1 | launcher-only (hidden tray) | 6 | **381.8 MB** | **235.3 MB** | `ram-kepler-launcher-only-20260518-130757.json` |
-| 2 | all-extensions-idle (5 ext + dashboard) | 11 | **906.0 MB** | **453.5 MB** | `ram-kepler-all-extensions-idle-20260518-131123.json` |
-| 3 | exp23-acrylic (launcher visible) | 6 | **430.4 MB** | **291.2 MB** | `ram-kepler-exp23-acrylic-20260518-131429.json` |
-| 4 | exp23-mica (launcher visible) | 6 | **444.8 MB** | **305.4 MB** | `ram-kepler-exp23-mica-20260518-131607.json` |
+| #   | Scenario                                | Procs | RSS (mean, 3 samples) | Private (mean) | JSON                                                  |
+| --- | --------------------------------------- | ----: | --------------------: | -------------: | ----------------------------------------------------- |
+| 1   | launcher-only (hidden tray)             |     6 |          **381.8 MB** |   **235.3 MB** | `ram-kepler-launcher-only-20260518-130757.json`       |
+| 2   | all-extensions-idle (5 ext + dashboard) |    11 |          **906.0 MB** |   **453.5 MB** | `ram-kepler-all-extensions-idle-20260518-131123.json` |
+| 3   | exp23-acrylic (launcher visible)        |     6 |          **430.4 MB** |   **291.2 MB** | `ram-kepler-exp23-acrylic-20260518-131429.json`       |
+| 4   | exp23-mica (launcher visible)           |     6 |          **444.8 MB** |   **305.4 MB** | `ram-kepler-exp23-mica-20260518-131607.json`          |
 
 ## Per-scenario breakdown
 
@@ -44,10 +44,10 @@ kepler-backend     1    9.5 MB RSS    1.9 MB Priv
 
 Из `docs-site/agents/manual-tests-pending.md` decision tree:
 
-| Threshold | Result | Verdict |
-|---|---|---|
-| all-extensions-idle Private > **900 MB** → 🚨 critical Exp 5 | 453.5 MB | ✅ OK |
-| all-extensions-idle Private > **600 MB** → ⚠️ Exp 5 priority | 453.5 MB | ✅ OK |
+| Threshold                                                    | Result   | Verdict                         |
+| ------------------------------------------------------------ | -------- | ------------------------------- |
+| all-extensions-idle Private > **900 MB** → 🚨 critical Exp 5 | 453.5 MB | ✅ OK                           |
+| all-extensions-idle Private > **600 MB** → ⚠️ Exp 5 priority | 453.5 MB | ✅ OK                           |
 | all-extensions-idle Private < **600 MB** → Exp 5 deferred OK | 453.5 MB | **✅ Exp 5 правильно deferred** |
 
 **Вывод по Exp 5 (WebContentsView migration):** RAM сейчас в пределах нормы. Migration не оправдан — большая работа (1-2 недели) ради экономии когда мы под threshold. Defer'нут правильно.
@@ -56,16 +56,16 @@ kepler-backend     1    9.5 MB RSS    1.9 MB Priv
 
 ### RAM (visible launcher)
 
-| Material | RSS (mean) | Private (mean) | Δ vs acrylic |
-|---|---:|---:|---:|
-| acrylic | 430.4 MB | 291.2 MB | — |
-| mica | 444.8 MB | 305.4 MB | +14.4 MB / +14.2 MB |
+| Material | RSS (mean) | Private (mean) |        Δ vs acrylic |
+| -------- | ---------: | -------------: | ------------------: |
+| acrylic  |   430.4 MB |       291.2 MB |                   — |
+| mica     |   444.8 MB |       305.4 MB | +14.4 MB / +14.2 MB |
 
 **RAM-вердикт:** Δ ~3-5%, в пределах шума single-machine measurement. **RAM не дифференцирует** acrylic от mica на этой машине.
 
 ### GPU% (dwm.exe + kepler-shell.exe)
 
-⚠️ **Не удалось снять программно.** Get-Counter '\GPU Engine(*)\Utilization Percentage' возвращал 0% для обоих PID — launcher был toggled в hidden state (Ctrl+Shift+K от SendKeys мог hide вместо show). Программный trigger globalShortcut'а ненадёжен.
+⚠️ **Не удалось снять программно.** Get-Counter '\GPU Engine(\*)\Utilization Percentage' возвращал 0% для обоих PID — launcher был toggled в hidden state (Ctrl+Shift+K от SendKeys мог hide вместо show). Программный trigger globalShortcut'а ненадёжен.
 
 **Требуется ручной A/B (~5 минут):**
 

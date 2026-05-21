@@ -106,9 +106,11 @@ test.describe("commands architecture v1+v2", () => {
       await waitForBackendReady(launcher);
 
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
 
       const eden = await app.waitForEvent("window", { timeout: 10_000 });
@@ -118,17 +120,22 @@ test.describe("commands architecture v1+v2", () => {
       // Zen mode active.
       const zenActive = await eden.evaluate(() =>
         Boolean(
-          document.querySelector(".focus-mode-active") ||
-            document.querySelector(".focus-mode"),
+          document.querySelector(".focus-mode-active") || document.querySelector(".focus-mode"),
         ),
       );
       expect(zenActive, "zen mode должен быть active после open-today").toBe(true);
 
       // Journal entry создан с ISO YYYY-MM-DD title.
       const result = await eden.evaluate(async () => {
-        const api = (window as unknown as {
-          api: { listEntries: () => Promise<Array<{ id: string; title: string; type_id?: string | null }>> };
-        }).api;
+        const api = (
+          window as unknown as {
+            api: {
+              listEntries: () => Promise<
+                Array<{ id: string; title: string; type_id?: string | null }>
+              >;
+            };
+          }
+        ).api;
         const entries = await api.listEntries();
         const now = new Date();
         const yyyy = now.getFullYear();
@@ -142,17 +149,27 @@ test.describe("commands architecture v1+v2", () => {
           ),
         };
       });
-      expect(result.matching.length, `journal entry с title ${result.expected}`).toBeGreaterThanOrEqual(1);
+      expect(
+        result.matching.length,
+        `journal entry с title ${result.expected}`,
+      ).toBeGreaterThanOrEqual(1);
 
       // Cleanup.
-      await eden.evaluate(async (ids) => {
-        const api = (window as unknown as {
-          api: { deleteEntry: (id: string) => Promise<unknown> };
-        }).api;
-        for (const id of ids) {
-          try { await api.deleteEntry(id); } catch {}
-        }
-      }, result.matching.map((e) => e.id));
+      await eden.evaluate(
+        async (ids) => {
+          const api = (
+            window as unknown as {
+              api: { deleteEntry: (id: string) => Promise<unknown> };
+            }
+          ).api;
+          for (const id of ids) {
+            try {
+              await api.deleteEntry(id);
+            } catch {}
+          }
+        },
+        result.matching.map((e) => e.id),
+      );
     } finally {
       await app.close();
     }
@@ -180,9 +197,11 @@ test.describe("commands architecture v1+v2", () => {
 
       // Invoke action от не-running Eden.
       await launcher.evaluate(async () => {
-        await (window as unknown as {
-          kepler: { commands: { invoke: (id: string) => Promise<void> } };
-        }).kepler.commands.invoke("eden:note:open-today");
+        await (
+          window as unknown as {
+            kepler: { commands: { invoke: (id: string) => Promise<void> } };
+          }
+        ).kepler.commands.invoke("eden:note:open-today");
       });
 
       // Eden window должно появиться.
@@ -206,9 +225,11 @@ test.describe("commands architecture v1+v2", () => {
 
       const result = await launcher.evaluate(async () => {
         try {
-          await (window as unknown as {
-            kepler: { commands: { invoke: (id: string) => Promise<void> } };
-          }).kepler.commands.invoke("nonexistent:xyz:no-such-cmd");
+          await (
+            window as unknown as {
+              kepler: { commands: { invoke: (id: string) => Promise<void> } };
+            }
+          ).kepler.commands.invoke("nonexistent:xyz:no-such-cmd");
           return "ok";
         } catch (e) {
           return "throw:" + (e instanceof Error ? e.message : String(e));

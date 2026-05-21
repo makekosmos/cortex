@@ -18,8 +18,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:te
 const lsStore: Record<string, string> = {};
 (globalThis as any).localStorage = {
   getItem: (k: string) => lsStore[k] ?? null,
-  setItem: (k: string, v: string) => { lsStore[k] = v; },
-  removeItem: (k: string) => { delete lsStore[k]; },
+  setItem: (k: string, v: string) => {
+    lsStore[k] = v;
+  },
+  removeItem: (k: string) => {
+    delete lsStore[k];
+  },
 };
 
 // Controlled Date.now.
@@ -31,7 +35,9 @@ class MockedDate extends realDateCtor {
     // @ts-expect-error variadic
     else super(...args);
   }
-  static now() { return currentNow; }
+  static now() {
+    return currentNow;
+  }
 }
 (globalThis as any).Date = MockedDate;
 
@@ -62,9 +68,15 @@ function advanceTime(ms: number): void {
 
 // AudioContext stub (sounds.ts lazy reads).
 (globalThis as any).AudioContext = class {
-  state = "running"; currentTime = 0; destination = {};
-  createOscillator() { return { type: "sine", frequency: { value: 0 }, connect() {}, start() {}, stop() {} }; }
-  createGain() { return { gain: { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {} }; }
+  state = "running";
+  currentTime = 0;
+  destination = {};
+  createOscillator() {
+    return { type: "sine", frequency: { value: 0 }, connect() {}, start() {}, stop() {} };
+  }
+  createGain() {
+    return { gain: { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {} };
+  }
   resume() {}
 };
 
@@ -100,16 +112,17 @@ const horoApi = {
     listRunning: async (opts?: { source?: string | string[] }) => {
       const running = entries.filter((e) => !e.endedAt);
       if (!opts?.source) return running;
-      const allowed = new Set(
-        Array.isArray(opts.source) ? opts.source : [opts.source],
-      );
+      const allowed = new Set(Array.isArray(opts.source) ? opts.source : [opts.source]);
       return running.filter((e) => allowed.has(e.source ?? "manual"));
     },
     startTimer: async (input: any) => {
       const e: Entry = {
-        id: `te-${nextEntryId++}`, title: input.title,
-        startedAt: new Date(currentNow).toISOString(), endedAt: null,
-        taskId: input.taskId ?? null, taskTitle: input.taskTitle ?? null,
+        id: `te-${nextEntryId++}`,
+        title: input.title,
+        startedAt: new Date(currentNow).toISOString(),
+        endedAt: null,
+        taskId: input.taskId ?? null,
+        taskTitle: input.taskTitle ?? null,
         source: input.source ?? "manual",
         completed: false,
       };
@@ -132,7 +145,8 @@ const horoApi = {
     },
     create: async (input: any) => {
       const e: Entry = {
-        id: `te-${nextEntryId++}`, ...input,
+        id: `te-${nextEntryId++}`,
+        ...input,
       };
       entries.push(e);
       return e;
@@ -142,9 +156,7 @@ const horoApi = {
       if (idx >= 0) entries.splice(idx, 1);
     },
     countTodayCompletedPomodoros: async () => {
-      return entries.filter(
-        (e) => e.source === "pomodoro" && e.completed === true,
-      ).length;
+      return entries.filter((e) => e.source === "pomodoro" && e.completed === true).length;
     },
   },
   tasks: { list: async () => [] },
@@ -175,9 +187,15 @@ const horoApi = {
 // Default get_state — idle. Нужен до import'а, потому что
 // usePomodoroSession делает `void ensureInit()` на module load.
 rpcHandlers["pomodoro.get_state"] = async () => ({
-  phase: "idle", remainingMs: 0, totalMs: 0,
-  completedPomodoros: 0, isRunning: false, isPaused: false,
-  title: "", tasks: [], phaseEndsAtMs: null,
+  phase: "idle",
+  remainingMs: 0,
+  totalMs: 0,
+  completedPomodoros: 0,
+  isRunning: false,
+  isPaused: false,
+  title: "",
+  tasks: [],
+  phaseEndsAtMs: null,
 });
 // applyFocusBlocking вызывается в applyState на module-load ensureInit'е —
 // тоже до beforeEach. No-op handler чтобы не было warn'а.
@@ -197,9 +215,15 @@ beforeEach(() => {
   for (const k of Object.keys(rpcHandlers)) delete rpcHandlers[k];
   // Default get_state → idle.
   rpcHandlers["pomodoro.get_state"] = async () => ({
-    phase: "idle", remainingMs: 0, totalMs: 0,
-    completedPomodoros: 0, isRunning: false, isPaused: false,
-    title: "", tasks: [], phaseEndsAtMs: null,
+    phase: "idle",
+    remainingMs: 0,
+    totalMs: 0,
+    completedPomodoros: 0,
+    isRunning: false,
+    isPaused: false,
+    title: "",
+    tasks: [],
+    phaseEndsAtMs: null,
   });
   // Default focus.set_active_state — no-op. usePomodoroSession вызывает его
   // в applyState (declarative focus-blocking); индивидуальные тесты могут
@@ -222,9 +246,15 @@ describe("usePomodoroSession local interpolation", () => {
     const endsAt = startNow + totalMs;
 
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: endsAt,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: endsAt,
     });
 
     const p = usePomodoroSession();
@@ -250,9 +280,15 @@ describe("usePomodoroSession local interpolation", () => {
     const totalMs = 25 * 60 * 1000;
     const startNow = currentNow;
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
 
     const p = usePomodoroSession();
@@ -262,9 +298,15 @@ describe("usePomodoroSession local interpolation", () => {
 
     // Backend emit'ит phase_changed → paused state с явным null anchor.
     rpcHandlers["pomodoro.pause"] = async () => ({
-      phase: "work", remainingMs: beforePause, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: true,
-      title: "", tasks: [], phaseEndsAtMs: null,
+      phase: "work",
+      remainingMs: beforePause,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: true,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: null,
     });
     await p.pause();
 
@@ -278,9 +320,15 @@ describe("usePomodoroSession local interpolation", () => {
     const totalMs = 25 * 60 * 1000;
     const startNow = currentNow;
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     const p = usePomodoroSession();
     await p.start({ title: "Focus", tasks: [] });
@@ -288,18 +336,30 @@ describe("usePomodoroSession local interpolation", () => {
     const remainingAtPause = p.remainingMs.value;
 
     rpcHandlers["pomodoro.pause"] = async () => ({
-      phase: "work", remainingMs: remainingAtPause, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: true,
-      title: "", tasks: [], phaseEndsAtMs: null,
+      phase: "work",
+      remainingMs: remainingAtPause,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: true,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: null,
     });
     await p.pause();
     advanceTime(5000); // 5s в паузе
 
     // Resume: backend пересчитывает anchor = now + remainingAtPause.
     rpcHandlers["pomodoro.resume"] = async () => ({
-      phase: "work", remainingMs: remainingAtPause, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "", tasks: [], phaseEndsAtMs: currentNow + remainingAtPause,
+      phase: "work",
+      remainingMs: remainingAtPause,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: currentNow + remainingAtPause,
     });
     await p.resume();
 
@@ -317,9 +377,15 @@ describe("usePomodoroSession local interpolation", () => {
     const totalMs = 25 * 60 * 1000;
     const startNow = currentNow;
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     const p = usePomodoroSession();
     await p.start({ title: "Focus", tasks: [] });
@@ -329,9 +395,15 @@ describe("usePomodoroSession local interpolation", () => {
     // не должен «прыгнуть» назад если local clock уже двинулся вперёд.
     emit("pomodoro_tick", {
       event: "pomodoro_tick",
-      phase: "work", remainingMs: totalMs - 500, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs - 500,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     expect(p.remainingMs.value).toBeLessThanOrEqual(totalMs - 500 + 50);
     expect(p.remainingMs.value).toBeGreaterThanOrEqual(totalMs - 500 - 50);
@@ -346,9 +418,15 @@ describe("usePomodoroSession local interpolation", () => {
     const totalMs = 25 * 60 * 1000;
     const startNow = currentNow;
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     rpcHandlers["focus.set_active_state"] = async () => ({ ok: true });
 
@@ -359,10 +437,17 @@ describe("usePomodoroSession local interpolation", () => {
     // — именно в этом handler'е renderer создаёт первый time_entry.
     emit("pomodoro_phase_changed", {
       event: "pomodoro_phase_changed",
-      from: "idle", to: "work",
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      from: "idle",
+      to: "work",
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     // Async chain в phase_changed: closeArkEntry → createArkEntry.
     await usePomodoroSession().drainSideEffects();
@@ -375,9 +460,15 @@ describe("usePomodoroSession local interpolation", () => {
 
     // Pause: backend замораживает, renderer должен закрыть entry.
     rpcHandlers["pomodoro.pause"] = async () => ({
-      phase: "work", remainingMs: 20 * 60_000, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: true,
-      title: "Focus", tasks: [], phaseEndsAtMs: null,
+      phase: "work",
+      remainingMs: 20 * 60_000,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: true,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: null,
     });
     await p.pause();
 
@@ -393,9 +484,15 @@ describe("usePomodoroSession local interpolation", () => {
 
     // Resume: новый сегмент стартует.
     rpcHandlers["pomodoro.resume"] = async () => ({
-      phase: "work", remainingMs: 20 * 60_000, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: currentNow + 20 * 60_000,
+      phase: "work",
+      remainingMs: 20 * 60_000,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: currentNow + 20 * 60_000,
     });
     await p.resume();
 
@@ -408,10 +505,17 @@ describe("usePomodoroSession local interpolation", () => {
     advanceTime(20 * 60_000);
     emit("pomodoro_phase_changed", {
       event: "pomodoro_phase_changed",
-      from: "work", to: "shortBreak",
-      phase: "shortBreak", remainingMs: 5 * 60_000, totalMs: 5 * 60_000,
-      completedPomodoros: 1, isRunning: false, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: null,
+      from: "work",
+      to: "shortBreak",
+      phase: "shortBreak",
+      remainingMs: 5 * 60_000,
+      totalMs: 5 * 60_000,
+      completedPomodoros: 1,
+      isRunning: false,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: null,
     });
     await usePomodoroSession().drainSideEffects();
 
@@ -431,9 +535,15 @@ describe("usePomodoroSession daily counter", () => {
     const totalMs = 25 * 60 * 1000;
     const startNow = currentNow;
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     rpcHandlers["focus.set_active_state"] = async () => ({ ok: true });
 
@@ -443,10 +553,17 @@ describe("usePomodoroSession daily counter", () => {
 
     emit("pomodoro_phase_changed", {
       event: "pomodoro_phase_changed",
-      from: "idle", to: "work",
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      from: "idle",
+      to: "work",
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     await usePomodoroSession().drainSideEffects();
     expect(entries.length).toBe(1);
@@ -459,16 +576,29 @@ describe("usePomodoroSession daily counter", () => {
     emit("pomodoro_finished", {
       event: "pomodoro_finished",
       finished: "work",
-      phase: "work", remainingMs: 0, totalMs,
-      completedPomodoros: 1, isRunning: false, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: null,
+      phase: "work",
+      remainingMs: 0,
+      totalMs,
+      completedPomodoros: 1,
+      isRunning: false,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: null,
     });
     emit("pomodoro_phase_changed", {
       event: "pomodoro_phase_changed",
-      from: "work", to: "shortBreak",
-      phase: "shortBreak", remainingMs: 5 * 60_000, totalMs: 5 * 60_000,
-      completedPomodoros: 1, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: currentNow + 5 * 60_000,
+      from: "work",
+      to: "shortBreak",
+      phase: "shortBreak",
+      remainingMs: 5 * 60_000,
+      totalMs: 5 * 60_000,
+      completedPomodoros: 1,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: currentNow + 5 * 60_000,
     });
     await usePomodoroSession().drainSideEffects();
 
@@ -483,15 +613,27 @@ describe("usePomodoroSession daily counter", () => {
     const totalMs = 25 * 60 * 1000;
     const startNow = currentNow;
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     rpcHandlers["focus.set_active_state"] = async () => ({ ok: true });
     rpcHandlers["pomodoro.stop"] = async () => ({
-      phase: "idle", remainingMs: 0, totalMs: 0,
-      completedPomodoros: 0, isRunning: false, isPaused: false,
-      title: "", tasks: [], phaseEndsAtMs: null,
+      phase: "idle",
+      remainingMs: 0,
+      totalMs: 0,
+      completedPomodoros: 0,
+      isRunning: false,
+      isPaused: false,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: null,
     });
 
     const p = usePomodoroSession();
@@ -499,10 +641,17 @@ describe("usePomodoroSession daily counter", () => {
     await p.start({ title: "Focus", tasks: [] });
     emit("pomodoro_phase_changed", {
       event: "pomodoro_phase_changed",
-      from: "idle", to: "work",
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      from: "idle",
+      to: "work",
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
     await usePomodoroSession().drainSideEffects();
 
@@ -512,10 +661,17 @@ describe("usePomodoroSession daily counter", () => {
     await p.stop();
     emit("pomodoro_phase_changed", {
       event: "pomodoro_phase_changed",
-      from: "work", to: "idle",
-      phase: "idle", remainingMs: 0, totalMs: 0,
-      completedPomodoros: 0, isRunning: false, isPaused: false,
-      title: "", tasks: [], phaseEndsAtMs: null,
+      from: "work",
+      to: "idle",
+      phase: "idle",
+      remainingMs: 0,
+      totalMs: 0,
+      completedPomodoros: 0,
+      isRunning: false,
+      isPaused: false,
+      title: "",
+      tasks: [],
+      phaseEndsAtMs: null,
     });
     await usePomodoroSession().drainSideEffects();
 
@@ -590,9 +746,15 @@ describe("usePomodoroSession reload rehydration", () => {
     const totalMs = 25 * 60 * 1000;
     const startNow = currentNow;
     rpcHandlers["pomodoro.start"] = async () => ({
-      phase: "work", remainingMs: totalMs, totalMs,
-      completedPomodoros: 0, isRunning: true, isPaused: false,
-      title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+      phase: "work",
+      remainingMs: totalMs,
+      totalMs,
+      completedPomodoros: 0,
+      isRunning: true,
+      isPaused: false,
+      title: "Focus",
+      tasks: [],
+      phaseEndsAtMs: startNow + totalMs,
     });
 
     const p = usePomodoroSession();
@@ -604,10 +766,17 @@ describe("usePomodoroSession reload rehydration", () => {
     for (let i = 0; i < 2; i++) {
       emit("pomodoro_phase_changed", {
         event: "pomodoro_phase_changed",
-        from: "idle", to: "work",
-        phase: "work", remainingMs: totalMs, totalMs,
-        completedPomodoros: 0, isRunning: true, isPaused: false,
-        title: "Focus", tasks: [], phaseEndsAtMs: startNow + totalMs,
+        from: "idle",
+        to: "work",
+        phase: "work",
+        remainingMs: totalMs,
+        totalMs,
+        completedPomodoros: 0,
+        isRunning: true,
+        isPaused: false,
+        title: "Focus",
+        tasks: [],
+        phaseEndsAtMs: startNow + totalMs,
       });
     }
     // Дрейним serial queue до завершения всех side-effects.

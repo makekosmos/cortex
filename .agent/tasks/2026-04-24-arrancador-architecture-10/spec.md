@@ -36,11 +36,13 @@ Out of scope:
 ## Acceptance Criteria
 
 AC1: Backend backup IPC boundary is thin.
+
 - `electron/main/ipc/backup-handlers.ts` must delegate backup workflow to a focused service/module.
 - The handler file must no longer directly import low-level backup implementation functions such as `createBackup`, `restoreBackup`, `deleteBackup`, `discoverBackupInfo`, `findGameSaves`, or backup DB helper functions.
 - Backup commands retain the same IPC channel names and payload/result shapes.
 
 AC2: Backup workflow is testable away from Electron IPC.
+
 - A new or existing non-IPC module must expose backup workflow functions through dependency injection/ports.
 - Unit tests must cover at least:
   - save path lookup emits `game:save-path-missing` when no path is found.
@@ -48,11 +50,13 @@ AC2: Backup workflow is testable away from Electron IPC.
   - restore backup rejects missing backup IDs.
 
 AC3: Game Detail route is a composition surface for launch orchestration.
+
 - `src-vue/pages/GameDetailPage.vue` must delegate launch/preflight/kill-process behavior to a composable.
 - The route component must no longer call `backupApi.checkRestoreNeeded`, `backupApi.shouldBackupBeforeLaunch`, `backupApi.checkBackupNeeded`, `backupApi.create`, `backupApi.restore`, `gamesApi.launch`, `gamesApi.killProcesses`, or `gamesApi.getRunningInstances` directly.
 - Existing child component props/emits remain compatible.
 
 AC4: Launch workflow is tested as stateful Vue logic.
+
 - A composable test must cover:
   - running game path: confirm, kill matching processes, update running count, no launch.
   - restore-before-launch path.
@@ -60,10 +64,12 @@ AC4: Launch workflow is tested as stateful Vue logic.
   - launch failure notification path.
 
 AC5: Architecture guardrails are strengthened.
+
 - `architecture-boundaries.test.ts` or equivalent tests must fail if backup IPC grows low-level backup imports again.
 - A route-level budget/check must cover Game Detail launch orchestration imports/calls.
 
 AC6: Verification is fresh and passing.
+
 - `bun run typecheck`
 - `bun run test`
 - `bun run test:coverage`
@@ -71,6 +77,7 @@ AC6: Verification is fresh and passing.
 - `cargo test --manifest-path sidecar\Cargo.toml`
 
 AC7: Proof artifacts exist.
+
 - `.agent/tasks/2026-04-24-arrancador-architecture-10/evidence.md`
 - `.agent/tasks/2026-04-24-arrancador-architecture-10/evidence.json`
 - Raw command output files for every verification command.

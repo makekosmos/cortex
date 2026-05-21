@@ -14,9 +14,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/Editor.vue"
-      ],
+      "evidence": ["apps/eden/ts/src/Editor.vue"],
       "notes": "Editor defaults to note_obj and passes relation/navigation context into TypedHeader."
     },
     {
@@ -31,9 +29,7 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/main/main.ts"
-      ],
+      "evidence": ["apps/eden/ts/main/main.ts"],
       "notes": "shutdownArk wiring is present in shutdown paths."
     },
     {

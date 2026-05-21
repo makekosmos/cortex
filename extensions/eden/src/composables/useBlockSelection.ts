@@ -63,12 +63,7 @@ export function useBlockSelection() {
   const hasSelection = computed(() => selectedPositions.value.size > 0);
 
   function aabbCollide(a: DragRect, b: DOMRect): boolean {
-    return !(
-      a.x + a.width < b.left ||
-      a.x > b.right ||
-      a.y + a.height < b.top ||
-      a.y > b.bottom
-    );
+    return !(a.x + a.width < b.left || a.x > b.right || a.y + a.height < b.top || a.y > b.bottom);
   }
 
   function clearSelection(): void {
@@ -183,12 +178,7 @@ export function useBlockSelection() {
         const blockRect = dom.getBoundingClientRect();
         // DOMRect конструктор принимает x/y/w/h. Заменяем horizontal
         // bounds на содержащий контейнер — vertical оставляем реальные.
-        const expandedRect = new DOMRect(
-          fullLeft,
-          blockRect.top,
-          fullWidth,
-          blockRect.height,
-        );
+        const expandedRect = new DOMRect(fullLeft, blockRect.top, fullWidth, blockRect.height);
         out.push({ pos, el: dom, rect: expandedRect });
       }
       return false;

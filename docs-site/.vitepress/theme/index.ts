@@ -23,8 +23,7 @@ const MERMAID_THEME = {
     lineColor: "#9b9bb2",
     secondaryColor: "#222230",
     tertiaryColor: "#1a1a1f",
-    fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'SF Pro Display', Inter, sans-serif",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', Inter, sans-serif",
     fontSize: "13px",
   },
 } as const;

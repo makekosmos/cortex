@@ -54,9 +54,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "backend-search-verification.json assertions.arkFoundObject = true"
-      ]
+      "evidence": ["backend-search-verification.json assertions.arkFoundObject = true"]
     },
     {
       "id": "AC2",
@@ -86,9 +84,7 @@
   ],
   "encoding": {
     "status": "PASS",
-    "details": [
-      "proof-loop docs in this task folder are ASCII"
-    ]
+    "details": ["proof-loop docs in this task folder are ASCII"]
   },
   "overall_verification": "PASS"
 }

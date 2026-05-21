@@ -24,9 +24,7 @@ const CharCounter = defineComponent({
     contentJson: { type: String, required: true },
   },
   setup(props) {
-    const count = computed(() =>
-      countCharsInProseMirrorDoc(props.contentJson) ?? 0,
-    );
+    const count = computed(() => countCharsInProseMirrorDoc(props.contentJson) ?? 0);
     const label = computed(() => `${count.value} ${pluralize(count.value)}`);
     return { label };
   },

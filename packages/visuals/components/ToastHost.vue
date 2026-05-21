@@ -12,7 +12,12 @@ const state = inject(ToastKey, null);
   <Teleport v-if="state" to="body">
     <div class="kosmos-toast-host" aria-live="polite">
       <TransitionGroup name="kosmos-toast">
-        <Toast v-for="item in state.items.value" :key="item.id" :message="item.message" :tone="item.tone" />
+        <Toast
+          v-for="item in state.items.value"
+          :key="item.id"
+          :message="item.message"
+          :tone="item.tone"
+        />
       </TransitionGroup>
     </div>
   </Teleport>
@@ -32,7 +37,9 @@ const state = inject(ToastKey, null);
 
 .kosmos-toast-enter-active,
 .kosmos-toast-leave-active {
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
 }
 
 .kosmos-toast-enter-from {

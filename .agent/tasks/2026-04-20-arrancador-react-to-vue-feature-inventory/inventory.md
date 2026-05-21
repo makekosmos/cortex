@@ -36,12 +36,14 @@ These are useful migration references and confirm that the repo already contains
     - [src/main.ts](/D:/Personal/Hobby/Coding/kosmos/apps/delphi/ts/src/main.ts)
 
 Conclusion:
+
 - The repo already has usable local patterns for both stable Vue and Vue + vapor interop.
 - Arrancador migration can and should reuse these local precedents instead of inventing a fresh stack.
 
 ## 2. Current Arrancador frontend scope
 
 Renderer app:
+
 - [apps/arrancador/package.json](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/package.json)
 - [src/main.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/main.tsx)
 - [src/router.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/router.tsx)
@@ -49,6 +51,7 @@ Renderer app:
 - [vite.config.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/vite.config.ts)
 
 Current renderer size indicators:
+
 - 10 route-level page components in `src/pages/`
 - 10 shared components in `src/components/`
 - 12 UI primitive wrapper components in `src/components/ui/`
@@ -63,6 +66,7 @@ This section is the feature contract. These are not “React features”; these 
 ### 3.1 App shell and navigation
 
 Files:
+
 - [src/pages/Layout.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Layout.tsx)
 - [src/components/Sidebar.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/Sidebar.tsx)
 - [src/components/AppTitlebar.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/AppTitlebar.tsx)
@@ -70,6 +74,7 @@ Files:
 - [src/components/Spotlight.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/Spotlight.tsx)
 
 Feature list:
+
 - Desktop shell with custom titlebar
 - Native/fallback window controls
 - Back/forward history controls
@@ -82,9 +87,11 @@ Feature list:
 ### 3.2 Library page
 
 File:
+
 - [src/pages/Library.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Library.tsx)
 
 Feature list:
+
 - Main game library listing
 - Grid/list display modes
 - Persisted library filter preset
@@ -112,9 +119,11 @@ Feature list:
 ### 3.3 Game detail page
 
 File:
+
 - [src/pages/GameDetail.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/GameDetail.tsx)
 
 Feature list:
+
 - Game hero with localized genres and metadata
 - Launch button with running/missing/ready states
 - Running-instance tracking
@@ -143,9 +152,11 @@ Feature list:
 ### 3.4 Scan page
 
 File:
+
 - [src/pages/Scan.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Scan.tsx)
 
 Feature list:
+
 - Folder scan tab
 - Running processes tab
 - Streamed executable scan via IPC
@@ -160,9 +171,11 @@ Feature list:
 ### 3.5 Catalogue page
 
 File:
+
 - [src/pages/Catalogue.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Catalogue.tsx)
 
 Feature list:
+
 - RAWG showcase / search page
 - Search input + async search state
 - Add RAWG item to local library
@@ -174,9 +187,11 @@ Feature list:
 ### 3.6 Statistics page
 
 File:
+
 - [src/pages/Statistics.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Statistics.tsx)
 
 Feature list:
+
 - Playtime stats fetch by date range
 - Preset ranges
 - Custom date ranges
@@ -190,9 +205,11 @@ Feature list:
 ### 3.7 Settings page
 
 File:
+
 - [src/pages/Settings.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Settings.tsx)
 
 Feature list:
+
 - Appearance/theme settings
 - System settings
 - Backup settings
@@ -205,9 +222,11 @@ Feature list:
 ### 3.8 Achievements page
 
 File:
+
 - [src/pages/Achievements.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Achievements.tsx)
 
 Feature list:
+
 - Load achievements
 - Filter all/unlocked/locked
 - Seed default achievements
@@ -219,9 +238,11 @@ Feature list:
 ### 3.9 System info page
 
 File:
+
 - [src/pages/SystemInfo.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/SystemInfo.tsx)
 
 Feature list:
+
 - Load/cached system information
 - Display CPU, memory, GPU, storage and uptime data
 - Disk speed tests per mount point
@@ -230,9 +251,11 @@ Feature list:
 ### 3.10 SQOBA page
 
 File:
+
 - [src/pages/Sqoba.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Sqoba.tsx)
 
 Feature list:
+
 - SQOBA overview cards
 - Save-path lookup across library
 - Save-file lookup per game
@@ -248,6 +271,7 @@ Feature list:
 ### 4.1 Shared components
 
 Files:
+
 - [src/components/GameCard.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/GameCard.tsx)
 - [src/components/RawgMetadataPrompt.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/RawgMetadataPrompt.tsx)
 - [src/components/Spotlight.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/Spotlight.tsx)
@@ -256,6 +280,7 @@ Files:
 - [src/components/mode-toggle.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/mode-toggle.tsx)
 
 These are feature-bearing and must be ported, not just visually replicated:
+
 - Game card link behavior
 - Metadata application prompt flow
 - Spotlight query, ranking and keyboard control
@@ -266,6 +291,7 @@ These are feature-bearing and must be ported, not just visually replicated:
 ### 4.2 Global providers / global state
 
 Files:
+
 - [src/providers.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/providers.tsx)
 - [src/store/GamesContext.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/store/GamesContext.tsx)
 - [src/components/theme-provider.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/theme-provider.tsx)
@@ -273,6 +299,7 @@ Files:
 - [src/components/ToastProvider.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ToastProvider.tsx)
 
 Migration targets:
+
 - `GamesContext` -> Pinia store or provide/inject composable store
 - `ThemeProvider` -> Vue composable/provider
 - `LanguageProvider` -> Vue composable/provider or i18n-lite store
@@ -286,11 +313,13 @@ This is the direct rewrite surface.
 ### 5.1 Entry and routing
 
 Current React files:
+
 - [src/main.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/main.tsx)
 - [src/router.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/router.tsx)
 - [src/App.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/App.tsx)
 
 Current React-specific behavior:
+
 - `ReactDOM.createRoot`
 - `RouterProvider`
 - `createBrowserRouter`
@@ -298,6 +327,7 @@ Current React-specific behavior:
 - `Outlet`, `useNavigate`, `useLocation`, `useNavigationType`, `Link`, `NavLink`
 
 Vue migration target:
+
 - `createApp`
 - `createRouter`
 - route records with lazy imports
@@ -308,6 +338,7 @@ Vue migration target:
 ### 5.2 State and hooks model
 
 Current React-specific patterns:
+
 - `useState`
 - `useEffect`
 - `useMemo`
@@ -317,6 +348,7 @@ Current React-specific patterns:
 - `forwardRef`
 
 Affected files include:
+
 - [src/store/GamesContext.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/store/GamesContext.tsx)
 - [src/hooks/useSettingsState.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/hooks/useSettingsState.ts)
 - [src/hooks/useGameStatus.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/hooks/useGameStatus.ts)
@@ -324,6 +356,7 @@ Affected files include:
 - [src/hooks/use-mobile.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/hooks/use-mobile.ts)
 
 Vue migration target:
+
 - composables
 - `ref`, `reactive`, `computed`, `watch`
 - Pinia or injected stores
@@ -332,6 +365,7 @@ Vue migration target:
 ### 5.3 UI primitive layer
 
 Current React UI wrappers:
+
 - [button.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/button.tsx)
 - [card.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/card.tsx)
 - [dropdown-menu.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/dropdown-menu.tsx)
@@ -346,6 +380,7 @@ Current React UI wrappers:
 - [tooltip.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/ui/tooltip.tsx)
 
 Current React-specific vendor dependencies:
+
 - `@radix-ui/react-dialog`
 - `@radix-ui/react-dropdown-menu`
 - `@radix-ui/react-progress`
@@ -355,6 +390,7 @@ Current React-specific vendor dependencies:
 - `@radix-ui/react-tooltip`
 
 Vue migration target:
+
 - port wrappers to Vue SFCs
 - likely use `reka-ui` patterns already present in `delphi`
 - or replace with app-local Vue primitives where simpler
@@ -362,18 +398,22 @@ Vue migration target:
 ### 5.4 Icon layer
 
 Current:
+
 - `lucide-react`
 
 Migration target:
+
 - `lucide-vue-next`
 
 ### 5.5 Charts layer
 
 Current:
+
 - `recharts`
 - used in [src/pages/Statistics.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/pages/Statistics.tsx)
 
 Migration target:
+
 - replace charting with a Vue-capable chart library or local wrapper
 - this is a product feature dependency, not just syntax conversion
 
@@ -387,6 +427,7 @@ These are not React-specific and should be preserved as-is or minimally adapted:
 - [src/types/index.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/types/index.ts)
 
 API groups already defined:
+
 - `gamesApi`
 - `metadataApi`
 - `achievementsApi`
@@ -400,6 +441,7 @@ API groups already defined:
 - `windowApi`
 
 Migration note:
+
 - UI framework can change without rewriting the Electron/main-process contracts.
 - The safest migration is to keep these API contracts stable while swapping only the renderer implementation.
 
@@ -408,15 +450,18 @@ Migration note:
 ### 7.1 Build/tooling replacements
 
 Current React-specific config:
+
 - [vite.config.ts](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/vite.config.ts)
 
 Current React-specific items:
+
 - `@vitejs/plugin-react`
 - React alias resolution
 - React dedupe
 - `tsx` include/coverage assumptions
 
 Vue migration target:
+
 - `@vitejs/plugin-vue`
 - Vue aliases/dedupe
 - `.vue` + `.ts` coverage/test config
@@ -425,6 +470,7 @@ Vue migration target:
 ### 7.2 Dependency replacements
 
 Current React deps in [package.json](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/package.json):
+
 - `react`
 - `react-dom`
 - `react-router-dom`
@@ -437,6 +483,7 @@ Current React deps in [package.json](/D:/Personal/Hobby/Coding/kosmos/apps/arran
 - `@vitejs/plugin-react`
 
 Expected Vue-side replacements:
+
 - `vue`
 - `vue-router`
 - `lucide-vue-next`
@@ -448,6 +495,7 @@ Expected Vue-side replacements:
 ### 7.3 Test suites to migrate
 
 Current renderer tests in `src/test/` include:
+
 - `achievements.test.tsx`
 - `app-providers.test.tsx`
 - `app-titlebar.test.tsx`
@@ -479,6 +527,7 @@ Current renderer tests in `src/test/` include:
 - plus non-UI utility/API tests
 
 Migration implication:
+
 - every `.tsx` component/hook/provider test must be ported to Vue test patterns
 - router mocks and component mount helpers must be rewritten
 - primitive wrapper tests must be recreated against the new Vue primitive layer
@@ -544,6 +593,7 @@ This is the concrete “what we need to work through” list.
 If the goal is “full port, no partial hybrid,” the migration unit is the renderer, not isolated JSX files.
 
 That means:
+
 - do not think of this as “convert components one by one” only
 - think of it as:
   - boot/runtime swap
@@ -553,6 +603,7 @@ That means:
   - test harness swap
 
 The business-facing contracts that must remain stable are:
+
 - IPC/API contracts in `src/lib/api.ts`
 - browser/electron helpers in `src/lib/browser.ts`
 - domain types in `src/types/index.ts`
@@ -561,12 +612,14 @@ The business-facing contracts that must remain stable are:
 ## 10. Summary
 
 What exists now:
+
 - full Electron renderer app in React
 - 10 major route-level product surfaces
 - shared shell, search, toast, theme, language, game store and primitive layers
 - React-only vendor stack and React-only tests
 
 What must be ported to Vue:
+
 - all route pages
 - all shared shell components
 - all providers/stores/hooks
@@ -575,6 +628,7 @@ What must be ported to Vue:
 - all React-specific dependencies
 
 What does not need conceptual redesign:
+
 - Electron/main-process IPC surface
 - domain types
 - core business capabilities

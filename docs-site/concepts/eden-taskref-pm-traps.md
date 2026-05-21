@@ -18,6 +18,7 @@ description: Шесть hard-won багов interaction'а между Vue NodeVi
 **Причина.** `props.node.nodeSize` возвращал **2**, тогда как **реальный** `taskRef` в документе занимал size **1** (atom-leaf). Insert новой ноды по `myPos + node.nodeSize = 0 + 2 = 2` падал ВНУТРЬ следующего пустого параграфа `[1, 3)`, и `tr.insert` split'ил параграф на половинки → лишний пустой блок снизу.
 
 **Источник расхождения.** `Node.nodeSize` в PM считается формулой `isLeaf ? 1 : content.size + 2`. Для нашего taskRef:
+
 - В реальной документной ноде `isLeaf` опирается на `contentMatch === ContentMatch.empty` — true → size = 1.
 - В `props.node` (то, что NodeView получает от TipTap) `isLeaf` оказывался false (атрибутивная разница, возможно из-за того как TipTap клонирует ноду в Vue-renderer'е) → формула давала `0 + 2 = 2`.
 
@@ -118,6 +119,7 @@ if ((sel as any).node !== undefined) {
 ### Что РАБОТАЕТ — focus-defender pattern
 
 Стратегия: **признать что PM украдёт focus и отбить обратно**. Принципы:
+
 - Активировать защиту только когда юзер кликнул именно по input (`onTitleMouseDown` ставит флаг `focusDefenderActive = true`).
 - На `input.blur` — если `relatedTarget` это `.ProseMirror`, restore'нуть focus через `requestAnimationFrame`.
 - Сохранять `selectionStart` ДО blur (после него value selection недоступна).

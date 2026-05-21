@@ -5,11 +5,12 @@
 ## 1. Граница записи в ARK
 
 ::: danger
+
 - Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
 - **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
 - Dashboard — read-only.
 - Перед PR в data services: `bun run ark:guard:writes`.
-:::
+  :::
 
 См. [Граница записи в ARK](/concepts/write-boundary).
 
@@ -25,10 +26,11 @@
 ## 3. Изоляция тестовых БД
 
 ::: danger
+
 - Тесты / smoke / Playwright / migration verify — **только** на изолированных DB.
 - Разрешённые пути: `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/`, OS temp.
 - Любой тест, дефолтящийся в user data dir, **отвергается** на code review.
-:::
+  :::
 
 См. [Изоляция тестовых БД](/concepts/test-isolation).
 
@@ -66,12 +68,12 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 8. Запреты per-app
 
-| Приложение | Не делать |
-|---|---|
-| Delphi | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback |
-| Eden | Возвращаться к ripgrep, ломать `save/move/delete` hardening в `store.ts`, возвращать ручные titlebar-offset |
-| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути |
-| Dashboard | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts` |
+| Приложение | Не делать                                                                                                   |
+| ---------- | ----------------------------------------------------------------------------------------------------------- |
+| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                    |
+| Eden       | Возвращаться к ripgrep, ломать `save/move/delete` hardening в `store.ts`, возвращать ручные titlebar-offset |
+| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                       |
+| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                   |
 
 ## 9. Brand consistency (Kepler / Kosmos)
 

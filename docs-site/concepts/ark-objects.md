@@ -6,12 +6,12 @@ ARK хранит данные приложений как **универсаль
 
 ARK SQLite на 2026-04-16 содержит:
 
-| Группа | Таблицы | Назначение |
-|---|---|---|
-| **Generic object model** | `object_types`, `objects`, `object_links` | Универсальные объекты приложений |
-| **Usage tracking** | `tracked_apps`, `usage_sessions`, `usage_events` | Сессии использования (windows tracker) |
-| **Legacy planning** | `todos`, `projects`, `areas`, `tags`, `headings` | Старая модель задач (Delphi мигрирует в object model) |
-| **Sync metadata** | `sync_kv`, `sync_tombstones` | Версионные векторы, HLC, tombstones для delete propagation |
+| Группа                   | Таблицы                                          | Назначение                                                 |
+| ------------------------ | ------------------------------------------------ | ---------------------------------------------------------- |
+| **Generic object model** | `object_types`, `objects`, `object_links`        | Универсальные объекты приложений                           |
+| **Usage tracking**       | `tracked_apps`, `usage_sessions`, `usage_events` | Сессии использования (windows tracker)                     |
+| **Legacy planning**      | `todos`, `projects`, `areas`, `tags`, `headings` | Старая модель задач (Delphi мигрирует в object model)      |
+| **Sync metadata**        | `sync_kv`, `sync_tombstones`                     | Версионные векторы, HLC, tombstones для delete propagation |
 
 **Новые app-domain данные должны идти в generic object model**, если только это не высокообъёмные analytics/usage-данные.
 
@@ -107,23 +107,23 @@ erDiagram
 
 ## Известные типы объектов
 
-| `typeId` | Кто пишет | Что значит |
-|---|---|---|
-| `note_obj` | Eden | заметка (дневник, typed note) |
-| `task_obj` | Delphi | задача (после миграции legacy todos) |
-| `game_obj` | Arrancador | запись об игре |
-| `time_entry_obj` | Horologion | запись отрезка времени (start/end), pomodoro-сегменты, ручные записи |
+| `typeId`                                         | Кто пишет                        | Что значит                                                                                                   |
+| ------------------------------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `note_obj`                                       | Eden                             | заметка (дневник, typed note)                                                                                |
+| `task_obj`                                       | Delphi                           | задача (после миграции legacy todos)                                                                         |
+| `game_obj`                                       | Arrancador                       | запись об игре                                                                                               |
+| `time_entry_obj`                                 | Horologion                       | запись отрезка времени (start/end), pomodoro-сегменты, ручные записи                                         |
 | `tag_obj` <span class="kbadge accent">WIP</span> | **shared** (Delphi + Horologion) | общий тег (`title` = имя, `propsJson.color` = OKLCH-цвет). Связи через `object_links` с `linkType='tagged'`. |
 
 Каждое приложение может зарегистрировать **custom object type** (например, для специализированных typed-notes Eden или для категорий задач Delphi). Custom types — это часть продуктового домена приложения.
 
 ### Object links — конвенции `linkType`
 
-| `linkType` | source → target | Кто использует |
-|---|---|---|
-| `tagged` | `<any>` → `tag_obj` | Все приложения — для пометки тегом |
+| `linkType` | source → target               | Кто использует                        |
+| ---------- | ----------------------------- | ------------------------------------- |
+| `tagged`   | `<any>` → `tag_obj`           | Все приложения — для пометки тегом    |
 | `for-task` | `time_entry_obj` → `task_obj` | Horologion — привязка записи к задаче |
-| `related` | универсальное | любая семантически связанная пара |
+| `related`  | универсальное                 | любая семантически связанная пара     |
 
 ### Schema для `time_entry_obj`
 
@@ -205,10 +205,10 @@ UsageSession { id, tracked_app_id, started_at, ended_at, duration_ms, ... }
 
 ## Sync metadata
 
-| Таблица | Что хранит |
-|---|---|
-| `sync_kv` | произвольный key/value (HLC последнего apply, версии векторов, peer ids) |
-| `sync_tombstones` | durable tombstones для propagation удалений |
+| Таблица           | Что хранит                                                               |
+| ----------------- | ------------------------------------------------------------------------ |
+| `sync_kv`         | произвольный key/value (HLC последнего apply, версии векторов, peer ids) |
+| `sync_tombstones` | durable tombstones для propagation удалений                              |
 
 `lan_sync.version_vector` — это запись в `sync_kv` под фиксированным ключом, обновляется на каждой записи в синхронизируемую сущность.
 
@@ -217,38 +217,50 @@ UsageSession { id, tracked_app_id, started_at, ended_at, duration_ms, ... }
 ```ts
 // CRUD объектов
 await ark.objects.upsert({
-  id: 'task-1', typeId: 'task_obj', title: 'Draft plan',
-  contentJson: { body: '' }, propsJson: { status: 'open' },
-  createdAt: now, updatedAt: now, deletedAt: null,
+  id: "task-1",
+  typeId: "task_obj",
+  title: "Draft plan",
+  contentJson: { body: "" },
+  propsJson: { status: "open" },
+  createdAt: now,
+  updatedAt: now,
+  deletedAt: null,
 });
-const t = await ark.objects.get('task-1');
+const t = await ark.objects.get("task-1");
 const all = await ark.objects.list();
-const tasks = await ark.objects.listByType('task_obj');
-const many = await ark.objects.getMany(['task-1', 'note-1']);
-const matches = await ark.objects.search('plan');
-await ark.objects.delete('task-1');
+const tasks = await ark.objects.listByType("task_obj");
+const many = await ark.objects.getMany(["task-1", "note-1"]);
+const matches = await ark.objects.search("plan");
+await ark.objects.delete("task-1");
 
 // Object types
 await ark.objectTypes.upsert({
-  id: 'task_obj', name: 'Task',
-  schemaJson: '{}', uiSchemaJson: '{}',
-  createdAt: now, updatedAt: now, systemLocked: false,
+  id: "task_obj",
+  name: "Task",
+  schemaJson: "{}",
+  uiSchemaJson: "{}",
+  createdAt: now,
+  updatedAt: now,
+  systemLocked: false,
 });
 
 // Links
 await ark.links.upsert({
-  id: 'link-1', sourceObjectId: 'task-1', targetObjectId: 'note-1',
-  linkType: 'related', createdAt: now,
+  id: "link-1",
+  sourceObjectId: "task-1",
+  targetObjectId: "note-1",
+  linkType: "related",
+  createdAt: now,
 });
 
 // Usage
 const usage = await ark.usage.loadAll();
 const recent = await ark.usage.processes.recent(10);
-const found = await ark.usage.processes.search('demo', 10);
+const found = await ark.usage.processes.search("demo", 10);
 const summary = await ark.usage.gamePlaytime.summary({
-  bindings: [{ gameId, gameName, matchType: 'exe_path', matchValue: 'C:/...' }],
-  rangeStart: '2026-04-01',
-  rangeEnd: '2026-04-30',
+  bindings: [{ gameId, gameName, matchType: "exe_path", matchValue: "C:/..." }],
+  rangeStart: "2026-04-01",
+  rangeEnd: "2026-04-30",
 });
 ```
 

@@ -5,6 +5,7 @@
 ## AC1 — Manifest schema + loader → PASS
 
 **Файлы:**
+
 - `shell/electron/extension-host.ts`: новый `KextManifestCommand` тип
   (id/title/subtitle/icon/route/kind/mode); `ExtensionManifest.commands?`;
   `loadDeclaredCommands(): DeclaredCommand[]` сканирует все manifests,
@@ -16,6 +17,7 @@
 ## AC2 — IPC integration → PASS
 
 **Файлы:**
+
 - `shell/electron/main.ts`: `kepler:commands:list` мержит три источника
   (internal > manifest > dynamic), dedup по id; `kepler:commands:invoke`
   resolves: internal → exec, manifest open → openExtension, manifest
@@ -27,12 +29,14 @@
 ## AC3 — Migration Eden/Horologion/Delphi → PASS
 
 **Manifests:**
+
 - `extensions/eden/manifest.json`: commands [open, note:create, note:open-today].
 - `extensions/horologion/manifest.json`: commands [open, pomodoro, stopwatch].
 - `extensions/delphi/manifest.json`: commands [open, inbox].
 - `extensions/arrancador/manifest.json`: commands [open].
 
 **Shell cleanup:**
+
 - `shell/electron/commands.ts` `COMMANDS[]` теперь только kepler-internal
   (settings/dashboard/check-updates). Удалены delphi/horologion/arrancador/eden
   entries + helper `openAsExtension` + import `extensionIconDataUri/openExtension`.
@@ -40,6 +44,7 @@
 ## AC4 — Auto-launch для dynamic action → PASS
 
 **Файлы:**
+
 - `shell/electron/main.ts`: `awaitExtensionCommand(extId, fullId, timeoutMs=5000)`
   poll'ит arkClient.commands.list() каждые 100ms пока команда не появится.
 - В `kepler:commands:invoke` для manifest `mode: "action"` и для runtime
@@ -50,6 +55,7 @@
 ## AC5 — Edge cases → PASS
 
 Прогнаны через e2e (см. AC6):
+
 - Uninstall extension — команды исчезают (notifyCommandsChanged broadcast).
 - Install extension с manifest.commands — добавляет команды.
 - Duplicate id — internal > manifest > dynamic priority (тесты ожидают

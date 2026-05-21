@@ -50,4 +50,3 @@
 ## Notes
 
 - An optional `bun run build:renderer:vue` attempt earlier in the session failed in the local environment with a Tailwind/native binary loading issue (`@tailwindcss/oxide` / `spawn EPERM`). That failure is not specific to the Game Detail changes, and the required verification surface for this task remains `PASS` via typecheck plus Vue tests.
-

@@ -13,21 +13,21 @@
 
 Backend under test: `ts-electron-main`.
 
-| Metric | Result |
-| --- | ---: |
-| scan_executables_stream | 136.19 ms |
-| scan throughput | 52,867.32 files/s |
-| scan time to first result | 3.95 ms |
-| scan cancellation latency | 0.45 ms |
-| backup create directory | 293.32 ms |
-| backup create throughput | 5.59 MB/s |
-| backup restore directory | 260.56 ms |
-| backup restore throughput | 6.30 MB/s |
-| sqlite open/init | 125.85 ms |
-| sqlite insert 1000 games | 3621.66 ms |
-| sqlite insert throughput | 276.12 rows/s |
-| sqlite get all 1000 games | 8.96 ms |
-| sqlite search | 0.69 ms |
+| Metric                    |            Result |
+| ------------------------- | ----------------: |
+| scan_executables_stream   |         136.19 ms |
+| scan throughput           | 52,867.32 files/s |
+| scan time to first result |           3.95 ms |
+| scan cancellation latency |           0.45 ms |
+| backup create directory   |         293.32 ms |
+| backup create throughput  |         5.59 MB/s |
+| backup restore directory  |         260.56 ms |
+| backup restore throughput |         6.30 MB/s |
+| sqlite open/init          |         125.85 ms |
+| sqlite insert 1000 games  |        3621.66 ms |
+| sqlite insert throughput  |     276.12 rows/s |
+| sqlite get all 1000 games |           8.96 ms |
+| sqlite search             |           0.69 ms |
 
 Correctness markers:
 

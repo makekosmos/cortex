@@ -16,7 +16,10 @@
   </div>
 
   <!-- Main app -->
-  <div v-else :class="['app-container', { 'focus-mode-active': layout.isZenMode, 'eden-docked': isDocked }]">
+  <div
+    v-else
+    :class="['app-container', { 'focus-mode-active': layout.isZenMode, 'eden-docked': isDocked }]"
+  >
     <SearchOverlay
       :is-open="layout.isSearchOpen"
       :query="pendingQuery"
@@ -27,17 +30,16 @@
       @result-select="onResultSelect"
     />
 
-    <DesktopChrome
-      class="app-shell"
-      :platform="chromePlatform"
-    >
+    <DesktopChrome class="app-shell" :platform="chromePlatform">
       <template #titlebar-leading>
         <template v-if="!layout.isZenMode">
           <button
             type="button"
             class="sidebar-head-icon withBackground eden-titlebar-toggle"
             data-testid="sidebar-toggle"
-            :title="layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
+            :title="
+              layout.widgetSidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'
+            "
             @click="layout.toggleWidgetSidebar()"
           >
             <svg
@@ -83,22 +85,23 @@
           class="eden-titlebar-title"
           :title="layout.isZenMode ? 'Двойной клик — закрепить поверх окон' : ''"
           @dblclick="onTitleDblClick"
-        >{{ titlebarTitle }}</span>
+          >{{ titlebarTitle }}</span
+        >
       </template>
 
       <template #titlebar-trailing>
         <WindowControls :hide-minimize="layout.isZenMode" :hide-maximize="layout.isZenMode" />
       </template>
 
-      <template
-        v-if="showSidebarChrome && !layout.isZenMode"
-        #sidebar
-      >
+      <template v-if="showSidebarChrome && !layout.isZenMode" #sidebar>
         <div class="sidebar-layout">
           <EdenSidebar
             class="widget-sidebar-wrapper"
             :hidden="layout.widgetSidebarHidden"
-            :initial-config="{ width: layout.widgetSidebarWidth, hidden: layout.widgetSidebarHidden }"
+            :initial-config="{
+              width: layout.widgetSidebarWidth,
+              hidden: layout.widgetSidebarHidden,
+            }"
             :is-search-open="layout.isSearchOpen"
             :search-query="layout.searchQuery"
             :recent-entries="recentSidebarEntries"
@@ -133,7 +136,12 @@
       >
         <main class="app-main">
           <div
-            v-if="eden.isHydratingVault && eden.activeScreen !== 'settings' && eden.activeScreen !== 'object-types' && !eden.currentEntry"
+            v-if="
+              eden.isHydratingVault &&
+              eden.activeScreen !== 'settings' &&
+              eden.activeScreen !== 'object-types' &&
+              !eden.currentEntry
+            "
             class="app-main-loading"
           >
             Загрузка данных...
@@ -216,7 +224,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
 import { LoaderPinwheel } from "lucide-vue-next";
 import {
   ContextMenu,
@@ -291,9 +308,11 @@ function onEntryContextMenu(event: MouseEvent, entryId: string) {
  */
 function onTitleDblClick() {
   if (!layout.isZenMode) return;
-  void (window as unknown as {
-    kepler?: { window?: { toggleDockCorner?: () => Promise<void> } };
-  }).kepler?.window?.toggleDockCorner?.();
+  void (
+    window as unknown as {
+      kepler?: { window?: { toggleDockCorner?: () => Promise<void> } };
+    }
+  ).kepler?.window?.toggleDockCorner?.();
 }
 
 // Docked-widget state — для CSS-маркера (.eden-docked) на app-container.
@@ -307,9 +326,11 @@ interface KeplerWindowApiExt {
 }
 
 onMounted(async () => {
-  const winApi = (window as unknown as {
-    kepler?: { window?: KeplerWindowApiExt };
-  }).kepler?.window;
+  const winApi = (
+    window as unknown as {
+      kepler?: { window?: KeplerWindowApiExt };
+    }
+  ).kepler?.window;
   if (!winApi) return;
   if (winApi.isDocked) {
     try {
@@ -340,9 +361,11 @@ onUnmounted(() => {
 watch(
   () => layout.isZenMode,
   (isZen) => {
-    void (window as unknown as {
-      kepler?: { window?: { setMaximizable?: (v: boolean) => Promise<void> } };
-    }).kepler?.window?.setMaximizable?.(!isZen);
+    void (
+      window as unknown as {
+        kepler?: { window?: { setMaximizable?: (v: boolean) => Promise<void> } };
+      }
+    ).kepler?.window?.setMaximizable?.(!isZen);
   },
   { immediate: true },
 );
@@ -368,10 +391,7 @@ const suppressHistoryRecording = shallowRef(false);
 const settingsInitialTab = shallowRef<SettingsTab>("general");
 const objectTypeCreateToken = shallowRef(0);
 
-function appendHistorySnapshot(
-  snapshots: EdenHistorySnapshot[],
-  snapshot: EdenHistorySnapshot,
-) {
+function appendHistorySnapshot(snapshots: EdenHistorySnapshot[], snapshot: EdenHistorySnapshot) {
   const next = [...snapshots, snapshot];
   if (next.length <= MAX_NAVIGATION_HISTORY) {
     return next;
@@ -383,9 +403,7 @@ function pickRecentEntries(entries: Entry[], limit: number) {
   const topEntries: Entry[] = [];
 
   for (const entry of entries) {
-    let insertAt = topEntries.findIndex(
-      (candidate) => entry.updated_at > candidate.updated_at,
-    );
+    let insertAt = topEntries.findIndex((candidate) => entry.updated_at > candidate.updated_at);
 
     if (insertAt === -1) {
       if (topEntries.length >= limit) continue;
@@ -402,9 +420,7 @@ function pickRecentEntries(entries: Entry[], limit: number) {
   return topEntries;
 }
 
-const recentSidebarEntries = computed(() =>
-  pickRecentEntries(eden.entries, 10),
-);
+const recentSidebarEntries = computed(() => pickRecentEntries(eden.entries, 10));
 
 const liveCharCount = ref<number | null>(null);
 watch(
@@ -471,15 +487,21 @@ function reattachProseMirrorObserver(): void {
 }
 
 watch(liveCharCount, () => scheduleOverlapCheck());
-watch(() => layout.isZenMode, () => {
-  // При переключении zen mode editor relayout'ится — даём DOM settle,
-  // потом re-attach observer (counter появляется/исчезает, PM может move).
-  nextTick(reattachProseMirrorObserver);
-});
-watch(() => eden.currentEntry?.id ?? null, () => {
-  // Switch entry → Editor unmount/remount → PM ref stale.
-  nextTick(reattachProseMirrorObserver);
-});
+watch(
+  () => layout.isZenMode,
+  () => {
+    // При переключении zen mode editor relayout'ится — даём DOM settle,
+    // потом re-attach observer (counter появляется/исчезает, PM может move).
+    nextTick(reattachProseMirrorObserver);
+  },
+);
+watch(
+  () => eden.currentEntry?.id ?? null,
+  () => {
+    // Switch entry → Editor unmount/remount → PM ref stale.
+    nextTick(reattachProseMirrorObserver);
+  },
+);
 
 onMounted(() => {
   window.addEventListener("resize", scheduleOverlapCheck);
@@ -489,12 +511,13 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("resize", scheduleOverlapCheck);
-  window.removeEventListener("scroll", scheduleOverlapCheck, { capture: true } as EventListenerOptions);
+  window.removeEventListener("scroll", scheduleOverlapCheck, {
+    capture: true,
+  } as EventListenerOptions);
   overlapResizeObserver?.disconnect();
   overlapResizeObserver = null;
   if (overlapRafId !== null) cancelAnimationFrame(overlapRafId);
 });
-
 
 function pluralizeCharacters(n: number): string {
   const mod10 = n % 10;
@@ -513,17 +536,17 @@ const titlebarTitle = computed<string>(() => {
       : "Коллекция";
   }
   if (eden.currentEntry) {
-    return getEntryDisplayTitle(
-      eden.currentEntry.title,
-      eden.currentEntry.header_props_json,
-    );
+    return getEntryDisplayTitle(eden.currentEntry.title, eden.currentEntry.header_props_json);
   }
   return "";
 });
 
 const entryTitlesById = computed<Record<string, string>>(() =>
   Object.fromEntries(
-    eden.entries.map((entry) => [entry.id, getEntryDisplayTitle(entry.title, entry.header_props_json)]),
+    eden.entries.map((entry) => [
+      entry.id,
+      getEntryDisplayTitle(entry.title, entry.header_props_json),
+    ]),
   ),
 );
 
@@ -699,7 +722,11 @@ watch(currentHistorySnapshot, (nextSnapshot, previousSnapshot) => {
     return;
   }
 
-  if (suppressHistoryRecording.value || !previousSnapshot || snapshotsEqual(nextSnapshot, previousSnapshot)) {
+  if (
+    suppressHistoryRecording.value ||
+    !previousSnapshot ||
+    snapshotsEqual(nextSnapshot, previousSnapshot)
+  ) {
     return;
   }
 
@@ -717,35 +744,35 @@ watch(
     () => eden.currentEntry,
   ],
   () => {
-    if (eden.isInitializing || eden.isHydratingVault || !eden.vaultPath || eden.activeScreen !== "notes") return;
+    if (
+      eden.isInitializing ||
+      eden.isHydratingVault ||
+      !eden.vaultPath ||
+      eden.activeScreen !== "notes"
+    )
+      return;
     if (eden.activeSpace === "my-space" && !eden.currentEntry) {
       void eden.openMySpace();
     }
   },
 );
 
-watch(
-  [
-    () => layout.isZenMode,
-    () => eden.activeScreen,
-  ],
-  ([isZenMode, activeScreen]) => {
-    if (!isZenMode) return;
+watch([() => layout.isZenMode, () => eden.activeScreen], ([isZenMode, activeScreen]) => {
+  if (!isZenMode) return;
 
-    layout.closeSearch();
+  layout.closeSearch();
 
-    // Auto-disable zen mode ТОЛЬКО при уходе с notes screen (в Настройки,
-    // типы объектов и т.п.). Не дёргаем на transitions currentEntry
-    // (null → noteB → noteA), потому что во время навигации между
-    // заметками currentEntry кратковременно null'ится, что валило zen
-    // mode мид-navigation и ломало dock-corner dblclick на следующей
-    // странице. Если юзер сам не находится ни на каком entry в notes
-    // screen — пусть смотрит пустой editor, Esc выйдет руками.
-    if (activeScreen !== "notes") {
-      layout.disableZenMode();
-    }
-  },
-);
+  // Auto-disable zen mode ТОЛЬКО при уходе с notes screen (в Настройки,
+  // типы объектов и т.п.). Не дёргаем на transitions currentEntry
+  // (null → noteB → noteA), потому что во время навигации между
+  // заметками currentEntry кратковременно null'ится, что валило zen
+  // mode мид-navigation и ломало dock-corner dblclick на следующей
+  // странице. Если юзер сам не находится ни на каком entry в notes
+  // screen — пусть смотрит пустой editor, Esc выйдет руками.
+  if (activeScreen !== "notes") {
+    layout.disableZenMode();
+  }
+});
 
 function onSearchClose() {
   layout.isSearchOpen = false;
@@ -759,11 +786,11 @@ async function onResultSelect(entryId: string) {
   const found = await window.api.loadEntry(entryId);
   if (found) {
     eden.activeScreen = "notes";
-      eden.currentEntry = found;
-      eden.activeNoteTypeId = null;
-      pendingQuery.value = "";
-      layout.searchQuery = "";
-      layout.searchResults = [];
+    eden.currentEntry = found;
+    eden.activeNoteTypeId = null;
+    pendingQuery.value = "";
+    layout.searchQuery = "";
+    layout.searchResults = [];
     layout.isSearchOpen = false;
   }
 }

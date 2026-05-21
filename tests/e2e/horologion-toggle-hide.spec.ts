@@ -59,9 +59,7 @@ test("horologion: при активной сессии inactive toggle полу�
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
       new Promise<void>((r) => app.process().once("exit", () => r())),
-      new Promise<void>((_, rej) =>
-        setTimeout(() => rej(new Error("exit timeout 10s")), 10_000),
-      ),
+      new Promise<void>((_, rej) => setTimeout(() => rej(new Error("exit timeout 10s")), 10_000)),
     ]);
   }
 });

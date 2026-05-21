@@ -11,6 +11,7 @@ Phase 7 — единый export-API в kepler-backend + UI секция в Setti
 В задаче:
 
 **Backend (`services/kepler-backend/src/export/`):**
+
 - Модуль `export/mod.rs` — registry конвертеров + dispatcher.
 - Trait `Converter`: `id() -> &str`, `display_name() -> &str`, `object_type() -> &str`, `default_format() -> &str`, `supported_formats() -> &[&str]`, `convert(objects: &[ArkObject], format: &str, dest_dir: &Path) -> ConvertResult`.
 - `ConvertResult { files_written: Vec<PathBuf>, bytes: u64, errors: Vec<String> }`.
@@ -25,6 +26,7 @@ Phase 7 — единый export-API в kepler-backend + UI секция в Setti
 - Rust unit tests: каждый конвертер на ≥2 sample object'ах, проверяющие что файлы созданы + содержат ожидаемые поля.
 
 **Frontend (`shell/`):**
+
 - `shell/electron/preload.ts` — exposes `window.kepler.export.{list, run, onProgress}`.
 - `shell/src/views/SettingsView.vue` (или новый `ExportPanel.vue` секция) — UI:
   - Список доступных converters (из `export.list`).
@@ -35,6 +37,7 @@ Phase 7 — единый export-API в kepler-backend + UI секция в Setti
 - Unit/integration smoke в shell (опционально).
 
 **Документация:**
+
 - `docs-site/apps/kepler-roadmap.md` — Phase 7 ✅, замена «⏳».
 - `docs-site/concepts/` — новая страница `data-export.md` (как работает converter registry, как добавить новый).
 - `STATUS.md` — раздел Phase 7 в Сделано.

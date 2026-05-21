@@ -23,10 +23,7 @@ export function useTitlebarSafeArea() {
 
       const leftArea = widgetSidebarHidden ? 0 : widgetSidebarWidth;
 
-      document.documentElement.style.setProperty(
-        "--titlebar-left-safe-area",
-        `${leftArea}px`,
-      );
+      document.documentElement.style.setProperty("--titlebar-left-safe-area", `${leftArea}px`);
     },
     { immediate: true },
   );

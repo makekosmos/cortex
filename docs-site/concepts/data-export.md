@@ -59,14 +59,14 @@ Registry — `OnceLock<Vec<Box<dyn Converter>>>` в `export/mod.rs`. Регис�
 
 ## Текущие конвертеры (6)
 
-| Converter id | Object type | Format | Файлы |
-|---|---|---|---|
-| `note_md` | `note_obj` | `md` | `<title>.md` per note + YAML frontmatter (id/type/title/created/updated/header_props). Body — TipTap JSON → markdown (paragraph, heading 1-6, lists, code_block, blockquote, marks: bold/italic/code/link). |
-| `task_md` | `task_obj` | `md` | `<title>.md` per task + frontmatter (project_id, area_id, scheduled_date, deadline, priority, completed, tags). Body — notes + `## Чек-лист` с `- [x]` / `- [ ]`. |
-| `task_csv` | `task_obj` | `csv` | Один `tasks.csv`. Columns: id, title, project_id, area_id, scheduled_date, deadline, completed, priority, tags (joined `\|`). |
-| `time_entry_csv` | `time_entry_obj` | `csv` | Один `time-entries.csv`. Columns: id, title, started_at, ended_at, duration_minutes, task_id, source. |
-| `tag_json` | `tag_obj` | `json` | `tags.json` — pretty-printed array всех tag_obj. |
-| `game_json` | `game_obj` | `json` | `games.json` — pretty-printed array всех game_obj. |
+| Converter id     | Object type      | Format | Файлы                                                                                                                                                                                                       |
+| ---------------- | ---------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `note_md`        | `note_obj`       | `md`   | `<title>.md` per note + YAML frontmatter (id/type/title/created/updated/header_props). Body — TipTap JSON → markdown (paragraph, heading 1-6, lists, code_block, blockquote, marks: bold/italic/code/link). |
+| `task_md`        | `task_obj`       | `md`   | `<title>.md` per task + frontmatter (project_id, area_id, scheduled_date, deadline, priority, completed, tags). Body — notes + `## Чек-лист` с `- [x]` / `- [ ]`.                                           |
+| `task_csv`       | `task_obj`       | `csv`  | Один `tasks.csv`. Columns: id, title, project_id, area_id, scheduled_date, deadline, completed, priority, tags (joined `\|`).                                                                               |
+| `time_entry_csv` | `time_entry_obj` | `csv`  | Один `time-entries.csv`. Columns: id, title, started_at, ended_at, duration_minutes, task_id, source.                                                                                                       |
+| `tag_json`       | `tag_obj`        | `json` | `tags.json` — pretty-printed array всех tag_obj.                                                                                                                                                            |
+| `game_json`      | `game_obj`       | `json` | `games.json` — pretty-printed array всех game_obj.                                                                                                                                                          |
 
 ## WS API
 

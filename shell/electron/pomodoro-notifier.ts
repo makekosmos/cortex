@@ -113,13 +113,11 @@ export function setupPomodoroNotifier(opts: { arkClient: ArkClient }): void {
   // Тестовый IPC: позволяет e2e/manual триггернуть toast без 25-минутного
   // ожидания фазы. Регистрируем только один раз — handler stateless.
   if (!ipcRegistered) {
-    ipcMain.handle(
-      "kepler:pomodoro:notify-now",
-      (_e, args?: { title?: string; body?: string }) =>
-        notify({
-          title: args?.title ?? TITLE_BREAK,
-          body: args?.body ?? "Тестовое уведомление",
-        }),
+    ipcMain.handle("kepler:pomodoro:notify-now", (_e, args?: { title?: string; body?: string }) =>
+      notify({
+        title: args?.title ?? TITLE_BREAK,
+        body: args?.body ?? "Тестовое уведомление",
+      }),
     );
     ipcRegistered = true;
   }

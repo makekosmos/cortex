@@ -124,12 +124,13 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 ## Sync rules
 
 ::: warning Жёстко
+
 - Каждая persisted syncable сущность обязана round-trip'иться через `db.rs::load_entities` и `db.rs::apply_entity`.
 - Direct writers вне RPC layer (`services/kepler-backend/src/usage_tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
 - Schema-добавления **идемпотентны**. Используй `CREATE TABLE IF NOT EXISTS` / additive миграции, не destructive rewrites.
 - Wire-протокол sync остаётся `snake_case`. RPC может быть `camelCase` где зависят legacy Electron callers.
 - **Self-peer filtering** и **routable-address filtering** — обязательные инварианты. Не ослабляй при изменениях в sync startup или peer persistence.
-:::
+  :::
 
 ## Verification expectations
 

@@ -21,20 +21,14 @@ const search = useSearchQuery();
 
 <template>
   <div class="arrancador-shell">
-    <AppTitlebar
-      :sidebar-hidden="sidebarHidden"
-      @toggle-sidebar="sidebarHidden = !sidebarHidden"
-    >
+    <AppTitlebar :sidebar-hidden="sidebarHidden" @toggle-sidebar="sidebarHidden = !sidebarHidden">
       <template #right>
         <AppSpotlight v-model="search" />
       </template>
     </AppTitlebar>
 
     <div class="arrancador-shell__body">
-      <AppSidebar
-        :hidden="sidebarHidden"
-        @update:hidden="(val) => (sidebarHidden = val)"
-      />
+      <AppSidebar :hidden="sidebarHidden" @update:hidden="(val) => (sidebarHidden = val)" />
 
       <div class="arrancador-content">
         <router-view />

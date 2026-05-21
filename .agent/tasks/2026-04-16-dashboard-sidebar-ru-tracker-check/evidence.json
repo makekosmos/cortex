@@ -4,9 +4,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/dashboard/src/components/dashboard/DashboardShell.vue"
-      ]
+      "evidence": ["apps/dashboard/src/components/dashboard/DashboardShell.vue"]
     },
     {
       "id": "AC2",

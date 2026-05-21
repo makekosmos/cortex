@@ -27,9 +27,7 @@ function onKeyDown(e: KeyboardEvent) {
 
 <template>
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-    <div
-      class="bg-(--background) border-(--border) w-full max-w-lg rounded-xl border p-5"
-    >
+    <div class="bg-(--background) border-(--border) w-full max-w-lg rounded-xl border p-5">
       <h2 class="mb-2 text-lg font-semibold">Подключение к Ark</h2>
       <p class="text-(--muted-foreground) mb-4 text-sm">
         Вставьте код подключения, чтобы загрузить данные в web-режиме.

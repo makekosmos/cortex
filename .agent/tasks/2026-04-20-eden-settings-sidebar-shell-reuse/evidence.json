@@ -25,9 +25,7 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/App.vue"
-      ],
+      "evidence": ["apps/eden/ts/src/App.vue"],
       "notes": "Width and hidden state remain owned by layout store values passed into the same outer sidebar instance."
     },
     {
@@ -51,17 +49,13 @@
     {
       "id": "AC6",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/components/settings/ObjectTypesSettings.vue"
-      ],
+      "evidence": ["apps/eden/ts/src/components/settings/ObjectTypesSettings.vue"],
       "notes": "Existing type selection and new draft creation both remain wired after removing the inner object-types sidebar."
     },
     {
       "id": "AC7",
       "status": "PASS",
-      "evidence": [
-        ".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/utf8-check.txt"
-      ],
+      "evidence": [".agent/tasks/2026-04-20-eden-settings-sidebar-shell-reuse/raw/utf8-check.txt"],
       "notes": "Touched Russian labels were verified from UTF-8 file reads."
     },
     {

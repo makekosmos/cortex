@@ -13,9 +13,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/src/pages/Library.tsx:924"
-      ]
+      "evidence": ["apps/arrancador/src/pages/Library.tsx:924"]
     },
     {
       "id": "AC3",

@@ -64,9 +64,7 @@ export function readZip(zipPath) {
     } else if (compMethod === 8) {
       data = zlib.inflateRawSync(rawData);
     } else {
-      throw new Error(
-        `zip: unsupported compression method ${compMethod} for ${name}`,
-      );
+      throw new Error(`zip: unsupported compression method ${compMethod} for ${name}`);
     }
     entries.push({ name, isDir: name.endsWith("/"), data });
     offset += 46 + nameLen + extraLen + commentLen;
@@ -191,9 +189,7 @@ export function writeZip(zipPath, entries) {
   let offset = 0;
   for (const e of entries) {
     const name = e.name;
-    const data = Buffer.isBuffer(e.data)
-      ? e.data
-      : Buffer.from(String(e.data), "utf8");
+    const data = Buffer.isBuffer(e.data) ? e.data : Buffer.from(String(e.data), "utf8");
     const crc = crc32(data);
     const nameBuf = Buffer.from(name, "utf8");
     const lfh = Buffer.alloc(30);

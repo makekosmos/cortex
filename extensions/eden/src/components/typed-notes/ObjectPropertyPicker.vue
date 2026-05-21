@@ -6,22 +6,25 @@ interface PickerOption {
   label: string;
 }
 
-const props = withDefaults(defineProps<{
-  modelValue: string | string[] | null | undefined;
-  options: PickerOption[];
-  placeholder: string;
-  variant?: "featured-inline" | "featured-column" | "secondary";
-  multiple?: boolean;
-  disabled?: boolean;
-  emptyLabel?: string;
-  emptyOptionsLabel?: string;
-}>(), {
-  variant: "secondary",
-  multiple: false,
-  disabled: false,
-  emptyLabel: "Без значения",
-  emptyOptionsLabel: "Нет вариантов",
-});
+const props = withDefaults(
+  defineProps<{
+    modelValue: string | string[] | null | undefined;
+    options: PickerOption[];
+    placeholder: string;
+    variant?: "featured-inline" | "featured-column" | "secondary";
+    multiple?: boolean;
+    disabled?: boolean;
+    emptyLabel?: string;
+    emptyOptionsLabel?: string;
+  }>(),
+  {
+    variant: "secondary",
+    multiple: false,
+    disabled: false,
+    emptyLabel: "Без значения",
+    emptyOptionsLabel: "Нет вариантов",
+  },
+);
 
 const emit = defineEmits<{
   "update:modelValue": [value: string | string[]];
@@ -38,7 +41,9 @@ const panelMaxHeight = shallowRef(260);
 
 const selectedValues = computed(() => {
   if (Array.isArray(props.modelValue)) {
-    return props.modelValue.filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+    return props.modelValue.filter(
+      (value): value is string => typeof value === "string" && value.trim().length > 0,
+    );
   }
 
   if (typeof props.modelValue === "string" && props.modelValue.trim().length > 0) {
@@ -48,7 +53,10 @@ const selectedValues = computed(() => {
   return [];
 });
 
-const optionLabels = computed(() => new Map(props.options.map((option) => [option.value, option.label] satisfies [string, string])));
+const optionLabels = computed(
+  () =>
+    new Map(props.options.map((option) => [option.value, option.label] satisfies [string, string])),
+);
 const selectedOptions = computed(() =>
   selectedValues.value.map((value) => ({
     value,
@@ -194,10 +202,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
       :aria-expanded="isOpen ? 'true' : 'false'"
       @click="togglePicker"
     >
-      <span
-        v-if="hasSelection && !multiple"
-        class="object-property-picker__summary"
-      >
+      <span v-if="hasSelection && !multiple" class="object-property-picker__summary">
         {{ summaryText }}
       </span>
 
@@ -246,7 +251,10 @@ watch(isOpen, async (open, _previous, onCleanup) => {
             :class="isSelected(option.value) && 'is-active'"
             @click="selectValue(option.value)"
           >
-            <span class="object-property-picker__check" :class="isSelected(option.value) && 'is-active'"></span>
+            <span
+              class="object-property-picker__check"
+              :class="isSelected(option.value) && 'is-active'"
+            ></span>
             <span class="object-property-picker__option-label">{{ option.label }}</span>
           </button>
         </div>
@@ -327,7 +335,9 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   font-size: 14px;
   line-height: 1;
   transform: rotate(90deg);
-  transition: transform 0.16s ease, color 0.16s ease;
+  transition:
+    transform 0.16s ease,
+    color 0.16s ease;
 }
 
 .object-property-picker.is-open .object-property-picker__chevron {
@@ -374,7 +384,9 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   color: var(--text-secondary, var(--muted-foreground));
   font: inherit;
   text-align: left;
-  transition: background-color 0.16s ease, color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .object-property-picker__option:hover,

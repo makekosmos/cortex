@@ -11,6 +11,7 @@ Duration: ~31s
 **File:** `apps/delphi/ts/src/services/space/__tests__/space-manager.test.ts`
 
 19 test cases covering:
+
 - `getSpaces()`: empty storage, invalid JSON, stored spaces
 - `saveSpace()`: persistence, prepending, deduplication by code
 - `removeSpace()`: removal + persistence, no-op for unknown code
@@ -25,6 +26,7 @@ Duration: ~31s
 **File:** `apps/delphi/ts/src/services/sync/__tests__/sync-server.test.ts`
 
 10 test cases using real WebSocket connections:
+
 - Server starts and accepts WS connections
 - Hello handshake returns correct device_id, device_name, protocol_version, addresses
 - Protocol version mismatch closes with code 1002
@@ -43,6 +45,7 @@ Sidecar mocked via `vi.mock('../../../../electron/sidecar')`.
 **File:** `apps/delphi/ts/src/services/sync/__tests__/sync-client.test.ts`
 
 7 test cases using a real ws.WebSocketServer as mock peer:
+
 - Client connects and sends hello with correct fields
 - Transitions to authenticated after receiving server hello
 - `peerDeviceId` and `peerName` reflect peer record/server hello
@@ -59,6 +62,7 @@ Uses `// @vitest-environment node`.
 **File:** `apps/delphi/ts/src/services/sync/__tests__/sync-flow.test.ts`
 
 6 test cases with real SyncServer + SyncClient:
+
 - Empty-empty sync: no data exchanged
 - Server has data: entities synced, version vector populated
 - Both have data: version vectors exchanged and merged
@@ -78,12 +82,14 @@ New test files (4 files, 42 tests) all passing.
 ## Files Changed
 
 New files:
+
 - `apps/delphi/ts/src/services/space/__tests__/space-manager.test.ts`
 - `apps/delphi/ts/src/services/sync/__tests__/sync-server.test.ts`
 - `apps/delphi/ts/src/services/sync/__tests__/sync-client.test.ts`
 - `apps/delphi/ts/src/services/sync/__tests__/sync-flow.test.ts`
 
 Modified (test infrastructure only):
+
 - `apps/delphi/ts/vitest.config.ts` -- added `fileParallelism: false` to prevent port conflicts between integration tests
 
 No production files modified.

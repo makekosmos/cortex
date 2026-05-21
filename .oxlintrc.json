@@ -1,10 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "unicorn",
-    "oxc"
-  ],
+  "plugins": ["typescript", "unicorn", "oxc"],
   "categories": {
     "correctness": "error"
   },
@@ -51,11 +47,7 @@
       }
     },
     {
-      "files": [
-        "scripts/**/*.mjs",
-        "shell/scripts/**/*.mjs",
-        "**/scripts/**/*.mjs"
-      ],
+      "files": ["scripts/**/*.mjs", "shell/scripts/**/*.mjs", "**/scripts/**/*.mjs"],
       "rules": {
         "no-unused-vars": "warn"
       }

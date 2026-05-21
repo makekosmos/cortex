@@ -9,10 +9,7 @@
 //   только их leaf-block содержимое.
 
 import { describe, test, expect } from "bun:test";
-import {
-  countCharsInProseMirrorDoc,
-  countCharsInProseMirrorNode,
-} from "../src/lib/charCount.js";
+import { countCharsInProseMirrorDoc, countCharsInProseMirrorNode } from "../src/lib/charCount.js";
 
 function doc(...content: unknown[]) {
   return JSON.stringify({ type: "doc", content });
@@ -59,9 +56,7 @@ describe("countCharsInProseMirrorDoc", () => {
   });
 
   test("три параграфа → 2 newline между ними", () => {
-    expect(
-      countCharsInProseMirrorDoc(doc(p(t("a")), p(t("b")), p(t("c")))),
-    ).toBe(5);
+    expect(countCharsInProseMirrorDoc(doc(p(t("a")), p(t("b")), p(t("c"))))).toBe(5);
   });
 
   test("пустой параграф между двумя непустыми считается как 2 newline", () => {
@@ -70,19 +65,11 @@ describe("countCharsInProseMirrorDoc", () => {
   });
 
   test("hard_break (Shift+Enter) считается как один символ", () => {
-    expect(
-      countCharsInProseMirrorDoc(
-        doc(p(t("a"), { type: "hardBreak" }, t("b"))),
-      ),
-    ).toBe(3);
+    expect(countCharsInProseMirrorDoc(doc(p(t("a"), { type: "hardBreak" }, t("b"))))).toBe(3);
   });
 
   test("hard_break в snake_case (резерв на случай нестандартной сериализации)", () => {
-    expect(
-      countCharsInProseMirrorDoc(
-        doc(p(t("a"), { type: "hard_break" }, t("b"))),
-      ),
-    ).toBe(3);
+    expect(countCharsInProseMirrorDoc(doc(p(t("a"), { type: "hard_break" }, t("b"))))).toBe(3);
   });
 
   test("emoji (surrogate pair) считается за 1 символ, а не за 2", () => {
@@ -140,14 +127,15 @@ describe("countCharsInProseMirrorDoc", () => {
   test("несколько text node'ов в одном параграфе (после mark split) суммируются без newline", () => {
     // Bold split: "hello world" = одна строка из двух text node'ов, marks
     // у второго. Между ними newline быть НЕ должно.
-    const json = doc(
-      p(t("hello "), { type: "text", text: "world", marks: [{ type: "bold" }] }),
-    );
+    const json = doc(p(t("hello "), { type: "text", text: "world", marks: [{ type: "bold" }] }));
     expect(countCharsInProseMirrorDoc(json)).toBe(11);
   });
 
   test("countCharsInProseMirrorNode работает напрямую с объектом без JSON-парсинга", () => {
-    const node = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "raw" }] }] };
+    const node = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "raw" }] }],
+    };
     expect(countCharsInProseMirrorNode(node)).toBe(3);
   });
 });

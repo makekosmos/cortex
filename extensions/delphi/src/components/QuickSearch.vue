@@ -15,43 +15,32 @@ const { todos, projects } = storeToRefs(store);
 function matchTodos(query: string) {
   if (!query.trim()) return [];
   const q = query.toLowerCase();
-  return todos.value
-    .filter((t) => !t.isTrashed && t.title.toLowerCase().includes(q))
-    .slice(0, 8);
+  return todos.value.filter((t) => !t.isTrashed && t.title.toLowerCase().includes(q)).slice(0, 8);
 }
 
 function matchProjects(query: string) {
   if (!query.trim()) return [];
   const q = query.toLowerCase();
-  return projects.value
-    .filter((p) => p.title.toLowerCase().includes(q))
-    .slice(0, 5);
+  return projects.value.filter((p) => p.title.toLowerCase().includes(q)).slice(0, 5);
 }
 
-async function selectTodo(
-  todo: { id: string; projectId?: string | null },
-  close: () => void,
-) {
+async function selectTodo(todo: { id: string; projectId?: string | null }, close: () => void) {
   close();
   const target = todo.projectId ? `/project/${todo.projectId}` : "/";
   await router.push(target);
   setTimeout(() => {
-    const el = document.querySelector(
-      `[data-todo-id="${todo.id}"]`,
-    ) as HTMLElement | null;
+    const el = document.querySelector(`[data-todo-id="${todo.id}"]`) as HTMLElement | null;
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    const siblings =
-      el.parentElement?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [];
+    const siblings = el.parentElement?.querySelectorAll<HTMLElement>("[data-todo-id]") ?? [];
     for (const sib of siblings) {
       sib.style.transition = "opacity 0.5s ease, box-shadow 0.5s ease";
       sib.style.opacity = sib === el ? "1" : "0.25";
     }
     el.style.position = "relative";
     el.style.zIndex = "10";
-    el.style.boxShadow =
-      "0 0 0 1px var(--accent), 0 0 8px 0 var(--accent)";
+    el.style.boxShadow = "0 0 0 1px var(--accent), 0 0 8px 0 var(--accent)";
     el.style.borderRadius = "var(--radius)";
 
     setTimeout(() => {
@@ -87,22 +76,15 @@ function selectProject(project: { id: string }, close: () => void) {
   >
     <template #default="{ query, close }">
       <!-- Empty state -->
-      <EmptyState
-        v-if="!query.trim()"
-        compact
-        title="Начните вводить для поиска"
-      />
+      <EmptyState v-if="!query.trim()" compact title="Начните вводить для поиска" />
 
       <!-- No results -->
       <EmptyState
-        v-else-if="
-          matchTodos(query).length === 0 && matchProjects(query).length === 0
-        "
+        v-else-if="matchTodos(query).length === 0 && matchProjects(query).length === 0"
         compact
         title="Ничего не найдено"
         :description="`По запросу «${query}» совпадений нет`"
       />
-
 
       <template v-else>
         <!-- Todos -->

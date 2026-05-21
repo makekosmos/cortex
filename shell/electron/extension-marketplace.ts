@@ -43,12 +43,7 @@ let cachedCatalog: { data: Catalog; fetchedAt: number } | null = null;
 function httpsGetText(url: string, timeoutMs = 15000): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers: { "User-Agent": "Kepler-Shell" } }, (res) => {
-      if (
-        res.statusCode &&
-        res.statusCode >= 300 &&
-        res.statusCode < 400 &&
-        res.headers.location
-      ) {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         // Follow redirect (raw.githubusercontent.com обычно serves direct, но safety).
         httpsGetText(res.headers.location, timeoutMs).then(resolve, reject);
         res.resume();
@@ -162,9 +157,7 @@ export async function installFromUrl(
     if (expectedSha256 && expectedSha256.length > 0) {
       const actual = sha256File(tmpFile);
       if (actual.toLowerCase() !== expectedSha256.toLowerCase()) {
-        throw new Error(
-          `sha256 mismatch: expected ${expectedSha256}, got ${actual}`,
-        );
+        throw new Error(`sha256 mismatch: expected ${expectedSha256}, got ${actual}`);
       }
     }
     return installFromPath(tmpFile);
@@ -189,9 +182,7 @@ let periodicTimer: NodeJS.Timeout | null = null;
 export function startPeriodicCatalogCheck(): void {
   if (periodicTimer) return;
   // initial fetch на старте (не блокирующий)
-  fetchCatalog(false).catch((e) =>
-    console.error("[marketplace] initial catalog fetch failed:", e),
-  );
+  fetchCatalog(false).catch((e) => console.error("[marketplace] initial catalog fetch failed:", e));
   periodicTimer = setInterval(
     () => {
       fetchCatalog(true).catch((e) =>
@@ -215,17 +206,15 @@ export function registerMarketplaceIpc(): void {
 
   ipcMain.handle(
     "kepler:extension:install:fromUrl",
-    async (
-      _e,
-      url: string,
-      expectedSha256?: string | null,
-    ): Promise<KextManifestPreview> => {
+    async (_e, url: string, expectedSha256?: string | null): Promise<KextManifestPreview> => {
       const result = await installFromUrl(url, expectedSha256 ?? null);
       // Notify all windows: static commands list зависит от установленных
       // extension'ов (см. requiresExtension в commands.ts).
       for (const win of BrowserWindow.getAllWindows()) {
         if (!win.isDestroyed()) {
-          try { win.webContents.send("kepler:commands:updated"); } catch {}
+          try {
+            win.webContents.send("kepler:commands:updated");
+          } catch {}
         }
       }
       return result;

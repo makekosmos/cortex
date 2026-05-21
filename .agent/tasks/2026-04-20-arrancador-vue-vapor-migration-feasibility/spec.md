@@ -1,6 +1,7 @@
 # Task: Arrancador Vue Vapor migration feasibility
 
 ## Summary
+
 Assess whether `apps/arrancador` can be fully migrated from React to the latest Vue + Vapor stack in a safe, supportable way.
 
 ## Findings

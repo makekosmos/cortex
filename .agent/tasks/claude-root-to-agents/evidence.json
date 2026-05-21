@@ -5,9 +5,7 @@
     "AC1": {
       "status": "PASS",
       "details": ".claude is now a symlink.",
-      "raw_artifacts": [
-        ".agent/tasks/claude-root-to-agents/raw/post-claude-ls.txt"
-      ]
+      "raw_artifacts": [".agent/tasks/claude-root-to-agents/raw/post-claude-ls.txt"]
     },
     "AC2": {
       "status": "PASS",
@@ -20,16 +18,12 @@
     "AC3": {
       "status": "PASS",
       "details": ".claude/skills and .claude/agents still exist through the root symlink.",
-      "raw_artifacts": [
-        ".agent/tasks/claude-root-to-agents/raw/verification.txt"
-      ]
+      "raw_artifacts": [".agent/tasks/claude-root-to-agents/raw/verification.txt"]
     },
     "AC4": {
       "status": "PASS",
       "details": ".agents/skills and .agents/agents remain present.",
-      "raw_artifacts": [
-        ".agent/tasks/claude-root-to-agents/raw/verification.txt"
-      ]
+      "raw_artifacts": [".agent/tasks/claude-root-to-agents/raw/verification.txt"]
     }
   }
 }

@@ -21,6 +21,7 @@ AC5. `ark-core-rpc` `start_sync` accepts optional `auth_secret` and passes it to
 AC6. `@arksync/node` exposes `authSecret?: string` and includes it as `auth_secret` in `start_sync`.
 
 AC7. Verification artifacts prove:
+
 - legacy hello compatibility;
 - HMAC helper correctness and invalid secret rejection;
 - a matching-secret sync succeeds;

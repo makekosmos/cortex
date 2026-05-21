@@ -31,10 +31,7 @@ function fuzzyScore(text: string, query: string): number {
   if (lower.includes(q)) return 1;
 
   const queryTokens = q.split(/\s+/).filter(Boolean);
-  if (
-    queryTokens.length > 1 &&
-    queryTokens.every((tok) => lower.includes(tok))
-  ) {
+  if (queryTokens.length > 1 && queryTokens.every((tok) => lower.includes(tok))) {
     return 0.8;
   }
 
@@ -88,20 +85,12 @@ function computeResults(query: string): QuickOpenResult[] {
     .toSorted((a, b) => b.score - a.score)
     .slice(0, 8);
 
-  items.push(
-    ...scoredTodos.map((x) => ({ kind: "todo" as const, item: x.todo })),
-  );
+  items.push(...scoredTodos.map((x) => ({ kind: "todo" as const, item: x.todo })));
 
-  const matchedProjects = projects.value
-    .filter((p) => fuzzyScore(p.title, q) > 0)
-    .slice(0, 3);
-  items.push(
-    ...matchedProjects.map((p) => ({ kind: "project" as const, item: p })),
-  );
+  const matchedProjects = projects.value.filter((p) => fuzzyScore(p.title, q) > 0).slice(0, 3);
+  items.push(...matchedProjects.map((p) => ({ kind: "project" as const, item: p })));
 
-  const matchedTags = tags.value
-    .filter((t) => fuzzyScore(t.title, q) > 0)
-    .slice(0, 3);
+  const matchedTags = tags.value.filter((t) => fuzzyScore(t.title, q) > 0).slice(0, 3);
   items.push(...matchedTags.map((t) => ({ kind: "tag" as const, item: t })));
 
   return items;
@@ -131,9 +120,7 @@ function getResultSubtitle(result: QuickOpenResult): string {
     }
     case "project": {
       const project = result.item as Project;
-      const count = todos.value.filter(
-        (t) => t.projectId === project.id && !t.isTrashed,
-      ).length;
+      const count = todos.value.filter((t) => t.projectId === project.id && !t.isTrashed).length;
       return `${count} задач`;
     }
     case "tag": {
@@ -161,11 +148,7 @@ function getResultSubtitle(result: QuickOpenResult): string {
           @click="activate(result, close)"
         >
           <div class="shrink-0">
-            <CheckCircle
-              v-if="result.kind === 'todo'"
-              :size="16"
-              class="text-(--primary)"
-            />
+            <CheckCircle v-if="result.kind === 'todo'" :size="16" class="text-(--primary)" />
             <Folder
               v-else-if="result.kind === 'project'"
               :size="16"
@@ -184,11 +167,7 @@ function getResultSubtitle(result: QuickOpenResult): string {
         </button>
       </template>
 
-      <EmptyState
-        v-else-if="query.trim() !== ''"
-        compact
-        title="Ничего не найдено"
-      />
+      <EmptyState v-else-if="query.trim() !== ''" compact title="Ничего не найдено" />
     </template>
   </CommandPalette>
 </template>

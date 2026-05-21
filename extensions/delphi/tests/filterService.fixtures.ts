@@ -12,10 +12,7 @@ import type { TodoItem } from "../src/types/task";
 export const TODAY_ISO = "2026-05-15";
 
 // Helper для краткости.
-function mk(
-  id: string,
-  overrides: Partial<TodoItem> = {},
-): TodoItem {
+function mk(id: string, overrides: Partial<TodoItem> = {}): TodoItem {
   return {
     id,
     title: id,
@@ -122,14 +119,7 @@ export const EXPECTED: Record<string, string[]> = {
   // Note: Inbox НЕ фильтрует по scheduledDate / isToday — anything that's
   // not in a project, not someday, active попадает. Поэтому upcoming-1/2
   // (no project, scheduled future) и today-flag/today-scheduled тоже Inbox.
-  inbox: [
-    "inbox-1",
-    "inbox-2",
-    "today-scheduled",
-    "today-flag",
-    "upcoming-2",
-    "upcoming-1",
-  ],
+  inbox: ["inbox-1", "inbox-2", "today-scheduled", "today-flag", "upcoming-2", "upcoming-1"],
 
   // Today: active && (isToday || scheduledDate=today). Sort sortOrder asc.
   // today-scheduled(5), today-flag(10). scheduled-today-completed — НЕ

@@ -14,15 +14,8 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  launchKepler,
-  freshDataDir,
-  launchKeplerWithDataDir,
-} from "./helpers/launch";
-import {
-  emitPostUpdate,
-  getUserDataDir,
-} from "./helpers/update-state";
+import { launchKepler, freshDataDir, launchKeplerWithDataDir } from "./helpers/launch";
+import { emitPostUpdate, getUserDataDir } from "./helpers/update-state";
 import { getLauncherWindow, waitForPostUpdateTile } from "./helpers/launcher";
 
 test.describe("launcher post-update banner", () => {
@@ -37,9 +30,7 @@ test.describe("launcher post-update banner", () => {
 
       await waitForPostUpdateTile(launcher);
       const tile = launcher.locator(".post-update-tile");
-      await expect(tile.locator(".update-title")).toHaveText(
-        /Kepler обновл[её]н до v9\.9\.9/i,
-      );
+      await expect(tile.locator(".update-title")).toHaveText(/Kepler обновл[её]н до v9\.9\.9/i);
     } finally {
       await app.close();
     }
@@ -95,9 +86,7 @@ test.describe("launcher post-update banner", () => {
       const launcher = await getLauncherWindow(app);
       await waitForPostUpdateTile(launcher);
       // Версия должна присутствовать (берётся из app.getVersion(), не из файла).
-      const title = await launcher
-        .locator(".post-update-tile .update-title")
-        .innerText();
+      const title = await launcher.locator(".post-update-tile .update-title").innerText();
       expect(title).toMatch(/v\d+\.\d+\.\d+/);
     } finally {
       await app.close();

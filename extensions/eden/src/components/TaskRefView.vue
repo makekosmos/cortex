@@ -77,7 +77,10 @@
         v-for="opt in TASK_STATUSES"
         :key="opt"
         :class="{ 'task-ref-menu-item-active': opt === status }"
-        @click="setStatus(opt); contextMenu.close()"
+        @click="
+          setStatus(opt);
+          contextMenu.close();
+        "
       >
         <span class="task-ref-menu-icon">
           <TaskStatusIcon :status="opt" :aria-label="''" tabindex="-1" />
@@ -145,9 +148,7 @@ const isRangeSelected = ref(false);
 
 function recomputeRangeSelection(): void {
   // props.editor может быть undefined в SSR / edge cases.
-  const editor = props.editor as
-    | { state?: { selection?: any } }
-    | undefined;
+  const editor = props.editor as { state?: { selection?: any } } | undefined;
   const sel = editor?.state?.selection;
   if (!sel || sel.empty) {
     isRangeSelected.value = false;
@@ -268,9 +269,7 @@ function openTaskPage(): void {
   if (!id || missing.value) return;
   // TODO(Pattern B Phase 2): eden.navigateTo(id) когда task page route готов.
   // Пока — открываем через event на window для App.vue/store.
-  window.dispatchEvent(
-    new CustomEvent("eden:open-task", { detail: { taskId: id } }),
-  );
+  window.dispatchEvent(new CustomEvent("eden:open-task", { detail: { taskId: id } }));
 }
 
 /**
@@ -358,7 +357,9 @@ function defendFocus(): void {
   };
   document.addEventListener("mousedown", handleDocMouseDown, { capture: true });
   mousedownDocumentOff = () =>
-    document.removeEventListener("mousedown", handleDocMouseDown, { capture: true } as EventListenerOptions);
+    document.removeEventListener("mousedown", handleDocMouseDown, {
+      capture: true,
+    } as EventListenerOptions);
 
   const handleBlur = (event: FocusEvent) => {
     if (!focusDefenderActive) return;
@@ -449,10 +450,17 @@ function commitAndCreateNew(): void {
     }
 
     const editor = props.editor as {
-      state: { schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } } };
-      view: { dispatch: (tr: unknown) => void; state: { tr: { insert: (pos: number, node: unknown) => unknown } } };
+      state: {
+        schema: { nodes: { taskRef?: { create: (attrs: Record<string, unknown>) => unknown } } };
+      };
+      view: {
+        dispatch: (tr: unknown) => void;
+        state: { tr: { insert: (pos: number, node: unknown) => unknown } };
+      };
     };
-    const extension = props.extension as { options?: { getSourceNoteId?: () => string | null } } | undefined;
+    const extension = props.extension as
+      | { options?: { getSourceNoteId?: () => string | null } }
+      | undefined;
     const sourceNoteId = extension?.options?.getSourceNoteId?.() ?? null;
     if (!sourceNoteId) {
       console.warn("[eden TaskRef] commitAndCreateNew: no sourceNoteId");
@@ -669,7 +677,10 @@ function findTaskRefInDoc(
 function onTitleArrowVertical(e: KeyboardEvent): void {
   if (e.isComposing) return;
   const editor = props.editor as
-    | { view?: { state: any; dispatch: (tr: any) => void; dom: HTMLElement }; commands?: { focus?: (pos?: number) => void } }
+    | {
+        view?: { state: any; dispatch: (tr: any) => void; dom: HTMLElement };
+        commands?: { focus?: (pos?: number) => void };
+      }
     | undefined;
   if (!editor?.view) return;
   const getPos = props.getPos;
@@ -880,7 +891,10 @@ onMounted(() => {
   // Подписка на editor.selectionUpdate для range-highlight. Каждое
   // изменение selection re-checks включён ли этот node в range.
   const editor = props.editor as
-    | { on?: (event: string, cb: () => void) => void; off?: (event: string, cb: () => void) => void }
+    | {
+        on?: (event: string, cb: () => void) => void;
+        off?: (event: string, cb: () => void) => void;
+      }
     | undefined;
   if (editor?.on && editor.off) {
     editor.on("selectionUpdate", recomputeRangeSelection);
@@ -981,7 +995,9 @@ onBeforeUnmount(() => {
   font-family: inherit;
   font-weight: inherit;
   /* cursor: text у input нативно — не override'им */
-  transition: opacity 120ms ease, color 120ms ease;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
   min-width: 0;
 }
 
@@ -1031,7 +1047,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
   color: var(--muted-foreground, #888);
   opacity: 0;
-  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease;
   flex-shrink: 0;
 }
 

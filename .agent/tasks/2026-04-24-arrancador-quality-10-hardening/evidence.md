@@ -8,19 +8,19 @@ All acceptance criteria from `spec.md` passed against the current codebase.
 
 ## Baseline vs Final Metrics
 
-| Metric | Baseline | Final | Change |
-| --- | ---: | ---: | ---: |
-| Source files | 209 | 227 | +18 |
-| Code files | 197 | 215 | +18 |
-| Test files | 33 | 37 | +4 |
-| Total code lines | 26088 | 26969 | +881 |
-| Files >300 lines | 18 | 17 | -1 |
-| Files >450 lines | 5 | 0 | -5 |
-| IPC commands | 80 | 80 | 0 |
-| Coverage statements | not captured | 80.25% | PASS |
-| Coverage branches | not captured | 74.73% | PASS |
-| Coverage functions | not captured | 77.16% | PASS |
-| Coverage lines | not captured | 81.47% | PASS |
+| Metric              |     Baseline |  Final | Change |
+| ------------------- | -----------: | -----: | -----: |
+| Source files        |          209 |    227 |    +18 |
+| Code files          |          197 |    215 |    +18 |
+| Test files          |           33 |     37 |     +4 |
+| Total code lines    |        26088 |  26969 |   +881 |
+| Files >300 lines    |           18 |     17 |     -1 |
+| Files >450 lines    |            5 |      0 |     -5 |
+| IPC commands        |           80 |     80 |      0 |
+| Coverage statements | not captured | 80.25% |   PASS |
+| Coverage branches   | not captured | 74.73% |   PASS |
+| Coverage functions  | not captured | 77.16% |   PASS |
+| Coverage lines      | not captured | 81.47% |   PASS |
 
 ## Structural Changes
 
@@ -33,17 +33,17 @@ All acceptance criteria from `spec.md` passed against the current codebase.
 
 ## Verification Commands
 
-| Command | Log | Result |
-| --- | --- | --- |
-| `bun run typecheck` | `final-typecheck.txt` | PASS |
-| `bun run lint` | `final-lint.txt` | PASS |
-| `bun run test` | `final-test.txt` | PASS |
-| `bun run test:coverage` | `final-coverage.txt` | PASS |
-| `bun run build:renderer` | `final-build-renderer.txt` | PASS |
-| `bun run build:main` | `final-build-main.txt` | PASS |
-| `bun run build:preload` | `final-build-preload.txt` | PASS |
-| `cargo test --manifest-path apps/arrancador/sidecar/Cargo.toml` | `final-cargo-test-sidecar.txt` | PASS |
-| `npm.cmd run test:e2e` | `final-e2e-fixed.txt` | PASS |
+| Command                                                         | Log                            | Result |
+| --------------------------------------------------------------- | ------------------------------ | ------ |
+| `bun run typecheck`                                             | `final-typecheck.txt`          | PASS   |
+| `bun run lint`                                                  | `final-lint.txt`               | PASS   |
+| `bun run test`                                                  | `final-test.txt`               | PASS   |
+| `bun run test:coverage`                                         | `final-coverage.txt`           | PASS   |
+| `bun run build:renderer`                                        | `final-build-renderer.txt`     | PASS   |
+| `bun run build:main`                                            | `final-build-main.txt`         | PASS   |
+| `bun run build:preload`                                         | `final-build-preload.txt`      | PASS   |
+| `cargo test --manifest-path apps/arrancador/sidecar/Cargo.toml` | `final-cargo-test-sidecar.txt` | PASS   |
+| `npm.cmd run test:e2e`                                          | `final-e2e-fixed.txt`          | PASS   |
 
 ## Acceptance Criteria
 

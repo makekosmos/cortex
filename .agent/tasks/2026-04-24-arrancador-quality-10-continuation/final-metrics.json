@@ -1,211 +1,211 @@
 ﻿{
-    "timestamp":  "2026-04-24T10:57:49.0516524+03:00",
-    "sourceFileCount":  212,
-    "codeFileCount":  200,
-    "testFileCount":  33,
-    "totalCodeLines":  26446,
-    "top30LineCounts":  [
-                            {
-                                "lines":  608,
-                                "file":  "apps/arrancador/sidecar/src/main.rs"
-                            },
-                            {
-                                "lines":  527,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
-                            },
-                            {
-                                "lines":  514,
-                                "file":  "apps/arrancador/src-vue/pages/GameDetailPage.vue"
-                            },
-                            {
-                                "lines":  499,
-                                "file":  "apps/arrancador/src-vue/pages/LibraryPage.vue"
-                            },
-                            {
-                                "lines":  466,
-                                "file":  "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
-                            },
-                            {
-                                "lines":  369,
-                                "file":  "apps/arrancador/bench/run-baseline.ts"
-                            },
-                            {
-                                "lines":  366,
-                                "file":  "apps/arrancador/e2e/bridge-mock.ts"
-                            },
-                            {
-                                "lines":  351,
-                                "file":  "apps/arrancador/src/types/index.ts"
-                            },
-                            {
-                                "lines":  349,
-                                "file":  "apps/arrancador/src-vue/lib/libraryFilters.ts"
-                            },
-                            {
-                                "lines":  347,
-                                "file":  "apps/arrancador/electron/main/services/games.ts"
-                            },
-                            {
-                                "lines":  337,
-                                "file":  "apps/arrancador/electron/main/services/ark-game-objects.ts"
-                            },
-                            {
-                                "lines":  329,
-                                "file":  "apps/arrancador/src-vue/components/AppSpotlight.vue"
-                            },
-                            {
-                                "lines":  329,
-                                "file":  "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
-                            },
-                            {
-                                "lines":  327,
-                                "file":  "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
-                            },
-                            {
-                                "lines":  323,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage.ts"
-                            },
-                            {
-                                "lines":  317,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage.test.ts"
-                            },
-                            {
-                                "lines":  317,
-                                "file":  "apps/arrancador/src-vue/test/game-detail-components.test.ts"
-                            },
-                            {
-                                "lines":  317,
-                                "file":  "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
-                            },
-                            {
-                                "lines":  296,
-                                "file":  "apps/arrancador/src-vue/composables/useScanPageState.ts"
-                            },
-                            {
-                                "lines":  295,
-                                "file":  "apps/arrancador/electron/shared/ipc.ts"
-                            },
-                            {
-                                "lines":  282,
-                                "file":  "apps/arrancador/electron/main/ipc/backup-handlers.ts"
-                            },
-                            {
-                                "lines":  275,
-                                "file":  "apps/arrancador/src-vue/components/scan/ScanResultsList.vue"
-                            },
-                            {
-                                "lines":  271,
-                                "file":  "apps/arrancador/src-vue/components/sqoba/SqobaGameCard.vue"
-                            },
-                            {
-                                "lines":  267,
-                                "file":  "apps/arrancador/src/types/ipc.ts"
-                            },
-                            {
-                                "lines":  265,
-                                "file":  "apps/arrancador/src-vue/composables/useSqobaPageState.ts"
-                            },
-                            {
-                                "lines":  263,
-                                "file":  "apps/arrancador/electron/main/services/ark-game-migration.ts"
-                            },
-                            {
-                                "lines":  263,
-                                "file":  "apps/arrancador/scripts/dev.ts"
-                            },
-                            {
-                                "lines":  261,
-                                "file":  "apps/arrancador/src-vue/components/AppSidebar.vue"
-                            },
-                            {
-                                "lines":  254,
-                                "file":  "apps/arrancador/bench/compare-baseline.ts"
-                            },
-                            {
-                                "lines":  249,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage-bindings.test.ts"
-                            }
-                        ],
-    "filesOver300Lines":  [
-                              {
-                                  "lines":  608,
-                                  "file":  "apps/arrancador/sidecar/src/main.rs"
-                              },
-                              {
-                                  "lines":  527,
-                                  "file":  "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
-                              },
-                              {
-                                  "lines":  514,
-                                  "file":  "apps/arrancador/src-vue/pages/GameDetailPage.vue"
-                              },
-                              {
-                                  "lines":  499,
-                                  "file":  "apps/arrancador/src-vue/pages/LibraryPage.vue"
-                              },
-                              {
-                                  "lines":  466,
-                                  "file":  "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
-                              },
-                              {
-                                  "lines":  369,
-                                  "file":  "apps/arrancador/bench/run-baseline.ts"
-                              },
-                              {
-                                  "lines":  366,
-                                  "file":  "apps/arrancador/e2e/bridge-mock.ts"
-                              },
-                              {
-                                  "lines":  351,
-                                  "file":  "apps/arrancador/src/types/index.ts"
-                              },
-                              {
-                                  "lines":  349,
-                                  "file":  "apps/arrancador/src-vue/lib/libraryFilters.ts"
-                              },
-                              {
-                                  "lines":  347,
-                                  "file":  "apps/arrancador/electron/main/services/games.ts"
-                              },
-                              {
-                                  "lines":  337,
-                                  "file":  "apps/arrancador/electron/main/services/ark-game-objects.ts"
-                              },
-                              {
-                                  "lines":  329,
-                                  "file":  "apps/arrancador/src-vue/components/AppSpotlight.vue"
-                              },
-                              {
-                                  "lines":  329,
-                                  "file":  "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
-                              },
-                              {
-                                  "lines":  327,
-                                  "file":  "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
-                              },
-                              {
-                                  "lines":  323,
-                                  "file":  "apps/arrancador/electron/main/services/ark-usage.ts"
-                              },
-                              {
-                                  "lines":  317,
-                                  "file":  "apps/arrancador/electron/main/services/ark-usage.test.ts"
-                              },
-                              {
-                                  "lines":  317,
-                                  "file":  "apps/arrancador/src-vue/test/game-detail-components.test.ts"
-                              },
-                              {
-                                  "lines":  317,
-                                  "file":  "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
-                              }
-                          ],
-    "ipcCommandCount":  80,
-    "ipcEventCount":  5,
-    "coverage":  {
-                     "statements":  77.69,
-                     "branches":  70.56,
-                     "functions":  71.59,
-                     "lines":  78.95
-                 }
+  "timestamp": "2026-04-24T10:57:49.0516524+03:00",
+  "sourceFileCount": 212,
+  "codeFileCount": 200,
+  "testFileCount": 33,
+  "totalCodeLines": 26446,
+  "top30LineCounts": [
+    {
+      "lines": 608,
+      "file": "apps/arrancador/sidecar/src/main.rs"
+    },
+    {
+      "lines": 527,
+      "file": "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
+    },
+    {
+      "lines": 514,
+      "file": "apps/arrancador/src-vue/pages/GameDetailPage.vue"
+    },
+    {
+      "lines": 499,
+      "file": "apps/arrancador/src-vue/pages/LibraryPage.vue"
+    },
+    {
+      "lines": 466,
+      "file": "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
+    },
+    {
+      "lines": 369,
+      "file": "apps/arrancador/bench/run-baseline.ts"
+    },
+    {
+      "lines": 366,
+      "file": "apps/arrancador/e2e/bridge-mock.ts"
+    },
+    {
+      "lines": 351,
+      "file": "apps/arrancador/src/types/index.ts"
+    },
+    {
+      "lines": 349,
+      "file": "apps/arrancador/src-vue/lib/libraryFilters.ts"
+    },
+    {
+      "lines": 347,
+      "file": "apps/arrancador/electron/main/services/games.ts"
+    },
+    {
+      "lines": 337,
+      "file": "apps/arrancador/electron/main/services/ark-game-objects.ts"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/components/AppSpotlight.vue"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
+    },
+    {
+      "lines": 327,
+      "file": "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
+    },
+    {
+      "lines": 323,
+      "file": "apps/arrancador/electron/main/services/ark-usage.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/electron/main/services/ark-usage.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/test/game-detail-components.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
+    },
+    {
+      "lines": 296,
+      "file": "apps/arrancador/src-vue/composables/useScanPageState.ts"
+    },
+    {
+      "lines": 295,
+      "file": "apps/arrancador/electron/shared/ipc.ts"
+    },
+    {
+      "lines": 282,
+      "file": "apps/arrancador/electron/main/ipc/backup-handlers.ts"
+    },
+    {
+      "lines": 275,
+      "file": "apps/arrancador/src-vue/components/scan/ScanResultsList.vue"
+    },
+    {
+      "lines": 271,
+      "file": "apps/arrancador/src-vue/components/sqoba/SqobaGameCard.vue"
+    },
+    {
+      "lines": 267,
+      "file": "apps/arrancador/src/types/ipc.ts"
+    },
+    {
+      "lines": 265,
+      "file": "apps/arrancador/src-vue/composables/useSqobaPageState.ts"
+    },
+    {
+      "lines": 263,
+      "file": "apps/arrancador/electron/main/services/ark-game-migration.ts"
+    },
+    {
+      "lines": 263,
+      "file": "apps/arrancador/scripts/dev.ts"
+    },
+    {
+      "lines": 261,
+      "file": "apps/arrancador/src-vue/components/AppSidebar.vue"
+    },
+    {
+      "lines": 254,
+      "file": "apps/arrancador/bench/compare-baseline.ts"
+    },
+    {
+      "lines": 249,
+      "file": "apps/arrancador/electron/main/services/ark-usage-bindings.test.ts"
+    }
+  ],
+  "filesOver300Lines": [
+    {
+      "lines": 608,
+      "file": "apps/arrancador/sidecar/src/main.rs"
+    },
+    {
+      "lines": 527,
+      "file": "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
+    },
+    {
+      "lines": 514,
+      "file": "apps/arrancador/src-vue/pages/GameDetailPage.vue"
+    },
+    {
+      "lines": 499,
+      "file": "apps/arrancador/src-vue/pages/LibraryPage.vue"
+    },
+    {
+      "lines": 466,
+      "file": "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
+    },
+    {
+      "lines": 369,
+      "file": "apps/arrancador/bench/run-baseline.ts"
+    },
+    {
+      "lines": 366,
+      "file": "apps/arrancador/e2e/bridge-mock.ts"
+    },
+    {
+      "lines": 351,
+      "file": "apps/arrancador/src/types/index.ts"
+    },
+    {
+      "lines": 349,
+      "file": "apps/arrancador/src-vue/lib/libraryFilters.ts"
+    },
+    {
+      "lines": 347,
+      "file": "apps/arrancador/electron/main/services/games.ts"
+    },
+    {
+      "lines": 337,
+      "file": "apps/arrancador/electron/main/services/ark-game-objects.ts"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/components/AppSpotlight.vue"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
+    },
+    {
+      "lines": 327,
+      "file": "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
+    },
+    {
+      "lines": 323,
+      "file": "apps/arrancador/electron/main/services/ark-usage.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/electron/main/services/ark-usage.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/test/game-detail-components.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
+    }
+  ],
+  "ipcCommandCount": 80,
+  "ipcEventCount": 5,
+  "coverage": {
+    "statements": 77.69,
+    "branches": 70.56,
+    "functions": 71.59,
+    "lines": 78.95
+  }
 }

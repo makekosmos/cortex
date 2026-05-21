@@ -16,21 +16,13 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "package-json-evidence.txt",
-        "package-json-assert.txt",
-        "build-sidecar-dev.txt"
-      ],
+      "evidence": ["package-json-evidence.txt", "package-json-assert.txt", "build-sidecar-dev.txt"],
       "summary": "Dev sidecar build script builds ../../../packages/ark-core/rust/Cargo.toml with --bin ark-core-rpc."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "package-json-evidence.txt",
-        "package-json-assert.txt",
-        "git-diff.txt"
-      ],
+      "evidence": ["package-json-evidence.txt", "package-json-assert.txt", "git-diff.txt"],
       "summary": "Electron Builder extraResources copies ../../../packages/ark-core/rust/target/release/ark-core-rpc.exe to ark-core/ark-core-rpc.exe and no longer references delphi-db.exe."
     },
     {

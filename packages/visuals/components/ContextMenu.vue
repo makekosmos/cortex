@@ -93,13 +93,7 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="props.open"
-      ref="root"
-      class="kosmos-context-menu"
-      role="menu"
-      :style="style"
-    >
+    <div v-if="props.open" ref="root" class="kosmos-context-menu" role="menu" :style="style">
       <slot />
     </div>
   </Teleport>

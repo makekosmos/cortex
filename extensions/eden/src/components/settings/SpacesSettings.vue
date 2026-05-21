@@ -23,7 +23,9 @@
               <div class="settings-row-desc settings-row-desc-plain">{{ option.description }}</div>
             </div>
             <div class="settings-row-right">
-              <span v-if="props.activeSpace === option.id" class="settings-space-badge">Активно</span>
+              <span v-if="props.activeSpace === option.id" class="settings-space-badge"
+                >Активно</span
+              >
             </div>
           </button>
         </div>

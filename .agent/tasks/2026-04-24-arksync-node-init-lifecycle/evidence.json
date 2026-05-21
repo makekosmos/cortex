@@ -6,48 +6,31 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt"],
       "summary": "ArkClientOptions accepts documented dbPath?: string."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "verify-lifecycle.ts",
-        "verify-lifecycle.txt",
-        "source-evidence.txt"
-      ],
+      "evidence": ["verify-lifecycle.ts", "verify-lifecycle.txt", "source-evidence.txt"],
       "summary": "Self-managed start initializes once before start_sync."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "verify-lifecycle.ts",
-        "verify-lifecycle.txt"
-      ],
+      "evidence": ["verify-lifecycle.ts", "verify-lifecycle.txt"],
       "summary": "Injected requestFn mode does not require dbPath and does not send init."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "verify-lifecycle.ts",
-        "verify-lifecycle.txt"
-      ],
+      "evidence": ["verify-lifecycle.ts", "verify-lifecycle.txt"],
       "summary": "Self-managed start without dbPath fails before any sidecar request."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": [
-        "typecheck.txt",
-        "build.txt",
-        "git-diff-check.txt"
-      ],
+      "evidence": ["typecheck.txt", "build.txt", "git-diff-check.txt"],
       "summary": "TypeScript typecheck/build and diff check pass."
     }
   ],

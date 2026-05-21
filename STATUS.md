@@ -2,14 +2,14 @@
 
 ## Текущие версии
 
-| Артефакт | Версия |
-|---|---|
-| Kepler shell (`shell/package.json`) | **0.2.1** |
+| Артефакт                                         | Версия                                                                  |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| Kepler shell (`shell/package.json`)              | **0.2.1**                                                               |
 | Eden extension (`extensions/eden/manifest.json`) | **0.1.8** (Pattern B + Anytype-style block selection + Linear statuses) |
-| Delphi extension | **0.1.3** (live ARK sync + «Когда-нибудь» tab) |
-| Horologion extension | **0.1.5** |
-| Arrancador extension | **0.1.3** |
-| Dashboard | встроен в shell (не extension) |
+| Delphi extension                                 | **0.1.3** (live ARK sync + «Когда-нибудь» tab)                          |
+| Horologion extension                             | **0.1.5**                                                               |
+| Arrancador extension                             | **0.1.3**                                                               |
+| Dashboard                                        | встроен в shell (не extension)                                          |
 
 ## 2026-05-20 — Eden Pattern B + Anytype block selection (Kepler 0.2.0 → 0.2.1)
 
@@ -70,6 +70,7 @@
 ## 2026-05-18 — performance sweep + UX полировка (Kepler 0.1.10 → 0.1.16)
 
 Серия release'ов за день:
+
 - **0.1.10** — Mica backdrop + electronLanguages shrink (−45 MB disk) + CSS contain + TS incremental
 - **0.1.11** — Export bug fix (unwrap `{converters: [...]}`) + extensions catalog populated
 - **0.1.12** — Marketplace UI (Settings → Расширения → catalog с кнопкой Установить) + Export tab скрыт (техдолг)
@@ -79,6 +80,7 @@
 - **0.1.16** — Horologion task input alignment fix + QuickEntryPanel removed Tailwind + Storybook 8 + handcrafted convention + Focus mode roadmap spec
 
 См.:
+
 - `docs-site/concepts/system-requirements.md` — что нужно для запуска и сборки (canonical).
 - `docs-site/concepts/performance-experiments.md` — реальные baseline/after measurements (правило: нет цифр → `(не записал)`, **никогда** не выдумывать).
 - `.agent/tasks/2026-05-18-*/evidence.md` — proof loops с calibration.
@@ -131,13 +133,13 @@ Eden.exe — остаётся standalone Electron + общий backend чере�
 
 ## Naming convention (после brand swap)
 
-| Слой | Имя |
-|---|---|
-| Ecosystem (monorepo, ARK SDK, AppData) | **Kosmos** |
-| Launcher app (Electron host) | **Kepler** |
-| TS package SDK | `@kosmos/ark` |
-| Visuals (CSS tokens + Vue components) | `@kosmos/visuals` |
-| Backend binary | `kepler-backend.exe` |
+| Слой                                   | Имя                  |
+| -------------------------------------- | -------------------- |
+| Ecosystem (monorepo, ARK SDK, AppData) | **Kosmos**           |
+| Launcher app (Electron host)           | **Kepler**           |
+| TS package SDK                         | `@kosmos/ark`        |
+| Visuals (CSS tokens + Vue components)  | `@kosmos/visuals`    |
+| Backend binary                         | `kepler-backend.exe` |
 
 ## Изоляция инстансов (slot system, 2026-05-20)
 
@@ -146,12 +148,12 @@ derive'ятся Electron userData, ARK dataDir, productName, hotkey, autoupdater
 autorun. Цель — installed prod Kepler работает **одновременно** с dev-сессиями
 (и multi-agent worktree разработкой).
 
-| slot | trigger | Electron userData | ARK dataDir | hotkey | autoupdater |
-|---|---|---|---|---|---|
-| `prod` (default) | installed `Kepler.exe` | `%APPDATA%\Kepler\` | `%APPDATA%\Kosmos\` | `Alt+Space` | on |
-| `dev` | `VITE_DEV_SERVER_URL` (`bun run --cwd shell dev`) | `%APPDATA%\Kepler-dev\` | `%APPDATA%\Kosmos-dev\` | `` Alt+` `` | off |
-| `dev-<x>` | `KEPLER_INSTANCE=dev-<x>` (per-worktree `shell/.env.local`) | `%APPDATA%\Kepler-dev-<x>\` | `%APPDATA%\Kosmos-dev-<x>\` | disabled | off |
-| `test-<x>` | Playwright (`KOSMOS_DATA_DIR` set) | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR` | disabled | off |
+| slot             | trigger                                                     | Electron userData             | ARK dataDir                 | hotkey      | autoupdater |
+| ---------------- | ----------------------------------------------------------- | ----------------------------- | --------------------------- | ----------- | ----------- |
+| `prod` (default) | installed `Kepler.exe`                                      | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`         | `Alt+Space` | on          |
+| `dev`            | `VITE_DEV_SERVER_URL` (`bun run --cwd shell dev`)           | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`     | `` Alt+` `` | off         |
+| `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `shell/.env.local`) | `%APPDATA%\Kepler-dev-<x>\`   | `%APPDATA%\Kosmos-dev-<x>\` | disabled    | off         |
+| `test-<x>`       | Playwright (`KOSMOS_DATA_DIR` set)                          | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR`           | disabled    | off         |
 
 Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 `applyInstanceToApp()` вызывается в самом верху `main.ts` — до
@@ -200,12 +202,12 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 4 — Apps как Vue extensions
 
-| App | Build | Что работает | Что осталось |
-|---|---|---|---|
-| **Dashboard** | 83 KB JS / 17 KB CSS | Read-only analytics: Overview + Sessions pages через `kepler.ark.request("get_usage_analytics")` + focus/visibility auto-refresh | Choose/reset DB — host-managed; vue-router history dropped |
-| **Horologion** | 102 KB pomodoroSettings chunk + 23 KB HomeView + 5 KB SettingsView | Pomodoro + Stopwatch + Settings через `horologionApi` shim над `kepler.ark.*`. Status dot + settings button в topbar. | Streamer mode / tray / multi-window settings — dropped |
-| **Delphi** | 3485 modules, 32 KB CSS с Tailwind | Vue Router (memory history), 5 pages, `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request`. Task CRUD работает | LAN sync / P2P / space management — graceful no-op. Tailwind остался (см. Phase 9) |
-| **Arrancador** | 108 KB JS / 19 KB CSS, 57 modules | 7 страниц (Library + 6 stubs/read-only): Library, Catalogue (stub), Scan, Sqoba (stub), Statistics (JS aggregation), Settings (localStorage), GameDetail | Native scanner spawn, game launch, RAWG metadata fetch — Phase 5+ |
+| App            | Build                                                              | Что работает                                                                                                                                             | Что осталось                                                                       |
+| -------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **Dashboard**  | 83 KB JS / 17 KB CSS                                               | Read-only analytics: Overview + Sessions pages через `kepler.ark.request("get_usage_analytics")` + focus/visibility auto-refresh                         | Choose/reset DB — host-managed; vue-router history dropped                         |
+| **Horologion** | 102 KB pomodoroSettings chunk + 23 KB HomeView + 5 KB SettingsView | Pomodoro + Stopwatch + Settings через `horologionApi` shim над `kepler.ark.*`. Status dot + settings button в topbar.                                    | Streamer mode / tray / multi-window settings — dropped                             |
+| **Delphi**     | 3485 modules, 32 KB CSS с Tailwind                                 | Vue Router (memory history), 5 pages, `electron-api-shim.ts` устанавливает `window.electronAPI` поверх `kepler.ark.request`. Task CRUD работает          | LAN sync / P2P / space management — graceful no-op. Tailwind остался (см. Phase 9) |
+| **Arrancador** | 108 KB JS / 19 KB CSS, 57 modules                                  | 7 страниц (Library + 6 stubs/read-only): Library, Catalogue (stub), Scan, Sqoba (stub), Statistics (JS aggregation), Settings (localStorage), GameDetail | Native scanner spawn, game launch, RAWG metadata fetch — Phase 5+                  |
 
 ### Phase 5 — Extension developer mode (Raycast-style)
 
@@ -231,11 +233,11 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### RAM benchmark
 
-| Метрика | Baseline (4 standalone) | Kepler + 4 extensions | Diff |
-|---|---|---|---|
-| Working Set | 1092 MB | 968 MB | **−124 MB / −11%** |
-| Private Bytes | 683 MB | 474 MB | **−209 MB / −31%** |
-| Processes | 15 | 11 | −4 |
+| Метрика       | Baseline (4 standalone) | Kepler + 4 extensions | Diff               |
+| ------------- | ----------------------- | --------------------- | ------------------ |
+| Working Set   | 1092 MB                 | 968 MB                | **−124 MB / −11%** |
+| Private Bytes | 683 MB                  | 474 MB                | **−209 MB / −31%** |
+| Processes     | 15                      | 11                    | −4                 |
 
 Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod без DevTools — save аналогичный.
 
@@ -263,18 +265,20 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 См. `.agent/tasks/2026-05-17-eden-extension/spec.md` и `.agent/tasks/2026-05-17-eden-cleanup-and-hardening/spec.md`.
 
 **Phase 6.0 — Scaffold + ARK note CRUD**:
+
 - `extensions/eden/` создан как Vue extension (manifest, package, vite config, src/).
 - `kepler-api-shim` (renderer-side bridge поверх `window.kepler.ark.request`) — emulates `window.api` так, что Eden codebase почти не правился.
 - Note CRUD / folders / typed-notes / search — все ARK операции через shim.
 - Команды `eden:note:create` / `eden:note:search` зарегистрированы в command bus.
 
 **Phase 6.0.A — Cleanup + hardening**:
+
 - Hevy полностью удалён (UI + API + ConnectedAppsSettings.vue + lib/hevy.ts). Замена — Olympia.
 - Code lint/format удалён полностью (Editor.vue вызовы, settings panel, shim methods, vite-env types).
 - Trash UI реализован поверх ARK soft-delete (`deletedAt != null` фильтр; restore через `upsert_object` с `deletedAt: null`).
 - Bundle codesplit: lazy `Editor.vue` через `defineAsyncComponent` → main bundle **353KB** (gzip 112KB), editor chunk 1.36MB lazy.
 - Standalone `apps/eden/ts/` (вместе с Heart Rust + main process + preload) удалён полностью.
-- Workspace + tooling cleanup: `package.json`, `Cargo.toml`, `lefthook.yml`, scripts/*.mjs.
+- Workspace + tooling cleanup: `package.json`, `Cargo.toml`, `lefthook.yml`, scripts/\*.mjs.
 
 ### Arrancador full completion (2026-05-18)
 
@@ -285,7 +289,7 @@ Caveats: оба measurements в dev mode (DevTools overhead +~160 MB). Real prod
 - Launcher: `steam://rungameid/<id>` через `cmd /c start` + прямой exe spawn для Epic/manual.
 - RAWG client: search + get_details + apply (merge в game_obj.propsJson), httpmock тесты.
 - SQOBA: discover save paths heuristics, zip с `_sqoba_meta.json`, restore с path traversal protection, rotation keep N=10.
-- WS namespace `arrancador.*` (scan/launch/rawg.*/sqoba.*/config.*).
+- WS namespace `arrancador.*` (scan/launch/rawg._/sqoba._/config.\*).
 - UI: все 4 stub'нутые страницы оживлены (Library launch button, Scan кнопка + history, Catalogue RAWG search+apply Modal, Sqoba per-game backup/restore, Settings RAWG key).
 - Preload bridge `window.kepler.arrancador.*`.
 - cargo test 110/110, typecheck/build/ark-guard зелёные.
@@ -346,6 +350,7 @@ LRU eviction, RAM budget management, lazy extension load/unload. Имеет см
 ### Phase 8 — Retire legacy
 
 После production smoke testing:
+
 - `apps/kepler/` (старый Rust gpui launcher) — удалить.
 - `apps/{dashboard,delphi,horologion,arrancador}/` standalone Electron — удалить (extensions cover everything).
 - Eden — оставить пока не сделано Phase 6.

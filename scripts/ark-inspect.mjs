@@ -26,13 +26,17 @@ function inspect(dbPath) {
 
   const stat = fs.statSync(dbPath);
   console.log(`\n=== ${dbPath} ===`);
-  console.log(`  size: ${(stat.size / 1024).toFixed(1)} KB · modified: ${stat.mtime.toISOString()}`);
+  console.log(
+    `  size: ${(stat.size / 1024).toFixed(1)} KB · modified: ${stat.mtime.toISOString()}`,
+  );
 
   const db = new DatabaseSync(dbPath, { readOnly: true });
 
   // tables and row counts
   const tables = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
     .all();
 
   console.log("\n  tables:");
@@ -42,9 +46,11 @@ function inspect(dbPath) {
   }
 
   // objects breakdown by type
-  if (tables.find(t => t.name === "objects")) {
+  if (tables.find((t) => t.name === "objects")) {
     const byType = db
-      .prepare("SELECT type_id, COUNT(*) AS n FROM objects WHERE deleted_at IS NULL GROUP BY type_id ORDER BY n DESC")
+      .prepare(
+        "SELECT type_id, COUNT(*) AS n FROM objects WHERE deleted_at IS NULL GROUP BY type_id ORDER BY n DESC",
+      )
       .all();
     if (byType.length > 0) {
       console.log("\n  objects by type:");
@@ -56,7 +62,9 @@ function inspect(dbPath) {
     // sample object per type
     for (const { type_id } of byType) {
       const sample = db
-        .prepare(`SELECT id, title, substr(content_json, 1, 80) AS content, substr(props_json, 1, 80) AS props, created_at FROM objects WHERE type_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`)
+        .prepare(
+          `SELECT id, title, substr(content_json, 1, 80) AS content, substr(props_json, 1, 80) AS props, created_at FROM objects WHERE type_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
+        )
         .get(type_id);
       if (sample) {
         console.log(`\n  sample ${type_id}:`);
@@ -70,27 +78,35 @@ function inspect(dbPath) {
   }
 
   // tracked_apps
-  if (tables.find(t => t.name === "tracked_apps")) {
+  if (tables.find((t) => t.name === "tracked_apps")) {
     const apps = db.prepare("SELECT COUNT(*) AS n FROM tracked_apps").get().n;
     if (apps > 0) {
       const top = db
-        .prepare("SELECT display_name, process_name, last_seen_at FROM tracked_apps ORDER BY last_seen_at DESC LIMIT 5")
+        .prepare(
+          "SELECT display_name, process_name, last_seen_at FROM tracked_apps ORDER BY last_seen_at DESC LIMIT 5",
+        )
         .all();
       console.log("\n  recent tracked apps:");
       for (const a of top) {
-        console.log(`    ${(a.display_name || a.process_name || "—").padEnd(40)} last_seen ${a.last_seen_at}`);
+        console.log(
+          `    ${(a.display_name || a.process_name || "—").padEnd(40)} last_seen ${a.last_seen_at}`,
+        );
       }
     }
   }
 
   // usage_sessions
-  if (tables.find(t => t.name === "usage_sessions")) {
-    const total = db.prepare("SELECT COUNT(*) AS n, SUM(foreground_ms) AS ms FROM usage_sessions").get();
+  if (tables.find((t) => t.name === "usage_sessions")) {
+    const total = db
+      .prepare("SELECT COUNT(*) AS n, SUM(foreground_ms) AS ms FROM usage_sessions")
+      .get();
     if (total.n > 0) {
       const totalH = ((total.ms || 0) / 1000 / 60 / 60).toFixed(1);
       console.log(`\n  usage_sessions: ${total.n} sessions, total foreground ${totalH}h`);
       const latest = db
-        .prepare("SELECT started_at, ended_at, foreground_ms, idle_ms, process_name FROM usage_sessions ORDER BY started_at DESC LIMIT 5")
+        .prepare(
+          "SELECT started_at, ended_at, foreground_ms, idle_ms, process_name FROM usage_sessions ORDER BY started_at DESC LIMIT 5",
+        )
         .all();
       for (const s of latest) {
         const min = (s.foreground_ms / 1000 / 60).toFixed(1);
@@ -100,8 +116,12 @@ function inspect(dbPath) {
   }
 
   // sync_tombstones (record of deletes for propagation to peers)
-  if (tables.find(t => t.name === "sync_tombstones")) {
-    const tombs = db.prepare("SELECT id, entity_type, deleted_at FROM sync_tombstones ORDER BY deleted_at DESC LIMIT 5").all();
+  if (tables.find((t) => t.name === "sync_tombstones")) {
+    const tombs = db
+      .prepare(
+        "SELECT id, entity_type, deleted_at FROM sync_tombstones ORDER BY deleted_at DESC LIMIT 5",
+      )
+      .all();
     if (tombs.length > 0) {
       console.log("\n  recent tombstones:");
       for (const t of tombs) {
@@ -111,8 +131,10 @@ function inspect(dbPath) {
   }
 
   // sync_kv (version vector etc)
-  if (tables.find(t => t.name === "sync_kv")) {
-    const rows = db.prepare("SELECT key, substr(value, 1, 120) AS value FROM sync_kv ORDER BY key").all();
+  if (tables.find((t) => t.name === "sync_kv")) {
+    const rows = db
+      .prepare("SELECT key, substr(value, 1, 120) AS value FROM sync_kv ORDER BY key")
+      .all();
     if (rows.length > 0) {
       console.log("\n  sync_kv:");
       for (const r of rows) {

@@ -26,6 +26,7 @@ Result: PASS
 ## Application Checks
 
 Arrancador:
+
 - `bun run --cwd apps/arrancador typecheck`: PASS.
 - `bun run --cwd apps/arrancador test`: PASS, 47 files and 163 tests passed.
 - `bun run --cwd apps/arrancador smoke:packaged`: PASS.
@@ -34,12 +35,14 @@ Arrancador:
   - Smoke used isolated `userData`: `D:\Personal\Hobby\Coding\kosmos\apps\arrancador\.e2e\packaged-smoke\localappdata\arrancador`.
 
 Dashboard:
+
 - `bun run --cwd apps/dashboard typecheck`: PASS.
 - `bun run --cwd apps/dashboard test:e2e:smoke`: PASS.
   - Smoke database: `D:\Personal\Hobby\Coding\kosmos\apps\dashboard\.e2e\smoke-dashboard.db`.
   - Verified database connected status, top app rendering, scrolling, responsive width, and sessions route.
 
 Eden:
+
 - `bun run --cwd apps/eden/ts test:ark-migration`: PASS.
   - Verified object types, objects, links, and partial-failure migration status on isolated test data.
 - `bun run --cwd apps/eden/ts build`: PASS.
@@ -47,6 +50,7 @@ Eden:
   - Tests use isolated temp vaults/app data and test ARK paths.
 
 Delphi:
+
 - `bun run --cwd apps/delphi/ts test`: PASS, 8 files and 100 tests passed.
 - `bun run --cwd apps/delphi/ts build`: PASS.
   - Build path compiles the canonical `ark-core-rpc` sidecar and packages the app.
@@ -62,6 +66,7 @@ Arrancador packaged smoke still reports Electron `appData` as the OS roaming dir
 ## Remaining Warnings
 
 The successful checks still emit non-failing warnings:
+
 - Electron CSP warnings in e2e/smoke output.
 - Vite chunk-size and deprecated Rollup `inlineDynamicImports` warnings.
 - Electron-builder metadata/icon/signing warnings.

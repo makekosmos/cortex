@@ -15,6 +15,7 @@
 Status: PASS
 
 Proof:
+
 - [`packages/kosmos-visuals/components/Sidebar.vue`](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/components/Sidebar.vue) now performs a side-effect import of `./sidebar.css`.
 - Fresh dashboard build output contains the wrapper and resize-handle CSS classes from `sidebar.css`:
   - `.kosmos-sidebar-wrapper`
@@ -29,6 +30,7 @@ Proof:
 Status: PASS
 
 Proof:
+
 - [`packages/kosmos-visuals/components/Sidebar.vue`](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/components/Sidebar.vue) now exposes `dragRegion?: boolean` with default `false`.
 - The component computes `contentStyle` and applies `WebkitAppRegion: "drag"` to `.kosmos-sidebar-content` when `dragRegion` is enabled.
 - The built dashboard bundle contains the compiled `WebkitAppRegion` branch and the no-drag interactive selectors from `sidebar.css`.
@@ -43,6 +45,7 @@ Existing `Sidebar` usage remains compatible, and the dashboard sidebar resize fl
 Status: PASS
 
 Proof:
+
 - Fresh consumer type checks passed for both current users of `@kosmos/visuals` sidebar:
   - [dashboard-tsc.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-tsc.txt)
   - [delphi-tsc.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resizable-parity/raw/delphi-tsc.txt)
@@ -53,6 +56,7 @@ Proof:
 - The current dashboard shell still wires the same sidebar resize/toggle contract through `SidebarConfig`, `hidden`, `configChange`, and `update:hidden`.
 
 Additional note:
+
 - A direct Electron smoke execution was attempted against the fresh build, but the environment blocks GUI process spawn with `electron.launch: spawn EPERM`.
 - Raw artifact: [dashboard-runtime-smoke.txt](/D:/Personal/Hobby/Coding/kosmos/.agent/tasks/2026-04-17-sidebar-resizable-parity/raw/dashboard-runtime-smoke.txt)
 

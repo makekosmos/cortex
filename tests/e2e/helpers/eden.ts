@@ -25,7 +25,15 @@ import { waitForBackendReady } from "./wait";
 
 export interface EdenApi {
   saveEntry: (e: unknown) => Promise<{ ok: boolean; entryId?: string }>;
-  listEntries: () => Promise<Array<{ id: string; title: string; content_json?: string; type_id?: string | null; deleted_at?: number | null }>>;
+  listEntries: () => Promise<
+    Array<{
+      id: string;
+      title: string;
+      content_json?: string;
+      type_id?: string | null;
+      deleted_at?: number | null;
+    }>
+  >;
   loadEntry: (id: string) => Promise<{ id: string; title: string; content_json?: string } | null>;
   deleteEntry: (id: string) => Promise<unknown>;
   createTask?: (sourceNoteId: string, title?: string, explicitId?: string) => Promise<string>;
@@ -73,38 +81,40 @@ export interface CreateNoteOpts {
 /**
  * Создать note_obj entry через `window.api.saveEntry`. Возвращает id.
  */
-export async function createEdenNote(
-  edenWindow: Page,
-  opts: CreateNoteOpts = {},
-): Promise<string> {
+export async function createEdenNote(edenWindow: Page, opts: CreateNoteOpts = {}): Promise<string> {
   const id = opts.id ?? `eden-e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const title = opts.title ?? `e2e-note-${id.slice(-6)}`;
   const contentJson = opts.contentJson ?? { type: "doc", content: [{ type: "paragraph" }] };
   const typeId = opts.typeId ?? "note_obj";
 
-  const result = await edenWindow.evaluate(async (payload) => {
-    const api = (window as unknown as { api: EdenApi }).api;
-    try {
-      const r = await api.saveEntry({
-        id: payload.id,
-        title: payload.title,
-        content_json: JSON.stringify(payload.contentJson),
-        created_at: Date.now(),
-        updated_at: Date.now(),
-        folder_id: null,
-        type_id: payload.typeId,
-        header_layout: "default",
-        header_props_json: "{}",
-        schema_version: 1,
-        deleted_at: null,
-      });
-      return { ok: true, r };
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) };
-    }
-  }, { id, title, contentJson, typeId });
+  const result = await edenWindow.evaluate(
+    async (payload) => {
+      const api = (window as unknown as { api: EdenApi }).api;
+      try {
+        const r = await api.saveEntry({
+          id: payload.id,
+          title: payload.title,
+          content_json: JSON.stringify(payload.contentJson),
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          folder_id: null,
+          type_id: payload.typeId,
+          header_layout: "default",
+          header_props_json: "{}",
+          schema_version: 1,
+          deleted_at: null,
+        });
+        return { ok: true, r };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+    { id, title, contentJson, typeId },
+  );
 
-  expect(result.ok, `createEdenNote saveEntry should succeed: ${JSON.stringify(result)}`).toBe(true);
+  expect(result.ok, `createEdenNote saveEntry should succeed: ${JSON.stringify(result)}`).toBe(
+    true,
+  );
   return id;
 }
 
@@ -147,37 +157,44 @@ export async function openNoteViaReload(edenWindow: Page, entryId: string): Prom
   return await edenWindow.evaluate(() => !!document.querySelector(".ProseMirror"));
 }
 
-export async function openEdenNote(edenWindow: Page, entryId: string, expectedTitle?: string): Promise<string> {
+export async function openEdenNote(
+  edenWindow: Page,
+  entryId: string,
+  expectedTitle?: string,
+): Promise<string> {
   // Sidebar item для recent entry рендерится с data-testid="recent-entry-<id>"
   // (см. EdenSidebar.vue::buildEntryItem + visuals/Sidebar.vue). Если note
   // только что создан и ещё не в `recentEntries.value` (refresh периодически
   // через subscribeObjectChanges) — может потребоваться wait.
-  const status = await edenWindow.evaluate(async ({ id, title }) => {
-    const selector = `[data-testid="recent-entry-${id}"]`;
-    // Poll до 3s — entries.value обновляется через ARK object_upserted event.
-    const start = Date.now();
-    while (Date.now() - start < 3000) {
-      const el = document.querySelector(selector) as HTMLElement | null;
-      if (el) {
-        el.click();
-        return "clicked-sidebar";
+  const status = await edenWindow.evaluate(
+    async ({ id, title }) => {
+      const selector = `[data-testid="recent-entry-${id}"]`;
+      // Poll до 3s — entries.value обновляется через ARK object_upserted event.
+      const start = Date.now();
+      while (Date.now() - start < 3000) {
+        const el = document.querySelector(selector) as HTMLElement | null;
+        if (el) {
+          el.click();
+          return "clicked-sidebar";
+        }
+        await new Promise((r) => setTimeout(r, 150));
       }
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    // Fallback: by-text. Точное совпадение текста в data-testid="kosmos-sidebar".
-    if (title) {
-      const sidebar = document.querySelector('[data-testid="kosmos-sidebar"]');
-      if (sidebar) {
-        const all = Array.from(sidebar.querySelectorAll<HTMLElement>("*"));
-        const byText = all.find((el) => (el.textContent ?? "").trim() === title);
-        if (byText) {
-          byText.click();
-          return "clicked-by-text";
+      // Fallback: by-text. Точное совпадение текста в data-testid="kosmos-sidebar".
+      if (title) {
+        const sidebar = document.querySelector('[data-testid="kosmos-sidebar"]');
+        if (sidebar) {
+          const all = Array.from(sidebar.querySelectorAll<HTMLElement>("*"));
+          const byText = all.find((el) => (el.textContent ?? "").trim() === title);
+          if (byText) {
+            byText.click();
+            return "clicked-by-text";
+          }
         }
       }
-    }
-    return "not-found";
-  }, { id: entryId, title: expectedTitle });
+      return "not-found";
+    },
+    { id: entryId, title: expectedTitle },
+  );
   return status;
 }
 
@@ -192,10 +209,13 @@ export async function openEdenNote(edenWindow: Page, entryId: string, expectedTi
  */
 export async function getProseMirrorJSON(edenWindow: Page): Promise<unknown | null> {
   return await edenWindow.evaluate(() => {
-    const pm = document.querySelector(".ProseMirror") as (HTMLElement & { pmViewDesc?: { node?: unknown } }) | null;
+    const pm = document.querySelector(".ProseMirror") as
+      | (HTMLElement & { pmViewDesc?: { node?: unknown } })
+      | null;
     if (!pm) return null;
     // pmViewDesc.node — корневой ProseMirror Node. У него .toJSON() — публичный.
-    const desc = (pm as unknown as { pmViewDesc?: { node?: { toJSON: () => unknown } } }).pmViewDesc;
+    const desc = (pm as unknown as { pmViewDesc?: { node?: { toJSON: () => unknown } } })
+      .pmViewDesc;
     if (desc?.node?.toJSON) {
       try {
         return desc.node.toJSON();
@@ -222,7 +242,7 @@ export async function getProseMirrorStructure(edenWindow: Page): Promise<{
     const pm = document.querySelector(".ProseMirror");
     if (!pm) return null;
     const children = Array.from(pm.children).map((el) => {
-      const text = (el.textContent ?? "");
+      const text = el.textContent ?? "";
       // Пустой paragraph в PM рендерится как <p><br class="ProseMirror-trailingBreak"></p>
       // textContent === "" но всё равно node существует.
       const onlyBr = el.children.length === 1 && el.children[0].tagName === "BR";
@@ -249,8 +269,9 @@ export async function getProseMirrorStructure(edenWindow: Page): Promise<{
 export async function deleteEdenEntry(edenWindow: Page, entryId: string): Promise<void> {
   await edenWindow.evaluate(async (id) => {
     try {
-      await (window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } })
-        .api.deleteEntry(id);
+      await (
+        window as unknown as { api: { deleteEntry: (id: string) => Promise<unknown> } }
+      ).api.deleteEntry(id);
     } catch (e) {
       console.warn("[eden helpers] deleteEntry failed:", e);
     }

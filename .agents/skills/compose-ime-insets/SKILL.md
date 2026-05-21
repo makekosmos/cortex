@@ -21,6 +21,7 @@ Log.d("INSETS", "ime=$imeBottom nav=$navBottom paddingBottom=${paddingValues.cal
 ```
 
 Открой/закрой клавиатуру, посмотри `adb logcat -s INSETS`. Типичные значения:
+
 - `ime=825, nav=63, paddingBottom=80dp` — клавиатура открыта
 - `ime=0, nav=63, paddingBottom=80dp` — клавиатура закрыта
 
@@ -105,18 +106,19 @@ Scaffold(
 
 ## Частые ошибки
 
-| Ошибка | Результат |
-|--------|-----------|
-| `imePadding()` на input bar + `adjustResize` | Двойной отступ |
-| `navigationBarsPadding()` внутри input bar | +63px зазор |
-| `windowInsetsPadding(ime.union(nav))` на Surface | Фон Surface тянется в зазор |
-| Ручной `padding(bottom = ime - nav)` | Зазор = nav bar |
-| `adjustNothing` | ime insets могут не репортиться |
-| Таб-бар НЕ скрыт + imePadding | Зазор = высота таб-бара (~80dp) |
+| Ошибка                                           | Результат                       |
+| ------------------------------------------------ | ------------------------------- |
+| `imePadding()` на input bar + `adjustResize`     | Двойной отступ                  |
+| `navigationBarsPadding()` внутри input bar       | +63px зазор                     |
+| `windowInsetsPadding(ime.union(nav))` на Surface | Фон Surface тянется в зазор     |
+| Ручной `padding(bottom = ime - nav)`             | Зазор = nav bar                 |
+| `adjustNothing`                                  | ime insets могут не репортиться |
+| Таб-бар НЕ скрыт + imePadding                    | Зазор = высота таб-бара (~80dp) |
 
 ## ContentProvider + ContentObserver
 
 Если данные приходят через ContentProvider (IPC):
+
 - **ContentObserver.onChange()** вызывается на main thread
 - Никогда не делай `contentResolver.query()` внутри onChange напрямую
 - Используй `ioScope.launch { val result = query(); trySend(result) }` в callbackFlow

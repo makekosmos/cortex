@@ -34,14 +34,7 @@ function servicePath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "kepler-focus-svc.exe");
   }
-  return path.resolve(
-    __dirname,
-    "..",
-    "..",
-    "target",
-    "release",
-    "kepler-focus-svc.exe",
-  );
+  return path.resolve(__dirname, "..", "..", "target", "release", "kepler-focus-svc.exe");
 }
 
 // --- CLI invocations (install / uninstall / status) ------------------------
@@ -106,7 +99,9 @@ export async function stopService(): Promise<CliResult> {
 }
 
 /** Install/uninstall с elevation via PowerShell RunAs. Используется UI кнопками. */
-export function runServiceCliElevated(subcommand: string): Promise<{ ok: boolean; error?: string }> {
+export function runServiceCliElevated(
+  subcommand: string,
+): Promise<{ ok: boolean; error?: string }> {
   return new Promise((resolve) => {
     const bin = servicePath();
     const psCommand = [
@@ -122,11 +117,9 @@ export function runServiceCliElevated(subcommand: string): Promise<{ ok: boolean
       "-Wait",
     ].join(" ");
 
-    const ps = spawn(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", psCommand],
-      { windowsHide: true },
-    );
+    const ps = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand], {
+      windowsHide: true,
+    });
     let stderr = "";
     ps.stderr?.on("data", (c) => (stderr += c.toString("utf8")));
     ps.on("error", (e) => resolve({ ok: false, error: e.message }));

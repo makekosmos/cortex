@@ -30,9 +30,7 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/services/games.ts"
-      ]
+      "evidence": ["apps/arrancador/electron/main/services/games.ts"]
     },
     {
       "id": "AC5",

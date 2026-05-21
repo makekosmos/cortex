@@ -55,10 +55,7 @@ test.describe(".kext installer + backup", () => {
     const app = await electron.launch({
       executablePath: electronBinary,
       cwd: appRoot,
-      args: [
-        path.join(appRoot, "dist-electron", "main.js"),
-        `--user-data-dir=${userDataDir}`,
-      ],
+      args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
       env: {
         ...process.env,
         NODE_ENV: "test",
@@ -73,9 +70,11 @@ test.describe(".kext installer + backup", () => {
 
       // Install v1.
       const r1 = await app.evaluate(async ({ ipcMain }, kextPath) => {
-        const handlers = (ipcMain as unknown as {
-          _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
-        })._invokeHandlers;
+        const handlers = (
+          ipcMain as unknown as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+          }
+        )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
         if (!h) throw new Error("install handler missing");
         return await h({} as never, kextPath);
@@ -91,9 +90,11 @@ test.describe(".kext installer + backup", () => {
 
       // Install v2 — должен создать backup для v1.
       const r2 = await app.evaluate(async ({ ipcMain }, kextPath) => {
-        const handlers = (ipcMain as unknown as {
-          _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
-        })._invokeHandlers;
+        const handlers = (
+          ipcMain as unknown as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+          }
+        )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
         return await h({} as never, kextPath);
       }, kextV2);
@@ -142,10 +143,7 @@ test.describe(".kext installer + backup", () => {
     const app = await electron.launch({
       executablePath: electronBinary,
       cwd: appRoot,
-      args: [
-        path.join(appRoot, "dist-electron", "main.js"),
-        `--user-data-dir=${isolatedUser}`,
-      ],
+      args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${isolatedUser}`],
       env: {
         ...process.env,
         NODE_ENV: "test",
@@ -158,9 +156,11 @@ test.describe(".kext installer + backup", () => {
     try {
       await new Promise((r) => setTimeout(r, 1500));
       const result = await app.evaluate(async ({ ipcMain }, kextPath) => {
-        const handlers = (ipcMain as unknown as {
-          _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
-        })._invokeHandlers;
+        const handlers = (
+          ipcMain as unknown as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+          }
+        )._invokeHandlers;
         const h = handlers?.get?.("kepler:extension:install:do");
         try {
           await h({} as never, kextPath);

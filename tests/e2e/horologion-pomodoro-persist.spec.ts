@@ -11,15 +11,8 @@
 // Тесты используют ОДИН `dataDir` между launch'ами (freshDataDir один раз).
 
 import { test, expect } from "@playwright/test";
-import {
-  freshDataDir,
-  launchKeplerWithDataDir,
-} from "./helpers/launch";
-import {
-  gracefulQuit,
-  getPomodoroState,
-  startPomodoroViaArk,
-} from "./helpers/horologion";
+import { freshDataDir, launchKeplerWithDataDir } from "./helpers/launch";
+import { gracefulQuit, getPomodoroState, startPomodoroViaArk } from "./helpers/horologion";
 import {
   pomodoroStateFileExists,
   readPomodoroStateFile,

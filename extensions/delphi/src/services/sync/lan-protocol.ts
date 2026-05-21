@@ -133,10 +133,7 @@ export function isNewerHlc(a: string, b: string): boolean {
 // Version vector diff
 // ---------------------------------------------------------------------------
 
-export function computeVectorDiff(
-  local: VersionVector,
-  remote: VersionVector,
-): Set<string> {
+export function computeVectorDiff(local: VersionVector, remote: VersionVector): Set<string> {
   const needed = new Set<string>();
 
   for (const [entityId, remoteHlc] of Object.entries(remote)) {
@@ -151,10 +148,7 @@ export function computeVectorDiff(
   return needed;
 }
 
-export function computeLocalExcess(
-  local: VersionVector,
-  remote: VersionVector,
-): Set<string> {
+export function computeLocalExcess(local: VersionVector, remote: VersionVector): Set<string> {
   return computeVectorDiff(remote, local);
 }
 
@@ -174,8 +168,7 @@ export function splitIntoBatches(entities: SyncEntity[]): SyncEntity[][] {
 
     if (
       current.length > 0 &&
-      (current.length >= MAX_BATCH_SIZE ||
-        currentBytes + entityBytes > MAX_BATCH_BYTES)
+      (current.length >= MAX_BATCH_SIZE || currentBytes + entityBytes > MAX_BATCH_BYTES)
     ) {
       batches.push(current);
       current = [];
@@ -221,10 +214,7 @@ export function generateId(): string {
 // Peer record merging
 // ---------------------------------------------------------------------------
 
-export function mergePeerRecords(
-  existing: PeerRecord[],
-  incoming: PeerRecord[],
-): PeerRecord[] {
+export function mergePeerRecords(existing: PeerRecord[], incoming: PeerRecord[]): PeerRecord[] {
   const map = new Map<string, PeerRecord>();
 
   for (const peer of existing) {

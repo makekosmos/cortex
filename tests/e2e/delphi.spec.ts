@@ -10,13 +10,7 @@
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
 
-const REQUIRED_SIDEBAR_ITEMS = [
-  "Входящие",
-  "Сегодня",
-  "Журнал",
-  "Корзина",
-  "Проекты",
-];
+const REQUIRED_SIDEBAR_ITEMS = ["Входящие", "Сегодня", "Журнал", "Корзина", "Проекты"];
 
 test.describe("delphi extension", () => {
   test("delphi sidebar содержит все обязательные пункты", async () => {
@@ -57,12 +51,9 @@ test.describe("delphi extension", () => {
         .textContent({ timeout: 5_000 })
         .catch(() => null);
 
-      const bodyText =
-        sidebarText ?? (await delphiWindow.locator("body").textContent());
+      const bodyText = sidebarText ?? (await delphiWindow.locator("body").textContent());
 
-      const missing = REQUIRED_SIDEBAR_ITEMS.filter(
-        (item) => !bodyText?.includes(item),
-      );
+      const missing = REQUIRED_SIDEBAR_ITEMS.filter((item) => !bodyText?.includes(item));
       if (missing.length > 0) {
         const found = REQUIRED_SIDEBAR_ITEMS.filter((i) => bodyText?.includes(i));
         throw new Error(

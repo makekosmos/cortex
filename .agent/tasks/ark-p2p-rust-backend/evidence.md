@@ -12,6 +12,7 @@
 `ffi.rs` implements `start_sync()` using `std::thread::Builder::new().name("ark-sync-setup").spawn(...)` + `std::sync::mpsc::channel`. The JNI thread blocks only until ports are bound (result_rx.recv_timeout(10s)), not for the lifetime of the sync engine. Shutdown is via a `tokio::sync::oneshot::Sender` stored in `sync_shutdown`.
 
 Proof:
+
 - File: `packages/ark-core/rust/src/ffi.rs` lines 302-524
 - `cargo build --release` exits 0 (raw/build.txt: "0 errors, 1 warning")
 - `./gradlew compileDebugKotlin` exits BUILD SUCCESS (raw/kotlin-build.txt)
@@ -23,6 +24,7 @@ Proof:
 **Status**: PASS
 
 File `packages/ark-core/rust/src/relay_transport.rs` exists with:
+
 - URL pattern `{url}/ws?space_id=X&device_id=Y&api_key=Z`
 - `LanSyncMessage` JSON wire format via `serialize_message`/`deserialize_message`
 - Offline outbox (`Arc<Mutex<VecDeque<LanSyncMessage>>>`)
@@ -52,6 +54,7 @@ Proof: `cargo build --release` exit 0; `./gradlew compileDebugKotlin` BUILD SUCC
 **Status**: PASS
 
 `packages/ark-relay-server/`:
+
 - `Cargo.toml`: `[[bin]] name = "ark-relay-server"`, deps: tokio, axum, tokio-tungstenite, rusqlite (bundled), serde_json, uuid
 - `src/main.rs`: WebSocket server on `ARK_RELAY_PORT` (default 8765), api_key validation
 - `src/relay.rs`: `RelayRooms` with HashMap<space_id, HashMap<device_id, WsSender>>, catch-up replay, broadcast, SQLite store
@@ -66,6 +69,7 @@ Proof: `cargo build --release` exit 0 (raw/relay-build.txt: "0 errors, 2 warning
 **Status**: PASS
 
 Files exist at `packages/ark-core/swift/`:
+
 - `ArkCoreExample.swift` — uses `ArkCore()`, `FfiSyncConfig(spaceId:...)`, `startSync(config:listener:)`
 - `generated/ark_core.swift` — generated UniFFI bindings (2.7KB)
 - `generated/ark_coreFFI.h` — generated C header (845B)
@@ -97,6 +101,7 @@ Proof: `cargo test --test relay_round_trip` — 1 passed in 0.11s (raw/relay-tes
 **Status**: PASS
 
 `packages/arksync-node/src/ark-client.ts` implements all required methods:
+
 - `constructor(opts: ArkClientOptions)` with spaceId, deviceId, deviceName, port, relayUrl, relayApiKey, sidecarPath, requestFn, onEventFn
 - `start()`, `stop()`, `broadcastChange()`, `getConnectedPeers()`
 - `onPeerConnected()`, `onPeerDisconnected()`, `onEntityChanged()` — all return unsubscribe fn
@@ -125,6 +130,7 @@ Proof: `bun run build` in apps/delphi/ts exits 0, "2346 modules transformed" (ra
 `apps/delphi/ts/src/services/sync/ark-client.ts` deleted. All import sites updated to `@/services/sync/ark-types` (new file with pure data conversion utilities and a no-op `arkSync` stub). `peer-bridge.ts` import updated to `./ark-types`.
 
 Verification:
+
 - `ls apps/delphi/ts/src/services/sync/ark-client.ts` → No such file
 - `grep -r "ark-client" apps/delphi/ts/src/` → empty (exit 1)
 - `bun run build` in apps/delphi/ts → exit 0, 2346 modules transformed, 0 TS errors
@@ -136,6 +142,7 @@ Verification:
 **Status**: PASS (fixed 2026-04-09)
 
 All 4 legacy files deleted:
+
 - `ArkSyncClient.kt` — deleted; ViewModels now use `peerManager.broadcastTodoChange(...)` directly
 - `ArkPeerManager.kt` — deleted; MainActivity no longer injects or calls it
 - `ArkPeerProtocol.kt` — deleted (was only used internally by ArkPeerManager)
@@ -144,6 +151,7 @@ All 4 legacy files deleted:
 Changed files: `TodoViewModel.kt`, `SmartListViewModel.kt`, `InboxViewModel.kt`, `LogbookViewModel.kt`, `TodayViewModel.kt`, `UpcomingViewModel.kt`, `TrashViewModel.kt`, `ProjectViewModel.kt`, `SettingsViewModel.kt`, `MainActivity.kt`, `ConnectionIndicator.kt`
 
 Verification:
+
 - `ls ArkSyncClient.kt ArkPeerManager.kt ArkPeerProtocol.kt ArkEventMapper.kt` → all "No such file"
 - `grep -r "ArkSyncClient|ArkPeerManager|ArkPeerProtocol|ArkEventMapper" apps/delphi/kotlin/app/src/main/java/` → empty (exit 1)
 - `./gradlew compileDebugKotlin` → BUILD SUCCESSFUL in 24s
@@ -199,6 +207,7 @@ Requires interactive session with display server. Build passes (AC9), sidecar pa
 **Status**: PASS
 
 `packages/ark-core/CLAUDE.md` Runtime status section now states:
+
 - Sync layer LIVE
 - Beacon in Rust (beacon.rs)
 - Relay transport live (relay_transport.rs, mesh.rs)
@@ -213,6 +222,7 @@ Requires interactive session with display server. Build passes (AC9), sidecar pa
 **Status**: PASS (fixed 2026-04-09)
 
 `apps/delphi/CLAUDE.md` changes:
+
 - Electron file tree: removed `peer-manager.ts`, `peer-discovery.ts`, `peer-protocol.ts` entries
 - `services/sync/` description: updated from `ark-client (legacy)` to `ark-types`
 - Removed "Legacy: ArkSyncClient" section
@@ -223,6 +233,7 @@ Requires interactive session with display server. Build passes (AC9), sidecar pa
 `apps/delphi/kotlin/CLAUDE.md` line 131 already correctly states: "Legacy `ArkSyncClient`, `ArkPeerManager`, `ArkPeerProtocol`, `ArkEventMapper` have been deleted."
 
 Verification:
+
 - `grep "peer-manager.ts\|peer-discovery.ts\|peer-protocol.ts" apps/delphi/CLAUDE.md` → empty
 - `grep "ts/src/services/sync/ark-client" apps/delphi/CLAUDE.md` → empty
 - `grep "relay_transport\|mesh.ms\|arksync-node" apps/delphi/CLAUDE.md` → 5 matches
@@ -231,16 +242,16 @@ Verification:
 
 ## Build summary
 
-| Build | Exit | Notes |
-|-------|------|-------|
-| `cargo build --release` (ark-core) | 0 | 1 warning (unused fields in StartSync) |
-| `cargo test` (ark-core) | 0 | 95 passed |
-| `cargo test --test relay_round_trip` | 0 | 1 passed |
-| `cargo build --release` (ark-relay-server) | 0 | 2 warnings |
-| `cargo test` (ark-relay-server) | 0 | 0 tests (integration covered by ark-core) |
-| `bun run build` (@arksync/node) | 0 | tsc clean |
-| `bun run build` (apps/delphi/ts) | 0 | 2346 modules transformed |
-| `./gradlew compileDebugKotlin` | 0 | BUILD SUCCESS |
+| Build                                      | Exit | Notes                                     |
+| ------------------------------------------ | ---- | ----------------------------------------- |
+| `cargo build --release` (ark-core)         | 0    | 1 warning (unused fields in StartSync)    |
+| `cargo test` (ark-core)                    | 0    | 95 passed                                 |
+| `cargo test --test relay_round_trip`       | 0    | 1 passed                                  |
+| `cargo build --release` (ark-relay-server) | 0    | 2 warnings                                |
+| `cargo test` (ark-relay-server)            | 0    | 0 tests (integration covered by ark-core) |
+| `bun run build` (@arksync/node)            | 0    | tsc clean                                 |
+| `bun run build` (apps/delphi/ts)           | 0    | 2346 modules transformed                  |
+| `./gradlew compileDebugKotlin`             | 0    | BUILD SUCCESS                             |
 
 ## Raw artifacts
 

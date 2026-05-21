@@ -53,11 +53,7 @@ export const TrailingParagraph = Extension.create({
 
           const lastChild = doc.lastChild;
           // Последний node = пустой paragraph — ничего делать не надо.
-          if (
-            lastChild &&
-            lastChild.type === paragraphType &&
-            lastChild.content.size === 0
-          ) {
+          if (lastChild && lastChild.type === paragraphType && lastChild.content.size === 0) {
             return null;
           }
 
@@ -65,9 +61,7 @@ export const TrailingParagraph = Extension.create({
           // setMeta addToHistory=false: trailing paragraph — это invariant
           // doc'а, не пользовательское действие. Не должен попадать в
           // undo stack отдельным шагом.
-          return tr
-            .insert(doc.content.size, paragraphType.create())
-            .setMeta("addToHistory", false);
+          return tr.insert(doc.content.size, paragraphType.create()).setMeta("addToHistory", false);
         },
       }),
     ];

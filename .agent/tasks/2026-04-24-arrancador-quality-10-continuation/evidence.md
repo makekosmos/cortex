@@ -14,22 +14,22 @@ Verification result: PASS
 
 ## Baseline vs Final
 
-| Metric | Baseline | Final | Result |
-| --- | ---: | ---: | --- |
-| `bun run typecheck` | not rerun in baseline artifact, current post-9+ state | PASS | verified |
-| `bun run lint` | not rerun in baseline artifact, current post-9+ state | PASS | verified |
-| `bun run test` | 30 files / 90 tests from previous pass | 31 files / 95 tests | better |
-| `bun run test:coverage` | PASS from previous pass | PASS | unchanged |
-| Coverage lines | 78.95% | 78.95% | unchanged |
-| Coverage functions | 71.59% | 71.59% | unchanged |
-| Coverage branches | 70.56% | 70.56% | unchanged |
-| Coverage statements | 77.69% | 77.69% | unchanged |
-| `build:renderer` | PASS from previous pass | PASS | unchanged |
-| `build:main` | PASS from previous pass | PASS | unchanged |
-| `build:preload` | PASS from previous pass | PASS | unchanged |
-| `ark-usage.ts` size | 462 lines | 323 lines | better |
-| Test files counted by metrics | 32 | 33 | better |
-| IPC registry surface | 80 commands / 5 events | 80 commands / 5 events | preserved |
+| Metric                        |                                              Baseline |                  Final | Result    |
+| ----------------------------- | ----------------------------------------------------: | ---------------------: | --------- |
+| `bun run typecheck`           | not rerun in baseline artifact, current post-9+ state |                   PASS | verified  |
+| `bun run lint`                | not rerun in baseline artifact, current post-9+ state |                   PASS | verified  |
+| `bun run test`                |                30 files / 90 tests from previous pass |    31 files / 95 tests | better    |
+| `bun run test:coverage`       |                               PASS from previous pass |                   PASS | unchanged |
+| Coverage lines                |                                                78.95% |                 78.95% | unchanged |
+| Coverage functions            |                                                71.59% |                 71.59% | unchanged |
+| Coverage branches             |                                                70.56% |                 70.56% | unchanged |
+| Coverage statements           |                                                77.69% |                 77.69% | unchanged |
+| `build:renderer`              |                               PASS from previous pass |                   PASS | unchanged |
+| `build:main`                  |                               PASS from previous pass |                   PASS | unchanged |
+| `build:preload`               |                               PASS from previous pass |                   PASS | unchanged |
+| `ark-usage.ts` size           |                                             462 lines |              323 lines | better    |
+| Test files counted by metrics |                                                    32 |                     33 | better    |
+| IPC registry surface          |                                80 commands / 5 events | 80 commands / 5 events | preserved |
 
 ## Raw Artifacts
 

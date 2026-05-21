@@ -14,14 +14,15 @@ const props = defineProps<{
   game: ArrancadorGame;
 }>();
 
-const cover = computed(
-  () => props.game.backgroundImage ?? props.game.coverImage ?? null,
-);
+const cover = computed(() => props.game.backgroundImage ?? props.game.coverImage ?? null);
 
 const primaryGenre = computed(() => {
   const genres = props.game.genres;
   if (!genres) return "Игра";
-  const first = genres.split(",").map((s) => s.trim()).filter(Boolean)[0];
+  const first = genres
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)[0];
   return first ?? "Игра";
 });
 

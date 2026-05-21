@@ -111,17 +111,57 @@
     }
   ],
   "commands_run": [
-    {"cmd": "cd packages/ark-core/rust && cargo build", "exit": 0, "notes": "Finished dev profile, no warnings"},
-    {"cmd": "cd packages/ark-core/rust && cargo test", "exit": 0, "notes": "92 unit tests + 2 integration tests (round_trip_sync_between_two_servers, self_connect_is_rejected) passed, 0 failed, 0 ignored"},
-    {"cmd": "cd packages/ark-core/rust && cargo clippy --all-targets -- -D warnings", "exit": 0, "notes": "clean, zero warnings"},
-    {"cmd": "cd apps/delphi/ts && bunx tsc --noEmit", "exit": 0, "notes": "zero output"},
-    {"cmd": "cd apps/delphi/kotlin && ./gradlew :app:assembleDebug", "exit": 0, "notes": "BUILD SUCCESSFUL in 1s, 40 tasks up-to-date"},
-    {"cmd": "unzip -l apps/delphi/kotlin/app/build/outputs/apk/debug/app-debug.apk | grep libark_core", "exit": 0, "notes": "lib/arm64-v8a/libark_core.so 6181384"},
-    {"cmd": "ls apps/delphi/ts/electron/delphi-storage.ts", "exit": 1, "notes": "No such file or directory — confirmed deleted"},
-    {"cmd": "rg 'from [\"']@arksync/(core|node)[\"']' apps/delphi/ts/electron/", "exit": 0, "notes": "1 match: main.ts:7 `import type { PeerChange, SyncEntity } from '@arksync/core';` (pure type-only)"},
-    {"cmd": "rg 'class (SyncServer|LanSyncClient|BroadcastDiscovery)' apps/delphi/kotlin/app/src/main/java/", "exit": 1, "notes": "zero matches"},
-    {"cmd": "rg '@arksync/core|@arksync/node' apps/delphi/ts/", "exit": 0, "notes": "remaining refs only in src/services/* and test/config files (out of scope per Assumption A9)"},
-    {"cmd": "file apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so", "exit": 0, "notes": "ELF 64-bit LSB shared object, ARM aarch64, dynamically linked"}
+    {
+      "cmd": "cd packages/ark-core/rust && cargo build",
+      "exit": 0,
+      "notes": "Finished dev profile, no warnings"
+    },
+    {
+      "cmd": "cd packages/ark-core/rust && cargo test",
+      "exit": 0,
+      "notes": "92 unit tests + 2 integration tests (round_trip_sync_between_two_servers, self_connect_is_rejected) passed, 0 failed, 0 ignored"
+    },
+    {
+      "cmd": "cd packages/ark-core/rust && cargo clippy --all-targets -- -D warnings",
+      "exit": 0,
+      "notes": "clean, zero warnings"
+    },
+    { "cmd": "cd apps/delphi/ts && bunx tsc --noEmit", "exit": 0, "notes": "zero output" },
+    {
+      "cmd": "cd apps/delphi/kotlin && ./gradlew :app:assembleDebug",
+      "exit": 0,
+      "notes": "BUILD SUCCESSFUL in 1s, 40 tasks up-to-date"
+    },
+    {
+      "cmd": "unzip -l apps/delphi/kotlin/app/build/outputs/apk/debug/app-debug.apk | grep libark_core",
+      "exit": 0,
+      "notes": "lib/arm64-v8a/libark_core.so 6181384"
+    },
+    {
+      "cmd": "ls apps/delphi/ts/electron/delphi-storage.ts",
+      "exit": 1,
+      "notes": "No such file or directory — confirmed deleted"
+    },
+    {
+      "cmd": "rg 'from [\"']@arksync/(core|node)[\"']' apps/delphi/ts/electron/",
+      "exit": 0,
+      "notes": "1 match: main.ts:7 `import type { PeerChange, SyncEntity } from '@arksync/core';` (pure type-only)"
+    },
+    {
+      "cmd": "rg 'class (SyncServer|LanSyncClient|BroadcastDiscovery)' apps/delphi/kotlin/app/src/main/java/",
+      "exit": 1,
+      "notes": "zero matches"
+    },
+    {
+      "cmd": "rg '@arksync/core|@arksync/node' apps/delphi/ts/",
+      "exit": 0,
+      "notes": "remaining refs only in src/services/* and test/config files (out of scope per Assumption A9)"
+    },
+    {
+      "cmd": "file apps/delphi/kotlin/app/src/main/jniLibs/arm64-v8a/libark_core.so",
+      "exit": 0,
+      "notes": "ELF 64-bit LSB shared object, ARM aarch64, dynamically linked"
+    }
   ],
   "artifacts_used": [
     ".agent/tasks/ark-rust-runtime/spec.md",

@@ -6,26 +6,19 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "packages/kosmos-visuals/theme/css-variables.css"
-      ],
+      "evidence": ["packages/kosmos-visuals/theme/css-variables.css"],
       "notes": "Shared primary title typography variables were added to kosmos-visuals."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/Editor.css",
-        "apps/eden/ts/src/App.css"
-      ],
+      "evidence": ["apps/eden/ts/src/Editor.css", "apps/eden/ts/src/App.css"],
       "notes": "The Eden note/object title input now reads the shared title token."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/src/components/settings/SettingsPage.css"
-      ],
+      "evidence": ["apps/eden/ts/src/components/settings/SettingsPage.css"],
       "notes": "Settings page titles now read the shared title token."
     },
     {

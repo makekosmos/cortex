@@ -124,9 +124,7 @@ export const codeBlockLanguages: { id: string; name: string }[] = [
   { id: "zig", name: "Zig" },
 ];
 
-export const codeBlockLanguageMap = new Map(
-  codeBlockLanguages.map((lang) => [lang.id, lang.name]),
-);
+export const codeBlockLanguageMap = new Map(codeBlockLanguages.map((lang) => [lang.id, lang.name]));
 
 export const codeLanguageAliases: Record<string, string> = {
   js: "javascript",

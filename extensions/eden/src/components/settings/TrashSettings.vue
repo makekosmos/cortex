@@ -32,7 +32,9 @@
               draggable="false"
             />
             <div class="trash-item-text">
-              <span class="trash-item-title">{{ getEntryDisplayTitle(entry.title, entry.header_props_json) }}</span>
+              <span class="trash-item-title">{{
+                getEntryDisplayTitle(entry.title, entry.header_props_json)
+              }}</span>
               <span class="trash-item-meta">
                 Удалено {{ formatTimeAgo(entry.deleted_at!) }} · осталось
                 {{ daysRemaining(entry.deleted_at!) }} дн.

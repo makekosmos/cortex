@@ -25,7 +25,7 @@ LAN sync namespace = глобальный `kepler-default` (фиксирован
 - **AC1**: Dashboard окно открывается сразу на DashboardView (без welcome
   step). Hash `#/dashboard`.
 - **AC2**: Backend lock.json показывает `db_path:
-  C:\Users\<user>\AppData\Roaming\Kosmos\ark.db` (top-level, без `spaces/`).
+C:\Users\<user>\AppData\Roaming\Kosmos\ark.db` (top-level, без `spaces/`).
 - **AC3**: Horologion / Delphi / Arrancador видят свои реальные объекты
   (17 игр / 6 time-записей / 4 task'а / 6 заметок) — merge выполнен.
 - **AC4**: shell `bun run --cwd shell build:js` PASS.

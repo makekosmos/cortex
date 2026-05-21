@@ -25,7 +25,7 @@ export default defineConfig({
         "packages/visuals/theme/css-variables.css",
       ),
       "@kosmos/visuals": path.resolve(repoRoot, "packages/visuals"),
-      "pinia": path.resolve(__dirname, "node_modules/pinia"),
+      pinia: path.resolve(__dirname, "node_modules/pinia"),
     },
     dedupe: ["vue", "pinia"],
   },

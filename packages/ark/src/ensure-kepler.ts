@@ -78,9 +78,7 @@ export interface EnsureKeplerOptions {
 /**
  * Главный entrypoint. Возвращает KeplerState — апка реагирует через switch.
  */
-export async function ensureKeplerRunning(
-  opts: EnsureKeplerOptions,
-): Promise<KeplerState> {
+export async function ensureKeplerRunning(opts: EnsureKeplerOptions): Promise<KeplerState> {
   const waitMs = opts.waitMs ?? 10000;
   const clientMajor = opts.clientProtocolMajor ?? 1;
   const autoLaunch = opts.autoLaunch ?? true;
@@ -236,10 +234,7 @@ export function isPidAlive(pid: number): boolean {
   }
 }
 
-export function resolveKeplerExe(
-  custom: string[] | undefined,
-  attempted: string[],
-): string | null {
+export function resolveKeplerExe(custom: string[] | undefined, attempted: string[]): string | null {
   const candidates: string[] = custom ? [...custom] : defaultExeCandidates();
   for (const c of candidates) {
     if (fs.existsSync(c)) {
@@ -255,19 +250,10 @@ function defaultExeCandidates(): string[] {
 
   if (process.platform === "win32") {
     if (process.env.LOCALAPPDATA) {
-      list.push(
-        path.join(process.env.LOCALAPPDATA, "Kosmos", "Kepler", "kepler.exe"),
-      );
+      list.push(path.join(process.env.LOCALAPPDATA, "Kosmos", "Kepler", "kepler.exe"));
     }
     if (process.env["ProgramFiles"]) {
-      list.push(
-        path.join(
-          process.env["ProgramFiles"],
-          "Kosmos",
-          "Kepler",
-          "kepler.exe",
-        ),
-      );
+      list.push(path.join(process.env["ProgramFiles"], "Kosmos", "Kepler", "kepler.exe"));
     }
   } else if (process.platform === "darwin") {
     list.push("/Applications/Kosmos Kepler.app/Contents/MacOS/kepler");

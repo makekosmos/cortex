@@ -53,9 +53,7 @@
     {
       "id": "AC6",
       "status": "PASS",
-      "evidence": [
-        "bunx tsc --noEmit"
-      ]
+      "evidence": ["bunx tsc --noEmit"]
     }
   ],
   "commands": [
@@ -65,7 +63,5 @@
       "status": "PASS"
     }
   ],
-  "notes": [
-    "Interactive Electron runtime validation was not performed in the sandbox."
-  ]
+  "notes": ["Interactive Electron runtime validation was not performed in the sandbox."]
 }

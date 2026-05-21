@@ -61,11 +61,9 @@ function objectToTimeEntry(obj: ArkObjectRecord): TimeEntry {
   // createdAt всё равно есть → entry «running вечно»). StopwatchView'овский
   // filter `Boolean(e.startedAt)` после такого fallback'а проходил насквозь.
   const rawStarted = props.startedAt;
-  const startedAt =
-    typeof rawStarted === "string" && rawStarted.length > 0 ? rawStarted : "";
+  const startedAt = typeof rawStarted === "string" && rawStarted.length > 0 ? rawStarted : "";
   const rawEnded = props.endedAt;
-  const endedAt =
-    typeof rawEnded === "string" && rawEnded.length > 0 ? rawEnded : null;
+  const endedAt = typeof rawEnded === "string" && rawEnded.length > 0 ? rawEnded : null;
   return {
     id: obj.id,
     title: obj.title ?? "",
@@ -76,8 +74,7 @@ function objectToTimeEntry(obj: ArkObjectRecord): TimeEntry {
     tagIds: [],
     taskId: (props.taskId as string | null | undefined) ?? null,
     taskTitle: (props.taskTitle as string | null | undefined) ?? null,
-    completed:
-      typeof props.completed === "boolean" ? (props.completed as boolean) : undefined,
+    completed: typeof props.completed === "boolean" ? (props.completed as boolean) : undefined,
   };
 }
 
@@ -106,12 +103,7 @@ async function listRunning(opts?: {
     : [opts?.source];
 
   const lists = await Promise.all(
-    sources.map((s) =>
-      ark<ArkObjectRecord[]>(
-        "list_running_time_entries",
-        s ? { source: s } : {},
-      ),
-    ),
+    sources.map((s) => ark<ArkObjectRecord[]>("list_running_time_entries", s ? { source: s } : {})),
   );
 
   // Dedup по id (на случай дубликатов между параллельными запросами — в норме

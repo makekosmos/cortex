@@ -120,9 +120,7 @@ test("delphi: inbox shows task created via ARK", async () => {
     }
     expect(bodyText).toContain(TASK_TITLE);
 
-    const missingFieldErrors = consoleErrors.filter((e) =>
-      e.includes("missing field"),
-    );
+    const missingFieldErrors = consoleErrors.filter((e) => e.includes("missing field"));
     if (missingFieldErrors.length > 0) {
       throw new Error(
         `${missingFieldErrors.length} missing field errors:\n${missingFieldErrors.join("\n")}`,
@@ -131,9 +129,7 @@ test("delphi: inbox shows task created via ARK", async () => {
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
-      new Promise<void>((resolve) =>
-        app.process().once("exit", () => resolve()),
-      ),
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
       new Promise<void>((_, rej) =>
         setTimeout(() => rej(new Error("process exit timeout 10s")), 10_000),
       ),

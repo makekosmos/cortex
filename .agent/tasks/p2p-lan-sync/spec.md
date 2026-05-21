@@ -1,12 +1,14 @@
 # Task Spec: p2p-lan-sync
 
 ## Metadata
+
 - Task ID: p2p-lan-sync
 - Created: 2026-03-31T17:53:01+00:00
 - Repo root: /Users/kirill/Documents/projects/kepler
 - Scope: Фаза 1 only (минимальный работающий sync)
 
 ## Guidance sources
+
 - `apps/delphi/CLAUDE.md` — Delphi architecture, Ark Space, data models
 - `apps/delphi/kotlin/CLAUDE.md` — Android Kotlin conventions
 - `apps/eden/CLAUDE.md` — Eden architecture
@@ -18,6 +20,7 @@
 Replace broken P2P sync in Delphi with a reliable Syncthing-style LAN sync protocol. Hub model: Electron = WS server, Android = WS client. Diff-based sync with version vectors, batch transfer with ACK, live mode for realtime changes.
 
 Current problems:
+
 1. mDNS discovery doesn't work (routers block multicast)
 2. Android is client-only, no bidirectional connection
 3. Sync protocol is fire-and-forget with no diff, ACK, or retry

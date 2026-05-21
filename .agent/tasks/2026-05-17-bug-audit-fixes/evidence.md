@@ -11,10 +11,12 @@
 цикл поиска char boundary перед усечением.
 
 Тест `sanitize_filename_truncates_at_char_boundary` проходит:
+
 - 61 кириллический символ = 122 байта → truncate(120) паниковал бы без fix
 - После fix: усекает до 60 символов = 120 байт, валидный UTF-8
 
 Вывод `cargo test --lib -- export`:
+
 ```
 test export::tests::sanitize_filename_truncates_at_char_boundary ... ok
 test export::tests::sanitize_filename_strips_banned_chars ... ok
@@ -30,6 +32,7 @@ test export::tests::sanitize_filename_strips_banned_chars ... ok
 'Z' или ':' вместо panic-prone slicing через `unwrap_or(0)`.
 
 Новые тесты проходят:
+
 ```
 test hlc::tests::test_from_string_empty ... ok
 test hlc::tests::test_from_string_no_colons ... ok
@@ -49,6 +52,7 @@ test hlc::tests::test_from_string_one_colon_after_z ... ok
 `!target.starts_with(&root)` после join.
 
 Тест `sqoba_restore_rejects_absolute_path_in_zip` проходит:
+
 - Zip с entry `source_0//evil.txt` (rel="/evil.txt") → rejected
 - Файл не записан за пределами root
 - Легитимная запись `source_0/save.dat` восстановлена (restored_files=1)
@@ -78,6 +82,7 @@ Code review: при сбое десериализации ARK-ответа кл�
 (уже существует) на `stem-{epoch_millis}.ext`.
 
 Тест `test_unique_path_exhaustion_fallback` проходит:
+
 - Создаёт 10,000 файлов (stem.ext + stem-2.ext … stem-9999.ext)
 - Проверяет что `unique_path` возвращает несуществующий путь
 

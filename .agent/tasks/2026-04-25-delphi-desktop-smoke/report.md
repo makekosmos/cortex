@@ -28,13 +28,13 @@ From `apps/delphi/ts/package.json`:
 
 ## Commands run
 
-| Command | Result | Notes |
-| --- | --- | --- |
-| `bun run test` | PASS | Vitest: 7 test files passed, 93 tests passed, duration 32.64s. |
-| `.\node_modules\.bin\tsc.cmd --noEmit` | FAIL_TO_START | Local `.bin` contains `tsc.exe`/`tsc.bunx`, not `tsc.cmd`; PowerShell could not find the command. Re-run below with `tsc.exe`. |
-| `.\node_modules\.bin\tsc.exe --noEmit` | PASS | TypeScript typecheck completed with exit code 0 and no output. |
-| `bun run build` | FAIL | `build:sidecar` completed after waiting for a Cargo build lock; renderer build completed; Electron production build failed in `vite-plugin-electron:prod`. |
-| `bun run build:web` | PASS | Web build completed; warning only: `/fonts/zed-mono-extended.ttf` remains unresolved until runtime, plus `vite-plugin-checker` timing warning. |
+| Command                                | Result        | Notes                                                                                                                                                      |
+| -------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run test`                         | PASS          | Vitest: 7 test files passed, 93 tests passed, duration 32.64s.                                                                                             |
+| `.\node_modules\.bin\tsc.cmd --noEmit` | FAIL_TO_START | Local `.bin` contains `tsc.exe`/`tsc.bunx`, not `tsc.cmd`; PowerShell could not find the command. Re-run below with `tsc.exe`.                             |
+| `.\node_modules\.bin\tsc.exe --noEmit` | PASS          | TypeScript typecheck completed with exit code 0 and no output.                                                                                             |
+| `bun run build`                        | FAIL          | `build:sidecar` completed after waiting for a Cargo build lock; renderer build completed; Electron production build failed in `vite-plugin-electron:prod`. |
+| `bun run build:web`                    | PASS          | Web build completed; warning only: `/fonts/zed-mono-extended.ttf` remains unresolved until runtime, plus `vite-plugin-checker` timing warning.             |
 
 ## Key failure
 

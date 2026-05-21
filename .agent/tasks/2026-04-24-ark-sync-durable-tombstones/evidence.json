@@ -6,59 +6,37 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt",
-        "cargo-test-full.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt", "cargo-test-full.txt"],
       "summary": "Schema creates durable sync_tombstones table and HLC index."
     },
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt",
-        "cargo-test-full.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt", "cargo-test-full.txt"],
       "summary": "Deleted sync entities physically delete rows and record tombstones with delete HLC."
     },
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt",
-        "test-summary.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt", "test-summary.txt"],
       "summary": "Successful non-deleted apply clears existing tombstone for the id."
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "source-evidence.txt",
-        "git-diff.txt",
-        "test-summary.txt"
-      ],
+      "evidence": ["source-evidence.txt", "git-diff.txt", "test-summary.txt"],
       "summary": "load_entities emits durable tombstones as deleted SyncEntity values with empty data."
     },
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": [
-        "vector-evidence.txt",
-        "git-diff.txt"
-      ],
+      "evidence": ["vector-evidence.txt", "git-diff.txt"],
       "summary": "Sync server/client retain delete HLCs in version vectors instead of removing deleted ids."
     },
     {
       "id": "AC6",
       "status": "PASS",
-      "evidence": [
-        "cargo-test-full.txt",
-        "test-summary.txt"
-      ],
+      "evidence": ["cargo-test-full.txt", "test-summary.txt"],
       "summary": "Regression tests cover tombstone emission, backend recreation, and live entity tombstone clearing."
     },
     {

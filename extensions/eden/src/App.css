@@ -4787,7 +4787,9 @@ span[data-wikilink]:hover {
   border: none;
   cursor: pointer;
   color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
-  transition: background-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
 .eden-zen-exit:hover {

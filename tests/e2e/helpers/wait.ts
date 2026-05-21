@@ -15,28 +15,24 @@ import type { Page } from "playwright";
  *
  * Использовать вместо `await page.waitForTimeout(2500)` после launch.
  */
-export async function waitForBackendReady(
-  page: Page,
-  timeoutMs = 15_000,
-): Promise<void> {
+export async function waitForBackendReady(page: Page, timeoutMs = 15_000): Promise<void> {
   await page.waitForFunction(
     () =>
-      typeof (window as unknown as { kepler?: { __test?: unknown } }).kepler
-        ?.__test !== "undefined",
+      typeof (window as unknown as { kepler?: { __test?: unknown } }).kepler?.__test !==
+      "undefined",
     null,
     { timeout: 5_000 },
   );
-  await page.evaluate(
-    async (ms: number) => {
-      const k = (window as unknown as {
+  await page.evaluate(async (ms: number) => {
+    const k = (
+      window as unknown as {
         kepler: {
           __test: { waitForReady(timeoutMs: number): Promise<void> };
         };
-      }).kepler;
-      await k.__test.waitForReady(ms);
-    },
-    timeoutMs,
-  );
+      }
+    ).kepler;
+    await k.__test.waitForReady(ms);
+  }, timeoutMs);
 }
 
 /**
@@ -52,13 +48,15 @@ export async function waitForCommandRegistered(
 ): Promise<void> {
   await page.waitForFunction(
     async (id: string) => {
-      const k = (window as unknown as {
-        kepler?: {
-          __test?: {
-            getStats(): Promise<{ commands: string[] }>;
+      const k = (
+        window as unknown as {
+          kepler?: {
+            __test?: {
+              getStats(): Promise<{ commands: string[] }>;
+            };
           };
-        };
-      }).kepler;
+        }
+      ).kepler;
       if (!k?.__test) return false;
       const stats = await k.__test.getStats();
       return stats.commands.includes(id);
@@ -78,21 +76,21 @@ export async function getTestStats(page: Page): Promise<{
   commandsRegistered: number;
 }> {
   return page.evaluate(async () => {
-    const k = (window as unknown as {
-      kepler?: {
-        __test?: {
-          getStats(): Promise<{
-            arkConnected: boolean;
-            commands: string[];
-            commandsRegistered: number;
-          }>;
+    const k = (
+      window as unknown as {
+        kepler?: {
+          __test?: {
+            getStats(): Promise<{
+              arkConnected: boolean;
+              commands: string[];
+              commandsRegistered: number;
+            }>;
+          };
         };
-      };
-    }).kepler;
+      }
+    ).kepler;
     if (!k?.__test) {
-      throw new Error(
-        "window.kepler.__test не exposed — KOSMOS_TEST_MODE=1 не выставлен?",
-      );
+      throw new Error("window.kepler.__test не exposed — KOSMOS_TEST_MODE=1 не выставлен?");
     }
     return k.__test.getStats();
   });

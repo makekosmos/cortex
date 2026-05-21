@@ -10,13 +10,7 @@
 // canceled/duplicate → is_cancelled. Pattern на запись — single source of
 // truth status, derived flags пишутся синхронно.
 
-export const TASK_STATUSES = [
-  "triage",
-  "backlog",
-  "todo",
-  "done",
-  "canceled",
-] as const;
+export const TASK_STATUSES = ["triage", "backlog", "todo", "done", "canceled"] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 

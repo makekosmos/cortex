@@ -22,8 +22,7 @@ async function refresh() {
   } catch (cause) {
     // eslint-disable-next-line no-console
     console.error("[arrancador-extension] loadGames failed:", cause);
-    error.value =
-      cause instanceof Error ? cause.message : "Не удалось загрузить игры";
+    error.value = cause instanceof Error ? cause.message : "Не удалось загрузить игры";
   } finally {
     loading.value = false;
   }
@@ -59,7 +58,6 @@ export function useGames() {
     loading,
     error,
     refresh,
-    findGame: (id: string) =>
-      computed(() => games.value.find((g) => g.id === id) ?? null),
+    findGame: (id: string) => computed(() => games.value.find((g) => g.id === id) ?? null),
   };
 }

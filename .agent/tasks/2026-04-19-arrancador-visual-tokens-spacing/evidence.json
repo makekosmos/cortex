@@ -5,10 +5,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/src/index.css:3",
-        "apps/arrancador/src/index.css:40"
-      ]
+      "evidence": ["apps/arrancador/src/index.css:3", "apps/arrancador/src/index.css:40"]
     },
     {
       "id": "AC2",

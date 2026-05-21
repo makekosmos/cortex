@@ -27,23 +27,23 @@ hello-world vs полное приложение, и на Windows WebView2 — �
 
 ### Disk
 
-| | Electron Kepler 0.2.0 | Tauri PoC | Tauri port |
-|---|---|---|---|
-| Главный exe | **213 MB** | **3.07 MB** | **4.53 MB** |
-| Installer (NSIS) | 113 MB | ~5-10 MB ожид. | ~5-10 MB ожид. |
-| Unpacked dist | 385 MB | ~30 MB | ~30 MB + frontend |
-| Build cache | ~500 MB (node_modules) | 1.1 GB (Rust target/) | 1.2 GB (Rust target/) |
+|                  | Electron Kepler 0.2.0  | Tauri PoC             | Tauri port            |
+| ---------------- | ---------------------- | --------------------- | --------------------- |
+| Главный exe      | **213 MB**             | **3.07 MB**           | **4.53 MB**           |
+| Installer (NSIS) | 113 MB                 | ~5-10 MB ожид.        | ~5-10 MB ожид.        |
+| Unpacked dist    | 385 MB                 | ~30 MB                | ~30 MB + frontend     |
+| Build cache      | ~500 MB (node_modules) | 1.1 GB (Rust target/) | 1.2 GB (Rust target/) |
 
 ### RAM idle (4 секунды после cold start, через process tree от parent PID)
 
-| Процесс | Electron Kepler (полное приложение) | Tauri PoC (hello-world) |
-|---|---|---|
-| Main / host | **157.4 MB** (Node + наш TS) | **22.6 MB** (Rust + tao) |
-| Renderer | 117.1 MB (Chromium) | 56.7 MB (WebView2, пустая страница) |
-| GPU | 95.9 MB | 69.4 MB |
-| Utility | 62.2 MB | 70.3 MB (network + storage) |
-| Crashpad | 33.1 MB (наш) | 13.4 MB (WebView2 own) |
-| **TOTAL** | **465.7 MB** | **354.8 MB** |
+| Процесс     | Electron Kepler (полное приложение) | Tauri PoC (hello-world)             |
+| ----------- | ----------------------------------- | ----------------------------------- |
+| Main / host | **157.4 MB** (Node + наш TS)        | **22.6 MB** (Rust + tao)            |
+| Renderer    | 117.1 MB (Chromium)                 | 56.7 MB (WebView2, пустая страница) |
+| GPU         | 95.9 MB                             | 69.4 MB                             |
+| Utility     | 62.2 MB                             | 70.3 MB (network + storage)         |
+| Crashpad    | 33.1 MB (наш)                       | 13.4 MB (WebView2 own)              |
+| **TOTAL**   | **465.7 MB**                        | **354.8 MB**                        |
 
 **Tauri host (Rust): 22.6 MB. WebView2 children: 332.2 MB.** То есть пустая
 Tauri-страница уже жрёт **76% RAM полнофункционального Electron Kepler** —
@@ -51,18 +51,18 @@ Tauri-страница уже жрёт **76% RAM полнофункционал�
 
 ### Cold start
 
-| | Время до visible window |
-|---|---|
-| Tauri PoC | **1574 ms** |
+|                 | Время до visible window                                |
+| --------------- | ------------------------------------------------------ |
+| Tauri PoC       | **1574 ms**                                            |
 | Electron Kepler | ~2-3 с (точно не замерить — launcher hidden by design) |
 
 ### Build time
 
-| | cold | incremental |
-|---|---|---|
-| Electron (`bun run build`) | ~1-2 мин | <30 с (Vite HMR) |
-| Tauri PoC (release LTO) | ~1.5 мин | **1.5 мин** (LTO заново) |
-| Tauri port (release LTO) | ~1.5 мин (incremental, deps кэшированы) | 1.5 мин |
+|                            | cold                                    | incremental              |
+| -------------------------- | --------------------------------------- | ------------------------ |
+| Electron (`bun run build`) | ~1-2 мин                                | <30 с (Vite HMR)         |
+| Tauri PoC (release LTO)    | ~1.5 мин                                | **1.5 мин** (LTO заново) |
+| Tauri port (release LTO)   | ~1.5 мин (incremental, deps кэшированы) | 1.5 мин                  |
 
 LTO+strip+opt-level=s даёт маленький exe, но платит этим в incremental build time.
 Без LTO Rust incremental ~30-40 c, но exe вырастет до 6-8 MB.
@@ -71,10 +71,10 @@ LTO+strip+opt-level=s даёт маленький exe, но платит эти�
 
 На той же машине **прямо сейчас**:
 
-| Что | Размер |
-|---|---|
-| WebView2 runtime на диске (`C:\Program Files (x86)\Microsoft\EdgeWebView\...`) | **829.7 MB** |
-| Сейчас запущенные процессы WebView2 от других приложений | **20 процессов, 872.3 MB WS** |
+| Что                                                                            | Размер                        |
+| ------------------------------------------------------------------------------ | ----------------------------- |
+| WebView2 runtime на диске (`C:\Program Files (x86)\Microsoft\EdgeWebView\...`) | **829.7 MB**                  |
+| Сейчас запущенные процессы WebView2 от других приложений                       | **20 процессов, 872.3 MB WS** |
 
 Disk shared между приложениями. RAM — нет, каждое приложение поднимает свои
 WebView2 children. Аргумент «Tauri экономит диск» = правда **только если у
@@ -147,6 +147,7 @@ Windows**, +4-8 недель на Linux/macOS обход WebKitGTK багов.
      crashpad по `--type=` в CommandLine.
 
 2. **Tauri PoC** (для замера hello-world Tauri RAM/disk):
+
    ```powershell
    cargo install tauri-cli --version "^2.0" --locked  # 3-15 мин cold
    cargo tauri init --ci `
@@ -156,6 +157,7 @@ Windows**, +4-8 недель на Linux/macOS обход WebKitGTK багов.
    cargo tauri icon path/to/icon.png
    cargo tauri build --no-bundle
    ```
+
    Tauri.conf: `withGlobalTauri: true`, 1 окно 720×460, `transparent: true`,
    `decorations: false`. Cargo.toml release-profile: `lto = true`, `strip = true`,
    `opt-level = "s"`, `panic = "abort"`.

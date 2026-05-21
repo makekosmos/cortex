@@ -67,8 +67,6 @@ export async function emitPostUpdate(
  * Возвращает реальный `app.getPath("userData")` после applyInstanceToApp —
  * для test slot'а это `<KOSMOS_DATA_DIR>/userdata`, а не `--user-data-dir=`.
  */
-export async function getUserDataDir(
-  app: ElectronApplication,
-): Promise<string> {
+export async function getUserDataDir(app: ElectronApplication): Promise<string> {
   return await app.evaluate(({ app: a }) => a.getPath("userData"));
 }

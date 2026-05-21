@@ -7,6 +7,7 @@ test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 ```
 
 Relevant tests:
+
 - `lock_file::tests::permissions_disabled_env_skips_hardening` — NEW, ok
 - `lock_file::tests::windows_acl_inheritance_disabled` — ok (флаг сброшен под ENV_MUTEX, ACL применился)
 - `lock_file::tests::kosmos_data_dir_respects_env_override` — ok (теперь под ENV_MUTEX)

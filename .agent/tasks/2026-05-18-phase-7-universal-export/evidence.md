@@ -7,6 +7,7 @@ Verified at: 2026-05-18
 **PASS.**
 
 `services/kepler-backend/src/export/mod.rs` определяет:
+
 - `pub trait Converter: Send + Sync` с методами `id`, `display_name`, `object_type`, `default_format`, `supported_formats`, `convert`.
 - `pub struct ConvertResult { files_written, bytes, errors }`.
 - Registry через `OnceLock<Vec<Box<dyn Converter>>>` + `list_converters()` / `find_converter()` helpers.
@@ -18,14 +19,14 @@ Verified at: 2026-05-18
 
 **PASS.**
 
-| Converter | File | Object type | Format | Unit tests |
-|---|---|---|---|---|
-| `note_md` | `export/note_md.rs` | `note_obj` | `md` | 3 |
-| `task_md` | `export/task_md.rs` | `task_obj` | `md` | 3 |
-| `task_csv` | `export/task_csv.rs` | `task_obj` | `csv` | 3 |
-| `time_entry_csv` | `export/time_entry_csv.rs` | `time_entry_obj` | `csv` | 3 |
-| `tag_json` | `export/tag_json.rs` | `tag_obj` | `json` | 2 |
-| `game_json` | `export/game_json.rs` | `game_obj` | `json` | 3 |
+| Converter        | File                       | Object type      | Format | Unit tests |
+| ---------------- | -------------------------- | ---------------- | ------ | ---------- |
+| `note_md`        | `export/note_md.rs`        | `note_obj`       | `md`   | 3          |
+| `task_md`        | `export/task_md.rs`        | `task_obj`       | `md`   | 3          |
+| `task_csv`       | `export/task_csv.rs`       | `task_obj`       | `csv`  | 3          |
+| `time_entry_csv` | `export/time_entry_csv.rs` | `time_entry_obj` | `csv`  | 3          |
+| `tag_json`       | `export/tag_json.rs`       | `tag_obj`        | `json` | 2          |
+| `game_json`      | `export/game_json.rs`      | `game_obj`       | `json` | 3          |
 
 ## AC3 — cargo test green
 
@@ -48,6 +49,7 @@ test result: ok. 75 passed; 0 failed; 0 ignored
 **PASS.**
 
 `handle_export_op("run", params, &ark_host)`:
+
 1. Парсит `converter_id`, `format` (опц.), `dest_dir`.
 2. Находит converter через `find_converter`.
 3. Создаёт `dest_dir` рекурсивно если не существует.
@@ -72,6 +74,7 @@ window.kepler.export = {
 ```
 
 `shell/electron/main.ts` — 3 IPC handler'а:
+
 - `kepler:export:list` → `arkClient.invokeOperation({operation: "export.list"})`
 - `kepler:export:run` → `arkClient.invokeOperation({operation: "export.run", ...args})`
 - `kepler:export:pickDir` → `dialog.showOpenDialog(parentWindow, { properties: ["openDirectory", "createDirectory"] })`
@@ -83,6 +86,7 @@ Bonus: `pickDir` IPC добавлен потому что existing dialog handle
 **PASS.**
 
 `shell/src/views/SettingsView.vue` — новый таб «Экспорт»:
+
 - Mount → dispatch `window.kepler.export.list()` → state с converters.
 - Per-converter карта: `display_name`, dropdown format (если `supported_formats.length > 1`), кнопка «Экспортировать».
 - Click → `pickDir` → `run` → inline статус (success / errors).
@@ -129,19 +133,19 @@ Export module использует только `list_objects_by_type` (read-onl
 
 ## Verification summary
 
-| AC | Verdict |
-|---|---|
-| AC1 Converter trait + Registry | PASS |
-| AC2 6 converters + 17 tests | PASS |
-| AC3 cargo test 75/75 | PASS |
-| AC4 export.list | PASS |
-| AC5 export.run | PASS |
-| AC6 preload exposure | PASS |
-| AC7 UI Settings panel | PASS |
-| AC8 typecheck | PASS |
-| AC9 build:js | PASS |
-| AC10 ark:guard:writes | PASS |
-| AC11 docs | PASS |
+| AC                             | Verdict |
+| ------------------------------ | ------- |
+| AC1 Converter trait + Registry | PASS    |
+| AC2 6 converters + 17 tests    | PASS    |
+| AC3 cargo test 75/75           | PASS    |
+| AC4 export.list                | PASS    |
+| AC5 export.run                 | PASS    |
+| AC6 preload exposure           | PASS    |
+| AC7 UI Settings panel          | PASS    |
+| AC8 typecheck                  | PASS    |
+| AC9 build:js                   | PASS    |
+| AC10 ark:guard:writes          | PASS    |
+| AC11 docs                      | PASS    |
 
 ## Smoke manual (operator)
 

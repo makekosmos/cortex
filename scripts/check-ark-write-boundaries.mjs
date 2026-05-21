@@ -106,9 +106,7 @@ const userDataPattern = /\bapp\.getPath\s*\(\s*["']userData["']\s*\)/;
 
 function checkUserDataAccess() {
   const root = path.join(repoRoot, "shell/electron");
-  const allowlist = new Set([
-    "shell/electron/instance.ts",
-  ]);
+  const allowlist = new Set(["shell/electron/instance.ts"]);
   const findings = [];
   for (const filePath of walk(root)) {
     const rel = relRepo(filePath);
@@ -136,10 +134,7 @@ const pathJoinBrandPattern = /\bpath\.join\s*\([^)]*["'](?:Kosmos|Kepler)["']/;
 
 function checkBrandPathJoin() {
   const root = path.join(repoRoot, "shell/electron");
-  const allowlist = new Set([
-    "shell/electron/instance.ts",
-    "shell/electron/data-dir.ts",
-  ]);
+  const allowlist = new Set(["shell/electron/instance.ts", "shell/electron/data-dir.ts"]);
   const findings = [];
   for (const filePath of walk(root)) {
     const rel = relRepo(filePath);
@@ -164,13 +159,12 @@ function checkBrandPathJoin() {
 
 // Ловит: KOSMOS_DATA_DIR: ... process.env.APPDATA / %APPDATA% / "AppData" вместе
 // в пределах ~5 строк. Простой grep — оба токена на одной строке.
-const kosmosDataAppdataPattern = /KOSMOS_DATA_DIR[\s\S]{0,200}(?:%APPDATA%|process\.env\.APPDATA|AppData[\\/]Roaming|getPath\(["']appData["']\))/;
+const kosmosDataAppdataPattern =
+  /KOSMOS_DATA_DIR[\s\S]{0,200}(?:%APPDATA%|process\.env\.APPDATA|AppData[\\/]Roaming|getPath\(["']appData["']\))/;
 
 function checkTestsAppdataDataDir() {
   const root = path.join(repoRoot, "tests/e2e");
-  const allowlist = new Set([
-    "tests/e2e/helpers/launch.ts",
-  ]);
+  const allowlist = new Set(["tests/e2e/helpers/launch.ts"]);
   const findings = [];
   for (const filePath of walk(root)) {
     const rel = relRepo(filePath);
@@ -205,8 +199,7 @@ const KIND_LABELS = {
   "sql-write": "Direct SQL write to ARK table",
   "user-data-access":
     "app.getPath('userData') outside instance.ts — use resolveInstance() / keplerDataDir()",
-  "brand-path-join":
-    "path.join(..., 'Kosmos'|'Kepler', ...) outside instance.ts / data-dir.ts",
+  "brand-path-join": "path.join(..., 'Kosmos'|'Kepler', ...) outside instance.ts / data-dir.ts",
   "tests-appdata-data-dir":
     "KOSMOS_DATA_DIR pointing at real user APPDATA in tests/e2e — forbidden.md → Тесты",
 };

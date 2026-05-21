@@ -13,12 +13,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
-import {
-  openEden,
-  createEdenNote,
-  openNoteViaReload,
-  deleteEdenEntry,
-} from "./helpers/eden";
+import { openEden, createEdenNote, openNoteViaReload, deleteEdenEntry } from "./helpers/eden";
 import { taskRef, paragraph, type PMDoc } from "./helpers/eden-doc";
 
 /**
@@ -30,71 +25,74 @@ async function createTaskViaArk(
   sourceNoteId: string,
   title: string,
 ): Promise<string | null> {
-  return await edenWindow.evaluate(async ({ noteId, taskTitle }) => {
-    type ArkReq = { request: <T>(op: string, params?: Record<string, unknown>) => Promise<T> };
-    const ark = (window as unknown as { kepler?: { ark?: ArkReq } }).kepler?.ark;
-    if (!ark) return null;
-    try {
-      const now = new Date().toISOString();
-      // Регистрируем task_obj type (idempotent).
-      await ark.request("upsert_object_type", {
-        object_type: {
-          id: "task_obj",
-          name: "Задача",
-          schemaJson: "{}",
-          uiSchemaJson: "{}",
-          systemLocked: false,
-          createdAt: now,
-          updatedAt: now,
-        },
-      });
-      const taskId = (window as unknown as { crypto: Crypto }).crypto.randomUUID();
-      await ark.request("upsert_object", {
-        object: {
-          id: taskId,
-          typeId: "task_obj",
-          title: taskTitle.trim() || "Пустая задача",
-          contentJson: { type: "doc", content: [{ type: "paragraph" }] },
-          propsJson: {
-            description: null,
-            priority: 0,
-            scheduled_date: null,
-            deadline: null,
-            reminder_date: null,
-            is_today: false,
-            is_evening: false,
-            is_someday: false,
-            is_completed: false,
-            completed_at: null,
-            is_cancelled: false,
-            cancelled_at: null,
-            is_trashed: false,
-            status: "triage",
-            sort_order: 0,
-            heading_id: null,
-            project_id: null,
-            area_id: null,
-            tag_ids: [],
-            checklist_items: [],
-            recurrence_rule: null,
-            billable: false,
-            price: null,
-            created_at: now,
-            source_app: "eden",
-            source_note_id: noteId,
-            model_version: 1,
+  return await edenWindow.evaluate(
+    async ({ noteId, taskTitle }) => {
+      type ArkReq = { request: <T>(op: string, params?: Record<string, unknown>) => Promise<T> };
+      const ark = (window as unknown as { kepler?: { ark?: ArkReq } }).kepler?.ark;
+      if (!ark) return null;
+      try {
+        const now = new Date().toISOString();
+        // Регистрируем task_obj type (idempotent).
+        await ark.request("upsert_object_type", {
+          object_type: {
+            id: "task_obj",
+            name: "Задача",
+            schemaJson: "{}",
+            uiSchemaJson: "{}",
+            systemLocked: false,
+            createdAt: now,
+            updatedAt: now,
           },
-          createdAt: now,
-          updatedAt: now,
-          deletedAt: null,
-        },
-      });
-      return taskId;
-    } catch (e) {
-      console.error("[test] createTaskViaArk error:", e);
-      return null;
-    }
-  }, { noteId: sourceNoteId, taskTitle: title });
+        });
+        const taskId = (window as unknown as { crypto: Crypto }).crypto.randomUUID();
+        await ark.request("upsert_object", {
+          object: {
+            id: taskId,
+            typeId: "task_obj",
+            title: taskTitle.trim() || "Пустая задача",
+            contentJson: { type: "doc", content: [{ type: "paragraph" }] },
+            propsJson: {
+              description: null,
+              priority: 0,
+              scheduled_date: null,
+              deadline: null,
+              reminder_date: null,
+              is_today: false,
+              is_evening: false,
+              is_someday: false,
+              is_completed: false,
+              completed_at: null,
+              is_cancelled: false,
+              cancelled_at: null,
+              is_trashed: false,
+              status: "triage",
+              sort_order: 0,
+              heading_id: null,
+              project_id: null,
+              area_id: null,
+              tag_ids: [],
+              checklist_items: [],
+              recurrence_rule: null,
+              billable: false,
+              price: null,
+              created_at: now,
+              source_app: "eden",
+              source_note_id: noteId,
+              model_version: 1,
+            },
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+        });
+        return taskId;
+      } catch (e) {
+        console.error("[test] createTaskViaArk error:", e);
+        return null;
+      }
+    },
+    { noteId: sourceNoteId, taskTitle: title },
+  );
 }
 
 /**
@@ -190,7 +188,10 @@ test.describe("eden: TaskRef ArrowUp/ArrowDown navigation", () => {
       await edenWindow.waitForTimeout(200);
 
       const active = await activeTaskId(edenWindow);
-      expect(active, `после ArrowDown активный TaskRef должен быть task2=${task2}, фактически ${active}`).toBe(task2);
+      expect(
+        active,
+        `после ArrowDown активный TaskRef должен быть task2=${task2}, фактически ${active}`,
+      ).toBe(task2);
 
       await deleteEdenEntry(edenWindow, noteId);
     } finally {
@@ -231,7 +232,9 @@ test.describe("eden: TaskRef ArrowUp/ArrowDown navigation", () => {
       await edenWindow.waitForTimeout(200);
 
       const active = await activeTaskId(edenWindow);
-      expect(active, `после ArrowUp активный TaskRef = task1=${task1}, фактически ${active}`).toBe(task1);
+      expect(active, `после ArrowUp активный TaskRef = task1=${task1}, фактически ${active}`).toBe(
+        task1,
+      );
 
       await deleteEdenEntry(edenWindow, noteId);
     } finally {
@@ -294,7 +297,9 @@ test.describe("eden: TaskRef ArrowUp/ArrowDown navigation", () => {
       const activeAfter2 = await activeTaskId(edenWindow);
       const onPM2 = await activeIsProseMirror(edenWindow);
       // eslint-disable-next-line no-console
-      console.log(`[taskref-nav-via-p] после второго ArrowDown: activeTaskRef=${activeAfter2}, onPM=${onPM2}`);
+      console.log(
+        `[taskref-nav-via-p] после второго ArrowDown: activeTaskRef=${activeAfter2}, onPM=${onPM2}`,
+      );
       // Сильное assertion: либо мы попали в task2, либо остались в PM
       // (что бы ни решил fix-агент — главное не падать).
       expect(
@@ -402,7 +407,10 @@ test.describe("eden: TaskRef ArrowUp/ArrowDown navigation", () => {
       const afterDelay = await activeTaskId(edenWindow);
 
       expect(immediately, `сразу после ArrowDown focus должен быть в task2=${task2}`).toBe(task2);
-      expect(afterDelay, `через 450ms focus всё ещё в task2=${task2} (defender не должен украсть)`).toBe(task2);
+      expect(
+        afterDelay,
+        `через 450ms focus всё ещё в task2=${task2} (defender не должен украсть)`,
+      ).toBe(task2);
 
       await deleteEdenEntry(edenWindow, noteId);
     } finally {

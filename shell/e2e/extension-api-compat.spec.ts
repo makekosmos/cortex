@@ -27,10 +27,7 @@ async function launch(): Promise<ElectronApplication> {
   return electron.launch({
     executablePath: electronBinary,
     cwd: appRoot,
-    args: [
-      path.join(appRoot, "dist-electron", "main.js"),
-      `--user-data-dir=${userDataDir}`,
-    ],
+    args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
     env: {
       ...process.env,
       NODE_ENV: "test",
@@ -84,19 +81,13 @@ test.describe("extension keplerApiVersion compat", () => {
         2,
       ),
     );
-    fs.writeFileSync(
-      path.join(extDir, "index.html"),
-      "<!doctype html><title>mocha-bad</title>",
-    );
+    fs.writeFileSync(path.join(extDir, "index.html"), "<!doctype html><title>mocha-bad</title>");
 
     fs.mkdirSync(userDataDir, { recursive: true });
     const app = await electron.launch({
       executablePath: electronBinary,
       cwd: appRoot,
-      args: [
-        path.join(appRoot, "dist-electron", "main.js"),
-        `--user-data-dir=${userDataDir}`,
-      ],
+      args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
       env: {
         ...process.env,
         NODE_ENV: "test",
@@ -122,9 +113,11 @@ test.describe("extension keplerApiVersion compat", () => {
       // у Playwright нет renderer'а, в котором запущен preload; используем
       // прямой вызов из main process.
       await app.evaluate(async ({ ipcMain }, id) => {
-        const handlers = (ipcMain as unknown as {
-          _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
-        })._invokeHandlers;
+        const handlers = (
+          ipcMain as unknown as {
+            _invokeHandlers: Map<string, (...a: unknown[]) => unknown>;
+          }
+        )._invokeHandlers;
         const handler = handlers?.get?.("kepler:extension:open");
         if (!handler) throw new Error("kepler:extension:open handler not registered");
         // Fake IpcMainInvokeEvent.
@@ -142,13 +135,9 @@ test.describe("extension keplerApiVersion compat", () => {
       );
 
       // Новое окно появилось — и его title содержит «несовместимо».
-      const newWins = after.filter(
-        (w) => !before.some((b) => b.id === w.id),
-      );
+      const newWins = after.filter((w) => !before.some((b) => b.id === w.id));
       expect(newWins.length).toBeGreaterThanOrEqual(1);
-      const hasIncompat = newWins.some((w) =>
-        w.title.toLowerCase().includes("несовместимо"),
-      );
+      const hasIncompat = newWins.some((w) => w.title.toLowerCase().includes("несовместимо"));
       expect(hasIncompat).toBe(true);
     } finally {
       await app.close();

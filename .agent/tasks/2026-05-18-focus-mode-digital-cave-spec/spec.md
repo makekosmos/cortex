@@ -14,6 +14,7 @@
 - **digital-cave (что зарезервировано как app, не реализовано)** — блокировка отвлекающих приложений / сайтов.
 
 Идея: разные **типы задач** в Horologion → разные **профили блокировок**. Например:
+
 - Pomodoro «Coding» → блокируется TikTok / Reddit / YouTube
 - Pomodoro «Writing» → блокируется Twitter + чаты
 - Stopwatch «Research» → разрешено всё (только трекинг)
@@ -31,15 +32,18 @@
 ### 1. Hosts file manipulation
 
 `C:\Windows\System32\drivers\etc\hosts` — Windows механизм перенаправления DNS. Если в файле:
+
 ```
 127.0.0.1 tiktok.com
 127.0.0.1 www.tiktok.com
 ```
+
 браузер не сможет резолвить tiktok.com на реальный IP → редирект на 127.0.0.1.
 
 **Privileges:** запись в hosts требует admin / `runas` через UAC.
 
 **Подход:**
+
 - Helper bin (`kepler-block-helper.exe`) в `extraResources` — отдельный signed бинарник с manifest требующим elevation (`<requestedExecutionLevel level="requireAdministrator" />`).
 - Shell main process spawn'ит helper через `ShellExecuteEx(...,"runas")` когда нужно изменить hosts.
 - UAC prompt появляется один раз при первом включении блокировки.
@@ -50,6 +54,7 @@
 ### 2. Blocklist TXT loader
 
 Юзер может загрузить plain TXT файл со списком доменов (1 на строку, `#` — комментарии):
+
 ```
 # Social media
 tiktok.com
@@ -66,12 +71,14 @@ twitch.tv
 ```
 
 Парсер устойчив:
+
 - ignore пустые строки + `#` комментарии
 - strip `https://`, `http://`, `www.`
 - normalize в `domain.tld` форму
 - автоматически добавлять `www.<domain>` вариант если оригинал без www
 
 Persist в ARK как `blocklist_obj` (новый object_type, см. ARK model):
+
 ```json
 {
   "id": "blocklist-coding",
@@ -92,12 +99,14 @@ UI: drag&drop TXT → preview parsed domains → save as named blocklist.
 Решение: Kepler shell поднимает локальный HTTP server на `127.0.0.1:8080` (или unused port). Hosts entries: `127.0.0.1 tiktok.com` + добавить в hosts тоже port forwarding нельзя — hosts file не поддерживает порты.
 
 **Workaround:** использовать `8080` не получится из-за hosts ограничений. Альтернативы:
+
 - (A) Слушать на **порте 80**, но это требует admin privileges + конфликт с любым другим веб-сервером.
 - (B) Использовать `127.0.0.1` как IP, но юзер увидит "site cannot be reached" от браузера, а Kepler никак этому не помочь без полноценного proxy.
 - (C) Подменять hosts на специальный IP `127.0.0.42` и spawn'ить mini HTTP server на `127.0.0.42:80` — требует admin для bind на 80 порт.
 - (D) Использовать reverse proxy с TLS termination — слишком сложно для personal launcher.
 
 **Решение:** Вариант (A) с graceful degradation:
+
 - Helper bin при первой блокировке spawn'ит mini HTTP server на 127.0.0.1:80 (requires admin, делает один раз через тот же elevation flow что и hosts modify).
 - Server рендерит статическую HTML страницу «Этот сайт заблокирован Kepler Focus» с кнопками:
   - **«ОК, закрыть»** — закрывает таб (через `window.close()` если возможно, иначе плашка).
@@ -108,6 +117,7 @@ Mini HTTP server pages bundled in helper bin, не зависят от extension
 ### 4. 5-минутный temporary unblock
 
 Когда юзер кликает «Нужно 5 минут»:
+
 1. Shell получает POST от block page.
 2. Shell спрашивает helper: «remove `tiktok.com` from hosts, restore after 300s».
 3. Helper удаляет entry → schedule re-add через `setTimeout` (или persistent timer если перезапуск).
@@ -115,6 +125,7 @@ Mini HTTP server pages bundled in helper bin, не зависят от extension
 5. Через 5 минут — re-add entry. Юзер на сайте получает Connection refused / автоматический redirect обратно на block page при следующей навигации.
 
 **Edge cases:**
+
 - Множественные «5 минут» для разных доменов — track per-domain timers.
 - Kepler crashes / restart во время unblock — на startup проверяем pending temporary unblocks в персистентном state, восстанавливаем timers.
 - Юзер хочет cancel unblock — кнопка в Settings → Focus → «Активные временные разблокировки».
@@ -132,10 +143,12 @@ pomodoroDraft = {
 ```
 
 При `pomodoro.start`:
+
 - Horologion публикует команду `focus:enable` через command bus с payload `{profileId: "blocklist-coding"}`.
 - Shell main listens → applies blocklist через helper.
 
 При `pomodoro.stop` / `pomodoro.finish` / `pomodoro.pause` (опция: блокировка на паузе off):
+
 - Horologion публикует `focus:disable`.
 - Shell main → helper → restore hosts.
 
@@ -152,26 +165,28 @@ pomodoroDraft = {
 - **History**: какие сессии запускались с каким blocklist, общая длительность блокировок за день / неделю.
 
 **Horologion Settings → Focus profiles** (extension settings):
+
 - В PomodoroDraftInput → новый dropdown «Focus profile» → выбор blocklist из созданных в Kepler Settings.
 
 **Focus widget enhancements (uses 0.1.15 widget):**
+
 - Если активный pomodoro имеет focusProfileId → виджет показывает иконку 🛡️ рядом с временем как индикатор «блокировка active».
 - Click на иконку 🛡️ → open Settings → Focus tab.
 
 ## Acceptance Criteria
 
-| # | AC | Verify |
-|---|---|---|
-| AC1 | Helper bin `kepler-block-helper.exe` собран, подписан, с manifest требующим elevation | electron-builder afterPack copy + signtool verify |
-| AC2 | Первое включение блокировки показывает UAC prompt; subsequent calls используют cached elevation (если supported) | manual smoke |
-| AC3 | TXT blocklist parser корректно обрабатывает: пустые строки, # комментарии, http:// prefix, www. prefix, mixed case | unit tests на helper / parser module |
-| AC4 | Atomic hosts update: backup → write → verify → rollback на любом failure | unit test против fake hosts file |
-| AC5 | Mini HTTP server на 127.0.0.1:80 рендерит block page с двумя кнопками; closes на «ОК», POST на «5 минут» | manual smoke + curl |
-| AC6 | 5-минутный temporary unblock: hosts entry removed → 300s timer → entry restored. Persist через restart Kepler. | unit test + manual smoke с restart mid-timer |
-| AC7 | Horologion `pomodoro.start` с focusProfileId публикует `focus:enable` command в bus; shell listens и применяет блокировку | e2e или manual smoke |
-| AC8 | Kepler Settings → Focus tab показывает blocklists, active blocks, temporary unblocks, helper status | manual smoke |
-| AC9 | Uninstall Kepler → hosts file ВСЕГДА восстанавливается из backup (не оставлять блокировки) | uninstall script + manual verify |
-| AC10 | Browser cache hint показывается юзеру когда temporary unblock activated (DNS cache flush instruction) | UI text in block page |
+| #    | AC                                                                                                                        | Verify                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| AC1  | Helper bin `kepler-block-helper.exe` собран, подписан, с manifest требующим elevation                                     | electron-builder afterPack copy + signtool verify |
+| AC2  | Первое включение блокировки показывает UAC prompt; subsequent calls используют cached elevation (если supported)          | manual smoke                                      |
+| AC3  | TXT blocklist parser корректно обрабатывает: пустые строки, # комментарии, http:// prefix, www. prefix, mixed case        | unit tests на helper / parser module              |
+| AC4  | Atomic hosts update: backup → write → verify → rollback на любом failure                                                  | unit test против fake hosts file                  |
+| AC5  | Mini HTTP server на 127.0.0.1:80 рендерит block page с двумя кнопками; closes на «ОК», POST на «5 минут»                  | manual smoke + curl                               |
+| AC6  | 5-минутный temporary unblock: hosts entry removed → 300s timer → entry restored. Persist через restart Kepler.            | unit test + manual smoke с restart mid-timer      |
+| AC7  | Horologion `pomodoro.start` с focusProfileId публикует `focus:enable` command в bus; shell listens и применяет блокировку | e2e или manual smoke                              |
+| AC8  | Kepler Settings → Focus tab показывает blocklists, active blocks, temporary unblocks, helper status                       | manual smoke                                      |
+| AC9  | Uninstall Kepler → hosts file ВСЕГДА восстанавливается из backup (не оставлять блокировки)                                | uninstall script + manual verify                  |
+| AC10 | Browser cache hint показывается юзеру когда temporary unblock activated (DNS cache flush instruction)                     | UI text in block page                             |
 
 ## Что НЕ входит в scope
 
@@ -199,15 +214,15 @@ pomodoroDraft = {
 
 ## Roadmap phases
 
-| Phase | Scope | Estimate (adjusted) |
-|---|---|---|
-| **F1** | Helper bin + hosts modification + atomic backup/restore | 1h |
-| **F2** | Blocklist TXT loader + ARK object_type + Settings UI | 0.5h |
-| **F3** | Mini HTTP server на 127.0.0.1:80 + block page | 0.7h |
-| **F4** | 5-min temporary unblock + persistent state | 0.5h |
-| **F5** | Horologion integration (focusProfileId + command bus) | 0.3h |
-| **F6** | Focus widget enhancement (🛡️ icon) + Settings Focus tab UI | 0.4h |
-| **F7** | E2E smoke tests + uninstall hosts restore | 0.6h |
+| Phase  | Scope                                                      | Estimate (adjusted) |
+| ------ | ---------------------------------------------------------- | ------------------- |
+| **F1** | Helper bin + hosts modification + atomic backup/restore    | 1h                  |
+| **F2** | Blocklist TXT loader + ARK object_type + Settings UI       | 0.5h                |
+| **F3** | Mini HTTP server на 127.0.0.1:80 + block page              | 0.7h                |
+| **F4** | 5-min temporary unblock + persistent state                 | 0.5h                |
+| **F5** | Horologion integration (focusProfileId + command bus)      | 0.3h                |
+| **F6** | Focus widget enhancement (🛡️ icon) + Settings Focus tab UI | 0.4h                |
+| **F7** | E2E smoke tests + uninstall hosts restore                  | 0.6h                |
 
 **Cumulative adjusted estimate: ~4h wall-clock** (с anchors variance).
 

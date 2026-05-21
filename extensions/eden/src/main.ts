@@ -17,10 +17,7 @@ import { createPinia } from "pinia";
 import { PiniaColada } from "@pinia/colada";
 import { installScrollFadeListener } from "@kosmos/visuals";
 
-import {
-  dispatchEdenCommand,
-  installKeplerApiShim,
-} from "./lib/kepler-api-shim";
+import { dispatchEdenCommand, installKeplerApiShim } from "./lib/kepler-api-shim";
 
 // Shim should be installed BEFORE Vue app boot — App.vue / stores читают
 // `window.api` в onMounted / initApp.
@@ -36,11 +33,7 @@ import "./composables/useTheme";
 // Установлен 2026-05-19 в рамках Phase 14 (pilot). Сейчас не используется
 // — еще нет ни одной useQuery/useMutation; store/eden.ts продолжает работать
 // на обычной Pinia. Миграция отдельных queries — отдельный proof loop.
-createApp(App)
-  .use(createPinia())
-  .use(PiniaColada)
-  .use(vaporInteropPlugin)
-  .mount("#root");
+createApp(App).use(createPinia()).use(PiniaColada).use(vaporInteropPlugin).mount("#root");
 
 // ---------------------------------------------------------------------------
 // Deep-link routing — static open-команды Kepler shell'а вызывают

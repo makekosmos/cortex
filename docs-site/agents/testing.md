@@ -6,12 +6,12 @@
 
 ## Уровни тестов
 
-| Уровень | Где | Что | Когда писать |
-|---|---|---|---|
-| Rust unit | `crates/ark-core/rust`, `services/kepler-backend` | `cargo test` — ARK runtime, lock-file, WS handshake, sync | Новый Rust код / refactor |
-| TS unit | `packages/ark/tests/` | `bun test` — `@kosmos/ark` SDK contracts | Новый SDK метод / lock-file resolver |
-| **Extension contract (universal)** | `tests/e2e/extensions-contract.spec.ts` | Manifest-driven: boot + commands.register + ARK round-trip | **Автоматически** для каждого extension с `manifest.tests` |
-| **Per-app UI spec** | `tests/e2e/<app>.spec.ts` | Конкретный UI flow (TipTap render, Pomodoro tick) | Когда фича не покрывается архитектурным contract'ом |
+| Уровень                            | Где                                               | Что                                                        | Когда писать                                               |
+| ---------------------------------- | ------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
+| Rust unit                          | `crates/ark-core/rust`, `services/kepler-backend` | `cargo test` — ARK runtime, lock-file, WS handshake, sync  | Новый Rust код / refactor                                  |
+| TS unit                            | `packages/ark/tests/`                             | `bun test` — `@kosmos/ark` SDK contracts                   | Новый SDK метод / lock-file resolver                       |
+| **Extension contract (universal)** | `tests/e2e/extensions-contract.spec.ts`           | Manifest-driven: boot + commands.register + ARK round-trip | **Автоматически** для каждого extension с `manifest.tests` |
+| **Per-app UI spec**                | `tests/e2e/<app>.spec.ts`                         | Конкретный UI flow (TipTap render, Pomodoro tick)          | Когда фича не покрывается архитектурным contract'ом        |
 
 ## Universal extension contract (manifest-driven)
 
@@ -25,9 +25,9 @@
     "commands": ["eden:note:create", "eden:note:search"],
     "smoke": {
       "objectType": "note_obj",
-      "sample": { "title": "contract-smoke-eden" }
-    }
-  }
+      "sample": { "title": "contract-smoke-eden" },
+    },
+  },
 }
 ```
 
@@ -55,8 +55,7 @@
 Канонический pattern для нового BrowserWindow:
 
 ```ts
-const headless =
-  process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
+const headless = process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
 new BrowserWindow({
   show: !headless,
   skipTaskbar: headless,
@@ -89,7 +88,7 @@ win.showInactive();
 
 ```ts
 await launcher.waitForLoadState("domcontentloaded");
-await launcher.waitForTimeout(2500);  // backend WS + ArkClient warmup
+await launcher.waitForTimeout(2500); // backend WS + ArkClient warmup
 
 const triggered = await app.evaluate(async ({ BrowserWindow }) => {
   const launcher = BrowserWindow.getAllWindows()[0];
@@ -105,7 +104,7 @@ const triggered = await app.evaluate(async ({ BrowserWindow }) => {
       })()
     `);
     if (ok === "ok") return "ok";
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 100));
   }
   return "timeout";
 });

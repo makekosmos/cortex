@@ -14,10 +14,10 @@
 
 ## Brand convention (per CLAUDE.md)
 
-| Уровень | Имя |
-|---|---|
-| Ecosystem | **Kosmos** |
-| Launcher app | **Kepler** |
+| Уровень            | Имя                                                             |
+| ------------------ | --------------------------------------------------------------- |
+| Ecosystem          | **Kosmos**                                                      |
+| Launcher app       | **Kepler**                                                      |
 | Distribution repos | `kepler-releases` (launcher), `kosmos-extensions` (marketplace) |
 
 ## Архитектура
@@ -74,16 +74,16 @@
 
 ## Decisions (confirmed user)
 
-| # | Решение | Value |
-|---|---|---|
-| 1 | Owner | `yoso-industries` (GitHub organization; commits всё ещё под `ksanrse` user) |
-| 2 | Repo names | `kepler-releases` + `kosmos-extensions` |
-| 3 | Visibility | оба public |
-| 4 | autoUpdater interval | start-up + 6h |
-| 5 | Marketplace check interval | start-up + 24h (catalog reasonably static) |
-| 6 | Code signing | skip пока v0.x (SmartScreen warning OK) |
-| 7 | Channels | один stable, beta/dev — defer |
-| 8 | Mainставлер bundled extensions | **No** — lean Kepler installer без extensions. Extensions устанавливаются marketplace-driven. (Если переключаемся на bundled — это решение Phase 2.) |
+| #   | Решение                        | Value                                                                                                                                                |
+| --- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Owner                          | `yoso-industries` (GitHub organization; commits всё ещё под `ksanrse` user)                                                                          |
+| 2   | Repo names                     | `kepler-releases` + `kosmos-extensions`                                                                                                              |
+| 3   | Visibility                     | оба public                                                                                                                                           |
+| 4   | autoUpdater interval           | start-up + 6h                                                                                                                                        |
+| 5   | Marketplace check interval     | start-up + 24h (catalog reasonably static)                                                                                                           |
+| 6   | Code signing                   | skip пока v0.x (SmartScreen warning OK)                                                                                                              |
+| 7   | Channels                       | один stable, beta/dev — defer                                                                                                                        |
+| 8   | Mainставлер bundled extensions | **No** — lean Kepler installer без extensions. Extensions устанавливаются marketplace-driven. (Если переключаемся на bundled — это решение Phase 2.) |
 
 ## Acceptance criteria
 
@@ -115,6 +115,7 @@
 
 - **AC5**: `electron-updater` dep в `shell/package.json`. `bun install` clean.
 - **AC6**: `shell/electron/main.ts` импорт + integration:
+
   ```ts
   import { autoUpdater } from "electron-updater";
 
@@ -124,6 +125,7 @@
     setInterval(() => autoUpdater.checkForUpdatesAndNotify(), 6 * 60 * 60 * 1000);
   }
   ```
+
 - **AC7**: События logged (update-available, download-progress, downloaded, error).
 - **AC8**: При `update-downloaded` — native notification «Kepler X.Y.Z готов,
   перезапустить?» → `autoUpdater.quitAndInstall()` если yes.
@@ -205,7 +207,7 @@
 - **AC21**: На second machine рестартанутый Kepler в течение 24h (или manual
   refresh) detect'ит update Horologion → install → Horologion новая версия.
 - **AC22**: Bump Kepler version в `shell/package.json` → `bun run --cwd shell
-  build` пушит installer → second machine получает autoUpdater notification.
+build` пушит installer → second machine получает autoUpdater notification.
 
 ### Phase G — Docs + governance
 
@@ -274,14 +276,14 @@ E. (manual verification) on second machine — install Kepler → marketplace
 
 ## Risks
 
-| Risk | Mitigation |
-|---|---|
-| GH rate limit | autoUpdater check ~4/day. Catalog check ~1/day. User load: 5 req/day. Unauth limit 60/h → OK. С PAT 5000/h. |
-| SmartScreen warning | Documented в README. Кликнуть «Run anyway». Cert ~$300/y когда стабильно. |
-| Catalog drift | `schemaVersion` field + Kepler tolerant к unknown fields. Breaking change → bump version + maintain backward read для 1 release. |
-| Brick после update | Manual download предыдущей `Kepler-Setup-X.Y.Z.exe` from kepler-releases. Phase 2: auto-rollback. |
-| Token leak | Scope minimal (только public_repo). Не хранить в repo. Rotate если exposed. |
-| Extension malware (когда community) | Phase 3 — code review process. Сейчас все extensions свои → trust ok. |
+| Risk                                | Mitigation                                                                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| GH rate limit                       | autoUpdater check ~4/day. Catalog check ~1/day. User load: 5 req/day. Unauth limit 60/h → OK. С PAT 5000/h.                      |
+| SmartScreen warning                 | Documented в README. Кликнуть «Run anyway». Cert ~$300/y когда стабильно.                                                        |
+| Catalog drift                       | `schemaVersion` field + Kepler tolerant к unknown fields. Breaking change → bump version + maintain backward read для 1 release. |
+| Brick после update                  | Manual download предыдущей `Kepler-Setup-X.Y.Z.exe` from kepler-releases. Phase 2: auto-rollback.                                |
+| Token leak                          | Scope minimal (только public_repo). Не хранить в repo. Rotate если exposed.                                                      |
+| Extension malware (когда community) | Phase 3 — code review process. Сейчас все extensions свои → trust ok.                                                            |
 
 ## Out of scope (Phase 2+)
 

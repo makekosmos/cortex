@@ -53,14 +53,14 @@ docs-site/
 
 ## Что куда добавлять
 
-| Хочу добавить… | Куда |
-|---|---|
-| Новое правило (запрет, требование) | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md` |
-| Новый чек-лист для области | `docs-site/agents/checklists.md` |
-| Новый концепт (sync, miration, протокол) | `docs-site/concepts/<name>.md` |
-| Информацию о существующем приложении | `docs-site/apps/<name>.md` |
-| Информацию о существующем пакете | `docs-site/packages/<name>.md` |
-| ADR — архитектурное решение | `docs/<DECISION>.md` (полный текст) + ссылка в `docs-site/reference/decisions.md` |
+| Хочу добавить…                           | Куда                                                                              |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| Новое правило (запрет, требование)       | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md`                |
+| Новый чек-лист для области               | `docs-site/agents/checklists.md`                                                  |
+| Новый концепт (sync, miration, протокол) | `docs-site/concepts/<name>.md`                                                    |
+| Информацию о существующем приложении     | `docs-site/apps/<name>.md`                                                        |
+| Информацию о существующем пакете         | `docs-site/packages/<name>.md`                                                    |
+| ADR — архитектурное решение              | `docs/<DECISION>.md` (полный текст) + ссылка в `docs-site/reference/decisions.md` |
 
 После любой правки → `bun run docs:sync` → коммит.
 

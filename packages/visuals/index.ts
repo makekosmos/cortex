@@ -63,7 +63,4 @@ export {
 
 // Runtime helpers
 
-export {
-  installScrollFadeListener,
-  type InstallScrollFadeOptions,
-} from "./runtime/scroll-fade";
+export { installScrollFadeListener, type InstallScrollFadeOptions } from "./runtime/scroll-fade";

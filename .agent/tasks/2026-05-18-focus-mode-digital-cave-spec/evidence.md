@@ -5,18 +5,18 @@
 
 ## AC статус
 
-| AC | Описание | Статус |
-|---|---|---|
-| AC1 | Helper bin собран, signed, manifest requireAdministrator | ✅ Cargo bin `kepler-focus-helper.exe` + `embed_manifest`. signtool — TODO следующий step (cert flow). |
-| AC2 | UAC prompt при первом запуске; subsequent — cached | ⏳ MANUAL — нужен admin Windows для real elevation test. Helper manifest корректный, Windows покажет prompt автоматически. |
-| AC3 | TXT parser: пустые строки, #комментарии, http://, www., mixed case | ✅ `services/kepler-focus-helper/src/hosts.rs` + 11 cargo unit tests pass. Frontend mirror в SettingsView.vue parseDomains(). |
-| AC4 | Atomic hosts update: backup → write → verify → rollback | ✅ `hosts.kepler-backup` created once на первом write, не перезаписывается. Verify через readback после rename. Tests cover happy path + edge cases. |
-| AC5 | Mini HTTP server 127.0.0.1:80 с block page + кнопками | ❌ NOT IMPLEMENTED. **Deferred** — без mini server юзер видит «Connection refused» в браузере, что acceptable для MVP. Реализация требует дополнительной admin elevation для bind на port 80. |
-| AC6 | 5-min temporary unblock + persistent state | ❌ NOT IMPLEMENTED. **Deferred** — depends on AC5 (block page имеет кнопку «5 минут»). UI flow есть concept в spec, но без mini HTTP server не triggers. |
-| AC7 | Horologion → focus.set_active_state → shell apply | ✅ Wired: `usePomodoroSession.applyFocusBlocking()` → `focus.set_active_state` → `extension-host.onFocusStateChanged()` → `applyFocusBlock()` → spawn helper. |
-| AC8 | Kepler Settings → Focus tab | ✅ F6 agent: tab «Фокус» в SettingsView.vue. Список blocklists + создать (form с textarea + drag&drop .txt) + активная блокировка + delete. |
-| AC9 | Uninstall hook → restore hosts | ❌ NOT IMPLEMENTED. **Deferred** — NSIS uninstall hook требует electron-builder customisation. Workaround: юзер может deactivate через UI до uninstall. |
-| AC10 | Browser cache hint (DNS flush) при temp unblock | ❌ N/A — depends on AC5/AC6. |
+| AC   | Описание                                                           | Статус                                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC1  | Helper bin собран, signed, manifest requireAdministrator           | ✅ Cargo bin `kepler-focus-helper.exe` + `embed_manifest`. signtool — TODO следующий step (cert flow).                                                                                        |
+| AC2  | UAC prompt при первом запуске; subsequent — cached                 | ⏳ MANUAL — нужен admin Windows для real elevation test. Helper manifest корректный, Windows покажет prompt автоматически.                                                                    |
+| AC3  | TXT parser: пустые строки, #комментарии, http://, www., mixed case | ✅ `services/kepler-focus-helper/src/hosts.rs` + 11 cargo unit tests pass. Frontend mirror в SettingsView.vue parseDomains().                                                                 |
+| AC4  | Atomic hosts update: backup → write → verify → rollback            | ✅ `hosts.kepler-backup` created once на первом write, не перезаписывается. Verify через readback после rename. Tests cover happy path + edge cases.                                          |
+| AC5  | Mini HTTP server 127.0.0.1:80 с block page + кнопками              | ❌ NOT IMPLEMENTED. **Deferred** — без mini server юзер видит «Connection refused» в браузере, что acceptable для MVP. Реализация требует дополнительной admin elevation для bind на port 80. |
+| AC6  | 5-min temporary unblock + persistent state                         | ❌ NOT IMPLEMENTED. **Deferred** — depends on AC5 (block page имеет кнопку «5 минут»). UI flow есть concept в spec, но без mini HTTP server не triggers.                                      |
+| AC7  | Horologion → focus.set_active_state → shell apply                  | ✅ Wired: `usePomodoroSession.applyFocusBlocking()` → `focus.set_active_state` → `extension-host.onFocusStateChanged()` → `applyFocusBlock()` → spawn helper.                                 |
+| AC8  | Kepler Settings → Focus tab                                        | ✅ F6 agent: tab «Фокус» в SettingsView.vue. Список blocklists + создать (form с textarea + drag&drop .txt) + активная блокировка + delete.                                                   |
+| AC9  | Uninstall hook → restore hosts                                     | ❌ NOT IMPLEMENTED. **Deferred** — NSIS uninstall hook требует electron-builder customisation. Workaround: юзер может deactivate через UI до uninstall.                                       |
+| AC10 | Browser cache hint (DNS flush) при temp unblock                    | ❌ N/A — depends on AC5/AC6.                                                                                                                                                                  |
 
 **Cumulative status:** **6/10 AC закрыты** (60%). Critical path для MVP: ✅. Deferred: mini HTTP server + 5-min unblock + uninstall hook (advanced UX, не блокирует core focus mode flow).
 

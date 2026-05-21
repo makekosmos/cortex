@@ -25,11 +25,11 @@ title.
 (как `horologion:pomodoro:25`). Видны в launcher всегда, не зависят от того что
 Eden запущен.
 
-| id | route | действие |
-|---|---|---|
+| id                     | route    | действие                                                                        |
+| ---------------------- | -------- | ------------------------------------------------------------------------------- |
 | `eden:note:open-today` | `/today` | найти/создать `system-type-journal` запись с today-title, активировать zen mode |
-| `eden:note:create` | `/new` | новая пустая заметка типа `note_obj` |
-| `eden:open` | — | просто открыть Eden |
+| `eden:note:create`     | `/new`   | новая пустая заметка типа `note_obj`                                            |
+| `eden:open`            | —        | просто открыть Eden                                                             |
 
 Route'ы обрабатываются в `extensions/eden/src/main.ts` через
 `kepler.navigation.initialRoute` + `onNavigate`:
@@ -77,7 +77,7 @@ Bottom-center, fixed. Рекурсивно собирает длину всех 
 ProseMirror doc:
 
 ```ts
-function countCharsInProseMirrorDoc(json: string | null | undefined): number | null
+function countCharsInProseMirrorDoc(json: string | null | undefined): number | null;
 ```
 
 Русская плюрализация: 1 → «символ», 2-4 → «символа», 5+ → «символов»,
@@ -108,10 +108,12 @@ backgroundMaterial: "acrylic",
 CSS (`App.css`):
 
 ```css
-.app-container { background-color: var(--bg-app); }
+.app-container {
+  background-color: var(--bg-app);
+}
 
 .app-container.focus-mode-active {
-  background-color: var(--sidebar-bg-acrylic);  /* alpha 82% */
+  background-color: var(--sidebar-bg-acrylic); /* alpha 82% */
   backdrop-filter: blur(24px) saturate(140%);
 }
 

@@ -179,11 +179,11 @@ function buildDoc(text) {
         type: "paragraph",
         content: text
           ? [
-            {
-              type: "text",
-              text,
-            },
-          ]
+              {
+                type: "text",
+                text,
+              },
+            ]
           : [],
       },
     ],
@@ -214,7 +214,10 @@ async function main() {
   await client.connect();
 
   try {
-    results.mainPing = await evalMain(client, `(async () => ({ mainPing: true, pid: process.pid }))()`);
+    results.mainPing = await evalMain(
+      client,
+      `(async () => ({ mainPing: true, pid: process.pid }))()`,
+    );
     results.rendererStringPing = await execRenderer(client, `(() => "renderer-ok")()`);
     results.rendererPing = await execRenderer(
       client,

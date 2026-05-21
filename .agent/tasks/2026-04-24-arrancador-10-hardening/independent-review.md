@@ -11,6 +11,7 @@ whether the current code and proof artifacts are good enough for that review to
 count as one of the required five 10/10 AC9 reviews.
 
 The current evidence is:
+
 - `spec.md`
 - `evidence.md`
 - `evidence.json`

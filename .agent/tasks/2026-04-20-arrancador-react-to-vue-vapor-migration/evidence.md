@@ -1,6 +1,7 @@
 # Evidence: Arrancador full React -> Vue/Vapor migration
 
 ## Current Status
+
 PASS
 
 ## Delivered scope

@@ -21,8 +21,7 @@ export const WithCover: Story = {
     to: "#hades",
     title: "Hades II",
     eyebrow: "Roguelike",
-    coverSrc:
-      "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&h=560&fit=crop",
+    coverSrc: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=400&h=560&fit=crop",
   },
   decorators: [
     (Story) => ({ components: { Story }, template: `<div style="width: 220px;"><Story /></div>` }),

@@ -5,7 +5,8 @@ const meta: Meta<typeof BlocklistCard> = {
   title: "Display/BlocklistCard",
   component: BlocklistCard,
   tags: ["autodocs"],
-  parameters: { layout: "centered",
+  parameters: {
+    layout: "centered",
     // Этот компонент свежий — agent-built, не handcrafted.
     // После того как юзер allowed UX → мы переключим на true.
     handcrafted: false,
@@ -21,10 +22,14 @@ export default meta;
 type Story = StoryObj<typeof BlocklistCard>;
 
 const sampleDomains = [
-  "tiktok.com", "www.tiktok.com",
-  "twitter.com", "www.twitter.com",
-  "reddit.com", "www.reddit.com",
-  "youtube.com", "www.youtube.com",
+  "tiktok.com",
+  "www.tiktok.com",
+  "twitter.com",
+  "www.twitter.com",
+  "reddit.com",
+  "www.reddit.com",
+  "youtube.com",
+  "www.youtube.com",
 ];
 
 export const Default: Story = {

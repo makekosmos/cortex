@@ -1,11 +1,13 @@
 # Task Spec: sync-full-db
 
 ## Metadata
+
 - Task ID: sync-full-db
 - Created: 2026-04-04
 - Repo root: /Users/kirill/Documents/projects/kepler
 
 ## Guidance sources
+
 - `/CLAUDE.md` (repo task proof loop)
 - `/apps/delphi/CLAUDE.md` (P2P sync architecture, data model, all platforms)
 - `/apps/delphi/kotlin/CLAUDE.md` (Android specifics, Ark Data ContentProvider)
@@ -20,6 +22,7 @@ Four user-reported problems:
 4. Data lost on Android app reinstall.
 
 Requirements from user:
+
 - ALL devices in a space MUST have IDENTICAL DB -- not just todos, but all entities (projects, areas, tags, headings, checklist items, notes).
 - Permanent delete = hard delete, must propagate to all devices.
 - Data must survive app reinstall on Android (Auto Backup or External Storage).
@@ -90,6 +93,7 @@ Applies to: `SyncServer.handleSyncChanges()`, `SyncServer.handleLiveChange()`, `
 ### AC5: Android space code persistence is robust
 
 Investigate and harden the DataStore read path in `SpaceSetupViewModel` so that a transient DataStore read failure does not cause the app to show SpaceSetupScreen. Possible approaches:
+
 - Add retry/fallback when DataStore returns null on cold start.
 - Wait for DataStore to be fully initialized before rendering NavGraph decision.
 - Persist space code redundantly (SharedPreferences fallback) if DataStore is unreliable.
@@ -109,6 +113,7 @@ The data model includes ChecklistItem and tag-todo cross-references. These MUST 
 ### AC8: All platforms compile and existing tests pass
 
 Changes MUST NOT break builds on any platform:
+
 - `bun run build` (TS/Electron)
 - `./gradlew assembleDebug` (Android/Kotlin)
 - Existing unit tests pass: `bun run test`, `./gradlew test`
@@ -146,14 +151,17 @@ Changes MUST NOT break builds on any platform:
 ## Verification plan
 
 ### Build
+
 - `cd /Users/kirill/Documents/projects/kepler && bun run build` -- Electron/TS compiles
 - `cd /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin && ./gradlew assembleDebug` -- Android compiles
 
 ### Unit tests
+
 - `cd /Users/kirill/Documents/projects/kepler && bun run test` -- existing tests pass
 - `cd /Users/kirill/Documents/projects/kepler/apps/delphi/kotlin && ./gradlew test` -- existing tests pass
 
 ### Code review checks
+
 - Verify `loadAllEntities` on Android includes all 5 entity types
 - Verify `getAllForSync` does not filter trashed items
 - Verify `emptyTrash` on both Electron and Android broadcasts delete events
@@ -162,6 +170,7 @@ Changes MUST NOT break builds on any platform:
 - Verify Android backup configuration
 
 ### Manual checks
+
 - Create space on Electron with todos, projects, areas, tags, headings
 - Join from Android -- verify all entities arrive
 - Empty trash on Electron -- verify Android removes same items

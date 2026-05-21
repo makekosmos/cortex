@@ -18,15 +18,15 @@ Current: `electron-main+rust-scan-sidecar`.
 
 `raw/compare-rust-scan.json` reports `correctnessPass: true`.
 
-| Metric | Pre-Rust | Rust scan sidecar | Status |
-| --- | ---: | ---: | --- |
-| scan duration | 136.19 ms | 134.38 ms | improved 1.33% |
-| scan p95 event-loop lag | 0.44 ms | 0.24 ms | improved 45.45% |
-| scan throughput | 52,867.32 files/s | 53,579.40 files/s | improved 1.35% |
-| time to first result | 3.95 ms | 7.47 ms | regressed 89.11% |
-| found executables | 720 | 720 | same |
-| cancel duration | 5.77 ms | 5.65 ms | improved 2.08% |
-| cancel latency | 0.45 ms | 0.39 ms | improved 13.33% |
+| Metric                  |          Pre-Rust | Rust scan sidecar | Status           |
+| ----------------------- | ----------------: | ----------------: | ---------------- |
+| scan duration           |         136.19 ms |         134.38 ms | improved 1.33%   |
+| scan p95 event-loop lag |           0.44 ms |           0.24 ms | improved 45.45%  |
+| scan throughput         | 52,867.32 files/s | 53,579.40 files/s | improved 1.35%   |
+| time to first result    |           3.95 ms |           7.47 ms | regressed 89.11% |
+| found executables       |               720 |               720 | same             |
+| cancel duration         |           5.77 ms |           5.65 ms | improved 2.08%   |
+| cancel latency          |           0.45 ms |           0.39 ms | improved 13.33%  |
 
 The remaining time-to-first-result regression is sidecar startup/protocol overhead. The next optimization is to keep the sidecar process warm instead of spawning it per scan.
 

@@ -87,9 +87,7 @@ interface ArrancadorApi {
 }
 
 export function arrancadorApi(): ArrancadorApi | null {
-  const kepler = (
-    window as unknown as { kepler?: { arrancador?: ArrancadorApi } }
-  ).kepler;
+  const kepler = (window as unknown as { kepler?: { arrancador?: ArrancadorApi } }).kepler;
   return kepler?.arrancador ?? null;
 }
 

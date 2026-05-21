@@ -6,18 +6,14 @@ export const gamePosterCardClasses = {
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
     "focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   ].join(" "),
-  media:
-    "kosmos-game-poster-card__media-stack absolute inset-0 z-0 overflow-hidden",
+  media: "kosmos-game-poster-card__media-stack absolute inset-0 z-0 overflow-hidden",
   image: "kosmos-game-poster-card__media absolute inset-0 z-0 h-full w-full object-cover",
   placeholder:
     "kosmos-game-poster-card__media absolute inset-0 z-0 flex items-center justify-center bg-gradient-to-br from-muted via-card to-secondary",
   scrim: "kosmos-game-poster-card__scrim pointer-events-none absolute inset-x-0 bottom-0 z-10",
-  overlay:
-    "kosmos-game-poster-card__overlay pointer-events-none absolute inset-0 z-20",
+  overlay: "kosmos-game-poster-card__overlay pointer-events-none absolute inset-0 z-20",
   content:
     "kosmos-game-poster-card__content pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-1 p-4 sm:p-5",
-  eyebrow:
-    "kosmos-game-poster-card__eyebrow truncate text-xs font-normal leading-none sm:text-sm",
-  title:
-    "kosmos-game-poster-card__title text-base font-semibold leading-tight sm:text-lg",
+  eyebrow: "kosmos-game-poster-card__eyebrow truncate text-xs font-normal leading-none sm:text-sm",
+  title: "kosmos-game-poster-card__title text-base font-semibold leading-tight sm:text-lg",
 } as const;

@@ -63,9 +63,7 @@ function getGeminiApiKey() {
   const key = import.meta.env.VITE_GEMINI_API_KEY?.trim();
 
   if (!key) {
-    throw new Error(
-      "VITE_GEMINI_API_KEY is missing. Add Gemini API key before using voice tasks.",
-    );
+    throw new Error("VITE_GEMINI_API_KEY is missing. Add Gemini API key before using voice tasks.");
   }
 
   return key;
@@ -284,9 +282,7 @@ class LiveVoiceTaskSession {
     }
 
     if (typeof window === "undefined" || !("ScriptProcessorNode" in window)) {
-      throw new Error(
-        "ScriptProcessorNode is not available in this environment.",
-      );
+      throw new Error("ScriptProcessorNode is not available in this environment.");
     }
 
     this.stream = await navigator.mediaDevices.getUserMedia({
@@ -335,8 +331,7 @@ class LiveVoiceTaskSession {
               {
                 name: CREATE_TASK_FUNCTION,
 
-                description:
-                  "Create one task immediately from current speech fragment.",
+                description: "Create one task immediately from current speech fragment.",
 
                 parametersJsonSchema: {
                   type: "object",
@@ -356,8 +351,7 @@ class LiveVoiceTaskSession {
               {
                 name: UPDATE_LAST_TASK_FUNCTION,
 
-                description:
-                  "Update the most recently created task when user corrects wording.",
+                description: "Update the most recently created task when user corrects wording.",
 
                 parametersJsonSchema: {
                   type: "object",
@@ -377,8 +371,7 @@ class LiveVoiceTaskSession {
               {
                 name: DELETE_LAST_TASK_FUNCTION,
 
-                description:
-                  "Delete the most recently created task when user cancels it.",
+                description: "Delete the most recently created task when user cancels it.",
 
                 parametersJsonSchema: {
                   type: "object",
@@ -511,9 +504,7 @@ class LiveVoiceTaskSession {
     this.wsOpen = false;
   }
 
-  private async executeToolCall(
-    call: FunctionCall,
-  ): Promise<ToolResponsePayload> {
+  private async executeToolCall(call: FunctionCall): Promise<ToolResponsePayload> {
     const responseBase = {
       id: call.id,
 
@@ -660,16 +651,13 @@ class LiveVoiceTaskSession {
 
     if (functionCalls.length === 0 || !this.session) {
       const boundaryReached =
-        Boolean(inputTranscription?.finished) ||
-        Boolean(message.serverContent?.turnComplete);
+        Boolean(inputTranscription?.finished) || Boolean(message.serverContent?.turnComplete);
 
       if (boundaryReached && this.utteranceBuffer) {
         try {
           await this.createTaskFromTranscriptFallback(this.utteranceBuffer);
         } catch (error) {
-          this.reportError(
-            `Fallback task create failed: ${toErrorMessage(error)}`,
-          );
+          this.reportError(`Fallback task create failed: ${toErrorMessage(error)}`);
         } finally {
           this.utteranceBuffer = "";
         }

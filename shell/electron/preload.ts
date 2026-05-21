@@ -19,8 +19,7 @@ const api: KeplerApi = {
     onDisconnected: (listener) => {
       const handler = () => listener();
       ipcRenderer.on("kepler:backend:disconnected", handler);
-      return () =>
-        ipcRenderer.removeListener("kepler:backend:disconnected", handler);
+      return () => ipcRenderer.removeListener("kepler:backend:disconnected", handler);
     },
   },
   window: {
@@ -30,19 +29,16 @@ const api: KeplerApi = {
       ipcRenderer.on("kepler:window:show", handler);
       return () => ipcRenderer.removeListener("kepler:window:show", handler);
     },
-    setExpanded: (expanded) =>
-      ipcRenderer.invoke("kepler:window:setExpanded", expanded),
+    setExpanded: (expanded) => ipcRenderer.invoke("kepler:window:setExpanded", expanded),
   },
   search: {
     query: (text) => ipcRenderer.invoke("kepler:search:query", text),
   },
   objects: {
-    listRecent: (limit) =>
-      ipcRenderer.invoke("kepler:objects:listRecent", limit),
+    listRecent: (limit) => ipcRenderer.invoke("kepler:objects:listRecent", limit),
   },
   ark: {
-    request: (operation, params) =>
-      ipcRenderer.invoke("kepler:ark:request", operation, params),
+    request: (operation, params) => ipcRenderer.invoke("kepler:ark:request", operation, params),
   },
   commands: {
     list: () => ipcRenderer.invoke("kepler:commands:list"),
@@ -56,17 +52,12 @@ const api: KeplerApi = {
   extension: {
     installPreview: (sourcePath) =>
       ipcRenderer.invoke("kepler:extension:install:preview", sourcePath),
-    installDo: (sourcePath) =>
-      ipcRenderer.invoke("kepler:extension:install:do", sourcePath),
-    installedList: () =>
-      ipcRenderer.invoke("kepler:extension:installed:list"),
-    revert: (id, timestamp) =>
-      ipcRenderer.invoke("kepler:extension:revert", id, timestamp),
-    backupsList: (id) =>
-      ipcRenderer.invoke("kepler:extension:backups:list", id),
+    installDo: (sourcePath) => ipcRenderer.invoke("kepler:extension:install:do", sourcePath),
+    installedList: () => ipcRenderer.invoke("kepler:extension:installed:list"),
+    revert: (id, timestamp) => ipcRenderer.invoke("kepler:extension:revert", id, timestamp),
+    backupsList: (id) => ipcRenderer.invoke("kepler:extension:backups:list", id),
     uninstall: (id) => ipcRenderer.invoke("kepler:extension:uninstall", id),
-    catalogFetch: (force) =>
-      ipcRenderer.invoke("kepler:extension:catalog:fetch", force),
+    catalogFetch: (force) => ipcRenderer.invoke("kepler:extension:catalog:fetch", force),
     installFromUrl: (url, expectedSha256) =>
       ipcRenderer.invoke("kepler:extension:install:fromUrl", url, expectedSha256),
   },
@@ -76,12 +67,10 @@ const api: KeplerApi = {
     pickDir: () => ipcRenderer.invoke("kepler:export:pickDir"),
   },
   focusWidget: {
-    setState: (patch) =>
-      ipcRenderer.invoke("kepler:focus-widget:set-state", patch),
+    setState: (patch) => ipcRenderer.invoke("kepler:focus-widget:set-state", patch),
     getState: () => ipcRenderer.invoke("kepler:focus-widget:get-state"),
     hide: () => ipcRenderer.invoke("kepler:focus-widget:hide"),
-    openHorologion: () =>
-      ipcRenderer.invoke("kepler:focus-widget:open-horologion"),
+    openHorologion: () => ipcRenderer.invoke("kepler:focus-widget:open-horologion"),
     pomodoro: {
       pause: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:pause"),
       resume: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:resume"),
@@ -116,8 +105,7 @@ const api: KeplerApi = {
     stop: () => ipcRenderer.invoke("kepler:focus-service:stop"),
     autoInstallDeclined: {
       get: () => ipcRenderer.invoke("kepler:focus-service:auto-install-declined:get"),
-      set: (value) =>
-        ipcRenderer.invoke("kepler:focus-service:auto-install-declined:set", value),
+      set: (value) => ipcRenderer.invoke("kepler:focus-service:auto-install-declined:set", value),
     },
     onStatusChanged: (cb) => {
       const wrapper = () => cb();
@@ -131,34 +119,28 @@ const api: KeplerApi = {
     autostart: {
       get: () => ipcRenderer.invoke("kepler:settings:autostart:get"),
       allowed: () => ipcRenderer.invoke("kepler:settings:autostart:allowed"),
-      set: (enabled) =>
-        ipcRenderer.invoke("kepler:settings:autostart:set", enabled),
+      set: (enabled) => ipcRenderer.invoke("kepler:settings:autostart:set", enabled),
     },
     developerMode: {
       get: () => ipcRenderer.invoke("kepler:settings:developer-mode:get"),
-      set: (enabled) =>
-        ipcRenderer.invoke("kepler:settings:developer-mode:set", enabled),
+      set: (enabled) => ipcRenderer.invoke("kepler:settings:developer-mode:set", enabled),
     },
     usageTracker: {
       get: () => ipcRenderer.invoke("kepler:settings:usage-tracker:get"),
-      set: (enabled) =>
-        ipcRenderer.invoke("kepler:settings:usage-tracker:set", enabled),
+      set: (enabled) => ipcRenderer.invoke("kepler:settings:usage-tracker:set", enabled),
     },
     version: () => ipcRenderer.invoke("kepler:settings:version"),
     hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
-    hotkeySet: (value) =>
-      ipcRenderer.invoke("kepler:settings:hotkey:set", value),
+    hotkeySet: (value) => ipcRenderer.invoke("kepler:settings:hotkey:set", value),
     hotkeyReset: () => ipcRenderer.invoke("kepler:settings:hotkey:reset"),
     update: {
       check: () => ipcRenderer.invoke("kepler:settings:update:check"),
       install: () => ipcRenderer.invoke("kepler:settings:update:install"),
       state: () => ipcRenderer.invoke("kepler:settings:update:state"),
       onStateChanged: (listener) => {
-        const handler = (_e: unknown, state: unknown) =>
-          listener(state as never);
+        const handler = (_e: unknown, state: unknown) => listener(state as never);
         ipcRenderer.on("kepler:settings:update:state", handler);
-        return () =>
-          ipcRenderer.removeListener("kepler:settings:update:state", handler);
+        return () => ipcRenderer.removeListener("kepler:settings:update:state", handler);
       },
     },
   },
@@ -169,8 +151,7 @@ const api: KeplerApi = {
   },
   postUpdate: {
     onShown: (listener) => {
-      const handler = (_e: unknown, payload: unknown) =>
-        listener(payload as { version: string });
+      const handler = (_e: unknown, payload: unknown) => listener(payload as { version: string });
       ipcRenderer.on("kepler:post-update", handler);
       return () => ipcRenderer.removeListener("kepler:post-update", handler);
     },

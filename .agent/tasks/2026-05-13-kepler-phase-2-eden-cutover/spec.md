@@ -9,6 +9,7 @@
 ## Цель
 
 После Phase 2:
+
 - ARK имеет таблицу `sync_pending_objects` для hold-and-replay objects с неизвестным `type_id` (закрывает блайнд-спот #1).
 - `@kosmos/ark` имеет третий transport mode: **kepler** — коннектится к Kepler host через WebSocket, использует existing handshake протокола.
 - `@kosmos/ark` exports новый helper `ensureKeplerRunning()` — auto-launch flow (см. план Decision #4 + Phase 6 AC5-AC8).
@@ -17,32 +18,39 @@
 ## Acceptance criteria
 
 ### AC1 — Eden работает в kepler-mode end-to-end
+
 **Утверждение**: Запустить Kepler host + Eden с `KOSMOS_KEPLER_OPTIONAL=1`. Eden создаёт object_type, объект, обновляет, удаляет — все через WS к Kepler. Никакого self-spawn ark-core-rpc внутри Eden.
 **Проверка**: вручную (manual smoke) + Playwright e2e после имплементации.
 
 ### AC2 — Kill Kepler → reconnect ≤ 5s
+
 **Утверждение**: пока Eden открыт и работает с ARK, kill Kepler из task-manager. Eden показывает «connection lost» tост, Kepler respawn'ится (если watcher есть) или manually запускается. Eden переподключается ≤ 5s, in-flight requests retry'ятся (или fail gracefully), новые requests работают.
 **Проверка**: manual smoke + unit test для `KeplerTransport.reconnect` с mock WS.
 
 ### AC3 — Schema drift: unknown type_id → sync_pending_objects + sync_error event
+
 **Утверждение**: peer присылает SyncEntity типа "object" с `data.type_id = "X"`, и `X` не существует в `object_types`. ARK кладёт payload в `sync_pending_objects`, эмитит `sync_error` event `{code: "unknown_type_id", entity_id, awaited_type_id}`. Version_vector обновляется (entity «принят»).
 **Проверка**: Rust unit test (`db::tests::object_with_unknown_type_goes_to_pending`).
 
 ### AC4 — Replay: создание object_type → автоматический replay + sync_replay event
+
 **Утверждение**: после AC3 в pending лежит payload. Создаётся (через любой path: local upsert_object_type или sync) тот самый `object_type`. ARK автоматически replay'ит pending: parses payload, upsert_object, DELETE из pending, эмитит `sync_replay` event `{entity_id, type_id}`. Объект становится доступен через `list_objects`.
 **Проверка**: Rust unit test (`db::tests::replay_runs_when_type_appears`).
 
 ### AC5 — Version mismatch отклоняется
+
 **Утверждение**: `@kosmos/ark` ArkClient в kepler-mode читает `kepler.lock.json`, парсит `protocol_version`. Если MAJOR не совпадает с поддерживаемым клиентом — refuse connect, throw `IncompatibleProtocolError`. При `KOSMOS_KEPLER_OPTIONAL=1` — fallback на self-managed.
 **Проверка**: TS unit test (`ark-client.test.ts::kepler_mode_rejects_major_mismatch`).
 
 ### AC6 — Fallback: lock-file отсутствует → self-managed
+
 **Утверждение**: `KOSMOS_KEPLER_OPTIONAL=1`, lock-файл не существует или PID мёртв. ArkClient прозрачно стартует self-managed ark-core-rpc child (как сейчас). Eden работает идентично pre-Phase-2 поведению.
 **Проверка**: TS unit test + manual smoke без Kepler.
 
 ## Объём работ (компоненты)
 
 ### Rust (ARK core)
+
 - `packages/ark-core/rust/src/schema.rs` — новая таблица `sync_pending_objects`
 - `packages/ark-core/rust/src/db.rs`:
   - `is_object_type_known(conn, type_id) -> bool`
@@ -54,6 +62,7 @@
 - Unit tests: object → pending; replay; idempotency
 
 ### TypeScript (`@kosmos/ark`)
+
 - Новый `ensureKeplerRunning(opts)` helper в `src/ensure-kepler.ts`:
   - Reads `kepler.lock.json`
   - Checks PID alive
@@ -66,6 +75,7 @@
 - Update `src/index.ts` exports
 
 ### Eden
+
 - `apps/eden/ts/main/ark.ts` — заменить локальный `ArkClient` class (lines 101-313) на `import { ArkClient } from "@kosmos/ark"` с kepler-mode resolve.
 - Опциональный `SyncDriftToast.vue` component (renderer side) — подписка на `sync_error`/`sync_replay` events через preload bridge, ненавязчивый toast.
 

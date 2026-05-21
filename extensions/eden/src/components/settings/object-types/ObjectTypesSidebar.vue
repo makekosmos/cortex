@@ -47,7 +47,9 @@ const emit = defineEmits<{
                 draggable="false"
               />
             </div>
-            <span class="object-types-sidebar__item-name object-types-item-name">{{ noteType.name }}</span>
+            <span class="object-types-sidebar__item-name object-types-item-name">{{
+              noteType.name
+            }}</span>
           </div>
           <span class="object-types-sidebar__item-badge">Система</span>
         </button>
@@ -75,7 +77,9 @@ const emit = defineEmits<{
                 draggable="false"
               />
             </div>
-            <span class="object-types-sidebar__item-name object-types-item-name">{{ noteType.name }}</span>
+            <span class="object-types-sidebar__item-name object-types-item-name">{{
+              noteType.name
+            }}</span>
           </div>
         </button>
 

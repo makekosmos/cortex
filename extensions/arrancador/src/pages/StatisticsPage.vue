@@ -21,9 +21,7 @@ const totalPlaytime = computed(() =>
   games.value.reduce((sum, g) => sum + (g.totalPlaytime ?? 0), 0),
 );
 
-const favouritesCount = computed(
-  () => games.value.filter((g) => g.isFavorite).length,
-);
+const favouritesCount = computed(() => games.value.filter((g) => g.isFavorite).length);
 
 const completedCount = computed(
   () => games.value.filter((g) => g.playStatus === "completed").length,
@@ -56,8 +54,8 @@ function formatHours(seconds: number): string {
     <h1 class="arrancador-page__title">Статистика</h1>
 
     <p class="arrancador-page__hint">
-      Тепловая карта по дням (usage_sessions / events) появится после
-      Phase 5. Сейчас агрегация только по `game_obj.propsJson.total_playtime`.
+      Тепловая карта по дням (usage_sessions / events) появится после Phase 5. Сейчас агрегация
+      только по `game_obj.propsJson.total_playtime`.
     </p>
 
     <div v-if="error" class="arrancador-error">{{ error }}</div>
@@ -99,11 +97,7 @@ function formatHours(seconds: number): string {
         description="Запустите игру из Arrancador.exe."
       />
       <ol v-else class="arrancador-stats__top">
-        <li
-          v-for="game in topPlayed"
-          :key="game.id"
-          class="arrancador-stats__top-row"
-        >
+        <li v-for="game in topPlayed" :key="game.id" class="arrancador-stats__top-row">
           <span class="arrancador-stats__top-name">{{ game.name }}</span>
           <span class="arrancador-stats__top-value">
             {{ formatHours(game.totalPlaytime ?? 0) }}

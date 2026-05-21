@@ -1,11 +1,12 @@
 # DB resilience и crash safety
 
 ::: tip Источник правды
+
 - `services/kepler-backend/src/db_backup.rs` — periodic backup scheduler
 - `services/kepler-backend/src/crash_reporter.rs` — Rust panic hook
 - `crates/ark-core/rust/src/db.rs::check_integrity` + `backup_to_file`
 - `shell/electron/main.ts` — Electron crashReporter + supervisor logic
-:::
+  :::
 
 Локально-первый продукт = вся ответственность за data safety на твоей машине. Эта страница описывает все safety nets, которые работают за кулисами.
 
@@ -14,26 +15,31 @@
 Раз в **24 часа** (override через `KEPLER_BACKUP_INTERVAL_HOURS`) `kepler-backend` на старте делает SQLite Online Backup ARK базы в `%APPDATA%\Kosmos\backups\ark.db.backup-YYYY-MM-DD-HHMMSS`.
 
 **Что значит "Online Backup":**
+
 - Используется `rusqlite::Connection::backup` (`backup` feature) — SQLite C API.
 - Source DB остаётся live — concurrent readers и единственный writer не блокируются.
 - Это **не** raw `cp` — Online Backup корректно работает с WAL + checkpoints.
 
 **Rotation:**
+
 - После каждого backup'а удаляется всё кроме **последних 7** (override через `KEPLER_BACKUP_RETAIN_COUNT`).
 - Sort by parsed timestamp в имени файла (descending) — независимо от mtime.
 
 **Last-run tracking:**
+
 - Timestamp последнего backup'а хранится в `sync_kv` под ключом `kepler.last_backup_ts`.
 - При старте, если `now - last_ts < interval` — backup пропускается.
 - Если sync_kv ключа нет (свежая установка) — backup запускается сразу.
 
 **Failure modes:**
+
 - Backup failure НЕ блокирует startup backend'а — `eprintln!` в лог, continue.
 - User увидит missing backup files в `<data_dir>/backups/`.
 
 ## Integrity check на старте
 
 `db::init_schema(conn)` перед applying миграций вызывает:
+
 ```rust
 conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
 ```
@@ -41,15 +47,18 @@ conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
 Если результат != `"ok"` — `init_schema` возвращает `Err(format!("ARK DB integrity check failed: ..."))`.
 
 **Что ловит:**
+
 - WAL/journal corruption после unexpected shutdown.
 - Disk corruption (bad sector, file system error).
 - Schema drift с corrupted btree pages.
 
 **Что НЕ ловит:**
+
 - Application-level data inconsistencies (например, foreign key violations — те ловятся отдельно через `PRAGMA foreign_keys = ON`).
 - Logically wrong data (например, неправильные JSON в `propsJson`).
 
 **После fail-loud:**
+
 - Backend записывает Err в WS init response.
 - Kepler shell видит non-connected state → `resetArkClient` → UI показывает error.
 - User может попробовать restart, или восстановить из `backups/` вручную.
@@ -58,24 +67,27 @@ conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
 
 `shell/electron/main.ts` — exponential backoff respawn:
 
-| Crash # | Delay перед respawn |
-|---|---|
-| 1 | 1 секунда |
-| 2 | 5 секунд |
-| 3 | 30 секунд |
-| 4 | 60 секунд |
-| 5 | 120 секунд |
-| 6+ | Error dialog, automatic restart paused |
+| Crash # | Delay перед respawn                    |
+| ------- | -------------------------------------- |
+| 1       | 1 секунда                              |
+| 2       | 5 секунд                               |
+| 3       | 30 секунд                              |
+| 4       | 60 секунд                              |
+| 5       | 120 секунд                             |
+| 6+      | Error dialog, automatic restart paused |
 
 **Reset conditions:**
+
 - Если backend проработал **> 5 минут** — counter сбрасывается (это transient crash, не permanent).
 - Manual restart через Settings → Перезапустить backend — counter сбрасывается (user action).
 
 **Что считается crash:**
+
 - Exit code != 0 от `backendProc.on('exit')`.
 - Code 0 (clean exit, manual stop) — НЕ respawn.
 
 **`isQuiting` guard:**
+
 - При shutdown Kepler shell isQuiting = true — supervisor НЕ respawn'ит backend.
 
 ## Crash reporter
@@ -89,6 +101,7 @@ conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
 ```
 
 Файл содержит:
+
 - `kepler-backend v0.1.X` (CARGO_PKG_VERSION)
 - timestamp (RFC 3339)
 - panic message (downcast `&str` / `String`)
@@ -106,6 +119,7 @@ conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
 ### Settings UI
 
 Settings → General → секция "Отчёты об ошибках":
+
 - Hint показывает count crash files в папке.
 - Кнопка **«Открыть папку»** — `shell.openPath(<data_dir>/crashes/)`.
 - Кнопка **«Очистить»** — удаляет все crash файлы.

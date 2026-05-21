@@ -53,12 +53,7 @@ watch(
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="kosmos-timecol"
-    :aria-label="props.label"
-    role="listbox"
-  >
+  <div ref="root" class="kosmos-timecol" :aria-label="props.label" role="listbox">
     <button
       v-for="v in items"
       :key="v"

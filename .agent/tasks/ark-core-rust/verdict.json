@@ -4,31 +4,87 @@
   "timestamp": "2026-04-04",
   "summary": "Core DB, HLC, protocol, sync server/client, space codes compile and pass 59 tests. UniFFI bindings (AC13), cdylib target (AC14), and SqliteStorageBackend (AC12) are missing.",
   "criteria": [
-    { "id": "AC1", "status": "PASS", "reason": "Schema creates todos, projects, areas, tags, headings, sync_kv with correct columns. PRAGMAs set in open_db." },
-    { "id": "AC2", "status": "PASS", "reason": "All 16 CRUD operations implemented in db.rs and dispatched from main.rs. INSERT OR REPLACE semantics, bool as INTEGER, JSON TEXT for tag_ids/checklist_items/recurrence_rule." },
-    { "id": "AC3", "status": "PASS", "reason": "main.rs reads JSON per line from stdin, dispatches to handler, writes JSON response. Wire format matches existing sidecar." },
-    { "id": "AC4", "status": "PASS", "reason": "HLC with tick, merge, compare, to_string, from_string. Format <ISO8601>:<counter:06d>:<device_id>. Splits on Z. Tests pass." },
-    { "id": "AC5", "status": "PASS", "reason": "VersionVector = HashMap<String,String>. compute_vector_diff and compute_local_excess implemented and tested." },
-    { "id": "AC6", "status": "PASS", "reason": "split_into_batches respects MAX_BATCH_SIZE=100 and MAX_BATCH_BYTES=1MB. Tests for count and byte limits pass." },
-    { "id": "AC7", "status": "PASS", "reason": "All 9 message types as enum with serde tag discriminator. snake_case fields. SyncEntity.type via rename, deleted skip_serializing_if. Serialization tests pass." },
-    { "id": "AC8", "status": "PASS", "reason": "WS server on port 21531 with tokio+tungstenite. Hello validation, version_vector exchange, peer_list, sync_changes batches, live_change forwarding, ping frames." },
-    { "id": "AC9", "status": "PASS", "reason": "WS client with address racing (tokio::spawn per address, oneshot for first winner). Exponential backoff 2s base/30s max. Stopped flag. Full protocol flow." },
-    { "id": "AC10", "status": "PASS", "reason": "PeerRecord struct with all fields. merge_peer_records unions addresses, keeps newest last_seen. Persisted via sync_kv sync.peers key." },
-    { "id": "AC11", "status": "PASS", "reason": "generate_space_code 12-char Crockford. encode/decode_ipv4 7-char. Extended 19-char. format/parse for 7/12/19. derive_space_id SHA-256 first 16 hex. QR payload ark://join URI. All tested." },
-    { "id": "AC12", "status": "FAIL", "reason": "StorageBackend trait is defined but no SqliteStorageBackend implementation exists anywhere in the crate." },
-    { "id": "AC13", "status": "FAIL", "reason": "No uniffi dependency in Cargo.toml. No UniFFI annotations or UDL file. No exported surface for Kotlin/Swift." },
-    { "id": "AC14", "status": "FAIL", "reason": "Cargo.toml has crate-type = [\"lib\"] instead of [\"cdylib\", \"lib\"]. No cdylib output for UniFFI." },
-    { "id": "AC15", "status": "PASS", "reason": "Protocol messages use snake_case, SyncEntity.type serializes as type, deleted omitted when None. Deserialization of TS-compatible JSON tested." },
-    { "id": "AC16", "status": "PASS", "reason": "59 unit tests pass covering HLC, version vectors, batch splitting, space codes, peer records, protocol messages, DB CRUD." }
+    {
+      "id": "AC1",
+      "status": "PASS",
+      "reason": "Schema creates todos, projects, areas, tags, headings, sync_kv with correct columns. PRAGMAs set in open_db."
+    },
+    {
+      "id": "AC2",
+      "status": "PASS",
+      "reason": "All 16 CRUD operations implemented in db.rs and dispatched from main.rs. INSERT OR REPLACE semantics, bool as INTEGER, JSON TEXT for tag_ids/checklist_items/recurrence_rule."
+    },
+    {
+      "id": "AC3",
+      "status": "PASS",
+      "reason": "main.rs reads JSON per line from stdin, dispatches to handler, writes JSON response. Wire format matches existing sidecar."
+    },
+    {
+      "id": "AC4",
+      "status": "PASS",
+      "reason": "HLC with tick, merge, compare, to_string, from_string. Format <ISO8601>:<counter:06d>:<device_id>. Splits on Z. Tests pass."
+    },
+    {
+      "id": "AC5",
+      "status": "PASS",
+      "reason": "VersionVector = HashMap<String,String>. compute_vector_diff and compute_local_excess implemented and tested."
+    },
+    {
+      "id": "AC6",
+      "status": "PASS",
+      "reason": "split_into_batches respects MAX_BATCH_SIZE=100 and MAX_BATCH_BYTES=1MB. Tests for count and byte limits pass."
+    },
+    {
+      "id": "AC7",
+      "status": "PASS",
+      "reason": "All 9 message types as enum with serde tag discriminator. snake_case fields. SyncEntity.type via rename, deleted skip_serializing_if. Serialization tests pass."
+    },
+    {
+      "id": "AC8",
+      "status": "PASS",
+      "reason": "WS server on port 21531 with tokio+tungstenite. Hello validation, version_vector exchange, peer_list, sync_changes batches, live_change forwarding, ping frames."
+    },
+    {
+      "id": "AC9",
+      "status": "PASS",
+      "reason": "WS client with address racing (tokio::spawn per address, oneshot for first winner). Exponential backoff 2s base/30s max. Stopped flag. Full protocol flow."
+    },
+    {
+      "id": "AC10",
+      "status": "PASS",
+      "reason": "PeerRecord struct with all fields. merge_peer_records unions addresses, keeps newest last_seen. Persisted via sync_kv sync.peers key."
+    },
+    {
+      "id": "AC11",
+      "status": "PASS",
+      "reason": "generate_space_code 12-char Crockford. encode/decode_ipv4 7-char. Extended 19-char. format/parse for 7/12/19. derive_space_id SHA-256 first 16 hex. QR payload ark://join URI. All tested."
+    },
+    {
+      "id": "AC12",
+      "status": "FAIL",
+      "reason": "StorageBackend trait is defined but no SqliteStorageBackend implementation exists anywhere in the crate."
+    },
+    {
+      "id": "AC13",
+      "status": "FAIL",
+      "reason": "No uniffi dependency in Cargo.toml. No UniFFI annotations or UDL file. No exported surface for Kotlin/Swift."
+    },
+    {
+      "id": "AC14",
+      "status": "FAIL",
+      "reason": "Cargo.toml has crate-type = [\"lib\"] instead of [\"cdylib\", \"lib\"]. No cdylib output for UniFFI."
+    },
+    {
+      "id": "AC15",
+      "status": "PASS",
+      "reason": "Protocol messages use snake_case, SyncEntity.type serializes as type, deleted omitted when None. Deserialization of TS-compatible JSON tested."
+    },
+    {
+      "id": "AC16",
+      "status": "PASS",
+      "reason": "59 unit tests pass covering HLC, version vectors, batch splitting, space codes, peer records, protocol messages, DB CRUD."
+    }
   ],
-  "commands_run": [
-    "cargo build -- success",
-    "cargo test -- 59 passed, 0 failed"
-  ],
-  "artifacts_used": [
-    "spec.md",
-    "All src/*.rs files",
-    "Cargo.toml",
-    "packages/ark-core/CLAUDE.md"
-  ]
+  "commands_run": ["cargo build -- success", "cargo test -- 59 passed, 0 failed"],
+  "artifacts_used": ["spec.md", "All src/*.rs files", "Cargo.toml", "packages/ark-core/CLAUDE.md"]
 }

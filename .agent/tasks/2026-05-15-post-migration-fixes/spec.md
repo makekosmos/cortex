@@ -40,7 +40,7 @@
 
 - **AC8**: Playwright e2e infrastructure установлена. Spec файлы в
   `tests/e2e/` (root) или в каждом extension. CI команда `bun run
-  test:e2e`.
+test:e2e`.
 - **AC9**: **Test DB isolation** жёстко: все Playwright прогоны
   используют `%APPDATA%\Kosmos-test\ark.db` (или `.e2e/<spec>.db`),
   никогда `%APPDATA%\Kosmos\ark.db`. Backend поддерживает
@@ -65,15 +65,18 @@
 ## Approach
 
 **Phase A — Test infrastructure (foundation):**
+
 1. Playwright install + config. Test DB convention.
 2. Backend `KOSMOS_DATA_DIR` env override.
 3. Documentation refresh.
 
 **Phase B — Quick fixes (independent):**
+
 1. Build warnings (INEFFECTIVE_DYNAMIC_IMPORT, deprecated options).
 2. `missing field 'id'` diagnostic + fix.
 
 **Phase C — Functional regressions (validated by tests):**
+
 1. Делphi sidebar (still empty after dedupe e5d3d18 — need DOM-level
    diagnostic via Playwright).
 2. Horologion stopwatch/pomodoro state management.

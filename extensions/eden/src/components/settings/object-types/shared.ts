@@ -103,9 +103,7 @@ export function buildUiSchema(typeDraft: TypeDraft) {
     .map((field) => field.id);
   const hiddenFields = [
     ...baseHiddenFields,
-    ...typeDraft.fields
-      .filter((field) => field.displayMode === "hidden")
-      .map((field) => field.id),
+    ...typeDraft.fields.filter((field) => field.displayMode === "hidden").map((field) => field.id),
   ];
 
   return {
@@ -132,7 +130,9 @@ export function buildHeaderTemplateJson(typeDraft: TypeDraft) {
   const imageFieldId = typeDraft.fields.find((field) => field.kind === "image")?.id ?? null;
 
   return JSON.stringify({
-    ...createDefaultHeaderTemplate(typeDraft.headerLayout === "column" ? "centered_profile" : "default"),
+    ...createDefaultHeaderTemplate(
+      typeDraft.headerLayout === "column" ? "centered_profile" : "default",
+    ),
     primaryFieldIds: featuredFields,
     secondaryFieldIds: visibleFields,
     imageFieldId,

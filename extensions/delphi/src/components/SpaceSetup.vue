@@ -122,17 +122,13 @@ async function handleCreate() {
   // Get own addresses via IPC for QR payload and extended code
   if (isElectron && window.electronAPI?.invoke) {
     try {
-      const addresses = (await window.electronAPI.invoke(
-        "sync:getOwnAddresses",
-      )) as string[];
+      const addresses = (await window.electronAPI.invoke("sync:getOwnAddresses")) as string[];
       const payload = generateQrPayload(code, addresses ?? []);
       qrPayloadRaw.value = payload;
       await generateQr(payload);
 
       // Build extended code from first LAN IPv4 address
-      const primaryAddr = (addresses ?? []).find((a) =>
-        /^\d+\.\d+\.\d+\.\d+:\d+$/.test(a),
-      );
+      const primaryAddr = (addresses ?? []).find((a) => /^\d+\.\d+\.\d+\.\d+:\d+$/.test(a));
       if (primaryAddr) {
         const ipv4 = primaryAddr.split(":")[0];
         const ext = generateExtendedCode(code, ipv4);
@@ -164,8 +160,7 @@ function handleJoin() {
   // Try parsing as raw code
   const parsed = parseSpaceCode(input);
   if (!parsed) {
-    joinError.value =
-      "Введите корректный код (XXXX-XXXX-XXXX или XXXX-XXXX-XXXX-XXXX-XXX)";
+    joinError.value = "Введите корректный код (XXXX-XXXX-XXXX или XXXX-XXXX-XXXX-XXXX-XXX)";
     return;
   }
   joinError.value = "";
@@ -174,12 +169,8 @@ function handleJoin() {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
-  >
-    <div
-      class="bg-(--background) border-(--border) w-full max-w-sm rounded-xl border p-5"
-    >
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+    <div class="bg-(--background) border-(--border) w-full max-w-sm rounded-xl border p-5">
       <!-- Choose mode -->
       <template v-if="mode === 'choose'">
         <h2 class="mb-1 text-lg font-semibold">Ark Space</h2>
@@ -189,9 +180,7 @@ function handleJoin() {
 
         <!-- Saved spaces -->
         <div v-if="savedSpaces.length > 0" class="mb-4">
-          <p
-            class="text-(--muted-foreground) mb-2 text-xs font-medium uppercase tracking-wider"
-          >
+          <p class="text-(--muted-foreground) mb-2 text-xs font-medium uppercase tracking-wider">
             Сохранённые пространства
           </p>
           <div class="space-y-2">
@@ -303,13 +292,7 @@ function handleJoin() {
           Отсканируйте QR-код или введите код на другом устройстве.
         </p>
         <div v-if="qrDataUrl" class="mb-4 flex justify-center">
-          <img
-            :src="qrDataUrl"
-            alt="QR Code"
-            class="rounded-lg"
-            width="200"
-            height="200"
-          />
+          <img :src="qrDataUrl" alt="QR Code" class="rounded-lg" width="200" height="200" />
         </div>
         <div
           class="bg-(--muted) mb-3 rounded-lg p-4 text-center font-mono text-2xl tracking-widest"
@@ -342,8 +325,8 @@ function handleJoin() {
         </button>
         <h2 class="mb-1 text-lg font-semibold">Присоединиться</h2>
         <p class="text-(--muted-foreground) mb-4 text-sm">
-          Введите код пространства. Длинный код (XXXX-XXXX-XXXX-XXXX-XXX)
-          включает адрес устройства для прямого подключения.
+          Введите код пространства. Длинный код (XXXX-XXXX-XXXX-XXXX-XXX) включает адрес устройства
+          для прямого подключения.
         </p>
         <input
           v-model="joinInput"

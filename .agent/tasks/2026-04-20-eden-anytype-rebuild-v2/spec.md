@@ -1,7 +1,9 @@
 # Task Spec - Eden Anytype object types rebuild v2
 
 ## Goal
+
 Rebuild Eden's object type/settings experience so it stops looking like a generic gray form UI and instead feels materially closer to Anytype in:
+
 - spatial composition
 - hierarchy
 - row/item states
@@ -10,12 +12,14 @@ Rebuild Eden's object type/settings experience so it stops looking like a generi
 - motion/interaction cues
 
 At the same time:
+
 - consume Kosmos visuals theme tokens instead of inventing ad-hoc gray surfaces
 - remove mojibake in touched UI
 - produce test Ark databases for typed note and game flows
 - document current dev-mode/runtime constraints and fix repo-side issues where feasible
 
 ## Sources to mirror
+
 - `sample/anytype-ts-develop/src/ts/component/sidebar/page/type.tsx`
 - `sample/anytype-ts-develop/src/ts/component/sidebar/preview.tsx`
 - `sample/anytype-ts-develop/src/ts/component/page/elements/head/simple.tsx`
@@ -28,6 +32,7 @@ At the same time:
 - `packages/kosmos-visuals/tokens/colors.ts`
 
 ## Design constraints
+
 - Do not fake Anytype with random gradients and generic cards.
 - Prefer Anytype-like section rhythm, hover overlays, list row shells, and lightweight borders.
 - Reuse Kosmos visuals CSS variables for base colors and surfaces.
@@ -35,6 +40,7 @@ At the same time:
 - Preserve Vue Composition API and keep route-level files as composition surfaces.
 
 ## Component map
+
 - `ObjectTypesSettings.vue`
   route-level composition surface for the object type screen shell only
 - `ObjectTypesSidebar.vue`
@@ -55,6 +61,7 @@ At the same time:
   draft state and preview derivations
 
 ## Acceptance Criteria
+
 - AC1: The object types screen uses a distinctly Anytype-like composition with a left type library and a right page-like editor workspace, not a generic form card layout.
 - AC2: The rebuilt screen consumes Kosmos visuals theme tokens for background, surface, border, text, sidebar, and hover states; new ad-hoc gray color mixing is removed from the rebuilt object type UI.
 - AC3: Object type rows and field rows have clear interactive states inspired by Anytype: hover overlay, active state, affordance for reordering, and tighter section rhythm.
@@ -66,6 +73,7 @@ At the same time:
 - AC9: Current dev-mode/runtime issues are explicitly investigated and summarized with repo-side fixes applied where feasible; any environment-only blockers are documented with evidence.
 
 ## Verification plan
+
 - Typecheck:
   - `node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit`
 - Build:
@@ -80,6 +88,7 @@ At the same time:
   - inspect touched files through UTF-8-aware reads, not PowerShell console rendering alone
 
 ## Raw artifact targets
+
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/tsc.txt`
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/build.txt`
 - `.agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/seed.txt`

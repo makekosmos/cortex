@@ -1,300 +1,300 @@
 ﻿{
-    "timestamp":  "2026-04-24T10:37:20.5380607+03:00",
-    "sourceFileCount":  210,
-    "codeFileCount":  198,
-    "testFileCount":  32,
-    "totalCodeLines":  26256,
-    "top30LineCounts":  [
-                            {
-                                "lines":  608,
-                                "file":  "apps/arrancador/sidecar/src/main.rs"
-                            },
-                            {
-                                "lines":  527,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
-                            },
-                            {
-                                "lines":  514,
-                                "file":  "apps/arrancador/src-vue/pages/GameDetailPage.vue"
-                            },
-                            {
-                                "lines":  499,
-                                "file":  "apps/arrancador/src-vue/pages/LibraryPage.vue"
-                            },
-                            {
-                                "lines":  466,
-                                "file":  "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
-                            },
-                            {
-                                "lines":  462,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage.ts"
-                            },
-                            {
-                                "lines":  369,
-                                "file":  "apps/arrancador/bench/run-baseline.ts"
-                            },
-                            {
-                                "lines":  366,
-                                "file":  "apps/arrancador/e2e/bridge-mock.ts"
-                            },
-                            {
-                                "lines":  351,
-                                "file":  "apps/arrancador/src/types/index.ts"
-                            },
-                            {
-                                "lines":  349,
-                                "file":  "apps/arrancador/src-vue/lib/libraryFilters.ts"
-                            },
-                            {
-                                "lines":  347,
-                                "file":  "apps/arrancador/electron/main/services/games.ts"
-                            },
-                            {
-                                "lines":  337,
-                                "file":  "apps/arrancador/electron/main/services/ark-game-objects.ts"
-                            },
-                            {
-                                "lines":  329,
-                                "file":  "apps/arrancador/src-vue/components/AppSpotlight.vue"
-                            },
-                            {
-                                "lines":  329,
-                                "file":  "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
-                            },
-                            {
-                                "lines":  327,
-                                "file":  "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
-                            },
-                            {
-                                "lines":  317,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage.test.ts"
-                            },
-                            {
-                                "lines":  317,
-                                "file":  "apps/arrancador/src-vue/test/game-detail-components.test.ts"
-                            },
-                            {
-                                "lines":  317,
-                                "file":  "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
-                            },
-                            {
-                                "lines":  296,
-                                "file":  "apps/arrancador/src-vue/composables/useScanPageState.ts"
-                            },
-                            {
-                                "lines":  295,
-                                "file":  "apps/arrancador/electron/shared/ipc.ts"
-                            },
-                            {
-                                "lines":  282,
-                                "file":  "apps/arrancador/electron/main/ipc/backup-handlers.ts"
-                            },
-                            {
-                                "lines":  275,
-                                "file":  "apps/arrancador/src-vue/components/scan/ScanResultsList.vue"
-                            },
-                            {
-                                "lines":  271,
-                                "file":  "apps/arrancador/src-vue/components/sqoba/SqobaGameCard.vue"
-                            },
-                            {
-                                "lines":  267,
-                                "file":  "apps/arrancador/src/types/ipc.ts"
-                            },
-                            {
-                                "lines":  265,
-                                "file":  "apps/arrancador/src-vue/composables/useSqobaPageState.ts"
-                            },
-                            {
-                                "lines":  263,
-                                "file":  "apps/arrancador/electron/main/services/ark-game-migration.ts"
-                            },
-                            {
-                                "lines":  263,
-                                "file":  "apps/arrancador/scripts/dev.ts"
-                            },
-                            {
-                                "lines":  261,
-                                "file":  "apps/arrancador/src-vue/components/AppSidebar.vue"
-                            },
-                            {
-                                "lines":  254,
-                                "file":  "apps/arrancador/bench/compare-baseline.ts"
-                            },
-                            {
-                                "lines":  249,
-                                "file":  "apps/arrancador/electron/main/services/ark-usage-bindings.test.ts"
-                            }
-                        ],
-    "filesOver300Lines":  [
-                              {
-                                  "lines":  608,
-                                  "file":  "apps/arrancador/sidecar/src/main.rs"
-                              },
-                              {
-                                  "lines":  527,
-                                  "file":  "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
-                              },
-                              {
-                                  "lines":  514,
-                                  "file":  "apps/arrancador/src-vue/pages/GameDetailPage.vue"
-                              },
-                              {
-                                  "lines":  499,
-                                  "file":  "apps/arrancador/src-vue/pages/LibraryPage.vue"
-                              },
-                              {
-                                  "lines":  466,
-                                  "file":  "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
-                              },
-                              {
-                                  "lines":  462,
-                                  "file":  "apps/arrancador/electron/main/services/ark-usage.ts"
-                              },
-                              {
-                                  "lines":  369,
-                                  "file":  "apps/arrancador/bench/run-baseline.ts"
-                              },
-                              {
-                                  "lines":  366,
-                                  "file":  "apps/arrancador/e2e/bridge-mock.ts"
-                              },
-                              {
-                                  "lines":  351,
-                                  "file":  "apps/arrancador/src/types/index.ts"
-                              },
-                              {
-                                  "lines":  349,
-                                  "file":  "apps/arrancador/src-vue/lib/libraryFilters.ts"
-                              },
-                              {
-                                  "lines":  347,
-                                  "file":  "apps/arrancador/electron/main/services/games.ts"
-                              },
-                              {
-                                  "lines":  337,
-                                  "file":  "apps/arrancador/electron/main/services/ark-game-objects.ts"
-                              },
-                              {
-                                  "lines":  329,
-                                  "file":  "apps/arrancador/src-vue/components/AppSpotlight.vue"
-                              },
-                              {
-                                  "lines":  329,
-                                  "file":  "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
-                              },
-                              {
-                                  "lines":  327,
-                                  "file":  "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
-                              },
-                              {
-                                  "lines":  317,
-                                  "file":  "apps/arrancador/electron/main/services/ark-usage.test.ts"
-                              },
-                              {
-                                  "lines":  317,
-                                  "file":  "apps/arrancador/src-vue/test/game-detail-components.test.ts"
-                              },
-                              {
-                                  "lines":  317,
-                                  "file":  "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
-                              }
-                          ],
-    "ipcCommandCount":  80,
-    "ipcEventCount":  5,
-    "ipcCommands":  [
-                        "add_game",
-                        "add_game_process_bindings",
-                        "add_games_batch",
-                        "add_scan_directory",
-                        "apply_rawg_metadata",
-                        "cancel_scan",
-                        "check_backup_needed",
-                        "check_ludusavi_installed",
-                        "check_restore_needed",
-                        "clear_notifications",
-                        "create_backup",
-                        "create_notification",
-                        "delete_backup",
-                        "delete_catalogue_item",
-                        "delete_game",
-                        "dialog_open",
-                        "find_game_save_paths",
-                        "find_game_saves",
-                        "game_exists_by_path",
-                        "get_all_achievements",
-                        "get_all_games",
-                        "get_all_settings",
-                        "get_ark_connection_info",
-                        "get_autostart_state",
-                        "get_backup_directory_setting",
-                        "get_backup_settings",
-                        "get_catalogue_items",
-                        "get_favorites",
-                        "get_game",
-                        "get_game_backups",
-                        "get_ludusavi_executable_path",
-                        "get_playtime_stats",
-                        "get_rawg_api_key",
-                        "get_rawg_game_details",
-                        "get_running_instances",
-                        "get_running_processes",
-                        "get_scan_directories",
-                        "get_setting",
-                        "get_system_info",
-                        "get_window_platform",
-                        "is_game_installed",
-                        "kill_game_processes",
-                        "launch_game",
-                        "list_notifications",
-                        "list_recent_usage_processes",
-                        "mark_all_notifications_read",
-                        "mark_notification_read",
-                        "migrate_ark_games",
-                        "record_achievement_event",
-                        "record_game_launch",
-                        "refresh_sqoba_manifest",
-                        "remove_game_process_binding",
-                        "remove_scan_directory",
-                        "resolve_shortcut_target",
-                        "restore_backup",
-                        "scan_executables_stream",
-                        "search_catalogue",
-                        "search_games",
-                        "search_rawg",
-                        "search_usage_processes",
-                        "seed_default_achievements",
-                        "set_autostart_state",
-                        "set_backup_directory",
-                        "set_ludusavi_path",
-                        "set_rawg_api_key",
-                        "set_setting",
-                        "shell_open_external",
-                        "shell_open_path",
-                        "should_backup_before_launch",
-                        "sync_games_to_ark",
-                        "sync_library_to_catalogue",
-                        "test_disk_speed",
-                        "toggle_favorite",
-                        "update_backup_settings",
-                        "update_game",
-                        "update_settings",
-                        "upsert_catalogue_item",
-                        "window_close",
-                        "window_minimize",
-                        "window_toggle_maximize"
-                    ],
-    "ipcEvents":  [
-                      "backup:progress",
-                      "game:save-path-missing",
-                      "restore:progress",
-                      "scan:done",
-                      "scan:entry"
-                  ],
-    "coverage":  {
-                     "statements":  77.69,
-                     "branches":  70.56,
-                     "functions":  71.59,
-                     "lines":  78.95
-                 }
+  "timestamp": "2026-04-24T10:37:20.5380607+03:00",
+  "sourceFileCount": 210,
+  "codeFileCount": 198,
+  "testFileCount": 32,
+  "totalCodeLines": 26256,
+  "top30LineCounts": [
+    {
+      "lines": 608,
+      "file": "apps/arrancador/sidecar/src/main.rs"
+    },
+    {
+      "lines": 527,
+      "file": "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
+    },
+    {
+      "lines": 514,
+      "file": "apps/arrancador/src-vue/pages/GameDetailPage.vue"
+    },
+    {
+      "lines": 499,
+      "file": "apps/arrancador/src-vue/pages/LibraryPage.vue"
+    },
+    {
+      "lines": 466,
+      "file": "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
+    },
+    {
+      "lines": 462,
+      "file": "apps/arrancador/electron/main/services/ark-usage.ts"
+    },
+    {
+      "lines": 369,
+      "file": "apps/arrancador/bench/run-baseline.ts"
+    },
+    {
+      "lines": 366,
+      "file": "apps/arrancador/e2e/bridge-mock.ts"
+    },
+    {
+      "lines": 351,
+      "file": "apps/arrancador/src/types/index.ts"
+    },
+    {
+      "lines": 349,
+      "file": "apps/arrancador/src-vue/lib/libraryFilters.ts"
+    },
+    {
+      "lines": 347,
+      "file": "apps/arrancador/electron/main/services/games.ts"
+    },
+    {
+      "lines": 337,
+      "file": "apps/arrancador/electron/main/services/ark-game-objects.ts"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/components/AppSpotlight.vue"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
+    },
+    {
+      "lines": 327,
+      "file": "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/electron/main/services/ark-usage.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/test/game-detail-components.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
+    },
+    {
+      "lines": 296,
+      "file": "apps/arrancador/src-vue/composables/useScanPageState.ts"
+    },
+    {
+      "lines": 295,
+      "file": "apps/arrancador/electron/shared/ipc.ts"
+    },
+    {
+      "lines": 282,
+      "file": "apps/arrancador/electron/main/ipc/backup-handlers.ts"
+    },
+    {
+      "lines": 275,
+      "file": "apps/arrancador/src-vue/components/scan/ScanResultsList.vue"
+    },
+    {
+      "lines": 271,
+      "file": "apps/arrancador/src-vue/components/sqoba/SqobaGameCard.vue"
+    },
+    {
+      "lines": 267,
+      "file": "apps/arrancador/src/types/ipc.ts"
+    },
+    {
+      "lines": 265,
+      "file": "apps/arrancador/src-vue/composables/useSqobaPageState.ts"
+    },
+    {
+      "lines": 263,
+      "file": "apps/arrancador/electron/main/services/ark-game-migration.ts"
+    },
+    {
+      "lines": 263,
+      "file": "apps/arrancador/scripts/dev.ts"
+    },
+    {
+      "lines": 261,
+      "file": "apps/arrancador/src-vue/components/AppSidebar.vue"
+    },
+    {
+      "lines": 254,
+      "file": "apps/arrancador/bench/compare-baseline.ts"
+    },
+    {
+      "lines": 249,
+      "file": "apps/arrancador/electron/main/services/ark-usage-bindings.test.ts"
+    }
+  ],
+  "filesOver300Lines": [
+    {
+      "lines": 608,
+      "file": "apps/arrancador/sidecar/src/main.rs"
+    },
+    {
+      "lines": 527,
+      "file": "apps/arrancador/electron/main/services/ark-usage-backfill.ts"
+    },
+    {
+      "lines": 514,
+      "file": "apps/arrancador/src-vue/pages/GameDetailPage.vue"
+    },
+    {
+      "lines": 499,
+      "file": "apps/arrancador/src-vue/pages/LibraryPage.vue"
+    },
+    {
+      "lines": 466,
+      "file": "apps/arrancador/electron/main/services/backup/save-root-resolver.ts"
+    },
+    {
+      "lines": 462,
+      "file": "apps/arrancador/electron/main/services/ark-usage.ts"
+    },
+    {
+      "lines": 369,
+      "file": "apps/arrancador/bench/run-baseline.ts"
+    },
+    {
+      "lines": 366,
+      "file": "apps/arrancador/e2e/bridge-mock.ts"
+    },
+    {
+      "lines": 351,
+      "file": "apps/arrancador/src/types/index.ts"
+    },
+    {
+      "lines": 349,
+      "file": "apps/arrancador/src-vue/lib/libraryFilters.ts"
+    },
+    {
+      "lines": 347,
+      "file": "apps/arrancador/electron/main/services/games.ts"
+    },
+    {
+      "lines": 337,
+      "file": "apps/arrancador/electron/main/services/ark-game-objects.ts"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/components/AppSpotlight.vue"
+    },
+    {
+      "lines": 329,
+      "file": "apps/arrancador/src-vue/composables/useSettingsPageState.ts"
+    },
+    {
+      "lines": 327,
+      "file": "apps/arrancador/electron/main/sidecar/arrancador-sidecar.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/electron/main/services/ark-usage.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/test/game-detail-components.test.ts"
+    },
+    {
+      "lines": 317,
+      "file": "apps/arrancador/src-vue/components/RawgMetadataPrompt.vue"
+    }
+  ],
+  "ipcCommandCount": 80,
+  "ipcEventCount": 5,
+  "ipcCommands": [
+    "add_game",
+    "add_game_process_bindings",
+    "add_games_batch",
+    "add_scan_directory",
+    "apply_rawg_metadata",
+    "cancel_scan",
+    "check_backup_needed",
+    "check_ludusavi_installed",
+    "check_restore_needed",
+    "clear_notifications",
+    "create_backup",
+    "create_notification",
+    "delete_backup",
+    "delete_catalogue_item",
+    "delete_game",
+    "dialog_open",
+    "find_game_save_paths",
+    "find_game_saves",
+    "game_exists_by_path",
+    "get_all_achievements",
+    "get_all_games",
+    "get_all_settings",
+    "get_ark_connection_info",
+    "get_autostart_state",
+    "get_backup_directory_setting",
+    "get_backup_settings",
+    "get_catalogue_items",
+    "get_favorites",
+    "get_game",
+    "get_game_backups",
+    "get_ludusavi_executable_path",
+    "get_playtime_stats",
+    "get_rawg_api_key",
+    "get_rawg_game_details",
+    "get_running_instances",
+    "get_running_processes",
+    "get_scan_directories",
+    "get_setting",
+    "get_system_info",
+    "get_window_platform",
+    "is_game_installed",
+    "kill_game_processes",
+    "launch_game",
+    "list_notifications",
+    "list_recent_usage_processes",
+    "mark_all_notifications_read",
+    "mark_notification_read",
+    "migrate_ark_games",
+    "record_achievement_event",
+    "record_game_launch",
+    "refresh_sqoba_manifest",
+    "remove_game_process_binding",
+    "remove_scan_directory",
+    "resolve_shortcut_target",
+    "restore_backup",
+    "scan_executables_stream",
+    "search_catalogue",
+    "search_games",
+    "search_rawg",
+    "search_usage_processes",
+    "seed_default_achievements",
+    "set_autostart_state",
+    "set_backup_directory",
+    "set_ludusavi_path",
+    "set_rawg_api_key",
+    "set_setting",
+    "shell_open_external",
+    "shell_open_path",
+    "should_backup_before_launch",
+    "sync_games_to_ark",
+    "sync_library_to_catalogue",
+    "test_disk_speed",
+    "toggle_favorite",
+    "update_backup_settings",
+    "update_game",
+    "update_settings",
+    "upsert_catalogue_item",
+    "window_close",
+    "window_minimize",
+    "window_toggle_maximize"
+  ],
+  "ipcEvents": [
+    "backup:progress",
+    "game:save-path-missing",
+    "restore:progress",
+    "scan:done",
+    "scan:entry"
+  ],
+  "coverage": {
+    "statements": 77.69,
+    "branches": 70.56,
+    "functions": 71.59,
+    "lines": 78.95
+  }
 }

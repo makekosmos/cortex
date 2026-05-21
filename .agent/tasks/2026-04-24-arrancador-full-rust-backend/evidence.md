@@ -19,22 +19,22 @@ Current: `electron-main+rust-sidecar`.
 
 `raw/final-compare.json` reports `correctnessPass: true`.
 
-| Operation | Metric | Baseline | Current | Result |
-| --- | --- | ---: | ---: | --- |
-| scan_executables_stream | duration | 136.19 ms | 105.29 ms | improved 22.69% |
-| scan_executables_stream | p95 event-loop lag | 0.44 ms | 0.07 ms | improved 84.09% |
-| scan_executables_stream | throughput | 52,867.32 files/s | 68,382.56 files/s | improved 29.35% |
-| scan_executables_stream | time to first result | 3.95 ms | 6.40 ms | regressed 62.03% |
-| scan_executables_stream | found executables | 720 | 720 | same |
-| scan_executables_cancel | duration | 5.77 ms | 5.99 ms | regressed 3.81% |
-| scan_executables_cancel | cancel latency | 0.45 ms | 0.34 ms | improved 24.44% |
-| backup_create_directory | duration | 293.32 ms | 225.38 ms | improved 23.16% |
-| backup_create_directory | p95 event-loop lag | 1.48 ms | 0.27 ms | improved 81.76% |
-| backup_create_directory | throughput | 5.59 MB/s | 7.28 MB/s | improved 30.23% |
-| backup_restore_directory | duration | 260.56 ms | 192.96 ms | improved 25.94% |
-| backup_restore_directory | p95 event-loop lag | 0.50 ms | 0.36 ms | improved 28.00% |
-| backup_restore_directory | throughput | 6.30 MB/s | 8.50 MB/s | improved 34.92% |
-| backup_restore_directory | hash parity | true | true | same |
+| Operation                | Metric               |          Baseline |           Current | Result           |
+| ------------------------ | -------------------- | ----------------: | ----------------: | ---------------- |
+| scan_executables_stream  | duration             |         136.19 ms |         105.29 ms | improved 22.69%  |
+| scan_executables_stream  | p95 event-loop lag   |           0.44 ms |           0.07 ms | improved 84.09%  |
+| scan_executables_stream  | throughput           | 52,867.32 files/s | 68,382.56 files/s | improved 29.35%  |
+| scan_executables_stream  | time to first result |           3.95 ms |           6.40 ms | regressed 62.03% |
+| scan_executables_stream  | found executables    |               720 |               720 | same             |
+| scan_executables_cancel  | duration             |           5.77 ms |           5.99 ms | regressed 3.81%  |
+| scan_executables_cancel  | cancel latency       |           0.45 ms |           0.34 ms | improved 24.44%  |
+| backup_create_directory  | duration             |         293.32 ms |         225.38 ms | improved 23.16%  |
+| backup_create_directory  | p95 event-loop lag   |           1.48 ms |           0.27 ms | improved 81.76%  |
+| backup_create_directory  | throughput           |         5.59 MB/s |         7.28 MB/s | improved 30.23%  |
+| backup_restore_directory | duration             |         260.56 ms |         192.96 ms | improved 25.94%  |
+| backup_restore_directory | p95 event-loop lag   |           0.50 ms |           0.36 ms | improved 28.00%  |
+| backup_restore_directory | throughput           |         6.30 MB/s |         8.50 MB/s | improved 34.92%  |
+| backup_restore_directory | hash parity          |              true |              true | same             |
 
 SQLite rows remain `ts-electron-main` in the final benchmark. Their apparent improvements are local run variance, not a claimed Rust DB migration.
 

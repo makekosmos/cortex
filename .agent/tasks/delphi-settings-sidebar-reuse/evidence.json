@@ -6,10 +6,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/delphi/ts/src/App.vue:788",
-        "apps/delphi/ts/src/components/SideBar.vue:89"
-      ]
+      "evidence": ["apps/delphi/ts/src/App.vue:788", "apps/delphi/ts/src/components/SideBar.vue:89"]
     },
     {
       "id": "AC2",
@@ -22,17 +19,12 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "apps/delphi/ts/src/pages/SettingsPage.vue:1"
-      ]
+      "evidence": ["apps/delphi/ts/src/pages/SettingsPage.vue:1"]
     },
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "apps/delphi/ts/src/App.vue:788",
-        "apps/delphi/ts/src/App.vue:796"
-      ]
+      "evidence": ["apps/delphi/ts/src/App.vue:788", "apps/delphi/ts/src/App.vue:796"]
     },
     {
       "id": "AC5",
@@ -45,9 +37,7 @@
     {
       "id": "AC6",
       "status": "PASS",
-      "evidence": [
-        "bunx tsc --noEmit"
-      ]
+      "evidence": ["bunx tsc --noEmit"]
     }
   ],
   "commands": [
@@ -57,7 +47,5 @@
       "status": "PASS"
     }
   ],
-  "notes": [
-    "Interactive Electron runtime validation was not performed in the sandbox."
-  ]
+  "notes": ["Interactive Electron runtime validation was not performed in the sandbox."]
 }

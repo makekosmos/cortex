@@ -1,6 +1,7 @@
 # Task: Arrancador full React -> Vue/Vapor migration
 
 ## Summary
+
 Migrate the entire `apps/arrancador` renderer from React to Vue using the repo's established Vue/Vapor patterns, preserving current product functionality and renderer/main-process contracts.
 
 ## Acceptance Criteria

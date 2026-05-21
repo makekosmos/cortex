@@ -249,10 +249,7 @@ function setupCommandBusBridge() {
   };
 }
 
-function mergeTodosById(
-  localTodos: TodoItem[],
-  arkTodos: TodoItem[],
-): TodoItem[] {
+function mergeTodosById(localTodos: TodoItem[], arkTodos: TodoItem[]): TodoItem[] {
   const byId = new Map<string, TodoItem>();
 
   for (const todo of localTodos) {
@@ -285,10 +282,7 @@ async function bootstrapWeb() {
   store.setHydrated(false);
 
   try {
-    const [tasks, projects] = await Promise.all([
-      fetchTasksFromArk(),
-      fetchProjectsFromArk(),
-    ]);
+    const [tasks, projects] = await Promise.all([fetchTasksFromArk(), fetchProjectsFromArk()]);
 
     store.setTodos(tasks);
     store.setProjects(projects);
@@ -299,8 +293,7 @@ async function bootstrapWeb() {
     arkStatus.value = "connected";
   } catch (error) {
     authRequired.value = true;
-    authError.value =
-      error instanceof Error ? error.message : "Ошибка подключения";
+    authError.value = error instanceof Error ? error.message : "Ошибка подключения";
     connectionState.value = "offline";
     arkStatus.value = "error";
   } finally {
@@ -390,8 +383,7 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
 
   if (isLocalDbAvailable()) {
     try {
-      const { todos, projects, areas, tags, headings } =
-        await loadAllFromLocalDb();
+      const { todos, projects, areas, tags, headings } = await loadAllFromLocalDb();
       mergedTodos = todos;
       mergedProjects = projects;
       mergedAreas = areas;
@@ -405,9 +397,7 @@ async function activateSpace(code: string, seedAddresses: string[] = []) {
   // ARK task load — всегда, не зависит от local DB availability.
   if (window.electronAPI?.invoke) {
     try {
-      const arkTodos = (await window.electronAPI.invoke(
-        "ark:listDelphiTasks",
-      )) as TodoItem[];
+      const arkTodos = (await window.electronAPI.invoke("ark:listDelphiTasks")) as TodoItem[];
       if (Array.isArray(arkTodos) && arkTodos.length > 0) {
         mergedTodos = mergeTodosById(mergedTodos, arkTodos);
       }
@@ -520,41 +510,30 @@ function setupLanSyncBridge() {
   if (!window.electronAPI?.on) return;
 
   // Listen for incoming changes from sync peers
-  const unsub1 = window.electronAPI.on(
-    "lan-sync:change",
-    (...args: unknown[]) => {
-      const entity = args[0] as SyncEntity;
-      if (entity) handleLanSyncEntity(entity);
-    },
-  );
+  const unsub1 = window.electronAPI.on("lan-sync:change", (...args: unknown[]) => {
+    const entity = args[0] as SyncEntity;
+    if (entity) handleLanSyncEntity(entity);
+  });
 
-  const unsub2 = window.electronAPI.on(
-    "lan-sync:peerConnected",
-    (...args: unknown[]) => {
-      const deviceId = args[0] as string;
-      console.log(`[App] Sync peer connected: ${deviceId}`);
-      connectedPeerCount.value++;
-      connectionState.value = "online";
-      // Refresh peer list
-      refreshPeerStatus();
-    },
-  );
+  const unsub2 = window.electronAPI.on("lan-sync:peerConnected", (...args: unknown[]) => {
+    const deviceId = args[0] as string;
+    console.log(`[App] Sync peer connected: ${deviceId}`);
+    connectedPeerCount.value++;
+    connectionState.value = "online";
+    // Refresh peer list
+    refreshPeerStatus();
+  });
 
-  const unsub3 = window.electronAPI.on(
-    "lan-sync:peerDisconnected",
-    (...args: unknown[]) => {
-      const deviceId = args[0] as string;
-      const remaining = (args[1] as number) ?? 0;
-      console.log(
-        `[App] Sync peer disconnected: ${deviceId}, remaining: ${remaining}`,
-      );
-      connectedPeerCount.value = remaining;
-      if (remaining === 0) {
-        connectionState.value = "offline";
-      }
-      refreshPeerStatus();
-    },
-  );
+  const unsub3 = window.electronAPI.on("lan-sync:peerDisconnected", (...args: unknown[]) => {
+    const deviceId = args[0] as string;
+    const remaining = (args[1] as number) ?? 0;
+    console.log(`[App] Sync peer disconnected: ${deviceId}, remaining: ${remaining}`);
+    connectedPeerCount.value = remaining;
+    if (remaining === 0) {
+      connectionState.value = "offline";
+    }
+    refreshPeerStatus();
+  });
 
   cleanupLanSyncListener = () => {
     unsub1?.();
@@ -568,13 +547,11 @@ function refreshPeerStatus() {
   if (!window.electronAPI?.invoke) return;
   window.electronAPI
     .invoke("lan-sync:getStatus")
-    .then(
-      (status: { active: boolean; peers: number; peerNames?: string[] }) => {
-        connectedPeerCount.value = status.peers;
-        connectedPeerNames.value = status.peerNames ?? [];
-        connectionState.value = status.peers > 0 ? "online" : "offline";
-      },
-    )
+    .then((status: { active: boolean; peers: number; peerNames?: string[] }) => {
+      connectedPeerCount.value = status.peers;
+      connectedPeerNames.value = status.peerNames ?? [];
+      connectionState.value = status.peers > 0 ? "online" : "offline";
+    })
     .catch(() => {
       connectionState.value = "offline";
     });
@@ -655,10 +632,7 @@ function leaveSpaceListener() {
 </script>
 
 <template>
-  <div
-    class="flex h-screen w-screen overflow-hidden bg-(--background) text-(--foreground)"
-  >
-
+  <div class="flex h-screen w-screen overflow-hidden bg-(--background) text-(--foreground)">
     <DesktopChrome :platform="chromePlatform" class="flex min-h-0 min-w-0 flex-1">
       <template #titlebar-leading>
         <button
@@ -697,11 +671,7 @@ function leaveSpaceListener() {
       </template>
 
       <template #sidebar>
-        <SideBar
-          :hidden="sidebarHidden"
-          :show-toggle="false"
-          :reserve-top-inset="false"
-        />
+        <SideBar :hidden="sidebarHidden" :show-toggle="false" :reserve-top-inset="false" />
       </template>
 
       <DesktopContentSurface
@@ -733,7 +703,6 @@ function leaveSpaceListener() {
       @space-joined="handleSpaceJoined"
       @space-deleted="handleSpaceDeleted"
     />
-
   </div>
 </template>
 

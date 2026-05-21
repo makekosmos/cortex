@@ -18,9 +18,11 @@ adb shell dumpsys gfxinfo <package.name> framestats
 ```
 
 Developer Options на телефоне:
+
 - **Profile GPU Rendering** → On screen as bars (красные столбики = jank)
 
 Ключевые метрики в `gfxinfo`:
+
 - `Janky frames` — % дропнутых кадров (цель < 5%)
 - `90th percentile` — 90-й перцентиль времени кадра (цель < 8.3ms при 120Hz)
 - В framestats смотри колонку `anim_phase` (= Compose рекомпозиция + layout)
@@ -95,6 +97,7 @@ cat app/build/compose_reports/app_releaseDebug-composables.txt | grep -A5 "fun T
 ```
 
 Ищи:
+
 - `restartable skippable` — ✅ хорошо, Compose может пропустить
 - `unstable` у параметра — ⚠️ добавь `@Immutable` или `@Stable`
 

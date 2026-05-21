@@ -24,8 +24,7 @@ const defaultProjectId = computed<string | null>(() => {
 });
 
 function onSave(payload: QuickEntrySavePayload) {
-  const isToday =
-    payload.scheduledDate !== null && payload.scheduledDate === todayIso();
+  const isToday = payload.scheduledDate !== null && payload.scheduledDate === todayIso();
   store.addTodo({
     title: payload.title,
     notes: payload.notes,
@@ -40,7 +39,11 @@ function onSave(payload: QuickEntrySavePayload) {
 const handler = (e: KeyboardEvent) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "n" && !e.shiftKey && !e.altKey) {
     e.preventDefault();
-    if (open.value) { hide(); } else { open.value = true; }
+    if (open.value) {
+      hide();
+    } else {
+      open.value = true;
+    }
   }
 };
 

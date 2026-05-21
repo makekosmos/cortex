@@ -22,10 +22,7 @@ export function openInstallExtensionWindow(sourcePath: string): void {
   if (installWindow && !installWindow.isDestroyed()) {
     // Если уже открыто — просто заменяем path query и фокусируем.
     installWindow.focus();
-    void installWindow.webContents.send(
-      "kepler:extension:install:source-changed",
-      sourcePath,
-    );
+    void installWindow.webContents.send("kepler:extension:install:source-changed", sourcePath);
     return;
   }
   const display = screen.getPrimaryDisplay().workAreaSize;

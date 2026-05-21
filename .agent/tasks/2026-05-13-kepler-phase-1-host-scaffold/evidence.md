@@ -6,15 +6,15 @@
 
 ## Сводка
 
-| AC | Утверждение | Статус | Evidence |
-|----|-------------|--------|----------|
-| AC1 | Все ~60 ARK операций работают через WS (request/response корреляция) | **PASS** | tests/handshake.rs::e2e_happy_path_handshake_and_rpc + 5 ark_host dispatcher unit tests |
-| AC2 | Singleton enforcement (вторая копия отказывается стартовать) | **PASS** | 3 singleton unit tests, fail-fast при second_acquire |
-| AC3 | Lock-file OS permissions (Win ACL only-owner / 0600 elsewhere) | **PASS** | 8 lock_file tests, включая windows_acl_inheritance_disabled |
-| AC4 | Version handshake (отказ без protocolVersion / при MAJOR mismatch) | **PASS** | 10 ws_server unit tests + e2e_rejects_missing_protocol_version |
-| AC5 | PID-binding auth (отказ при non-existent / foreign PID) | **PASS** | 7 auth unit tests + e2e_rejects_nonexistent_pid |
-| AC6 | Latency P50 ≤ 5ms, P95 ≤ 15ms (P95 > 30ms → HARD STOP на UDS) | **PASS (с большим запасом)** | benches/rpc_latency.rs: P50=191µs, P95=258µs |
-| AC7 | Unit-тесты зелёные | **PASS** | 41 unit + 4 integration = 45/45 tests, 0 failed |
+| AC  | Утверждение                                                          | Статус                       | Evidence                                                                                |
+| --- | -------------------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
+| AC1 | Все ~60 ARK операций работают через WS (request/response корреляция) | **PASS**                     | tests/handshake.rs::e2e_happy_path_handshake_and_rpc + 5 ark_host dispatcher unit tests |
+| AC2 | Singleton enforcement (вторая копия отказывается стартовать)         | **PASS**                     | 3 singleton unit tests, fail-fast при second_acquire                                    |
+| AC3 | Lock-file OS permissions (Win ACL only-owner / 0600 elsewhere)       | **PASS**                     | 8 lock_file tests, включая windows_acl_inheritance_disabled                             |
+| AC4 | Version handshake (отказ без protocolVersion / при MAJOR mismatch)   | **PASS**                     | 10 ws_server unit tests + e2e_rejects_missing_protocol_version                          |
+| AC5 | PID-binding auth (отказ при non-existent / foreign PID)              | **PASS**                     | 7 auth unit tests + e2e_rejects_nonexistent_pid                                         |
+| AC6 | Latency P50 ≤ 5ms, P95 ≤ 15ms (P95 > 30ms → HARD STOP на UDS)        | **PASS (с большим запасом)** | benches/rpc_latency.rs: P50=191µs, P95=258µs                                            |
+| AC7 | Unit-тесты зелёные                                                   | **PASS**                     | 41 unit + 4 integration = 45/45 tests, 0 failed                                         |
 
 **Все 7 AC = PASS. Phase 1 готова к мерджу.**
 
@@ -53,15 +53,15 @@ max     : 465.8µs
 
 ## Тестовая матрица модулей
 
-| Модуль | Unit tests | Покрытие AC |
-|--------|------------|-------------|
-| `protocol_version` | 6 | AC4 (semver parsing, MAJOR/MINOR/PATCH compat logic) |
-| `auth` | 7 | AC5 (token gen entropy, constant-time validate, PID-binding cross-platform) |
-| `singleton` | 3 | AC2 (acquire, re-acquire after drop, parent dir creation) |
-| `lock_file` | 8 | AC3 (write_atomic, read, stale PID detection, Windows ACL verify, parent dir) |
-| `ark_host` | 6 | AC1 (response/event dispatch, req_id correlation, uncorrelated drop) |
-| `ws_server` | 10 | AC4+AC5 (hello validation, все reject codes, compat labels) |
-| `tests/handshake.rs` | 4 e2e | AC1+AC4+AC5 (реальный child + WS handshake + RPC roundtrip) |
+| Модуль               | Unit tests | Покрытие AC                                                                   |
+| -------------------- | ---------- | ----------------------------------------------------------------------------- |
+| `protocol_version`   | 6          | AC4 (semver parsing, MAJOR/MINOR/PATCH compat logic)                          |
+| `auth`               | 7          | AC5 (token gen entropy, constant-time validate, PID-binding cross-platform)   |
+| `singleton`          | 3          | AC2 (acquire, re-acquire after drop, parent dir creation)                     |
+| `lock_file`          | 8          | AC3 (write_atomic, read, stale PID detection, Windows ACL verify, parent dir) |
+| `ark_host`           | 6          | AC1 (response/event dispatch, req_id correlation, uncorrelated drop)          |
+| `ws_server`          | 10         | AC4+AC5 (hello validation, все reject codes, compat labels)                   |
+| `tests/handshake.rs` | 4 e2e      | AC1+AC4+AC5 (реальный child + WS handshake + RPC roundtrip)                   |
 
 ## Артефакты
 

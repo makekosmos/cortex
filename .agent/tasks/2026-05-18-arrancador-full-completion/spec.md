@@ -139,6 +139,7 @@
 ## Verification commands
 
 См. AC. Specific:
+
 - `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib`
 - `cargo test --manifest-path services\kepler-backend\Cargo.toml --test arrancador_full_flow` (если integration через `tests/` directory)
 - `bun run --cwd shell typecheck`

@@ -66,26 +66,31 @@ Captured after the previous architecture pass:
 AC1: Freeze this spec before implementation.
 
 AC2: Refactor backup workflow into responsibility-focused modules.
+
 - `apps/arrancador/electron/main/services/backup-workflow.ts` is a façade under 80 lines.
 - Backup workflow contracts/types live outside the façade.
 - Read/query backup use cases and write/mutation backup use cases live in separate files.
 - Existing imports from `../services/backup-workflow` keep working.
 
 AC3: Preserve behavior.
+
 - Existing IPC channels and renderer API behavior remain compatible.
 - Existing backup workflow tests still pass.
 - Existing Game Detail launch flow tests still pass.
 
 AC4: Strengthen measurable architecture guardrails.
+
 - Add/adjust architecture tests so `backup-workflow.ts` cannot regress into a large implementation file.
 - Add/adjust architecture tests so Game Detail route stays under its composition-surface budget.
 
 AC5: Produce before/after metrics.
+
 - Store baseline metrics in `baseline-metrics.json`.
 - Store final metrics in `final-metrics.json`.
 - `evidence.md` must include a before/after score table with 10/10 for every category and the measurable basis for each score.
 
 AC6: Fresh verification PASS.
+
 - All five verification commands pass against current code.
 
 ## Stop Condition

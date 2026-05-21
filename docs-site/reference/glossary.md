@@ -123,4 +123,3 @@
 ## Z
 
 **Zed Mono** — моноширинный шрифт, используется в `@kosmos/visuals` для `font-family-mono`.
-

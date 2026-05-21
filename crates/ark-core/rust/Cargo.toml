@@ -19,7 +19,15 @@ path = "src/bin/uniffi-bindgen.rs"
 
 [dependencies]
 rusqlite.workspace = true
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util", "io-std"] }
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "net",
+  "time",
+  "sync",
+  "io-util",
+  "io-std",
+] }
 tokio-tungstenite.workspace = true
 futures-util.workspace = true
 serde.workspace = true

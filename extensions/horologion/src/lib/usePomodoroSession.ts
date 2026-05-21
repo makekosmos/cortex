@@ -114,10 +114,7 @@ function createSessionState() {
   async function applyFocusBlocking(): Promise<void> {
     const blocklistId = pomodoroSettings.focusBlocklistId;
     const shouldBlock =
-      phase.value === "work" &&
-      isRunning.value &&
-      !isPaused.value &&
-      blocklistId != null;
+      phase.value === "work" && isRunning.value && !isPaused.value && blocklistId != null;
     const next = { active: shouldBlock, blocklistId: shouldBlock ? blocklistId : null };
     if (
       lastBlockingApplied &&
@@ -152,8 +149,7 @@ function createSessionState() {
     if (!force && active && remainingSec === lastFocusPushedSec) return;
     lastFocusPushedSec = active ? remainingSec : -1;
 
-    const mode: "work" | "break" | "stopwatch" =
-      phase.value === "work" ? "work" : "break";
+    const mode: "work" | "break" | "stopwatch" = phase.value === "work" ? "work" : "break";
     const ctxTitle = (lastContext.value?.title ?? pomodoroDraft.value.title ?? "").trim();
     const firstTask = lastContext.value?.tasks?.[0] ?? pomodoroDraft.value.tasks?.[0];
     const label = ctxTitle || firstTask?.title || (mode === "work" ? "Фокус" : "Перерыв");
@@ -293,10 +289,7 @@ function createSessionState() {
     }
   }
 
-  async function closeArkEntry(
-    finishedPhase: PomodoroPhase,
-    completed: boolean,
-  ): Promise<void> {
+  async function closeArkEntry(finishedPhase: PomodoroPhase, completed: boolean): Promise<void> {
     const id = currentEntryId.value;
     if (!id) return;
 
@@ -304,7 +297,7 @@ function createSessionState() {
     const liveTasks = pomodoroDraft.value.tasks.slice();
     const isWork = finishedPhase === "work";
     const effectiveTitle = (isWork ? liveTitle : lastContext.value?.title) || "Помодоро";
-    const effectiveTasks = isWork ? liveTasks : lastContext.value?.tasks ?? [];
+    const effectiveTasks = isWork ? liveTasks : (lastContext.value?.tasks ?? []);
 
     if (isWork && effectiveTasks.length > 1) {
       try {
@@ -341,7 +334,9 @@ function createSessionState() {
         console.error("[pomodoroSession] failed multi-task split:", e);
         try {
           await window.horologion.timeEntries.stopTimer(id);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     } else if (isWork) {
       const t = effectiveTasks[0] ?? null;
@@ -358,11 +353,15 @@ function createSessionState() {
       }
       try {
         await window.horologion.timeEntries.stopTimer(id);
-      } catch { /* sidecar мог уже закрыть */ }
+      } catch {
+        /* sidecar мог уже закрыть */
+      }
     } else {
       try {
         await window.horologion.timeEntries.stopTimer(id);
-      } catch { /* sidecar мог уже закрыть */ }
+      } catch {
+        /* sidecar мог уже закрыть */
+      }
     }
 
     currentEntryId.value = null;
@@ -459,7 +458,11 @@ function createSessionState() {
 
   function dispose(): void {
     for (const u of unsubFns) {
-      try { u(); } catch { /* ignore */ }
+      try {
+        u();
+      } catch {
+        /* ignore */
+      }
     }
     unsubFns = [];
     clearInterpTimer();
@@ -498,8 +501,7 @@ function createSessionState() {
     lastContext.value = {
       title: String(ctx.title ?? ""),
       tasks: tasksPlain,
-      workMinOverride:
-        typeof ctx.workMinOverride === "number" ? ctx.workMinOverride : undefined,
+      workMinOverride: typeof ctx.workMinOverride === "number" ? ctx.workMinOverride : undefined,
     };
     const config = {
       workMin: Number(pomodoroSettings.workMin),
@@ -510,8 +512,7 @@ function createSessionState() {
       autoStartBreak: Boolean(pomodoroSettings.autoStartBreak),
       title: String(ctx.title ?? ""),
       tasks: tasksPlain,
-      workMinOverride:
-        typeof ctx.workMinOverride === "number" ? ctx.workMinOverride : undefined,
+      workMinOverride: typeof ctx.workMinOverride === "number" ? ctx.workMinOverride : undefined,
     };
     try {
       const s = await kepler().request<BackendState>("pomodoro.start", { config });
@@ -535,7 +536,9 @@ function createSessionState() {
       // Серилизуем через sideEffectQueue чтобы pause не гонялся с
       // phase_changed handler'ом (см. enqueueSideEffect в ensureInit).
       await enqueueSideEffect(() => closeArkEntry(phaseAtPause, false));
-    } catch (e) { console.error("[pomodoroSession] pause failed:", e); }
+    } catch (e) {
+      console.error("[pomodoroSession] pause failed:", e);
+    }
   }
 
   async function resume(): Promise<void> {
@@ -556,7 +559,9 @@ function createSessionState() {
           currentEntryId.value = await createArkEntry(s.phase, ctx);
         });
       }
-    } catch (e) { console.error("[pomodoroSession] resume failed:", e); }
+    } catch (e) {
+      console.error("[pomodoroSession] resume failed:", e);
+    }
   }
 
   async function skip(): Promise<void> {
@@ -564,7 +569,9 @@ function createSessionState() {
     try {
       const s = await kepler().request<BackendState>("pomodoro.skip");
       applyState(s);
-    } catch (e) { console.error("[pomodoroSession] skip failed:", e); }
+    } catch (e) {
+      console.error("[pomodoroSession] skip failed:", e);
+    }
   }
 
   async function stop(): Promise<void> {
@@ -572,7 +579,9 @@ function createSessionState() {
     try {
       const s = await kepler().request<BackendState>("pomodoro.stop");
       applyState(s);
-    } catch (e) { console.error("[pomodoroSession] stop failed:", e); }
+    } catch (e) {
+      console.error("[pomodoroSession] stop failed:", e);
+    }
   }
 
   // Permission prompt не нужен: native toast'ы шлёт main process через
@@ -597,9 +606,7 @@ function createSessionState() {
     todayCompleted,
     isRunning,
     isPaused,
-    progress: computed(() =>
-      totalMs.value > 0 ? 1 - remainingMs.value / totalMs.value : 0,
-    ),
+    progress: computed(() => (totalMs.value > 0 ? 1 - remainingMs.value / totalMs.value : 0)),
     start,
     pause,
     resume,

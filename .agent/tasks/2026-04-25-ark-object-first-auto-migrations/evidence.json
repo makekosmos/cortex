@@ -11,13 +11,29 @@
     "AC7": "PASS"
   },
   "checks": [
-    { "command": "bun run --cwd apps/delphi/ts test", "status": "PASS", "summary": "7 files, 93 tests" },
+    {
+      "command": "bun run --cwd apps/delphi/ts test",
+      "status": "PASS",
+      "summary": "7 files, 93 tests"
+    },
     { "command": "bun run --cwd apps/delphi/ts build:web", "status": "PASS" },
-    { "command": "bun run --cwd apps/delphi/ts build", "status": "PASS", "summary": "ark-core-rpc build, tsc, Vite, electron-builder, NSIS" },
-    { "command": "node .agent\\tasks\\2026-04-25-ark-object-first-auto-migrations\\raw\\delphi-packaged-sidecar-smoke.mjs", "status": "PASS", "summary": "packaged ark-core-rpc init + list_objects" },
+    {
+      "command": "bun run --cwd apps/delphi/ts build",
+      "status": "PASS",
+      "summary": "ark-core-rpc build, tsc, Vite, electron-builder, NSIS"
+    },
+    {
+      "command": "node .agent\\tasks\\2026-04-25-ark-object-first-auto-migrations\\raw\\delphi-packaged-sidecar-smoke.mjs",
+      "status": "PASS",
+      "summary": "packaged ark-core-rpc init + list_objects"
+    },
     { "command": "Test-Path apps\\delphi\\ts\\sidecar", "status": "PASS", "summary": "False" },
     { "command": "bun run --cwd apps/eden/ts build", "status": "PASS" },
-    { "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml", "status": "PASS", "summary": "126 total Rust tests across lib/main/integration/doc targets" },
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "summary": "126 total Rust tests across lib/main/integration/doc targets"
+    },
     { "command": "git diff --check", "status": "PASS", "summary": "CRLF warnings only" }
   ]
 }

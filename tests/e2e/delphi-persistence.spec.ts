@@ -91,7 +91,11 @@ test("delphi: задача создана через addTodo сохраняет�
           billable: false,
           price: null,
         };
-        const api = (window as unknown as { electronAPI?: { invoke: (c: string, ...a: unknown[]) => Promise<unknown> } }).electronAPI;
+        const api = (
+          window as unknown as {
+            electronAPI?: { invoke: (c: string, ...a: unknown[]) => Promise<unknown> };
+          }
+        ).electronAPI;
         if (!api) return { ok: false, reason: "no electronAPI shim" };
         const result = await api.invoke("ark:upsertDelphiTask", todo);
         return { ok: true, result };
@@ -114,7 +118,10 @@ test("delphi: задача создана через addTodo сохраняет�
     });
     const arkList = (arkCheck.list ?? []) as Array<{ id: string; title: string }>;
     const matchingArk = arkList.find((o) => o.id === taskId);
-    expect(matchingArk, `ARK не содержит task ${taskId}. ARK list: ${JSON.stringify(arkList)}`).toBeDefined();
+    expect(
+      matchingArk,
+      `ARK не содержит task ${taskId}. ARK list: ${JSON.stringify(arkList)}`,
+    ).toBeDefined();
     expect(matchingArk?.title).toBe(TASK_TITLE);
 
     // ----- step 2: закрываем Делphi window -----
@@ -140,9 +147,7 @@ test("delphi: задача создана через addTodo сохраняет�
     }
     expect(bodyText).toContain(TASK_TITLE);
 
-    const missingFieldErrors = consoleErrors.filter((e) =>
-      e.includes("missing field"),
-    );
+    const missingFieldErrors = consoleErrors.filter((e) => e.includes("missing field"));
     if (missingFieldErrors.length > 0) {
       throw new Error(
         `${missingFieldErrors.length} missing field errors:\n${missingFieldErrors.join("\n")}`,
@@ -151,9 +156,7 @@ test("delphi: задача создана через addTodo сохраняет�
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
-      new Promise<void>((resolve) =>
-        app.process().once("exit", () => resolve()),
-      ),
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
       new Promise<void>((_, rej) =>
         setTimeout(() => rej(new Error("process exit timeout 10s")), 10_000),
       ),

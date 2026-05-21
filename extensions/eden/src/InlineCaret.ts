@@ -44,11 +44,7 @@ export const InlineCaret = Extension.create({
           decorations: (state) => {
             const pluginState = inlineCaretPluginKey.getState(state);
 
-            if (
-              !pluginState?.focused ||
-              pluginState.composing ||
-              !state.selection.empty
-            ) {
+            if (!pluginState?.focused || pluginState.composing || !state.selection.empty) {
               return DecorationSet.empty;
             }
 
@@ -62,32 +58,24 @@ export const InlineCaret = Extension.create({
           },
           handleDOMEvents: {
             focus: (view) => {
-              view.dispatch(
-                view.state.tr.setMeta(inlineCaretPluginKey, { focused: true }),
-              );
+              view.dispatch(view.state.tr.setMeta(inlineCaretPluginKey, { focused: true }));
               view.dom.classList.add("pm-inline-caret-enabled");
               return false;
             },
             blur: (view) => {
-              view.dispatch(
-                view.state.tr.setMeta(inlineCaretPluginKey, { focused: false }),
-              );
+              view.dispatch(view.state.tr.setMeta(inlineCaretPluginKey, { focused: false }));
               view.dom.classList.remove("pm-inline-caret-enabled");
               view.dom.classList.remove("pm-inline-caret-composing");
               return false;
             },
             compositionstart: (view) => {
-              view.dispatch(
-                view.state.tr.setMeta(inlineCaretPluginKey, { composing: true }),
-              );
+              view.dispatch(view.state.tr.setMeta(inlineCaretPluginKey, { composing: true }));
               view.dom.classList.remove("pm-inline-caret-enabled");
               view.dom.classList.add("pm-inline-caret-composing");
               return false;
             },
             compositionend: (view) => {
-              view.dispatch(
-                view.state.tr.setMeta(inlineCaretPluginKey, { composing: false }),
-              );
+              view.dispatch(view.state.tr.setMeta(inlineCaretPluginKey, { composing: false }));
               view.dom.classList.remove("pm-inline-caret-composing");
               view.dom.classList.add("pm-inline-caret-enabled");
               return false;
@@ -96,9 +84,7 @@ export const InlineCaret = Extension.create({
         },
         view: (view) => {
           if (view.hasFocus()) {
-            view.dispatch(
-              view.state.tr.setMeta(inlineCaretPluginKey, { focused: true }),
-            );
+            view.dispatch(view.state.tr.setMeta(inlineCaretPluginKey, { focused: true }));
             view.dom.classList.add("pm-inline-caret-enabled");
           }
 

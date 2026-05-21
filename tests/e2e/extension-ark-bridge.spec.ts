@@ -54,7 +54,7 @@ test.describe("extension ark bridge", () => {
         if (!launcher) return "no-launcher";
         const start = Date.now();
         while (Date.now() - start < 3000) {
-          const ok = await launcher.webContents.executeJavaScript(`
+          const ok = (await launcher.webContents.executeJavaScript(`
             (async () => {
               if (typeof window.kepler?.commands?.invoke !== "function") {
                 return "no-api";
@@ -66,7 +66,7 @@ test.describe("extension ark bridge", () => {
                 return "throw:" + (e && e.message ? e.message : String(e));
               }
             })()
-          `) as string;
+          `)) as string;
           if (ok === "ok") return ok;
           await new Promise((r) => setTimeout(r, 100));
         }
@@ -93,13 +93,9 @@ test.describe("extension ark bridge", () => {
       // в renderer'е логируются как unhandled rejections, поэтому смотрим
       // оба канала.)
       const allErrors = [...consoleErrors, ...pageErrors];
-      const bridgeErrors = allErrors.filter((e) =>
-        e.includes("ark bridge not ready"),
-      );
+      const bridgeErrors = allErrors.filter((e) => e.includes("ark bridge not ready"));
       if (bridgeErrors.length > 0) {
-        throw new Error(
-          `Получены "ark bridge not ready" ошибки: ${JSON.stringify(bridgeErrors)}`,
-        );
+        throw new Error(`Получены "ark bridge not ready" ошибки: ${JSON.stringify(bridgeErrors)}`);
       }
     } finally {
       await app.close();

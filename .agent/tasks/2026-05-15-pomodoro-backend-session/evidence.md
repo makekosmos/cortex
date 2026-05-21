@@ -16,20 +16,20 @@ thin subscriber, state живёт в `kepler-backend` (Rust singleton
 
 ## Acceptance criteria
 
-| AC | Описание | Статус |
-|----|----------|--------|
-| AC1 | TS golden tests на текущий usePomodoro state machine | **PASS** — 11 bun-test сценариев (`extensions/horologion/tests/usePomodoro.test.ts`) |
-| AC2 | Rust `pomodoro::Session` модуль с public API | **PASS** — `crates/ark-core/rust/src/pomodoro/{mod,session,events,clock}.rs` |
-| AC3 | Unit tests Rust state machine с теми же сценариями + MockClock | **PASS** — 12 unit tests в `pomodoro::session::tests` |
-| AC4 | Parity — Rust output совпадает с TS на одинаковых input'ах | **PASS** — same scenarios assert'ятся в обоих наборах тестов (start/tick/pause/resume/finish-work/4-cycle-long-break/skip/stop/auto-start/workMinOverride) |
-| AC5 | ARK ops exposed: `pomodoro.{start,pause,resume,skip,stop,get_state}` | **PASS** — `services/kepler-backend/src/pomodoro_host.rs::handle_pomodoro_op`, intercepted в `ws_server.rs` (strip prefix `pomodoro.`) |
-| AC6 | Backend emits flat events `pomodoro_{tick,phase_changed,finished}` через ws_server broadcast | **PASS** — `forward_session_events` task + per-connection select на `pomo_rx.recv()` в `handle_connection` |
-| AC7 | Renderer `usePomodoroSession.ts` thin wrapper, та же reactive shape | **PASS** — `extensions/horologion/src/lib/usePomodoroSession.ts` (340 LOC); PomodoroView / HomeView / main.ts переключены |
-| AC8 | Time entries создаются renderer'ом на phase_changed events | **PASS** — `createArkEntry` / `closeArkEntry` вызываются в `pomodoro_phase_changed` subscribe-handler'е в usePomodoroSession |
-| AC9 | Timer переживает renderer crash (close window, reopen) | **PASS** — `pomodoro-persistence.spec.ts` Playwright e2e ✓ |
-| AC10 | Timer переживает renderer reload (state восстанавливается из get_state) | **PASS** — covered by AC9 e2e (close-and-reopen = reload в этом контексте) |
-| AC11 | Playwright e2e: open → start → close window → wait → reopen → time продвинулся | **PASS** — `tests/e2e/pomodoro-persistence.spec.ts:1:1` (13.5s) |
-| AC12 | Все existing e2e PASS | **PASS** — 14/14 (был 13 + новый persistence; spec'овский счёт «22+» оказался завышенным — фактический baseline 13) |
+| AC   | Описание                                                                                     | Статус                                                                                                                                                     |
+| ---- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC1  | TS golden tests на текущий usePomodoro state machine                                         | **PASS** — 11 bun-test сценариев (`extensions/horologion/tests/usePomodoro.test.ts`)                                                                       |
+| AC2  | Rust `pomodoro::Session` модуль с public API                                                 | **PASS** — `crates/ark-core/rust/src/pomodoro/{mod,session,events,clock}.rs`                                                                               |
+| AC3  | Unit tests Rust state machine с теми же сценариями + MockClock                               | **PASS** — 12 unit tests в `pomodoro::session::tests`                                                                                                      |
+| AC4  | Parity — Rust output совпадает с TS на одинаковых input'ах                                   | **PASS** — same scenarios assert'ятся в обоих наборах тестов (start/tick/pause/resume/finish-work/4-cycle-long-break/skip/stop/auto-start/workMinOverride) |
+| AC5  | ARK ops exposed: `pomodoro.{start,pause,resume,skip,stop,get_state}`                         | **PASS** — `services/kepler-backend/src/pomodoro_host.rs::handle_pomodoro_op`, intercepted в `ws_server.rs` (strip prefix `pomodoro.`)                     |
+| AC6  | Backend emits flat events `pomodoro_{tick,phase_changed,finished}` через ws_server broadcast | **PASS** — `forward_session_events` task + per-connection select на `pomo_rx.recv()` в `handle_connection`                                                 |
+| AC7  | Renderer `usePomodoroSession.ts` thin wrapper, та же reactive shape                          | **PASS** — `extensions/horologion/src/lib/usePomodoroSession.ts` (340 LOC); PomodoroView / HomeView / main.ts переключены                                  |
+| AC8  | Time entries создаются renderer'ом на phase_changed events                                   | **PASS** — `createArkEntry` / `closeArkEntry` вызываются в `pomodoro_phase_changed` subscribe-handler'е в usePomodoroSession                               |
+| AC9  | Timer переживает renderer crash (close window, reopen)                                       | **PASS** — `pomodoro-persistence.spec.ts` Playwright e2e ✓                                                                                                 |
+| AC10 | Timer переживает renderer reload (state восстанавливается из get_state)                      | **PASS** — covered by AC9 e2e (close-and-reopen = reload в этом контексте)                                                                                 |
+| AC11 | Playwright e2e: open → start → close window → wait → reopen → time продвинулся               | **PASS** — `tests/e2e/pomodoro-persistence.spec.ts:1:1` (13.5s)                                                                                            |
+| AC12 | Все existing e2e PASS                                                                        | **PASS** — 14/14 (был 13 + новый persistence; spec'овский счёт «22+» оказался завышенным — фактический baseline 13)                                        |
 
 **Все 12 AC = PASS.**
 
@@ -179,17 +179,17 @@ Wave 2 поднял backend ticker до 250 ms потому что renderer'у �
 
 ### Acceptance criteria
 
-| AC  | Описание | Статус |
-|-----|----------|--------|
-| AC1 | `SessionState.phase_ends_at_ms: Option<u64>` (`Some` когда running && !paused; `None` иначе). `remaining_ms` остаётся в snapshot для paused/idle. | **PASS** — `crates/ark-core/rust/src/pomodoro/session.rs` (см. impl + 4 новых unit-теста). |
-| AC2 | Backend ticker → 1 Hz. `horologion-pomodoro.spec.ts` продолжает PASS. | **PASS** — `services/kepler-backend/src/pomodoro_host.rs::ticker_loop` (`Duration::from_secs(1)`); Playwright spec ✓ (10s). |
-| AC3 | Renderer `usePomodoroSession.ts` интерполирует remainingMs локально (33 ms timer, server-driven fallback на null anchor, pause→freeze, resume→new anchor). | **PASS** — `extensions/horologion/src/lib/usePomodoroSession.ts` (`applyState` + `recomputeFromAnchor`). |
-| AC4 | Rust unit-тесты на `phase_ends_at_ms` Some/None branches. | **PASS** — 4 новых теста: `snapshot_phase_ends_at_ms_some_when_running`, `_none_when_paused`, `_none_when_idle`, `_updates_on_resume`. Всего 16 unit-тестов в `pomodoro::session::tests`. |
-| AC5 | TS coverage interpolation поведения. | **PASS** — `extensions/horologion/tests/usePomodoroSession.test.ts` (4 теста). Существующий `usePomodoro.test.ts` (11 тестов) оставлен для deprecated impl. |
-| AC6 | `pomodoro-persistence.spec.ts` PASS — backend 1Hz survives renderer close. | **PASS** — 13.5s, time decreases ≥3s между close/reopen. |
-| AC7 | `horologion-pomodoro.spec.ts` PASS — UI ticks visibly через local interpolation, не backend tick rate. | **PASS** — 10.0s. |
-| AC8 | Bench `Session::snapshot()` отдельно, <100ns. | **PASS** — **13.75 ns** (см. raw ниже). |
-| AC9 | Все 14 Playwright PASS. | **PASS** — 14/14 (1.7m). |
+| AC  | Описание                                                                                                                                                   | Статус                                                                                                                                                                                    |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC1 | `SessionState.phase_ends_at_ms: Option<u64>` (`Some` когда running && !paused; `None` иначе). `remaining_ms` остаётся в snapshot для paused/idle.          | **PASS** — `crates/ark-core/rust/src/pomodoro/session.rs` (см. impl + 4 новых unit-теста).                                                                                                |
+| AC2 | Backend ticker → 1 Hz. `horologion-pomodoro.spec.ts` продолжает PASS.                                                                                      | **PASS** — `services/kepler-backend/src/pomodoro_host.rs::ticker_loop` (`Duration::from_secs(1)`); Playwright spec ✓ (10s).                                                               |
+| AC3 | Renderer `usePomodoroSession.ts` интерполирует remainingMs локально (33 ms timer, server-driven fallback на null anchor, pause→freeze, resume→new anchor). | **PASS** — `extensions/horologion/src/lib/usePomodoroSession.ts` (`applyState` + `recomputeFromAnchor`).                                                                                  |
+| AC4 | Rust unit-тесты на `phase_ends_at_ms` Some/None branches.                                                                                                  | **PASS** — 4 новых теста: `snapshot_phase_ends_at_ms_some_when_running`, `_none_when_paused`, `_none_when_idle`, `_updates_on_resume`. Всего 16 unit-тестов в `pomodoro::session::tests`. |
+| AC5 | TS coverage interpolation поведения.                                                                                                                       | **PASS** — `extensions/horologion/tests/usePomodoroSession.test.ts` (4 теста). Существующий `usePomodoro.test.ts` (11 тестов) оставлен для deprecated impl.                               |
+| AC6 | `pomodoro-persistence.spec.ts` PASS — backend 1Hz survives renderer close.                                                                                 | **PASS** — 13.5s, time decreases ≥3s между close/reopen.                                                                                                                                  |
+| AC7 | `horologion-pomodoro.spec.ts` PASS — UI ticks visibly через local interpolation, не backend tick rate.                                                     | **PASS** — 10.0s.                                                                                                                                                                         |
+| AC8 | Bench `Session::snapshot()` отдельно, <100ns.                                                                                                              | **PASS** — **13.75 ns** (см. raw ниже).                                                                                                                                                   |
+| AC9 | Все 14 Playwright PASS.                                                                                                                                    | **PASS** — 14/14 (1.7m).                                                                                                                                                                  |
 
 **Все 9 AC = PASS.**
 

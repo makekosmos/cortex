@@ -5,6 +5,7 @@
 All acceptance criteria in `spec.md` are `PASS`.
 
 Follow-up reliability pass on 2026-04-16:
+
 - removed fragile `<script setup vapor>` usage from dashboard leaf components that broke `vite` dev transforms
 - switched dashboard router to hash history so Electron route navigation and e2e deep links are stable
 - added Playwright coverage for the dashboard (`playwright.config.ts`, `e2e/dashboard.spec.ts`)
@@ -18,6 +19,7 @@ Follow-up reliability pass on 2026-04-16:
 PASS.
 
 Evidence:
+
 - `packages/ark-core/rust/src/db.rs` includes `test_init_schema_migrates_existing_db_without_destroying_data`.
 - The test verifies an existing DB with pre-usage tables keeps legacy data after `init_schema()` and gains the usage tables.
 - Verification log: `raw/ark-core-tests.txt`.
@@ -27,6 +29,7 @@ Evidence:
 PASS.
 
 Evidence:
+
 - `packages/ark-core/rust/tests/sync_round_trip.rs` includes `usage_entities_sync_between_two_servers`.
 - The test replicates `tracked_app`, `usage_session`, and `usage_event` through the current sync server/client path and asserts the receiving side loads them.
 - Verification log: `raw/ark-core-tests.txt`.
@@ -36,6 +39,7 @@ Evidence:
 PASS.
 
 Evidence:
+
 - Release packaging flow exists in `services/usage-tracker/scripts/build-installer.ps1`.
 - Install/uninstall scripts exist in `services/usage-tracker/installer/install.ps1` and `services/usage-tracker/installer/uninstall.ps1`.
 - `services/usage-tracker/package.json` exposes `build:release` and `package:installer`.
@@ -48,6 +52,7 @@ Evidence:
 PASS.
 
 Evidence:
+
 - New app: `apps/dashboard/`.
 - Vue + Electron scaffold in `apps/dashboard/package.json`, `apps/dashboard/vite.config.mjs`, `apps/dashboard/electron/main.ts`, `apps/dashboard/electron/preload.ts`.
 - Composition API + `<script setup lang="ts">` renderer code in `apps/dashboard/src/**`.
@@ -59,6 +64,7 @@ Evidence:
 PASS.
 
 Evidence:
+
 - Direct dependency: `apps/dashboard/package.json`.
 - Direct alias usage in `apps/dashboard/vite.config.mjs`.
 - Direct imports in `apps/dashboard/src/components/dashboard/DashboardShell.vue` and `apps/dashboard/src/global.css`.
@@ -69,6 +75,7 @@ Evidence:
 PASS.
 
 Evidence:
+
 - Secure bridge: `apps/dashboard/electron/preload.ts` exposes only `window.dashboardApi`.
 - Read-only query layer: `apps/dashboard/electron/services/analytics.ts`.
 - SQLite remains in main process: `apps/dashboard/electron/db/sqlite.ts`.
@@ -82,6 +89,7 @@ Evidence:
 PASS.
 
 Evidence:
+
 - Root dependency install: `raw/bun-install.txt`.
 - Ark tests: `raw/ark-core-tests.txt`.
 - usage-tracker tests: `raw/usage-tracker-tests.txt`.
@@ -99,6 +107,7 @@ Evidence:
 PASS.
 
 Evidence:
+
 - Updated `packages/ark-core/AGENTS.md` for usage entities, migrations, and sync rules.
 - Updated `apps/arrancador/AGENTS.md` to describe Arrancador as an Ark usage consumer rather than tracker owner.
 - Added/updated `services/usage-tracker/AGENTS.md`.

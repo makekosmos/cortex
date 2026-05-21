@@ -49,9 +49,7 @@ export function pomodoroStateFileExists(dataDir: string): boolean {
   return fs.existsSync(statePath(dataDir));
 }
 
-export function readPomodoroStateFile(
-  dataDir: string,
-): PomodoroStateFileShape | null {
+export function readPomodoroStateFile(dataDir: string): PomodoroStateFileShape | null {
   const p = statePath(dataDir);
   if (!fs.existsSync(p)) return null;
   const raw = fs.readFileSync(p, "utf8");
@@ -59,10 +57,7 @@ export function readPomodoroStateFile(
 }
 
 /** Атомарная запись (temp + rename) — mirror Rust save_state. */
-export function writePomodoroStateFile(
-  dataDir: string,
-  state: PomodoroStateFileShape,
-): void {
+export function writePomodoroStateFile(dataDir: string, state: PomodoroStateFileShape): void {
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   const target = statePath(dataDir);
   const tmp = target + ".tmp.test";
@@ -81,9 +76,7 @@ export async function waitForPomodoroStateFile(
     if (s) return s;
     await new Promise((r) => setTimeout(r, 100));
   }
-  throw new Error(
-    `pomodoro-state.json не появился в ${dataDir} за ${timeoutMs}ms`,
-  );
+  throw new Error(`pomodoro-state.json не появился в ${dataDir} за ${timeoutMs}ms`);
 }
 
 /** Polling: ждёт пока файл исчезнет (или сразу возвращает если его нет). */
@@ -96,7 +89,5 @@ export async function waitForPomodoroStateFileAbsent(
     if (!pomodoroStateFileExists(dataDir)) return;
     await new Promise((r) => setTimeout(r, 100));
   }
-  throw new Error(
-    `pomodoro-state.json не удалён из ${dataDir} за ${timeoutMs}ms`,
-  );
+  throw new Error(`pomodoro-state.json не удалён из ${dataDir} за ${timeoutMs}ms`);
 }

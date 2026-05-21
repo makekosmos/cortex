@@ -1,6 +1,7 @@
 # Task: Arrancador Vue statistics route
 
 ## Summary
+
 Port the current React `Statistics` page into the Vue/Vapor renderer under `apps/arrancador/src-vue/**`, preserving the existing statistics workflow and keeping the React `src/` tree untouched.
 
 ## Scope And Constraints

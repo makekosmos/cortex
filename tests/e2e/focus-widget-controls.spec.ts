@@ -59,15 +59,9 @@ test("focus widget: показывает 3 inline кнопки когда active
     const buttons = widget!.locator(".controls .ctl-btn");
     await expect(buttons).toHaveCount(3);
     // Pause / Skip / Stop — все aria-label есть.
-    await expect(
-      widget!.locator('.ctl-btn[aria-label="Пауза"]'),
-    ).toBeVisible();
-    await expect(
-      widget!.locator('.ctl-btn[aria-label="Пропустить фазу"]'),
-    ).toBeVisible();
-    await expect(
-      widget!.locator('.ctl-btn[aria-label="Остановить"]'),
-    ).toBeVisible();
+    await expect(widget!.locator('.ctl-btn[aria-label="Пауза"]')).toBeVisible();
+    await expect(widget!.locator('.ctl-btn[aria-label="Пропустить фазу"]')).toBeVisible();
+    await expect(widget!.locator('.ctl-btn[aria-label="Остановить"]')).toBeVisible();
   } finally {
     await gracefulQuit(app);
   }
@@ -191,15 +185,9 @@ test("focus widget: Stopwatch mode скрывает Skip кнопку", async ()
 
     // Skip отсутствует, Pause + Stop есть.
     await expect(widget!.locator(".controls .ctl-btn")).toHaveCount(2);
-    await expect(
-      widget!.locator('.ctl-btn[aria-label="Пропустить фазу"]'),
-    ).toHaveCount(0);
-    await expect(
-      widget!.locator('.ctl-btn[aria-label="Пауза"]'),
-    ).toBeVisible();
-    await expect(
-      widget!.locator('.ctl-btn[aria-label="Остановить"]'),
-    ).toBeVisible();
+    await expect(widget!.locator('.ctl-btn[aria-label="Пропустить фазу"]')).toHaveCount(0);
+    await expect(widget!.locator('.ctl-btn[aria-label="Пауза"]')).toBeVisible();
+    await expect(widget!.locator('.ctl-btn[aria-label="Остановить"]')).toBeVisible();
   } finally {
     await gracefulQuit(app);
   }

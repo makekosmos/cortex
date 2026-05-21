@@ -10,9 +10,7 @@ import type { ElectronApplication } from "playwright";
  * `firstWindow()` всё равно отдаёт его (webContents существует, видимость
  * не важна для DOM-операций).
  */
-export async function getLauncherWindow(
-  app: ElectronApplication,
-): Promise<Page> {
+export async function getLauncherWindow(app: ElectronApplication): Promise<Page> {
   const launcher = await app.firstWindow();
   await launcher.waitForLoadState("domcontentloaded");
   return launcher;

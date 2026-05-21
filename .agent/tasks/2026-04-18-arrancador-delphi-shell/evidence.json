@@ -30,9 +30,7 @@
     {
       "id": "AC4",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/windows.ts:74-127"
-      ]
+      "evidence": ["apps/arrancador/electron/main/windows.ts:74-127"]
     },
     {
       "id": "AC5",

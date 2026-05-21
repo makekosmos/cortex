@@ -51,7 +51,5 @@
       ]
     }
   ],
-  "raw_artifacts": [
-    ".agent/tasks/2026-04-17-repo-hygiene-cleanup/raw/verification.txt"
-  ]
+  "raw_artifacts": [".agent/tasks/2026-04-17-repo-hygiene-cleanup/raw/verification.txt"]
 }

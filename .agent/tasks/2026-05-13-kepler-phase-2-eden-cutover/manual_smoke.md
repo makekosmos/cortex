@@ -30,6 +30,7 @@ bun install --frozen-lockfile
 ```
 
 Verify бинари существуют:
+
 ```powershell
 Test-Path D:\Personal\Hobby\Coding\kosmos-kepler\apps\kepler\target\release\kepler.exe
 Test-Path D:\Personal\Hobby\Coding\kosmos-kepler\packages\ark-core\rust\target\release\ark-core-rpc.exe
@@ -52,6 +53,7 @@ D:\Personal\Hobby\Coding\kosmos-kepler\apps\kepler\target\release\kepler.exe
 ```
 
 **Ожидаемый output** в stderr:
+
 ```
 Kepler v0.1.0 starting (protocol 1.0.0)
 [kepler] singleton acquired: C:\Users\<you>\AppData\Roaming\Kosmos\kepler-singleton.lock.db
@@ -74,12 +76,14 @@ Get-Content $env:APPDATA\Kosmos\kepler.lock.json | ConvertFrom-Json | Format-Lis
 ```
 
 **Что увидеть:**
+
 - `pid` — должен матчить PID kepler.exe из task-manager
 - `ws_port` — какой-то random > 1024
 - `protocol_version` — `@{major=1; minor=0; patch=0}`
 - `auth_token` — 64 hex-символа
 
 **Permissions проверка** (AC3 verification из Phase 1, но напомним):
+
 ```powershell
 (Get-Acl $env:APPDATA\Kosmos\kepler.lock.json).Access | Where-Object {
     $_.IdentityReference -notmatch [Environment]::UserName
@@ -107,9 +111,11 @@ electron] [eden.ark] using Kepler host (pid <kepler_pid>, ws_port <port>)
 **Это критичная строка** — означает Eden **успешно подключился к Kepler**.
 
 Если вместо неё видишь:
+
 ```
 electron] [eden.ark] Kepler unavailable (...); falling back to self-managed ark-core-rpc.
 ```
+
 → Eden не нашёл Kepler. См. Troubleshooting ниже.
 
 ### Шаг 4: Проверка Task Manager — **главный proof**
@@ -117,6 +123,7 @@ electron] [eden.ark] Kepler unavailable (...); falling back to self-managed ark-
 Открыть Task Manager → Details tab → отфильтровать по имени.
 
 **Должно быть:**
+
 - `kepler.exe` — **ровно 1 шт.** (наш host)
 - `ark-core-rpc.exe` — **ровно 1 шт.** (supervised child Kepler'а, **не** Eden'ом)
 - `electron.exe` / `Eden.exe` — несколько (renderer/preload Electron'а — это нормально)
@@ -127,6 +134,7 @@ electron] [eden.ark] Kepler unavailable (...); falling back to self-managed ark-
 ### Шаг 5: Eden UI — CRUD заметок
 
 В окне Eden:
+
 1. Создать новую заметку → ввести текст → сохранить (Ctrl+S или автосейв)
 2. Перезагрузить Eden (Ctrl+R в DevTools или закрыть/открыть) → заметка должна быть на месте
 3. Поиск по тексту заметки → должен находить (через ARK FTS5)
@@ -137,6 +145,7 @@ electron] [eden.ark] Kepler unavailable (...); falling back to self-managed ark-
 ### Шаг 6: Проверка stderr Eden и Kepler
 
 В Eden Vite консоли **не должно** быть:
+
 - `ark-core-rpc exited with` (sidecar упал)
 - `ark-core-rpc init failed` (init не прошёл)
 - timeouts на ARK операции
@@ -152,12 +161,14 @@ electron] [eden.ark] Kepler unavailable (...); falling back to self-managed ark-
 В Task Manager → правый клик на `kepler.exe` → End task.
 
 **Ожидаемое поведение Eden:**
+
 - В Eden Vite консоли появится: `[eden.ark] Kepler connection closed` или `kepler error` на следующем request
 - Если ты сейчас делаешь операцию (поиск, save) — она fail'ится с ошибкой
 
 ### Шаг 8: Перезапустить Kepler
 
 В первом окне (где kepler.exe был запущен) — заново:
+
 ```powershell
 D:\Personal\Hobby\Coding\kosmos-kepler\apps\kepler\target\release\kepler.exe
 ```
@@ -167,6 +178,7 @@ D:\Personal\Hobby\Coding\kosmos-kepler\apps\kepler\target\release\kepler.exe
 ### Шаг 9: Eden reconnect
 
 Через ≤ 5 секунд (или при следующей операции в Eden) — Eden должен реконнектиться. Видно по:
+
 - Новая операция в Eden работает без перезапуска
 - В Vite консоли: новый `[eden.ark] using Kepler host (pid <NEW_pid>, ws_port <NEW_port>)`
 
@@ -175,6 +187,7 @@ D:\Personal\Hobby\Coding\kosmos-kepler\apps\kepler\target\release\kepler.exe
 ### Альтернативный сценарий (если reconnect не работает автоматически):
 
 В текущей реализации `closeKeplerConnection` reject'ит все pending requests, но automatic reconnect logic не имплементирован (Phase 2 minimum scope). В этом случае:
+
 - Eden show error toast / console error
 - Закрыть Eden и заново запустить → Eden подключится к новому Kepler
 
@@ -187,6 +200,7 @@ D:\Personal\Hobby\Coding\kosmos-kepler\apps\kepler\target\release\kepler.exe
 ### Eden не находит Kepler (fallback на self-managed)
 
 Проверь:
+
 1. `kepler.exe` запущен? Process Explorer показывает живой процесс.
 2. `kepler.lock.json` существует? `Get-Item $env:APPDATA\Kosmos\kepler.lock.json`.
 3. Permissions OK? Eden запущен под тем же user account что Kepler?
@@ -195,10 +209,13 @@ D:\Personal\Hobby\Coding\kosmos-kepler\apps\kepler\target\release\kepler.exe
 ### Kepler не стартует (singleton conflict)
 
 Если в stderr Kepler:
+
 ```
 [kepler] another Kepler is already running (pid X, ws_port Y)
 ```
+
 Но процесс X не существует — `kepler.lock.json` stale. Удалить вручную:
+
 ```powershell
 Remove-Item $env:APPDATA\Kosmos\kepler.lock.json
 Remove-Item $env:APPDATA\Kosmos\kepler-singleton.lock.db
@@ -207,6 +224,7 @@ Remove-Item $env:APPDATA\Kosmos\kepler-singleton.lock.db
 ### Eden показывает database errors
 
 Может быть ARK DB conflict — Kepler и Eden пытаются open same DB:
+
 - Если Kepler владеет DB через ark-core-rpc child, **Eden НЕ должен** тоже open ту же DB напрямую.
 - В kepler mode Eden идёт через WS → ark-core-rpc Kepler'а → DB. Нет конфликта.
 - В fallback mode (self-managed) — Eden открывает свой ark-core-rpc → если Kepler жив И тоже DB — **conflict**. Решение: kill один или другой.
@@ -214,22 +232,24 @@ Remove-Item $env:APPDATA\Kosmos\kepler-singleton.lock.db
 ### `ark-core-rpc` падает с FK constraint при создании object
 
 Это AC3 scenario (Phase 2). Если объект приходит с unknown `type_id` — он сейчас идёт в `sync_pending_objects` и эмитится `sync_error` event. Eden пишет в Vite консоль:
+
 ```
 [eden.ark] sync_error code=unknown_type_id entity_id=... awaited_type_id=...
 ```
+
 Это **не баг**, это новое корректное поведение Phase 2.
 
 ---
 
 ## Итоговая verification матрица
 
-| AC | Status | Where verified |
-|----|--------|----------------|
-| AC1 | Manual smoke | Шаги 1-6 |
-| AC2 | Manual smoke (partial — reconnect-by-restart-eden OK) | Шаги 7-9 |
-| AC3 | Auto (Rust unit) | `phase2_replay_runs_when_type_appears` |
-| AC4 | Auto (Rust unit) | `phase2_replay_handles_multiple_pending_same_type` |
-| AC5 | Auto (TS unit) | `AC5: alive PID + MAJOR mismatch` |
-| AC6 | Auto (TS unit) + manual fallback | `AC6: no lock + no exe + autoLaunch off` |
+| AC  | Status                                                | Where verified                                     |
+| --- | ----------------------------------------------------- | -------------------------------------------------- |
+| AC1 | Manual smoke                                          | Шаги 1-6                                           |
+| AC2 | Manual smoke (partial — reconnect-by-restart-eden OK) | Шаги 7-9                                           |
+| AC3 | Auto (Rust unit)                                      | `phase2_replay_runs_when_type_appears`             |
+| AC4 | Auto (Rust unit)                                      | `phase2_replay_handles_multiple_pending_same_type` |
+| AC5 | Auto (TS unit)                                        | `AC5: alive PID + MAJOR mismatch`                  |
+| AC6 | Auto (TS unit) + manual fallback                      | `AC6: no lock + no exe + autoLaunch off`           |
 
 Когда AC1+AC2 PASS — Phase 2 готова к merge.

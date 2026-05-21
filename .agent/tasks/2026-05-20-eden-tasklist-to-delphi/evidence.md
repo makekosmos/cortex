@@ -6,18 +6,18 @@
 
 ## AC
 
-| # | Criterion | Status | Evidence |
-|---|---|---|---|
-| AC1 | `bun run --cwd shell build:extensions` зелёный | **PASS** | exit 0, `dist/eden/` build с TaskItemWithId chunk |
-| AC2 | shell typecheck зелёный | **PASS** | `bun run --cwd shell typecheck` exit 0 |
-| AC3 | `bun run ark:guard:writes` зелёный | **PASS** | `ARK write boundary guard passed.` exit 0 |
-| AC4 | `bun run ark:smoke` зелёный | **PASS** | `ARK smoke matrix passed.` exit 0 (после fix'а ark-smoke.mjs Windows quote bug) |
-| AC5 | `/задача` создаёт чекбокс | **PENDING-MANUAL** | manual smoke в dev — отложен на ревью пользователем |
-| AC6 | task_obj появляется в Dashboard | **PENDING-MANUAL** | manual |
-| AC7 | toggle checked → is_completed update | **PENDING-MANUAL** | manual |
-| AC8 | delete row → soft-delete task_obj | **PENDING-MANUAL** | manual |
-| AC9 | propsJson.source_app=eden, source_note_id=<entry.id> | **PASS** (по коду) | См. `kepler-api-shim.ts::upsertTaskFromNote` |
-| AC10 | sync failure не блокирует note save | **PASS** (по коду) | `syncTaskItemsToArk` try/catch без throw, snapshot обновляется только для successful operations |
+| #    | Criterion                                            | Status             | Evidence                                                                                        |
+| ---- | ---------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
+| AC1  | `bun run --cwd shell build:extensions` зелёный       | **PASS**           | exit 0, `dist/eden/` build с TaskItemWithId chunk                                               |
+| AC2  | shell typecheck зелёный                              | **PASS**           | `bun run --cwd shell typecheck` exit 0                                                          |
+| AC3  | `bun run ark:guard:writes` зелёный                   | **PASS**           | `ARK write boundary guard passed.` exit 0                                                       |
+| AC4  | `bun run ark:smoke` зелёный                          | **PASS**           | `ARK smoke matrix passed.` exit 0 (после fix'а ark-smoke.mjs Windows quote bug)                 |
+| AC5  | `/задача` создаёт чекбокс                            | **PENDING-MANUAL** | manual smoke в dev — отложен на ревью пользователем                                             |
+| AC6  | task_obj появляется в Dashboard                      | **PENDING-MANUAL** | manual                                                                                          |
+| AC7  | toggle checked → is_completed update                 | **PENDING-MANUAL** | manual                                                                                          |
+| AC8  | delete row → soft-delete task_obj                    | **PENDING-MANUAL** | manual                                                                                          |
+| AC9  | propsJson.source_app=eden, source_note_id=<entry.id> | **PASS** (по коду) | См. `kepler-api-shim.ts::upsertTaskFromNote`                                                    |
+| AC10 | sync failure не блокирует note save                  | **PASS** (по коду) | `syncTaskItemsToArk` try/catch без throw, snapshot обновляется только для successful operations |
 
 ## Файлы
 

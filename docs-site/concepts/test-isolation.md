@@ -20,14 +20,14 @@
 
 ## Где хранить тестовые БД
 
-| Путь | Когда |
-|---|---|
-| `.agent/tasks/<TASK_ID>/smoke/` | task-локальные артефакты proof-loop |
-| `apps/<app>/.tmp/` | локальные unit/integration прогоны разработчика |
-| `apps/<app>/.e2e/` | Playwright e2e |
-| OS temp (`os.tmpdir()`, `$env:TEMP`) | эфемерные одноразовые smoke |
-| `dist/`, `build/`, `coverage/` | ❌ нет — попадает в коммит и в артефакты сборки |
-| user data dir (`%APPDATA%`, `~/.config`) | ❌ нет — это user DB |
+| Путь                                     | Когда                                           |
+| ---------------------------------------- | ----------------------------------------------- |
+| `.agent/tasks/<TASK_ID>/smoke/`          | task-локальные артефакты proof-loop             |
+| `apps/<app>/.tmp/`                       | локальные unit/integration прогоны разработчика |
+| `apps/<app>/.e2e/`                       | Playwright e2e                                  |
+| OS temp (`os.tmpdir()`, `$env:TEMP`)     | эфемерные одноразовые smoke                     |
+| `dist/`, `build/`, `coverage/`           | ❌ нет — попадает в коммит и в артефакты сборки |
+| user data dir (`%APPDATA%`, `~/.config`) | ❌ нет — это user DB                            |
 
 `.tmp` и `.e2e` должны быть в `.gitignore` каждого приложения.
 

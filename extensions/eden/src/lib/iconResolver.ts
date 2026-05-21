@@ -72,12 +72,12 @@ const ACTIVITY: IconNode = [
 ];
 
 const ICON_MAP: Record<string, IconNode> = {
-  "document": FILE_TEXT,
+  document: FILE_TEXT,
   "document-text": FILE_TEXT,
-  "page": FILE,
+  page: FILE,
   "game-controller": GAMEPAD_2,
-  "barbell": DUMBBELL,
-  "fitness": ACTIVITY,
+  barbell: DUMBBELL,
+  fitness: ACTIVITY,
 };
 
 function renderSvg(node: IconNode): string {

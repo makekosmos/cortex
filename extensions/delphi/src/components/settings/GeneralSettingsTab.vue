@@ -10,9 +10,7 @@ const { theme, setTheme } = useTheme();
     <header class="settings-tab-header">
       <p class="settings-tab-kicker">Настройки Delphi</p>
       <h1 class="settings-tab-title">Общие</h1>
-      <p class="settings-tab-subtitle">
-        Базовые настройки интерфейса и поведения приложения.
-      </p>
+      <p class="settings-tab-subtitle">Базовые настройки интерфейса и поведения приложения.</p>
     </header>
 
     <section class="settings-card">

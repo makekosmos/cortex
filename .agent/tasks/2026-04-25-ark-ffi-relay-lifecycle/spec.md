@@ -19,6 +19,7 @@ AC4. `ArkCore::stop_sync` stops the relay transport.
 AC5. `ArkCore::get_connected_peers` includes authenticated relay peers without duplicating LAN/outbound entries.
 
 AC6. Verification artifacts prove:
+
 - Rust compiles and full tests pass;
 - a targeted unit/integration verifier covers the FFI relay lifecycle wiring shape;
 - generated bindings remain buildable by `cargo check`;

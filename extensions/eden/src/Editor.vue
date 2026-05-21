@@ -31,10 +31,7 @@
                 Открыть объект
               </button>
               <div class="note-type-menu-divider" aria-hidden="true"></div>
-              <div
-                class="note-type-menu-submenu"
-                @mouseenter="isTypePickerOpen = true"
-              >
+              <div class="note-type-menu-submenu" @mouseenter="isTypePickerOpen = true">
                 <button
                   class="note-type-menu-item note-type-menu-item--submenu"
                   type="button"
@@ -47,7 +44,11 @@
                   <button
                     v-for="noteType in typePickerOptions"
                     :key="noteType.id"
-                    :class="['note-type-menu-item', 'note-type-submenu-item', noteType.id === noteTypeId && 'is-active']"
+                    :class="[
+                      'note-type-menu-item',
+                      'note-type-submenu-item',
+                      noteType.id === noteTypeId && 'is-active',
+                    ]"
                     type="button"
                     @click="handleNoteTypeChange(noteType.id)"
                   >
@@ -88,11 +89,7 @@
         </div>
       </div>
     </div>
-    <div
-      ref="contentAreaRef"
-      class="editor-content-area"
-      @mousedown="onContentMouseDown"
-    >
+    <div ref="contentAreaRef" class="editor-content-area" @mousedown="onContentMouseDown">
       <div class="editor-rail editor-content-rail">
         <EditorContent :editor="editor ?? null" />
       </div>
@@ -201,7 +198,9 @@ const noteTypeId = ref<string>(props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID);
 const headerLayout = ref<string | null>(props.entry.header_layout);
 const headerProps = ref<Record<string, unknown>>(
   safeParseHeaderProps(
-    props.noteTypes.find((noteType) => noteType.id === (props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID)) ?? null,
+    props.noteTypes.find(
+      (noteType) => noteType.id === (props.entry.type_id ?? SYSTEM_TYPE_NOTE_ID),
+    ) ?? null,
     props.entry.header_props_json,
   ),
 );
@@ -250,7 +249,9 @@ const activeNoteType = computed(
 // в zen-режиме, попадание `/` в title через keyboard navigation).
 const isJournalEntry = computed(() => noteTypeId.value === SYSTEM_TYPE_JOURNAL_ID);
 
-const typePickerOptions = computed(() => props.noteTypes.filter((noteType) => Boolean(noteType.id)));
+const typePickerOptions = computed(() =>
+  props.noteTypes.filter((noteType) => Boolean(noteType.id)),
+);
 
 function getNoteTypeIconSrc(noteType: NoteType | null) {
   return noteType?.icon ? objectIconUri(noteType.icon) : "";
@@ -401,7 +402,10 @@ function onWindowKeyDown(e: KeyboardEvent): void {
   // PM selection branch — Ctrl+A→Ctrl+C / range-select→Ctrl+C / Ctrl+X.
   // Срабатывает только если editor фокусирован (иначе юзер в title input
   // или другом UI — пускаем native handle).
-  if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C" || e.key === "x" || e.key === "X")) {
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    (e.key === "c" || e.key === "C" || e.key === "x" || e.key === "X")
+  ) {
     const sel = editor.value.state.selection;
     if (sel.empty) return;
     if (!editor.value.view.hasFocus()) return;
@@ -433,8 +437,15 @@ function pluralizeBlocks(n: number): string {
  * `- [ ] ${titleSnapshot}`. Без патча attr пустой и markdown получает
  * `- [ ] ` (источник истины title живёт в ARK, не в attrs).
  */
-function patchTaskRefSnapshots(json: { type?: string; content?: unknown[]; attrs?: Record<string, unknown> }, viewDom: HTMLElement): void {
-  const walk = (node: { type?: string; content?: unknown[]; attrs?: Record<string, unknown> }): void => {
+function patchTaskRefSnapshots(
+  json: { type?: string; content?: unknown[]; attrs?: Record<string, unknown> },
+  viewDom: HTMLElement,
+): void {
+  const walk = (node: {
+    type?: string;
+    content?: unknown[];
+    attrs?: Record<string, unknown>;
+  }): void => {
     if (!node) return;
     if (node.type === "taskRef" && node.attrs?.taskId) {
       const input = viewDom.querySelector(
@@ -468,7 +479,9 @@ function serializeSelectedBlocksAsMarkdown(): string {
   }
   if (filtered.length === 0) return "";
   const sliceJson = { type: "doc", content: filtered };
-  return (editor.value as unknown as { markdown: { serialize: (j: unknown) => string } }).markdown.serialize(sliceJson);
+  return (
+    editor.value as unknown as { markdown: { serialize: (j: unknown) => string } }
+  ).markdown.serialize(sliceJson);
 }
 
 function serializePMSelectionAsMarkdown(): string {
@@ -485,7 +498,9 @@ function serializePMSelectionAsMarkdown(): string {
     sliceJson = { type: "doc", content: sliceContent ?? [] };
   }
   patchTaskRefSnapshots(sliceJson, view.dom as HTMLElement);
-  return (editor.value as unknown as { markdown: { serialize: (j: unknown) => string } }).markdown.serialize(sliceJson);
+  return (
+    editor.value as unknown as { markdown: { serialize: (j: unknown) => string } }
+  ).markdown.serialize(sliceJson);
 }
 
 /**
@@ -868,7 +883,9 @@ function getSuggestionClientRect(renderProps: {
   }
 
   return () => {
-    const { left, right, top, bottom } = renderProps.editor.view.coordsAtPos(renderProps.range.from);
+    const { left, right, top, bottom } = renderProps.editor.view.coordsAtPos(
+      renderProps.range.from,
+    );
     return new DOMRect(left, top, Math.max(1, right - left), Math.max(1, bottom - top));
   };
 }
@@ -1385,7 +1402,7 @@ watch(
     resetRevisionBaseline();
     queueMicrotask(() => {
       lastPersistedContentJson = getSerializedEditorContent();
-        isHydrating = false;
+      isHydrating = false;
       emitLiveCharCount();
     });
   },
@@ -1413,7 +1430,8 @@ watch(
     if (isDirty()) return;
 
     const normalizedTypeId = nextTypeId ?? SYSTEM_TYPE_NOTE_ID;
-    const nextNoteType = props.noteTypes.find((noteType) => noteType.id === normalizedTypeId) ?? null;
+    const nextNoteType =
+      props.noteTypes.find((noteType) => noteType.id === normalizedTypeId) ?? null;
     const normalizedHeaderPropsJson = normalizeHeaderPropsJson(nextHeaderPropsJson);
 
     isHydrating = true;
@@ -1606,7 +1624,9 @@ watchEffect((onCleanup) => {
     window.removeEventListener("beforeunload", handleBeforeUnload);
     window.removeEventListener("keydown", onWindowKeyDown);
     window.removeEventListener("mousemove", onWindowMouseMove);
-    window.removeEventListener("mousedown", handleGlobalMouseDown, { capture: true } as EventListenerOptions);
+    window.removeEventListener("mousedown", handleGlobalMouseDown, {
+      capture: true,
+    } as EventListenerOptions);
   });
 });
 

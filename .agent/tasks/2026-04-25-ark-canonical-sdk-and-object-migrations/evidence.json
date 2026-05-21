@@ -16,13 +16,29 @@
     { "command": "bun run --cwd packages/arksync-node typecheck", "status": "PASS" },
     { "command": "bun run --cwd packages/arksync-node build", "status": "PASS" },
     { "command": "bun run --cwd apps/arrancador build:main", "status": "PASS" },
-    { "command": "bun run --cwd apps/arrancador test", "status": "PASS", "summary": "47 files, 161 tests" },
+    {
+      "command": "bun run --cwd apps/arrancador test",
+      "status": "PASS",
+      "summary": "47 files, 161 tests"
+    },
     { "command": "bun run --cwd apps/dashboard typecheck", "status": "PASS" },
     { "command": "bun run --cwd apps/dashboard build", "status": "PASS" },
     { "command": "bun run --cwd apps/dashboard smoke:seed", "status": "PASS" },
-    { "command": "bun run --cwd apps/dashboard smoke:analytics", "status": "PASS", "summary": "33 sessions, top app Odyssey Browser" },
-    { "command": "bun run --cwd apps/dashboard test:e2e:smoke", "status": "PASS", "summary": "status ok, route sessions" },
-    { "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml", "status": "PASS", "summary": "126 total Rust tests across lib/main/integration/doc targets" },
+    {
+      "command": "bun run --cwd apps/dashboard smoke:analytics",
+      "status": "PASS",
+      "summary": "33 sessions, top app Odyssey Browser"
+    },
+    {
+      "command": "bun run --cwd apps/dashboard test:e2e:smoke",
+      "status": "PASS",
+      "summary": "status ok, route sessions"
+    },
+    {
+      "command": "cargo test --manifest-path packages\\ark-core\\rust\\Cargo.toml",
+      "status": "PASS",
+      "summary": "126 total Rust tests across lib/main/integration/doc targets"
+    },
     { "command": "git diff --check", "status": "PASS", "summary": "CRLF warnings only" }
   ]
 }

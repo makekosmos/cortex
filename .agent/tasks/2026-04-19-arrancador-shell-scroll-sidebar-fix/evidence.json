@@ -26,10 +26,7 @@
       "id": "AC1",
       "status": "PASS",
       "summary": "Desktop scroll is confined to inner app containers instead of the document/page level.",
-      "evidence": [
-        "apps/arrancador/src/index.css",
-        "apps/arrancador/src/pages/Layout.tsx"
-      ]
+      "evidence": ["apps/arrancador/src/index.css", "apps/arrancador/src/pages/Layout.tsx"]
     },
     {
       "id": "AC2",

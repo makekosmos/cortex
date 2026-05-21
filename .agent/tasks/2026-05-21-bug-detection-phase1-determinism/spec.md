@@ -51,23 +51,23 @@ proof loop'ах.
 AC1. `bun run --cwd shell typecheck` — зелёный после правок main/preload.
 
 AC2. В production preload (`KOSMOS_TEST_MODE` unset) `window.kepler.__test`
-     === `undefined`. Проверка: запустить `bun run --cwd shell dev`, в DevTools
-     `window.kepler.__test` === undefined.
+=== `undefined`. Проверка: запустить `bun run --cwd shell dev`, в DevTools
+`window.kepler.__test` === undefined.
 
 AC3. В test mode (`KOSMOS_TEST_MODE=1`) `window.kepler.__test.waitForReady()`
-     резолвится в течение 15 сек на cold start, и `getStats().arkConnected` ===
-     true после резолва.
+резолвится в течение 15 сек на cold start, и `getStats().arkConnected` ===
+true после резолва.
 
 AC4. `bun run test:e2e` — все specs зелёные.
 
 AC5. Wall-clock топ-3 spec'ов (eden, eden-selection-after-click,
-     eden-taskref-arrow-nav) после миграции — **меньше или равно** baseline'у.
-     Baseline записан до правок в `evidence.md`.
+eden-taskref-arrow-nav) после миграции — **меньше или равно** baseline'у.
+Baseline записан до правок в `evidence.md`.
 
 AC6. `bun run ark:guard:writes` — зелёный.
 
 AC7. Все нарушения `KOSMOS_HEADLESS` / `KOSMOS_TEST_MODE` гвардов остаются на
-     месте (никаких regressions в `forbidden.md::E2e тесты — всегда невидимые`).
+месте (никаких regressions в `forbidden.md::E2e тесты — всегда невидимые`).
 
 ## Verification commands
 

@@ -4,29 +4,30 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 ## Статус по фазам
 
-| Фаза | Что | Статус |
-|---|---|---|
-| 0 | Backend extracted в `services/kepler-backend/` (lib + bin `kepler-backend.exe`) | ✅ |
-| 1 | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state) | ✅ |
-| 2 | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher) | ✅ |
-| 3 | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC | ✅ |
-| 4 | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador) | ✅ |
-| 5 | Extension developer mode (Vite HMR per extension, Raycast-style) | ✅ |
-| 6 | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit) | ✅ |
-| 7 | Universal per-type data export (notes → md, tasks → md/CSV, time entries → CSV, tags/games → JSON) — Rust converter framework + Settings UI | ✅ |
-| 7.5 | Adaptive lifecycle (optional) | ⏳ |
-| 11 | Backup / Disaster Recovery ARK DB (multi-disk + GitHub + encryption) | ⏳ |
-| 8 | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅ | ⏳ |
-| 9 | Delphi UI: Tailwind → plain CSS (открытый вопрос) | ⏳ |
-| 10 | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳ | ⏳ |
-| 12 | Password manager (как хранить — TBD) | ⏳ |
-| 13 | Raycast API совместимость — целевая в Kepler **0.5.0** | ⏳ |
-| 14 | Eden state на **Pinia Colada** (auto-cache + dedup + revalidation, минус ~200 строк самопального state-sync) | ⏳ |
-| 16 | **AI semantic search** в ARK — sqlite-vec + fastembed-rs + DirectML на Windows, MiniLM bundle + Qwen3 opt-in | ⏳ |
+| Фаза | Что                                                                                                                                         | Статус |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 0    | Backend extracted в `services/kepler-backend/` (lib + bin `kepler-backend.exe`)                                                             | ✅     |
+| 1    | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state)                                              | ✅     |
+| 2    | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher)                                                         | ✅     |
+| 3    | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC                                                     | ✅     |
+| 4    | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador)                                                        | ✅     |
+| 5    | Extension developer mode (Vite HMR per extension, Raycast-style)                                                                            | ✅     |
+| 6    | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit)      | ✅     |
+| 7    | Universal per-type data export (notes → md, tasks → md/CSV, time entries → CSV, tags/games → JSON) — Rust converter framework + Settings UI | ✅     |
+| 7.5  | Adaptive lifecycle (optional)                                                                                                               | ⏳     |
+| 11   | Backup / Disaster Recovery ARK DB (multi-disk + GitHub + encryption)                                                                        | ⏳     |
+| 8    | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅                                                       | ⏳     |
+| 9    | Delphi UI: Tailwind → plain CSS (открытый вопрос)                                                                                           | ⏳     |
+| 10   | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳                                                | ⏳     |
+| 12   | Password manager (как хранить — TBD)                                                                                                        | ⏳     |
+| 13   | Raycast API совместимость — целевая в Kepler **0.5.0**                                                                                      | ⏳     |
+| 14   | Eden state на **Pinia Colada** (auto-cache + dedup + revalidation, минус ~200 строк самопального state-sync)                                | ⏳     |
+| 16   | **AI semantic search** в ARK — sqlite-vec + fastembed-rs + DirectML на Windows, MiniLM bundle + Qwen3 opt-in                                | ⏳     |
 
 ## Phase 0 ✅ — Backend extracted
 
 Из старого Rust gpui launcher (легаси, удалён в Phase A) выделен чистый backend в `services/kepler-backend/`:
+
 - Crate с lib (ARK runtime, WS server, command bus, sync) + бинарь `kepler-backend.exe`.
 - Spawn'ится Electron host'ом как child process; держит ARK и обслуживает WS-клиентов.
 - Сборка: `cargo build --release --manifest-path services/kepler-backend/Cargo.toml --bin kepler-backend`.
@@ -34,6 +35,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 ## Phase 1 ✅ — Electron shell scaffold
 
 `shell/` — новая Electron-апка:
+
 - Frameless 720×460 launcher window, Mica/Acrylic (Win11), centered на active display, `nativeTheme.themeSource = 'dark'`.
 - `globalShortcut Ctrl+Shift+K` toggle show/hide; при потере фокуса — hide.
 - Tray icon с меню Открыть / Выйти.
@@ -45,6 +47,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 ## Phase 2 ✅ — Command bus
 
 Полноценный dynamic command flow:
+
 - `kepler-backend` Rust: in-memory registry, WS-операции `commands.{register,unregister,list,invoke}`, события `command_invoked` / `commands_changed`.
 - `@kosmos/ark` TypeScript: `ArkClient.commands` namespace + типизированные payloads + event subscription.
 - Электронные апки регистрируют команды при старте; backend роутит invoke к нужному client'у через события.
@@ -55,11 +58,13 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 ## Phase 3 ✅ — Real handlers + extension PoC
 
 Динамические команды реально что-то делают:
+
 - **Horologion**: `horologion:pomodoro:25`, `horologion:pomodoro:50`, `horologion:stopwatch:start`. Main → IPC `horologion:cmd` → renderer вызывает `pomodoro.start({ workMinOverride })` или `timeEntries.startTimer`. `usePomodoro` поддерживает `workMinOverride` для per-session override без мутации persistent settings.
 - **Delphi**: `delphi:task:create` (открывает QuickEntry) и `delphi:task:today` (router.push '/today'). `SidecarClient.onCommand` listener + `focusMainWindow` перед dispatch.
 - **Eden**: `eden:note:create` (новая заметка), `eden:search` (overlay поиска через FTS5).
 
 Дополнительно:
+
 - Settings window для Kepler shell (отдельный `BrowserWindow`, hash `#/settings`).
 - Extension loader PoC: `electron/extension-host.ts` загружает static extensions из `extensions/<id>/{manifest.json,index.html,bundle.js}` в отдельные BrowserWindow'ы. Демо: `extensions/horologion/` и др.
 
@@ -190,6 +195,7 @@ User-story: после смены ПК / переустановки Windows / у
 ### Технический фон
 
 ARK = SQLite в WAL-режиме. Просто `cp ark.db` рисково — WAL может содержать незакоммиченные транзакции. Нужен consistent snapshot:
+
 - `VACUUM INTO 'dest.db'` — атомарно копирует БД в новый файл, без WAL и idle pages. Single-statement.
 - Или `sqlite3_backup_init/step/finish` API — для online backup'а без блокировок.
 
@@ -317,11 +323,11 @@ Pinia Colada **коэкзистит** с обычной Pinia → миграци
 
 ### Метрики (proof loop обязателен)
 
-| Метрика | До | После | Цель |
-|---|---|---|---|
-| `wc -l extensions/eden/src/store/eden.ts` | 686 | TBD | ≤ 500 |
-| Eden bundle `index.js` gzip | 113 KB | TBD | ≤ 125 KB (стоимость либы ~5-10KB) |
-| `tests/e2e/eden.spec.ts` wall-clock | TBD | TBD | не выросло |
+| Метрика                                   | До     | После | Цель                              |
+| ----------------------------------------- | ------ | ----- | --------------------------------- |
+| `wc -l extensions/eden/src/store/eden.ts` | 686    | TBD   | ≤ 500                             |
+| Eden bundle `index.js` gzip               | 113 KB | TBD   | ≤ 125 KB (стоимость либы ~5-10KB) |
+| `tests/e2e/eden.spec.ts` wall-clock       | TBD    | TBD   | не выросло                        |
 
 baseline снят в `.agent/experiments/2026-05-19-tooling-pass/` (E3).
 
@@ -366,13 +372,13 @@ baseline снят в `.agent/experiments/2026-05-19-tooling-pass/` (E3).
 
 ### Стек
 
-| Компонент | Что | Почему |
-|---|---|---|
-| **sqlite-vec** (extension) | KNN-поиск по векторам в той же SQLite-БД где живёт ARK. Brute-force в MVP, ANN-индексы (DiskANN/IVF) позже когда стабилизируются. | One DB to rule them all. Sync через ARK работает «бесплатно». |
-| **fastembed-rs** | Inference embeddings локально через ONNX Runtime. Multi-platform, без сети. | Pure Rust, без Python deps. Уже на 5.x stable. |
-| **DirectML execution provider** (Windows) | GPU-инференс embedding-моделей через DirectX 12. Любой GPU (Nvidia/AMD/Intel/Qualcomm). | 5-10× быстрее CPU для bulk-reindex (тысячи заметок при первой раскрутке). |
-| **MiniLM-L6-v2** (default) | 22M params, 384-dim, ~30MB q4 на диске. Bundle с installer. | MVP: маленькая модель, посредственно на русском но работает. |
-| **Qwen3-Embedding-0.6B** (opt-in download) | 600M params, 1024-dim, ~300MB q4. **On-demand**, не bundled. | Quality upgrade для RU/EN смешанных заметок. Settings → «Включить умный поиск с RU-поддержкой». |
+| Компонент                                  | Что                                                                                                                               | Почему                                                                                          |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **sqlite-vec** (extension)                 | KNN-поиск по векторам в той же SQLite-БД где живёт ARK. Brute-force в MVP, ANN-индексы (DiskANN/IVF) позже когда стабилизируются. | One DB to rule them all. Sync через ARK работает «бесплатно».                                   |
+| **fastembed-rs**                           | Inference embeddings локально через ONNX Runtime. Multi-platform, без сети.                                                       | Pure Rust, без Python deps. Уже на 5.x stable.                                                  |
+| **DirectML execution provider** (Windows)  | GPU-инференс embedding-моделей через DirectX 12. Любой GPU (Nvidia/AMD/Intel/Qualcomm).                                           | 5-10× быстрее CPU для bulk-reindex (тысячи заметок при первой раскрутке).                       |
+| **MiniLM-L6-v2** (default)                 | 22M params, 384-dim, ~30MB q4 на диске. Bundle с installer.                                                                       | MVP: маленькая модель, посредственно на русском но работает.                                    |
+| **Qwen3-Embedding-0.6B** (opt-in download) | 600M params, 1024-dim, ~300MB q4. **On-demand**, не bundled.                                                                      | Quality upgrade для RU/EN смешанных заметок. Settings → «Включить умный поиск с RU-поддержкой». |
 
 ### Фазы
 

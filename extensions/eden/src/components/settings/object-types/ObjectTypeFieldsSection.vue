@@ -65,11 +65,7 @@ function onDragEnter(index: number) {
 }
 
 function onDragEnd() {
-  if (
-    dragIndex.value !== null &&
-    dropIndex.value !== null &&
-    dragIndex.value !== dropIndex.value
-  ) {
+  if (dragIndex.value !== null && dropIndex.value !== null && dragIndex.value !== dropIndex.value) {
     emit("moveFieldToIndex", dragIndex.value, dropIndex.value);
   }
 
@@ -163,7 +159,9 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
 
               <div class="object-type-field-row__content">
                 <div class="object-type-field-row__topline">
-                  <div class="object-type-field-row__kind">{{ fieldKindLabels.get(field.kind) }}</div>
+                  <div class="object-type-field-row__kind">
+                    {{ fieldKindLabels.get(field.kind) }}
+                  </div>
                   <div class="object-type-field-row__id">{{ field.id }}</div>
                 </div>
 
@@ -173,7 +171,11 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
                     :value="field.label"
                     :disabled="field.structuralLocked"
                     placeholder="Название поля"
-                    @input="emit('updateField', index, { label: ($event.target as HTMLInputElement).value })"
+                    @input="
+                      emit('updateField', index, {
+                        label: ($event.target as HTMLInputElement).value,
+                      })
+                    "
                   />
 
                   <select
@@ -182,11 +184,16 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
                     :disabled="field.structuralLocked"
                     @change="
                       emit('updateField', index, {
-                        kind: ($event.target as HTMLSelectElement).value as TypeEditorFieldDraft['kind'],
+                        kind: ($event.target as HTMLSelectElement)
+                          .value as TypeEditorFieldDraft['kind'],
                       })
                     "
                   >
-                    <option v-for="option in FIELD_KIND_OPTIONS" :key="option.value" :value="option.value">
+                    <option
+                      v-for="option in FIELD_KIND_OPTIONS"
+                      :key="option.value"
+                      :value="option.value"
+                    >
                       {{ option.label }}
                     </option>
                   </select>
@@ -226,7 +233,11 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
                         type="checkbox"
                         :checked="field.read_only === true"
                         :disabled="field.structuralLocked"
-                        @change="emit('updateField', index, { read_only: ($event.target as HTMLInputElement).checked })"
+                        @change="
+                          emit('updateField', index, {
+                            read_only: ($event.target as HTMLInputElement).checked,
+                          })
+                        "
                       />
                       <span>Только чтение</span>
                     </label>
@@ -236,17 +247,29 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
                         type="checkbox"
                         :checked="field.system === true"
                         :disabled="field.structuralLocked"
-                        @change="emit('updateField', index, { system: ($event.target as HTMLInputElement).checked })"
+                        @change="
+                          emit('updateField', index, {
+                            system: ($event.target as HTMLInputElement).checked,
+                          })
+                        "
                       />
                       <span>Системное</span>
                     </label>
                   </div>
 
                   <div class="object-type-field-row__actions">
-                    <button class="object-type-field-row__ghost" type="button" @click="emit('moveField', index, -1)">
+                    <button
+                      class="object-type-field-row__ghost"
+                      type="button"
+                      @click="emit('moveField', index, -1)"
+                    >
                       Выше
                     </button>
-                    <button class="object-type-field-row__ghost" type="button" @click="emit('moveField', index, 1)">
+                    <button
+                      class="object-type-field-row__ghost"
+                      type="button"
+                      @click="emit('moveField', index, 1)"
+                    >
                       Ниже
                     </button>
                     <button
@@ -390,7 +413,10 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
   border-radius: 18px;
   border: 1px solid transparent;
   background: var(--background);
-  transition: border-color 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    opacity 0.16s ease,
+    transform 0.16s ease;
 }
 
 .object-type-field-row + .object-type-field-row {
@@ -501,7 +527,10 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
   background: var(--background);
   color: var(--foreground);
   font-size: 13px;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .object-type-form-input:hover {
@@ -541,7 +570,10 @@ function setDisplayMode(index: number, displayMode: TypeEditorFieldDraft["displa
   background: transparent;
   color: var(--muted-foreground);
   font-size: 12px;
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .object-type-field-row__mode.active {

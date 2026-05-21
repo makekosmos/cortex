@@ -26,10 +26,7 @@
       "id": "AC1",
       "status": "PASS",
       "summary": "Layout shows a visible restore control outside the collapsed desktop sidebar.",
-      "evidence": [
-        "apps/arrancador/src/pages/Layout.tsx",
-        "apps/arrancador/src/index.css"
-      ]
+      "evidence": ["apps/arrancador/src/pages/Layout.tsx", "apps/arrancador/src/index.css"]
     },
     {
       "id": "AC2",

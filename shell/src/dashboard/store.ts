@@ -32,10 +32,7 @@ interface RawObjectTypeRecord {
   schemaJson?: string;
 }
 
-function arkRequest<T>(
-  operation: string,
-  params?: Record<string, unknown>,
-): Promise<T> {
+function arkRequest<T>(operation: string, params?: Record<string, unknown>): Promise<T> {
   return window.kepler.ark.request<T>(operation, params);
 }
 

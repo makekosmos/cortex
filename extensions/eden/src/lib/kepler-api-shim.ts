@@ -213,11 +213,7 @@ function mapArkObjectTypeToNoteType(objectType: ArkObjectTypeRecord): NoteType {
         : "document-text";
 
   const color =
-    objectType.id === "game_obj"
-      ? "#ef4444"
-      : objectType.id === "task_obj"
-        ? "#f59e0b"
-        : "#2aa7ee";
+    objectType.id === "game_obj" ? "#ef4444" : objectType.id === "task_obj" ? "#f59e0b" : "#2aa7ee";
 
   return normalizeSystemNoteType(
     normalizeNoteType({
@@ -239,12 +235,8 @@ function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
   const uiSchema = parseNoteTypeUiSchema(noteType.ui_schema_json);
   const definition = parseNoteTypeDefinition(noteType.schema_json);
   const featuredFromUi = uiSchema.featured_fields ?? [];
-  const visibleFromFields = definition.fields
-    .filter((f) => f.visible !== false)
-    .map((f) => f.id);
-  const readOnlyFromFields = definition.fields
-    .filter((f) => f.read_only === true)
-    .map((f) => f.id);
+  const visibleFromFields = definition.fields.filter((f) => f.visible !== false).map((f) => f.id);
+  const readOnlyFromFields = definition.fields.filter((f) => f.read_only === true).map((f) => f.id);
 
   return {
     id: noteType.id,
@@ -252,15 +244,14 @@ function mapNoteTypeToArkObjectType(noteType: NoteType): ArkObjectTypeRecord {
     schemaJson: noteType.schema_json,
     uiSchemaJson: JSON.stringify({
       featured_fields: featuredFromUi,
-      visible_fields: uiSchema.visible_fields?.length
-        ? uiSchema.visible_fields
-        : visibleFromFields,
+      visible_fields: uiSchema.visible_fields?.length ? uiSchema.visible_fields : visibleFromFields,
       hidden_fields: uiSchema.hidden_fields ?? ["created_at", "updated_at", "deleted_at"],
       read_only_fields: uiSchema.read_only_fields?.length
         ? uiSchema.read_only_fields
         : readOnlyFromFields,
-      field_order:
-        uiSchema.field_order?.length ? uiSchema.field_order : definition.fields.map((f) => f.id),
+      field_order: uiSchema.field_order?.length
+        ? uiSchema.field_order
+        : definition.fields.map((f) => f.id),
       header_layout: uiSchema.header_layout ?? "inline",
       default_layout: uiSchema.default_layout ?? "page",
       default_template_id: uiSchema.default_template_id ?? null,
@@ -449,9 +440,7 @@ export async function deleteEntry(entryId: string): Promise<DeleteEntryResult> {
 }
 
 export async function listNoteTypes(): Promise<NoteType[]> {
-  const types = await ark<unknown>("list_object_types").then(
-    ensureList<ArkObjectTypeRecord>,
-  );
+  const types = await ark<unknown>("list_object_types").then(ensureList<ArkObjectTypeRecord>);
   return types.map(mapArkObjectTypeToNoteType);
 }
 
@@ -671,9 +660,7 @@ async function restoreEntry(entryId: string): Promise<{ ok: boolean; entryId?: s
   return { ok: true, entryId };
 }
 
-async function permanentDeleteEntry(
-  entryId: string,
-): Promise<{ ok: boolean; entryId?: string }> {
+async function permanentDeleteEntry(entryId: string): Promise<{ ok: boolean; entryId?: string }> {
   // ARK `delete_object` уже выполняет soft-delete; для extension'а трактуем
   // «удалить навсегда» как повторный hard-delete — backend выкидывает запись
   // окончательно через тот же endpoint после soft-state. Полноценный hard-purge
@@ -784,10 +771,7 @@ export function dispatchEdenCommand(channel: EdenCommandChannel, params: unknown
   }
 }
 
-function onCommand(
-  channel: EdenCommandChannel,
-  handler: (params: unknown) => void,
-): () => void {
+function onCommand(channel: EdenCommandChannel, handler: (params: unknown) => void): () => void {
   let set = commandListeners.get(channel);
   if (!set) {
     set = new Set();
@@ -923,9 +907,8 @@ export async function patchTask(
 
   // Если patch явно указал title — нормализуем (пустой/whitespace → placeholder),
   // иначе оставляем existing. Без этого Delphi показывает empty-row.
-  const nextTitle = patch.title !== undefined
-    ? (patch.title.trim() || EDEN_EMPTY_TASK_TITLE)
-    : existing.title;
+  const nextTitle =
+    patch.title !== undefined ? patch.title.trim() || EDEN_EMPTY_TASK_TITLE : existing.title;
   await ark("upsert_object", {
     object: {
       ...existing,
@@ -1025,12 +1008,17 @@ export async function createTask(
  * это API чтобы live-обновлять чекбокс/title когда Delphi пишет task_obj.
  */
 export function subscribeObjectChanges(
-  handler: (payload: { event: "object_upserted" | "object_deleted"; id: string; typeId?: string }) => void,
+  handler: (payload: {
+    event: "object_upserted" | "object_deleted";
+    id: string;
+    typeId?: string;
+  }) => void,
 ): () => void {
   const bridge = keplerBridge();
   const offU = bridge.subscribe("object_upserted", (payload) => {
     const p = payload as { id?: string; type_id?: string };
-    if (typeof p.id === "string") handler({ event: "object_upserted", id: p.id, typeId: p.type_id });
+    if (typeof p.id === "string")
+      handler({ event: "object_upserted", id: p.id, typeId: p.type_id });
   });
   const offD = bridge.subscribe("object_deleted", (payload) => {
     const p = payload as { id?: string };

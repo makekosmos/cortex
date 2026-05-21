@@ -55,18 +55,18 @@ X» внутри заметки, и хочет чтобы это автомат�
 
 ## Acceptance Criteria
 
-| # | Criterion | How to verify |
-|---|---|---|
-| AC1 | `bun run --cwd extensions/eden build` зелёный | `echo $?` |
-| AC2 | `bun run --cwd extensions/eden typecheck` зелёный | `echo $?` |
-| AC3 | `bun run ark:guard:writes` зелёный (новый write-path идёт через `@kosmos/ark` shim, нет direct SQL) | guard exit 0 |
-| AC4 | `bun run ark:smoke` зелёный | smoke output |
-| AC5 | В dev Eden: ввести `/задача` → появляется чекбокс-список | manual screenshot |
-| AC6 | После save заметки с 2 task'ами → в Dashboard видны 2 объекта типа `task_obj` с правильным title | manual через Settings → Dashboard или прямой `list_objects_by_type task_obj` |
-| AC7 | Toggle чекбокса в Eden + save → `is_completed` в task_obj обновляется | manual через Dashboard |
-| AC8 | Удалить строку taskItem в Eden + save → объект помечен `deletedAt != null`, исчезает из Delphi | manual через Delphi UI |
-| AC9 | `task_obj` создан с `propsJson.source_app = "eden"` и `propsJson.source_note_id = <entry.id>` | inspect через Dashboard детали объекта |
-| AC10 | Sync failure (например искусственно сломать shim) НЕ блокирует note save — заметка сохраняется, в console warn | manual repro |
+| #    | Criterion                                                                                                      | How to verify                                                                |
+| ---- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| AC1  | `bun run --cwd extensions/eden build` зелёный                                                                  | `echo $?`                                                                    |
+| AC2  | `bun run --cwd extensions/eden typecheck` зелёный                                                              | `echo $?`                                                                    |
+| AC3  | `bun run ark:guard:writes` зелёный (новый write-path идёт через `@kosmos/ark` shim, нет direct SQL)            | guard exit 0                                                                 |
+| AC4  | `bun run ark:smoke` зелёный                                                                                    | smoke output                                                                 |
+| AC5  | В dev Eden: ввести `/задача` → появляется чекбокс-список                                                       | manual screenshot                                                            |
+| AC6  | После save заметки с 2 task'ами → в Dashboard видны 2 объекта типа `task_obj` с правильным title               | manual через Settings → Dashboard или прямой `list_objects_by_type task_obj` |
+| AC7  | Toggle чекбокса в Eden + save → `is_completed` в task_obj обновляется                                          | manual через Dashboard                                                       |
+| AC8  | Удалить строку taskItem в Eden + save → объект помечен `deletedAt != null`, исчезает из Delphi                 | manual через Delphi UI                                                       |
+| AC9  | `task_obj` создан с `propsJson.source_app = "eden"` и `propsJson.source_note_id = <entry.id>`                  | inspect через Dashboard детали объекта                                       |
+| AC10 | Sync failure (например искусственно сломать shim) НЕ блокирует note save — заметка сохраняется, в console warn | manual repro                                                                 |
 
 ## Risks
 
@@ -99,5 +99,6 @@ X» внутри заметки, и хочет чтобы это автомат�
 ## Out of scope justification
 
 Bidirectional sync — отдельная фича, требует subscription на ARK events
-+ TipTap transaction для обновления чекбокса без autosave loop. Не входит
-в MVP.
+
+- TipTap transaction для обновления чекбокса без autosave loop. Не входит
+  в MVP.

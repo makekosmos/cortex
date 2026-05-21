@@ -27,18 +27,18 @@ Kepler   = launcher (отдельное приложение, host для ark-co
 
 ## Что затронуто
 
-| Категория | До | После |
-|---|---|---|
-| Ecosystem AppData | `%APPDATA%\Kepler\` | `%APPDATA%\Kosmos\` |
-| ARK DB | `%APPDATA%\Kepler\ark.db` | `%APPDATA%\Kosmos\ark.db` |
-| Installer dir | `%LOCALAPPDATA%\Kepler\Kosmos\` | `%LOCALAPPDATA%\Kosmos\Kepler\` |
-| Launcher lock-file | `kosmos.lock.json` | `kepler.lock.json` |
-| Singleton lock | `kosmos-singleton.lock.db` | `kepler-singleton.lock.db` |
-| Device id | `kosmos-device-id.txt` | `kepler-device-id.txt` |
-| HKCU Run key | `KeplerKosmos` | `KosmosKepler` |
-| TS package | `@kepler/ark`, `@kepler/visuals` | `@kosmos/ark`, `@kosmos/visuals` |
-| Env vars | `KEPLER_DB_PATH`, `KEPLER_SPACE_ID` | `KOSMOS_DB_PATH`, `KOSMOS_SPACE_ID` |
-| Backend service | `services/kosmos-backend` | `services/kepler-backend` |
+| Категория          | До                                  | После                               |
+| ------------------ | ----------------------------------- | ----------------------------------- |
+| Ecosystem AppData  | `%APPDATA%\Kepler\`                 | `%APPDATA%\Kosmos\`                 |
+| ARK DB             | `%APPDATA%\Kepler\ark.db`           | `%APPDATA%\Kosmos\ark.db`           |
+| Installer dir      | `%LOCALAPPDATA%\Kepler\Kosmos\`     | `%LOCALAPPDATA%\Kosmos\Kepler\`     |
+| Launcher lock-file | `kosmos.lock.json`                  | `kepler.lock.json`                  |
+| Singleton lock     | `kosmos-singleton.lock.db`          | `kepler-singleton.lock.db`          |
+| Device id          | `kosmos-device-id.txt`              | `kepler-device-id.txt`              |
+| HKCU Run key       | `KeplerKosmos`                      | `KosmosKepler`                      |
+| TS package         | `@kepler/ark`, `@kepler/visuals`    | `@kosmos/ark`, `@kosmos/visuals`    |
+| Env vars           | `KEPLER_DB_PATH`, `KEPLER_SPACE_ID` | `KOSMOS_DB_PATH`, `KOSMOS_SPACE_ID` |
+| Backend service    | `services/kosmos-backend`           | `services/kepler-backend`           |
 
 Полный список изменений в коде делается параллельно агентами 1–4 (см. swap PR). Этот документ описывает только **пользовательские данные**.
 

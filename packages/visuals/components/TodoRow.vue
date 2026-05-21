@@ -25,9 +25,7 @@ const emit = defineEmits<{
   drop: [payload: TodoDropPayload];
 }>();
 
-const isCompleted = computed(
-  () => props.todo.isCompleted || props.todo.isCancelled,
-);
+const isCompleted = computed(() => props.todo.isCompleted || props.todo.isCancelled);
 
 const expanded = shallowRef(false);
 const titleDraft = shallowRef(props.todo.title);
@@ -46,8 +44,7 @@ watch(
     notesDraft.value = next.notes ?? "";
     dateDraft.value = next.scheduledDate ?? null;
     billableDraft.value = Boolean(next.billable);
-    priceDraft.value =
-      next.price !== null && next.price !== undefined ? String(next.price) : "";
+    priceDraft.value = next.price !== null && next.price !== undefined ? String(next.price) : "";
   },
   { deep: true },
 );
@@ -66,9 +63,7 @@ function toggleExpand() {
     dateDraft.value = props.todo.scheduledDate ?? null;
     billableDraft.value = Boolean(props.todo.billable);
     priceDraft.value =
-      props.todo.price !== null && props.todo.price !== undefined
-        ? String(props.todo.price)
-        : "";
+      props.todo.price !== null && props.todo.price !== undefined ? String(props.todo.price) : "";
     nextTick(() => titleInputRef.value?.focus());
   }
 }
@@ -238,12 +233,8 @@ function beginDrag(cx: number, cy: number) {
 }
 
 function getSiblingRows(): HTMLElement[] {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>("[data-todo-id]"),
-  ).filter(
-    (el) =>
-      el.dataset.todoId !== props.todo.id &&
-      !el.hasAttribute("data-drag-clone"),
+  return Array.from(document.querySelectorAll<HTMLElement>("[data-todo-id]")).filter(
+    (el) => el.dataset.todoId !== props.todo.id && !el.hasAttribute("data-drag-clone"),
   );
 }
 
@@ -353,9 +344,7 @@ function onDragEnd() {
         <div
           :class="[
             'truncate text-sm leading-5 px-1 py-0.5 select-none',
-            isCompleted
-              ? 'text-(--muted-foreground) line-through'
-              : 'text-(--foreground)',
+            isCompleted ? 'text-(--muted-foreground) line-through' : 'text-(--foreground)',
           ]"
         >
           {{ todo.title }}
@@ -369,10 +358,7 @@ function onDragEnd() {
       </div>
 
       <!-- Trailing chips (collapsed) -->
-      <div
-        v-if="!expanded"
-        class="flex items-center gap-1.5 text-xs text-(--muted-foreground)"
-      >
+      <div v-if="!expanded" class="flex items-center gap-1.5 text-xs text-(--muted-foreground)">
         <span
           v-if="todo.billable"
           class="flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-500"
@@ -421,11 +407,7 @@ function onDragEnd() {
       />
 
       <div class="flex flex-wrap items-center gap-2">
-        <DateChip
-          :value="dateDraft"
-          placeholder="Без даты"
-          @update:value="commitDate"
-        />
+        <DateChip :value="dateDraft" placeholder="Без даты" @update:value="commitDate" />
 
         <button
           type="button"
@@ -462,9 +444,7 @@ function onDragEnd() {
   </div>
 
   <ContextMenu :open="menuOpen" :x="menuX" :y="menuY" @close="closeMenu">
-    <ContextMenuItem destructive @click="handleDelete">
-      Удалить
-    </ContextMenuItem>
+    <ContextMenuItem destructive @click="handleDelete"> Удалить </ContextMenuItem>
   </ContextMenu>
 </template>
 
@@ -475,7 +455,9 @@ function onDragEnd() {
   height: 18px;
   border-radius: 6px;
   border: 2px solid var(--ring);
-  transition: border-color 0.15s, background-color 0.15s;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
   position: relative;
 }
 
@@ -524,8 +506,14 @@ function onDragEnd() {
 }
 
 @keyframes focus-pulse {
-  0% { opacity: 1; }
-  20% { opacity: 0.5; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+  20% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 </style>

@@ -45,13 +45,8 @@ function handleDrop(payload: { targetId: string; after: boolean }, sourceId: str
       :style="wrapStyle"
     >
       <div ref="titleGroupRef" :class="titleGroupClass" :style="titleGroupStyle">
-        <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">
-          Сегодня
-        </h1>
-        <span
-          v-if="filtered.length > 0"
-          class="text-sm text-(--muted-foreground) select-none"
-        >
+        <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">Сегодня</h1>
+        <span v-if="filtered.length > 0" class="text-sm text-(--muted-foreground) select-none">
           {{ filtered.length }}
         </span>
       </div>

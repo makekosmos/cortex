@@ -4,10 +4,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "apps/dashboard/src/global.css",
-        "apps/delphi/ts/src/global.css"
-      ]
+      "evidence": ["apps/dashboard/src/global.css", "apps/delphi/ts/src/global.css"]
     },
     {
       "id": "AC2",

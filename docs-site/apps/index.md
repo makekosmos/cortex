@@ -8,31 +8,31 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **ч�
 
 ## Desktop host
 
-| Приложение | Путь | Роль |
-|---|---|---|
+| Приложение             | Путь     | Роль                                                                                                                                                                  |
+| ---------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Kepler](/apps/kepler) | `shell/` | Electron host + global launcher (Ctrl+Shift+K). Спавнит `kepler-backend.exe`, рутит [command bus](/concepts/command-bus), Phase 4 — extension host для остальных апок |
 
 ## Vue-extensions (внутри Kepler shell)
 
-| Приложение | Путь | Роль | Модель данных |
-|---|---|---|---|
-| [Delphi](/apps/delphi) | `extensions/delphi` | задачи | `task_obj` (auto-миграция legacy todos на старте) |
-| [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data |
-| [Horologion](/apps/horologion) | `extensions/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi) |
+| Приложение                     | Путь                    | Роль                                                           | Модель данных                                     |
+| ------------------------------ | ----------------------- | -------------------------------------------------------------- | ------------------------------------------------- |
+| [Delphi](/apps/delphi)         | `extensions/delphi`     | задачи                                                         | `task_obj` (auto-миграция legacy todos на старте) |
+| [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы                           | `game_obj` + usage data                           |
+| [Horologion](/apps/horologion) | `extensions/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi)     |
 
 ## Встроенные shell views
 
-| Приложение | Путь | Роль | Модель данных |
-|---|---|---|---|
+| Приложение                   | Путь                                                      | Роль                                                                            | Модель данных       |
+| ---------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------- |
 | [Dashboard](/apps/dashboard) | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: welcome (space picker) + space view (sidebar + объекты) | read-only inspector |
 
 ## Standalone desktop apps (Electron)
 
-| Приложение | Путь | Роль | Модель данных |
-|---|---|---|---|
-| [Eden](/apps/eden) | `apps/eden/ts` | заметки, дневник, typed notes | `note_obj` + кастомные типы |
-| [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог) | TBD |
-| [Kerux](/apps/kerux) <span class="kbadge info">TBD</span> | `apps/kerux` (зарезервировано) | голосовой ввод по хоткею (Superwhisper аналог; faster-whisper / Groq Whisper-v3) | TBD (опционально `voice_clip_obj`) |
+| Приложение                                                              | Путь                                  | Роль                                                                             | Модель данных                      |
+| ----------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
+| [Eden](/apps/eden)                                                      | `apps/eden/ts`                        | заметки, дневник, typed notes                                                    | `note_obj` + кастомные типы        |
+| [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог)                                        | TBD                                |
+| [Kerux](/apps/kerux) <span class="kbadge info">TBD</span>               | `apps/kerux` (зарезервировано)        | голосовой ввод по хоткею (Superwhisper аналог; faster-whisper / Groq Whisper-v3) | TBD (опционально `voice_clip_obj`) |
 
 Apps коннектятся к `kepler-backend` (Rust, spawn'ится Kepler host'ом) через `@kosmos/ark` WS-транспорт. Динамические команды (Pomodoro start, создание задачи Delphi, заметка Eden) регистрируются апками и доступны из Kepler launcher'а — см. [Command bus](/concepts/command-bus).
 
@@ -42,9 +42,9 @@ Apps коннектятся к `kepler-backend` (Rust, spawn'ится Kepler hos
 
 Отдельный стек **только для Android**, изолированный от desktop ARK. Состоит из двух APK, связанных через signature-permission ContentProvider:
 
-| APK | Путь | Роль |
-|---|---|---|
-| Delphi (Android) | `mobile/delphi` | UI, Compose. Package `com.kazui.delphi`. |
+| APK                              | Путь                 | Роль                                                                                        |
+| -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
+| Delphi (Android)                 | `mobile/delphi`      | UI, Compose. Package `com.kazui.delphi`.                                                    |
 | [ark-service](/apps/ark-service) | `mobile/ark-service` | Room SQLite + ContentProvider. Package `com.kosmos.ark.data`. Хранит данные Android Delphi. |
 
 ::: warning Не путать с desktop ARK
@@ -70,13 +70,13 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 
 ## Состояние интеграции с ARK
 
-| Приложение | ARK интегрирован? | Что осталось |
-|---|---|---|
-| Eden (desktop) | ✅ (notes как `note_obj`) | стартовая миграция legacy entries; Heart остаётся для editor/vault и one-time work |
-| Delphi (desktop) | ✅ (tasks как `task_obj`) | legacy DB sidecar **удалён**; auto-migration на старте; **TODO billing**: `propsJson.price` / `hourlyRate` на task_obj для расчёта $/час из связанных `time_entry_obj` |
-| Arrancador | ✅ (games как `game_obj`, usage через ARK) | завершён usage backfill |
-| Dashboard | ✅ (read-only inspector) | предпочитать ARK analytics endpoints вместо raw SQL |
-| Horologion | ✅ (time_entry_obj) | tag picker UI и реальный `object_link` task↔entry — TODO (см. roadmap) |
-| Digital Cave | ⏳ TBD | зарезервировано, кода нет |
-| Kerux | ⏳ TBD | зарезервировано, кода нет |
-| Delphi (Android) + ark-service | ❌ | отдельный Room-стек; миграция на UniFFI от `ark-core` — задача на будущее |
+| Приложение                     | ARK интегрирован?                          | Что осталось                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Eden (desktop)                 | ✅ (notes как `note_obj`)                  | стартовая миграция legacy entries; Heart остаётся для editor/vault и one-time work                                                                                     |
+| Delphi (desktop)               | ✅ (tasks как `task_obj`)                  | legacy DB sidecar **удалён**; auto-migration на старте; **TODO billing**: `propsJson.price` / `hourlyRate` на task_obj для расчёта $/час из связанных `time_entry_obj` |
+| Arrancador                     | ✅ (games как `game_obj`, usage через ARK) | завершён usage backfill                                                                                                                                                |
+| Dashboard                      | ✅ (read-only inspector)                   | предпочитать ARK analytics endpoints вместо raw SQL                                                                                                                    |
+| Horologion                     | ✅ (time_entry_obj)                        | tag picker UI и реальный `object_link` task↔entry — TODO (см. roadmap)                                                                                                 |
+| Digital Cave                   | ⏳ TBD                                     | зарезервировано, кода нет                                                                                                                                              |
+| Kerux                          | ⏳ TBD                                     | зарезервировано, кода нет                                                                                                                                              |
+| Delphi (Android) + ark-service | ❌                                         | отдельный Room-стек; миграция на UniFFI от `ark-core` — задача на будущее                                                                                              |

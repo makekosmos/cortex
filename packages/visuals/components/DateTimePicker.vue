@@ -36,9 +36,11 @@ const emit = defineEmits<{
 const open = ref(false);
 const triggerRef = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
-const panelPosition = ref<{ top: number; left: number; placement: "below" | "above" }>(
-  { top: 0, left: 0, placement: "below" },
-);
+const panelPosition = ref<{ top: number; left: number; placement: "below" | "above" }>({
+  top: 0,
+  left: 0,
+  placement: "below",
+});
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -157,8 +159,18 @@ function onTimeKeyDown(e: KeyboardEvent) {
 }
 
 const RU_MONTHS_SHORT = [
-  "янв", "фев", "мар", "апр", "мая", "июн",
-  "июл", "авг", "сен", "окт", "ноя", "дек",
+  "янв",
+  "фев",
+  "мар",
+  "апр",
+  "мая",
+  "июн",
+  "июл",
+  "авг",
+  "сен",
+  "окт",
+  "ноя",
+  "дек",
 ] as const;
 
 function refDate(): Date | null {
@@ -270,7 +282,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", onWindowResize);
   window.removeEventListener("scroll", onWindowResize, true);
 });
-
 </script>
 
 <template>
@@ -318,7 +329,11 @@ onBeforeUnmount(() => {
           </button>
           <div class="kosmos-dtp__foot-spacer" />
           <button type="button" class="kosmos-dtp__btn" @click="open = false">Отмена</button>
-          <button type="button" class="kosmos-dtp__btn kosmos-dtp__btn--primary" @click="applyDraft">
+          <button
+            type="button"
+            class="kosmos-dtp__btn kosmos-dtp__btn--primary"
+            @click="applyDraft"
+          >
             Сохранить
           </button>
         </footer>

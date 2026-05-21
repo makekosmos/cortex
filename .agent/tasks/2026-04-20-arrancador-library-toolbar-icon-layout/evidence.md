@@ -1,6 +1,7 @@
 # Evidence: Arrancador library toolbar icon layout
 
 ## Result
+
 PASS
 
 ## Acceptance Criteria

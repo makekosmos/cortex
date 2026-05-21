@@ -15,14 +15,14 @@ Kosmos — это **monorepo для личного софта одного че�
 
 ## Требования
 
-| Что | Версия | Зачем |
-|---|---|---|
-| **Bun** | `1.3.5+` | пакет-менеджер, runner всех скриптов |
-| **Rust** | stable + `cargo` | сборка `ark-core`, `kepler-backend`, `ark-relay-server`, `kepler-watcher` |
-| **Node** | 20+ | окружение для VitePress, native-зависимости Electron |
-| **PowerShell** | 7+ (Windows) | большинство smoke-команд написаны под PS |
-| **Git** | любая | репозиторий |
-| Платформа | Windows 10/11 (основная), macOS, Linux | Electron-приложения проверяются преимущественно на Windows |
+| Что            | Версия                                 | Зачем                                                                     |
+| -------------- | -------------------------------------- | ------------------------------------------------------------------------- |
+| **Bun**        | `1.3.5+`                               | пакет-менеджер, runner всех скриптов                                      |
+| **Rust**       | stable + `cargo`                       | сборка `ark-core`, `kepler-backend`, `ark-relay-server`, `kepler-watcher` |
+| **Node**       | 20+                                    | окружение для VitePress, native-зависимости Electron                      |
+| **PowerShell** | 7+ (Windows)                           | большинство smoke-команд написаны под PS                                  |
+| **Git**        | любая                                  | репозиторий                                                               |
+| Платформа      | Windows 10/11 (основная), macOS, Linux | Electron-приложения проверяются преимущественно на Windows                |
 
 ## Первый запуск
 

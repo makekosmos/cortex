@@ -13,4 +13,3 @@
 - Smallest safe next step:
   - Re-run `bun run build` locally outside this sandbox on the same workspace.
   - If it still fails outside sandbox, capture the new build output and treat it as a separate dependency/toolchain issue.
-

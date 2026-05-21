@@ -14,18 +14,18 @@ Use this mode when the caller wants `ArkClient` to spawn and own
 `ark-core-rpc`.
 
 ```ts
-import { ArkClient } from '@kosmos/ark'
+import { ArkClient } from "@kosmos/ark";
 
 const ark = new ArkClient({
-  spaceId: 'default',
-  deviceId: 'device-1',
-  deviceName: 'Workstation',
-  authSecret: 'shared-space-secret',
-  dbPath: 'C:/Users/me/AppData/Roaming/Kosmos/spaces/default/ark.db',
-  sidecarPath: 'C:/path/to/ark-core-rpc.exe',
-})
+  spaceId: "default",
+  deviceId: "device-1",
+  deviceName: "Workstation",
+  authSecret: "shared-space-secret",
+  dbPath: "C:/Users/me/AppData/Roaming/Kosmos/spaces/default/ark.db",
+  sidecarPath: "C:/path/to/ark-core-rpc.exe",
+});
 
-await ark.start()
+await ark.start();
 ```
 
 `dbPath` is required in this mode. The client sends `init` automatically before
@@ -40,13 +40,13 @@ an Electron `sidecar.ts` module shared by multiple app services.
 
 ```ts
 const ark = new ArkClient({
-  spaceId: 'default',
-  deviceId: 'device-1',
+  spaceId: "default",
+  deviceId: "device-1",
   requestFn: sidecar.request,
   onEventFn: sidecar.onEvent,
-})
+});
 
-await ark.start()
+await ark.start();
 ```
 
 In injected mode, the owner of `requestFn` is responsible for initializing the
@@ -56,25 +56,25 @@ legacy-compatible and does not add request ids to injected calls.
 ## Sync API
 
 ```ts
-await ark.start()
+await ark.start();
 
 ark.onPeerConnected((deviceId, deviceName) => {
-  console.log('peer connected', deviceId, deviceName)
-})
+  console.log("peer connected", deviceId, deviceName);
+});
 
 ark.onEntityChanged((entityJson) => {
-  console.log('entity changed', entityJson)
-})
+  console.log("entity changed", entityJson);
+});
 
-await ark.broadcastChange('object', 'obj-1', {
-  type: 'object',
-  id: 'obj-1',
+await ark.broadcastChange("object", "obj-1", {
+  type: "object",
+  id: "obj-1",
   data: {},
-  hlc: '0:0:device-1',
-})
+  hlc: "0:0:device-1",
+});
 
-const peers = await ark.getConnectedPeers()
-await ark.stop()
+const peers = await ark.getConnectedPeers();
+await ark.stop();
 ```
 
 Relay options are forwarded to `ark-core-rpc`. When `relayUrl` is set, the
@@ -88,24 +88,24 @@ without the shared secret from joining the mesh, but it does not encrypt traffic
 ## Object API
 
 ```ts
-const objects = await ark.objects.list()
-const taskObjects = await ark.objects.listByType('task_obj')
-const task = await ark.objects.get('task-1')
-const linked = await ark.objects.getMany(['task-1', 'note-1'])
+const objects = await ark.objects.list();
+const taskObjects = await ark.objects.listByType("task_obj");
+const task = await ark.objects.get("task-1");
+const linked = await ark.objects.getMany(["task-1", "note-1"]);
 
 await ark.objects.upsert({
-  id: 'task-1',
-  typeId: 'task_obj',
-  title: 'Draft plan',
-  contentJson: { body: '' },
-  propsJson: { status: 'open' },
+  id: "task-1",
+  typeId: "task_obj",
+  title: "Draft plan",
+  contentJson: { body: "" },
+  propsJson: { status: "open" },
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   deletedAt: null,
-})
+});
 
-const matches = await ark.objects.search('plan')
-await ark.objects.delete('task-1')
+const matches = await ark.objects.search("plan");
+await ark.objects.delete("task-1");
 ```
 
 `listByType` and `getMany` are real `ark-core-rpc` query operations, not
@@ -115,58 +115,58 @@ SDK-side filtering over `list()`.
 
 ```ts
 await ark.objectTypes.upsert({
-  id: 'task_obj',
-  name: 'Task',
-  schemaJson: '{}',
-  uiSchemaJson: '{}',
+  id: "task_obj",
+  name: "Task",
+  schemaJson: "{}",
+  uiSchemaJson: "{}",
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   systemLocked: false,
-})
+});
 
 await ark.links.upsert({
-  id: 'link-1',
-  sourceObjectId: 'task-1',
-  targetObjectId: 'note-1',
-  linkType: 'related',
+  id: "link-1",
+  sourceObjectId: "task-1",
+  targetObjectId: "note-1",
+  linkType: "related",
   createdAt: new Date().toISOString(),
-})
+});
 ```
 
 ## Usage API
 
 ```ts
-const usage = await ark.usage.loadAll()
-const recentProcesses = await ark.usage.processes.recent(10)
-const matchingProcesses = await ark.usage.processes.search('demo', 10)
+const usage = await ark.usage.loadAll();
+const recentProcesses = await ark.usage.processes.recent(10);
+const matchingProcesses = await ark.usage.processes.search("demo", 10);
 const gamePlaytime = await ark.usage.gamePlaytime.summary({
   bindings: [
     {
-      gameId: 'game-1',
-      gameName: 'Demo',
-      matchType: 'exe_path',
-      matchValue: 'C:/Games/Demo/demo.exe',
+      gameId: "game-1",
+      gameName: "Demo",
+      matchType: "exe_path",
+      matchValue: "C:/Games/Demo/demo.exe",
     },
   ],
-  rangeStart: '2026-04-01',
-  rangeEnd: '2026-04-30',
-})
+  rangeStart: "2026-04-01",
+  rangeEnd: "2026-04-30",
+});
 
 await ark.usage.trackedApps.upsert({
-  id: 'app-1',
-  platform: 'windows',
-  exePath: 'C:/Games/Demo/demo.exe',
-  normalizedExePath: 'c:/games/demo/demo.exe',
-  processName: 'demo.exe',
-  displayName: 'Demo',
+  id: "app-1",
+  platform: "windows",
+  exePath: "C:/Games/Demo/demo.exe",
+  normalizedExePath: "c:/games/demo/demo.exe",
+  processName: "demo.exe",
+  displayName: "Demo",
   publisher: null,
   iconRef: null,
   firstSeenAt: new Date().toISOString(),
   lastSeenAt: new Date().toISOString(),
-})
+});
 
-await ark.usage.sessions.delete('session-1')
-await ark.usage.events.delete('event-1')
+await ark.usage.sessions.delete("session-1");
+await ark.usage.events.delete("event-1");
 ```
 
 Usage process and game playtime summary queries are backed by Rust/SQLite

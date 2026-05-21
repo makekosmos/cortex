@@ -5,20 +5,23 @@ import { UNTITLED_ENTRY_PLACEHOLDER } from "@/lib/entryTitles";
 import { getNoteTypePresentation, getResolvedNoteTypeField } from "@/lib/typedNotes";
 import { SYSTEM_TYPE_GAME_ID, SYSTEM_TYPE_NOTE_ID } from "@/lib/systemTypes";
 
-const props = withDefaults(defineProps<{
-  activeNoteType: NoteType | null;
-  title: string;
-  headerProps: Record<string, unknown>;
-  validationError: string | null;
-  allEntries: Entry[];
-  currentEntryId: string;
-  readonly?: boolean;
-  showTitle?: boolean;
-  showTypeRow?: boolean;
-}>(), {
-  showTitle: false,
-  showTypeRow: true,
-});
+const props = withDefaults(
+  defineProps<{
+    activeNoteType: NoteType | null;
+    title: string;
+    headerProps: Record<string, unknown>;
+    validationError: string | null;
+    allEntries: Entry[];
+    currentEntryId: string;
+    readonly?: boolean;
+    showTitle?: boolean;
+    showTypeRow?: boolean;
+  }>(),
+  {
+    showTitle: false,
+    showTypeRow: true,
+  },
+);
 
 const emit = defineEmits<{
   headerPropChange: [fieldId: string, value: unknown];
@@ -72,7 +75,9 @@ const backgroundImageSrc = computed(() => {
 
   return String(props.headerProps.background_image ?? "").trim();
 });
-const titleText = computed(() => props.title.trim() || props.activeNoteType?.name || UNTITLED_ENTRY_PLACEHOLDER);
+const titleText = computed(
+  () => props.title.trim() || props.activeNoteType?.name || UNTITLED_ENTRY_PLACEHOLDER,
+);
 const isGameNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_GAME_ID);
 const isPlainNoteType = computed(() => props.activeNoteType?.id === SYSTEM_TYPE_NOTE_ID);
 const shouldShowDescription = computed(() => {
@@ -91,29 +96,30 @@ const allowEmptyHeaderFields = computed(() => !isPlainNoteType.value);
 const renderedFeaturedFields = computed(() =>
   isGameNoteType.value
     ? []
-    : presentation.value.featuredFields.filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
+    : presentation.value.featuredFields.filter(
+        (field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id),
+      ),
 );
 const renderedSecondaryFields = computed(() =>
-  (
-    isGameNoteType.value
-      ? [...presentation.value.featuredFields, ...presentation.value.secondaryFields]
-      : presentation.value.secondaryFields
+  (isGameNoteType.value
+    ? [...presentation.value.featuredFields, ...presentation.value.secondaryFields]
+    : presentation.value.secondaryFields
   ).filter((field) => allowEmptyHeaderFields.value || hasMeaningfulValue(field.id)),
 );
 const hasFeaturedFields = computed(() => renderedFeaturedFields.value.length > 0);
 const hasSecondaryFields = computed(() => renderedSecondaryFields.value.length > 0);
 const hasHeroContent = computed(
-  () => props.showTitle || shouldShowDescription.value || hasFeaturedFields.value || showVisual.value,
+  () =>
+    props.showTitle || shouldShowDescription.value || hasFeaturedFields.value || showVisual.value,
 );
-const shouldRenderHeader = computed(() =>
-  Boolean(props.activeNoteType) &&
-  (
-    props.showTypeRow ||
-    hasHeroContent.value ||
-    hasSecondaryFields.value ||
-    Boolean(props.validationError) ||
-    Boolean(backgroundImageSrc.value)
-  ),
+const shouldRenderHeader = computed(
+  () =>
+    Boolean(props.activeNoteType) &&
+    (props.showTypeRow ||
+      hasHeroContent.value ||
+      hasSecondaryFields.value ||
+      Boolean(props.validationError) ||
+      Boolean(backgroundImageSrc.value)),
 );
 
 function updateDescription(event: Event) {
@@ -166,7 +172,10 @@ function updateDescription(event: Event) {
           <h2 v-if="showTitle" class="typed-object-header__title">{{ titleText }}</h2>
 
           <div v-if="shouldShowDescription" class="typed-object-header__description-wrap">
-            <p v-if="readonly" class="typed-object-header__description typed-object-header__description--readonly">
+            <p
+              v-if="readonly"
+              class="typed-object-header__description typed-object-header__description--readonly"
+            >
               {{ descriptionValue }}
             </p>
 
@@ -191,7 +200,9 @@ function updateDescription(event: Event) {
               :field="field"
               :model-value="headerProps[field.id]"
               :layout="presentation.headerLayout"
-              :variant="presentation.headerLayout === 'column' ? 'featured-column' : 'featured-inline'"
+              :variant="
+                presentation.headerLayout === 'column' ? 'featured-column' : 'featured-inline'
+              "
               :relation-candidates="relationCandidates"
               :entries-by-id="entriesById"
               :readonly="readonly"

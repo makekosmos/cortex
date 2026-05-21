@@ -1,6 +1,7 @@
 # Task: Arrancador library toolbar refresh
 
 ## Summary
+
 Rework the top controls of the Arrancador library page so the header no longer shows the search field in the top-right area. Replace that space with compact filter and sort controls, and move the view mode toggle into the upper content controls.
 
 ## Acceptance Criteria

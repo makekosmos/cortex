@@ -66,8 +66,9 @@ test("pomodoro: session переживает renderer close+reopen", async () =>
     await app.evaluate(({ BrowserWindow }) => {
       const wins = BrowserWindow.getAllWindows();
       const horo = wins.find(
-        (w) => w.getTitle().toLowerCase().includes("horologion") ||
-              w.webContents.getURL().includes("horologion"),
+        (w) =>
+          w.getTitle().toLowerCase().includes("horologion") ||
+          w.webContents.getURL().includes("horologion"),
       );
       if (horo) horo.close();
     });
@@ -103,9 +104,7 @@ test("pomodoro: session переживает renderer close+reopen", async () =>
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
-      new Promise<void>((resolve) =>
-        app.process().once("exit", () => resolve()),
-      ),
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
       new Promise<void>((_, rej) =>
         setTimeout(() => rej(new Error("process exit timeout 10s")), 10_000),
       ),

@@ -85,9 +85,7 @@ test("horologion: stopwatch start → tick → stop", async () => {
     await expect(startBtn).toHaveText(/Начать сессию/);
 
     // No `missing field id` errors throughout.
-    const missingFieldErrors = consoleErrors.filter((e) =>
-      e.includes("missing field"),
-    );
+    const missingFieldErrors = consoleErrors.filter((e) => e.includes("missing field"));
     if (missingFieldErrors.length > 0) {
       throw new Error(
         `${missingFieldErrors.length} «missing field» errors detected:\n${missingFieldErrors.join("\n")}`,
@@ -96,9 +94,7 @@ test("horologion: stopwatch start → tick → stop", async () => {
   } finally {
     await app.evaluate(({ app: a }) => a.quit());
     await Promise.race([
-      new Promise<void>((resolve) =>
-        app.process().once("exit", () => resolve()),
-      ),
+      new Promise<void>((resolve) => app.process().once("exit", () => resolve())),
       new Promise<void>((_, rej) =>
         setTimeout(() => rej(new Error("process exit timeout 10s")), 10_000),
       ),

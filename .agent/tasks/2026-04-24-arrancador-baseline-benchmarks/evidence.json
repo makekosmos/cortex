@@ -12,15 +12,11 @@
     },
     "AC2": {
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/package.json scripts.bench:baseline"
-      ]
+      "evidence": ["apps/arrancador/package.json scripts.bench:baseline"]
     },
     "AC3": {
       "status": "PASS",
-      "evidence": [
-        ".agent/tasks/2026-04-24-arrancador-baseline-benchmarks/raw/baseline.json"
-      ]
+      "evidence": [".agent/tasks/2026-04-24-arrancador-baseline-benchmarks/raw/baseline.json"]
     },
     "AC4": {
       "status": "PASS",

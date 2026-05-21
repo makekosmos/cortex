@@ -72,17 +72,16 @@ if (keplerNav) {
 
 type CommandInvokedEvent = { id: string; params?: unknown };
 
-const kepler = (window as unknown as {
-  kepler?: {
-    ark: {
-      request: (op: string, params?: Record<string, unknown>) => Promise<unknown>;
-      subscribe: (
-        event: string,
-        handler: (payload: unknown) => void,
-      ) => () => void;
+const kepler = (
+  window as unknown as {
+    kepler?: {
+      ark: {
+        request: (op: string, params?: Record<string, unknown>) => Promise<unknown>;
+        subscribe: (event: string, handler: (payload: unknown) => void) => () => void;
+      };
     };
-  };
-}).kepler;
+  }
+).kepler;
 
 if (kepler) {
   void kepler.ark

@@ -8,10 +8,7 @@
 // (M items / sec).
 
 import { SmartList, type TodoItem } from "../src/types/task";
-import {
-  filterTodos,
-  countAll,
-} from "../src/services/filters/todoFilterService";
+import { filterTodos, countAll } from "../src/services/filters/todoFilterService";
 import { makeSynthetic } from "./filterService.fixtures";
 
 interface BenchResult {
@@ -21,12 +18,7 @@ interface BenchResult {
   throughput_items_per_sec: number;
 }
 
-function bench(
-  name: string,
-  fn: () => void,
-  items: number,
-  runs = 200,
-): BenchResult {
+function bench(name: string, fn: () => void, items: number, runs = 200): BenchResult {
   // Warmup.
   for (let i = 0; i < 20; i++) fn();
   const samples: number[] = [];

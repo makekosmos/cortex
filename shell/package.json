@@ -1,7 +1,7 @@
 {
   "name": "kepler-shell",
-  "private": true,
   "version": "0.2.2",
+  "private": true,
   "description": "Kepler — Electron host для Kosmos ecosystem (global launcher + extension host)",
   "author": "Kazui",
   "type": "module",
@@ -51,7 +51,10 @@
   "build": {
     "appId": "com.kazui.kepler",
     "productName": "Kepler",
-    "electronLanguages": ["en-US", "ru"],
+    "electronLanguages": [
+      "en-US",
+      "ru"
+    ],
     "afterPack": "./build/afterPack.cjs",
     "directories": {
       "output": "release",

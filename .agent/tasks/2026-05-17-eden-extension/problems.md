@@ -5,6 +5,7 @@
 **Что не сошлось.**
 
 AC6 в spec.md требует два условия:
+
 1. `extensions/eden/src/lib/edenApi.ts` не содержит обращений к `window.api`, `window.electronAPI`, `ipcRenderer`, `better-sqlite3`.
 2. Проверочный grep по **всему** `extensions/eden/src/` — empty.
 

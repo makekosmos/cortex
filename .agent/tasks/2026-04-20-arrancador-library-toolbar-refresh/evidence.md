@@ -1,6 +1,7 @@
 # Evidence: Arrancador library toolbar refresh
 
 ## Result
+
 PASS
 
 ## Acceptance Criteria

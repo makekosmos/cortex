@@ -83,11 +83,7 @@ const buttonLabel = computed(() =>
 );
 
 const canInstall = computed(
-  () =>
-    !!preview.value &&
-    !preview.value.apiCompatError &&
-    !installing.value &&
-    !installed.value,
+  () => !!preview.value && !preview.value.apiCompatError && !installing.value && !installed.value,
 );
 
 onMounted(() => {
@@ -114,12 +110,7 @@ onMounted(() => {
     <template v-else-if="preview">
       <div class="body">
         <div class="head-row">
-          <img
-            v-if="preview.iconDataUri"
-            class="icon"
-            :src="preview.iconDataUri"
-            alt=""
-          />
+          <img v-if="preview.iconDataUri" class="icon" :src="preview.iconDataUri" alt="" />
           <div v-else class="icon icon-fallback">{{ preview.manifest.name.slice(0, 1) }}</div>
           <div class="head-text">
             <div class="name">{{ preview.manifest.name }}</div>
@@ -133,7 +124,9 @@ onMounted(() => {
         </div>
 
         <div v-if="preview.isUpgrade" class="banner upgrade">
-          Обновление: установлено v{{ preview.currentVersion ?? "—" }} → v{{ preview.manifest.version ?? "—" }}
+          Обновление: установлено v{{ preview.currentVersion ?? "—" }} → v{{
+            preview.manifest.version ?? "—"
+          }}
         </div>
 
         <div v-if="preview.apiCompatError" class="banner incompat">
@@ -156,11 +149,7 @@ onMounted(() => {
           <div class="row" v-if="preview.manifest.permissions?.length">
             <div class="row-label">Разрешения</div>
             <div class="row-value perms">
-              <code
-                v-for="p in preview.manifest.permissions"
-                :key="p"
-                class="perm"
-              >
+              <code v-for="p in preview.manifest.permissions" :key="p" class="perm">
                 {{ p }}
               </code>
             </div>
@@ -171,15 +160,8 @@ onMounted(() => {
       </div>
 
       <div class="footer">
-        <button class="btn ghost" type="button" @click="onCancel">
-          Отмена
-        </button>
-        <button
-          class="btn primary"
-          type="button"
-          :disabled="!canInstall"
-          @click="onConfirm"
-        >
+        <button class="btn ghost" type="button" @click="onCancel">Отмена</button>
+        <button class="btn primary" type="button" :disabled="!canInstall" @click="onConfirm">
           {{ buttonLabel }}
         </button>
       </div>
@@ -200,8 +182,7 @@ onMounted(() => {
 
 .header {
   padding: 14px 22px;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
   -webkit-app-region: drag;
 }
 
@@ -333,8 +314,7 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  border-top: 1px solid
-    color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .btn {

@@ -1,13 +1,13 @@
 {
-	"sortImports": {
-		"groups": [
-			"type-import",
-			["value-builtin", "value-external"],
-			"value-internal",
-			["type-parent", "value-parent"],
-			["type-sibling", "value-sibling", "value-index"],
-			"unknown"
-		],
-		"newlinesBetween": "always"
-	}
+  "sortImports": {
+    "groups": [
+      "type-import",
+      ["value-builtin", "value-external"],
+      "value-internal",
+      ["type-parent", "value-parent"],
+      ["type-sibling", "value-sibling", "value-index"],
+      "unknown"
+    ],
+    "newlinesBetween": "always"
+  }
 }

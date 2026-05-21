@@ -109,7 +109,9 @@ input {
   height: 28px;
   border-radius: var(--radius-input);
   color: var(--muted-foreground);
-  transition: background 120ms var(--easing-standard), color 120ms var(--easing-standard);
+  transition:
+    background 120ms var(--easing-standard),
+    color 120ms var(--easing-standard);
 }
 
 .arrancador-titlebar__btn:hover:not(:disabled) {

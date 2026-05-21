@@ -1,6 +1,7 @@
 # Task: Arrancador React to Vue feature inventory
 
 ## Summary
+
 Produce a complete migration inventory for `apps/arrancador`: the user-facing features that exist today, the React-specific implementation layers they currently depend on, and the concrete areas that must be ported to Vue/Vapor.
 
 ## Acceptance Criteria

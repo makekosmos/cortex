@@ -109,26 +109,26 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 Когда пользователь упоминает имя — ты должен моментально знать, где это.
 
-| Имя | Где | Что |
-|---|---|---|
-| **Eden** | `extensions/eden` | заметки и дневник — Vue-extension в Kepler shell (TipTap editor). Phase 6.0 + 6.0.A + **6.1 (2026-05-19)** done. Standalone `apps/eden/ts/` удалён. Phase 6.1: system type «Дневник» + ISO `YYYY-MM-DD` title; static open-команды `eden:note:open-today` / `eden:note:create`; zen-mode chord `Ctrl+K Z` + acrylic backdrop в zen; titlebar page-title + `WindowControls` (без min/max в zen); char counter; ПКМ-меню «Удалить» через `ContextMenu`; иконки Lucide через `iconResolver.ts` (anytype-папка удалена); layout-agnostic hotkeys через `e.code`. |
-| **Delphi** | `extensions/delphi` | задачи — Vue-extension в Kepler shell |
-| **Arrancador** | `extensions/arrancador` | игровая библиотека — Vue-extension |
-| **Dashboard** | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user. |
-| **Horologion** | `extensions/horologion` | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj` |
-| **Kepler Shell** | `shell/` (npm name: `kepler-shell`) | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view). |
-| **Kepler Backend** | `services/kepler-backend` | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2) |
-| **Extension host** | `shell/electron/extension-host.ts` + `extensions/<id>/` | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md). |
-| **Command bus** | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md). |
-| **Digital Cave** | `apps/digital-cave` | focus-блокер (TBD, имя зарезервировано) |
-| **Kerux** | `apps/kerux` | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано) |
-| **ark-service (Android)** | `mobile/ark-service` | Android Room ContentProvider для `mobile/delphi` (отдельно от desktop ARK) |
-| **ark-core** | `crates/ark-core/rust` | Rust runtime + ark-core-rpc bin |
-| **@kosmos/ark** | `packages/ark` | TS SDK |
-| **@kosmos/visuals** | `packages/visuals` | UI токены, тема, компоненты |
-| **ark-relay-server** | `services/ark-relay-server` | WebSocket relay (опционально, для NAT) |
-| **kepler-watcher** | `services/kepler-watcher` | watcher-демон над `crates/ark-core` |
-| **usage-tracker** | `services/kepler-backend/src/usage_tracker/` | модуль внутри kepler-backend (был standalone до Phase E3 → `legacy/usage-tracker`) |
+| Имя                       | Где                                                                               | Что                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Eden**                  | `extensions/eden`                                                                 | заметки и дневник — Vue-extension в Kepler shell (TipTap editor). Phase 6.0 + 6.0.A + **6.1 (2026-05-19)** done. Standalone `apps/eden/ts/` удалён. Phase 6.1: system type «Дневник» + ISO `YYYY-MM-DD` title; static open-команды `eden:note:open-today` / `eden:note:create`; zen-mode chord `Ctrl+K Z` + acrylic backdrop в zen; titlebar page-title + `WindowControls` (без min/max в zen); char counter; ПКМ-меню «Удалить» через `ContextMenu`; иконки Lucide через `iconResolver.ts` (anytype-папка удалена); layout-agnostic hotkeys через `e.code`. |
+| **Delphi**                | `extensions/delphi`                                                               | задачи — Vue-extension в Kepler shell                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Arrancador**            | `extensions/arrancador`                                                           | игровая библиотека — Vue-extension                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Dashboard**             | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`                         | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user.                                                                                                                                                                                                                                                                                                                                                               |
+| **Horologion**            | `extensions/horologion`                                                           | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Kepler Shell**          | `shell/` (npm name: `kepler-shell`)                                               | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view).                                                                                                                                                                                                                                                                                   |
+| **Kepler Backend**        | `services/kepler-backend`                                                         | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Extension host**        | `shell/electron/extension-host.ts` + `extensions/<id>/`                           | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md).                                                                                                                                                                                                                                                                                                                   |
+| **Command bus**           | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md).                                                                                                                                                                                                                                                                                                                                                                 |
+| **Digital Cave**          | `apps/digital-cave`                                                               | focus-блокер (TBD, имя зарезервировано)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Kerux**                 | `apps/kerux`                                                                      | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано)                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **ark-service (Android)** | `mobile/ark-service`                                                              | Android Room ContentProvider для `mobile/delphi` (отдельно от desktop ARK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **ark-core**              | `crates/ark-core/rust`                                                            | Rust runtime + ark-core-rpc bin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **@kosmos/ark**           | `packages/ark`                                                                    | TS SDK                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **@kosmos/visuals**       | `packages/visuals`                                                                | UI токены, тема, компоненты                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **ark-relay-server**      | `services/ark-relay-server`                                                       | WebSocket relay (опционально, для NAT)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **kepler-watcher**        | `services/kepler-watcher`                                                         | watcher-демон над `crates/ark-core`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **usage-tracker**         | `services/kepler-backend/src/usage_tracker/`                                      | модуль внутри kepler-backend (был standalone до Phase E3 → `legacy/usage-tracker`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ## Что считается substantial (нужен proof loop)
 
@@ -189,7 +189,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 ## Sync
 
 - ❌ Direct Rust writer пишет в ARK без вызова `ark_core::db::bump_sync_version_vector`.
-- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
+- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete\*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
 - ❌ Batch upsert handler без bump'а `record_local_upsert` per-entity. Один общий bump на батч недостаточен — peer-side sync проверяет HLC entity-id'шно.
 - ❌ Ослабление self-peer filtering при изменениях в sync startup.
 - ❌ Ослабление routable-address filtering при изменениях в peer persistence.
@@ -587,21 +587,21 @@ bun run ark:smoke
 
 ## Когда обновлять документацию
 
-| Что изменил | Где обновить |
-|---|---|
-| Добавил/убрал команду в `package.json` | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md` |
-| Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md` |
-| Добавил/изменил метод в `@kosmos/ark` | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
-| Изменил структуру папок приложения | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md` |
-| Удалил/перенёс файл, упомянутый в доке | grep по `docs-site/` на имя файла → обновить или удалить упоминание |
-| Изменил sync-протокол / HLC / relay | `docs-site/concepts/sync.md` |
-| Добавил/убрал зависимость в стеке | `docs-site/guide/tooling.md` |
-| Добавил smoke-команду | `docs-site/reference/smoke-matrix.md` |
-| Изменил правило/запрет | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md` |
-| Принял архитектурное решение | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md` |
-| Изменил дизайн-токены `@kosmos/visuals` | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
-| Создал/убрал `object_type` | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
-| Запланировал фичу / нашёл баг приложения | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap)) |
+| Что изменил                                    | Где обновить                                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Добавил/убрал команду в `package.json`         | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md`        |
+| Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md`                        |
+| Добавил/изменил метод в `@kosmos/ark`          | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md`                   |
+| Изменил структуру папок приложения             | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md`                                      |
+| Удалил/перенёс файл, упомянутый в доке         | grep по `docs-site/` на имя файла → обновить или удалить упоминание                           |
+| Изменил sync-протокол / HLC / relay            | `docs-site/concepts/sync.md`                                                                  |
+| Добавил/убрал зависимость в стеке              | `docs-site/guide/tooling.md`                                                                  |
+| Добавил smoke-команду                          | `docs-site/reference/smoke-matrix.md`                                                         |
+| Изменил правило/запрет                         | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md`                            |
+| Принял архитектурное решение                   | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md`    |
+| Изменил дизайн-токены `@kosmos/visuals`        | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css`   |
+| Создал/убрал `object_type`                     | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
+| Запланировал фичу / нашёл баг приложения       | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap))                        |
 
 ## Когда **НЕ** надо трогать документацию
 
@@ -708,7 +708,7 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 - **Когда фича в roadmap начинает делаться** — оставляй её в «Ближайшее» с пометкой статуса.
 - **Когда фича завершена** — убирай из roadmap и фиксируй в обзоре приложения (`docs-site/apps/<name>.md`).
 - **Баг исправили** — убираем из «Баги».
-- **Не дублируй с code-комментариями `// TODO`** — комментарии в коде про *локальное место*; roadmap про *направление приложения*.
+- **Не дублируй с code-комментариями `// TODO`** — комментарии в коде про _локальное место_; roadmap про _направление приложения_.
 
 ### Когда roadmap-страницы нет
 
@@ -732,11 +732,12 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 ## 1. Граница записи в ARK
 
 ::: danger
+
 - Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
 - **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
 - Dashboard — read-only.
 - Перед PR в data services: `bun run ark:guard:writes`.
-:::
+  :::
 
 См. [Граница записи в ARK](docs-site/concepts/write-boundary.md).
 
@@ -752,10 +753,11 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 ## 3. Изоляция тестовых БД
 
 ::: danger
+
 - Тесты / smoke / Playwright / migration verify — **только** на изолированных DB.
 - Разрешённые пути: `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/`, OS temp.
 - Любой тест, дефолтящийся в user data dir, **отвергается** на code review.
-:::
+  :::
 
 См. [Изоляция тестовых БД](docs-site/concepts/test-isolation.md).
 
@@ -793,12 +795,12 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 8. Запреты per-app
 
-| Приложение | Не делать |
-|---|---|
-| Delphi | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback |
-| Eden | Возвращаться к ripgrep, ломать `save/move/delete` hardening в `store.ts`, возвращать ручные titlebar-offset |
-| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути |
-| Dashboard | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts` |
+| Приложение | Не делать                                                                                                   |
+| ---------- | ----------------------------------------------------------------------------------------------------------- |
+| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                    |
+| Eden       | Возвращаться к ripgrep, ломать `save/move/delete` hardening в `store.ts`, возвращать ручные titlebar-offset |
+| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                       |
+| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                   |
 
 ## 9. Brand consistency (Kepler / Kosmos)
 
@@ -836,17 +838,17 @@ Substantial-правки в репо проходят через формаль�
 
 ## Когда применяется
 
-| Тип правки | Proof loop? |
-|---|---|
-| Новая фича приложения | ✅ да |
-| Нетривиальный рефактор | ✅ да |
-| Нетривиальный багфикс | ✅ да |
-| Изменение data-слоя ARK / SDK / smoke | ✅ да |
-| Архитектурное решение | ✅ да, плюс ADR |
-| Опечатка / форматирование | ❌ нет |
-| Локальное переименование переменной | ❌ нет |
-| Косметика README | ❌ нет |
-| Edit-level правка одной строки в UI | ❌ нет |
+| Тип правки                            | Proof loop?     |
+| ------------------------------------- | --------------- |
+| Новая фича приложения                 | ✅ да           |
+| Нетривиальный рефактор                | ✅ да           |
+| Нетривиальный багфикс                 | ✅ да           |
+| Изменение data-слоя ARK / SDK / smoke | ✅ да           |
+| Архитектурное решение                 | ✅ да, плюс ADR |
+| Опечатка / форматирование             | ❌ нет          |
+| Локальное переименование переменной   | ❌ нет          |
+| Косметика README                      | ❌ нет          |
+| Edit-level правка одной строки в UI   | ❌ нет          |
 
 ## Структура task-папки
 
@@ -934,10 +936,11 @@ flowchart LR
 ## Жёсткие правила
 
 ::: danger Не нарушай
+
 - Не объявляй задачу завершённой, пока **каждый** AC не `PASS`.
 - Verifier судит по текущему коду и текущим выводам команд, не по предыдущим сообщениям в чате.
 - Fixer делает наименьший защитимый diff. Не «попутно отрефакторил», только fix.
-:::
+  :::
 
 ## Workflow-агенты
 

@@ -36,7 +36,13 @@ export const WithReferenceSameDay: Story = {
     components: { DateTimePicker },
     setup() {
       const now = new Date();
-      const today1530 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 15, 30).toISOString();
+      const today1530 = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        15,
+        30,
+      ).toISOString();
       return {
         value: ref<string | null>(today1530),
         reference: now.toISOString(),

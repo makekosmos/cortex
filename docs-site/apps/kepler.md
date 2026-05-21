@@ -36,15 +36,15 @@
 
 ## Стек
 
-| Слой | Технология |
-|---|---|
-| Shell | Electron 41 (frameless, Mica/Acrylic, transparent) |
-| Renderer | Vue 3.6 + TypeScript + Vite 8 (electron-vite) |
-| Bundler | Vite environments (renderer / main / preload через `vite.config.mjs` в `shell/`) |
-| Backend | `kepler-backend.exe` (Rust, lib + bin из `services/kepler-backend/`) |
-| ARK SDK | `@kosmos/ark` (kepler mode, hello-handshake, command bus client) |
-| UI | `@kosmos/visuals` (DesktopChrome, токены, компоненты) |
-| Tray / hotkey | Electron `Tray` + `globalShortcut` |
+| Слой          | Технология                                                                       |
+| ------------- | -------------------------------------------------------------------------------- |
+| Shell         | Electron 41 (frameless, Mica/Acrylic, transparent)                               |
+| Renderer      | Vue 3.6 + TypeScript + Vite 8 (electron-vite)                                    |
+| Bundler       | Vite environments (renderer / main / preload через `vite.config.mjs` в `shell/`) |
+| Backend       | `kepler-backend.exe` (Rust, lib + bin из `services/kepler-backend/`)             |
+| ARK SDK       | `@kosmos/ark` (kepler mode, hello-handshake, command bus client)                 |
+| UI            | `@kosmos/visuals` (DesktopChrome, токены, компоненты)                            |
+| Tray / hotkey | Electron `Tray` + `globalShortcut`                                               |
 
 ## Структура
 
@@ -95,6 +95,7 @@ extensions/                   # ← top-level рядом с shell/
 Kepler — точка входа для всех команд экосистемы. Подробно см. [Command bus](../concepts/command-bus.md).
 
 Коротко:
+
 - `kepler-backend` хранит in-memory registry команд (`commands.register/unregister/list/invoke`) и эмитит события `command_invoked` / `commands_changed` через WS.
 - Электронные апки при старте делают `ArkClient.commands.register([...])` и подписываются на `command_invoked` события для своих id'шников.
 - `LauncherView` слушает `commands_changed`, держит актуальный список и при выборе вызывает `commands.invoke(id)`.
@@ -104,20 +105,20 @@ Kepler — точка входа для всех команд экосистем
 
 Каждая запись — `InternalCommand` с полями `id`, `title`, `subtitle`, `category` (`'open' | 'action'`), `kind` (`'app' | 'command'`), `appName?` и `icon?: () => string | undefined`.
 
-| id | kind | title | Что делает |
-|---|---|---|---|
-| `delphi:open` | `app` | Открыть Delphi | `openExtension("delphi")` |
-| `horologion:open` | `app` | Открыть Horologion | `openExtension("horologion")` |
-| `arrancador:open` | `app` | Открыть Arrancador | `openExtension("arrancador")` |
-| `eden:open` | `app` | Открыть Eden | `openExtension("eden")` |
-| `dashboard:open` | `command` (`appName: "Kepler"`) | Открыть таблицу данных | `openDashboardWindow()` |
-| `settings:open` | `command` (`appName: "Kepler"`) | Открыть настройки | `openSettings()` |
-| `kepler:check-updates` | `command` (`appName: "Kepler"`) | Проверить обновления | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
-| `delphi:today` | `command` (`appName: "Delphi"`) | Сегодняшние задачи | `openExtension("delphi", "/today")` |
-| `horologion:pomodoro` | `command` (`appName: "Horologion"`) | Помодоро | `openExtension("horologion", "/?mode=pomodoro")` |
-| `horologion:stopwatch` | `command` (`appName: "Horologion"`) | Секундомер | `openExtension("horologion", "/?mode=stopwatch")` |
-| `eden:note:create` | `command` (`appName: "Eden"`) | Создать заметку | `openExtension("eden", "/new")` |
-| `eden:note:open-today` | `command` (`appName: "Eden"`) | Открыть сегодняшнюю заметку | `openExtension("eden", "/today")` |
+| id                     | kind                                | title                       | Что делает                                                                                           |
+| ---------------------- | ----------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `delphi:open`          | `app`                               | Открыть Delphi              | `openExtension("delphi")`                                                                            |
+| `horologion:open`      | `app`                               | Открыть Horologion          | `openExtension("horologion")`                                                                        |
+| `arrancador:open`      | `app`                               | Открыть Arrancador          | `openExtension("arrancador")`                                                                        |
+| `eden:open`            | `app`                               | Открыть Eden                | `openExtension("eden")`                                                                              |
+| `dashboard:open`       | `command` (`appName: "Kepler"`)     | Открыть таблицу данных      | `openDashboardWindow()`                                                                              |
+| `settings:open`        | `command` (`appName: "Kepler"`)     | Открыть настройки           | `openSettings()`                                                                                     |
+| `kepler:check-updates` | `command` (`appName: "Kepler"`)     | Проверить обновления        | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
+| `delphi:today`         | `command` (`appName: "Delphi"`)     | Сегодняшние задачи          | `openExtension("delphi", "/today")`                                                                  |
+| `horologion:pomodoro`  | `command` (`appName: "Horologion"`) | Помодоро                    | `openExtension("horologion", "/?mode=pomodoro")`                                                     |
+| `horologion:stopwatch` | `command` (`appName: "Horologion"`) | Секундомер                  | `openExtension("horologion", "/?mode=stopwatch")`                                                    |
+| `eden:note:create`     | `command` (`appName: "Eden"`)       | Создать заметку             | `openExtension("eden", "/new")`                                                                      |
+| `eden:note:open-today` | `command` (`appName: "Eden"`)       | Открыть сегодняшнюю заметку | `openExtension("eden", "/today")`                                                                    |
 
 ::: tip Eden static commands вернулись (2026-05-19)
 После миграции в extension (Phase 6.0) добавлены три static open-команды: `eden:open`, `eden:note:create`, `eden:note:open-today`. Они видны в launcher'е всегда (как `horologion:pomodoro`), не зависят от того, запущен ли Eden — kepler-shell сам открывает extension по route'у через [Deep links через `route`](/concepts/extension-host#deep-links-через-route). Иконки берутся из `extensionIconDataUri("eden")` (через manifest icon).
@@ -158,6 +159,7 @@ LauncherView показывает две секции, когда строка �
 При непустой строке секции скрываются — показывается единый fuzzy-отсортированный список.
 
 `CommandRecord` (`shell/shared/ipc-types.ts`) расширен полями `kind: 'app' | 'command'` и `appName?`. UI рендерит правую часть row'а так:
+
 - `kind === 'app'` → лейбл «Приложение».
 - `kind === 'command'` → приглушённое имя приложения справа от title + лейбл «Команда».
 
@@ -238,16 +240,16 @@ bun run dev                 # build:backend:dev + extensions + vite + Electron
 
 ## Команды
 
-| Команда | Что |
-|---|---|
-| `bun run --cwd shell dev` | dev режим |
-| `bun run --cwd shell build:js` | tsc + vite build (без NSIS) |
-| `bun run --cwd shell build` | release backend + js + NSIS installer |
-| `bun run --cwd shell typecheck` | tsc --noEmit |
-| `bun run --cwd shell package:dir` | unpacked Electron сборка |
-| `bun run --cwd shell test:e2e` | Playwright e2e |
+| Команда                                  | Что                                                                                                                                          |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run --cwd shell dev`                | dev режим                                                                                                                                    |
+| `bun run --cwd shell build:js`           | tsc + vite build (без NSIS)                                                                                                                  |
+| `bun run --cwd shell build`              | release backend + js + NSIS installer                                                                                                        |
+| `bun run --cwd shell typecheck`          | tsc --noEmit                                                                                                                                 |
+| `bun run --cwd shell package:dir`        | unpacked Electron сборка                                                                                                                     |
+| `bun run --cwd shell test:e2e`           | Playwright e2e                                                                                                                               |
 | `bun run --cwd shell ext:install <path>` | поставить extension в `%APPDATA%\Kosmos\extensions\<id>\` (override bundled). См. [Extension installer](../concepts/extension-installer.md). |
-| `bun run --cwd shell ext:uninstall <id>` | удалить user-installed extension; bundled (если есть) поднимется автоматически. |
+| `bun run --cwd shell ext:uninstall <id>` | удалить user-installed extension; bundled (если есть) поднимется автоматически.                                                              |
 
 Артефакты `build` — `shell/release/Kepler Setup X.Y.Z.exe` (NSIS one-click).
 

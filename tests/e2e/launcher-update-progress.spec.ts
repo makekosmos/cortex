@@ -32,9 +32,7 @@ test.describe("launcher update progress", () => {
       expect(width).toBe("42%");
 
       // Title содержит версию.
-      await expect(launcher.locator(".update-tile .update-title")).toContainText(
-        /9\.9\.9/,
-      );
+      await expect(launcher.locator(".update-tile .update-title")).toContainText(/9\.9\.9/);
     } finally {
       await app.close();
     }
@@ -77,9 +75,7 @@ test.describe("launcher update progress", () => {
       });
       await waitForUpdateTile(launcher, "downloading");
       await expect
-        .poll(async () =>
-          fill.evaluate((el) => (el as HTMLElement).style.width),
-        )
+        .poll(async () => fill.evaluate((el) => (el as HTMLElement).style.width))
         .toBe("0%");
 
       await emitUpdateState(app, {
@@ -88,9 +84,7 @@ test.describe("launcher update progress", () => {
         percent: 50,
       });
       await expect
-        .poll(async () =>
-          fill.evaluate((el) => (el as HTMLElement).style.width),
-        )
+        .poll(async () => fill.evaluate((el) => (el as HTMLElement).style.width))
         .toBe("50%");
 
       await emitUpdateState(app, {
@@ -99,9 +93,7 @@ test.describe("launcher update progress", () => {
         percent: 100,
       });
       await expect
-        .poll(async () =>
-          fill.evaluate((el) => (el as HTMLElement).style.width),
-        )
+        .poll(async () => fill.evaluate((el) => (el as HTMLElement).style.width))
         .toBe("100%");
     } finally {
       await app.close();
@@ -132,9 +124,7 @@ test.describe("launcher update progress", () => {
 
       // Tile НЕ имеет класса `disabled` (clickable: true в downloaded).
       const tile = launcher.locator(".update-tile").first();
-      const hasDisabled = await tile.evaluate((el) =>
-        el.classList.contains("disabled"),
-      );
+      const hasDisabled = await tile.evaluate((el) => el.classList.contains("disabled"));
       expect(hasDisabled).toBe(false);
     } finally {
       await app.close();
@@ -152,9 +142,7 @@ test.describe("launcher update progress", () => {
 
       await expect(launcher.locator(".update-tile-progress")).toHaveCount(0);
       const tile = launcher.locator(".update-tile").first();
-      const hasDisabled = await tile.evaluate((el) =>
-        el.classList.contains("disabled"),
-      );
+      const hasDisabled = await tile.evaluate((el) => el.classList.contains("disabled"));
       // updateBanner.clickable === false в available → tile должен быть disabled.
       expect(hasDisabled).toBe(true);
     } finally {

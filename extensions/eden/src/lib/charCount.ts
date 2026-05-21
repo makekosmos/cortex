@@ -27,9 +27,7 @@ interface ProseMirrorNode {
   content?: unknown[];
 }
 
-export function countCharsInProseMirrorDoc(
-  json: string | null | undefined,
-): number | null {
+export function countCharsInProseMirrorDoc(json: string | null | undefined): number | null {
   if (!json) return null;
   let doc: unknown;
   try {

@@ -88,22 +88,15 @@ function selectType(id: string): void {
             @click="selectType(t.id)"
           />
         </div>
-
       </aside>
     </template>
 
-    <DesktopContentSurface
-      :padding-top="'0'"
-      :padding-inline="'0'"
-      class="main-surface"
-    >
+    <DesktopContentSurface :padding-top="'0'" :padding-inline="'0'" class="main-surface">
       <header class="main-header">
         <h1>{{ titleLabel }}</h1>
       </header>
       <div class="main-body">
-        <div v-if="showSettings" class="settings-stub">
-          Настройки — в разработке.
-        </div>
+        <div v-if="showSettings" class="settings-stub">Настройки — в разработке.</div>
         <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
       </div>
     </DesktopContentSurface>

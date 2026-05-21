@@ -47,9 +47,14 @@ onMounted(() => {
     state.value = s;
   });
   // Initial fetch (in case widget opened mid-session).
-  window.kepler.focusWidget.getState().then((s) => {
-    if (s) state.value = s;
-  }).catch(() => { /* ignore */ });
+  window.kepler.focusWidget
+    .getState()
+    .then((s) => {
+      if (s) state.value = s;
+    })
+    .catch(() => {
+      /* ignore */
+    });
 });
 
 onBeforeUnmount(() => {
@@ -132,7 +137,8 @@ async function onStop(): Promise<void> {
         class="shield"
         :title="'Блокировка активна'"
         aria-label="Блокировка активна"
-      >🛡️</span>
+        >🛡️</span
+      >
       <div class="time">{{ timeText }}</div>
       <div class="separator" />
       <div class="label" :title="labelText">{{ labelText }}</div>
@@ -167,14 +173,7 @@ async function onStop(): Promise<void> {
         <Square :size="13" />
       </button>
     </div>
-    <button
-      class="close-btn"
-      type="button"
-      :title="HINTS.close"
-      @click="onClose"
-    >
-      ×
-    </button>
+    <button class="close-btn" type="button" :title="HINTS.close" @click="onClose">×</button>
   </div>
 </template>
 
@@ -276,7 +275,9 @@ async function onStop(): Promise<void> {
   border-radius: 6px;
   cursor: pointer;
   padding: 0;
-  transition: background 100ms, color 100ms;
+  transition:
+    background 100ms,
+    color 100ms;
 }
 .ctl-btn:hover {
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
@@ -300,7 +301,9 @@ async function onStop(): Promise<void> {
   line-height: 1;
   border-radius: 6px;
   cursor: pointer;
-  transition: background 100ms, color 100ms;
+  transition:
+    background 100ms,
+    color 100ms;
 }
 .close-btn:hover {
   background: color-mix(in srgb, var(--foreground) 8%, transparent);

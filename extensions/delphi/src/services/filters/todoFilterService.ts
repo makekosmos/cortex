@@ -35,8 +35,7 @@ function isActive(t: TodoItem): boolean {
 const predicates: Record<SmartList, (t: TodoItem) => boolean> = {
   [SmartList.Inbox]: (t) => !t.projectId && !t.isSomeday && isActive(t),
 
-  [SmartList.Today]: (t) =>
-    isActive(t) && (t.isToday || isDateToday(t.scheduledDate)),
+  [SmartList.Today]: (t) => isActive(t) && (t.isToday || isDateToday(t.scheduledDate)),
 
   [SmartList.Upcoming]: (t) => !!t.scheduledDate && isActive(t) && !t.isSomeday,
 
@@ -48,10 +47,7 @@ const predicates: Record<SmartList, (t: TodoItem) => boolean> = {
   // данные после rollout'а status field. Активная задача только — done / canceled /
   // trashed скрываются.
   [SmartList.Someday]: (t) =>
-    (t.status === "backlog" || t.isSomeday) &&
-    !t.isCompleted &&
-    !t.isCancelled &&
-    !t.isTrashed,
+    (t.status === "backlog" || t.isSomeday) && !t.isCompleted && !t.isCancelled && !t.isTrashed,
 
   [SmartList.Logbook]: (t) => t.isCompleted || t.isCancelled,
 

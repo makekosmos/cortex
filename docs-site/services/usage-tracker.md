@@ -59,12 +59,13 @@ cargo test --manifest-path services\kepler-backend\Cargo.toml --lib
 ## Правила
 
 ::: warning Жёстко
+
 - Модуль пишет напрямую в ARK DB и **обязан** обновлять `lan_sync.version_vector` после прямых entity writes.
 - Default DB path остаётся `%APPDATA%\Kosmos\ark.db`, если не переопределён env.
 - Автоматические тесты и smoke checks **обязаны** переопределить DB path на изолированный `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/`, или OS temp. **Не** запускай verification против main user ARK DB.
 - Не превращай в Windows Service.
 - Не добавляй UI, tray, окна — capture модуль остаётся пассивным.
-:::
+  :::
 
 ## Smoke
 

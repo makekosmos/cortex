@@ -61,7 +61,7 @@
   - Line 300: `peer-manager.ts` listed as active file
   - Line 301: `peer-discovery.ts` listed as active file
   - Lines 313, 381, 413, 433: `ark-client`, `ArkSyncClient`, `peer-manager.ts` listed without "deleted"/"legacy" disambiguation
-  `apps/delphi/kotlin/CLAUDE.md` line 131 still mentions legacy `ArkSyncClient` in the sync key files table without indicating it was deleted.
+    `apps/delphi/kotlin/CLAUDE.md` line 131 still mentions legacy `ArkSyncClient` in the sync key files table without indicating it was deleted.
 - **Minimal reproduction**:
   ```bash
   grep -n "peer-manager.ts\|peer-discovery.ts\|ArkSyncClient\|ark-client.*legacy" \

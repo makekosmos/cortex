@@ -25,11 +25,31 @@ interface FocusBlocklist {
 }
 
 const ICON_CHOICES = [
-  "🛡️", "🚫", "🎮", "🧠", "📰",
-  "📺", "🎬", "💬", "🐦", "📷",
-  "🛒", "⚽", "🎰", "🍔", "💸",
-  "🎵", "📚", "⚙️", "🔒", "🎯",
-  "⏰", "🌐", "✨", "🔥", "⚡",
+  "🛡️",
+  "🚫",
+  "🎮",
+  "🧠",
+  "📰",
+  "📺",
+  "🎬",
+  "💬",
+  "🐦",
+  "📷",
+  "🛒",
+  "⚽",
+  "🎰",
+  "🍔",
+  "💸",
+  "🎵",
+  "📚",
+  "⚙️",
+  "🔒",
+  "🎯",
+  "⏰",
+  "🌐",
+  "✨",
+  "🔥",
+  "⚡",
 ];
 
 interface FocusActiveState {
@@ -318,8 +338,7 @@ async function loadExportConverters() {
 
 async function onRunExport(c: ExportConverterInfo) {
   if (exportBusyId.value) return;
-  const format =
-    exportSelectedFormat.value[c.converter_id] ?? c.default_format;
+  const format = exportSelectedFormat.value[c.converter_id] ?? c.default_format;
   let destDir: string | null = null;
   try {
     destDir = await window.kepler.export.pickDir();
@@ -345,9 +364,7 @@ async function onRunExport(c: ExportConverterInfo) {
     });
     const ok = r.errors.length === 0;
     const sizeKb = (r.bytes / 1024).toFixed(1);
-    const parts: string[] = [
-      `Готово: ${r.files_written.length} файлов, ${sizeKb} KB`,
-    ];
+    const parts: string[] = [`Готово: ${r.files_written.length} файлов, ${sizeKb} KB`];
     if (r.errors.length > 0) {
       parts.push(`Ошибок: ${r.errors.length}`);
       const sample = r.errors.slice(0, 3).join("; ");
@@ -454,10 +471,7 @@ function isUnknownOperationError(err: unknown): boolean {
   return /unknown operation|unknown_operation|not.?found/i.test(msg);
 }
 
-async function focusRequest<T>(
-  op: string,
-  params?: Record<string, unknown>,
-): Promise<T | null> {
+async function focusRequest<T>(op: string, params?: Record<string, unknown>): Promise<T | null> {
   try {
     const r = await window.kepler.ark.request<T>(op, params);
     return r;
@@ -474,9 +488,7 @@ async function loadBlocklists() {
   focusLoading.value = true;
   focusError.value = "";
   try {
-    const r = await focusRequest<{ blocklists: FocusBlocklist[] }>(
-      "focus.list_blocklists",
-    );
+    const r = await focusRequest<{ blocklists: FocusBlocklist[] }>("focus.list_blocklists");
     focusBlocklists.value = r?.blocklists ?? [];
   } catch (e) {
     focusError.value = (e as Error).message;
@@ -543,12 +555,7 @@ const mentionCandidates = computed<FocusBlocklist[]>(() => {
   const q = mentionQuery.value.toLowerCase();
   return focusBlocklists.value
     .filter((b) => b.id !== focusEditingId.value)
-    .filter(
-      (b) =>
-        !q ||
-        b.id.toLowerCase().includes(q) ||
-        b.name.toLowerCase().includes(q),
-    )
+    .filter((b) => !q || b.id.toLowerCase().includes(q) || b.name.toLowerCase().includes(q))
     .slice(0, 6);
 });
 
@@ -665,8 +672,7 @@ function onMentionKey(e: KeyboardEvent) {
     mentionHighlight.value = (mentionHighlight.value + 1) % Math.max(list.length, 1);
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
-    mentionHighlight.value =
-      (mentionHighlight.value - 1 + list.length) % Math.max(list.length, 1);
+    mentionHighlight.value = (mentionHighlight.value - 1 + list.length) % Math.max(list.length, 1);
   } else if (e.key === "Enter") {
     if (list.length > 0) {
       e.preventDefault();
@@ -759,9 +765,7 @@ async function onDraftDrop(e: DragEvent) {
 
 const focusActiveBlocklist = computed<FocusBlocklist | undefined>(() => {
   if (!focusActive.value.active || !focusActive.value.blocklist_id) return undefined;
-  return focusBlocklists.value.find(
-    (b) => b.id === focusActive.value.blocklist_id,
-  );
+  return focusBlocklists.value.find((b) => b.id === focusActive.value.blocklist_id);
 });
 
 function onClose() {
@@ -1021,9 +1025,7 @@ onBeforeUnmount(() => {
           -->
         </nav>
       </div>
-      <button class="close" type="button" @click="onClose" aria-label="Закрыть">
-        ×
-      </button>
+      <button class="close" type="button" @click="onClose" aria-label="Закрыть">×</button>
     </header>
 
     <!-- General tab -->
@@ -1077,16 +1079,12 @@ onBeforeUnmount(() => {
           <div class="row-label">
             <div class="label">Developer mode</div>
             <div class="hint">
-              Hot reload extension'ов через Vite + F12 для DevTools.
-              Перезапусти extension чтобы применить.
+              Hot reload extension'ов через Vite + F12 для DevTools. Перезапусти extension чтобы
+              применить.
             </div>
           </div>
           <label class="toggle">
-            <input
-              type="checkbox"
-              :checked="developerMode"
-              @change="onToggleDeveloperMode"
-            />
+            <input type="checkbox" :checked="developerMode" @change="onToggleDeveloperMode" />
             <span class="track"><span class="thumb" /></span>
           </label>
         </div>
@@ -1095,17 +1093,12 @@ onBeforeUnmount(() => {
           <div class="row-label">
             <div class="label">Трекать активные приложения</div>
             <div class="hint">
-              Записывает в ARK какое окно сейчас активно (process + title).
-              Password manager'ы и окна с «password» в title исключаются.
-              Изменение применится после перезапуска Kepler.
+              Записывает в ARK какое окно сейчас активно (process + title). Password manager'ы и
+              окна с «password» в title исключаются. Изменение применится после перезапуска Kepler.
             </div>
           </div>
           <label class="toggle">
-            <input
-              type="checkbox"
-              :checked="usageTracker"
-              @change="onToggleUsageTracker"
-            />
+            <input type="checkbox" :checked="usageTracker" @change="onToggleUsageTracker" />
             <span class="track"><span class="thumb" /></span>
           </label>
         </div>
@@ -1137,16 +1130,13 @@ onBeforeUnmount(() => {
                 Crash-логов нет. Если Kepler упадёт, файлы появятся здесь.
               </template>
               <template v-else>
-                {{ crashFiles.length }} {{ crashFiles.length === 1 ? "файл" : "файла(-ов)" }} в папке отчётов.
+                {{ crashFiles.length }} {{ crashFiles.length === 1 ? "файл" : "файла(-ов)" }} в
+                папке отчётов.
               </template>
             </div>
           </div>
           <div class="row-actions">
-            <button
-              type="button"
-              class="btn ghost"
-              @click="onOpenCrashesFolder"
-            >
+            <button type="button" class="btn ghost" @click="onOpenCrashesFolder">
               Открыть папку
             </button>
             <button
@@ -1191,17 +1181,13 @@ onBeforeUnmount(() => {
         <div v-if="availableInCatalog.length > 0" class="ext-section-title">
           Доступные расширения
         </div>
-        <div
-          v-for="c in availableInCatalog"
-          :key="`catalog-${c.id}`"
-          class="ext-item"
-        >
+        <div v-for="c in availableInCatalog" :key="`catalog-${c.id}`" class="ext-item">
           <img
             v-if="c.iconUrl"
             class="ext-icon"
             :src="c.iconUrl"
             alt=""
-            @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+            @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
           />
           <div v-else class="ext-icon ext-icon-fallback">
             {{ c.name.slice(0, 1) }}
@@ -1230,31 +1216,16 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Установленные -->
-        <div
-          v-if="installed.length > 0 && availableInCatalog.length > 0"
-          class="ext-section-title"
-        >
+        <div v-if="installed.length > 0 && availableInCatalog.length > 0" class="ext-section-title">
           Установленные
         </div>
-        <div
-          v-if="installed.length === 0 && availableInCatalog.length === 0"
-          class="empty"
-        >
+        <div v-if="installed.length === 0 && availableInCatalog.length === 0" class="empty">
           <template v-if="marketLoading">Загрузка каталога…</template>
           <template v-else>Расширений нет. Каталог пуст или недоступен.</template>
         </div>
 
-        <div
-          v-for="ext in installed"
-          :key="ext.id"
-          class="ext-item"
-        >
-          <img
-            v-if="ext.iconDataUri"
-            class="ext-icon"
-            :src="ext.iconDataUri"
-            alt=""
-          />
+        <div v-for="ext in installed" :key="ext.id" class="ext-item">
+          <img v-if="ext.iconDataUri" class="ext-icon" :src="ext.iconDataUri" alt="" />
           <div v-else class="ext-icon ext-icon-fallback">
             {{ ext.name.slice(0, 1) }}
           </div>
@@ -1278,9 +1249,7 @@ onBeforeUnmount(() => {
           <div class="ext-actions">
             <!-- Dev-source extension'ы (из repo) НЕ имеют update/revert/uninstall —
                  source code управляется git'ом, не Kepler installer'ом. -->
-            <span v-if="ext.source === 'dev'" class="ext-dev-hint">
-              источник: репозиторий
-            </span>
+            <span v-if="ext.source === 'dev'" class="ext-dev-hint"> источник: репозиторий </span>
             <template v-else>
               <button
                 v-if="hasUpdate(ext)"
@@ -1338,7 +1307,10 @@ onBeforeUnmount(() => {
         <div class="row focus-service-row">
           <div class="row-label">
             <div class="label">Системный демон</div>
-            <div v-if="focusServiceStatus.installed && focusServiceStatus.running" class="hint focus-service-hint-ok">
+            <div
+              v-if="focusServiceStatus.installed && focusServiceStatus.running"
+              class="hint focus-service-hint-ok"
+            >
               Установлен и работает — блокировка включается без запроса прав администратора.
             </div>
             <div v-else-if="focusServiceStatus.installed" class="hint">
@@ -1483,10 +1455,7 @@ onBeforeUnmount(() => {
               @dragleave="onDraftDragLeave"
               @drop="onDraftDrop"
             />
-            <div
-              v-if="mentionOpen && mentionCandidates.length > 0"
-              class="mention-dropdown"
-            >
+            <div v-if="mentionOpen && mentionCandidates.length > 0" class="mention-dropdown">
               <button
                 v-for="(bl, i) in mentionCandidates"
                 :key="bl.id"
@@ -1505,10 +1474,7 @@ onBeforeUnmount(() => {
               <span v-if="focusDraftParsed.kind === 'raw'" class="ext-author">
                 · содержит ссылки
               </span>
-              <span
-                v-if="focusDraftParsed.invalid.length > 0"
-                class="focus-invalid-count"
-              >
+              <span v-if="focusDraftParsed.invalid.length > 0" class="focus-invalid-count">
                 · невалидных: {{ focusDraftParsed.invalid.length }}
               </span>
             </div>
@@ -1556,20 +1522,13 @@ onBeforeUnmount(() => {
           Нет доступных конвертеров. Backend ещё не зарегистрировал ни одного.
         </div>
 
-        <div
-          v-for="c in exportConverters"
-          :key="c.converter_id"
-          class="row export-row"
-        >
+        <div v-for="c in exportConverters" :key="c.converter_id" class="row export-row">
           <div class="row-label">
             <div class="label">{{ c.display_name }}</div>
             <div class="hint">
               {{ c.object_type }} → {{ exportSelectedFormat[c.converter_id] ?? c.default_format }}
             </div>
-            <div
-              v-if="exportStatusByConverter[c.converter_id]"
-              class="hint export-status"
-            >
+            <div v-if="exportStatusByConverter[c.converter_id]" class="hint export-status">
               {{ exportStatusByConverter[c.converter_id] }}
             </div>
           </div>
@@ -1580,11 +1539,7 @@ onBeforeUnmount(() => {
               class="export-format-select"
               :disabled="exportBusyId === c.converter_id"
             >
-              <option
-                v-for="f in c.supported_formats"
-                :key="f"
-                :value="f"
-              >
+              <option v-for="f in c.supported_formats" :key="f" :value="f">
                 {{ f }}
               </option>
             </select>
@@ -1599,34 +1554,21 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div
-          v-if="exportHistory.length > 0"
-          class="ext-section-header"
-        >
-          Последние экспорты
-        </div>
-        <div
-          v-for="(h, i) in exportHistory"
-          :key="i"
-          class="row export-history-row"
-        >
+        <div v-if="exportHistory.length > 0" class="ext-section-header">Последние экспорты</div>
+        <div v-for="(h, i) in exportHistory" :key="i" class="row export-history-row">
           <div class="row-label">
             <div class="label">
               {{ h.display_name }}
               <span class="hint">({{ h.format }})</span>
             </div>
             <div class="hint">
-              {{ formatHistoryTime(h.timestamp) }} ·
-              {{ h.file_count }} файлов ·
+              {{ formatHistoryTime(h.timestamp) }} · {{ h.file_count }} файлов ·
               {{ (h.bytes / 1024).toFixed(1) }} KB
             </div>
             <code class="value lock">{{ h.dest_dir }}</code>
           </div>
           <div class="row-actions">
-            <span
-              class="value"
-              :class="{ muted: !h.ok }"
-            >
+            <span class="value" :class="{ muted: !h.ok }">
               {{ h.ok ? "ok" : "с ошибками" }}
             </span>
           </div>
@@ -1697,7 +1639,9 @@ onBeforeUnmount(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .row-actions {
@@ -1711,8 +1655,7 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   padding: 16px 22px 10px;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
   -webkit-app-region: drag;
   gap: 16px;
 }
@@ -2220,13 +2163,14 @@ onBeforeUnmount(() => {
 
 .add-card {
   min-height: 140px;
-  border: 2px dashed
-    color-mix(in srgb, var(--foreground) 16%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--foreground) 16%, transparent);
   border-radius: 12px;
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
   cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
   font: inherit;
   font-size: 13px;
   font-weight: 500;

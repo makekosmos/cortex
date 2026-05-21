@@ -66,15 +66,15 @@ Arrancador использует:
 
 ## Страницы и их состояние
 
-| Страница | Файл | Состояние |
-|---|---|---|
-| Library | `src/pages/LibraryPage.vue` | ✅ list + кнопка «Запустить» (Steam URL или прямой exe) |
-| Catalogue | `src/pages/CataloguePage.vue` | ✅ RAWG search + apply-to-library через Modal+Dropdown |
-| Scan | `src/pages/ScanPage.vue` | ✅ «Сканировать сейчас» + Steam/Epic, история last 10 |
-| Sqoba | `src/pages/SqobaPage.vue` | ✅ per-game backup list + create + restore с confirmation |
-| Statistics | `src/pages/StatisticsPage.vue` | ✅ JS-агрегация по списку игр (heatmap по `usage_sessions` — stub) |
-| Settings | `src/pages/SettingsPage.vue` | ✅ RAWG API key (password input + eye-toggle + status) + localStorage |
-| GameDetail | `src/pages/GameDetailPage.vue` | ✅ read-only (доп. actions — follow-up) |
+| Страница   | Файл                           | Состояние                                                             |
+| ---------- | ------------------------------ | --------------------------------------------------------------------- |
+| Library    | `src/pages/LibraryPage.vue`    | ✅ list + кнопка «Запустить» (Steam URL или прямой exe)               |
+| Catalogue  | `src/pages/CataloguePage.vue`  | ✅ RAWG search + apply-to-library через Modal+Dropdown                |
+| Scan       | `src/pages/ScanPage.vue`       | ✅ «Сканировать сейчас» + Steam/Epic, история last 10                 |
+| Sqoba      | `src/pages/SqobaPage.vue`      | ✅ per-game backup list + create + restore с confirmation             |
+| Statistics | `src/pages/StatisticsPage.vue` | ✅ JS-агрегация по списку игр (heatmap по `usage_sessions` — stub)    |
+| Settings   | `src/pages/SettingsPage.vue`   | ✅ RAWG API key (password input + eye-toggle + status) + localStorage |
+| GameDetail | `src/pages/GameDetailPage.vue` | ✅ read-only (доп. actions — follow-up)                               |
 
 Routing — Vue Router с `createMemoryHistory` (нет file-system URLs внутри extension'а).
 

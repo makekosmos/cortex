@@ -17,7 +17,13 @@ type DiagSnapshot = {
   blockSelected: number;
   rangeSelected: number;
   nodeSelected: number;
-  tasks: Array<{ idx: number; cls: string; bg: string; rowBg: string | null; hasBlockSel: boolean }>;
+  tasks: Array<{
+    idx: number;
+    cls: string;
+    bg: string;
+    rowBg: string | null;
+    hasBlockSel: boolean;
+  }>;
   sel: { from: number; to: number; type: string; empty: boolean } | null;
 };
 
@@ -69,7 +75,9 @@ async function setupEdenWithTasks(taskCount: number): Promise<{
   app: ElectronApplication;
   edenWin: Page;
 }> {
-  const app = await launchKepler({ slug: `eden-sel-${Date.now()}-${Math.floor(Math.random() * 1000)}` });
+  const app = await launchKepler({
+    slug: `eden-sel-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+  });
   const launcher = await app.firstWindow();
   await launcher.waitForLoadState("domcontentloaded");
   await waitForBackendReady(launcher);
@@ -90,8 +98,7 @@ async function setupEdenWithTasks(taskCount: number): Promise<{
   // shim install + initApp: ждём появления window.api.saveEntry.
   await edenWin.waitForFunction(
     () =>
-      typeof (window as unknown as { api?: { saveEntry?: unknown } }).api
-        ?.saveEntry === "function",
+      typeof (window as unknown as { api?: { saveEntry?: unknown } }).api?.saveEntry === "function",
     null,
     { timeout: 5_000 },
   );
@@ -153,7 +160,11 @@ async function setupEdenWithTasks(taskCount: number): Promise<{
   expect(got).toBeGreaterThanOrEqual(taskCount);
 
   // Снимаем фокус с input'а
-  await edenWin.locator(".editor-header").first().click({ force: true }).catch(() => {});
+  await edenWin
+    .locator(".editor-header")
+    .first()
+    .click({ force: true })
+    .catch(() => {});
   await edenWin.waitForTimeout(300);
 
   return { app, edenWin };
@@ -197,7 +208,9 @@ async function assertRubberBandSucceeded(edenWin: Page, scenario: string): Promi
   const snap = await snapshot(edenWin);
   console.log(`[diag][${scenario}] AFTER DRAG:`, JSON.stringify(snap, null, 2));
   if (snap.blockSelected < 2) {
-    console.log(`[test][${scenario}] WARN: rubber-band не выделил 2 task'и (blockSelected=${snap.blockSelected})`);
+    console.log(
+      `[test][${scenario}] WARN: rubber-band не выделил 2 task'и (blockSelected=${snap.blockSelected})`,
+    );
   }
 }
 
@@ -275,10 +288,16 @@ test.describe("Eden block-selection after click — scenarios", () => {
       // Главный assert: после клика на task title input — фокус ДОЛЖЕН
       // быть на этом input, не на <p> и не где-либо ещё.
       expect(focus.activeTag, "после клика на title — focus должен быть на INPUT").toBe("INPUT");
-      expect(focus.activeCls, "класс активного элемента должен быть task-ref-title-input").toContain("task-ref-title-input");
+      expect(
+        focus.activeCls,
+        "класс активного элемента должен быть task-ref-title-input",
+      ).toContain("task-ref-title-input");
       // Каретка не должна торчать в 0 (т.е. в начале) если клик был
       // в середине input'а с текстом длиннее 5 символов.
-      expect(focus.inputCaret, "каретка должна стоять примерно где кликнули, не в 0").toBeGreaterThan(2);
+      expect(
+        focus.inputCaret,
+        "каретка должна стоять примерно где кликнули, не в 0",
+      ).toBeGreaterThan(2);
     } finally {
       await app.close();
     }

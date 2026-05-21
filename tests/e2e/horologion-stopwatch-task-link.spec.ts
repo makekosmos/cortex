@@ -18,12 +18,7 @@
 
 import { test, expect } from "@playwright/test";
 import { launchKepler } from "./helpers/launch";
-import {
-  openHorologion,
-  seedTask,
-  seedPomodoroDraft,
-  gracefulQuit,
-} from "./helpers/horologion";
+import { openHorologion, seedTask, seedPomodoroDraft, gracefulQuit } from "./helpers/horologion";
 
 interface ArkObjectRecord {
   id: string;
@@ -128,9 +123,7 @@ test("horologion stopwatch: task привязка через @-mention сохр�
 
     // No clone / IPC errors.
     const fatal = consoleErrors.filter(
-      (e) =>
-        e.toLowerCase().includes("could not be cloned") ||
-        e.includes("missing field"),
+      (e) => e.toLowerCase().includes("could not be cloned") || e.includes("missing field"),
     );
     if (fatal.length > 0) {
       throw new Error(`BUG: console errors:\n${fatal.join("\n")}`);

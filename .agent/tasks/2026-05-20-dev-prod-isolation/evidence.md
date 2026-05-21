@@ -5,31 +5,31 @@ Worktree: `D:\Personal\Hobby\Coding\kepler-worktrees\dev-prod-isolation`
 
 ## Изменения
 
-| Файл | Что |
-|---|---|
-| `shell/electron/instance.ts` | новый — `resolveInstance()`, `applyInstanceToApp()`, регэксп слотов, one-shot dev settings migration |
-| `shell/electron/data-dir.ts` | thin wrapper над `resolveInstance().dataDir` (back-compat) |
-| `shell/electron/main.ts` | top-level `resolveInstance + applyInstanceToApp` ДО `requestSingleInstanceLock`; crashReporter productName; backend env `KEPLER_INSTANCE`; tray tooltip; deviceId per slot; autoupdater + periodic marketplace check gated; globalShortcut skip когда `hotkey===null` |
-| `shell/electron/settings-window.ts` | `DEFAULT_HOTKEY` из instance; `setAutostartEnabled` silent no-op в non-prod; новый `isAutostartAllowed()` |
-| `shell/scripts/dev.mjs` | `.env.local` loader (минималистский, без новых deps) |
-| `shell/.env.local.example` | шаблон с комментариями |
-| `shell/.gitignore` | `.env.local` ignored |
-| `docs-site/concepts/instances.md` | новая страница |
-| `docs-site/.vitepress/config.ts` | nav link на /concepts/instances |
-| `docs-site/agents/forbidden.md` | 3 новых запрета (хардкод "Kepler"/"Kosmos", порядок `applyInstanceToApp` vs `requestSingleInstanceLock`, `setLoginItemSettings` без gate) |
-| `STATUS.md` | секция «Изоляция инстансов (slot system)» заменила «Изоляция data dir (3 уровня)» |
-| `AGENTS.md`, `CLAUDE.md`, `mobile/delphi/AGENTS.md`, `crates/ark-core/AGENTS.md`, `docs-site/public/llms.txt`, `docs-site/public/full-llms.txt` | регенерация через `bun run docs:sync` |
+| Файл                                                                                                                                            | Что                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shell/electron/instance.ts`                                                                                                                    | новый — `resolveInstance()`, `applyInstanceToApp()`, регэксп слотов, one-shot dev settings migration                                                                                                                                                                  |
+| `shell/electron/data-dir.ts`                                                                                                                    | thin wrapper над `resolveInstance().dataDir` (back-compat)                                                                                                                                                                                                            |
+| `shell/electron/main.ts`                                                                                                                        | top-level `resolveInstance + applyInstanceToApp` ДО `requestSingleInstanceLock`; crashReporter productName; backend env `KEPLER_INSTANCE`; tray tooltip; deviceId per slot; autoupdater + periodic marketplace check gated; globalShortcut skip когда `hotkey===null` |
+| `shell/electron/settings-window.ts`                                                                                                             | `DEFAULT_HOTKEY` из instance; `setAutostartEnabled` silent no-op в non-prod; новый `isAutostartAllowed()`                                                                                                                                                             |
+| `shell/scripts/dev.mjs`                                                                                                                         | `.env.local` loader (минималистский, без новых deps)                                                                                                                                                                                                                  |
+| `shell/.env.local.example`                                                                                                                      | шаблон с комментариями                                                                                                                                                                                                                                                |
+| `shell/.gitignore`                                                                                                                              | `.env.local` ignored                                                                                                                                                                                                                                                  |
+| `docs-site/concepts/instances.md`                                                                                                               | новая страница                                                                                                                                                                                                                                                        |
+| `docs-site/.vitepress/config.ts`                                                                                                                | nav link на /concepts/instances                                                                                                                                                                                                                                       |
+| `docs-site/agents/forbidden.md`                                                                                                                 | 3 новых запрета (хардкод "Kepler"/"Kosmos", порядок `applyInstanceToApp` vs `requestSingleInstanceLock`, `setLoginItemSettings` без gate)                                                                                                                             |
+| `STATUS.md`                                                                                                                                     | секция «Изоляция инстансов (slot system)» заменила «Изоляция data dir (3 уровня)»                                                                                                                                                                                     |
+| `AGENTS.md`, `CLAUDE.md`, `mobile/delphi/AGENTS.md`, `crates/ark-core/AGENTS.md`, `docs-site/public/llms.txt`, `docs-site/public/full-llms.txt` | регенерация через `bun run docs:sync`                                                                                                                                                                                                                                 |
 
 ## Автоматические проверки
 
-| Проверка | Команда | Результат |
-|---|---|---|
-| TypeScript | `bun run --cwd shell typecheck` | PASS — clean (без output) |
-| ARK write boundary guard | `bun run ark:guard:writes` | PASS — `ARK write boundary guard passed.` |
-| Shell JS build | `bun run --cwd shell build:js` | PASS — `built in 789ms` |
-| ARK smoke matrix | `bun run ark:smoke` | PASS — `ARK smoke matrix passed.` |
-| Docs sync | `bun run docs:sync` | PASS — 6 файлов обновлено |
-| Docs check | `bun run docs:check` | 4 stale ref'а — **pre-existing, не от моих правок** (raycast-compat, ark-core/benches, lint script, /memory link). Мой `/concepts/instances` чист |
+| Проверка                 | Команда                         | Результат                                                                                                                                         |
+| ------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TypeScript               | `bun run --cwd shell typecheck` | PASS — clean (без output)                                                                                                                         |
+| ARK write boundary guard | `bun run ark:guard:writes`      | PASS — `ARK write boundary guard passed.`                                                                                                         |
+| Shell JS build           | `bun run --cwd shell build:js`  | PASS — `built in 789ms`                                                                                                                           |
+| ARK smoke matrix         | `bun run ark:smoke`             | PASS — `ARK smoke matrix passed.`                                                                                                                 |
+| Docs sync                | `bun run docs:sync`             | PASS — 6 файлов обновлено                                                                                                                         |
+| Docs check               | `bun run docs:check`            | 4 stale ref'а — **pre-existing, не от моих правок** (raycast-compat, ark-core/benches, lint script, /memory link). Мой `/concepts/instances` чист |
 
 ## AC ручная верификация (требует пользователь)
 
@@ -75,5 +75,6 @@ Actual: примерно **40 минут активного агентского
 будущих оценок: «single new module + thin call-site updates» = 1–2 часа, не 6–10.
 
 Однако пользовательский actual_h **не** включает в себя ручную верификацию AC-1..AC-3
-+ возможные follow-up'ы. Поэтому actual_h, фиксируемый в log, — `(не записал, требует
+
+- возможные follow-up'ы. Поэтому actual_h, фиксируемый в log, — `(не записал, требует
 user feedback после ручной верификации)`.

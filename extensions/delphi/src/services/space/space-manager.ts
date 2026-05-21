@@ -26,9 +26,7 @@ export function encodeIpv4(ipv4: string): string | null {
   if (!m) return null;
   const parts = [+m[1], +m[2], +m[3], +m[4]];
   if (parts.some((n) => n < 0 || n > 255)) return null;
-  const n = BigInt(
-    ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0,
-  );
+  const n = BigInt(((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0);
   const shifted = n << 3n;
   let result = "";
   for (let i = 6; i >= 0; i--) {
@@ -55,10 +53,7 @@ export function decodeIpv4(encoded: string): string | null {
   return `${parts[0]}.${parts[1]}.${parts[2]}.${parts[3]}`;
 }
 
-export function generateExtendedCode(
-  code: string,
-  primaryIpv4: string,
-): string | null {
+export function generateExtendedCode(code: string, primaryIpv4: string): string | null {
   const encoded = encodeIpv4(primaryIpv4);
   if (!encoded) return null;
   return code.replace(/[-\s]/g, "").toUpperCase().slice(0, 12) + encoded;
@@ -93,9 +88,7 @@ export function generateQrPayload(code: string, addresses: string[]): string {
   return `ark://join?code=${formatted}&addrs=${addrs}`;
 }
 
-export function parseQrPayload(
-  payload: string,
-): { code: string; addresses: string[] } | null {
+export function parseQrPayload(payload: string): { code: string; addresses: string[] } | null {
   if (payload.startsWith("ark://join?")) {
     try {
       const queryString = payload.slice("ark://join?".length);
@@ -107,9 +100,7 @@ export function parseQrPayload(
       const code = parseSpaceCode(rawCode);
       if (!code) return null;
 
-      const addresses = rawAddrs
-        ? rawAddrs.split(",").filter((a) => a.length > 0)
-        : [];
+      const addresses = rawAddrs ? rawAddrs.split(",").filter((a) => a.length > 0) : [];
 
       return { code, addresses };
     } catch {
@@ -159,15 +150,13 @@ export interface Space {
 // ---------------------------------------------------------------------------
 
 const isElectron =
-  typeof window !== "undefined" &&
-  !!(window as unknown as Record<string, unknown>).electronAPI;
+  typeof window !== "undefined" && !!(window as unknown as Record<string, unknown>).electronAPI;
 
 function ipc(): {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
 } | null {
   if (typeof window === "undefined") return null;
-  return (window as unknown as Record<string, unknown>)
-    .electronAPI as ReturnType<typeof ipc>;
+  return (window as unknown as Record<string, unknown>).electronAPI as ReturnType<typeof ipc>;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,16 +198,10 @@ export async function removeSpace(code: string): Promise<void> {
     } catch {}
   }
   const spaces = await getSpaces();
-  localStorage.setItem(
-    "delphi.spaces",
-    JSON.stringify(spaces.filter((s) => s.code !== code)),
-  );
+  localStorage.setItem("delphi.spaces", JSON.stringify(spaces.filter((s) => s.code !== code)));
 }
 
-export async function renameSpace(
-  code: string,
-  newName: string,
-): Promise<boolean> {
+export async function renameSpace(code: string, newName: string): Promise<boolean> {
   if (isElectron) {
     try {
       const result = await ipc()?.invoke("space:rename", code, newName);
@@ -236,9 +219,7 @@ export async function renameSpace(
   }
   // Fallback
   try {
-    const spaces: Space[] = JSON.parse(
-      localStorage.getItem("delphi.spaces") || "[]",
-    );
+    const spaces: Space[] = JSON.parse(localStorage.getItem("delphi.spaces") || "[]");
     const space = spaces.find((s) => s.code === code);
     if (!space) return false;
     space.name = newName.trim() || _formatSpaceCode(code);

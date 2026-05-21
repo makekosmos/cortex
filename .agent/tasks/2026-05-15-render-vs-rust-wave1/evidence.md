@@ -7,7 +7,7 @@
 - **AC2** (TS baseline benchmark capture): **PASS** — см.
   `raw/ts-baseline.md`.
 - **AC3** (Rust unit tests PASS): **PASS** — `cargo test --lib
-  delphi::` → 3/3 passed:
+delphi::` → 3/3 passed:
   - `golden_parity_filter_per_list`
   - `golden_parity_count_all`
   - `empty_input`
@@ -19,16 +19,16 @@
 
 ## Numbers @ n = 10 000 todos
 
-| Operation | TS median | Rust median | Ratio | Winner |
-|---|---:|---:|---:|---|
-| `filter_inbox` | 0.149 ms | 1.770 ms | TS **11.9x** faster | TS |
-| `filter_today` | 0.576 ms | 0.472 ms | Rust 1.2x faster | Rust |
-| `filter_upcoming` | 0.834 ms | 0.642 ms | Rust 1.3x faster | Rust |
-| `filter_anytime` | 0.189 ms | 1.995 ms | TS **10.6x** faster | TS |
-| `filter_someday` | 0.071 ms | 0.216 ms | TS 3.0x faster | TS |
-| `filter_logbook` | 0.822 ms | 0.404 ms | Rust 2.0x faster | Rust |
-| `filter_trash` | 0.807 ms | 0.319 ms | Rust 2.5x faster | Rust |
-| `count_all` | 1.648 ms | 0.099 ms | Rust **16.6x** faster | Rust |
+| Operation         | TS median | Rust median |                 Ratio | Winner |
+| ----------------- | --------: | ----------: | --------------------: | ------ |
+| `filter_inbox`    |  0.149 ms |    1.770 ms |   TS **11.9x** faster | TS     |
+| `filter_today`    |  0.576 ms |    0.472 ms |      Rust 1.2x faster | Rust   |
+| `filter_upcoming` |  0.834 ms |    0.642 ms |      Rust 1.3x faster | Rust   |
+| `filter_anytime`  |  0.189 ms |    1.995 ms |   TS **10.6x** faster | TS     |
+| `filter_someday`  |  0.071 ms |    0.216 ms |        TS 3.0x faster | TS     |
+| `filter_logbook`  |  0.822 ms |    0.404 ms |      Rust 2.0x faster | Rust   |
+| `filter_trash`    |  0.807 ms |    0.319 ms |      Rust 2.5x faster | Rust   |
+| `count_all`       |  1.648 ms |    0.099 ms | Rust **16.6x** faster | Rust   |
 
 (TS — bun runtime V8 на debug. Rust — `cargo bench` release mode.)
 
@@ -58,6 +58,7 @@
 1 MB allocation per call. Это и есть 10x regression vs V8 ref-sharing.
 
 Workaround variants:
+
 - `Vec<&TodoItem>` (lifetime-bound) — caller владеет input, Rust filter
   возвращает refs. **PROBLEM**: cross-FFI / IPC overflow boundary
   нельзя refs, всё equal сериализуется.
@@ -107,6 +108,7 @@ work.
 ### Rule of thumb
 
 Мигрировать модуль в Rust имеет смысл если ответ «да» хотя бы на один:
+
 - Нужно ли state-у пережить renderer crash?
 - Нужен ли fan-out events на несколько окон?
 - Можно ли сделать SELECT/WHERE/ORDER BY вместо TS-loop'а?

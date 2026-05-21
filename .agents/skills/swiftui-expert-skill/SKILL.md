@@ -19,12 +19,14 @@ description: Write, review, or improve SwiftUI code following best practices for
 ## Task Workflow
 
 ### Review existing SwiftUI code
+
 - Read the code under review and identify which topics apply
 - Flag deprecated APIs (compare against `references/latest-apis.md`)
 - Run the Topic Router below for each relevant topic
 - Validate `#available` gating and fallback paths for iOS 26+ features
 
 ### Improve existing SwiftUI code
+
 - Audit current implementation against the Topic Router topics
 - Replace deprecated APIs with modern equivalents from `references/latest-apis.md`
 - Refactor hot paths to reduce unnecessary state updates
@@ -32,6 +34,7 @@ description: Write, review, or improve SwiftUI code following best practices for
 - Suggest image downsampling when `UIImage(data:)` is encountered (optional optimization, see `references/image-optimization.md`)
 
 ### Implement new SwiftUI feature
+
 - Design data flow first: identify owned vs injected state
 - Structure views for optimal diffing (extract subviews early)
 - Apply correct animation patterns (implicit vs explicit, transitions)
@@ -42,27 +45,27 @@ description: Write, review, or improve SwiftUI code following best practices for
 
 Consult the reference file for each topic relevant to the current task:
 
-| Topic | Reference |
-|-------|-----------|
-| State management | `references/state-management.md` |
-| View composition | `references/view-structure.md` |
-| Performance | `references/performance-patterns.md` |
-| Lists and ForEach | `references/list-patterns.md` |
-| Layout | `references/layout-best-practices.md` |
-| Sheets and navigation | `references/sheet-navigation-patterns.md` |
-| ScrollView | `references/scroll-patterns.md` |
-| Animations (basics) | `references/animation-basics.md` |
-| Animations (transitions) | `references/animation-transitions.md` |
-| Animations (advanced) | `references/animation-advanced.md` |
-| Accessibility | `references/accessibility-patterns.md` |
-| Swift Charts | `references/charts.md` |
-| Charts accessibility | `references/charts-accessibility.md` |
-| Image optimization | `references/image-optimization.md` |
-| Liquid Glass (iOS 26+) | `references/liquid-glass.md` |
-| macOS scenes | `references/macos-scenes.md` |
-| macOS window styling | `references/macos-window-styling.md` |
-| macOS views | `references/macos-views.md` |
-| Deprecated API lookup | `references/latest-apis.md` |
+| Topic                    | Reference                                 |
+| ------------------------ | ----------------------------------------- |
+| State management         | `references/state-management.md`          |
+| View composition         | `references/view-structure.md`            |
+| Performance              | `references/performance-patterns.md`      |
+| Lists and ForEach        | `references/list-patterns.md`             |
+| Layout                   | `references/layout-best-practices.md`     |
+| Sheets and navigation    | `references/sheet-navigation-patterns.md` |
+| ScrollView               | `references/scroll-patterns.md`           |
+| Animations (basics)      | `references/animation-basics.md`          |
+| Animations (transitions) | `references/animation-transitions.md`     |
+| Animations (advanced)    | `references/animation-advanced.md`        |
+| Accessibility            | `references/accessibility-patterns.md`    |
+| Swift Charts             | `references/charts.md`                    |
+| Charts accessibility     | `references/charts-accessibility.md`      |
+| Image optimization       | `references/image-optimization.md`        |
+| Liquid Glass (iOS 26+)   | `references/liquid-glass.md`              |
+| macOS scenes             | `references/macos-scenes.md`              |
+| macOS window styling     | `references/macos-window-styling.md`      |
+| macOS views              | `references/macos-views.md`               |
+| Deprecated API lookup    | `references/latest-apis.md`               |
 
 ## Correctness Checklist
 

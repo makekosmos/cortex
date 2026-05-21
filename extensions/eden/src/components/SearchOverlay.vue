@@ -33,7 +33,9 @@
 
       <EmptyState v-else title="Начните вводить для поиска" compact />
 
-      <div class="mt-2 flex items-center justify-end gap-4 border-t border-(--border) px-4 py-3 text-xs text-(--muted-foreground)">
+      <div
+        class="mt-2 flex items-center justify-end gap-4 border-t border-(--border) px-4 py-3 text-xs text-(--muted-foreground)"
+      >
         <span><kbd>↑</kbd><kbd>↓</kbd> навигация</span>
         <span><kbd>Enter</kbd> открыть</span>
         <span><kbd>Esc</kbd> закрыть</span>

@@ -39,14 +39,7 @@ function helperBinaryPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "kepler-focus-helper.exe");
   }
-  return path.resolve(
-    __dirname,
-    "..",
-    "..",
-    "target",
-    "release",
-    "kepler-focus-helper.exe",
-  );
+  return path.resolve(__dirname, "..", "..", "target", "release", "kepler-focus-helper.exe");
 }
 
 // --- Direct spawn (Kepler уже admin) ---------------------------------------
@@ -142,11 +135,9 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
     ].join(" ");
 
     await new Promise<void>((resolve, reject) => {
-      const ps = spawn(
-        "powershell.exe",
-        ["-NoProfile", "-NonInteractive", "-Command", psCommand],
-        { windowsHide: true },
-      );
+      const ps = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand], {
+        windowsHide: true,
+      });
       let psStderr = "";
       ps.stderr?.on("data", (c) => (psStderr += c.toString("utf8")));
       ps.on("error", reject);
@@ -176,9 +167,7 @@ async function runHelperElevated(req: HelperRequest): Promise<HelperResponse> {
 let autoInstallAttemptedThisSession = false;
 
 async function tryAutoInstallService(): Promise<boolean> {
-  const { runServiceCliElevated, getServiceStatus, pingService } = await import(
-    "./focus-service"
-  );
+  const { runServiceCliElevated, getServiceStatus, pingService } = await import("./focus-service");
   const { setFocusServiceAutoInstallDeclined, isFocusServiceAutoInstallDeclined } =
     await import("./settings-window");
 
@@ -192,10 +181,7 @@ async function tryAutoInstallService(): Promise<boolean> {
     // User cancelled UAC, или install реально упал. Persistим decline чтобы
     // повторно не спрашивать в следующих сессиях — юзер может включить через
     // Settings UI вручную.
-    console.warn(
-      "[focus-block] auto-install failed/declined:",
-      installResult.error,
-    );
+    console.warn("[focus-block] auto-install failed/declined:", installResult.error);
     setFocusServiceAutoInstallDeclined(true);
     return false;
   }
@@ -270,9 +256,7 @@ export async function applyFocusBlock(args: {
   active: boolean;
   domains: string[];
 }): Promise<HelperResponse> {
-  const req: HelperRequest = args.active
-    ? { op: "add", domains: args.domains }
-    : { op: "reset" };
+  const req: HelperRequest = args.active ? { op: "add", domains: args.domains } : { op: "reset" };
 
   const result = await runHelper(req);
 
@@ -280,9 +264,7 @@ export async function applyFocusBlock(args: {
     console.warn("[focus-block] helper failed:", result.error);
   } else {
     console.log(
-      `[focus-block] applied ${req.op}${
-        req.domains ? ` (${req.domains.length} domains)` : ""
-      }`,
+      `[focus-block] applied ${req.op}${req.domains ? ` (${req.domains.length} domains)` : ""}`,
     );
   }
 

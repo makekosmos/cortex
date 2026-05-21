@@ -16,21 +16,15 @@
     },
     "AC3": {
       "status": "PASS",
-      "evidence": [
-        "Visible caret no longer uses an in-flow widget anchor"
-      ]
+      "evidence": ["Visible caret no longer uses an in-flow widget anchor"]
     },
     "AC4": {
       "status": "PASS",
-      "evidence": [
-        "Eden app test updated to assert overlay caret visibility/hiding"
-      ]
+      "evidence": ["Eden app test updated to assert overlay caret visibility/hiding"]
     },
     "AC5": {
       "status": "PASS",
-      "evidence": [
-        "TypeScript noEmit passes for apps/eden/ts"
-      ]
+      "evidence": ["TypeScript noEmit passes for apps/eden/ts"]
     }
   }
 }

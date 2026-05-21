@@ -1,15 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue";
-import {
-  Archive,
-  ArrowLeft,
-  Book,
-  Globe,
-  Inbox,
-  Plus,
-  Settings2,
-  Star,
-} from "lucide-vue-next";
+import { Archive, ArrowLeft, Book, Globe, Inbox, Plus, Settings2, Star } from "lucide-vue-next";
 import {
   Sidebar as KosmosSidebar,
   type SidebarConfig,

@@ -45,9 +45,7 @@
       "gaps": []
     }
   ],
-  "changed_files": [
-    "apps/delphi/ts/electron/main.ts"
-  ],
+  "changed_files": ["apps/delphi/ts/electron/main.ts"],
   "commands_for_fresh_verifier": [
     "cd /workspace/apps/delphi/ts && ./node_modules/.bin/tsc -p tsconfig.node.json",
     "cd /workspace && rg -n \"isSyncNotRunningError|resetSyncRuntimeState|handleStaleSyncRuntime|lan-sync:getStatus|lan-sync:broadcastChange|return \\\{ active: false, peers: 0, peerNames: \\\[\\\] \\\}\" apps/delphi/ts/electron/main.ts"

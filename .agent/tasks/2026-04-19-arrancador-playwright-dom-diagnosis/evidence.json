@@ -20,9 +20,7 @@
         "cwd": "D:\\Personal\\Hobby\\Coding\\kosmos\\apps\\arrancador",
         "status": "FAIL",
         "artifact": ".agent/tasks/2026-04-19-arrancador-playwright-dom-diagnosis/raw/playwright-cli-error.log",
-        "notes": [
-          "Playwright browser launch failed with spawn EPERM in the current environment"
-        ]
+        "notes": ["Playwright browser launch failed with spawn EPERM in the current environment"]
       }
     ]
   },
@@ -39,10 +37,7 @@
       "id": "AC2",
       "status": "PASS",
       "summary": "Sidebar no longer has the accidental resize-handle click path that collapses it into an apparently empty state.",
-      "evidence": [
-        "apps/arrancador/src/components/Sidebar.tsx",
-        "apps/arrancador/src/index.css"
-      ]
+      "evidence": ["apps/arrancador/src/components/Sidebar.tsx", "apps/arrancador/src/index.css"]
     },
     {
       "id": "AC3",

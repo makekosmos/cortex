@@ -4,6 +4,15 @@
   "private": true,
   "main": "index.ts",
   "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./tokens": "./tokens/index.ts",
+    "./theme": "./theme/index.ts",
+    "./components": "./components/index.ts",
+    "./patterns": "./patterns/index.ts",
+    "./theme/css": "./theme/css-variables.css",
+    "./components/sidebar.css": "./components/sidebar.css"
+  },
   "scripts": {
     "format": "oxfmt components/ tokens/ *.ts",
     "format:check": "oxfmt --check components/ tokens/ *.ts",
@@ -12,6 +21,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource/ibm-plex-mono": "^5.2.7"
   },
   "devDependencies": {
     "@storybook/addon-docs": "^10.4.0",
@@ -32,18 +45,5 @@
     "lucide-vue-next": "*",
     "vue": "^3.0.0",
     "vue-router": "^4.5.0"
-  },
-  "exports": {
-    ".": "./index.ts",
-    "./tokens": "./tokens/index.ts",
-    "./theme": "./theme/index.ts",
-    "./components": "./components/index.ts",
-    "./patterns": "./patterns/index.ts",
-    "./theme/css": "./theme/css-variables.css",
-    "./components/sidebar.css": "./components/sidebar.css"
-  },
-  "dependencies": {
-    "@fontsource-variable/inter": "^5.2.8",
-    "@fontsource/ibm-plex-mono": "^5.2.7"
   }
 }

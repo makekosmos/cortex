@@ -80,12 +80,7 @@ function isOnSomeDisplay(x: number, y: number, w: number, h: number): boolean {
   const displays = screen.getAllDisplays();
   return displays.some((d) => {
     const wa = d.workArea;
-    return (
-      x + w > wa.x &&
-      x < wa.x + wa.width &&
-      y + h > wa.y &&
-      y < wa.y + wa.height
-    );
+    return x + w > wa.x && x < wa.x + wa.width && y + h > wa.y && y < wa.y + wa.height;
   });
 }
 
@@ -152,13 +147,7 @@ export function openDashboardWindow(): void {
 
   // F12 — DevTools toggle (без модификаторов).
   dashboardWin.webContents.on("before-input-event", (e, input) => {
-    if (
-      input.key === "F12" &&
-      !input.alt &&
-      !input.control &&
-      !input.shift &&
-      !input.meta
-    ) {
+    if (input.key === "F12" && !input.alt && !input.control && !input.shift && !input.meta) {
       e.preventDefault();
       try {
         dashboardWin?.webContents.toggleDevTools();

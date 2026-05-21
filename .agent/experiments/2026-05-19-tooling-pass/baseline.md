@@ -20,40 +20,41 @@
 
 ### Baseline (`cargo test --workspace --exclude kepler-focus-{helper,svc} --quiet`)
 
-| Run | wall-clock (s) | прошло тестов |
-|---|---|---|
-| 1 (cold) | 84.871 | — (compile) |
-| 2 | 8.588 | 314 |
-| 3 | 8.438 | 314 |
-| 4 | 8.350 | 314 |
-| 5 | 8.122 | 314 |
-| **median (warm 2-5)** | **8.394** | |
+| Run                   | wall-clock (s) | прошло тестов |
+| --------------------- | -------------- | ------------- |
+| 1 (cold)              | 84.871         | — (compile)   |
+| 2                     | 8.588          | 314           |
+| 3                     | 8.438          | 314           |
+| 4                     | 8.350          | 314           |
+| 5                     | 8.122          | 314           |
+| **median (warm 2-5)** | **8.394**      |               |
 
 raw: `raw/baseline-cargo-test.txt`
 
 ### After (`cargo nextest run --workspace --exclude kepler-focus-{helper,svc}`)
 
-| Run | wall-clock (s) | прошло тестов | nextest inner (s) |
-|---|---|---|---|
-| 1 (warm-ish) | 12.625 | 314 | 6.168 |
-| 2 | 8.100 | 314 | 6.631 |
-| 3 | 8.068 | 314 | 6.631 |
-| 4 | 8.091 | 314 | 6.745 |
-| 5 | 8.204 | 314 | 6.791 |
-| **median (warm 2-5)** | **8.096** | | 6.700 |
+| Run                   | wall-clock (s) | прошло тестов | nextest inner (s) |
+| --------------------- | -------------- | ------------- | ----------------- |
+| 1 (warm-ish)          | 12.625         | 314           | 6.168             |
+| 2                     | 8.100          | 314           | 6.631             |
+| 3                     | 8.068          | 314           | 6.631             |
+| 4                     | 8.091          | 314           | 6.745             |
+| 5                     | 8.204          | 314           | 6.791             |
+| **median (warm 2-5)** | **8.096**      |               | 6.700             |
 
 raw: `raw/after-cargo-nextest.txt`
 
 ### Verdict E1
 
-| Метрика | Baseline | After | Δ |
-|---|---|---|---|
-| wall-clock warm median | 8.394s | 8.096s | **−0.30s (−3.5%)** — в пределах шума |
-| тесты прошли | 314 | 314 | — |
+| Метрика                | Baseline | After  | Δ                                    |
+| ---------------------- | -------- | ------ | ------------------------------------ |
+| wall-clock warm median | 8.394s   | 8.096s | **−0.30s (−3.5%)** — в пределах шума |
+| тесты прошли           | 314      | 314    | —                                    |
 
 **Реальный выигрыш не там где ожидался.** Гипотеза «20-50% быстрее» опровергнута на нашем масштабе тестов — наши тесты CPU-light (большинство <100ms), bottleneck в test-binary launch overhead, а не в исполнении. Параллелизация nextest'а раскрывается на медленных тестах или массиве крупных suite'ов.
 
 **Что nextest всё-таки даёт** (qualitative, не в этих метриках):
+
 - Прогресс-бар во время прогона (видно сколько осталось).
 - Per-test изоляция через subprocess — каждый тест в своём процессе, panic'и одного не убивают остальных.
 - JUnit XML output (для CI integration в будущем).
@@ -74,12 +75,12 @@ raw: `raw/after-cargo-nextest.txt`
 
 ### Baseline (`cargo clean && cargo build --workspace --release`)
 
-| Run | wall-clock (s) |
-|---|---|
-| 1 | 210.0 (3m30s) |
-| 2 | 196.2 (3m16s) |
-| 3 | 162.2 (2m42s) |
-| **median** | **196.2** |
+| Run        | wall-clock (s) |
+| ---------- | -------------- |
+| 1          | 210.0 (3m30s)  |
+| 2          | 196.2 (3m16s)  |
+| 3          | 162.2 (2m42s)  |
+| **median** | **196.2**      |
 
 raw: `raw/baseline-cargo-build-cold.txt`
 
@@ -97,23 +98,23 @@ Verify post-cleanup: `cargo check --workspace` зелёный (48s); `cargo next
 
 ### After (`cargo clean && cargo build --workspace --release`)
 
-| Run | wall-clock (s) |
-|---|---|
-| 1 | 220.4 (3m40s) |
-| 2 | 188.5 (3m8s) |
-| 3 | 184.6 (3m4s) |
-| **median** | **188.5** |
+| Run        | wall-clock (s) |
+| ---------- | -------------- |
+| 1          | 220.4 (3m40s)  |
+| 2          | 188.5 (3m8s)   |
+| 3          | 184.6 (3m4s)   |
+| **median** | **188.5**      |
 
 raw: `raw/after-cargo-build-cold.txt`
 
 ### Verdict E2
 
-| Метрика | Baseline | After | Δ |
-|---|---|---|---|
-| cold-build median | 196.2s | 188.5s | −7.7s (−3.9%) — в пределах шума (variance baseline 3:30→2:42 = ±25%) |
-| unused deps в Cargo.toml | 6 | 0 | −6 deps |
-| строк в Cargo.toml файлах | — | — | −8 lines |
-| `cargo check --workspace` post | ok | ok | 314/314 tests still pass |
+| Метрика                        | Baseline | After  | Δ                                                                    |
+| ------------------------------ | -------- | ------ | -------------------------------------------------------------------- |
+| cold-build median              | 196.2s   | 188.5s | −7.7s (−3.9%) — в пределах шума (variance baseline 3:30→2:42 = ±25%) |
+| unused deps в Cargo.toml       | 6        | 0      | −6 deps                                                              |
+| строк в Cargo.toml файлах      | —        | —      | −8 lines                                                             |
+| `cargo check --workspace` post | ok       | ok     | 314/314 tests still pass                                             |
 
 Quantitative выигрыш по cold-build около-нулевой — orphan deps в Cargo workspace **не компилируются** если не используются (Rust dependency resolver видит что нет use-цепочки и пропускает). Удаление из `Cargo.toml` — hygiene, не perf.
 
@@ -135,11 +136,11 @@ Quantitative выигрыш по cold-build около-нулевой — orphan
 
 ### Baseline (до install)
 
-| Метрика | Значение |
-|---|---|
-| `wc -l extensions/eden/src/store/eden.ts` | 686 |
-| Eden bundle `index.js` raw | 358,873 bytes (351 KB) |
-| Eden bundle `index.js` gzip | 113,089 bytes (110 KB) |
+| Метрика                                                       | Значение                    |
+| ------------------------------------------------------------- | --------------------------- |
+| `wc -l extensions/eden/src/store/eden.ts`                     | 686                         |
+| Eden bundle `index.js` raw                                    | 358,873 bytes (351 KB)      |
+| Eden bundle `index.js` gzip                                   | 113,089 bytes (110 KB)      |
 | `tests/e2e/eden.spec.ts` wall-clock (median последних 3 runs) | **89s (9/9 tests passing)** |
 
 E2e замеры runs 1-2 (5m20s, 4m15s) выпадают — гонялись параллельно с cold-build x3 в фоне, CPU contention. Runs 3-5 (1m30/1m29/1m27) — после освобождения CPU, эти и берём для baseline'а будущей Phase 14 миграции.
@@ -148,11 +149,11 @@ raw: `raw/baseline-eden-e2e.txt`
 
 ### After (install + `app.use(PiniaColada)`, без миграции queries)
 
-| Метрика | Значение | Δ |
-|---|---|---|
-| `wc -l extensions/eden/src/store/eden.ts` | 686 | 0 (миграция не делалась) |
-| Eden bundle `index.js` raw | 363,421 bytes (355 KB) | +4,548 bytes (+1.3%) |
-| Eden bundle `index.js` gzip | 114,819 bytes (112 KB) | **+1,730 bytes (+1.5%)** |
+| Метрика                                   | Значение               | Δ                        |
+| ----------------------------------------- | ---------------------- | ------------------------ |
+| `wc -l extensions/eden/src/store/eden.ts` | 686                    | 0 (миграция не делалась) |
+| Eden bundle `index.js` raw                | 363,421 bytes (355 KB) | +4,548 bytes (+1.3%)     |
+| Eden bundle `index.js` gzip               | 114,819 bytes (112 KB) | **+1,730 bytes (+1.5%)** |
 
 ### Verdict E3
 
@@ -193,9 +194,9 @@ Capability add: можно теперь писать Vue component тесты н
 
 ## Summary
 
-| E# | Что | Result | Adopt? |
-|---|---|---|---|
-| E1 | cargo-nextest | −0.3s wall (3.5%) — в пределах шума; gain в UX (progress, retries, JUnit) | ✅ да |
-| E2 | cargo-shear cleanup | 6 orphan deps удалено, cold-build не изменился (hygiene > perf) | ✅ да |
-| E3 | Pinia Colada install | +1.7 KB gzip, drop-in, baseline зафиксирован для Phase 14 миграции | ✅ да |
-| E4 | Vitest browser mode | Новый testing layer, 5/5 sample test passes | ✅ да |
+| E#  | Что                  | Result                                                                    | Adopt? |
+| --- | -------------------- | ------------------------------------------------------------------------- | ------ |
+| E1  | cargo-nextest        | −0.3s wall (3.5%) — в пределах шума; gain в UX (progress, retries, JUnit) | ✅ да  |
+| E2  | cargo-shear cleanup  | 6 orphan deps удалено, cold-build не изменился (hygiene > perf)           | ✅ да  |
+| E3  | Pinia Colada install | +1.7 KB gzip, drop-in, baseline зафиксирован для Phase 14 миграции        | ✅ да  |
+| E4  | Vitest browser mode  | Новый testing layer, 5/5 sample test passes                               | ✅ да  |

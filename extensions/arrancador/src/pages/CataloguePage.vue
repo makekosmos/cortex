@@ -11,10 +11,7 @@ import { useRouter } from "vue-router";
 import { EmptyState, Dropdown, Modal } from "@kosmos/visuals";
 
 import { useGames } from "../composables/useGames";
-import {
-  requireArrancadorApi,
-  type RawgGame,
-} from "../lib/arrancadorApi";
+import { requireArrancadorApi, type RawgGame } from "../lib/arrancadorApi";
 
 const { games } = useGames();
 const router = useRouter();
@@ -69,8 +66,7 @@ watch(debouncedQuery, async (q) => {
     results.value = res.results ?? [];
   } catch (cause) {
     results.value = [];
-    searchError.value =
-      cause instanceof Error ? cause.message : "Ошибка поиска RAWG";
+    searchError.value = cause instanceof Error ? cause.message : "Ошибка поиска RAWG";
   } finally {
     searching.value = false;
   }
@@ -120,8 +116,7 @@ async function onConfirmApply() {
       applyError.value = res.error ?? "Не удалось применить metadata";
     }
   } catch (cause) {
-    applyError.value =
-      cause instanceof Error ? cause.message : "Ошибка применения metadata";
+    applyError.value = cause instanceof Error ? cause.message : "Ошибка применения metadata";
   } finally {
     applying.value = false;
   }
@@ -152,11 +147,7 @@ function genresLine(rawg: RawgGame): string {
       description="Чтобы искать игры в каталоге RAWG, укажите ключ в настройках. Получить ключ можно бесплатно на rawg.io/apidocs."
     >
       <template #action>
-        <button
-          type="button"
-          class="arrancador-catalogue-action"
-          @click="goToSettings"
-        >
+        <button type="button" class="arrancador-catalogue-action" @click="goToSettings">
           Перейти в настройки
         </button>
       </template>
@@ -190,17 +181,11 @@ function genresLine(rawg: RawgGame): string {
       <div v-if="searching" class="arrancador-catalogue-loading">Поиск…</div>
 
       <div v-if="results.length > 0" class="arrancador-catalogue-grid">
-        <article
-          v-for="rawg in results"
-          :key="rawg.id"
-          class="arrancador-catalogue-card"
-        >
+        <article v-for="rawg in results" :key="rawg.id" class="arrancador-catalogue-card">
           <div
             class="arrancador-catalogue-card__cover"
             :style="
-              rawg.background_image
-                ? { backgroundImage: `url(${rawg.background_image})` }
-                : {}
+              rawg.background_image ? { backgroundImage: `url(${rawg.background_image})` } : {}
             "
           >
             <span v-if="!rawg.background_image" aria-hidden="true">🎮</span>
@@ -211,11 +196,7 @@ function genresLine(rawg: RawgGame): string {
               <span>{{ releaseYear(rawg.released) }}</span>
               <span v-if="genresLine(rawg)"> · {{ genresLine(rawg) }}</span>
             </div>
-            <button
-              type="button"
-              class="arrancador-catalogue-action"
-              @click="openApplyModal(rawg)"
-            >
+            <button type="button" class="arrancador-catalogue-action" @click="openApplyModal(rawg)">
               Применить metadata к…
             </button>
           </div>
@@ -223,18 +204,14 @@ function genresLine(rawg: RawgGame): string {
       </div>
     </template>
 
-    <Modal
-      :open="applyModalOpen"
-      title="Применить metadata RAWG"
-      @close="closeApplyModal"
-    >
+    <Modal :open="applyModalOpen" title="Применить metadata RAWG" @close="closeApplyModal">
       <div v-if="applyTarget" class="arrancador-catalogue-apply">
         <p class="arrancador-catalogue-apply__source">
           Источник: <strong>{{ applyTarget.name }}</strong>
         </p>
         <p class="arrancador-catalogue-apply__hint">
-          Выберите игру в библиотеке, к которой нужно применить metadata
-          (название, обложка, жанры, описание).
+          Выберите игру в библиотеке, к которой нужно применить metadata (название, обложка, жанры,
+          описание).
         </p>
         <Dropdown
           v-model="selectedGameId"

@@ -41,15 +41,18 @@
 ## Файлы
 
 **Modify:**
+
 - `apps/kepler-shell/electron/extension-host.ts` — заменить `resolveExtensionsRoot()` (single) на `resolveExtensionRoots()` (array) + `resolveExtensionDir(id)` lookup.
 - `apps/kepler-shell/package.json` — добавить scripts `ext:install`, `ext:uninstall`.
 
 **Create:**
+
 - `apps/kepler-shell/scripts/install-extension.mjs`
 - `apps/kepler-shell/scripts/uninstall-extension.mjs`
 - `docs-site/concepts/extension-installer.md`
 
 **Update docs:**
+
 - `docs-site/concepts/extension-host.md` — секция Resolution order.
 - `docs-site/apps/kepler.md` — упоминание новых команд.
 - `docs-site/apps/kepler-roadmap.md` — auto-update, `.kext` format, UI manager в потом.

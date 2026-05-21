@@ -62,7 +62,7 @@ src/lib/usePomodoro.ts`, 320 LOC). Это значит:
 ### Rust port
 
 - **AC2**: Rust `pomodoro::Session` модуль в `crates/ark-core/rust/src/
-  pomodoro/{mod,session,events}.rs`. Public API:
+pomodoro/{mod,session,events}.rs`. Public API:
   - `Session::start(SessionConfig)` → emit phase_changed(idle→work)
   - `Session::pause()` / `resume()` / `skip()` / `stop()`
   - `Session::tick()` — внутренний, вызывается tokio таймером
@@ -91,7 +91,7 @@ src/lib/usePomodoro.ts`, 320 LOC). Это значит:
 - **AC9 (PERSISTENCE CORE)**: timer переживает renderer crash. Reproduce:
   start работу через WS, симулировать close-and-reopen renderer окна,
   state не сбрасывается (phase, remainingMs сохраняются).
-- **AC10**: timer переживает renderer reload. F5 в окне Horologion → 
+- **AC10**: timer переживает renderer reload. F5 в окне Horologion →
   через WS event renderer получает actual state, не starts заново.
 
 ### Tests

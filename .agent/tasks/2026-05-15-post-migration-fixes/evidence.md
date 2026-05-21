@@ -48,7 +48,7 @@ tests/e2e/horologion-pomodoro.spec.ts  — AC4 (start→pause→resume→stop) +
 - **AC9** (test DB isolation enforced): **PASS** — helper refuses
   paths inside `%APPDATA%`. Backend honors `KOSMOS_DATA_DIR`. Helper
   unit test PASS (`cargo test --manifest-path
-  services/kepler-backend/Cargo.toml --lib`).
+services/kepler-backend/Cargo.toml --lib`).
 - **AC10** (AC1-AC6 в Playwright): **PASS** — все покрыты.
 - **AC11** (docs updated): **PASS** — test-isolation.md, forbidden.md
   обновлены. AGENTS.md/CLAUDE.md regenerated.
@@ -68,7 +68,7 @@ tests/e2e/horologion-pomodoro.spec.ts  — AC4 (start→pause→resume→stop) +
    Stopwatch UI больше не зависает с invalid Date.
 
 3. **`58c5806` — test mode lifecycle + KOSMOS_DATA_DIR в ensure-kepler.**
-   resolveBackendExe probes target/debug first (works в test); 
+   resolveBackendExe probes target/debug first (works в test);
    ensureKeplerRunning читает KOSMOS_DATA_DIR; `app.on('before-quit')`
    взводит isQuiting (Playwright app.close() больше не висит до timeout).
 

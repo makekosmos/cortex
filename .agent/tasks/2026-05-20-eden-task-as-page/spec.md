@@ -50,19 +50,19 @@ Pattern B (объект первичен, рендер вторичен) сог�
 
 ## Acceptance Criteria
 
-| # | Criterion | How to verify |
-|---|---|---|
-| AC1 | `cargo test --manifest-path services/kepler-backend/Cargo.toml --lib` зелёный после ark-core change | cargo test exit 0 |
-| AC2 | `bun run --cwd shell build:extensions` зелёный | exit 0 |
-| AC3 | `bun run --cwd shell typecheck` зелёный | exit 0 |
-| AC4 | `bun run ark:guard:writes` зелёный | exit 0 |
-| AC5 | `bun run ark:smoke` зелёный | exit 0 |
-| AC6 | `/задача` в Eden → создаёт task_obj + TaskRef node; checkbox + title виден | manual |
-| AC7 | Click на TaskRef → открывает TaskPage с полями | manual |
-| AC8 | Toggle checkbox в TaskPage / в Eden TaskRef → is_completed update в task_obj | manual via Dashboard |
-| AC9 | Toggle is_completed в Delphi → TaskRef checkbox в Eden обновляется **live** | manual |
-| AC10 | Старая нота с taskItem (Pattern C) при открытии конвертируется в taskRef | inspect content_json до/после |
-| AC11 | Backspace на пустом TaskRef → soft-delete task_obj | manual + Dashboard inspect |
+| #    | Criterion                                                                                           | How to verify                 |
+| ---- | --------------------------------------------------------------------------------------------------- | ----------------------------- |
+| AC1  | `cargo test --manifest-path services/kepler-backend/Cargo.toml --lib` зелёный после ark-core change | cargo test exit 0             |
+| AC2  | `bun run --cwd shell build:extensions` зелёный                                                      | exit 0                        |
+| AC3  | `bun run --cwd shell typecheck` зелёный                                                             | exit 0                        |
+| AC4  | `bun run ark:guard:writes` зелёный                                                                  | exit 0                        |
+| AC5  | `bun run ark:smoke` зелёный                                                                         | exit 0                        |
+| AC6  | `/задача` в Eden → создаёт task_obj + TaskRef node; checkbox + title виден                          | manual                        |
+| AC7  | Click на TaskRef → открывает TaskPage с полями                                                      | manual                        |
+| AC8  | Toggle checkbox в TaskPage / в Eden TaskRef → is_completed update в task_obj                        | manual via Dashboard          |
+| AC9  | Toggle is_completed в Delphi → TaskRef checkbox в Eden обновляется **live**                         | manual                        |
+| AC10 | Старая нота с taskItem (Pattern C) при открытии конвертируется в taskRef                            | inspect content_json до/после |
+| AC11 | Backspace на пустом TaskRef → soft-delete task_obj                                                  | manual + Dashboard inspect    |
 
 ## Risks
 

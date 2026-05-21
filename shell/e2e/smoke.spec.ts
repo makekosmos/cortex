@@ -33,10 +33,7 @@ async function launchKepler(): Promise<ElectronApplication> {
   return electron.launch({
     executablePath: electronBinary,
     cwd: appRoot,
-    args: [
-      path.join(appRoot, "dist-electron", "main.js"),
-      `--user-data-dir=${userDataDir}`,
-    ],
+    args: [path.join(appRoot, "dist-electron", "main.js"), `--user-data-dir=${userDataDir}`],
     env: {
       ...process.env,
       NODE_ENV: "test",
@@ -52,15 +49,11 @@ test.describe("kepler-shell smoke", () => {
   test("AC1: app запускается, getAppPath() и getName() возвращают валидные значения", async () => {
     const app = await launchKepler();
     try {
-      const appPath = await app.evaluate(({ app: electronApp }) =>
-        electronApp.getAppPath(),
-      );
+      const appPath = await app.evaluate(({ app: electronApp }) => electronApp.getAppPath());
       expect(appPath).toBeTruthy();
       expect(typeof appPath).toBe("string");
 
-      const name = await app.evaluate(({ app: electronApp }) =>
-        electronApp.getName(),
-      );
+      const name = await app.evaluate(({ app: electronApp }) => electronApp.getName());
       expect(name).toBeTruthy();
 
       // Дать main-process чуть времени на whenReady / spawn backend.

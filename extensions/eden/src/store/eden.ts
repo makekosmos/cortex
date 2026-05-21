@@ -154,8 +154,7 @@ export const useEdenStore = defineStore("eden", () => {
 
     if (currentEntry.value) {
       currentEntry.value =
-        entriesData.find((e) => e.id === currentEntry.value!.id) ??
-        currentEntry.value;
+        entriesData.find((e) => e.id === currentEntry.value!.id) ?? currentEntry.value;
     }
   }
 
@@ -178,9 +177,7 @@ export const useEdenStore = defineStore("eden", () => {
       // Если id невалидный / entry удалена — fallback на my-space.
       const lastVisitedId = readLastVisitedEntryId();
       if (lastVisitedId) {
-        const lastEntry = entriesData.find(
-          (e) => e.id === lastVisitedId && !e.deleted_at,
-        );
+        const lastEntry = entriesData.find((e) => e.id === lastVisitedId && !e.deleted_at);
         if (lastEntry) {
           currentEntry.value = lastEntry;
           activeSpace.value = "diary"; // не открываем my-space welcome
@@ -188,8 +185,7 @@ export const useEdenStore = defineStore("eden", () => {
         }
       }
 
-      const existingMySpace =
-        entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
+      const existingMySpace = entriesData.find((e) => e.title.trim() === MY_SPACE_TITLE) ?? null;
 
       if (existingMySpace) {
         currentEntry.value = existingMySpace;
@@ -533,8 +529,7 @@ export const useEdenStore = defineStore("eden", () => {
       slug?: string;
     },
   ): Promise<SaveNoteTypeResult> {
-    if (!window.api)
-      return { ok: false, reason: "invalid_definition", message: "No API" };
+    if (!window.api) return { ok: false, reason: "invalid_definition", message: "No API" };
 
     const now = Date.now();
 
@@ -580,17 +575,14 @@ export const useEdenStore = defineStore("eden", () => {
   async function handleSave(entry: Entry): Promise<SaveEntryResult | null> {
     if (!window.api) return null;
 
-    const persistEntry = async (
-      entryToPersist: Entry,
-    ): Promise<SaveEntryResult | null> => {
+    const persistEntry = async (entryToPersist: Entry): Promise<SaveEntryResult | null> => {
       latestSaveTimestamps.set(entryToPersist.id, entryToPersist.updated_at);
 
       const result = await window.api.saveEntry(entryToPersist);
 
       if (!result.ok) return result;
 
-      if (latestSaveTimestamps.get(entryToPersist.id) !== entryToPersist.updated_at)
-        return result;
+      if (latestSaveTimestamps.get(entryToPersist.id) !== entryToPersist.updated_at) return result;
 
       const idx = entries.value.findIndex((e) => e.id === entryToPersist.id);
 
@@ -614,9 +606,7 @@ export const useEdenStore = defineStore("eden", () => {
 
     saveCoordinators[entry.id] = coordinator;
 
-    const runSaveLoop = async (
-      nextEntry: Entry,
-    ): Promise<SaveEntryResult | null> => {
+    const runSaveLoop = async (nextEntry: Entry): Promise<SaveEntryResult | null> => {
       coordinator.inFlight = true;
 
       try {

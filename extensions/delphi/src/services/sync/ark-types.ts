@@ -187,11 +187,9 @@ export function arkChangeToTask(change: ArkChange): Task | null {
 
   const eventType = outerData?.event_type as string | undefined;
 
-  if (eventType && eventType !== "task" && eventType !== "task_created")
-    return null;
+  if (eventType && eventType !== "task" && eventType !== "task_created") return null;
 
-  const rawId =
-    (data.id as string) || (outerData?.source_id as string) || change.event_id;
+  const rawId = (data.id as string) || (outerData?.source_id as string) || change.event_id;
 
   const title = (data.title as string) ?? (outerData?.summary as string);
 
@@ -204,25 +202,17 @@ export function arkChangeToTask(change: ArkChange): Task | null {
 
     title,
 
-    description:
-      (data.description as string | null) ??
-      (data.notes as string | null) ??
-      null,
+    description: (data.description as string | null) ?? (data.notes as string | null) ?? null,
 
     completed: Boolean(data.completed ?? data.isCompleted ?? false),
 
     priority: Number(data.priority ?? 0),
 
-    due_date:
-      (data.due_date as string | null) ??
-      (data.deadline as string | null) ??
-      null,
+    due_date: (data.due_date as string | null) ?? (data.deadline as string | null) ?? null,
 
     list_id: (data.list_id as string | null) ?? null,
 
-    created_at: new Date(
-      String(data.created_at ?? data.createdAt ?? Date.now()),
-    ),
+    created_at: new Date(String(data.created_at ?? data.createdAt ?? Date.now())),
 
     updated_at:
       (data.updated_at ?? data.updatedAt)
@@ -244,11 +234,9 @@ export function arkChangeToTodoItem(change: ArkChange): TodoItem | null {
 
   const eventType = outerData?.event_type as string | undefined;
 
-  if (eventType && eventType !== "task" && eventType !== "task_created")
-    return null;
+  if (eventType && eventType !== "task" && eventType !== "task_created") return null;
 
-  const rawId =
-    (data.id as string) || (outerData?.source_id as string) || change.event_id;
+  const rawId = (data.id as string) || (outerData?.source_id as string) || change.event_id;
 
   const title = (data.title as string) ?? (outerData?.summary as string);
 
@@ -261,19 +249,13 @@ export function arkChangeToTodoItem(change: ArkChange): TodoItem | null {
 
     title,
 
-    notes:
-      (data.notes as string | null) ??
-      (data.description as string | null) ??
-      null,
+    notes: (data.notes as string | null) ?? (data.description as string | null) ?? null,
 
     priority: Number(data.priority ?? Priority.None) as Priority,
 
     scheduledDate: (data.scheduledDate as string | null) ?? null,
 
-    deadline:
-      (data.deadline as string | null) ??
-      (data.due_date as string | null) ??
-      null,
+    deadline: (data.deadline as string | null) ?? (data.due_date as string | null) ?? null,
 
     reminderDate: (data.reminderDate as string | null) ?? null,
 
@@ -296,16 +278,11 @@ export function arkChangeToTodoItem(change: ArkChange): TodoItem | null {
     sortOrder: Number(data.sortOrder ?? 0),
 
     createdAt:
-      (data.createdAt as string) ??
-      (data.created_at as string) ??
-      new Date().toISOString(),
+      (data.createdAt as string) ?? (data.created_at as string) ?? new Date().toISOString(),
 
     headingId: (data.headingId as string | null) ?? null,
 
-    projectId:
-      (data.projectId as string | null) ??
-      (data.list_id as string | null) ??
-      null,
+    projectId: (data.projectId as string | null) ?? (data.list_id as string | null) ?? null,
 
     areaId: (data.areaId as string | null) ?? null,
 
@@ -320,9 +297,7 @@ export function arkChangeToTodoItem(change: ArkChange): TodoItem | null {
     billable: Boolean(data.billable),
 
     price:
-      typeof data.price === "number" && Number.isFinite(data.price)
-        ? (data.price as number)
-        : null,
+      typeof data.price === "number" && Number.isFinite(data.price) ? (data.price as number) : null,
   };
 }
 
@@ -393,8 +368,7 @@ export function arkChangeToProject(change: ArkChange): Project | null {
 
   if (eventType !== "project") return null;
 
-  const rawId =
-    (data.id as string) || (outerData?.source_id as string) || change.event_id;
+  const rawId = (data.id as string) || (outerData?.source_id as string) || change.event_id;
 
   const title = (data.title as string) ?? (outerData?.summary as string);
 
@@ -426,9 +400,7 @@ export function arkChangeToProject(change: ArkChange): Project | null {
     billable: Boolean(data.billable),
 
     price:
-      typeof data.price === "number" && Number.isFinite(data.price)
-        ? (data.price as number)
-        : null,
+      typeof data.price === "number" && Number.isFinite(data.price) ? (data.price as number) : null,
   };
 }
 
@@ -476,16 +448,11 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
       const todo: TodoItem = {
         id,
         title,
-        notes:
-          (dataRaw.notes as string | null) ??
-          (dataRaw.description as string | null) ??
-          null,
+        notes: (dataRaw.notes as string | null) ?? (dataRaw.description as string | null) ?? null,
         priority: Number(dataRaw.priority ?? Priority.None) as Priority,
         scheduledDate: (dataRaw.scheduledDate as string | null) ?? null,
         deadline:
-          (dataRaw.deadline as string | null) ??
-          (dataRaw.due_date as string | null) ??
-          null,
+          (dataRaw.deadline as string | null) ?? (dataRaw.due_date as string | null) ?? null,
         reminderDate: (dataRaw.reminderDate as string | null) ?? null,
         isToday: Boolean(dataRaw.isToday ?? false),
         isEvening: Boolean(dataRaw.isEvening ?? false),
@@ -503,18 +470,13 @@ export async function fetchTasksFromArk(): Promise<TodoItem[]> {
           new Date().toISOString(),
         headingId: (dataRaw.headingId as string | null) ?? null,
         projectId:
-          (dataRaw.projectId as string | null) ??
-          (dataRaw.list_id as string | null) ??
-          null,
+          (dataRaw.projectId as string | null) ?? (dataRaw.list_id as string | null) ?? null,
         areaId: (dataRaw.areaId as string | null) ?? null,
-        tagIds: Array.isArray(dataRaw.tagIds)
-          ? (dataRaw.tagIds as string[])
-          : [],
+        tagIds: Array.isArray(dataRaw.tagIds) ? (dataRaw.tagIds as string[]) : [],
         checklistItems: Array.isArray(dataRaw.checklistItems)
           ? (dataRaw.checklistItems as TodoItem["checklistItems"])
           : [],
-        recurrenceRule:
-          (dataRaw.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
+        recurrenceRule: (dataRaw.recurrenceRule as TodoItem["recurrenceRule"]) ?? null,
         billable: Boolean(dataRaw.billable),
         price:
           typeof dataRaw.price === "number" && Number.isFinite(dataRaw.price)

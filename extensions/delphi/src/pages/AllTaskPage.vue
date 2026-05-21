@@ -24,10 +24,7 @@ const store = useTodoStore();
 const { todos } = storeToRefs(store);
 const filtered = computed(() => filterTodos(SmartList.Inbox, todos.value));
 
-function handleDrop(
-  payload: { targetId: string; after: boolean },
-  sourceId: string,
-) {
+function handleDrop(payload: { targetId: string; after: boolean }, sourceId: string) {
   if (sourceId === payload.targetId) return;
   const list = [...filtered.value];
   const srcIdx = list.findIndex((t) => t.id === sourceId);
@@ -51,10 +48,7 @@ function handleDrop(
         <h1 :class="[titleClass, 'text-2xl font-bold text-(--foreground) select-none']">
           Входящие
         </h1>
-        <span
-          v-if="filtered.length > 0"
-          class="text-sm text-(--muted-foreground) select-none"
-        >
+        <span v-if="filtered.length > 0" class="text-sm text-(--muted-foreground) select-none">
           {{ filtered.length }}
         </span>
       </div>

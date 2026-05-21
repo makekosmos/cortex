@@ -78,16 +78,19 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 ```
 
 ### Titlebar
+
 - **Слева**: «Horologion» (muted color, secondary).
 - **Справа**: круглый dot подключения к ARK (`var(--status-success)` / warning / `var(--destructive)`) + ⚙ Настройки (route `/settings` внутри extension window'а).
 - Windows-controls справа — через `DesktopChrome` (Kepler shell сам управляет рамкой extension window'а).
 
 ### Draft input card
+
 - Скруглённый прямоугольник с inline-chip'ами выбранных задач + текстовый ввод.
 - `@` запускает MentionMenu, выбор задачи добавляет chip; Backspace на пустом — убирает последний chip.
 - Submit (Enter) на этом поле → запускает текущий выбранный режим таймера (помодоро или секундомер).
 
 ### Timer card (pomodoro / stopwatch)
+
 - Сверху — segmented control (шайба) с двумя кнопками **Помодоро / Секундомер** + sliding accent pill, перекатывается transform-анимацией.
 - Ниже — выбранный таймер: pomodoro (с ring + ticks 60×1 минута) или stopwatch (большое `HH:MM:SS`).
 - Переключение режимов — swipe-анимация (translateX + opacity) с одновременной плавной анимацией высоты card'а (JS-driven, FLIP через inline `height`).
@@ -96,9 +99,11 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
   - Draft input card и timer card визуально объединяются: gap → 0, соседние углы выпрямляются (`border-bottom-radius` у draft и `border-top-radius` у pomo транзишнятся в 0 + прилегающие border-color → transparent).
 
 ### Список записей
+
 - Группировка по дням (clickable header `▼ Ср, 13 мая` + сумма). Клик по header'у — collapse/expand дня с CSS-grid анимацией `grid-template-rows: 1fr ↔ 0fr`.
 
 ### Список записей
+
 - Группировка по дням (хедер с суммой).
 - Группировка одинаковых entries (одинаковый title + taskId + billable) внутри дня → одна строка с `[N]` badge'ем.
 - **Клик на `[N]`** → раскрывает группу (CSS Grid 0fr→1fr транзишн, 280ms) — видны индивидуальные подстроки `HH:MM — HH:MM`.
@@ -108,6 +113,7 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 - $-badge для billable.
 
 ### Edit modal
+
 - `<Modal>` из `@kosmos/visuals`.
 - Поле «Описание» — `<MentionInput>` (можно поменять / добавить задачу через `@`).
 - Preview под input'ом показывает task-pill.
@@ -115,6 +121,7 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 - Кнопки: «Удалить» (слева, danger) / «Отмена» / «Сохранить».
 
 ### Помодоро
+
 - Круговой SVG-таймер с tick-метками минут + крупный mono-счётчик `MM:SS`.
 - Cвой `<MentionInput>` сверху — выбираешь «над чем работаешь» (можно поменять в любой момент, в т.ч. во время break'а — следующий work возьмёт новое значение).
 - Точки `[● ● ○ ○]` показывают сколько помидорок до длинного перерыва.
@@ -123,6 +130,7 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 - **Пауза = stop текущего сегмента, resume = новый сегмент** (Toggl-style). На `pause()` `usePomodoroSession` закрывает активный `time_entry_obj` с `endedAt = моментом паузы`, на `resume()` открывает свежий entry. Время в паузе **не учитывается** в длительности записей. Один pomodoro с N паузами = N+1 `time_entry_obj`, сумма их `endedAt - startedAt` = чистое отработанное время. Backend (`ark-core::pomodoro::Session`) одновременно замораживает `remainingMs` / `phase_ends_at_ms` — таймер визуально стоит.
 
 ### Settings
+
 - Длительности (work / short / long), сколько помидорок до длинного.
 - 5 toggle'ей: трекать брейки как «Отдых», автостарт work, автостарт break, системные уведомления, режим стримера.
 - Звук конца work и конца break — 4 опции через Web Audio (без файлов): «Колокольчик» / «Перелив» / «Стук» / «Сигнал» + ▶ для прослушивания.
@@ -130,11 +138,11 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 
 ## Объектная модель в ARK
 
-| Тип | Где владеется | Роль |
-|---|---|---|
-| `time_entry_obj` | Horologion | Запись отрезка времени. propsJson: `startedAt`, `endedAt`, `source`, `billable`, `taskId`, `taskTitle`. |
-| `tag_obj` | shared (Horologion / Delphi) | Общий тег. **Пока не используется в UI** (TODO). |
-| `task_obj` | Delphi | Существующий тип, Horologion ссылается через `propsJson.taskId` (object_link — TODO). |
+| Тип              | Где владеется                | Роль                                                                                                    |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `time_entry_obj` | Horologion                   | Запись отрезка времени. propsJson: `startedAt`, `endedAt`, `source`, `billable`, `taskId`, `taskTitle`. |
+| `tag_obj`        | shared (Horologion / Delphi) | Общий тег. **Пока не используется в UI** (TODO).                                                        |
+| `task_obj`       | Delphi                       | Существующий тип, Horologion ссылается через `propsJson.taskId` (object_link — TODO).                   |
 
 **Pomodoro не маркирует записи** — поле `kind` снято. Pomodoro чисто UI-фича, создаёт обычные `time_entry_obj` (опционально break-entries с title «Отдых», если `trackBreaksAsRest` включён в Settings).
 
@@ -148,6 +156,7 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 ## Настройки
 
 В Settings:
+
 - Длительности (work / shortBreak / longBreak / pomodorosUntilLongBreak) — input[type=number] с 2px border, без spin-button'ов.
 - Поведение — toggles (трекать break как «Отдых» / autostart work / autostart break / системные уведомления / режим стримера — отключает паузу рендеринга при перекрытии окна; toggle мирорится из renderer'а в `userData/horologion-settings.json` через IPC `horologion:streamerMode:set`, main применяет `disable-features=CalculateNativeWinOcclusion` + `disable-backgrounding-occluded-windows` ДО `app.whenReady`; на toggle в проде делаем `app.relaunch()`, в деве авто-рестарт пропускаем — `VITE_DEV_SERVER_URL` теряется при self-relaunch).
 - Звуки — `@kosmos/visuals` `Dropdown` (shadcn-стиль вместо native `<select>`) для выбора звука конца work / конца break + кнопка тестирования + slider громкости (`pomodoroSettings.ringtoneVolume`, sync'ится через `setVolumeMultiplier` в `lib/sounds.ts`).
@@ -180,11 +189,11 @@ Horologion регистрируется в [Kepler command bus](/concepts/comman
 
 ### Зарегистрированные команды
 
-| ID | Что делает |
-|---|---|
-| `horologion:pomodoro:25` | Запускает помодоро на 25 минут |
-| `horologion:pomodoro:50` | Запускает помодоро на 50 минут |
-| `horologion:stopwatch:start` | Запускает секундомер |
+| ID                           | Что делает                     |
+| ---------------------------- | ------------------------------ |
+| `horologion:pomodoro:25`     | Запускает помодоро на 25 минут |
+| `horologion:pomodoro:50`     | Запускает помодоро на 50 минут |
+| `horologion:stopwatch:start` | Запускает секундомер           |
 
 Регистрация — в extension main (`extensions/horologion/src/main.ts`) через `ArkClient.commands.register([...])` после подключения к `kepler-backend`.
 

@@ -1,9 +1,9 @@
 {
   "name": "@kosmos/extension-eden",
-  "private": true,
   "version": "0.1.9",
-  "type": "module",
+  "private": true,
   "description": "Eden (заметки + TipTap editor) — Vue extension для Kepler shell.",
+  "type": "module",
   "scripts": {
     "test": "bun test && bun run test:vue",
     "test:unit": "bun test",
@@ -15,8 +15,8 @@
     "@pinia/colada": "^1.3.0",
     "@tiptap/core": "^3.20.1",
     "@tiptap/extension-code-block-lowlight": "^3.20.1",
-    "@tiptap/extension-mention": "^3.20.1",
     "@tiptap/extension-list": "^3.20.1",
+    "@tiptap/extension-mention": "^3.20.1",
     "@tiptap/extension-placeholder": "^3.20.1",
     "@tiptap/extension-task-item": "^3.20.1",
     "@tiptap/extension-task-list": "^3.20.1",

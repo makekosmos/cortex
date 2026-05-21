@@ -1,17 +1,17 @@
 ﻿{
-    "task_id":  "2026-04-24-arrancador-full-10",
-    "phase":  "baseline",
-    "captured_at":  "2026-04-24",
-    "backup_workflow_lines":  499,
-    "backup_handlers_lines":  151,
-    "game_detail_page_lines":  392,
-    "games_service_lines":  395,
-    "test_files":  39,
-    "previous_test_count":  119,
-    "previous_coverage":  {
-                              "statements":  79.5,
-                              "branches":  73.09,
-                              "functions":  74.52,
-                              "lines":  80.88
-                          }
+  "task_id": "2026-04-24-arrancador-full-10",
+  "phase": "baseline",
+  "captured_at": "2026-04-24",
+  "backup_workflow_lines": 499,
+  "backup_handlers_lines": 151,
+  "game_detail_page_lines": 392,
+  "games_service_lines": 395,
+  "test_files": 39,
+  "previous_test_count": 119,
+  "previous_coverage": {
+    "statements": 79.5,
+    "branches": 73.09,
+    "functions": 74.52,
+    "lines": 80.88
+  }
 }

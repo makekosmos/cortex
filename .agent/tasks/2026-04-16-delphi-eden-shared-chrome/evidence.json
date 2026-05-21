@@ -32,10 +32,7 @@
     },
     "AC5": {
       "status": "PASS",
-      "evidence": [
-        "apps/delphi/AGENTS.md updated",
-        "apps/eden/ts/AGENTS.md updated"
-      ]
+      "evidence": ["apps/delphi/AGENTS.md updated", "apps/eden/ts/AGENTS.md updated"]
     },
     "AC6": {
       "status": "FAIL",

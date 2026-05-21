@@ -9,10 +9,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/eden/ts/main/store.ts",
-        "apps/eden/ts/main/ark.ts"
-      ]
+      "evidence": ["apps/eden/ts/main/store.ts", "apps/eden/ts/main/ark.ts"]
     },
     {
       "id": "AC3",

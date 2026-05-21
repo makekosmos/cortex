@@ -103,14 +103,30 @@ describe("horologionApi.countTodayCompletedPomodoros", () => {
   test("считает только source='pomodoro' + completed=true за сегодня", async () => {
     const now = new Date();
     const todayMorning = new Date(
-      now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0,
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      9,
+      0,
+      0,
     ).toISOString();
     const todayAfternoon = new Date(
-      now.getFullYear(), now.getMonth(), now.getDate(), 14, 0, 0,
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      14,
+      0,
+      0,
     ).toISOString();
 
-    store.set("a", makeEntry({ id: "a", source: "pomodoro", completed: true, startedAt: todayMorning }));
-    store.set("b", makeEntry({ id: "b", source: "pomodoro", completed: true, startedAt: todayAfternoon }));
+    store.set(
+      "a",
+      makeEntry({ id: "a", source: "pomodoro", completed: true, startedAt: todayMorning }),
+    );
+    store.set(
+      "b",
+      makeEntry({ id: "b", source: "pomodoro", completed: true, startedAt: todayAfternoon }),
+    );
 
     const n = await horologionApi.timeEntries.countTodayCompletedPomodoros();
     expect(n).toBe(2);
@@ -120,10 +136,18 @@ describe("horologionApi.countTodayCompletedPomodoros", () => {
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
     const today = new Date(
-      now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0,
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      10,
+      0,
+      0,
     ).toISOString();
 
-    store.set("y", makeEntry({ id: "y", source: "pomodoro", completed: true, startedAt: yesterday }));
+    store.set(
+      "y",
+      makeEntry({ id: "y", source: "pomodoro", completed: true, startedAt: yesterday }),
+    );
     store.set("t", makeEntry({ id: "t", source: "pomodoro", completed: true, startedAt: today }));
 
     expect(await horologionApi.timeEntries.countTodayCompletedPomodoros()).toBe(1);
@@ -138,7 +162,10 @@ describe("horologionApi.countTodayCompletedPomodoros", () => {
 
   test("исключает source='pomodoro_break' (отдых), даже если completed=true", async () => {
     const today = new Date().toISOString();
-    store.set("br", makeEntry({ id: "br", source: "pomodoro_break", completed: true, startedAt: today }));
+    store.set(
+      "br",
+      makeEntry({ id: "br", source: "pomodoro_break", completed: true, startedAt: today }),
+    );
     store.set("p", makeEntry({ id: "p", source: "pomodoro", completed: true, startedAt: today }));
     expect(await horologionApi.timeEntries.countTodayCompletedPomodoros()).toBe(1);
   });
@@ -152,10 +179,16 @@ describe("horologionApi.countTodayCompletedPomodoros", () => {
 
   test("исключает deleted (soft-deleted) entries", async () => {
     const today = new Date().toISOString();
-    store.set("d", makeEntry({
-      id: "d", source: "pomodoro", completed: true, startedAt: today,
-      deletedAt: today,
-    }));
+    store.set(
+      "d",
+      makeEntry({
+        id: "d",
+        source: "pomodoro",
+        completed: true,
+        startedAt: today,
+        deletedAt: today,
+      }),
+    );
     store.set("ok", makeEntry({ id: "ok", source: "pomodoro", completed: true, startedAt: today }));
     expect(await horologionApi.timeEntries.countTodayCompletedPomodoros()).toBe(1);
   });
@@ -186,7 +219,10 @@ describe("horologionApi.startTimer source/completed propagation", () => {
   });
 
   test("source='pomodoro_break' прокидывается", async () => {
-    const e = await horologionApi.timeEntries.startTimer({ title: "Отдых", source: "pomodoro_break" });
+    const e = await horologionApi.timeEntries.startTimer({
+      title: "Отдых",
+      source: "pomodoro_break",
+    });
     expect(e.source).toBe("pomodoro_break");
   });
 });

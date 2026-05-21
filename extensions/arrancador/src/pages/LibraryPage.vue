@@ -86,8 +86,7 @@ async function onLaunch(game: ArrancadorGame) {
       });
     }
   } catch (cause) {
-    const msg =
-      cause instanceof Error ? cause.message : "Не удалось запустить";
+    const msg = cause instanceof Error ? cause.message : "Не удалось запустить";
     setLaunchState(game.id, { busy: false, message: msg, isError: true });
   }
 }
@@ -114,22 +113,14 @@ async function onLaunch(game: ArrancadorGame) {
     />
 
     <div v-else class="arrancador-grid">
-      <div
-        v-for="game in filteredGames"
-        :key="game.id"
-        class="arrancador-library-cell"
-      >
+      <div v-for="game in filteredGames" :key="game.id" class="arrancador-library-cell">
         <GameCard :game="game" />
         <div class="arrancador-library-cell__actions">
           <button
             type="button"
             class="arrancador-library-cell__launch"
             :disabled="!canLaunch(game) || launchStates[game.id]?.busy"
-            :title="
-              !canLaunch(game)
-                ? 'Не задан путь к исполняемому файлу'
-                : 'Запустить игру'
-            "
+            :title="!canLaunch(game) ? 'Не задан путь к исполняемому файлу' : 'Запустить игру'"
             @click="onLaunch(game)"
           >
             <Play :size="14" />
@@ -140,8 +131,7 @@ async function onLaunch(game: ArrancadorGame) {
           v-if="launchStates[game.id]?.message"
           class="arrancador-library-cell__msg"
           :class="{
-            'arrancador-library-cell__msg--error':
-              launchStates[game.id]?.isError,
+            'arrancador-library-cell__msg--error': launchStates[game.id]?.isError,
           }"
         >
           {{ launchStates[game.id]?.message }}

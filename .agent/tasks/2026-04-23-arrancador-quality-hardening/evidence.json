@@ -47,10 +47,5 @@
       "blocker": "Playwright worker/browser launch failed with spawn EPERM in the local environment after the app build completed."
     }
   ],
-  "raw_artifacts": [
-    "raw/typecheck.txt",
-    "raw/test.txt",
-    "raw/biome-check.txt",
-    "raw/test-e2e.txt"
-  ]
+  "raw_artifacts": ["raw/typecheck.txt", "raw/test.txt", "raw/biome-check.txt", "raw/test-e2e.txt"]
 }

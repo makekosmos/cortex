@@ -46,6 +46,7 @@ Using real WebSocket connections (`ws` library) against a real `SyncServer` inst
 - `stop()` closes all connections and clears the ping interval.
 
 **Mocking surface (sidecar):**
+
 - `dbGetSyncKv` -> returns `null` or stored JSON string (version vector, known peers).
 - `dbSetSyncKv` -> stores value in a test-local `Map<string, string>`.
 - `dbLoadAll` -> returns `{ todos: [], projects: [], areas: [], tags: [], headings: [] }` (or test-specific data).

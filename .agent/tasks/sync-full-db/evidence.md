@@ -1,6 +1,7 @@
 # Evidence Bundle: sync-full-db
 
 ## Summary
+
 - Overall status: PASS
 - Last updated: 2026-04-06
 
@@ -9,10 +10,12 @@
 ### AC1: All entity types included in initial sync (all platforms) -- PASS
 
 **Android SyncServer.loadAllEntities():** Now loads all 5 entity types (todos, projects, areas, tags, headings) plus checklist items and tag cross-refs per todo.
+
 - File: `apps/delphi/kotlin/.../sync/SyncServer.kt`
 - Calls `repo.getAllAreasForSync()`, `repo.getAllTagsForSync()`, `repo.getAllHeadingsForSync()`
 
 **Android LanSyncClient.buildVersionVector():** Now includes all 5 entity types.
+
 - File: `apps/delphi/kotlin/.../sync/LanSyncClient.kt`
 
 **Android LanSyncClient.loadEntityById():** Now tries area, tag, heading lookups.
@@ -26,6 +29,7 @@
 ### AC2: Trashed items included in initial sync -- PASS
 
 **ArkDataRepository.getAllForSync():** Removed `!it.isTrashed` filter.
+
 - Before: `queryAllTodos().filter { !it.isTrashed }`
 - After: `queryAllTodos()`
 
@@ -89,4 +93,5 @@
 - `packages/arksync/src/sync-client.ts`
 
 ## Known gaps
+
 - None. All acceptance criteria pass.

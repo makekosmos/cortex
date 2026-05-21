@@ -1,11 +1,13 @@
 # Task Spec: ark-core-rust
 
 ## Metadata
+
 - Task ID: ark-core-rust
 - Created: 2026-04-04
 - Repo root: /Users/kirill/Documents/projects/kepler
 
 ## Guidance Sources
+
 - `/CLAUDE.md` (repo task proof loop)
 - `/apps/delphi/CLAUDE.md` (P2P sync protocol, entity models, sidecar architecture)
 - `/apps/delphi/kotlin/CLAUDE.md` (Android sync, entity types)
@@ -13,6 +15,7 @@
 ## Original Task Statement
 
 Create a single Rust crate `packages/ark-core/rust/` that replaces:
+
 1. `packages/arksync/` (TS sync engine, ~2434 LOC) -- P2P sync protocol
 2. `apps/delphi/ts/sidecar/` (Rust delphi-db, ~686 LOC) -- SQLite CRUD
 3. Kotlin sync code in `apps/delphi/kotlin/.../data/sync/` (SyncServer.kt, LanSyncClient.kt, ~1400 LOC)
@@ -47,6 +50,7 @@ Implement `HLC` with `tick()`, `merge(remote)`, `compare(a, b)`, `to_string()`, 
 
 **AC7** -- Protocol messages.
 All nine message types are represented as a Rust enum with serde `#[serde(tag = "type")]` discriminator:
+
 - `hello` (protocol_version, device_id, device_name, space_id, addresses?)
 - `version_vector` (vector)
 - `sync_changes` (batch_id, entities, is_last)
@@ -61,6 +65,7 @@ JSON serialization/deserialization must be byte-compatible with the TS `serializ
 
 **AC8** -- WebSocket server.
 Async WS server on port `21531` using tokio + tokio-tungstenite. Accepts incoming connections. Protocol flow per connection:
+
 1. Receive `hello` from client, validate `protocol_version == 1`, reply with own `hello`.
 2. Send `version_vector`, receive remote `version_vector`.
 3. Exchange `peer_list` (send after short delay ~100ms).
@@ -78,6 +83,7 @@ Async WS client using tokio-tungstenite. Takes a `PeerRecord` (device_id, device
 `PeerRecord` struct: device_id, device_name, addresses (Vec<String>), last_seen (ISO 8601), last_address (Option<String>). `merge_peer_records(existing, incoming) -> Vec<PeerRecord>` unions addresses (dedup), keeps newest last_seen, preserves last_address from newer record. Known peers persisted via `sync_kv` under key `sync.peers` as JSON.
 
 **AC11** -- Space codes.
+
 - `generate_space_code() -> String`: 12 random Base32-Crockford characters (alphabet `0123456789ABCDEFGHJKMNPQRSTVWXYZ`).
 - `encode_ipv4(ip) -> Option<String>`: encode IPv4 into 7 Base32-Crockford chars (32-bit IP left-shifted by 3 bits, then 7x5-bit digits).
 - `decode_ipv4(encoded) -> Option<String>`: reverse.
@@ -88,6 +94,7 @@ Async WS client using tokio-tungstenite. Takes a `PeerRecord` (device_id, device
 - QR payload: `generate_qr_payload(code, addresses)`, `parse_qr_payload(payload)`. URI scheme: `ark://join?code=...&addrs=...`. Also parse 19-char extended codes and bare codes.
 
 **AC12** -- StorageBackend trait.
+
 ```rust
 #[async_trait]
 trait StorageBackend: Send + Sync {
@@ -97,12 +104,14 @@ trait StorageBackend: Send + Sync {
     async fn set_kv(&self, key: &str, value: &str);
 }
 ```
+
 A `SqliteStorageBackend` implementation backed by the DB layer (AC1-AC2) that implements this trait. `load_entities` returns all entities whose HLC is present in the given version vector. `apply_entity` does upsert-or-delete based on the `deleted` flag.
 
 ### UniFFI Bindings
 
 **AC13** -- UniFFI export surface.
 The crate uses `uniffi` (proc-macro or UDL) to export the following functions/types for Kotlin and Swift:
+
 - `open_db(path: String)` -- open database, create schema
 - All CRUD operations from AC2
 - `start_server(space_id, device_id, device_name, addresses)` / `stop_server()`
@@ -113,14 +122,16 @@ The crate uses `uniffi` (proc-macro or UDL) to export the following functions/ty
 
 **AC14** -- Dual build targets.
 `Cargo.toml` supports:
+
 - `cargo build` produces a binary (`ark-core-rpc`) for stdin/stdout JSON-RPC (Electron sidecar replacement).
 - `cargo build --lib` produces a cdylib (`libark_core.so`/`.dylib`) for UniFFI consumption.
-Both targets share the same core code. The binary is defined as `[[bin]]`, the library as `[lib] crate-type = ["cdylib", "lib"]`.
+  Both targets share the same core code. The binary is defined as `[[bin]]`, the library as `[lib] crate-type = ["cdylib", "lib"]`.
 
 ### Integration and Testing
 
 **AC15** -- Wire protocol compatibility.
 The Rust implementation MUST produce and consume messages that are byte-compatible with the existing TS arksync (`packages/arksync/`). A Rust Android client MUST be able to sync with a TS Electron server and vice versa. Key compatibility points:
+
 - JSON field names: snake_case (e.g., `protocol_version`, `device_id`, `space_id`, `batch_id`, `is_last`, `change_id`, `last_seen`, `last_address`)
 - `SyncEntity.type` field serializes as `"type"` in JSON (not `entity_type`)
 - `SyncEntity.data` is an arbitrary JSON object (`serde_json::Value` / `Map<String, Value>`)
@@ -133,6 +144,7 @@ The Rust implementation MUST produce and consume messages that are byte-compatib
 
 **AC16** -- Unit tests.
 Tests for:
+
 - HLC tick, merge, compare, to/from string round-trip
 - Version vector diff computation
 - Batch splitting (entity count limit, byte limit)

@@ -22,16 +22,18 @@ test.describe("Eden TaskRef Enter", () => {
 
       await app.evaluate(async ({ BrowserWindow }) => {
         const win = BrowserWindow.getAllWindows()[0];
-        await win!.webContents.executeJavaScript(
-          `window.kepler.commands.invoke("eden:open")`,
-        );
+        await win!.webContents.executeJavaScript(`window.kepler.commands.invoke("eden:open")`);
       });
 
       const edenWin = await app.waitForEvent("window", { timeout: 10_000 });
       await edenWin.waitForLoadState("domcontentloaded");
       edenWin.on("console", (msg) => {
         const text = msg.text();
-        if (text.includes("eden TaskRef") || text.includes("commitAndCreateNew") || text.includes("AFTER insert")) {
+        if (
+          text.includes("eden TaskRef") ||
+          text.includes("commitAndCreateNew") ||
+          text.includes("AFTER insert")
+        ) {
           console.log("[browser]", text);
         }
       });
@@ -56,12 +58,14 @@ test.describe("Eden TaskRef Enter", () => {
       }, noteId);
 
       // Navigate to it via eden store
-      await edenWin.evaluate(async (id) => {
-        const mod = await import("/src/store/eden.ts");
-        const store = mod.useEdenStore();
-        await store.refreshEntries();
-        await store.navigateTo(id);
-      }, noteId).catch(() => {});
+      await edenWin
+        .evaluate(async (id) => {
+          const mod = await import("/src/store/eden.ts");
+          const store = mod.useEdenStore();
+          await store.refreshEntries();
+          await store.navigateTo(id);
+        }, noteId)
+        .catch(() => {});
       await edenWin.waitForTimeout(1000);
 
       // Insert TaskRef via slash command UI:

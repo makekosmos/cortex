@@ -22,10 +22,7 @@ export interface NotifyOptions {
 let lastNotification: Notification | null = null;
 
 function isHeadless(): boolean {
-  return (
-    process.env.KOSMOS_HEADLESS === "1" ||
-    process.env.KOSMOS_TEST_MODE === "1"
-  );
+  return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
 }
 
 /**
@@ -37,9 +34,7 @@ function isHeadless(): boolean {
  */
 export function notify(opts: NotifyOptions): boolean {
   if (isHeadless()) {
-    console.log(
-      `[system-notifications] headless skip: ${opts.title} — ${opts.body}`,
-    );
+    console.log(`[system-notifications] headless skip: ${opts.title} — ${opts.body}`);
     return false;
   }
   if (!Notification.isSupported()) {

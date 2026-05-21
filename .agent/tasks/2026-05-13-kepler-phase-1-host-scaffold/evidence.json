@@ -33,9 +33,5 @@
     "hard_limit_p95_ms": 30,
     "margin_p95": "≈58× under target"
   },
-  "out_of_scope": [
-    "installer/install.ps1",
-    "services/kepler-watcher/",
-    "gpui + tray-icon UI layer"
-  ]
+  "out_of_scope": ["installer/install.ps1", "services/kepler-watcher/", "gpui + tray-icon UI layer"]
 }

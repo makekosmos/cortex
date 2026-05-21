@@ -73,12 +73,14 @@ Phase 6.0 (`.agent/tasks/2026-05-17-eden-extension/`) поставил Eden ка
 ## Acceptance Criteria
 
 **AC1.** Hevy полностью убран из `extensions/eden/`:
+
 - `grep -RE "hevy" extensions/eden/src/` — пусто (case-insensitive).
 - `extensions/eden/src/lib/hevy.ts` отсутствует.
 - В `vite-env.d.ts` нет `hevy*` методов в `Window.api`.
 - В `ConnectedAppsSettings.vue` нет Hevy секции; если этот файл больше не нужен — удалить.
 
 **AC2.** Code-tools UI убран из `extensions/eden/`:
+
 - В shim нет `lintCodeBlock`, `formatCodeBlock`, `getCodeToolsSettings`, `updateCodeToolsSettings`.
 - В `vite-env.d.ts` нет code-tools методов.
 - `Editor.vue` не вызывает lint/format.
@@ -86,19 +88,23 @@ Phase 6.0 (`.agent/tasks/2026-05-17-eden-extension/`) поставил Eden ка
 - TipTap CodeBlock extension сам по себе работает (синтакс highlight через lowlight остаётся).
 
 **AC3.** Trash UI работает:
+
 - `TrashSettings.vue` рендерит непустой список если в ARK есть объекты с `deletedAt != null`.
 - Кнопка «Восстановить» обнуляет `deletedAt` (next `listEntries` показывает заметку в основном списке).
 - Кнопка «Удалить навсегда» убирает объект из ARK (next `list_objects` его не возвращает).
 
 **AC4.** Eden bundle codesplit:
+
 - `extensions/eden/dist/assets/*-*.js` — main chunk < 800KB (gzip < 280KB).
 - Editor chunk lazy-loaded (отдельный JS asset, появляется только при открытии заметки).
 
 **AC5.** `apps/eden/` директория удалена:
+
 - `Test-Path apps/eden` → False.
 - `grep -RE "apps[/\\\\]eden" .` (исключая `.agent/`, `dist/`, `node_modules/`, `legacy/`) — пусто. Ссылки в активных конфигах вычищены.
 
 **AC6.** Workspace + tooling cleanup:
+
 - `package.json` workspaces не содержит `apps/eden/ts`.
 - `Cargo.toml` workspace.members не содержит `apps/eden/ts/heart`.
 - `lefthook.yml` не содержит hooks про `apps/eden/`.
@@ -107,6 +113,7 @@ Phase 6.0 (`.agent/tasks/2026-05-17-eden-extension/`) поставил Eden ка
 - `scripts/sync-agents-docs.mjs` не генерирует `apps/eden/AGENTS.md` и `apps/eden/ts/AGENTS.md`.
 
 **AC7.** Документация обновлена и перегенерирована:
+
 - `docs-site/apps/eden.md` описывает extension-based Eden, не standalone.
 - `STATUS.md` содержит Phase 6.0/6.0.A.
 - `docs-site/apps/kepler-roadmap.md` (или эквивалент) содержит entry про per-type export.
@@ -114,6 +121,7 @@ Phase 6.0 (`.agent/tasks/2026-05-17-eden-extension/`) поставил Eden ка
 - `bun run docs:check` зелёный (нет stale references).
 
 **AC8.** Build + typecheck зелёные:
+
 - `bun install` clean (после изменения workspaces).
 - `bun run --cwd shell build:extensions` — все 4 extensions собираются.
 - `bun run --cwd shell typecheck` — clean.

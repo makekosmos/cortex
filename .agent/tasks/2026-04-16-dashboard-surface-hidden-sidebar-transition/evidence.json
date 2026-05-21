@@ -25,9 +25,7 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "bun run typecheck passed"
-      ]
+      "evidence": ["bun run typecheck passed"]
     }
   ],
   "verification": {

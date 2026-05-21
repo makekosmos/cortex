@@ -64,37 +64,34 @@ runtime checks остаются в `scripts/check-ark-write-boundaries.mjs`.
 ## Acceptance Criteria
 
 AC1. `bun add -D -E oxlint` успешно поставлен. `bunx oxlint --version`
-     возвращает версию.
+возвращает версию.
 
 AC2. `.oxlintrc.json` валидируется через `bunx oxlint --rules` без syntax
-     errors. Точечные ban-rules срабатывают на синтетическом сэмпле
-     (добавить `app.getPath('userData')` в любой файл shell/electron вне
-     instance.ts → oxlint выдаёт error).
+errors. Точечные ban-rules срабатывают на синтетическом сэмпле
+(добавить `app.getPath('userData')` в любой файл shell/electron вне
+instance.ts → oxlint выдаёт error).
 
 AC3. `bunx oxlint .` на чистом working tree прогоняется без новых error'ов
-     (только warning'и; кол-во warning'ов задокументировано в `evidence.md`).
+(только warning'и; кол-во warning'ов задокументировано в `evidence.md`).
 
 AC4. `cargo clippy --workspace --all-targets -- -D warnings` — green или
-     с задокументированным точным списком warning'ов (если warning'ов
-     больше 0 — `unwrap_used` оставляем `warn` и в clippy CLI не передаём
-     `-D warnings`, проверка работает на `cargo clippy --workspace
+с задокументированным точным списком warning'ов (если warning'ов
+больше 0 — `unwrap_used` оставляем `warn` и в clippy CLI не передаём
+`-D warnings`, проверка работает на `cargo clippy --workspace
      --all-targets` без флагов).
 
-AC5. `bun run ark:guard:writes` зелёный, новые scan'ы покрывают:
-     - `app.getPath('userData')` outside `instance.ts` → fail (проверить
-       синтетической вставкой),
-     - `KOSMOS_DATA_DIR=...APPDATA...` в `tests/e2e/*` outside
-       `helpers/launch.ts` → fail (синтетическая вставка),
-     - `path.join(*, "Kosmos"/"Kepler", ...)` outside instance/data-dir →
-       fail (синтетика).
+AC5. `bun run ark:guard:writes` зелёный, новые scan'ы покрывают: - `app.getPath('userData')` outside `instance.ts` → fail (проверить
+синтетической вставкой), - `KOSMOS_DATA_DIR=...APPDATA...` в `tests/e2e/*` outside
+`helpers/launch.ts` → fail (синтетическая вставка), - `path.join(*, "Kosmos"/"Kepler", ...)` outside instance/data-dir →
+fail (синтетика).
 
 AC6. `lefthook.yml` содержит oxlint в pre-commit и clippy в pre-push.
-     `lefthook run pre-commit --files shell/electron/main.ts` отрабатывает
-     без regression'ов (то есть проходит для текущего clean tree).
+`lefthook run pre-commit --files shell/electron/main.ts` отрабатывает
+без regression'ов (то есть проходит для текущего clean tree).
 
 AC7. Phase 1 e2e suite (`bun run test:e2e`) — не сломан. То есть
-     добавление oxlint / clippy / расширение ark:guard не нарушает
-     deterministic behavior. Smoke прогон достаточен (один-два spec'а).
+добавление oxlint / clippy / расширение ark:guard не нарушает
+deterministic behavior. Smoke прогон достаточен (один-два spec'а).
 
 ## Verification commands
 

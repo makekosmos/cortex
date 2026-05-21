@@ -134,13 +134,13 @@ bun run test:e2e                              # полный suite (20 test'ов
 
 ## Verification summary
 
-| AC | Verdict |
-|---|---|
-| AC1 ExtensionManifest.tests field | PASS |
-| AC2 4 manifest'а с tests | PASS |
-| AC3 extensions-contract.spec.ts | PASS (defined + discovered) |
-| AC4 eden.spec.ts | PASS (defined + discovered) |
-| AC5 typecheck | PASS |
-| AC6 build:js | PASS |
-| AC7 manifest parsing не падает | PASS (build + typecheck зелёные) |
-| AC8 e2e run | PENDING_OPERATOR (ACL lock-файлы блокируют) |
+| AC                                | Verdict                                     |
+| --------------------------------- | ------------------------------------------- |
+| AC1 ExtensionManifest.tests field | PASS                                        |
+| AC2 4 manifest'а с tests          | PASS                                        |
+| AC3 extensions-contract.spec.ts   | PASS (defined + discovered)                 |
+| AC4 eden.spec.ts                  | PASS (defined + discovered)                 |
+| AC5 typecheck                     | PASS                                        |
+| AC6 build:js                      | PASS                                        |
+| AC7 manifest parsing не падает    | PASS (build + typecheck зелёные)            |
+| AC8 e2e run                       | PENDING_OPERATOR (ACL lock-файлы блокируют) |

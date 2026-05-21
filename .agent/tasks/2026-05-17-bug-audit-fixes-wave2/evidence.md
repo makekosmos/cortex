@@ -51,7 +51,8 @@ Added bounds check before `readFileSync`:
 
 ```ts
 const iconPath = path.resolve(path.join(dir, manifest.icon));
-if (!iconPath.startsWith(path.resolve(dir) + path.sep) && iconPath !== path.resolve(dir)) return undefined;
+if (!iconPath.startsWith(path.resolve(dir) + path.sep) && iconPath !== path.resolve(dir))
+  return undefined;
 ```
 
 Any `manifest.icon` with `..` traversal is rejected before reading.
@@ -106,6 +107,7 @@ let escaped = input
 ```
 
 Test:
+
 ```
 test export::note_md::tests::yaml_scalar_escapes_newlines ... ok
 ```
@@ -123,6 +125,7 @@ if href.starts_with("http://") || href.starts_with("https://") {
 ```
 
 Test:
+
 ```
 test export::note_md::tests::unsafe_link_href_replaced_with_blank ... ok
 ```
@@ -132,6 +135,7 @@ test export::note_md::tests::unsafe_link_href_replaced_with_blank ... ok
 `parse_object_body` now takes `depth: usize` and returns `VdfNode::Null` at depth > 64.
 
 Test:
+
 ```
 test arrancador::scanner::tests::vdf_depth_limit_prevents_stack_overflow ... ok
 ```

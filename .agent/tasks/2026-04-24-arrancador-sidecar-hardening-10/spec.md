@@ -19,6 +19,7 @@ AC5. ScanPage orchestration is more atomic: scan/import stateful behavior is ext
 AC6. Architecture guard tests or unit tests cover the new boundaries so route-level scan behavior does not collapse back into a large all-in-one page unnoticed.
 
 AC7. Fresh verification passes on the current codebase:
+
 - `bun run typecheck`
 - `bun run build:main`
 - `bun run build:preload`

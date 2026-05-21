@@ -72,11 +72,7 @@ export function resolveInstance(): Instance {
   }
 
   const appData = app.getPath("appData");
-  const kind: InstanceKind = slot.startsWith("test")
-    ? "test"
-    : slot === "prod"
-      ? "prod"
-      : "dev";
+  const kind: InstanceKind = slot.startsWith("test") ? "test" : slot === "prod" ? "prod" : "dev";
 
   // ARK dataDir:
   //   - test-<x>: KOSMOS_DATA_DIR env (всегда absolute). Helper'ы Playwright
@@ -88,9 +84,7 @@ export function resolveInstance(): Instance {
   if (kind === "test") {
     const override = process.env.KOSMOS_DATA_DIR;
     if (!override) {
-      throw new Error(
-        `[kepler-shell] test slot "${slot}" требует KOSMOS_DATA_DIR env`,
-      );
+      throw new Error(`[kepler-shell] test slot "${slot}" требует KOSMOS_DATA_DIR env`);
     }
     dataDir = override;
   } else if (slot === "prod") {
@@ -132,19 +126,13 @@ export function resolveInstance(): Instance {
           ? `Kepler [test]`
           : `Kepler [${slot}]`;
 
-  const appId =
-    slot === "prod" ? "com.kazui.kepler" : `com.kazui.kepler.${slot}`;
+  const appId = slot === "prod" ? "com.kazui.kepler" : `com.kazui.kepler.${slot}`;
 
   // Hotkey: prod = Alt+Space (legacy), dev = Alt+` (legacy, не конфликтует
   // с prod-инстансом). dev-<x> и test-<x> = disabled (несколько dev-инстансов
   // не могут поделить один accelerator; пользователь активирует launcher
   // через tray click).
-  const hotkey =
-    slot === "prod"
-      ? "Alt+Space"
-      : slot === "dev"
-        ? "Alt+`"
-        : null;
+  const hotkey = slot === "prod" ? "Alt+Space" : slot === "dev" ? "Alt+`" : null;
 
   return (cached = {
     slot,
@@ -166,7 +154,10 @@ function pickSlot(): string {
 
   const kosmosDataDir = process.env.KOSMOS_DATA_DIR;
   if (kosmosDataDir) {
-    const base = path.basename(kosmosDataDir).toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const base = path
+      .basename(kosmosDataDir)
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-");
     return `test-${base || "default"}`;
   }
 
@@ -228,9 +219,7 @@ function migrateLegacyDevSettings(newUserDataDir: string): void {
     const { mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
     mkdirSync(newUserDataDir, { recursive: true });
     writeFileSync(newSettings, content, "utf8");
-    console.error(
-      `[kepler-shell] migrated dev settings: %APPDATA%/Kepler -> ${newUserDataDir}`,
-    );
+    console.error(`[kepler-shell] migrated dev settings: %APPDATA%/Kepler -> ${newUserDataDir}`);
   } catch (e) {
     // Не критично — dev user заново выставит developer mode toggle.
     console.error("[kepler-shell] dev settings migration skipped:", e);

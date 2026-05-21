@@ -19,6 +19,7 @@ description: Android Kotlin + Jetpack Compose best practices for the Delphi app.
 ## Architecture Rules
 
 ### ViewModels
+
 - All ViewModels annotated with `@HiltViewModel` and inherit from `ViewModel`
 - Use `SmartListViewModel` as base for all smart list screens (Today, Inbox, etc.)
 - Expose UI state as `StateFlow<List<T>>`, never as mutable state
@@ -33,6 +34,7 @@ class InboxViewModel @Inject constructor(
 ```
 
 ### Room
+
 - All DAO methods are `suspend fun` or return `Flow<>`
 - Use `@Upsert` for create/update operations (idempotent)
 - Use KSP (not KAPT) for code generation
@@ -54,6 +56,7 @@ interface TodoDao {
 ```
 
 ### Hilt DI
+
 - `AppModule` — application-scoped singletons (HttpClient, DataStore)
 - `DatabaseModule` — Room database and all DAOs
 - Inject DAOs via constructor injection in ViewModels, never access DB directly from UI
@@ -61,6 +64,7 @@ interface TodoDao {
 ## Compose Patterns
 
 ### Navigation
+
 - Routes defined as `sealed class Screen` with `data object` entries
 - Tab navigation: `popUpTo + saveState + restoreState` to prevent stack buildup
 - No transition animations for tab switching (`EnterTransition.None`)
@@ -75,6 +79,7 @@ navController.navigate(screen.route) {
 ```
 
 ### State Observation
+
 Always use `collectAsStateWithLifecycle()` (not `collectAsState()`):
 
 ```kotlin
@@ -82,6 +87,7 @@ val todos by viewModel.todos.collectAsStateWithLifecycle()
 ```
 
 ### Component Reuse
+
 - `SmartListScaffold` — wrap all list screens (handles FAB, TopAppBar, LazyColumn)
 - `TodoRow` — single todo item with priority color and checkbox
 - `QuickEntryBar` — bottom input for quick task creation
@@ -90,6 +96,7 @@ val todos by viewModel.todos.collectAsStateWithLifecycle()
 Do NOT reimpliment these. Extend via parameters if needed.
 
 ### Local UI State
+
 Use `mutableStateOf` only for ephemeral UI state (input text, dialog visibility):
 
 ```kotlin
@@ -100,22 +107,26 @@ var showMenu by remember { mutableStateOf(false) }
 ## Data Model Conventions
 
 ### Entity IDs
+
 - All IDs are UUIDs as `String` (not auto-increment Long)
 - `source_id` in sync events = local entity ID (deduplication key)
 
 ### Soft Operations
+
 - Never physically delete completed/cancelled/trashed items
 - Use boolean flags: `isCompleted`, `isCancelled`, `isTrashed`
 - Logbook shows `isCompleted OR isCancelled`
 - Trash shows `isTrashed = true`
 
 ### Timestamps
+
 - All timestamps as ISO 8601 UTC strings: `"2025-03-29T14:30:00Z"`
 - Use `Instant.now().toString()` for current time
 
 ## Sync Integration
 
 ### Sending Changes
+
 After any local mutation, immediately send to sync:
 
 ```kotlin
@@ -134,10 +145,12 @@ fun completeTodo(id: String) {
 ```
 
 ### Receiving Changes
+
 Changes from other devices arrive via `syncClient.onChange{}` callback.
 Apply via Room `upsert()` — the Flow will automatically update the UI.
 
 ### Offline Queue
+
 If `syncClient.sendChange()` is called while offline, it queues to `PendingChangeDao`.
 Outbox flushes automatically on reconnect. No manual handling needed in ViewModels.
 
@@ -145,13 +158,13 @@ Outbox flushes automatically on reconnect. No manual handling needed in ViewMode
 
 All smart list filtering lives in `TodoFilterService`. Add new lists there, not in ViewModels.
 
-| SmartList | Filter |
-|-----------|--------|
-| TODAY | `isToday=true` OR `scheduledDate=today` |
-| INBOX | `projectId=null` AND `isSomeday=false` |
-| UPCOMING | `scheduledDate > today` |
-| LOGBOOK | `isCompleted=true` OR `isCancelled=true` |
-| TRASH | `isTrashed=true` |
+| SmartList | Filter                                   |
+| --------- | ---------------------------------------- |
+| TODAY     | `isToday=true` OR `scheduledDate=today`  |
+| INBOX     | `projectId=null` AND `isSomeday=false`   |
+| UPCOMING  | `scheduledDate > today`                  |
+| LOGBOOK   | `isCompleted=true` OR `isCancelled=true` |
+| TRASH     | `isTrashed=true`                         |
 
 ## File Structure
 

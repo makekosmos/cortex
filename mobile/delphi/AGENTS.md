@@ -10,6 +10,7 @@
 Полная страница: `docs-site/apps/delphi.md`.
 
 ---
+
 ## Контекст: Delphi — Kotlin workspace
 
 # Delphi — задачи
@@ -99,9 +100,9 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 ```ts
 type Project = {
   // ...
-  billable: boolean,     // помечает весь проект как оплачиваемый
-  price?: number | null, // общий бюджет проекта (опц.)
-}
+  billable: boolean; // помечает весь проект как оплачиваемый
+  price?: number | null; // общий бюджет проекта (опц.)
+};
 ```
 
 ### Наследование
@@ -124,13 +125,13 @@ Delphi портирован в `extensions/delphi/` **как есть** из sta
 
 ### Mapping legacy каналов → ARK operations
 
-| Legacy channel | Ark operation |
-|---|---|
-| `db:loadAll`, `ark:listDelphiTasks` | `list_objects_by_type` (`task_obj`) → массив `TodoItem` |
-| `db:upsertTodo`, `ark:upsertDelphiTask` | `upsert_object` (`task_obj`) |
-| `db:deleteTodo`, `ark:deleteDelphiTask` | `delete_object` |
-| `db:batchUpsertTodos` | цикл `upsert_object` |
-| `ark:listTimeEntries` | `list_objects_by_type` (`time_entry_obj`) |
+| Legacy channel                          | Ark operation                                           |
+| --------------------------------------- | ------------------------------------------------------- |
+| `db:loadAll`, `ark:listDelphiTasks`     | `list_objects_by_type` (`task_obj`) → массив `TodoItem` |
+| `db:upsertTodo`, `ark:upsertDelphiTask` | `upsert_object` (`task_obj`)                            |
+| `db:deleteTodo`, `ark:deleteDelphiTask` | `delete_object`                                         |
+| `db:batchUpsertTodos`                   | цикл `upsert_object`                                    |
+| `ark:listTimeEntries`                   | `list_objects_by_type` (`time_entry_obj`)               |
 
 `TodoItem ↔ ArkObjectRecord` mapping инлайнен прямо в shim — поля `billable` / `price` / `description` / `dates` / `priority` сериализуются в `propsJson`, plain text — в `contentJson`.
 
@@ -153,17 +154,22 @@ Delphi регистрируется в [Kepler command bus](docs-site/concepts/c
 
 ### Зарегистрированные команды
 
-| ID | Что делает |
-|---|---|
-| `delphi:task:create` | Открывает `QuickEntry` модалку |
-| `delphi:task:today` | `router.push('/today')` — страница сегодняшних задач |
+| ID                   | Что делает                                           |
+| -------------------- | ---------------------------------------------------- |
+| `delphi:task:create` | Открывает `QuickEntry` модалку                       |
+| `delphi:task:today`  | `router.push('/today')` — страница сегодняшних задач |
 
 Регистрация — внутри extension'а через `ArkClient.commands.register([...])`:
 
 ```ts
 await arkClient.commands.register([
-  { id: 'delphi:task:create', title: 'Создать задачу', subtitle: 'Delphi', category: 'action' },
-  { id: 'delphi:task:today',  title: 'Открыть сегодняшние задачи', subtitle: 'Delphi', category: 'action' },
+  { id: "delphi:task:create", title: "Создать задачу", subtitle: "Delphi", category: "action" },
+  {
+    id: "delphi:task:today",
+    title: "Открыть сегодняшние задачи",
+    subtitle: "Delphi",
+    category: "action",
+  },
 ]);
 ```
 
@@ -203,7 +209,7 @@ await arkClient.commands.register([
 ## Sync
 
 - ❌ Direct Rust writer пишет в ARK без вызова `ark_core::db::bump_sync_version_vector`.
-- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
+- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete\*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
 - ❌ Batch upsert handler без bump'а `record_local_upsert` per-entity. Один общий bump на батч недостаточен — peer-side sync проверяет HLC entity-id'шно.
 - ❌ Ослабление self-peer filtering при изменениях в sync startup.
 - ❌ Ослабление routable-address filtering при изменениях в peer persistence.

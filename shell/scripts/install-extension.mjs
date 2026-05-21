@@ -89,8 +89,7 @@ function matchSingle(range, v) {
     const b = parseSemver(r.slice(1));
     if (!b || cmp(v, b) < 0) return false;
     if (b.major === 0) {
-      if (b.minor === 0)
-        return v.major === 0 && v.minor === 0 && v.patch === b.patch;
+      if (b.minor === 0) return v.major === 0 && v.minor === 0 && v.patch === b.patch;
       return v.major === 0 && v.minor === b.minor;
     }
     return v.major === b.major;
@@ -146,10 +145,7 @@ if (sourceStat.isDirectory()) {
   } catch (e) {
     die(`invalid manifest.json: ${e.message}`);
   }
-} else if (
-  sourceAbs.toLowerCase().endsWith(".kext") ||
-  sourceAbs.toLowerCase().endsWith(".zip")
-) {
+} else if (sourceAbs.toLowerCase().endsWith(".kext") || sourceAbs.toLowerCase().endsWith(".zip")) {
   isZipSource = true;
   let entries;
   try {
@@ -193,7 +189,9 @@ console.log(`  version:     ${manifest.version ?? "(not set)"}`);
 console.log(`  description: ${manifest.description ?? "(not set)"}`);
 console.log(`  author:      ${manifest.author ?? "(not set)"}`);
 console.log(`  api req:     ${manifest.keplerApiVersion ?? "(legacy)"}`);
-console.log(`  permissions: ${Array.isArray(manifest.permissions) ? manifest.permissions.join(", ") : "(none)"}`);
+console.log(
+  `  permissions: ${Array.isArray(manifest.permissions) ? manifest.permissions.join(", ") : "(none)"}`,
+);
 
 if (manifest.keplerApiVersion) {
   if (!satisfiesSemver(KEPLER_API_VERSION, manifest.keplerApiVersion)) {

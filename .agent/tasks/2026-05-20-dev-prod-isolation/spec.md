@@ -19,6 +19,7 @@ Worktree: `D:\Personal\Hobby\Coding\kepler-worktrees\dev-prod-isolation`
 - autoupdater в dev не должен пуллить релизы.
 
 Что **уже** разделено и работает (не трогаем):
+
 - `keplerDataDir()` в `shell/electron/data-dir.ts` — ARK data: prod `%APPDATA%\Kosmos\`, dev `%APPDATA%\Kosmos-dev\`, test `KOSMOS_DATA_DIR`. backend наследует через env.
 - `kepler.lock.json` (backend WS port + bearer token) лежит **внутри** dataDir → backend port уже не конфликтует между prod и dev.
 
@@ -30,12 +31,12 @@ Worktree: `D:\Personal\Hobby\Coding\kepler-worktrees\dev-prod-isolation`
 
 ### Слоты (соглашение)
 
-| slot | trigger | Electron userData | ARK dataDir | productName | hotkey | autoupdater | autorun |
-|---|---|---|---|---|---|---|---|
-| `prod` (default) | installed Kepler.exe | `%APPDATA%\Kepler\` | `%APPDATA%\Kosmos\` | Kepler | Ctrl+Shift+K | on | разрешён |
-| `dev` | `VITE_DEV_SERVER_URL` set, нет `KEPLER_INSTANCE` | `%APPDATA%\Kepler-dev\` | `%APPDATA%\Kosmos-dev\` | Kepler [dev] | Ctrl+Shift+Alt+K | off | запрещён |
-| `dev-<x>` | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local`) | `%APPDATA%\Kepler-dev-<x>\` | `%APPDATA%\Kosmos-dev-<x>\` | Kepler [dev:<x>] | disabled | off | запрещён |
-| `test-<slug>` | `KOSMOS_DATA_DIR` set (Playwright) | (под `KOSMOS_DATA_DIR/userdata/`) | `KOSMOS_DATA_DIR` (absolute) | Kepler [test] | disabled | off | запрещён |
+| slot             | trigger                                               | Electron userData                 | ARK dataDir                  | productName      | hotkey           | autoupdater | autorun  |
+| ---------------- | ----------------------------------------------------- | --------------------------------- | ---------------------------- | ---------------- | ---------------- | ----------- | -------- |
+| `prod` (default) | installed Kepler.exe                                  | `%APPDATA%\Kepler\`               | `%APPDATA%\Kosmos\`          | Kepler           | Ctrl+Shift+K     | on          | разрешён |
+| `dev`            | `VITE_DEV_SERVER_URL` set, нет `KEPLER_INSTANCE`      | `%APPDATA%\Kepler-dev\`           | `%APPDATA%\Kosmos-dev\`      | Kepler [dev]     | Ctrl+Shift+Alt+K | off         | запрещён |
+| `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local`) | `%APPDATA%\Kepler-dev-<x>\`       | `%APPDATA%\Kosmos-dev-<x>\`  | Kepler [dev:<x>] | disabled         | off         | запрещён |
+| `test-<slug>`    | `KOSMOS_DATA_DIR` set (Playwright)                    | (под `KOSMOS_DATA_DIR/userdata/`) | `KOSMOS_DATA_DIR` (absolute) | Kepler [test]    | disabled         | off         | запрещён |
 
 `<x>` — произвольный slug `[a-z0-9-]+`. Соглашение: `dev-a`, `dev-b`, `dev-eden`, `dev-issue-42`.
 
@@ -49,28 +50,32 @@ Worktree: `D:\Personal\Hobby\Coding\kepler-worktrees\dev-prod-isolation`
 ### Изменения в коде
 
 1. **Новый `shell/electron/instance.ts`** — single source of truth:
+
    ```ts
    export interface Instance {
-     slot: string;          // "prod" | "dev" | "dev-<x>" | "test-<x>"
+     slot: string; // "prod" | "dev" | "dev-<x>" | "test-<x>"
      kind: "prod" | "dev" | "test";
-     userDataDir: string;   // absolute path
-     dataDir: string;       // absolute path (ARK)
+     userDataDir: string; // absolute path
+     dataDir: string; // absolute path (ARK)
      productName: string;
-     appId: string;         // com.kazui.kepler[.<slot>]  (prod = com.kazui.kepler)
+     appId: string; // com.kazui.kepler[.<slot>]  (prod = com.kazui.kepler)
      hotkey: string | null; // null = disabled
      autoupdaterEnabled: boolean;
      autorunEnabled: boolean;
    }
    export function resolveInstance(): Instance;
    ```
+
    Должен вызываться **до** любого другого Electron API, кроме `app.getPath('appData')`.
 
 2. **`shell/electron/main.ts`** — в самом начале `bootstrap()` (до `requestSingleInstanceLock`):
+
    ```ts
    const instance = resolveInstance();
    app.setName(instance.productName);
-   app.setPath('userData', instance.userDataDir);
+   app.setPath("userData", instance.userDataDir);
    ```
+
    Это разделит singleInstanceLock scope, window state, GPU cache.
    - `requestSingleInstanceLock` остаётся unchanged — он теперь scope'ится по новому userData.
    - `globalShortcut.register(instance.hotkey, …)` — skip если `null`.
@@ -88,6 +93,7 @@ Worktree: `D:\Personal\Hobby\Coding\kepler-worktrees\dev-prod-isolation`
 7. **`shell/scripts/dev.mjs`** — загружает `<shell>/.env.local` (если есть) через простой parser (без новых deps), пробрасывает `KEPLER_INSTANCE` в child env. Без `.env.local` поведение прежнее (`dev` slot).
 
 8. **`shell/.env.local.example`** (новый файл, in tree) — шаблон:
+
    ```
    # Раскомментировать чтобы запустить отдельный dev-инстанс
    # (не конфликтует с prod Kepler и другими dev-инстансами)
@@ -98,7 +104,7 @@ Worktree: `D:\Personal\Hobby\Coding\kepler-worktrees\dev-prod-isolation`
 
 10. **`shell/electron/extension-host.ts`** + **`shell/electron/extension-installer.ts`** — extension install dir уже под `keplerDataDir()/extensions/`, дополнительных правок не требует. Sanity-check audit.
 
-11. **Tray accent (опционально)** — для dev-* слотов рисуем монохромный overlay-точку (синий для `dev`, оранжевый для `dev-*`) на trayicon. Optional — если успеем; иначе только tooltip.
+11. **Tray accent (опционально)** — для dev-_ слотов рисуем монохромный overlay-точку (синий для `dev`, оранжевый для `dev-_`) на trayicon. Optional — если успеем; иначе только tooltip.
 
 ### Документация
 

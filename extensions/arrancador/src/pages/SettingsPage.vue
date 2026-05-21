@@ -87,9 +87,7 @@ const rawgKeySaving = ref(false);
 const rawgKeyError = ref<string | null>(null);
 const rawgKeyStatus = ref<string | null>(null);
 
-const hasRawgKey = computed(
-  () => rawgKeyLoaded.value && rawgKey.value.trim().length > 0,
-);
+const hasRawgKey = computed(() => rawgKeyLoaded.value && rawgKey.value.trim().length > 0);
 
 async function loadRawgKey() {
   const api = arrancadorApi();
@@ -102,8 +100,7 @@ async function loadRawgKey() {
     const res = await api.config.getRawgKey();
     rawgKey.value = res.key ?? "";
   } catch (cause) {
-    rawgKeyError.value =
-      cause instanceof Error ? cause.message : "Не удалось загрузить ключ";
+    rawgKeyError.value = cause instanceof Error ? cause.message : "Не удалось загрузить ключ";
   } finally {
     rawgKeyLoaded.value = true;
   }
@@ -126,8 +123,7 @@ async function saveRawgKey() {
       rawgKeyError.value = res.error ?? "Не удалось сохранить ключ";
     }
   } catch (cause) {
-    rawgKeyError.value =
-      cause instanceof Error ? cause.message : "Не удалось сохранить ключ";
+    rawgKeyError.value = cause instanceof Error ? cause.message : "Не удалось сохранить ключ";
   } finally {
     rawgKeySaving.value = false;
   }
@@ -184,10 +180,7 @@ function openRawgApiDocs() {
 
       <div class="arrancador-rawg-key-status">
         <span v-if="!rawgKeyLoaded">Загрузка…</span>
-        <span
-          v-else-if="rawgKeyError"
-          class="arrancador-rawg-key-status--error"
-        >
+        <span v-else-if="rawgKeyError" class="arrancador-rawg-key-status--error">
           {{ rawgKeyError }}
         </span>
         <span v-else-if="rawgKeyStatus">{{ rawgKeyStatus }}</span>
@@ -209,10 +202,7 @@ function openRawgApiDocs() {
         description="Информационные баннеры на страницах extension'а."
       >
         <template #control>
-          <Toggle
-            v-model="settings.showLegacyHints"
-            aria-label="Показывать подсказки"
-          />
+          <Toggle v-model="settings.showLegacyHints" aria-label="Показывать подсказки" />
         </template>
       </SettingsRow>
 
@@ -221,10 +211,7 @@ function openRawgApiDocs() {
         description="Какой раздел открывается первым при запуске extension'а."
       >
         <template #control>
-          <select
-            v-model="settings.defaultSection"
-            class="arrancador-settings__select"
-          >
+          <select v-model="settings.defaultSection" class="arrancador-settings__select">
             <option value="library">Библиотека</option>
             <option value="scan">Сканер</option>
             <option value="stats">Статистика</option>
@@ -233,11 +220,7 @@ function openRawgApiDocs() {
       </SettingsRow>
 
       <div class="arrancador-settings__actions">
-        <button
-          type="button"
-          class="arrancador-settings__btn"
-          @click="resetDefaults"
-        >
+        <button type="button" class="arrancador-settings__btn" @click="resetDefaults">
           Сбросить к умолчаниям
         </button>
         <span v-if="savedLabel" class="arrancador-settings__saved">

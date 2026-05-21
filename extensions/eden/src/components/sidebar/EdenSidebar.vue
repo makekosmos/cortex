@@ -79,14 +79,21 @@ const isMac = navigator.platform.startsWith("Mac");
 const neutralEntryIconColor = "rgb(255 255 255 / 0.58)";
 
 const noteTypesById = computed(
-  () => new Map(props.noteTypes.map((noteType) => [noteType.id, noteType] satisfies [string, NoteType])),
+  () =>
+    new Map(
+      props.noteTypes.map((noteType) => [noteType.id, noteType] satisfies [string, NoteType]),
+    ),
 );
 
-const systemNoteTypes = computed(() => props.noteTypes.filter((noteType) => isSystemType(noteType.id)));
-const customNoteTypes = computed(() => props.noteTypes.filter((noteType) => !isSystemType(noteType.id)));
+const systemNoteTypes = computed(() =>
+  props.noteTypes.filter((noteType) => isSystemType(noteType.id)),
+);
+const customNoteTypes = computed(() =>
+  props.noteTypes.filter((noteType) => !isSystemType(noteType.id)),
+);
 
 function buildEntryItem(entry: Entry, testId: string): SidebarProjectItem {
-  const noteType = entry.type_id ? noteTypesById.value.get(entry.type_id) ?? null : null;
+  const noteType = entry.type_id ? (noteTypesById.value.get(entry.type_id) ?? null) : null;
   const iconName = noteType?.icon ?? "document";
 
   return {

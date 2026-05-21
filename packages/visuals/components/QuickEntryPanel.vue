@@ -27,8 +27,7 @@ const showProjectMenu = shallowRef(false);
 const titleRef = useTemplateRef<HTMLInputElement>("titleInput");
 const projectMenuRef = useTemplateRef<HTMLDivElement>("projectMenu");
 
-const selectedProject = () =>
-  props.projects?.find((p) => p.id === selectedProjectId.value);
+const selectedProject = () => props.projects?.find((p) => p.id === selectedProjectId.value);
 
 function reset() {
   title.value = "";
@@ -64,20 +63,32 @@ function save() {
 }
 
 function onTitleKeyDown(e: KeyboardEvent) {
-  if (e.key === "Enter") { e.preventDefault(); save(); }
-  if (e.key === "Escape") { e.preventDefault(); close(); }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    save();
+  }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    close();
+  }
 }
 
 function onNotesKeyDown(e: KeyboardEvent) {
-  if (e.key === "Escape") { e.preventDefault(); close(); }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    close();
+  }
 }
 
-watch(() => props.open, (val) => {
-  if (val) {
-    reset();
-    nextTick(() => titleRef.value?.focus());
-  }
-});
+watch(
+  () => props.open,
+  (val) => {
+    if (val) {
+      reset();
+      nextTick(() => titleRef.value?.focus());
+    }
+  },
+);
 
 // Outside-click для project menu. Раньше использовался nested watch({ once: true })
 // для cleanup'а — он ломался при последовательных open/close (новый handler
@@ -183,17 +194,25 @@ onBeforeUnmount(() => {
                 type="button"
                 class="qep-menu-item"
                 :class="{ 'qep-menu-item--selected': selectedProjectId === null }"
-                @click="selectedProjectId = null; billable = false; showProjectMenu = false"
+                @click="
+                  selectedProjectId = null;
+                  billable = false;
+                  showProjectMenu = false;
+                "
               >
                 Входящие
               </button>
               <button
-                v-for="project in (projects ?? [])"
+                v-for="project in projects ?? []"
                 :key="project.id"
                 type="button"
                 class="qep-menu-item"
                 :class="{ 'qep-menu-item--selected': selectedProjectId === project.id }"
-                @click="selectedProjectId = project.id; billable = Boolean(project.billable); showProjectMenu = false"
+                @click="
+                  selectedProjectId = project.id;
+                  billable = Boolean(project.billable);
+                  showProjectMenu = false;
+                "
               >
                 {{ project.title }}
               </button>
@@ -311,7 +330,9 @@ onBeforeUnmount(() => {
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: background-color 120ms, color 120ms;
+  transition:
+    background-color 120ms,
+    color 120ms;
 }
 .qep-chip:hover {
   background: var(--surface);
@@ -402,7 +423,9 @@ onBeforeUnmount(() => {
   color: var(--muted-foreground);
   border-radius: 6px;
   cursor: pointer;
-  transition: background 100ms, color 100ms;
+  transition:
+    background 100ms,
+    color 100ms;
 }
 .qep-close:hover {
   background: var(--surface);

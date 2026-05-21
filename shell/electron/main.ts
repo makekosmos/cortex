@@ -52,11 +52,7 @@ import {
 import { fileURLToPath } from "node:url";
 import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
 import { keplerDataDir } from "./data-dir";
-import type {
-  BackendStatus,
-  CommandRecord,
-  SearchResult,
-} from "../shared/ipc-types";
+import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
 import {
   findDeclaredCommand,
@@ -77,31 +73,18 @@ import {
   isFocusServiceAutoInstallDeclined,
   setFocusServiceAutoInstallDeclined,
 } from "./settings-window";
-import {
-  registerMarketplaceIpc,
-  startPeriodicCatalogCheck,
-} from "./extension-marketplace";
+import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
 import "./focus-widget";
-import {
-  getServiceStatus,
-  runServiceCliElevated,
-  pingService,
-} from "./focus-service";
-import {
-  findKextInArgv,
-  openInstallExtensionWindow,
-} from "./install-extension-window";
+import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
+import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
 import {
   check as checkForUpdates,
   getState as getUpdateState,
   install as installUpdate,
   setupAutoUpdater,
 } from "./autoupdater-host";
-import {
-  setupPomodoroNotifier,
-  teardownPomodoroNotifier,
-} from "./pomodoro-notifier";
+import { setupPomodoroNotifier, teardownPomodoroNotifier } from "./pomodoro-notifier";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -203,15 +186,9 @@ function resolveBackendExe(): string {
   // Try dev paths first regardless of isDev — Playwright тесты не выставляют
   // VITE_DEV_SERVER_URL, но cargo build выкладывает binary в target/{debug,release}/
   // как при dev так и при first-time test run.
-  const devDebug = path.resolve(
-    __dirname,
-    "../../target/debug/kepler-backend.exe",
-  );
+  const devDebug = path.resolve(__dirname, "../../target/debug/kepler-backend.exe");
   if (existsSync(devDebug)) return devDebug;
-  const devRelease = path.resolve(
-    __dirname,
-    "../../target/release/kepler-backend.exe",
-  );
+  const devRelease = path.resolve(__dirname, "../../target/release/kepler-backend.exe");
   if (existsSync(devRelease)) return devRelease;
 
   // production: рядом с упакованным приложением (extraResources)
@@ -249,12 +226,8 @@ function spawnBackend() {
       RUST_BACKTRACE: "1",
     },
   });
-  backendProc.stdout?.on("data", (b) =>
-    process.stderr.write(`[kepler-backend] ${b.toString()}`),
-  );
-  backendProc.stderr?.on("data", (b) =>
-    process.stderr.write(`[kepler-backend] ${b.toString()}`),
-  );
+  backendProc.stdout?.on("data", (b) => process.stderr.write(`[kepler-backend] ${b.toString()}`));
+  backendProc.stderr?.on("data", (b) => process.stderr.write(`[kepler-backend] ${b.toString()}`));
   backendStartedAt = Date.now();
   backendProc.on("exit", (code) => {
     const ranForMs = Date.now() - backendStartedAt;
@@ -308,9 +281,7 @@ function scheduleBackendRespawn(lastRanForMs: number): void {
 function showBackendCrashDialog(): void {
   if (backendCrashDialogShown) return;
   backendCrashDialogShown = true;
-  console.error(
-    "[kepler-shell] supervisor: backend crashed 5 times in a row, giving up",
-  );
+  console.error("[kepler-shell] supervisor: backend crashed 5 times in a row, giving up");
   const crashesDir = path.join(keplerDataDir(), "crashes");
   // dialog.showMessageBox — async, не блокирует event loop. Отдельный
   // import dialog уже есть в shell.
@@ -318,8 +289,7 @@ function showBackendCrashDialog(): void {
     .showMessageBox({
       type: "error",
       title: "Kepler — backend не запускается",
-      message:
-        "kepler-backend упал 5 раз подряд. Автоматический перезапуск приостановлен.",
+      message: "kepler-backend упал 5 раз подряд. Автоматический перезапуск приостановлен.",
       detail:
         "Откройте Настройки → Диагностика и посмотрите последние crash-логи.\n\n" +
         `Папка с отчётами: ${crashesDir}\n\n` +
@@ -486,8 +456,7 @@ let launcherHidden = true;
 function showLauncher() {
   if (!mainWindow) createLauncher();
   if (!mainWindow) return;
-  const headless =
-    process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
+  const headless = process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
   const saved = loadWindowState();
   const pos = saved ?? defaultLauncherPosition();
   mainWindow.setBounds({
@@ -568,9 +537,7 @@ function resolveTrayIconPath(): string | null {
 
 function createTray() {
   const iconPath = resolveTrayIconPath();
-  const icon = iconPath
-    ? nativeImage.createFromPath(iconPath)
-    : nativeImage.createEmpty();
+  const icon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
   tray = new Tray(icon);
   tray.setToolTip(KEPLER_INSTANCE.productName);
   tray.setContextMenu(
@@ -614,7 +581,9 @@ function ensureArkReadyPromise(): Promise<ArkClient> {
 // Broadcast lifecycle ARK-клиента всем окнам. Renderer / e2e тесты слушают
 // `kepler:backend:ready` вместо polling'а `kepler:backend:status`. Phase 1
 // determinism — см. .agent/tasks/2026-05-21-bug-detection-phase1-determinism/.
-function broadcastBackendEvent(event: "kepler:backend:ready" | "kepler:backend:disconnected"): void {
+function broadcastBackendEvent(
+  event: "kepler:backend:ready" | "kepler:backend:disconnected",
+): void {
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.isDestroyed()) continue;
     try {
@@ -683,9 +652,7 @@ async function initArkClient(): Promise<void> {
       autoLaunch: false,
     });
     if (state.kind !== "connected") {
-      console.error(
-        `[kepler-shell] kepler-backend ${state.kind}: ArkClient unavailable`,
-      );
+      console.error(`[kepler-shell] kepler-backend ${state.kind}: ArkClient unavailable`);
       // Без reject pending awaitArkReady() висят 15s и потом получают
       // generic "timeout" вместо реальной причины. Сбрасываем promise чтобы
       // следующий ensureArkReadyPromise() (после backend respawn) попробовал
@@ -759,13 +726,10 @@ ipcMain.handle("kepler:backend:status", () => readBackendStatus());
 // Production preload не зовёт эти каналы; контракт preload exposes их только
 // в test mode. Если случайно вызвал из production — IPC throw'нет «no handler».
 if (process.env.KOSMOS_TEST_MODE === "1") {
-  ipcMain.handle(
-    "kepler:__test:waitForReady",
-    async (_e, timeoutMs?: number): Promise<void> => {
-      const ms = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 15000;
-      await awaitArkReady(ms);
-    },
-  );
+  ipcMain.handle("kepler:__test:waitForReady", async (_e, timeoutMs?: number): Promise<void> => {
+    const ms = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 15000;
+    await awaitArkReady(ms);
+  });
   ipcMain.handle("kepler:__test:getStats", async () => {
     let commands: string[] = [];
     if (arkClient) {
@@ -870,45 +834,41 @@ ipcMain.handle("kepler:backend:restart", async () => {
 
 ipcMain.handle("kepler:window:hide", () => hideLauncher());
 
-ipcMain.handle(
-  "kepler:window:setExpanded",
-  (_e, expanded: boolean) => setLauncherExpanded(!!expanded),
+ipcMain.handle("kepler:window:setExpanded", (_e, expanded: boolean) =>
+  setLauncherExpanded(!!expanded),
 );
 
-ipcMain.handle(
-  "kepler:search:query",
-  async (_e, text: string): Promise<SearchResult[]> => {
-    if (!arkClient || !text.trim()) return [];
-    try {
-      const hits = await arkClient.objects.search(text);
-      if (hits.length === 0) return [];
-      // hits — массив { file, line, text, entryId } от db::search_objects.
-      // Резолвим title/typeId через get_objects_by_ids одной батч-операцией.
-      const ids = Array.from(new Set(hits.map((h) => h.entryId))).slice(0, 8);
-      const records = await arkClient.objects.getMany(ids);
-      const recordById = new Map(records.map((r) => [r.id, r]));
-      const out: SearchResult[] = [];
-      const seen = new Set<string>();
-      for (const h of hits) {
-        if (seen.has(h.entryId)) continue;
-        seen.add(h.entryId);
-        const rec = recordById.get(h.entryId);
-        if (!rec) continue;
-        out.push({
-          id: rec.id,
-          title: rec.title && rec.title.length > 0 ? rec.title : rec.id,
-          type_id: rec.typeId,
-          snippet: h.text,
-        });
-        if (out.length >= 8) break;
-      }
-      return out;
-    } catch (e) {
-      console.error("[kepler-shell] search failed:", e);
-      return [];
+ipcMain.handle("kepler:search:query", async (_e, text: string): Promise<SearchResult[]> => {
+  if (!arkClient || !text.trim()) return [];
+  try {
+    const hits = await arkClient.objects.search(text);
+    if (hits.length === 0) return [];
+    // hits — массив { file, line, text, entryId } от db::search_objects.
+    // Резолвим title/typeId через get_objects_by_ids одной батч-операцией.
+    const ids = Array.from(new Set(hits.map((h) => h.entryId))).slice(0, 8);
+    const records = await arkClient.objects.getMany(ids);
+    const recordById = new Map(records.map((r) => [r.id, r]));
+    const out: SearchResult[] = [];
+    const seen = new Set<string>();
+    for (const h of hits) {
+      if (seen.has(h.entryId)) continue;
+      seen.add(h.entryId);
+      const rec = recordById.get(h.entryId);
+      if (!rec) continue;
+      out.push({
+        id: rec.id,
+        title: rec.title && rec.title.length > 0 ? rec.title : rec.id,
+        type_id: rec.typeId,
+        snippet: h.text,
+      });
+      if (out.length >= 8) break;
     }
-  },
-);
+    return out;
+  } catch (e) {
+    console.error("[kepler-shell] search failed:", e);
+    return [];
+  }
+});
 
 function staticCommands(): CommandRecord[] {
   // Filter: команды с requiresExtension показываются только если этот
@@ -1094,7 +1054,6 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
   hideLauncher();
 });
 
-
 ipcMain.handle(
   "kepler:ark:request",
   async (_e, operation: string, params?: Record<string, unknown>) => {
@@ -1122,7 +1081,11 @@ ipcMain.handle("kepler:export:list", async () => {
     | unknown[]
     | null;
   if (Array.isArray(resp)) return resp;
-  if (resp && typeof resp === "object" && Array.isArray((resp as { converters?: unknown }).converters)) {
+  if (
+    resp &&
+    typeof resp === "object" &&
+    Array.isArray((resp as { converters?: unknown }).converters)
+  ) {
     return (resp as { converters: unknown[] }).converters;
   }
   return [];
@@ -1130,10 +1093,7 @@ ipcMain.handle("kepler:export:list", async () => {
 
 ipcMain.handle(
   "kepler:export:run",
-  async (
-    _e,
-    args: { converter_id: string; format: string; dest_dir: string },
-  ) => {
+  async (_e, args: { converter_id: string; format: string; dest_dir: string }) => {
     if (!args || typeof args.converter_id !== "string") {
       throw new Error("kepler:export:run: invalid args");
     }
@@ -1162,28 +1122,25 @@ ipcMain.handle("kepler:export:pickDir", async (e): Promise<string | null> => {
   return result.filePaths[0];
 });
 
-ipcMain.handle(
-  "kepler:objects:listRecent",
-  async (_e, limit?: number): Promise<SearchResult[]> => {
-    if (!arkClient) return [];
-    const cap = typeof limit === "number" && limit > 0 ? Math.min(limit, 500) : 200;
-    try {
-      const records = await arkClient.objects.list();
-      const sorted = records
-        .filter((r) => !r.deletedAt)
-        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
-        .slice(0, cap);
-      return sorted.map((r) => ({
-        id: r.id,
-        title: r.title && r.title.length > 0 ? r.title : r.id,
-        type_id: r.typeId,
-      }));
-    } catch (e) {
-      console.error("[kepler-shell] objects.list failed:", e);
-      return [];
-    }
-  },
-);
+ipcMain.handle("kepler:objects:listRecent", async (_e, limit?: number): Promise<SearchResult[]> => {
+  if (!arkClient) return [];
+  const cap = typeof limit === "number" && limit > 0 ? Math.min(limit, 500) : 200;
+  try {
+    const records = await arkClient.objects.list();
+    const sorted = records
+      .filter((r) => !r.deletedAt)
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+      .slice(0, cap);
+    return sorted.map((r) => ({
+      id: r.id,
+      title: r.title && r.title.length > 0 ? r.title : r.id,
+      type_id: r.typeId,
+    }));
+  } catch (e) {
+    console.error("[kepler-shell] objects.list failed:", e);
+    return [];
+  }
+});
 
 // --- autoUpdater IPC ----------------------------------------------------------
 // Implementation в `./autoupdater-host.ts` — state machine + broadcast.
@@ -1240,12 +1197,9 @@ ipcMain.handle("kepler:focus-service:stop", () => runServiceCliElevated("stop"))
 ipcMain.handle("kepler:focus-service:auto-install-declined:get", () =>
   isFocusServiceAutoInstallDeclined(),
 );
-ipcMain.handle(
-  "kepler:focus-service:auto-install-declined:set",
-  (_e, value: boolean) => {
-    setFocusServiceAutoInstallDeclined(!!value);
-  },
-);
+ipcMain.handle("kepler:focus-service:auto-install-declined:set", (_e, value: boolean) => {
+  setFocusServiceAutoInstallDeclined(!!value);
+});
 
 // --- lifecycle ---------------------------------------------------------------
 
@@ -1320,10 +1274,7 @@ app.whenReady().then(async () => {
   }
   // Skip periodic в test mode чтобы Playwright не делал HTTPS вызовов.
   // Skip также в dev / dev-<x> чтобы dev-инстансы не спамили GitHub.
-  if (
-    process.env.KOSMOS_TEST_MODE !== "1" &&
-    KEPLER_INSTANCE.periodicMarketplaceCheckEnabled
-  ) {
+  if (process.env.KOSMOS_TEST_MODE !== "1" && KEPLER_INSTANCE.periodicMarketplaceCheckEnabled) {
     startPeriodicCatalogCheck();
   }
 
@@ -1346,7 +1297,9 @@ app.whenReady().then(async () => {
       // tray-команду.
       try {
         openDashboardWindow();
-      } catch (e) { console.error("bench open dashboard failed:", e); }
+      } catch (e) {
+        console.error("bench open dashboard failed:", e);
+      }
     }, 5000);
   }
 
@@ -1396,9 +1349,7 @@ app.whenReady().then(async () => {
       console.error(`[kepler-shell] globalShortcut ${currentAccelerator} register failed`);
     }
   } else {
-    console.log(
-      `[kepler-shell] hotkey disabled for slot ${KEPLER_INSTANCE.slot} — use tray click`,
-    );
+    console.log(`[kepler-shell] hotkey disabled for slot ${KEPLER_INSTANCE.slot} — use tray click`);
   }
   // F12 toggle DevTools (dev mode только) — глобальный hotkey удобнее чем
   // accelerator menu, т.к. меню у frameless окна нет. F12 не конфликтует
@@ -1474,4 +1425,3 @@ app.on("will-quit", () => {
   }
   console.error("[kepler-shell] will-quit: cleanup done");
 });
-

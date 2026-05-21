@@ -3,11 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { SmartList } from "../src/types/task";
-import {
-  filterTodos,
-  countTodos,
-  countAll,
-} from "../src/services/filters/todoFilterService";
+import { filterTodos, countTodos, countAll } from "../src/services/filters/todoFilterService";
 import { FIXTURES, EXPECTED, EXPECTED_COUNTS, TODAY_ISO } from "./filterService.fixtures";
 
 // `isDateToday` в impl читает `new Date()` напрямую — для детерминистических

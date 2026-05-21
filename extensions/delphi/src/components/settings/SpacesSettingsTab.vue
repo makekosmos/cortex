@@ -34,9 +34,7 @@ const fullQrDataUrl = shallowRef("");
 const qrOverlayPayload = shallowRef("");
 const qrLinkCopied = shallowRef(false);
 
-const activeP2pCode = computed(
-  () => sharedActiveSpaceCode.value ?? activeSpaceCode.value,
-);
+const activeP2pCode = computed(() => sharedActiveSpaceCode.value ?? activeSpaceCode.value);
 
 const connectionLabel = computed(() => {
   switch (connectionState.value) {
@@ -52,9 +50,7 @@ const connectionLabel = computed(() => {
   }
 });
 
-const connectionToneClass = computed(
-  () => `p2p-dot p2p-dot--${connectionState.value}`,
-);
+const connectionToneClass = computed(() => `p2p-dot p2p-dot--${connectionState.value}`);
 
 async function openQrOverlay() {
   const code = activeP2pCode.value;
@@ -62,11 +58,7 @@ async function openQrOverlay() {
   try {
     let payload = "";
     if (isElectron && window.electronAPI?.invoke) {
-      payload =
-        ((await window.electronAPI.invoke(
-          "sync:getQrPayload",
-          code,
-        )) as string) || "";
+      payload = ((await window.electronAPI.invoke("sync:getQrPayload", code)) as string) || "";
     }
     if (!payload) payload = formatSpaceCode(code);
     qrOverlayPayload.value = payload;
@@ -106,13 +98,11 @@ function refreshPeerStatus() {
   if (!isElectron || !window.electronAPI?.invoke) return;
   window.electronAPI
     .invoke("lan-sync:getStatus")
-    .then(
-      (status: { active: boolean; peers: number; peerNames?: string[] }) => {
-        connectedPeerCount.value = status.peers;
-        connectedPeerNames.value = status.peerNames ?? [];
-        connectionState.value = status.peers > 0 ? "online" : "offline";
-      },
-    )
+    .then((status: { active: boolean; peers: number; peerNames?: string[] }) => {
+      connectedPeerCount.value = status.peers;
+      connectedPeerNames.value = status.peerNames ?? [];
+      connectionState.value = status.peers > 0 ? "online" : "offline";
+    })
     .catch(() => {});
 }
 
@@ -196,11 +186,7 @@ onUnmounted(() => {
             <p class="p2p-label">Активное пространство</p>
             <p class="p2p-code">{{ formatSpaceCode(activeP2pCode) }}</p>
           </div>
-          <button
-            type="button"
-            class="settings-action-button"
-            @click="openQrOverlay"
-          >
+          <button type="button" class="settings-action-button" @click="openQrOverlay">
             Показать QR-код
           </button>
         </div>
@@ -235,11 +221,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <EmptyState
-        v-if="spaces.length === 0"
-        compact
-        title="Сохранённых пространств пока нет"
-      />
+      <EmptyState v-if="spaces.length === 0" compact title="Сохранённых пространств пока нет" />
 
       <div v-else class="settings-space-list">
         <article
@@ -265,11 +247,7 @@ onUnmounted(() => {
                 >
                   Да, удалить
                 </button>
-                <button
-                  type="button"
-                  class="settings-action-button"
-                  @click="deletingCode = null"
-                >
+                <button type="button" class="settings-action-button" @click="deletingCode = null">
                   Отмена
                 </button>
               </div>
@@ -294,11 +272,7 @@ onUnmounted(() => {
                 >
                   Сохранить
                 </button>
-                <button
-                  type="button"
-                  class="settings-action-button"
-                  @click="cancelRename"
-                >
+                <button type="button" class="settings-action-button" @click="cancelRename">
                   Отмена
                 </button>
               </div>
@@ -310,10 +284,7 @@ onUnmounted(() => {
               <div>
                 <div class="settings-space-title-row">
                   <h3 class="settings-space-title">{{ space.name }}</h3>
-                  <span
-                    v-if="activeSpaceCode === space.code"
-                    class="settings-space-badge"
-                  >
+                  <span v-if="activeSpaceCode === space.code" class="settings-space-badge">
                     Активно
                   </span>
                 </div>
@@ -324,11 +295,7 @@ onUnmounted(() => {
               </div>
 
               <div class="settings-space-actions">
-                <button
-                  type="button"
-                  class="settings-action-button"
-                  @click="startRename(space)"
-                >
+                <button type="button" class="settings-action-button" @click="startRename(space)">
                   Переименовать
                 </button>
                 <button
@@ -346,11 +313,7 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <div
-      v-if="showQrOverlay"
-      class="p2p-qr-overlay"
-      @click.self="showQrOverlay = false"
-    >
+    <div v-if="showQrOverlay" class="p2p-qr-overlay" @click.self="showQrOverlay = false">
       <div class="p2p-qr-dialog">
         <p class="p2p-qr-kicker">Пространство</p>
         <p v-if="activeP2pCode" class="p2p-qr-code">
@@ -364,9 +327,7 @@ onUnmounted(() => {
           width="320"
           height="320"
         />
-        <p class="p2p-qr-hint">
-          Отсканируйте QR или вставьте ссылку на другом устройстве
-        </p>
+        <p class="p2p-qr-hint">Отсканируйте QR или вставьте ссылку на другом устройстве</p>
         <div class="p2p-qr-actions">
           <button
             v-if="qrOverlayPayload"
@@ -376,11 +337,7 @@ onUnmounted(() => {
           >
             {{ qrLinkCopied ? "Скопировано!" : "Скопировать ссылку" }}
           </button>
-          <button
-            type="button"
-            class="settings-action-button"
-            @click="showQrOverlay = false"
-          >
+          <button type="button" class="settings-action-button" @click="showQrOverlay = false">
             Закрыть
           </button>
         </div>

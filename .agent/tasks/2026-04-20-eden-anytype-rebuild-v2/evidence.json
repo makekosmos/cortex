@@ -69,9 +69,7 @@
       "id": "AC6",
       "status": "PASS",
       "summary": "Touched files were verified through UTF-8-aware reads and no mojibake was introduced in the rebuilt object type path.",
-      "evidence": [
-        ".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/utf8-check.txt"
-      ]
+      "evidence": [".agent/tasks/2026-04-20-eden-anytype-rebuild-v2/raw/utf8-check.txt"]
     },
     {
       "id": "AC7",

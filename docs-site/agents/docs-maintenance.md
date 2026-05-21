@@ -14,21 +14,21 @@
 
 ## Когда обновлять документацию
 
-| Что изменил | Где обновить |
-|---|---|
-| Добавил/убрал команду в `package.json` | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md` |
-| Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md` |
-| Добавил/изменил метод в `@kosmos/ark` | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md` |
-| Изменил структуру папок приложения | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md` |
-| Удалил/перенёс файл, упомянутый в доке | grep по `docs-site/` на имя файла → обновить или удалить упоминание |
-| Изменил sync-протокол / HLC / relay | `docs-site/concepts/sync.md` |
-| Добавил/убрал зависимость в стеке | `docs-site/guide/tooling.md` |
-| Добавил smoke-команду | `docs-site/reference/smoke-matrix.md` |
-| Изменил правило/запрет | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md` |
-| Принял архитектурное решение | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md` |
-| Изменил дизайн-токены `@kosmos/visuals` | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css` |
-| Создал/убрал `object_type` | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
-| Запланировал фичу / нашёл баг приложения | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap)) |
+| Что изменил                                    | Где обновить                                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Добавил/убрал команду в `package.json`         | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md`        |
+| Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md`                        |
+| Добавил/изменил метод в `@kosmos/ark`          | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md`                   |
+| Изменил структуру папок приложения             | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md`                                      |
+| Удалил/перенёс файл, упомянутый в доке         | grep по `docs-site/` на имя файла → обновить или удалить упоминание                           |
+| Изменил sync-протокол / HLC / relay            | `docs-site/concepts/sync.md`                                                                  |
+| Добавил/убрал зависимость в стеке              | `docs-site/guide/tooling.md`                                                                  |
+| Добавил smoke-команду                          | `docs-site/reference/smoke-matrix.md`                                                         |
+| Изменил правило/запрет                         | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md`                            |
+| Принял архитектурное решение                   | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md`    |
+| Изменил дизайн-токены `@kosmos/visuals`        | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css`   |
+| Создал/убрал `object_type`                     | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
+| Запланировал фичу / нашёл баг приложения       | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap))                        |
 
 ## Когда **НЕ** надо трогать документацию
 
@@ -135,7 +135,7 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 - **Когда фича в roadmap начинает делаться** — оставляй её в «Ближайшее» с пометкой статуса.
 - **Когда фича завершена** — убирай из roadmap и фиксируй в обзоре приложения (`docs-site/apps/<name>.md`).
 - **Баг исправили** — убираем из «Баги».
-- **Не дублируй с code-комментариями `// TODO`** — комментарии в коде про *локальное место*; roadmap про *направление приложения*.
+- **Не дублируй с code-комментариями `// TODO`** — комментарии в коде про _локальное место_; roadmap про _направление приложения_.
 
 ### Когда roadmap-страницы нет
 

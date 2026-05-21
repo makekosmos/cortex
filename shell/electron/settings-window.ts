@@ -206,17 +206,11 @@ ipcMain.handle("kepler:settings:close", () => {
 
 ipcMain.handle("kepler:settings:autostart:get", () => isAutostartEnabled());
 
-ipcMain.handle(
-  "kepler:settings:autostart:allowed",
-  () => isAutostartAllowed(),
-);
+ipcMain.handle("kepler:settings:autostart:allowed", () => isAutostartAllowed());
 
-ipcMain.handle(
-  "kepler:settings:autostart:set",
-  (_e, enabled: boolean) => {
-    setAutostartEnabled(!!enabled);
-  },
-);
+ipcMain.handle("kepler:settings:autostart:set", (_e, enabled: boolean) => {
+  setAutostartEnabled(!!enabled);
+});
 
 ipcMain.handle("kepler:settings:version", () => app.getVersion());
 
@@ -246,9 +240,7 @@ ipcMain.handle("kepler:settings:hotkey:reset", () => {
 
 // main.ts регистрирует callback, который умеет переcнять globalShortcut.
 let reregisterHotkeyCallback: ((accelerator: string) => boolean) | null = null;
-export function setHotkeyReregisterCallback(
-  cb: (accelerator: string) => boolean,
-): void {
+export function setHotkeyReregisterCallback(cb: (accelerator: string) => boolean): void {
   reregisterHotkeyCallback = cb;
 }
 
@@ -257,19 +249,12 @@ ipcMain.handle(
   () => process.env.KEPLER_DEV === "1" || !!readSettings().developerMode,
 );
 
-ipcMain.handle(
-  "kepler:settings:developer-mode:set",
-  (_e, enabled: boolean) => {
-    writeSettings({ developerMode: !!enabled });
-  },
-);
+ipcMain.handle("kepler:settings:developer-mode:set", (_e, enabled: boolean) => {
+  writeSettings({ developerMode: !!enabled });
+});
 
 ipcMain.handle("kepler:settings:usage-tracker:get", () => isUsageTrackerEnabled());
 
-ipcMain.handle(
-  "kepler:settings:usage-tracker:set",
-  (_e, enabled: boolean) => {
-    writeSettings({ usageTrackerEnabled: !!enabled });
-  },
-);
-
+ipcMain.handle("kepler:settings:usage-tracker:set", (_e, enabled: boolean) => {
+  writeSettings({ usageTrackerEnabled: !!enabled });
+});

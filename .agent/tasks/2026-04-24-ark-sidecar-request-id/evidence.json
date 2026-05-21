@@ -6,11 +6,7 @@
     {
       "id": "AC1",
       "status": "PASS",
-      "evidence": [
-        "cargo-test-response-id.txt",
-        "cargo-test-full.txt",
-        "source-evidence.txt"
-      ],
+      "evidence": ["cargo-test-response-id.txt", "cargo-test-full.txt", "source-evidence.txt"],
       "summary": "Legacy requests without id still produce responses without id."
     },
     {
@@ -27,10 +23,7 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "git-diff.txt",
-        "verify-arksync-node-request-id.txt"
-      ],
+      "evidence": ["git-diff.txt", "verify-arksync-node-request-id.txt"],
       "summary": "Async event frames remain unchanged and are still handled separately from responses."
     },
     {
@@ -46,10 +39,7 @@
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": [
-        "verify-arksync-node-request-id.ts",
-        "verify-arksync-node-request-id.txt"
-      ],
+      "evidence": ["verify-arksync-node-request-id.ts", "verify-arksync-node-request-id.txt"],
       "summary": "Injected requestFn mode remains legacy-shaped and does not force request ids into Delphi's sidecar path."
     },
     {

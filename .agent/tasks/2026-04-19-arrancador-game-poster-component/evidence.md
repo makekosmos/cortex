@@ -1,6 +1,7 @@
 # Evidence - Arrancador game poster component in kosmos-visuals
 
 ## Scope
+
 - `packages/kosmos-visuals/react/GamePosterCard.tsx`
 - `packages/kosmos-visuals/react/index.ts`
 - `packages/kosmos-visuals/patterns/gamePosterCard.ts`
@@ -12,6 +13,7 @@
 - `.agent/tasks/2026-04-19-arrancador-game-poster-component/spec.md`
 
 ## What changed
+
 - Added a real shared React poster-card component in `kosmos-visuals` as [GamePosterCard.tsx](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/react/GamePosterCard.tsx:1).
 - Exported that component through the package subpath in [packages/kosmos-visuals/package.json](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/package.json:1).
 - Switched Arrancador's local [GameCard.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/GameCard.tsx:1) from owning the card markup to delegating rendering to the shared `GamePosterCard`.
@@ -21,6 +23,7 @@
 - Added the minimal TypeScript/Vite resolution glue needed for a React component stored under `packages/kosmos-visuals` to be typechecked and bundled from Arrancador.
 
 ## Acceptance criteria
+
 - `AC1` PASS: `kosmos-visuals` now exports a real React poster-card component from [GamePosterCard.tsx](/D:/Personal/Hobby/Coding/kosmos/packages/kosmos-visuals/react/GamePosterCard.tsx:23).
 - `AC2` PASS: Arrancador [GameCard.tsx](/D:/Personal/Hobby/Coding/kosmos/apps/arrancador/src/components/GameCard.tsx:12) no longer owns the card markup and instead renders the shared component directly.
 - `AC3` PASS: the shared component accepts a destination path and a `LinkComponent`, letting Arrancador keep `react-router-dom/Link` at the app boundary.
@@ -30,17 +33,21 @@
 - `AC7` PASS: `bun run typecheck` passes in `apps/arrancador`.
 
 ## Verification
+
 ### Fresh commands
+
 - `bun run typecheck` PASS
 - `bunx vitest run --configLoader native --config vitest.config.mjs src/test/game-card.test.tsx` PASS
 - `bun run build:renderer` PASS
 
 ### Raw artifacts
+
 - `.agent/tasks/2026-04-19-arrancador-game-poster-component/typecheck.log`
 - `.agent/tasks/2026-04-19-arrancador-game-poster-component/game-card-vitest.log`
 - `.agent/tasks/2026-04-19-arrancador-game-poster-component/build-renderer.log`
 
 ## Notes
+
 - The Arrancador test now verifies delegation into the shared component contract, while `build:renderer` verifies that the real shared React component from `kosmos-visuals` can be bundled into the app.
 - The shared component is stored in `packages/kosmos-visuals/react/` to avoid mixing Vue and React exports in the existing `components/` area.
 - No mojibake patterns were introduced in the changed project files during this step.

@@ -40,7 +40,9 @@ const hasRows = computed(() => props.rows.length > 0);
       <tbody>
         <tr v-for="row in rows" :key="row.id" @click="console.log('[dashboard] row', row)">
           <td class="primary">{{ row.primary }}</td>
-          <td><code class="type-id">{{ row.typeId }}</code></td>
+          <td>
+            <code class="type-id">{{ row.typeId }}</code>
+          </td>
           <td class="created">{{ fmtCreatedAt(row.createdAt) }}</td>
         </tr>
       </tbody>
@@ -95,8 +97,7 @@ tbody tr:hover {
 
 tbody td {
   padding: 10px 12px;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--border) 60%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;

@@ -12,7 +12,15 @@ const categories = {
   // Окна / Desktop chrome — нужны реальный viewport.
   Window: ["DesktopChrome", "DesktopContentSurface", "Titlebar", "TitlebarHistoryControls"],
   // Inputs / controls.
-  Inputs: ["Toggle", "SettingsRow", "Dropdown", "DateChip", "DateTimePicker", "TimeColumn", "Calendar"],
+  Inputs: [
+    "Toggle",
+    "SettingsRow",
+    "Dropdown",
+    "DateChip",
+    "DateTimePicker",
+    "TimeColumn",
+    "Calendar",
+  ],
   // Display / data cards.
   Display: ["StatusDot", "EmptyState", "BlocklistCard", "GamePosterCard"],
   // Lists.
@@ -63,10 +71,7 @@ for (const file of fs.readdirSync(components)) {
     // Look for `parameters: { ... }` or `parameters: {}` или вообще нет parameters.
     if (/parameters:\s*\{/.test(src)) {
       // Insert layout into existing parameters block.
-      src = src.replace(
-        /parameters:\s*\{/,
-        `parameters: { layout: "${desiredLayout}",`,
-      );
+      src = src.replace(/parameters:\s*\{/, `parameters: { layout: "${desiredLayout}",`);
     } else {
       // Insert parameters near `tags: ["autodocs"]` или после component:.
       src = src.replace(

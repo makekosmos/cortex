@@ -97,10 +97,7 @@ function handleListKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div
-    v-if="open"
-    class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
-  >
+  <div v-if="open" class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close" />
 
     <div
@@ -133,18 +130,16 @@ function handleListKeydown(event: KeyboardEvent) {
           @input="updateQuery(($event.target as HTMLInputElement).value)"
           @keydown="handleInputKeydown"
         />
-        <kbd class="hidden rounded border border-(--border) px-1.5 py-0.5 text-[10px] text-(--muted-foreground) sm:block">
+        <kbd
+          class="hidden rounded border border-(--border) px-1.5 py-0.5 text-[10px] text-(--muted-foreground) sm:block"
+        >
           esc
         </kbd>
       </div>
 
       <div class="h-px bg-(--border)" />
 
-      <div
-        ref="listRef"
-        class="max-h-96 overflow-y-auto py-2"
-        @keydown="handleListKeydown"
-      >
+      <div ref="listRef" class="max-h-96 overflow-y-auto py-2" @keydown="handleListKeydown">
         <slot :query="query" :close="close" />
       </div>
     </div>

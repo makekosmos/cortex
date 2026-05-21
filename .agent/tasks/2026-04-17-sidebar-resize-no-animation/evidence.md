@@ -15,6 +15,7 @@ Manual drag resize does not animate sidebar width.
 Status: PASS
 
 Proof:
+
 - `packages/kosmos-visuals/components/sidebar.css` now defines `.kosmos-sidebar-wrapper.is-resizing { transition: none; }`.
 - The shared sidebar already toggles `is-resizing` during pointer-driven resize, so width updates now apply immediately while dragging.
 - Raw artifacts:
@@ -28,6 +29,7 @@ Collapse and expand animation remains intact.
 Status: PASS
 
 Proof:
+
 - The existing `.kosmos-sidebar-wrapper.animating` rule remains unchanged.
 - No hide/show logic in `Sidebar.vue` was modified for this fix, so only the drag-resize path changes behavior.
 - Raw artifacts:
@@ -41,6 +43,7 @@ Focused checks pass after the styling change.
 Status: PASS
 
 Proof:
+
 - `apps/dashboard` typecheck passed.
 - `apps/delphi/ts` typecheck passed.
 - `apps/eden/ts` typecheck passed.

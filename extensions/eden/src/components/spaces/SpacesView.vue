@@ -77,24 +77,14 @@
         </div>
         <div v-for="nt in propertyTypes" :key="nt.id" class="space-table-row">
           <span style="display: flex; align-items: center; gap: 6px">
-            <img
-              :src="objectIconUri(nt.icon)"
-              alt=""
-              width="16"
-              height="16"
-              draggable="false"
-            />
+            <img :src="objectIconUri(nt.icon)" alt="" width="16" height="16" draggable="false" />
             {{ nt.name }}
           </span>
           <span>{{ nt.slug }}</span>
           <span>{{ entries.filter((e) => e.type_id === nt.id).length }}</span>
         </div>
       </div>
-      <EmptyState
-        v-else
-        title="Нет типов"
-        description="Создайте типы объектов в настройках."
-      />
+      <EmptyState v-else title="Нет типов" description="Создайте типы объектов в настройках." />
     </section>
   </section>
 

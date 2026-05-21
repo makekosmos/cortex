@@ -18,8 +18,9 @@ Dashboard становится встроенной частью Kepler shell'а
 ## Цель
 
 Внутри shell render bundle добавить routing `#/dashboard/...`, новый `DashboardWelcomeView`
-+ `DashboardSpaceView`, отдельное окно через `electron/dashboard-window.ts`, IPC `kepler:spaces:*`
-для перечисления spaces. Старый extension Dashboard — frozen в legacy/.
+
+- `DashboardSpaceView`, отдельное окно через `electron/dashboard-window.ts`, IPC `kepler:spaces:*`
+  для перечисления spaces. Старый extension Dashboard — frozen в legacy/.
 
 ## Acceptance criteria
 

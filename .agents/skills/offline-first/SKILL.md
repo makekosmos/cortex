@@ -22,16 +22,16 @@ The user must never wait for a network response to see the result of their actio
 ```typescript
 // Vue/Pinia — Web
 function addTodo(params: CreateTodoParams): TodoItem {
-    const todo = createTodoItem(params);
-    todos.value = [todo, ...todos.value];          // 1. Update UI immediately
-    arkSync.sendChange(todoItemToArkChange(todo, "create"));  // 2. Queue/send async
-    return todo;
+  const todo = createTodoItem(params);
+  todos.value = [todo, ...todos.value]; // 1. Update UI immediately
+  arkSync.sendChange(todoItemToArkChange(todo, "create")); // 2. Queue/send async
+  return todo;
 }
 
 function updateTodo(id: string, patch: Partial<TodoItem>) {
-    todos.value = todos.value.map(t => t.id === id ? { ...t, ...patch } : t);  // 1. Optimistic
-    const updated = todos.value.find(t => t.id === id);
-    if (updated) arkSync.sendChange(todoItemToArkChange(updated, "update"));    // 2. Async
+  todos.value = todos.value.map((t) => (t.id === id ? { ...t, ...patch } : t)); // 1. Optimistic
+  const updated = todos.value.find((t) => t.id === id);
+  if (updated) arkSync.sendChange(todoItemToArkChange(updated, "update")); // 2. Async
 }
 ```
 
@@ -56,23 +56,25 @@ fun completeTodo(id: String) {
 Changes made while offline must survive app restarts.
 
 ### Web (localStorage)
+
 ```typescript
 const OUTBOX_KEY = "delphi.sync_outbox";
 
 function enqueue(change: ArkChange) {
-    const outbox = loadOutbox();
-    outbox.push(change);
-    localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
+  const outbox = loadOutbox();
+  outbox.push(change);
+  localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox));
 }
 
 function flushOutbox() {
-    const pending = loadOutbox();
-    localStorage.setItem(OUTBOX_KEY, "[]");  // Clear before sending
-    for (const change of pending) sendChange(change);
+  const pending = loadOutbox();
+  localStorage.setItem(OUTBOX_KEY, "[]"); // Clear before sending
+  for (const change of pending) sendChange(change);
 }
 ```
 
 ### Android (Room)
+
 ```kotlin
 @Entity(tableName = "pending_changes")
 data class PendingChange(
@@ -102,6 +104,7 @@ Every device tracks what it has seen from every other device.
 ```
 
 On reconnect:
+
 1. Send vector to server: `sync_start { vector }`
 2. Server returns everything the client missed: `sync_changes { changes }`
 3. Client applies missed changes, then flushes outbox
@@ -117,9 +120,10 @@ Incoming changes from other devices must be safe to apply multiple times.
 ```typescript
 // Web — Pinia upsert
 function upsertTodo(incoming: TodoItem) {
-    const idx = todos.value.findIndex(t => t.id === incoming.id);
-    if (idx >= 0) todos.value[idx] = incoming;  // Update
-    else todos.value.push(incoming);             // Insert
+  const idx = todos.value.findIndex((t) => t.id === incoming.id);
+  if (idx >= 0)
+    todos.value[idx] = incoming; // Update
+  else todos.value.push(incoming); // Insert
 }
 ```
 
@@ -151,7 +155,7 @@ For sync protocol, `change_type: "delete"` tells peers to mark the item deleted 
 The UI should reflect sync state without blocking interaction.
 
 ```typescript
-type ConnectionState = "online" | "syncing" | "offline"
+type ConnectionState = "online" | "syncing" | "offline";
 
 // Green dot → online
 // Yellow pulsing → syncing/connecting
@@ -215,12 +219,12 @@ Before marking any data feature done:
 
 ## Anti-Patterns to Avoid
 
-| Anti-Pattern | Why Bad | Fix |
-|---|---|---|
-| `await syncClient.send(change)` in UI | Blocks on network; shows spinner | Fire-and-forget, queue if offline |
-| Show "offline" error and block action | Hostile UX, violates offline-first | Queue silently, sync later |
-| Outbox in memory only | Lost on app restart | Persist to Room / localStorage |
-| Physical `DELETE` for user deletions | Can't sync, unrecoverable | Use `isTrashed` flag or soft-delete event |
-| Version vector in memory only | App restart → re-fetches all history | Persist to DataStore / localStorage |
-| Apply changes then update vector | Race condition: re-apply on restart | Update vector inside apply loop |
-| Fetch from server in CRUD handler | Network dependency in hot path | Read from local DB only |
+| Anti-Pattern                          | Why Bad                              | Fix                                       |
+| ------------------------------------- | ------------------------------------ | ----------------------------------------- |
+| `await syncClient.send(change)` in UI | Blocks on network; shows spinner     | Fire-and-forget, queue if offline         |
+| Show "offline" error and block action | Hostile UX, violates offline-first   | Queue silently, sync later                |
+| Outbox in memory only                 | Lost on app restart                  | Persist to Room / localStorage            |
+| Physical `DELETE` for user deletions  | Can't sync, unrecoverable            | Use `isTrashed` flag or soft-delete event |
+| Version vector in memory only         | App restart → re-fetches all history | Persist to DataStore / localStorage       |
+| Apply changes then update vector      | Race condition: re-apply on restart  | Update vector inside apply loop           |
+| Fetch from server in CRUD handler     | Network dependency in hot path       | Read from local DB only                   |

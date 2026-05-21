@@ -41,9 +41,7 @@ export const vueExtensions = discoverVueExtensions();
 export default defineConfig(({ mode }) => {
   // mode используется как extension id. По умолчанию — первый
   // найденный extension, что удобно для smoke `vite build --config ...`.
-  const id = mode && mode !== "production" && mode !== "development"
-    ? mode
-    : vueExtensions[0];
+  const id = mode && mode !== "production" && mode !== "development" ? mode : vueExtensions[0];
 
   if (!id) {
     throw new Error(
@@ -70,27 +68,18 @@ export default defineConfig(({ mode }) => {
         // legacy apps (Delphi, Eden, Horologion), упрощает миграцию исходников
         // как Vue extension без массового rewrite import-путей.
         "@": path.resolve(extensionDir, "src"),
-        "@kosmos/ark": path.resolve(
-          __dirname,
-          "../packages/ark/src/index.ts",
-        ),
+        "@kosmos/ark": path.resolve(__dirname, "../packages/ark/src/index.ts"),
         "@kosmos/visuals/theme/css": path.resolve(
           __dirname,
           "../packages/visuals/theme/css-variables.css",
         ),
-        "@kosmos/visuals": path.resolve(
-          __dirname,
-          "../packages/visuals",
-        ),
+        "@kosmos/visuals": path.resolve(__dirname, "../packages/visuals"),
         // Extensions live at <repoRoot>/extensions/<id>/ and have no own
         // node_modules. Bare-specifier deps used by extension sources
         // (e.g. lucide-vue-next, tailwindcss) resolve via shell's
         // node_modules: point them explicitly so Rolldown does not walk
         // up past the repo root and miss them.
-        "lucide-vue-next": path.resolve(
-          __dirname,
-          "node_modules/lucide-vue-next",
-        ),
+        "lucide-vue-next": path.resolve(__dirname, "node_modules/lucide-vue-next"),
         // Tailwind CSS — extension'ы могут @import "tailwindcss" (или
         // его submodules как `tailwindcss/utilities.css`). Bare specifier
         // не резолвится из <extensionDir>/src без alias'а, потому что

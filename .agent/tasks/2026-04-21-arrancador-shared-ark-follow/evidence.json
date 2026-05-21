@@ -13,9 +13,7 @@
     {
       "id": "AC2",
       "status": "PASS",
-      "evidence": [
-        "apps/arrancador/electron/main/backend.ts"
-      ]
+      "evidence": ["apps/arrancador/electron/main/backend.ts"]
     },
     {
       "id": "AC3",

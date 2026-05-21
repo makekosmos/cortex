@@ -1,11 +1,6 @@
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 
-export type SpaceId =
-  | "my-space"
-  | "all-objects"
-  | "all-notes"
-  | "all-properties"
-  | "diary";
+export type SpaceId = "my-space" | "all-objects" | "all-notes" | "all-properties" | "diary";
 
 export type SortMode = "updated_at" | "created_at" | "title";
 

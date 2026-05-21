@@ -61,9 +61,7 @@ export async function localDbDeleteTodo(id: string): Promise<void> {
   await db()?.db.deleteTodo(id);
 }
 
-export async function localDbBatchUpsertTodos(
-  todos: TodoItem[],
-): Promise<void> {
+export async function localDbBatchUpsertTodos(todos: TodoItem[]): Promise<void> {
   if (todos.length === 0) return;
 
   await db()?.db.batchUpsertTodos(todos);

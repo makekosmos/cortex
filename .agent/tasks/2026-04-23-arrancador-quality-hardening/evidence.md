@@ -13,6 +13,7 @@ AC1. Mojibake is removed from active Arrancador source and docs touched by this 
 Result: `PASS`
 
 Evidence:
+
 - Added `apps/arrancador/src-vue/test/source-encoding.test.ts`.
 - The test scans active Arrancador source/docs as UTF-8 and rejects common mojibake marker sequences.
 - Raw encoding gate is included in `bun run test`.
@@ -23,6 +24,7 @@ AC2. The default `bun run test` command runs both renderer and Electron main uni
 Result: `PASS`
 
 Evidence:
+
 - `apps/arrancador/vitest.config.mjs` now defines separate Vitest projects:
   - `renderer`: jsdom, Vue setup, `src-vue/test/**/*`
   - `electron-main`: node, `electron/main/**/*.test.ts`
@@ -34,6 +36,7 @@ AC3. Shared pure game-import/path logic is extracted from large route pages.
 Result: `PASS`
 
 Evidence:
+
 - Added `apps/arrancador/src-vue/lib/gameImport.ts`.
 - `LibraryPage.vue` and `ScanPage.vue` import shared helpers instead of defining duplicate local functions.
 - `rg` finds helper definitions only in `src-vue/lib/gameImport.ts`.
@@ -43,6 +46,7 @@ AC4. Test coverage is added for the extracted shared logic.
 Result: `PASS`
 
 Evidence:
+
 - Added `apps/arrancador/src-vue/test/game-import.test.ts`.
 - Tests cover supported drop paths, filename extraction, display-name cleanup, normalization, fuzzy merge matching, and merge-candidate lookup.
 
@@ -51,6 +55,7 @@ AC5. Verification is fresh and recorded.
 Result: `PASS`
 
 Evidence:
+
 - Raw artifacts:
   - `raw/typecheck.txt`
   - `raw/test.txt`

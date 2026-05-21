@@ -16,16 +16,19 @@ AC1 PASS. `changed-files.md` separates proof artifacts, task-owned hardening
 files, and related broader/pre-existing dirty state.
 
 AC2 PASS. `bun run typecheck`:
+
 - raw: `raw/typecheck.txt`
 - command: `vue-tsc --noEmit && tsc --noEmit -p tsconfig.electron.json && tsc --noEmit -p tsconfig.node.json`
 
 AC3 PASS. `electron/main/services/games.ts` no longer has unresolved
 `getRowById` or `queryOne` hazards.
+
 - `queryOne` is imported explicitly.
 - `recordGameLaunch` uses `createGameLoaders(...).loadGame`.
 - focused coverage exists in `electron/main/services/games.test.ts`.
 
 AC4 PASS. Backup copy/restore path safety is enforced.
+
 - TypeScript copy rejects traversal, absolute paths, drive-qualified paths,
   unsafe segments, and unsafe root labels.
 - Rust copy rejects unsafe relative paths and root labels.
@@ -40,6 +43,7 @@ AC4 PASS. Backup copy/restore path safety is enforced.
 - tests: `backup/copy.test.ts`, `backup/restore.test.ts`, `sidecar/src/backup.rs`.
 
 AC5 PASS. Managed sidecar request handling is race-safe.
+
 - stdin stream/write errors are captured.
 - stdout draining is serialized with `stdoutDrain`.
 - close handling waits for stdout draining before rejecting.
@@ -49,6 +53,7 @@ AC5 PASS. Managed sidecar request handling is race-safe.
   responses, failed responses, and abort.
 
 AC6 PASS. Vue template contracts are checked by normal typecheck.
+
 - `package.json` typecheck starts with `vue-tsc --noEmit`.
 - `GameDetailPage` passes `saving-edit`, `metadata-results`,
   `searching-metadata`, and `applying-metadata` to `GameDetailDialogs`.
@@ -56,6 +61,7 @@ AC6 PASS. Vue template contracts are checked by normal typecheck.
 
 AC7 PASS. Coverage includes active Electron main/service facades and nested
 implementation files.
+
 - raw coverage summary: `raw/coverage.txt`
 - copied lcov: `raw/coverage-lcov.info`
 - lcov includes:
@@ -70,6 +76,7 @@ implementation files.
   - `electron\main\sidecar\arrancador-sidecar.ts`
 
 AC8 PASS. Verification commands and raw logs:
+
 - `bun run typecheck`: PASS, `raw/typecheck.txt`
 - `bun run lint`: PASS, `raw/lint.txt`
 - `bun run test`: PASS, 45 files / 152 tests, `raw/test.txt`

@@ -6,9 +6,7 @@
       "id": "AC1",
       "status": "PASS",
       "summary": "TypedHeader now uses an Anytype-like page-head hierarchy instead of a heavy rounded card block.",
-      "evidence": [
-        "apps/eden/ts/src/components/typed-notes/TypedHeader.vue"
-      ]
+      "evidence": ["apps/eden/ts/src/components/typed-notes/TypedHeader.vue"]
     },
     {
       "id": "AC2",

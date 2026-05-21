@@ -74,17 +74,17 @@ Eden — standalone Electron .exe (apps/eden). Остальные — Vue-extens
 
 `services/kepler-backend/`:
 
-| Файл | Что делает |
-|---|---|
-| `main.rs` | bootstrap: singleton, lock-file, ark-core-rpc supervisor, WS server, start_sync |
-| `ark_host.rs` | spawn + watchdog `ark-core-rpc`, proxy stdio JSON ↔ WS |
-| `ws_server.rs` | WS accept loop, auth handshake, dispatch operations (intercept `commands.*`) |
-| `command_bus.rs` | registry per WS-connection, broadcast invoke/changed events |
-| `sync.rs` | вызов `start_sync` на ark-core-rpc после health |
-| `lock_file.rs` | `%APPDATA%\Kosmos\kepler.lock.json` (pid, ws_port, bearer token) |
-| `singleton.rs` | rusqlite WAL BEGIN IMMEDIATE — одна копия на машину |
-| `auth.rs` | bearer token, PID-binding, file ACL |
-| `protocol_version.rs` | hello-handshake version match |
+| Файл                  | Что делает                                                                      |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `main.rs`             | bootstrap: singleton, lock-file, ark-core-rpc supervisor, WS server, start_sync |
+| `ark_host.rs`         | spawn + watchdog `ark-core-rpc`, proxy stdio JSON ↔ WS                          |
+| `ws_server.rs`        | WS accept loop, auth handshake, dispatch operations (intercept `commands.*`)    |
+| `command_bus.rs`      | registry per WS-connection, broadcast invoke/changed events                     |
+| `sync.rs`             | вызов `start_sync` на ark-core-rpc после health                                 |
+| `lock_file.rs`        | `%APPDATA%\Kosmos\kepler.lock.json` (pid, ws_port, bearer token)                |
+| `singleton.rs`        | rusqlite WAL BEGIN IMMEDIATE — одна копия на машину                             |
+| `auth.rs`             | bearer token, PID-binding, file ACL                                             |
+| `protocol_version.rs` | hello-handshake version match                                                   |
 
 ### Apps (consumers + producers)
 
@@ -122,20 +122,20 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Horologion. Никогда не п
 
 Канонический бинарь рантайма. Принимает newline-delimited JSON со stdin, пишет ответы и события в stdout. Все исходники — в `crates/ark-core/rust/src/`:
 
-| Файл | Что делает |
-|---|---|
-| `main.rs` | stdin/stdout цикл, диспетчер операций |
-| `db.rs` | SQLite CRUD, миграции, sync storage adapter |
-| `schema.rs` | DDL — `CREATE TABLE IF NOT EXISTS` и индексы |
-| `types.rs` | shared entities и sync payloads |
-| `protocol.rs` | wire-протокол sync (фреймы) |
-| `hlc.rs` | Hybrid Logical Clock |
-| `sync_server.rs`, `sync_client.rs` | WebSocket sync |
-| `beacon.rs` | UDP discovery в LAN |
-| `relay_transport.rs`, `relay_sync.rs` | relay-bridge поверх sync |
-| `mesh.rs` | координация LAN + relay |
-| `host.rs`, `net.rs` | фильтрация hostname и routable addresses |
-| `ffi.rs` | UniFFI facade для Android / Swift |
+| Файл                                  | Что делает                                   |
+| ------------------------------------- | -------------------------------------------- |
+| `main.rs`                             | stdin/stdout цикл, диспетчер операций        |
+| `db.rs`                               | SQLite CRUD, миграции, sync storage adapter  |
+| `schema.rs`                           | DDL — `CREATE TABLE IF NOT EXISTS` и индексы |
+| `types.rs`                            | shared entities и sync payloads              |
+| `protocol.rs`                         | wire-протокол sync (фреймы)                  |
+| `hlc.rs`                              | Hybrid Logical Clock                         |
+| `sync_server.rs`, `sync_client.rs`    | WebSocket sync                               |
+| `beacon.rs`                           | UDP discovery в LAN                          |
+| `relay_transport.rs`, `relay_sync.rs` | relay-bridge поверх sync                     |
+| `mesh.rs`                             | координация LAN + relay                      |
+| `host.rs`, `net.rs`                   | фильтрация hostname и routable addresses     |
+| `ffi.rs`                              | UniFFI facade для Android / Swift            |
 
 ### SQLite
 
@@ -151,12 +151,12 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 
 ## Communication primitives
 
-| Primitive | Где определён | Когда |
-|---|---|---|
-| **ARK objects** | `objects` + `object_links` в SQLite | Долгоживущие данные, репликация sync'ом |
-| **Entity events** | `onArkEvent` / `onEntityChanged` в `@kosmos/ark` | Подписка на изменения объектов |
-| **Command bus** | `commands.*` в WS protocol | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](/concepts/command-bus) |
-| **Extension host** | `kepler:extension:*` IPC в kepler-shell | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](/concepts/extension-host) |
+| Primitive          | Где определён                                    | Когда                                                                                                                 |
+| ------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **ARK objects**    | `objects` + `object_links` в SQLite              | Долгоживущие данные, репликация sync'ом                                                                               |
+| **Entity events**  | `onArkEvent` / `onEntityChanged` в `@kosmos/ark` | Подписка на изменения объектов                                                                                        |
+| **Command bus**    | `commands.*` в WS protocol                       | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](/concepts/command-bus)              |
+| **Extension host** | `kepler:extension:*` IPC в kepler-shell          | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](/concepts/extension-host) |
 
 ## Принципы
 
@@ -182,16 +182,16 @@ Substantial-правки проходят через proof loop с явными 
 
 ## Компонентная карта
 
-| Кусок | Где | Тип | Роль |
-|---|---|---|---|
-| ark-core | `crates/ark-core/rust` | Rust crate + бинарь | runtime данных |
-| @kosmos/ark | `packages/ark` | TS SDK | клиент к sidecar / kepler-backend |
-| kepler-shell | `shell/` (npm `kepler-shell`) | TS + Electron | launcher host, tray, settings, extension loader |
-| kepler-backend | `services/kepler-backend` | Rust binary | shared runtime supervisor + WS gateway + command bus + sync + usage_tracker модуль |
-| ark-relay-server | `services/ark-relay-server` | Rust server | WebSocket relay (NAT-обход p2p sync) |
-| kepler-watcher | `services/kepler-watcher` | Rust | watcher-демон над ark-core |
-| @kosmos/visuals | `packages/visuals` | TS + Vue | дизайн-система |
-| Eden (standalone) | `apps/eden/ts` | TS + Electron | заметки, пока вне shell (Phase 6 — миграция) |
-| Vue-extensions | `extensions/{delphi,arrancador,dashboard,horologion}` | TS + Vue | продуктовые оболочки внутри Kepler shell |
-| ark-service (Android) | `mobile/ark-service` | Kotlin + Room | Android ContentProvider, держит данные Android Delphi (`mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
-| usage-tracker module | `services/kepler-backend/src/usage_tracker/` | Rust | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3 |
+| Кусок                 | Где                                                   | Тип                 | Роль                                                                                                                        |
+| --------------------- | ----------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| ark-core              | `crates/ark-core/rust`                                | Rust crate + бинарь | runtime данных                                                                                                              |
+| @kosmos/ark           | `packages/ark`                                        | TS SDK              | клиент к sidecar / kepler-backend                                                                                           |
+| kepler-shell          | `shell/` (npm `kepler-shell`)                         | TS + Electron       | launcher host, tray, settings, extension loader                                                                             |
+| kepler-backend        | `services/kepler-backend`                             | Rust binary         | shared runtime supervisor + WS gateway + command bus + sync + usage_tracker модуль                                          |
+| ark-relay-server      | `services/ark-relay-server`                           | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                        |
+| kepler-watcher        | `services/kepler-watcher`                             | Rust                | watcher-демон над ark-core                                                                                                  |
+| @kosmos/visuals       | `packages/visuals`                                    | TS + Vue            | дизайн-система                                                                                                              |
+| Eden (standalone)     | `apps/eden/ts`                                        | TS + Electron       | заметки, пока вне shell (Phase 6 — миграция)                                                                                |
+| Vue-extensions        | `extensions/{delphi,arrancador,dashboard,horologion}` | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                    |
+| ark-service (Android) | `mobile/ark-service`                                  | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
+| usage-tracker module  | `services/kepler-backend/src/usage_tracker/`          | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                               |

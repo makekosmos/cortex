@@ -1,9 +1,11 @@
 # Evidence - Kosmos shared typography tokens
 
 ## Summary
+
 A shared primary title typography token set was added to `kosmos-visuals`, and Eden first-level headings were migrated to use it instead of local hardcoded values.
 
 ## Code Evidence
+
 - `packages/kosmos-visuals/theme/css-variables.css`
   - introduced:
     - `--kosmos-type-title-1-size`
@@ -24,32 +26,39 @@ A shared primary title typography token set was added to `kosmos-visuals`, and E
 ## Verification
 
 ### AC1
+
 PASS
 
 Shared primary title typography token set exists in `kosmos-visuals`.
 
 ### AC2
+
 PASS
 
 Eden note/object title input uses the shared title token.
 
 ### AC3
+
 PASS
 
 Eden settings page titles use the shared title token.
 
 ### AC4
+
 PASS
 
 Other first-level Eden headings on the same visual tier now use the shared title token as well.
 
 ### AC5
+
 PASS
 
 Checks passed:
+
 - `bun x tsc --noEmit`
 - `bun run build`
 
 Raw artifacts:
+
 - `raw/tsc.txt`
 - `raw/build.txt`

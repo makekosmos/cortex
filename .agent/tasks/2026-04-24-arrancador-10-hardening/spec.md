@@ -22,11 +22,13 @@ AC2. `bun run typecheck` from `apps/arrancador` typechecks Vue SFC templates,
 renderer/shared TypeScript, Electron main/preload TypeScript, and Node scripts.
 
 AC3. Runtime hazards in `electron/main/services/games.ts` are removed:
+
 - no unresolved `getRowById`
 - no unresolved `queryOne`
 - `recordGameLaunch` has focused coverage or an explicit no-op contract.
 
 AC4. Backup copy/restore path safety is enforced in TypeScript and Rust:
+
 - backup-relative paths reject traversal, absolute paths, drive-qualified paths,
   unsafe segments, and unsafe root labels
 - restore manifest `backupPath` rejects traversal, absolute paths, and
@@ -35,6 +37,7 @@ AC4. Backup copy/restore path safety is enforced in TypeScript and Rust:
   derived from the current game/save-root context.
 
 AC5. Managed sidecar request handling is race-safe:
+
 - stdin errors are handled
 - stdout event/response draining is serialized
 - process close waits for stdout draining before rejecting.
@@ -44,6 +47,7 @@ the `GameDetailPage` -> `GameDetailDialogs` prop bridge is covered.
 
 AC7. Coverage includes the active Electron main/service facades and nested
 implementation files relevant to the hardening work:
+
 - backup IPC handlers
 - backup service facade
 - backup copy/restore
@@ -53,6 +57,7 @@ implementation files relevant to the hardening work:
 
 AC8. Verification passes and raw logs are captured under
 `.agent/tasks/2026-04-24-arrancador-10-hardening/raw/`:
+
 - `bun run typecheck`
 - `bun run lint`
 - `bun run test`

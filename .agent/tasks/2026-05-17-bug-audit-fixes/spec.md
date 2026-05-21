@@ -31,6 +31,7 @@ UTF-8-символа. Для строк с кириллицей/китайски
 **Файл:** `crates/ark-core/rust/src/hlc.rs`
 
 При вызове `HLC::from_string("")`:
+
 - `z_pos = 0`, `first_colon = 0`
 - `rest = &s[1..]` → паника: byte index 1 out of bounds for "" (len=0)
 

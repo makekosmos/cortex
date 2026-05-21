@@ -22,9 +22,7 @@
     {
       "id": "AC3",
       "status": "PASS",
-      "evidence": [
-        "apps/delphi/ts/src/pages/SettingsPage.vue"
-      ]
+      "evidence": ["apps/delphi/ts/src/pages/SettingsPage.vue"]
     },
     {
       "id": "AC4",
@@ -39,9 +37,7 @@
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": [
-        ".agent/tasks/delphi-remove-google-calendar/raw/tsc-noemit.txt"
-      ]
+      "evidence": [".agent/tasks/delphi-remove-google-calendar/raw/tsc-noemit.txt"]
     }
   ],
   "commands": [

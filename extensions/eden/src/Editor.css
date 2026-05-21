@@ -317,7 +317,6 @@
   pointer-events: none;
 }
 
-
 .focus-mode .editor-content-rail {
   min-height: 0;
 }
@@ -517,8 +516,6 @@
   pointer-events: none;
   transform: translateY(-10px);
 }
-
-
 
 .focus-mode .editor-content-rail {
   min-height: 0;

@@ -1,9 +1,11 @@
 # Task: Arrancador game poster component in kosmos-visuals
 
 ## Goal
+
 Move the actual React poster-card component into `packages/kosmos-visuals` so Arrancador consumes a real shared component rather than recreating the markup locally.
 
 ## Acceptance Criteria
+
 - AC1: `kosmos-visuals` exports a real React poster-card component, not just a class recipe.
 - AC2: Arrancador `GameCard` no longer owns the card markup and instead renders the shared `kosmos-visuals` component directly.
 - AC3: The shared component supports navigation by path and allows Arrancador to provide its router link implementation.

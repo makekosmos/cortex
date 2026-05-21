@@ -20,9 +20,7 @@ function normalizeSettingsTab(rawTab: unknown): SettingsTab {
 }
 
 const activeTab = computed<SettingsTab>(() =>
-  normalizeSettingsTab(
-    Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab,
-  ),
+  normalizeSettingsTab(Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab),
 );
 
 watch(

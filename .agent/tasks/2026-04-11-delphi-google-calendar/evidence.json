@@ -75,7 +75,5 @@
       ]
     }
   ],
-  "notes": [
-    "Unrelated dirty file left untouched: packages/kosmos-visuals/theme/css-variables.css"
-  ]
+  "notes": ["Unrelated dirty file left untouched: packages/kosmos-visuals/theme/css-variables.css"]
 }

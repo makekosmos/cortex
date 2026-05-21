@@ -6,5 +6,4 @@ import LauncherView from "./views/LauncherView.vue";
   <LauncherView />
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>

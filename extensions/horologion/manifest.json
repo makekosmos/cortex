@@ -43,11 +43,7 @@
     }
   ],
   "tests": {
-    "commands": [
-      "horologion:pomodoro:25",
-      "horologion:pomodoro:50",
-      "horologion:stopwatch:start"
-    ],
+    "commands": ["horologion:pomodoro:25", "horologion:pomodoro:50", "horologion:stopwatch:start"],
     "smoke": {
       "objectType": "time_entry_obj",
       "sample": {

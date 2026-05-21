@@ -1,6 +1,7 @@
 # Task: Arrancador library toolbar icon layout
 
 ## Summary
+
 Refine the Arrancador library toolbar layout so filter and sort are icon-only buttons, the view mode toggle is centered at the top of the content controls, and favorites/reset actions live inside the expanded filters panel.
 
 ## Acceptance Criteria

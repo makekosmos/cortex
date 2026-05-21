@@ -20,10 +20,7 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <div
-    class="kosmos-settings-row"
-    :class="{ 'kosmos-settings-row--muted': muted }"
-  >
+  <div class="kosmos-settings-row" :class="{ 'kosmos-settings-row--muted': muted }">
     <div class="kosmos-settings-row__left">
       <div class="kosmos-settings-row__title">{{ title }}</div>
       <div v-if="description" class="kosmos-settings-row__description">

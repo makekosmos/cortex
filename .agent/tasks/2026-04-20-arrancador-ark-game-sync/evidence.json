@@ -49,9 +49,7 @@
     {
       "id": "AC5",
       "status": "PASS",
-      "evidence": [
-        ".agent/tasks/2026-04-20-arrancador-ark-game-sync/evidence.md"
-      ]
+      "evidence": [".agent/tasks/2026-04-20-arrancador-ark-game-sync/evidence.md"]
     }
   ],
   "changed_files": [

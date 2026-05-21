@@ -26,9 +26,7 @@
       "id": "AC3",
       "text": "The obsolete duplicate file `apps/delphi/ts/src/components/SideBarButton.vue` must be removed from the app source tree.",
       "status": "PASS",
-      "proof": [
-        "raw/sidebar-button-file.txt contains 'missing' after existence check"
-      ],
+      "proof": ["raw/sidebar-button-file.txt contains 'missing' after existence check"],
       "gaps": []
     },
     {

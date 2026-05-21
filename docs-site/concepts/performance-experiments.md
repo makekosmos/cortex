@@ -19,11 +19,11 @@ Permanent log: какие performance / optimization эксперименты б
 
 **Метод измерения:** `du -sb` на `release/win-unpacked/locales/` + `ls -la` на NSIS installer. Baseline — committed `Kepler Setup 0.1.9.exe` от 2026-05-16.
 
-| Метрика | Baseline | After | Δ |
-|---|---:|---:|---:|
-| `locales/` файлов | 55 | 2 | −53 |
-| `locales/` unpacked | 46.38 MB | 1.64 MB | **−44.74 MB** |
-| `release/win-unpacked/` total | ~415 MB | 370.32 MB | −44.68 MB (−10.8%) |
+| Метрика                         |      Baseline |         After |                    Δ |
+| ------------------------------- | ------------: | ------------: | -------------------: |
+| `locales/` файлов               |            55 |             2 |                  −53 |
+| `locales/` unpacked             |      46.38 MB |       1.64 MB |        **−44.74 MB** |
+| `release/win-unpacked/` total   |       ~415 MB |     370.32 MB |   −44.68 MB (−10.8%) |
 | `Kepler Setup 0.1.9.exe` (NSIS) | **110.62 MB** | **102.78 MB** | **−7.84 MB (−7.1%)** |
 
 **Verdict:** ✅ применено permanent. Reduction: −44 MB на диске юзера после установки.
@@ -51,11 +51,11 @@ Permanent log: какие performance / optimization эксперименты б
 
 **Метод измерения:** `bun run --cwd shell typecheck` cold (после `rm -f .tsbuildinfo`) и warm (повторный запуск). Stop-watch timing через bash `START=$(date +%s%N) ... END=$(date +%s%N)`.
 
-| Run | Wall-clock |
-|---|---:|
-| **Cold** (no .tsbuildinfo) | **1650 ms** |
-| **Warm** (uses .tsbuildinfo) | **1177 ms** |
-| Δ | **−473 ms (−28%)** |
+| Run                          |         Wall-clock |
+| ---------------------------- | -----------------: |
+| **Cold** (no .tsbuildinfo)   |        **1650 ms** |
+| **Warm** (uses .tsbuildinfo) |        **1177 ms** |
+| Δ                            | **−473 ms (−28%)** |
 
 `.tsbuildinfo` size: 54637 bytes.
 
@@ -76,6 +76,7 @@ Permanent log: какие performance / optimization эксперименты б
 ### 2026-05-18 — Exp 23: backgroundMaterial → Mica
 
 **Изменение:**
+
 - `shell/electron/main.ts` → `resolveLauncherBgMaterial()` default = `"mica"` (с env override `KEPLER_BG_MATERIAL`).
 - `shell/electron/settings-window.ts` → `"acrylic"` заменён на `"mica"`.
 - `shell/electron/install-extension-window.ts` → то же.
@@ -84,10 +85,10 @@ Permanent log: какие performance / optimization эксперименты б
 **Метод измерения:** `measure-kepler-ram.ps1 -Scenario exp23-acrylic/mica` (3 samples mean), production build, isolated data dir.
 
 | Material (launcher visible) | RSS (mean) | Private (mean) |
-|---|---:|---:|
-| acrylic | 430.4 MB | **291.2 MB** |
-| mica | 444.8 MB | **305.4 MB** |
-| Δ | +14.4 MB | +14.2 MB (~5%) |
+| --------------------------- | ---------: | -------------: |
+| acrylic                     |   430.4 MB |   **291.2 MB** |
+| mica                        |   444.8 MB |   **305.4 MB** |
+| Δ                           |   +14.4 MB | +14.2 MB (~5%) |
 
 **dwm.exe GPU%:** **(не записал)** — `Get-Counter '\GPU Engine(*)\Utilization Percentage'` вернул 0% для обоих PID. Программный trigger Ctrl+Shift+K через `keybd_event` toggled launcher в hidden state, DWM не рисует backgroundMaterial для hidden window'ов.
 
@@ -99,28 +100,28 @@ Permanent log: какие performance / optimization эксперименты б
 
 **Метод:** `scripts/run-baseline-scenarios.ps1` (orchestrator) → `measure-kepler-ram.ps1` (multi-sample). 3 samples × 5-10s interval. Win-unpacked Kepler.exe + isolated `.tmp/baseline-data/` с installed extensions.
 
-| Scenario | Procs | RSS (mean) | Private (mean) |
-|---|---:|---:|---:|
-| launcher-only (tray-hidden) | 6 | 381.8 MB | **235.3 MB** |
-| all-extensions-idle (5 ext + dashboard) | 11 | 906.0 MB | **453.5 MB** |
+| Scenario                                | Procs | RSS (mean) | Private (mean) |
+| --------------------------------------- | ----: | ---------: | -------------: |
+| launcher-only (tray-hidden)             |     6 |   381.8 MB |   **235.3 MB** |
+| all-extensions-idle (5 ext + dashboard) |    11 |   906.0 MB |   **453.5 MB** |
 
 ### Trigger thresholds для будущих регрессий
 
-| Метрика | Threshold | Trigger |
-|---|---|---|
-| `all-extensions-idle` Private > 600 MB | ⚠️ alert | Exp 5 (WebContentsView migration) — priority |
-| `all-extensions-idle` Private > 900 MB | 🚨 critical | Exp 5 + Exp 4 (window pool) одновременно |
-| `all-extensions-idle` Private < 600 MB | ✅ OK | defer всё что про RAM |
+| Метрика                                | Threshold   | Trigger                                      |
+| -------------------------------------- | ----------- | -------------------------------------------- |
+| `all-extensions-idle` Private > 600 MB | ⚠️ alert    | Exp 5 (WebContentsView migration) — priority |
+| `all-extensions-idle` Private > 900 MB | 🚨 critical | Exp 5 + Exp 4 (window pool) одновременно     |
+| `all-extensions-idle` Private < 600 MB | ✅ OK       | defer всё что про RAM                        |
 
 **Текущий статус (2026-05-18): 453.5 MB Private — все RAM-оптимизации правильно deferred.**
 
 ### Сравнение с Phase 4 commit `7cb16df`
 
-| Метрика | Phase 4 (2025) | 2026-05-18 |
-|---|---:|---:|
-| Working Set | 968 MB (dev mode + DevTools) | 906 MB (production, без DevTools) |
-| Private Bytes | 474 MB | **453.5 MB** |
-| Processes | 11 | 11 |
+| Метрика       |               Phase 4 (2025) |                        2026-05-18 |
+| ------------- | ---------------------------: | --------------------------------: |
+| Working Set   | 968 MB (dev mode + DevTools) | 906 MB (production, без DevTools) |
+| Private Bytes |                       474 MB |                      **453.5 MB** |
+| Processes     |                           11 |                                11 |
 
 Production stable / consistent даже с добавлением Eden как extension. Phase 4 dev mode добавлял ~160 MB DevTools overhead per window — production baseline сейчас ниже.
 
@@ -128,15 +129,15 @@ Production stable / consistent даже с добавлением Eden как ex
 
 ## Отброшенные / нерелевантные для Electron 41
 
-| Original (EXPTOTRY) | Причина |
-|---|---|
-| affinity option | Удалён в Electron 14+ |
-| v8-compile-cache npm | Electron 17+ имеет built-in V8 code cache |
-| `--enable-gpu-rasterization` flag | Default в Chromium 90+ |
-| `--use-angle=d3d11` flag | Default на Windows в Electron 41 |
-| `differentialPackage: true` | Default в современном electron-builder + NSIS |
-| moment/lodash swap | Не использовались в проекте |
-| Hidden sourcemaps | Vite default уже без sourcemaps в production |
+| Original (EXPTOTRY)               | Причина                                       |
+| --------------------------------- | --------------------------------------------- |
+| affinity option                   | Удалён в Electron 14+                         |
+| v8-compile-cache npm              | Electron 17+ имеет built-in V8 code cache     |
+| `--enable-gpu-rasterization` flag | Default в Chromium 90+                        |
+| `--use-angle=d3d11` flag          | Default на Windows в Electron 41              |
+| `differentialPackage: true`       | Default в современном electron-builder + NSIS |
+| moment/lodash swap                | Не использовались в проекте                   |
+| Hidden sourcemaps                 | Vite default уже без sourcemaps в production  |
 
 ---
 
@@ -144,13 +145,13 @@ Production stable / consistent даже с добавлением Eden как ex
 
 Эксперименты НЕ применены — ждут реального signal'а. См. [`docs-site/agents/manual-tests-pending.md`](/agents/manual-tests-pending).
 
-| # | Что | Когда применять |
-|---|---|---|
-| 4 | Hide/Show window pool | сигнал «extension'ы переоткрываются медленно» |
-| 5 | WebContentsView migration | `all-extensions-idle` Private > 600 MB sustained |
-| 27 | Виртуализация списков | юзер сообщает о slow scroll при >300 todos / >500 objects |
-| 46/47 | shallowRef + v-memo (Pinia) | identified render bottleneck при >100 items |
-| 49-53 | TipTap optimization | измеренный input latency в Eden больших документах |
+| #     | Что                         | Когда применять                                           |
+| ----- | --------------------------- | --------------------------------------------------------- |
+| 4     | Hide/Show window pool       | сигнал «extension'ы переоткрываются медленно»             |
+| 5     | WebContentsView migration   | `all-extensions-idle` Private > 600 MB sustained          |
+| 27    | Виртуализация списков       | юзер сообщает о slow scroll при >300 todos / >500 objects |
+| 46/47 | shallowRef + v-memo (Pinia) | identified render bottleneck при >100 items               |
+| 49-53 | TipTap optimization         | измеренный input latency в Eden больших документах        |
 
 ---
 

@@ -18,17 +18,11 @@ const route = useRoute();
 const router = useRouter();
 const { games, loading, error } = useGames();
 
-const gameId = computed(() =>
-  typeof route.params.id === "string" ? route.params.id : "",
-);
+const gameId = computed(() => (typeof route.params.id === "string" ? route.params.id : ""));
 
-const game = computed(
-  () => games.value.find((g) => g.id === gameId.value) ?? null,
-);
+const game = computed(() => games.value.find((g) => g.id === gameId.value) ?? null);
 
-const heroImage = computed(
-  () => game.value?.backgroundImage ?? game.value?.coverImage ?? null,
-);
+const heroImage = computed(() => game.value?.backgroundImage ?? game.value?.coverImage ?? null);
 
 const genres = computed(() => {
   const raw = game.value?.genres;
@@ -52,9 +46,7 @@ const playtimeLabel = computed(() => {
   const seconds = game.value?.totalPlaytime ?? 0;
   if (seconds <= 0) return "Не запускалась";
   const hours = seconds / 3600;
-  return hours < 1
-    ? `${Math.round(seconds / 60)} мин`
-    : `${hours.toFixed(1)} ч`;
+  return hours < 1 ? `${Math.round(seconds / 60)} мин` : `${hours.toFixed(1)} ч`;
 });
 
 function goBack() {
@@ -64,9 +56,7 @@ function goBack() {
 
 <template>
   <section class="arrancador-page">
-    <button type="button" class="arrancador-back" @click="goBack">
-      ← Назад
-    </button>
+    <button type="button" class="arrancador-back" @click="goBack">← Назад</button>
 
     <div v-if="error" class="arrancador-error">{{ error }}</div>
 
@@ -81,9 +71,7 @@ function goBack() {
     <article v-else class="arrancador-detail">
       <div
         class="arrancador-detail__hero"
-        :style="
-          heroImage ? { backgroundImage: `url(${heroImage})` } : undefined
-        "
+        :style="heroImage ? { backgroundImage: `url(${heroImage})` } : undefined"
       >
         <div class="arrancador-detail__hero-overlay">
           <h1 class="arrancador-detail__title">{{ game.name }}</h1>
@@ -104,9 +92,7 @@ function goBack() {
         </div>
         <div v-if="game.userRating" class="arrancador-detail__meta-row">
           <span class="arrancador-detail__meta-label">Оценка</span>
-          <span class="arrancador-detail__meta-value">
-            {{ game.userRating.toFixed(1) }} / 5
-          </span>
+          <span class="arrancador-detail__meta-value"> {{ game.userRating.toFixed(1) }} / 5 </span>
         </div>
         <div v-if="game.playStatus" class="arrancador-detail__meta-row">
           <span class="arrancador-detail__meta-label">Статус</span>
@@ -131,8 +117,7 @@ function goBack() {
       </p>
 
       <p class="arrancador-page__hint">
-        Запуск, бэкапы и редактирование метаданных пока в legacy
-        Arrancador.exe (Phase 5).
+        Запуск, бэкапы и редактирование метаданных пока в legacy Arrancador.exe (Phase 5).
       </p>
     </article>
   </section>

@@ -112,7 +112,7 @@ bun run --cwd shell dev
 - [ ] **SQOBA backup для Outlast.** Outlast хранит save в `%LOCALAPPDATA%\OLG\Saved\` — должен найтись и забекапиться. Создай бекап → проверь файл.
 - [ ] **SQOBA restore.** Удали один файл из сейв-папки Outlast → SqobaPage → выбери backup → «Восстановить» → Modal-confirmation → confirm → файл должен вернуться.
 - [ ] **SQOBA rotation.** Сделай 12 backup'ов Outlast подряд (тестово). После 11-го самый старый должен удалиться (rotation keep N=10).
-- [ ] **Console errors.** F12 в Arrancador window → Console. Никаких «Unknown operation arrancador.*» или unhandled rejections.
+- [ ] **Console errors.** F12 в Arrancador window → Console. Никаких «Unknown operation arrancador.\*» или unhandled rejections.
 
 **Если что-то падает** — создай `problems.md` в proof loop'е соответствующей задачи и опиши проблему.
 
@@ -214,10 +214,12 @@ Cold typecheck 1650ms → warm 1177ms (−28%). Effect для DX в watch-mode.
 **Симптом:** На production install 0.1.11 страница «Экспорт» падает на whitescreen / catch-all error. Tab временно закомментирован в `shell/src/views/SettingsView.vue` (tab nav + content), функциональность доступна через WS API напрямую но не через UI.
 
 **Что уже сделано:**
+
 - 0.1.10 fix: `main.ts` IPC handler `kepler:export:list` unwraps `{converters: [...]}` → array (backend returns wrapped object). Это починило "e is not iterable" в loadExportConverters().
 - 0.1.11 не помог по user-репорту — есть ещё какая-то ошибка в renderer'е страницы.
 
 **Что нужно отдебажить:**
+
 - Запустить production build, открыть DevTools (F12 if not blocked), переключиться на Экспорт → смотреть console errors.
 - Возможные причины:
   - `c.supported_formats` undefined (template `v-for in c.supported_formats`) — если backend converters почему-то имеют разные shape.
@@ -235,12 +237,12 @@ Cold typecheck 1650ms → warm 1177ms (−28%). Effect для DX в watch-mode.
 
 Собран agent'ом через production build + isolated data dir. См. `.agent/tasks/2026-05-18-ram-baseline-harness/baseline-results.md`.
 
-| Scenario | Private bytes (mean) | Verdict |
-|---|---:|---|
-| launcher-only | 235.3 MB | baseline |
-| all-extensions-idle (5 ext + dashboard) | **453.5 MB** | ✅ Exp 5 правильно deferred (<600 MB) |
-| exp23-acrylic | 291.2 MB | — |
-| exp23-mica | 305.4 MB | RAM Δ ~5%, в пределах шума |
+| Scenario                                | Private bytes (mean) | Verdict                               |
+| --------------------------------------- | -------------------: | ------------------------------------- |
+| launcher-only                           |             235.3 MB | baseline                              |
+| all-extensions-idle (5 ext + dashboard) |         **453.5 MB** | ✅ Exp 5 правильно deferred (<600 MB) |
+| exp23-acrylic                           |             291.2 MB | —                                     |
+| exp23-mica                              |             305.4 MB | RAM Δ ~5%, в пределах шума            |
 
 **Остаётся manual (GPU% при visible launcher):** Exp 23 final decision. См. блок «Exp 23 — Mica» ниже.
 
@@ -335,6 +337,7 @@ exp23-acrylic dwm.exe %GPU sustained:
 Файл: `extensions/delphi/src/store/todos.ts` — `todos = ref<TodoItem[]>([])` → `shallowRef<TodoItem[]>([])`. Аналогично projects/areas/tags/headings.
 
 **Что нужно проверить перед commit'ом:**
+
 - [ ] Создание/редактирование/удаление задачи в TodayPage / AllTaskPage обновляет UI немедленно.
 - [ ] Drag-and-drop порядка задач сохраняется и виден в UI.
 - [ ] Markdown task content / tags / due date — реактивные изменения видны без force-refresh.
@@ -370,6 +373,7 @@ Trade-off: 70-80% быстрее переоткрытие vs 100-150 MB per hidd
 ### Exp 5 — `WebContentsView` migration (WHOLE архитектура)
 
 **Большая работа (1-2 недели).** Эффект: −30% RAM на extension за счёт shared GPU process. Требует:
+
 - Замена BrowserWindow per extension на BaseWindow + WebContentsView внутри Kepler shell.
 - Manual управление z-index / bounds / визуальной целостности.
 - Пересмотр extension-host'а целиком.

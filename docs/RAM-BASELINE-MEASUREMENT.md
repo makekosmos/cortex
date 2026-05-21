@@ -93,11 +93,11 @@ pwsh scripts/measure-kepler-ram.ps1 -Compare
 
 ## Интерпретация результатов
 
-| Экономия (RSS) | Решение |
-|---|---|
-| `< 100 MB` | Extension model не оправдывает усилий. Остаёмся в standalone-режиме, Phase 2 отменяется или откладывается. |
-| `100..300 MB` | Соответствует ожиданиям review. Двигаемся в Phase 2 — extension architecture. |
-| `> 300 MB` | Отлично, aggressive pre-warming (предзагрузка extensions при старте host'а) целесообразен. |
+| Экономия (RSS)                  | Решение                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `< 100 MB`                      | Extension model не оправдывает усилий. Остаёмся в standalone-режиме, Phase 2 отменяется или откладывается.                           |
+| `100..300 MB`                   | Соответствует ожиданиям review. Двигаемся в Phase 2 — extension architecture.                                                        |
+| `> 300 MB`                      | Отлично, aggressive pre-warming (предзагрузка extensions при старте host'а) целесообразен.                                           |
 | Регрессия (Kepler `>` baseline) | Что-то пошло не так в Phase 1. Перед Phase 2 обязательно профилировать `kepler-shell` (V8 heap, native modules, retained renderers). |
 
 ## Caveats
