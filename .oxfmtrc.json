@@ -17,6 +17,7 @@
     "docs-site/.vitepress/dist/**",
     "docs-site/.vitepress/cache/**",
     "docs-site/public/llms.txt",
-    "docs-site/public/full-llms.txt"
+    "docs-site/public/full-llms.txt",
+    "packages/ark/src/generated/**"
   ]
 }
