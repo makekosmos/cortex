@@ -7,6 +7,16 @@ pre-commit:
     ark-core-rust:
       glob: "crates/ark-core/rust/**/*.rs"
       run: cd crates/ark-core/rust && cargo check --quiet
+    # Phase 5 bug-detection: ts-rs bindings up-to-date guard.
+    # Если правил types.rs и забыл cargo test --features ts-rs — fail.
+    ts-rs-bindings-fresh:
+      glob: "crates/ark-core/rust/src/types.rs"
+      run: |
+        cd crates/ark-core/rust && \
+        cargo test --features ts-rs --quiet --lib export_bindings 2>&1 > /dev/null && \
+        cd - && \
+        git diff --exit-code packages/ark/src/generated/ || \
+        (echo "ts-rs bindings out of date — re-run cargo test --features ts-rs and git add" && exit 1)
     kepler-backend-rust:
       glob: "services/kepler-backend/src/**/*.rs"
       run: cd services/kepler-backend && cargo check --quiet
