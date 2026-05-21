@@ -53,6 +53,7 @@ import { fileURLToPath } from "node:url";
 import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
 import { keplerDataDir } from "./data-dir";
 import { keplerLog } from "./logging";
+import { safeHandle } from "./ipc-safe";
 // Side-effect import: регистрирует kepler:diagnostics:* IPC handlers.
 import "./diagnostics";
 import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
@@ -850,7 +851,7 @@ function listCrashLogs(): Array<{ name: string; size: number; mtime: string }> {
   }
 }
 
-ipcMain.handle("kepler:crashes:list", () => listCrashLogs());
+safeHandle("kepler:crashes:list", async () => listCrashLogs());
 
 ipcMain.handle("kepler:crashes:openFolder", async () => {
   const dir = crashesDirPath();
@@ -885,7 +886,7 @@ ipcMain.handle("kepler:crashes:clear", () => {
   return { removed };
 });
 
-ipcMain.handle("kepler:backend:restart", async () => {
+safeHandle("kepler:backend:restart", async () => {
   // Manual restart — это user action, не supervisor failure. Сбрасываем
   // crash streak counter чтобы dialog не показывался если backend упадёт
   // позже (даём свежий window of opportunity).
@@ -911,7 +912,7 @@ ipcMain.handle("kepler:window:setExpanded", (_e, expanded: boolean) =>
   setLauncherExpanded(!!expanded),
 );
 
-ipcMain.handle("kepler:search:query", async (_e, text: string): Promise<SearchResult[]> => {
+safeHandle("kepler:search:query", async (_e, text: string): Promise<SearchResult[]> => {
   if (!arkClient || !text.trim()) return [];
   try {
     const hits = await arkClient.objects.search(text);
@@ -973,7 +974,7 @@ function staticCommands(): CommandRecord[] {
  * manifest-declared > runtime-dynamic). См.
  * `docs-site/concepts/command-bus.md`.
  */
-ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
+safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
   const byId = new Map<string, CommandRecord>();
 
   // 1) Kepler-internal (settings/dashboard/check-updates).
@@ -1056,7 +1057,7 @@ async function awaitExtensionCommand(
   return false;
 }
 
-ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> => {
+safeHandle("kepler:commands:invoke", async (_e, id: string): Promise<void> => {
   // 1) Internal commands win — exec локально.
   const internal = findCommand(id);
   if (internal) {
@@ -1127,7 +1128,7 @@ ipcMain.handle("kepler:commands:invoke", async (_e, id: string): Promise<void> =
   hideLauncher();
 });
 
-ipcMain.handle(
+safeHandle(
   "kepler:ark:request",
   async (_e, operation: string, params?: Record<string, unknown>) => {
     if (typeof operation !== "string" || operation.length === 0) {
@@ -1146,7 +1147,7 @@ ipcMain.handle(
 // Конвертеры регистрируются в kepler-backend, shell ничего о них не знает —
 // просто показывает список и запускает.
 
-ipcMain.handle("kepler:export:list", async () => {
+safeHandle("kepler:export:list", async () => {
   const client = await awaitArkReady();
   // Backend returns `{ converters: [...] }`. Renderer ожидает плоский массив.
   const resp = (await client.invokeOperation({ operation: "export.list" })) as
@@ -1164,7 +1165,7 @@ ipcMain.handle("kepler:export:list", async () => {
   return [];
 });
 
-ipcMain.handle(
+safeHandle(
   "kepler:export:run",
   async (_e, args: { converter_id: string; format: string; dest_dir: string }) => {
     if (!args || typeof args.converter_id !== "string") {
@@ -1180,7 +1181,7 @@ ipcMain.handle(
   },
 );
 
-ipcMain.handle("kepler:export:pickDir", async (e): Promise<string | null> => {
+safeHandle("kepler:export:pickDir", async (e): Promise<string | null> => {
   const win = BrowserWindow.fromWebContents(e.sender);
   const result = win
     ? await dialog.showOpenDialog(win, {
@@ -1195,7 +1196,7 @@ ipcMain.handle("kepler:export:pickDir", async (e): Promise<string | null> => {
   return result.filePaths[0];
 });
 
-ipcMain.handle("kepler:objects:listRecent", async (_e, limit?: number): Promise<SearchResult[]> => {
+safeHandle("kepler:objects:listRecent", async (_e, limit?: number): Promise<SearchResult[]> => {
   if (!arkClient) return [];
   const cap = typeof limit === "number" && limit > 0 ? Math.min(limit, 500) : 200;
   try {
