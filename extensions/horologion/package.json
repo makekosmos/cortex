@@ -4,11 +4,21 @@
   "private": true,
   "description": "Horologion (pomodoro + stopwatch + time tracking) — Vue extension для Kepler shell.",
   "type": "module",
+  "scripts": {
+    "test:vue": "vitest run --browser"
+  },
   "dependencies": {
     "@kosmos/ark": "workspace:*",
     "@kosmos/visuals": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "vue": "^3.6.0-beta.12",
     "vue-router": "^5.0.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitest/browser": "^4.1.6",
+    "@vitest/browser-playwright": "^4.1.6",
+    "vitest": "^4.1.6",
+    "vitest-browser-vue": "^2.1.0"
   }
 }
