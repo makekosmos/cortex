@@ -1,4 +1,7 @@
 export { ArkClient } from "./ark-client.js";
+// Generated bindings из Rust ark-core (Phase 5 bug-detection).
+// См. packages/ark/src/generated/index.ts.
+export type { ArkObject, ObjectType, ObjectLink } from "./generated/index.js";
 export {
   KEPLER_LOCK_FILENAME,
   ensureKeplerRunning,
