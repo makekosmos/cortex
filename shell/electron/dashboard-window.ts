@@ -126,7 +126,7 @@ export function openDashboardWindow(): void {
     minHeight: DASHBOARD_MIN_HEIGHT,
     x,
     y,
-    show: true,
+    show: process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1",
     title: "Kosmos",
     backgroundColor: "#0d0d0d",
     frame: true,

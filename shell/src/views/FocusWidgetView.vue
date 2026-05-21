@@ -7,6 +7,7 @@
 // (Horologion публикует обновления через `window.kepler.focusWidget.setState`).
 
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { Pause, Play, SkipForward, Square } from "lucide-vue-next";
 
 interface FocusState {
   active: boolean;
@@ -16,7 +17,18 @@ interface FocusState {
   mode: "work" | "break" | "stopwatch";
   /** Применён ли активный блоклист — 🛡️ индикатор показывается слева от времени. */
   blockingActive: boolean;
+  /** Pomodoro session на паузе — кнопка показывает Play вместо Pause. */
+  isPaused: boolean;
 }
+
+// Локализованные подписи (CLAUDE.md: UI на русском).
+const HINTS = {
+  pause: "Пауза",
+  resume: "Продолжить",
+  skip: "Пропустить фазу",
+  stop: "Остановить",
+  close: "Скрыть виджет",
+} as const;
 
 const state = ref<FocusState>({
   active: false,
@@ -24,6 +36,7 @@ const state = ref<FocusState>({
   label: "",
   mode: "work",
   blockingActive: false,
+  isPaused: false,
 });
 
 let unsubscribe: (() => void) | null = null;
@@ -67,6 +80,47 @@ function onClick(): void {
 function onClose(): void {
   window.kepler.focusWidget.hide?.();
 }
+
+// Controls видны только когда session активна. Skip скрыт для stopwatch
+// (фазы нет). Stop для stopwatch закрывает manual time_entry, для pomodoro —
+// дёргает pomodoro.stop.
+const showControls = computed(() => state.value.active);
+const showSkip = computed(() => state.value.mode !== "stopwatch");
+const isPomodoro = computed(() => state.value.mode !== "stopwatch");
+
+async function onPauseToggle(): Promise<void> {
+  const api = window.kepler.focusWidget;
+  try {
+    if (state.value.isPaused) {
+      await api.pomodoro.resume();
+    } else {
+      await api.pomodoro.pause();
+    }
+  } catch (e) {
+    console.error("[focus-widget] pause toggle failed:", e);
+  }
+}
+
+async function onSkip(): Promise<void> {
+  try {
+    await window.kepler.focusWidget.pomodoro.skip();
+  } catch (e) {
+    console.error("[focus-widget] skip failed:", e);
+  }
+}
+
+async function onStop(): Promise<void> {
+  const api = window.kepler.focusWidget;
+  try {
+    if (isPomodoro.value) {
+      await api.pomodoro.stop();
+    } else {
+      await api.stopwatch.stop();
+    }
+  } catch (e) {
+    console.error("[focus-widget] stop failed:", e);
+  }
+}
 </script>
 
 <template>
@@ -83,10 +137,40 @@ function onClose(): void {
       <div class="separator" />
       <div class="label" :title="labelText">{{ labelText }}</div>
     </div>
+    <div v-if="showControls" class="controls">
+      <button
+        class="ctl-btn"
+        type="button"
+        :title="state.isPaused ? HINTS.resume : HINTS.pause"
+        :aria-label="state.isPaused ? HINTS.resume : HINTS.pause"
+        @click="onPauseToggle"
+      >
+        <component :is="state.isPaused ? Play : Pause" :size="14" />
+      </button>
+      <button
+        v-if="showSkip"
+        class="ctl-btn"
+        type="button"
+        :title="HINTS.skip"
+        :aria-label="HINTS.skip"
+        @click="onSkip"
+      >
+        <SkipForward :size="14" />
+      </button>
+      <button
+        class="ctl-btn"
+        type="button"
+        :title="HINTS.stop"
+        :aria-label="HINTS.stop"
+        @click="onStop"
+      >
+        <Square :size="13" />
+      </button>
+    </div>
     <button
       class="close-btn"
       type="button"
-      :title="'Скрыть виджет'"
+      :title="HINTS.close"
       @click="onClose"
     >
       ×
@@ -104,9 +188,9 @@ function onClose(): void {
   background: color-mix(in srgb, var(--background) 70%, transparent);
   color: var(--foreground);
   font-family: var(--font-sans);
-  border-radius: 12px;
+  border-radius: var(--radius-input);
   border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  box-shadow: 0 4px 24px color-mix(in srgb, #000 28%, transparent);
+  box-shadow: var(--shadow-floating);
   user-select: none;
   overflow: hidden;
 }
@@ -120,13 +204,13 @@ function onClose(): void {
   background: var(--accent-stripe, var(--primary));
 }
 .mode-work {
-  --accent-stripe: #e74c3c;
+  --accent-stripe: var(--timer-work);
 }
 .mode-break {
-  --accent-stripe: #2ecc71;
+  --accent-stripe: var(--timer-break);
 }
 .mode-stopwatch {
-  --accent-stripe: var(--primary);
+  --accent-stripe: var(--timer-stopwatch);
 }
 
 .drag-area {
@@ -169,6 +253,37 @@ function onClose(): void {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.controls {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 2px;
+}
+
+.ctl-btn {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+  transition: background 100ms, color 100ms;
+}
+.ctl-btn:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+.ctl-btn:active {
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
 }
 
 .close-btn {

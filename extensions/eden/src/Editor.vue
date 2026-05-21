@@ -113,6 +113,7 @@ import Typography from "@tiptap/extension-typography";
 import type { Editor as TiptapEditor, Range } from "@tiptap/vue-3";
 import { Wikilink } from "./Wikilink";
 import { TaskRef } from "./TaskRef";
+import { TrailingParagraph } from "./TrailingParagraph";
 import { edenApi } from "@/lib/edenApi";
 import { useBlockSelection } from "@/composables/useBlockSelection";
 import BlockSelectionOverlay from "@/components/BlockSelectionOverlay.vue";
@@ -446,12 +447,15 @@ const EdenCodeBlock = CodeBlockLowlight.extend({
 });
 
 const extensions = [
-  // trailingNode: false — StarterKit по умолчанию вставляет пустой
-  // параграф в конец документа («чтобы было куда поставить курсор»).
-  // У Eden это создаёт «висящую» пустую строку под последней task'ой
-  // после каждого Enter. Клик в пустое пространство ниже фокусит editor
-  // в конец через onContentMouseDown — этот UX заменяет автотрейлер.
+  // trailingNode: false — StarterKit'овский TrailingNode добавлял
+  // paragraph после ЛЮБОГО atom-блока (включая taskRef), конфликтуя с
+  // TaskRef.commitAndCreateNew (см. eden-taskref-pm-traps.md ловушка #2).
+  // Вместо него используем кастомный TrailingParagraph ниже — он
+  // гарантирует empty paragraph именно в самом конце документа, что
+  // нужно для UX «всегда есть куда поставить курсор после последнего
+  // блока», но без поломки TaskRef-flow.
   StarterKit.configure({ codeBlock: false, trailingNode: false }),
+  TrailingParagraph,
   Markdown,
   Placeholder.configure({ placeholder: "Начни писать что-нибудь интересное..." }),
   EdenCodeBlock.configure({

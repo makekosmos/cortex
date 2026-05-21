@@ -122,11 +122,16 @@ export async function check(): Promise<UpdateState> {
 export function install(): void {
   if (!initialized) return;
   // Флаг для post-update first-launch: при следующем старте main.ts его
-  // прочитает, откроет launcher и покажет changelog модалку. После чтения
+  // прочитает и покажет в launcher'е баннер «Kepler обновлён». После чтения
   // флаг очищается.
+  //
+  // ВАЖНО: внутри install() `app.getVersion()` возвращает СТАРУЮ версию
+  // (процесс ещё не перезапущен с новым кодом). Пишем только timestamp;
+  // новую версию main.ts при чтении флага возьмёт из `app.getVersion()`
+  // ПОСЛЕ старта — это уже новая.
   try {
     const flag = path.join(app.getPath("userData"), "post-update.flag");
-    writeFileSync(flag, String(Date.now()), "utf8");
+    writeFileSync(flag, JSON.stringify({ at: Date.now() }), "utf8");
   } catch (e) {
     console.warn("[autoUpdater] failed to write post-update flag:", e);
   }

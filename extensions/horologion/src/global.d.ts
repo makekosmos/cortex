@@ -24,6 +24,8 @@ declare global {
           label?: string;
           mode?: "work" | "break" | "stopwatch";
           blockingActive?: boolean;
+          isPaused?: boolean;
+          phaseEndsAtMs?: number | null;
         }): Promise<void>;
       };
     };

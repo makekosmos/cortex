@@ -180,6 +180,9 @@ const api = {
       label?: string;
       mode?: "work" | "break" | "stopwatch";
       blockingActive?: boolean;
+      /** Wallclock (Unix ms) когда фаза закончится; main process использует
+          для автономного тика когда renderer throttle'ится. null = pause/idle. */
+      phaseEndsAtMs?: number | null;
     }): Promise<void> =>
       ipcRenderer.invoke("kepler:focus-widget:set-state", patch) as Promise<void>,
   },

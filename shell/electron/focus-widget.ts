@@ -19,6 +19,7 @@ import {
   app,
 } from "electron";
 import { openExtension } from "./extension-host";
+import { awaitArkReady } from "./main";
 import path from "node:path";
 import {
   existsSync,
@@ -44,6 +45,18 @@ export interface FocusState {
   mode: "work" | "break" | "stopwatch";
   /** Применён ли активный блоклист (focus mode blocking). Управляет 🛡️ индикатором в widget. */
   blockingActive: boolean;
+  /** Pomodoro session на паузе. Виджет показывает Play вместо Pause. Для
+      stopwatch / idle всегда false. */
+  isPaused: boolean;
+  /**
+   * Wallclock (Unix ms) когда текущая фаза должна закончиться. null = idle/paused
+   * (нет автономного тика). Когда задан и active=true, main process сам
+   * пересчитывает remainingSec каждую секунду — поэтому виджет продолжает
+   * тикать даже если Horologion renderer скрыт / закрыт и Chromium throttle'ит
+   * его таймеры. На каждый setState от renderer'а перезаписываем — он
+   * authoritative.
+   */
+  phaseEndsAtMs: number | null;
 }
 
 interface PersistedBounds {
@@ -57,11 +70,14 @@ const DEFAULT_STATE: FocusState = {
   label: "",
   mode: "work",
   blockingActive: false,
+  isPaused: false,
+  phaseEndsAtMs: null,
 };
 
 let widgetWindow: BrowserWindow | null = null;
 let currentState: FocusState = { ...DEFAULT_STATE };
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let tickTimer: ReturnType<typeof setInterval> | null = null;
 
 // --- Position persistence ---------------------------------------------------
 
@@ -188,6 +204,14 @@ function ensureWindow(): BrowserWindow {
 
 function showWidget(): void {
   const win = ensureWindow();
+  // Headless / test mode: окно живёт логически (state, tick, IPC), но не
+  // показывается визуально. Playwright читает state через main process.
+  if (
+    process.env.KOSMOS_HEADLESS === "1" ||
+    process.env.KOSMOS_TEST_MODE === "1"
+  ) {
+    return;
+  }
   if (!win.isVisible()) win.showInactive();
 }
 
@@ -207,6 +231,50 @@ function broadcastState(): void {
   }
 }
 
+// --- Autonomous tick --------------------------------------------------------
+//
+// Horologion renderer пушит state на каждой смене целой секунды. Когда
+// окно Horologion скрыто или закрыто, Chromium агрессивно throttle'ит
+// его setInterval (вплоть до полной остановки), и pushFocusWidgetState
+// перестаёт приходить → виджет «замерзает». Чтобы это пережить, main
+// process сам пересчитывает remainingSec из wallclock anchor'а
+// (phaseEndsAtMs) и broadcast'ит в виджет каждую секунду.
+//
+// Renderer всё ещё source of truth: каждый его setState перезатирает
+// phaseEndsAtMs / remainingSec / label / mode. Tick только заполняет
+// промежутки, когда renderer молчит.
+
+function recomputeRemainingFromAnchor(): boolean {
+  if (currentState.phaseEndsAtMs == null) return false;
+  const next = Math.max(
+    0,
+    Math.ceil((currentState.phaseEndsAtMs - Date.now()) / 1000),
+  );
+  if (currentState.remainingSec === next) return false;
+  currentState.remainingSec = next;
+  return true;
+}
+
+function ensureTickTimer(): void {
+  if (tickTimer != null) return;
+  tickTimer = setInterval(() => {
+    if (!currentState.active || currentState.phaseEndsAtMs == null) {
+      clearTickTimer();
+      return;
+    }
+    if (recomputeRemainingFromAnchor()) {
+      broadcastState();
+    }
+  }, 1000);
+}
+
+function clearTickTimer(): void {
+  if (tickTimer != null) {
+    clearInterval(tickTimer);
+    tickTimer = null;
+  }
+}
+
 // --- Public API -------------------------------------------------------------
 
 export function setFocusState(next: Partial<FocusState>): void {
@@ -217,6 +285,16 @@ export function setFocusState(next: Partial<FocusState>): void {
     showWidget();
   } else {
     hideWidget();
+  }
+  // Start/stop autonomous tick. Без него, когда Horologion окно скрыто,
+  // setInterval в renderer'е throttle'ится Chromium'ом → MM:SS замерзает.
+  if (currentState.active && currentState.phaseEndsAtMs != null) {
+    // Сразу пересчитаем — renderer мог прислать stale remainingSec
+    // (он считает на 30fps, мы хотим целую секунду по wallclock).
+    recomputeRemainingFromAnchor();
+    ensureTickTimer();
+  } else {
+    clearTickTimer();
   }
   broadcastState();
 }
@@ -245,8 +323,108 @@ ipcMain.handle("kepler:focus-widget:open-horologion", async () => {
   await openExtension("horologion");
 });
 
+// --- Inline controls (Pause / Resume / Skip / Stop) -------------------------
+//
+// IPC от FocusWidgetView'ы. Все pomodoro операции идут через kepler-backend
+// (PomodoroHost): он source of truth для session lifecycle. После успешной
+// op backend сам шлёт `phase_changed` event → Horologion renderer обновит
+// state → pushFocusWidgetState() запушит свежий patch в виджет. Поэтому
+// здесь дополнительно setFocusState() не дёргаем.
+//
+// Stopwatch stop — отдельный путь: pomodoro session не задействована, надо
+// закрыть `time_entry_obj` с source=manual напрямую через ARK upsert.
+
+interface ArkObjectLike {
+  id: string;
+  typeId?: string;
+  type_id?: string;
+  title?: string | null;
+  contentJson?: unknown;
+  content_json?: unknown;
+  propsJson?: Record<string, unknown>;
+  props_json?: Record<string, unknown>;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+  deletedAt?: string | null;
+  deleted_at?: string | null;
+}
+
+async function invokePomodoro(op: "pause" | "resume" | "skip" | "stop"): Promise<void> {
+  try {
+    const client = await awaitArkReady();
+    await client.invokeOperation({ operation: `pomodoro.${op}` });
+  } catch (e) {
+    console.error(`[focus-widget] pomodoro.${op} failed:`, e);
+  }
+}
+
+async function stopManualStopwatch(): Promise<void> {
+  try {
+    const client = await awaitArkReady();
+    // SQL-уровневый фильтр endedAt IS NULL + source='manual' через json_extract
+    // в ARK (`list_running_time_entries`). До 2026-05-21 здесь был
+    // list_objects_by_type + client-side фильтр/сортировка — на больших
+    // историях это тянуло всю time_entry_obj таблицу через WS.
+    const running = (await client.invokeOperation({
+      operation: "list_running_time_entries",
+      source: "manual",
+    } as { operation: string; [k: string]: unknown })) as ArkObjectLike[];
+    if (!Array.isArray(running)) return;
+    const nowIso = new Date().toISOString();
+    // Backend уже отсортировал startedAt DESC и отфильтровал endedAt/deleted_at.
+    // Сохраняем только startedAt guard — orphan entries без started тоже не
+    // нужны (хотя по идее их нет, потому что endedAt IS NULL && startedAt пуст
+    // — это broken state, но defensive).
+    const target = running.find((o) => {
+      const props = (o.propsJson ?? o.props_json ?? {}) as Record<string, unknown>;
+      const started = props.startedAt;
+      return typeof started === "string" && started.length > 0;
+    });
+    if (!target) {
+      console.warn("[focus-widget] stopwatch stop: no running manual time_entry");
+      return;
+    }
+    const props = { ...((target.propsJson ?? target.props_json ?? {}) as Record<string, unknown>), endedAt: nowIso };
+    const record = {
+      id: target.id,
+      typeId: target.typeId ?? target.type_id ?? "time_entry_obj",
+      title: target.title ?? "",
+      contentJson: target.contentJson ?? target.content_json ?? {},
+      propsJson: props,
+      createdAt: target.createdAt ?? target.created_at ?? nowIso,
+      updatedAt: nowIso,
+      deletedAt: target.deletedAt ?? target.deleted_at ?? null,
+    };
+    await client.invokeOperation({
+      operation: "upsert_object",
+      object: record,
+    } as { operation: string; [k: string]: unknown });
+  } catch (e) {
+    console.error("[focus-widget] stopwatch stop failed:", e);
+  }
+}
+
+ipcMain.handle("kepler:focus-widget:pomodoro:pause", async () => {
+  await invokePomodoro("pause");
+});
+ipcMain.handle("kepler:focus-widget:pomodoro:resume", async () => {
+  await invokePomodoro("resume");
+});
+ipcMain.handle("kepler:focus-widget:pomodoro:skip", async () => {
+  await invokePomodoro("skip");
+});
+ipcMain.handle("kepler:focus-widget:pomodoro:stop", async () => {
+  await invokePomodoro("stop");
+});
+ipcMain.handle("kepler:focus-widget:stopwatch:stop", async () => {
+  await stopManualStopwatch();
+});
+
 // Cleanup on app quit.
 app.on("before-quit", () => {
+  clearTickTimer();
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.destroy();
     widgetWindow = null;

@@ -788,6 +788,14 @@ export function isExtensionRunning(id: string): boolean {
  */
 function focusExistingExtensionWindow(win: BrowserWindow): void {
   if (win.isDestroyed()) return;
+  // Headless / test mode: окна не показываем, Playwright работает через
+  // webContents без paint'а.
+  if (
+    process.env.KOSMOS_HEADLESS === "1" ||
+    process.env.KOSMOS_TEST_MODE === "1"
+  ) {
+    return;
+  }
   try {
     if (win.isMinimized()) win.restore();
     if (!win.isVisible()) win.show();

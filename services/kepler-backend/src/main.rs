@@ -166,7 +166,7 @@ async fn setup() -> Result<SetupState, DynError> {
 
     let token = auth::generate_token();
 
-    let ws = WsServer::bind(ark.clone(), token.clone()).await?;
+    let ws = WsServer::bind(ark.clone(), token.clone(), lock_dir.clone()).await?;
     let port = ws.port();
     eprintln!("[kepler-backend] WS listening on 127.0.0.1:{port}");
 

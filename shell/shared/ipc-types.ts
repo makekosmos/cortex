@@ -230,6 +230,7 @@ export interface KeplerApi {
       label?: string;
       mode?: "work" | "break" | "stopwatch";
       blockingActive?: boolean;
+      isPaused?: boolean;
     }): Promise<void>;
     getState(): Promise<{
       active: boolean;
@@ -237,9 +238,23 @@ export interface KeplerApi {
       label: string;
       mode: "work" | "break" | "stopwatch";
       blockingActive: boolean;
+      isPaused: boolean;
     } | null>;
     hide(): Promise<void>;
     openHorologion(): Promise<void>;
+    /** Pomodoro inline controls. Прокидываются в kepler-backend
+        PomodoroHost через ArkClient.request("pomodoro.<op>"). */
+    pomodoro: {
+      pause(): Promise<void>;
+      resume(): Promise<void>;
+      skip(): Promise<void>;
+      stop(): Promise<void>;
+    };
+    /** Stopwatch (manual time_entry) stop. Закрывает running entry с
+        source=manual напрямую через ARK upsert_object. */
+    stopwatch: {
+      stop(): Promise<void>;
+    };
     /** Subscribe на push state updates от main. Returns unsubscribe. */
     onState(
       handler: (state: {
@@ -248,6 +263,7 @@ export interface KeplerApi {
         label: string;
         mode: "work" | "break" | "stopwatch";
         blockingActive: boolean;
+        isPaused: boolean;
       }) => void,
     ): () => void;
   };
@@ -283,6 +299,11 @@ export interface KeplerApi {
     close(): Promise<void>;
     autostart: {
       get(): Promise<boolean>;
+      /** Разрешён ли autostart toggle в текущем slot'е. true только для
+          prod (installed Kepler). В dev / test возвращает false — UI должен
+          disable'ить toggle, потому что setLoginItemSettings из dev пишет
+          мусор в HKCU Run (electron.exe из node_modules). */
+      allowed(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
     /** Developer mode — hot reload extension'ов через Vite dev server +
@@ -327,6 +348,13 @@ export interface KeplerApi {
     openFolder(): Promise<void>;
     /** Удалить все crash файлы. Возвращает количество удалённых. */
     clear(): Promise<{ removed: number }>;
+  };
+  /** Post-update first launch — main process детектит `post-update.flag` в
+      userData (создаётся autoupdater-host'ом перед quitAndInstall) и шлёт
+      одноразовое событие в renderer. UI показывает banner «Kepler обновлён». */
+  postUpdate: {
+    /** Подписка на post-update push. Returns unsubscribe. */
+    onShown(listener: (payload: { version: string }) => void): () => void;
   };
 }
 

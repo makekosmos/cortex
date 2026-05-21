@@ -44,14 +44,19 @@
 
 ## Headless mode
 
-Все e2e тесты идут с env `KOSMOS_HEADLESS=1` (выставляет `launchKepler` automatically). Extension windows создаются с `show: false` + `skipTaskbar: true` — окна не выскакивают на экран, не воруют focus, Playwright продолжает работать через `webContents` без visible render.
+::: danger ВСЕГДА. Без исключений.
+**Любой e2e прогон обязан быть невидимым для пользователя.** Не должно мелькать ни одно окно — ни launcher, ни extension, ни Settings, ни Dashboard, ни focus widget, ни install dialog. Если ты добавил новое BrowserWindow / show() / showInactive() / setAlwaysOnTop() — обязан проверить, что оно не появляется при `KOSMOS_HEADLESS=1` или `KOSMOS_TEST_MODE=1`. Пользователь не должен видеть никакой мигающей UI-активности от тестов.
+:::
+
+Все e2e тесты идут с env `KOSMOS_HEADLESS=1` + `KOSMOS_TEST_MODE=1` (выставляет `launchKepler` automatically). Все BrowserWindow респектят оба флага — `show: false`, `skipTaskbar: true`, `showLauncher()`/`showInactive()` skip'ают визуальное всплытие, `setAlwaysOnTop` подавляется.
 
 Это **обязательное** правило: в e2e никогда не показывать windows. Иначе тесты воруют focus у пользователя, мешают работе и flake'ят на slow paint.
 
-В `shell/electron/extension-host.ts`:
+Канонический pattern для нового BrowserWindow:
 
 ```ts
-const headless = process.env.KOSMOS_HEADLESS === "1";
+const headless =
+  process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
 new BrowserWindow({
   show: !headless,
   skipTaskbar: headless,
@@ -59,7 +64,18 @@ new BrowserWindow({
 });
 ```
 
-Главное shell-окно (launcher) и так стартует с `show: false` — в headless mode это поведение совпадает.
+Для `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)`, вызываемых **после** create:
+
+```ts
+if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") {
+  return; // или skip только визуальные операции, оставив state / IPC
+}
+win.showInactive();
+```
+
+Главное shell-окно (launcher) и так стартует с `show: false` — но `showLauncher()` (вызывается из hotkey, tray-click, post-update flow) обязан проверять headless перед `mainWindow.showInactive()`. См. `shell/electron/main.ts::showLauncher()`.
+
+Запрет CLAUDE.md дублирует это правило в секции «Тесты». Любое нарушение — fail из-за visible window — это **баг**, не «фича тестов».
 
 ## Известные ловушки в e2e (и как их обходить)
 

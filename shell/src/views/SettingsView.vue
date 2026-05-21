@@ -117,6 +117,7 @@ async function resetHotkey() {
 }
 const version = ref<string>("");
 const autostart = ref<boolean>(false);
+const autostartAllowed = ref<boolean>(true);
 const developerMode = ref<boolean>(false);
 const usageTracker = ref<boolean>(true);
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
@@ -126,10 +127,11 @@ const autostartError = ref<string>("");
 async function loadGeneral() {
   loading.value = true;
   try {
-    const [h, v, a, d, u, b] = await Promise.all([
+    const [h, v, a, aAllowed, d, u, b] = await Promise.all([
       window.kepler.settings.hotkey(),
       window.kepler.settings.version(),
       window.kepler.settings.autostart.get(),
+      window.kepler.settings.autostart.allowed(),
       window.kepler.settings.developerMode.get(),
       window.kepler.settings.usageTracker.get(),
       window.kepler.backend.status(),
@@ -137,6 +139,7 @@ async function loadGeneral() {
     hotkey.value = h;
     version.value = v;
     autostart.value = a;
+    autostartAllowed.value = aAllowed;
     developerMode.value = d;
     usageTracker.value = u;
     backend.value = b;
@@ -1053,13 +1056,17 @@ onBeforeUnmount(() => {
         <div class="row">
           <div class="row-label">
             <div class="label">Автозапуск с Windows</div>
-            <div class="hint">Запускать Kepler при входе в систему</div>
+            <div class="hint">
+              <template v-if="autostartAllowed">Запускать Kepler при входе в систему</template>
+              <template v-else>Доступно только в установленной версии (не в dev-сборке)</template>
+            </div>
             <div v-if="autostartError" class="error">{{ autostartError }}</div>
           </div>
-          <label class="toggle">
+          <label class="toggle" :class="{ disabled: !autostartAllowed }">
             <input
               type="checkbox"
               :checked="autostart"
+              :disabled="!autostartAllowed"
               @change="onToggleAutostart"
             />
             <span class="track"><span class="thumb" /></span>
@@ -1870,6 +1877,11 @@ onBeforeUnmount(() => {
   display: inline-block;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+.toggle.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .toggle input {

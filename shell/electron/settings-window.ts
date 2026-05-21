@@ -106,13 +106,13 @@ export function openSettings(): void {
     height: SETTINGS_HEIGHT,
     x: Math.round((display.width - SETTINGS_WIDTH) / 2),
     y: Math.round((display.height - SETTINGS_HEIGHT) / 2),
-    show: true,
+    show: process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1",
     frame: false,
     resizable: true,
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    skipTaskbar: false,
+    skipTaskbar: process.env.KOSMOS_HEADLESS === "1",
     alwaysOnTop: false,
     backgroundColor: "#00000000",
     backgroundMaterial: "mica",
@@ -159,10 +159,32 @@ export function setAutostartEnabled(enabled: boolean): void {
     );
     return;
   }
+  // args: ['--autostart'] — два эффекта:
+  //   1) Передача args форсит Electron записать в HKCU\...\Run строку вида
+  //      `"C:\...\Kepler.exe" --autostart` (с кавычками вокруг path). Без
+  //      args Electron на некоторых версиях кладёт path без кавычек; если в
+  //      пути есть пробелы (system-wide install в "Program Files"), Windows
+  //      shell не парсит и autorun не срабатывает. Per-user install в
+  //      %LOCALAPPDATA%\Programs\Kepler\ пробелов не имеет, но защита
+  //      универсальная.
+  //   2) Диагностический маркер — main.ts может прочитать process.argv и
+  //      понять, что запуск был из autorun (полезно для будущего «start
+  //      minimized to tray» и для лог-диагностики).
   app.setLoginItemSettings({
     openAtLogin: enabled,
     path: process.execPath,
+    args: ["--autostart"],
   });
+  // Сразу читаем обратно — если запись в HKCU не прошла, openAtLogin будет
+  // false и UI покажет ошибку. Логируем для диагностики реальных установок.
+  try {
+    const verify = app.getLoginItemSettings();
+    console.log(
+      `[kepler-shell] autostart set → enabled=${enabled}, verified openAtLogin=${verify.openAtLogin}, execPath=${process.execPath}`,
+    );
+  } catch (e) {
+    console.warn("[kepler-shell] autostart verify failed:", e);
+  }
 }
 
 export function isAutostartAllowed(): boolean {
@@ -182,6 +204,11 @@ ipcMain.handle("kepler:settings:close", () => {
 });
 
 ipcMain.handle("kepler:settings:autostart:get", () => isAutostartEnabled());
+
+ipcMain.handle(
+  "kepler:settings:autostart:allowed",
+  () => isAutostartAllowed(),
+);
 
 ipcMain.handle(
   "kepler:settings:autostart:set",

@@ -180,7 +180,12 @@ pub struct WsServer {
 
 impl WsServer {
     /// Биндит TcpListener на 127.0.0.1 + случайный свободный порт.
-    pub async fn bind(ark_host: Arc<ArkHost>, auth_token: String) -> Result<Self, WsServerError> {
+    /// `data_dir` — куда писать persisted pomodoro state.
+    pub async fn bind(
+        ark_host: Arc<ArkHost>,
+        auth_token: String,
+        data_dir: std::path::PathBuf,
+    ) -> Result<Self, WsServerError> {
         let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
         let listener = TcpListener::bind(addr).await?;
         Ok(WsServer {
@@ -188,7 +193,7 @@ impl WsServer {
             ark_host,
             auth_token: Arc::new(auth_token),
             command_bus: Arc::new(CommandBus::new()),
-            pomodoro_host: PomodoroHost::new(),
+            pomodoro_host: PomodoroHost::new(data_dir),
             next_client_id: Arc::new(AtomicU64::new(1)),
         })
     }

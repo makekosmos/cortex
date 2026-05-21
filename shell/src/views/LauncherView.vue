@@ -7,6 +7,7 @@ import {
     ArrowUpCircle,
     Loader2,
     RefreshCw,
+    Check,
 } from "lucide-vue-next";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
 import holoSvg from "../assets/holo.svg";
@@ -141,9 +142,14 @@ const recentIds = ref<string[]>(loadRecents());
 const updateState = ref<UpdateState>({ kind: "idle" });
 let unsubUpdateState: (() => void) | null = null;
 
-// TEMP HARDCODE для визуальной проверки большого update-tile.
-// TODO: убрать `HARDCODE_UPDATE_FOR_PREVIEW = true` после approval.
-const HARDCODE_UPDATE_FOR_PREVIEW = false;
+// --- Post-update banner (one-shot после quitAndInstall) ---------------------
+// Main process детектит `post-update.flag` в userData и шлёт `kepler:post-update`
+// с актуальной версией. Banner перекрывает update-banner и dismiss'ится по клику.
+const postUpdateVersion = ref<string | null>(null);
+let unsubPostUpdate: (() => void) | null = null;
+function dismissPostUpdate() {
+    postUpdateVersion.value = null;
+}
 
 const updateBanner = computed<
     | null
@@ -153,17 +159,9 @@ const updateBanner = computed<
         icon: Component;
         spinning: boolean;
         clickable: boolean;
+        progress?: number;
     }
 >(() => {
-    if (HARDCODE_UPDATE_FOR_PREVIEW) {
-        return {
-            title: "Обновить Kepler до 0.1.8",
-            description: "Установить новую версию и перезапустить",
-            icon: ArrowUpCircle,
-            spinning: false,
-            clickable: true,
-        };
-    }
     const s = updateState.value;
     if (s.kind === "downloaded") {
         return {
@@ -181,6 +179,7 @@ const updateBanner = computed<
             icon: Loader2,
             spinning: true,
             clickable: false,
+            progress: s.percent,
         };
     }
     if (s.kind === "available") {
@@ -361,6 +360,9 @@ onMounted(async () => {
     unsubUpdateState = window.kepler.settings.update.onStateChanged((s) => {
         updateState.value = s;
     });
+    unsubPostUpdate = window.kepler.postUpdate.onShown((payload) => {
+        postUpdateVersion.value = payload.version;
+    });
     void refreshCommands();
     void nextTick(() => inputRef.value?.focus());
 });
@@ -369,6 +371,7 @@ onUnmounted(() => {
     offShow();
     offCommandsUpdated();
     unsubUpdateState?.();
+    unsubPostUpdate?.();
 });
 
 </script>
@@ -379,7 +382,21 @@ onUnmounted(() => {
             placeholder="Поиск команд: pomo, заметка, открыть delphi…" spellcheck="false" autocomplete="off"
             autocorrect="off" autocapitalize="off" @input="onInput" />
         <div ref="listRef" class="list kosmos-scroll">
-            <template v-if="updateBanner">
+            <template v-if="postUpdateVersion">
+                <div class="section-label">Готово</div>
+                <ul class="results">
+                    <li class="result update-tile post-update-tile" @click="dismissPostUpdate">
+                        <span class="update-icon update-icon-large post-update-icon">
+                            <Check :size="22" :stroke-width="2.5" />
+                        </span>
+                        <div class="update-body">
+                            <div class="update-title">Kepler обновлён до v{{ postUpdateVersion }}</div>
+                            <div class="update-description">Нажми, чтобы скрыть</div>
+                        </div>
+                    </li>
+                </ul>
+            </template>
+            <template v-else-if="updateBanner">
                 <div class="section-label">Обновление</div>
                 <ul class="results">
                     <li class="result update-tile" :class="{ selected: selectedIndex === 0, disabled: !updateBanner.clickable }"
@@ -392,6 +409,11 @@ onUnmounted(() => {
                             <div class="update-title">{{ updateBanner.title }}</div>
                             <div class="update-description">{{ updateBanner.description }}</div>
                         </div>
+                        <span
+                            v-if="updateBanner.progress !== undefined"
+                            class="update-tile-progress"
+                            :style="{ width: `${updateBanner.progress}%` }"
+                        />
                     </li>
                 </ul>
             </template>
@@ -550,6 +572,26 @@ onUnmounted(() => {
 .update-tile {
     align-items: stretch;
     padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+}
+
+.update-tile .update-icon-large,
+.update-tile .update-body {
+    position: relative;
+    z-index: 1;
+}
+
+.update-tile-progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    top: 0;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border-right: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    transition: width 200ms ease-out;
+    pointer-events: none;
+    z-index: 0;
 }
 
 .update-body {
@@ -574,6 +616,16 @@ onUnmounted(() => {
 
 .update-tile.disabled {
     cursor: default;
+}
+
+/* Post-update banner — зелёная галка вместо синей стрелки апдейта.
+   Stateless dismiss-on-click, не подсвечивается selection ring'ом. */
+.post-update-icon {
+    background: oklch(0.62 0.18 145);
+}
+
+.post-update-tile {
+    cursor: pointer;
 }
 
 .spin {

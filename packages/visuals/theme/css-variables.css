@@ -65,6 +65,17 @@
   --status-warning: oklch(75% 0.14 75);
   --status-connecting: oklch(75% 0.14 75);
   --scrim-gradient: linear-gradient(180deg, color-mix(in srgb, var(--background) 0%, transparent) 0%, color-mix(in srgb, var(--background) 75%, transparent) 100%);
+
+  /* Pomodoro / timer accent stripe цвета. Derive из семантических токенов:
+     work — destructive (красный), break — status-success (зелёный),
+     stopwatch — primary/accent (нейтральный). */
+  --timer-work: var(--destructive);
+  --timer-break: var(--status-success);
+  --timer-stopwatch: var(--accent);
+
+  /* Floating window shadow (focus widget и аналогичные always-on-top окна). */
+  --shadow-floating: 0 4px 24px color-mix(in srgb, oklch(0 0 0) 28%, transparent);
+
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -129,6 +140,7 @@
   --status-warning: oklch(75% 0.14 75);
   --status-connecting: oklch(75% 0.14 75);
   --scrim-gradient: linear-gradient(180deg, color-mix(in srgb, #000 0%, transparent) 0%, color-mix(in srgb, #000 75%, transparent) 100%);
+  --shadow-floating: 0 4px 24px color-mix(in srgb, oklch(0 0 0) 55%, transparent);
 
   --border: oklch(0.23 0.00004 271);
   --input: oklch(1 0 0 / 15%);

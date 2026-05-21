@@ -98,6 +98,10 @@ import {
   install as installUpdate,
   setupAutoUpdater,
 } from "./autoupdater-host";
+import {
+  setupPomodoroNotifier,
+  teardownPomodoroNotifier,
+} from "./pomodoro-notifier";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -161,6 +165,12 @@ app.on("second-instance", (_event, argv) => {
   const kext = findKextInArgv(argv);
   if (kext) {
     openInstallExtensionWindow(kext);
+    return;
+  }
+  // Если второй instance — autorun (Windows зачем-то выстрелил Run-entry
+  // повторно при уже запущенном Kepler), не дёргаем launcher: пользователь
+  // не нажимал хоткей.
+  if (argv.includes("--autostart")) {
     return;
   }
   showLauncher();
@@ -476,6 +486,8 @@ let launcherHidden = true;
 function showLauncher() {
   if (!mainWindow) createLauncher();
   if (!mainWindow) return;
+  const headless =
+    process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
   const saved = loadWindowState();
   const pos = saved ?? defaultLauncherPosition();
   mainWindow.setBounds({
@@ -486,10 +498,26 @@ function showLauncher() {
   });
   mainWindow.setIgnoreMouseEvents(false);
   mainWindow.setOpacity(1);
-  if (!mainWindow.isVisible()) {
-    mainWindow.showInactive();
+  // В headless / test mode окно НИКОГДА не показывается визуально — Playwright
+  // работает через webContents без paint'а. Renderer всё равно получает
+  // `kepler:window:show` для focus/refresh, и `launcherHidden` обновляется.
+  if (!headless) {
+    if (!mainWindow.isVisible()) {
+      mainWindow.showInactive();
+    }
+    mainWindow.focus();
+    // Гарантируем что окно реально окажется на переднем плане (нужно для
+    // post-update flow: процесс только что перезапустился и Windows может
+    // отдать focus текущему foreground app). Снимаем флаг через 800мс —
+    // постоянный always-on-top раздражает.
+    if (!mainWindow.isAlwaysOnTop()) {
+      const win = mainWindow;
+      win.setAlwaysOnTop(true);
+      setTimeout(() => {
+        if (!win.isDestroyed()) win.setAlwaysOnTop(false);
+      }, 800);
+    }
   }
-  mainWindow.focus();
   launcherHidden = false;
   mainWindow.webContents.send("kepler:window:show");
 }
@@ -592,6 +620,10 @@ async function resetArkClient(reason: string): Promise<void> {
   const prev = arkClient;
   arkClient = null;
   setExtensionArkBridge({ request: null, subscribe: null });
+  // pomodoro-notifier держит ref на старый arkClient через onArkEvent callback —
+  // отписываем до stop(), иначе при следующем setupPomodoroNotifier останется
+  // double-subscribe на новый клиент.
+  teardownPomodoroNotifier();
   if (prev) {
     try {
       await prev.stop();
@@ -601,7 +633,7 @@ async function resetArkClient(reason: string): Promise<void> {
   }
 }
 
-async function awaitArkReady(timeoutMs = 15000): Promise<ArkClient> {
+export async function awaitArkReady(timeoutMs = 15000): Promise<ArkClient> {
   if (arkClient) return arkClient;
   const p = ensureArkReadyPromise();
   let timer: NodeJS.Timeout | null = null;
@@ -665,6 +697,14 @@ async function initArkClient(): Promise<void> {
     console.error(
       `[kepler-shell] ArkClient connected to kepler-backend (pid ${state.lock.pid}, ws_port ${state.lock.ws_port})`,
     );
+    // Pomodoro main-process notifier: подписывается на pomodoro_phase_changed
+    // через свежий arkClient. Idempotent — при reconnect старый sub отпишется
+    // первым делом. См. shell/electron/pomodoro-notifier.ts.
+    try {
+      setupPomodoroNotifier({ arkClient: client });
+    } catch (e) {
+      console.error("[kepler-shell] setupPomodoroNotifier failed:", e);
+    }
     // Bridge для Vue-extensions: extension-host прокидывает renderer-запросы
     // сюда через IPC. invokeOperation — public escape-hatch для generic RPC,
     // onArkEvent — generic подписка, фильтруем по event-имени.
@@ -1169,6 +1209,18 @@ app.whenReady().then(async () => {
   // launcher просвечивает белым).
   nativeTheme.themeSource = "dark";
 
+  // Диагностика: был ли запуск из autorun (Windows HKCU\...\Run). Маркер
+  // --autostart выставляется в setAutostartEnabled() через args. Запись
+  // в stdout попадает в crash log / electron log если backend crash'нется
+  // на early init. Сейчас launcher по умолчанию hidden (`launcherHidden = true`),
+  // поэтому при autorun пользователь видит только tray icon — это by design.
+  const startedFromAutorun = process.argv.includes("--autostart");
+  if (startedFromAutorun) {
+    console.log(
+      "[kepler-shell] launched from Windows autorun (--autostart marker present); launcher remains hidden, tray icon only",
+    );
+  }
+
   spawnBackend();
   createLauncher();
   createTray();
@@ -1182,12 +1234,40 @@ app.whenReady().then(async () => {
 
   // Post-update first launch: если только что обновились через
   // quitAndInstall (autoupdater-host пишет флаг в userData/post-update.flag),
-  // открываем launcher автоматически и показываем changelog модалку.
+  // открываем launcher автоматически и пробрасываем событие в renderer —
+  // тот покажет одноразовый banner «Kepler обновлён до vX.Y.Z».
+  // Версию берём из `app.getVersion()` уже после старта (это новая версия —
+  // процесс перезапущен с обновлённым кодом). Backwards-compat: старый формат
+  // флага (просто timestamp число) тоже принимаем — версию всё равно
+  // получаем из app.getVersion().
   try {
     const flag = path.join(app.getPath("userData"), "post-update.flag");
     if (existsSync(flag)) {
+      // Содержимое не используем (формат может быть как старый — number-as-string,
+      // так и новый — JSON `{at: number}`). Главное — сам факт наличия флага.
+      try {
+        readFileSync(flag, "utf8");
+      } catch {
+        /* ignore — флаг всё равно удаляем */
+      }
       unlinkSync(flag);
+      const newVersion = app.getVersion();
       showLauncher();
+      // Renderer подписывается на `kepler:post-update` через preload
+      // (см. LauncherView.vue → onPostUpdateShown). Шлём после небольшой
+      // задержки, чтобы renderer успел смонтироваться, если launcher
+      // только что был создан в createLauncher().
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          try {
+            mainWindow.webContents.send("kepler:post-update", {
+              version: newVersion,
+            });
+          } catch {
+            /* dead webContents — skip */
+          }
+        }
+      }, 300);
     }
   } catch (e) {
     console.warn("[kepler-shell] post-update flag handling failed:", e);
@@ -1308,6 +1388,7 @@ app.on("will-quit", () => {
   console.error("[kepler-shell] will-quit: starting cleanup");
   globalShortcut.unregisterAll();
   setExtensionArkBridge({ request: null, subscribe: null });
+  teardownPomodoroNotifier();
   if (windowStateSaveTimer) {
     clearTimeout(windowStateSaveTimer);
     windowStateSaveTimer = null;

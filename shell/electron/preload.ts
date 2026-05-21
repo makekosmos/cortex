@@ -71,6 +71,15 @@ const api: KeplerApi = {
     hide: () => ipcRenderer.invoke("kepler:focus-widget:hide"),
     openHorologion: () =>
       ipcRenderer.invoke("kepler:focus-widget:open-horologion"),
+    pomodoro: {
+      pause: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:pause"),
+      resume: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:resume"),
+      skip: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:skip"),
+      stop: () => ipcRenderer.invoke("kepler:focus-widget:pomodoro:stop"),
+    },
+    stopwatch: {
+      stop: () => ipcRenderer.invoke("kepler:focus-widget:stopwatch:stop"),
+    },
     onState: (handler) => {
       const wrapper = (_e: Electron.IpcRendererEvent, state: unknown) =>
         handler(
@@ -80,6 +89,7 @@ const api: KeplerApi = {
             label: string;
             mode: "work" | "break" | "stopwatch";
             blockingActive: boolean;
+            isPaused: boolean;
           },
         );
       ipcRenderer.on("kepler:focus-widget:state", wrapper);
@@ -109,6 +119,7 @@ const api: KeplerApi = {
     close: () => ipcRenderer.invoke("kepler:settings:close"),
     autostart: {
       get: () => ipcRenderer.invoke("kepler:settings:autostart:get"),
+      allowed: () => ipcRenderer.invoke("kepler:settings:autostart:allowed"),
       set: (enabled) =>
         ipcRenderer.invoke("kepler:settings:autostart:set", enabled),
     },
@@ -144,6 +155,14 @@ const api: KeplerApi = {
     list: () => ipcRenderer.invoke("kepler:crashes:list"),
     openFolder: () => ipcRenderer.invoke("kepler:crashes:openFolder"),
     clear: () => ipcRenderer.invoke("kepler:crashes:clear"),
+  },
+  postUpdate: {
+    onShown: (listener) => {
+      const handler = (_e: unknown, payload: unknown) =>
+        listener(payload as { version: string });
+      ipcRenderer.on("kepler:post-update", handler);
+      return () => ipcRenderer.removeListener("kepler:post-update", handler);
+    },
   },
 };
 

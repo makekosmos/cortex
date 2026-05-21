@@ -203,14 +203,26 @@ function formatTimeOfDay(iso: string): string {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-/** Делит title записи на куски, выделяя `@<taskTitle>` как accent-span. */
+/** Делит title записи на куски, выделяя `@<taskTitle>` как accent-span.
+ *  Если taskTitle есть, но в title нет inline `@<taskTitle>` substring'а
+ *  (типичный случай: задачу выбрали через @-mention menu, который удаляет
+ *  @query из input и кладёт task в отдельный chip-массив), всё равно
+ *  показываем `@<taskTitle>` как accent в начале — иначе визуально teряется
+ *  связь с задачей, и юзер видит сырой title без признака трекинга. */
 function titleParts(g: EntryGroup): Array<{ type: "text" | "task"; text: string }> {
-    if (!g.taskTitle) return [{ type: "text", text: g.title || "Без названия" }];
+    const titleText = g.title || "";
+    if (!g.taskTitle) return [{ type: "text", text: titleText || "Без названия" }];
     const needle = `@${g.taskTitle}`;
-    const idx = g.title.indexOf(needle);
-    if (idx < 0) return [{ type: "text", text: g.title || "Без названия" }];
-    const before = g.title.slice(0, idx);
-    const after = g.title.slice(idx + needle.length);
+    const idx = titleText.indexOf(needle);
+    if (idx < 0) {
+        const parts: Array<{ type: "text" | "task"; text: string }> = [
+            { type: "task", text: g.taskTitle },
+        ];
+        if (titleText) parts.push({ type: "text", text: ` ${titleText}` });
+        return parts;
+    }
+    const before = titleText.slice(0, idx);
+    const after = titleText.slice(idx + needle.length);
     const parts: Array<{ type: "text" | "task"; text: string }> = [];
     if (before) parts.push({ type: "text", text: before });
     parts.push({ type: "task", text: g.taskTitle });

@@ -164,7 +164,21 @@ function createSessionState() {
       !isPaused.value &&
       pomodoroSettings.focusBlocklistId != null;
 
-    void api.setState({ active, remainingSec, label, mode, blockingActive });
+    // Передаём wallclock-anchor: когда Horologion окно скрыто, Chromium
+    // throttle'ит наш setInterval и renderer перестаёт пушить апдейты.
+    // Main process использует phaseEndsAtMs чтобы автономно тикать MM:SS
+    // каждую секунду пока виджет видим. На pause / idle — null.
+    const widgetPhaseEndsAtMs = active ? phaseEndsAtMs : null;
+
+    void api.setState({
+      active,
+      remainingSec,
+      label,
+      mode,
+      blockingActive,
+      isPaused: isPaused.value,
+      phaseEndsAtMs: widgetPhaseEndsAtMs,
+    });
   }
 
   function recomputeFromAnchor(): void {
@@ -361,25 +375,8 @@ function createSessionState() {
   function notifyEnd(p: PomodoroPhase) {
     if (p === "work") playSound(pomodoroSettings.workEndSound);
     else if (p === "shortBreak" || p === "longBreak") playSound(pomodoroSettings.breakEndSound);
-
-    if (!pomodoroSettings.systemNotifications) return;
-    try {
-      if (typeof Notification === "undefined") return;
-      if (Notification.permission !== "granted") return;
-      const titles: Record<PomodoroPhase, string> = {
-        idle: "",
-        work: "Фокус закончен",
-        shortBreak: "Перерыв закончен",
-        longBreak: "Большой перерыв закончен",
-      };
-      const bodies: Record<PomodoroPhase, string> = {
-        idle: "",
-        work: "Время отдохнуть.",
-        shortBreak: "Время вернуться к работе.",
-        longBreak: "Хорошо отдохнули — продолжаем.",
-      };
-      new Notification(titles[p], { body: bodies[p] });
-    } catch { /* ignore */ }
+    // System Notification вынесен в main process (shell/electron/pomodoro-notifier.ts).
+    // Это даёт toast независимо от того, открыто ли Horologion окно.
   }
 
   async function ensureInit(): Promise<void> {
@@ -489,17 +486,32 @@ function createSessionState() {
 
   async function start(ctx: PhaseContext): Promise<void> {
     await ensureInit();
-    lastContext.value = { ...ctx };
+    // Глубокая копия с принудительной типизацией к примитивам — IPC сериализатор
+    // (Electron v8 / structured clone) падает с "An object could not be cloned"
+    // на Vue reactive Proxy / Symbol / функциях. `ctx.tasks` приходит как
+    // slice() реактивного массива: элементы остаются Proxy. Plain {id,title}
+    // снимает обёртку; Number/Boolean — снимают reactive getter'ы pomodoroSettings.
+    const tasksPlain = (ctx.tasks ?? []).map((t) => ({
+      id: String(t.id),
+      title: String(t.title),
+    }));
+    lastContext.value = {
+      title: String(ctx.title ?? ""),
+      tasks: tasksPlain,
+      workMinOverride:
+        typeof ctx.workMinOverride === "number" ? ctx.workMinOverride : undefined,
+    };
     const config = {
-      workMin: pomodoroSettings.workMin,
-      shortBreakMin: pomodoroSettings.shortBreakMin,
-      longBreakMin: pomodoroSettings.longBreakMin,
-      pomodorosUntilLongBreak: pomodoroSettings.pomodorosUntilLongBreak,
-      autoStartWork: pomodoroSettings.autoStartWork,
-      autoStartBreak: pomodoroSettings.autoStartBreak,
-      title: ctx.title,
-      tasks: ctx.tasks,
-      workMinOverride: ctx.workMinOverride,
+      workMin: Number(pomodoroSettings.workMin),
+      shortBreakMin: Number(pomodoroSettings.shortBreakMin),
+      longBreakMin: Number(pomodoroSettings.longBreakMin),
+      pomodorosUntilLongBreak: Number(pomodoroSettings.pomodorosUntilLongBreak),
+      autoStartWork: Boolean(pomodoroSettings.autoStartWork),
+      autoStartBreak: Boolean(pomodoroSettings.autoStartBreak),
+      title: String(ctx.title ?? ""),
+      tasks: tasksPlain,
+      workMinOverride:
+        typeof ctx.workMinOverride === "number" ? ctx.workMinOverride : undefined,
     };
     try {
       const s = await kepler().request<BackendState>("pomodoro.start", { config });
@@ -563,14 +575,8 @@ function createSessionState() {
     } catch (e) { console.error("[pomodoroSession] stop failed:", e); }
   }
 
-  // Permission prompt (как в usePomodoro).
-  if (
-    typeof Notification !== "undefined" &&
-    Notification.permission === "default" &&
-    pomodoroSettings.systemNotifications
-  ) {
-    void Notification.requestPermission().catch(() => {});
-  }
+  // Permission prompt не нужен: native toast'ы шлёт main process через
+  // Electron Notification API (не requires renderer permission grant).
 
   // Lazy init на module-import — стартуем subscribe ASAP чтобы не пропустить
   // backend события (например, активная сессия после reload).
