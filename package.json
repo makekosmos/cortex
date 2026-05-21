@@ -34,7 +34,7 @@
     "oxlint": "1.66.0",
     "playwright": "^1.60.0",
     "vue": "^3.6.0-beta.12",
-    "vue-router": "^4.6.4"
+    "vue-router": "^5.0.7"
   },
   "overrides": {
     "vite": "^8.0.3"
