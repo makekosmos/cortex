@@ -5,8 +5,8 @@
   "description": "Eden (заметки + TipTap editor) — Vue extension для Kepler shell.",
   "type": "module",
   "scripts": {
-    "test": "bun test && bun run test:vue",
-    "test:unit": "bun test",
+    "test": "bun run test:unit && bun run test:vue",
+    "test:unit": "bun test tests/*.test.ts",
     "test:vue": "vitest run --browser"
   },
   "dependencies": {
