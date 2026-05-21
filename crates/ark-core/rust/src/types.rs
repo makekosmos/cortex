@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+#[cfg(feature = "ts-rs")]
+use ts_rs::TS;
+
 // ---------------------------------------------------------------------------
 // DB entity types (camelCase JSON for sidecar compatibility)
 // ---------------------------------------------------------------------------
@@ -134,13 +137,20 @@ pub struct UsageEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(
+    feature = "ts-rs",
+    ts(export, export_to = "../../../../packages/ark/src/generated/")
+)]
 pub struct ArkObject {
     pub id: String,
     pub type_id: String,
     pub title: String,
     #[serde(default = "default_content_json")]
+    #[cfg_attr(feature = "ts-rs", ts(type = "unknown"))]
     pub content_json: Value,
     #[serde(default = "default_props_json")]
+    #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
     pub props_json: Value,
     pub created_at: String,
     pub updated_at: String,
@@ -149,6 +159,11 @@ pub struct ArkObject {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(
+    feature = "ts-rs",
+    ts(export, export_to = "../../../../packages/ark/src/generated/")
+)]
 pub struct ObjectType {
     pub id: String,
     pub name: String,
@@ -161,6 +176,11 @@ pub struct ObjectType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(
+    feature = "ts-rs",
+    ts(export, export_to = "../../../../packages/ark/src/generated/")
+)]
 pub struct ObjectLink {
     pub id: String,
     pub source_object_id: String,
