@@ -5,6 +5,9 @@
   "scripts": {
     "ark:guard:writes": "node scripts/check-ark-write-boundaries.mjs",
     "ark:smoke": "node scripts/ark-smoke.mjs",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "docs:dev": "bun run --cwd docs-site dev",
     "docs:build": "bun run docs:sync && bun run --cwd docs-site build",
     "docs:preview": "bun run --cwd docs-site preview",
