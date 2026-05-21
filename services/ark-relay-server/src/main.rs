@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+
 //! ark-relay-server: WebSocket relay for Kepler P2P mesh.
 //!
 //! Forwards `LanSyncMessage` JSON frames between devices sharing the same

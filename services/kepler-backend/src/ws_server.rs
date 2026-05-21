@@ -186,7 +186,9 @@ impl WsServer {
         auth_token: String,
         data_dir: std::path::PathBuf,
     ) -> Result<Self, WsServerError> {
-        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:0"
+            .parse()
+            .expect("hardcoded socket literal is always valid");
         let listener = TcpListener::bind(addr).await?;
         Ok(WsServer {
             listener,

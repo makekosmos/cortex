@@ -42,7 +42,7 @@ impl RelayRooms {
     }
 
     fn join(&self, space_id: &str, device_id: &str, tx: WsSender) {
-        let mut rooms = self.inner.lock().unwrap();
+        let mut rooms = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         rooms
             .entry(space_id.to_string())
             .or_default()
@@ -50,7 +50,7 @@ impl RelayRooms {
     }
 
     fn leave(&self, space_id: &str, device_id: &str) {
-        let mut rooms = self.inner.lock().unwrap();
+        let mut rooms = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(room) = rooms.get_mut(space_id) {
             room.remove(device_id);
             if room.is_empty() {
@@ -61,7 +61,7 @@ impl RelayRooms {
 
     /// Broadcast a text frame to all devices in the room **except** `from_device`.
     fn broadcast(&self, space_id: &str, from_device: &str, msg: Message) {
-        let rooms = self.inner.lock().unwrap();
+        let rooms = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(room) = rooms.get(space_id) {
             for (dev, tx) in room.iter() {
                 if dev != from_device {
@@ -73,7 +73,7 @@ impl RelayRooms {
 
     /// Return catch-up messages for a new device.
     fn catch_up(&self, space_id: &str) -> Vec<Message> {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         match db.get_events_since(space_id, "") {
             Ok(rows) => rows
                 .into_iter()
@@ -111,7 +111,7 @@ impl RelayRooms {
             .unwrap_or("")
             .to_string();
         let entity_json = serde_json::to_string(entity).unwrap_or_default();
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         if let Err(e) = db.store_event(space_id, device_id, &entity_json, &hlc) {
             eprintln!("[relay] db store error: {e}");
         }

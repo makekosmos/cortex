@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+
 //! kepler-focus-svc: Windows Service для focus mode hosts file management.
 //!
 //! Sub-commands:

@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+
 // Kosmos Kepler backend — headless ARK host runtime.
 //
 // Этот крейт extracted из apps/kepler/ в Phase 0 Kepler-Electron pivot. Содержит

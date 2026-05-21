@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+
 // Kosmos Kepler backend — headless binary.
 //
 // Запускается как child процесс Electron Kepler main process в новой

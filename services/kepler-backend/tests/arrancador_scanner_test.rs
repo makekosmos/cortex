@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 // Integration test: синтетическая Steam library с тремя играми (Dota 2 / Cairn /
 // Outlast). Покрывает AC3 (scanner-часть): scanner находит 3 game_obj с
 // корректными именами + source_app_id. ARK upsert через WS dispatcher — не
