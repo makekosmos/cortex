@@ -53,7 +53,7 @@ atomic, данные внутри guard'а валидны).
   `#[cfg(test)] mod tests` в lib/bin) или `#![allow(clippy::unwrap_used)]`
   (для `tests/*.rs` / `benches/*.rs`).
 - **AC4** [clippy-all-targets-no-errors]: `cargo clippy --workspace
-  --all-targets` завершается без `error[...]` (warning'и не-unwrap
+--all-targets` завершается без `error[...]` (warning'и не-unwrap
   lint'ов допустимы — они вне scope).
 - **AC5** [tests-pass]: `cargo test --workspace --lib` — все lib unit
   тесты passed (0 failed).

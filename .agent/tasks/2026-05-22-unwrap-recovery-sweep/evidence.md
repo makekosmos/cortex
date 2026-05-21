@@ -15,6 +15,7 @@
 После правки: **0**.
 
 Распределение фиксов:
+
 - `crates/ark-core/rust/src/ffi.rs` — 8 fixes
   (Mutex poison recovery `lock().unwrap_or_else(|e| e.into_inner())`)
 - `crates/ark-core/rust/src/main.rs` — 5 fixes (Mutex poison recovery)
@@ -23,7 +24,7 @@
 - `services/ark-relay-server/src/relay.rs` — 5 fixes (Mutex)
 - `services/kepler-backend/src/ws_server.rs` — 1 fix
   (`"127.0.0.1:0".parse().unwrap()` → `.expect("hardcoded socket literal
-  is always valid")`)
+is always valid")`)
 
 **Total: 27 prod unwrap'ов починено.**
 
@@ -42,6 +43,7 @@ unimplemented = "warn"
 ## AC3 [tests-allow-attribute]: PASS
 
 `#![cfg_attr(test, allow(clippy::unwrap_used))]` добавлен в crate root'ы:
+
 - `crates/ark-core/rust/src/lib.rs`
 - `crates/ark-core/rust/src/main.rs`
 - `services/kepler-backend/src/lib.rs`
@@ -52,6 +54,7 @@ unimplemented = "warn"
 - `services/kepler-focus-helper/src/lib.rs`
 
 `#![allow(clippy::unwrap_used)]` (file-level) в integration tests и benches:
+
 - `crates/ark-core/rust/tests/relay_round_trip.rs`
 - `crates/ark-core/rust/tests/sync_round_trip.rs`
 - `crates/ark-core/rust/tests/proptest_invariants.rs`

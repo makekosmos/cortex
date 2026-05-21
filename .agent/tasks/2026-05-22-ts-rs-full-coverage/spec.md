@@ -37,7 +37,7 @@ sync entities, analytics).
 
 ## Acceptance Criteria
 
-1. **AC1**: `cargo test --features ts-rs --manifest-path crates/ark-core/rust/Cargo.toml --lib export_bindings` → 26 export_bindings_* тестов PASS.
+1. **AC1**: `cargo test --features ts-rs --manifest-path crates/ark-core/rust/Cargo.toml --lib export_bindings` → 26 export*bindings*\* тестов PASS.
 2. **AC2**: `bun run --cwd packages/ark typecheck` → PASS (нет TS ошибок).
 3. **AC3**: `bun run --cwd shell typecheck` → PASS (нет регрессий).
 4. **AC4**: `bunx oxlint .` → 0 errors (warnings допустимы — pre-existing).
@@ -53,7 +53,7 @@ sync entities, analytics).
 ## Known issues / notes
 
 - ts-rs выдаёт warning'и про `#[serde(default, skip_serializing_if =
-  "Option::is_none")]` — атрибут парсится не полностью. На output это не
+"Option::is_none")]` — атрибут парсится не полностью. На output это не
   влияет: `Option<bool>` корректно становится `boolean | null`.
 - `SyncEntity.data` (`serde_json::Map<String, Value>`) и `*.meta_json` (`Value`)
   типизированы как `Record<string, unknown>` через `#[ts(type = ...)]`.
