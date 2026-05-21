@@ -44,6 +44,12 @@ urlencoding = "2"
 async-trait = "0.1"
 # Arrancador SQOBA (subagent C) — zip backup/restore save-files.
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
+# Phase 4 bug-detection: structured logging.
+# tracing = фасад; subscriber = JSON exporter + env-filter; appender =
+# rolling daily file под `<data_dir>/logs/<slot>/`.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [

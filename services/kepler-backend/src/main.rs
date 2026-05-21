@@ -35,6 +35,49 @@ struct SetupState {
     ws: WsServer,
     lock_path: PathBuf,
     _singleton: SingletonGuard,
+    // tracing-appender WorkerGuard. Drop'нется когда SetupState упадёт —
+    // тогда background writer flush'нет очередь и завершится. Без guard'а
+    // последние логи теряются перед exit'ом процесса.
+    _log_guard: tracing_appender::non_blocking::WorkerGuard,
+}
+
+/// Инициализирует tracing с rolling daily file appender в
+/// `<lock_dir>/logs/kepler-backend.<DATE>`. Возвращает WorkerGuard который
+/// нужно держать живым (drop = flush + shutdown).
+///
+/// Env override: `RUST_LOG` controls filter (default `info`).
+/// JSON output для machine parsing — bug bundle / external aggregation.
+fn init_tracing(lock_dir: &std::path::Path) -> tracing_appender::non_blocking::WorkerGuard {
+    use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+    let log_dir = lock_dir.join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
+
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "kepler-backend");
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    // Two layers: JSON в file (для bundle), pretty в stderr (для dev).
+    let file_layer = fmt::layer()
+        .json()
+        .with_writer(non_blocking)
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_current_span(false);
+
+    let stderr_layer = fmt::layer()
+        .with_writer(std::io::stderr)
+        .with_target(false)
+        .with_ansi(false);
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(file_layer)
+        .with(stderr_layer)
+        .init();
+
+    guard
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
@@ -52,6 +95,7 @@ async fn main() -> ExitCode {
         ws,
         lock_path,
         _singleton,
+        _log_guard,
     } = state;
 
     tokio::spawn(async move {
@@ -103,6 +147,8 @@ async fn main() -> ExitCode {
 }
 
 async fn setup() -> Result<SetupState, DynError> {
+    // NB: до init_tracing нельзя зваать tracing::info!. Banner печатается
+    // в stderr через eprintln; tracing включается ниже после crash_reporter.
     eprintln!(
         "kepler-backend v{} starting (protocol {})",
         env!("CARGO_PKG_VERSION"),
@@ -119,47 +165,62 @@ async fn setup() -> Result<SetupState, DynError> {
     // <data_dir>/crashes/panic-*.log. Требует RUST_BACKTRACE=1 для
     // backtrace; Kepler shell сетит этот env при spawn'е backend.
     crash_reporter::install(lock_dir.clone());
+
+    // Phase 4 bug-detection: structured logging. tracing init ДО любых
+    // других steps чтобы info!/warn!/error! из setup'а попали в файл.
+    let log_guard = init_tracing(&lock_dir);
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        protocol = ?PROTOCOL_VERSION,
+        "kepler-backend starting"
+    );
+
     let singleton_path = lock_dir.join("kepler-singleton.lock.db");
 
     if let Some(existing) = lock_file::read_if_alive(&lock_path)? {
-        eprintln!(
-            "[kepler-backend] another instance running (pid {}, ws_port {})",
-            existing.pid, existing.ws_port
+        tracing::warn!(
+            pid = existing.pid,
+            ws_port = existing.ws_port,
+            "another kepler-backend instance running (singleton conflict)"
         );
         return Err("singleton conflict via lock-file".into());
     }
 
     let _singleton = SingletonGuard::acquire(&singleton_path)?;
-    eprintln!("[kepler-backend] singleton acquired: {singleton_path:?}");
+    tracing::info!(path = ?singleton_path, "singleton acquired");
 
     let ark_binary = ark_host::resolve_ark_core_rpc_path()?;
-    eprintln!("[kepler-backend] ark-core-rpc binary: {ark_binary:?}");
+    tracing::info!(binary = ?ark_binary, "ark-core-rpc resolved");
 
     let db_path = std::env::var("KOSMOS_DB_PATH")
         .unwrap_or_else(|_| lock_dir.join("ark.db").to_string_lossy().into_owned());
-    eprintln!("[kepler-backend] db: {db_path}");
+    tracing::info!(db_path = %db_path, "ark db path");
 
     let ark = Arc::new(ArkHost::spawn(&ark_binary, &db_path).await?);
-    eprintln!("[kepler-backend] ark-core-rpc spawned and initialized");
+    tracing::info!("ark-core-rpc spawned and initialized");
 
     if std::env::var("KEPLER_SKIP_SYNC").as_deref() == Ok("1") {
-        eprintln!("[kepler-backend] KEPLER_SKIP_SYNC=1 — start_sync пропущен");
+        tracing::info!("KEPLER_SKIP_SYNC=1 — start_sync пропущен");
     } else {
         let space_id = sync::resolve_space_id();
         let device_id = match sync::resolve_device_id(&lock_dir) {
             Ok(id) => id,
             Err(e) => {
-                eprintln!("[kepler-backend] WARN device_id resolve failed: {e}; fallback 'kepler-fallback'");
+                tracing::warn!(error = %e, "device_id resolve failed; fallback 'kepler-fallback'");
                 "kepler-fallback".to_string()
             }
         };
         let device_name = sync::resolve_device_name();
         match sync::start_lan_sync(&ark, &space_id, &device_id, &device_name).await {
-            Ok(()) => eprintln!(
-                "[kepler-backend] LAN sync started: space_id={space_id} device_id={device_id} device_name={device_name:?}"
+            Ok(()) => tracing::info!(
+                space_id = %space_id,
+                device_id = %device_id,
+                device_name = ?device_name,
+                "LAN sync started"
             ),
-            Err(e) => eprintln!(
-                "[kepler-backend] WARN start_sync failed: {e}; ARK ops продолжат работать, sync — нет"
+            Err(e) => tracing::warn!(
+                error = %e,
+                "start_sync failed; ARK ops продолжат работать, sync — нет"
             ),
         }
     }
@@ -168,7 +229,7 @@ async fn setup() -> Result<SetupState, DynError> {
 
     let ws = WsServer::bind(ark.clone(), token.clone(), lock_dir.clone()).await?;
     let port = ws.port();
-    eprintln!("[kepler-backend] WS listening on 127.0.0.1:{port}");
+    tracing::info!(port = port, "WS listening on 127.0.0.1");
 
     let lock = KeplerLockFile {
         format_version: LOCK_FILE_FORMAT_VERSION,
@@ -180,12 +241,13 @@ async fn setup() -> Result<SetupState, DynError> {
         db_path: db_path.clone(),
     };
     lock_file::write_atomic(&lock_path, &lock)?;
-    eprintln!("[kepler-backend] lock-file: {lock_path:?}");
+    tracing::info!(path = ?lock_path, "lock-file written");
 
     Ok(SetupState {
         ark,
         ws,
         lock_path,
         _singleton,
+        _log_guard: log_guard,
     })
 }
