@@ -357,13 +357,13 @@ baseline снят в `.agent/experiments/2026-05-19-tooling-pass/` (E3).
 ### Открытые вопросы
 
 - **Loader**: реализовать `@raycast/api` shim как npm-пакет в `packages/` + extension просто импортирует? Или JSX/React-runtime внутри extension и адаптер на наш Vue Vapor?
-- **Лицензия**: Raycast API типы (`@raycast/api`) — proprietary. Использовать TypeScript types из их пакета нельзя; нужно объявить совместимый shape в `packages/raycast-compat/` своими силами.
+- **Лицензия**: Raycast API типы (`@raycast/api`) — proprietary. Использовать TypeScript types из их пакета нельзя; нужно объявить совместимый shape в новом workspace-пакете (рабочее название `@kosmos/raycast-compat`) своими силами.
 - **Marketplace**: установка Raycast extensions через `.kext` (после конвертации) vs прямая поддержка `.raycast` бандлов.
 
 ## Phase 16 ⏳ — AI semantic search
 
 ::: tip Материализация AI-first графа
-[North-star](/memory) проекта — «всё есть объект + AI-friendly граф». Phase 16 — первая конкретная фича в этом направлении: semantic search через embeddings, локально, без сетевых API.
+North-star проекта — «всё есть объект + AI-friendly граф». Phase 16 — первая конкретная фича в этом направлении: semantic search через embeddings, локально, без сетевых API.
 :::
 
 ### Цель
