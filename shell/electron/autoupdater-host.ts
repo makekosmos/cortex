@@ -10,10 +10,11 @@
 //   idle → checking → (available → downloading → downloaded) | not-available | error
 //   any → checking (manual or periodic)
 
-import { app, BrowserWindow, dialog } from "electron";
+import { BrowserWindow, dialog } from "electron";
 import electronUpdater from "electron-updater";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
+import { keplerDataDir } from "./data-dir";
 
 export type UpdateState =
   | { kind: "idle" }
@@ -130,7 +131,7 @@ export function install(): void {
   // новую версию main.ts при чтении флага возьмёт из `app.getVersion()`
   // ПОСЛЕ старта — это уже новая.
   try {
-    const flag = path.join(app.getPath("userData"), "post-update.flag");
+    const flag = path.join(keplerDataDir(), "post-update.flag");
     writeFileSync(flag, JSON.stringify({ at: Date.now() }), "utf8");
   } catch (e) {
     console.warn("[autoUpdater] failed to write post-update flag:", e);

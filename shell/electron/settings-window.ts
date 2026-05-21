@@ -12,6 +12,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveInstance } from "./instance";
+import { keplerDataDir } from "./data-dir";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +65,7 @@ export function setStoredHotkey(value: string): void {
 }
 
 function settingsFilePath(): string {
-  return path.join(app.getPath("userData"), "kepler-shell-settings.json");
+  return path.join(keplerDataDir(), "kepler-shell-settings.json");
 }
 
 function readSettings(): KeplerShellSettings {

@@ -1287,7 +1287,7 @@ app.whenReady().then(async () => {
   // флага (просто timestamp число) тоже принимаем — версию всё равно
   // получаем из app.getVersion().
   try {
-    const flag = path.join(app.getPath("userData"), "post-update.flag");
+    const flag = path.join(keplerDataDir(), "post-update.flag");
     if (existsSync(flag)) {
       // Содержимое не используем (формат может быть как старый — number-as-string,
       // так и новый — JSON `{at: number}`). Главное — сам факт наличия флага.

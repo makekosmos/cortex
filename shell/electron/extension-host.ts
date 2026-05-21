@@ -25,7 +25,6 @@
 // extension сам отвечает за всю свою логику.
 
 import {
-  app,
   BrowserWindow,
   ipcMain,
   screen,
@@ -286,7 +285,7 @@ export function setExtensionArkBridge(opts: {
  */
 export function readDevModeSetting(): boolean {
   try {
-    const file = path.join(app.getPath("userData"), "kepler-shell-settings.json");
+    const file = path.join(keplerDataDir(), "kepler-shell-settings.json");
     if (!existsSync(file)) return false;
     const json = JSON.parse(readFileSync(file, "utf8")) as {
       developerMode?: boolean;
