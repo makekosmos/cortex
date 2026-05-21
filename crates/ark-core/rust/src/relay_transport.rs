@@ -95,8 +95,8 @@ impl RelayTransport {
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
 
         // Swap in the new sender so `send()` goes to the active loop.
-        *self.send_tx.lock().unwrap() = send_tx.clone();
-        *self.stop_tx.lock().unwrap() = Some(stop_tx);
+        *self.send_tx.lock().unwrap_or_else(|e| e.into_inner()) = send_tx.clone();
+        *self.stop_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(stop_tx);
 
         let outbox = self.outbox.clone();
         let ws_url = self.ws_url();
@@ -107,7 +107,7 @@ impl RelayTransport {
 
         // Drain any offline outbox into the new channel right away.
         {
-            let mut ob = outbox.lock().unwrap();
+            let mut ob = outbox.lock().unwrap_or_else(|e| e.into_inner());
             while let Some(msg) = ob.pop_front() {
                 let _ = send_tx.send(msg);
             }
@@ -161,7 +161,7 @@ impl RelayTransport {
                         {
                             // Collect queued messages without holding the mutex across awaits.
                             let queued: Vec<LanSyncMessage> = {
-                                let mut ob = outbox.lock().unwrap();
+                                let mut ob = outbox.lock().unwrap_or_else(|e| e.into_inner());
                                 ob.drain(..).collect()
                             };
                             for msg in queued {
@@ -229,11 +229,11 @@ impl RelayTransport {
     /// Enqueue a message. If the transport is connected, it goes immediately;
     /// if disconnected, it is stored in the offline outbox (capped at 500 entries).
     pub fn send(&self, msg: LanSyncMessage) -> Result<(), String> {
-        let tx = self.send_tx.lock().unwrap();
+        let tx = self.send_tx.lock().unwrap_or_else(|e| e.into_inner());
         if tx.send(msg.clone()).is_err() {
             // Channel closed (not yet started or stopped) — use offline outbox.
             const MAX_OUTBOX_SIZE: usize = 500;
-            let mut outbox = self.outbox.lock().unwrap();
+            let mut outbox = self.outbox.lock().unwrap_or_else(|e| e.into_inner());
             if outbox.len() < MAX_OUTBOX_SIZE {
                 outbox.push_back(msg);
             }
@@ -243,7 +243,12 @@ impl RelayTransport {
 
     /// Signal the background loop to stop.
     pub fn stop(&self) {
-        if let Some(tx) = self.stop_tx.lock().unwrap().take() {
+        if let Some(tx) = self
+            .stop_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             let _ = tx.send(());
         }
     }

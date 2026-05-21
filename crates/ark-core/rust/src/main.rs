@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+
 //! ark-core-rpc: stdin/stdout JSON-RPC binary used as a sidecar by Electron
 //! and any other embedder that wants the full DB + sync runtime without
 //! linking the Rust crate directly.
@@ -371,7 +373,7 @@ fn write_line(value: &Value) {
         Ok(s) => s,
         Err(_) => return,
     };
-    let _guard = STDOUT_LOCK.lock().unwrap();
+    let _guard = STDOUT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut out = std::io::stdout().lock();
     let _ = out.write_all(json.as_bytes());
     let _ = out.write_all(b"\n");
@@ -394,18 +396,18 @@ fn with_conn<T, F>(f: F) -> Result<T, String>
 where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
 {
-    let outer = DB.lock().unwrap();
+    let outer = DB.lock().unwrap_or_else(|e| e.into_inner());
     let shared = outer
         .as_ref()
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?
         .clone();
     drop(outer);
-    let inner = shared.lock().unwrap();
+    let inner = shared.lock().unwrap_or_else(|e| e.into_inner());
     f(&inner)
 }
 
 fn get_shared_conn() -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
-    let guard = DB.lock().unwrap();
+    let guard = DB.lock().unwrap_or_else(|e| e.into_inner());
     guard
         .as_ref()
         .cloned()
@@ -450,7 +452,7 @@ async fn handle_request(request: Request) -> Result<Value, String> {
         Request::Init { db_path } => {
             let conn = db::open_db(&db_path)?;
             db::init_schema(&conn)?;
-            *DB.lock().unwrap() = Some(Arc::new(StdMutex::new(conn)));
+            *DB.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(StdMutex::new(conn)));
             Ok(json!(true))
         }
 

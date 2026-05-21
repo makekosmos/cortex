@@ -1,3 +1,9 @@
+// Test code freely uses unwrap() — invariants are asserted by the surrounding
+// test harness. Production paths use unwrap_or_else(|e| e.into_inner()) for
+// Mutex poison recovery (см. forbidden.md → Mutex discipline) and expect()
+// for genuine invariants.
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+
 pub mod beacon;
 pub mod db;
 pub mod delphi;

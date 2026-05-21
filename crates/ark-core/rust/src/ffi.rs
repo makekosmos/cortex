@@ -182,7 +182,7 @@ impl ArkCore {
     pub fn open_db(&self, path: String) -> Result<bool> {
         let conn = open_db(&path).map_err(ArkCoreError::from)?;
         init_schema(&conn).map_err(ArkCoreError::from)?;
-        *self.db.lock().unwrap() = Some(Arc::new(StdMutex::new(conn)));
+        *self.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(StdMutex::new(conn)));
         Ok(true)
     }
 
@@ -387,17 +387,18 @@ impl ArkCore {
 
         // 2b. Open DB if the caller supplied a path and we haven't opened one yet.
         if let Some(path) = config.db_path.as_ref() {
-            if self.db.lock().unwrap().is_none() {
+            if self.db.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
                 let conn = open_db(path).map_err(ArkCoreError::from)?;
                 init_schema(&conn).map_err(ArkCoreError::from)?;
-                *self.db.lock().unwrap() = Some(Arc::new(StdMutex::new(conn)));
+                *self.db.lock().unwrap_or_else(|e| e.into_inner()) =
+                    Some(Arc::new(StdMutex::new(conn)));
             }
         }
 
         let shared_conn = self
             .db
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .as_ref()
             .cloned()
             .ok_or_else(|| err("DB not opened; call open_db first"))?;
@@ -408,7 +409,7 @@ impl ArkCore {
         let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
         // Save the shutdown sender so stop_sync can signal the background thread.
-        *self.sync_shutdown.lock().unwrap() = Some(shutdown_tx);
+        *self.sync_shutdown.lock().unwrap_or_else(|e| e.into_inner()) = Some(shutdown_tx);
 
         // Clone data needed inside the background thread.
         let runtime_handle = self.runtime.handle().clone();
@@ -611,7 +612,12 @@ impl ArkCore {
 
     pub fn stop_sync(&self) -> Result<bool> {
         // Signal the background sync thread to exit.
-        if let Some(tx) = self.sync_shutdown.lock().unwrap().take() {
+        if let Some(tx) = self
+            .sync_shutdown
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             let _ = tx.send(());
         }
         self.runtime.block_on(async {
@@ -738,13 +744,13 @@ impl ArkCore {
     where
         F: FnOnce(&Connection) -> Result<T>,
     {
-        let outer = self.db.lock().unwrap();
+        let outer = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let shared = outer
             .as_ref()
             .cloned()
             .ok_or_else(|| err("Database not opened. Call open_db first."))?;
         drop(outer);
-        let inner = shared.lock().unwrap();
+        let inner = shared.lock().unwrap_or_else(|e| e.into_inner());
         f(&inner)
     }
 

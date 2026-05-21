@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 // Property-based invariant tests для ARK objects + sync layer.
 //
 // Часть pre-in-process-hardening proof loop (см. .agent/tasks/2026-05-18-

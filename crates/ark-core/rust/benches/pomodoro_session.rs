@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 //! Bench для `pomodoro::Session::tick()` — оцениваем cost одного tick'а
 //! plus full lifecycle (start → много ticks → finish).
 //!

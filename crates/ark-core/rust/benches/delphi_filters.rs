@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 //! Bench для `delphi::filters::*` на той же synthetic data что TS-side
 //! `extensions/delphi/tests/filterService.bench.ts:makeSynthetic(n)`.
 //!

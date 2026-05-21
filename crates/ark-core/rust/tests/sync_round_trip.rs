@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 //! End-to-end sync integration test (AC20 / AC18 / AC19).
 //!
 //! Spins up two `SyncServer` instances in-process on loopback, dials one from

@@ -74,7 +74,7 @@ impl MeshCoordinator {
             entity_id: entity_id.to_string(),
             hlc: hlc.to_string(),
         };
-        let mut seen = self.seen.lock().unwrap();
+        let mut seen = self.seen.lock().unwrap_or_else(|e| e.into_inner());
         seen.insert(key) // returns true when newly inserted
     }
 

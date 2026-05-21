@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 //! Integration test: relay round-trip.
 //!
 //! Starts an in-process relay server, creates two relay transport clients,
