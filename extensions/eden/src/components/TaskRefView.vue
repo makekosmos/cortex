@@ -45,6 +45,8 @@
         @keydown.enter.prevent.stop="onEnterKey"
         @keydown.escape.prevent.stop="cancelAndBlur"
         @keydown.delete.stop="onTitleKeyDelete"
+        @keydown.up="onTitleArrowVertical"
+        @keydown.down="onTitleArrowVertical"
       />
       <button
         v-if="!missing"
@@ -89,6 +91,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { NodeViewWrapper, nodeViewProps } from "@tiptap/vue-3";
+import { Selection } from "@tiptap/pm/state";
 import { ContextMenu, ContextMenuItem, useContextMenu } from "@kosmos/visuals";
 import { edenApi } from "@/lib/edenApi";
 import TaskStatusIcon from "@/components/TaskStatusIcon.vue";
@@ -591,6 +594,140 @@ function cancelAndBlur(): void {
  * Backspace на пустом title — удалить TaskRef node (и связанный task_obj
  * через soft-delete, чтобы не висеть orphan'ом в Delphi).
  */
+/**
+ * ArrowUp/ArrowDown на title input — стандартная PM-навигация между
+ * блоками. Native `<input>` сам по себе глотает arrow keys (single-line
+ * input двигает caret внутри value, что бесполезно). Перехватываем,
+ * находим соседний textblock через `Selection.findFrom` относительно
+ * границы текущего TaskRef'а и переводим туда PM TextSelection. Если
+ * соседний блок — тоже TaskRef, его NodeView сам сфокусит свой input
+ * через autoFocus-attr-flow… нет, NodeView не реагирует на selection
+ * snap, так что DOM-фокусим input напрямую.
+ *
+ * Selection.findFrom отвечает за корректный skip atom/non-textblock
+ * нод и возврат валидной TextSelection. Если на пути одни atom-блоки —
+ * findFrom вернёт null → ничего не делаем (нет места для текстовой
+ * каретки в этом направлении).
+ */
+/**
+ * DOM-фокус на title input соседнего TaskRef'а по taskId. Используется когда PM
+ * findFrom скипает atom-блок или мы напрямую знаем siblingTaskId. Возвращает
+ * true если нашли input и сфокусили.
+ *
+ * Trap #4: focus-defender вернёт focus обратно на текущий input если не сбросить
+ * флаг ДО `.focus()`. Порядок критичен.
+ */
+function focusTaskRefInputDOM(view: { dom: HTMLElement }, taskRefId: string): boolean {
+  const input = view.dom.querySelector(
+    `[data-task-id="${taskRefId}"] .task-ref-title-input`,
+  ) as HTMLInputElement | null;
+  if (!input) return false;
+  focusDefenderActive = false;
+  input.focus();
+  const len = input.value.length;
+  input.setSelectionRange(len, len);
+  return true;
+}
+
+/**
+ * Резолвит позицию TaskRef'а в актуальном doc по taskId (Trap #1: props.node.nodeSize
+ * врёт). Сначала top-level loop — тогда возвращаем topIndex для adjacency-check'а.
+ * Если не нашли на верхнем уровне (вложен в blockquote и т.п.) — fallback на
+ * descendants с topIndex = -1.
+ */
+function findTaskRefInDoc(
+  doc: any,
+  taskRefId: string,
+): { from: number; to: number; topIndex: number } | null {
+  let runningPos = 0;
+  for (let i = 0; i < doc.childCount; i++) {
+    const child = doc.child(i);
+    if (child.type?.name === "taskRef" && child.attrs?.taskId === taskRefId) {
+      return { from: runningPos, to: runningPos + child.nodeSize, topIndex: i };
+    }
+    runningPos += child.nodeSize;
+  }
+  let from = -1;
+  let to = -1;
+  doc.descendants((child: any, pos: number) => {
+    if (from !== -1) return false;
+    if (child.type?.name === "taskRef" && child.attrs?.taskId === taskRefId) {
+      from = pos;
+      to = pos + child.nodeSize;
+      return false;
+    }
+    return true;
+  });
+  if (from === -1) return null;
+  return { from, to, topIndex: -1 };
+}
+
+function onTitleArrowVertical(e: KeyboardEvent): void {
+  if (e.isComposing) return;
+  const editor = props.editor as
+    | { view?: { state: any; dispatch: (tr: any) => void; dom: HTMLElement }; commands?: { focus?: (pos?: number) => void } }
+    | undefined;
+  if (!editor?.view) return;
+  const getPos = props.getPos;
+  if (typeof getPos !== "function") return;
+
+  const doc = editor.view.state.doc;
+  const targetTaskId = (props.node as any).attrs?.taskId;
+  const located = findTaskRefInDoc(doc, targetTaskId);
+  if (!located) return;
+  const { from: myFrom, to: myTo, topIndex: myTopIndex } = located;
+
+  const up = e.key === "ArrowUp";
+
+  // Прямой adjacency: если соседний top-level node — тоже TaskRef, фокусим
+  // его input через DOM (textOnly findFrom его бы скипнул как atom).
+  if (myTopIndex !== -1) {
+    const siblingIndex = up ? myTopIndex - 1 : myTopIndex + 1;
+    if (siblingIndex >= 0 && siblingIndex < doc.childCount) {
+      const sibling = doc.child(siblingIndex);
+      if (sibling.type?.name === "taskRef") {
+        const siblingTaskId = sibling.attrs?.taskId;
+        if (siblingTaskId) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (focusTaskRefInputDOM(editor.view, siblingTaskId)) return;
+        }
+      }
+    }
+  }
+
+  // Иначе — стандартный PM findFrom. textOnly=false чтобы захватить и atom
+  // TaskRef (на случай TaskRef через несколько paragraph'ов / в blockquote'е).
+  const probePos = up ? myFrom : myTo;
+  const $probe = doc.resolve(probePos);
+  const next = Selection.findFrom($probe, up ? -1 : 1, false);
+  // Edge: findFrom вернул null — нет места для selection в этом направлении.
+  // НЕ preventDefault — даём native input стрелкам шанс (IME / single-line
+  // caret motion внутри value).
+  if (!next) return;
+
+  // Trap #3: detect NodeSelection без constructor.name (минификация перебивает
+  // имена в prod-build). Используем наличие .node property — есть у NodeSelection
+  // и AllSelection, нет у TextSelection.
+  const selNode = (next as any).node;
+  if (selNode && selNode.type?.name === "taskRef") {
+    const nextTaskId = selNode.attrs?.taskId;
+    if (nextTaskId) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (focusTaskRefInputDOM(editor.view, nextTaskId)) return;
+    }
+  }
+
+  // TextSelection в обычном textblock'е (paragraph / heading / ...).
+  e.preventDefault();
+  e.stopPropagation();
+  focusDefenderActive = false;
+  const tr = editor.view.state.tr.setSelection(next).scrollIntoView();
+  editor.view.dispatch(tr);
+  editor.view.focus();
+}
+
 function onTitleKeyDelete(e: KeyboardEvent): void {
   if (e.key !== "Backspace") return;
   if (titleInputValue.value !== "") return;
