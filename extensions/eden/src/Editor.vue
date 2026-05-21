@@ -402,9 +402,19 @@ function onWindowKeyDown(e: KeyboardEvent): void {
   // Ctrl+A → активируем block selection (как drag-select), не PM-native
   // selectAll. Это даёт визуальный overlay по всем блокам + унифицирует
   // copy/cut путь через serializeSelectedBlocksAsMarkdown.
+  //
+  // Срабатывает если target внутри editor-wrapper (включая title input,
+  // task-ref inputs, итд) — НЕ только если editor body имеет focus.
+  // Иначе из title input native Ctrl+A select'ил бы текст в input'е, а
+  // Ctrl+C дал бы plain text title, не markdown.
   if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
-    if (!editor.value.view.hasFocus()) return;
+    const target = e.target as HTMLElement | null;
+    const inEditorScope = !!target?.closest(".editor-wrapper");
+    if (!inEditorScope) return;
     e.preventDefault();
+    // Перенесём focus в editor body (если был в input) — иначе следующий
+    // Ctrl+C native'ом сработает по input'у, не по нашему handler'у.
+    editor.value.commands.focus();
     blockSelection.selectAll(editor.value);
     return;
   }

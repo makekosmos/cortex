@@ -319,19 +319,24 @@ export function useBlockSelection() {
   }
 
   /**
-   * Select all top-level blocks — эмулирует drag-select по всему документу.
-   * Используется для Ctrl+A: вместо PM-нативного selectAll (текстовое
-   * выделение которое плохо ложится на markdown copy) подсвечивает все
-   * блоки overlay'ем. Дальше Ctrl+C идёт по той же ветке что и
-   * drag-select → markdown.
+   * Select all **top-level** blocks. Используется для Ctrl+A.
    *
-   * NB: collapses PM selection как side-effect — иначе native ctrl+a
-   * подсветит ещё и текстовый layer, что визуально шумно.
+   * NB: НЕ переиспользуем `collectBlocks()` — он рекурсит внутрь
+   * CONTAINER_BLOCK_TYPES (bulletList / taskList / blockquote) и собирает
+   * вложенные listItem pos'ы. Но `serializeSelectedBlocksAsMarkdown` в
+   * Editor.vue фильтрует по top-level positions. Несовпадение → md пустой.
+   * Поэтому здесь собираем строго top-level через doc.forEach.
+   *
+   * Collapses PM selection как side-effect — иначе native ctrl+a накладывает
+   * текстовый range layer поверх block overlay'а, визуально шумно.
    */
   function selectAll(editor: TiptapEditor): void {
-    const blocks = collectBlocks(editor);
-    if (blocks.length === 0) return;
-    selectedPositions.value = new Set(blocks.map((b) => b.pos));
+    const positions: number[] = [];
+    editor.state.doc.forEach((_node, offset) => {
+      positions.push(offset);
+    });
+    if (positions.length === 0) return;
+    selectedPositions.value = new Set(positions);
     collapseEditorSelection(editor);
   }
 
