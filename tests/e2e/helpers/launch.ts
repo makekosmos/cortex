@@ -45,8 +45,10 @@ export function freshDataDir(slug: string): string {
   return dir;
 }
 
-export async function launchKepler(opts: LaunchOptions): Promise<ElectronApplication> {
-  const dataDir = freshDataDir(opts.slug);
+async function _launch(
+  dataDir: string,
+  extraEnv?: Record<string, string>,
+): Promise<ElectronApplication> {
   const userDataDir = path.join(dataDir, "electron-userdata");
   fs.mkdirSync(userDataDir, { recursive: true });
 
@@ -76,8 +78,27 @@ export async function launchKepler(opts: LaunchOptions): Promise<ElectronApplica
       KOSMOS_LOCK_PERMISSIONS_DISABLED: "1",
       KEPLER_SKIP_SYNC: "1",
       KEPLER_USAGE_TRACKER: "0",
-      ...(opts.env ?? {}),
+      ...(extraEnv ?? {}),
     },
     timeout: 20_000,
   });
+}
+
+/**
+ * Запускает Kepler с УЖЕ существующим (заранее подготовленным) dataDir —
+ * не вызывает freshDataDir (который бы снёс заготовку).
+ *
+ * Используется в post-update spec'ах: тесту нужно записать
+ * `<dataDir>/userdata/post-update.flag` ДО старта main process'а.
+ */
+export async function launchKeplerWithDataDir(
+  dataDir: string,
+  extraEnv?: Record<string, string>,
+): Promise<ElectronApplication> {
+  return _launch(dataDir, extraEnv);
+}
+
+export async function launchKepler(opts: LaunchOptions): Promise<ElectronApplication> {
+  const dataDir = freshDataDir(opts.slug);
+  return _launch(dataDir, opts.env);
 }
