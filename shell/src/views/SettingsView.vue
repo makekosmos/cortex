@@ -940,6 +940,31 @@ async function onClearCrashes() {
   }
 }
 
+// --- Bug bundle (Phase 4 bug-detection) -------------------------------------
+const bundling = ref(false);
+const bundleSavedPath = ref<string>("");
+const bundleError = ref<string>("");
+async function onBundleSave() {
+  bundleError.value = "";
+  bundleSavedPath.value = "";
+  bundling.value = true;
+  try {
+    const saved = await window.kepler.diagnostics.bundleSave();
+    if (saved) bundleSavedPath.value = saved;
+  } catch (e) {
+    bundleError.value = (e as Error).message;
+  } finally {
+    bundling.value = false;
+  }
+}
+async function onOpenLogsFolder() {
+  try {
+    await window.kepler.diagnostics.openLogsFolder();
+  } catch (e) {
+    bundleError.value = (e as Error).message;
+  }
+}
+
 onMounted(() => {
   void loadGeneral();
   void refreshUpdateState();
@@ -1150,6 +1175,27 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div v-if="crashesError" class="error-banner">{{ crashesError }}</div>
+
+        <!-- Bug bundle (Phase 4 bug-detection) -->
+        <div class="row">
+          <div class="row-label">
+            <div class="label">Bug-report (ZIP)</div>
+            <div class="hint">
+              <template v-if="bundleSavedPath">
+                Сохранён: <code>{{ bundleSavedPath }}</code>
+              </template>
+              <template v-else-if="bundling">Собираю отчёт…</template>
+              <template v-else> Логи + crash-reports + версии. Прикрепи к issue / в чат. </template>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button type="button" class="btn ghost" :disabled="bundling" @click="onBundleSave">
+              Создать отчёт
+            </button>
+            <button type="button" class="btn ghost" @click="onOpenLogsFolder">Открыть logs/</button>
+          </div>
+        </div>
+        <div v-if="bundleError" class="error-banner">{{ bundleError }}</div>
 
         <div class="row">
           <div class="row-label">

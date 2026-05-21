@@ -357,6 +357,16 @@ export interface KeplerApi {
     /** Удалить все crash файлы. Возвращает количество удалённых. */
     clear(): Promise<{ removed: number }>;
   };
+  /** Phase 4 bug-detection: diagnostics bundle для bug report'ов. */
+  diagnostics: {
+    /** Создать ZIP в temp dir с logs + crashes + versions + extensions. */
+    bundle(): Promise<{ ok: boolean; zipPath?: string; error?: string }>;
+    /** Создать ZIP + показать saveDialog. Returns final path или null
+        если пользователь отменил. */
+    bundleSave(): Promise<string | null>;
+    /** Открыть `<data_dir>/logs/` директорию в Explorer'е. */
+    openLogsFolder(): Promise<void>;
+  };
   /** Post-update first launch — main process детектит `post-update.flag` в
       userData (создаётся autoupdater-host'ом перед quitAndInstall) и шлёт
       одноразовое событие в renderer. UI показывает banner «Kepler обновлён». */

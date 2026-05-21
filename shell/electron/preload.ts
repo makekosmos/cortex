@@ -149,6 +149,11 @@ const api: KeplerApi = {
     openFolder: () => ipcRenderer.invoke("kepler:crashes:openFolder"),
     clear: () => ipcRenderer.invoke("kepler:crashes:clear"),
   },
+  diagnostics: {
+    bundle: () => ipcRenderer.invoke("kepler:diagnostics:bundle"),
+    bundleSave: () => ipcRenderer.invoke("kepler:diagnostics:bundle-save"),
+    openLogsFolder: () => ipcRenderer.invoke("kepler:diagnostics:open-logs-folder"),
+  },
   postUpdate: {
     onShown: (listener) => {
       const handler = (_e: unknown, payload: unknown) => listener(payload as { version: string });
