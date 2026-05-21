@@ -310,7 +310,11 @@ let lastCaretBeforeBlur: number | null = null;
 function onTitleMouseDown(_e: MouseEvent): void {
   const input = titleInputRef.value;
   if (!input || missing.value) return;
-  input.focus();
+  // preventScroll: HTMLInputElement.focus() по дефолту делает scrollIntoView,
+  // если input не полностью видим — это давало viewport jump при клике на
+  // TaskRef у нижнего/верхнего края. Click — позиция уже видима, скроллить
+  // не нужно.
+  input.focus({ preventScroll: true });
   focusDefenderActive = true;
 }
 
@@ -327,7 +331,7 @@ function onRowMouseDown(e: MouseEvent): void {
   if (target?.closest(".task-ref-title-input, .task-ref-status, .task-ref-open")) return;
   const input = titleInputRef.value;
   if (!input || missing.value) return;
-  input.focus();
+  input.focus({ preventScroll: true });
   // Кликнули по margin'у справа — каретку в конец текста.
   const len = input.value.length;
   input.setSelectionRange(len, len);
@@ -363,7 +367,7 @@ function defendFocus(): void {
     if (next && next.classList?.contains("ProseMirror")) {
       requestAnimationFrame(() => {
         if (!focusDefenderActive) return;
-        input.focus();
+        input.focus({ preventScroll: true });
         if (lastCaretBeforeBlur !== null) {
           input.setSelectionRange(lastCaretBeforeBlur, lastCaretBeforeBlur);
         }
@@ -728,10 +732,7 @@ function onTitleArrowVertical(e: KeyboardEvent): void {
   editor.view.focus();
 }
 
-function onTitleKeyDelete(e: KeyboardEvent): void {
-  if (e.key !== "Backspace") return;
-  if (titleInputValue.value !== "") return;
-  e.preventDefault();
+function deleteEmptyTaskRefAndFocusPrev(): void {
   const id = taskId.value;
   if (id) {
     void edenApi.softDeleteTask(id).catch((err) => {
@@ -748,6 +749,105 @@ function onTitleKeyDelete(e: KeyboardEvent): void {
       editor?.commands?.focus?.();
     }
   });
+}
+
+/**
+ * Backspace в title TaskRef'а при курсоре на самом начале input'а. Поведение
+ * зависит от предыдущего top-level блока:
+ *   - empty paragraph над задачей → удалить (caret остаётся в title);
+ *   - TaskRef → DOM-focus на его title;
+ *   - непустой textblock (paragraph/heading) → переместить caret в конец;
+ *   - блока нет (TaskRef первый) и title пустой → удалить TaskRef (legacy).
+ *
+ * Native `<input>` глотает Backspace до того как PM может что-то сделать
+ * (caret уже at 0, нечего удалять внутри input'а) — пересекаем границу
+ * сами, как iA Writer / AnyType.
+ */
+function onTitleKeyDelete(e: KeyboardEvent): void {
+  if (e.key !== "Backspace") return;
+  const input = titleInputRef.value;
+  const caretAtStart = input?.selectionStart === 0 && input?.selectionEnd === 0;
+  if (!caretAtStart) return;
+
+  const editor = props.editor as
+    | { view?: { state: any; dispatch: (tr: any) => void; dom: HTMLElement } }
+    | undefined;
+  if (!editor?.view) {
+    if (titleInputValue.value === "") {
+      e.preventDefault();
+      deleteEmptyTaskRefAndFocusPrev();
+    }
+    return;
+  }
+
+  const doc = editor.view.state.doc;
+  const targetTaskId = taskId.value;
+  if (!targetTaskId) return;
+  const located = findTaskRefInDoc(doc, targetTaskId);
+  if (!located) return;
+  const { topIndex: myTopIndex } = located;
+
+  // Nested TaskRef (в blockquote / list) — пока обрабатываем только legacy
+  // case пустого title; иначе no-op (рароугольный кейс).
+  if (myTopIndex === -1) {
+    if (titleInputValue.value === "") {
+      e.preventDefault();
+      deleteEmptyTaskRefAndFocusPrev();
+    }
+    return;
+  }
+
+  // TaskRef — первый top-level node. Backspace должен удалить TaskRef ТОЛЬКО
+  // если title пустой (legacy). Иначе native input no-op.
+  if (myTopIndex === 0) {
+    if (titleInputValue.value === "") {
+      e.preventDefault();
+      deleteEmptyTaskRefAndFocusPrev();
+    }
+    return;
+  }
+
+  // Есть предыдущий top-level блок — посчитаем его from/to.
+  const prevIndex = myTopIndex - 1;
+  const prev = doc.child(prevIndex);
+  let prevFrom = 0;
+  for (let i = 0; i < prevIndex; i++) prevFrom += doc.child(i).nodeSize;
+  const prevTo = prevFrom + prev.nodeSize;
+
+  // 1. Empty paragraph выше → удалить, caret остаётся в title.
+  if (prev.type?.name === "paragraph" && prev.textContent.length === 0) {
+    e.preventDefault();
+    e.stopPropagation();
+    const tr = editor.view.state.tr.delete(prevFrom, prevTo);
+    editor.view.dispatch(tr);
+    return;
+  }
+
+  // 2. Previous — другой TaskRef → DOM-focus его input.
+  if (prev.type?.name === "taskRef") {
+    const prevTaskId = prev.attrs?.taskId;
+    if (prevTaskId) {
+      e.preventDefault();
+      e.stopPropagation();
+      focusTaskRefInputDOM(editor.view, prevTaskId);
+    }
+    return;
+  }
+
+  // 3. Непустой textblock → каретка в конец.
+  if (prev.isTextblock && prev.textContent.length > 0) {
+    e.preventDefault();
+    e.stopPropagation();
+    const endProbe = doc.resolve(prevTo - 1);
+    const next = Selection.findFrom(endProbe, -1, true);
+    if (next) {
+      focusDefenderActive = false;
+      const tr = editor.view.state.tr.setSelection(next);
+      editor.view.dispatch(tr);
+      editor.view.focus();
+    }
+    return;
+  }
 }
 
 let selectionUpdateOff: (() => void) | null = null;
