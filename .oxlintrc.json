@@ -1,0 +1,64 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "no-unused-vars": [
+      "warn",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "no-useless-escape": "warn",
+    "unicorn/no-useless-fallback-in-spread": "warn"
+  },
+  "env": {
+    "builtin": true,
+    "node": true,
+    "browser": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/dist-electron/**",
+    "**/build/**",
+    "**/.e2e/**",
+    "**/.tmp/**",
+    "**/.bun_cache/**",
+    "**/coverage/**",
+    "legacy/**",
+    "sample/**",
+    "tests/.e2e/**",
+    "shell/.e2e/**",
+    "site/dist/**",
+    "docs-site/.vitepress/dist/**",
+    "docs-site/.vitepress/cache/**"
+  ],
+  "overrides": [
+    {
+      "files": ["tests/**", "**/*.spec.ts", "**/*.test.ts"],
+      "rules": {
+        "no-unused-vars": "off"
+      }
+    },
+    {
+      "files": [
+        "scripts/**/*.mjs",
+        "shell/scripts/**/*.mjs",
+        "**/scripts/**/*.mjs"
+      ],
+      "rules": {
+        "no-unused-vars": "warn"
+      }
+    }
+  ]
+}
