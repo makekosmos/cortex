@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { Copy, Minus, Square, X } from "lucide-vue-next";
+import { Copy, Minus, Square, X } from "@lucide/vue";
 
 interface Props {
   /** Скрыть кнопку minimize. */

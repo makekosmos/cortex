@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { Calendar as CalendarIcon } from "lucide-vue-next";
+import { Calendar as CalendarIcon } from "@lucide/vue";
 import Calendar from "./Calendar.vue";
 
 interface Props {

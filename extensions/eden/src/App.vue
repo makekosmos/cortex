@@ -234,7 +234,7 @@ import {
   shallowRef,
   watch,
 } from "vue";
-import { LoaderPinwheel } from "lucide-vue-next";
+import { LoaderPinwheel } from "@lucide/vue";
 import {
   ContextMenu,
   ContextMenuItem,

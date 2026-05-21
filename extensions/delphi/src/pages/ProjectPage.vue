@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Circle, DollarSign, MoreHorizontal, Plus } from "lucide-vue-next";
+import { Circle, DollarSign, MoreHorizontal, Plus } from "@lucide/vue";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 import { useSidebarState } from "@/composables/useSidebarState";
 

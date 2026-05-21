@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
-import { Settings, ArrowLeft } from "lucide-vue-next";
+import { Settings, ArrowLeft } from "@lucide/vue";
 import { DesktopChrome, DesktopContentSurface, WindowControls } from "@kosmos/visuals";
 
 const route = useRoute();

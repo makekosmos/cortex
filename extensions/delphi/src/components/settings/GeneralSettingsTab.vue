@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SunMoon } from "lucide-vue-next";
+import { SunMoon } from "@lucide/vue";
 import { useTheme } from "@/composables/useTheme";
 
 const { theme, setTheme } = useTheme();

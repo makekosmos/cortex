@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /* eslint-disable no-console */
 import { computed, onMounted, onUnmounted, shallowRef } from "vue";
-import { CheckCircle, Folder, Tag } from "lucide-vue-next";
+import { CheckCircle, Folder, Tag } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { CommandPalette, EmptyState } from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";

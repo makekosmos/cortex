@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, watch, nextTick, useTemplateRef, onBeforeUnmount } from "vue";
-import { DollarSign, Folder, X } from "lucide-vue-next";
+import { DollarSign, Folder, X } from "@lucide/vue";
 import DateChip from "./DateChip.vue";
 import type { QuickEntryProject, QuickEntrySavePayload } from "./types";
 

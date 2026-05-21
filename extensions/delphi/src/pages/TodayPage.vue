@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Plus } from "lucide-vue-next";
+import { Plus } from "@lucide/vue";
 import { useQuickEntry } from "@/composables/useQuickEntry";
 
 const { show: openQuickEntry } = useQuickEntry();

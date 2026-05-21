@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends string | number">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { ChevronDown, Check } from "lucide-vue-next";
+import { ChevronDown, Check } from "@lucide/vue";
 
 /**
  * Универсальный Dropdown (shadcn-стиль): кастомный триггер + popover с

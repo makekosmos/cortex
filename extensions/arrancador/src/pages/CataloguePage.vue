@@ -5,7 +5,7 @@
 // «Применить к…» → выбор game_obj из библиотеки → arrancador.rawg.apply.
 
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
-import { Search } from "lucide-vue-next";
+import { Search } from "@lucide/vue";
 import { useRouter } from "vue-router";
 
 import { EmptyState, Dropdown, Modal } from "@kosmos/visuals";

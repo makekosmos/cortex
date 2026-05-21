@@ -3,7 +3,7 @@
 // + восстановление с confirmation.
 
 import { ref, watch } from "vue";
-import { ChevronDown, ChevronRight, Archive, RotateCcw } from "lucide-vue-next";
+import { ChevronDown, ChevronRight, Archive, RotateCcw } from "@lucide/vue";
 
 import { EmptyState, Modal } from "@kosmos/visuals";
 

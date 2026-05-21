@@ -25,7 +25,7 @@ defineEmits<{
         :aria-label="sidebarHidden ? 'Показать сайдбар' : 'Скрыть сайдбар'"
         @click="$emit('toggleSidebar')"
       >
-        <!-- Простая иконка-меню без зависимости от lucide-vue-next.
+        <!-- Простая иконка-меню без зависимости от @lucide/vue.
              Legacy импортирует Menu / X из lucide, здесь оставляем inline SVG
              чтобы не тянуть тяжёлую icon-библиотеку в extension bundle. -->
         <svg

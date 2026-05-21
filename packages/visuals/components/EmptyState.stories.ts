@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { h } from "vue";
-import { Inbox } from "lucide-vue-next";
+import { Inbox } from "@lucide/vue";
 import EmptyState from "./EmptyState.vue";
 
 const meta: Meta<typeof EmptyState> = {

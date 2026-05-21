@@ -3,7 +3,7 @@
 // (хранится через `arrancador.config.set_rawg_key` в backend config).
 
 import { computed, onMounted, ref, watch } from "vue";
-import { Eye, EyeOff, ExternalLink } from "lucide-vue-next";
+import { Eye, EyeOff, ExternalLink } from "@lucide/vue";
 
 import { SettingsRow, Toggle } from "@kosmos/visuals";
 

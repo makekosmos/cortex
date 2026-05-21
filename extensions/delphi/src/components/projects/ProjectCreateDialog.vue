@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue";
-import { Check, DollarSign, FolderPlus, X } from "lucide-vue-next";
+import { Check, DollarSign, FolderPlus, X } from "@lucide/vue";
 
 type ProjectColorTag = "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "pink";
 

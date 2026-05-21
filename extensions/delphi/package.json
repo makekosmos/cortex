@@ -8,11 +8,11 @@
     "test:vue": "vitest run --browser"
   },
   "dependencies": {
+    "@lucide/vue": "^1.16.0",
     "@tailwindcss/vite": "^4.2.2",
     "bonjour-service": "^1.3.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-vue-next": "^1.0.0",
     "pinia": "^3.0.4",
     "qrcode": "^1.5.4",
     "reka-ui": "^2.9.2",

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, computed, useTemplateRef, nextTick, ref, watch } from "vue";
-import { Calendar as CalendarIcon, DollarSign } from "lucide-vue-next";
+import { Calendar as CalendarIcon, DollarSign } from "@lucide/vue";
 import ContextMenu from "./ContextMenu.vue";
 import ContextMenuItem from "./ContextMenuItem.vue";
 import DateChip from "./DateChip.vue";

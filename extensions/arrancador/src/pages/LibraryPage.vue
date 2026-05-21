@@ -5,7 +5,7 @@
 // отдельный action под карточкой, чтобы не конфликтовать с router-link.
 
 import { computed, ref } from "vue";
-import { Play } from "lucide-vue-next";
+import { Play } from "@lucide/vue";
 
 import { EmptyState } from "@kosmos/visuals";
 

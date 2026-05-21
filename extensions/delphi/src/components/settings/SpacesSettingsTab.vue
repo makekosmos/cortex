@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
-import { Globe2, Radio } from "lucide-vue-next";
+import { Globe2, Radio } from "@lucide/vue";
 import { useRouter } from "vue-router";
 import QRCode from "qrcode";
 import { EmptyState } from "@kosmos/visuals";

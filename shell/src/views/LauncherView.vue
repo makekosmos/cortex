@@ -8,7 +8,7 @@ import {
   Loader2,
   RefreshCw,
   Check,
-} from "lucide-vue-next";
+} from "@lucide/vue";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
 import holoSvg from "../assets/holo.svg";
 import holoPomoSvg from "../assets/holo-pomo.svg";

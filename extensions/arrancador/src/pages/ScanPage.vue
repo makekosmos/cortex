@@ -3,7 +3,7 @@
 // найденных game_obj.
 
 import { onMounted, ref } from "vue";
-import { RefreshCw } from "lucide-vue-next";
+import { RefreshCw } from "@lucide/vue";
 
 import { EmptyState } from "@kosmos/visuals";
 

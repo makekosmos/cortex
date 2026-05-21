@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, onMounted, onUnmounted, watch } from "vue";
 import { RouterLink } from "vue-router";
-import { ChevronRight, PanelLeftClose } from "lucide-vue-next";
+import { ChevronRight, PanelLeftClose } from "@lucide/vue";
 // eslint-disable-next-line import/no-unassigned-import
 import "./sidebar.css";
 import SidebarButton from "./SidebarButton.vue";

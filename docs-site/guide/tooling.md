@@ -105,7 +105,7 @@
 | Слой                          | Инструменты                                                                                                            | Где используется                                                                   |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | UI tokens / shared components | **`@kosmos/visuals`** (workspace)                                                                                      | shell + все Vue extensions                                                         |
-| Icons                         | **`lucide-vue-next`**                                                                                                  | все Vue extensions + shell                                                         |
+| Icons                         | **`@lucide/vue`**                                                                                                      | все Vue extensions + shell                                                         |
 | Fonts                         | **`@fontsource-variable/inter`** + **`@fontsource/ibm-plex-mono`**                                                     | через `@kosmos/visuals`                                                            |
 | Tailwind стек (legacy Delphi) | **tailwindcss** + **`@tailwindcss/vite`** + **reka-ui** + **clsx** + **class-variance-authority** + **tailwind-merge** | **Только Delphi** — переезд на plain CSS в [Phase 9](/apps/kepler-roadmap#phase-9) |
 

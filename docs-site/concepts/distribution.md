@@ -113,7 +113,7 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 | `downloaded`  | «Обновление готово — нажми чтобы установить и перезапустить» | `ArrowUpCircle`  | `install()` → quitAndInstall                             |
 | `error`       | сообщение error'а                                            | —                | retry check                                              |
 
-Иконки — `lucide-vue-next`.
+Иконки — `@lucide/vue`.
 
 ### Manual «Проверить обновления»
 

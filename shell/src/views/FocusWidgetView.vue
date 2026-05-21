@@ -7,7 +7,7 @@
 // (Horologion публикует обновления через `window.kepler.focusWidget.setState`).
 
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Pause, Play, SkipForward, Square } from "lucide-vue-next";
+import { Pause, Play, SkipForward, Square } from "@lucide/vue";
 
 interface FocusState {
   active: boolean;

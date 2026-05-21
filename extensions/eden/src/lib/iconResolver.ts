@@ -12,7 +12,7 @@
 // "page". Mapping ниже покрывает встречающиеся значения; всё что не нашлось
 // падает в `document` (FileText).
 //
-// SVG path data заимствован из `lucide-vue-next` (v0.548) — встраиваем
+// SVG path data заимствован из `@lucide/vue` (v0.548) — встраиваем
 // inline чтобы избежать tree-shake'а Lucide через Vue-component сборку
 // и контроля над финальным attributes (stroke=currentColor для mask).
 

@@ -181,7 +181,7 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
 - **Backend status** — состояние `kepler-backend.exe` child process'а (running / not running) + текущий порт WS.
 - **Версия** — `app.getVersion()`.
 - **Developer Mode** toggle (Phase 5) — persist'ится в `%APPDATA%\Kosmos\kepler-shell-settings.json`. Когда включён, extension-host резолвит `loadURL('http://localhost:<devPort>/')` вместо `loadFile(dist/...)` для extension'ов, у которых в `manifest.json` указан `devPort`. F12 в любом extension window открывает DevTools.
-- **Update banner** (sticky 32px вверху Settings окна) — Raycast-style индикатор состояния autoUpdater'а. Состояния `available` / `downloading` (progress bar) / `downloaded` (click-to-install) / `error`. Иконки `ArrowUpCircle` / `Loader2` из `lucide-vue-next`. Подписан на `window.kepler.settings.update.onStateChanged(...)`. См. [Distribution → autoUpdater](../concepts/distribution.md#kepler-launcher-autoupdater).
+- **Update banner** (sticky 32px вверху Settings окна) — Raycast-style индикатор состояния autoUpdater'а. Состояния `available` / `downloading` (progress bar) / `downloaded` (click-to-install) / `error`. Иконки `ArrowUpCircle` / `Loader2` из `@lucide/vue`. Подписан на `window.kepler.settings.update.onStateChanged(...)`. См. [Distribution → autoUpdater](../concepts/distribution.md#kepler-launcher-autoupdater).
 - **Кнопка «Проверить обновления»** (General tab) — вызывает `window.kepler.settings.update.check()`. Тот же эффект, что launcher-команда `kepler:check-updates`.
 - **Расширения** (таб) — плоский список установленных. Для каждого extension'а:
   - lookup в каталоге: если `catalog.version > installed.version` → кнопка **«Обновить»**;

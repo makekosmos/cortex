@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from "vue";
-import { HelpCircle } from "lucide-vue-next";
+import { HelpCircle } from "@lucide/vue";
 
 const props = withDefaults(
   defineProps<{

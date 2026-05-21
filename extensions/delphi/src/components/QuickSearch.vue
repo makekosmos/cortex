@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
-import { FolderOpen } from "lucide-vue-next";
+import { FolderOpen } from "@lucide/vue";
 import { storeToRefs } from "pinia";
 import { CommandPalette, EmptyState, TodoRow } from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";

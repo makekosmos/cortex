@@ -34,12 +34,12 @@ const config: StorybookConfig = {
     config.optimizeDeps = config.optimizeDeps ?? {};
     config.optimizeDeps.include = [
       ...(config.optimizeDeps.include ?? []),
-      "lucide-vue-next",
+      "@lucide/vue",
       "vue-router",
     ];
     config.ssr = config.ssr ?? {};
     (config.ssr as { noExternal?: string[] }).noExternal = [
-      "lucide-vue-next",
+      "@lucide/vue",
       "@fontsource-variable/inter",
       "vue-router",
     ];

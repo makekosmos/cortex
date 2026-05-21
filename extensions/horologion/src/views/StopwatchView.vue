@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
-import { Play, Square } from "lucide-vue-next";
+import { Play, Square } from "@lucide/vue";
 import type { TimeEntry } from "../types";
 import { entriesChangedAt, notifyEntriesChanged, pomodoroDraft } from "../lib/store";
 

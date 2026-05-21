@@ -2,7 +2,7 @@
 /* eslint-disable no-console */
 import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
-import { PanelLeft } from "lucide-vue-next";
+import { PanelLeft } from "@lucide/vue";
 import {
   fetchProjectsFromArk,
   fetchTasksFromArk,

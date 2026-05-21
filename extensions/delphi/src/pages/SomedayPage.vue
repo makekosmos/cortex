@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Plus } from "lucide-vue-next";
+import { Plus } from "@lucide/vue";
 import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";

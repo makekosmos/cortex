@@ -5,7 +5,7 @@
 // nav-item'а (Sidebar сам не подписан на router).
 import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { Gamepad2, LayoutGrid, Search, Save, BarChart3, Settings } from "lucide-vue-next";
+import { Gamepad2, LayoutGrid, Search, Save, BarChart3, Settings } from "@lucide/vue";
 import { Sidebar } from "@kosmos/visuals";
 import type { SidebarNavItem } from "@kosmos/visuals";
 
