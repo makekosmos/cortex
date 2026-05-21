@@ -30,7 +30,7 @@
     "@kosmos/visuals": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
     "electron-updater": "^6.3.9",
-    "lucide-vue-next": "^0.548.0",
+    "lucide-vue-next": "^1.0.0",
     "tailwindcss": "^4.1.16",
     "vue": "^3.6.0-beta.12"
   },
