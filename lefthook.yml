@@ -16,6 +16,9 @@ pre-commit:
     oxlint:
       glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx}"
       run: bunx oxlint {staged_files}
+    oxfmt:
+      glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx,json}"
+      run: bunx oxfmt --check {staged_files}
     ark-guard-writes:
       glob: "{shell/electron,extensions,tests/e2e}/**/*.{ts,tsx,mjs,cjs,js}"
       run: bun run ark:guard:writes
