@@ -137,6 +137,10 @@ describe("ensureKeplerRunning", () => {
       const state = await ensureKeplerRunning({
         appDataPath: appdata,
         autoLaunch: false,
+        // Без waitMs ensureKeplerRunning поллит default 10s ожидая live lock —
+        // тест Bun timeout 5s. Stale lock уже удалён `readLockIfAlive` на
+        // первой итерации, доп. polling смысла не имеет → 0.
+        waitMs: 0,
       });
       expect(state.kind).toBe("not-installed");
       // Stale lock должен быть удалён readLockIfAlive
@@ -156,6 +160,7 @@ describe("ensureKeplerRunning", () => {
       const state = await ensureKeplerRunning({
         appDataPath: appdata,
         autoLaunch: false,
+        waitMs: 0,
       });
       expect(state.kind).toBe("not-installed");
     } finally {
