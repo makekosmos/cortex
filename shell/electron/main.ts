@@ -52,6 +52,9 @@ import {
 import { fileURLToPath } from "node:url";
 import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
 import { keplerDataDir } from "./data-dir";
+import { keplerLog } from "./logging";
+// Side-effect import: регистрирует kepler:diagnostics:* IPC handlers.
+import "./diagnostics";
 import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
 import {
@@ -198,13 +201,12 @@ function resolveBackendExe(): string {
 function spawnBackend() {
   const exe = resolveBackendExe();
   if (!existsSync(exe)) {
-    console.error("[kepler-shell] kepler-backend.exe not found at", exe);
+    keplerLog.error("backend", "kepler-backend.exe not found", { exe });
     return;
   }
   const dataDir = keplerDataDir();
   backendLockPath = path.join(dataDir, "kepler.lock.json");
-  console.error("[kepler-shell] spawning backend:", exe);
-  console.error("[kepler-shell] data dir:", dataDir);
+  keplerLog.info("backend", "spawning backend", { exe, dataDir });
   const trackerEnabled = isUsageTrackerEnabled();
   backendProc = spawn(exe, [], {
     detached: false,
@@ -270,7 +272,7 @@ function scheduleBackendRespawn(lastRanForMs: number): void {
   backendRespawnTimer = setTimeout(() => {
     backendRespawnTimer = null;
     if (isQuiting) return;
-    console.error("[kepler-shell] supervisor: respawning backend");
+    keplerLog.warn("supervisor", "respawning backend", { streak: backendCrashStreak });
     spawnBackend();
     // Дёргаем ARK reinit — старый promise сброшен в resetArkClient,
     // initArkClient создаст новый.
@@ -281,7 +283,9 @@ function scheduleBackendRespawn(lastRanForMs: number): void {
 function showBackendCrashDialog(): void {
   if (backendCrashDialogShown) return;
   backendCrashDialogShown = true;
-  console.error("[kepler-shell] supervisor: backend crashed 5 times in a row, giving up");
+  keplerLog.error("supervisor", "backend crashed too many times in a row, giving up", {
+    streak: backendCrashStreak,
+  });
   const crashesDir = path.join(keplerDataDir(), "crashes");
   // dialog.showMessageBox — async, не блокирует event loop. Отдельный
   // import dialog уже есть в shell.
@@ -298,7 +302,7 @@ function showBackendCrashDialog(): void {
       defaultId: 0,
     })
     .catch((e) => {
-      console.error("[kepler-shell] supervisor: dialog failed:", e);
+      keplerLog.error("supervisor", "dialog failed", { err: String(e) });
     });
 }
 
@@ -359,7 +363,7 @@ function saveWindowStateNow() {
     writeFileSync(tmp, JSON.stringify(state, null, 2), "utf8");
     renameSync(tmp, targetPath);
   } catch (e) {
-    console.error("[kepler-shell] saveWindowState failed:", e);
+    keplerLog.warn("window", "saveWindowState failed", { err: String(e) });
   }
 }
 
@@ -613,7 +617,7 @@ async function resetArkClient(reason: string): Promise<void> {
     try {
       await prev.stop();
     } catch (e) {
-      console.error("[kepler-shell] ArkClient stop failed:", e);
+      keplerLog.warn("ark", "ArkClient stop failed", { err: String(e) });
     }
   }
 }
@@ -687,7 +691,7 @@ async function initArkClient(): Promise<void> {
     try {
       setupPomodoroNotifier({ arkClient: client });
     } catch (e) {
-      console.error("[kepler-shell] setupPomodoroNotifier failed:", e);
+      keplerLog.error("pomodoro-notifier", "setup failed", { err: String(e) });
     }
     // Bridge для Vue-extensions: extension-host прокидывает renderer-запросы
     // сюда через IPC. invokeOperation — public escape-hatch для generic RPC,
@@ -713,7 +717,7 @@ async function initArkClient(): Promise<void> {
       }
     });
   } catch (e) {
-    console.error("[kepler-shell] ArkClient init failed:", e);
+    keplerLog.error("ark", "ArkClient init failed", { err: String(e) });
     arkClientReadyReject?.(e instanceof Error ? e : new Error(String(e)));
   }
 }
@@ -865,7 +869,7 @@ ipcMain.handle("kepler:search:query", async (_e, text: string): Promise<SearchRe
     }
     return out;
   } catch (e) {
-    console.error("[kepler-shell] search failed:", e);
+    keplerLog.warn("search", "ARK search failed", { err: String(e) });
     return [];
   }
 });
@@ -921,7 +925,7 @@ ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
       });
     }
   } catch (e) {
-    console.error("[kepler-shell] loadDeclaredCommands failed:", e);
+    keplerLog.error("commands", "loadDeclaredCommands failed", { err: String(e) });
   }
 
   // 3) Runtime dynamic (commands.register от running extension'ов).
@@ -946,7 +950,7 @@ ipcMain.handle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
         console.warn("[kepler-shell] commands.list returned non-array:", dynamic);
       }
     } catch (e) {
-      console.error("[kepler-shell] commands.list (dynamic) failed:", e);
+      keplerLog.warn("commands", "commands.list (dynamic) failed", { err: String(e) });
     }
   }
 
@@ -1137,7 +1141,7 @@ ipcMain.handle("kepler:objects:listRecent", async (_e, limit?: number): Promise<
       type_id: r.typeId,
     }));
   } catch (e) {
-    console.error("[kepler-shell] objects.list failed:", e);
+    keplerLog.warn("objects", "objects.list failed", { err: String(e) });
     return [];
   }
 });
