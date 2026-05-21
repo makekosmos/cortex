@@ -330,6 +330,11 @@
   font-size: 16px;
   line-height: 1.65;
   color: var(--text-primary);
+  /* Physical breathing room после последнего блока: можно проскроллить так,
+     чтобы последний блок встал примерно по центру viewport — комфорт при
+     письме «снизу». scroll-padding-bottom на .editor-wrapper (30vh)
+     отвечает за scrollIntoView() цель — оставляем независимо. */
+  padding-bottom: 50vh;
 }
 
 /* Block selection highlight (Anytype-style). Класс `.kepler-block-selected`

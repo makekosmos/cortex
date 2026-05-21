@@ -211,6 +211,7 @@
       </ContextMenuItem>
     </ContextMenu>
 
+    <ToastHost />
   </div>
 </template>
 
@@ -223,8 +224,10 @@ import {
   DesktopChrome,
   DesktopContentSurface,
   TitlebarHistoryControls,
+  ToastHost,
   WindowControls,
   type TitlebarPlatform,
+  provideToastHost,
   useContextMenu,
 } from "@kosmos/visuals";
 import { useEdenStore } from "@/store/eden";
@@ -251,6 +254,10 @@ import "@/App.css";
 
 const eden = useEdenStore();
 const layout = useLayoutStore();
+// Provide toast api на root уровне — useToast() из любого descendant'а
+// (Editor.vue и т.д.) увидит его. ToastHost дальше в template только
+// рендерит, не повторяет provide.
+provideToastHost();
 
 type EdenHistorySnapshot = {
   activeScreen: "notes" | "settings" | "object-types" | "type-collection";
