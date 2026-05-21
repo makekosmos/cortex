@@ -61,6 +61,11 @@ export const Wikilink = Node.create({
     ];
   },
 
+  // @ts-expect-error — renderMarkdown registered via @tiptap/markdown
+  renderMarkdown(node: { attrs?: { label?: string; id?: string } }): string {
+    return `[[${node.attrs?.label ?? node.attrs?.id ?? ""}]]`;
+  },
+
   addOptions() {
     return {
       suggestion: {

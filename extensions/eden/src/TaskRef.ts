@@ -82,6 +82,17 @@ export const TaskRef = Node.create<TaskRefOptions>({
     return ["div", mergeAttributes(HTMLAttributes, { "data-task-ref": "" })];
   },
 
+  // Markdown serialization для clipboard (Ctrl+C / Ctrl+X / drag-select).
+  // `titleSnapshot` — runtime-only attr, патчится в Editor.vue из DOM input'а
+  // перед serialize'ом (source of truth — ARK task_obj, не node attrs).
+  // Поле читается @tiptap/markdown'ом через getExtensionField — типа в core
+  // нет, поэтому ts-ignore.
+  // @ts-expect-error — renderMarkdown registered via @tiptap/markdown MarkdownManager
+  renderMarkdown(node: { attrs?: { titleSnapshot?: string } }): string {
+    const title = (node.attrs?.titleSnapshot ?? "").trim();
+    return `- [ ] ${title}`;
+  },
+
   addNodeView() {
     return VueNodeViewRenderer(TaskRefView, {
       /**

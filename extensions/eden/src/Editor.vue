@@ -118,6 +118,7 @@ import { edenApi } from "@/lib/edenApi";
 import { useBlockSelection } from "@/composables/useBlockSelection";
 import BlockSelectionOverlay from "@/components/BlockSelectionOverlay.vue";
 import { TextSelection } from "@tiptap/pm/state";
+import { useToast } from "@kosmos/visuals";
 import {
   BlockSelectionDecoration,
   blockSelectionPluginKey,
@@ -257,6 +258,7 @@ function getNoteTypeIconSrc(noteType: NoteType | null) {
 
 const contentAreaRef = useTemplateRef<HTMLDivElement>("contentAreaRef");
 const blockSelection = useBlockSelection();
+const toast = useToast();
 
 // Флаг ставится window-level mousedown handler'ом (capture-фаза) когда
 // он очистил block selection. onContentMouseDown в bubble-фазе видит флаг
@@ -350,32 +352,145 @@ function onWindowMouseUp(): void {
   // решит куда кликнуть дальше.
 }
 
-// Keyboard: Esc → clear selection; Delete/Backspace → delete selected blocks.
+// Keyboard: Esc → clear selection; Delete/Backspace → delete selected blocks;
+// Ctrl+C / Ctrl+X → copy/cut выделенного как markdown; Ctrl+C при обычной PM
+// selection (включая Ctrl+A) — копирует выделение целиком как markdown.
 function onWindowKeyDown(e: KeyboardEvent): void {
-  if (!blockSelection.hasSelection.value) return;
-  if (e.key === "Escape") {
-    e.preventDefault();
-    blockSelection.clearSelection();
+  if (!editor.value) return;
+
+  if (blockSelection.hasSelection.value) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      blockSelection.clearSelection();
+      return;
+    }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      void blockSelection.deleteSelected(editor.value, edenApi.softDeleteTask);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
+      e.preventDefault();
+      const md = serializeSelectedBlocksAsMarkdown();
+      if (md) {
+        void navigator.clipboard.writeText(md);
+        toast.show({
+          message: `Скопировано ${blockSelection.selectedPositions.value.size} ${pluralizeBlocks(blockSelection.selectedPositions.value.size)}`,
+          tone: "success",
+        });
+      }
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) {
+      e.preventDefault();
+      const count = blockSelection.selectedPositions.value.size;
+      const md = serializeSelectedBlocksAsMarkdown();
+      if (md) {
+        void navigator.clipboard.writeText(md);
+        void blockSelection.deleteSelected(editor.value, edenApi.softDeleteTask);
+        toast.show({
+          message: `Вырезано ${count} ${pluralizeBlocks(count)}`,
+          tone: "success",
+        });
+      }
+      return;
+    }
     return;
   }
-  if (e.key === "Delete" || e.key === "Backspace") {
-    if (!editor.value) return;
+
+  // PM selection branch — Ctrl+A→Ctrl+C / range-select→Ctrl+C / Ctrl+X.
+  // Срабатывает только если editor фокусирован (иначе юзер в title input
+  // или другом UI — пускаем native handle).
+  if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C" || e.key === "x" || e.key === "X")) {
+    const sel = editor.value.state.selection;
+    if (sel.empty) return;
+    if (!editor.value.view.hasFocus()) return;
     e.preventDefault();
-    void blockSelection.deleteSelected(editor.value, edenApi.softDeleteTask);
-    return;
-  }
-  if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
-    if (!editor.value) return;
-    e.preventDefault();
-    const text = serializeSelectedBlocks();
-    if (text) void navigator.clipboard.writeText(text);
+    const isCut = e.key === "x" || e.key === "X";
+    const md = serializePMSelectionAsMarkdown();
+    if (md) {
+      void navigator.clipboard.writeText(md);
+      if (isCut) editor.value.commands.deleteSelection();
+      toast.show({
+        message: isCut ? "Вырезано в Markdown" : "Скопировано в Markdown",
+        tone: "success",
+      });
+    }
   }
 }
 
+function pluralizeBlocks(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "блок";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "блока";
+  return "блоков";
+}
+
 /**
- * Сериализует выделенные блоки в plain text для clipboard. taskRef ноды
- * читают title прямо из DOM input'а (синхронно, без async getTask).
- * Параграфы / heading'и / list items — через `node.textContent`.
+ * Walk JSON doc, для каждого taskRef патчит attrs.titleSnapshot значением
+ * из DOM input'а — markdown renderer (см. TaskRef.ts) рендерит
+ * `- [ ] ${titleSnapshot}`. Без патча attr пустой и markdown получает
+ * `- [ ] ` (источник истины title живёт в ARK, не в attrs).
+ */
+function patchTaskRefSnapshots(json: { type?: string; content?: unknown[]; attrs?: Record<string, unknown> }, viewDom: HTMLElement): void {
+  const walk = (node: { type?: string; content?: unknown[]; attrs?: Record<string, unknown> }): void => {
+    if (!node) return;
+    if (node.type === "taskRef" && node.attrs?.taskId) {
+      const input = viewDom.querySelector(
+        `[data-task-id="${node.attrs.taskId as string}"] .task-ref-title-input`,
+      ) as HTMLInputElement | null;
+      if (input) node.attrs = { ...node.attrs, titleSnapshot: input.value };
+    }
+    if (Array.isArray(node.content)) {
+      for (const child of node.content) walk(child as never);
+    }
+  };
+  walk(json);
+}
+
+function serializeSelectedBlocksAsMarkdown(): string {
+  if (!editor.value) return "";
+  const view = editor.value.view;
+  const doc = view.state.doc;
+  const docJson = doc.toJSON() as { type: string; content?: unknown[] };
+  patchTaskRefSnapshots(docJson, view.dom as HTMLElement);
+  const positionsSet = blockSelection.selectedPositions.value;
+  if (positionsSet.size === 0) return "";
+  const filtered: unknown[] = [];
+  let runningPos = 0;
+  for (let i = 0; i < doc.childCount; i++) {
+    const child = doc.child(i);
+    if (positionsSet.has(runningPos) && docJson.content?.[i]) {
+      filtered.push(docJson.content[i]);
+    }
+    runningPos += child.nodeSize;
+  }
+  if (filtered.length === 0) return "";
+  const sliceJson = { type: "doc", content: filtered };
+  return (editor.value as unknown as { markdown: { serialize: (j: unknown) => string } }).markdown.serialize(sliceJson);
+}
+
+function serializePMSelectionAsMarkdown(): string {
+  if (!editor.value) return "";
+  const view = editor.value.view;
+  const sel = view.state.selection;
+  if (sel.empty) return "";
+  const doc = view.state.doc;
+  let sliceJson: { type: string; content?: unknown[] };
+  if (sel.from <= 0 && sel.to >= doc.content.size) {
+    sliceJson = doc.toJSON() as { type: string; content?: unknown[] };
+  } else {
+    const sliceContent = doc.slice(sel.from, sel.to).content.toJSON() as unknown[] | null;
+    sliceJson = { type: "doc", content: sliceContent ?? [] };
+  }
+  patchTaskRefSnapshots(sliceJson, view.dom as HTMLElement);
+  return (editor.value as unknown as { markdown: { serialize: (j: unknown) => string } }).markdown.serialize(sliceJson);
+}
+
+/**
+ * @deprecated Legacy plain-text сериализатор — оставлен для обратной совместимости
+ * если кто-то ещё импортирует. Новый путь — markdown через render handlers.
  */
 function serializeSelectedBlocks(): string {
   if (!editor.value) return "";
