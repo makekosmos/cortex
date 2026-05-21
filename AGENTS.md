@@ -200,6 +200,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 - ❌ Запускать e2e без `KOSMOS_HEADLESS=1`. Окна Kepler / extension'ов не должны лезть на экран и воровать focus у пользователя. `launchKepler` helper выставляет этот env автоматически — не override'ить в `opts.env`.
 - ❌ Создавать BrowserWindow в `shell/electron/` без проверки `process.env.KOSMOS_HEADLESS === "1"`. Любое новое окно должно респектать headless mode (`show: !headless`, `skipTaskbar: headless`).
+- ❌ Звать `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)` на BrowserWindow в `shell/electron/` без headless guard'а. `showLauncher`, `focusExistingExtensionWindow`, `showWidget`, `openSettings`, `openDashboardWindow`, `openInstallExtensionWindow` — все должны раннее return'ить в headless/test mode (либо пропускать визуальные операции, оставляя state / IPC). Видимые окна во время e2e — это **баг**, а не «фича тестов». Пользователь не должен видеть мигающего UI от прогона.
 - ❌ Полагаться на `getByRole("button", { name: /<text>/ })` strict-mode, если на странице потенциально несколько подходящих кнопок (Vue transitions, multi-pane layouts). Scope'ить к специфичному CSS классу. См. [Testing → ловушки](/agents/testing#vue-transition).
 - ❌ Lazy-регистрировать object_type extension'ом при первом write если extension объявлен в `manifest.tests.smoke`. Eager register на boot в shim'е — иначе universal contract spec падает с FK constraint.
 - ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
