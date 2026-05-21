@@ -163,7 +163,7 @@ PASS.
 - ts-rs как `optional dependency` + feature flag, не `[dev-dependencies]`.
   Разница: dev-dep не доступен в `--features`, а нам нужен feature gate
   для conditional `#[derive(TS)]`. С optional dep + feature `ts-rs =
-  ["dep:ts-rs"]` это работает.
+["dep:ts-rs"]` это работает.
 
 ## Out of scope (для следующих итераций)
 

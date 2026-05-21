@@ -94,7 +94,7 @@ PASS.
   ссылается на bindings из `crates/ark-core/rust/bindings/`, которые
   генерируются `cargo test --features ts-rs`. Не commit'ятся, prepare шаг
   для CI / local. Прогнал `cargo test --features ts-rs --manifest-path
-  crates/ark-core/rust/Cargo.toml --lib` — bindings регенерировались,
+crates/ark-core/rust/Cargo.toml --lib` — bindings регенерировались,
   typecheck стал зелёный. Не относится к Phase 7.
 - `app.getPath('userData')` инкапсулирован в `verifyUserDataMatches`
   (instance.ts) — guard'у нравится, и интент очевиден из имени.

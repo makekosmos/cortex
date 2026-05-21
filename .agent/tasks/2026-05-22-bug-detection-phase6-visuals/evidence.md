@@ -32,12 +32,14 @@ $ bun run --cwd extensions/horologion test:vue
 ## AC4 — PASS
 
 `tests/e2e/visual.spec.ts` содержит 3 `toHaveScreenshot` теста:
+
 - launcher initial state
 - eden empty journal view
 - launcher settled (regression baseline)
 
 Baseline сгенерирован через `--update-snapshots`, файлы в
 `tests/e2e/visual.spec.ts-snapshots/`:
+
 - `launcher-initial-win32.png`
 - `eden-journal-empty-win32.png`
 - `launcher-settled-win32.png`
