@@ -45,11 +45,21 @@ export {
   SettingsRow,
   EmptyState,
   BlocklistCard,
+  Toast,
+  ToastHost,
 } from "./components";
 
 // Composables
 
 export { useContextMenu, type ContextMenuState } from "./composables/useContextMenu";
+
+export {
+  useToast,
+  provideToastHost,
+  type ToastOptions,
+  type ToastTone,
+  type ToastApi,
+} from "./composables/useToast";
 
 // Runtime helpers
 
