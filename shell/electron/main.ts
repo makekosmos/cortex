@@ -30,7 +30,7 @@ import {
   nativeTheme,
   screen,
 } from "electron";
-import { resolveInstance, applyInstanceToApp } from "./instance";
+import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./instance";
 
 // КРИТИЧНО: applyInstanceToApp ДОЛЖЕН выполниться до requestSingleInstanceLock
 // и до любого app.getPath('userData') / app.getName() — Electron кэширует эти
@@ -196,6 +196,75 @@ function resolveBackendExe(): string {
 
   // production: рядом с упакованным приложением (extraResources)
   return path.join(process.resourcesPath ?? __dirname, "kepler-backend.exe");
+}
+
+// --- Phase 7: boot self-check ------------------------------------------------
+// Проверяет invariant'ы slot isolation + наличие backend exe ДО spawnBackend
+// и любых window'ов. Failure path — error dialog + app.exit(1). Fail-loud,
+// без retry / recovery: если invariant broken, лучше упасть на старте чем
+// писать в чужой userData / висеть без backend'а.
+function runBootSelfCheck(): void {
+  // 1. userData совпадает с тем что resolveInstance насчитал. Защита от
+  //    ситуации когда что-то ниже по импортной цепочке успело вызвать
+  //    getPath ДО applyInstanceToApp — Electron кэширует первое значение,
+  //    и slot isolation тихо ломается. verifyUserDataMatches инкапсулирует
+  //    единственный whitelisted вызов getPath('userData') (в instance.ts).
+  const verify = verifyUserDataMatches(KEPLER_INSTANCE);
+  if (!verify.ok) {
+    const msg =
+      `Kepler boot self-check failed: userData mismatch.\n` +
+      `Expected: ${verify.expected}\n` +
+      `Actual:   ${verify.actual}\n` +
+      `Slot:     ${KEPLER_INSTANCE.slot}\n\n` +
+      `Это означает что applyInstanceToApp не успел отработать до первого ` +
+      `чтения userData path. Запустите Kepler заново; если повторяется — ` +
+      `см. shell/electron/instance.ts.`;
+    keplerLog.error("boot", "userData mismatch", {
+      expected: verify.expected,
+      actual: verify.actual,
+      slot: KEPLER_INSTANCE.slot,
+    });
+    dialog.showErrorBox("Kepler — ошибка запуска", msg);
+    app.exit(1);
+    return;
+  }
+
+  // 2. Backend exe существует. Без него ничего не работает; show dialog
+  //    и выходим, иначе пользователь увидит вечно "загрузка" в launcher.
+  const backendExe = resolveBackendExe();
+  if (!existsSync(backendExe)) {
+    const msg =
+      `kepler-backend.exe не найден по ожидаемому пути:\n${backendExe}\n\n` +
+      `Возможно установка повреждена. Переустановите Kepler.`;
+    keplerLog.error("boot", "backend exe missing", { backendExe });
+    dialog.showErrorBox("Kepler — ошибка запуска", msg);
+    app.exit(1);
+    return;
+  }
+
+  // 3. test slot не должен резолвиться в обычном запуске (без
+  //    KOSMOS_TEST_MODE=1). Если кто-то случайно прокинул KOSMOS_DATA_DIR
+  //    в production env — это ошибка конфигурации.
+  if (KEPLER_INSTANCE.kind === "test" && process.env.KOSMOS_TEST_MODE !== "1") {
+    const msg =
+      `Kepler запущен в test slot (${KEPLER_INSTANCE.slot}) без KOSMOS_TEST_MODE=1.\n` +
+      `Это обычно означает что KOSMOS_DATA_DIR / KEPLER_INSTANCE прокинут случайно.\n` +
+      `Очистите env и запустите снова.`;
+    keplerLog.error("boot", "test slot without KOSMOS_TEST_MODE", {
+      slot: KEPLER_INSTANCE.slot,
+    });
+    dialog.showErrorBox("Kepler — ошибка запуска", msg);
+    app.exit(1);
+    return;
+  }
+
+  keplerLog.info("boot", "self-check passed", {
+    slot: KEPLER_INSTANCE.slot,
+    kind: KEPLER_INSTANCE.kind,
+    userDataDir: KEPLER_INSTANCE.userDataDir,
+    dataDir: KEPLER_INSTANCE.dataDir,
+    backendExe,
+  });
 }
 
 function spawnBackend() {
@@ -1208,6 +1277,10 @@ ipcMain.handle("kepler:focus-service:auto-install-declined:set", (_e, value: boo
 // --- lifecycle ---------------------------------------------------------------
 
 app.whenReady().then(async () => {
+  // Phase 7 boot self-check: проверяем slot isolation invariant'ы +
+  // backend exe до того как что-либо стартует. Failure → exit(1).
+  runBootSelfCheck();
+
   // Принудительно темная тема — чтобы acrylic backgroundMaterial использовал
   // dark variant независимо от Windows system theme (иначе на light theme
   // launcher просвечивает белым).

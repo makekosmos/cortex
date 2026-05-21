@@ -198,6 +198,23 @@ export function applyInstanceToApp(instance: Instance): void {
 }
 
 /**
+ * Phase 7 boot self-check helper. Возвращает { ok: true } если Electron
+ * закэшировал тот же `userData` который мы насчитали в `resolveInstance()`,
+ * иначе { ok: false, expected, actual }. Caller (main.ts::runBootSelfCheck)
+ * показывает error dialog и exit'ит. Эта функция инкапсулирует единственный
+ * легитимный вызов `app.getPath('userData')` вне `applyInstanceToApp` —
+ * guard `ark:guard:writes` whitelist'ит только этот файл.
+ */
+export function verifyUserDataMatches(instance: Instance): {
+  ok: boolean;
+  expected: string;
+  actual: string;
+} {
+  const actual = app.getPath("userData");
+  return { ok: actual === instance.userDataDir, expected: instance.userDataDir, actual };
+}
+
+/**
  * До этого рефакторинга dev писал в `%APPDATA%/Kepler/` (тот же что prod).
  * После — `%APPDATA%/Kepler-dev/`. Чтобы dev пользователь не потерял
  * developerMode toggle, hotkey override и т.п., копируем kepler-shell-settings.json
