@@ -40,6 +40,12 @@ interface CachedBlock {
 const DRAG_THRESHOLD_PX = 20;
 const CROSSING_MIN_PX = 8;
 
+// Auto-scroll: пока drag активен и курсор у верх/низ края scroll контейнера,
+// двигаем scrollTop. Edge zone 48px, max скорость ~16px/frame proporcional
+// глубине курсора в зону.
+const AUTO_SCROLL_EDGE_PX = 48;
+const AUTO_SCROLL_MAX_SPEED_PX = 16;
+
 export function useBlockSelection() {
   /** Set позиций выделенных блоков. Position стабилен в течение drag-session. */
   const selectedPositions = ref<Set<number>>(new Set());
@@ -55,6 +61,17 @@ export function useBlockSelection() {
   let active = false;
   /** Container element для координат overlay (содержит overlay absolute). */
   let containerEl: HTMLElement | null = null;
+  /** Scroll container (`.kosmos-scroll` ancestor) для auto-scroll. */
+  let scrollContainerEl: HTMLElement | null = null;
+  /** Editor reference сохраняем для re-collectBlocks после auto-scroll tick'а. */
+  let editorRef: TiptapEditor | null = null;
+  /** Последние известные client coords мыши — обновляются в `updateDrag`,
+      используются auto-scroll tick'ом чтобы пересчитать selection после
+      того как контент проскроллился (мышь стоит на месте, контент уехал). */
+  let lastClientX = 0;
+  let lastClientY = 0;
+  /** rAF id active auto-scroll loop'а (null если не запущен). */
+  let autoScrollRafId: number | null = null;
   /** Pos блока на котором был mousedown (null если в margin'е). Используется
       чтобы НЕ активировать block-drag пока курсор остаётся в этом же блоке —
       даём юзеру нормально выделять text в одной строке для copy/paste. */
@@ -94,7 +111,11 @@ export function useBlockSelection() {
     hasMoved = false;
     startX = clientX;
     startY = clientY;
+    lastClientX = clientX;
+    lastClientY = clientY;
     containerEl = container;
+    editorRef = editor;
+    scrollContainerEl = container.closest(".kosmos-scroll") as HTMLElement | null;
     cache = collectBlocks(editor);
     // Запомнили на каком блоке (если был) был mousedown. Drag активируется
     // только когда курсор уходит ИЗ этого блока — иначе юзер просто
@@ -192,8 +213,95 @@ export function useBlockSelection() {
    * blur'нуть editor + collapse selection). Дальше возвращает `"dragging"`.
    * До threshold возвращает `null`.
    */
+  /** Считает, сколько scrollTop нужно прибавить для авто-скролла в текущем
+      кадре. 0 = курсор не у края, скроллить не надо. */
+  function computeAutoScrollDelta(clientY: number, container: HTMLElement): number {
+    const rect = container.getBoundingClientRect();
+    const fromTop = clientY - rect.top;
+    const fromBottom = rect.bottom - clientY;
+    if (fromTop < AUTO_SCROLL_EDGE_PX && fromTop < fromBottom) {
+      const depth = Math.max(0, AUTO_SCROLL_EDGE_PX - fromTop);
+      const intensity = Math.min(1, depth / AUTO_SCROLL_EDGE_PX);
+      return -Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED_PX);
+    }
+    if (fromBottom < AUTO_SCROLL_EDGE_PX) {
+      const depth = Math.max(0, AUTO_SCROLL_EDGE_PX - fromBottom);
+      const intensity = Math.min(1, depth / AUTO_SCROLL_EDGE_PX);
+      return Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED_PX);
+    }
+    return 0;
+  }
+
+  /** Пересчитать dragRect + hit-test selection из current startX/Y + lastClientX/Y.
+      Вызывается после auto-scroll tick'а (startY сдвинут, cache пересобран). */
+  function recomputeDragGeometry(): void {
+    if (!containerEl) return;
+    const x = Math.min(startX, lastClientX);
+    const y = Math.min(startY, lastClientY);
+    const width = Math.abs(lastClientX - startX);
+    const height = Math.abs(lastClientY - startY);
+    const containerRect = containerEl.getBoundingClientRect();
+    dragRect.value = {
+      x: x - containerRect.left,
+      y: y - containerRect.top,
+      width,
+      height,
+    };
+    const clientDragRect: DragRect = { x, y, width, height };
+    const next = new Set<number>();
+    for (const block of cache) {
+      if (aabbCollide(clientDragRect, block.rect)) {
+        next.add(block.pos);
+      }
+    }
+    selectedPositions.value = next;
+  }
+
+  /** rAF-loop пока drag активен. На каждом tick'е:
+      1. Если курсор у края — двигаем scrollTop scrollContainerEl.
+      2. Сдвигаем startY на величину реального скролла (anchor drag origin
+         к документу, не к viewport — иначе rect «убегал» бы от точки
+         нажатия после скролла).
+      3. Пересобираем cache блоков (их rects изменились со скроллом).
+      4. Пересчитываем dragRect + selection — даже если мышь стоит.
+      Loop планирует сам себя пока `active && hasMoved`. */
+  function autoScrollTick(): void {
+    autoScrollRafId = null;
+    if (!active || !hasMoved) return;
+    if (scrollContainerEl && editorRef) {
+      const delta = computeAutoScrollDelta(lastClientY, scrollContainerEl);
+      if (delta !== 0) {
+        const before = scrollContainerEl.scrollTop;
+        scrollContainerEl.scrollTop = before + delta;
+        const actual = scrollContainerEl.scrollTop - before;
+        if (actual !== 0) {
+          // Контент проехал в client coords на -actual. Чтобы стартовая
+          // точка drag'а оставалась прибита к документу — двигаем startY
+          // вместе с ней.
+          startY -= actual;
+          cache = collectBlocks(editorRef);
+          recomputeDragGeometry();
+          // Стираем native browser Range, который мог переустановиться.
+          const sel = window.getSelection();
+          if (sel && sel.rangeCount > 0) sel.removeAllRanges();
+        }
+      }
+    }
+    if (active && hasMoved) {
+      autoScrollRafId = requestAnimationFrame(autoScrollTick);
+    }
+  }
+
+  function ensureAutoScrollLoop(): void {
+    if (autoScrollRafId !== null) return;
+    if (!scrollContainerEl) return;
+    autoScrollRafId = requestAnimationFrame(autoScrollTick);
+  }
+
   function updateDrag(clientX: number, clientY: number): "activated" | "dragging" | null {
     if (!active) return null;
+    lastClientX = clientX;
+    lastClientY = clientY;
 
     const dx = Math.abs(clientX - startX);
     const dy = Math.abs(clientY - startY);
@@ -258,14 +366,21 @@ export function useBlockSelection() {
       }
     }
     selectedPositions.value = next;
+    ensureAutoScrollLoop();
     return justActivated ? "activated" : "dragging";
   }
 
   function finishDrag(): void {
     if (!active) return;
     active = false;
+    if (autoScrollRafId !== null) {
+      cancelAnimationFrame(autoScrollRafId);
+      autoScrollRafId = null;
+    }
     dragRect.value = null;
     containerEl = null;
+    scrollContainerEl = null;
+    editorRef = null;
     cache = [];
     startBlockPos = null;
     // selection остаётся (юзер может нажать Delete или Esc).
