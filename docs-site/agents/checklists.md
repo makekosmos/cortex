@@ -137,6 +137,26 @@
 - [ ] Tracker-модуль стартует/останавливается из `services/kepler-backend/src/main.rs` (Phase E2). Standalone-бинарь — frozen в `legacy/usage-tracker/`.
 - [ ] Tracker остаётся user-level, не Windows Service.
 
+## Я правил focus-mode (`shell/electron/focus-*.ts` + `services/kepler-focus-*` + `services/kepler-backend/src/focus.rs`)
+
+- [ ] `bun run --cwd shell typecheck` — clean.
+- [ ] `bun run --cwd shell build:js` — clean.
+- [ ] `cargo test -p kepler-focus-helper` — зелёный (`hosts.rs` unit-тесты с tempfile).
+- [ ] `cargo test -p kepler-focus-svc` — зелёный (`protocol.rs` dispatch-тесты).
+- [ ] `cargo build --workspace` — собирается (включая helper + svc, оба Windows-only).
+- [ ] Прямые writes в hosts file идут **только** из `kepler-focus-helper` или `kepler-focus-svc` (никаких новых `fs.writeFile("C:\\Windows\\...")` в shell / backend).
+- [ ] Модификации hosts остаются между маркерами `# === kepler-focus BEGIN/END ===`. Backup `hosts.kepler-backup` создаётся один раз и не перезаписывается.
+- [ ] Widget operations (pause/resume/skip/stop) идут через `invokeOperation("pomodoro.<op>")`, не через локальный `setFocusState` после клика.
+- [ ] Backend `focus.rs` не делает privileged operations — только хранит state.
+- [ ] Если правил `setupFocusWidgetBackendSync` / `teardownFocusWidgetBackendSync` — wiring в `main.ts` зовёт teardown перед resubscribe при backend respawn.
+- [ ] Если правил pipe protocol (`kepler-focus-svc/src/protocol.rs`) — request/response shape остаётся backward compatible (shell может говорить со старой версией service'а и наоборот).
+- [ ] Если менял auto-install flow — `autoInstallAttemptedThisSession` + `setFocusServiceAutoInstallDeclined` гварды не ослаблены (один UAC промпт максимум).
+- [ ] Если добавил новую `focus.*` ARK операцию — диспатч в `ws_server.rs` + middleware в `extension-host.ts` (если требует apply на hosts).
+- [ ] `requireAdministrator` manifest у `kepler-focus-helper.exe` на месте (`build.rs` embed-manifest).
+- [ ] Headless e2e не показывает widget (`process.env.KOSMOS_HEADLESS === "1"` гвард в `showWidget`).
+
+См. [Focus mode](/concepts/focus-mode).
+
 ## Я правил `@kosmos/visuals` (`packages/visuals`)
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).

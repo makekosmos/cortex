@@ -24,7 +24,7 @@
 
 ## E
 
-**Eden Heart** — Rust sidecar внутри Eden для полнотекстового поиска через Tantivy. См. [Eden](/apps/eden).
+**Eden Heart** — историческая Rust sidecar архитектура Eden (Tantivy FTS, vault-локальные операции). Не используется после миграции Eden в extension (`extensions/eden/`, Phase 6.0). Термин сохранён только для исторического контекста ADR. См. [Eden](/apps/eden).
 
 **Electron main** — главный процесс Electron-приложения. Только он имеет доступ к ARK и Node API. См. [Архитектура](/concepts/architecture).
 
@@ -64,7 +64,7 @@
 
 ## P
 
-**Pinia** — store-менеджер Vue. Используется в Eden (`useEdenStore`, `useLayoutStore`).
+**Pinia** — store-менеджер Vue. Используется в Eden (`useEdenStore`, `useLayoutStore`) вместе с `@pinia/colada` для async-query кэширования.
 
 **Preload API** — узкий API между renderer и main процессами Electron. Renderer обращается к нему через `window.<app>Api`.
 
@@ -82,7 +82,7 @@
 
 **Self-managed sidecar** — режим `@kosmos/ark`, когда `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`.
 
-**Sidecar** — отдельный процесс рядом с приложением. Примеры: `ark-core-rpc` (для всех Electron apps), Eden Heart (для Eden).
+**Sidecar** — отдельный процесс рядом с приложением. Пример: `ark-core-rpc` (для всех Electron apps). Раньше: Eden Heart (исторически, до миграции Eden в extension).
 
 **Space** — отдельное пространство данных ARK. Разные spaces — разные SQLite-БД (`%APPDATA%\Kosmos\spaces\<spaceId>\ark.db`).
 
@@ -96,7 +96,7 @@
 
 ## T
 
-**Tantivy** — Rust-библиотека полнотекстового поиска, используется в Eden Heart.
+**Tantivy** — Rust-библиотека полнотекстового поиска. Использовалась в Eden Heart (исторически). В текущем коде не используется — Eden как extension ищет через ARK object search.
 
 **`task_obj`** — `object_type` для задач Delphi.
 
