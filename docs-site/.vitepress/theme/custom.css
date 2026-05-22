@@ -742,19 +742,20 @@ body[data-kosmos-mode="user"] .VPDoc .container {
 }
 
 @media (max-width: 1280px) {
-    body[data-kosmos-mode="user"] .VPDoc .container {
-      max-width: calc(100% - var(--sidebar-width)) !important;
-      margin-left: auto !important;
-      margin-right: 0 !important;
-    }
-    body[data-kosmos-mode="user"] .VPDoc .aside {
-      display: none !important;
-    }
+  body[data-kosmos-mode="user"] .VPDoc .container {
+    max-width: calc(100% - var(--sidebar-width)) !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+  }
+  body[data-kosmos-mode="user"] .VPDoc .aside {
+    display: none !important;
+  }
 }
 
 @media (max-width: 1024px) {
-    body[data-kosmos-mode="user"] .VPDoc .container {
-      max-width: 100% !important;}
+  body[data-kosmos-mode="user"] .VPDoc .container {
+    max-width: 100% !important;
+  }
 }
 
 /* Контент тоже сдвигается вверх — без оффсета под navbar */
