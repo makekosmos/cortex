@@ -348,14 +348,18 @@ function moveSelection(delta: number) {
         return;
       }
     }
-    // Custom scrollIntoView с 8px padding к краю по направлению движения.
+    // Custom scrollIntoView с 8px padding к краю.
+    // Проверяем ОБА overflow независимо от direction — иначе если selection
+    // ушёл за пределы viewport (например, list был прокручен с прошлого
+    // открытия), нажатие ArrowDown не подтянет scroll если выделенный
+    // элемент оказался выше viewport.
     const listRect = list.getBoundingClientRect();
     const elRect = selectedEl.getBoundingClientRect();
     const topOverflow = listRect.top + SCROLL_EDGE_PADDING - elRect.top;
     const bottomOverflow = elRect.bottom - (listRect.bottom - SCROLL_EDGE_PADDING);
-    if (direction === "up" && topOverflow > 0) {
+    if (topOverflow > 0) {
       list.scrollTop -= topOverflow;
-    } else if (direction === "down" && bottomOverflow > 0) {
+    } else if (bottomOverflow > 0) {
       list.scrollTop += bottomOverflow;
     }
   });
@@ -399,7 +403,13 @@ onMounted(async () => {
     query.value = "";
     selectedIndex.value = 0;
     void refreshCommands();
-    void nextTick(() => inputRef.value?.focus());
+    void nextTick(() => {
+      inputRef.value?.focus();
+      // Сброс прокрутки — иначе при следующем открытии launcher остаётся
+      // на позиции скролла прошлого открытия, и selection нулевой строки
+      // не виден в viewport.
+      if (listRef.value) listRef.value.scrollTop = 0;
+    });
   });
   offCommandsUpdated = window.kepler.commands.onUpdated(() => {
     void refreshCommands();
