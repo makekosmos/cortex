@@ -27,15 +27,7 @@ pre-commit:
       glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx}"
       run: bunx oxlint {staged_files}
     oxfmt:
-      glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx,json,md,yml,yaml}"
-      # Auto-generated скриптом docs:sync, который сам прогоняет oxfmt. Здесь
-      # исключаем чтобы избежать race с параллельным docs-sync hook'ом.
-      exclude:
-        - "AGENTS.md"
-        - "CLAUDE.md"
-        - "mobile/delphi/AGENTS.md"
-        - "crates/ark-core/AGENTS.md"
-      run: bunx oxfmt --check {staged_files}
+      run: bunx oxfmt --check .
     ark-guard-writes:
       glob: "{shell/electron,extensions,tests/e2e}/**/*.{ts,tsx,mjs,cjs,js}"
       run: bun run ark:guard:writes
