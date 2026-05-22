@@ -12,7 +12,6 @@ const SECTIONS = [
     items: [
       { text: "Быстрый старт", link: "/manual/basics" },
       { text: "Платформы", link: "/manual/platforms" },
-      { text: "Бета — FAQ", link: "/manual/beta/" },
     ],
   },
   {

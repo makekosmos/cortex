@@ -1,14 +1,15 @@
 ---
-title: Бета — FAQ
+title: Бета мануал
 description: Частые вопросы о текущем состоянии Kosmos.
 ---
 
 # Бета мануал <span class="beta-pill">β</span>
 
-Kosmos сейчас в активной разработке. Эта страница отвечает на частые
-вопросы про текущее состояние: что работает, что нет, чего ждать.
+Kosmos сейчас в активной разработке. Ниже — частые вопросы про текущее
+состояние: что работает, что нет, чего ждать.
 
-## Что такое «бета»?
+<details class="faq-item">
+<summary>Что такое «бета»?</summary>
 
 Kosmos — личный проект. Это значит:
 
@@ -18,13 +19,19 @@ Kosmos — личный проект. Это значит:
 - Я ставлю себе апдейты раньше, чем кто-либо ещё. Если что-то ломается
   — обычно я знаю об этом первым.
 
-## Почему Kosmos только для Windows?
+</details>
+
+<details class="faq-item">
+<summary>Почему Kosmos только для Windows?</summary>
 
 Я работаю на Windows. Это первая платформа потому, что я могу постоянно
 тестировать продукт на своей машине. macOS / Android / iOS — в планах,
 порядок описан на [странице «Платформы»](../platforms).
 
-## Где хранятся мои данные?
+</details>
+
+<details class="faq-item">
+<summary>Где хранятся мои данные?</summary>
 
 Локально, в `%APPDATA%\Kosmos\ark.db` — это SQLite-база.
 **Local-first**: данные принадлежат тебе, не уходят на сервер без
@@ -32,7 +39,10 @@ Kosmos — личный проект. Это значит:
 
 LAN-синхронизация между твоими устройствами — в разработке.
 
-## Что-то сломалось — куда писать?
+</details>
+
+<details class="faq-item">
+<summary>Что-то сломалось — куда писать?</summary>
 
 - GitHub Issues: [yoso-industries/kepler](https://github.com/yoso-industries)
 - Email: kazajackyyy@gmail.com
@@ -43,7 +53,10 @@ LAN-синхронизация между твоими устройствами 
 2. Что делал перед поломкой
 3. Логи (если есть) из `%APPDATA%\Kosmos\crashes\`
 
-## Я могу потерять данные?
+</details>
+
+<details class="faq-item">
+<summary>Я могу потерять данные?</summary>
 
 Технически — да, как и в любом софте. Что Kosmos делает чтобы этого не было:
 
@@ -57,7 +70,10 @@ LAN-синхронизация между твоими устройствами 
 Тем не менее, **резервные копии важных заметок и задач делай сам**, особенно
 если данных накопилось много.
 
-## Когда стабильный релиз?
+</details>
+
+<details class="faq-item">
+<summary>Когда стабильный релиз?</summary>
 
 Не знаю. Это личный проект, графика нет. Стабильным считаю момент, когда:
 
@@ -65,17 +81,25 @@ LAN-синхронизация между твоими устройствами 
 - LAN-sync пройдёт долгое использование без потерь данных
 - Все 4 встроенных расширения дойдут до фич, которыми я сам пользуюсь ежедневно
 
-## Я хочу помочь / законтрибьютить
+</details>
+
+<details class="faq-item">
+<summary>Я хочу помочь / законтрибьютить</summary>
 
 Пиши на email или открой issue с предложением. Я открыт к фидбеку,
 но при этом продукт делаю под себя — не каждое предложение войдёт в
 roadmap.
 
-## Где changelog?
+</details>
+
+<details class="faq-item">
+<summary>Где changelog?</summary>
 
 [Новости](/whats-new/) — релиз-ноты по версиям Kepler и каждого расширения.
 
-<style>
+</details>
+
+<style scoped>
 .beta-pill {
   display: inline-block;
   padding: 3px 10px;
@@ -89,5 +113,73 @@ roadmap.
   vertical-align: middle;
   text-transform: lowercase;
   font-family: var(--kosmos-font-sans);
+}
+</style>
+
+<style>
+.faq-item {
+  margin: 8px 0;
+  padding: 0;
+  border: 1px solid var(--kosmos-border);
+  border-radius: 10px;
+  background: transparent;
+  transition: border-color 120ms ease;
+}
+
+.faq-item[open] {
+  border-color: var(--vp-c-brand-1);
+}
+
+.faq-item > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--kosmos-fg);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.faq-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item > summary::after {
+  content: "+";
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--kosmos-muted-fg);
+  transition: transform 160ms ease, color 120ms ease;
+}
+
+.faq-item[open] > summary::after {
+  content: "−";
+  color: var(--vp-c-brand-1);
+}
+
+.faq-item > summary:hover {
+  color: var(--vp-c-brand-1);
+}
+
+.faq-item > *:not(summary) {
+  padding: 0 18px;
+}
+
+.faq-item > *:not(summary):first-of-type {
+  padding-top: 4px;
+}
+
+.faq-item > *:not(summary):last-child {
+  padding-bottom: 16px;
 }
 </style>
