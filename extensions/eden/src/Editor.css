@@ -876,19 +876,19 @@
 }
 
 span[data-wikilink] {
-  color: var(--accent);
-  background-color: var(--accent-muted);
+  color: var(--eden-accent-color);
+  background-color: color-mix(in srgb, var(--eden-accent-color) 14%, transparent);
   padding: 0 4px;
   border-radius: var(--radius-xs);
   cursor: pointer;
   font-weight: 500;
   transition: all var(--transition-fast);
-  border-bottom: 1px solid rgba(10, 132, 255, 0.25);
+  border-bottom: 1px solid color-mix(in srgb, var(--eden-accent-color) 35%, transparent);
 }
 
 span[data-wikilink]:hover {
-  background-color: var(--accent-strong);
-  color: var(--accent-hover);
+  background-color: color-mix(in srgb, var(--eden-accent-color) 22%, transparent);
+  color: var(--eden-accent-color);
 }
 
 .wikilink-suggestions {
