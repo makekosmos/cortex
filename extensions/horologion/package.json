@@ -1,6 +1,6 @@
 {
   "name": "@kosmos/extension-horologion",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "Horologion (pomodoro + stopwatch + time tracking) — Vue extension для Kepler shell.",
   "type": "module",

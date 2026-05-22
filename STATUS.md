@@ -1,15 +1,41 @@
-# Kosmos — статус проекта (2026-05-20)
+# Kosmos — статус проекта (2026-05-22)
 
 ## Текущие версии
 
-| Артефакт                                         | Версия                                                                  |
-| ------------------------------------------------ | ----------------------------------------------------------------------- |
-| Kepler shell (`shell/package.json`)              | **0.2.1**                                                               |
-| Eden extension (`extensions/eden/manifest.json`) | **0.1.8** (Pattern B + Anytype-style block selection + Linear statuses) |
-| Delphi extension                                 | **0.1.3** (live ARK sync + «Когда-нибудь» tab)                          |
-| Horologion extension                             | **0.1.5**                                                               |
-| Arrancador extension                             | **0.1.3**                                                               |
-| Dashboard                                        | встроен в shell (не extension)                                          |
+| Артефакт                                         | Версия                                                                                                            |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Kepler shell (`shell/package.json`)              | **0.2.4** (focus widget backend sync + drag fix + IconButton)                                                     |
+| Eden extension (`extensions/eden/manifest.json`) | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
+| Delphi extension                                 | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                 |
+| Horologion extension                             | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                          |
+| Arrancador extension                             | **0.1.3**                                                                                                         |
+| Dashboard                                        | встроен в shell (не extension)                                                                                    |
+
+## 2026-05-22 — Horologion live-в-фоне + drag-select auto-scroll (Kepler 0.2.3 → 0.2.4, Eden 0.1.10 → 0.1.11, Horologion 0.1.5 → 0.1.6)
+
+### Horologion 0.1.5 → 0.1.6 + Kepler shell 0.2.3 → 0.2.4
+
+Закрытие окна Horologion во время pomodoro ломало 3 вещи:
+1. Floating focus widget переставал тикать (renderer push'ил state, renderer dead → no push'ей; main process autonomous tick не обновлял phaseEndsAtMs на phase boundary).
+2. `time_entry_obj` оставались `endedAt: null` навсегда (close/create логика жила в `usePomodoroSession` renderer'е).
+3. Native notifications зависели от renderer-life'а.
+
+**Решение**:
+- **`keepAliveInBackground: true`** новое поле в `ExtensionManifest`. `shell/electron/extension-host.ts` intercept'ит `close` event для таких extensions → `win.hide()` вместо destroy. Renderer переживает X, все side-effects продолжают работать. Окно реально destroy'ится только на `app.before-quit`.
+- **`backgroundThrottling: false`** теперь для всех extension `webPreferences` — даже hidden / minimized таймеры не throttle'ятся Chromium'ом.
+- **`focus-widget` backend sync** — main process подписывается напрямую на `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через `arkClient.onArkEvent`, деривит focus state, зовёт `setFocusState`. Виджет теперь появляется даже если pomodoro стартанули через launcher команду без открытия Horologion окна. Renderer push'и остаются для blockingActive (live из focusBlocklistId setting).
+- **Drag fix виджета** — `focusable: false` на BrowserWindow ломал `-webkit-app-region: drag` (Win32 не отправляет WM_NCLBUTTONDOWN не-фокусабельному окну). Поменяли на `focusable: true`; `showInactive()` всё ещё обеспечивает «не воровать фокус при появлении».
+
+### @kosmos/visuals → `IconButton` primitive
+
+Выделен ghost icon button (`size`, `tone: default | destructive`, `draggable`). Заменяет ad-hoc `.iconbtn` / `.ctl-btn` / `.close-btn` CSS, которые тиражировались по shell / extensions. FocusWidgetView мигрирован — close button получает Lucide `X` вместо glyph `×` для консистентности с `WindowControls`.
+
+### Eden 0.1.10 → 0.1.11
+
+- **Auto-scroll при drag-select** — Anytype-style rubber-band selection теперь скроллит editor когда курсор у верх/низ края `.kosmos-scroll` контейнера. rAF-loop активен пока drag активен: двигает scrollTop, anchor'ит startY к документу (не к viewport), пересобирает cache блоков, пересчитывает selection даже при неподвижной мыши. Edge zone 48px, max 16px/frame.
+- **Wikilink визуально на Eden accent** (оранжевый) вместо общего синего — линки в заметках смотрятся как часть Eden theme'ы, а не системные.
+
+## 2026-05-20 — Eden Pattern B + Anytype block selection (Kepler 0.2.0 → 0.2.1)
 
 ## 2026-05-20 — Eden Pattern B + Anytype block selection (Kepler 0.2.0 → 0.2.1)
 
@@ -128,7 +154,7 @@ Kepler.exe (Electron host)
       ├─ command bus (registry + invoke broadcast)
       └─ LAN sync (centralized — один node на машину)
 
-Eden.exe — остаётся standalone Electron + общий backend через kepler-mode (legacy).
+Eden — Vue extension в `extensions/eden/` (Phase 6.0 / 6.0.A, 2026-05-17). Standalone `apps/eden/ts/` удалён полностью.
 ```
 
 ## Naming convention (после brand swap)
@@ -336,12 +362,6 @@ bunx playwright test --list # parse-check
 - `scripts/dev-extensions.mjs` — orchestrator для Vite dev servers per extension.
 
 ## ⏳ Не сделано / отложено
-
-### Phase 6 — Eden migration
-
-**Размер**: ~2 недели сфокусированной работы. Eden намеренно отложен — TipTap editor + Heart Rust sidecar (vault filesystem manager) + сложный preload API (titlebar history, store hardening, FTS5, sync ops). Eden остаётся `Eden.exe` standalone + общий backend через cosmos-mode.
-
-Ожидаемый RAM save после migration: ~250 MB.
 
 ### Phase 7 — Adaptive lifecycle (optional)
 
