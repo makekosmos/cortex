@@ -81,7 +81,7 @@ const PROBE_ALIVE_CACHE_TTL_MS = 10_000;
 
 ## Concurrency
 
-`openExtension(id, route)` использует in-flight Map для дедупликации параллельных вызовов — два быстрых invoke на один id вернут одну и ту же Promise<void>, не создадут двух BrowserWindow'ов. Раньше (синхронная функция) гонка была невозможна по построению; с async probe она появилась бы без явного дедупа.
+`openExtension(id, route)` использует in-flight Map для дедупликации параллельных вызовов — два быстрых invoke на один id вернут одну и ту же `Promise<void>`, не создадут двух BrowserWindow'ов. Раньше (синхронная функция) гонка была невозможна по построению; с async probe она появилась бы без явного дедупа.
 
 ## Settings toggle
 

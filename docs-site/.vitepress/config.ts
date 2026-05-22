@@ -28,6 +28,11 @@ export default defineConfig({
     theme: { light: "github-light", dark: "github-dark" },
   },
 
+  // Игнорируем ссылки на артефакты вне docs-site/ — .agent/.agents/
+  // указывают на корневые директории репо (skills, proof loops), которые
+  // не публикуются в дока-сайт, но полезны при чтении исходников локально.
+  ignoreDeadLinks: [/^\/\.agents?\//],
+
   vite: {
     build: {
       chunkSizeWarningLimit: 3000,
