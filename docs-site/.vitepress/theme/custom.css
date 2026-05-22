@@ -657,6 +657,18 @@ body[data-kosmos-mode="user"] .VPNav {
 body[data-kosmos-mode="user"] .VPSidebar {
   top: 0 !important;
   padding-top: 20px !important;
+  width: 240px !important;
+}
+
+/* Контент сдвигается вместе с sidebar — VitePress использует
+ * --vp-sidebar-width в padding-left контейнера */
+body[data-kosmos-mode="user"] {
+  --vp-sidebar-width: 240px;
+  --vp-layout-max-width: 1440px;
+}
+
+body[data-kosmos-mode="user"] .VPContent.has-sidebar {
+  padding-left: 240px !important;
 }
 
 /* Контент тоже сдвигается вверх — без оффсета под navbar */
