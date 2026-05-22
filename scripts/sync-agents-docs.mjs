@@ -155,68 +155,31 @@ async function buildRootAgents() {
 
   await write("AGENTS.md", agentsBody);
 
+  // CLAUDE.md — slim version. Anthropic best-practices: < 200 строк, иначе
+  // Claude начинает игнорировать правила (https://code.claude.com/docs/en/best-practices).
+  // CLAUDE.md загружается каждую сессию каждый turn. Source — единственный
+  // curated файл `agents/claude-md-core.md`; per-app forbidden и situational
+  // знания живут в `docs-site/` и подгружаются Claude'ом по необходимости.
+  // Полный жирный набор остаётся в auto-generated `AGENTS.md` (для других
+  // агентов, читающих AGENTS.md, и для on-demand reference Claude'ом).
+  const claudeCore = await readDoc("agents/claude-md-core.md");
+
   const claudeHeader = [
     "# CLAUDE.md",
     "",
     MARK,
     "",
-    "Auto-generated файл с контекстом работы над Kosmos для Claude Code.",
-    "Источник — `docs-site/`, регенерация — `bun run docs:sync`. Полный набор",
-    "правил продублирован в `AGENTS.md` (Claude Code читает оба).",
+    "Контекст работы над монорепо Kosmos для Claude Code.",
+    "Источник — `docs-site/agents/claude-md-core.md`. Регенерация — `bun run docs:sync`.",
     "",
-    "См. также:",
-    "- `docs-site/agents/index.md` — старт",
-    "- `docs-site/agents/forbidden.md` — нерушимые запреты",
-    "- `docs-site/agents/checklists.md` — чек-листы по областям",
-    "- `docs-site/agents/docs-maintenance.md` — поддержка документации в актуальном состоянии",
-    "- `docs-site/agents/spec-templates.md` — шаблоны spec.md",
-    "- `docs-site/concepts/` — концепты архитектуры",
-    "- `docs-site/reference/rules.md` — сжатый чек-лист правил",
+    "Полный (жирный) набор правил — `AGENTS.md` в корне (не загружается каждую сессию;",
+    "читай при необходимости) и страницы под `docs-site/`.",
     "",
     "---",
     "",
   ].join("\n");
 
-  const claudeLabels = ["Старт", "Запреты", "Чек-листы", "Поддержка документации"];
-
-  // CLAUDE.md загружается в контекст каждой сессии Claude Code, поэтому держим
-  // его в пределах ~30k. Старт и Запреты — safety-critical, инлайним полностью.
-  // Чек-листы и docs-maintenance ситуативны (релевантны только когда дошёл до
-  // соответствующей области / закрываешь substantial-задачу) — оставляем
-  // pointer'ы; полный текст есть в AGENTS.md и в docs-site/.
-  const checklistsPointer = [
-    "Чек-листы построены по областям («я правил Eden / Delphi / shell / ARK runtime / тесты / ...»).",
-    "Прочитай соответствующий раздел в `docs-site/agents/checklists.md` **до того как сказать «готово»**",
-    "по области, которую трогал. Общий финальный чек-лист — там же, в конце страницы.",
-    "",
-    "Полный текст также инлайнен в корневой `AGENTS.md`.",
-  ].join("\n");
-
-  const docsMaintenancePointer = [
-    "Документация обновляется в **той же** задаче, что и код. Источник правды — `docs-site/`.",
-    "После любой substantial-правки публичного поведения / API / структуры:",
-    "",
-    "1. Правишь страницы под `docs-site/` (не сгенерированные `AGENTS.md` / `CLAUDE.md` — они затрутся).",
-    "2. `bun run docs:sync` — регенерация `AGENTS.md`, `CLAUDE.md`, per-area `AGENTS.md`, `llms.txt`.",
-    "3. `bun run docs:check` — проверка, что упомянутые пути / команды / ссылки существуют.",
-    "",
-    "Полная таблица «что изменил → где обновить» и чек-лист закрытия задачи —",
-    "в `docs-site/agents/docs-maintenance.md` (также инлайнено в корневой `AGENTS.md`).",
-  ].join("\n");
-
-  await write(
-    "CLAUDE.md",
-    claudeHeader +
-      "\n" +
-      toc(claudeLabels) +
-      "---\n\n" +
-      joinBlocks(
-        block("Старт", rewriteLinks(agentIndex)),
-        block("Запреты", rewriteLinks(forbidden)),
-        block("Чек-листы", checklistsPointer),
-        block("Поддержка документации", docsMaintenancePointer),
-      ),
-  );
+  await write("CLAUDE.md", claudeHeader + "\n" + rewriteLinks(stripFrontmatter(claudeCore)).trim() + "\n");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
