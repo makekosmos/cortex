@@ -145,16 +145,13 @@ Kosmos — местo, которое унифицирует хранение в�
 
 .manual-hero-image {
   margin: 28px 0;
-  border: 1px solid var(--kosmos-border);
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--kosmos-sidebar-surface);
 }
 
 .manual-hero-image img {
   display: block;
   width: 100%;
   height: auto;
+  border-radius: 14px;
 }
 
 .manual-info-box {
