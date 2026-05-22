@@ -61,6 +61,7 @@ export default defineConfig({
     siteTitle: "Kosmos",
 
     nav: [
+      { text: "Мануал", link: "/manual/" },
       { text: "Что нового", link: "/whats-new/" },
       { text: "Старт", link: "/guide/getting-started" },
       { text: "Концепты", link: "/concepts/architecture" },
@@ -71,6 +72,31 @@ export default defineConfig({
     ],
 
     sidebar: {
+      "/manual/": [
+        {
+          text: "Начало",
+          items: [
+            { text: "Основы", link: "/manual/basics" },
+          ],
+        },
+        {
+          text: "Core features",
+          items: [
+            { text: "Обзор", link: "/manual/core-features/" },
+            { text: "Запуск приложений", link: "/manual/core-features/app-launcher" },
+          ],
+        },
+        {
+          text: "Встроенные расширения",
+          items: [
+            { text: "Обзор", link: "/manual/extensions/" },
+            { text: "Eden — заметки", link: "/manual/extensions/eden" },
+            { text: "Delphi — задачи", link: "/manual/extensions/delphi" },
+            { text: "Horologion — время", link: "/manual/extensions/horologion" },
+            { text: "Arrancador — игры", link: "/manual/extensions/arrancador" },
+          ],
+        },
+      ],
       "/whats-new/": [
         {
           text: "Что нового",

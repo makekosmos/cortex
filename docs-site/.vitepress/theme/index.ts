@@ -1,6 +1,7 @@
 import DefaultTheme from "vitepress/theme";
 import { nextTick, onMounted, watch } from "vue";
 import { useRoute } from "vitepress";
+import Layout from "./Layout.vue";
 import "./custom.css";
 
 /*
@@ -117,6 +118,7 @@ function schedule(fn: () => void) {
 
 export default {
   extends: DefaultTheme,
+  Layout,
   setup() {
     const route = useRoute();
     const run = async () => {
