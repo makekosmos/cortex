@@ -72,19 +72,20 @@
   --kosmos-muted-fg: oklch(0.708 0 0);
   --kosmos-border: oklch(0.23 0.00004 271);
   --kosmos-ring: oklch(0.53 0 0);
-  --kosmos-sidebar-bg: oklch(0.15 0 0);
+  /* Sidebar и navbar — тот же цвет, что и main content, чтобы вся поверхность была flat */
+  --kosmos-sidebar-bg: var(--kosmos-bg);
   --kosmos-sidebar-surface: oklch(0.32 0 0);
 
   --vp-c-bg: var(--kosmos-bg);
-  --vp-c-bg-alt: oklch(0.205 0 0);
-  --vp-c-bg-elv: oklch(0.205 0 0);
+  --vp-c-bg-alt: var(--kosmos-bg);
+  --vp-c-bg-elv: var(--kosmos-bg);
   --vp-c-bg-soft: var(--kosmos-bg-soft);
   --vp-c-text-1: var(--kosmos-fg);
   --vp-c-text-2: oklch(0.78 0 0);
   --vp-c-text-3: var(--kosmos-muted-fg);
   --vp-c-divider: var(--kosmos-border);
   --vp-c-border: var(--kosmos-border);
-  --vp-c-gutter: var(--kosmos-sidebar-bg);
+  --vp-c-gutter: var(--kosmos-bg);
 
   --vp-c-default-1: oklch(0.269 0 0);
   --vp-c-default-2: oklch(0.31 0 0);
@@ -131,6 +132,22 @@ body {
   background: var(--kosmos-sidebar-bg) !important;
   border-right: 1px solid var(--kosmos-border);
   padding-top: 12px;
+  /* Прижимаем содержимое sidebar'а к левому краю — дефолтный VitePress
+   * имеет 32px справа/слева. Оставляем минимальный padding для воздуха. */
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+}
+
+.VPSidebar .VPSidebarItem .item,
+.VPSidebar .VPSidebarItem .link {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Kosmos логотип в navbar — тоже к левому краю */
+.VPNavBar .title,
+.VPNavBar.has-sidebar .title {
+  padding-left: 14px !important;
 }
 
 /* Уберём VitePress'овский «curtain» градиент сверху сайдбара */
