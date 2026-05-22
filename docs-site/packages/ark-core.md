@@ -16,31 +16,35 @@
 ## Архитектура
 
 ```text
-packages/ark-core/rust/src/
+crates/ark-core/rust/src/
   main.rs              # stdin/stdout JSON-RPC sidecar для Electron callers
   ffi.rs               # UniFFI facade для Android / Swift / embedded callers
   lib.rs               # library entry point, public re-exports
   types.rs             # shared entities и sync payloads
   schema.rs            # CREATE TABLE / index statements
   db.rs                # SQLite CRUD, миграции, sync entity loading
+  events.rs            # event bus для cross-module нотификаций
   hlc.rs               # Hybrid Logical Clock helpers
   protocol.rs          # sync wire messages и батчинг
   sync_server.rs       # WebSocket sync server
   sync_client.rs       # WebSocket sync client
   beacon.rs            # UDP peer discovery
   relay_transport.rs   # outbound relay client
+  relay_sync.rs        # relay bridge поверх sync
   mesh.rs              # LAN + relay coordination
   host.rs / net.rs     # hostname + routable address filtering
   space.rs             # пространство данных
+  delphi/              # Delphi-specific runtime extensions
+  pomodoro/            # pomodoro engine модуль
 ```
 
 ## Сборка и тесты
 
 ```powershell
-cargo build --manifest-path packages/ark-core/rust/Cargo.toml --bin ark-core-rpc
-cargo test  --manifest-path packages/ark-core/rust/Cargo.toml
-bun run --cwd packages/kosmos-ark typecheck
-bun run --cwd packages/kosmos-ark build
+cargo build --manifest-path crates/ark-core/rust/Cargo.toml --bin ark-core-rpc
+cargo test  --manifest-path crates/ark-core/rust/Cargo.toml
+bun run --cwd packages/ark typecheck
+bun run --cwd packages/ark build
 ```
 
 ## Sidecar контракт

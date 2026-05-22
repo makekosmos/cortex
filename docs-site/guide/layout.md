@@ -7,14 +7,13 @@ kepler/
 ├─ shell/                  # ⭐ Kepler Electron host (npm: kepler-shell)
 ├─ extensions/             # Vue-extensions внутри Kepler shell
 │  ├─ arrancador/          # игровая библиотека
-│  ├─ dashboard/           # read-only аналитика ARK
 │  ├─ delphi/              # задачи
+│  ├─ eden/                # заметки (TipTap)
 │  └─ horologion/          # трекер времени + pomodoro
-├─ apps/                   # Standalone Electron-приложения
-│  └─ eden/                # Vue 3.6 + Electron — заметки (до Phase 6)
+├─ apps/                   # Зарезервировано (на 2026-05 пусто, только README.md)
 ├─ crates/                 # Rust crates
 │  └─ ark-core/            # ⭐ Rust runtime + ark-core-rpc sidecar
-├─ packages/               # TS пакеты (npm scope @kepler/*)
+├─ packages/               # TS пакеты (npm scope @kosmos/*)
 │  ├─ ark/                 # ⭐ @kosmos/ark — канонический TS SDK
 │  └─ visuals/             # @kosmos/visuals — UI-токены, тема, компоненты
 ├─ services/               # Долгоживущие Rust-сервисы
@@ -46,7 +45,6 @@ kepler/
   "shell",
   "extensions/*",
   "apps/*",
-  "apps/eden/ts",
   "mobile/*",
   "services/*",
   "packages/*",
@@ -113,17 +111,6 @@ extensions/<id>/
 └─ src/                       # Vue 3 SPA с memory router'ом
 ```
 
-### Eden (заметки) — standalone
-
-```text
-apps/eden/ts/
-├─ src/                       # Vue 3.6 Vapor UI
-├─ main/                      # Electron main
-├─ heart/                     # Rust + Tantivy search sidecar
-├─ tests/                     # Playwright E2E
-└─ electron-builder.json5
-```
-
 ## Иконки приложений
 
 Стандарт для standalone Electron-приложений Kosmos (Eden и сам Kepler shell):
@@ -181,7 +168,7 @@ apps/eden/ts/
 | Новый метод в TS SDK                            | `packages/ark/src/ark-client.ts`                             |
 | UI-компонент, переиспользуемый в 2+ приложениях | `packages/visuals/components/`                               |
 | Локальная фича одного extension'а               | внутри `extensions/<id>/src/`                                |
-| Локальная фича Eden                             | внутри `apps/eden/ts/`                                       |
+| Локальная фича Eden                             | внутри `extensions/eden/src/`                                |
 | Новый extension                                 | новая директория `extensions/<id>/` с `manifest.json`        |
 | Концепт / архитектурное решение                 | `docs/` (источник правды) + страница в `docs-site/concepts/` |
 | Артефакты proof-loop задачи                     | `.agent/tasks/<DATE>-<slug>/`                                |

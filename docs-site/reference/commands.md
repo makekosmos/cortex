@@ -49,6 +49,14 @@ bun run docs:sync                # регенерация AGENTS.md / CLAUDE.md 
 bun run docs:check               # верификация stale references в docs-site/
 bun run docs:build               # docs:sync + статическая сборка
 bun run docs:preview             # превью собранного
+
+bun run lint                     # oxlint по всему репо
+bun run format                   # oxfmt — переформатировать
+bun run format:check             # oxfmt --check (CI guard)
+
+bun run test:e2e                 # Playwright (root config, общие e2e наборы)
+bun run test:e2e:headed          # то же, с видимым окном (DEBUG only)
+bun run test:e2e:debug           # Playwright --debug (инспектор)
 ```
 
 ## ARK runtime
@@ -78,10 +86,18 @@ bun run build              # full production chain:
                             #   3. vite build per extension × 4 (Dashboard / Horologion / Delphi / Arrancador)
                             #   4. electron-builder --win nsis (one-click installer)
 bun run package:dir        # unpacked desktop bundle
-bun run test:e2e           # Playwright smoke
+bun run test:e2e           # Playwright smoke (билдит JS перед прогоном)
+bun run test:e2e:headed    # то же, с видимым окном
 bun run ext:install <path> # положить extension override в %APPDATA%\Kosmos\extensions\
-bun run ext:uninstall <id>
+bun run ext:uninstall <id> # удалить extension override
+bun run ext:publish <id>   # опубликовать .kext extension в kepler-releases (GitHub)
+bun run ext:publish-all    # ext:publish для всех extension'ов подряд
+bun run ext:catalog        # пересобрать catalog.json со списком published extension'ов
 ```
+
+::: tip
+Все `ext:*` команды живут в `shell/package.json` — запускай их из `shell/` (`cd shell` или `bun run --cwd shell ext:publish <id>`).
+:::
 
 Output финального билда:
 

@@ -51,7 +51,7 @@ bun run --cwd shell test:e2e
 bun run --cwd shell build:extensions
 bun run --cwd shell typecheck
 # Eden-specific e2e (Phase 6.0.5+): tests/e2e/eden.spec.ts
-bunx playwright test --config playwright.config.ts --grep "eden"
+cd shell; bunx playwright test --config playwright.config.ts --grep "eden"
 ```
 
 Phase 6.0.A удалил standalone Eden; ARK migration smoke больше не нужен — все writes идут через `kepler-api-shim` поверх ARK (которые покрыты `ark:guard:writes` + cargo tests).

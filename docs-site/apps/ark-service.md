@@ -47,7 +47,7 @@ flowchart LR
 ## Сборка
 
 ```powershell
-cd apps/ark-service
+cd mobile/ark-service
 .\gradlew build
 ```
 

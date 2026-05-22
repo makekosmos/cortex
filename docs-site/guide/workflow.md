@@ -40,7 +40,7 @@
 ## Когда нужно
 
 - ✅ Перед PR в data-слой — `bun run ark:guard:writes`.
-- ✅ Перед PR в любую часть ARK — `cargo test` + `bun run --cwd packages/kosmos-ark typecheck`.
+- ✅ Перед PR в любую часть ARK — `cargo test` + `bun run --cwd packages/ark typecheck`.
 - ✅ Перед PR в Electron-приложение — `bun run typecheck`, `bun run build`, `bun run test:e2e`.
 - ✅ Все новые тестовые БД — изолированные. Передавай путь через CLI/env, не дефолти в user data.
 - ✅ Если меняешь endpoint в `ark-core-rpc` — добавь тест миграции и репликации, не только локальный CRUD.
