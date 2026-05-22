@@ -129,6 +129,11 @@ const api: KeplerApi = {
       get: () => ipcRenderer.invoke("kepler:settings:usage-tracker:get"),
       set: (enabled) => ipcRenderer.invoke("kepler:settings:usage-tracker:set", enabled),
     },
+    launcherStateTtl: {
+      get: () => ipcRenderer.invoke("kepler:settings:launcher-state-ttl:get"),
+      set: (minutes: number) =>
+        ipcRenderer.invoke("kepler:settings:launcher-state-ttl:set", minutes),
+    },
     version: () => ipcRenderer.invoke("kepler:settings:version"),
     hotkey: () => ipcRenderer.invoke("kepler:settings:hotkey"),
     hotkeySet: (value) => ipcRenderer.invoke("kepler:settings:hotkey:set", value),

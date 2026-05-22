@@ -327,6 +327,12 @@ export interface KeplerApi {
       get(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
+    /** Сколько минут хранить позицию в лаунчере (query / selection / scroll)
+        между открытиями. 0 = всегда ресетить. Default 5. */
+    launcherStateTtl: {
+      get(): Promise<number>;
+      set(minutes: number): Promise<void>;
+    };
     /** Версия Kepler из app.getVersion(). */
     version(): Promise<string>;
     /** Текущий глобальный хоткей. По умолчанию `Alt+Space`. */

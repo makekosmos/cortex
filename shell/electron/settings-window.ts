@@ -34,6 +34,9 @@ interface KeplerShellSettings {
       пользователь явно нажимает «Установить» в Settings → Фокус.
       Сбрасывается через Settings UI. */
   focusServiceAutoInstallDeclined?: boolean;
+  /** Сколько минут хранить позицию в лаунчере (query / selection / scroll)
+      между открытиями. 0 = всегда ресетим. Default 5. */
+  launcherStateTtlMinutes?: number;
 }
 
 export function isFocusServiceAutoInstallDeclined(): boolean {
@@ -258,3 +261,26 @@ ipcMain.handle("kepler:settings:usage-tracker:get", () => isUsageTrackerEnabled(
 ipcMain.handle("kepler:settings:usage-tracker:set", (_e, enabled: boolean) => {
   writeSettings({ usageTrackerEnabled: !!enabled });
 });
+
+const DEFAULT_LAUNCHER_STATE_TTL_MIN = 5;
+export function getLauncherStateTtlMinutes(): number {
+  const v = readSettings().launcherStateTtlMinutes;
+  if (typeof v !== "number" || Number.isNaN(v) || v < 0) {
+    return DEFAULT_LAUNCHER_STATE_TTL_MIN;
+  }
+  return Math.floor(v);
+}
+
+ipcMain.handle("kepler:settings:launcher-state-ttl:get", () =>
+  getLauncherStateTtlMinutes(),
+);
+
+ipcMain.handle(
+  "kepler:settings:launcher-state-ttl:set",
+  (_e, minutes: number) => {
+    const n = Number(minutes);
+    if (Number.isFinite(n) && n >= 0) {
+      writeSettings({ launcherStateTtlMinutes: Math.floor(n) });
+    }
+  },
+);

@@ -140,6 +140,7 @@ const autostart = ref<boolean>(false);
 const autostartAllowed = ref<boolean>(true);
 const developerMode = ref<boolean>(false);
 const usageTracker = ref<boolean>(true);
+const launcherStateTtl = ref<number>(5);
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
 const loading = ref<boolean>(true);
 const autostartError = ref<string>("");
@@ -147,13 +148,14 @@ const autostartError = ref<string>("");
 async function loadGeneral() {
   loading.value = true;
   try {
-    const [h, v, a, aAllowed, d, u, b] = await Promise.all([
+    const [h, v, a, aAllowed, d, u, ttl, b] = await Promise.all([
       window.kepler.settings.hotkey(),
       window.kepler.settings.version(),
       window.kepler.settings.autostart.get(),
       window.kepler.settings.autostart.allowed(),
       window.kepler.settings.developerMode.get(),
       window.kepler.settings.usageTracker.get(),
+      window.kepler.settings.launcherStateTtl.get(),
       window.kepler.backend.status(),
     ]);
     hotkey.value = h;
@@ -162,6 +164,7 @@ async function loadGeneral() {
     autostartAllowed.value = aAllowed;
     developerMode.value = d;
     usageTracker.value = u;
+    launcherStateTtl.value = ttl;
     backend.value = b;
   } catch (e) {
     console.warn("settings load failed", e);
@@ -208,6 +211,19 @@ async function onToggleUsageTracker(e: Event) {
   } catch (err) {
     console.warn("usageTracker set failed", err);
     usageTracker.value = await window.kepler.settings.usageTracker.get();
+  }
+}
+
+async function onLauncherStateTtlChange(e: Event) {
+  const target = e.target as HTMLInputElement;
+  const minutes = Number(target.value);
+  if (!Number.isFinite(minutes) || minutes < 0) return;
+  try {
+    await window.kepler.settings.launcherStateTtl.set(minutes);
+    launcherStateTtl.value = await window.kepler.settings.launcherStateTtl.get();
+  } catch (err) {
+    console.warn("launcherStateTtl set failed", err);
+    launcherStateTtl.value = await window.kepler.settings.launcherStateTtl.get();
   }
 }
 
@@ -1130,6 +1146,28 @@ onBeforeUnmount(() => {
 
         <div class="row">
           <div class="row-label">
+            <div class="label">Запоминать позицию в лаунчере</div>
+            <div class="hint">
+              Сохраняет введённый текст, выбранный пункт и прокрутку между открытиями
+              лаунчера. По истечении указанного времени — сбрасывает.
+              <code>0</code> — всегда ресетить при открытии.
+            </div>
+          </div>
+          <label class="ttl-input">
+            <input
+              type="number"
+              min="0"
+              max="1440"
+              step="1"
+              :value="launcherStateTtl"
+              @change="onLauncherStateTtlChange"
+            />
+            <span>мин</span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
             <div class="label">Backend</div>
             <div class="hint">kepler-backend подпроцесс</div>
           </div>
@@ -1859,6 +1897,30 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.ttl-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: var(--kosmos-muted-fg);
+  font-size: 13px;
+}
+.ttl-input input {
+  width: 64px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--kosmos-fg);
+  background: var(--vp-c-bg-soft, var(--kosmos-sidebar-surface));
+  border: 1px solid var(--kosmos-border);
+  border-radius: 6px;
+  text-align: right;
+}
+.ttl-input input:focus {
+  outline: none;
+  border-color: var(--vp-c-brand-1, var(--kosmos-fg));
 }
 
 .toggle {

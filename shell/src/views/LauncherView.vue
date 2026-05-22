@@ -164,6 +164,59 @@ const filtered = computed<CommandRecord[]>(() => {
 const RECENTS_KEY = "kepler.launcher.recents";
 const RECENTS_LIMIT = 5;
 
+// --- State restore (TTL-bound) ---------------------------------------------
+// Сохраняем последние { query, selectedIndex, scrollTop, savedAt } в
+// localStorage. При показе launcher'а — если прошло меньше TTL минут,
+// восстанавливаем. Иначе сбрасываем. TTL настраивается в Settings →
+// kepler-shell-settings.json::launcherStateTtlMinutes (default 5).
+const STATE_KEY = "kepler.launcher.state";
+interface PersistedLauncherState {
+  query: string;
+  selectedIndex: number;
+  scrollTop: number;
+  savedAt: number; // ms since epoch
+}
+const launcherStateTtlMs = ref<number>(5 * 60 * 1000);
+
+function loadPersistedState(): PersistedLauncherState | null {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedLauncherState;
+    if (
+      typeof parsed.query !== "string" ||
+      typeof parsed.selectedIndex !== "number" ||
+      typeof parsed.scrollTop !== "number" ||
+      typeof parsed.savedAt !== "number"
+    )
+      return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedState() {
+  if (typeof window === "undefined") return;
+  try {
+    const state: PersistedLauncherState = {
+      query: query.value,
+      selectedIndex: selectedIndex.value,
+      scrollTop: listRef.value?.scrollTop ?? 0,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  } catch {
+    /* storage quota / disabled — ignore */
+  }
+}
+
+let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleSaveState() {
+  if (saveStateTimer) clearTimeout(saveStateTimer);
+  saveStateTimer = setTimeout(savePersistedState, 200);
+}
+
 function loadRecents(): string[] {
   try {
     const raw = localStorage.getItem(RECENTS_KEY);
@@ -261,6 +314,11 @@ const groupedNoQuery = computed(() => {
 
 function onInput() {
   selectedIndex.value = 0;
+  scheduleSaveState();
+}
+
+function onListScroll() {
+  scheduleSaveState();
 }
 
 // Шаблон уважает «виртуальный» banner-item впереди: selectedIndex 0 — это
@@ -316,6 +374,13 @@ async function invokeSelected() {
   }
   query.value = "";
   selectedIndex.value = 0;
+  // После успешного invoke — стираем persisted state, чтобы следующий
+  // открытый launcher не восстанавливал старый query.
+  try {
+    localStorage.removeItem(STATE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 const SCROLL_EDGE_PADDING = 8;
@@ -327,6 +392,7 @@ function moveSelection(delta: number) {
   const next = prevIdx + delta;
   // Clamp без wrap — упереться в границы.
   selectedIndex.value = Math.max(0, Math.min(n - 1, next));
+  scheduleSaveState();
   const direction: "up" | "down" = selectedIndex.value < prevIdx ? "up" : "down";
   void nextTick(() => {
     const list = listRef.value;
@@ -400,15 +466,27 @@ let offCommandsUpdated = () => {};
 
 onMounted(async () => {
   offShow = window.kepler.window.onShow(() => {
-    query.value = "";
-    selectedIndex.value = 0;
+    // Восстанавливаем state если прошло меньше TTL с последнего сохранения.
+    // Иначе ресетим query / selection / scroll.
+    const persisted = loadPersistedState();
+    const fresh =
+      persisted &&
+      launcherStateTtlMs.value > 0 &&
+      Date.now() - persisted.savedAt <= launcherStateTtlMs.value;
+    if (fresh && persisted) {
+      query.value = persisted.query;
+      selectedIndex.value = persisted.selectedIndex;
+    } else {
+      query.value = "";
+      selectedIndex.value = 0;
+    }
     void refreshCommands();
     void nextTick(() => {
       inputRef.value?.focus();
-      // Сброс прокрутки — иначе при следующем открытии launcher остаётся
-      // на позиции скролла прошлого открытия, и selection нулевой строки
-      // не виден в viewport.
-      if (listRef.value) listRef.value.scrollTop = 0;
+      inputRef.value?.select();
+      if (listRef.value) {
+        listRef.value.scrollTop = fresh && persisted ? persisted.scrollTop : 0;
+      }
     });
   });
   offCommandsUpdated = window.kepler.commands.onUpdated(() => {
@@ -425,6 +503,13 @@ onMounted(async () => {
   unsubPostUpdate = window.kepler.postUpdate.onShown((payload) => {
     postUpdateVersion.value = payload.version;
   });
+  // TTL для restore (минуты → мс). Если settings API недоступен — default 5 мин.
+  try {
+    const minutes = await window.kepler.settings.launcherStateTtl.get();
+    launcherStateTtlMs.value = Math.max(0, minutes) * 60 * 1000;
+  } catch {
+    /* ignore */
+  }
   void refreshCommands();
   void nextTick(() => inputRef.value?.focus());
 });
@@ -451,7 +536,7 @@ onUnmounted(() => {
       autocapitalize="off"
       @input="onInput"
     />
-    <div ref="listRef" class="list kosmos-scroll">
+    <div ref="listRef" class="list kosmos-scroll" @scroll="onListScroll">
       <template v-if="postUpdateVersion">
         <div class="section-label">Готово</div>
         <ul class="results">
