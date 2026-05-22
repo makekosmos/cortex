@@ -145,6 +145,7 @@ export default defineConfig({
           text: "Концепты",
           items: [
             { text: "Архитектура", link: "/concepts/architecture" },
+            { text: "App Index", link: "/concepts/app-index" },
             { text: "Модель данных ARK", link: "/concepts/ark-objects" },
             { text: "Синхронизация", link: "/concepts/sync" },
             { text: "Граница записи в ARK", link: "/concepts/write-boundary" },
