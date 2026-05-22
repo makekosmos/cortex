@@ -667,8 +667,11 @@ body[data-kosmos-mode="user"] {
   --vp-layout-max-width: 1440px;
 }
 
+body[data-kosmos-mode="user"] .VPContent,
 body[data-kosmos-mode="user"] .VPContent.has-sidebar {
   padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-right: 0 !important;
 }
 
 /* Контент: max-width = 100% страницы минус sidebar минус TOC.
