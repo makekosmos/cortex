@@ -79,7 +79,10 @@ import {
 } from "./settings-window";
 import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
-import "./focus-widget";
+import {
+  setupFocusWidgetBackendSync,
+  teardownFocusWidgetBackendSync,
+} from "./focus-widget";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
 import {
@@ -679,10 +682,11 @@ async function resetArkClient(reason: string): Promise<void> {
   arkClient = null;
   setExtensionArkBridge({ request: null, subscribe: null });
   if (wasConnected) broadcastBackendEvent("kepler:backend:disconnected");
-  // pomodoro-notifier держит ref на старый arkClient через onArkEvent callback —
-  // отписываем до stop(), иначе при следующем setupPomodoroNotifier останется
-  // double-subscribe на новый клиент.
+  // pomodoro-notifier + focus-widget держат ref на старый arkClient через
+  // onArkEvent callback'и — отписываем до stop(), иначе при следующем setup
+  // останется double-subscribe на новый клиент.
   teardownPomodoroNotifier();
+  teardownFocusWidgetBackendSync();
   if (prev) {
     try {
       await prev.stop();
@@ -762,6 +766,11 @@ async function initArkClient(): Promise<void> {
       setupPomodoroNotifier({ arkClient: client });
     } catch (e) {
       keplerLog.error("pomodoro-notifier", "setup failed", { err: String(e) });
+    }
+    try {
+      setupFocusWidgetBackendSync({ arkClient: client });
+    } catch (e) {
+      keplerLog.error("focus-widget", "backend sync setup failed", { err: String(e) });
     }
     // Bridge для Vue-extensions: extension-host прокидывает renderer-запросы
     // сюда через IPC. invokeOperation — public escape-hatch для generic RPC,

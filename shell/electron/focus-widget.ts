@@ -13,6 +13,7 @@
 //     чтобы reopen был мгновенным.
 
 import { BrowserWindow, ipcMain, screen, app } from "electron";
+import type { ArkClient } from "@kosmos/ark";
 import { openExtension } from "./extension-host";
 import { awaitArkReady } from "./main";
 import path from "node:path";
@@ -151,7 +152,11 @@ function createWidgetWindow(): BrowserWindow {
     transparent: true,
     backgroundColor: "#00000000",
     roundedCorners: true,
-    focusable: false, // не воровать фокус когда показывается
+    // focusable: true (default). Раньше было false («не воровать фокус
+    // когда показывается»), но на Win32 non-focusable окно не получает
+    // WM_NCLBUTTONDOWN для драга → `-webkit-app-region: drag` молча не
+    // работал. Show-без-кражи-фокуса всё равно обеспечивается `showInactive()`
+    // — окно появляется, фокус остаётся на текущем приложении пользователя.
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
@@ -403,9 +408,117 @@ ipcMain.handle("kepler:focus-widget:stopwatch:stop", async () => {
   await stopManualStopwatch();
 });
 
+// --- Backend pomodoro events subscription ----------------------------------
+//
+// До 2026-05-22 focus widget состояние обновлялось ИСКЛЮЧИТЕЛЬНО через
+// `kepler:focus-widget:set-state` push из renderer'а Horologion. Если юзер
+// стартанул помодоро через launcher команду (`pomodoro:25`), окно Horologion
+// не открывается → renderer не работает → widget никогда не появляется.
+//
+// Решение: main process подписывается напрямую на backend pomodoro events
+// (как `pomodoro-notifier`), деривит focus state и зовёт `setFocusState`.
+// Renderer push остаётся source of truth когда horologion открыт (его state
+// содержит pomodoroDraft.title и live blockingActive из focusBlocklistId
+// settings, которые backend не знает).
+//
+// Idempotent: повторные set с тем же контентом перезатирают, дешёво.
+
+type BackendPhase = "idle" | "work" | "shortBreak" | "longBreak";
+
+interface PomodoroEventState {
+  phase?: BackendPhase;
+  remainingMs?: number;
+  totalMs?: number;
+  isRunning?: boolean;
+  isPaused?: boolean;
+  phaseEndsAtMs?: number | null;
+  title?: string;
+  tasks?: Array<{ id?: string; title?: string }>;
+}
+
+function deriveFocusStateFromBackend(raw: PomodoroEventState): Partial<FocusState> {
+  const phase = (raw.phase ?? "idle") as BackendPhase;
+  const isRunning = raw.isRunning === true;
+  const isPaused = raw.isPaused === true;
+  const active = isRunning && !isPaused && phase !== "idle";
+
+  // Pause state — widget остаётся видим (active), просто показывает Play.
+  const widgetActive = isRunning && phase !== "idle";
+
+  const mode: FocusState["mode"] = phase === "work" ? "work" : "break";
+  const remainingSec = Math.max(0, Math.ceil((raw.remainingMs ?? 0) / 1000));
+
+  const title = (raw.title ?? "").trim();
+  const firstTask = raw.tasks?.[0];
+  const label = title || firstTask?.title || (mode === "work" ? "Фокус" : "Перерыв");
+
+  return {
+    active: widgetActive,
+    remainingSec,
+    label,
+    mode,
+    isPaused,
+    // backend не знает про focus blocklist — оставляем как есть. Renderer
+    // обновит при следующем push'е если horologion открыт.
+    phaseEndsAtMs: active ? (raw.phaseEndsAtMs ?? null) : null,
+  };
+}
+
+let backendEventsUnsubscribe: (() => void) | null = null;
+
+export function setupFocusWidgetBackendSync(opts: { arkClient: ArkClient }): void {
+  if (backendEventsUnsubscribe) {
+    try {
+      backendEventsUnsubscribe();
+    } catch (e) {
+      console.error("[focus-widget] previous unsubscribe failed:", e);
+    }
+    backendEventsUnsubscribe = null;
+  }
+  backendEventsUnsubscribe = opts.arkClient.onArkEvent((e) => {
+    if (
+      e.event !== "pomodoro_tick" &&
+      e.event !== "pomodoro_phase_changed" &&
+      e.event !== "pomodoro_finished"
+    ) {
+      return;
+    }
+    const raw = e as unknown as PomodoroEventState;
+    const patch = deriveFocusStateFromBackend(raw);
+    setFocusState(patch);
+  });
+
+  // Hydrate widget при первом subscribe — backend мог восстановить running
+  // session из persisted snapshot до того как мы успели подписаться.
+  void opts.arkClient
+    .invokeOperation({ operation: "pomodoro.get_state" } as { operation: string })
+    .then((s) => {
+      if (s && typeof s === "object") {
+        setFocusState(deriveFocusStateFromBackend(s as PomodoroEventState));
+      }
+    })
+    .catch((err) => {
+      console.warn("[focus-widget] initial pomodoro.get_state failed:", err);
+    });
+
+  console.log("[focus-widget] subscribed to backend pomodoro events");
+}
+
+export function teardownFocusWidgetBackendSync(): void {
+  if (backendEventsUnsubscribe) {
+    try {
+      backendEventsUnsubscribe();
+    } catch (e) {
+      console.error("[focus-widget] teardown unsubscribe failed:", e);
+    }
+    backendEventsUnsubscribe = null;
+  }
+}
+
 // Cleanup on app quit.
 app.on("before-quit", () => {
   clearTickTimer();
+  teardownFocusWidgetBackendSync();
   if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.destroy();
     widgetWindow = null;

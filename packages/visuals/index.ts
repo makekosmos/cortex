@@ -40,6 +40,7 @@ export {
   TimeColumn,
   DateTimePicker,
   Dropdown,
+  IconButton,
   Toggle,
   Checkbox,
   SettingsRow,
