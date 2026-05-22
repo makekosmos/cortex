@@ -51,10 +51,10 @@ pre-push:
   commands:
     test-ark-core:
       glob: "crates/ark-core/rust/**/*.rs"
-      run: cd crates/ark-core/rust && cargo nextest run --quiet
+      run: cd crates/ark-core/rust && cargo nextest run
     test-kepler-backend:
       glob: "services/kepler-backend/src/**/*.rs"
-      run: cd services/kepler-backend && cargo nextest run --lib --quiet
+      run: cd services/kepler-backend && cargo nextest run --lib
     # Hygiene: orphan deps в Cargo workspace. Fail если найдены unused —
     # автор должен либо удалить (cargo shear --fix), либо добавить в
     # ignore-list если deps нужны для feature-flag'а / build-script'а.

@@ -50,8 +50,6 @@ lnk = "0.5"
 notify = "6"
 # App Index: рекурсивный walk Start Menu directories.
 walkdir = "2"
-# App Index: extract .ico → PNG. (sha2 уже выше для usage_tracker.)
-ico = "0.3"
 image = { version = "0.25", default-features = false, features = ["png"] }
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
