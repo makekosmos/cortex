@@ -8,6 +8,22 @@ description: Rich-text заметки с wikilink, задачами и Anytype-s
 Редактор заметок на TipTap. Каждая заметка — объект в ARK, доступный
 другим расширениям.
 
+<div class="manual-figure">
+  <img src="/manual/eden.png" alt="Eden — редактор заметок" />
+</div>
+
+<style scoped>
+.manual-figure {
+  margin: 28px 0;
+}
+.manual-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+}
+</style>
+
 ## Что умеет
 
 - **Rich text** — заголовки, списки, чек-боксы, цитаты, code blocks
@@ -22,5 +38,3 @@ description: Rich-text заметки с wikilink, задачами и Anytype-s
 
 - Поисковик → `eden`
 - Команда `note: создать` — сразу новая заметка
-
-> 🚧 Скриншоты редактора и GIF wikilink-навигации скоро.
