@@ -61,7 +61,7 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 - **Horologion**: `horologion:pomodoro:25`, `horologion:pomodoro:50`, `horologion:stopwatch:start`. Main → IPC `horologion:cmd` → renderer вызывает `pomodoro.start({ workMinOverride })` или `timeEntries.startTimer`. `usePomodoro` поддерживает `workMinOverride` для per-session override без мутации persistent settings.
 - **Delphi**: `delphi:task:create` (открывает QuickEntry) и `delphi:task:today` (router.push '/today'). `SidecarClient.onCommand` listener + `focusMainWindow` перед dispatch.
-- **Eden**: `eden:note:create` (новая заметка), `eden:search` (overlay поиска через FTS5).
+- **Eden**: `eden:note:create` (новая заметка), `eden:note:open-today` (открыть/создать сегодняшний journal entry). Поиск — внутри Eden (Ctrl+K в окне), отдельной команды `eden:search` нет.
 
 Дополнительно:
 
@@ -85,7 +85,7 @@ RAM-эффект Phase 4 — −124 MB Working Set / −209 MB Private Bytes / �
 
 После основной миграции Phase 4 добавлены доводки, считаются частью Phase 4:
 
-- **App icons в launcher** — каждое open-command (Dashboard / Horologion / Delphi / Arrancador) показывает иконку extension'а в результатах launcher'а. `extensionIconDataUri(id)` в `extension-host.ts` читает `extensions/<id>/icon.png` и кэширует по **mtime файла** — hot-swap иконки без рестарта Kepler. Eden команда без иконки (legacy, не extension).
+- **App icons в launcher** — каждое open-command extension'а (Eden / Horologion / Delphi / Arrancador) показывает иконку из `extensions/<id>/icon.png`. `extensionIconDataUri(id)` в `extension-host.ts` читает PNG и кэширует по **mtime файла** — hot-swap иконки без рестарта Kepler. После Phase 6.0 Eden уже extension, иконка `extensions/eden/icon.png` участвует в общем механизме.
 - **Crash on close fix** — `BrowserWindow.on("closed", …)` теперь использует captured `wcId` (захваченный **до** регистрации listener'а), а не `win.webContents.id` после destroy. До фикса Kepler падал при закрытии extension-окна.
 - **Status dot в Horologion topbar** — точка статуса подключения к ARK (probe `list_object_types` каждые 10с), визуально совпадает с Delphi extension'ом.
 - **Selected-space DB resolution** — `kepler-shell` main читает `%APPDATA%\Kosmos\selected-space.json` (через `@kosmos/ark` хелперы `readSharedSelectedSpace` / `getArkDbPathForSelectedSpace`) и передаёт `KOSMOS_DB_PATH=<spaceDir>/ark.db` в env при `spawnBackend()`. Backend пишет в выбранный space, а не в дефолтный `%APPDATA%\Kosmos\ark.db`.

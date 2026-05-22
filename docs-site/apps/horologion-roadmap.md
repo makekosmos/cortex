@@ -36,12 +36,16 @@
 - **Real `object_link`** между `time_entry_obj` и `task_obj` (сейчас только `propsJson.taskId`, не настоящая связь ARK).
 - **Reports / charts** — за неделю / месяц, по тегам / задачам.
 - **Импорт из usage-tracker** — предложить time_entry из активного периода с предложением «ты работал тут в Chrome 28 мин, было это «X»?».
-- **Pomodoro state в ark-core-rpc** — перенос state machine в sidecar (Rust), чтобы переживать полный quit Electron'а. Сейчас живёт в Vue renderer — теряется при kill процесса.
 - **Hotkeys** — глобальные клавиши для start/stop, pomodoro skip, и т.д.
 - **Calendar week-strip в EditModal** — добавить возможность типа «вчера / 2 дня назад» вместо месячной навигации.
 - **Soft delete / корзина** — сейчас delete = permanent.
 - **Чип-пикер задачи** в input row (`📁` иконка) — выбор задачи без `@`.
 - **Goo / metaballs соединение** draft input ↔ timer card при активной сессии. Пробовали через SVG-filter — текст в card'ах блёрился из-за `feGaussianBlur`. Для production-quality нужна двухслойная архитектура: background-only-слой с goo + content-слой без filter. Сейчас вместо этого простое соединение: gap → 0 + плавное выпрямление прилегающих углов.
+
+## Сделано
+
+- **Pomodoro state в kepler-backend** (2026-05-22). `services/kepler-backend/src/pomodoro_host.rs` (`PomodoroHost`) держит state machine, эмитит `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus. Horologion-окно можно закрывать — таймер тикает в фоне, focus widget и notifications продолжают работать. Полный quit Kepler shell всё ещё останавливает таймер (sidecar убивается вместе с shell'ом), но это уже корректно: «сегмент закрыт» с правильным `endedAt`.
+- **`keepAliveInBackground` для Horologion-окна** (2026-05-22). Manifest имеет флаг, shell intercept'ит close → hide, renderer переживает закрытие.
 
 ## Баги / замечания
 
