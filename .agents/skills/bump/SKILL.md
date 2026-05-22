@@ -18,29 +18,63 @@ Edit'ить код, чинить баги, обновлять документа
 
 ### 1. Определить target
 
-- Явное имя в команде → используй его (`eden`, `delphi`, `horologion`, `arrancador`, `shell` = kepler-shell).
-- Без имени → смотри последний коммит / уже staged изменения / контекст разговора. Если непонятно — спроси.
+- Явное имя в команде («бамп eden») → используй его (`eden`, `delphi`, `horologion`, `arrancador`, `shell` = kepler-shell).
+- **Без имени** → определи по `git log <last-bump-commit>..HEAD` (последний bump commit обычно `chore: bump ...` или `fix(...) + bump ...`):
+  - Все компоненты у которых есть commits, **трогающие соответствующие папки** (`extensions/<id>/`, `shell/`, `packages/visuals/`) → кандидаты на bump.
+  - Если у компонента **нет user-visible commits** с последнего bump'а (только docs / typecheck / chore-deps / lint) — пропусти его.
+  - Если несколько компонентов → multi-target bump (см. секцию ниже).
+- **Несколько имён** («бамп eden delphi») → multi-target bump.
+- Если непонятно после диагностики — спроси.
+
+### 1a. Pre-bump checks
+
+Перед любым bump'ом — обязательно:
+
+```powershell
+git status --short       # рабочее дерево clean? если нет — закоммить ОТДЕЛЬНО до bump'а
+bun run --cwd shell typecheck
+# для extension-bump'а:
+bun run --cwd shell build:extensions
+```
+
+Если typecheck / build fail — fix первым, потом bump. Bump чтобы «закрыть test-цикл» / «вытолкнуть фикс» — anti-pattern; bump = release для пользователя.
 
 ### 2. Bump patch версии (+0.0.1)
 
 - **Extension** (`extensions/<id>/`):
   - `extensions/<id>/manifest.json` → `"version"`
   - `extensions/<id>/package.json` → `"version"`
-  - Оба должны быть согласованы.
+  - Оба ОБЯЗАНЫ совпадать. Manifest — источник правды для marketplace / autoupdater, package.json — для workspace. После edit'а:
+    ```powershell
+    jq -r '.version' extensions/<id>/manifest.json
+    jq -r '.version' extensions/<id>/package.json
+    # должны вернуть одно и то же
+    ```
 - **kepler-shell** (`shell/`):
-  - `shell/package.json` → `"version"`
-- Patch increment (`0.1.2 → 0.1.3`), не minor/major.
+  - `shell/package.json` → `"version"` — публикуется electron-updater в `latest.yml`, installed Kepler'ы прочтут как «доступно обновление».
+- **`packages/visuals` / `packages/ark`** — НЕ БАМПЯТСЯ. Это workspace internals (`"version": "0.1.0"` зафиксирована), extensions/shell зависят через `workspace:*`. Менять только если будет actual публикация на npm (не сейчас).
+- Patch increment (`0.1.2 → 0.1.3`), не minor/major. Minor — только по явной команде пользователя («бамп eden minor»).
 
 ### 3. Обновить документацию
 
-- `STATUS.md` — если статус приложения изменился (новая фича, фикс заметного бага).
-- `CHANGELOG.md` (корень репо) — технический changelog для разработчиков (Keep a Changelog), если фича/фикс существенный.
+**Обязательно**:
+
+- **`STATUS.md`** (корень) — единственный developer-facing changelog проекта. `CHANGELOG.md` отдельный **не существует** — не создавай его.
+  - Обнови таблицу версий в шапке (Kepler / Eden / Delphi / Horologion / Arrancador).
+  - Добавь раздел с датой bump'а и описанием: `## YYYY-MM-DD — <название итерации> (Kepler X.Y.Z, Eden A.B.C)`.
+  - В тоне «развёрнуто, для следующего агента / разработчика» — технические детали, ссылки на коммиты / спеки.
 - **`docs-site/whats-new/<area>.md`** — **user-facing** changelog. Тон «о, круто», без жаргона типа `IPC` / `manifest.commands[]`. Добавляй карточку **только если фича user-visible** (то что пользователь заметит): новая команда в launcher'е, новый хоткей, изменение UX, исправление заметного бага. Внутренние рефакторы / fix билдов / typecheck — **не** добавляй.
-  - `whats-new/kepler.md` — лаунчер (хоткеи, маркетплейс, focus, обновления, settings).
+  - `whats-new/kepler.md` — лаунчер (хоткеи, маркетплейс, focus widget, обновления, settings).
   - `whats-new/extensions.md` — Eden, Horologion, Delphi, Arrancador (per-app section).
   - Формат карточки: `### Заголовок <Badge type="tip" text="0.1.X" />` + 1-3 коротких абзаца на человеческом языке. Указывай что юзер делает, а не как код работает.
-- `docs-site/apps/<name>.md` или `docs-site/concepts/<name>-*.md` — если поведение/архитектура изменились (это уже для следующих агентов и разработчиков, не для пользователя).
-- После правок в `docs-site/` обязательно `bun run docs:sync` — иначе `AGENTS.md` / `CLAUDE.md` разъедутся.
+
+**Опционально** (если архитектура / поведение реально изменились):
+- `docs-site/apps/<name>.md` — для дев-доки конкретного компонента.
+- `docs-site/concepts/<name>-*.md` — для cross-cutting концептов (extension-host, command-bus, distribution).
+- `docs-site/agents/forbidden.md` — если новая фича вводит инвариант, нарушение которого опасно (например «не выключай `keepAliveInBackground` для Horologion без переноса side-effects в main»).
+
+**После правок в `docs-site/`**:
+- `bun run docs:sync` — регенерация `AGENTS.md` / `CLAUDE.md` / `llms.txt`. Иначе разъедутся.
 - Если документация уже обновлена в предыдущих коммитах текущей сессии — пропусти этот шаг (не дублируй).
 
 ### 4. Commit + push
@@ -108,6 +142,24 @@ gh release create v<version> -R yoso-industries/kepler-releases `
 `latest.yml` **обязательно** прикреплять — autoUpdater старых установок ищет его
 для определения новой версии. Без него обновление не подхватится.
 :::
+
+### 5a. Multi-target bump в одном запросе
+
+Если bump покрывает несколько компонентов (например после смешанной итерации:
+shell + eden + horologion):
+
+- **Версии** правь во всех компонентах одним коммитом: `chore: bump shell 0.2.3→0.2.4, eden 0.1.10→0.1.11, horologion 0.1.5→0.1.6`.
+  - Так делают предыдущие multi-bump коммиты в истории (`94bb480b`, `273eb032`).
+  - Не разбивай на отдельные `chore(eden)` / `chore(shell)` коммиты — это перетасовка из-за которой `git log --oneline` становится шумным, а сами bump'ы атомарно связаны.
+- **STATUS.md / whats-new** — один комбинированный edit + один коммит с docs (можно объединить с bump-коммитом, см. шаблон ниже).
+- **Publish** — отдельно per-extension (`ext:publish` принимает один id), потом один `ext:catalog`:
+  ```powershell
+  bun run --cwd shell ext:publish eden
+  bun run --cwd shell ext:publish horologion
+  # shell — отдельная процедура (build + manual gh release)
+  bun run --cwd shell ext:catalog
+  ```
+- **Каталог** перегенерируется один раз в конце — захватывает все свежие releases.
 
 ### 6. Verify
 
