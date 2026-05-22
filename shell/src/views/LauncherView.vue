@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, nextTick } from "vue";
+import { computed, ref, onMounted, onUnmounted, nextTick, watch } from "vue";
 import type { Component } from "vue";
 import {
   Settings as SettingsIcon,
@@ -10,6 +10,7 @@ import {
   Check,
 } from "@lucide/vue";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
+import FileSearchResultRow from "../components/FileSearchResultRow.vue";
 import holoSvg from "../assets/holo.svg";
 import holoPomoSvg from "../assets/holo-pomo.svg";
 import holoSecoSvg from "../assets/holo-seco.svg";
@@ -89,6 +90,8 @@ function builtInIconFor(cmd: CommandRecord): BuiltInIconConfig | null {
 
 const query = ref("");
 const commands = ref<CommandRecord[]>([]);
+const fileCommands = ref<CommandRecord[]>([]);
+const fileSearchPending = ref(false);
 const selectedIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
@@ -108,6 +111,7 @@ interface AppEntry {
   mtime: number | null;
 }
 const APP_ID_PREFIX = "app:";
+const FILE_ID_PREFIX = "file:";
 
 function appToCommand(a: AppEntry): CommandRecord {
   return {
@@ -127,6 +131,36 @@ async function fetchApps(): Promise<CommandRecord[]> {
     return (res?.apps ?? []).map(appToCommand);
   } catch (e) {
     console.warn("app_index.list_all failed", e);
+    return [];
+  }
+}
+
+interface FileEntry {
+  path: string;
+  name?: string;
+  score: number;
+}
+
+function fileToCommand(file: FileEntry): CommandRecord {
+  const fallbackName = file.path.split(/[\\/]/).filter(Boolean).at(-1);
+  return {
+    id: `${FILE_ID_PREFIX}${file.path}`,
+    title: file.name?.trim() || fallbackName || "Без названия",
+    subtitle: file.path,
+    category: "open",
+    kind: "file",
+  };
+}
+
+async function searchFiles(text: string): Promise<CommandRecord[]> {
+  try {
+    const res = await window.kepler.ark.request<{ results: FileEntry[] }>("file_index.search", {
+      query: text,
+      limit: 8,
+    });
+    return (res?.results ?? []).map(fileToCommand);
+  } catch (e) {
+    console.warn("file_index.search failed", e);
     return [];
   }
 }
@@ -157,7 +191,8 @@ const filtered = computed<CommandRecord[]>(() => {
     .map<ScoredCommand>((cmd) => ({ cmd, score: scoreCommand(cmd, q) }))
     .filter((x) => x.score >= 0)
     .sort((a, b) => b.score - a.score)
-    .map((x) => x.cmd);
+    .map((x) => x.cmd)
+    .concat(fileCommands.value);
 });
 
 const RECENTS_KEY = "kepler.launcher.recents";
@@ -357,7 +392,16 @@ async function invokeSelected() {
   recordRecent(row.cmd.id);
   // App-команда (kind: "app" + id с префиксом `app:`) → app_index.launch.
   // Обычная command → command bus.
-  if (row.cmd.id.startsWith(APP_ID_PREFIX)) {
+  if (row.cmd.id.startsWith(FILE_ID_PREFIX)) {
+    const path = row.cmd.id.slice(FILE_ID_PREFIX.length);
+    try {
+      await window.kepler.ark.request("file_index.open", { path });
+    } catch (e) {
+      console.warn("file_index.open failed", e);
+      return;
+    }
+    await window.kepler.window.hide();
+  } else if (row.cmd.id.startsWith(APP_ID_PREFIX)) {
     const appId = row.cmd.id.slice(APP_ID_PREFIX.length);
     try {
       await window.kepler.ark.request("app_index.launch", { id: appId });
@@ -460,6 +504,37 @@ async function refreshCommands() {
 
 let offShow = () => {};
 let offCommandsUpdated = () => {};
+let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
+let fileSearchRun = 0;
+const FILE_SEARCH_DEBOUNCE_MS = 120;
+const FILE_SEARCH_REFRESH_MS = 800;
+
+function scheduleFileSearch(text: string, run: number, delay: number) {
+  if (fileSearchTimer) clearTimeout(fileSearchTimer);
+  fileSearchTimer = setTimeout(async () => {
+    if (run === fileSearchRun) {
+      fileSearchPending.value = true;
+    }
+    const found = await searchFiles(text);
+    if (run === fileSearchRun) {
+      fileCommands.value = found;
+      fileSearchPending.value = false;
+      scheduleFileSearch(text, run, FILE_SEARCH_REFRESH_MS);
+    }
+  }, delay);
+}
+
+watch(query, (value) => {
+  const text = value.trim();
+  const run = ++fileSearchRun;
+  if (!text) {
+    if (fileSearchTimer) clearTimeout(fileSearchTimer);
+    fileCommands.value = [];
+    fileSearchPending.value = false;
+    return;
+  }
+  scheduleFileSearch(text, run, FILE_SEARCH_DEBOUNCE_MS);
+});
 
 onMounted(async () => {
   offShow = window.kepler.window.onShow(() => {
@@ -514,6 +589,8 @@ onMounted(async () => {
 onUnmounted(() => {
   offShow();
   offCommandsUpdated();
+  fileSearchRun++;
+  if (fileSearchTimer) clearTimeout(fileSearchTimer);
   unsubUpdateState?.();
   unsubPostUpdate?.();
 });
@@ -526,7 +603,7 @@ onUnmounted(() => {
       v-model="query"
       class="search"
       type="text"
-      placeholder="Поиск команд: pomo, заметка, открыть delphi…"
+      placeholder="Поиск команд, приложений и файлов"
       spellcheck="false"
       autocomplete="off"
       autocorrect="off"
@@ -608,6 +685,9 @@ onUnmounted(() => {
               <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
               <BuiltInIcon v-else />
               <span class="title">{{ cmd.title }}</span>
+              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
+                cmd.subtitle
+              }}</span>
               <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
                 cmd.appName
               }}</span>
@@ -646,6 +726,9 @@ onUnmounted(() => {
               <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
               <BuiltInIcon v-else />
               <span class="title">{{ cmd.title }}</span>
+              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
+                cmd.subtitle
+              }}</span>
               <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
                 cmd.appName
               }}</span>
@@ -657,36 +740,60 @@ onUnmounted(() => {
         </template>
       </template>
       <template v-else>
-        <div v-if="filtered.length === 0" class="empty">Ничего не найдено</div>
+        <div v-if="fileSearchPending" class="file-search-status">
+          <Loader2 class="spin" :size="15" :stroke-width="2" />
+          <span>Ищем файлы...</span>
+        </div>
+        <div v-if="filtered.length === 0 && !fileSearchPending" class="empty">
+          Ничего не найдено
+        </div>
         <ul v-else class="results">
-          <li
-            v-for="(cmd, idx) in filtered"
-            :key="cmd.id"
-            class="result"
-            :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
-            @click="
-              () => {
-                selectedIndex = (updateBanner ? 1 : 0) + idx;
-                void invokeSelected();
-              }
-            "
-          >
-            <BuiltInIcon
-              v-if="builtInIconFor(cmd)"
-              :icon="builtInIconFor(cmd)!.icon"
-              :svg-src="builtInIconFor(cmd)!.svgSrc"
-              :icon-color="builtInIconFor(cmd)!.iconColor"
-              :from="builtInIconFor(cmd)!.from"
-              :to="builtInIconFor(cmd)!.to"
+          <template v-for="(cmd, idx) in filtered" :key="cmd.id">
+            <FileSearchResultRow
+              v-if="cmd.kind === 'file'"
+              :title="cmd.title"
+              :path="cmd.subtitle ?? ''"
+              :selected="(updateBanner ? 1 : 0) + idx === selectedIndex"
+              @select="
+                () => {
+                  selectedIndex = (updateBanner ? 1 : 0) + idx;
+                  void invokeSelected();
+                }
+              "
             />
-            <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
-            <span v-else class="icon icon-placeholder" aria-hidden="true" />
-            <span class="title">{{ cmd.title }}</span>
-            <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-              cmd.appName
-            }}</span>
-            <span class="kind-label">{{ cmd.kind === "command" ? "Команда" : "Приложение" }}</span>
-          </li>
+            <li
+              v-else
+              class="result"
+              :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+              @click="
+                () => {
+                  selectedIndex = (updateBanner ? 1 : 0) + idx;
+                  void invokeSelected();
+                }
+              "
+            >
+              <BuiltInIcon
+                v-if="builtInIconFor(cmd)"
+                :icon="builtInIconFor(cmd)!.icon"
+                :svg-src="builtInIconFor(cmd)!.svgSrc"
+                :icon-color="builtInIconFor(cmd)!.iconColor"
+                :from="builtInIconFor(cmd)!.from"
+                :to="builtInIconFor(cmd)!.to"
+              />
+              <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+              <span v-else class="icon icon-placeholder" aria-hidden="true" />
+              <span class="title">{{ cmd.title }}</span>
+              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
+                cmd.subtitle
+              }}</span>
+              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
+                cmd.appName
+              }}</span>
+              <span class="kind-label">{{
+                cmd.kind === "command" ? "Команда" : cmd.kind === "file" ? "Файл" : "Приложение"
+              }}</span>
+            </li>
+          </template>
         </ul>
       </template>
     </div>
@@ -713,6 +820,16 @@ onUnmounted(() => {
   font-size: 18px;
   font-weight: 400;
   flex-shrink: 0;
+}
+
+.file-search-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 2px 14px 6px;
+  color: color-mix(in srgb, var(--foreground) 52%, transparent);
+  font-size: 12px;
 }
 
 .search::placeholder {

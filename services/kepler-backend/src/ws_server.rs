@@ -20,6 +20,7 @@ use crate::arrancador;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
 use crate::export;
+use crate::file_index::FileIndex;
 use crate::focus::handle_focus_op;
 use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
@@ -78,10 +79,7 @@ pub struct HelloErrorResponse<'a> {
 #[derive(Debug, Clone)]
 pub enum HelloOutcome {
     Accept(Compatibility),
-    Reject {
-        code: &'static str,
-        message: String,
-    },
+    Reject { code: &'static str, message: String },
 }
 
 /// Чистая функция (детерминированная) — отделена от network IO, тестируется легко.
@@ -177,6 +175,7 @@ pub struct WsServer {
     command_bus: Arc<CommandBus>,
     pomodoro_host: Arc<PomodoroHost>,
     app_index: Arc<AppIndex>,
+    file_index: Arc<FileIndex>,
     next_client_id: Arc<AtomicU64>,
 }
 
@@ -188,6 +187,7 @@ impl WsServer {
         auth_token: String,
         data_dir: std::path::PathBuf,
         app_index: Arc<AppIndex>,
+        file_index: Arc<FileIndex>,
     ) -> Result<Self, WsServerError> {
         let addr: SocketAddr = "127.0.0.1:0"
             .parse()
@@ -200,6 +200,7 @@ impl WsServer {
             command_bus: Arc::new(CommandBus::new()),
             pomodoro_host: PomodoroHost::new(data_dir),
             app_index,
+            file_index,
             next_client_id: Arc::new(AtomicU64::new(1)),
         })
     }
@@ -225,10 +226,13 @@ impl WsServer {
             let bus = self.command_bus.clone();
             let pomo = self.pomodoro_host.clone();
             let app_idx = self.app_index.clone();
+            let file_idx = self.file_index.clone();
             let client_id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
             tokio::spawn(async move {
-                if let Err(e) =
-                    handle_connection(stream, ark_host, token, bus, pomo, app_idx, client_id).await
+                if let Err(e) = handle_connection(
+                    stream, ark_host, token, bus, pomo, app_idx, file_idx, client_id,
+                )
+                .await
                 {
                     eprintln!("[kepler.ws] connection error: {e}");
                 }
@@ -244,6 +248,7 @@ async fn handle_connection(
     command_bus: Arc<CommandBus>,
     pomodoro_host: Arc<PomodoroHost>,
     app_index: Arc<AppIndex>,
+    file_index: Arc<FileIndex>,
     client_id: ClientId,
 ) -> Result<(), WsServerError> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
@@ -546,6 +551,25 @@ async fn handle_connection(
                     continue;
                 }
 
+                // Intercept file_index.* — host-local filename/path search.
+                if let Some(rest) = operation.strip_prefix("file_index.") {
+                    let resp = handle_file_index_op(rest, params, &file_index).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
                 // Intercept commands.* — обрабатываем локально.
                 if let Some(rest) = operation.strip_prefix("commands.") {
                     let resp =
@@ -763,15 +787,15 @@ async fn handle_export_op(
                     ark_resp.error.unwrap_or_default()
                 ));
             }
-            let objects: Vec<ark_core::types::ArkObject> = match serde_json::from_value(ark_resp.data)
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    return LocalResponse::err(format!(
-                        "export.run: parse ArkObject array: {e}"
-                    ))
-                }
-            };
+            let objects: Vec<ark_core::types::ArkObject> =
+                match serde_json::from_value(ark_resp.data) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return LocalResponse::err(format!(
+                            "export.run: parse ArkObject array: {e}"
+                        ))
+                    }
+                };
 
             let result = converter.convert(&objects, &format, &dest_dir);
             match serde_json::to_value(&result) {
@@ -948,9 +972,7 @@ async fn handle_arrancador_op(
             let game: ark_core::types::ArkObject = match serde_json::from_value(ark_resp.data) {
                 Ok(g) => g,
                 Err(e) => {
-                    return LocalResponse::err(format!(
-                        "arrancador.launch: parse ArkObject: {e}"
-                    ))
+                    return LocalResponse::err(format!("arrancador.launch: parse ArkObject: {e}"))
                 }
             };
             match arrancador::launcher::launch(&game) {
@@ -997,9 +1019,7 @@ async fn handle_arrancador_op(
             match arrancador::rawg::search(&query, &api_key).await {
                 Ok(results) => match serde_json::to_value(&results) {
                     Ok(v) => LocalResponse::ok(serde_json::json!({ "results": v })),
-                    Err(e) => {
-                        LocalResponse::err(format!("arrancador.rawg.search: serialize: {e}"))
-                    }
+                    Err(e) => LocalResponse::err(format!("arrancador.rawg.search: serialize: {e}")),
                 },
                 Err(e) => LocalResponse::err(format!("arrancador.rawg.search: {e}")),
             }
@@ -1078,11 +1098,7 @@ async fn handle_arrancador_op(
                         .filter_map(|x| x.as_str().map(std::path::PathBuf::from))
                         .collect()
                 });
-            match arrancador::sqoba::backup(
-                &game_id,
-                &game_name,
-                manual_paths.as_deref(),
-            ) {
+            match arrancador::sqoba::backup(&game_id, &game_name, manual_paths.as_deref()) {
                 Ok(b) => match serde_json::to_value(&b) {
                     Ok(v) => LocalResponse::ok(v),
                     Err(e) => {
@@ -1155,10 +1171,7 @@ async fn handle_app_index_op(
             // Все приложения с inline base64 иконками. Используется когда
             // launcher хочет показать apps как часть общего списка команд
             // (без отдельной поисковой подсекции).
-            let limit = params
-                .get("limit")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(500) as usize;
+            let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(500) as usize;
             let mut out: Vec<crate::app_index::App> = app_index.all(limit).await;
             for app in &mut out {
                 if let Some(path) = app.icon_path.clone() {
@@ -1180,10 +1193,7 @@ async fn handle_app_index_op(
                 Some(q) => q.to_string(),
                 None => return LocalResponse::err("app_index.search: missing 'query'"),
             };
-            let limit = params
-                .get("limit")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(8) as usize;
+            let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(8) as usize;
             // Frecency: пустой UsageStats в v1. TODO: join из ARK usage_event_obj.
             let usage = UsageStats::empty();
             let mut results = app_index.search(&query, limit, &usage).await;
@@ -1192,8 +1202,7 @@ async fn handle_app_index_op(
             for scored in &mut results {
                 if let Some(path) = scored.app.icon_path.clone() {
                     if let Ok(bytes) = std::fs::read(&path) {
-                        let b64 =
-                            base64_encode(&bytes);
+                        let b64 = base64_encode(&bytes);
                         scored.app.icon_path = Some(format!("data:image/png;base64,{b64}"));
                     } else {
                         scored.app.icon_path = None;
@@ -1230,16 +1239,88 @@ async fn handle_app_index_op(
     }
 }
 
+/// Dispatch `file_index.<subop>` — host-local file search and settings.
+async fn handle_file_index_op(
+    subop: &str,
+    params: serde_json::Value,
+    file_index: &Arc<FileIndex>,
+) -> LocalResponse {
+    match subop {
+        "search" => {
+            let query = match params.get("query").and_then(|v| v.as_str()) {
+                Some(query) => query,
+                None => return LocalResponse::err("file_index.search: missing 'query'"),
+            };
+            let limit = params
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(8)
+                .min(50) as usize;
+            match file_index.search(query, limit) {
+                Ok(results) => {
+                    match serde_json::to_value(serde_json::json!({ "results": results })) {
+                        Ok(value) => LocalResponse::ok(value),
+                        Err(e) => LocalResponse::err(format!("file_index.search: serialize: {e}")),
+                    }
+                }
+                Err(e) => LocalResponse::err(format!("file_index.search: {e}")),
+            }
+        }
+        "open" => {
+            let path = match params.get("path").and_then(|v| v.as_str()) {
+                Some(path) => path,
+                None => return LocalResponse::err("file_index.open: missing 'path'"),
+            };
+            match file_index.open(path) {
+                Ok(()) => LocalResponse::ok(serde_json::json!({ "ok": true })),
+                Err(e) => LocalResponse::err(format!("file_index.open: {e}")),
+            }
+        }
+        "rescan" => match file_index.rescan().await {
+            Ok(stats) => match serde_json::to_value(stats) {
+                Ok(value) => LocalResponse::ok(value),
+                Err(e) => LocalResponse::err(format!("file_index.rescan: serialize: {e}")),
+            },
+            Err(e) => LocalResponse::err(format!("file_index.rescan: {e}")),
+        },
+        "settings_get" => match file_index.settings() {
+            Ok(settings) => match serde_json::to_value(settings) {
+                Ok(value) => LocalResponse::ok(value),
+                Err(e) => LocalResponse::err(format!("file_index.settings_get: serialize: {e}")),
+            },
+            Err(e) => LocalResponse::err(format!("file_index.settings_get: {e}")),
+        },
+        "settings_set" => {
+            let exclude = match params
+                .get("exclude_noisy_folders")
+                .and_then(|v| v.as_bool())
+            {
+                Some(exclude) => exclude,
+                None => {
+                    return LocalResponse::err(
+                        "file_index.settings_set: missing 'exclude_noisy_folders'",
+                    )
+                }
+            };
+            match file_index.set_exclude_noisy_folders(exclude).await {
+                Ok(stats) => LocalResponse::ok(serde_json::json!({ "stats": stats })),
+                Err(e) => LocalResponse::err(format!("file_index.settings_set: {e}")),
+            }
+        }
+        other => LocalResponse::err(format!("file_index.{other}: unknown sub-operation")),
+    }
+}
+
 /// Minimal base64 encoder (RFC 4648 standard alphabet, no padding-stripping).
 /// Используется для inline PNG icons в app_index.search response. Не добавляем
 /// dep `base64` ради ~30 строк.
 fn base64_encode(input: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
     let mut i = 0;
     while i + 3 <= input.len() {
-        let n = (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8) | u32::from(input[i + 2]);
+        let n =
+            (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8) | u32::from(input[i + 2]);
         out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
         out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
         out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
@@ -1263,11 +1344,7 @@ fn base64_encode(input: &[u8]) -> String {
     out
 }
 
-async fn send_hello_error<S>(
-    sink: &mut S,
-    code: &str,
-    message: &str,
-) -> Result<(), WsServerError>
+async fn send_hello_error<S>(sink: &mut S, code: &str, message: &str) -> Result<(), WsServerError>
 where
     S: SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin,
 {

@@ -21,6 +21,7 @@ pub mod command_bus;
 pub mod crash_reporter;
 pub mod db_backup;
 pub mod export;
+pub mod file_index;
 pub mod focus;
 pub mod lock_file;
 pub mod pomodoro_host;

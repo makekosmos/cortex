@@ -71,6 +71,11 @@ interface ExportHistoryEntry {
   bytes: number;
 }
 
+interface FileIndexSettings {
+  exclude_noisy_folders: boolean;
+  roots: string[];
+}
+
 const EXPORT_HISTORY_KEY = "kepler-export-history";
 const EXPORT_HISTORY_LIMIT = 10;
 
@@ -141,6 +146,9 @@ const autostartAllowed = ref<boolean>(true);
 const developerMode = ref<boolean>(false);
 const usageTracker = ref<boolean>(true);
 const launcherStateTtl = ref<number>(5);
+const fileSearchSettings = ref<FileIndexSettings | null>(null);
+const fileSearchBusy = ref<boolean>(false);
+const fileSearchError = ref<string>("");
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
 const loading = ref<boolean>(true);
 const autostartError = ref<string>("");
@@ -166,10 +174,22 @@ async function loadGeneral() {
     usageTracker.value = u;
     launcherStateTtl.value = ttl;
     backend.value = b;
+    await loadFileSearchSettings();
   } catch (e) {
     console.warn("settings load failed", e);
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadFileSearchSettings() {
+  fileSearchError.value = "";
+  try {
+    fileSearchSettings.value =
+      await window.kepler.ark.request<FileIndexSettings>("file_index.settings_get");
+  } catch (err) {
+    console.warn("file_index.settings_get failed", err);
+    fileSearchError.value = "Настройки поиска файлов пока недоступны";
   }
 }
 
@@ -224,6 +244,24 @@ async function onLauncherStateTtlChange(e: Event) {
   } catch (err) {
     console.warn("launcherStateTtl set failed", err);
     launcherStateTtl.value = await window.kepler.settings.launcherStateTtl.get();
+  }
+}
+
+async function onToggleFileSearchNoise(e: Event) {
+  const target = e.target as HTMLInputElement;
+  fileSearchBusy.value = true;
+  fileSearchError.value = "";
+  try {
+    await window.kepler.ark.request("file_index.settings_set", {
+      exclude_noisy_folders: target.checked,
+    });
+    await loadFileSearchSettings();
+  } catch (err) {
+    console.warn("file_index.settings_set failed", err);
+    fileSearchError.value = "Не удалось переиндексировать файлы";
+    await loadFileSearchSettings();
+  } finally {
+    fileSearchBusy.value = false;
   }
 }
 
@@ -1163,6 +1201,27 @@ onBeforeUnmount(() => {
               @change="onLauncherStateTtlChange"
             />
             <span>мин</span>
+          </label>
+        </div>
+
+        <div class="row">
+          <div class="row-label">
+            <div class="label">Исключать шумные папки из поиска файлов</div>
+            <div class="hint">
+              Kepler индексирует файлы на локальных дисках и пропускает
+              <code>node_modules</code>, <code>.git</code>, сборки и временные каталоги. Изменение
+              сразу запускает переиндексацию.
+            </div>
+            <div v-if="fileSearchError" class="error">{{ fileSearchError }}</div>
+          </div>
+          <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
+            <input
+              type="checkbox"
+              :checked="fileSearchSettings?.exclude_noisy_folders ?? true"
+              :disabled="!fileSearchSettings || fileSearchBusy"
+              @change="onToggleFileSearchNoise"
+            />
+            <span class="track"><span class="thumb" /></span>
           </label>
         </div>
 

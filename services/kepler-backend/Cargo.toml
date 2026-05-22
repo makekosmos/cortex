@@ -67,8 +67,12 @@ windows = { version = "0.58", features = [
   "Win32_Security_Authorization",
   "Win32_System_Threading",
   "Win32_System_SystemInformation",
+  "Win32_System_IO",
+  "Win32_System_Ioctl",
+  "Win32_System_WindowsProgramming",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
+  "Win32_Storage_FileSystem",
   # App Index icons (2026-05-22): ExtractIconExW + GDI DIB → PNG conversion.
   "Win32_UI_Shell",
   "Win32_Graphics_Gdi",

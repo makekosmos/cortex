@@ -232,18 +232,16 @@ async fn setup() -> Result<SetupState, DynError> {
     // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),
     // icon cache в lock_dir/app-icons/. На старте — load cached синхронно (<10ms),
     // background rescan через spawn ниже.
-    let app_index = match kepler_backend::app_index::AppIndex::new(
-        &lock_dir,
-        lock_dir.join("app-icons"),
-    ) {
-        Ok(ai) => std::sync::Arc::new(ai),
-        Err(e) => {
-            tracing::warn!(error = %e, "app_index init failed; launcher search будет пустой");
-            // Создаём fallback с empty store — backend стартует, search возвращает [].
-            // Если init упал жёстко, просто паникуем — это infrastructure failure.
-            return Err(format!("app_index init failed: {e}").into());
-        }
-    };
+    let app_index =
+        match kepler_backend::app_index::AppIndex::new(&lock_dir, lock_dir.join("app-icons")) {
+            Ok(ai) => std::sync::Arc::new(ai),
+            Err(e) => {
+                tracing::warn!(error = %e, "app_index init failed; launcher search будет пустой");
+                // Создаём fallback с empty store — backend стартует, search возвращает [].
+                // Если init упал жёстко, просто паникуем — это infrastructure failure.
+                return Err(format!("app_index init failed: {e}").into());
+            }
+        };
 
     // Background rescan на старте — не блокирует bind / запуск backend'а.
     {
@@ -262,11 +260,34 @@ async fn setup() -> Result<SetupState, DynError> {
         });
     }
 
+    // File Index v1: non-elevated local-drive filename/path scanner. Test mode
+    // supplies no roots unless KEPLER_FILE_INDEX_ROOTS is set, so test backend
+    // processes do not walk the developer's drives.
+    let file_index = match kepler_backend::file_index::FileIndex::new(&lock_dir) {
+        Ok(index) => std::sync::Arc::new(index),
+        Err(e) => return Err(format!("file_index init failed: {e}").into()),
+    };
+    {
+        let index = file_index.clone();
+        tokio::spawn(async move {
+            match index.rescan().await {
+                Ok(stats) => tracing::info!(
+                    total = stats.total,
+                    roots = stats.roots,
+                    noisy_folders_excluded = stats.noisy_folders_excluded,
+                    "file_index initial rescan"
+                ),
+                Err(e) => tracing::warn!(error = %e, "file_index initial rescan failed"),
+            }
+        });
+    }
+
     let ws = WsServer::bind(
         ark.clone(),
         token.clone(),
         lock_dir.clone(),
         app_index.clone(),
+        file_index.clone(),
     )
     .await?;
     let port = ws.port();

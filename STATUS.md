@@ -1,5 +1,25 @@
 # Kosmos — статус проекта (2026-05-22)
 
+## 2026-05-22 — File Search v1
+
+Kepler launcher теперь ищет **файлы по имени и пути** через отдельный
+host-local индекс в `kepler-backend`:
+
+- `services/kepler-backend/src/file_index/` хранит индекс в `file-index.db`
+  рядом с instance data, не в ARK и не в sync.
+- V1 сканирует файлы на локальных fixed drives; на NTFS drive roots backend
+  сначала пробует MFT/USN fast scan и при недоступности прозрачно падает назад
+  на обычный non-elevated обход. Folder results и content search пока не входят
+  в скоуп.
+- Шумные папки (`node_modules`, `.git`, `dist`, `target`, temp/build cache)
+  исключаются по умолчанию. Toggle в Settings → Общие сохраняет режим в
+  `file-index.db` и сразу запускает reindex.
+- Launcher подмешивает file hits только когда введён query, показывает pending
+  state пока backend ищет файлы и открывает файл через backend
+  `file_index.open`.
+
+Proof loop: `.agent/tasks/2026-05-22-file-search-v1/spec.md`.
+
 ## 2026-05-22 — App Launcher v1 + state restore (Kepler 0.2.4 → 0.2.5)
 
 Большая новая фича — **запуск установленных приложений** из поисковика

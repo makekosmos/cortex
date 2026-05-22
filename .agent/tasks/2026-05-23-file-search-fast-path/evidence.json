@@ -1,0 +1,26 @@
+{
+  "task_id": "2026-05-23-file-search-fast-path",
+  "verified_at": "2026-05-23",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "isolated headless Kepler renderer pending-state smoke"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "cargo test --manifest-path services\\kepler-backend\\Cargo.toml --lib file_index"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "cargo test --manifest-path services\\kepler-backend\\Cargo.toml --lib"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "backend tests, shell type/build, ARK guard, isolated-target ARK smoke"
+    }
+  ]
+}

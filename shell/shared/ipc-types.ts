@@ -116,8 +116,9 @@ export interface CommandRecord {
   /** Группа для секций в UI: 'open' = запустить апку, 'action' = ручка апки. */
   category: "open" | "action";
   /** UI-классификация плашки. 'app' → правый лейбл «Приложение».
-      'command' → «Команда · <appName>». Если не указано — считается 'app'. */
-  kind?: "app" | "command";
+      'command' → «Команда · <appName>», 'file' → file-index hit.
+      Если не указано — считается 'app'. */
+  kind?: "app" | "command" | "file";
   /** Имя родительского приложения для command-плашек (Delphi / Horologion / Kepler). */
   appName?: string;
   /** Опциональная иконка команды. Data URI (`data:image/png;base64,...`)
