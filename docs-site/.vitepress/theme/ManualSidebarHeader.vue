@@ -8,18 +8,7 @@ const isManual = computed(() => route.path.startsWith("/manual"));
 
 <template>
   <div v-if="isManual" class="manual-header">
-    <a class="manual-row" href="/manual/" aria-label="Beta Manual">
-      <span class="icon" aria-hidden="true">
-        <!-- Lucide clock -->
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12 6 12 12 16 14" />
-        </svg>
-      </span>
-      <span class="label">Beta Manual</span>
-    </a>
-    <a class="manual-row primary" href="/manual/" aria-label="Manual">
+    <a class="manual-row" href="/manual/">
       <span class="icon" aria-hidden="true">
         <!-- Lucide book-open -->
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -28,7 +17,18 @@ const isManual = computed(() => route.path.startsWith("/manual"));
           <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
         </svg>
       </span>
-      <span class="label">Manual</span>
+      <span class="label">Мануал</span>
+    </a>
+    <a class="manual-row" href="/manual/beta/">
+      <span class="icon" aria-hidden="true">
+        <!-- Lucide clock -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+      </span>
+      <span class="label">Бета мануал</span>
     </a>
   </div>
 </template>
@@ -37,46 +37,38 @@ const isManual = computed(() => route.path.startsWith("/manual"));
 .manual-header {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 14px 0 18px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--vp-c-divider);
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .manual-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  color: var(--vp-c-text-2);
-  font-size: 14px;
-  font-weight: 500;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 13.5px;
+  letter-spacing: -0.1px;
+  color: var(--kosmos-muted-fg);
   text-decoration: none;
-  transition: background 120ms ease, color 120ms ease;
+  transition: color 120ms ease;
 }
 
 .manual-row:hover {
-  background: var(--vp-c-bg-soft);
-  color: var(--vp-c-text-1);
-}
-
-.manual-row.primary {
-  color: var(--vp-c-text-1);
-  font-weight: 600;
+  color: var(--vp-c-brand-1);
 }
 
 .icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .icon svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 </style>

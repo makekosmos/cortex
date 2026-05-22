@@ -89,6 +89,8 @@ export default defineConfig({
           text: "Начало",
           items: [
             { text: "Основы", link: "/manual/basics" },
+            { text: "Платформы", link: "/manual/platforms" },
+            { text: "Бета — FAQ", link: "/manual/beta/" },
           ],
         },
         {
