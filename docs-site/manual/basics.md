@@ -57,9 +57,9 @@ description: От установки до первой заметки за 5 ш�
   <li>
     <div class="step-number">5</div>
     <div class="step-body">
-      <h3 class="step-title">Запусти фокусную сессию</h3>
-      <p>Напечатай <strong>помодоро 25</strong> — Horologion стартанёт 25-минутный таймер. Появится плавающий виджет поверх всех окон, который тикает даже если ты закроешь Horologion.</p>
-      <p>Подробнее — <a href="./extensions/horologion">Horologion</a>.</p>
+      <h3 class="step-title">Веди дневник</h3>
+      <p>Напечатай <strong>дневник</strong> — Eden откроет заметку сегодняшнего дня (или создаст, если её ещё нет). Каждый день автоматически попадает в свою запись, ничего вручную называть и сортировать не надо.</p>
+      <p>Подробнее — <a href="./extensions/eden">Eden</a>.</p>
     </div>
   </li>
 </ol>
@@ -75,15 +75,15 @@ description: От установки до первой заметки за 5 ш�
 .eyebrow {
   font-size: 13px;
   color: var(--kosmos-muted-fg);
-  margin-bottom: -8px;
-  margin-top: 4px;
+  margin: 0 0 6px;
 }
 
 h1 {
   font-size: 40px;
   letter-spacing: -0.6px;
   font-weight: 800;
-  margin-bottom: 14px;
+  margin: 0 0 14px !important;
+  padding: 0 !important;
 }
 
 .quickstart-steps {
