@@ -52,6 +52,8 @@ export { default as DateTimePicker } from "./DateTimePicker.vue";
 
 export { default as Dropdown } from "./Dropdown.vue";
 
+export { default as IconButton } from "./IconButton.vue";
+
 export { default as Toggle } from "./Toggle.vue";
 
 export { default as Checkbox } from "./Checkbox.vue";

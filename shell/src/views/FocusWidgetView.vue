@@ -7,7 +7,8 @@
 // (Horologion публикует обновления через `window.kepler.focusWidget.setState`).
 
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Pause, Play, SkipForward, Square } from "@lucide/vue";
+import { Pause, Play, SkipForward, Square, X } from "@lucide/vue";
+import { IconButton } from "@kosmos/visuals";
 
 interface FocusState {
   active: boolean;
@@ -144,36 +145,36 @@ async function onStop(): Promise<void> {
       <div class="label" :title="labelText">{{ labelText }}</div>
     </div>
     <div v-if="showControls" class="controls">
-      <button
-        class="ctl-btn"
-        type="button"
+      <IconButton
+        :size="24"
         :title="state.isPaused ? HINTS.resume : HINTS.pause"
         :aria-label="state.isPaused ? HINTS.resume : HINTS.pause"
         @click="onPauseToggle"
       >
         <component :is="state.isPaused ? Play : Pause" :size="14" />
-      </button>
-      <button
+      </IconButton>
+      <IconButton
         v-if="showSkip"
-        class="ctl-btn"
-        type="button"
+        :size="24"
         :title="HINTS.skip"
         :aria-label="HINTS.skip"
         @click="onSkip"
       >
         <SkipForward :size="14" />
-      </button>
-      <button
-        class="ctl-btn"
-        type="button"
-        :title="HINTS.stop"
-        :aria-label="HINTS.stop"
-        @click="onStop"
-      >
+      </IconButton>
+      <IconButton :size="24" :title="HINTS.stop" :aria-label="HINTS.stop" @click="onStop">
         <Square :size="13" />
-      </button>
+      </IconButton>
     </div>
-    <button class="close-btn" type="button" :title="HINTS.close" @click="onClose">×</button>
+    <IconButton
+      :size="24"
+      tone="destructive"
+      :title="HINTS.close"
+      :aria-label="HINTS.close"
+      @click="onClose"
+    >
+      <X :size="14" />
+    </IconButton>
   </div>
 </template>
 
@@ -255,58 +256,9 @@ async function onStop(): Promise<void> {
 }
 
 .controls {
-  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   gap: 2px;
   margin-right: 2px;
-}
-
-.ctl-btn {
-  -webkit-app-region: no-drag;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: transparent;
-  border: none;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  border-radius: 6px;
-  cursor: pointer;
-  padding: 0;
-  transition:
-    background 100ms,
-    color 100ms;
-}
-.ctl-btn:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-.ctl-btn:active {
-  background: color-mix(in srgb, var(--foreground) 14%, transparent);
-}
-
-.close-btn {
-  -webkit-app-region: no-drag;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: transparent;
-  border: none;
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
-  font-size: 18px;
-  line-height: 1;
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    background 100ms,
-    color 100ms;
-}
-.close-btn:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
 }
 </style>

@@ -24,7 +24,7 @@
 // kind: "static" (legacy PoC) — preload не используется по умолчанию;
 // extension сам отвечает за всю свою логику.
 
-import { BrowserWindow, ipcMain, screen, type WebContents } from "electron";
+import { app, BrowserWindow, ipcMain, screen, type WebContents } from "electron";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import net from "node:net";
@@ -143,6 +143,22 @@ export interface ExtensionManifest {
    */
   windowEffect?: "acrylic" | "mica" | "none";
   /**
+   * Если `true` — клик на «X» / Alt+F4 / `kepler:extension:window:close`
+   * **скрывает** окно вместо destroy. Renderer остаётся жив (вместе со всеми
+   * таймерами, ARK подписками и side-effect'ами), reopen через `openExtension`
+   * мгновенно показывает hidden окно. Используется для extensions с долго
+   * живущим процессом (Horologion — pomodoro session, time_entry close on
+   * phase boundary, native notifications). Окно реально уничтожается только
+   * на quit приложения.
+   *
+   * Default: false (классический destroy on close).
+   *
+   * NB: окно ВСЁ ЕЩЁ показывается / прячется в taskbar при hide — пользователь
+   * видит что extension "закрыт"; индикатор того что pomodoro продолжается —
+   * floating focus widget.
+   */
+  keepAliveInBackground?: boolean;
+  /**
    * Declarative commands extension'а (Raycast-style). Manifest = source of
    * truth для entry-point команд: открыть extension с конкретным route,
    * либо триггернуть action который extension обработает через
@@ -186,12 +202,22 @@ export interface ExtensionManifest {
 interface ExtensionWindowEntry {
   win: BrowserWindow;
   id: string;
+  /** Если true — close скрывает окно вместо destroy (см. ExtensionManifest.keepAliveInBackground). */
+  keepAliveInBackground: boolean;
   /** Initial route переданный в `openExtension(id, route)` для cold start.
       Renderer читает через `kepler.navigation.initialRoute()` на mount. */
   initialRoute?: string;
 }
 
 const extensionWindows = new Map<string, ExtensionWindowEntry>();
+
+// При quit'е приложения keepAliveInBackground extension'ы должны реально
+// уничтожиться, а не зацикливать preventDefault → app.exit вис. before-quit
+// взводит этот флаг до того как BrowserWindow'ы получат close.
+let isAppQuitting = false;
+app.on("before-quit", () => {
+  isAppQuitting = true;
+});
 // Reverse map: webContents.id → extension id. Нужен, чтобы из IPC handler'а
 // определить, какое окно отправило запрос (kepler.window.close и т.п.).
 const webContentsToExtensionId = new Map<number, string>();
@@ -934,6 +960,11 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
       preload,
       contextIsolation: true,
       nodeIntegration: false,
+      // Hidden / minimized extensions держат timers через
+      // `requestAnimationFrame` / `setInterval` для side-effect логики
+      // (Horologion: phase boundary → close time_entry, push focus widget).
+      // Chromium по умолчанию throttle'ит фоновые timers — выключаем.
+      backgroundThrottling: false,
     },
   });
 
@@ -992,12 +1023,25 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     saveWindowState();
     broadcastMaximizedState();
   });
-  win.on("close", () => {
+  win.on("close", (e) => {
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = null;
     }
     saveWindowState();
+    // keepAliveInBackground: intercept close → hide. App.before-quit взводит
+    // isAppQuitting → пропускаем интерсепт на quit'е, иначе app не сможет
+    // выйти. Headless / test mode тоже даёт реальный close — Playwright
+    // явно закрывает окна.
+    if (
+      manifest.keepAliveInBackground &&
+      !isAppQuitting &&
+      !headless &&
+      !win.isDestroyed()
+    ) {
+      e.preventDefault();
+      win.hide();
+    }
   });
 
   // Capture webContents.id ДО регистрации listener'ов. После 'closed' event
@@ -1009,7 +1053,12 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     webContentsToExtensionId.delete(wcId);
     extensionWindows.delete(id);
   });
-  extensionWindows.set(id, { win, id, initialRoute: route });
+  extensionWindows.set(id, {
+    win,
+    id,
+    keepAliveInBackground: manifest.keepAliveInBackground === true,
+    initialRoute: route,
+  });
 
   // После полной загрузки renderer'а отправляем initial route — extension
   // ловит через `kepler.navigation.onNavigate` и делает `router.push(route)`.
