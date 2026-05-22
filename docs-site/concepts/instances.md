@@ -17,12 +17,12 @@
 
 ## Слоты (соглашение)
 
-| slot             | trigger                                               | Electron userData             | ARK dataDir                  | productName      | hotkey      | autoupdater | autorun  |
-| ---------------- | ----------------------------------------------------- | ----------------------------- | ---------------------------- | ---------------- | ----------- | ----------- | -------- |
-| `prod` (default) | installed `Kepler.exe`                                | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`          | Kepler           | `Alt+Space` | on          | разрешён |
-| `dev`            | `VITE_DEV_SERVER_URL` set, нет `KEPLER_INSTANCE`      | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`      | Kepler [dev]     | `` Alt+` `` | off         | запрещён |
+| slot             | trigger                                               | Electron userData             | ARK dataDir                  | productName            | hotkey      | autoupdater | autorun  |
+| ---------------- | ----------------------------------------------------- | ----------------------------- | ---------------------------- | ---------------------- | ----------- | ----------- | -------- |
+| `prod` (default) | installed `Kepler.exe`                                | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`          | Kepler                 | `Alt+Space` | on          | разрешён |
+| `dev`            | `VITE_DEV_SERVER_URL` set, нет `KEPLER_INSTANCE`      | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`      | Kepler [dev]           | `` Alt+` `` | off         | запрещён |
 | `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local`) | `%APPDATA%\Kepler-dev-<x>\`   | `%APPDATA%\Kosmos-dev-<x>\`  | Kepler [dev-&lt;x&gt;] | disabled    | off         | запрещён |
-| `test-<x>`       | `KOSMOS_DATA_DIR` set (Playwright helper)             | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR` (absolute) | Kepler [test]    | disabled    | off         | запрещён |
+| `test-<x>`       | `KOSMOS_DATA_DIR` set (Playwright helper)             | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR` (absolute) | Kepler [test]          | disabled    | off         | запрещён |
 
 `<x>` — `[a-z0-9][a-z0-9-]*`. Соглашение по именам: `dev-a`, `dev-b`, `dev-eden`, `dev-issue-42`.
 

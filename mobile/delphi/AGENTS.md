@@ -10,6 +10,7 @@
 Полная страница: `docs-site/apps/delphi.md`.
 
 ---
+
 ## Контекст: Delphi — Kotlin workspace
 
 # Delphi — задачи

@@ -68,12 +68,12 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 8. Запреты per-app
 
-| Приложение | Не делать                                                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------------------------- |
-| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                    |
+| Приложение | Не делать                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                                                                           |
 | Eden       | Возвращаться к ripgrep / Heart sidecar, ломать `save/move/delete` hardening в Pinia store (`extensions/eden/src/store/eden.ts`), возвращать ручные titlebar-offset |
-| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                       |
-| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                   |
+| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                                                                              |
+| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                                                                          |
 
 ## 9. Brand consistency (Kepler / Kosmos)
 

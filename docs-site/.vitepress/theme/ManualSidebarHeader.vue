@@ -84,8 +84,14 @@ function openSearch() {
     <!-- Поисковик -->
     <button type="button" class="search-trigger" @click="openSearch">
       <span class="search-icon" aria-hidden="true">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
-          stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="m10 10 4.25 4.25m-3-7.75a4.75 4.75 0 1 1-9.5 0 4.75 4.75 0 0 1 9.5 0Z" />
         </svg>
       </span>
@@ -100,18 +106,34 @@ function openSearch() {
     <div class="section-nav">
       <a class="section-link" :class="{ active: isManualHome }" href="/manual/">
         <span class="icon" aria-hidden="true">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 3.75s-3-2-6.25-2v10.5c3.25 0 6.25 2 6.25 2m0-10.5s3-2 6.25-2v10.5c-3.25 0-6.25 2-6.25 2m0-10.5v10.5" />
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M8 3.75s-3-2-6.25-2v10.5c3.25 0 6.25 2 6.25 2m0-10.5s3-2 6.25-2v10.5c-3.25 0-6.25 2-6.25 2m0-10.5v10.5"
+            />
           </svg>
         </span>
         Мануал
       </a>
       <a class="section-link" :class="{ active: isBeta }" href="/manual/beta/">
         <span class="icon" aria-hidden="true">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 4.75v2.836a1 1 0 0 0 .293.707l1.957 1.957m4-2.25a6.25 6.25 0 1 1-12.5 0 6.25 6.25 0 0 1 12.5 0Z" />
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M8 4.75v2.836a1 1 0 0 0 .293.707l1.957 1.957m4-2.25a6.25 6.25 0 1 1-12.5 0 6.25 6.25 0 0 1 12.5 0Z"
+            />
           </svg>
         </span>
         Бета мануал
@@ -186,7 +208,9 @@ function openSearch() {
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
 }
 
 .search-trigger:hover {
@@ -360,7 +384,9 @@ function openSearch() {
 
 .other-link .arrow {
   color: var(--kosmos-muted-fg);
-  transition: transform 120ms ease, color 120ms ease;
+  transition:
+    transform 120ms ease,
+    color 120ms ease;
 }
 
 .other-link:hover .arrow {

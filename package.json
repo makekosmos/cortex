@@ -11,6 +11,7 @@
     "docs-site"
   ],
   "scripts": {
+    "prepare": "lefthook install",
     "ark:guard:writes": "node scripts/check-ark-write-boundaries.mjs",
     "ark:smoke": "node scripts/ark-smoke.mjs",
     "lint": "oxlint",
@@ -30,6 +31,7 @@
     "electron": "^42.2.0",
     "electron-playwright-helpers": "^2.1.0",
     "knip": "^6.14.1",
+    "lefthook": "^2.1.8",
     "oxfmt": "0.51.0",
     "oxlint": "1.66.0",
     "playwright": "^1.60.0",

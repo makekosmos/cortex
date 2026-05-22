@@ -27,15 +27,15 @@
 
 ## 🚨 Прежде чем менять код
 
-| Область правки | Обязательно прочитать |
-| --- | --- |
+| Область правки                                                                                   | Обязательно прочитать                                                              |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
 | Data-слой (`shell/electron`, `extensions/<id>/src`, `services/kepler-backend/src/usage_tracker`) | `docs-site/concepts/write-boundary.md` + `agents/forbidden.md` § ARK writes / Sync |
-| `extensions/<id>/src/` | `docs-site/apps/<name>.md` + `forbidden.md` § per-app |
-| `shell/electron/focus-*`, `kepler-focus-helper/svc` | `docs-site/concepts/focus-mode.md` + `forbidden.md` § Focus mode |
-| `shell/electron/extension-host.ts`, command bus | `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md` |
-| Sync / schema / write-boundary | `docs-site/concepts/sync.md` + `ark-objects.md` |
-| Substantial-задача (фича / endpoint / архитектура) | `docs-site/concepts/proof-loop.md` + spec в `.agent/tasks/<DATE>-<slug>/` |
-| Перед оценкой срока пользователю | skill `estimate-calibration` (читать `log.jsonl`) |
+| `extensions/<id>/src/`                                                                           | `docs-site/apps/<name>.md` + `forbidden.md` § per-app                              |
+| `shell/electron/focus-*`, `kepler-focus-helper/svc`                                              | `docs-site/concepts/focus-mode.md` + `forbidden.md` § Focus mode                   |
+| `shell/electron/extension-host.ts`, command bus                                                  | `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md`  |
+| Sync / schema / write-boundary                                                                   | `docs-site/concepts/sync.md` + `ark-objects.md`                                    |
+| Substantial-задача (фича / endpoint / архитектура)                                               | `docs-site/concepts/proof-loop.md` + spec в `.agent/tasks/<DATE>-<slug>/`          |
+| Перед оценкой срока пользователю                                                                 | skill `estimate-calibration` (читать `log.jsonl`)                                  |
 
 ## Команды (всегда под рукой)
 
@@ -51,19 +51,19 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 
 ## Карта (где что)
 
-| Имя | Где |
-| --- | --- |
-| Eden (заметки, TipTap) | `extensions/eden/` |
-| Delphi (задачи) | `extensions/delphi/` |
-| Horologion (трекер/pomodoro, focus mode host) | `extensions/horologion/` |
-| Arrancador (игровая библиотека) | `extensions/arrancador/` |
-| Kepler shell (лаунчер + focus widget) | `shell/` |
-| Kepler backend (Rust: command bus, sync, usage tracker) | `services/kepler-backend/` |
-| Focus helper / service (hosts write) | `services/kepler-focus-helper/`, `services/kepler-focus-svc/` |
-| ARK core (Rust runtime) | `crates/ark-core/` |
-| `@kosmos/ark` (TS SDK) | `packages/ark/` |
-| `@kosmos/visuals` (UI токены) | `packages/visuals/` |
-| Dashboard (встроенный shell view) | `shell/src/views/Dashboard*.vue` |
+| Имя                                                     | Где                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------- |
+| Eden (заметки, TipTap)                                  | `extensions/eden/`                                            |
+| Delphi (задачи)                                         | `extensions/delphi/`                                          |
+| Horologion (трекер/pomodoro, focus mode host)           | `extensions/horologion/`                                      |
+| Arrancador (игровая библиотека)                         | `extensions/arrancador/`                                      |
+| Kepler shell (лаунчер + focus widget)                   | `shell/`                                                      |
+| Kepler backend (Rust: command bus, sync, usage tracker) | `services/kepler-backend/`                                    |
+| Focus helper / service (hosts write)                    | `services/kepler-focus-helper/`, `services/kepler-focus-svc/` |
+| ARK core (Rust runtime)                                 | `crates/ark-core/`                                            |
+| `@kosmos/ark` (TS SDK)                                  | `packages/ark/`                                               |
+| `@kosmos/visuals` (UI токены)                           | `packages/visuals/`                                           |
+| Dashboard (встроенный shell view)                       | `shell/src/views/Dashboard*.vue`                              |
 
 Подробное описание — `docs-site/agents/index.md` (Карта приложений).
 
@@ -153,12 +153,14 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 :::
 
 **Главные:**
+
 - `docs-site/agents/forbidden.md` — **полный** список «никогда» с обоснованиями (per-app).
 - `docs-site/agents/index.md` — карта приложений + общие принципы.
 - `docs-site/agents/checklists.md` — чек-листы по областям перед сдачей.
 - `STATUS.md` (корень) — актуальный snapshot проекта.
 
 **Концепты:**
+
 - `docs-site/concepts/architecture.md`, `ark-objects.md`, `write-boundary.md`, `sync.md` — модель данных и граница записи.
 - `docs-site/concepts/proof-loop.md`, `test-isolation.md` — substantial-задачи и изоляция тестов.
 - `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md` — runtime extensions (probe-based HMR, opt-in dev mode).
@@ -167,6 +169,7 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 - `docs-site/concepts/db-resilience.md` — Mutex poison recovery, backup, integrity check.
 
 **Reference:**
+
 - `docs-site/reference/rules.md` — сжатый TL;DR.
 - `docs-site/reference/commands.md` — все bun scripts.
 - `docs-site/reference/glossary.md` — термины.
@@ -174,6 +177,7 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 - `docs-site/reference/smoke-matrix.md` — что прогонять перед PR.
 
 **Operational:**
+
 - `docs-site/agents/testing.md` — e2e правила (headless, universal contract).
 - `docs-site/agents/spec-templates.md` — шаблоны `spec.md`.
 - `docs-site/agents/estimation.md` — калибровка оценок.

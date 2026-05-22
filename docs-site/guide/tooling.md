@@ -62,11 +62,11 @@
 
 ### State management (Vue)
 
-| Слой                             | Инструменты                                             | Где используется                                                    |
-| -------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
-| Reactive state                   | **Pinia 3**                                             | Eden, Horologion (stores `useEdenStore`, `usePomodoroStore`)        |
+| Слой                             | Инструменты                                                                                                            | Где используется                                                    |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Reactive state                   | **Pinia 3**                                                                                                            | Eden, Horologion (stores `useEdenStore`, `usePomodoroStore`)        |
 | Server state cache (планируется) | **@pinia/colada 1.3** — plugin подключён в Eden (`main.ts`), но stores ещё на чистой Pinia. Полная миграция — Phase 14 | Eden state migration — см. [Roadmap Phase 14](/apps/kepler-roadmap) |
-| Routing                          | **vue-router** (memory history)                         | Delphi (5 pages), при необходимости в других extensions             |
+| Routing                          | **vue-router** (memory history)                                                                                        | Delphi (5 pages), при необходимости в других extensions             |
 
 ### Сетевая инфраструктура (LAN sync, IPC)
 

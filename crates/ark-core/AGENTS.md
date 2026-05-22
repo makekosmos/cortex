@@ -10,6 +10,7 @@
 Полная страница: `docs-site/packages/ark-core.md`.
 
 ---
+
 ## Контекст: ark-core
 
 # ark-core

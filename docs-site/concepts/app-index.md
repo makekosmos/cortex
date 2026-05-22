@@ -92,6 +92,7 @@ pub trait AppSource: Send + Sync {
 - `%PROGRAMDATA%\Microsoft\Windows\Start Menu\Programs` (system-wide)
 
 Каждый `.lnk` парсится через [lnk crate](https://crates.io/crates/lnk):
+
 - `link_info().local_base_path()` — target file
 - env-var expansion (`%ProgramFiles%`, `%LocalAppData%`, и т.д.)
 - skip: uninstaller'ы (по filename regex), `.url`/`.appref-ms`, broken targets, non-executable, zero-byte
@@ -134,6 +135,7 @@ score(query, app, recent_usage)
 ```
 
 `name_match_score`:
+
 - `1.0` — full prefix (`Note` → `Notepad`)
 - `0.7` — word-prefix после space/dash/underscore/dot/slash (`store` → `Microsoft Store`)
 - `0.4` — substring
@@ -143,12 +145,12 @@ score(query, app, recent_usage)
 
 ## WS endpoints
 
-| Operation | Params | Response |
-|---|---|---|
-| `app_index.list_all` | `{ limit?: number = 500 }` | `{ apps: App[] }` с inline base64 иконками |
-| `app_index.search` | `{ query: string, limit?: number = 8 }` | `{ results: ScoredApp[] }` (top-N с score) |
-| `app_index.launch` | `{ id: string }` | `{ ok: true }` |
-| `app_index.rescan` | (none) | `{ added, updated, removed, total }` |
+| Operation            | Params                                  | Response                                   |
+| -------------------- | --------------------------------------- | ------------------------------------------ |
+| `app_index.list_all` | `{ limit?: number = 500 }`              | `{ apps: App[] }` с inline base64 иконками |
+| `app_index.search`   | `{ query: string, limit?: number = 8 }` | `{ results: ScoredApp[] }` (top-N с score) |
+| `app_index.launch`   | `{ id: string }`                        | `{ ok: true }`                             |
+| `app_index.rescan`   | (none)                                  | `{ added, updated, removed, total }`       |
 
 Иконки приходят как **inline base64 data URL** в response — renderer не имеет file://-доступа к icon cache. Размер ответа `list_all` ~3–5 MB на типичной машине (65 apps × ~40 KB на иконку) — это в порядке для local IPC, но если станет узким — переедем на `kepler-icon://` custom protocol в main process.
 

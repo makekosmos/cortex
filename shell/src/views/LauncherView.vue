@@ -121,10 +121,9 @@ function appToCommand(a: AppEntry): CommandRecord {
 
 async function fetchApps(): Promise<CommandRecord[]> {
   try {
-    const res = await window.kepler.ark.request<{ apps: AppEntry[] }>(
-      "app_index.list_all",
-      { limit: 500 },
-    );
+    const res = await window.kepler.ark.request<{ apps: AppEntry[] }>("app_index.list_all", {
+      limit: 500,
+    });
     return (res?.apps ?? []).map(appToCommand);
   } catch (e) {
     console.warn("app_index.list_all failed", e);
@@ -332,9 +331,7 @@ function totalRows(): number {
   return banner + filtered.value.length;
 }
 
-function rowAt(
-  idx: number,
-): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | null {
+function rowAt(idx: number): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | null {
   const banner = updateBanner.value ? 1 : 0;
   if (banner && idx === 0) return { kind: "banner" };
   const i = idx - banner;
@@ -688,9 +685,7 @@ onUnmounted(() => {
             <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
               cmd.appName
             }}</span>
-            <span class="kind-label">{{
-              cmd.kind === "command" ? "Команда" : "Приложение"
-            }}</span>
+            <span class="kind-label">{{ cmd.kind === "command" ? "Команда" : "Приложение" }}</span>
           </li>
         </ul>
       </template>

@@ -38,6 +38,7 @@ LAN-синхронизация между твоими устройствами 
 - Email: kazajackyyy@gmail.com
 
 Приложи к репорту:
+
 1. Версию Kepler (Settings → О программе)
 2. Что делал перед поломкой
 3. Логи (если есть) из `%APPDATA%\Kosmos\crashes\`

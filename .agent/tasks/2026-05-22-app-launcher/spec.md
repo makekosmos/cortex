@@ -15,7 +15,6 @@ Research (`a6d57d15...`): все production launcher'ы используют **�
 ### Backend — `services/kepler-backend/src/app_index/`
 
 1. **Common module (`mod.rs`, `app.rs`, `store.rs`, `cache.rs`, `icons.rs`, `watcher.rs`)** — platform-agnostic.
-
    - `pub trait AppSource: Send + Sync { fn name(&self) -> &str; fn discover(&self) -> Result<Vec<App>>; fn launch(&self, app: &App) -> Result<()>; }`
    - `struct App { id: String, name: String, exec_path: String, icon_path: Option<String>, kind: AppKind, source: String, mtime: i64 }`
    - `enum AppKind { Win32, Uwp, MacBundle, LinuxDesktop }`

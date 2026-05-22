@@ -79,10 +79,7 @@ import {
 } from "./settings-window";
 import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
-import {
-  setupFocusWidgetBackendSync,
-  teardownFocusWidgetBackendSync,
-} from "./focus-widget";
+import { setupFocusWidgetBackendSync, teardownFocusWidgetBackendSync } from "./focus-widget";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
 import {

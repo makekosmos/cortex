@@ -18,6 +18,7 @@
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -179,7 +180,10 @@ async function buildRootAgents() {
     "",
   ].join("\n");
 
-  await write("CLAUDE.md", claudeHeader + "\n" + rewriteLinks(stripFrontmatter(claudeCore)).trim() + "\n");
+  await write(
+    "CLAUDE.md",
+    claudeHeader + "\n" + rewriteLinks(stripFrontmatter(claudeCore)).trim() + "\n",
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -353,11 +357,30 @@ async function buildLlmsTxt() {
 // main
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Прогоняем oxfmt по только что сгенерированным .md, иначе pre-commit hook
+// (`oxfmt --check`) падает: генератор пишет «как есть», а CI/hook ожидают
+// форматированный output.
+function formatGenerated() {
+  const files = ["AGENTS.md", "CLAUDE.md", "mobile/delphi/AGENTS.md", "crates/ark-core/AGENTS.md"];
+  const bin = path.join(
+    ROOT,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "oxfmt.exe" : "oxfmt",
+  );
+  const r = spawnSync(bin, files, { stdio: "inherit", cwd: ROOT });
+  if (r.status !== 0) {
+    console.error(`oxfmt failed (exit ${r.status})`);
+    process.exit(r.status ?? 1);
+  }
+}
+
 async function main() {
   console.log("→ sync agents docs");
   await buildRootAgents();
   await buildPerAreaAgents();
   await buildLlmsTxt();
+  formatGenerated();
   console.log("done.");
 }
 

@@ -271,16 +271,11 @@ export function getLauncherStateTtlMinutes(): number {
   return Math.floor(v);
 }
 
-ipcMain.handle("kepler:settings:launcher-state-ttl:get", () =>
-  getLauncherStateTtlMinutes(),
-);
+ipcMain.handle("kepler:settings:launcher-state-ttl:get", () => getLauncherStateTtlMinutes());
 
-ipcMain.handle(
-  "kepler:settings:launcher-state-ttl:set",
-  (_e, minutes: number) => {
-    const n = Number(minutes);
-    if (Number.isFinite(n) && n >= 0) {
-      writeSettings({ launcherStateTtlMinutes: Math.floor(n) });
-    }
-  },
-);
+ipcMain.handle("kepler:settings:launcher-state-ttl:set", (_e, minutes: number) => {
+  const n = Number(minutes);
+  if (Number.isFinite(n) && n >= 0) {
+    writeSettings({ launcherStateTtlMinutes: Math.floor(n) });
+  }
+});

@@ -69,11 +69,13 @@ bun run --cwd shell build:extensions
   - Формат карточки: `### Заголовок <Badge type="tip" text="0.1.X" />` + 1-3 коротких абзаца на человеческом языке. Указывай что юзер делает, а не как код работает.
 
 **Опционально** (если архитектура / поведение реально изменились):
+
 - `docs-site/apps/<name>.md` — для дев-доки конкретного компонента.
 - `docs-site/concepts/<name>-*.md` — для cross-cutting концептов (extension-host, command-bus, distribution).
 - `docs-site/agents/forbidden.md` — если новая фича вводит инвариант, нарушение которого опасно (например «не выключай `keepAliveInBackground` для Horologion без переноса side-effects в main»).
 
 **После правок в `docs-site/`**:
+
 - `bun run docs:sync` — регенерация `AGENTS.md` / `CLAUDE.md` / `llms.txt`. Иначе разъедутся.
 - Если документация уже обновлена в предыдущих коммитах текущей сессии — пропусти этот шаг (не дублируй).
 

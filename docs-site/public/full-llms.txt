@@ -240,7 +240,7 @@ Dashboard — встроенный shell view (shell/src/views/Dashboard*.vue), 
 
 - Спавнит `kepler-backend.exe` как child (`spawnBackend`).
 - Подключается к нему через `@kosmos/ark` в kepler-mode (`ensureKeplerRunning`).
-- Показывает launcher окно (frameless, acrylic background, alwaysOnTop) по `Alt+Space` (prod) / `Alt+\`` (dev) — см. `shell/electron/instance.ts → resolveInstance().hotkey` и `shell/electron/settings-window.ts → DEFAULT_HOTKEY_PROD`.
+- Показывает launcher окно (frameless, acrylic background, alwaysOnTop) по `Alt+Space` (prod) / `Alt+\`` (dev) — см. `shell/electron/instance.ts → resolveInstance().hotkey`и`shell/electron/settings-window.ts → DEFAULT_HOTKEY_PROD`.
 - Tray-иконка с menu (Открыть / Настройки / Выход).
 - Список команд в launcher = **static open-commands** (`COMMANDS` из `electron/commands.ts`) + **dynamic action-commands** (через `arkClient.commands.list()` — приходят от running апок).
 - При invoke: static исполняются локально (`spawn(exe)`), dynamic уходят в `kepler-backend` через `arkClient.commands.invoke(id)` — backend broadcast'ит `command_invoked`, owning апка handle'ит.
@@ -324,13 +324,13 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 
 ## Communication primitives
 
-| Primitive          | Где определён                                    | Когда                                                                                                                 |
-| ------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| **ARK objects**    | `objects` + `object_links` в SQLite              | Долгоживущие данные, репликация sync'ом                                                                               |
-| **Entity events**  | `onArkEvent` / `onEntityChanged` в `@kosmos/ark` | Подписка на изменения объектов                                                                                        |
-| **Command bus**    | `commands.*` в WS protocol                       | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](docs-site/concepts/command-bus.md)              |
-| **Extension host** | `kepler:extension:*` IPC в kepler-shell          | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](docs-site/concepts/extension-host.md) |
-| **Focus mode**     | `shell/electron/focus-*.ts` + backend `pomodoro_host` | Floating widget, app/website blocker, pomodoro phase events. См. [Focus mode](docs-site/concepts/focus-mode.md)             |
+| Primitive          | Где определён                                         | Когда                                                                                                                 |
+| ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **ARK objects**    | `objects` + `object_links` в SQLite                   | Долгоживущие данные, репликация sync'ом                                                                               |
+| **Entity events**  | `onArkEvent` / `onEntityChanged` в `@kosmos/ark`      | Подписка на изменения объектов                                                                                        |
+| **Command bus**    | `commands.*` в WS protocol                            | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](docs-site/concepts/command-bus.md)              |
+| **Extension host** | `kepler:extension:*` IPC в kepler-shell               | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](docs-site/concepts/extension-host.md) |
+| **Focus mode**     | `shell/electron/focus-*.ts` + backend `pomodoro_host` | Floating widget, app/website blocker, pomodoro phase events. См. [Focus mode](docs-site/concepts/focus-mode.md)                   |
 
 ## Принципы
 
@@ -356,19 +356,19 @@ Substantial-правки проходят через proof loop с явными 
 
 ## Компонентная карта
 
-| Кусок                 | Где                                                   | Тип                 | Роль                                                                                                                        |
-| --------------------- | ----------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| ark-core              | `crates/ark-core/rust`                                | Rust crate + бинарь | runtime данных                                                                                                              |
-| @kosmos/ark           | `packages/ark`                                        | TS SDK              | клиент к sidecar / kepler-backend                                                                                           |
-| kepler-shell          | `shell/` (npm `kepler-shell`)                         | TS + Electron       | launcher host, tray, settings, extension loader                                                                             |
-| kepler-backend        | `services/kepler-backend`                             | Rust binary         | shared runtime supervisor + WS gateway + command bus + sync + usage_tracker модуль                                          |
-| ark-relay-server      | `services/ark-relay-server`                           | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                        |
-| kepler-watcher        | `services/kepler-watcher`                             | Rust                | watcher-демон над ark-core                                                                                                  |
-| @kosmos/visuals       | `packages/visuals`                                    | TS + Vue            | дизайн-система                                                                                                              |
-| Vue-extensions        | `extensions/{eden,delphi,arrancador,horologion}`      | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                    |
-| Dashboard             | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | TS + Vue        | встроенный shell view (read-only ARK browser), не extension                                                                 |
-| ark-service (Android) | `mobile/ark-service`                                  | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
-| usage-tracker module  | `services/kepler-backend/src/usage_tracker/`          | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                               |
+| Кусок                 | Где                                                       | Тип                 | Роль                                                                                                                        |
+| --------------------- | --------------------------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| ark-core              | `crates/ark-core/rust`                                    | Rust crate + бинарь | runtime данных                                                                                                              |
+| @kosmos/ark           | `packages/ark`                                            | TS SDK              | клиент к sidecar / kepler-backend                                                                                           |
+| kepler-shell          | `shell/` (npm `kepler-shell`)                             | TS + Electron       | launcher host, tray, settings, extension loader                                                                             |
+| kepler-backend        | `services/kepler-backend`                                 | Rust binary         | shared runtime supervisor + WS gateway + command bus + sync + usage_tracker модуль                                          |
+| ark-relay-server      | `services/ark-relay-server`                               | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                        |
+| kepler-watcher        | `services/kepler-watcher`                                 | Rust                | watcher-демон над ark-core                                                                                                  |
+| @kosmos/visuals       | `packages/visuals`                                        | TS + Vue            | дизайн-система                                                                                                              |
+| Vue-extensions        | `extensions/{eden,delphi,arrancador,horologion}`          | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                    |
+| Dashboard             | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | TS + Vue            | встроенный shell view (read-only ARK browser), не extension                                                                 |
+| ark-service (Android) | `mobile/ark-service`                                      | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
+| usage-tracker module  | `services/kepler-backend/src/usage_tracker/`              | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                               |
 
 
 ## Модель данных ARK
@@ -1039,13 +1039,13 @@ bun run ark:guard:writes
 
 ## Кому разрешено читать напрямую
 
-| Контекст                   | Можно?                        | Условия                                                    |
-| -------------------------- | ----------------------------- | ---------------------------------------------------------- |
-| Renderer любого приложения | ❌ нет                        | Только preload API                                         |
-| Electron main              | ✅ да                         | Только `mode=ro`, явный fallback, отделённый от writes     |
+| Контекст                   | Можно?                        | Условия                                                       |
+| -------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| Renderer любого приложения | ❌ нет                        | Только preload API                                            |
+| Electron main              | ✅ да                         | Только `mode=ro`, явный fallback, отделённый от writes        |
 | Dashboard (shell view)     | ✅ полный read-only inspector | Любая выбранная ARK SQLite-БД, доступ через kepler-shell main |
-| Arrancador                 | ⚠️ ограничено                 | Только как fallback при недоступном `ark-core-rpc`         |
-| Eden / Delphi / другие     | ⚠️ ограничено                 | Только специальные пути (миграция, vault-локальная работа) |
+| Arrancador                 | ⚠️ ограничено                 | Только как fallback при недоступном `ark-core-rpc`            |
+| Eden / Delphi / другие     | ⚠️ ограничено                 | Только специальные пути (миграция, vault-локальная работа)    |
 
 ## Почему read-only мягче
 
@@ -2246,12 +2246,12 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 8. Запреты per-app
 
-| Приложение | Не делать                                                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------------------------- |
-| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                    |
+| Приложение | Не делать                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                                                                           |
 | Eden       | Возвращаться к ripgrep / Heart sidecar, ломать `save/move/delete` hardening в Pinia store (`extensions/eden/src/store/eden.ts`), возвращать ручные titlebar-offset |
-| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                       |
-| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                   |
+| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                                                                              |
+| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                                                                          |
 
 ## 9. Brand consistency (Kepler / Kosmos)
 

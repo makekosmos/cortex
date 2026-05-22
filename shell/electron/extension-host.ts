@@ -1033,12 +1033,7 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     // isAppQuitting → пропускаем интерсепт на quit'е, иначе app не сможет
     // выйти. Headless / test mode тоже даёт реальный close — Playwright
     // явно закрывает окна.
-    if (
-      manifest.keepAliveInBackground &&
-      !isAppQuitting &&
-      !headless &&
-      !win.isDestroyed()
-    ) {
+    if (manifest.keepAliveInBackground && !isAppQuitting && !headless && !win.isDestroyed()) {
       e.preventDefault();
       win.hide();
     }

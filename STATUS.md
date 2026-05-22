@@ -27,7 +27,8 @@ Squirrel-installer apps кладут target=Update.exe (без embedded icons),
 а реальный icon location прописан в `.lnk`. Старый extractor доставал
 иконку только из target → placeholder. Теперь Start Menu source
 вызывает icons.rs eagerly с доступом к .lnk path, стратегия:
-1) `.lnk::icon_location()` → 2) target exe.
+
+1. `.lnk::icon_location()` → 2) target exe.
 
 ### State restore с TTL
 
@@ -38,29 +39,29 @@ Setting в Settings → Общие.
 
 См. `.agent/tasks/2026-05-22-app-launcher/spec.md` и `docs-site/concepts/app-index.md`.
 
-
-
 ## Текущие версии
 
-| Артефакт                                         | Версия                                                                                                            |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Kepler shell (`shell/package.json`)              | **0.2.5** (App Launcher v1 — Start Menu + UWP + frecency + state restore)                                          |
+| Артефакт                                         | Версия                                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Kepler shell (`shell/package.json`)              | **0.2.5** (App Launcher v1 — Start Menu + UWP + frecency + state restore)                                           |
 | Eden extension (`extensions/eden/manifest.json`) | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
-| Delphi extension                                 | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                 |
-| Horologion extension                             | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                          |
-| Arrancador extension                             | **0.1.3**                                                                                                         |
-| Dashboard                                        | встроен в shell (не extension)                                                                                    |
+| Delphi extension                                 | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
+| Horologion extension                             | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
+| Arrancador extension                             | **0.1.3**                                                                                                           |
+| Dashboard                                        | встроен в shell (не extension)                                                                                      |
 
 ## 2026-05-22 — Horologion live-в-фоне + drag-select auto-scroll (Kepler 0.2.3 → 0.2.4, Eden 0.1.10 → 0.1.11, Horologion 0.1.5 → 0.1.6)
 
 ### Horologion 0.1.5 → 0.1.6 + Kepler shell 0.2.3 → 0.2.4
 
 Закрытие окна Horologion во время pomodoro ломало 3 вещи:
+
 1. Floating focus widget переставал тикать (renderer push'ил state, renderer dead → no push'ей; main process autonomous tick не обновлял phaseEndsAtMs на phase boundary).
 2. `time_entry_obj` оставались `endedAt: null` навсегда (close/create логика жила в `usePomodoroSession` renderer'е).
 3. Native notifications зависели от renderer-life'а.
 
 **Решение**:
+
 - **`keepAliveInBackground: true`** новое поле в `ExtensionManifest`. `shell/electron/extension-host.ts` intercept'ит `close` event для таких extensions → `win.hide()` вместо destroy. Renderer переживает X, все side-effects продолжают работать. Окно реально destroy'ится только на `app.before-quit`.
 - **`backgroundThrottling: false`** теперь для всех extension `webPreferences` — даже hidden / minimized таймеры не throttle'ятся Chromium'ом.
 - **`focus-widget` backend sync** — main process подписывается напрямую на `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через `arkClient.onArkEvent`, деривит focus state, зовёт `setFocusState`. Виджет теперь появляется даже если pomodoro стартанули через launcher команду без открытия Horologion окна. Renderer push'и остаются для blockingActive (live из focusBlocklistId setting).

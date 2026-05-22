@@ -11,9 +11,7 @@ const route = useRoute();
 // user mode: /manual/* и /whats-new/* — упрощённый nav
 // dev mode: всё остальное — полный nav
 const mode = computed(() =>
-  route.path.startsWith("/manual") || route.path.startsWith("/whats-new")
-    ? "user"
-    : "dev",
+  route.path.startsWith("/manual") || route.path.startsWith("/whats-new") ? "user" : "dev",
 );
 
 function applyMode(m: string) {
