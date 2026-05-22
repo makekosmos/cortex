@@ -82,7 +82,32 @@ bun run --cwd shell ext:catalog
 bun run --cwd shell build
 ```
 
-`electron-builder --win nsis --publish always` сам бьёт релиз в `yoso-industries/kepler-releases` (см. `shell/package.json → build.publish`).
+::: warning electron-builder publish step падает без GH_TOKEN
+У пользователя нет постоянного `GH_TOKEN` в env. `electron-builder --publish always`
+дойдёт до GitHubPublisher и упадёт с `GitHub Personal Access Token is not set`.
+**Это OK** — артефакты уже собраны на диск к этому моменту:
+
+```
+shell/release/Kepler Setup X.Y.Z.exe
+shell/release/Kepler Setup X.Y.Z.exe.blockmap
+shell/release/latest.yml
+```
+
+Сразу делай **manual GH release через gh CLI** (auth уже настроен через `gh auth login`):
+
+```powershell
+cd shell/release
+gh release create v<version> -R yoso-industries/kepler-releases `
+  --title "v<version>" `
+  --notes "<краткий changelog>" `
+  "Kepler Setup <version>.exe" `
+  "Kepler Setup <version>.exe.blockmap" `
+  "latest.yml"
+```
+
+`latest.yml` **обязательно** прикреплять — autoUpdater старых установок ищет его
+для определения новой версии. Без него обновление не подхватится.
+:::
 
 ### 6. Verify
 
