@@ -152,6 +152,12 @@ impl AppIndex {
         self.cache.read().await.iter().find(|a| a.id == id).cloned()
     }
 
+    /// Все приложения (с лимитом). Используется когда launcher показывает
+    /// apps как часть общего списка без отдельного поиска.
+    pub async fn all(&self, limit: usize) -> Vec<App> {
+        self.cache.read().await.iter().take(limit).cloned().collect()
+    }
+
     /// Список источников (для launch dispatch).
     pub fn sources(&self) -> &[Box<dyn AppSource>] {
         &self.sources

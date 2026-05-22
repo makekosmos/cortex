@@ -11,7 +11,7 @@ use std::path::PathBuf;
 
 pub fn sources(icon_cache_dir: PathBuf) -> Vec<Box<dyn AppSource>> {
     vec![
-        Box::new(start_menu::StartMenuSource::new()),
+        Box::new(start_menu::StartMenuSource::new(icon_cache_dir.clone())),
         Box::new(uwp::UwpSource::new(icon_cache_dir)),
     ]
 }

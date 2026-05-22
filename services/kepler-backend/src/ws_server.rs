@@ -1151,6 +1151,30 @@ async fn handle_app_index_op(
     use crate::app_index::ranking::UsageStats;
 
     match subop {
+        "list_all" => {
+            // Все приложения с inline base64 иконками. Используется когда
+            // launcher хочет показать apps как часть общего списка команд
+            // (без отдельной поисковой подсекции).
+            let limit = params
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(500) as usize;
+            let mut out: Vec<crate::app_index::App> = app_index.all(limit).await;
+            for app in &mut out {
+                if let Some(path) = app.icon_path.clone() {
+                    if let Ok(bytes) = std::fs::read(&path) {
+                        let b64 = base64_encode(&bytes);
+                        app.icon_path = Some(format!("data:image/png;base64,{b64}"));
+                    } else {
+                        app.icon_path = None;
+                    }
+                }
+            }
+            match serde_json::to_value(serde_json::json!({ "apps": out })) {
+                Ok(v) => LocalResponse::ok(v),
+                Err(e) => LocalResponse::err(format!("app_index.list_all: serialize: {e}")),
+            }
+        }
         "search" => {
             let query = match params.get("query").and_then(|v| v.as_str()) {
                 Some(q) => q.to_string(),

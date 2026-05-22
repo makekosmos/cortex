@@ -28,17 +28,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-pub struct StartMenuSource;
-
-impl StartMenuSource {
-    pub fn new() -> Self {
-        Self
-    }
+pub struct StartMenuSource {
+    icon_cache_dir: PathBuf,
 }
 
-impl Default for StartMenuSource {
-    fn default() -> Self {
-        Self::new()
+impl StartMenuSource {
+    pub fn new(icon_cache_dir: PathBuf) -> Self {
+        Self { icon_cache_dir }
     }
 }
 
@@ -62,7 +58,7 @@ impl AppSource for StartMenuSource {
                 );
                 continue;
             }
-            scan_dir(root, &mut by_id);
+            scan_dir(root, &mut by_id, &self.icon_cache_dir);
         }
 
         let apps: Vec<App> = by_id.into_values().collect();
@@ -103,7 +99,7 @@ fn start_menu_roots() -> Vec<PathBuf> {
     out
 }
 
-fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>) {
+fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>, icon_cache_dir: &Path) {
     for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|e| e.ok()) {
         if !entry.file_type().is_file() {
             continue;
@@ -182,11 +178,21 @@ fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>) {
                     continue;
                 }
                 let mtime = mtime_secs(path);
+                // Извлекаем иконку eagerly с доступом к .lnk path —
+                // Squirrel-installer apps (Discord, Slack, Teams) кладут
+                // реальный icon location в .lnk, а target указывает на
+                // Update.exe без embedded ресурсов.
+                let icon_path = crate::app_index::icons::ensure_icon_for_lnk(
+                    icon_cache_dir,
+                    path,
+                    &exec_path,
+                )
+                .ok();
                 let app = App {
                     id: id.clone(),
                     name: file_stem,
                     exec_path,
-                    icon_path: None,
+                    icon_path,
                     kind: AppKind::Win32,
                     source: "start_menu".to_string(),
                     mtime,

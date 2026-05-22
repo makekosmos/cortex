@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, nextTick, watch } from "vue";
+import { computed, ref, onMounted, onUnmounted, nextTick } from "vue";
 import type { Component } from "vue";
 import {
   Settings as SettingsIcon,
@@ -94,8 +94,10 @@ const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
 
 // --- App Launcher (Start Menu / UWP) ---------------------------------------
-// Backend WS endpoint `app_index.search` возвращает уже отрендеренные
-// data-URL иконки. `app_index.launch { id }` запускает приложение.
+// Apps загружаются один раз на старте через `app_index.list_all` и
+// merge'атся в общий список `commands` как CommandRecord c kind: "app".
+// Иконка приходит уже data-URL'ом. Filter / grouping / keyboard nav —
+// всё через существующую логику команд, отдельной секции «Приложения» нет.
 interface AppEntry {
   id: string;
   name: string;
@@ -105,48 +107,30 @@ interface AppEntry {
   source: string;
   mtime: number | null;
 }
-interface ScoredApp {
-  app: AppEntry;
-  score: number;
+const APP_ID_PREFIX = "app:";
+
+function appToCommand(a: AppEntry): CommandRecord {
+  return {
+    id: `${APP_ID_PREFIX}${a.id}`,
+    title: a.name,
+    category: "open",
+    kind: "app",
+    icon: a.icon_path ?? undefined,
+  };
 }
 
-const apps = ref<ScoredApp[]>([]);
-let appsSearchTimer: ReturnType<typeof setTimeout> | null = null;
-let appsSearchSeq = 0;
-
-async function searchApps(q: string) {
-  const seq = ++appsSearchSeq;
+async function fetchApps(): Promise<CommandRecord[]> {
   try {
-    const res = await window.kepler.ark.request<{ results: ScoredApp[] }>(
-      "app_index.search",
-      { query: q, limit: 8 },
+    const res = await window.kepler.ark.request<{ apps: AppEntry[] }>(
+      "app_index.list_all",
+      { limit: 500 },
     );
-    // Защита от race condition: пользователь мог уже ввести более новый
-    // запрос, пока WS вызов летал туда-обратно.
-    if (seq !== appsSearchSeq) return;
-    apps.value = res?.results ?? [];
+    return (res?.apps ?? []).map(appToCommand);
   } catch (e) {
-    if (seq !== appsSearchSeq) return;
-    console.warn("app_index.search failed", e);
-    apps.value = [];
+    console.warn("app_index.list_all failed", e);
+    return [];
   }
 }
-
-watch(query, (val) => {
-  const q = val.trim();
-  if (appsSearchTimer) {
-    clearTimeout(appsSearchTimer);
-    appsSearchTimer = null;
-  }
-  if (!q) {
-    appsSearchSeq++;
-    apps.value = [];
-    return;
-  }
-  appsSearchTimer = setTimeout(() => {
-    void searchApps(q);
-  }, 50);
-});
 
 interface ScoredCommand {
   cmd: CommandRecord;
@@ -287,12 +271,12 @@ function totalRows(): number {
   if (groupedNoQuery.value) {
     return banner + groupedNoQuery.value.recent.length + groupedNoQuery.value.all.length;
   }
-  return banner + filtered.value.length + apps.value.length;
+  return banner + filtered.value.length;
 }
 
 function rowAt(
   idx: number,
-): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | { kind: "app"; app: AppEntry } | null {
+): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | null {
   const banner = updateBanner.value ? 1 : 0;
   if (banner && idx === 0) return { kind: "banner" };
   const i = idx - banner;
@@ -304,19 +288,9 @@ function rowAt(
     if (j < all.length) return { kind: "cmd", cmd: all[j]! };
     return null;
   }
-  const f = filtered.value;
-  if (i < f.length) return { kind: "cmd", cmd: f[i]! };
-  const j = i - f.length;
-  const a = apps.value[j];
-  return a ? { kind: "app", app: a.app } : null;
+  const c = filtered.value[i];
+  return c ? { kind: "cmd", cmd: c } : null;
 }
-
-// Базовый индекс секции «Приложения» при активном query — используется в
-// шаблоне для маппинга click → selectedIndex.
-const appsBaseIndex = computed(() => {
-  const banner = updateBanner.value ? 1 : 0;
-  return banner + filtered.value.length;
-});
 
 async function invokeSelected() {
   const row = rowAt(selectedIndex.value);
@@ -325,20 +299,21 @@ async function invokeSelected() {
     await onBannerClick();
     return;
   }
-  if (row.kind === "app") {
+  recordRecent(row.cmd.id);
+  // App-команда (kind: "app" + id с префиксом `app:`) → app_index.launch.
+  // Обычная command → command bus.
+  if (row.cmd.id.startsWith(APP_ID_PREFIX)) {
+    const appId = row.cmd.id.slice(APP_ID_PREFIX.length);
     try {
-      await window.kepler.ark.request("app_index.launch", { id: row.app.id });
+      await window.kepler.ark.request("app_index.launch", { id: appId });
     } catch (e) {
       console.warn("app_index.launch failed", e);
       return;
     }
     await window.kepler.window.hide();
-    query.value = "";
-    selectedIndex.value = 0;
-    return;
+  } else {
+    await window.kepler.commands.invoke(row.cmd.id);
   }
-  recordRecent(row.cmd.id);
-  await window.kepler.commands.invoke(row.cmd.id);
   query.value = "";
   selectedIndex.value = 0;
 }
@@ -403,13 +378,17 @@ function onKey(e: KeyboardEvent) {
 }
 
 async function refreshCommands() {
-  try {
-    const all = await window.kepler.commands.list();
-    commands.value = all;
-  } catch (e) {
-    console.warn("commands.list failed", e);
-    commands.value = [];
-  }
+  // Загружаем команды от command bus и apps от app_index параллельно,
+  // мерджим в один массив. Apps идут после команд (запуск приложения —
+  // одна из подкатегорий «open»).
+  const [cmds, apps] = await Promise.all([
+    window.kepler.commands.list().catch((e) => {
+      console.warn("commands.list failed", e);
+      return [] as CommandRecord[];
+    }),
+    fetchApps(),
+  ]);
+  commands.value = [...cmds, ...apps];
 }
 
 let offShow = () => {};
@@ -419,8 +398,6 @@ onMounted(async () => {
   offShow = window.kepler.window.onShow(() => {
     query.value = "";
     selectedIndex.value = 0;
-    apps.value = [];
-    appsSearchSeq++;
     void refreshCommands();
     void nextTick(() => inputRef.value?.focus());
   });
@@ -588,65 +565,39 @@ onUnmounted(() => {
         </template>
       </template>
       <template v-else>
-        <div v-if="filtered.length === 0 && apps.length === 0" class="empty">
-          Ничего не найдено
-        </div>
-        <template v-else>
-          <ul v-if="filtered.length > 0" class="results">
-            <li
-              v-for="(cmd, idx) in filtered"
-              :key="cmd.id"
-              class="result"
-              :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
-              @click="
-                () => {
-                  selectedIndex = (updateBanner ? 1 : 0) + idx;
-                  void invokeSelected();
-                }
-              "
-            >
-              <BuiltInIcon
-                v-if="builtInIconFor(cmd)"
-                :icon="builtInIconFor(cmd)!.icon"
-                :svg-src="builtInIconFor(cmd)!.svgSrc"
-                :icon-color="builtInIconFor(cmd)!.iconColor"
-                :from="builtInIconFor(cmd)!.from"
-                :to="builtInIconFor(cmd)!.to"
-              />
-              <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
-              <span v-else class="icon icon-placeholder" aria-hidden="true" />
-              <span class="title">{{ cmd.title }}</span>
-              <span class="subtitle">{{ cmd.subtitle }}</span>
-            </li>
-          </ul>
-          <template v-if="apps.length > 0">
-            <div class="section-label">Приложения</div>
-            <ul class="results">
-              <li
-                v-for="(scored, idx) in apps"
-                :key="`app-${scored.app.id}`"
-                class="result"
-                :class="{ selected: appsBaseIndex + idx === selectedIndex }"
-                @click="
-                  () => {
-                    selectedIndex = appsBaseIndex + idx;
-                    void invokeSelected();
-                  }
-                "
-              >
-                <img
-                  v-if="scored.app.icon_path"
-                  :src="scored.app.icon_path"
-                  class="icon icon-app"
-                  alt=""
-                />
-                <span v-else class="icon icon-placeholder" aria-hidden="true" />
-                <span class="title">{{ scored.app.name }}</span>
-                <span class="kind-label">Приложение</span>
-              </li>
-            </ul>
-          </template>
-        </template>
+        <div v-if="filtered.length === 0" class="empty">Ничего не найдено</div>
+        <ul v-else class="results">
+          <li
+            v-for="(cmd, idx) in filtered"
+            :key="cmd.id"
+            class="result"
+            :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+            @click="
+              () => {
+                selectedIndex = (updateBanner ? 1 : 0) + idx;
+                void invokeSelected();
+              }
+            "
+          >
+            <BuiltInIcon
+              v-if="builtInIconFor(cmd)"
+              :icon="builtInIconFor(cmd)!.icon"
+              :svg-src="builtInIconFor(cmd)!.svgSrc"
+              :icon-color="builtInIconFor(cmd)!.iconColor"
+              :from="builtInIconFor(cmd)!.from"
+              :to="builtInIconFor(cmd)!.to"
+            />
+            <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+            <span v-else class="icon icon-placeholder" aria-hidden="true" />
+            <span class="title">{{ cmd.title }}</span>
+            <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
+              cmd.appName
+            }}</span>
+            <span class="kind-label">{{
+              cmd.kind === "command" ? "Команда" : "Приложение"
+            }}</span>
+          </li>
+        </ul>
       </template>
     </div>
   </div>

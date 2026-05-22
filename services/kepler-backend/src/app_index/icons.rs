@@ -38,8 +38,8 @@ fn hex_short(bytes: &[u8]) -> String {
 
 /// Гарантировать наличие иконки на диске. Возвращает путь.
 /// Если файл уже существует — no-op (быстро).
-/// Если не существует — извлекает; при любой ошибке падает на placeholder
-/// (search должен работать даже без иконок).
+/// При любой ошибке экстрактора — возвращает Err БЕЗ записи placeholder,
+/// чтобы следующий rescan повторил попытку (UI рендерит placeholder в DOM).
 pub fn ensure_icon(cache_dir: &Path, app: &App) -> Result<String> {
     let path = cached_icon_path(cache_dir, &app.exec_path);
     if path.exists() {
@@ -54,37 +54,63 @@ pub fn ensure_icon(cache_dir: &Path, app: &App) -> Result<String> {
         AppKind::Win32 => {
             #[cfg(target_os = "windows")]
             {
-                match win32::extract_to_png(&app.exec_path, &path) {
-                    Ok(()) => {}
-                    Err(e) => {
-                        tracing::debug!(
-                            target: "app_index::icons",
-                            exec_path = %app.exec_path,
-                            error = %e,
-                            "win32 icon extraction failed, writing placeholder"
-                        );
-                        write_placeholder(&path)?;
-                    }
-                }
+                win32::extract_to_png(&app.exec_path, &path).map_err(|e| {
+                    tracing::debug!(
+                        target: "app_index::icons",
+                        exec_path = %app.exec_path,
+                        error = %e,
+                        "win32 icon extraction failed"
+                    );
+                    crate::app_index::AppIndexError::Other(format!("icon extraction: {e}"))
+                })?;
             }
             #[cfg(not(target_os = "windows"))]
             {
-                write_placeholder(&path)?;
+                return Err(crate::app_index::AppIndexError::Other(
+                    "Win32 icon extraction only on Windows".into(),
+                ));
             }
         }
         AppKind::Uwp => {
-            // UWP должен извлекаться eagerly в UwpSource::discover() через
-            // ensure_icon_for_uwp(). Если попали сюда — Package недоступен
-            // (re-scan существующего AppKind::Uwp без обновления icon_path).
-            // Placeholder это OK — обычно icon_path уже выставлен.
-            write_placeholder(&path)?;
+            // UWP icons извлекаются eagerly в UwpSource::discover()
+            // через ensure_icon_for_uwp() с доступом к Package. Здесь
+            // fallback не имеем — return Err (UI покажет placeholder).
+            return Err(crate::app_index::AppIndexError::Other(
+                "UWP icon must be extracted via ensure_icon_for_uwp at discover time".into(),
+            ));
         }
         _ => {
-            write_placeholder(&path)?;
+            return Err(crate::app_index::AppIndexError::Other(format!(
+                "icon extraction not implemented for kind: {:?}",
+                app.kind
+            )));
         }
     }
 
     Ok(path.to_string_lossy().to_string())
+}
+
+/// Win32 икон-extractor с приоритетом .lnk::icon_location над target.
+/// Используется eagerly из StartMenuSource::discover() — это спасает
+/// Squirrel-installer apps (Discord, Slack, Teams), где target=Update.exe
+/// без иконки, а icon_location в .lnk указывает на реальный exe.
+#[cfg(target_os = "windows")]
+pub fn ensure_icon_for_lnk(
+    cache_dir: &Path,
+    lnk_path: &Path,
+    target_path: &str,
+) -> Result<String> {
+    let out = cached_icon_path(cache_dir, target_path);
+    if out.exists() {
+        return Ok(out.to_string_lossy().to_string());
+    }
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    win32::extract_to_png_with_lnk(lnk_path, target_path, &out).map_err(|e| {
+        crate::app_index::AppIndexError::Other(format!("lnk icon extraction: {e}"))
+    })?;
+    Ok(out.to_string_lossy().to_string())
 }
 
 /// Eager UWP icon extraction — вызывается из `UwpSource::discover()`.
@@ -159,6 +185,43 @@ mod win32 {
 
         let hicon = unsafe { extract_hicon(&icon_source, icon_index) }
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "ExtractIconExW: no icon"))?;
+        let res = unsafe { hicon_to_png(hicon, out_path) };
+        unsafe {
+            let _ = DestroyIcon(hicon);
+        }
+        res
+    }
+
+    /// Same as extract_to_png, но принимает .lnk path отдельно от target.
+    /// Стратегия:
+    ///   1) Попробовать .lnk::icon_location() (для Squirrel apps типа Discord)
+    ///   2) Попробовать target exe напрямую (Win32 .exe с embedded icons)
+    pub(super) fn extract_to_png_with_lnk(
+        lnk_path: &Path,
+        target_path: &str,
+        out_path: &Path,
+    ) -> std::io::Result<()> {
+        // Стратегия 1: .lnk::icon_location
+        if let Ok(shell_link) = lnk::ShellLink::open(lnk_path) {
+            let icon_index = shell_link.header().icon_index();
+            if let Some(loc) = shell_link.icon_location().as_ref() {
+                if !loc.is_empty() {
+                    let expanded = expand_env(loc);
+                    if try_extract_and_save(&expanded, icon_index, out_path).is_ok() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        // Стратегия 2: target exe
+        try_extract_and_save(target_path, 0, out_path)
+    }
+
+    /// Helper: extract HICON → PNG, единым шагом с cleanup.
+    fn try_extract_and_save(source: &str, icon_index: i32, out_path: &Path) -> std::io::Result<()> {
+        let hicon = unsafe { extract_hicon(source, icon_index) }.ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "ExtractIconExW: no icon")
+        })?;
 
         // Гарантируем DestroyIcon на любом exit path.
         let res = unsafe { hicon_to_png(hicon, out_path) };
@@ -437,11 +500,70 @@ mod uwp {
         let mut buf = vec![0u8; loaded as usize];
         reader.ReadBytes(&mut buf).map_err(map_err("ReadBytes"))?;
 
-        // Bytes — типично PNG (Win10/11 manifests используют .png для tiles).
-        // Не валидируем magic — UI всё равно прогонит через `<img>` и упадёт
-        // на placeholder gracefully, плюс мы catch'аем panics в caller.
-        std::fs::write(out_path, &buf)?;
+        // UWP logo приходит как 44×44 (или 64×64) PNG с transparent padding —
+        // стандартный tile asset Microsoft (логотип в центре, ~12-14px padding
+        // вокруг). При render в маленьком 20×20 box лого выглядит крошечным.
+        // Обрезаем по bbox непрозрачных пикселей, потом записываем.
+        match trim_transparent_png(&buf) {
+            Ok(cropped) => std::fs::write(out_path, &cropped)?,
+            Err(_) => std::fs::write(out_path, &buf)?, // fallback: пишем как есть
+        }
         Ok(())
+    }
+
+    /// Обрезать прозрачные края PNG → новый PNG (тоже PNG, encoded заново).
+    /// Если нет ни одного непрозрачного пикселя — возвращаем входной buf.
+    fn trim_transparent_png(input: &[u8]) -> std::io::Result<Vec<u8>> {
+        use image::ImageFormat;
+        let img = image::load_from_memory(input).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, format!("decode png: {e}"))
+        })?;
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        let mut min_x = w;
+        let mut min_y = h;
+        let mut max_x: u32 = 0;
+        let mut max_y: u32 = 0;
+        let mut any = false;
+        for y in 0..h {
+            for x in 0..w {
+                if rgba.get_pixel(x, y)[3] > 8 {
+                    any = true;
+                    if x < min_x {
+                        min_x = x;
+                    }
+                    if y < min_y {
+                        min_y = y;
+                    }
+                    if x > max_x {
+                        max_x = x;
+                    }
+                    if y > max_y {
+                        max_y = y;
+                    }
+                }
+            }
+        }
+        if !any {
+            // Полностью transparent — нечего обрезать.
+            return Ok(input.to_vec());
+        }
+        let cropped = image::imageops::crop_imm(
+            &rgba,
+            min_x,
+            min_y,
+            max_x - min_x + 1,
+            max_y - min_y + 1,
+        )
+        .to_image();
+        let mut out = Vec::new();
+        let dyn_img = image::DynamicImage::ImageRgba8(cropped);
+        dyn_img
+            .write_to(&mut std::io::Cursor::new(&mut out), ImageFormat::Png)
+            .map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, format!("encode png: {e}"))
+            })?;
+        Ok(out)
     }
 
     fn entry_logo(
