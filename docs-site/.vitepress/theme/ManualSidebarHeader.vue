@@ -52,7 +52,8 @@ function isActive(link: string) {
 }
 
 const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
-const isManualHome = computed(() => !isBeta.value);
+// «Мануал» подсвечивается только на самой главной странице /manual/
+const isManualHome = computed(() => currentPath.value === "/manual");
 
 function openSearch() {
   if (typeof window === "undefined") return;
