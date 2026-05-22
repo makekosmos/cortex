@@ -84,6 +84,11 @@ export default defineConfig({
     ],
 
     sidebar: {
+      // /manual/* — config нужен чтобы VitePress отрисовал sidebar-колонку
+      // и search-index видел страницы. Сам визуальный sidebar полностью
+      // переопределяется кастомным компонентом ManualSidebarHeader.vue
+      // (через slot 'sidebar-nav-before'), а дефолтные .VPSidebarItem'ы
+      // прячутся CSS-ом на /manual/* (см. custom.css).
       "/manual/": [
         {
           text: "Начало",

@@ -631,3 +631,12 @@ body[data-kosmos-mode="user"] .VPNavScreenMenu > *:nth-child(n + 4) {
 body[data-kosmos-mode="dev"] .VPNavScreenMenu > *:nth-child(3) {
   display: none !important;
 }
+
+/* На /manual/* — прячем default VitePress'овские sidebar items.
+ * Они нужны в config (search-index видит страницы), но визуально
+ * заменяются нашим custom-компонентом ManualSidebarHeader.vue,
+ * который рендерится через slot 'sidebar-nav-before'. */
+body[data-kosmos-mode="user"] .VPSidebar .group,
+body[data-kosmos-mode="user"] .VPSidebar .VPSidebarItem.level-0 {
+  display: none !important;
+}
