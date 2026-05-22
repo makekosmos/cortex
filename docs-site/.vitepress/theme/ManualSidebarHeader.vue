@@ -36,6 +36,11 @@ const SECTIONS = [
   },
 ];
 
+const OTHER = [
+  { text: "Новости", link: "/whats-new/" },
+  { text: "Для разработчиков", link: "/guide/getting-started" },
+];
+
 function normalize(path: string) {
   return path.replace(/\/$/, "") || "/";
 }
@@ -46,16 +51,53 @@ function isActive(link: string) {
   return currentPath.value === normalize(link);
 }
 
-const isManualHome = computed(
-  () => currentPath.value === "/manual" || currentPath.value.startsWith("/manual") && !currentPath.value.startsWith("/manual/beta"),
-);
 const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
+const isManualHome = computed(() => !isBeta.value);
+
+function openSearch() {
+  if (typeof window === "undefined") return;
+  // VitePress local search слушает Ctrl/Cmd+K глобально — эмулируем событие
+  const event = new KeyboardEvent("keydown", {
+    key: "k",
+    code: "KeyK",
+    ctrlKey: true,
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  window.dispatchEvent(event);
+  document.dispatchEvent(event);
+  // Fallback — ищем стандартную кнопку поиска и кликаем
+  const btn = document.querySelector<HTMLButtonElement>(
+    ".VPNavBarSearch button, #docsearch button, .DocSearch-Button",
+  );
+  btn?.click();
+}
 </script>
 
 <template>
   <div v-if="isManual" class="kosmos-manual-sidebar">
+    <!-- Логотип Kosmos сверху сайдбара -->
+    <a class="logo" href="/">Kosmos</a>
+
+    <!-- Поисковик -->
+    <button type="button" class="search-trigger" @click="openSearch">
+      <span class="search-icon" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+          stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m10 10 4.25 4.25m-3-7.75a4.75 4.75 0 1 1-9.5 0 4.75 4.75 0 0 1 9.5 0Z" />
+        </svg>
+      </span>
+      <span class="search-label">Search Manual</span>
+      <span class="search-kbd-group">
+        <kbd class="search-kbd">Ctrl</kbd>
+        <kbd class="search-kbd">K</kbd>
+      </span>
+    </button>
+
+    <!-- Section nav: Мануал / Бета мануал -->
     <div class="section-nav">
-      <a class="section-link" :class="{ active: isManualHome && !isBeta }" href="/manual/">
+      <a class="section-link" :class="{ active: isManualHome }" href="/manual/">
         <span class="icon" aria-hidden="true">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
             stroke-linecap="round" stroke-linejoin="round">
@@ -75,6 +117,7 @@ const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
       </a>
     </div>
 
+    <!-- Основная навигация -->
     <nav class="nav" aria-label="Manual navigation">
       <ul class="list">
         <li v-for="section in SECTIONS" :key="section.title" class="section">
@@ -85,6 +128,21 @@ const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
             <li v-for="item in section.items" :key="item.link" class="item">
               <a class="link" :class="{ active: isActive(item.link) }" :href="item.link">
                 {{ item.text }}
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <!-- Другое -->
+        <li class="section other-section">
+          <div class="section-header">
+            <span class="section-title as-label">Другое</span>
+          </div>
+          <ul class="section-list">
+            <li v-for="o in OTHER" :key="o.link" class="item">
+              <a class="link other-link" :href="o.link">
+                <span>{{ o.text }}</span>
+                <span class="arrow" aria-hidden="true">→</span>
               </a>
             </li>
           </ul>
@@ -100,7 +158,80 @@ const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
   flex-direction: column;
 }
 
-/* Top section nav: Мануал / Бета мануал */
+/* Логотип */
+.logo {
+  display: block;
+  padding: 4px 0 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--kosmos-fg);
+  text-decoration: none;
+}
+
+/* Search trigger */
+.search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 18px;
+  background: var(--kosmos-sidebar-surface);
+  border: 1px solid var(--kosmos-border);
+  border-radius: 8px;
+  color: var(--kosmos-muted-fg);
+  font-size: 0.875rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.search-trigger:hover {
+  border-color: var(--kosmos-muted-fg);
+}
+
+.search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.search-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.search-label {
+  flex: 1;
+}
+
+.search-kbd-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.search-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-family: var(--kosmos-font-mono);
+  font-size: 11px;
+  color: var(--kosmos-muted-fg);
+  background: var(--vp-c-bg);
+  border: 1px solid var(--kosmos-border);
+  border-radius: 4px;
+}
+
+/* Section nav: Мануал / Бета мануал */
 .section-nav {
   display: flex;
   flex-direction: column;
@@ -142,7 +273,7 @@ const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
   height: 14px;
 }
 
-/* Nav sections */
+/* Sections */
 .nav {
   display: block;
 }
@@ -176,6 +307,14 @@ const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
   color: var(--vp-c-brand-1);
 }
 
+.section-title.as-label {
+  cursor: default;
+}
+
+.section-title.as-label:hover {
+  color: var(--kosmos-fg);
+}
+
 .section-list {
   list-style: none;
   margin: 0;
@@ -204,5 +343,27 @@ const isBeta = computed(() => currentPath.value.startsWith("/manual/beta"));
 .link.active {
   color: var(--vp-c-brand-1);
   font-weight: 500;
+}
+
+/* "Другое" — items со стрелкой */
+.other-section {
+  margin-top: 14px;
+}
+
+.other-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.other-link .arrow {
+  color: var(--kosmos-muted-fg);
+  transition: transform 120ms ease, color 120ms ease;
+}
+
+.other-link:hover .arrow {
+  color: var(--vp-c-brand-1);
+  transform: translateX(2px);
 }
 </style>

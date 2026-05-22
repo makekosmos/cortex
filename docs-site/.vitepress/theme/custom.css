@@ -647,3 +647,24 @@ body[data-kosmos-mode="user"] .VPSidebar .group,
 body[data-kosmos-mode="user"] .VPSidebar .VPSidebarItem.level-0 {
   display: none !important;
 }
+
+/* /manual/* — полностью убираем navbar (логотип и search переехали в sidebar) */
+body[data-kosmos-mode="user"] .VPNav {
+  display: none !important;
+}
+
+/* Sidebar поднимается к самому верху страницы — нет navbar'а сверху */
+body[data-kosmos-mode="user"] .VPSidebar {
+  top: 0 !important;
+  padding-top: 20px !important;
+}
+
+/* Контент тоже сдвигается вверх — без оффсета под navbar */
+body[data-kosmos-mode="user"] .VPContent {
+  padding-top: 0 !important;
+}
+
+body[data-kosmos-mode="user"] .VPContent .container,
+body[data-kosmos-mode="user"] .VPDoc {
+  padding-top: 32px !important;
+}
