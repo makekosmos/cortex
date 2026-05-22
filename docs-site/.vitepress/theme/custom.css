@@ -539,3 +539,32 @@ body {
   color: var(--kosmos-muted-fg);
   font-size: 12.5px;
 }
+
+/* ── Conditional nav (user vs dev mode) ─────────────────
+ * Порядок nav items в config.ts:
+ *   1. Мануал, 2. Новости, 3. Для разработчиков, 4. Старт,
+ *   5. Концепты, 6. Приложения, 7. Пакеты, 8. Эксперименты, 9. Справочник.
+ *
+ * user mode (manual/news страницы) — показываем 1, 2, 3. Прячем 4-9.
+ * dev mode (остальное) — показываем 1, 2, 4-9. Прячем 3 (дубль Старта).
+ *
+ * Layout.vue выставляет body[data-kosmos-mode="user"|"dev"].
+ * Применяется и к desktop nav (.VPNavBarMenu), и к mobile (.VPNavScreenMenu). */
+
+/* Desktop: user mode — прячем dev-пункты (с 4-го) */
+body[data-kosmos-mode="user"] .VPNavBarMenu > *:nth-child(n + 4) {
+  display: none !important;
+}
+
+/* Desktop: dev mode — прячем 3-й пункт «Для разработчиков» (дубль Старта) */
+body[data-kosmos-mode="dev"] .VPNavBarMenu > *:nth-child(3) {
+  display: none !important;
+}
+
+/* Mobile (slide-out screen): тот же принцип */
+body[data-kosmos-mode="user"] .VPNavScreenMenu > *:nth-child(n + 4) {
+  display: none !important;
+}
+body[data-kosmos-mode="dev"] .VPNavScreenMenu > *:nth-child(3) {
+  display: none !important;
+}

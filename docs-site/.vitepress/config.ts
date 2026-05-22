@@ -65,10 +65,22 @@ export default defineConfig({
   themeConfig: {
     siteTitle: "Kosmos",
 
+    // Порядок зафиксирован — на нём держится conditional CSS в custom.css
+    // (body[data-kosmos-mode="user"|"dev"]). См. Layout.vue / ManualSidebarHeader.vue.
+    //   1. Мануал           — всегда
+    //   2. Новости          — всегда
+    //   3. Для разработчиков — только в user mode (manual/news)
+    //   4-9. Dev nav        — только в dev mode
     nav: [
       { text: "Мануал", link: "/manual/" },
       { text: "Новости", link: "/whats-new/" },
       { text: "Для разработчиков", link: "/guide/getting-started" },
+      { text: "Старт", link: "/guide/getting-started" },
+      { text: "Концепты", link: "/concepts/architecture" },
+      { text: "Приложения", link: "/apps/" },
+      { text: "Пакеты", link: "/packages/" },
+      { text: "Эксперименты", link: "/experiments/" },
+      { text: "Справочник", link: "/reference/rules" },
     ],
 
     sidebar: {
