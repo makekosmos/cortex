@@ -610,6 +610,16 @@ body {
   font-size: 12.5px;
 }
 
+/* Doc footer pager (← Назад / Дальше →): когда есть только одна ссылка
+ * (например на первой / последней странице раздела), растягиваем её на
+ * всю ширину блока вместо half-column. */
+.pager .pager-link.has-prev:only-child,
+.pager .pager-link.next:only-child,
+.pager .pager-link.prev:only-child {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
 /* ── Conditional nav (user vs dev mode) ─────────────────
  * Порядок nav items в config.ts:
  *   1. Мануал, 2. Новости, 3. Для разработчиков, 4. Старт,

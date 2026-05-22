@@ -65,13 +65,6 @@ description: От установки до первой заметки за 5 ш�
   </li>
 </ol>
 
-<div class="next-block">
-  <a href="./platforms" class="next-link">
-    <span class="next-label">Дальше</span>
-    <span class="next-title">Платформы <span aria-hidden="true">→</span></span>
-  </a>
-</div>
-
 <style scoped>
 .eyebrow {
   font-size: 13px;
@@ -240,33 +233,4 @@ kbd {
   vertical-align: 1px;
 }
 
-.next-block {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--kosmos-border);
-}
-
-.next-link {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  text-align: right;
-  text-decoration: none !important;
-}
-
-.next-label {
-  font-size: 13px;
-  color: var(--kosmos-muted-fg);
-  margin-bottom: 2px;
-}
-
-.next-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--vp-c-brand-1);
-}
-
-.next-link:hover .next-title {
-  text-decoration: underline;
-}
 </style>
