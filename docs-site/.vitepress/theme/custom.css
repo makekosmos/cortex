@@ -678,6 +678,40 @@ body[data-kosmos-mode="user"] .VPDoc.has-sidebar.has-aside {
   margin-right: 0 !important;
 }
 
+/* .aside (TOC) визуально поднимаем на уровень VPSidebar/VPContent —
+ * fixed-плавающий справа от viewport. DOM-родитель остаётся .VPDoc.container,
+ * но компоновка-flex-spacer внутри container'а его больше не учитывает. */
+body[data-kosmos-mode="user"] .VPDoc .aside {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: var(--toc-width) !important;
+  height: 100vh !important;
+  padding: 24px !important;
+  margin: 0 !important;
+  z-index: 5;
+}
+
+body[data-kosmos-mode="user"] .VPDoc .aside-container {
+  position: static !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  transform: none !important;
+}
+
+body[data-kosmos-mode="user"] .VPDoc .aside-content {
+  position: static !important;
+  height: auto !important;
+  padding: 0 !important;
+}
+
+body[data-kosmos-mode="user"] .VPDoc .aside-curtain {
+  display: none !important;
+}
+
 /* Контент: max-width = 100% страницы минус sidebar минус TOC.
  * Sidebar и TOC — плавающие фиксированные колонки, content между ними. */
 body[data-kosmos-mode="user"] {
