@@ -135,8 +135,8 @@ body {
   padding-top: 12px;
   /* Прижимаем содержимое sidebar'а к левому краю — дефолтный VitePress
    * имеет 32px справа/слева. Оставляем минимальный padding для воздуха. */
-  padding-left: 14px !important;
-  padding-right: 14px !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
 }
 
 /* Контент-area — никаких разделительных линий слева */
@@ -153,10 +153,10 @@ body {
   padding-right: 0 !important;
 }
 
-/* Kosmos логотип в navbar — тоже к левому краю */
+/* Kosmos логотип в navbar — выровнен с padding сайдбара */
 .VPNavBar .title,
 .VPNavBar.has-sidebar .title {
-  padding-left: 14px !important;
+  padding-left: 24px !important;
 }
 
 /* Уберём VitePress'овский «curtain» градиент сверху сайдбара */
