@@ -130,12 +130,21 @@ body {
 
 .VPSidebar {
   background: var(--kosmos-sidebar-bg) !important;
-  border-right: 1px solid var(--kosmos-border);
+  border-right: none !important;
+  border-top: none !important;
   padding-top: 12px;
   /* Прижимаем содержимое sidebar'а к левому краю — дефолтный VitePress
    * имеет 32px справа/слева. Оставляем минимальный padding для воздуха. */
   padding-left: 14px !important;
   padding-right: 14px !important;
+}
+
+/* Контент-area — никаких разделительных линий слева */
+.VPContent,
+.VPDoc,
+.VPDoc .container,
+.VPDoc .content-container {
+  border-left: none !important;
 }
 
 .VPSidebar .VPSidebarItem .item,
@@ -156,28 +165,40 @@ body {
   display: none !important;
 }
 
+/* Подзаголовки (items внутри группы): 0.875rem, padding 5px по вертикали */
 .VPSidebarItem .text,
 .VPSidebarItem .link .text {
-  font-size: 13.5px;
+  font-size: 0.875rem;
   letter-spacing: -0.1px;
   font-weight: 400 !important;
 }
 
-/* Заголовок группы — тот же кегль, но bold + видимый цвет.
- * (Если на группе задан link — VitePress сам сделает <a>, и эти стили
- * применятся к нему.) */
+.VPSidebarItem:not(.level-0) > .item,
+.VPSidebarItem:not(.level-0) > .item > .link {
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+
+/* Заголовок группы — bold, тот же кегль (0.875rem), padding 4px по
+ * вертикали, margin-bottom 4px. */
 .VPSidebarItem.level-0 > .item > .text,
 .VPSidebarItem.level-0 > .item > .link > .text {
-  font-size: 13.5px !important;
+  font-size: 0.875rem !important;
   text-transform: none !important;
   letter-spacing: -0.1px !important;
   color: var(--kosmos-fg);
   font-weight: 600 !important;
 }
 
-/* Убираем все VitePress'овские разделители между группами sidebar'а.
- * VitePress использует разные классы (.group, .VPSidebarGroup,
- * .VPSidebarItem.level-0) в разных версиях — глушим всё. */
+.VPSidebarItem.level-0 > .item,
+.VPSidebarItem.level-0 > .item > .link {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Убираем все VitePress'овские разделители между группами sidebar'а
+ * (border-top'ы во всех вариантах класса). */
 .VPSidebar .group,
 .VPSidebar .group + .group,
 .VPSidebarGroup,
@@ -188,9 +209,10 @@ body {
   border-top: none !important;
 }
 
+/* Группа целиком: padding-bottom 8px (расстояние до следующей группы) */
 .VPSidebar .group {
-  padding-top: 8px !important;
-  padding-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 8px !important;
 }
 
 .VPSidebarItem.is-active > .item .link .text {
