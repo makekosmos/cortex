@@ -3,6 +3,7 @@
 // от размера. На mobile (<= 720px) скрываем bottom labels, оставляем top.
 
 const DOCS_URL = "https://docs-site-beige-phi.vercel.app/";
+const MANUAL_URL = "https://docs-site-beige-phi.vercel.app/manual/";
 const ORG_URL = "https://github.com/yoso-industries";
 const GITHUB_URL = "https://github.com/ksanrse";
 </script>
@@ -10,6 +11,8 @@ const GITHUB_URL = "https://github.com/ksanrse";
 <template>
   <!-- Top-left -->
   <div class="corner top-left">
+    <a :href="MANUAL_URL" target="_blank" rel="noopener">Мануал</a>
+    <span class="sep">,</span>
     <a :href="DOCS_URL" target="_blank" rel="noopener">Документация</a>
     <span class="sep">,</span>
     <a :href="ORG_URL" target="_blank" rel="noopener">Yoso</a>
