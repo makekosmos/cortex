@@ -194,19 +194,18 @@ h1 {
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  border: 1px solid var(--kosmos-border);
-  background: var(--vp-c-bg-soft);
+  border: 1px solid #ffffff;
+  background: #ffffff;
   border-radius: 8px;
-  color: var(--kosmos-fg) !important;
+  color: #1a1a1a !important;
   font-size: 13.5px;
   font-weight: 500;
   text-decoration: none !important;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: opacity 120ms ease;
 }
 
 .step-button:hover {
-  background: var(--vp-c-brand-soft);
-  border-color: var(--vp-c-brand-1);
+  opacity: 0.88;
 }
 
 .badge {
