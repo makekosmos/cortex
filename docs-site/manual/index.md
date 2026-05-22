@@ -162,7 +162,8 @@ Kosmos — местo, которое унифицирует хранение в�
   margin: 24px 0 36px;
   border: 1px solid var(--kosmos-border);
   border-radius: 10px;
-  background: var(--kosmos-sidebar-surface);
+  /* Чуть светлее фона страницы — едва заметная плашка */
+  background: rgba(255, 255, 255, 0.025);
   font-size: 14px;
   line-height: 1.5;
   color: var(--kosmos-muted-fg);
@@ -190,10 +191,10 @@ Kosmos — местo, которое унифицирует хранение в�
   padding: 18px;
   border: 1px solid var(--kosmos-border);
   border-radius: 12px;
-  background: var(--kosmos-sidebar-surface);
+  background: transparent;
   color: var(--kosmos-fg);
   text-decoration: none !important;
-  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+  transition: border-color 120ms ease, background 120ms ease;
 }
 
 .tile:hover {
