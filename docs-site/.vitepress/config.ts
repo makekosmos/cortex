@@ -67,13 +67,8 @@ export default defineConfig({
 
     nav: [
       { text: "Мануал", link: "/manual/" },
-      { text: "Что нового", link: "/whats-new/" },
-      { text: "Старт", link: "/guide/getting-started" },
-      { text: "Концепты", link: "/concepts/architecture" },
-      { text: "Приложения", link: "/apps/" },
-      { text: "Пакеты", link: "/packages/" },
-      { text: "Эксперименты", link: "/experiments/" },
-      { text: "Справочник", link: "/reference/rules" },
+      { text: "Новости", link: "/whats-new/" },
+      { text: "Для разработчиков", link: "/guide/getting-started" },
     ],
 
     sidebar: {
