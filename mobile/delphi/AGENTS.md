@@ -275,6 +275,22 @@ await arkClient.commands.register([
 - ❌ Создание `currentEntryId` без проверки `currentEntryId.value == null` в phase_changed handler'е. Двойной phase_changed (quick double-click «Старт» / backend retry) создаёт два entry, первый orphan'ится с null id-references.
 - ❌ Пропустить `rehydrateCurrentEntryId(phase)` в `ensureInit()` когда backend сообщил `isRunning && phase !== "idle"`. После reload extension'а renderer теряет id открытого ARK entry — последующий pause/stop становится no-op'ом, entry «running вечно». Фикс: смотрим `listRunning({ source: 'pomodoro' | 'pomodoro_break' })` и берём последнюю.
 
+### Focus mode
+
+См. [Focus mode](docs-site/concepts/focus-mode.md).
+
+- ❌ Прямые манипуляции `BrowserWindow` focus widget'а (show/hide/move/destroy) из extension'ов или из кода вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*` (`set-state` / `get-state` / `hide`).
+- ❌ Обход `pomodoro_host` для lifecycle pomodoro-сессии. Кнопки виджета (pause/resume/skip/stop) дёргают **только** `invokeOperation("pomodoro.<op>")` через backend — никаких прямых `setFocusState` локально после клика. Backend — source of truth, его broadcast обновит widget.
+- ❌ Прямые writes в `C:\Windows\System32\drivers\etc\hosts` из любого места кроме `kepler-focus-helper` / `kepler-focus-svc`. Никаких inline `fs.writeFile` или `child_process` поверх hosts из shell / extension'ов / `services/kepler-backend/`.
+- ❌ Запись вне маркерной секции (`# === kepler-focus BEGIN/END ===`) в helper / svc. Backup создаётся **один раз** при первой модификации — если перезаписать вне маркеров, юзерские hosts entries потеряются навсегда.
+- ❌ Destructive ALTER / DROP для `blocklist_obj` или ключа `focus.active_state` в `sync_kv`. Только additive миграции (см. [ARK objects](docs-site/concepts/ark-objects.md)).
+- ❌ `setupFocusWidgetBackendSync` без последующего `teardownFocusWidgetBackendSync` при backend respawn / `resetArkClient`. Двойная подписка → каждый pomodoro event handled дважды.
+- ❌ Применение блокировки (hosts write) из `services/kepler-backend/src/focus.rs`. Модуль хранит **только state** в ARK; применение делает shell через `applyFocusBlock` middleware в `extension-host.ts`. Никакого privileged кода в backend.
+- ❌ Trust'нуть pipe ответу без safety timeout. `sendViaPipe` всегда финиширует за 3s даже при mute pipe.
+- ❌ Удалять `requireAdministrator` manifest у `kepler-focus-helper.exe`. Без него helper стартует non-elevated и hosts write молча падает с access denied.
+- ❌ Расширять SDDL `kepler-focus-svc` pipe'а за пределы `D:(A;;GA;;;AU)` (Authenticated Users). NULL-DACL = network exposure, не нужно.
+- ❌ Автоматически re-prompt'ить UAC для auto-install `kepler-focus-svc` после того, как юзер отказался. `autoInstallAttemptedThisSession` (session-scope) + `setFocusServiceAutoInstallDeclined` (persisted) гарантируют один промпт максимум.
+
 ### Spaces concept
 
 - ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user

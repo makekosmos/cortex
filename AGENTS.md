@@ -256,6 +256,22 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 - ❌ Создание `currentEntryId` без проверки `currentEntryId.value == null` в phase_changed handler'е. Двойной phase_changed (quick double-click «Старт» / backend retry) создаёт два entry, первый orphan'ится с null id-references.
 - ❌ Пропустить `rehydrateCurrentEntryId(phase)` в `ensureInit()` когда backend сообщил `isRunning && phase !== "idle"`. После reload extension'а renderer теряет id открытого ARK entry — последующий pause/stop становится no-op'ом, entry «running вечно». Фикс: смотрим `listRunning({ source: 'pomodoro' | 'pomodoro_break' })` и берём последнюю.
 
+### Focus mode
+
+См. [Focus mode](docs-site/concepts/focus-mode.md).
+
+- ❌ Прямые манипуляции `BrowserWindow` focus widget'а (show/hide/move/destroy) из extension'ов или из кода вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*` (`set-state` / `get-state` / `hide`).
+- ❌ Обход `pomodoro_host` для lifecycle pomodoro-сессии. Кнопки виджета (pause/resume/skip/stop) дёргают **только** `invokeOperation("pomodoro.<op>")` через backend — никаких прямых `setFocusState` локально после клика. Backend — source of truth, его broadcast обновит widget.
+- ❌ Прямые writes в `C:\Windows\System32\drivers\etc\hosts` из любого места кроме `kepler-focus-helper` / `kepler-focus-svc`. Никаких inline `fs.writeFile` или `child_process` поверх hosts из shell / extension'ов / `services/kepler-backend/`.
+- ❌ Запись вне маркерной секции (`# === kepler-focus BEGIN/END ===`) в helper / svc. Backup создаётся **один раз** при первой модификации — если перезаписать вне маркеров, юзерские hosts entries потеряются навсегда.
+- ❌ Destructive ALTER / DROP для `blocklist_obj` или ключа `focus.active_state` в `sync_kv`. Только additive миграции (см. [ARK objects](docs-site/concepts/ark-objects.md)).
+- ❌ `setupFocusWidgetBackendSync` без последующего `teardownFocusWidgetBackendSync` при backend respawn / `resetArkClient`. Двойная подписка → каждый pomodoro event handled дважды.
+- ❌ Применение блокировки (hosts write) из `services/kepler-backend/src/focus.rs`. Модуль хранит **только state** в ARK; применение делает shell через `applyFocusBlock` middleware в `extension-host.ts`. Никакого privileged кода в backend.
+- ❌ Trust'нуть pipe ответу без safety timeout. `sendViaPipe` всегда финиширует за 3s даже при mute pipe.
+- ❌ Удалять `requireAdministrator` manifest у `kepler-focus-helper.exe`. Без него helper стартует non-elevated и hosts write молча падает с access denied.
+- ❌ Расширять SDDL `kepler-focus-svc` pipe'а за пределы `D:(A;;GA;;;AU)` (Authenticated Users). NULL-DACL = network exposure, не нужно.
+- ❌ Автоматически re-prompt'ить UAC для auto-install `kepler-focus-svc` после того, как юзер отказался. `autoInstallAttemptedThisSession` (session-scope) + `setFocusServiceAutoInstallDeclined` (persisted) гарантируют один промпт максимум.
+
 ### Spaces concept
 
 - ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user
@@ -529,6 +545,26 @@ bun run ark:smoke
 - [ ] Tracker-модуль стартует/останавливается из `services/kepler-backend/src/main.rs` (Phase E2). Standalone-бинарь — frozen в `legacy/usage-tracker/`.
 - [ ] Tracker остаётся user-level, не Windows Service.
 
+## Я правил focus-mode (`shell/electron/focus-*.ts` + `services/kepler-focus-*` + `services/kepler-backend/src/focus.rs`)
+
+- [ ] `bun run --cwd shell typecheck` — clean.
+- [ ] `bun run --cwd shell build:js` — clean.
+- [ ] `cargo test -p kepler-focus-helper` — зелёный (`hosts.rs` unit-тесты с tempfile).
+- [ ] `cargo test -p kepler-focus-svc` — зелёный (`protocol.rs` dispatch-тесты).
+- [ ] `cargo build --workspace` — собирается (включая helper + svc, оба Windows-only).
+- [ ] Прямые writes в hosts file идут **только** из `kepler-focus-helper` или `kepler-focus-svc` (никаких новых `fs.writeFile("C:\\Windows\\...")` в shell / backend).
+- [ ] Модификации hosts остаются между маркерами `# === kepler-focus BEGIN/END ===`. Backup `hosts.kepler-backup` создаётся один раз и не перезаписывается.
+- [ ] Widget operations (pause/resume/skip/stop) идут через `invokeOperation("pomodoro.<op>")`, не через локальный `setFocusState` после клика.
+- [ ] Backend `focus.rs` не делает privileged operations — только хранит state.
+- [ ] Если правил `setupFocusWidgetBackendSync` / `teardownFocusWidgetBackendSync` — wiring в `main.ts` зовёт teardown перед resubscribe при backend respawn.
+- [ ] Если правил pipe protocol (`kepler-focus-svc/src/protocol.rs`) — request/response shape остаётся backward compatible (shell может говорить со старой версией service'а и наоборот).
+- [ ] Если менял auto-install flow — `autoInstallAttemptedThisSession` + `setFocusServiceAutoInstallDeclined` гварды не ослаблены (один UAC промпт максимум).
+- [ ] Если добавил новую `focus.*` ARK операцию — диспатч в `ws_server.rs` + middleware в `extension-host.ts` (если требует apply на hosts).
+- [ ] `requireAdministrator` manifest у `kepler-focus-helper.exe` на месте (`build.rs` embed-manifest).
+- [ ] Headless e2e не показывает widget (`process.env.KOSMOS_HEADLESS === "1"` гвард в `showWidget`).
+
+См. [Focus mode](docs-site/concepts/focus-mode.md).
+
 ## Я правил `@kosmos/visuals` (`packages/visuals`)
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).
@@ -680,10 +716,13 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 Скрипт `scripts/sync-agents-docs.mjs` берёт:
 
 - `docs-site/agents/index.md` + `forbidden.md` + `checklists.md` + `reference/rules.md` + `concepts/proof-loop.md` → корневой `AGENTS.md` и `CLAUDE.md`.
-- `docs-site/apps/eden.md` + общие запреты → `apps/eden/AGENTS.md`, `apps/eden/ts/AGENTS.md`.
 - `docs-site/apps/delphi.md` (Kotlin-часть) → `mobile/delphi/AGENTS.md`.
 - `docs-site/packages/ark-core.md` → `crates/ark-core/AGENTS.md`.
 - Весь набор ключевых страниц inline → `docs-site/public/llms.txt`.
+
+::: tip Eden / Dashboard / Horologion / Arrancador
+Per-extension `AGENTS.md` не генерируются (папки `apps/<name>/` упразднены — расширения живут в `extensions/<id>/` и читают общий корневой `AGENTS.md`). Если нужны жёсткие per-extension правила — добавляй их в соответствующую страницу `docs-site/apps/<name>.md` либо в `docs-site/agents/forbidden.md` (секция per-app).
+:::
 
 Если меняешь логику генерации — правь сам `scripts/sync-agents-docs.mjs`, потом `bun run docs:sync`.
 
@@ -799,7 +838,7 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 | Приложение | Не делать                                                                                                   |
 | ---------- | ----------------------------------------------------------------------------------------------------------- |
 | Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                    |
-| Eden       | Возвращаться к ripgrep, ломать `save/move/delete` hardening в `store.ts`, возвращать ручные titlebar-offset |
+| Eden       | Возвращаться к ripgrep / Heart sidecar, ломать `save/move/delete` hardening в Pinia store (`extensions/eden/src/store/eden.ts`), возвращать ручные titlebar-offset |
 | Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                       |
 | Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                   |
 
@@ -921,7 +960,7 @@ flowchart LR
   "verified_at": "2026-04-26T15:00:00Z",
   "results": [
     { "ac": "AC1", "verdict": "PASS", "command": "bun run ark:guard:writes" },
-    { "ac": "AC2", "verdict": "PASS", "command": "bun run --cwd apps/arrancador test" }
+    { "ac": "AC2", "verdict": "PASS", "command": "bun run --cwd extensions/arrancador test" }
   ]
 }
 ```
