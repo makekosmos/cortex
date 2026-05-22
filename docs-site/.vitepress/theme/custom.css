@@ -668,7 +668,25 @@ body[data-kosmos-mode="user"] {
 }
 
 body[data-kosmos-mode="user"] .VPContent.has-sidebar {
-  padding-left: 240px !important;
+  padding-left: 0 !important;
+}
+
+/* Контент центрируется по странице, а не относительно области справа
+ * от sidebar'а. Sidebar — fixed-плавающий слева, content sits в центре
+ * viewport'а. На узких экранах (<1080px) — оставляем минимум 280px
+ * слева чтобы не залезал на sidebar (240px sidebar + 40px gap). */
+body[data-kosmos-mode="user"] .VPDoc .container {
+  max-width: 820px !important;
+  margin: 0 auto !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+@media (max-width: 1080px) {
+  body[data-kosmos-mode="user"] .VPDoc .container {
+    margin-left: 280px !important;
+    margin-right: auto !important;
+  }
 }
 
 /* Контент тоже сдвигается вверх — без оффсета под navbar */

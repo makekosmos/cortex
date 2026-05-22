@@ -88,7 +88,7 @@ function openSearch() {
           <path d="m10 10 4.25 4.25m-3-7.75a4.75 4.75 0 1 1-9.5 0 4.75 4.75 0 0 1 9.5 0Z" />
         </svg>
       </span>
-      <span class="search-label">Search Manual</span>
+      <span class="search-label">Искать</span>
       <span class="search-kbd-group">
         <kbd class="search-kbd">Ctrl</kbd>
         <kbd class="search-kbd">K</kbd>
