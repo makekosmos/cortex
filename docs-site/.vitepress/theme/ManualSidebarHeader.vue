@@ -38,7 +38,8 @@ const isManual = computed(() => route.path.startsWith("/manual"));
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 8px;
+  margin-top: 6px;
+  margin-bottom: 14px;
 }
 
 .manual-row {

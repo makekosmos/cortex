@@ -87,6 +87,7 @@ export default defineConfig({
       "/manual/": [
         {
           text: "Начало",
+          link: "/manual/basics",
           items: [
             { text: "Основы", link: "/manual/basics" },
             { text: "Платформы", link: "/manual/platforms" },
@@ -95,6 +96,7 @@ export default defineConfig({
         },
         {
           text: "Core features",
+          link: "/manual/core-features/",
           items: [
             { text: "Обзор", link: "/manual/core-features/" },
             { text: "Запуск приложений", link: "/manual/core-features/app-launcher" },
@@ -102,6 +104,7 @@ export default defineConfig({
         },
         {
           text: "Встроенные расширения",
+          link: "/manual/extensions/",
           items: [
             { text: "Обзор", link: "/manual/extensions/" },
             { text: "Eden — заметки", link: "/manual/extensions/eden" },

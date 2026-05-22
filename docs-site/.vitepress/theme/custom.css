@@ -142,14 +142,32 @@ body {
 .VPSidebarItem .text {
   font-size: 13.5px;
   letter-spacing: -0.1px;
+  font-weight: 400;
 }
 
-.VPSidebarItem.level-0 > .item > .text {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--kosmos-muted-fg);
+/* Заголовок группы — тот же кегль, но bold + видимый цвет.
+ * (Если на группе задан link — VitePress сам сделает <a>, и эти стили
+ * применятся к нему.) */
+.VPSidebarItem.level-0 > .item > .text,
+.VPSidebarItem.level-0 > .item > .link > .text {
+  font-size: 13.5px;
+  text-transform: none;
+  letter-spacing: -0.1px;
+  color: var(--kosmos-fg);
   font-weight: 600;
+}
+
+/* Убираем все VitePress'овские разделители между группами sidebar'а.
+ * (По дефолту level-0 имеет padding-top + border-top или divider.) */
+.VPSidebarItem.level-0 {
+  border-top: none !important;
+  padding-top: 0 !important;
+}
+
+.VPSidebarGroup,
+.VPSidebarGroup + .VPSidebarGroup {
+  border-top: none !important;
+  padding-top: 0 !important;
 }
 
 .VPSidebarItem.is-active > .item .link .text {
