@@ -14,6 +14,7 @@ use thiserror::Error;
 use tokio::net::TcpListener;
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::app_index::AppIndex;
 use crate::ark_host::ArkHost;
 use crate::arrancador;
 use crate::auth;
@@ -175,6 +176,7 @@ pub struct WsServer {
     auth_token: Arc<String>,
     command_bus: Arc<CommandBus>,
     pomodoro_host: Arc<PomodoroHost>,
+    app_index: Arc<AppIndex>,
     next_client_id: Arc<AtomicU64>,
 }
 
@@ -185,6 +187,7 @@ impl WsServer {
         ark_host: Arc<ArkHost>,
         auth_token: String,
         data_dir: std::path::PathBuf,
+        app_index: Arc<AppIndex>,
     ) -> Result<Self, WsServerError> {
         let addr: SocketAddr = "127.0.0.1:0"
             .parse()
@@ -196,6 +199,7 @@ impl WsServer {
             auth_token: Arc::new(auth_token),
             command_bus: Arc::new(CommandBus::new()),
             pomodoro_host: PomodoroHost::new(data_dir),
+            app_index,
             next_client_id: Arc::new(AtomicU64::new(1)),
         })
     }
@@ -220,10 +224,11 @@ impl WsServer {
             let token = self.auth_token.clone();
             let bus = self.command_bus.clone();
             let pomo = self.pomodoro_host.clone();
+            let app_idx = self.app_index.clone();
             let client_id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
             tokio::spawn(async move {
                 if let Err(e) =
-                    handle_connection(stream, ark_host, token, bus, pomo, client_id).await
+                    handle_connection(stream, ark_host, token, bus, pomo, app_idx, client_id).await
                 {
                     eprintln!("[kepler.ws] connection error: {e}");
                 }
@@ -238,6 +243,7 @@ async fn handle_connection(
     expected_token: Arc<String>,
     command_bus: Arc<CommandBus>,
     pomodoro_host: Arc<PomodoroHost>,
+    app_index: Arc<AppIndex>,
     client_id: ClientId,
 ) -> Result<(), WsServerError> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
@@ -505,6 +511,25 @@ async fn handle_connection(
                 // Intercept focus.* — focus-mode блоклисты (ARK-backed) + active state в sync_kv.
                 if let Some(rest) = operation.strip_prefix("focus.") {
                     let resp = handle_focus_op(rest, params, &ark_host).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
+                }
+
+                // Intercept app_index.* — app launcher search / launch / rescan.
+                if let Some(rest) = operation.strip_prefix("app_index.") {
+                    let resp = handle_app_index_op(rest, params, &app_index).await;
                     let mut envelope = serde_json::Map::new();
                     if let Some(id) = req_id {
                         envelope.insert("id".into(), serde_json::Value::String(id));
@@ -1110,6 +1135,108 @@ async fn handle_arrancador_op(
         }
         other => LocalResponse::err(format!("arrancador.{other}: unknown sub-operation")),
     }
+}
+
+/// Dispatch `app_index.<subop>` — App Launcher: search / launch / rescan.
+///
+/// Sub-operations:
+///   - `app_index.search { query, limit? }` → `{ results: [{id, name, icon_path, kind, score}] }`
+///   - `app_index.launch { id }` → `{ ok: true }`. Frecency tracking — TODO через ARK usage_event_obj.
+///   - `app_index.rescan` → `{ added, updated, removed, total }`
+async fn handle_app_index_op(
+    subop: &str,
+    params: serde_json::Value,
+    app_index: &Arc<AppIndex>,
+) -> LocalResponse {
+    use crate::app_index::ranking::UsageStats;
+
+    match subop {
+        "search" => {
+            let query = match params.get("query").and_then(|v| v.as_str()) {
+                Some(q) => q.to_string(),
+                None => return LocalResponse::err("app_index.search: missing 'query'"),
+            };
+            let limit = params
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(8) as usize;
+            // Frecency: пустой UsageStats в v1. TODO: join из ARK usage_event_obj.
+            let usage = UsageStats::empty();
+            let mut results = app_index.search(&query, limit, &usage).await;
+            // Inline icon как data URL — renderer не имеет file:// доступа.
+            // ~50KB per icon, top-8 = ~400KB JSON, приемлемо.
+            for scored in &mut results {
+                if let Some(path) = scored.app.icon_path.clone() {
+                    if let Ok(bytes) = std::fs::read(&path) {
+                        let b64 =
+                            base64_encode(&bytes);
+                        scored.app.icon_path = Some(format!("data:image/png;base64,{b64}"));
+                    } else {
+                        scored.app.icon_path = None;
+                    }
+                }
+            }
+            match serde_json::to_value(serde_json::json!({ "results": results })) {
+                Ok(v) => LocalResponse::ok(v),
+                Err(e) => LocalResponse::err(format!("app_index.search: serialize: {e}")),
+            }
+        }
+        "launch" => {
+            let id = match params.get("id").and_then(|v| v.as_str()) {
+                Some(s) => s.to_string(),
+                None => return LocalResponse::err("app_index.launch: missing 'id'"),
+            };
+            let app = match app_index.find(&id).await {
+                Some(a) => a,
+                None => return LocalResponse::err(format!("app_index.launch: not found: {id}")),
+            };
+            match app_index.launch(&app) {
+                Ok(_) => LocalResponse::ok(serde_json::json!({ "ok": true })),
+                Err(e) => LocalResponse::err(format!("app_index.launch: {e}")),
+            }
+        }
+        "rescan" => match app_index.rescan().await {
+            Ok(stats) => match serde_json::to_value(&stats) {
+                Ok(v) => LocalResponse::ok(v),
+                Err(e) => LocalResponse::err(format!("app_index.rescan: serialize: {e}")),
+            },
+            Err(e) => LocalResponse::err(format!("app_index.rescan: {e}")),
+        },
+        other => LocalResponse::err(format!("app_index.{other}: unknown sub-operation")),
+    }
+}
+
+/// Minimal base64 encoder (RFC 4648 standard alphabet, no padding-stripping).
+/// Используется для inline PNG icons в app_index.search response. Не добавляем
+/// dep `base64` ради ~30 строк.
+fn base64_encode(input: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    let mut i = 0;
+    while i + 3 <= input.len() {
+        let n = (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8) | u32::from(input[i + 2]);
+        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
+        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
+        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
+        out.push(ALPHABET[(n & 0x3F) as usize] as char);
+        i += 3;
+    }
+    let rem = input.len() - i;
+    if rem == 1 {
+        let n = u32::from(input[i]) << 16;
+        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
+        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
+        out.push('=');
+        out.push('=');
+    } else if rem == 2 {
+        let n = (u32::from(input[i]) << 16) | (u32::from(input[i + 1]) << 8);
+        out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
+        out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
+        out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
+        out.push('=');
+    }
+    out
 }
 
 async fn send_hello_error<S>(

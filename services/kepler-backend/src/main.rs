@@ -229,7 +229,46 @@ async fn setup() -> Result<SetupState, DynError> {
 
     let token = auth::generate_token();
 
-    let ws = WsServer::bind(ark.clone(), token.clone(), lock_dir.clone()).await?;
+    // App Index: индексирует Start Menu + UWP. SQLite в lock_dir (рядом с ark.db),
+    // icon cache в lock_dir/app-icons/. На старте — load cached синхронно (<10ms),
+    // background rescan через spawn ниже.
+    let app_index = match kepler_backend::app_index::AppIndex::new(
+        &lock_dir,
+        lock_dir.join("app-icons"),
+    ) {
+        Ok(ai) => std::sync::Arc::new(ai),
+        Err(e) => {
+            tracing::warn!(error = %e, "app_index init failed; launcher search будет пустой");
+            // Создаём fallback с empty store — backend стартует, search возвращает [].
+            // Если init упал жёстко, просто паникуем — это infrastructure failure.
+            return Err(format!("app_index init failed: {e}").into());
+        }
+    };
+
+    // Background rescan на старте — не блокирует bind / запуск backend'а.
+    {
+        let ai = app_index.clone();
+        tokio::spawn(async move {
+            match ai.rescan().await {
+                Ok(stats) => tracing::info!(
+                    added = stats.added,
+                    updated = stats.updated,
+                    removed = stats.removed,
+                    total = stats.total,
+                    "app_index initial rescan"
+                ),
+                Err(e) => tracing::warn!(error = %e, "app_index initial rescan failed"),
+            }
+        });
+    }
+
+    let ws = WsServer::bind(
+        ark.clone(),
+        token.clone(),
+        lock_dir.clone(),
+        app_index.clone(),
+    )
+    .await?;
     let port = ws.port();
     tracing::info!(port = port, "WS listening on 127.0.0.1");
 

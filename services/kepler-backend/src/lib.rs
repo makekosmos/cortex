@@ -13,6 +13,7 @@
 // Оба binary запускают идентичный setup; UI binary добавляет tray + launcher
 // поверх; headless binary только ждёт Ctrl+C / parent kill.
 
+pub mod app_index;
 pub mod ark_host;
 pub mod arrancador;
 pub mod auth;

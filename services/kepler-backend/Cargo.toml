@@ -44,6 +44,15 @@ urlencoding = "2"
 async-trait = "0.1"
 # Arrancador SQOBA (subagent C) — zip backup/restore save-files.
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
+# App Index (2026-05-22): .lnk parsing для Start Menu sources.
+lnk = "0.5"
+# App Index: fs-watch для invalidation cache.
+notify = "6"
+# App Index: рекурсивный walk Start Menu directories.
+walkdir = "2"
+# App Index: extract .ico → PNG. (sha2 уже выше для usage_tracker.)
+ico = "0.3"
+image = { version = "0.25", default-features = false, features = ["png"] }
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
 # rolling daily file под `<data_dir>/logs/<slot>/`.
@@ -60,6 +69,17 @@ windows = { version = "0.58", features = [
   "Win32_System_SystemInformation",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
+  # App Index icons (2026-05-22): ExtractIconExW + GDI DIB → PNG conversion.
+  "Win32_UI_Shell",
+  "Win32_Graphics_Gdi",
+  # App Index UWP source (2026-05-22): PackageManager / AppListEntry для UWP enum.
+  "Management_Deployment",
+  "ApplicationModel",
+  "ApplicationModel_Core",
+  "Foundation",
+  "Foundation_Collections",
+  "Storage",
+  "Storage_Streams",
 ] }
 
 [target.'cfg(unix)'.dependencies]
