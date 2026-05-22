@@ -54,9 +54,14 @@ shell/                     # npm package "kepler-shell"
 │  ├─ main.ts              # backend spawn, BrowserWindow, tray, globalShortcut, IPC
 │  ├─ preload.ts           # window.kepler API (search / invoke / commands)
 │  ├─ extension-preload.ts # preload для extension windows
-│  ├─ commands.ts          # статические команды (open app tiles + builtin Kepler commands)
+│  ├─ commands.ts          # 3 builtin static команды (dashboard/settings/check-updates)
 │  ├─ settings-window.ts   # отдельное окно настроек + IPC handlers
-│  └─ extension-host.ts    # загрузчик Vue extensions
+│  ├─ extension-host.ts    # загрузчик Vue extensions
+│  ├─ extension-installer.ts / extension-marketplace.ts # установка + catalog lookup
+│  ├─ instance.ts          # slot-based isolation (prod / dev / test)
+│  ├─ install-extension-window.ts # окно установки .kext / extension package
+│  ├─ focus-widget.ts / focus-block.ts / focus-service.ts / pomodoro-notifier.ts
+│  │                       # focus mode subsystem (см. [Focus mode](../concepts/focus-mode.md))
 ├─ shared/
 │  └─ ipc-types.ts         # KeplerApi (preload contract), CommandRecord, SearchResult
 ├─ src/
@@ -105,41 +110,29 @@ Kepler — точка входа для всех команд экосистем
 
 Каждая запись — `InternalCommand` с полями `id`, `title`, `subtitle`, `category` (`'open' | 'action'`), `kind` (`'app' | 'command'`), `appName?` и `icon?: () => string | undefined`.
 
-| id                     | kind                                | title                       | Что делает                                                                                           |
-| ---------------------- | ----------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `delphi:open`          | `app`                               | Открыть Delphi              | `openExtension("delphi")`                                                                            |
-| `horologion:open`      | `app`                               | Открыть Horologion          | `openExtension("horologion")`                                                                        |
-| `arrancador:open`      | `app`                               | Открыть Arrancador          | `openExtension("arrancador")`                                                                        |
-| `eden:open`            | `app`                               | Открыть Eden                | `openExtension("eden")`                                                                              |
-| `dashboard:open`       | `command` (`appName: "Kepler"`)     | Открыть таблицу данных      | `openDashboardWindow()`                                                                              |
-| `settings:open`        | `command` (`appName: "Kepler"`)     | Открыть настройки           | `openSettings()`                                                                                     |
-| `kepler:check-updates` | `command` (`appName: "Kepler"`)     | Проверить обновления        | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
-| `delphi:today`         | `command` (`appName: "Delphi"`)     | Сегодняшние задачи          | `openExtension("delphi", "/today")`                                                                  |
-| `horologion:pomodoro`  | `command` (`appName: "Horologion"`) | Помодоро                    | `openExtension("horologion", "/?mode=pomodoro")`                                                     |
-| `horologion:stopwatch` | `command` (`appName: "Horologion"`) | Секундомер                  | `openExtension("horologion", "/?mode=stopwatch")`                                                    |
-| `eden:note:create`     | `command` (`appName: "Eden"`)       | Создать заметку             | `openExtension("eden", "/new")`                                                                      |
-| `eden:note:open-today` | `command` (`appName: "Eden"`)       | Открыть сегодняшнюю заметку | `openExtension("eden", "/today")`                                                                    |
+В `shell/electron/commands.ts` живут **только три** kepler-internal команды:
 
-::: tip Eden static commands вернулись (2026-05-19)
-После миграции в extension (Phase 6.0) добавлены три static open-команды: `eden:open`, `eden:note:create`, `eden:note:open-today`. Они видны в launcher'е всегда (как `horologion:pomodoro`), не зависят от того, запущен ли Eden — kepler-shell сам открывает extension по route'у через [Deep links через `route`](/concepts/extension-host#deep-links-через-route). Иконки берутся из `extensionIconDataUri("eden")` (через manifest icon).
-:::
+| id                     | kind                            | title                  | Что делает                                                                                           |
+| ---------------------- | ------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| `dashboard:open`       | `command` (`appName: "Kepler"`) | Открыть таблицу данных | `openDashboardWindow()`                                                                              |
+| `settings:open`        | `command` (`appName: "Kepler"`) | Открыть настройки      | `openSettings()`                                                                                     |
+| `kepler:check-updates` | `command` (`appName: "Kepler"`) | Проверить обновления   | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
 
-::: info `mode=` hash для Horologion — TODO
-Команды `horologion:pomodoro` / `horologion:stopwatch` грузят extension с hash `/?mode=pomodoro` / `/?mode=stopwatch`, но HomeView пока не разбирает параметр — переключение режима будет в следующей итерации. Сама команда уже работает: extension открывается на правильном route.
-:::
+Все остальные open-команды (`eden:open`, `delphi:open`, `horologion:open`, `arrancador:open`, `eden:note:create`, `eden:note:open-today`, `delphi:inbox`, `horologion:pomodoro:25` и т.д.) **объявляются в `extensions/<id>/manifest.json::commands[]`** и резолвятся `loadDeclaredCommands` из `extension-host.ts`. Источник правды для перечня открывающих команд каждого extension'а — соответствующий `manifest.json` (см. поле `commands` в [Eden](./eden.md), [Delphi](./delphi.md), [Horologion](./horologion.md)).
 
 ### Dynamic (action) commands
 
 Регистрируются running extension'ами через [Command bus](../concepts/command-bus.md) (`category: 'action'`). **С 2026-05-19** LauncherView показывает их наравне с open-командами — раньше был фильтр `category !== "action"`, который скрывал dynamic-ручки. Теперь любая зарегистрированная action-команда видна в палитре пока соответствующее приложение запущено и держит WS-connection к kepler-backend.
 
-## Extension host (Phase 4 ✅)
+## Extension host (Phase 4 ✅ + Phase 6.0 ✅)
 
-`shell/electron/extension-host.ts` — production loader. Phase 4 завершён: 4 апки рендерятся как Vue extensions внутри Kepler без отдельных Electron-процессов.
+`shell/electron/extension-host.ts` — production loader. Все продуктовые апки, кроме встроенного Dashboard'а, рендерятся как Vue extensions внутри Kepler без отдельных Electron-процессов.
 
-- Extensions лежат в `extensions/<id>/` (top-level, рядом с `shell/`): Dashboard, Horologion, Delphi, Arrancador.
+- Extensions лежат в `extensions/<id>/` (top-level, рядом с `shell/`): **Eden, Horologion, Delphi, Arrancador** (четыре).
 - Каждое — `manifest.json` + Vue bundle + опциональный preload.
 - Host открывает extension в отдельном `BrowserWindow` с reuse через `Map<id, BrowserWindow>`.
-- Eden — намеренно standalone .exe (`apps/eden/ts/`), миграция в Phase 6, см. [Roadmap](./kepler-roadmap.md).
+- **Dashboard** — встроенный shell view (`shell/src/views/Dashboard*.vue`), не extension. Открывается через `openDashboardWindow()` из `commands.ts`.
+- Eden мигрирован в extension в Phase 6.0 (2026-05-17), standalone `apps/eden/ts/` удалён в Phase 6.0.A.
 
 ### Иконки в launcher
 

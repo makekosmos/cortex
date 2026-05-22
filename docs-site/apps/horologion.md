@@ -126,7 +126,8 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 - Cвой `<MentionInput>` сверху — выбираешь «над чем работаешь» (можно поменять в любой момент, в т.ч. во время break'а — следующий work возьмёт новое значение).
 - Точки `[● ● ○ ○]` показывают сколько помидорок до длинного перерыва.
 - Кнопки: primary «Начать сессию» (по статусу: Пауза / Продолжить / Старт фокуса / Старт перерыва), Skip, Stop.
-- **Состояние сохраняется при сворачивании в трей** — таймер тикает в фоне.
+- **Состояние сохраняется при сворачивании в трей и при закрытии окна Horologion** — manifest имеет `keepAliveInBackground: true` (с 2026-05-22), `shell/electron/extension-host.ts` intercept'ит `close` и делает `win.hide()` вместо destroy. Renderer переживает закрытие, таймер продолжает тикать. Реальный destroy окна — только на `app.before-quit`.
+- **Pomodoro state как single source of truth — backend.** `services/kepler-backend/src/pomodoro_host.rs` (`PomodoroHost`) держит состояние сессии (phase, phase_ends_at_ms, remainingMs) и эмитит `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus даже если Horologion-окно закрыто. Renderer и focus widget слушают эти события и ресинхронизуются при reopen.
 - **Пауза = stop текущего сегмента, resume = новый сегмент** (Toggl-style). На `pause()` `usePomodoroSession` закрывает активный `time_entry_obj` с `endedAt = моментом паузы`, на `resume()` открывает свежий entry. Время в паузе **не учитывается** в длительности записей. Один pomodoro с N паузами = N+1 `time_entry_obj`, сумма их `endedAt - startedAt` = чистое отработанное время. Backend (`ark-core::pomodoro::Session`) одновременно замораживает `remainingMs` / `phase_ends_at_ms` — таймер визуально стоит.
 
 ### Settings
@@ -164,9 +165,16 @@ Horologion полностью использует [`@kosmos/visuals`](/packages
 
 ## Persistence pomodoro
 
-::: warning Future
-Сейчас pomodoro-состояние живёт в Vue renderer (extension). Если Kepler shell закрыт — pomodoro теряет таймер, но активный `time_entry_obj` уже записан в ARK с `startedAt`. Долгосрочно — перенос pomodoro state machine в ark-core-rpc либо в kepler-backend, чтобы переживать полный quit. Это TODO в roadmap.
-:::
+С 2026-05-22 pomodoro state machine живёт в `services/kepler-backend/src/pomodoro_host.rs` (`PomodoroHost`):
+
+- Backend держит фазу, `phase_ends_at_ms`, `remainingMs`, конфигурацию сессии и эмитит события `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` через ARK event bus.
+- Horologion-окно закрыли (или extension вообще не открывали в этой сессии) — таймер продолжает тикать в backend'е, focus widget и system notifications работают.
+- Renderer выступает в роли UI-консумера: подписывается на события и ресинхронизуется при mount/reopen.
+- Полный quit Kepler shell (`app.before-quit`) останавливает backend и активные `time_entry_obj` остаются с теми `endedAt`, которые им проставил pomodoro_host при последнем segment-stop.
+
+## Focus widget
+
+Floating focus widget — отдельное окно, которым управляет `shell/electron/focus-widget.ts`. Главный процесс подписывается на `pomodoro_tick` / `pomodoro_phase_changed` / `pomodoro_finished` напрямую через `arkClient.onArkEvent` (`focus-service.ts`) и деривит state виджета — поэтому он появляется и тикает даже когда Horologion-окно никто не открывал, например при запуске pomodoro через launcher-команду. Подробности render-логики и blocking integration — `shell/electron/focus-block.ts` / `focus-service.ts` (см. будущий [Focus mode](../concepts/focus-mode.md)).
 
 ## Команды
 

@@ -147,6 +147,13 @@ Light и dark темы:
 | `TimeColumn.vue`                          | Вертикальная шкала времени                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `Dropdown.vue`                            | Generic shadcn-стиль `<select>`-замена: trigger + teleport-popover, поддержка клавиатуры (↑/↓/Enter/Escape), click-outside, чекмарк на выбранном. API: `v-model` + `options: { value, label, description?, disabled? }[]`.                                                                                                                                                                                                                        |
 | `WindowControls.vue`                      | Кастомные min/max/close кнопки для extension windows с Lucide иконками (`Minus`/`Square`/`Copy`/`X`). Реактивно подписан на `window.kepler.window.onMaximizedChange` — иконка maximize переключается на restore (`Copy`, зеркалена по X для Win11-look) когда окно maximized. Props `hideMinimize`/`hideMaximize`/`hideClose` для частичного скрытия (например, в Eden zen mode оставляется только close). См. [WindowControls](#windowcontrols). |
+| `IconButton.vue`                          | Ghost-кнопка для иконок (titlebar, mini-player, context-aware controls). Заменяет ad-hoc `.iconbtn` / `.ctl-btn` / `.close-btn` CSS. Props: `size` (default 28), `radius`, `tone: "default" \| "destructive"`, `draggable`, `disabled`. Slot — Lucide icon. |
+| `Toggle.vue`                              | Switch (бинарный on/off control) для settings. `v-model: boolean`, props: `label?`, `disabled?`, `ariaLabel?`. Совместим со `SettingsRow` через slot `control`. |
+| `Checkbox.vue`                            | Квадратный outline-checkbox (18×18, 6px radius, без ✓ glyph'а — inset filled square при checked). Единый primitive для всех «галочек» в экосистеме (Eden TaskRef, Delphi subitems). `v-model: boolean`, props: `disabled?`, `ariaLabel?`. Accent переопределяется через CSS var `--kosmos-checkbox-accent`. |
+| `SettingsRow.vue`                         | Строка Settings UI: title + опциональный description слева, slot `control` (или default) справа. Props: `title`, `description?`, `muted?`. Используется в Eden / Horologion / Delphi / Arrancador settings. |
+| `EmptyState.vue`                          | Стандартный empty-state для списков / trash / search results. Props: `title`, `description?`, `compact?`. Slots: `icon`, `action`. |
+| `BlocklistCard.vue`                       | Карточка blocklist'а в Settings → Фокус. Сверху preview доменов с gradient fade, снизу footer (иконка + название + русская плюрализация количества). Props: `name`, `domains: string[]`, `icon?`, `preset?`, `active?`, `count?`. Emits: `click`, `delete`. |
+| `Toast.vue` + `ToastHost.vue`             | Toast-уведомления. `ToastHost` — Teleport-renderer в `body`, рисует `<Toast>` через `<TransitionGroup>`. `Toast` props: `message`, `tone?: "info" \| "success" \| "error"`. Использовать через composable `useToast()` + `provideToastHost()` на корне приложения. |
 
 ## Визуальный референс компонентов
 
@@ -345,6 +352,25 @@ import {
   DateChip,
   TimeColumn,
   DateTimePicker,
+  Dropdown,
+  WindowControls,
+  IconButton,
+  Toggle,
+  Checkbox,
+  SettingsRow,
+  EmptyState,
+  BlocklistCard,
+  Toast,
+  ToastHost,
+  // Composables
+  useToast,
+  provideToastHost,
+  type ToastOptions,
+  type ToastTone,
+  type ToastApi,
+  // Runtime
+  installScrollFadeListener,
+  type InstallScrollFadeOptions,
 } from "@kosmos/visuals";
 ```
 
@@ -433,6 +459,5 @@ off(); // unsubscribe (idempotent)
 ## Связанные документы
 
 - [Архитектура](/concepts/architecture).
-- `packages/visuals/stories/README.md` — как запустить локальный Histoire-playground
-  и добавить новую story.
-- `apps/eden/AGENTS.md` и `apps/dashboard/AGENTS.md` — где именно применяются shared компоненты.
+- `packages/visuals/.storybook/` — конфиг Storybook (`bun run --cwd packages/visuals storybook`).
+- [Eden](/apps/eden), [Dashboard](/apps/dashboard), [Horologion](/apps/horologion), [Delphi](/apps/delphi), [Arrancador](/apps/arrancador) — потребители shared компонентов.

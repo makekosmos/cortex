@@ -1,6 +1,6 @@
 # Приложения
 
-Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **четыре Vue-extension'а** внутри Kepler shell (Delphi, Arrancador, Dashboard, Horologion) + **Eden** как standalone Electron (до Phase 6), **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
+Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **четыре Vue-extension'а** внутри Kepler shell (**Eden**, Delphi, Arrancador, Horologion) + встроенный shell-view **Dashboard**, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
 
 ::: tip Live snapshot
 Актуальное состояние миграций / Phase trackers — `STATUS.md` в корне репозитория. Эта страница — концептуальная карта; STATUS.md — what's in flight прямо сейчас.
@@ -16,6 +16,7 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **ч�
 
 | Приложение                     | Путь                    | Роль                                                           | Модель данных                                     |
 | ------------------------------ | ----------------------- | -------------------------------------------------------------- | ------------------------------------------------- |
+| [Eden](/apps/eden)             | `extensions/eden`       | заметки, дневник, typed notes                                  | `note_obj` + кастомные типы                       |
 | [Delphi](/apps/delphi)         | `extensions/delphi`     | задачи                                                         | `task_obj` (auto-миграция legacy todos на старте) |
 | [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы                           | `game_obj` + usage data                           |
 | [Horologion](/apps/horologion) | `extensions/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi)     |
@@ -26,11 +27,10 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **ч�
 | ---------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------- |
 | [Dashboard](/apps/dashboard) | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: welcome (space picker) + space view (sidebar + объекты) | read-only inspector |
 
-## Standalone desktop apps (Electron)
+## Зарезервированные имена
 
 | Приложение                                                              | Путь                                  | Роль                                                                             | Модель данных                      |
 | ----------------------------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------- |
-| [Eden](/apps/eden)                                                      | `apps/eden/ts`                        | заметки, дневник, typed notes                                                    | `note_obj` + кастомные типы        |
 | [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог)                                        | TBD                                |
 | [Kerux](/apps/kerux) <span class="kbadge info">TBD</span>               | `apps/kerux` (зарезервировано)        | голосовой ввод по хоткею (Superwhisper аналог; faster-whisper / Groq Whisper-v3) | TBD (опционально `voice_clip_obj`) |
 
@@ -59,7 +59,7 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 - Все тесты — на изолированных БД. См. [Изоляция тестовых БД](/concepts/test-isolation).
 - **Язык UI — русский.** Все user-facing строки (placeholder, labels, кнопки, эмпти-стейты, пилюли, заголовки view) — на русском. Английский только для technical-идентификаторов (id типов объектов, имена пакетов, log message'и). Это относится ко всем приложениям без исключения.
 - **Каждое приложение запоминает геометрию окна между запусками.** Для standalone Electron — сохранять `x` / `y` / `width` / `height` / `isMaximized` в `app.getPath("userData") + "/window-state.json"` на события `resize` / `move` / `maximize` / `unmaximize` / `close` (debounce 400мс на тики, final flush на close), и восстанавливать при `createWindow`. Для Vue-extensions внутри Kepler shell геометрию extension window'а сохраняет сам `shell/electron/extension-host.ts` (см. соответствующую секцию [Extension host](/concepts/extension-host)). Если сохранённый файл отсутствует или битый — fallback на дефолтные дименсии. Electron сам клампит bounds внутрь доступных дисплеев, если монитор отключили.
-- **Каждое приложение имеет свой `--<app>-accent` токен.** В локальном `styles.css` приложения объявляется `--<app>-accent` (например `--horologion-accent: oklch(0.66 0.245 305)` — Apple HIG systemPurple) + `--<app>-accent-foreground`, и переопределяется общий `--accent` / `--accent-foreground` на эти значения. Все компоненты автоматически подхватят свой цвет. Цвет выбирается осмысленно (Eden — зелёный, Horologion — фиолетовый, и т.п.), желательно из официальных HIG-палитр для узнаваемости.
+- **Каждое приложение имеет свой `--<app>-accent` токен.** В локальном `styles.css` приложения объявляется `--<app>-accent` (например `--horologion-accent: oklch(0.66 0.245 305)` — Apple HIG systemPurple) + `--<app>-accent-foreground`, и переопределяется общий `--accent` / `--accent-foreground` на эти значения. Все компоненты автоматически подхватят свой цвет. Цвет выбирается осмысленно (Eden — оранжевый `#ff5c00`, Horologion — фиолетовый, и т.п.), желательно из официальных HIG-палитр для узнаваемости.
 - **Inter Variable как fallback-шрифт.** macOS подхватит системный SF Pro раньше, но Windows и Linux должны рендерить именно Inter — мы подгружаем его через `@fontsource-variable/inter` (variable-шрифт ~30KB woff2, все weights в одном файле). Импортируется одной строкой в `src/main.ts` приложения. Дальше fallback на Segoe UI / Helvetica / Arial. Порядок прописан в `--font-sans` в `@kosmos/visuals/theme/css-variables.css`.
 - **Settings — отдельное окно либо route внутри extension'а.** Для standalone Electron (Eden): открывать через IPC отдельный `BrowserWindow` с hash `#/settings`. Для Vue-extensions внутри Kepler shell: route `/settings` внутри memory router'а extension'а (см. [Horologion → Topbar](./horologion.md#topbar)).
 - **Все desktop-приложения используют `@kosmos/visuals` как единый источник UI**:
@@ -72,7 +72,7 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 
 | Приложение                     | ARK интегрирован?                          | Что осталось                                                                                                                                                           |
 | ------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Eden (desktop)                 | ✅ (notes как `note_obj`)                  | стартовая миграция legacy entries; Heart остаётся для editor/vault и one-time work                                                                                     |
+| Eden (extension)               | ✅ (notes как `note_obj`)                  | Phase 6.0 ✅: standalone `apps/eden/ts/` удалён, Heart Rust sidecar удалён, search через ARK FTS5. Дальнейшее — Phase 14 (Pinia Colada) и Phase 16 (semantic search).  |
 | Delphi (desktop)               | ✅ (tasks как `task_obj`)                  | legacy DB sidecar **удалён**; auto-migration на старте; **TODO billing**: `propsJson.price` / `hourlyRate` на task_obj для расчёта $/час из связанных `time_entry_obj` |
 | Arrancador                     | ✅ (games как `game_obj`, usage через ARK) | завершён usage backfill                                                                                                                                                |
 | Dashboard                      | ✅ (read-only inspector)                   | предпочитать ARK analytics endpoints вместо raw SQL                                                                                                                    |

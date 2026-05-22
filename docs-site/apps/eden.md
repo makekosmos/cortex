@@ -103,17 +103,15 @@ bun run --cwd shell dev                     # shell + extensions вместе
 4. Если найден — открывает. Иначе — создаёт новый entry с этим title.
 5. `activeSpace = "diary"` — чтобы watch не перебивал текущий контекст.
 
-### Static open-команды
+### Open-команды
 
-В `shell/electron/commands.ts` добавлены static open-команды:
+Объявлены в `extensions/eden/manifest.json::commands[]` (см. полный список в самом manifest'е, источник правды). Резолвятся `loadDeclaredCommands` в `shell/electron/extension-host.ts` — видны в launcher всегда, не зависят от того, запущен ли Eden:
 
 | id                     | route     | Что делает                                                                                                                |
 | ---------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `eden:open`            | (default) | Открыть Eden                                                                                                              |
 | `eden:note:create`     | `/new`    | Создать новую заметку — Eden routing видит `/new` → `dispatchEdenCommand("eden:cmd:note:create")`                         |
 | `eden:note:open-today` | `/today`  | Открыть сегодняшнюю заметку дневника — routing → `dispatchEdenCommand("eden:cmd:note:open-today")` → `openTodayJournal()` |
-
-Это **static** команды (как `horologion:pomodoro`), они видны в launcher всегда, не зависят от того, запущен ли Eden. Подробнее — [Kepler → Static commands](./kepler#static-commands-registry-в-shell-electron-commands-ts).
 
 ### Eden routing + pending dispatch queue
 
@@ -211,9 +209,9 @@ Elevation surfaces (`dialog-card`, `search-overlay`, `note-type-menu`, etc.) о�
 
 Только utilities + theme (без preflight — иначе reset перебивает kosmos-tokens). Vite alias `tailwindcss → shell/node_modules/tailwindcss` живёт в `shell/vite.extensions.config.mjs` — чтобы extension резолвил тот же tailwind, что и shell, без дубль-install.
 
-### InlineCaret удалён
+### InlineCaret отключён
 
-`InlineCaret` TipTap extension убран из `Editor.vue`: widget decoration ломал drag-selection. Кастомный курсор остаётся через `CustomCaret` из `@kosmos/visuals` (Vapor-friendly overlay над браузерным).
+`InlineCaret` TipTap extension больше **не подключается** в `Editor.vue` (widget-decoration ломал drag-selection). Файл `extensions/eden/src/InlineCaret.ts` оставлен в репо, но не импортируется ни одним call-site'ом — только комментарий в `Editor.vue` отмечает причину отключения. Кастомный курсор остаётся через `CustomCaret` из `@kosmos/visuals` (Vapor-friendly overlay над браузерным).
 
 ### Accent color
 

@@ -88,7 +88,7 @@ if (state.kind === "connected") {
 
 ### Wire-формат kepler mode
 
-Тот же JSON-RPC что self-managed, плюс hello-handshake (см. [kepler.md](../apps/kepler.md#protocol-hello-handshake)). После handshake:
+Тот же JSON-RPC что self-managed, плюс hello-handshake (см. [Kepler → protocol hello handshake](/apps/kepler#protocol-hello-handshake)). После handshake:
 
 ```json
 // Request:  { "operation": "<name>", "_req_id": "...", ...params }
