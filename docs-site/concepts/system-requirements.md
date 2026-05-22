@@ -96,7 +96,7 @@
 
 ## Известные ограничения
 
-- **Headless / RDP** — globalShortcut Ctrl+Shift+K может не сработать в Remote Desktop session (Windows блокирует hotkey registration в детачнутых session'ах)
+- **Headless / RDP** — globalShortcut launcher'а (`Alt+Space` в prod, см. `shell/electron/instance.ts`) может не сработать в Remote Desktop session (Windows блокирует hotkey registration в детачнутых session'ах)
 - **Multi-monitor** — Kepler launcher позиционируется на primary display; extension окна имеют persisted position per-extension
 - **Antivirus / SmartScreen** — `Kepler.exe` и helper binaries **не подписаны EV cert** → Windows SmartScreen warning на первом запуске («Unknown publisher»). Один клик «Run anyway». EV cert ~$200/год — отложено.
 - **Group Policy на managed машинах** — может запрещать установку Windows Service (Focus svc), service install fall back на helper-mode (UAC per toggle)

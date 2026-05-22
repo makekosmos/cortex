@@ -17,6 +17,10 @@ description: Свежие фичи лаунчера — глазами поль�
 
 Виджет наконец **перетаскивается мышкой** — раньше зажатие на области времени / подписи ничего не делало из-за фокусного режима окна; теперь работает как ожидаешь.
 
+### IconButton primitive в дизайн-системе <Badge type="tip" text="0.2.4" />
+
+Под капотом `@kosmos/visuals` появился общий `IconButton` — ghost-кнопка для иконок в titlebar'ах, mini-player виджете, context-aware controls. Раньше каждое расширение тиражировало свой `.iconbtn` / `.ctl-btn` / `.close-btn` CSS — теперь это один primitive с tone (`default` / `destructive`), настраиваемым размером и корректным `-webkit-app-region: no-drag` в draggable-зонах. Постепенно подменяет ad-hoc CSS в Horologion / Eden / focus widget.
+
 ### Bug-report одним кликом <Badge type="tip" text="0.2.3" />
 
 Когда что-то пошло не так — открой **Настройки → Отчёты об ошибках → «Создать отчёт»**. Kepler соберёт ZIP с логами, crash-репортами, версиями (electron / chromium / node / kepler) и списком установленных расширений. Можно сразу отправить в issue или мне в личку.

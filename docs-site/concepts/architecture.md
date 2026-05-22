@@ -44,17 +44,17 @@
 ┌──┴──┐ ┌─────┴────┐ ┌─────┴────┐ ┌─────┴───┐ ┌──────┴─────┐
 │Eden │ │ Delphi   │ │Arrancador│ │Horologion│ │ Dashboard  │
 └─────┘ └──────────┘ └──────────┘ └──────────┘ └────────────┘
- standalone   extensions/<id>/ (Vue-extensions внутри shell/)
+ extensions/<id>/ (Vue-extensions внутри shell/)         shell view
 
-Eden — standalone Electron .exe (apps/eden). Остальные — Vue-extensions,
-открываются внутри Kepler shell, общаются с kepler-backend через @kosmos/ark.
+Eden, Delphi, Arrancador, Horologion — Vue-extensions внутри Kepler shell.
+Dashboard — встроенный shell view (shell/src/views/Dashboard*.vue), не extension.
+Все общаются с kepler-backend через @kosmos/ark.
 ```
 
-- `shell/` (Electron, npm `kepler-shell`) — оркестратор: launcher окно, tray, settings, extension loader, спавн `kepler-backend`.
-- `kepler-backend` (Rust) — shared runtime: supervisor для `ark-core-rpc`, WS gateway, command bus, sync, встроенный usage tracker.
+- `shell/` (Electron, npm `kepler-shell`) — оркестратор: launcher окно, tray, settings, extension loader, focus mode подсистема (см. `shell/electron/focus-*.ts`), спавн `kepler-backend`.
+- `kepler-backend` (Rust) — shared runtime: supervisor для `ark-core-rpc`, WS gateway, command bus, sync, встроенный usage tracker, pomodoro host (`pomodoro_host.rs`).
 - `ark-core-rpc` (Rust, `crates/ark-core`) — канонический ARK runtime: SQLite, миграции, sync protocol.
 - Extensions (`extensions/<id>/`) — Vue-bundles внутри Kepler shell. Общаются с `kepler-backend` через `@kosmos/ark`.
-- Eden — пока standalone (`apps/eden/ts`), миграция в extensions — Phase 6.
 
 ## Роли
 
@@ -64,7 +64,7 @@ Eden — standalone Electron .exe (apps/eden). Остальные — Vue-extens
 
 - Спавнит `kepler-backend.exe` как child (`spawnBackend`).
 - Подключается к нему через `@kosmos/ark` в kepler-mode (`ensureKeplerRunning`).
-- Показывает launcher окно (frameless, acrylic background, alwaysOnTop) по `Ctrl+Shift+K`.
+- Показывает launcher окно (frameless, acrylic background, alwaysOnTop) по `Alt+Space` (prod) / `Alt+\`` (dev) — см. `shell/electron/instance.ts → resolveInstance().hotkey` и `shell/electron/settings-window.ts → DEFAULT_HOTKEY_PROD`.
 - Tray-иконка с menu (Открыть / Настройки / Выход).
 - Список команд в launcher = **static open-commands** (`COMMANDS` из `electron/commands.ts`) + **dynamic action-commands** (через `arkClient.commands.list()` — приходят от running апок).
 - При invoke: static исполняются локально (`spawn(exe)`), dynamic уходят в `kepler-backend` через `arkClient.commands.invoke(id)` — backend broadcast'ит `command_invoked`, owning апка handle'ит.
@@ -88,10 +88,10 @@ Eden — standalone Electron .exe (apps/eden). Остальные — Vue-extens
 
 ### Apps (consumers + producers)
 
-Eden (`apps/eden/ts`) — standalone Electron .exe. Остальные (Delphi, Arrancador, Dashboard, Horologion) — Vue-extensions в `extensions/<id>/`, открываются внутри Kepler shell. Связи:
+Eden, Delphi, Arrancador, Horologion — Vue-extensions в `extensions/<id>/`, открываются внутри Kepler shell. Dashboard — встроенный shell view. Связи:
 
 - **Renderer**: Vue 3 Vapor через `@kosmos/visuals` (`Sidebar`, `Titlebar`, `DesktopChrome`, `CommandPalette` и т.п.). Никакого SQLite, всё через preload IPC.
-- **Electron main** (Eden) / **extension host** (Kepler shell main): коннектится к `kepler-backend` через `@kosmos/ark` (kepler-mode). Спавн собственного sidecar — **не делает**. Sync — **не запускает** (backend сам делает).
+- **Extension host** (Kepler shell main): коннектится к `kepler-backend` через `@kosmos/ark` (kepler-mode). Спавн собственного sidecar — **не делает**. Sync — **не запускает** (backend сам делает).
 - **Consumers**: читают/пишут ARK objects через `arkClient.objects.*` / `arkClient.links.*`. Подписываются на entity events.
 - **Producers**: регистрируют action-commands через `arkClient.commands.register(...)` и слушают `arkClient.commands.onInvoked(...)`. Пример — Horologion регистрирует `horologion:pomodoro:25` и при invoke стартует таймер.
 
@@ -111,10 +111,7 @@ Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Horologion. Никогда не п
 
 ### @kosmos/ark
 
-Канонический TS-клиент. Два режима:
-
-- **kepler-mode (default сейчас)** — `ArkClient` коннектится к `kepler-backend` через WS, используя `kepler.lock.json` (bearer token, port). Шейринг одного backend'а с другими апками.
-- **self-managed sidecar (legacy)** — `ArkClient` сам спавнит и владеет процессом `ark-core-rpc.exe`. Использовалось до Kepler как brand swap; сейчас live только для тестов и fallback.
+Канонический TS-клиент. Работает в **kepler-mode**: `ArkClient` коннектится к `kepler-backend` через WS, используя `kepler.lock.json` (bearer token, port). Шейринг одного backend'а с другими апками — Eden, Delphi, Arrancador, Horologion, Dashboard. Self-spawn `ark-core-rpc.exe` из renderer'а / extension'а — не делается, этим владеет backend.
 
 См. [@kosmos/ark](/packages/ark).
 
@@ -157,6 +154,7 @@ Apps (`@kosmos/ark` в kepler-mode) не открывают SQLite напрям�
 | **Entity events**  | `onArkEvent` / `onEntityChanged` в `@kosmos/ark` | Подписка на изменения объектов                                                                                        |
 | **Command bus**    | `commands.*` в WS protocol                       | Императивные «ручки» апок (Pomodoro start, create note и т.п.). См. [Command bus](/concepts/command-bus)              |
 | **Extension host** | `kepler:extension:*` IPC в kepler-shell          | Загрузка Vue extension bundles внутри launcher'а (Phase 4 foundation). См. [Extension host](/concepts/extension-host) |
+| **Focus mode**     | `shell/electron/focus-*.ts` + backend `pomodoro_host` | Floating widget, app/website blocker, pomodoro phase events. См. [Focus mode](/concepts/focus-mode)             |
 
 ## Принципы
 
@@ -191,7 +189,7 @@ Substantial-правки проходят через proof loop с явными 
 | ark-relay-server      | `services/ark-relay-server`                           | Rust server         | WebSocket relay (NAT-обход p2p sync)                                                                                        |
 | kepler-watcher        | `services/kepler-watcher`                             | Rust                | watcher-демон над ark-core                                                                                                  |
 | @kosmos/visuals       | `packages/visuals`                                    | TS + Vue            | дизайн-система                                                                                                              |
-| Eden (standalone)     | `apps/eden/ts`                                        | TS + Electron       | заметки, пока вне shell (Phase 6 — миграция)                                                                                |
-| Vue-extensions        | `extensions/{delphi,arrancador,dashboard,horologion}` | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                    |
+| Vue-extensions        | `extensions/{eden,delphi,arrancador,horologion}`      | TS + Vue            | продуктовые оболочки внутри Kepler shell                                                                                    |
+| Dashboard             | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | TS + Vue        | встроенный shell view (read-only ARK browser), не extension                                                                 |
 | ark-service (Android) | `mobile/ark-service`                                  | Kotlin + Room       | Android ContentProvider, держит данные Android Delphi (`mobile/delphi`). Изолирован от desktop ARK, ждёт миграции на UniFFI |
 | usage-tracker module  | `services/kepler-backend/src/usage_tracker/`          | Rust                | захват usage data → ARK; standalone-бинарь заморожен в `legacy/usage-tracker/` после Phase E3                               |
