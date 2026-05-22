@@ -335,8 +335,9 @@ pub fn expand_env_vars(s: &str) -> String {
                 continue;
             }
         }
-        out.push(s[i..].chars().next().unwrap());
-        i += s[i..].chars().next().unwrap().len_utf8();
+        let ch = s[i..].chars().next().expect("i < bytes.len()");
+        out.push(ch);
+        i += ch.len_utf8();
     }
     out
 }
