@@ -10,7 +10,7 @@
 | Async runtime (Rust) | **tokio** (multi-threaded)                                                 | весь backend / WS server / spawning subprocess                                                                                                                    |
 | Type system (TS)     | **TypeScript** (`tsc --noEmit`)                                            | shell + все Vue extensions                                                                                                                                        |
 | Desktop UI           | **Vue 3.6.0-beta.12** (везде) + Vapor (experimental, активно в Eden)       | Kepler shell + все 4 Vue-extensions (Eden, Horologion, Delphi, Arrancador) + Dashboard                                                                            |
-| Desktop shell        | **Electron 41**                                                            | Kepler launcher + extension windows                                                                                                                               |
+| Desktop shell        | **Electron 42**                                                            | Kepler launcher + extension windows                                                                                                                               |
 | Android UI           | **Kotlin** + **Jetpack Compose** + **Gradle** + **Room** (ContentProvider) | `mobile/delphi` (UI), `mobile/ark-service` (Room ContentProvider для Delphi mobile)                                                                               |
 | Cross-language FFI   | **UniFFI** (Mozilla)                                                       | `crates/ark-core` → Android Room provider; единый ARK code path                                                                                                   |
 
@@ -65,7 +65,7 @@
 | Слой                             | Инструменты                                             | Где используется                                                    |
 | -------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
 | Reactive state                   | **Pinia 3**                                             | Eden, Horologion (stores `useEdenStore`, `usePomodoroStore`)        |
-| Server state cache (планируется) | **@pinia/colada 1.3** — установлен, миграция в Phase 14 | Eden state migration — см. [Roadmap Phase 14](/apps/kepler-roadmap) |
+| Server state cache (планируется) | **@pinia/colada 1.3** — plugin подключён в Eden (`main.ts`), но stores ещё на чистой Pinia. Полная миграция — Phase 14 | Eden state migration — см. [Roadmap Phase 14](/apps/kepler-roadmap) |
 | Routing                          | **vue-router** (memory history)                         | Delphi (5 pages), при необходимости в других extensions             |
 
 ### Сетевая инфраструктура (LAN sync, IPC)
@@ -311,7 +311,7 @@ mDNS — zero-config LAN service discovery, поддерживается на в
 
 ### Почему better-sqlite3 в Electron, а не node:sqlite?
 
-`node:sqlite` (built-in в Node 22+) — реальная альтернатива. Electron 41 использует Node 22.x — миграция возможна, **уберёт native dep** (electron-rebuild), уменьшит installer. **На watch-list** — в Phase 11 (backup feature) пересмотрим.
+`node:sqlite` (built-in в Node 22+) — реальная альтернатива. Electron 42 использует Node 22.x — миграция возможна, **уберёт native dep** (electron-rebuild), уменьшит installer. **На watch-list** — в Phase 11 (backup feature) пересмотрим.
 
 ### Почему ARK FTS5, а не tantivy / meilisearch / sqlite-vec semantic?
 

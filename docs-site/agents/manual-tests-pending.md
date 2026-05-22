@@ -13,7 +13,7 @@
 
 ---
 
-## 🟠 Pending — Focus mode end-to-end (2026-05-18, Kepler 0.1.18+)
+## 🟠 Pending — Focus mode end-to-end (2026-05-18, Kepler 0.2.4+)
 
 Полная реализация focus mode shipped: helper bin + ARK schema + Settings UI +
 Horologion integration + PowerShell elevation fallback + NSIS uninstall hook.

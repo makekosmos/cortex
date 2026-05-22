@@ -106,10 +106,13 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 Скрипт `scripts/sync-agents-docs.mjs` берёт:
 
 - `docs-site/agents/index.md` + `forbidden.md` + `checklists.md` + `reference/rules.md` + `concepts/proof-loop.md` → корневой `AGENTS.md` и `CLAUDE.md`.
-- `docs-site/apps/eden.md` + общие запреты → `apps/eden/AGENTS.md`, `apps/eden/ts/AGENTS.md`.
 - `docs-site/apps/delphi.md` (Kotlin-часть) → `mobile/delphi/AGENTS.md`.
 - `docs-site/packages/ark-core.md` → `crates/ark-core/AGENTS.md`.
 - Весь набор ключевых страниц inline → `docs-site/public/llms.txt`.
+
+::: tip Eden / Dashboard / Horologion / Arrancador
+Per-extension `AGENTS.md` не генерируются (папки `apps/<name>/` упразднены — расширения живут в `extensions/<id>/` и читают общий корневой `AGENTS.md`). Если нужны жёсткие per-extension правила — добавляй их в соответствующую страницу `docs-site/apps/<name>.md` либо в `docs-site/agents/forbidden.md` (секция per-app).
+:::
 
 Если меняешь логику генерации — правь сам `scripts/sync-agents-docs.mjs`, потом `bun run docs:sync`.
 

@@ -63,7 +63,7 @@ bun run build:backend:dev   # cargo build (debug) services/kepler-backend
 bun run dev                 # backend + extensions + Vite + Electron
 ```
 
-`Ctrl+Shift+K` глобально откроет launcher. Tray-иконка появится в трее. Открой extension через launcher (Dashboard, Horologion, Delphi, Arrancador).
+`Alt+Space` (настраивается) глобально откроет launcher. Tray-иконка появится в трее. Открой extension через launcher (Eden, Horologion, Delphi, Arrancador, Dashboard).
 
 ## Дальше
 
