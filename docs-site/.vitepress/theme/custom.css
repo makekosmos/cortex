@@ -153,10 +153,17 @@ body {
   padding-right: 0 !important;
 }
 
-/* Kosmos логотип в navbar — выровнен с padding сайдбара */
+/* Kosmos логотип в navbar — точно одна линия с padding сайдбара (24px).
+ * Обнуляем offset родительских wrapper'ов, ставим 24px только на .title. */
+.VPNavBar.has-sidebar .wrapper,
+.VPNavBar .container {
+  padding-left: 0 !important;
+}
+
 .VPNavBar .title,
 .VPNavBar.has-sidebar .title {
   padding-left: 24px !important;
+  padding-right: 0 !important;
 }
 
 /* Уберём VitePress'овский «curtain» градиент сверху сайдбара */
