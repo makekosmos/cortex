@@ -1,10 +1,50 @@
 # Kosmos — статус проекта (2026-05-22)
 
+## 2026-05-22 — App Launcher v1 + state restore (Kepler 0.2.4 → 0.2.5)
+
+Большая новая фича — **запуск установленных приложений** из поисковика
+лаунчера (`Alt+Space`). Раньше поисковик находил только команды
+расширений; теперь — все Win32-программы (Start Menu) и UWP / Microsoft
+Store apps, в общем списке с командами.
+
+### Что под капотом
+
+- `services/kepler-backend/src/app_index/` — новый Rust-модуль:
+  trait `AppSource` + per-platform impl (Windows: Start Menu + UWP),
+  отдельный SQLite `app-index.db` рядом с `ark.db` (host-specific,
+  НЕ в ARK — см. write-boundary), in-memory cache, icon extractor
+  (Win32 ExtractIconExW + UWP Package.GetLogo с trim transparent
+  padding), WS namespace `app_index.{list_all,search,launch,rescan}`.
+- Иконки приходят renderer'у как **inline base64 data URL** (renderer
+  без file:// access). 65 apps × ~30KB = ~2MB JSON — приемлемо для
+  local IPC.
+- Cross-platform-ready: macOS / Linux добавятся как новые `AppSource`
+  impl без переписывания общей логики.
+
+### Discord/Slack/Teams icon fix
+
+Squirrel-installer apps кладут target=Update.exe (без embedded icons),
+а реальный icon location прописан в `.lnk`. Старый extractor доставал
+иконку только из target → placeholder. Теперь Start Menu source
+вызывает icons.rs eagerly с доступом к .lnk path, стратегия:
+1) `.lnk::icon_location()` → 2) target exe.
+
+### State restore с TTL
+
+Launcher запоминает `{ query, selectedIndex, scrollTop, savedAt }`
+в localStorage (debounce 200ms). При следующем открытии — если прошло
+меньше TTL (default 5 мин), восстанавливается. После invoke — стирается.
+Setting в Settings → Общие.
+
+См. `.agent/tasks/2026-05-22-app-launcher/spec.md` и `docs-site/concepts/app-index.md`.
+
+
+
 ## Текущие версии
 
 | Артефакт                                         | Версия                                                                                                            |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Kepler shell (`shell/package.json`)              | **0.2.4** (focus widget backend sync + drag fix + IconButton)                                                     |
+| Kepler shell (`shell/package.json`)              | **0.2.5** (App Launcher v1 — Start Menu + UWP + frecency + state restore)                                          |
 | Eden extension (`extensions/eden/manifest.json`) | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
 | Delphi extension                                 | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                 |
 | Horologion extension                             | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                          |
