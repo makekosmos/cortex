@@ -57,7 +57,7 @@ let handler: ((e: KeyboardEvent) => void) | undefined;
 
 onMounted(() => {
   handler = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    if ((e.metaKey || e.ctrlKey) && e.code === "KeyK") {
       e.preventDefault();
       open.value = !open.value;
     }

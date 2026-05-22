@@ -370,7 +370,7 @@ function onWindowKeyDown(e: KeyboardEvent): void {
       void blockSelection.deleteSelected(editor.value, edenApi.softDeleteTask);
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
+    if ((e.ctrlKey || e.metaKey) && e.code === "KeyC") {
       e.preventDefault();
       const md = serializeSelectedBlocksAsMarkdown();
       if (md) {
@@ -382,7 +382,7 @@ function onWindowKeyDown(e: KeyboardEvent): void {
       }
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && (e.key === "x" || e.key === "X")) {
+    if ((e.ctrlKey || e.metaKey) && e.code === "KeyX") {
       e.preventDefault();
       const count = blockSelection.selectedPositions.value.size;
       const md = serializeSelectedBlocksAsMarkdown();
@@ -407,7 +407,12 @@ function onWindowKeyDown(e: KeyboardEvent): void {
   // task-ref inputs, итд) — НЕ только если editor body имеет focus.
   // Иначе из title input native Ctrl+A select'ил бы текст в input'е, а
   // Ctrl+C дал бы plain text title, не markdown.
-  if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+  //
+  // NB: используем `e.code === "KeyA"` (физическая клавиша) — `e.key === "a"`
+  // ломается на русской раскладке (там та же клавиша возвращает "ф").
+  // Это инвариант для ВСЕХ ctrl-shortcut'ов с латинской буквой,
+  // см. docs-site/agents/forbidden.md → UI / раскладка.
+  if ((e.ctrlKey || e.metaKey) && e.code === "KeyA") {
     const target = e.target as HTMLElement | null;
     const inEditorScope = !!target?.closest(".editor-wrapper");
     if (!inEditorScope) return;
@@ -422,15 +427,12 @@ function onWindowKeyDown(e: KeyboardEvent): void {
   // PM range selection branch — range-select→Ctrl+C / Ctrl+X.
   // Срабатывает только если editor фокусирован (иначе юзер в title input
   // или другом UI — пускаем native handle).
-  if (
-    (e.ctrlKey || e.metaKey) &&
-    (e.key === "c" || e.key === "C" || e.key === "x" || e.key === "X")
-  ) {
+  if ((e.ctrlKey || e.metaKey) && (e.code === "KeyC" || e.code === "KeyX")) {
     const sel = editor.value.state.selection;
     if (sel.empty) return;
     if (!editor.value.view.hasFocus()) return;
     e.preventDefault();
-    const isCut = e.key === "x" || e.key === "X";
+    const isCut = e.code === "KeyX";
     const md = serializePMSelectionAsMarkdown();
     if (md) {
       void navigator.clipboard.writeText(md);
@@ -1518,7 +1520,7 @@ watchEffect((onCleanup) => {
   if (!editor.value) return;
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === "s") {
+    if ((event.metaKey || event.ctrlKey) && event.code === "KeyS") {
       event.preventDefault();
       void save();
     }

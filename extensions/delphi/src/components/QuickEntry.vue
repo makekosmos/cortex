@@ -37,7 +37,7 @@ function onSave(payload: QuickEntrySavePayload) {
 }
 
 const handler = (e: KeyboardEvent) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === "n" && !e.shiftKey && !e.altKey) {
+  if ((e.metaKey || e.ctrlKey) && e.code === "KeyN" && !e.shiftKey && !e.altKey) {
     e.preventDefault();
     if (open.value) {
       hide();
