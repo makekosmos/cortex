@@ -611,13 +611,18 @@ body {
 }
 
 /* Doc footer pager (← Назад / Дальше →): когда есть только одна ссылка
- * (например на первой / последней странице раздела), растягиваем её на
- * всю ширину блока вместо half-column. */
-.pager .pager-link.has-prev:only-child,
-.pager .pager-link.next:only-child,
-.pager .pager-link.prev:only-child {
-  width: 100% !important;
-  max-width: 100% !important;
+ * (например на первой странице раздела), grid-контейнер по дефолту
+ * 1fr 1fr — половина пустая. Схлопываем в одну колонку через :has(). */
+.VPDocFooter .prev-next:not(:has(.pager.has-prev)) {
+  grid-template-columns: 1fr !important;
+}
+.VPDocFooter .prev-next:not(:has(.pager.has-next)) {
+  grid-template-columns: 1fr !important;
+}
+/* На случай если VitePress не выставляет has-prev / has-next: проверяем
+ * наличие самого .pager-link в child .pager div. */
+.VPDocFooter .prev-next:not(:has(.pager:first-child .pager-link)) {
+  grid-template-columns: 1fr !important;
 }
 
 /* ── Conditional nav (user vs dev mode) ─────────────────
