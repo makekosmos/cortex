@@ -13,7 +13,7 @@
 | -------------------------- | ----------------------------- | ---------------------------------------------------------- |
 | Renderer любого приложения | ❌ нет                        | Только preload API                                         |
 | Electron main              | ✅ да                         | Только `mode=ro`, явный fallback, отделённый от writes     |
-| Dashboard                  | ✅ полный read-only inspector | Любая выбранная ARK SQLite-БД                              |
+| Dashboard (shell view)     | ✅ полный read-only inspector | Любая выбранная ARK SQLite-БД, доступ через kepler-shell main |
 | Arrancador                 | ⚠️ ограничено                 | Только как fallback при недоступном `ark-core-rpc`         |
 | Eden / Delphi / другие     | ⚠️ ограничено                 | Только специальные пути (миграция, vault-локальная работа) |
 
@@ -29,12 +29,12 @@ Read-only SQLite не ломает sync — он ничего не меняет.
 
 ## Dashboard — особый случай
 
-Dashboard — буквально read-only ARK inspector. Это часть его product surface:
+Dashboard — буквально read-only ARK inspector. Это встроенный view kepler-shell (`shell/src/views/Dashboard*.vue`), не отдельный app, не extension. Часть его product surface:
 
-- Можно открывать любую выбранную ARK SQLite-БД через Electron main.
+- Можно открывать любую выбранную ARK SQLite-БД через kepler-shell Electron main.
 - Можно показывать данные в UI.
 - **Нельзя** делать `INSERT` / `UPDATE` / `DELETE`.
-- Smoke использует `apps/dashboard/.e2e/smoke-dashboard.db`, никогда — user DB.
+- Smoke использует изолированную БД под `shell/.e2e/` или `.tmp/`, никогда — user DB.
 
 Когда возможно, Dashboard должен **сначала** пробовать `@kosmos/ark` analytics-endpoints:
 

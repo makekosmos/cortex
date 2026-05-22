@@ -174,39 +174,48 @@ sequenceDiagram
 
 ## Examples
 
-### Регистрация (Horologion при старте)
+### Регистрация (Horologion extension при старте)
+
+После миграции в extensions у апок нет собственного Electron main — всё идёт через `window.kepler.ark.request(...)` из renderer'а. Реальный пример из `extensions/horologion/src/main.ts`:
 
 ```ts
-// apps/horologion/electron/main.ts
-import { ArkClient } from "@kosmos/ark";
+// extensions/horologion/src/main.ts (renderer-side)
+const kepler = window.kepler;
 
-const client = new ArkClient({
-  /* kepler-mode */
-});
-await client.start();
-
-async function registerHorologionCommands() {
-  await client.commands.register([
-    {
-      id: "horologion:pomodoro:25",
-      title: "Pomodoro 25 min",
-      subtitle: "Horologion",
-      category: "action",
-    },
-    {
-      id: "horologion:stopwatch:start",
-      title: "Старт секундомера",
-      subtitle: "Horologion",
-      category: "action",
-    },
-  ]);
+if (kepler) {
+  // Register дублирует manifest.commands[] (mode:"action") — manifest даёт
+  // launcher-visibility до запуска extension'а, а commands.register нужен
+  // чтобы shell::awaitExtensionCommand увидел id в arkClient.commands.list
+  // перед dispatch'ем. Backend dedup'ит по id — двойная регистрация безопасна.
+  void kepler.ark
+    .request("commands.register", {
+      commands: [
+        {
+          id: "horologion:pomodoro:25",
+          title: "Помодоро 25 минут",
+          subtitle: "Horologion",
+          category: "action",
+        },
+        {
+          id: "horologion:stopwatch:start",
+          title: "Старт секундомера",
+          subtitle: "Horologion",
+          category: "action",
+        },
+      ],
+    })
+    .catch((err: unknown) => {
+      console.warn("[horologion-extension] commands.register failed:", err);
+    });
 }
 ```
 
-### Listening (handle на стороне апки)
+### Listening (handle на стороне extension'а)
 
 ```ts
-const off = client.commands.onInvoked((e) => {
+// Подписка через kepler.ark.subscribe — flat event с полем `event`.
+const off = kepler.ark.subscribe((e) => {
+  if (e.event !== "command:invoked") return;
   if (!e.id.startsWith("horologion:")) return;
   switch (e.id) {
     case "horologion:pomodoro:25":
@@ -218,8 +227,8 @@ const off = client.commands.onInvoked((e) => {
   }
 });
 
-// unsubscribe при shutdown
-app.on("before-quit", () => off());
+// unsubscribe при teardown
+window.addEventListener("beforeunload", () => off());
 ```
 
 ### Invoke (от launcher через `@kosmos/ark`)

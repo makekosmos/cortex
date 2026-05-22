@@ -86,7 +86,7 @@ flowchart LR
   "verified_at": "2026-04-26T15:00:00Z",
   "results": [
     { "ac": "AC1", "verdict": "PASS", "command": "bun run ark:guard:writes" },
-    { "ac": "AC2", "verdict": "PASS", "command": "bun run --cwd apps/arrancador test" }
+    { "ac": "AC2", "verdict": "PASS", "command": "bun run --cwd extensions/arrancador test" }
   ]
 }
 ```

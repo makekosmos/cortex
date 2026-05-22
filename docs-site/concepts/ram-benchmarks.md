@@ -25,7 +25,7 @@
   - **−1 Node runtime**: 4 Electron main процесса → 1 (kepler-shell).
   - **Shared GPU process + utility processes**: один набор на host вместо четырёх.
   - **1 ark-core-rpc вместо 4**: ARK runtime + SQLite handle разделяются между extensions через общий backend.
-- **Eden migration добавит ещё ~250 MB** save при включении (самая «толстая» апка из-за Heart Rust + TipTap). Eden намеренно остаётся standalone .exe пока — см. [Extension host](/concepts/extension-host).
+- **Eden migration done (Phase 6.0):** Eden уже extension (`extensions/eden/`), без отдельного `.exe`, без Heart Rust sidecar. Пост-migration baseline RAM ещё не замерен — числа в таблице выше относятся к Phase 4 конфигурации (4 extensions без Eden). Свежий замер с Eden как extension — TODO для следующего baseline-прогона.
 
 ## Воспроизведение
 

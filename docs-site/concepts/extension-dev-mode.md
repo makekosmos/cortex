@@ -6,9 +6,10 @@
 
 ## Архитектура: probe-based auto-detect
 
-Раньше extension dev mode требовал тройной opt-in (env var + Settings toggle + ручной `dev:extensions`). С 2026-05-19 — **автоматически**:
+Раньше extension dev mode требовал тройной opt-in (env var + Settings toggle + ручной `dev:extensions`). Сейчас — **probe-based**, но Vite dev server'ы **по умолчанию выключены**:
 
-1. **`bun run --cwd shell dev`** запускает Vite dev server'ы для всех extension'ов параллельно (`shell/scripts/dev.mjs` → `dev-extensions.mjs`). Это дефолт; opt-out — `KEPLER_DEV_EXTENSIONS=0`.
+1. **`bun run --cwd shell dev`** по дефолту НЕ поднимает Vite dev server'ы для extension'ов (`shell/scripts/dev.mjs` около строк 97-111). Причина: HMR трогает `Editor.vue` mid-typing — при правке файла в working tree Vite реклоадит Eden window, useEditor создаёт новый editor instance, и напечатанный пользователем но не сохранённый autosave'ом (debounce 800ms) контент теряется. Для агента, активно правящего код пока user тестит, это destructive.
+   **Opt-in:** `KEPLER_DEV_EXTENSIONS=1 bun run --cwd shell dev`.
 2. **`openExtension(id, route?)`** при каждом вызове делает **TCP probe** `localhost:<manifest.devPort>` (timeout 500ms, кэш «alive» — 10s):
    - Порт отвечает → грузим с `http://localhost:<devPort>/` (Vite HMR).
    - Порт не отвечает → fallback на `dist/index.html` (warning в console).
@@ -16,19 +17,22 @@
 
 Этот подход устраняет три проблемы прошлого дизайна:
 
-- **Двойной opt-in** (env + setting) — теперь zero-config в dev.
+- **Двойной opt-in** (env + setting) — теперь один env var, без persisted setting'а.
 - **Пустые окна при упавшем dev server** — graceful fallback на dist.
 - **Footgun с persisted setting** — раньше `developerMode: true` в settings оставался после dev-сессии, в installed Kepler ломал загрузку extension'ов (localhost:5184 в проде → пустое окно).
 
 ## Workflow
 
 ```powershell
-# Один терминал. Всё стартует автоматически:
+# Дефолт — без HMR extension'ов (безопасно для активной правки кода во время теста):
 bun run --cwd shell dev
+
+# Opt-in HMR — когда нужен живой reload extension'а:
+$env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd shell dev
 ```
 
-- Shell, backend, и Vite dev servers всех extension'ов поднимаются параллельно.
-- Edit `.vue` файла в `extensions/<id>/src/` → Vue HMR обновляет компонент в открытом extension window **без reload** окна.
+- Shell и backend поднимаются всегда. Vite dev servers extension'ов — только при `KEPLER_DEV_EXTENSIONS=1`.
+- При включённом HMR: edit `.vue` файла в `extensions/<id>/src/` → Vue HMR обновляет компонент в открытом extension window **без reload** окна.
 - F12 в любом extension window — toggle DevTools (detached, не блокирует extension).
 - DevTools auto-open на extension windows — dev-only поведение (probe вернул `dev-server`).
 
@@ -101,7 +105,7 @@ Settings window kepler-shell имеет checkbox «Developer Mode» в `%APPDATA
 | Файл                                | Что                                                                                            |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `shell/electron/extension-host.ts`  | `probeExtensionDevServer`, `resolveExtensionSource`, `openExtension` (async + inflight dedupe) |
-| `shell/scripts/dev.mjs`             | Orchestrator: default-on extension Vite servers, opt-out `KEPLER_DEV_EXTENSIONS=0`             |
+| `shell/scripts/dev.mjs`             | Orchestrator: extension Vite servers по дефолту выключены, opt-in `KEPLER_DEV_EXTENSIONS=1`    |
 | `shell/scripts/dev-extensions.mjs`  | Per-extension Vite dev server spawn                                                            |
 | `shell/vite.extensions.config.mjs`  | Vite config для extension build (one-shot dist)                                                |
 | `extensions/<id>/vite.config.mjs`   | Per-extension vite config (HMR server, alias)                                                  |
