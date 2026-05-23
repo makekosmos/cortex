@@ -6,6 +6,8 @@
 //! security trade-off для personal app, см. CLAUDE.md per-app constraints.
 
 use std::ffi::OsStr;
+use std::io::{BufRead, BufReader, Write};
+use std::os::windows::io::FromRawHandle;
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::ptr;
@@ -20,9 +22,7 @@ use windows_sys::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
 use windows_sys::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
-use windows_sys::Win32::Storage::FileSystem::{
-    ReadFile, WriteFile, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX,
-};
+use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX};
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE,
     PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
@@ -140,77 +140,23 @@ pub fn accept_loop(stop_flag: Arc<AtomicBool>) {
     let _ = sa_pair; // hold SD memory until accept_loop exits
 }
 
-/// Newtype чтобы handle перешёл во владение thread'а и Drop закрыл его.
+/// Newtype чтобы handle перешёл во владение thread'а.
 struct PipeHandle(HANDLE);
 
 unsafe impl Send for PipeHandle {}
 
-impl Drop for PipeHandle {
-    fn drop(&mut self) {
-        unsafe {
-            DisconnectNamedPipe(self.0);
-            CloseHandle(self.0);
-        }
-    }
-}
-
 fn handle_connection(pipe: PipeHandle) {
-    let mut buf = vec![0u8; BUF_SIZE as usize];
-    let mut total = 0usize;
-
-    // Простой read loop: читаем до EOF клиента (он закрывает write-side
-    // после single message) или до полного буфера. Клиенту достаточно сделать
-    // shutdown writes (или close) после write — ReadFile тогда вернёт 0.
-    loop {
-        let mut read: u32 = 0;
-        let ok = unsafe {
-            ReadFile(
-                pipe.0,
-                buf.as_mut_ptr().add(total) as *mut _,
-                (buf.len() - total) as u32,
-                &mut read,
-                ptr::null_mut(),
-            )
-        };
-        if ok == 0 || read == 0 {
-            break;
-        }
-        total += read as usize;
-        if total >= buf.len() {
-            break;
-        }
-        // Эвристика: если в накопленном буфере есть валидный JSON terminator
-        // (newline) — прекращаем чтение. Большинство клиентов пошлёт single
-        // line.
-        if buf[..total].contains(&b'\n') {
-            break;
-        }
+    let mut file = unsafe { std::fs::File::from_raw_handle(pipe.0 as _) };
+    let mut raw = String::new();
+    {
+        let mut reader = BufReader::new(&mut file);
+        let _ = reader.read_line(&mut raw);
     }
-
-    let raw = String::from_utf8_lossy(&buf[..total]);
     let resp = protocol::handle_raw(&raw, &hosts_path_for_dispatch());
     let json = serde_json::to_string(&resp)
         .unwrap_or_else(|_| String::from(r#"{"ok":false,"error":"serialize failed"}"#));
-    let mut payload = json.into_bytes();
-    payload.push(b'\n');
-
-    let mut written: u32 = 0;
-    let mut offset = 0usize;
-    while offset < payload.len() {
-        let ok = unsafe {
-            WriteFile(
-                pipe.0,
-                payload.as_ptr().add(offset) as *const _,
-                (payload.len() - offset) as u32,
-                &mut written,
-                ptr::null_mut(),
-            )
-        };
-        if ok == 0 || written == 0 {
-            break;
-        }
-        offset += written as usize;
-    }
-    // Drop pipe → DisconnectNamedPipe + CloseHandle.
+    let _ = writeln!(file, "{json}");
+    let _ = file.flush();
+    // Drop file → CloseHandle.
     let _ = (ERROR_IO_PENDING, FILE_FLAG_OVERLAPPED); // referenced to keep imports stable across feature combos
 }

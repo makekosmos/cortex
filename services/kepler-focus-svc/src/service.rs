@@ -66,7 +66,7 @@ fn run_service() -> windows_service::Result<()> {
     })?;
 
     let stop_flag_pipe = Arc::clone(&stop_flag);
-    let pipe_thread = thread::spawn(move || {
+    let _pipe_thread = thread::spawn(move || {
         pipe::accept_loop(stop_flag_pipe);
     });
 
@@ -74,10 +74,8 @@ fn run_service() -> windows_service::Result<()> {
     let _ = shutdown_rx.recv();
     stop_flag.store(true, Ordering::SeqCst);
 
-    // Pipe thread сам выйдет когда увидит флаг + получит очередное connection
-    // или CancelSynchronousIo. Не блокируем выход на нём (worst case — он
-    // умрёт когда процесс завершится).
-    let _ = pipe_thread.join();
+    // Pipe thread may be blocked in ConnectNamedPipe. Do not join it during
+    // SCM stop; process exit closes the pipe handle.
 
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,

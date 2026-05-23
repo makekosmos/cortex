@@ -17,6 +17,12 @@ pub enum Request {
     Reset,
     Status,
     Ping,
+    #[cfg(windows)]
+    #[serde(rename = "ntfs_scan")]
+    NtfsScan {
+        root: String,
+        exclude_noisy: bool,
+    },
 }
 
 #[derive(Debug, Serialize)]
@@ -28,6 +34,9 @@ pub struct Response {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pong: Option<bool>,
+    #[cfg(windows)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<crate::ntfs_scan::NtfsScanEntry>>,
 }
 
 impl Response {
@@ -37,6 +46,8 @@ impl Response {
             active_domains: Some(domains),
             error: None,
             pong: None,
+            #[cfg(windows)]
+            files: None,
         }
     }
 
@@ -46,6 +57,8 @@ impl Response {
             active_domains: None,
             error: Some(msg.into()),
             pong: None,
+            #[cfg(windows)]
+            files: None,
         }
     }
 
@@ -55,6 +68,19 @@ impl Response {
             active_domains: None,
             error: None,
             pong: Some(true),
+            #[cfg(windows)]
+            files: None,
+        }
+    }
+
+    #[cfg(windows)]
+    pub fn files(files: Vec<crate::ntfs_scan::NtfsScanEntry>) -> Self {
+        Self {
+            ok: true,
+            active_domains: None,
+            error: None,
+            pong: None,
+            files: Some(files),
         }
     }
 }
@@ -76,6 +102,16 @@ pub fn dispatch(req: Request, hosts_path: &Path) -> Response {
         Request::Reset => hosts::reset(hosts_path),
         Request::Status => hosts::read_active_domains(hosts_path),
         Request::Ping => return Response::pong(),
+        #[cfg(windows)]
+        Request::NtfsScan {
+            root,
+            exclude_noisy,
+        } => {
+            return match crate::ntfs_scan::scan_drive_root(&root, exclude_noisy) {
+                Ok(files) => Response::files(files),
+                Err(e) => Response::err(e),
+            };
+        }
     };
     match result {
         Ok(active) => Response::ok_domains(active),

@@ -51,15 +51,15 @@
 
 ## Зависимости компонентов
 
-| Subsystem                   | Bundle                                               | Внешние требования                                                                                                            |
-| --------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Electron host**           | `Kepler.exe` (Chromium 144 + Node 24)                | —                                                                                                                             |
-| **Backend**                 | `kepler-backend.exe` (Rust + tokio + WS server)      | —                                                                                                                             |
-| **ARK storage**             | `ark-core-rpc.exe` (SQLite WAL + FTS5 in-process)    | —                                                                                                                             |
-| **Focus svc**               | `kepler-focus-svc.exe` (Windows Service, AutoStart)  | **Один UAC при первой активации блокировки** — Kepler auto-install'ит service (с 0.1.21). Дальше — zero UAC через named pipe. |
-| **Focus helper** (fallback) | `kepler-focus-helper.exe` (admin elevation manifest) | UAC per toggle — используется только если юзер отклонил auto-install service'а                                                |
-| **AutoUpdater**             | `electron-updater`                                   | Доступ к `github.com/yoso-industries/kepler-releases`                                                                         |
-| **Extension marketplace**   | github raw + releases                                | Доступ к `github.com/yoso-industries/kosmos-extensions`                                                                       |
+| Subsystem                   | Bundle                                               | Внешние требования                                                                                                                                |
+| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Electron host**           | `Kepler.exe` (Chromium 144 + Node 24)                | —                                                                                                                                                 |
+| **Backend**                 | `kepler-backend.exe` (Rust + tokio + WS server)      | —                                                                                                                                                 |
+| **ARK storage**             | `ark-core-rpc.exe` (SQLite WAL + FTS5 in-process)    | —                                                                                                                                                 |
+| **Focus / file svc**        | `kepler-focus-svc.exe` (Windows Service, AutoStart)  | **Один UAC при первой установке service** — дальше zero UAC через named pipe: hosts-блокировка для Focus и быстрый NTFS/MFT scan для File Search. |
+| **Focus helper** (fallback) | `kepler-focus-helper.exe` (admin elevation manifest) | UAC per toggle — используется только если юзер отклонил auto-install service'а                                                                    |
+| **AutoUpdater**             | `electron-updater`                                   | Доступ к `github.com/yoso-industries/kepler-releases`                                                                                             |
+| **Extension marketplace**   | github raw + releases                                | Доступ к `github.com/yoso-industries/kosmos-extensions`                                                                                           |
 
 ## Размер на диске (после install)
 

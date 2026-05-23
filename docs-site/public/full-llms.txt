@@ -1064,7 +1064,7 @@ Dashboard — буквально read-only ARK inspector. Это встроен�
 - Можно открывать любую выбранную ARK SQLite-БД через kepler-shell Electron main.
 - Можно показывать данные в UI.
 - **Нельзя** делать `INSERT` / `UPDATE` / `DELETE`.
-- Smoke использует изолированную БД под `shell/.e2e/` или `.tmp/`, никогда — user DB.
+- Smoke использует изолированную БД под test temp-dir / `.tmp/`, никогда — user DB.
 
 Когда возможно, Dashboard должен **сначала** пробовать `@kosmos/ark` analytics-endpoints:
 

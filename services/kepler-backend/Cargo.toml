@@ -59,6 +59,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 [target.'cfg(windows)'.dependencies]
+ntfs-reader = "0.4.5"
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Security",

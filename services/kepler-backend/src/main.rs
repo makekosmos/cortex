@@ -267,20 +267,6 @@ async fn setup() -> Result<SetupState, DynError> {
         Ok(index) => std::sync::Arc::new(index),
         Err(e) => return Err(format!("file_index init failed: {e}").into()),
     };
-    {
-        let index = file_index.clone();
-        tokio::spawn(async move {
-            match index.rescan().await {
-                Ok(stats) => tracing::info!(
-                    total = stats.total,
-                    roots = stats.roots,
-                    noisy_folders_excluded = stats.noisy_folders_excluded,
-                    "file_index initial rescan"
-                ),
-                Err(e) => tracing::warn!(error = %e, "file_index initial rescan failed"),
-            }
-        });
-    }
 
     let ws = WsServer::bind(
         ark.clone(),
@@ -304,6 +290,24 @@ async fn setup() -> Result<SetupState, DynError> {
     };
     lock_file::write_atomic(&lock_path, &lock)?;
     tracing::info!(path = ?lock_path, "lock-file written");
+
+    // File indexing can be slow on large disks or when NTFS fast scan falls
+    // back to walking. Start it only after WS + lock-file are ready, otherwise
+    // shell IPC requests time out during backend startup.
+    {
+        let index = file_index.clone();
+        tokio::spawn(async move {
+            match index.rescan().await {
+                Ok(stats) => tracing::info!(
+                    total = stats.total,
+                    roots = stats.roots,
+                    noisy_folders_excluded = stats.noisy_folders_excluded,
+                    "file_index initial rescan"
+                ),
+                Err(e) => tracing::warn!(error = %e, "file_index initial rescan failed"),
+            }
+        });
+    }
 
     Ok(SetupState {
         ark,

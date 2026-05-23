@@ -91,7 +91,6 @@ function builtInIconFor(cmd: CommandRecord): BuiltInIconConfig | null {
 const query = ref("");
 const commands = ref<CommandRecord[]>([]);
 const fileCommands = ref<CommandRecord[]>([]);
-const fileSearchPending = ref(false);
 const selectedIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
@@ -184,15 +183,19 @@ function scoreCommand(cmd: CommandRecord, q: string): number {
   return 100 - subIdx;
 }
 
-const filtered = computed<CommandRecord[]>(() => {
+const filteredCommands = computed<CommandRecord[]>(() => {
   const q = query.value.trim();
   if (!q) return commands.value;
   return commands.value
     .map<ScoredCommand>((cmd) => ({ cmd, score: scoreCommand(cmd, q) }))
     .filter((x) => x.score >= 0)
     .sort((a, b) => b.score - a.score)
-    .map((x) => x.cmd)
-    .concat(fileCommands.value);
+    .map((x) => x.cmd);
+});
+
+const filtered = computed<CommandRecord[]>(() => {
+  if (!query.value.trim()) return commands.value;
+  return filteredCommands.value.concat(fileCommands.value);
 });
 
 const RECENTS_KEY = "kepler.launcher.recents";
@@ -363,7 +366,7 @@ function totalRows(): number {
   if (groupedNoQuery.value) {
     return banner + groupedNoQuery.value.recent.length + groupedNoQuery.value.all.length;
   }
-  return banner + filtered.value.length;
+  return banner + filteredCommands.value.length + fileCommands.value.length;
 }
 
 function rowAt(idx: number): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | null {
@@ -378,7 +381,7 @@ function rowAt(idx: number): { kind: "banner" } | { kind: "cmd"; cmd: CommandRec
     if (j < all.length) return { kind: "cmd", cmd: all[j]! };
     return null;
   }
-  const c = filtered.value[i];
+  const c = filteredCommands.value[i] ?? fileCommands.value[i - filteredCommands.value.length];
   return c ? { kind: "cmd", cmd: c } : null;
 }
 
@@ -512,13 +515,9 @@ const FILE_SEARCH_REFRESH_MS = 800;
 function scheduleFileSearch(text: string, run: number, delay: number) {
   if (fileSearchTimer) clearTimeout(fileSearchTimer);
   fileSearchTimer = setTimeout(async () => {
-    if (run === fileSearchRun) {
-      fileSearchPending.value = true;
-    }
     const found = await searchFiles(text);
     if (run === fileSearchRun) {
       fileCommands.value = found;
-      fileSearchPending.value = false;
       scheduleFileSearch(text, run, FILE_SEARCH_REFRESH_MS);
     }
   }, delay);
@@ -530,7 +529,6 @@ watch(query, (value) => {
   if (!text) {
     if (fileSearchTimer) clearTimeout(fileSearchTimer);
     fileCommands.value = [];
-    fileSearchPending.value = false;
     return;
   }
   scheduleFileSearch(text, run, FILE_SEARCH_DEBOUNCE_MS);
@@ -740,29 +738,15 @@ onUnmounted(() => {
         </template>
       </template>
       <template v-else>
-        <div v-if="fileSearchPending" class="file-search-status">
-          <Loader2 class="spin" :size="15" :stroke-width="2" />
-          <span>Ищем файлы...</span>
-        </div>
-        <div v-if="filtered.length === 0 && !fileSearchPending" class="empty">
+        <div v-if="filteredCommands.length === 0 && fileCommands.length === 0" class="empty">
           Ничего не найдено
         </div>
-        <ul v-else class="results">
-          <template v-for="(cmd, idx) in filtered" :key="cmd.id">
-            <FileSearchResultRow
-              v-if="cmd.kind === 'file'"
-              :title="cmd.title"
-              :path="cmd.subtitle ?? ''"
-              :selected="(updateBanner ? 1 : 0) + idx === selectedIndex"
-              @select="
-                () => {
-                  selectedIndex = (updateBanner ? 1 : 0) + idx;
-                  void invokeSelected();
-                }
-              "
-            />
+        <template v-if="filteredCommands.length > 0">
+          <div class="section-label">Все</div>
+          <ul class="results">
             <li
-              v-else
+              v-for="(cmd, idx) in filteredCommands"
+              :key="cmd.id"
               class="result"
               :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
               @click="
@@ -783,18 +767,33 @@ onUnmounted(() => {
               <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
               <span v-else class="icon icon-placeholder" aria-hidden="true" />
               <span class="title">{{ cmd.title }}</span>
-              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
-                cmd.subtitle
-              }}</span>
               <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
                 cmd.appName
               }}</span>
               <span class="kind-label">{{
-                cmd.kind === "command" ? "Команда" : cmd.kind === "file" ? "Файл" : "Приложение"
+                cmd.kind === "command" ? "Команда" : "Приложение"
               }}</span>
             </li>
-          </template>
-        </ul>
+          </ul>
+        </template>
+        <template v-if="fileCommands.length > 0">
+          <div class="section-label">Файлы</div>
+          <ul class="results">
+            <template v-for="(cmd, idx) in fileCommands" :key="cmd.id">
+              <FileSearchResultRow
+                :title="cmd.title"
+                :path="cmd.subtitle ?? ''"
+                :selected="(updateBanner ? 1 : 0) + filteredCommands.length + idx === selectedIndex"
+                @select="
+                  () => {
+                    selectedIndex = (updateBanner ? 1 : 0) + filteredCommands.length + idx;
+                    void invokeSelected();
+                  }
+                "
+              />
+            </template>
+          </ul>
+        </template>
       </template>
     </div>
   </div>
@@ -820,16 +819,6 @@ onUnmounted(() => {
   font-size: 18px;
   font-weight: 400;
   flex-shrink: 0;
-}
-
-.file-search-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 2px 14px 6px;
-  color: color-mix(in srgb, var(--foreground) 52%, transparent);
-  font-size: 12px;
 }
 
 .search::placeholder {

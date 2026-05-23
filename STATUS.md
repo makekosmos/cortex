@@ -1,4 +1,28 @@
-# Kosmos — статус проекта (2026-05-22)
+# Kosmos — статус проекта (2026-05-23)
+
+## 2026-05-23 — Fast File Search через Windows Service (Kepler 0.2.6 → 0.2.7)
+
+File Search v1 доведён до fast-path архитектуры на Windows:
+
+- `services/kepler-backend/src/file_index/scanner/ntfs.rs` теперь сначала
+  обращается к `KeplerFocusSvc` через named pipe `\\.\pipe\kepler-focus-svc`
+  и просит `ntfs_scan`.
+- `services/kepler-focus-svc/src/ntfs_scan.rs` читает MFT через
+  `ntfs-reader` под LocalSystem token'ом service'а. Kepler UI и
+  `kepler-backend.exe` остаются user-level процессами; UAC нужен только при
+  установке service'а.
+- Если service не установлен / не отвечает / старой версии, backend логирует
+  `ntfs service scan unavailable`, пробует локальный `ntfs-reader`, затем
+  обычный walk fallback. Это сохраняет совместимость с машинами без service.
+- Pipe protocol `kepler-focus-svc` расширен backward-compatible операцией
+  `ntfs_scan { root, exclude_noisy } -> { files: [{ path, name, mtime }] }`.
+- Исправлен stop-path Windows Service: service больше не зависает на
+  `pipe_thread.join()` при SCM stop, если pipe thread стоит в `ConnectNamedPipe`.
+
+Proof loops:
+
+- `.agent/tasks/2026-05-23-file-search-ntfs-reader/spec.md`
+- `.agent/tasks/2026-05-23-file-search-ntfs-service/spec.md`
 
 ## 2026-05-22 — File Search v1
 
@@ -63,7 +87,7 @@ Setting в Settings → Общие.
 
 | Артефакт                                         | Версия                                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Kepler shell (`shell/package.json`)              | **0.2.5** (App Launcher v1 — Start Menu + UWP + frecency + state restore)                                           |
+| Kepler shell (`shell/package.json`)              | **0.2.7** (File Search fast path через `KeplerFocusSvc` + `ntfs-reader`)                                            |
 | Eden extension (`extensions/eden/manifest.json`) | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
 | Delphi extension                                 | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
 | Horologion extension                             | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |

@@ -5,3 +5,6 @@
 //! живут здесь (pipe / SCM код требует Windows runtime → не unit-testable).
 
 pub mod protocol;
+
+#[cfg(windows)]
+pub mod ntfs_scan;

@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 kepler-focus-helper = { path = "../kepler-focus-helper" }
 
 [target.'cfg(windows)'.dependencies]
+ntfs-reader = "0.4.5"
 windows-service = "0.7"
 windows-sys = { version = "0.59", features = [
   "Win32_System_Pipes",

@@ -1,88 +1,54 @@
-use super::{path_contains_noisy_folder, IndexedFile};
+#![cfg(windows)]
+
 use ntfs_reader::file_info::{FileInfo, VecCache};
 use ntfs_reader::mft::Mft;
 use ntfs_reader::volume::Volume;
-use serde::Deserialize;
-use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-const FOCUS_SERVICE_PIPE: &str = r"\\.\pipe\kepler-focus-svc";
+const NOISY_FOLDER_NAMES: &[&str] = &[
+    "$recycle.bin",
+    ".cache",
+    ".bun_cache",
+    ".e2e",
+    ".git",
+    ".gradle",
+    ".next",
+    ".nuxt",
+    ".parcel-cache",
+    ".pnpm-store",
+    ".tmp",
+    ".turbo",
+    ".venv",
+    ".vite",
+    "__pycache__",
+    "build",
+    "cache",
+    "coverage",
+    "dist",
+    "node_modules",
+    "out",
+    "target",
+    "tmp",
+    "venv",
+];
 
-pub fn scan_drive_root(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
+#[derive(Debug, Serialize)]
+pub struct NtfsScanEntry {
+    pub path: String,
+    pub name: String,
+    pub mtime: i64,
+}
+
+pub fn scan_drive_root(root: &str, exclude_noisy: bool) -> Result<Vec<NtfsScanEntry>, String> {
     let drive = drive_letter(root)?;
-    match scan_via_service(root, exclude_noisy) {
-        Ok(files) => return Ok(files),
-        Err(error) => {
-            tracing::warn!(
-                target: "file_index",
-                root = %root.to_string_lossy(),
-                error,
-                "ntfs service scan unavailable; trying local fast scan"
-            );
-        }
-    }
     let volume =
         Volume::new(volume_path(drive)).map_err(|e| format!("open NTFS volume failed: {e}"))?;
     let mft = Mft::new(volume).map_err(|e| format!("read NTFS MFT failed: {e}"))?;
     Ok(mft_to_files(&mft, drive, exclude_noisy))
 }
 
-#[derive(Debug, Deserialize)]
-struct ServiceResponse {
-    ok: bool,
-    error: Option<String>,
-    files: Option<Vec<IndexedFileWire>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct IndexedFileWire {
-    path: String,
-    name: String,
-    mtime: i64,
-}
-
-fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
-    let mut pipe = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(FOCUS_SERVICE_PIPE)
-        .map_err(|e| format!("connect service pipe failed: {e}"))?;
-
-    let request = serde_json::json!({
-        "op": "ntfs_scan",
-        "root": root.to_string_lossy(),
-        "exclude_noisy": exclude_noisy,
-    });
-    writeln!(pipe, "{request}").map_err(|e| format!("write service request failed: {e}"))?;
-    pipe.flush()
-        .map_err(|e| format!("flush service request failed: {e}"))?;
-
-    let mut raw = String::new();
-    BufReader::new(pipe)
-        .read_line(&mut raw)
-        .map_err(|e| format!("read service response failed: {e}"))?;
-    let response: ServiceResponse =
-        serde_json::from_str(raw.trim()).map_err(|e| format!("parse service response failed: {e}"))?;
-    if !response.ok {
-        return Err(response
-            .error
-            .unwrap_or_else(|| "service returned error".to_string()));
-    }
-    let files = response
-        .files
-        .ok_or_else(|| "service response missing files".to_string())?;
-    Ok(files
-        .into_iter()
-        .map(|file| IndexedFile {
-            path: file.path,
-            name: file.name,
-            mtime: file.mtime,
-        })
-        .collect())
-}
-
-fn mft_to_files(mft: &Mft, drive: char, exclude_noisy: bool) -> Vec<IndexedFile> {
+fn mft_to_files(mft: &Mft, drive: char, exclude_noisy: bool) -> Vec<NtfsScanEntry> {
     let mut cache = VecCache::default();
     let mut out = Vec::new();
 
@@ -97,7 +63,7 @@ fn mft_to_files(mft: &Mft, drive: char, exclude_noisy: bool) -> Vec<IndexedFile>
             continue;
         }
 
-        out.push(IndexedFile {
+        out.push(NtfsScanEntry {
             path: path.to_string_lossy().into_owned(),
             name: info.name,
             mtime: info
@@ -110,13 +76,12 @@ fn mft_to_files(mft: &Mft, drive: char, exclude_noisy: bool) -> Vec<IndexedFile>
     out
 }
 
-fn drive_letter(root: &Path) -> Result<char, String> {
-    let raw = root.to_string_lossy();
-    raw.chars()
+fn drive_letter(root: &str) -> Result<char, String> {
+    root.chars()
         .next()
         .filter(|letter| letter.is_ascii_alphabetic())
         .map(|letter| letter.to_ascii_uppercase())
-        .ok_or_else(|| format!("invalid drive root: {}", root.to_string_lossy()))
+        .ok_or_else(|| format!("invalid drive root: {root}"))
 }
 
 fn volume_path(drive: char) -> String {
@@ -148,6 +113,15 @@ fn strip_volume_prefix(raw: &str, prefix: &str, drive: char) -> Option<String> {
         return Some(format!("{drive}:{suffix}"));
     }
     Some(format!(r"{drive}:\{suffix}"))
+}
+
+fn path_contains_noisy_folder(path: &Path) -> bool {
+    path.components().any(|component| {
+        let name = component.as_os_str().to_string_lossy().to_lowercase();
+        NOISY_FOLDER_NAMES
+            .iter()
+            .any(|candidate| name == *candidate)
+    })
 }
 
 #[cfg(test)]

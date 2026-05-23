@@ -33,7 +33,6 @@ impl FileStore {
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         conn.execute_batch(SCHEMA)?;
-        rebuild_fts_if_needed(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -193,21 +192,6 @@ impl FileStore {
         )?;
         Ok(())
     }
-}
-
-fn rebuild_fts_if_needed(conn: &Connection) -> Result<()> {
-    let files: i64 = conn.query_row("SELECT count(*) FROM files", [], |row| row.get(0))?;
-    let indexed: i64 =
-        conn.query_row("SELECT count(*) FROM file_search_fts", [], |row| row.get(0))?;
-    if files == indexed {
-        return Ok(());
-    }
-    conn.execute("DELETE FROM file_search_fts", [])?;
-    conn.execute(
-        "INSERT INTO file_search_fts (path, name) SELECT path, name FROM files",
-        [],
-    )?;
-    Ok(())
 }
 
 fn collect_files(
