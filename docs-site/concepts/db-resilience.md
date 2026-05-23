@@ -155,6 +155,7 @@ Run: `cargo test --manifest-path crates/ark-core/rust/Cargo.toml --test proptest
 - **Cross-device cloud backup.** Если ноут сгорел, backup'ы локальные тоже сгорели. Cloud sync — отдельный roadmap item.
 - **DB encryption at rest.** ARK DB plaintext SQLite. Если нужен encrypted-at-rest — SQLCipher feature (отдельная задача).
 - **Logical bugs.** Crash reporter ловит panic'и; logical data corruption (например, неправильный sync merge) — нет.
+- **Network FS под `%APPDATA%`.** Все Kepler safety nets (singleton lock, ARK WAL, backups) предполагают **локальную** файловую систему. Если `%APPDATA%` roaming-профиль через SMB/NFS — `SingletonGuard` (SQLite WAL `BEGIN IMMEDIATE`) и сам ARK ведут себя непредсказуемо: WAL поверх сетевой ФС официально не поддерживается SQLite, mandatory locks на SMB реализованы серверо-специфично. Симптомы — fantom singleton conflicts, stale reads, или corruption на disconnect. Не чиним: roaming-профили для Kepler out-of-scope, документируем как известное ограничение.
 
 ## Restore from backup (manual)
 
