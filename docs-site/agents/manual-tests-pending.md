@@ -13,6 +13,53 @@
 
 ---
 
+## 🟠 Pending — Settings sidebar + command visibility (2026-05-23, Kepler 0.2.8)
+
+Полная переработка Settings UI: sidebar навигация, поиск, страницы с `SettingsAdvancedIntro`, tray-toggle и управление видимостью команд.
+
+**Старт:** `bun run --cwd shell dev`
+
+### Чек-лист
+
+#### Sidebar и навигация
+
+- [ ] Settings окно открывается (`tray → Настройки`). Слева — sidebar 229px с заголовком «Настройки», полем поиска и двумя группами кнопок: **Общие / О приложении / Дебаг** (верхняя) и **Заметки / Задачи / Времяметр / Игры / Фокус / Расширения / Поиск файлов** (нижняя).
+- [ ] Нажатие на любую кнопку в sidebar открывает соответствующую страницу. Активная кнопка подсвечена фоном `#343434`.
+- [ ] Поиск в sidebar фильтрует кнопки по keywords. `«трей»` → остаётся только «Общие». `«eden»` → остаются Заметки + Расширения. При пустом query — все кнопки.
+- [ ] Поиск, не дающий результатов, показывает «Ничего не найдено» в sidebar и пустой контент.
+
+#### Общие
+
+- [ ] Страница «Общие» содержит хоткей, автозапуск, **«Показывать в трее»** toggle и «Запоминать позицию в лаунчере».
+- [ ] Toggle «Показывать в трее» → OFF → иконка в трее исчезает без перезапуска. Повторно → ON → значок возвращается.
+
+#### О приложении
+
+- [ ] Страница «О приложении» содержит версию Kepler и кнопку «Проверить обновления».
+
+#### Дебаг
+
+- [ ] Страница «Дебаг» содержит Developer mode, Usage tracker, позицию в лаунчере, Backend status, Отчёты об ошибках, Bug-report.
+
+#### Поиск файлов
+
+- [ ] Страница «Поиск файлов» содержит toggle «Исключать шумные папки».
+
+#### Управление командами (Заметки / Задачи / Времяметр / Игры)
+
+- [ ] Страница «Заметки» содержит список команд Eden с чекбоксами. Снять галочку с «Открыть Eden» → команда исчезает из launcher'а (проверить `Alt+Space`).
+- [ ] Переоткрыть Settings — снятая галочка сохранилась.
+- [ ] Включить команду обратно → появляется в launcher'е.
+- [ ] Страницы «Задачи», «Времяметр», «Игры» аналогично содержат команды Delphi / Horologion / Arrancador.
+- [ ] Раздел «Времяметр» дополнительно содержит toggle «Трекать активные приложения».
+
+#### Window chrome
+
+- [ ] Settings окно имеет нативный titlebar overlay (кнопки закрытия, свернуть) высотой 36px, полупрозрачный фон (acrylic).
+- [ ] Sidebar title «Настройки» — drag-area: окно можно перетащить за него.
+
+---
+
 ## 🟠 Pending — Focus mode end-to-end (2026-05-18, Kepler 0.2.4+)
 
 Полная реализация focus mode shipped: helper bin + ARK schema + Settings UI +
@@ -352,15 +399,15 @@ exp23-acrylic dwm.exe %GPU sustained:
 
 При имплементации — `@vueuse/core` `useVirtualList` + замена `<TodoRow v-for>` на virtualized container.
 
-### ~~Exp 23 — Mica vs Acrylic~~ ✅ DONE 2026-05-18
+### ~~Exp 23 — Mica vs Acrylic~~ ✅ DONE 2026-05-18, обновлено 2026-05-23
 
-Принято решение использовать **Mica** как default backdrop (современный Win11 22H2+ выбор, дешевле DWM чем acrylic, согласован с native Win11 chrome — Settings app, File Explorer).
+Принято решение использовать **Mica** как default backdrop для launcher'а. Settings window переключён на **Acrylic** (2026-05-23) — Mica плохо выглядит с native titleBarOverlay.
 
 - `shell/electron/main.ts` → `resolveLauncherBgMaterial()` default = `"mica"`.
-- `shell/electron/settings-window.ts` → `"mica"`.
+- `shell/electron/settings-window.ts` → `"acrylic"` (Acrylic + native titleBarOverlay 36px).
 - `shell/electron/install-extension-window.ts` → `"mica"`.
 - Dashboard оставлен solid (frame + titleBarOverlay — Mica с overlay'ем выглядит странно).
-- Env override `KEPLER_BG_MATERIAL=acrylic|mica|none` доступен.
+- Env override `KEPLER_BG_MATERIAL=acrylic|mica|none` доступен (только для launcher).
 
 ### Exp 4 — Hide/Show window pool для extensions
 

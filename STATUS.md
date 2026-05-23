@@ -1,5 +1,21 @@
 # Kosmos — статус проекта (2026-05-23)
 
+## 2026-05-23 — Settings sidebar + command visibility (Kepler 0.2.7 → 0.2.8)
+
+Settings window переработан с нуля: теперь это sidebar-first layout с поиском по разделам.
+
+### Что изменилось
+
+- **Sidebar navigation** — левая панель 229px с поиском, двумя группами («Общие», «Расширенные») и per-страничными иконками.
+- **Новые страницы** — О приложении, Дебаг, Заметки, Задачи, Времяметр, Игры, Поиск файлов, Фокус, Расширения — каждая с `SettingsAdvancedIntro` header'ом.
+- **Перегруппировка** — «Версия Kepler» → «О приложении»; Developer mode + Usage tracker → «Дебаг»; File search toggle → «Поиск файлов».
+- **Tray icon toggle** — новая настройка «Показывать в трее» в Общих (persistent, live — трей пересоздаётся без перезапуска).
+- **Command visibility** — в разделах Заметки / Задачи / Времяметр / Игры можно отключить конкретные команды из launcher'а (хранится в localStorage, лаунчер реагирует через storage event).
+- **Window chrome** — `backgroundMaterial` сменён с `mica` на `acrylic`; titleBar hidden + native overlay (36px).
+- **`@kosmos/visuals` — 5 новых компонентов**: `SettingsSidebar`, `SettingsSidebarButton`, `SettingsSearchInput`, `SettingsList`, `SettingsAdvancedIntro` + settings CSS-переменные и токены цветов.
+
+Proof loops: `.agent/tasks/2026-05-23-settings-sidebar-visuals/`, `.agent/tasks/2026-05-23-settings-advanced-layout/`, `.agent/tasks/2026-05-23-settings-file-search-page/`.
+
 ## 2026-05-23 — Fast File Search через Windows Service (Kepler 0.2.6 → 0.2.7)
 
 File Search v1 доведён до fast-path архитектуры на Windows:

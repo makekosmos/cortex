@@ -60,6 +60,16 @@ export { default as Checkbox } from "./Checkbox.vue";
 
 export { default as SettingsRow } from "./SettingsRow.vue";
 
+export { default as SettingsList } from "./SettingsList.vue";
+
+export { default as SettingsSidebar } from "./SettingsSidebar.vue";
+
+export { default as SettingsSidebarButton } from "./SettingsSidebarButton.vue";
+
+export { default as SettingsSearchInput } from "./SettingsSearchInput.vue";
+
+export { default as SettingsAdvancedIntro } from "./SettingsAdvancedIntro.vue";
+
 export { default as EmptyState } from "./EmptyState.vue";
 
 export { default as BlocklistCard } from "./BlocklistCard.vue";

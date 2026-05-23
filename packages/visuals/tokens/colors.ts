@@ -51,6 +51,24 @@ export const colors = {
     sidebarBorder: "oklch(0.922 0 0)",
 
     sidebarRing: "oklch(0.708 0 0)",
+
+    mainBackground: "rgb(13 13 13 / 90%)",
+
+    secondText: "#717171",
+
+    settingsBorder: "#313131",
+
+    settingsSearchSurface: "#262626",
+
+    settingsSearchSurfaceFocused: "#303030",
+
+    settingsSidebarActive: "#343434",
+
+    settingsSidebarIconFrom: "oklch(0.42 0 0)",
+
+    settingsSidebarIconTo: "oklch(0.26 0 0)",
+
+    settingsListBackground: "#222222",
   },
 
   dark: {
@@ -105,6 +123,24 @@ export const colors = {
     sidebarBorder: "oklch(1 0 0 / 10%)",
 
     sidebarRing: "oklch(0.556 0 0)",
+
+    mainBackground: "rgb(13 13 13 / 90%)",
+
+    secondText: "#717171",
+
+    settingsBorder: "#313131",
+
+    settingsSearchSurface: "#262626",
+
+    settingsSearchSurfaceFocused: "#303030",
+
+    settingsSidebarActive: "#343434",
+
+    settingsSidebarIconFrom: "oklch(0.42 0 0)",
+
+    settingsSidebarIconTo: "oklch(0.26 0 0)",
+
+    settingsListBackground: "#222222",
   },
 
   status: {

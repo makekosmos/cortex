@@ -21,6 +21,10 @@ export const typography = {
     xl: "1.25rem",
 
     "2xl": "1.5rem",
+
+    settingsAdvancedTitle: "24px",
+
+    settingsAdvancedDescription: "12px",
   },
 
   fontWeight: {

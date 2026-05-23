@@ -315,6 +315,11 @@ export interface KeplerApi {
       allowed(): Promise<boolean>;
       set(enabled: boolean): Promise<void>;
     };
+    /** Показывать Kepler в системном трее. */
+    trayIcon: {
+      get(): Promise<boolean>;
+      set(enabled: boolean): Promise<void>;
+    };
     /** Developer mode — hot reload extension'ов через Vite dev server +
         F12 для DevTools на extension window. Применяется при следующем
         открытии extension'а. */

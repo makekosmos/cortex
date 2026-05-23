@@ -69,8 +69,10 @@ shell/                     # npm package "kepler-shell"
 │  ├─ main.ts              # createApp + Inter Variable
 │  ├─ styles.css           # --kepler-accent + локальные токены
 │  └─ views/
-│     ├─ LauncherView.vue  # секции «Недавние»/«Все» + fuzzy filter
-│     └─ SettingsView.vue  # настройки host'а (hotkey, backend status)
+│     ├─ LauncherView.vue  # секции «Недавние»/«Все» + fuzzy filter + command visibility
+│     └─ SettingsView.vue  # sidebar навигация + поиск; страницы: Общие / О приложении /
+│                          #   Дебаг / Заметки / Задачи / Времяметр / Игры / Фокус /
+│                          #   Расширения / Поиск файлов
 ├─ src/components/
 │  └─ BuiltInIcon.vue      # generic gradient icon (Lucide-based) для builtin команд
 ├─ scripts/

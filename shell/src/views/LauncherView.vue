@@ -94,6 +94,8 @@ const fileCommands = ref<CommandRecord[]>([]);
 const selectedIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
+const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds";
+const hiddenCommandIds = ref<string[]>(loadHiddenCommandIds());
 
 // --- App Launcher (Start Menu / UWP) ---------------------------------------
 // Apps загружаются один раз на старте через `app_index.list_all` и
@@ -167,6 +169,21 @@ async function searchFiles(text: string): Promise<CommandRecord[]> {
 interface ScoredCommand {
   cmd: CommandRecord;
   score: number;
+}
+
+function loadHiddenCommandIds(): string[] {
+  try {
+    const raw = localStorage.getItem(HIDDEN_COMMANDS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function isCommandVisible(cmd: CommandRecord): boolean {
+  return !hiddenCommandIds.value.includes(cmd.id);
 }
 
 function scoreCommand(cmd: CommandRecord, q: string): number {
@@ -492,6 +509,7 @@ function onKey(e: KeyboardEvent) {
 }
 
 async function refreshCommands() {
+  hiddenCommandIds.value = loadHiddenCommandIds();
   // Загружаем команды от command bus и apps от app_index параллельно,
   // мерджим в один массив. Apps идут после команд (запуск приложения —
   // одна из подкатегорий «open»).
@@ -502,11 +520,12 @@ async function refreshCommands() {
     }),
     fetchApps(),
   ]);
-  commands.value = [...cmds, ...apps];
+  commands.value = [...cmds, ...apps].filter(isCommandVisible);
 }
 
 let offShow = () => {};
 let offCommandsUpdated = () => {};
+let offCommandVisibilityStorage = () => {};
 let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let fileSearchRun = 0;
 const FILE_SEARCH_DEBOUNCE_MS = 120;
@@ -562,6 +581,13 @@ onMounted(async () => {
   offCommandsUpdated = window.kepler.commands.onUpdated(() => {
     void refreshCommands();
   });
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== HIDDEN_COMMANDS_KEY) return;
+    hiddenCommandIds.value = loadHiddenCommandIds();
+    void refreshCommands();
+  };
+  window.addEventListener("storage", onStorage);
+  offCommandVisibilityStorage = () => window.removeEventListener("storage", onStorage);
   try {
     updateState.value = await window.kepler.settings.update.state();
   } catch {
@@ -587,6 +613,7 @@ onMounted(async () => {
 onUnmounted(() => {
   offShow();
   offCommandsUpdated();
+  offCommandVisibilityStorage();
   fileSearchRun++;
   if (fileSearchTimer) clearTimeout(fileSearchTimer);
   unsubUpdateState?.();

@@ -40,9 +40,10 @@ withDefaults(defineProps<Props>(), {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  padding: 14px 12px;
+  background: var(--settings-list-background);
+  border-bottom: 1px solid var(--border-color-strong);
 }
 
 .kosmos-settings-row:last-child {
@@ -52,19 +53,24 @@ withDefaults(defineProps<Props>(), {
 .kosmos-settings-row__left {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 4px;
   min-width: 0;
 }
 
 .kosmos-settings-row__title {
-  font-size: 0.9375rem;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 500;
   color: var(--foreground);
 }
 
 .kosmos-settings-row__description {
-  font-size: 0.8125rem;
-  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 11px;
   line-height: 1.4;
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 
 .kosmos-settings-row__right {

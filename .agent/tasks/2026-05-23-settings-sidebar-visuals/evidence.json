@@ -1,0 +1,48 @@
+{
+  "task_id": "2026-05-23-settings-sidebar-visuals",
+  "verified_at": "2026-05-23",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "Dedicated settings color tokens added in packages/visuals/tokens/colors.ts and packages/visuals/theme/css-variables.css; sidebar shell consumes them."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": "SettingsSidebar exposes a title prop and default slot in packages/visuals/components/SettingsSidebar.vue."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": "SettingsView now renders the shared sidebar shell with grouped nav and search."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": "SettingsSearchInput implements the requested search control styling and focus behavior."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": "SettingsSidebarButton implements the requested settings nav row dimensions and states."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "evidence": "SettingsView filters settings navigation by tab and subsetting keywords and shows a no-results state."
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell typecheck",
+      "log": ".agent/tasks/2026-05-23-settings-sidebar-visuals/raw/shell-typecheck.txt"
+    },
+    {
+      "ac": "AC7-build",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell build:js",
+      "log": ".agent/tasks/2026-05-23-settings-sidebar-visuals/raw/shell-build-js.txt"
+    }
+  ]
+}

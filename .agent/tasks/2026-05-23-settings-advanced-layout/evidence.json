@@ -1,0 +1,48 @@
+{
+  "task_id": "2026-05-23-settings-advanced-layout",
+  "verified_at": "2026-05-23",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "Focus navigation item moved to group advanced."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": "Content header no longer renders active page title text."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": "Content header border-bottom removed."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": "Basic layout renders back/forward/minimize/close controls and no maximize control; minimize is wired through settings IPC."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": "Advanced layout renders the same controls plus disabled gray toggle placeholder."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "evidence": "Existing computed active tab and watcher data loading remain in place."
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell typecheck",
+      "log": ".agent/tasks/2026-05-23-settings-advanced-layout/raw/shell-typecheck.txt"
+    },
+    {
+      "ac": "AC7-build",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell build:js",
+      "log": ".agent/tasks/2026-05-23-settings-advanced-layout/raw/shell-build-js.txt"
+    }
+  ]
+}

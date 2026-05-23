@@ -24,6 +24,7 @@ const __dirname = path.dirname(__filename);
 interface KeplerShellSettings {
   developerMode?: boolean;
   hotkey?: string;
+  showTrayIcon?: boolean;
   /** Трекать активные приложения (usage-tracker модуль в kepler-backend).
       Default = true (трекинг включён). Toggle off → backend стартует с
       `KEPLER_USAGE_TRACKER=0` и не пишет данные. Изменение применяется
@@ -49,6 +50,14 @@ export function setFocusServiceAutoInstallDeclined(value: boolean): void {
 
 export function isUsageTrackerEnabled(): boolean {
   return readSettings().usageTrackerEnabled !== false;
+}
+
+export function isTrayIconEnabled(): boolean {
+  return readSettings().showTrayIcon !== false;
+}
+
+export function setTrayIconEnabled(enabled: boolean): void {
+  writeSettings({ showTrayIcon: !!enabled });
 }
 
 export const DEFAULT_HOTKEY_PROD = "Alt+Space";
@@ -111,15 +120,21 @@ export function openSettings(): void {
     x: Math.round((display.width - SETTINGS_WIDTH) / 2),
     y: Math.round((display.height - SETTINGS_HEIGHT) / 2),
     show: process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1",
-    frame: false,
+    frame: true,
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#00000000",
+      symbolColor: "#FFFFFF",
+      height: 36,
+    },
     resizable: true,
-    minimizable: false,
+    minimizable: true,
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: process.env.KOSMOS_HEADLESS === "1",
     alwaysOnTop: false,
     backgroundColor: "#00000000",
-    backgroundMaterial: "mica",
+    backgroundMaterial: "acrylic",
     roundedCorners: true,
     title: "Kepler — Настройки",
     webPreferences: {
@@ -131,7 +146,7 @@ export function openSettings(): void {
   });
 
   try {
-    settingsWindow.setBackgroundMaterial("mica");
+    settingsWindow.setBackgroundMaterial("acrylic");
   } catch (e) {
     console.error("[kepler-shell] settings setBackgroundMaterial failed:", e);
   }
@@ -237,6 +252,14 @@ ipcMain.handle("kepler:settings:autostart:set", (_e, enabled: boolean) => {
   setAutostartEnabled(!!enabled);
 });
 
+ipcMain.handle("kepler:settings:tray-icon:get", () => isTrayIconEnabled());
+
+ipcMain.handle("kepler:settings:tray-icon:set", (_e, enabled: boolean) => {
+  const value = !!enabled;
+  setTrayIconEnabled(value);
+  setTrayVisibilityCallback?.(value);
+});
+
 ipcMain.handle("kepler:settings:version", () => app.getVersion());
 
 ipcMain.handle("kepler:settings:hotkey", () => getStoredHotkey());
@@ -267,6 +290,11 @@ ipcMain.handle("kepler:settings:hotkey:reset", () => {
 let reregisterHotkeyCallback: ((accelerator: string) => boolean) | null = null;
 export function setHotkeyReregisterCallback(cb: (accelerator: string) => boolean): void {
   reregisterHotkeyCallback = cb;
+}
+
+let setTrayVisibilityCallback: ((enabled: boolean) => void) | null = null;
+export function setTrayVisibilityController(cb: (enabled: boolean) => void): void {
+  setTrayVisibilityCallback = cb;
 }
 
 ipcMain.handle(

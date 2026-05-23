@@ -73,7 +73,9 @@ import {
   openSettings,
   getStoredHotkey,
   setHotkeyReregisterCallback,
+  setTrayVisibilityController,
   isUsageTrackerEnabled,
+  isTrayIconEnabled,
   isFocusServiceAutoInstallDeclined,
   setFocusServiceAutoInstallDeclined,
 } from "./settings-window";
@@ -631,6 +633,7 @@ function resolveTrayIconPath(): string | null {
 }
 
 function createTray() {
+  if (tray) return;
   const iconPath = resolveTrayIconPath();
   const icon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
   tray = new Tray(icon);
@@ -650,6 +653,15 @@ function createTray() {
     ]),
   );
   tray.on("click", () => showLauncher());
+}
+
+function setTrayVisible(enabled: boolean) {
+  if (enabled) {
+    createTray();
+    return;
+  }
+  tray?.destroy();
+  tray = null;
 }
 
 // --- ArkClient (WS to kepler-backend) ---------------------------------------
@@ -1332,7 +1344,8 @@ app.whenReady().then(async () => {
 
   spawnBackend();
   createLauncher();
-  createTray();
+  setTrayVisibilityController(setTrayVisible);
+  setTrayVisible(isTrayIconEnabled());
   if (shouldShowLauncherOnStartup(process.argv)) {
     showLauncher();
   }

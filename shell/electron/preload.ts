@@ -121,6 +121,10 @@ const api: KeplerApi = {
       allowed: () => ipcRenderer.invoke("kepler:settings:autostart:allowed"),
       set: (enabled) => ipcRenderer.invoke("kepler:settings:autostart:set", enabled),
     },
+    trayIcon: {
+      get: () => ipcRenderer.invoke("kepler:settings:tray-icon:get"),
+      set: (enabled) => ipcRenderer.invoke("kepler:settings:tray-icon:set", enabled),
+    },
     developerMode: {
       get: () => ipcRenderer.invoke("kepler:settings:developer-mode:get"),
       set: (enabled) => ipcRenderer.invoke("kepler:settings:developer-mode:set", enabled),
