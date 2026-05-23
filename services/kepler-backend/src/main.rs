@@ -179,16 +179,16 @@ async fn setup() -> Result<SetupState, DynError> {
 
     let singleton_path = lock_dir.join("kepler-singleton.lock.db");
 
-    if let Some(existing) = lock_file::read_if_alive(&lock_path)? {
-        tracing::warn!(
-            pid = existing.pid,
-            ws_port = existing.ws_port,
-            "another kepler-backend instance running (singleton conflict)"
-        );
-        return Err("singleton conflict via lock-file".into());
+    // Acquire через OS-level SQLite WAL lock — единственный надёжный singleton.
+    // Удаляем stale kepler.lock.json (если был) тут же, чтобы shell не прочёл
+    // устаревший ws_port в окне между acquire и write_atomic ниже.
+    //
+    // См. postmortems.md § 2026-05-23 — Kepler: singleton conflict из-за pid reuse.
+    let (_singleton, stale_pid) =
+        kepler_backend::singleton::acquire_clearing_stale_lock(&lock_path, &singleton_path)?;
+    if let Some(pid) = stale_pid {
+        tracing::info!(stale_pid = pid, "discarded stale kepler.lock.json");
     }
-
-    let _singleton = SingletonGuard::acquire(&singleton_path)?;
     tracing::info!(path = ?singleton_path, "singleton acquired");
 
     let ark_binary = ark_host::resolve_ark_core_rpc_path()?;

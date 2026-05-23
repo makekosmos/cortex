@@ -9,6 +9,8 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
+use crate::lock_file::{self, LockFileError};
+
 pub struct SingletonGuard {
     // Соединение держится живым на всё время процесса; Drop откатывает транзакцию.
     _connection: Connection,
@@ -24,6 +26,8 @@ pub enum SingletonError {
     Configure(String),
     #[error("Another Kepler instance is already running")]
     AlreadyRunning,
+    #[error("Failed to clear stale lock file: {0}")]
+    ClearStaleLock(String),
 }
 
 impl SingletonGuard {
@@ -55,10 +59,70 @@ impl Drop for SingletonGuard {
     }
 }
 
+/// Acquire singleton + удалить stale `kepler.lock.json` если он был.
+///
+/// Почему так: `SingletonGuard` (SQLite WAL exclusive lock на
+/// `kepler-singleton.lock.db`) — настоящий OS-level gate, kernel
+/// освобождает handle при любой смерти процесса (panic, kill -9, BSOD).
+/// JSON-файл — только discovery-метаданные для shell (ws_port, auth_token).
+///
+/// Раньше startup гейтился на «PID из JSON жив через `OpenProcess`», что
+/// ломалось на pid reuse: Windows отдавала освободившийся PID другому
+/// процессу (electron, chrome, ...), гейт видел «PID жив» и бесконечно
+/// отказывал в старте. См. postmortems.md § 2026-05-23 — Kepler:
+/// singleton conflict из-за pid reuse.
+///
+/// Возвращает `(guard, Some(stale_pid))` если на диске лежал JSON от
+/// предыдущего инстанса — для диагностического лога. Сам файл к моменту
+/// возврата уже удалён, чтобы shell не успел прочесть stale ws_port в
+/// окне между acquire и записью нового JSON.
+pub fn acquire_clearing_stale_lock(
+    lock_path: &Path,
+    singleton_path: &Path,
+) -> Result<(SingletonGuard, Option<u32>), SingletonError> {
+    let guard = SingletonGuard::acquire(singleton_path)?;
+
+    let stale_pid = match lock_file::read(lock_path) {
+        Ok(lock) => Some(lock.pid),
+        Err(LockFileError::Io(e)) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            // JSON есть, но не парсится (corrupt). Удалим — у нас singleton lock,
+            // мы вправе перетереть. Логируем для observability.
+            tracing::warn!(error = %e, "stale kepler.lock.json corrupt, removing");
+            None
+        }
+    };
+
+    // Удаляем JSON безусловно (если он есть) — невалидный, валидный, наш или
+    // не наш. После acquire singleton'а мы единственный backend, никто другой
+    // его читать как «свой» не должен.
+    if let Err(e) = fs::remove_file(lock_path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            return Err(SingletonError::ClearStaleLock(e.to_string()));
+        }
+    }
+
+    Ok((guard, stale_pid))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lock_file::{write_atomic, KeplerLockFile, LOCK_FILE_FORMAT_VERSION};
+    use crate::protocol_version::ProtocolVersion;
     use tempfile::tempdir;
+
+    fn sample_lock(pid: u32, port: u16) -> KeplerLockFile {
+        KeplerLockFile {
+            format_version: LOCK_FILE_FORMAT_VERSION,
+            protocol_version: ProtocolVersion::CURRENT,
+            pid,
+            ws_port: port,
+            auth_token: "deadbeef".repeat(8),
+            started_at: "2026-05-23T17:56:07Z".into(),
+            db_path: "C:\\fake\\ark.db".into(),
+        }
+    }
 
     #[test]
     fn second_acquire_fails_fast() {
@@ -90,5 +154,92 @@ mod tests {
 
         let _guard = SingletonGuard::acquire(&lock_path).expect("acquire creates parent");
         assert!(lock_path.parent().unwrap().exists());
+    }
+
+    // Regression: 2026-05-23. Pid reuse: kepler.lock.json остался от упавшего
+    // backend'а, его PID Windows переиспользовала для unrelated живого процесса
+    // (electron, chrome). Старый код гейтил startup на `is_pid_alive(stale.pid)`
+    // → backend никогда не стартовал. После фикса: trust SingletonGuard, JSON
+    // считается чистыми метаданными для shell, не gate'ом.
+    #[test]
+    fn stale_lock_with_live_unrelated_pid_does_not_block_acquire() {
+        let dir = tempdir().expect("temp dir");
+        let lock_path = dir.path().join("kepler.lock.json");
+        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+
+        // PID текущего теста — это cargo test binary, гарантированно живой и
+        // гарантированно НЕ kepler-backend. Симулирует pid reuse.
+        let stale = sample_lock(std::process::id(), 60803);
+        write_atomic(&lock_path, &stale).expect("write stale lock");
+
+        let (_guard, reported_pid) =
+            acquire_clearing_stale_lock(&lock_path, &singleton_path)
+                .expect("must acquire despite stale json with live unrelated pid");
+
+        assert_eq!(reported_pid, Some(std::process::id()));
+        assert!(
+            !lock_path.exists(),
+            "stale json должен быть удалён после acquire, чтобы shell не \
+             прочёл устаревший ws_port в окне до записи нового JSON"
+        );
+    }
+
+    #[test]
+    fn acquire_clearing_stale_lock_handles_missing_json() {
+        let dir = tempdir().expect("temp dir");
+        let lock_path = dir.path().join("kepler.lock.json");
+        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+
+        let (_guard, reported_pid) =
+            acquire_clearing_stale_lock(&lock_path, &singleton_path)
+                .expect("first-time startup без существующего JSON должен пройти");
+
+        assert_eq!(reported_pid, None);
+        assert!(!lock_path.exists());
+    }
+
+    #[test]
+    fn acquire_clearing_stale_lock_removes_corrupt_json() {
+        let dir = tempdir().expect("temp dir");
+        let lock_path = dir.path().join("kepler.lock.json");
+        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+
+        // Crash во время write_atomic мог оставить мусор — наш acquire всё
+        // равно должен пройти и снести битый файл.
+        std::fs::write(&lock_path, b"{ not valid json").expect("seed corrupt");
+
+        let (_guard, reported_pid) =
+            acquire_clearing_stale_lock(&lock_path, &singleton_path)
+                .expect("corrupt json не должен блокировать singleton");
+
+        assert_eq!(reported_pid, None);
+        assert!(!lock_path.exists(), "corrupt json должен быть удалён");
+    }
+
+    #[test]
+    fn second_acquire_clearing_stale_lock_fails_with_already_running() {
+        // Cross-process конкуренция симулируется внутри процесса — SingletonGuard
+        // в-процессный тест семантически эквивалентен (SQLite WAL `BEGIN IMMEDIATE`
+        // блокирует на уровне connection, не process).
+        let dir = tempdir().expect("temp dir");
+        let lock_path = dir.path().join("kepler.lock.json");
+        let singleton_path = dir.path().join("kepler-singleton.lock.db");
+
+        let _first = acquire_clearing_stale_lock(&lock_path, &singleton_path)
+            .expect("первый acquire должен пройти");
+
+        let second = acquire_clearing_stale_lock(&lock_path, &singleton_path);
+        match second {
+            Err(SingletonError::AlreadyRunning) => {}
+            Err(e) => panic!("expected AlreadyRunning, got Err({e})"),
+            Ok(_) => panic!("expected AlreadyRunning, got Ok"),
+        }
+
+        // Сообщение об ошибке — часть контракта. Должно быть human-readable.
+        let msg = SingletonError::AlreadyRunning.to_string();
+        assert!(
+            msg.contains("Kepler"),
+            "ошибка должна упоминать Kepler для diagnosability, got: {msg}"
+        );
     }
 }

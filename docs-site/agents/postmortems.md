@@ -21,6 +21,38 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-05-23 — Kepler: singleton conflict из-за pid reuse
+
+**Симптомы.** После некорректного завершения kepler-backend (panic, kill, BSOD) при следующем запуске `bun run --cwd shell dev` backend бесконечно падает на старте с `FATAL setup: singleton conflict via lock-file`. Supervisor уходит в respawn-loop (1s → 5s → 30s → 60s → 120s), shell показывает `ArkClient not ready (timeout)`, IPC `kepler:ark:request` валится. Помогает только ручное удаление `%APPDATA%\Kosmos\kepler.lock.json`.
+
+**Где жило.** `services/kepler-backend/src/main.rs:182-189` — гейт перед `SingletonGuard::acquire`. Использовал `services/kepler-backend/src/lock_file.rs:204` (`read_if_alive`), который через `services/kepler-backend/src/lock_file.rs:223` (`is_pid_alive` на Win — `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, ...)`) проверял только «жив ли PID», без валидации, что это именно kepler-backend.
+
+**Root cause.** Pid-based liveness check — фундаментально ненадёжный механизм определения «работает ли мой сервис». Windows переиспользует освободившиеся PID'ы, и наблюдаемый эпизод тому пример: PID 14852 был записан в lock-файл предыдущим kepler-backend'ом в 17:56 (упал без cleanup'а), к 23:05 Windows отдала этот же PID запускающемуся electron-shell'у. Гейт честно отвечал «PID 14852 жив» (electron действительно жив), и backend отказывался стартовать. Хуже того: `is_pid_alive` принципиально не может различить «мой мёртвый процесс / переиспользованный PID живой electron'а / случайный chrome / explorer».
+
+Архитектурно это была защита-в-глубину к настоящему механизму singleton'а — `SingletonGuard` на `kepler-singleton.lock.db` (SQLite WAL `BEGIN IMMEDIATE`). Этот lock работает корректно: kernel держит file handle, при любой смерти процесса handle освобождается, pid reuse физически не может его сломать. Но pid-гейт стоял **до** настоящего lock'а и отказывал раньше, чем тот успевал дать авторитетный ответ. То есть «защита в глубину» оказалась strict superset: первый слой ловил то, что второй пропустил бы корректно. JSON-файл должен быть discovery-метаданными для shell (ws_port, auth_token), а не gate'ом — параллель с Postgres'овым `postmaster.pid` (метаданные) vs. `flock` на data directory (настоящий gate).
+
+**Fix.** Pid-based гейт убран. Новый pub helper `kepler_backend::singleton::acquire_clearing_stale_lock(lock_path, singleton_path)` делает `SingletonGuard::acquire` (SQLite WAL `BEGIN IMMEDIATE` — OS-level file lock), затем безусловно удаляет stale `kepler.lock.json` если он был. JSON остаётся discovery-метаданными, перезаписывается `lock_file::write_atomic` после `ws.bind`. Удаление stale JSON **сразу после acquire** (а не лениво при write_atomic) закрывает race-окно «старый ws_port на диске пока новый WS ещё не bind'нулся» — shell, прочитавший JSON в это окно, получит `ENOENT` → retry в supervisor'е, а не connect к мёртвому endpoint'у с истёкшим auth token'ом. Мёртвый код `lock_file::read_if_alive` и `lock_file::is_pid_alive` (вместе с Win-веткой через `OpenProcess` и Unix-веткой через `kill(pid, 0)`) удалён — иначе через полгода кто-то «починит» обратно, не разобравшись.
+
+**Регрешн-защита.** `services/kepler-backend/src/singleton.rs::tests`:
+
+- `stale_lock_with_live_unrelated_pid_does_not_block_acquire` — пишет `kepler.lock.json` с `pid = std::process::id()` (это cargo test binary — гарантированно живой, гарантированно НЕ kepler-backend) и проверяет, что `acquire_clearing_stale_lock` возвращает `Ok` + reported_pid + удалил файл. Тест прямо симулирует наблюдаемый сценарий pid reuse.
+- `acquire_clearing_stale_lock_handles_missing_json` — first-time startup, JSON отсутствует.
+- `acquire_clearing_stale_lock_removes_corrupt_json` — частично записанный JSON от прерванного `write_atomic` тоже не блокирует.
+- `second_acquire_clearing_stale_lock_fails_with_already_running` — параллельный second-acquire падает с `SingletonError::AlreadyRunning`, и сообщение об ошибке содержит «Kepler» (часть контракта — diagnosability в логах supervisor'а).
+
+Manual repro для AC7: запустить `bun run --cwd shell dev`, дождаться bind, `Stop-Process` на kepler-backend.exe без cleanup'а, дождаться respawn — должен подняться.
+
+**Prevention.**
+
+- **PID — это не identity процесса.** Любой код, говорящий «PID жив → процесс X жив», содержит скрытое допущение «PID не переиспользован». Допущение ломается всегда — Windows крутит счётчик быстро, Linux обнуляет на 32767 по умолчанию. Если нужно «работает ли мой сервис», ответ один: **OS-level lock на файле/сокете/named pipe**, который kernel освобождает на смерть процесса.
+- **Discovery-метаданные ≠ gate.** Postgres: `postmaster.pid` содержит port + socket dir, но startup gate — это `flock` на data directory. SQLite: `<db>-wal` хранит WAL state, lock — POSIX advisory range lock на самой DB. Любой файл, который один процесс пишет на старте а другие читают для discovery, **не может одновременно быть и gate'ом** — потому что читатель не может атомарно «прочитать + захватить». Если в коде появляется паттерн «прочитать какой-то файл, проверить какой-то признак, решить можно ли стартовать» — это red flag.
+- **Defense-in-depth не освобождает от корректности первого слоя.** Здесь pid-гейт стоял **до** настоящего `SingletonGuard` и отказывал раньше. В результате «защита» оказалась strict liability — первый слой ловил ровно те случаи, которые второй обработал бы корректно. Прежде чем добавлять «дополнительную проверку», спросить: что именно она ловит, чего не ловит настоящий механизм, и какой её false-positive rate? Если правильный слой работает — лишний только увеличивает поверхность отказа.
+- **Lock-файл должен исчезать после graceful shutdown.** Уже есть (`main.rs:143` — `remove_file(&lock_path)` в shutdown path), но ungrateful shutdown оставит JSON на диске; новый код к этому resilient (удаляет stale при следующем старте). Если в проекте появятся другие discovery-файлы — same rule.
+
+**Связанные правила.** [forbidden.md § Rust](/agents/forbidden) — Mutex poison recovery + `RUST_BACKTRACE=1` + `db_backup`. Этот случай — пример того, что singleton-механизмы должны быть на kernel-уровне; pid-based — анти-паттерн.
+
+---
+
 ## 2026-05-23 — Kepler: file search показывает только файлы из %APPDATA% (НЕ ИСПРАВЛЕНО)
 
 **Симптомы.** File search в launcher находит только файлы под `%APPDATA%\Roaming\...`, не находит проекты на `C:\` / `D:\`.

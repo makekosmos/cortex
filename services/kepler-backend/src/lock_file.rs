@@ -198,42 +198,6 @@ pub fn read(path: &Path) -> Result<KeplerLockFile, LockFileError> {
     Ok(lock)
 }
 
-/// Прочитать lock-файл и проверить, что записанный PID жив. Если PID мёртв,
-/// lock считается stale → возвращаем Ok(None), вызывающий должен удалить файл
-/// и стартовать заново.
-pub fn read_if_alive(path: &Path) -> Result<Option<KeplerLockFile>, LockFileError> {
-    let lock = match read(path) {
-        Ok(l) => l,
-        Err(LockFileError::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e),
-    };
-    if is_pid_alive(lock.pid) {
-        Ok(Some(lock))
-    } else {
-        Ok(None)
-    }
-}
-
-#[cfg(unix)]
-fn is_pid_alive(pid: u32) -> bool {
-    unsafe { libc::kill(pid as i32, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
-}
-
-#[cfg(windows)]
-fn is_pid_alive(pid: u32) -> bool {
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
-    unsafe {
-        match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
-            Ok(h) if !h.is_invalid() => {
-                let _ = CloseHandle(h);
-                true
-            }
-            _ => false,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -301,37 +265,6 @@ mod tests {
             }
             other => panic!("expected NotFound, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn read_if_alive_returns_some_for_current_process() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("kepler.lock.json");
-        let lock = sample_lock(std::process::id(), 12345);
-        write_atomic(&path, &lock).unwrap();
-
-        let result = read_if_alive(&path).unwrap();
-        assert_eq!(result, Some(lock));
-    }
-
-    #[test]
-    fn read_if_alive_returns_none_for_dead_pid() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("kepler.lock.json");
-        // PID который точно не существует.
-        let lock = sample_lock(0x7FFFFFFF, 12345);
-        write_atomic(&path, &lock).unwrap();
-
-        let result = read_if_alive(&path).unwrap();
-        assert!(result.is_none(), "dead PID should produce stale → None");
-    }
-
-    #[test]
-    fn read_if_alive_returns_none_when_file_missing() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("nonexistent.lock.json");
-        let result = read_if_alive(&path).unwrap();
-        assert!(result.is_none());
     }
 
     #[test]
