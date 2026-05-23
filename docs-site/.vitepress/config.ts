@@ -244,6 +244,7 @@ export default defineConfig({
             { text: "Testing", link: "/agents/testing" },
             { text: "Estimation", link: "/agents/estimation" },
             { text: "Manual tests waiting", link: "/agents/manual-tests-pending" },
+            { text: "Постмортемы багов", link: "/agents/postmortems" },
           ],
         },
       ],

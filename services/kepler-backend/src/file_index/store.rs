@@ -43,6 +43,12 @@ impl FileStore {
     }
 
     pub fn replace_all(&self, files: &[IndexedFile]) -> Result<()> {
+        // NTFS fast scan может вернуть один и тот же абсолютный path дважды
+        // (junctions / symlinks / mount points видимые из нескольких roots).
+        // Без дедупа первый дубликат валит транзакцию по `files.path PRIMARY KEY`
+        // и весь rescan возвращает Err. См. postmortems.md § 2026-05-23.
+        let mut seen: std::collections::HashSet<&str> =
+            std::collections::HashSet::with_capacity(files.len());
         let mut conn = self.lock();
         let tx = conn.transaction()?;
         tx.execute("DELETE FROM files", [])?;
@@ -55,6 +61,9 @@ impl FileStore {
             let mut fts_stmt =
                 tx.prepare("INSERT INTO file_search_fts (path, name) VALUES (?, ?)")?;
             for file in files {
+                if !seen.insert(file.path.as_str()) {
+                    continue;
+                }
                 file_stmt.execute(params![file.path, file.name, file.mtime, now])?;
                 fts_stmt.execute(params![file.path, file.name])?;
             }
@@ -241,6 +250,42 @@ mod tests {
             store.search("note", 10).unwrap()[0].path,
             r"C:\foobar\note.txt"
         );
+    }
+
+    #[test]
+    fn replace_all_dedupes_duplicate_paths() {
+        // Regression: 2026-05-23. NTFS fast scan возвращал один и тот же path
+        // дважды (junction / symlink / mount point), `INSERT` валил всю
+        // транзакцию по `files.path PRIMARY KEY` → backend в зависе.
+        let data = tempdir().unwrap();
+        let store = FileStore::open(&data.path().join("files.db")).unwrap();
+        let files = vec![
+            IndexedFile {
+                path: r"C:\junction\note.txt".to_string(),
+                name: "note.txt".to_string(),
+                mtime: 1,
+            },
+            IndexedFile {
+                path: r"C:\junction\note.txt".to_string(),
+                name: "note.txt".to_string(),
+                mtime: 2,
+            },
+            IndexedFile {
+                path: r"C:\real\note.txt".to_string(),
+                name: "note.txt".to_string(),
+                mtime: 3,
+            },
+        ];
+
+        store
+            .replace_all(&files)
+            .expect("replace_all не должен падать на дубликатах");
+
+        let results = store.search("note", 10).unwrap();
+        assert_eq!(results.len(), 2, "должно остаться 2 уникальных path");
+        let paths: std::collections::HashSet<_> = results.iter().map(|r| r.path.as_str()).collect();
+        assert!(paths.contains(r"C:\junction\note.txt"));
+        assert!(paths.contains(r"C:\real\note.txt"));
     }
 
     #[test]
