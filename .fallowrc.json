@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.fallow.tools/schema/fallow.schema.json",
+  "ignorePatterns": [
+    "services/ark-relay-server/**",
+    "services/kepler-backend/**",
+    "services/kepler-focus-helper/**",
+    "services/kepler-focus-svc/**",
+    "services/kepler-watcher/**",
+    "mobile/ark-service/**",
+    "mobile/delphi/**",
+    "legacy/**",
+    "sample/**",
+    "site/**",
+    "tests/**"
+  ]
+}
