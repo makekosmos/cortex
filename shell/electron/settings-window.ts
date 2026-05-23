@@ -149,8 +149,24 @@ export function openSettings(): void {
   });
 }
 
+// `args` для autorun-entry. Маркер используется main.ts чтобы понять что
+// запуск был из Windows autorun (HKCU\...\Run) и не показывать launcher
+// автоматически (только tray). Имя `--autostart` уже зарегистрировано в
+// существующих установках — менять нельзя, иначе у старых юзеров маркер
+// потеряется до следующего toggle.
+const AUTOSTART_ARGS: string[] = ["--autostart"];
+
 export function isAutostartEnabled(): boolean {
-  return app.getLoginItemSettings().openAtLogin;
+  // На Windows getLoginItemSettings() без явных { path, args } сравнивает
+  // запись в HKCU с `process.execPath` БЕЗ args. Запись же выставлена с
+  // `args: ["--autostart"]` (строка в реестре: `"<exe>" --autostart`).
+  // Из-за этого Electron видит несовпадение и возвращает openAtLogin=false,
+  // даже если запись физически в реестре есть. Передаём те же path/args
+  // что и при set — тогда сравнение симметрично.
+  return app.getLoginItemSettings({
+    path: process.execPath,
+    args: AUTOSTART_ARGS,
+  }).openAtLogin;
 }
 
 export function setAutostartEnabled(enabled: boolean): void {
@@ -171,18 +187,24 @@ export function setAutostartEnabled(enabled: boolean): void {
   //      shell не парсит и autorun не срабатывает. Per-user install в
   //      %LOCALAPPDATA%\Programs\Kepler\ пробелов не имеет, но защита
   //      универсальная.
-  //   2) Диагностический маркер — main.ts может прочитать process.argv и
-  //      понять, что запуск был из autorun (полезно для будущего «start
-  //      minimized to tray» и для лог-диагностики).
+  //   2) Маркер для main.ts: если argv содержит `--autostart`, мы знаем
+  //      что запуск был из HKCU\...\Run и launcher window должен остаться
+  //      скрытым (только tray). При manual launch (ярлык / exe / после
+  //      update) этого маркера нет → launcher показывается сразу.
   app.setLoginItemSettings({
     openAtLogin: enabled,
     path: process.execPath,
-    args: ["--autostart"],
+    args: AUTOSTART_ARGS,
   });
   // Сразу читаем обратно — если запись в HKCU не прошла, openAtLogin будет
   // false и UI покажет ошибку. Логируем для диагностики реальных установок.
+  // Передаём { path, args } — без них verify фейлится из-за args mismatch
+  // (см. комментарий в isAutostartEnabled).
   try {
-    const verify = app.getLoginItemSettings();
+    const verify = app.getLoginItemSettings({
+      path: process.execPath,
+      args: AUTOSTART_ARGS,
+    });
     console.log(
       `[kepler-shell] autostart set → enabled=${enabled}, verified openAtLogin=${verify.openAtLogin}, execPath=${process.execPath}`,
     );

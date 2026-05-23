@@ -442,8 +442,14 @@ function deriveFocusStateFromBackend(raw: PomodoroEventState): Partial<FocusStat
   const isPaused = raw.isPaused === true;
   const active = isRunning && !isPaused && phase !== "idle";
 
-  // Pause state — widget остаётся видим (active), просто показывает Play.
-  const widgetActive = isRunning && phase !== "idle";
+  // Виджет остаётся видим пока pomodoro session не idle. Это включает:
+  //   - running (work/break),
+  //   - paused (показываем Play),
+  //   - между фазами с auto_start_*=false (Finished пришёл, isRunning=false,
+  //     но phase=Work/ShortBreak/LongBreak ждёт ручного Skip/Resume).
+  // Backend сбрасывает phase в Idle только на stop() — это и есть единственное
+  // условие скрытия виджета.
+  const widgetActive = phase !== "idle";
 
   const mode: FocusState["mode"] = phase === "work" ? "work" : "break";
   const remainingSec = Math.max(0, Math.ceil((raw.remainingMs ?? 0) / 1000));

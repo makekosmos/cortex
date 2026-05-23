@@ -144,7 +144,12 @@ function createSessionState() {
     const api = typeof window !== "undefined" ? window.kepler?.focusWidget : null;
     if (!api?.setState) return;
 
-    const active = isRunning.value && !isPaused.value && phase.value !== "idle";
+    // Виджет видим пока session не idle: running, paused, между фазами
+    // (Finished пришёл, isRunning=false, phase=Work/ShortBreak/LongBreak
+    // ждёт ручного Skip/Resume — auto_start_*=false). Скрываем только на
+    // stop() (phase=idle). См. shell/electron/focus-widget.ts —
+    // deriveFocusStateFromBackend применяет ту же логику.
+    const active = phase.value !== "idle";
     const remainingSec = Math.ceil(remainingMs.value / 1000);
     if (!force && active && remainingSec === lastFocusPushedSec) return;
     lastFocusPushedSec = active ? remainingSec : -1;

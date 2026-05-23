@@ -113,6 +113,7 @@ import { TaskRef } from "./TaskRef";
 import { TrailingParagraph } from "./TrailingParagraph";
 import { edenApi } from "@/lib/edenApi";
 import { useBlockSelection } from "@/composables/useBlockSelection";
+import { usePreferences } from "@/composables/usePreferences";
 import BlockSelectionOverlay from "@/components/BlockSelectionOverlay.vue";
 import { TextSelection } from "@tiptap/pm/state";
 import { useToast } from "@kosmos/visuals";
@@ -259,6 +260,7 @@ function getNoteTypeIconSrc(noteType: NoteType | null) {
 
 const contentAreaRef = useTemplateRef<HTMLDivElement>("contentAreaRef");
 const blockSelection = useBlockSelection();
+const preferences = usePreferences();
 const toast = useToast();
 
 // Флаг ставится window-level mousedown handler'ом (capture-фаза) когда
@@ -791,6 +793,20 @@ watch(
     if (typeof window !== "undefined") {
       (window as unknown as { __edenEditor?: unknown }).__edenEditor = instance ?? undefined;
     }
+  },
+  { immediate: true },
+);
+
+// Spellcheck toggle — атрибут `spellcheck` на `.ProseMirror` DOM управляет
+// браузерным spellcheck (Chromium читает его как у любого contentEditable).
+// Управляется из настроек (usePreferences). Меняем напрямую через DOM
+// atrribute а НЕ через `editor.setOptions({ editorProps })` — последнее
+// в TipTap v3 пересоздаёт PM-view с потерей selection / scroll позиции.
+watch(
+  [editor, () => preferences.state.spellcheckEnabled],
+  ([instance, enabled]) => {
+    if (!instance) return;
+    instance.view.dom.setAttribute("spellcheck", enabled ? "true" : "false");
   },
   { immediate: true },
 );

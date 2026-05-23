@@ -194,3 +194,98 @@ pub fn open_file(path: &str) -> Result<()> {
         .map(|_| ())
         .map_err(|e| FileIndexError::Open(e.to_string()))
 }
+
+#[cfg(test)]
+mod default_roots_tests {
+    use super::*;
+
+    /// `default_roots` обязан возвращать system-wide drives (C:\, D:\...),
+    /// а не data_dir / lock_dir. Регрешн на bug: в production видели что
+    /// файловый поиск находил только файлы рядом с `%APPDATA%\Kosmos\` —
+    /// если бы кто-то случайно подменил roots на data_dir, этот тест поймал бы.
+    ///
+    /// Прогон с env override (KEPLER_FILE_INDEX_ROOTS) — детерминистичный
+    /// (не зависит от того что физически смонтировано на CI). Test mutates
+    /// process env, поэтому помечен #[serial] нет — но в Rust-тестах одного
+    /// крейта env не шарится между процессами (cargo test -j N форкает),
+    /// единственный риск — параллельный тест внутри того же бинаря. Здесь
+    /// других env-чтений в файле нет.
+    #[test]
+    fn env_override_takes_precedence() {
+        // Сохраняем и восстанавливаем env чтобы не ломать другие тесты в
+        // том же процессе.
+        let prev_roots = std::env::var("KEPLER_FILE_INDEX_ROOTS").ok();
+        let prev_test = std::env::var("KOSMOS_TEST_MODE").ok();
+        // SAFETY: тесты в этом модуле выполняются последовательно (cargo test
+        // не запускает несколько тестов одного бинаря параллельно по умолчанию
+        // только если --test-threads=1; на больших проектах могут параллельно,
+        // но здесь восстановление env идёт сразу).
+        unsafe {
+            std::env::set_var("KEPLER_FILE_INDEX_ROOTS", r"C:\;D:\projects");
+            std::env::remove_var("KOSMOS_TEST_MODE");
+        }
+        let roots = default_roots();
+        assert_eq!(
+            roots,
+            vec![PathBuf::from(r"C:\"), PathBuf::from(r"D:\projects")],
+        );
+
+        unsafe {
+            match prev_roots {
+                Some(v) => std::env::set_var("KEPLER_FILE_INDEX_ROOTS", v),
+                None => std::env::remove_var("KEPLER_FILE_INDEX_ROOTS"),
+            }
+            match prev_test {
+                Some(v) => std::env::set_var("KOSMOS_TEST_MODE", v),
+                None => std::env::remove_var("KOSMOS_TEST_MODE"),
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_default_returns_real_drive_roots() {
+        // Без env override и без KOSMOS_TEST_MODE prod backend должен получить
+        // СИСТЕМНЫЕ drives, а не data_dir. Если этот тест когда-нибудь начнёт
+        // возвращать путь типа `C:\Users\<x>\AppData\Roaming\Kosmos\` — значит
+        // кто-то подменил default_roots() на data_dir-based fallback. Это и
+        // есть симптом bug'а «file search ищет только в AppData».
+        let prev_roots = std::env::var("KEPLER_FILE_INDEX_ROOTS").ok();
+        let prev_test = std::env::var("KOSMOS_TEST_MODE").ok();
+        unsafe {
+            std::env::remove_var("KEPLER_FILE_INDEX_ROOTS");
+            std::env::remove_var("KOSMOS_TEST_MODE");
+        }
+
+        let roots = default_roots();
+
+        for root in &roots {
+            let raw = root.to_string_lossy();
+            // Каждый root обязан быть drive root формата `<letter>:\`.
+            assert!(
+                raw.len() == 3
+                    && raw.chars().nth(1) == Some(':')
+                    && matches!(raw.chars().nth(2), Some('\\') | Some('/')),
+                "default root must be a drive root like `C:\\`, got {raw:?}",
+            );
+        }
+        // На любом нормально настроенном Windows хост-машинe есть хотя бы
+        // один fixed drive (C:). Если 0 — `GetLogicalDrives` / `GetDriveTypeW`
+        // что-то сломали и file_index работать не будет.
+        assert!(
+            !roots.is_empty(),
+            "default_roots() must return at least one fixed drive on Windows",
+        );
+
+        unsafe {
+            match prev_roots {
+                Some(v) => std::env::set_var("KEPLER_FILE_INDEX_ROOTS", v),
+                None => std::env::remove_var("KEPLER_FILE_INDEX_ROOTS"),
+            }
+            match prev_test {
+                Some(v) => std::env::set_var("KOSMOS_TEST_MODE", v),
+                None => std::env::remove_var("KOSMOS_TEST_MODE"),
+            }
+        }
+    }
+}

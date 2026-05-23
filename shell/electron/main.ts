@@ -110,6 +110,27 @@ function resolveLauncherBgMaterial(): LauncherBgMaterial {
   return "mica";
 }
 
+/**
+ * Решает показывать ли launcher window сразу после старта.
+ *
+ * - Windows autostart (HKCU\...\Run entry с `args: ["--autostart"]`, см.
+ *   `setAutostartEnabled` в settings-window.ts) → НЕ показываем, только tray.
+ *   Это требование: user не хочет чтобы при логине окно прыгало в лицо.
+ * - Manual launch (Start Menu shortcut / desktop / exe / NSIS runAfterFinish /
+ *   квит после autoupdater quitAndInstall — там флаг post-update.flag отдельно
+ *   обрабатывается ниже в whenReady) → показываем launcher сразу, иначе user
+ *   не видит обратной связи что приложение запустилось.
+ *
+ * Headless / test mode: вызывающий код всё равно проверяет `KOSMOS_HEADLESS`
+ * в `showLauncher()`, так что эта функция может возвращать true в тестах —
+ * показ всё равно будет no-op.
+ *
+ * Чистая функция от argv → возможен unit-test без Electron.
+ */
+export function shouldShowLauncherOnStartup(argv: readonly string[]): boolean {
+  return !argv.includes("--autostart");
+}
+
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let backendProc: ChildProcess | null = null;
@@ -1293,11 +1314,15 @@ app.whenReady().then(async () => {
   // launcher просвечивает белым).
   nativeTheme.themeSource = "dark";
 
-  // Диагностика: был ли запуск из autorun (Windows HKCU\...\Run). Маркер
-  // --autostart выставляется в setAutostartEnabled() через args. Запись
-  // в stdout попадает в crash log / electron log если backend crash'нется
-  // на early init. Сейчас launcher по умолчанию hidden (`launcherHidden = true`),
-  // поэтому при autorun пользователь видит только tray icon — это by design.
+  // Стартовое состояние launcher window: autorun (HKCU\...\Run) → hidden
+  // (только tray icon, пользователь активирует hotkey'ом / tray click);
+  // manual launch (ярлык, exe, после update / install) → показываем сразу,
+  // иначе пользователь не понимает запустилось ли что-то вообще.
+  //
+  // Маркер `--autostart` выставляется в setAutostartEnabled() через args
+  // при регистрации HKCU Run-entry. Windows стартует exe с этим аргументом
+  // на login → main.ts видит его в argv. См. shouldShowLauncherOnStartup()
+  // для логики (вынесено как чистая функция для unit-test'ов).
   const startedFromAutorun = process.argv.includes("--autostart");
   if (startedFromAutorun) {
     console.log(
@@ -1308,6 +1333,9 @@ app.whenReady().then(async () => {
   spawnBackend();
   createLauncher();
   createTray();
+  if (shouldShowLauncherOnStartup(process.argv)) {
+    showLauncher();
+  }
 
   void initArkClient();
 

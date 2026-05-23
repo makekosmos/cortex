@@ -25,8 +25,11 @@
   min-width: 0;
   position: relative;
   overflow-y: auto;
-  scroll-padding-top: 30vh;
-  scroll-padding-bottom: 30vh;
+  /* NB: НЕ ставим scroll-padding-top/bottom > нескольких десятков пикселей.
+     Chromium во время drag-select для текста вызывает scrollIntoView с учётом
+     scroll-padding — значение 30vh приводило к тому, что viewport начинал
+     прыгать ещё когда курсор оставался в центре окна (selection endpoint
+     попадал в 30vh-зону от края). См. postmortems → eden drag-select scroll. */
 }
 
 .editor-rail {
@@ -331,8 +334,9 @@
   color: var(--text-primary);
   /* Physical breathing room после последнего блока: можно проскроллить так,
      чтобы последний блок встал примерно по центру viewport — комфорт при
-     письме «снизу». scroll-padding-bottom на .editor-wrapper (30vh)
-     отвечает за scrollIntoView() цель — оставляем независимо. */
+     письме «снизу». scroll-padding на .editor-wrapper УБРАН (см. там
+     комментарий — он ломал drag-select), но padding-bottom: 50vh
+     обеспечивает то же самое UX через реальное место в layout'е. */
   padding-bottom: 50vh;
 }
 

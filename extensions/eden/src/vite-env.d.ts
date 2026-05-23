@@ -395,5 +395,12 @@ interface Window {
     meta?: {
       id: () => Promise<string>;
     };
+    userData?: {
+      readJson: <T = unknown>(name: string) => Promise<T | null>;
+      writeJson: (name: string, value: unknown) => Promise<void>;
+      readFile: (name: string) => Promise<string | null>;
+      writeFile: (name: string, content: string) => Promise<void>;
+      path: () => Promise<string>;
+    };
   };
 }
