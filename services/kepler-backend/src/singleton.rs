@@ -218,9 +218,14 @@ mod tests {
 
     #[test]
     fn second_acquire_clearing_stale_lock_fails_with_already_running() {
-        // Cross-process конкуренция симулируется внутри процесса — SingletonGuard
-        // в-процессный тест семантически эквивалентен (SQLite WAL `BEGIN IMMEDIATE`
-        // блокирует на уровне connection, не process).
+        // GAP: in-process only. Два `BEGIN IMMEDIATE` внутри одного процесса
+        // конфликтуют через SQLite connection-state, НЕ через OS file lock
+        // (fcntl/LockFileEx). Реальная kernel-level гарантия — что handle
+        // освобождается на TerminateProcess/SIGKILL без graceful Drop — этим
+        // тестом не покрыта.
+        //
+        // Cross-process валидация запланирована отдельной задачей:
+        // .agent/tasks/2026-05-23-singleton-cross-process-test/spec.md.
         let dir = tempdir().expect("temp dir");
         let lock_path = dir.path().join("kepler.lock.json");
         let singleton_path = dir.path().join("kepler-singleton.lock.db");
