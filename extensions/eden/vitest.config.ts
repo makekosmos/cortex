@@ -23,7 +23,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@kosmos/ark": path.resolve(__dirname, "../../packages/ark/src/index.ts"),
       "@kosmos/visuals": path.resolve(__dirname, "../../packages/visuals"),
     },
   },

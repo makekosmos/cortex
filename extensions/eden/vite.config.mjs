@@ -19,7 +19,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
-      "@kosmos/ark": path.resolve(repoRoot, "packages/ark/src/index.ts"),
       "@kosmos/visuals/theme/css": path.resolve(
         repoRoot,
         "packages/visuals/theme/css-variables.css",
