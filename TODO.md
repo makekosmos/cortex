@@ -4,6 +4,129 @@
 
 - [ ] **Полоска загрузки снизу при in-app update.** Когда autoUpdater качает новую версию через UI (Settings → Обновление), показывать тонкий progress bar внизу окна Kepler с процентом download'а. Сейчас обновление триггерится из Settings, но визуальной обратной связи о ходе скачивания нет — пользователь не знает, идёт ли загрузка. Источник прогресса: `electron-updater` `download-progress` event (см. `shell/electron/autoupdater-host.ts`). Renderer-side hook через IPC. Делать когда руки дойдут — не блокирует другие фичи.
 
+## Kepler Extension API v2 — Raycast-shaped UX (2026-05-23)
+
+**Цель**: дать extensions DX как у Raycast (inline render в launcher window, `<KList>`/`<KDetail>`/`<KForm>`/`<KActionPanel>`, `useNavigation` push/pop, clipboard/toast/preferences) при сохранении Vue-стека и текущей архитектуры «extension = own process для legacy, inline mount для нового API».
+
+**Не цель**: запуск существующих Raycast-extensions as-is. Причины — JSX/React runtime, лицензия `@raycast/api` (closed-source, нужна clean-room реализация), macOS-specific фичи (AppleScript, Frontmost App Bundle), AI/OAuth/BrowserExtension у Raycast живут в их облаке. Реалистичный максимум — 60–70% extension'ов при mechanical-port через codemod. Полный compat = очень большой проект, не рекомендую.
+
+### Стратегические решения (зафиксировать в `.agent/tasks/<DATE>-kepler-ext-api-v2/spec.md` перед стартом)
+
+1. **DX-цель**: Vue-native с Raycast-shape компонентов (**рекомендуется**) vs React-runtime внутри Electron (отвергается).
+2. **Process isolation для inline extensions**: `<webview>` (изоляция, ограниченный IPC) vs direct mount в launcher process (быстро, но extension видит DOM launcher'а). Влияет на security model.
+3. **Migration**: новые extensions сразу `kind: "inline"`, legacy (Eden/Delphi/Horologion/Arrancador) остаются `kind: "vue"` (own window). Не ломаем working extensions.
+4. **Permission model**: сделать **ДО** расширения API surface. Manifest declares capabilities (`clipboard`, `shell.open`, `applications`, `oauth`, …), backend gates `ark.request` по ним. Без этого расширение surface = security hole.
+5. **MVP scope первой итерации**: `<KList>` + `<KDetail>` + `<KActionPanel>` + `useNavigation` + `clipboard`/`showToast`/`environment` + `kind: "inline"` mode + permission declaration. Остальное — отдельные подзадачи.
+
+### POC до полноценной работы
+
+Минимум для валидации концепции: новый `extensions/sample-raycast/` с `manifest.kind: "inline"`, монтируется в slot launcher window'а вместо открытия отдельного `BrowserWindow`, использует `<KList>` + `<KDetail>` из `@kosmos/visuals`, ESC → popToRoot, ⌘K → action panel, Enter → push view. Если POC работает быстро и приятно — расширяем API surface. Если упирается в архитектуру (IPC через `<webview>` медленный, sandbox vs DX trade-off) — пересматриваем модель.
+
+### Gap-list (отсортировано лёгкое → тяжёлое)
+
+| #      | Что                                                                                                 | Сложность     | Группа            |
+| ------ | --------------------------------------------------------------------------------------------------- | ------------- | ----------------- |
+| 1      | **Permission/capability в manifest + backend gating `ark.request`**                                 | средне        | **prerequisite**  |
+| 2      | `kepler.clipboard` (Electron `clipboard`: text/HTML/files)                                          | низкая        | preload           |
+| 3      | `kepler.environment` (`isDevelopment, supportPath, assetsPath, extensionName, version, launchType`) | низкая        | preload           |
+| 4      | `kepler.shell.{openExternal,open,trash}`                                                            | низкая        | preload           |
+| 5      | `kepler.toast` / `kepler.hud` / `kepler.confirmAlert` (overlay в `@kosmos/visuals`)                 | низкая        | UI                |
+| 6      | `kepler.localStorage` key-by-key поверх `userData`                                                  | низкая        | storage           |
+| 7      | `kepler.cache` (TTL'd)                                                                              | низкая        | storage           |
+| 8      | **Manifest: `preferences[]` + `getPreferenceValues()` + Settings UI**                               | средне        | core              |
+| 9      | **Manifest: per-command `arguments[]` + launcher prompt form**                                      | средне        | core              |
+| 10     | **`<KList>` (keyboard nav + search filter + sections + dropdown)**                                  | высокая       | UI core           |
+| 11     | `<KDetail>` (markdown + metadata side panel)                                                        | низкая        | UI                |
+| 12     | `<KForm>` (TextField/TextArea/Dropdown/TagPicker/DatePicker/Checkbox/Submit)                        | средне        | UI                |
+| 13     | **`<KActionPanel>` + `<KAction.*>` + ⌘K popup + keyboard shortcuts**                                | высокая       | UI core           |
+| 14     | `<KGrid>`                                                                                           | низкая        | UI                |
+| 15     | **`useKeplerNavigation()` push/pop stack**                                                          | средне        | core (под inline) |
+| 16     | **`kind: "inline"` render mode в launcher**                                                         | средне        | core              |
+| 17     | `kepler.applications.{getFrontmost,list,getDefault}` (Windows: PowerShell / win32 через Rust)       | средне        | native            |
+| 18     | `kepler.keyboard` global shortcuts                                                                  | низкая        | native            |
+| 19     | `kepler.launchExtension(id, cmd, args?)` (поднять internal в preload + permission)                  | низкая        | core              |
+| 20     | `kepler.oauth.PKCEClient` (token store в `userData` + browser flow через custom protocol)           | средне        | auth              |
+| 21     | `kepler.ai.ask` (proxy к настроенному провайдеру, stream через IPC)                                 | средне        | AI                |
+| 22     | Background runtime: `mode: "no-view"` + `interval` scheduler                                        | высокая       | runtime           |
+| 23     | Codemod `raycast-to-kepler` (mechanical port TSX → Vue SFC)                                         | средне        | tooling           |
+| 24     | MenuBarExtra equivalent (tray-resident mini-renderer)                                               | высокая       | UI                |
+| 25     | `kepler.browserExtension` (companion browser ext через WS)                                          | высокая       | отдельный проект  |
+| ~~26~~ | ~~Полная React/JSX совместимость~~                                                                  | очень высокая | **не делаем**     |
+
+### Текущее состояние Kepler extension API (что есть сейчас)
+
+`window.kepler.*` (`shell/electron/extension-preload.ts:1-215` + `extension-host.ts:1108-1504`):
+
+- `kepler.ark.request(op, params)` / `.subscribe(event, cb)` — generic RPC к Rust backend (главная рабочая лошадка)
+- `kepler.window.*` — `close/minimize/maximize/toggleDockCorner/...` (Kepler-unique)
+- `kepler.userData.*` — `readJson/writeJson/readFile/writeFile/path`
+- `kepler.navigation.initialRoute()` + `.onNavigate(handler)` — host пушит route string
+- `kepler.meta.id()`
+- `kepler.host.invoke(action, payload)` — **stub**, всегда `false` (`extension-host.ts:1373-1376`)
+- `kepler.focusWidget.setState(patch)` — Kepler-unique (Horologion only)
+- `kepler.backend.onReady/onDisconnected`
+- `kepler.arrancador.*` — domain sugar над `ark.request("arrancador.*")`
+
+Manifest: `id, name, version, keplerApiVersion, kind: "vue", entryHtml, devPort, width/height, keepAliveInBackground, commands: [{id, title, subtitle, kind, mode: "open"|"action"}]`.
+
+### Mapping Raycast → Kepler (текущий статус)
+
+| Raycast                                                  | Kepler сейчас                                    | Статус           |
+| -------------------------------------------------------- | ------------------------------------------------ | ---------------- |
+| UI компоненты (List/Detail/Form/Grid/ActionPanel/Action) | нет — extension рендерит свой Vue                | ❌               |
+| Feedback (showToast/showHUD/confirmAlert)                | нет                                              | ❌               |
+| Clipboard                                                | только `navigator.clipboard` (text)              | 🟡               |
+| LocalStorage                                             | `userData.readJson/writeJson` (целые файлы)      | 🟡               |
+| Cache                                                    | нет                                              | ❌               |
+| Preferences declarative + `getPreferenceValues`          | нет                                              | ❌               |
+| per-command `arguments`                                  | нет в manifest                                   | ❌               |
+| `useNavigation` push/pop                                 | только route string push от host                 | 🟡               |
+| `popToRoot/closeMainWindow`                              | `window.close()` (extension window, не launcher) | 🟡               |
+| `getFrontmostApplication/getApplications`                | данные есть в `usage_tracker`, не выставлены     | ❌               |
+| `shell.open/openExternal/trash`                          | нет                                              | ❌               |
+| `OAuth.PKCEClient`                                       | нет                                              | ❌               |
+| `AI.ask`                                                 | нет                                              | ❌               |
+| `BrowserExtension`                                       | нет                                              | ❌               |
+| `environment.*`                                          | только `userData.path()`                         | 🟡               |
+| Icon/Color constants                                     | нет (есть design tokens в `@kosmos/visuals`)     | 🟡               |
+| Keyboard.Shortcut global                                 | нет                                              | ❌               |
+| `launchCommand` cross-extension                          | внутренний есть, в preload не выставлен          | 🟡               |
+| `mode: "no-view"/"menu-bar"` + `interval`                | нет runtime'а                                    | ❌               |
+| `@raycast/utils` hooks (useFetch/usePromise/useExec/...) | n/a — пишут руками                               | 🔵               |
+| `ark.request/subscribe` (objects+sync RPC)               | есть                                             | 🔵 Kepler-unique |
+| Per-extension window control (resize/dock/maximize)      | есть                                             | 🔵 Kepler-unique |
+
+### Архитектурные различия (важные ограничения)
+
+1. **Render model**. Raycast = одно launcher window, активная команда inline под search bar, navigation = стек React-элементов в том же окне. Kepler = `BrowserWindow` per extension. Под `kind: "inline"` нужно либо `<webview>` (process isolation, ограниченный IPC), либо direct mount (быстро, нет sandbox).
+2. **UI framework**. Raycast = JSX/React. Kepler = Vue. Запускать TSX напрямую нельзя — разные runtime'ы. Vue-компоненты с тем же контрактом DX — реалистично.
+3. **Process model**. Raycast spawn'ит команды как Node subprocess за ~50ms. Electron на Windows этого для BrowserWindow не даёт. Для inline через direct mount — быстро.
+4. **Permission**. У Raycast — sandbox + capabilities из manifest. У Kepler **любой extension может вызвать любой `ark.request`** — нет gate'инга. Решить ДО расширения surface.
+5. **Background/scheduled**. У Raycast `mode: "no-view"` + `interval` для headless. У Kepler `mode: "action"` есть в manifest, но extension runtime для headless нет.
+
+### Процесс
+
+Substantial-задача → **proof loop** обязательно. Структура:
+
+```
+.agent/tasks/<DATE>-kepler-ext-api-v2/
+  spec.md          — стратегические решения 1–5 выше
+  research/        — research от 2026-05-23 (этот блок + полный agent output в conversation)
+  plan.md          — порядок реализации (MVP scope → расширение)
+  acceptance.md    — критерии: новый sample-extension рендерится inline,
+                     показывает <KList> с search, открывает <KDetail>,
+                     <KAction.CopyToClipboard> работает, ESC → popToRoot.
+```
+
+### Ключевые ссылки
+
+- Preload: `shell/electron/extension-preload.ts:1-215`
+- Host handlers: `shell/electron/extension-host.ts:1108-1504` (ark proxy `:1117`, navigation `:1236`, window `:1243-1372`, userData `:1396-1441`)
+- Manifest пример: `extensions/horologion/manifest.json`
+- Real usage: `extensions/horologion/src/lib/horologionApi.ts`, `extensions/arrancador/src/lib/arkGames.ts`, `extensions/eden/src/lib/kepler-api-shim.ts`, `extensions/delphi/src/lib/electron-api-shim.ts`
+- Roadmap (Phase 13): `docs-site/apps/kepler-roadmap.md:339-361`
+- Distribution (Raycast-style two-repo update model): `docs-site/concepts/distribution.md:10`
+
 ## AI-first object graph (2026-05-19)
 
 North star: всё есть объект, любые объекты связываются через `object_links`, AI-агенты — first-class consumer. Markdown — рендеринг для людей, не source of truth. См. memory `project_north_star_object_graph.md` и обсуждение от 2026-05-19.
