@@ -65,7 +65,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # keyring — Windows Credential Manager для API key (enterprise-standard, не plaintext).
 # hickory-resolver — DoH resolver для AI HTTP клиентов (РФ обход DNS poisoning).
 # base64 — encode/decode WAV bytes между renderer и backend.
-enigo = "0.2"
+# arboard — save/restore clipboard поверх inject'а транскрипта. Ctrl+V сам шлётся
+# через нативный windows::Win32 SendInput (enigo шёл через VK_PACKET, ломался).
 arboard = "3"
 keyring = { version = "3", features = ["windows-native"] }
 hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
