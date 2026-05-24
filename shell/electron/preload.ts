@@ -66,6 +66,16 @@ const api: KeplerApi = {
     run: (args) => ipcRenderer.invoke("kepler:export:run", args),
     pickDir: () => ipcRenderer.invoke("kepler:export:pickDir"),
   },
+  fileSearch: {
+    settingsGet: () => ipcRenderer.invoke("kepler:file-search:settings:get"),
+    settingsSet: (patch) => ipcRenderer.invoke("kepler:file-search:settings:set", patch),
+    scopeAdd: (path) => ipcRenderer.invoke("kepler:file-search:scope:add", path),
+    scopeRemove: (path) => ipcRenderer.invoke("kepler:file-search:scope:remove", path),
+    ignoreAdd: (pattern) => ipcRenderer.invoke("kepler:file-search:ignore:add", pattern),
+    ignoreRemove: (pattern) => ipcRenderer.invoke("kepler:file-search:ignore:remove", pattern),
+    rescan: () => ipcRenderer.invoke("kepler:file-search:rescan"),
+    pickScope: () => ipcRenderer.invoke("kepler:file-search:pickScope"),
+  },
   focusWidget: {
     setState: (patch) => ipcRenderer.invoke("kepler:focus-widget:set-state", patch),
     getState: () => ipcRenderer.invoke("kepler:focus-widget:get-state"),

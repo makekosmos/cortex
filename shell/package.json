@@ -1,6 +1,6 @@
 {
   "name": "kepler-shell",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "private": true,
   "description": "Kepler — Electron host для Kosmos ecosystem (global launcher + extension host)",
   "author": "Kazui",

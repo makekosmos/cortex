@@ -267,6 +267,7 @@ async fn setup() -> Result<SetupState, DynError> {
         Ok(index) => std::sync::Arc::new(index),
         Err(e) => return Err(format!("file_index init failed: {e}").into()),
     };
+    file_index.bind_self();
 
     let ws = WsServer::bind(
         ark.clone(),
@@ -301,7 +302,10 @@ async fn setup() -> Result<SetupState, DynError> {
                 Ok(stats) => tracing::info!(
                     total = stats.total,
                     roots = stats.roots,
-                    noisy_folders_excluded = stats.noisy_folders_excluded,
+                    exclude_noisy_folders = stats.exclude_noisy_folders,
+                    respect_gitignore = stats.respect_gitignore,
+                    include_hidden = stats.include_hidden,
+                    ntfs_accelerated = stats.ntfs_accelerated,
                     "file_index initial rescan"
                 ),
                 Err(e) => tracing::warn!(error = %e, "file_index initial rescan failed"),

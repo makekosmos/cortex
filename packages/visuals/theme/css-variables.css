@@ -42,7 +42,7 @@
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
-  --main-background-color: rgb(19 19 19 / 70%);
+  --main-background-color: oklch(0.2002 0 0 / 60%);
   --second-text-color: #717171;
   --border-color-strong: #313131;
   /* Search surface is intentionally named narrowly for now; this is likely

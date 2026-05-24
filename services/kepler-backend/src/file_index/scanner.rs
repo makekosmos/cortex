@@ -1,11 +1,17 @@
-use super::{FileIndexError, IndexedFile, Result};
+use super::{FileIndexError, IndexedFile, NtfsStatus, Result, ScanOptions};
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use ignore::WalkBuilder;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use walkdir::{DirEntry, WalkDir};
 
 #[cfg(windows)]
 mod ntfs;
 
+// Regression L2 (2026-05-24): bare "tmp", "cache", "out" были too greedy —
+// блокировали legit user folders типа `D:\projects\my-app\tmp-output` или
+// `D:\projects\cache-libs` без override. Оставлены только однозначные
+// директории-артефакты сборки/окружения. "*.tmp"/"*.temp"/"**/Cache/**" из
+// DEFAULT_IGNORE_PATTERNS продолжают защищать от системного шума.
 const NOISY_FOLDER_NAMES: &[&str] = &[
     "$recycle.bin",
     ".cache",
@@ -23,97 +29,305 @@ const NOISY_FOLDER_NAMES: &[&str] = &[
     ".vite",
     "__pycache__",
     "build",
-    "cache",
     "coverage",
     "dist",
     "node_modules",
-    "out",
     "target",
-    "tmp",
     "venv",
 ];
 
-pub fn scan_roots(roots: &[PathBuf], exclude_noisy: bool) -> Vec<IndexedFile> {
+// Regression M1 (2026-05-24): default patterns apply ALWAYS, separately from
+// `exclude_noisy_folders`. Folder-name matches (.git, node_modules, target...)
+// are handled by NOISY_FOLDER_NAMES via path_contains_noisy_folder and respect
+// the toggle. Pattern-level entries here cover what name-matching can't: file
+// extensions and absolute path families like AppData that you almost never
+// want to index even in "power user" mode. AppData in particular: without it
+// indexing %USERPROFILE% turns into 100k+ files of Electron/Chrome cache.
+const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
+    "*.tmp",
+    "*.temp",
+    "**/AppData/**",
+    "**/[Cc]ache/**",
+    "**/[Cc]aches/**",
+];
+
+#[derive(Debug, Clone)]
+pub struct ScanProgress {
+    pub phase: String,
+    pub root: Option<String>,
+    pub roots_done: usize,
+    pub roots_total: usize,
+    pub files_seen: usize,
+    pub files_indexed: usize,
+    pub message: String,
+}
+
+pub fn scan_roots_with_progress(
+    roots: &[PathBuf],
+    opts: &ScanOptions,
+    mut on_progress: impl FnMut(ScanProgress),
+    mut on_ntfs: impl FnMut(NtfsStatus, Option<String>),
+) -> Vec<IndexedFile> {
     let mut files = Vec::new();
-    for root in roots {
+    let roots_total = roots.len();
+    let mut ntfs_any_drive = false;
+    let mut ntfs_any_active = false;
+    let mut ntfs_any_fallback = false;
+    let mut ntfs_note: Option<String> = None;
+    for (idx, root) in roots.iter().enumerate() {
         if !root.is_dir() {
             continue;
         }
-        files.extend(scan_root(root, exclude_noisy));
+        on_progress(ScanProgress {
+            phase: "scanning".to_string(),
+            root: Some(root.to_string_lossy().into_owned()),
+            roots_done: idx,
+            roots_total,
+            files_seen: files.len(),
+            files_indexed: files.len(),
+            message: "Сканируем файлы".to_string(),
+        });
+        let (root_files, root_ntfs) = scan_root(root, opts, idx, roots_total, &mut on_progress);
+        files.extend(root_files);
+        if let Some((status, note)) = root_ntfs {
+            ntfs_any_drive = true;
+            match status {
+                NtfsStatus::Active => ntfs_any_active = true,
+                NtfsStatus::Fallback | NtfsStatus::Unavailable => {
+                    ntfs_any_fallback = true;
+                    if ntfs_note.is_none() {
+                        ntfs_note = note;
+                    }
+                }
+                _ => {}
+            }
+        }
+        on_progress(ScanProgress {
+            phase: "scanning".to_string(),
+            root: Some(root.to_string_lossy().into_owned()),
+            roots_done: idx + 1,
+            roots_total,
+            files_seen: files.len(),
+            files_indexed: files.len(),
+            message: "Сканируем файлы".to_string(),
+        });
+    }
+    if opts.ntfs_accelerated {
+        let status = if !ntfs_any_drive {
+            // ntfs_accelerated=true но нет drive roots → ничего пробовать
+            NtfsStatus::Unknown
+        } else if ntfs_any_active {
+            NtfsStatus::Active
+        } else if ntfs_any_fallback {
+            NtfsStatus::Fallback
+        } else {
+            NtfsStatus::Unknown
+        };
+        on_ntfs(status, ntfs_note);
+    } else {
+        on_ntfs(NtfsStatus::Disabled, None);
     }
     files
 }
 
-fn scan_root(root: &Path, exclude_noisy: bool) -> Vec<IndexedFile> {
+fn scan_root(
+    root: &Path,
+    opts: &ScanOptions,
+    root_index: usize,
+    roots_total: usize,
+    on_progress: &mut impl FnMut(ScanProgress),
+) -> (Vec<IndexedFile>, Option<(NtfsStatus, Option<String>)>) {
     #[cfg(windows)]
-    if is_drive_root(root) {
-        match ntfs::scan_drive_root(root, exclude_noisy) {
+    if opts.ntfs_accelerated && is_drive_root(root) {
+        // Regression H1 (2026-05-24): NTFS fast path does not walk .gitignore
+        // files, so respect_gitignore would silently be ignored. When the user
+        // wants gitignore semantics, fall back to user-mode walk.
+        if opts.respect_gitignore {
+            tracing::info!(
+                target: "file_index",
+                root = %root.to_string_lossy(),
+                "ntfs fast scan skipped: respect_gitignore is on"
+            );
+            let files = scan_walk_root(root, opts, root_index, roots_total, on_progress);
+            return (
+                files,
+                Some((
+                    NtfsStatus::Fallback,
+                    Some("Учитывается .gitignore — NTFS режим не активен".to_string()),
+                )),
+            );
+        }
+        on_progress(ScanProgress {
+            phase: "ntfs".to_string(),
+            root: Some(root.to_string_lossy().into_owned()),
+            roots_done: root_index,
+            roots_total,
+            files_seen: 0,
+            files_indexed: 0,
+            message: "Быстрый NTFS scan".to_string(),
+        });
+        match ntfs::scan_drive_root(root, opts.exclude_noisy_folders) {
             Ok(files) => {
+                let filtered = filter_indexed_files(files, opts);
+                on_progress(ScanProgress {
+                    phase: "filtering".to_string(),
+                    root: Some(root.to_string_lossy().into_owned()),
+                    roots_done: root_index,
+                    roots_total,
+                    files_seen: filtered.len(),
+                    files_indexed: filtered.len(),
+                    message: "Фильтруем результаты NTFS".to_string(),
+                });
                 tracing::info!(
                     target: "file_index",
                     root = %root.to_string_lossy(),
-                    total = files.len(),
+                    total = filtered.len(),
                     "ntfs fast scan finished"
                 );
-                return files;
+                return (filtered, Some((NtfsStatus::Active, None)));
             }
             Err(error) => {
                 tracing::warn!(
                     target: "file_index",
                     root = %root.to_string_lossy(),
-                    error,
+                    error = %error,
                     "ntfs fast scan unavailable; using walk fallback"
+                );
+                let files = scan_walk_root(root, opts, root_index, roots_total, on_progress);
+                return (
+                    files,
+                    Some((NtfsStatus::Unavailable, Some(error.to_string()))),
                 );
             }
         }
     }
-    scan_walk_root(root, exclude_noisy)
+    #[cfg(windows)]
+    let drive_marker = if opts.ntfs_accelerated && is_drive_root(root) {
+        Some((NtfsStatus::Fallback, None))
+    } else {
+        None
+    };
+    #[cfg(not(windows))]
+    let drive_marker: Option<(NtfsStatus, Option<String>)> = None;
+    (
+        scan_walk_root(root, opts, root_index, roots_total, on_progress),
+        drive_marker,
+    )
 }
 
-fn scan_walk_root(root: &Path, exclude_noisy: bool) -> Vec<IndexedFile> {
-    let walker = WalkDir::new(root)
+fn scan_walk_root(
+    root: &Path,
+    opts: &ScanOptions,
+    root_index: usize,
+    roots_total: usize,
+    on_progress: &mut impl FnMut(ScanProgress),
+) -> Vec<IndexedFile> {
+    let mut builder = WalkBuilder::new(root);
+    builder
         .follow_links(false)
-        .into_iter()
-        .filter_entry(|entry| should_enter(entry, exclude_noisy));
+        .hidden(!opts.include_hidden)
+        .git_ignore(opts.respect_gitignore)
+        .git_global(opts.respect_gitignore)
+        .git_exclude(opts.respect_gitignore)
+        .parents(opts.respect_gitignore)
+        .add_custom_ignore_filename(".rayignore");
+    let matcher = ignore_matcher(opts);
     let mut files = Vec::new();
-    for entry in walker.filter_map(|entry| entry.ok()) {
-        if !entry.file_type().is_file() {
+    let mut seen = 0usize;
+    for entry in builder.build().filter_map(|entry| entry.ok()) {
+        let path = entry.path();
+        if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+            && !should_enter_dir(path, root, opts, matcher.as_ref())
+        {
             continue;
         }
+        if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+            continue;
+        }
+        if !should_index_path_for_root(path, root, opts, matcher.as_ref()) {
+            continue;
+        }
+        seen += 1;
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.is_empty() {
             continue;
         }
-        let mtime = entry
-            .metadata()
-            .ok()
-            .and_then(|meta| meta.modified().ok())
-            .and_then(|mtime| mtime.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|mtime| mtime.as_secs() as i64)
-            .unwrap_or_default();
+        // Regression L7 (2026-05-24): unwrap_or_default() used to silently
+        // bury metadata failures as epoch 0 (1970-01-01) — breaks future
+        // "recently modified" sorts and hides bad permissions. Log at trace.
+        let mtime = match entry.metadata() {
+            Ok(meta) => meta
+                .modified()
+                .ok()
+                .and_then(|mtime| mtime.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|mtime| mtime.as_secs() as i64)
+                .unwrap_or(0),
+            Err(e) => {
+                tracing::trace!(
+                    target: "file_index",
+                    path = %entry.path().to_string_lossy(),
+                    error = %e,
+                    "metadata read failed; using mtime=0"
+                );
+                0
+            }
+        };
         files.push(IndexedFile {
             path: entry.path().to_string_lossy().into_owned(),
             name,
             mtime,
         });
+        if seen == 1 || seen % 500 == 0 {
+            on_progress(ScanProgress {
+                phase: "scanning".to_string(),
+                root: Some(root.to_string_lossy().into_owned()),
+                roots_done: root_index,
+                roots_total,
+                files_seen: seen,
+                files_indexed: files.len(),
+                message: "Сканируем файлы".to_string(),
+            });
+        }
     }
     files
 }
 
-#[cfg(windows)]
-fn is_drive_root(root: &Path) -> bool {
-    let raw = root.to_string_lossy();
-    raw.len() == 3
-        && raw.as_bytes()[1] == b':'
-        && matches!(raw.as_bytes()[2], b'\\' | b'/')
-        && raw.as_bytes()[0].is_ascii_alphabetic()
+fn filter_indexed_files(files: Vec<IndexedFile>, opts: &ScanOptions) -> Vec<IndexedFile> {
+    let matcher = ignore_matcher(opts);
+    files
+        .into_iter()
+        .filter(|file| should_index_path(Path::new(&file.path), opts, matcher.as_ref()))
+        .collect()
 }
 
-fn should_enter(entry: &DirEntry, exclude_noisy: bool) -> bool {
-    if entry.depth() == 0 || !exclude_noisy || !entry.file_type().is_dir() {
+#[cfg(windows)]
+fn is_drive_root(root: &Path) -> bool {
+    // Regression H2 (2026-05-24): native folder picker returns "D:" or "D:\\"
+    // — bare byte-length check missed both, so NTFS fast path silently never
+    // engaged despite ntfs_accelerated=ON.
+    let raw = root.to_string_lossy();
+    let trimmed = raw.trim_end_matches(['\\', '/']);
+    let bytes = trimmed.as_bytes();
+    bytes.len() == 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic()
+}
+
+fn should_enter_dir(
+    path: &Path,
+    root: &Path,
+    opts: &ScanOptions,
+    matcher: Option<&GlobSet>,
+) -> bool {
+    if path == root {
         return true;
     }
-    !is_noisy_folder(entry.path())
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    if opts.exclude_noisy_folders && is_noisy_folder(relative) {
+        return false;
+    }
+    if !opts.include_hidden && is_dot_hidden(relative) {
+        return false;
+    }
+    !matches_ignore_pattern(relative, matcher)
 }
 
 fn is_noisy_folder(path: &Path) -> bool {
@@ -135,6 +349,130 @@ pub fn path_contains_noisy_folder(path: &Path) -> bool {
     })
 }
 
+pub fn should_index_path(path: &Path, opts: &ScanOptions, matcher: Option<&GlobSet>) -> bool {
+    if opts.exclude_noisy_folders && path_contains_noisy_folder(path) {
+        return false;
+    }
+    if !opts.include_hidden && is_dot_hidden(path) {
+        return false;
+    }
+    // Regression C2 (2026-05-24): on Windows "hidden" is the NTFS
+    // FILE_ATTRIBUTE_HIDDEN bit, not a dot-prefix. Without this check the
+    // NTFS fast scan + watcher events index AppData/ProgramData/etc despite
+    // include_hidden=false.
+    #[cfg(windows)]
+    if !opts.include_hidden && path_has_hidden_attribute(path) {
+        return false;
+    }
+    !matches_ignore_pattern(path, matcher)
+}
+
+#[cfg(windows)]
+fn path_has_hidden_attribute(path: &Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    // FILE_ATTRIBUTE_HIDDEN = 0x2, FILE_ATTRIBUTE_SYSTEM = 0x4 — system files
+    // are typically also hidden in Explorer; treat them as hidden for indexing.
+    const HIDDEN_OR_SYSTEM: u32 = 0x2 | 0x4;
+    path.metadata()
+        .ok()
+        .map(|meta| meta.file_attributes() & HIDDEN_OR_SYSTEM != 0)
+        .unwrap_or(false)
+}
+
+pub fn should_index_with_options(path: &Path, opts: &ScanOptions) -> bool {
+    let matcher = ignore_matcher(opts);
+    should_index_path(path, opts, matcher.as_ref())
+}
+
+fn should_index_path_for_root(
+    path: &Path,
+    root: &Path,
+    opts: &ScanOptions,
+    matcher: Option<&GlobSet>,
+) -> bool {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    if opts.exclude_noisy_folders && path_contains_noisy_folder(relative) {
+        return false;
+    }
+    if !opts.include_hidden && is_dot_hidden(relative) {
+        return false;
+    }
+    !matches_ignore_pattern(relative, matcher)
+}
+
+pub fn validate_ignore_pattern(pattern: &str) -> Result<()> {
+    let normalized = pattern.trim();
+    if normalized.is_empty() {
+        return Err(FileIndexError::InvalidSetting(
+            "ignore pattern must not be empty".to_string(),
+        ));
+    }
+    // Regression M10 (2026-05-24): Glob::new parses some patterns that later
+    // fail at GlobSetBuilder.add → silently dropped at scan time.
+    let mut builder = GlobSetBuilder::new();
+    let glob = Glob::new(normalized)
+        .map_err(|e| FileIndexError::InvalidSetting(format!("invalid ignore pattern: {e}")))?;
+    builder.add(glob);
+    builder
+        .build()
+        .map(|_| ())
+        .map_err(|e| FileIndexError::InvalidSetting(format!("invalid ignore pattern: {e}")))
+}
+
+fn ignore_matcher(opts: &ScanOptions) -> Option<GlobSet> {
+    // Regression M1 (2026-05-24): default patterns (`**/AppData/**`,
+    // `**/target/**`...) used to be gated by `exclude_noisy_folders`. When the
+    // user turned that toggle off they lost ALL default ignores including the
+    // critical AppData filter — `%USERPROFILE%` indexing then exploded. The
+    // toggle now controls only the NOISY_FOLDER_NAMES check (component-level
+    // names like "node_modules"); pattern-based defaults always apply.
+    let mut builder = GlobSetBuilder::new();
+    let mut added = false;
+    for pattern in DEFAULT_IGNORE_PATTERNS
+        .iter()
+        .copied()
+        .chain(opts.ignore_patterns.iter().map(String::as_str))
+    {
+        if add_glob_variants(&mut builder, pattern).is_ok() {
+            added = true;
+        }
+    }
+    if !added {
+        return None;
+    }
+    builder.build().ok()
+}
+
+fn add_glob_variants(builder: &mut GlobSetBuilder, pattern: &str) -> std::result::Result<(), ()> {
+    let normalized = pattern.trim();
+    if normalized.is_empty() {
+        return Ok(());
+    }
+    let glob = Glob::new(normalized).map_err(|_| ())?;
+    builder.add(glob);
+    if !normalized.contains('/') && !normalized.contains('\\') {
+        let deep = Glob::new(&format!("**/{normalized}")).map_err(|_| ())?;
+        builder.add(deep);
+    }
+    Ok(())
+}
+
+fn matches_ignore_pattern(path: &Path, matcher: Option<&GlobSet>) -> bool {
+    matcher.is_some_and(|matcher| {
+        matcher.is_match(path)
+            || path
+                .file_name()
+                .is_some_and(|name| matcher.is_match(Path::new(name)))
+    })
+}
+
+fn is_dot_hidden(path: &Path) -> bool {
+    path.components().any(|component| {
+        let name = component.as_os_str().to_string_lossy();
+        name.starts_with('.') && name != "." && name != ".."
+    })
+}
+
 pub fn default_roots() -> Vec<PathBuf> {
     if let Ok(roots) = std::env::var("KEPLER_FILE_INDEX_ROOTS") {
         return roots
@@ -147,34 +485,11 @@ pub fn default_roots() -> Vec<PathBuf> {
     if std::env::var("KOSMOS_TEST_MODE").as_deref() == Ok("1") {
         return Vec::new();
     }
-    platform_fixed_drive_roots()
-}
-
-#[cfg(windows)]
-fn platform_fixed_drive_roots() -> Vec<PathBuf> {
-    use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::{GetDriveTypeW, GetLogicalDrives};
-    use windows::Win32::System::WindowsProgramming::DRIVE_FIXED;
-
-    let mut out = Vec::new();
-    let drives = unsafe { GetLogicalDrives() };
-    for offset in 0..26u32 {
-        if drives & (1 << offset) == 0 {
-            continue;
-        }
-        let letter = char::from_u32('A' as u32 + offset).unwrap_or('C');
-        let root = format!("{letter}:\\");
-        let wide: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
-        if unsafe { GetDriveTypeW(PCWSTR(wide.as_ptr())) } == DRIVE_FIXED {
-            out.push(PathBuf::from(root));
-        }
-    }
-    out
-}
-
-#[cfg(not(windows))]
-fn platform_fixed_drive_roots() -> Vec<PathBuf> {
-    Vec::new()
+    std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .filter(|path| path.is_dir())
+        .into_iter()
+        .collect()
 }
 
 #[cfg(windows)]
@@ -199,19 +514,18 @@ pub fn open_file(path: &str) -> Result<()> {
 mod default_roots_tests {
     use super::*;
 
+    // Regression L1 (2026-05-24): cargo test parallelizes tests within a
+    // single binary by default. Tests that mutate process env races with any
+    // other test reading the same vars. This static lock serializes them.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// `default_roots` обязан возвращать system-wide drives (C:\, D:\...),
     /// а не data_dir / lock_dir. Регрешн на bug: в production видели что
     /// файловый поиск находил только файлы рядом с `%APPDATA%\Kosmos\` —
     /// если бы кто-то случайно подменил roots на data_dir, этот тест поймал бы.
-    ///
-    /// Прогон с env override (KEPLER_FILE_INDEX_ROOTS) — детерминистичный
-    /// (не зависит от того что физически смонтировано на CI). Test mutates
-    /// process env, поэтому помечен #[serial] нет — но в Rust-тестах одного
-    /// крейта env не шарится между процессами (cargo test -j N форкает),
-    /// единственный риск — параллельный тест внутри того же бинаря. Здесь
-    /// других env-чтений в файле нет.
     #[test]
     fn env_override_takes_precedence() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Сохраняем и восстанавливаем env чтобы не ломать другие тесты в
         // том же процессе.
         let prev_roots = std::env::var("KEPLER_FILE_INDEX_ROOTS").ok();
@@ -244,12 +558,10 @@ mod default_roots_tests {
 
     #[cfg(windows)]
     #[test]
-    fn windows_default_returns_real_drive_roots() {
-        // Без env override и без KOSMOS_TEST_MODE prod backend должен получить
-        // СИСТЕМНЫЕ drives, а не data_dir. Если этот тест когда-нибудь начнёт
-        // возвращать путь типа `C:\Users\<x>\AppData\Roaming\Kosmos\` — значит
-        // кто-то подменил default_roots() на data_dir-based fallback. Это и
-        // есть симптом bug'а «file search ищет только в AppData».
+    fn windows_default_returns_user_profile() {
+        // Regression: 2026-05-24. Drive-root defaults caused user-mode fallback
+        // to spend forever in system noise. Default scope is now USERPROFILE.
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let prev_roots = std::env::var("KEPLER_FILE_INDEX_ROOTS").ok();
         let prev_test = std::env::var("KOSMOS_TEST_MODE").ok();
         unsafe {
@@ -259,22 +571,10 @@ mod default_roots_tests {
 
         let roots = default_roots();
 
-        for root in &roots {
-            let raw = root.to_string_lossy();
-            // Каждый root обязан быть drive root формата `<letter>:\`.
-            assert!(
-                raw.len() == 3
-                    && raw.chars().nth(1) == Some(':')
-                    && matches!(raw.chars().nth(2), Some('\\') | Some('/')),
-                "default root must be a drive root like `C:\\`, got {raw:?}",
-            );
-        }
-        // На любом нормально настроенном Windows хост-машинe есть хотя бы
-        // один fixed drive (C:). Если 0 — `GetLogicalDrives` / `GetDriveTypeW`
-        // что-то сломали и file_index работать не будет.
-        assert!(
-            !roots.is_empty(),
-            "default_roots() must return at least one fixed drive on Windows",
+        assert_eq!(roots.len(), 1);
+        assert_eq!(
+            roots[0],
+            PathBuf::from(std::env::var("USERPROFILE").unwrap())
         );
 
         unsafe {
@@ -287,5 +587,89 @@ mod default_roots_tests {
                 None => std::env::remove_var("KOSMOS_TEST_MODE"),
             }
         }
+    }
+
+    #[test]
+    fn ignore_pattern_matches_file_name_anywhere() {
+        let opts = ScanOptions {
+            exclude_noisy_folders: true,
+            respect_gitignore: true,
+            include_hidden: false,
+            ntfs_accelerated: false,
+            ignore_patterns: vec!["*.tmp".to_string()],
+        };
+        assert!(!should_index_with_options(
+            Path::new(r"D:\docs\scratch.tmp"),
+            &opts
+        ));
+        assert!(should_index_with_options(
+            Path::new(r"D:\docs\notes.md"),
+            &opts
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn drive_root_detection_accepts_picker_variants() {
+        // Regression H2 (2026-05-24): native folder picker may return any of
+        // "D:", "D:\\", "D:\\\\", "d:/" — NTFS fast path must engage for all
+        // of them, not only the canonical "D:\\".
+        assert!(is_drive_root(Path::new("D:")));
+        assert!(is_drive_root(Path::new(r"D:\")));
+        assert!(is_drive_root(Path::new(r"D:\\")));
+        assert!(is_drive_root(Path::new("d:/")));
+        assert!(!is_drive_root(Path::new(r"D:\Projects")));
+        assert!(!is_drive_root(Path::new("notadrive")));
+    }
+
+    #[test]
+    fn validate_ignore_pattern_rejects_unbuildable_globs() {
+        // Regression M10 (2026-05-24): "[abc" parses through Glob::new but
+        // fails at GlobSetBuilder.build → silent drop at scan time.
+        assert!(validate_ignore_pattern("[abc").is_err());
+        assert!(validate_ignore_pattern("*.tmp").is_ok());
+        assert!(validate_ignore_pattern("   ").is_err());
+    }
+
+    #[test]
+    fn hidden_dot_paths_are_excluded_by_default() {
+        let opts = ScanOptions {
+            exclude_noisy_folders: true,
+            respect_gitignore: true,
+            include_hidden: false,
+            ntfs_accelerated: false,
+            ignore_patterns: Vec::new(),
+        };
+        assert!(!should_index_with_options(
+            Path::new(r"D:\docs\.secret"),
+            &opts
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn ntfs_hidden_attribute_detected_by_path_helper() {
+        // Regression C2 (2026-05-24): on Windows "hidden" is the NTFS attribute
+        // bit, not a dot-prefix. AppData/ntuser.dat/Thumbs.db are NOT dot-prefixed
+        // but ARE hidden — used to slip through the filter on the NTFS fast path
+        // and via watcher events. Test path_has_hidden_attribute directly because
+        // a higher-level test path would be pre-filtered by DEFAULT_IGNORE_PATTERNS
+        // (tempdir lives under %TEMP% = AppData on Windows).
+        let dir = tempfile::Builder::new()
+            .prefix("kosmos-test-")
+            .tempdir()
+            .unwrap();
+        let visible = dir.path().join("visible.txt");
+        std::fs::write(&visible, b"v").unwrap();
+        let hidden = dir.path().join("ntuser-like.dat");
+        std::fs::write(&hidden, b"v").unwrap();
+        let status = std::process::Command::new("attrib")
+            .args(["+H", hidden.to_str().unwrap()])
+            .status()
+            .expect("attrib must run on Windows");
+        assert!(status.success(), "attrib +H failed");
+
+        assert!(!path_has_hidden_attribute(&visible));
+        assert!(path_has_hidden_attribute(&hidden));
     }
 }

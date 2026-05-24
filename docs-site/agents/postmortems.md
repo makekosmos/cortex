@@ -53,7 +53,7 @@ Manual repro для AC7: запустить `bun run --cwd shell dev`, дожд�
 
 ---
 
-## 2026-05-23 — Kepler: file search показывает только файлы из %APPDATA% (НЕ ИСПРАВЛЕНО)
+## 2026-05-23 — Kepler: file search показывает только файлы из %APPDATA% (ИСПРАВЛЕНО 2026-05-24)
 
 **Симптомы.** File search в launcher находит только файлы под `%APPDATA%\Roaming\...`, не находит проекты на `C:\` / `D:\`.
 
@@ -61,17 +61,78 @@ Manual repro для AC7: запустить `bun run --cwd shell dev`, дожд�
 
 **Root cause.** Архитектурная хрупкость — два exclusive fast-path (focus-svc named pipe / direct NTFS USN) **оба требуют privilege** (installed Windows service / admin token). Fallback на user-space `WalkDir` от C:\ настолько медленный что initial rescan не выходит за пределы системных каталогов за обозримое время; пользователь видит первые indexed файлы (которые случайно в `C:\Users\<u>\AppData\` потому что walk идёт alphabetically/depth-first из C:\) и считает что indexer работает только в AppData.
 
-**Fix.** Только regression-тесты в `services/kepler-backend/src/file_index/scanner.rs::tests`: `env_override_takes_precedence`, `windows_default_returns_real_drive_roots` (`cfg(windows)`). Проверяют что default roots — настоящие drive letters формата `<L>:\`, не path в AppData. Защищают от регрессии «случайно поставить lock_dir как root».
+**Fix.** Substantial-задача `.agent/tasks/2026-05-24-file-search-scopes-ntfs/`: default roots заменены с fixed drives на `%USERPROFILE%`; scopes теперь persist'ятся в `file-index.db` (`file_index_roots`) и управляются из Settings → Поиск файлов. User-mode scanner получил root-relative hardcoded ignores, user-configurable ignore patterns, `.gitignore` toggle, hidden-files toggle. Existing NTFS/MFT fast path стал честным opt-in через настройку «Ускоренный NTFS-режим»: OFF гарантирует user-mode scan, ON пробует NTFS только когда применимо и fallback'ится на user-mode. `settings_set` стал partial patch API, добавлены `scope_add/scope_remove/ignore_add/ignore_remove`.
 
-**Реальный fix** требует substantial-задачи (отдельный proof loop в `.agent/tasks/`):
+**Регрешн-защита.** `cargo test -p kepler-backend file_index::`:
 
-1. **Авто-инсталл `kepler-focus-svc` через UAC prompt** при первом file search → доступ к named pipe `\\.\pipe\kepler-focus-svc` → быстрый NTFS scan через installed service running as SYSTEM, либо
-2. **Партиальные результаты с прогресс-баром UX** — показывать «индексация идёт, найдено N файлов» вместо тишины, либо
-3. **Opt-in elevated initial scan** — однократный UAC prompt → direct `Volume::new(\\.\C:)` от admin → последующие scan'ы инкрементальные через watcher.
+- `scanner::default_roots_tests::windows_default_returns_user_profile` — default root больше не full-drive scan.
+- `file_index::tests::scan_searches_regular_files_and_skips_noisy_folders_by_default` — обычные файлы индексируются, noisy folders пропускаются.
+- `file_index::tests::ignore_patterns_filter_matching_files` — пользовательский `*.tmp` отсекает файлы.
+- `file_index::tests::removing_root_hides_scope_immediately_and_cleans_index_in_background` — удаление scope сразу убирает root из настроек и затем очищает subtree в фоне.
+- `file_index::tests::scope_remove_does_not_cleanup_large_index_synchronously` — удаление большого scope не ждёт синхронный FTS/files cleanup.
+- `store::tests::roots_and_ignore_patterns_are_persisted_and_deduped` — scopes/patterns persist + dedupe.
 
-**Регрешн-защита.** 2 unit-теста выше (от другого класса регрессии — «lock_dir as root»). Реальная проблема fallback-UX не покрыта тестом — она требует functional testing, который пока не setup'нут.
+**Prevention.** **Privilege-dependent fast path не должен быть default UX-контрактом.** Default должен быть медленнее, но гарантированно рабочим без admin, а ускорение — явным opt-in с fallback. Для filesystem traversal noisy-folder filters должны считаться относительно search scope, а не абсолютного пути: иначе тестовые/temp roots под `%USERPROFILE%\AppData\...` сами себя отфильтруют и дадут ложное ощущение «индексатор пустой». Любой backend setting, который меняет roots, обязан либо перезапускать watcher, либо явно инвалидировать его — stale watcher по старым roots создаёт рассинхрон между Settings и результатами поиска. Root/scope mutation не должна синхронно делать bulk cleanup по FTS-таблице: пользовательское действие должно менять конфигурацию сразу, а тяжёлую чистку/полную переиндексацию выполнять как background job с прогрессом.
 
-**Prevention.** **Когда fast-path требует elevated privilege, fallback должен быть либо honestly-degraded (показывать пользователю «file search недоступен, установите helper»), либо реально работающим. Silent slow-walk fallback — анти-паттерн**: пользователь видит UI без feedback и считает фичу сломанной. Применимо ко всем фичам Kepler, требующим admin (focus mode hosts write, USN scanning, в будущем — keyboard global shortcuts).
+### Follow-up audit pass 2026-05-24 — 12 багов в Phase 1
+
+После реализации Phase 1 трёхвекторный audit (backend Rust / shell UI / cross-cutting) выявил 12 серьёзных проблем. Они зафикшены тем же днём:
+
+- **C1 watcher не фильтровал события удалённых scopes** → stale upsert после `remove_root`. `notify`-канал содержит pre-restart события; `apply_path` ловит их и переиндексирует «удалённое». Fix: `path_is_under_any_root` filter в `handle_event`, case-insensitive prefix check без false-prefix-match. Regression: `watcher::tests::events_outside_active_roots_are_dropped`.
+- **C2 NTFS-hidden attribute игнорировался** → `AppData`, `Thumbs.db`, `ntuser.dat` индексировались на NTFS fast path несмотря на `include_hidden=false`. `is_dot_hidden` смотрит только дот-префикс, что POSIX-only. Fix: `path_has_hidden_attribute` через `MetadataExt::file_attributes()` проверяет HIDDEN|SYSTEM. Regression: `scanner::tests::ntfs_hidden_attribute_excludes_file_when_include_hidden_off`.
+- **H2 NTFS fast path не активировался для picker-вариантов** → `D:`, `D:\\`, `d:/` мимо byte-length проверки. Fix: trim + 2-byte canonical. Regression: `drive_root_detection_accepts_picker_variants`.
+- **H4 SQLITE_BUSY на settings_get во время rescan** → reader без `busy_timeout` падал сразу. Fix: `busy_timeout(5s)` в `read_conn`.
+- **H5 удаление scope без confirm** → необратимая фоновая чистка тысяч строк по одному клику. Fix: `window.confirm` с явным текстом.
+- **H6 английский в UI** («Ignore patterns», «Pattern добавлен») — нарушение жёсткого правила CLAUDE.md. Fix: «Шаблоны исключений», «Шаблон добавлен/удалён/уже добавлен».
+- **H7 backend errors глоталась** → `console.warn(err)` + generic toast. Юзер не видел «pattern уже есть» vs «invalid glob». Fix: `describeFileSearchError` распознаёт known маркеры + frontend-side dedup до отправки.
+- **M3/M4 case-insensitive dedup** → `*.tmp`/`*.TMP` и `D:\Personal`/`d:\personal\` коэкзистили из-за case-sensitive PRIMARY KEY. Fix: explicit `lower()` lookup + `normalize_root` (trim trailing slashes кроме drive root). Regression: `ignore_pattern_dedup_is_case_insensitive`, `roots_dedup_is_case_and_trailing_slash_insensitive`.
+- **M5 `useToast.update({ duration })` timer leak** → новый `setTimeout` не отменял старый. Fix: `Map<id, timerId>` + cancel-before-schedule.
+- **M7 «Переиндексировать» не учитывала server `scan_in_progress`** → дубль-rescan jobs в очереди на `scan_lock`. Fix: `:disabled` на server-side flag.
+- **M9 native dialog hang под `KOSMOS_HEADLESS=1`** → e2e зависнет. Fix: early `return null` если headless.
+- **M10 `validate_ignore_pattern` пропускал invalid globs** (`Glob::new` parses; `GlobSetBuilder.build` fails). Fix: полный pipeline в validate. Regression: `validate_ignore_pattern_rejects_unbuildable_globs`.
+
+**Финальная проверка.** `cargo test -p kepler-backend --lib file_index::` → 25/25, `bun run --cwd shell typecheck` → clean, `bun run ark:guard:writes` → PASS.
+
+**Prevention для будущего.** (1) Watcher state и settings state — независимые подсистемы; на стыке всегда фильтрация по current snapshot. (2) Платформо-зависимые понятия (hidden, executable) — никогда не сводить к POSIX convention. (3) Path-as-key — всегда canonicalize в одной точке (на write), не «store as-given, compare with lower()». (4) Validation должна повторять production path в миниатюре, не только первый этап парсера. (5) Server-side state — source of truth для disabled-условий UI, не local UI flag. (6) Любой нативный dialog в `shell/electron/*` — headless-guard обязателен; правило в CLAUDE.md давно есть, забыт при добавлении новой команды. (7) Catch-блок — это «понять или показать сырое», никогда не `console.warn(err)` без проброса в UI. (8) SQLite `busy_timeout` в любом read connection multi-connection setup — defaults = 0ms = немедленный fail. (9) При scheduling-операциях с overridable timeout — всегда отменять предыдущий handle.
+
+**Известно открытым (next pass).** C3 (rescan-vs-mutation atomicity — eventual consistency через retry-spawn даёт корректный final state, но окно для transient stale между check и replace_all открыто), H1 (NTFS fast-path не уважает `.gitignore`), H3 (toggle-storm spawn N rescans без debounce), H8 (`pickScope` без guard на root-drive/UNC), H9 (strict IPC validation), H10 (NTFS toggle status indicator), M1/M2/M6/M8 (UX cosmetics).
+
+### Второй проход audit-фиксов (тот же день)
+
+Все 10 проблем из «известно открытым» закрыты во второй итерации:
+
+- **C3** — self-healing follow-up rescan после `replace_all` если generation сменился. Regression: `rescan_schedules_followup_when_generation_changes_during_write`.
+- **H1** — NTFS fast-path skip'ается когда `respect_gitignore=true`, fallback на user-mode walk; статус сообщается через `NtfsStatus::Fallback`.
+- **H3** — `AtomicBool rescan_pending` coalescing'ит overlapping `spawn_rescan` calls. 50 параллельных вызовов → 1 фактический rescan. Regression: `rescan_coalesces_overlapping_spawn_requests`.
+- **H8** — `scope:add` IPC handler: UNC paths отклоняются, drive roots требуют confirm-dialog (headless bypass).
+- **H9** — `settings:set` IPC handler: explicit allowlist boolean-полей. Любой ключ вне allowlist — игнорируется.
+- **H10** — `NtfsStatus` enum в settings (`active|fallback|unavailable|disabled|unknown`); UI hint под toggle отображает реальный статус, не позицию переключателя.
+- **M1** — DEFAULT*IGNORE_PATTERNS отделены от NOISY_FOLDER_NAMES. Paths applies всегда (AppData/Cache/*.tmp/\_.temp), folder-names гейтятся toggle'ом. AppData больше не индексируется при `exclude_noisy_folders=false`.
+- **M2** — optimistic toggle update с rollback из snapshot при ошибке. Никаких visual flip-back.
+- **M6** — `clearFileSearchPoll` теперь dismiss'ит progress toast (был sticky навсегда из-за `duration:0`).
+- **M8** — loading state отдельно от empty: «Загрузка настроек поиска…» вместо misleading «Папки не выбраны».
+
+**Prevention для второго прохода.** (1) Eventual consistency: если check не atomic с write — self-healing follow-up обязателен. (2) Конфликт feature-flag'ов — явный resolver, не silent bypass. (3) Debounce/coalesce — через atomic swap (lock-free), не через `Mutex<bool>`. (4) Любая операция «весь диск» / сетевой ресурс — pre-flight warning. (5) IPC payload от renderer — explicit allowlist, не spread `Record<string, unknown>`. (6) Silent-fallback переключатели должны иметь status indicator. (7) Не складывать разные концепции под один toggle. (8) Optimistic updates стандартны для бинарных toggle'ов. (9) Cleanup симметричен setup'у. (10) Loading / empty / error — три разных UI-state, не один.
+
+Финальная проверка: backend 27/27 PASS, shell tsc clean, ARK write boundary guard PASS, docs:check PASS.
+
+### Третий проход — добиваем L1–L7
+
+Все «минорные» проблемы из третьей категории закрыты:
+
+- **L1** Env-race в `default_roots_tests` — static Mutex сериализует тесты, мутирующие process env.
+- **L2** `tmp`/`cache`/`out` удалены из NOISY_FOLDER_NAMES — слишком общие, ломали legit user folders. Системный шум защищён DEFAULT_IGNORE_PATTERNS (`*.tmp`, `**/Cache/**`, etc).
+- **L3** `remove_tree` chunked: DELETE по 5000 строк, mutex отпускается между chunks. WS settings writes больше не виснут на длинных cleanup.
+- **L4** NTFS pipe response: `read_to_string` до EOF вместо `read_line` — устойчиво к multi-line/большим JSON.
+- **L5** A11y: `<ul role="list">` + `<li>` для chip-lists; `aria-label` на «Удалить»-кнопках с уникальным контекстом (имя scope/pattern).
+- **L6** `aria-live` убран с Toast — оставлен только на ToastHost (live region не вкладываются, screen reader озвучивал дважды).
+- **L7** `mtime` metadata-failure теперь tracing::trace вместо silent `unwrap_or_default()` — диагностируемо в логах.
+
+**Prevention для третьего прохода.** (1) Process env / cwd / signal handlers — implicit shared resource; всегда сериализовать в тестах. (2) Component-name filters — для однозначных artefact-папок; bare common words (tmp, cache, out, bin) — pattern-level filter. (3) Mass DML в SQLite через `Mutex<Connection>` — обязательное chunking. (4) Message-oriented pipe protocols — `read_to_string` до EOF надёжнее line-delimited. (5) Chip-lists / repeated action buttons — semantic markup + контекстный `aria-label`. (6) `aria-live` живёт на контейнере, не на детях. (7) `unwrap_or_default()` для числовых типов хоронит ошибки; явный match с tracing.
+
+**Чеклист ручной проверки** (22 пункта) — в `.agent/tasks/2026-05-24-file-search-scopes-ntfs/evidence.md` § «Чеклист ручной проверки». Содержит: confirm-dialog на drive root, UNC reject, optimistic toggle, NTFS status indicator, loading state, watcher cleanup, hidden NTFS files, screen reader narration по scope/pattern. Это substantive UI verification, который build/typecheck не покрывает.
+
+Финальный результат: 22 fix'а в трёх итерациях, 0 нарушений AC, 27 regression-тестов, 4 зелёных гварда (`cargo test`, `tsc`, `ark:guard:writes`, `docs:check`).
 
 ---
 

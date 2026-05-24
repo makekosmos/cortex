@@ -16,7 +16,12 @@ const state = inject(ToastKey, null);
           v-for="item in state.items.value"
           :key="item.id"
           :message="item.message"
+          :title="item.title"
+          :description="item.description"
           :tone="item.tone"
+          :loading="item.loading"
+          :closable="item.closable"
+          @dismiss="state.api.dismiss(item.id)"
         />
       </TransitionGroup>
     </div>

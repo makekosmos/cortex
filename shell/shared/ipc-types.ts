@@ -90,6 +90,35 @@ export interface ExportResult {
   errors: string[];
 }
 
+export type NtfsStatus = "unknown" | "disabled" | "active" | "fallback" | "unavailable";
+
+export interface FileIndexSettings {
+  exclude_noisy_folders: boolean;
+  roots: string[];
+  ignore_patterns: string[];
+  respect_gitignore: boolean;
+  include_hidden: boolean;
+  ntfs_accelerated: boolean;
+  scan_in_progress: boolean;
+  scan_progress: {
+    phase: string;
+    root: string | null;
+    roots_done: number;
+    roots_total: number;
+    files_seen: number;
+    files_indexed: number;
+    message: string;
+  };
+  ntfs_status: NtfsStatus;
+}
+
+export interface FileIndexSettingsPatch {
+  exclude_noisy_folders?: boolean;
+  respect_gitignore?: boolean;
+  include_hidden?: boolean;
+  ntfs_accelerated?: boolean;
+}
+
 export interface InstalledExtensionInfo {
   id: string;
   name: string;
@@ -228,6 +257,19 @@ export interface KeplerApi {
     /** Открыть native directory picker и вернуть выбранный путь
         (или null если пользователь отменил). */
     pickDir(): Promise<string | null>;
+  };
+
+  /** Host-local File Search index settings. Storage lives in file-index.db,
+      not ARK sync. */
+  fileSearch: {
+    settingsGet(): Promise<FileIndexSettings>;
+    settingsSet(patch: FileIndexSettingsPatch): Promise<void>;
+    scopeAdd(path: string): Promise<void>;
+    scopeRemove(path: string): Promise<void>;
+    ignoreAdd(pattern: string): Promise<void>;
+    ignoreRemove(pattern: string): Promise<void>;
+    rescan(): Promise<void>;
+    pickScope(): Promise<string | null>;
   };
 
   /** Floating focus widget — Spotify-mini-player style always-on-top

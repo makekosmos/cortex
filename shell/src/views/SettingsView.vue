@@ -7,6 +7,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Folder,
   Gamepad2,
   Info,
   ListTodo,
@@ -34,11 +35,14 @@ import {
   SettingsSearchInput,
   SettingsSidebar,
   SettingsSidebarButton,
+  ToastHost,
+  provideToastHost,
 } from "@kosmos/visuals";
 import type {
   BackendStatus,
   ExportConverterInfo,
   ExportResult,
+  FileIndexSettings,
   InstalledExtensionInfo,
   MarketplaceCatalog,
   MarketplaceExtension,
@@ -400,11 +404,6 @@ interface ExportHistoryEntry {
   bytes: number;
 }
 
-interface FileIndexSettings {
-  exclude_noisy_folders: boolean;
-  roots: string[];
-}
-
 const EXPORT_HISTORY_KEY = "kepler-export-history";
 const EXPORT_HISTORY_LIMIT = 10;
 
@@ -577,6 +576,10 @@ const launcherStateTtl = ref<number>(5);
 const fileSearchSettings = ref<FileIndexSettings | null>(null);
 const fileSearchBusy = ref<boolean>(false);
 const fileSearchError = ref<string>("");
+const fileSearchNewIgnore = ref<string>("");
+const { api: toast } = provideToastHost();
+let fileSearchPollTimer: ReturnType<typeof window.setTimeout> | null = null;
+let fileSearchToastId: number | null = null;
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
 const loading = ref<boolean>(true);
 const autostartError = ref<string>("");
@@ -613,12 +616,131 @@ async function loadGeneral() {
 async function loadFileSearchSettings() {
   fileSearchError.value = "";
   try {
-    fileSearchSettings.value =
-      await window.kepler.ark.request<FileIndexSettings>("file_index.settings_get");
+    fileSearchSettings.value = await window.kepler.fileSearch.settingsGet();
   } catch (err) {
     console.warn("file_index.settings_get failed", err);
     fileSearchError.value = "Настройки поиска файлов пока недоступны";
   }
+}
+
+function clearFileSearchPoll() {
+  if (fileSearchPollTimer) {
+    window.clearTimeout(fileSearchPollTimer);
+    fileSearchPollTimer = null;
+  }
+  // Regression M6 (2026-05-24): old code left the previous progress toast
+  // around when a new operation kicked in — stack grew, all stuck with
+  // duration:0.
+  if (fileSearchToastId !== null) {
+    toast.dismiss(fileSearchToastId);
+    fileSearchToastId = null;
+  }
+}
+
+function watchFileSearchProgress(message = "Индексация файлов запущена") {
+  // Regression 2026-05-24-evening: order matters. clearFileSearchPoll dismisses
+  // the toast it sees in fileSearchToastId — so it MUST run before we assign
+  // the new id, otherwise we dismiss the toast we just created.
+  clearFileSearchPoll();
+  fileSearchToastId = toast.show({
+    title: "Поиск файлов",
+    message,
+    description: formatFileSearchProgress(fileSearchSettings.value),
+    tone: "info",
+    duration: 0,
+    loading: true,
+    closable: true,
+  });
+  const startedAt = Date.now();
+  const poll = async () => {
+    try {
+      const next = await window.kepler.fileSearch.settingsGet();
+      fileSearchSettings.value = next;
+      if (fileSearchToastId !== null) {
+        toast.update(fileSearchToastId, {
+          title: "Индексируем файлы",
+          message: next.scan_progress.message || "Индексация файлов",
+          description: formatFileSearchProgress(next),
+          tone: "info",
+          loading: true,
+          duration: 0,
+          closable: true,
+        });
+      }
+      if (!next.scan_in_progress) {
+        if (fileSearchToastId !== null) {
+          toast.update(fileSearchToastId, {
+            title: "Поиск файлов",
+            message: "Индексация завершена",
+            description: formatFileSearchProgress(next),
+            tone: "success",
+            loading: false,
+            duration: 2600,
+            closable: true,
+          });
+          fileSearchToastId = null;
+        }
+        fileSearchPollTimer = null;
+        return;
+      }
+    } catch (err) {
+      console.warn("file_index progress poll failed", err);
+      if (Date.now() - startedAt > 90_000) {
+        if (fileSearchToastId !== null) {
+          toast.update(fileSearchToastId, {
+            title: "Поиск файлов",
+            message: "Индексация продолжается в фоне",
+            description: "Статус обновится при следующем открытии настроек.",
+            loading: false,
+            closable: true,
+            duration: 4200,
+          });
+          fileSearchToastId = null;
+        } else {
+          toast.show({
+            title: "Поиск файлов",
+            message: "Индексация продолжается в фоне, статус обновится позже",
+            tone: "info",
+            duration: 3200,
+          });
+        }
+        fileSearchPollTimer = null;
+        return;
+      }
+    }
+    fileSearchPollTimer = window.setTimeout(poll, 2000);
+  };
+  fileSearchPollTimer = window.setTimeout(poll, 1200);
+}
+
+function formatFileSearchProgress(settings: FileIndexSettings | null): string {
+  const progress = settings?.scan_progress;
+  if (!progress) return "Ожидаем статус индексатора.";
+  const parts: string[] = [];
+  if (progress.root) {
+    parts.push(shortenPath(progress.root));
+  }
+  if (progress.roots_total > 0) {
+    parts.push(
+      `папка ${Math.min(progress.roots_done + 1, progress.roots_total)}/${progress.roots_total}`,
+    );
+  }
+  if (progress.files_seen > 0 || progress.files_indexed > 0) {
+    parts.push(`${formatCount(progress.files_indexed || progress.files_seen)} файлов`);
+  }
+  if (progress.phase === "ntfs") {
+    parts.push("NTFS scan");
+  }
+  return parts.length > 0 ? parts.join(" · ") : "Индексатор готовится.";
+}
+
+function formatCount(value: number): string {
+  return new Intl.NumberFormat("ru-RU").format(value);
+}
+
+function shortenPath(path: string): string {
+  if (path.length <= 42) return path;
+  return `${path.slice(0, 18)}…${path.slice(-20)}`;
 }
 
 async function onToggleAutostart(e: Event) {
@@ -697,17 +819,170 @@ async function onLauncherStateTtlChange(e: Event) {
 
 async function onToggleFileSearchNoise(e: Event) {
   const target = e.target as HTMLInputElement;
+  await updateFileSearchSettings({ exclude_noisy_folders: target.checked });
+}
+
+async function onToggleFileSearchGitignore(e: Event) {
+  const target = e.target as HTMLInputElement;
+  await updateFileSearchSettings({ respect_gitignore: target.checked });
+}
+
+async function onToggleFileSearchHidden(e: Event) {
+  const target = e.target as HTMLInputElement;
+  await updateFileSearchSettings({ include_hidden: target.checked });
+}
+
+async function onToggleFileSearchNtfs(e: Event) {
+  const target = e.target as HTMLInputElement;
+  await updateFileSearchSettings({ ntfs_accelerated: target.checked });
+}
+
+async function updateFileSearchSettings(patch: {
+  exclude_noisy_folders?: boolean;
+  respect_gitignore?: boolean;
+  include_hidden?: boolean;
+  ntfs_accelerated?: boolean;
+}) {
+  // Regression M2 (2026-05-24): optimistic update so the toggle visually
+  // stays where the user put it instead of flipping back to the server value
+  // for a moment. On error we reload from server (rollback).
+  const snapshot = fileSearchSettings.value ? { ...fileSearchSettings.value } : null;
+  if (fileSearchSettings.value) {
+    fileSearchSettings.value = { ...fileSearchSettings.value, ...patch };
+  }
   fileSearchBusy.value = true;
   fileSearchError.value = "";
   try {
-    await window.kepler.ark.request("file_index.settings_set", {
-      exclude_noisy_folders: target.checked,
-    });
+    await window.kepler.fileSearch.settingsSet(patch);
     await loadFileSearchSettings();
+    if (fileSearchSettings.value?.scan_in_progress) {
+      watchFileSearchProgress("Настройка сохранена, индекс обновляется");
+    }
   } catch (err) {
     console.warn("file_index.settings_set failed", err);
-    fileSearchError.value = "Не удалось переиндексировать файлы";
+    if (snapshot) fileSearchSettings.value = snapshot;
+    fileSearchError.value = describeFileSearchError(err, "Не удалось применить настройку");
     await loadFileSearchSettings();
+  } finally {
+    fileSearchBusy.value = false;
+  }
+}
+
+async function onAddFileSearchScope() {
+  fileSearchError.value = "";
+  const picked = await window.kepler.fileSearch.pickScope();
+  if (!picked) return;
+  fileSearchBusy.value = true;
+  try {
+    await window.kepler.fileSearch.scopeAdd(picked);
+    await loadFileSearchSettings();
+    watchFileSearchProgress("Папка добавлена, индексация запущена");
+  } catch (err) {
+    console.warn("file_index.scope_add failed", err);
+    fileSearchError.value = "Не удалось добавить папку поиска";
+  } finally {
+    fileSearchBusy.value = false;
+  }
+}
+
+function describeFileSearchError(err: unknown, fallback: string): string {
+  // Regression H7 (2026-05-24): backend errors used to be swallowed into a
+  // generic toast — user couldn't tell "duplicate pattern" from "invalid glob".
+  const raw = (err as { message?: string } | null)?.message ?? String(err ?? "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const known = [
+    "pattern уже есть",
+    "invalid ignore pattern",
+    "must not be empty",
+    "must be an existing directory",
+  ];
+  for (const marker of known) {
+    if (trimmed.toLowerCase().includes(marker.toLowerCase())) {
+      return trimmed.replace(/^[a-z_]+\.[a-z_]+:\s*/i, "");
+    }
+  }
+  return `${fallback}: ${trimmed}`;
+}
+
+async function onRemoveFileSearchScope(path: string) {
+  // Regression H5 (2026-05-24): scope removal triggers index cleanup of
+  // potentially thousands of files. Without confirm an accidental click
+  // wipes hours of scan work.
+  const confirmed = window.confirm(
+    `Удалить папку поиска «${path}»? Все её проиндексированные файлы будут удалены.`,
+  );
+  if (!confirmed) return;
+  fileSearchBusy.value = true;
+  fileSearchError.value = "";
+  try {
+    await window.kepler.fileSearch.scopeRemove(path);
+    await loadFileSearchSettings();
+    watchFileSearchProgress("Папка удалена, индекс обновляется");
+  } catch (err) {
+    console.warn("file_index.scope_remove failed", err);
+    fileSearchError.value = describeFileSearchError(err, "Не удалось удалить папку поиска");
+  } finally {
+    fileSearchBusy.value = false;
+  }
+}
+
+async function onAddFileSearchIgnore() {
+  const pattern = fileSearchNewIgnore.value.trim();
+  if (!pattern) return;
+  // Regression H7 (2026-05-24): frontend-side dedup so user gets immediate
+  // feedback without a backend round-trip.
+  const existing = fileSearchSettings.value?.ignore_patterns ?? [];
+  if (existing.some((p) => p.toLowerCase() === pattern.toLowerCase())) {
+    fileSearchError.value = `Шаблон уже добавлен: ${pattern}`;
+    return;
+  }
+  fileSearchBusy.value = true;
+  fileSearchError.value = "";
+  try {
+    await window.kepler.fileSearch.ignoreAdd(pattern);
+    fileSearchNewIgnore.value = "";
+    await loadFileSearchSettings();
+    watchFileSearchProgress("Шаблон добавлен, индекс обновляется");
+  } catch (err) {
+    console.warn("file_index.ignore_add failed", err);
+    fileSearchError.value = describeFileSearchError(err, "Не удалось добавить шаблон");
+  } finally {
+    fileSearchBusy.value = false;
+  }
+}
+
+async function onRemoveFileSearchIgnore(pattern: string) {
+  fileSearchBusy.value = true;
+  fileSearchError.value = "";
+  try {
+    await window.kepler.fileSearch.ignoreRemove(pattern);
+    await loadFileSearchSettings();
+    watchFileSearchProgress("Шаблон удалён, индекс обновляется");
+  } catch (err) {
+    console.warn("file_index.ignore_remove failed", err);
+    fileSearchError.value = describeFileSearchError(err, "Не удалось удалить шаблон");
+  } finally {
+    fileSearchBusy.value = false;
+  }
+}
+
+async function onRescanFileSearch() {
+  // Regression M7 (2026-05-24): block if a scan is already running — the old
+  // code spawned redundant rescan jobs that queued on scan_lock.
+  if (fileSearchSettings.value?.scan_in_progress) {
+    fileSearchError.value = "Индексация уже идёт";
+    return;
+  }
+  fileSearchBusy.value = true;
+  fileSearchError.value = "";
+  try {
+    await window.kepler.fileSearch.rescan();
+    await loadFileSearchSettings();
+    watchFileSearchProgress("Переиндексация запущена");
+  } catch (err) {
+    console.warn("file_index.rescan failed", err);
+    fileSearchError.value = describeFileSearchError(err, "Не удалось переиндексировать файлы");
   } finally {
     fileSearchBusy.value = false;
   }
@@ -1499,11 +1774,13 @@ onBeforeUnmount(() => {
   unsubscribeUpdateState = null;
   unsubscribeFocusServiceStatus?.();
   unsubscribeFocusServiceStatus = null;
+  clearFileSearchPoll();
 });
 </script>
 
 <template>
   <div class="settings" tabindex="0" @keydown="onKey">
+    <ToastHost />
     <!-- Raycast-style update banner. Шириной во всё окно, height ~32px. -->
     <button
       v-if="updateBanner"
@@ -1890,7 +2167,109 @@ onBeforeUnmount(() => {
             />
 
             <div class="advanced-page__body rows">
-              <div class="row">
+              <div v-if="fileSearchError" class="error-banner">{{ fileSearchError }}</div>
+              <!-- Regression M8 (2026-05-24): show loading state instead of
+                   misleading "no folders chosen" while settings load. -->
+              <div v-if="fileSearchSettings === null && !fileSearchError" class="hint">
+                Загрузка настроек поиска…
+              </div>
+              <div v-if="fileSearchSettings" class="row file-search-row">
+                <div class="row-label file-search-wide">
+                  <div class="label">Папки поиска</div>
+                  <div class="hint">
+                    Kepler индексирует только выбранные папки. По умолчанию это профиль
+                    пользователя; большие диски лучше добавлять осознанно.
+                  </div>
+                  <!-- Regression L5 (2026-05-24): semantic list + button
+                       aria-label includes the scope so screen readers don't
+                       read "Удалить, Удалить, Удалить..." for N chips. -->
+                  <ul class="file-search-list" role="list">
+                    <li
+                      v-for="root in fileSearchSettings?.roots ?? []"
+                      :key="root"
+                      class="file-search-chip"
+                    >
+                      <span class="file-search-chip__icon" aria-hidden="true">
+                        <Folder :size="16" :stroke-width="1.75" />
+                      </span>
+                      <code>{{ root }}</code>
+                      <button
+                        type="button"
+                        class="btn ghost danger"
+                        :disabled="fileSearchBusy"
+                        :aria-label="`Удалить папку поиска ${root}`"
+                        @click="onRemoveFileSearchScope(root)"
+                      >
+                        Удалить
+                      </button>
+                    </li>
+                    <li v-if="(fileSearchSettings?.roots.length ?? 0) === 0" class="hint">
+                      Папки не выбраны — поиск файлов ничего не индексирует.
+                    </li>
+                  </ul>
+                </div>
+                <div class="row-actions">
+                  <button
+                    type="button"
+                    class="btn"
+                    :disabled="!fileSearchSettings || fileSearchBusy"
+                    @click="onAddFileSearchScope"
+                  >
+                    Добавить…
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="fileSearchSettings" class="row file-search-row">
+                <div class="row-label file-search-wide">
+                  <div class="label">Шаблоны исключений</div>
+                  <div class="hint">
+                    Паттерны применяются к имени и пути файла. Примеры:
+                    <code>*.tmp</code>, <code>*.log</code>, <code>**/Cache/**</code>.
+                  </div>
+                  <ul class="file-search-list" role="list">
+                    <li
+                      v-for="pattern in fileSearchSettings?.ignore_patterns ?? []"
+                      :key="pattern"
+                      class="file-search-chip"
+                    >
+                      <code>{{ pattern }}</code>
+                      <button
+                        type="button"
+                        class="btn ghost danger"
+                        :disabled="fileSearchBusy"
+                        :aria-label="`Удалить шаблон ${pattern}`"
+                        @click="onRemoveFileSearchIgnore(pattern)"
+                      >
+                        Удалить
+                      </button>
+                    </li>
+                    <li v-if="(fileSearchSettings?.ignore_patterns.length ?? 0) === 0" class="hint">
+                      Пользовательских шаблонов пока нет.
+                    </li>
+                  </ul>
+                  <div class="file-search-add">
+                    <input
+                      v-model="fileSearchNewIgnore"
+                      class="focus-input"
+                      type="text"
+                      placeholder="*.tmp"
+                      :disabled="fileSearchBusy"
+                      @keydown.enter.prevent="onAddFileSearchIgnore"
+                    />
+                    <button
+                      type="button"
+                      class="btn"
+                      :disabled="fileSearchBusy || fileSearchNewIgnore.trim().length === 0"
+                      @click="onAddFileSearchIgnore"
+                    >
+                      Добавить
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="fileSearchSettings" class="row">
                 <div class="row-label">
                   <div class="label">Исключать шумные папки из поиска файлов</div>
                   <div class="hint">
@@ -1898,7 +2277,6 @@ onBeforeUnmount(() => {
                     <code>node_modules</code>, <code>.git</code>, сборки и временные каталоги.
                     Изменение сразу запускает переиндексацию.
                   </div>
-                  <div v-if="fileSearchError" class="error">{{ fileSearchError }}</div>
                 </div>
                 <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
                   <input
@@ -1909,6 +2287,114 @@ onBeforeUnmount(() => {
                   />
                   <span class="track"><span class="thumb" /></span>
                 </label>
+              </div>
+
+              <div v-if="fileSearchSettings" class="row">
+                <div class="row-label">
+                  <div class="label">Учитывать <code>.gitignore</code></div>
+                  <div class="hint">
+                    Включено по умолчанию: Kepler пропускает файлы, которые проект сам считает
+                    мусором.
+                  </div>
+                </div>
+                <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
+                  <input
+                    type="checkbox"
+                    :checked="fileSearchSettings?.respect_gitignore ?? true"
+                    :disabled="!fileSearchSettings || fileSearchBusy"
+                    @change="onToggleFileSearchGitignore"
+                  />
+                  <span class="track"><span class="thumb" /></span>
+                </label>
+              </div>
+
+              <div v-if="fileSearchSettings" class="row">
+                <div class="row-label">
+                  <div class="label">Показывать скрытые файлы</div>
+                  <div class="hint">
+                    По умолчанию выключено, чтобы не засорять результаты dotfiles и системными
+                    скрытыми файлами.
+                  </div>
+                </div>
+                <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
+                  <input
+                    type="checkbox"
+                    :checked="fileSearchSettings?.include_hidden ?? false"
+                    :disabled="!fileSearchSettings || fileSearchBusy"
+                    @change="onToggleFileSearchHidden"
+                  />
+                  <span class="track"><span class="thumb" /></span>
+                </label>
+              </div>
+
+              <div v-if="fileSearchSettings" class="row">
+                <div class="row-label">
+                  <div class="label">Ускоренный NTFS-режим</div>
+                  <div class="hint">
+                    Если включено, Kepler пробует быстрый NTFS/MFT scan для корней дисков. Если
+                    service или права недоступны — автоматически падает назад на обычный scan.
+                    NTFS-режим не уважает <code>.gitignore</code>: при включённой обработке
+                    <code>.gitignore</code> диски сканируются обычным способом.
+                  </div>
+                  <!-- Regression H10 (2026-05-24): surface actual NTFS status,
+                       not just toggle position. -->
+                  <div
+                    v-if="
+                      fileSearchSettings?.ntfs_accelerated &&
+                      fileSearchSettings?.ntfs_status &&
+                      fileSearchSettings.ntfs_status !== 'disabled' &&
+                      fileSearchSettings.ntfs_status !== 'unknown'
+                    "
+                    class="hint"
+                    :class="{
+                      'ntfs-status-active': fileSearchSettings.ntfs_status === 'active',
+                      'ntfs-status-fallback':
+                        fileSearchSettings.ntfs_status === 'fallback' ||
+                        fileSearchSettings.ntfs_status === 'unavailable',
+                    }"
+                  >
+                    Статус:
+                    <strong v-if="fileSearchSettings.ntfs_status === 'active'"> активен </strong>
+                    <strong v-else-if="fileSearchSettings.ntfs_status === 'fallback'">
+                      резервный режим
+                    </strong>
+                    <strong v-else-if="fileSearchSettings.ntfs_status === 'unavailable'">
+                      недоступен
+                    </strong>
+                  </div>
+                </div>
+                <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
+                  <input
+                    type="checkbox"
+                    :checked="fileSearchSettings?.ntfs_accelerated ?? false"
+                    :disabled="!fileSearchSettings || fileSearchBusy"
+                    @change="onToggleFileSearchNtfs"
+                  />
+                  <span class="track"><span class="thumb" /></span>
+                </label>
+              </div>
+
+              <div v-if="fileSearchSettings" class="row">
+                <div class="row-label">
+                  <div class="label">Переиндексация</div>
+                  <div class="hint">Запусти вручную после больших перемещений файлов.</div>
+                </div>
+                <div class="row-actions">
+                  <button
+                    type="button"
+                    class="btn"
+                    :disabled="
+                      !fileSearchSettings || fileSearchBusy || fileSearchSettings?.scan_in_progress
+                    "
+                    @click="onRescanFileSearch"
+                  >
+                    {{
+                      fileSearchBusy || fileSearchSettings?.scan_in_progress
+                        ? "Идёт…"
+                        : "Переиндексировать"
+                    }}
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -3111,6 +3597,85 @@ onBeforeUnmount(() => {
 
 .focus-input:focus {
   border-color: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 60%, transparent);
+}
+
+.file-search-row {
+  align-items: flex-start;
+}
+
+.file-search-wide {
+  width: 100%;
+}
+
+.file-search-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.file-search-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.file-search-chip:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-color: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.file-search-chip__icon {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  display: flex;
+  align-items: center;
+}
+
+.file-search-chip code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--foreground) 85%, transparent);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  direction: ltr;
+}
+
+/* Regression 2026-05-24-evening: delete button hidden until hover/focus. */
+.file-search-chip .btn.ghost.danger {
+  opacity: 0;
+  transition: opacity 120ms ease;
+  flex: 0 0 auto;
+}
+
+.file-search-chip:hover .btn.ghost.danger,
+.file-search-chip:focus-within .btn.ghost.danger {
+  opacity: 1;
+}
+
+.file-search-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.file-search-add .focus-input {
+  min-width: 180px;
 }
 
 .focus-textarea {

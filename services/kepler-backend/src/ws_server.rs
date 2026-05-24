@@ -20,7 +20,7 @@ use crate::arrancador;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
 use crate::export;
-use crate::file_index::FileIndex;
+use crate::file_index::{FileIndex, FileIndexSettingsPatch};
 use crate::focus::handle_focus_op;
 use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_version::{Compatibility, ProtocolVersion, PROTOCOL_VERSION};
@@ -1276,7 +1276,7 @@ async fn handle_file_index_op(
                 Err(e) => LocalResponse::err(format!("file_index.open: {e}")),
             }
         }
-        "rescan" => match file_index.rescan().await {
+        "rescan" => match file_index.request_rescan() {
             Ok(stats) => match serde_json::to_value(stats) {
                 Ok(value) => LocalResponse::ok(value),
                 Err(e) => LocalResponse::err(format!("file_index.rescan: serialize: {e}")),
@@ -1291,20 +1291,53 @@ async fn handle_file_index_op(
             Err(e) => LocalResponse::err(format!("file_index.settings_get: {e}")),
         },
         "settings_set" => {
-            let exclude = match params
-                .get("exclude_noisy_folders")
-                .and_then(|v| v.as_bool())
-            {
-                Some(exclude) => exclude,
-                None => {
-                    return LocalResponse::err(
-                        "file_index.settings_set: missing 'exclude_noisy_folders'",
-                    )
-                }
+            let patch: FileIndexSettingsPatch = match serde_json::from_value(params) {
+                Ok(patch) => patch,
+                Err(e) => return LocalResponse::err(format!("file_index.settings_set: {e}")),
             };
-            match file_index.set_exclude_noisy_folders(exclude).await {
+            match file_index.set_settings(patch).await {
                 Ok(stats) => LocalResponse::ok(serde_json::json!({ "stats": stats })),
                 Err(e) => LocalResponse::err(format!("file_index.settings_set: {e}")),
+            }
+        }
+        "scope_add" => {
+            let path = match params.get("path").and_then(|v| v.as_str()) {
+                Some(path) => path,
+                None => return LocalResponse::err("file_index.scope_add: missing 'path'"),
+            };
+            match file_index.add_root(path).await {
+                Ok(stats) => LocalResponse::ok(serde_json::json!({ "stats": stats })),
+                Err(e) => LocalResponse::err(format!("file_index.scope_add: {e}")),
+            }
+        }
+        "scope_remove" => {
+            let path = match params.get("path").and_then(|v| v.as_str()) {
+                Some(path) => path,
+                None => return LocalResponse::err("file_index.scope_remove: missing 'path'"),
+            };
+            match file_index.remove_root(path).await {
+                Ok(stats) => LocalResponse::ok(serde_json::json!({ "stats": stats })),
+                Err(e) => LocalResponse::err(format!("file_index.scope_remove: {e}")),
+            }
+        }
+        "ignore_add" => {
+            let pattern = match params.get("pattern").and_then(|v| v.as_str()) {
+                Some(pattern) => pattern,
+                None => return LocalResponse::err("file_index.ignore_add: missing 'pattern'"),
+            };
+            match file_index.add_ignore_pattern(pattern).await {
+                Ok(stats) => LocalResponse::ok(serde_json::json!({ "stats": stats })),
+                Err(e) => LocalResponse::err(format!("file_index.ignore_add: {e}")),
+            }
+        }
+        "ignore_remove" => {
+            let pattern = match params.get("pattern").and_then(|v| v.as_str()) {
+                Some(pattern) => pattern,
+                None => return LocalResponse::err("file_index.ignore_remove: missing 'pattern'"),
+            };
+            match file_index.remove_ignore_pattern(pattern).await {
+                Ok(stats) => LocalResponse::ok(serde_json::json!({ "stats": stats })),
+                Err(e) => LocalResponse::err(format!("file_index.ignore_remove: {e}")),
             }
         }
         other => LocalResponse::err(format!("file_index.{other}: unknown sub-operation")),

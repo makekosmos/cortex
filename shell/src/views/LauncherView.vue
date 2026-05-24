@@ -832,7 +832,7 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: color-mix(in srgb, oklch(0.04 0 0) 75%, transparent);
+  background: var(--main-background-color);
 }
 
 .search {

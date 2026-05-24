@@ -4,7 +4,7 @@ use ntfs_reader::mft::Mft;
 use ntfs_reader::volume::Volume;
 use serde::Deserialize;
 use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 const FOCUS_SERVICE_PIPE: &str = r"\\.\pipe\kepler-focus-svc";
@@ -58,12 +58,14 @@ fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>
     pipe.flush()
         .map_err(|e| format!("flush service request failed: {e}"))?;
 
+    // Regression L4 (2026-05-24): single-line read_line was brittle — service
+    // could legitimately return multi-line JSON or a payload bigger than the
+    // BufReader's line buffer. Slurp the whole pipe until EOF.
     let mut raw = String::new();
-    BufReader::new(pipe)
-        .read_line(&mut raw)
+    pipe.read_to_string(&mut raw)
         .map_err(|e| format!("read service response failed: {e}"))?;
-    let response: ServiceResponse =
-        serde_json::from_str(raw.trim()).map_err(|e| format!("parse service response failed: {e}"))?;
+    let response: ServiceResponse = serde_json::from_str(raw.trim())
+        .map_err(|e| format!("parse service response failed: {e}"))?;
     if !response.ok {
         return Err(response
             .error

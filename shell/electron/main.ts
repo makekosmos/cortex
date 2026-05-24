@@ -1235,6 +1235,127 @@ safeHandle("kepler:export:pickDir", async (e): Promise<string | null> => {
   return result.filePaths[0];
 });
 
+safeHandle("kepler:file-search:settings:get", async () => {
+  const client = await awaitArkReady();
+  return client.invokeOperation({ operation: "file_index.settings_get" });
+});
+
+safeHandle("kepler:file-search:settings:set", async (_e, patch: Record<string, unknown>) => {
+  // Regression H9 (2026-05-24): strict allowlist of bool fields. Old handler
+  // spread arbitrary keys into the WS payload — any random key from renderer
+  // would reach the backend.
+  const ALLOWED_BOOL_FIELDS = [
+    "exclude_noisy_folders",
+    "respect_gitignore",
+    "include_hidden",
+    "ntfs_accelerated",
+  ] as const;
+  const sanitized: Record<string, boolean> = {};
+  if (patch && typeof patch === "object") {
+    for (const key of ALLOWED_BOOL_FIELDS) {
+      const value = (patch as Record<string, unknown>)[key];
+      if (typeof value === "boolean") sanitized[key] = value;
+    }
+  }
+  const client = await awaitArkReady();
+  await client.invokeOperation({
+    operation: "file_index.settings_set",
+    ...sanitized,
+  });
+});
+
+function isLikelyUnsafeScope(raw: string): { ok: true } | { ok: false; reason: string } {
+  // Regression H8 (2026-05-24): refuse UNC and warn-block on whole-drive roots.
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("\\\\") || trimmed.startsWith("//")) {
+    return { ok: false, reason: "Сетевые пути (UNC) пока не поддерживаются" };
+  }
+  // Drive root like "D:" / "D:\\" / "D:/" — let it through but flag in the UI.
+  return { ok: true };
+}
+
+function isDriveRoot(raw: string): boolean {
+  const trimmed = raw.trim().replace(/[\\/]+$/, "");
+  return /^[A-Za-z]:$/.test(trimmed);
+}
+
+safeHandle("kepler:file-search:scope:add", async (e, path: string) => {
+  if (typeof path !== "string" || path.trim().length === 0) {
+    throw new Error("kepler:file-search:scope:add invalid path");
+  }
+  const safety = isLikelyUnsafeScope(path);
+  if (!safety.ok) {
+    throw new Error(safety.reason);
+  }
+  if (isDriveRoot(path) && process.env.KOSMOS_HEADLESS !== "1") {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const choice = win
+      ? await dialog.showMessageBox(win, {
+          type: "warning",
+          buttons: ["Добавить", "Отмена"],
+          defaultId: 1,
+          cancelId: 1,
+          title: "Подтвердите добавление диска",
+          message: `Добавить весь диск «${path}» как папку поиска?`,
+          detail:
+            "Индексация целого диска может занять много времени и места. Стандартные исключения (AppData, кэши, временные файлы) применяются автоматически.",
+        })
+      : { response: 0 };
+    if (choice.response !== 0) {
+      return;
+    }
+  }
+  const client = await awaitArkReady();
+  await client.invokeOperation({ operation: "file_index.scope_add", path });
+});
+
+safeHandle("kepler:file-search:scope:remove", async (_e, path: string) => {
+  if (typeof path !== "string" || path.trim().length === 0) {
+    throw new Error("kepler:file-search:scope:remove invalid path");
+  }
+  const client = await awaitArkReady();
+  await client.invokeOperation({ operation: "file_index.scope_remove", path });
+});
+
+safeHandle("kepler:file-search:ignore:add", async (_e, pattern: string) => {
+  if (typeof pattern !== "string" || pattern.trim().length === 0) {
+    throw new Error("kepler:file-search:ignore:add invalid pattern");
+  }
+  const client = await awaitArkReady();
+  await client.invokeOperation({ operation: "file_index.ignore_add", pattern });
+});
+
+safeHandle("kepler:file-search:ignore:remove", async (_e, pattern: string) => {
+  if (typeof pattern !== "string" || pattern.trim().length === 0) {
+    throw new Error("kepler:file-search:ignore:remove invalid pattern");
+  }
+  const client = await awaitArkReady();
+  await client.invokeOperation({ operation: "file_index.ignore_remove", pattern });
+});
+
+safeHandle("kepler:file-search:rescan", async () => {
+  const client = await awaitArkReady();
+  await client.invokeOperation({ operation: "file_index.rescan" });
+});
+
+safeHandle("kepler:file-search:pickScope", async (e): Promise<string | null> => {
+  // Regression M9 (2026-05-24): native dialog would hang e2e under
+  // KOSMOS_HEADLESS=1. Skip silently in headless mode.
+  if (process.env.KOSMOS_HEADLESS === "1") return null;
+  const win = BrowserWindow.fromWebContents(e.sender);
+  const result = win
+    ? await dialog.showOpenDialog(win, {
+        title: "Добавить папку поиска",
+        properties: ["openDirectory"],
+      })
+    : await dialog.showOpenDialog({
+        title: "Добавить папку поиска",
+        properties: ["openDirectory"],
+      });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
 safeHandle("kepler:objects:listRecent", async (_e, limit?: number): Promise<SearchResult[]> => {
   if (!arkClient) return [];
   const cap = typeof limit === "number" && limit > 0 ? Math.min(limit, 500) : 200;
