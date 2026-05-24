@@ -336,6 +336,11 @@ export interface KeplerApi {
     /** Subscribe на команды от main к pill renderer (`start` / `stop` /
         `cancel`). Pill renderer слушает и переключает audio-capture. */
     onCommand(cb: (cmd: { kind: "start" | "stop" | "cancel" }) => void): () => void;
+    /** Подписка на capture events от Settings → Диктация → Горячая клавиша.
+     * Backend hook ловит accelerator ниже системного уровня (это позволяет
+     * назначать Win+H и др.). Events: `dictation_capture_key { vk, ctrl,
+     * shift, alt, win }` или `dictation_capture_cancelled` (Esc). */
+    onCaptureEvent(cb: (payload: Record<string, unknown>) => void): () => void;
   };
 
   /** Focus mode Windows Service control. Service устанавливается опционально

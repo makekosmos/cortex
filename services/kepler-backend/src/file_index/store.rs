@@ -16,7 +16,6 @@ pub struct FileStore {
 pub struct StatsSnapshot {
     pub total: usize,
     pub roots: Vec<String>,
-    pub ignore_patterns: Vec<String>,
     pub exclude_noisy_folders: bool,
     pub respect_gitignore: bool,
     pub include_hidden: bool,
@@ -211,12 +210,6 @@ impl FileStore {
         self.search_like(&q, limit)
     }
 
-    pub fn count_files(&self) -> Result<usize> {
-        let conn = self.lock();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))?;
-        Ok(count.max(0) as usize)
-    }
-
     // Regression 2026-05-24-evening: scope_remove was timing out at 30s because
     // current_stats() did 7 separate lock() acquisitions; each had to wait for
     // the background remove_tree chunk to yield. Snapshot reads ALL stats fields
@@ -234,15 +227,6 @@ impl FileStore {
                 roots.push(row?);
             }
         }
-        let mut ignore_patterns = Vec::new();
-        {
-            let mut stmt = conn
-                .prepare("SELECT pattern FROM file_index_ignore_patterns ORDER BY pattern ASC")?;
-            let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
-            for row in rows {
-                ignore_patterns.push(row?);
-            }
-        }
         let exclude_noisy_folders =
             bool_setting_with_conn(&conn, EXCLUDE_NOISY_FOLDERS_KEY, true)?;
         let respect_gitignore =
@@ -252,7 +236,6 @@ impl FileStore {
         Ok(StatsSnapshot {
             total: total.max(0) as usize,
             roots,
-            ignore_patterns,
             exclude_noisy_folders,
             respect_gitignore,
             include_hidden,

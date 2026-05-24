@@ -239,6 +239,8 @@ pub async fn handle_dictation_op(
         "test_connectivity" => op_test_connectivity(host).await,
         "get_stats" => op_get_stats(host).await,
         "reset_stats" => op_reset_stats(host).await,
+        "begin_hotkey_capture" => op_begin_hotkey_capture(host).await,
+        "end_hotkey_capture" => op_end_hotkey_capture(host).await,
         other => DictationResponse::err(format!("dictation.{other}: unknown sub-operation")),
     }
 }
@@ -353,28 +355,29 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
     DictationResponse::ok(json!({ "config": config_to_value(&snapshot) }))
 }
 
-/// Включает PTT hook когда `trigger_mode == PushToTalk` и hotkey парсится.
-/// Снимает (matcher=None) в остальных случаях.
+/// Активирует hotkey hook (Win32 WH_KEYBOARD_LL) для текущего hotkey + mode.
+/// Hook теперь используется ВСЕГДА (не только PTT) — иначе системные shortcut'ы
+/// (Win+H, Win+Space) не перехватишь через `RegisterHotKey`/Electron
+/// `globalShortcut`. На non-Windows hook — no-op stub.
 fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     #[cfg(windows)]
     {
-        if cfg.trigger_mode == TriggerMode::PushToTalk {
-            if let Some(matcher) = hotkey_hook::parse_accelerator(&cfg.hotkey) {
-                hotkey_hook::set_active(Some(matcher), Some(_tx.clone()));
-                return;
-            } else {
-                eprintln!(
-                    "[dictation::host] PTT mode requested but hotkey '{}' не парсится",
-                    cfg.hotkey
-                );
-            }
+        let mode = match cfg.trigger_mode {
+            TriggerMode::PushToTalk => hotkey_hook::HookMode::PushToTalk,
+            TriggerMode::Toggle => hotkey_hook::HookMode::Toggle,
+        };
+        if let Some(matcher) = hotkey_hook::parse_accelerator(&cfg.hotkey) {
+            hotkey_hook::set_active(Some(matcher), Some(_tx.clone()), mode);
+        } else {
+            eprintln!(
+                "[dictation::host] hotkey '{}' не парсится — hook деактивирован",
+                cfg.hotkey
+            );
+            hotkey_hook::set_active(None, None, mode);
         }
-        hotkey_hook::set_active(None, None);
     }
     #[cfg(not(windows))]
     {
-        // PTT в Phase 1.5 — Windows-only. Toggle работает на всех платформах
-        // через Electron globalShortcut.
         let _ = cfg;
     }
 }
@@ -573,6 +576,33 @@ async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
         .events_tx
         .send(json!({ "event": "dictation_stats_changed" }));
     DictationResponse::ok(snap)
+}
+
+async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
+    #[cfg(windows)]
+    {
+        hotkey_hook::set_capture_mode(true, Some(host.events_tx.clone()));
+        DictationResponse::ok(json!({ "ok": true }))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = host;
+        DictationResponse::err("begin_hotkey_capture: Windows-only (Phase 1)")
+    }
+}
+
+async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
+    #[cfg(windows)]
+    {
+        let _ = host;
+        hotkey_hook::set_capture_mode(false, None);
+        DictationResponse::ok(json!({ "ok": true }))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = host;
+        DictationResponse::ok(json!({ "ok": true }))
+    }
 }
 
 async fn op_test_connectivity(host: &DictationHost) -> DictationResponse {

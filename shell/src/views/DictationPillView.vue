@@ -18,6 +18,16 @@ const errorText = ref<string>("");
 const elapsedSec = ref<number>(0);
 const levelBars = ref<number[]>(Array.from({ length: 12 }, () => 0));
 
+// Audio capture lifecycle:
+//   • `mediaStream` + `audioCtx` — warm-cache. Создаются при первой записи и
+//     остаются открытыми после `stopAndSubmit` / `cancelCapture`. Это даёт
+//     ~0ms latency на серии записей подряд (нет повторного getUserMedia
+//     init'а на ~80-500ms).
+//   • Через `STREAM_KEEP_ALIVE_MS` после последней сессии stream закрывается
+//     (track.stop) → Windows mic indicator в трее гаснет, ресурсы
+//     освобождаются. Следующий toggleDictation создаёт stream заново.
+//   • `processor` / `analyser` / `source` / `pcmChunks` пересоздаются при
+//     каждой сессии — они per-recording.
 let mediaStream: MediaStream | null = null;
 let audioCtx: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
@@ -28,8 +38,12 @@ let timerHandle: ReturnType<typeof setInterval> | null = null;
 let levelHandle: ReturnType<typeof setInterval> | null = null;
 let unsubscribeCommand: (() => void) | null = null;
 let recordStartMs = 0;
+let streamShutdownTimer: ReturnType<typeof setTimeout> | null = null;
 
 const TARGET_SAMPLE_RATE = 16000;
+/** После этого окна тишины stream закрывается полностью (track.stop),
+ *  Windows mic indicator гаснет. На следующий hotkey — ~80-500ms cold start. */
+const STREAM_KEEP_ALIVE_MS = 30_000;
 
 function statusText(): string {
   switch (status.value) {
@@ -52,14 +66,15 @@ const timeText = computed(() => {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 });
 
-async function startCapture(): Promise<void> {
-  if (status.value === "recording") return;
-  pcmChunks = [];
-  errorText.value = "";
-  elapsedSec.value = 0;
+/** Создаёт MediaStream + AudioContext если их ещё нет (cold start), либо
+ *  возвращает уже warm cache. На warm-пути — мгновенно (нет getUserMedia).
+ *  Reset'ит scheduleStreamShutdown — пока юзер активно диктует, idle timer
+ *  не должен закрывать stream под ногами. */
+async function ensureStream(): Promise<MediaStream> {
+  cancelStreamShutdown();
+  if (mediaStream && mediaStream.active) return mediaStream;
 
-  // Узнаём, выбран ли в настройках конкретный микрофон. Если есть — пробуем
-  // его (exact), при провале (устройство отсоединили) — fallback на default.
+  // Cold start: запрашиваем нужное устройство из config'а.
   let preferredDeviceId: string | null = null;
   try {
     const cfg = (await window.kepler.ark.request("dictation.get_config", {})) as {
@@ -77,19 +92,71 @@ async function startCapture(): Promise<void> {
     autoGainControl: true,
   };
 
-  try {
-    if (preferredDeviceId) {
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: { ...baseConstraints, deviceId: { exact: preferredDeviceId } },
-        });
-      } catch (e) {
-        console.warn("[dictation-pill] preferred mic not available, falling back to default:", e);
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
-      }
-    } else {
+  if (preferredDeviceId) {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { ...baseConstraints, deviceId: { exact: preferredDeviceId } },
+      });
+    } catch (e) {
+      console.warn("[dictation-pill] preferred mic not available, falling back to default:", e);
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
     }
+  } else {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: baseConstraints });
+  }
+  return mediaStream;
+}
+
+function cancelStreamShutdown(): void {
+  if (streamShutdownTimer) {
+    clearTimeout(streamShutdownTimer);
+    streamShutdownTimer = null;
+  }
+}
+
+/** Запускает таймер закрытия stream'а. Вызывается после finalize сессии
+ *  (submit / cancel / pillFinished). Если до истечения timer'а юзер
+ *  запустит новую запись — `ensureStream` сбросит таймер и переиспользует
+ *  warm-stream (0ms latency). Иначе через STREAM_KEEP_ALIVE_MS закрываем
+ *  track'и и AudioContext — Windows mic indicator в трее гаснет. */
+function scheduleStreamShutdown(): void {
+  cancelStreamShutdown();
+  streamShutdownTimer = setTimeout(() => {
+    streamShutdownTimer = null;
+    closeStream();
+  }, STREAM_KEEP_ALIVE_MS);
+}
+
+/** Полностью закрывает warm-stream + AudioContext. После этого следующая
+ *  сессия пойдёт по cold path через `ensureStream`. */
+function closeStream(): void {
+  if (audioCtx) {
+    void audioCtx.close().catch(() => {
+      /* ignore */
+    });
+    audioCtx = null;
+  }
+  if (mediaStream) {
+    for (const t of mediaStream.getTracks()) {
+      try {
+        t.stop();
+      } catch {
+        /* ignore */
+      }
+    }
+    mediaStream = null;
+  }
+}
+
+async function startCapture(): Promise<void> {
+  if (status.value === "recording") return;
+  pcmChunks = [];
+  errorText.value = "";
+  elapsedSec.value = 0;
+
+  let stream: MediaStream;
+  try {
+    stream = await ensureStream();
   } catch (e) {
     status.value = "error";
     errorText.value = "Нет доступа к микрофону";
@@ -103,8 +170,12 @@ async function startCapture(): Promise<void> {
     return;
   }
 
-  audioCtx = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
-  source = audioCtx.createMediaStreamSource(mediaStream);
+  // AudioContext тоже warm'ится — нет смысла close/open на каждую сессию.
+  if (!audioCtx) {
+    audioCtx = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+  }
+
+  source = audioCtx.createMediaStreamSource(stream);
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 64;
   analyser.smoothingTimeConstant = 0.5;
@@ -145,6 +216,9 @@ async function startCapture(): Promise<void> {
   }, 80);
 }
 
+/** Останавливает per-session graph'а (processor / analyser / source / timers),
+ *  но НЕ трогает mediaStream и audioCtx — они кэшируются для warm restart.
+ *  Закрытием stream'а занимается `scheduleStreamShutdown`. */
 function teardownCapture(): void {
   if (timerHandle) {
     clearInterval(timerHandle);
@@ -178,22 +252,6 @@ function teardownCapture(): void {
       /* ignore */
     }
     source = null;
-  }
-  if (audioCtx) {
-    void audioCtx.close().catch(() => {
-      /* ignore */
-    });
-    audioCtx = null;
-  }
-  if (mediaStream) {
-    for (const t of mediaStream.getTracks()) {
-      try {
-        t.stop();
-      } catch {
-        /* ignore */
-      }
-    }
-    mediaStream = null;
   }
   levelBars.value = Array.from({ length: 12 }, () => 0);
 }
@@ -254,6 +312,7 @@ async function stopAndSubmit(): Promise<void> {
   teardownCapture();
   if (pcmChunks.length === 0) {
     status.value = "idle";
+    scheduleStreamShutdown();
     void window.kepler.dictation.pillFinished();
     return;
   }
@@ -276,6 +335,7 @@ async function stopAndSubmit(): Promise<void> {
   }
   // В обоих случаях (success/error) закрываем pill — статус ошибки
   // показывается через 800ms задержку для UX.
+  scheduleStreamShutdown();
   setTimeout(
     () => {
       void window.kepler.dictation.pillFinished();
@@ -293,6 +353,7 @@ async function cancelCapture(): Promise<void> {
   } catch {
     /* ignore */
   }
+  scheduleStreamShutdown();
   void window.kepler.dictation.pillFinished();
 }
 
@@ -322,6 +383,9 @@ onBeforeUnmount(() => {
   unsubscribeCommand?.();
   window.removeEventListener("keydown", handleKeydown);
   teardownCapture();
+  // Окно демонтируется (Kepler закрывают) — hard-close без grace-периода.
+  cancelStreamShutdown();
+  closeStream();
 });
 
 // expose to template
@@ -378,10 +442,8 @@ const exposeStatusText = computed(() => statusText());
   background: linear-gradient(180deg, #2a2a2c 0%, #141416 55%, #0a0a0b 100%);
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  /* Тень: широкая мягкая снизу + лёгкая внутренняя для bevel-эффекта. */
+  /* Без drop-shadow по запросу — оставляем только тонкий inset bevel внутри. */
   box-shadow:
-    0 14px 32px rgba(0, 0, 0, 0.55),
-    0 4px 10px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.55);
   -webkit-app-region: drag;

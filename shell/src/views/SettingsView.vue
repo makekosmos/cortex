@@ -1911,6 +1911,104 @@ async function onDictationHotkeyCapture(acc: string) {
   if (!acc) return;
   await patchDictationConfig({ hotkey: acc });
 }
+
+// External capture flow для системных shortcut'ов (Win+H и т.п.):
+// HotkeyCapture зовёт capture-start → мы говорим backend'у активировать
+// hook в capture mode → hook эмитит `dictation_capture_key` с vk +
+// модификаторами → конвертируем в accelerator string → передаём обратно
+// через pendingAccelerator ref. Также подписываемся на `_cancelled` (Esc).
+const dictationCaptureAccelerator = ref<string | null>(null);
+const dictationCaptureCancelTick = ref(0);
+let dictationCaptureUnsubscribe: (() => void) | null = null;
+
+function vkToKeyName(vk: number): string {
+  // ASCII A-Z (0x41-0x5A) и 0-9 (0x30-0x39).
+  if ((vk >= 0x41 && vk <= 0x5a) || (vk >= 0x30 && vk <= 0x39)) {
+    return String.fromCharCode(vk);
+  }
+  // F1-F24.
+  if (vk >= 0x70 && vk <= 0x87) return `F${vk - 0x6f}`;
+  // OEM punctuation.
+  const oem: Record<number, string> = {
+    0xba: ";",
+    0xbb: "+",
+    0xbc: ",",
+    0xbd: "-",
+    0xbe: ".",
+    0xbf: "/",
+    0xc0: "`",
+    0xdb: "[",
+    0xdc: "\\",
+    0xdd: "]",
+    0xde: "'",
+  };
+  if (oem[vk]) return oem[vk];
+  // Named keys.
+  const named: Record<number, string> = {
+    0x08: "Backspace",
+    0x09: "Tab",
+    0x0d: "Enter",
+    0x20: "Space",
+    0x21: "PageUp",
+    0x22: "PageDown",
+    0x23: "End",
+    0x24: "Home",
+    0x25: "Left",
+    0x26: "Up",
+    0x27: "Right",
+    0x28: "Down",
+    0x2d: "Insert",
+    0x2e: "Delete",
+  };
+  return named[vk] ?? "";
+}
+
+function buildAccelerator(payload: {
+  vk: number;
+  ctrl?: boolean;
+  shift?: boolean;
+  alt?: boolean;
+  win?: boolean;
+}): string {
+  const parts: string[] = [];
+  if (payload.ctrl) parts.push("Ctrl");
+  if (payload.alt) parts.push("Alt");
+  if (payload.shift) parts.push("Shift");
+  if (payload.win) parts.push("Super");
+  const key = vkToKeyName(payload.vk);
+  if (!key) return "";
+  parts.push(key);
+  return parts.join("+");
+}
+
+function onDictationCaptureStart() {
+  dictationCaptureAccelerator.value = null;
+  // Подписываемся ДО begin_hotkey_capture, иначе можем упустить первое
+  // нажатие если юзер крайне быстрый.
+  if (!dictationCaptureUnsubscribe) {
+    dictationCaptureUnsubscribe = window.kepler.dictation.onCaptureEvent((e) => {
+      if (e.event === "dictation_capture_key") {
+        const acc = buildAccelerator({
+          vk: e.vk as number,
+          ctrl: e.ctrl as boolean,
+          shift: e.shift as boolean,
+          alt: e.alt as boolean,
+          win: e.win as boolean,
+        });
+        if (acc) dictationCaptureAccelerator.value = acc;
+      } else if (e.event === "dictation_capture_cancelled") {
+        dictationCaptureCancelTick.value++;
+      }
+    });
+  }
+  void window.kepler.ark.request("dictation.begin_hotkey_capture", {});
+}
+
+function onDictationCaptureEnd() {
+  void window.kepler.ark.request("dictation.end_hotkey_capture", {});
+  dictationCaptureUnsubscribe?.();
+  dictationCaptureUnsubscribe = null;
+}
 async function onDictationDnsKindChange(kind: DnsKind) {
   const profile: { kind: DnsKind; url?: string } = { kind };
   if (kind === "custom_doh") profile.url = dictationCustomDohUrl.value.trim();
@@ -2620,6 +2718,11 @@ onBeforeUnmount(() => {
                     <HotkeyCapture
                       :model-value="dictationConfig.hotkey"
                       capture-prompt="Нажми сочетание…"
+                      external-capture
+                      :pending-accelerator="dictationCaptureAccelerator"
+                      :pending-cancel="dictationCaptureCancelTick"
+                      @capture-start="onDictationCaptureStart"
+                      @capture-end="onDictationCaptureEnd"
                       @update:modelValue="onDictationHotkeyCapture"
                     />
                   </template>

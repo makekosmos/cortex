@@ -1,11 +1,22 @@
-// Push-to-talk через Win32 low-level keyboard hook.
+// Hotkey hook через Win32 WH_KEYBOARD_LL.
 //
-// Electron `globalShortcut` шлёт только key-down event'ы — для PTT (hold-to-record)
-// этого недостаточно. Решение: ставим WH_KEYBOARD_LL hook в выделенном OS-потоке
-// с message-pump'ом. Hook отслеживает заданное сочетание (accelerator parsed
-// в `Matcher`) и emit'ит broadcast events `dictation_ptt_trigger { phase }`
-// — Electron слушает и вызывает `toggleDictation()` (на down → старт записи,
-// на up → стоп + submit, та же семантика что toggle, два вызова).
+// Два use case'а:
+//   1. Push-to-talk (hold-to-record) — нужны и down, и up event'ы;
+//      `globalShortcut` шлёт только down → недостаточно.
+//   2. Toggle через системные shortcut'ы (Win+H, Win+Space, etc.) — Electron
+//      `globalShortcut.register` опирается на Win32 `RegisterHotKey`, который
+//      возвращает MOD_ALREADY_REGISTERED для системных shortcut'ов
+//      перехваченных explorer.exe. WH_KEYBOARD_LL — нижестоящий уровень,
+//      получает событие ПЕРЕД shell'ом и может его **блокировать** через
+//      возврат `LRESULT(1)`. Это даёт нам Win+H без отключения системного
+//      Voice Typing в Settings.
+//
+// Решение: hook отслеживает заданное сочетание (accelerator parsed в `Matcher`)
+// и emit'ит broadcast event'ы:
+//   - PTT mode  → `dictation_ptt_trigger { phase: "down" | "up" }`
+//   - Toggle mode → `dictation_toggle_trigger` (только на down)
+// Когда matcher matches — событие consumed (intercept), Windows shell его не
+// увидит. На non-match — propagation через `CallNextHookEx` (нормальный путь).
 //
 // Безопасность производительности hook'а: callback `keyboard_proc` ОБЯЗАН
 // возвращаться быстро (иначе Windows блокирует все клавишные события).
@@ -29,7 +40,8 @@ use serde_json::json;
 use tokio::sync::broadcast;
 use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_CONTROL, VK_MENU, VK_SHIFT,
+    GetAsyncKeyState, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
+    KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HC_ACTION, HHOOK,
@@ -43,15 +55,34 @@ pub struct Matcher {
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
+    /// Windows logo key (Super / Meta / Cmd) — Left или Right.
+    pub win: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HookMode {
+    /// Hold-to-record. Emit и down, и up event ('dictation_ptt_trigger').
+    PushToTalk,
+    /// Toggle (как Electron globalShortcut). Emit только на down
+    /// ('dictation_toggle_trigger'). Используется для accelerator'ов которые
+    /// `RegisterHotKey` не может занять (системные Win+H, Win+Space).
+    Toggle,
 }
 
 struct State {
     matcher: Option<Matcher>,
     sender: Option<broadcast::Sender<serde_json::Value>>,
+    mode: HookMode,
     /// Текущее состояние "клавиша зажата" — для дедупа повторных WM_KEYDOWN
     /// (Windows шлёт повторы при удержании, нам нужен только первый down +
     /// один up).
     pressed: bool,
+    /// Capture mode — Settings UI просит hook ловить СЛЕДУЮЩЕЕ non-modifier
+    /// нажатие и emit'ить полный accelerator (vk + текущие modifiers).
+    /// Это позволяет назначить системные shortcut'ы вроде Win+H — иначе
+    /// Voice Typing срабатывает раньше WebContents keyboard handler'а.
+    /// Hook intercept'ит событие, оригинальное действие не происходит.
+    capture_active: bool,
 }
 
 static STATE: OnceLock<Mutex<State>> = OnceLock::new();
@@ -62,7 +93,9 @@ fn state_mtx() -> &'static Mutex<State> {
         Mutex::new(State {
             matcher: None,
             sender: None,
+            mode: HookMode::Toggle,
             pressed: false,
+            capture_active: false,
         })
     })
 }
@@ -76,14 +109,162 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
             let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
             let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
             if is_down || is_up {
-                handle_event(info.vkCode, is_down);
+                // Capture mode имеет приоритет над обычным matcher'ом — пока
+                // Settings UI ждёт назначения hotkey'я, ВСЕ нажатия идут к нам.
+                if handle_capture(info.vkCode, is_down) {
+                    return LRESULT(1);
+                }
+                if handle_event(info.vkCode, is_down) {
+                    return LRESULT(1);
+                }
             }
         }
     }
     CallNextHookEx(HHOOK(std::ptr::null_mut()), code, wparam, lparam)
 }
 
-fn handle_event(vk: u32, is_down: bool) {
+/// Returns `true` если capture mode активен И событие было captured/intercepted.
+/// На non-modifier keydown эмитит accelerator. Modifier нажатия ВСЕГДА
+/// пропускаются через `CallNextHookEx` — иначе Windows не зарегистрирует их
+/// в keyboard state, и `GetAsyncKeyState` для VK_LWIN/VK_CONTROL/etc. вернёт
+/// false, когда мы захотим проверить модификаторы при non-modifier нажатии.
+///
+/// Системный shortcut (Win+H) при этом всё равно не сработает: WM_HOTKEY для
+/// `RegisterHotKey` генерируется ПОСЛЕ keyboard hook chain'а — если мы
+/// intercept'ним именно нажатие H (через return LRESULT(1)), WM_HOTKEY для
+/// Win+H не дойдёт до Voice Typing.
+fn handle_capture(vk: u32, is_down: bool) -> bool {
+    let guard = match state_mtx().lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if !guard.capture_active {
+        return false;
+    }
+    let sender_opt = guard.sender.clone();
+    drop(guard);
+
+    // Modifier — пропускаем дальше (см. doc-comment выше), не intercept.
+    if is_modifier_vk(vk) {
+        return false;
+    }
+
+    // ESC отменяет capture (не emit'им accelerator).
+    if is_down && vk == 0x1B {
+        if let Some(tx) = sender_opt.as_ref() {
+            let _ = tx.send(json!({
+                "event": "dictation_capture_cancelled",
+            }));
+        }
+        // Auto-deactivate — host.rs не нужен round trip.
+        if let Ok(mut g) = state_mtx().lock() {
+            g.capture_active = false;
+        }
+        return true;
+    }
+
+    // Non-modifier — собираем accelerator из текущего state модификаторов.
+    // Эмитим только если хотя бы один modifier зажат (one-key hotkey'и
+    // запрещены на Windows: одиночная буква = обычный input, не shortcut).
+    if is_down {
+        let ctrl = check_mod(true, VK_CONTROL.0);
+        let shift = check_mod(true, VK_SHIFT.0);
+        let alt = check_mod(true, VK_MENU.0);
+        let win = check_mod_win(true);
+
+        // Без модификатора — игнор (но keyup всё равно intercept'ится, чтобы
+        // системный shortcut не отработал на retry'е).
+        if !ctrl && !shift && !alt && !win {
+            // Не intercept — пусть символ дойдёт до того окна где юзер
+            // случайно набрал букву (он же не закрывал Settings).
+            return false;
+        }
+
+        if let Some(tx) = sender_opt {
+            let _ = tx.send(json!({
+                "event": "dictation_capture_key",
+                "vk": vk,
+                "ctrl": ctrl,
+                "shift": shift,
+                "alt": alt,
+                "win": win,
+            }));
+        }
+        // Auto-deactivate — одно валидное нажатие = одна capture session.
+        if let Ok(mut g) = state_mtx().lock() {
+            g.capture_active = false;
+        }
+        // Подавить Start menu trigger от Win-up без другой клавиши.
+        swallow_win_shortcut_if_active();
+    }
+    true
+}
+
+/// Если Win key зажат и мы только что intercept'или акорд — посылаем
+/// **dummy** SendInput с VK_RESERVED (0xFF). Это не имеет визуального эффекта,
+/// но Windows считает что Win key был использован как modifier (не "lonely
+/// press") → при отпускании Win-up Start menu НЕ откроется.
+///
+/// Это стандартный приём AutoHotKey / PowerToys для "swallow"'а Win
+/// shortcut'а который перехватили на keyboard hook уровне.
+fn swallow_win_shortcut_if_active() {
+    if !check_mod_win(true) {
+        return;
+    }
+    // Dummy down + up для VK_RESERVED (0xFF). Не привязан ни к одной реальной
+    // клавише, но идёт через системный input pipeline и засчитывается как
+    // "key with modifier" → отменяет Start menu trigger.
+    let dummy_down = INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VIRTUAL_KEY(0xFF),
+                wScan: 0,
+                dwFlags: KEYBD_EVENT_FLAGS(0),
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    let dummy_up = INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VIRTUAL_KEY(0xFF),
+                wScan: 0,
+                dwFlags: KEYEVENTF_KEYUP,
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
+    };
+    let inputs = [dummy_down, dummy_up];
+    let cb = std::mem::size_of::<INPUT>() as i32;
+    unsafe {
+        SendInput(&inputs, cb);
+    }
+}
+
+fn is_modifier_vk(vk: u32) -> bool {
+    matches!(
+        vk,
+        0x10 | // VK_SHIFT
+        0xA0 | // VK_LSHIFT
+        0xA1 | // VK_RSHIFT
+        0x11 | // VK_CONTROL
+        0xA2 | // VK_LCONTROL
+        0xA3 | // VK_RCONTROL
+        0x12 | // VK_MENU (Alt)
+        0xA4 | // VK_LMENU
+        0xA5 | // VK_RMENU
+        0x5B | // VK_LWIN
+        0x5C   // VK_RWIN
+    )
+}
+
+/// Возвращает `true` если событие consumed (intercept). Включает logging
+/// в broadcast при match + дедуп auto-repeat'а.
+fn handle_event(vk: u32, is_down: bool) -> bool {
     // Lock короткий — только snapshot + send. Если lock poisoned —
     // recover через into_inner (poison из panic в predшествующей секции;
     // sender/matcher остаются valid).
@@ -92,32 +273,60 @@ fn handle_event(vk: u32, is_down: bool) {
         Err(p) => p.into_inner(),
     };
     let Some(m) = guard.matcher else {
-        return;
+        return false;
     };
     if vk != m.vk {
-        return;
+        return false;
     }
     if is_down && guard.pressed {
-        // Auto-repeat от удержания — игнор.
-        return;
+        // Auto-repeat от удержания — игнор события. Не пропускаем дальше
+        // тоже (всё ещё intercept), иначе системный shortcut сработает
+        // на втором tick'е.
+        return true;
     }
-    let mods_ok =
-        check_mod(m.ctrl, VK_CONTROL.0) && check_mod(m.shift, VK_SHIFT.0) && check_mod(m.alt, VK_MENU.0);
+    let mods_ok = check_mod(m.ctrl, VK_CONTROL.0)
+        && check_mod(m.shift, VK_SHIFT.0)
+        && check_mod(m.alt, VK_MENU.0)
+        && check_mod_win(m.win);
     if !mods_ok {
-        return;
+        return false;
     }
-    let phase = if is_down { "down" } else { "up" };
-    if let Some(tx) = guard.sender.as_ref() {
-        let _ = tx.send(json!({
-            "event": "dictation_ptt_trigger",
-            "phase": phase,
-        }));
-    }
-    // Update pressed-flag для дедупа.
+    let mode = guard.mode;
+    let sender_opt = guard.sender.clone();
     drop(guard);
+
+    // Emit event соответственно режиму.
+    match mode {
+        HookMode::PushToTalk => {
+            let phase = if is_down { "down" } else { "up" };
+            if let Some(tx) = sender_opt {
+                let _ = tx.send(json!({
+                    "event": "dictation_ptt_trigger",
+                    "phase": phase,
+                }));
+            }
+        }
+        HookMode::Toggle => {
+            if is_down {
+                if let Some(tx) = sender_opt {
+                    let _ = tx.send(json!({
+                        "event": "dictation_toggle_trigger",
+                    }));
+                }
+            }
+        }
+    }
+
+    // Update pressed-flag для дедупа.
     if let Ok(mut g) = state_mtx().lock() {
         g.pressed = is_down;
     }
+    // Подавить Start menu trigger при intercept'е Win-shortcut'а
+    // (см. swallow_win_shortcut_if_active).
+    if is_down {
+        swallow_win_shortcut_if_active();
+    }
+    true
 }
 
 fn check_mod(required: bool, vk: u16) -> bool {
@@ -126,6 +335,18 @@ fn check_mod(required: bool, vk: u16) -> bool {
     }
     let state = unsafe { GetAsyncKeyState(vk as i32) };
     (state as u16 & 0x8000) != 0
+}
+
+/// Win key: проверяем оба — Left (VK_LWIN, 0x5B) и Right (VK_RWIN, 0x5C).
+fn check_mod_win(required: bool) -> bool {
+    if !required {
+        return true;
+    }
+    unsafe {
+        let l = GetAsyncKeyState(VK_LWIN.0 as i32) as u16 & 0x8000;
+        let r = GetAsyncKeyState(VK_RWIN.0 as i32) as u16 & 0x8000;
+        (l | r) != 0
+    }
 }
 
 /// Запускает hook-thread один раз (idempotent). После старта thread живёт
@@ -154,10 +375,34 @@ fn ensure_thread_started() {
     });
 }
 
-/// Активирует hook'у matcher + sender. None для matcher = выключает emit
+/// Включает / выключает capture mode. Когда active, hook intercept'ит ВСЕ
+/// keystrokes (включая модификаторы), на первое non-modifier нажатие emit'ит
+/// `dictation_capture_key` event с accelerator'ом и автоматически
+/// деактивируется. ESC — `dictation_capture_cancelled`. Sender используется
+/// общий с regular hotkey hook'ом (тот же broadcast).
+pub fn set_capture_mode(
+    active: bool,
+    sender: Option<broadcast::Sender<serde_json::Value>>,
+) {
+    ensure_thread_started();
+    let mut g = match state_mtx().lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    g.capture_active = active;
+    if active && sender.is_some() {
+        g.sender = sender;
+    }
+}
+
+/// Активирует hook'у matcher + sender + mode. None для matcher = выключает emit
 /// (hook продолжает крутиться вхолостую). Можно вызвать многократно при
 /// смене hotkey'я / trigger_mode.
-pub fn set_active(matcher: Option<Matcher>, sender: Option<broadcast::Sender<serde_json::Value>>) {
+pub fn set_active(
+    matcher: Option<Matcher>,
+    sender: Option<broadcast::Sender<serde_json::Value>>,
+    mode: HookMode,
+) {
     ensure_thread_started();
     let mut g = match state_mtx().lock() {
         Ok(g) => g,
@@ -165,6 +410,7 @@ pub fn set_active(matcher: Option<Matcher>, sender: Option<broadcast::Sender<ser
     };
     g.matcher = matcher;
     g.sender = sender;
+    g.mode = mode;
     g.pressed = false;
 }
 
@@ -179,16 +425,14 @@ pub fn parse_accelerator(s: &str) -> Option<Matcher> {
     let mut ctrl = false;
     let mut shift = false;
     let mut alt = false;
+    let mut win = false;
     let mut vk: Option<u32> = None;
     for part in &parts {
         match part.to_ascii_lowercase().as_str() {
             "ctrl" | "control" | "commandorcontrol" | "cmdorctrl" => ctrl = true,
             "shift" => shift = true,
             "alt" | "option" => alt = true,
-            "super" | "meta" | "cmd" | "command" => {
-                // Windows logo key — пропускаем как unsupported в Phase 1.5.
-                return None;
-            }
+            "super" | "meta" | "cmd" | "command" | "win" | "windows" => win = true,
             key => {
                 vk = key_to_vk(key);
             }
@@ -199,6 +443,7 @@ pub fn parse_accelerator(s: &str) -> Option<Matcher> {
         ctrl,
         shift,
         alt,
+        win,
     })
 }
 
@@ -297,8 +542,28 @@ mod tests {
     }
 
     #[test]
-    fn parse_super_unsupported() {
-        assert!(parse_accelerator("Super+D").is_none());
+    fn parse_super_d() {
+        let m = parse_accelerator("Super+D").expect("parse ok");
+        assert_eq!(m.vk, 'D' as u32);
+        assert!(m.win);
+        assert!(!m.ctrl);
+    }
+
+    #[test]
+    fn parse_win_h_alias() {
+        // "Win+H" — алиас "Super+H" из HotkeyCapture / Electron-style.
+        let m = parse_accelerator("Win+H").expect("parse ok");
+        assert_eq!(m.vk, 'H' as u32);
+        assert!(m.win);
+    }
+
+    #[test]
+    fn parse_ctrl_shift_super_h() {
+        let m = parse_accelerator("Ctrl+Shift+Super+H").expect("parse ok");
+        assert_eq!(m.vk, 'H' as u32);
+        assert!(m.ctrl);
+        assert!(m.shift);
+        assert!(m.win);
     }
 
     #[test]
@@ -317,16 +582,19 @@ mod tests {
     #[test]
     fn set_active_idempotent_with_none() {
         // Не должно паниковать при отсутствии sender — ставим/снимаем matcher.
-        set_active(None, None);
+        set_active(None, None, HookMode::Toggle);
         set_active(
             Some(Matcher {
                 vk: 0x41,
                 ctrl: false,
                 shift: false,
                 alt: false,
+                win: false,
             }),
             None,
+            HookMode::Toggle,
         );
-        set_active(None, None);
+        set_active(None, None, HookMode::PushToTalk);
+        set_active(None, None, HookMode::Toggle);
     }
 }

@@ -64,24 +64,6 @@ fn handle_event(event: notify::Result<Event>, store: &FileStore) {
     }
 }
 
-pub(super) fn path_is_under_any_root(path: &Path, roots: &[PathBuf]) -> bool {
-    roots.iter().any(|root| is_path_under_root(path, root))
-}
-
-fn is_path_under_root(path: &Path, root: &Path) -> bool {
-    let path_norm = path.to_string_lossy().to_lowercase();
-    let root_norm = root.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
-    if root_norm.is_empty() {
-        return false;
-    }
-    if path_norm == root_norm {
-        return true;
-    }
-    let with_back = format!("{root_norm}\\");
-    let with_fwd = format!("{root_norm}/");
-    path_norm.starts_with(&with_back) || path_norm.starts_with(&with_fwd)
-}
-
 fn apply_path(path: &Path, opts: &super::ScanOptions, roots: &[PathBuf], store: &FileStore) {
     let Some(owning_root) = roots.iter().find(|root| {
         path == root.as_path()
@@ -119,6 +101,29 @@ fn apply_path(path: &Path, opts: &super::ScanOptions, roots: &[PathBuf], store: 
     if !path.exists() {
         let _ = store.remove_tree(&raw_path);
     }
+}
+
+/// Используется только regression-тестом C1 (2026-05-24); сохраняем чтобы
+/// при будущем refactor'е watcher'а сразу ловить ре-introduce бага «events
+/// queued before restart_watcher применяются к удалённому root'у».
+#[allow(dead_code)]
+pub(super) fn path_is_under_any_root(path: &Path, roots: &[PathBuf]) -> bool {
+    roots.iter().any(|root| is_path_under_root(path, root))
+}
+
+#[allow(dead_code)]
+fn is_path_under_root(path: &Path, root: &Path) -> bool {
+    let path_norm = path.to_string_lossy().to_lowercase();
+    let root_norm = root.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
+    if root_norm.is_empty() {
+        return false;
+    }
+    if path_norm == root_norm {
+        return true;
+    }
+    let with_back = format!("{root_norm}\\");
+    let with_fwd = format!("{root_norm}/");
+    path_norm.starts_with(&with_back) || path_norm.starts_with(&with_fwd)
 }
 
 fn scan_options(store: &FileStore) -> super::Result<super::ScanOptions> {

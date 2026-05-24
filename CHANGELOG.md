@@ -4,6 +4,38 @@
 
 Поддерживается вручную: при каждом version bump'е в `shell/package.json` добавляется новая секция с датой и списком изменений.
 
+## [0.3.1] — 2026-05-25
+
+Полировка диктации поверх 0.3.0 — фиксы латентности, системные shortcut'ы, визуал pill.
+
+### Добавлено
+
+- **Захват системных shortcut'ов как hotkey** (Win+H, Win+Space и т.п.). Settings → Диктация → Горячая клавиша теперь использует **system-level capture mode** в нашем WH_KEYBOARD_LL hook'е (ARK op `dictation.begin_hotkey_capture` / `end_hotkey_capture`). Backend ловит nажатие ДО того как Voice Typing / layout switcher успеют среагировать.
+- **`HookMode::Toggle`** для hotkey hook'а: hook теперь используется и в Toggle mode (раньше только PTT). Все accelerator'ы идут через intercept-вариант → Electron `globalShortcut` больше не нужен. Системные Win+X shortcut'ы заменяются нашим действием на всё время работы Kepler'а.
+- **Persistent audio stream с 30s idle keep-alive** — `MediaStream` + `AudioContext` остаются открытыми между сессиями. Серия диктовок подряд → ~0ms latency (нет повторного `getUserMedia`). Через 30s тишины track останавливается, Windows mic indicator гаснет.
+- **Idle warmup pill window** — `BrowserWindow` создаётся скрытым через 3s после старта Kepler через `setImmediate`. Первое нажатие hotkey — мгновенно.
+- **Запрет single-key hotkey'ев** в capture mode — Windows-конвенция «hotkey = modifier + key». Одиночная буква игнорируется, ждёт следующее нажатие.
+
+### Изменено
+
+- **Pill визуал** (`shell/src/views/DictationPillView.vue`): 240×72 окно, 200×56 pill, снизу экрана 100px от низа. Чёрный glossy с тонким inset bevel, без drop-shadow. Внутри — только waveform / dots / `!`, без таймера и подписей.
+- **Default модель** — `whisper-large-v3` (не turbo). Turbo даёт пропуски слов и галлюцинации на русском.
+- **Settings → Диктация** — UI упрощён: убраны row'ы «Тест записи», «Контекстный prompt» (теперь захардкожен), выбор модели. Микрофон вынесен в отдельную секцию с заголовком (как Статистика).
+
+### Исправлено
+
+- **Inject `TryFromIntError(())`** — `enigo::Key::Unicode('v')` шёл через VK_PACKET (Unicode channel), модификаторы там не работают как shortcut, enigo падал при упаковке keystate в u32. Заменено на нативный `windows::Win32::SendInput` с `VK_CONTROL` + `VK_V` (0x56). Зависимость `enigo` удалена.
+- **Pill race condition** — `start` команда улетала в renderer до `onMounted` Vue компонента. Добавлен `pillReady: Promise<void>` (резолвится на `did-finish-load` + 50ms tick).
+- **Capture модификаторов не работал в `HotkeyCapture`** — hook intercept'ил modifier-нажатия, Windows не успевал обновить keyboard state, `GetAsyncKeyState(VK_LWIN/...)` возвращал false. Modifier-нажатия теперь пропускаются через `CallNextHookEx`; intercept только non-modifier finals.
+- **Start menu открывался после Win+H intercept'а** — Win down→up без других клавиш между ними триггерит Start. Стандартный AHK/PowerToys приём: после intercept'а посылаем dummy `SendInput` с VK_RESERVED (0xFF) → Windows считает Win использованной как modifier, Start не открывается.
+- **`update_config` игнорировал `provider`/`model`** — UI слал patch, backend терял поля.
+- **Очищены 4 dead-code warning'а** в `file_index/store.rs` (поле `StatsSnapshot.ignore_patterns`, метод `count_files`) и `file_index/watcher.rs` (regression-функции получили `#[allow(dead_code)]` с обоснованием).
+
+### Заметки
+
+- Hook intercept глобален: пока Kepler запущен, выбранный hotkey **не работает ни в одном другом приложении**. На shutdown ОС автоматически снимает hook. Это by design.
+- Системный Voice Typing на Win+H остаётся **установленным**, мы лишь перехватываем событие до него. Никаких registry-изменений / отключений системного у пользователя не происходит.
+
 ## [0.3.0] — 2026-05-25
 
 Голосовой ввод (диктация) по образцу Raycast — global hotkey → плавающая pill → транскрипция в Groq Cloud → авто-вставка в активное окно.

@@ -1,5 +1,21 @@
 # Kosmos — статус проекта (2026-05-25)
 
+## 2026-05-25 — Диктация polish (Kepler 0.3.0 → 0.3.1)
+
+Полировка диктации после первого реального использования. 4 серьёзных бага + UX-фиксы.
+
+- **Capture системных hotkey'ев** (Win+H, Win+Space) через новый system-level capture mode в hook'е. Toggle mode тоже идёт через hook → Electron `globalShortcut` больше не используется.
+- **Persistent audio stream** с 30s idle keep-alive — 0ms latency на серии диктовок.
+- **Idle warmup pill window** через 3s после старта Kepler.
+- **Visual polish**: pill 240×72 снизу 100px от низа, чёрный glossy без drop-shadow, только waveform внутри.
+
+Post-mortems (см. [`docs-site/concepts/dictation.md`](docs-site/concepts/dictation.md) § Post-mortems):
+
+1. **TryFromIntError в inject** — `enigo::Key::Unicode('v')` ломался; перешли на нативный `windows::Win32::SendInput`. `enigo` dep удалён.
+2. **Pill race condition** — первый `start` терялся до Vue mount; добавлен `pillReady` Promise.
+3. **Модификаторы не ловились в capture** — hook intercept'ил Win-down → GetAsyncKeyState возвращал false; modifier'ы теперь пропускаются.
+4. **Start menu после Win+H intercept** — Win-up без других клавиш триггерит Start; AHK/PowerToys приём с dummy `SendInput VK_RESERVED` чтобы Windows считала Win использованной как modifier.
+
 ## 2026-05-25 — Диктация (STT) Phase 1 + 1.5 (Kepler 0.2.10 → 0.3.0)
 
 Голосовой ввод по образцу Raycast Dictation. Hotkey → pill снизу экрана → Groq Cloud (whisper-large-v3) → авто-вставка в активное окно через нативный Win32 `SendInput`.

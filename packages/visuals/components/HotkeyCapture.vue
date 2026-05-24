@@ -1,12 +1,21 @@
 <script setup lang="ts">
-// HotkeyCapture — UI-only компонент для захвата accelerator-сочетания.
-// При клике переходит в режим "ждёт нажатие", собирает modifiers + key,
-// эмитит `update:modelValue` со строкой вида "Ctrl+Shift+;" и автоматически
-// выходит из режима. Escape — отменяет.
+// HotkeyCapture — UI primitive для назначения accelerator'а.
 //
-// Регистрация / валидация в системе — задача parent'а (через emit).
+// Два режима capture:
+//   1. Локальный (default) — слушает DOM keydown сам. Работает для
+//      несистемных shortcut'ов (Ctrl+Shift+;, Alt+D, etc.).
+//   2. Внешний — компонент только показывает UI «жду нажатие», а событие
+//      приходит через prop'ы. Используется когда нужно ловить системные
+//      shortcut'ы (Win+H, Win+Space) через нижестоящий keyboard hook
+//      ОС-уровня — иначе системный shortcut срабатывает раньше WebContents
+//      keyboard handler'а.
+//
+// Внешний режим включается передачей prop `externalCapture: true`. В этом
+// случае parent сам стартует capture в системе (например через
+// `dictation.begin_hotkey_capture` backend op'у) и передаёт результат
+// обратно через `pendingAccelerator` / `pendingCancel` events.
 
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -16,11 +25,26 @@ const props = withDefaults(
     /** Текст пока ждём нажатие. */
     capturePrompt?: string;
     disabled?: boolean;
+    /** Если true — компонент НЕ слушает DOM keydown сам. Capture лифт
+     * наружу: parent стартует системный hook (например через ARK
+     * `dictation.begin_hotkey_capture`) когда срабатывает `@capture-start`,
+     * прокидывает результат назад установкой `pendingAccelerator`. */
+    externalCapture?: boolean;
+    /** Внешне-полученный accelerator (от parent'а в externalCapture mode).
+     * При изменении на не-пустую строку — emit'им `update:modelValue` и
+     * выходим из capture state. */
+    pendingAccelerator?: string | null;
+    /** Cancel signal от parent'а (например юзер нажал Escape — backend
+     * прислал `dictation_capture_cancelled`). Toggle для тригера. */
+    pendingCancel?: number;
   }>(),
   {
     placeholder: "Не задано",
     capturePrompt: "Нажмите сочетание…",
     disabled: false,
+    externalCapture: false,
+    pendingAccelerator: null,
+    pendingCancel: 0,
   },
 );
 
@@ -28,6 +52,11 @@ const emit = defineEmits<{
   "update:modelValue": [v: string];
   /** Срабатывает при Escape — parent может отреагировать (например clear). */
   cancel: [];
+  /** В externalCapture mode — parent должен стартовать системный hook. */
+  "capture-start": [];
+  /** В externalCapture mode — parent должен остановить системный hook
+   *  (например при blur'е окна или unmount). */
+  "capture-end": [];
 }>();
 
 const capturing = ref(false);
@@ -35,11 +64,39 @@ const capturing = ref(false);
 function start() {
   if (props.disabled) return;
   capturing.value = true;
+  if (props.externalCapture) {
+    emit("capture-start");
+  }
 }
 
 function stop() {
+  if (capturing.value && props.externalCapture) {
+    emit("capture-end");
+  }
   capturing.value = false;
 }
+
+// External capture: реактивно ловим accelerator или cancel от parent'а.
+watch(
+  () => props.pendingAccelerator,
+  (v) => {
+    if (!props.externalCapture) return;
+    if (v && capturing.value) {
+      emit("update:modelValue", v);
+      capturing.value = false;
+    }
+  },
+);
+watch(
+  () => props.pendingCancel,
+  () => {
+    if (!props.externalCapture) return;
+    if (capturing.value) {
+      capturing.value = false;
+      emit("cancel");
+    }
+  },
+);
 
 function keyEventToAccelerator(e: KeyboardEvent): string | null {
   const parts: string[] = [];
@@ -62,6 +119,10 @@ function keyEventToAccelerator(e: KeyboardEvent): string | null {
 
 function onKey(e: KeyboardEvent) {
   if (!capturing.value) return;
+  // В externalCapture parent сам ловит события через системный hook —
+  // DOM keydown не trustworthy (системные shortcut'ы перехватываются до
+  // того как WebContents получит event).
+  if (props.externalCapture) return;
   e.preventDefault();
   e.stopPropagation();
   const acc = keyEventToAccelerator(e);

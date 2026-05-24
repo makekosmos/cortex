@@ -20,7 +20,7 @@
 // но IPC handlers и state живут — чтобы Playwright мог driver'ить state
 // machine без видимого окна.
 
-import { BrowserWindow, ipcMain, screen, globalShortcut } from "electron";
+import { BrowserWindow, ipcMain, screen, webContents as electronWebContents } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,7 +36,6 @@ const BOTTOM_MARGIN = 100;
 let pillWindow: BrowserWindow | null = null;
 let pillReady: Promise<void> | null = null;
 let isRecording = false;
-let currentHotkey: string | null = null;
 
 function isHeadless(): boolean {
   return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
@@ -214,56 +213,36 @@ ipcMain.handle("kepler:dictation:pill-finished", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Hotkey registration
+// Hotkey routing
+//
+// Все hotkey'и идут через Rust WH_KEYBOARD_LL hook
+// (`services/kepler-backend/src/dictation/hotkey_hook.rs`). Hook эмитит:
+//   • `dictation_toggle_trigger` для Toggle mode
+//   • `dictation_ptt_trigger { phase: "down" | "up" }` для PTT mode
+// Hook intercept'ит match'нувшийся accelerator → системные shortcut'ы
+// (Win+H = Voice Typing, Win+Space = переключатель раскладок) не сработают.
+// Electron `globalShortcut.register` не используем — он опирается на Win32
+// `RegisterHotKey`, который не может занять системные shortcut'ы.
 // ---------------------------------------------------------------------------
 
-function unregisterHotkey(): void {
-  if (currentHotkey && globalShortcut.isRegistered(currentHotkey)) {
-    globalShortcut.unregister(currentHotkey);
-  }
-  currentHotkey = null;
-}
-
-function registerHotkey(accelerator: string): boolean {
-  if (isHeadless()) {
-    // В headless / тестах не регистрируем — accelerator всё равно отрабатывает
-    // только при focus на нашем окне, и спецификация требует чтобы тест
-    // не цеплялся к user'ской раскладке. Driver'им через IPC напрямую.
-    return true;
-  }
-  unregisterHotkey();
-  try {
-    const ok = globalShortcut.register(accelerator, () => {
-      void toggleDictation();
-    });
-    if (ok) {
-      currentHotkey = accelerator;
-      console.log(`[dictation-pill] hotkey ${accelerator} registered`);
-      return true;
-    }
-    console.error(`[dictation-pill] hotkey ${accelerator} register returned false`);
-    return false;
-  } catch (e) {
-    console.error(`[dictation-pill] hotkey register error:`, e);
-    return false;
-  }
-}
-
-/** Текущий trigger_mode, кэшируется из backend config'а. Влияет на регистрацию
-    globalShortcut: в `toggle` — регистрируем как обычно; в `push_to_talk` —
-    НЕ регистрируем, потому что PTT драйвится Rust-side low-level hook'ом
-    (`dictation::hotkey_hook`), который emit'ит `dictation_ptt_trigger` events. */
+/** Текущий trigger_mode из backend config'а — для diff'а при config_changed. */
 let currentTriggerMode: "toggle" | "push_to_talk" = "toggle";
 
-function applyHotkeyForMode(hotkey: string, mode: "toggle" | "push_to_talk"): void {
+function applyHotkeyForMode(_hotkey: string, mode: "toggle" | "push_to_talk"): void {
   currentTriggerMode = mode;
-  if (mode === "push_to_talk") {
-    // В PTT режиме globalShortcut нам не нужен — Rust hook отслеживает
-    // key-down и key-up. Снимаем регистрацию (если была).
-    unregisterHotkey();
-    return;
-  }
-  registerHotkey(hotkey);
+  // Hook сам перерегистрируется на backend стороне (`apply_ptt_hook` в
+  // host.rs вызывается на каждый update_config). Тут ничего не делаем —
+  // функция оставлена для future expansion (например smoke-test'а).
+}
+
+/** Warmup pill window на старте, чтобы первый toggleDictation не платил
+ * за создание BrowserWindow + load bundle (≈ 600-1500ms на холодном Electron).
+ * Создаём окно скрытым (`show: false` уже стоит в createPill); первый toggle
+ * только showInactive + IPC send. В headless / тестах ничего не делаем. */
+function warmupPill(): void {
+  if (isHeadless()) return;
+  if (pillWindow && !pillWindow.isDestroyed()) return;
+  ensureWindow();
 }
 
 /** Вызывается из main.ts на старте (после ARK ready) — читает hotkey + mode
@@ -279,9 +258,21 @@ export async function setupDictationHotkey(): Promise<void> {
     const hotkey = cfg?.config?.hotkey ?? "Ctrl+Shift+;";
     const mode = cfg?.config?.triggerMode ?? "toggle";
     applyHotkeyForMode(hotkey, mode);
+    // Idle warmup: отложить создание pill window на 3s после старта shell'а
+    // и сделать его только когда event loop свободен. Цель — не платить за
+    // транспарентное BrowserWindow + DWM композицию + Vue bundle загрузку
+    // во время startup'а (это съедает +200-400ms ready-time). 3s — компромисс
+    // между «не успел warmup до первого нажатия» и «не толкаемся за CPU
+    // с launcher mount + ark connect + extension scan».
+    setTimeout(() => {
+      // setImmediate уводит вызов на следующий tick event loop'а, давая
+      // приоритет любым ожидающим тяжёлым задачам.
+      setImmediate(warmupPill);
+    }, 3000);
 
     ark.onArkEvent((e: { event?: string; phase?: "down" | "up" }) => {
-      // 1. Re-register на config_changed event.
+      // 1. Re-apply mode на config_changed event (hook сам перерегистрируется
+      // на backend стороне в `apply_ptt_hook`; здесь только локальный state).
       if (e.event === "dictation_config_changed") {
         void (async () => {
           try {
@@ -292,21 +283,36 @@ export async function setupDictationHotkey(): Promise<void> {
               | undefined;
             const nextHotkey = updated?.config?.hotkey ?? "Ctrl+Shift+;";
             const nextMode = updated?.config?.triggerMode ?? "toggle";
-            if (nextHotkey !== currentHotkey || nextMode !== currentTriggerMode) {
+            if (nextMode !== currentTriggerMode) {
               applyHotkeyForMode(nextHotkey, nextMode);
             }
           } catch (err) {
-            console.error("[dictation-pill] re-register hotkey failed:", err);
+            console.error("[dictation-pill] re-apply hotkey mode failed:", err);
           }
         })();
         return;
       }
-      // 2. PTT trigger от Rust hook'а: эквивалент press/release.
-      if (e.event === "dictation_ptt_trigger") {
-        // Семантика: down → toggleDictation (запускает); up → toggleDictation
-        // (отправляет). Те же два вызова что юзер делал бы в Toggle mode.
-        // НЕ блокируем — toggleDictation сам асинхронный.
+      // 2. Toggle trigger от Rust hook'а (Toggle mode): один event на каждое
+      // нажатие, семантика идентична globalShortcut callback'у.
+      if (e.event === "dictation_toggle_trigger") {
         void toggleDictation();
+        return;
+      }
+      // 3. PTT trigger от Rust hook'а (PTT mode): эквивалент press/release.
+      // Семантика: down → toggleDictation (старт записи); up → toggleDictation
+      // (стоп + отправка). Те же два вызова что юзер делал бы вручную.
+      if (e.event === "dictation_ptt_trigger") {
+        void toggleDictation();
+        return;
+      }
+      // 4. Capture events для Settings → Диктация → Горячая клавиша.
+      // Forward'им на все живые webContents (Settings отдельным окном).
+      if (e.event === "dictation_capture_key" || e.event === "dictation_capture_cancelled") {
+        for (const wc of electronWebContents.getAllWebContents()) {
+          if (!wc.isDestroyed()) {
+            wc.send("kepler:dictation:capture", e);
+          }
+        }
       }
     });
   } catch (e) {

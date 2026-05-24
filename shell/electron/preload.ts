@@ -116,6 +116,12 @@ const api: KeplerApi = {
       ipcRenderer.on("kepler:dictation:command", wrapper);
       return () => ipcRenderer.removeListener("kepler:dictation:command", wrapper);
     },
+    onCaptureEvent: (cb) => {
+      const wrapper = (_e: Electron.IpcRendererEvent, payload: unknown) =>
+        cb(payload as Record<string, unknown>);
+      ipcRenderer.on("kepler:dictation:capture", wrapper);
+      return () => ipcRenderer.removeListener("kepler:dictation:capture", wrapper);
+    },
   },
   focusService: {
     status: () => ipcRenderer.invoke("kepler:focus-service:status"),

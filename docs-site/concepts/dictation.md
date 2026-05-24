@@ -167,6 +167,50 @@ UI не даёт менять модель — вшит **`whisper-large-v3`**. 
 
 Если ручка нужна — можно вручную поправить `model` в `dictation-config.json` (configurable hook сохраняется). При появлении локальных моделей в Phase 2 модель снова окажется в UI.
 
+## Post-mortems (0.3.0 → 0.3.1)
+
+После первого реального использования всплыли 4 серьёзных бага. Фиксы в 0.3.1, оставляем как permanent reference чтобы не наступить на те же грабли.
+
+### 1. `TryFromIntError(())` при inject'е транскрипта
+
+**Симптом:** transcription приходит, но Ctrl+V не симулируется. В логах `enigo input: you tried to simulate invalid input: (key state could not be converted to u32)`.
+
+**Причина:** в `inject.rs` мы дёргали `enigo.key(Key::Unicode('v'), Direction::Click)`. `Key::Unicode` на Windows шлёт символ через **VK_PACKET** (Unicode injection channel) — это литеральный ввод символа, **не** virtual-key. На VK_PACKET модификаторы (Ctrl, Shift) **не работают** как часть shortcut'а — Windows их игнорирует. Сам enigo при попытке упаковать keystate в `u32` падал с `TryFromIntError`.
+
+**Фикс:** заменили enigo на нативный `windows::Win32::UI::Input::KeyboardAndMouse::SendInput` с `VK_CONTROL` + `VK_V` (0x56). Это стандартный virtual-key канал, на котором модификаторы работают как shortcut. См. `inject.rs::send_ctrl_v`. Зависимость `enigo` удалена.
+
+**Урок:** для accelerator'ов / shortcut'ов на Windows — **всегда** virtual-key channel, **никогда** Unicode channel. Unicode только для непосредственного ввода текста (если бы мы хотели вместо clipboard набивать буквы вручную — но это медленно и зависит от раскладки).
+
+### 2. Pill race condition — первое нажатие hotkey'я не запускало запись
+
+**Симптом:** «нажимаю на хоткей и виджет появляется, но запись не идёт». Второе нажатие → ничего. Третье → запись стартует.
+
+**Причина:** `toggleDictation()` создавал pill window лениво (`ensureWindow → createPill → loadURL`), сразу `showInactive()` + `webContents.send("kepler:dictation:command", {kind: "start"})`. На холодном старте renderer ещё не успевал смонтировать Vue компонент → `onMounted` не отработал → подписка на `onCommand` ещё не активна. Команда `start` уходила в пустоту.
+
+**Фикс:** добавили `pillReady: Promise<void>`, резолвится по `did-finish-load` + 50ms tick (Vue mount). `sendPillCommand` ждёт `pillReady` перед `webContents.send`. После 0.3.1 ещё добавили **idle warmup** (BrowserWindow создаётся через 3s после старта Kepler) — `pillReady` к моменту первого hotkey уже резолвлен.
+
+**Урок:** Electron `webContents.send` не имеет flow-control. Если renderer не подписан — событие теряется. Для lazy-created окон **обязательно** ждать `did-finish-load` + один tick фреймворка перед первой отправкой.
+
+### 3. Модификаторы терялись при capture системных hotkey'ев (Win+H → H)
+
+**Симптом:** в Settings → Диктация → Горячая клавиша назначаешь `Win+H`, но прилетает только `H` без модификатора.
+
+**Причина:** capture-handler в hook'е intercept'ил **modifier-нажатия** (Win/Ctrl/Shift/Alt) с `return LRESULT(1)`. Windows **не успевала зарегистрировать их state** — потому что keyboard hook chain отрабатывает ДО того как ОС обновит внутреннее состояние. Когда юзер потом дожимал `H`, мы проверяли модификаторы через `GetAsyncKeyState(VK_LWIN)` — он возвращал «не нажато», потому что мы же сами перехватили само Win-down событие.
+
+**Фикс:** modifier-нажатия теперь **пропускаются** через `CallNextHookEx` (без intercept). Это безопасно — `RegisterHotKey` системных shortcut'ов (Win+H) опирается на `WM_HOTKEY`, который генерируется **после** всего hook chain'а. Если мы intercept'им именно final-клавишу (H), WM_HOTKEY для Win+H не генерируется → Voice Typing не запустится.
+
+**Урок:** `GetAsyncKeyState` читает **системный** state, не наше восприятие событий. Если мы перехватили событие до системы — для системы клавиша не нажималась.
+
+### 4. Start menu открывался после Win+H intercept'а
+
+**Симптом:** Win+H успешно intercept'ится, dictation запускается — но при отпускании Win открывается Start menu.
+
+**Причина:** Windows открывает Start menu когда Win-down → Win-up прошли **без других клавиш между ними**. Мы intercept'или H (`LRESULT 1`) → для ОС последовательность выглядит как «голое нажатие Win».
+
+**Фикс:** стандартный приём AutoHotKey / PowerToys — функция `swallow_win_shortcut_if_active()` в hook'е. После успешного intercept'а проверяем, зажат ли Win, и если да — посылаем dummy `SendInput` с `VK_RESERVED (0xFF)` (down+up). Это безымянный virtual-key без визуального эффекта, **но** Windows регистрирует его как «клавиша между Win-down и Win-up» → считает Win использованным как modifier → Start menu trigger подавляется.
+
+**Урок:** Windows shell отслеживает Win key как modifier через **state machine** (Win pressed → other key seen?), не через message flow. Перехват single key не нарушает этот state machine — нужно явно его «накормить» dummy событием.
+
 ## Что НЕ делает Phase 1 / 1.5
 
 - Локальные модели (whisper.cpp, Parakeet V3) — отдельный proof-loop Phase 2.
