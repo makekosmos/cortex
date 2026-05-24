@@ -117,6 +117,8 @@ export function openSettings(): void {
   settingsWindow = new BrowserWindow({
     width: SETTINGS_WIDTH,
     height: SETTINGS_HEIGHT,
+    minWidth: 800,
+    minHeight: 560,
     x: Math.round((display.width - SETTINGS_WIDTH) / 2),
     y: Math.round((display.height - SETTINGS_HEIGHT) / 2),
     show: process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1",

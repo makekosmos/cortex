@@ -12,10 +12,13 @@ import {
   Info,
   ListTodo,
   Loader2,
+  KeyRound,
+  Mic,
   Puzzle,
   Search,
   Settings,
   Shield,
+  ShieldCheck,
   Timer,
 } from "@lucide/vue";
 import holoSvg from "../assets/holo.svg";
@@ -31,10 +34,18 @@ import edenDiarySvg from "../assets/eden-diary.svg";
 import kosmosIconPng from "../../build/icon.png";
 import {
   BlocklistCard,
+  Button,
+  Dropdown,
+  HotkeyCapture,
+  RadioGroup,
   SettingsAdvancedIntro,
+  SettingsList,
+  SettingsRow,
   SettingsSearchInput,
   SettingsSidebar,
   SettingsSidebarButton,
+  Textarea,
+  TextInput,
   ToastHost,
   provideToastHost,
 } from "@kosmos/visuals";
@@ -53,12 +64,15 @@ type Tab =
   | "general"
   | "about"
   | "debug"
+  | "security"
+  | "secrets"
   | "notes"
   | "tasks"
   | "time-tracker"
   | "games"
   | "extensions"
   | "focus"
+  | "dictation"
   | "file-search"
   | "export";
 
@@ -205,14 +219,22 @@ const settingsNavigationItems: SettingsNavigationItem[] = [
     ],
   },
   {
-    tab: "about",
-    label: "О приложении",
+    tab: "security",
+    label: "Безопасность",
     group: "main",
     layout: "basic",
-    icon: Info,
-    introImage: kosmosIconPng,
-    description: "Kepler shell и обновления приложения.",
-    keywords: ["about", "о приложении", "версия", "kepler", "kosmos", "обновления", "update"],
+    icon: ShieldCheck,
+    description: "Сеть для AI-провайдеров и доступ к данным.",
+    keywords: ["безопасность", "сеть", "dns", "doh", "ai", "groq", "прокси", "блокировки", "рф"],
+  },
+  {
+    tab: "secrets",
+    label: "Секреты",
+    group: "main",
+    layout: "basic",
+    icon: KeyRound,
+    description: "API-ключи для AI-провайдеров. Хранятся в Windows Credential Manager.",
+    keywords: ["секреты", "api", "ключ", "key", "credential", "groq", "token", "пароль"],
   },
   {
     tab: "debug",
@@ -235,14 +257,93 @@ const settingsNavigationItems: SettingsNavigationItem[] = [
     ],
   },
   {
-    tab: "notes",
-    label: "Заметки",
+    tab: "about",
+    label: "О приложении",
+    group: "main",
+    layout: "basic",
+    icon: Info,
+    introImage: kosmosIconPng,
+    description: "Kepler shell и обновления приложения.",
+    keywords: ["about", "о приложении", "версия", "kepler", "kosmos", "обновления", "update"],
+  },
+  {
+    tab: "file-search",
+    label: "Поиск файлов",
     group: "advanced",
     layout: "advanced",
-    icon: BookOpen,
-    iconGradient: { from: "#7C5CFF", to: "#3A237D" },
-    description: "Eden: заметки, дневник и быстрый доступ к текстам.",
-    keywords: ["заметки", "eden", "дневник", "note", "journal", "тексты"],
+    icon: Search,
+    iconGradient: { from: "#94A3B8", to: "#334155" },
+    description: "Индексация локальных файлов и исключения шумных папок.",
+    keywords: [
+      "поиск файлов",
+      "file search",
+      "индексация файлов",
+      "шумные папки",
+      "node_modules",
+      ".git",
+      "переиндексация",
+      "локальные диски",
+    ],
+  },
+  {
+    tab: "extensions",
+    label: "Расширения",
+    group: "advanced",
+    layout: "advanced",
+    icon: Puzzle,
+    iconGradient: { from: "#A78BFA", to: "#5B21B6" },
+    description: "Установленные расширения, каталог и управление приложениями.",
+    keywords: [
+      "расширения",
+      "каталог",
+      "marketplace",
+      "установленные",
+      "список приложений",
+      "eden",
+      "delphi",
+      "arrancador",
+      "horologion",
+    ],
+  },
+  {
+    tab: "dictation",
+    label: "Диктация",
+    group: "advanced",
+    layout: "advanced",
+    icon: Mic,
+    iconGradient: { from: "#F472B6", to: "#7C2D12" },
+    description: "Голосовой ввод через Groq (whisper-large-v3-turbo).",
+    keywords: [
+      "диктация",
+      "stt",
+      "голос",
+      "whisper",
+      "groq",
+      "распознавание речи",
+      "транскрипция",
+      "voice",
+    ],
+  },
+  {
+    tab: "focus",
+    label: "Фокус",
+    group: "advanced",
+    layout: "advanced",
+    icon: Shield,
+    iconGradient: { from: "#60A5FA", to: "#1D4ED8" },
+    description: "Блокировка отвлечений и системный демон фокус-режима.",
+    keywords: [
+      "фокус",
+      "блокировка",
+      "системный демон",
+      "focus service",
+      "активная блокировка",
+      "blocklist",
+      "домены",
+      "сайты",
+      "hosts",
+      "pomodoro",
+    ],
   },
   {
     tab: "tasks",
@@ -253,6 +354,16 @@ const settingsNavigationItems: SettingsNavigationItem[] = [
     iconGradient: { from: "#2DD4BF", to: "#0F766E" },
     description: "Delphi: задачи, списки и рабочие действия.",
     keywords: ["задачи", "delphi", "todo", "task", "списки", "дела"],
+  },
+  {
+    tab: "notes",
+    label: "Заметки",
+    group: "advanced",
+    layout: "advanced",
+    icon: BookOpen,
+    iconGradient: { from: "#7C5CFF", to: "#3A237D" },
+    description: "Eden: заметки, дневник и быстрый доступ к текстам.",
+    keywords: ["заметки", "eden", "дневник", "note", "journal", "тексты"],
   },
   {
     tab: "time-tracker",
@@ -284,66 +395,6 @@ const settingsNavigationItems: SettingsNavigationItem[] = [
     iconGradient: { from: "#F472B6", to: "#9D174D" },
     description: "Arrancador: библиотека игр и связанные настройки.",
     keywords: ["игры", "arrancador", "games", "game library", "библиотека игр"],
-  },
-  {
-    tab: "focus",
-    label: "Фокус",
-    group: "advanced",
-    layout: "advanced",
-    icon: Shield,
-    iconGradient: { from: "#60A5FA", to: "#1D4ED8" },
-    description: "Блокировка отвлечений и системный демон фокус-режима.",
-    keywords: [
-      "фокус",
-      "блокировка",
-      "системный демон",
-      "focus service",
-      "активная блокировка",
-      "blocklist",
-      "домены",
-      "сайты",
-      "hosts",
-      "pomodoro",
-    ],
-  },
-  {
-    tab: "extensions",
-    label: "Расширения",
-    group: "advanced",
-    layout: "advanced",
-    icon: Puzzle,
-    iconGradient: { from: "#A78BFA", to: "#5B21B6" },
-    description: "Установленные расширения, каталог и управление приложениями.",
-    keywords: [
-      "расширения",
-      "каталог",
-      "marketplace",
-      "установленные",
-      "список приложений",
-      "eden",
-      "delphi",
-      "arrancador",
-      "horologion",
-    ],
-  },
-  {
-    tab: "file-search",
-    label: "Поиск файлов",
-    group: "advanced",
-    layout: "advanced",
-    icon: Search,
-    iconGradient: { from: "#94A3B8", to: "#334155" },
-    description: "Индексация локальных файлов и исключения шумных папок.",
-    keywords: [
-      "поиск файлов",
-      "file search",
-      "индексация файлов",
-      "шумные папки",
-      "node_modules",
-      ".git",
-      "переиндексация",
-      "локальные диски",
-    ],
   },
 ];
 
@@ -511,46 +562,8 @@ function onToggleCommandVisibility(id: string, event: Event) {
 
 const hotkey = ref<string>("");
 const hotkeyError = ref<string>("");
-const capturing = ref<boolean>(false);
 
-function startCapture() {
-  capturing.value = true;
-  hotkeyError.value = "";
-}
-
-function cancelCapture() {
-  capturing.value = false;
-}
-
-function keyEventToAccelerator(e: KeyboardEvent): string | null {
-  const parts: string[] = [];
-  if (e.ctrlKey) parts.push("Control");
-  if (e.altKey) parts.push("Alt");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.metaKey) parts.push("Super");
-  const key = e.key;
-  if (key === "Control" || key === "Alt" || key === "Shift" || key === "Meta") {
-    return null; // ждём не-модификатор
-  }
-  let main: string;
-  if (key === " ") main = "Space";
-  else if (key === "Escape") return "ESC_CANCEL";
-  else if (key.length === 1) main = key.toUpperCase();
-  else main = key;
-  parts.push(main);
-  return parts.join("+");
-}
-
-async function onCaptureKey(e: KeyboardEvent) {
-  if (!capturing.value) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const acc = keyEventToAccelerator(e);
-  if (!acc) return;
-  if (acc === "ESC_CANCEL") {
-    capturing.value = false;
-    return;
-  }
+async function onLauncherHotkeyChange(acc: string) {
   const r = await window.kepler.settings.hotkeySet(acc);
   if (r.ok) {
     hotkey.value = acc;
@@ -558,7 +571,6 @@ async function onCaptureKey(e: KeyboardEvent) {
   } else {
     hotkeyError.value = `Не удалось зарегистрировать (${r.error ?? "unknown"})`;
   }
-  capturing.value = false;
 }
 
 async function resetHotkey() {
@@ -1574,6 +1586,13 @@ function loadTabData(t: Tab) {
     void loadActiveState();
     void refreshFocusServiceStatus();
   }
+  if (t === "security" || t === "dictation" || t === "secrets") {
+    void loadDictationConfig();
+  }
+  if (t === "dictation") {
+    void loadDictationStats();
+    void loadDictationMicrophones();
+  }
 }
 
 function selectTab(t: Tab) {
@@ -1623,6 +1642,347 @@ const availableInCatalog = computed<MarketplaceExtension[]>(() => {
   const installedIds = new Set(installed.value.map((i) => i.id));
   return catalog.value.extensions.filter((c) => !installedIds.has(c.id));
 });
+
+// --- Dictation (Phase 1, Groq) ----------------------------------------------
+
+type DnsKind = "system" | "cloudflare_doh" | "google_doh" | "custom_doh";
+
+interface DictationConfigData {
+  hotkey: string;
+  triggerMode: "toggle" | "push_to_talk";
+  language: string;
+  injectMode: "auto_paste" | "clipboard_only";
+  networkProfile: { kind: DnsKind; url?: string };
+  httpProxy: string | null;
+  transcriptionPrompt: string;
+  provider: string;
+  model: string;
+  microphoneDeviceId: string | null;
+}
+
+interface DictationStatsData {
+  totalWords: number;
+  totalRecordSeconds: number;
+  totalSessions: number;
+  wpm: number;
+  timeSavedSeconds: number;
+}
+
+const DEFAULT_DICTATION_CFG: DictationConfigData = {
+  hotkey: "Ctrl+Shift+;",
+  triggerMode: "toggle",
+  language: "ru",
+  injectMode: "auto_paste",
+  networkProfile: { kind: "system" },
+  httpProxy: null,
+  transcriptionPrompt: "",
+  provider: "groq",
+  model: "whisper-large-v3-turbo",
+  microphoneDeviceId: null,
+};
+
+const DEFAULT_DICTATION_STATS: DictationStatsData = {
+  totalWords: 0,
+  totalRecordSeconds: 0,
+  totalSessions: 0,
+  wpm: 0,
+  timeSavedSeconds: 0,
+};
+
+const dictationConfig = ref<DictationConfigData>({ ...DEFAULT_DICTATION_CFG });
+const dictationStats = ref<DictationStatsData>({ ...DEFAULT_DICTATION_STATS });
+const dictationHasApiKey = ref(false);
+const dictationApiKeyInput = ref("");
+const dictationApiKeyBusy = ref(false);
+const dictationApiKeyMsg = ref("");
+const dictationCustomDohUrl = ref("");
+const dictationProxyInput = ref("");
+const dictationConnTestBusy = ref(false);
+const dictationConnTestResult = ref<string>("");
+const dictationMicDevices = ref<{ deviceId: string; label: string }[]>([]);
+const dictationMicError = ref<string>("");
+
+const dnsProfileOptions = [
+  {
+    value: "system",
+    label: "Системный DNS",
+    description: "OS resolver. Самый совместимый, но в РФ Groq обычно блокирован.",
+  },
+  {
+    value: "cloudflare_doh",
+    label: "Cloudflare DoH (1.1.1.1)",
+    description: "Обходит DNS poisoning. Безопасный default.",
+  },
+  { value: "google_doh", label: "Google DoH (8.8.8.8)", description: "Альтернатива Cloudflare." },
+  {
+    value: "custom_doh",
+    label: "Свой DoH URL",
+    description: "Укажите endpoint в формате https://example/dns-query.",
+  },
+] as const;
+
+const dictationTriggerOptions = [
+  {
+    value: "toggle",
+    label: "Toggle (двойное нажатие)",
+    description: "Первое нажатие — старт, второе — отправка.",
+  },
+  {
+    value: "push_to_talk",
+    label: "Push-to-talk (удерживать)",
+    description: "Удерживайте клавишу пока говорите.",
+  },
+] as const;
+
+const dictationInjectOptions = [
+  {
+    value: "auto_paste",
+    label: "Auto-paste",
+    description: "Симулирует Ctrl+V и восстанавливает буфер.",
+  },
+  {
+    value: "clipboard_only",
+    label: "Только в буфер обмена",
+    description: "Текст записывается в буфер, Ctrl+V — вручную.",
+  },
+] as const;
+
+// Whisper supports 90+ языков. Включаем самые востребованные + `auto`
+// (отсутствие language → авто-определение Whisper'ом).
+const dictationLanguageOptions = [
+  { value: "auto", label: "Авто" },
+  { value: "ru", label: "Русский" },
+  { value: "en", label: "English" },
+  { value: "uk", label: "Українська" },
+  { value: "be", label: "Беларуская" },
+  { value: "de", label: "Deutsch" },
+  { value: "fr", label: "Français" },
+  { value: "es", label: "Español" },
+  { value: "it", label: "Italiano" },
+  { value: "pt", label: "Português" },
+  { value: "pl", label: "Polski" },
+  { value: "tr", label: "Türkçe" },
+  { value: "ja", label: "日本語" },
+  { value: "ko", label: "한국어" },
+  { value: "zh", label: "中文" },
+  { value: "ar", label: "العربية" },
+  { value: "he", label: "עברית" },
+  { value: "hi", label: "हिन्दी" },
+  { value: "nl", label: "Nederlands" },
+  { value: "sv", label: "Svenska" },
+  { value: "fi", label: "Suomi" },
+  { value: "cs", label: "Čeština" },
+  { value: "el", label: "Ελληνικά" },
+] as const;
+
+const dictationProviderOptions = [{ value: "groq", label: "Groq Cloud" }] as const;
+
+async function onDictationProviderChange(v: string) {
+  await patchDictationConfig({ provider: v });
+}
+
+const dictationProviderDescription = computed(() =>
+  dictationHasApiKey.value
+    ? "Ключ установлен в разделе «Секреты»."
+    : "Не задан API-ключ — добавьте его в разделе «Секреты».",
+);
+
+async function loadDictationConfig() {
+  try {
+    const resp = (await window.kepler.ark.request("dictation.get_config", {})) as {
+      config?: Partial<DictationConfigData>;
+      hasApiKey?: boolean;
+    };
+    if (resp.config) {
+      dictationConfig.value = {
+        ...DEFAULT_DICTATION_CFG,
+        ...resp.config,
+        networkProfile: resp.config.networkProfile ?? { kind: "system" },
+      };
+      if (dictationConfig.value.networkProfile.kind === "custom_doh") {
+        dictationCustomDohUrl.value = dictationConfig.value.networkProfile.url ?? "";
+      }
+      dictationProxyInput.value = dictationConfig.value.httpProxy ?? "";
+    }
+    dictationHasApiKey.value = resp.hasApiKey ?? false;
+  } catch (e) {
+    console.error("[settings] loadDictationConfig failed:", e);
+  }
+}
+
+async function loadDictationStats() {
+  try {
+    const resp = (await window.kepler.ark.request(
+      "dictation.get_stats",
+      {},
+    )) as Partial<DictationStatsData>;
+    dictationStats.value = { ...DEFAULT_DICTATION_STATS, ...resp };
+  } catch (e) {
+    console.error("[settings] loadDictationStats failed:", e);
+  }
+}
+
+// Enumerate микрофоны через Web API. Labels пустые пока пользователь не дал
+// permission на mic. Поэтому запрашиваем permission shot'ом (мини-stream
+// сразу останавливаем) и затем enumerate'им повторно.
+async function loadDictationMicrophones() {
+  dictationMicError.value = "";
+  try {
+    // 1. shot permission (если ещё не давал) — иначе labels пустые.
+    try {
+      const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+      for (const t of probe.getTracks()) t.stop();
+    } catch (permErr) {
+      dictationMicError.value =
+        "Нет доступа к микрофону — выберите устройство после первого запуска записи.";
+      console.warn("[settings] mic permission probe failed:", permErr);
+    }
+    // 2. enumerate.
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    dictationMicDevices.value = devices
+      .filter((d) => d.kind === "audioinput")
+      .map((d, i) => ({
+        deviceId: d.deviceId,
+        label: d.label || `Микрофон ${i + 1}`,
+      }));
+  } catch (e) {
+    console.error("[settings] loadDictationMicrophones failed:", e);
+    dictationMicError.value = `Ошибка: ${(e as Error).message}`;
+  }
+}
+
+async function onDictationMicChange(v: string) {
+  // "" / "default" → null (системный default).
+  const next = v && v !== "default" ? v : null;
+  await patchDictationConfig({ microphoneDeviceId: next });
+}
+
+function formatTimeSaved(sec: number): { value: string; unit: string } {
+  if (sec < 60) return { value: String(Math.max(0, Math.round(sec))), unit: "сек" };
+  if (sec < 3600) return { value: String(Math.round(sec / 60)), unit: "мин" };
+  return { value: (sec / 3600).toFixed(1), unit: "ч" };
+}
+
+function formatTotalWords(n: number): { value: string; unit: string } {
+  if (n < 1000) return { value: String(n), unit: "" };
+  if (n < 1_000_000) return { value: (n / 1000).toFixed(1), unit: "k" };
+  return { value: (n / 1_000_000).toFixed(1), unit: "M" };
+}
+
+const statsCards = computed(() => {
+  const wpm = Math.round(dictationStats.value.wpm);
+  const saved = formatTimeSaved(dictationStats.value.timeSavedSeconds);
+  const total = formatTotalWords(dictationStats.value.totalWords);
+  return [
+    { key: "wpm", label: "WPM", value: String(wpm), unit: "" },
+    { key: "saved", label: "Сэкономлено", value: saved.value, unit: saved.unit },
+    { key: "words", label: "Всего слов", value: total.value, unit: total.unit },
+  ];
+});
+
+const dictationMicOptions = computed(() => {
+  const opts: { value: string; label: string }[] = [
+    { value: "default", label: "Системный по умолчанию" },
+  ];
+  for (const d of dictationMicDevices.value) {
+    // default ID часто тоже идёт в enumerateDevices — но трактуем как
+    // explicit choice пользователя, поэтому добавляем как есть.
+    opts.push({ value: d.deviceId, label: d.label });
+  }
+  return opts;
+});
+
+async function patchDictationConfig(patch: Record<string, unknown>) {
+  try {
+    await window.kepler.ark.request("dictation.update_config", patch);
+    await loadDictationConfig();
+  } catch (e) {
+    console.error("[settings] update_config failed:", e);
+  }
+}
+
+async function onDictationLanguageChange(v: string) {
+  await patchDictationConfig({ language: v });
+}
+async function onDictationInjectModeChange(v: "auto_paste" | "clipboard_only") {
+  await patchDictationConfig({ injectMode: v });
+}
+async function onDictationHotkeyCapture(acc: string) {
+  if (!acc) return;
+  await patchDictationConfig({ hotkey: acc });
+}
+async function onDictationDnsKindChange(kind: DnsKind) {
+  const profile: { kind: DnsKind; url?: string } = { kind };
+  if (kind === "custom_doh") profile.url = dictationCustomDohUrl.value.trim();
+  await patchDictationConfig({ networkProfile: profile });
+}
+async function onDictationCustomDohBlur() {
+  if (dictationConfig.value.networkProfile.kind !== "custom_doh") return;
+  await patchDictationConfig({
+    networkProfile: { kind: "custom_doh", url: dictationCustomDohUrl.value.trim() },
+  });
+}
+
+async function onDictationSaveApiKey() {
+  const key = dictationApiKeyInput.value.trim();
+  if (!key) return;
+  dictationApiKeyBusy.value = true;
+  dictationApiKeyMsg.value = "";
+  try {
+    await window.kepler.ark.request("dictation.set_api_key", { key });
+    dictationApiKeyInput.value = "";
+    dictationApiKeyMsg.value = "Сохранено в Windows Credential Manager";
+    await loadDictationConfig();
+  } catch (e) {
+    dictationApiKeyMsg.value = `Ошибка: ${(e as Error).message}`;
+  } finally {
+    dictationApiKeyBusy.value = false;
+  }
+}
+
+async function onDictationClearApiKey() {
+  dictationApiKeyBusy.value = true;
+  dictationApiKeyMsg.value = "";
+  try {
+    await window.kepler.ark.request("dictation.clear_api_key", {});
+    dictationApiKeyMsg.value = "Ключ удалён";
+    await loadDictationConfig();
+  } catch (e) {
+    dictationApiKeyMsg.value = `Ошибка: ${(e as Error).message}`;
+  } finally {
+    dictationApiKeyBusy.value = false;
+  }
+}
+
+async function onDictationTestConnectivity() {
+  dictationConnTestBusy.value = true;
+  dictationConnTestResult.value = "";
+  try {
+    const resp = (await window.kepler.ark.request("dictation.test_connectivity", {})) as {
+      ok?: boolean;
+      status?: number;
+      latencyMs?: number;
+    };
+    if (resp.ok) {
+      dictationConnTestResult.value = `OK · ${resp.status ?? "—"} · ${resp.latencyMs ?? "?"}ms`;
+    } else {
+      dictationConnTestResult.value = "Не удалось";
+    }
+  } catch (e) {
+    dictationConnTestResult.value = `Ошибка: ${(e as Error).message}`;
+  } finally {
+    dictationConnTestBusy.value = false;
+  }
+}
+
+async function onDictationTriggerModeChange(v: "toggle" | "push_to_talk") {
+  await patchDictationConfig({ triggerMode: v });
+}
+
+async function onDictationProxyBlur() {
+  const v = dictationProxyInput.value.trim();
+  await patchDictationConfig({ httpProxy: v === "" ? null : v });
+}
 
 // --- autoUpdater state ------------------------------------------------------
 
@@ -1889,18 +2249,12 @@ onBeforeUnmount(() => {
                 <div v-if="hotkeyError" class="error">{{ hotkeyError }}</div>
               </div>
               <div class="hotkey-control">
-                <button
-                  type="button"
-                  class="hotkey-capture"
-                  :class="{ capturing }"
-                  @click="startCapture"
-                  @keydown="onCaptureKey"
-                  @blur="cancelCapture"
-                >
-                  <span v-if="capturing">Нажми сочетание…</span>
-                  <code v-else class="value">{{ hotkey }}</code>
-                </button>
-                <button type="button" class="btn ghost" @click="resetHotkey">Сброс</button>
+                <HotkeyCapture
+                  :model-value="hotkey"
+                  capture-prompt="Нажми сочетание…"
+                  @update:modelValue="onLauncherHotkeyChange"
+                />
+                <Button variant="ghost" size="sm" @click="resetHotkey">Сброс</Button>
               </div>
             </div>
 
@@ -2079,6 +2433,234 @@ onBeforeUnmount(() => {
             </div>
             <div v-if="bundleError" class="error-banner">{{ bundleError }}</div>
           </div>
+        </template>
+
+        <!-- Безопасность — сеть для AI-провайдеров (DNS resolver). -->
+        <template v-else-if="activeTab === 'security'">
+          <div class="security-page kosmos-scroll">
+            <p class="security-page__intro">
+              Какой DNS-резолвер и прокси использовать для запросов к Groq и другим AI. В РФ Groq
+              часто блокируется через DNS poisoning — DoH (DNS-over-HTTPS) это обходит без VPN. SNI
+              / IP-блок DoH не лечит — для этого нужен прокси ниже.
+            </p>
+            <SettingsList>
+              <SettingsRow
+                title="DNS для AI-провайдеров"
+                description="Резолвер только для dictation HTTP. Не влияет на остальной сетевой стек."
+              >
+                <template #control>
+                  <RadioGroup
+                    :model-value="dictationConfig.networkProfile.kind"
+                    :options="dnsProfileOptions"
+                    name="dictation-dns"
+                    @update:modelValue="onDictationDnsKindChange"
+                  />
+                </template>
+              </SettingsRow>
+              <SettingsRow
+                v-if="dictationConfig.networkProfile.kind === 'custom_doh'"
+                title="Свой DoH URL"
+                description="Endpoint в формате https://example/dns-query."
+              >
+                <template #control>
+                  <TextInput
+                    v-model="dictationCustomDohUrl"
+                    placeholder="https://comss.dns.controld.com/dns-query"
+                    @blur="onDictationCustomDohBlur"
+                  />
+                </template>
+              </SettingsRow>
+              <SettingsRow
+                title="HTTP / SOCKS proxy"
+                description="Опционально. Если DoH недостаточно (SNI / IP блок). http://, https://, socks5://host:port. Пусто — без proxy."
+              >
+                <template #control>
+                  <TextInput
+                    v-model="dictationProxyInput"
+                    placeholder="socks5://127.0.0.1:1080"
+                    @blur="onDictationProxyBlur"
+                  />
+                </template>
+              </SettingsRow>
+              <SettingsRow
+                title="Проверить соединение"
+                :description="
+                  dictationConnTestResult ||
+                  'HEAD-запрос к api.groq.com через выбранный DNS + proxy.'
+                "
+              >
+                <template #control>
+                  <Button
+                    variant="ghost"
+                    :loading="dictationConnTestBusy"
+                    :disabled="dictationConnTestBusy"
+                    @click="onDictationTestConnectivity"
+                  >
+                    {{ dictationConnTestBusy ? "Проверяю…" : "Проверить" }}
+                  </Button>
+                </template>
+              </SettingsRow>
+            </SettingsList>
+          </div>
+        </template>
+
+        <!-- Секреты — API-ключи для AI-провайдеров. -->
+        <template v-else-if="activeTab === 'secrets'">
+          <div class="security-page kosmos-scroll">
+            <p class="security-page__intro">
+              API-ключи хранятся в Windows Credential Manager — изолированно от файлов конфигурации,
+              не попадают в backup'ы и логи. Используются функциями, которым нужен соответствующий
+              провайдер (сейчас — только диктация Groq).
+            </p>
+            <SettingsList>
+              <SettingsRow title="Groq">
+                <template #control>
+                  <div class="control-stack">
+                    <TextInput
+                      v-model="dictationApiKeyInput"
+                      type="password"
+                      autocomplete="new-password"
+                      :placeholder="dictationHasApiKey ? '••••••••' : 'gsk_...'"
+                      :block="false"
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      :loading="dictationApiKeyBusy"
+                      :disabled="dictationApiKeyBusy || !dictationApiKeyInput.trim()"
+                      @click="onDictationSaveApiKey"
+                    >
+                      Сохранить
+                    </Button>
+                    <Button
+                      v-if="dictationHasApiKey"
+                      variant="ghost"
+                      size="sm"
+                      :disabled="dictationApiKeyBusy"
+                      @click="onDictationClearApiKey"
+                    >
+                      Очистить
+                    </Button>
+                  </div>
+                </template>
+              </SettingsRow>
+            </SettingsList>
+          </div>
+        </template>
+
+        <!-- Диктация (продвинутые) — hotkey, язык, inject, API key. -->
+        <template v-else-if="activeTab === 'dictation'">
+          <section class="advanced-page kosmos-scroll">
+            <SettingsAdvancedIntro
+              v-if="activeAdvancedIntro"
+              :icon="activeAdvancedIntro.icon"
+              :title="activeAdvancedIntro.label"
+              :description="activeAdvancedIntro.description"
+              :image-src="activeAdvancedIntro.introImage"
+              :icon-from="activeAdvancedIntro.iconGradient?.from"
+              :icon-to="activeAdvancedIntro.iconGradient?.to"
+            />
+            <div class="advanced-page__body">
+              <div class="stats-header">
+                <span class="stats-header__title">Статистика</span>
+              </div>
+              <div class="stats-cards">
+                <div v-for="card in statsCards" :key="card.key" class="stats-card">
+                  <div class="stats-card__label">{{ card.label }}</div>
+                  <div class="stats-card__value">
+                    <span class="stats-card__number">{{ card.value }}</span>
+                    <span v-if="card.unit" class="stats-card__unit">{{ card.unit }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stats-header">
+                <span class="stats-header__title">Микрофон</span>
+              </div>
+              <SettingsList>
+                <SettingsRow
+                  title="Устройство"
+                  :description="
+                    dictationMicError ||
+                    'Если устройство не доступно во время записи — будет fallback на системный default.'
+                  "
+                >
+                  <template #control>
+                    <div class="control-min">
+                      <Dropdown
+                        :model-value="dictationConfig.microphoneDeviceId ?? 'default'"
+                        :options="dictationMicOptions"
+                        @update:modelValue="onDictationMicChange"
+                      />
+                    </div>
+                  </template>
+                </SettingsRow>
+              </SettingsList>
+
+              <div class="stats-header">
+                <span class="stats-header__title">Основное</span>
+              </div>
+              <SettingsList>
+                <SettingsRow
+                  title="Язык"
+                  description="Подсказка для Whisper. «Авто» — автоопределение."
+                >
+                  <template #control>
+                    <div class="control-min">
+                      <Dropdown
+                        :model-value="dictationConfig.language"
+                        :options="dictationLanguageOptions"
+                        @update:modelValue="onDictationLanguageChange"
+                      />
+                    </div>
+                  </template>
+                </SettingsRow>
+                <SettingsRow title="Горячая клавиша">
+                  <template #control>
+                    <HotkeyCapture
+                      :model-value="dictationConfig.hotkey"
+                      capture-prompt="Нажми сочетание…"
+                      @update:modelValue="onDictationHotkeyCapture"
+                    />
+                  </template>
+                </SettingsRow>
+                <SettingsRow title="Режим триггера" description="Как срабатывает горячая клавиша.">
+                  <template #control>
+                    <RadioGroup
+                      :model-value="dictationConfig.triggerMode"
+                      :options="dictationTriggerOptions"
+                      name="dictation-trigger"
+                      @update:modelValue="onDictationTriggerModeChange"
+                    />
+                  </template>
+                </SettingsRow>
+                <SettingsRow
+                  title="Вставка"
+                  description="Auto-paste симулирует Ctrl+V и восстанавливает буфер. Clipboard — только записать текст, вы жмёте Ctrl+V сами."
+                >
+                  <template #control>
+                    <RadioGroup
+                      :model-value="dictationConfig.injectMode"
+                      :options="dictationInjectOptions"
+                      name="dictation-inject"
+                      @update:modelValue="onDictationInjectModeChange"
+                    />
+                  </template>
+                </SettingsRow>
+                <SettingsRow title="Поставщик" :description="dictationProviderDescription">
+                  <template #control>
+                    <div class="control-min">
+                      <Dropdown
+                        :model-value="dictationConfig.provider"
+                        :options="dictationProviderOptions"
+                        @update:modelValue="onDictationProviderChange"
+                      />
+                    </div>
+                  </template>
+                </SettingsRow>
+              </SettingsList>
+            </div>
+          </section>
         </template>
 
         <template
@@ -3841,5 +4423,106 @@ onBeforeUnmount(() => {
   font-size: 10px;
   font-family: var(--font-mono, ui-monospace, monospace);
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
+}
+
+/* Dictation + Security pages — leverage @kosmos/visuals primitives. */
+.security-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.security-page__intro {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.advanced-page__body :deep(.kosmos-settings-list) {
+  margin-bottom: 12px;
+}
+
+.control-min {
+  min-width: 180px;
+}
+
+.control-stack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.control-hint {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+/* Dictation stats — three-card row, Raycast-style. */
+.stats-header {
+  display: flex;
+  align-items: center;
+  margin: 0 2px 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.stats-header__title {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-bottom: 16px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.7);
+  corner-shape: var(--corner-shape);
+  overflow: hidden;
+}
+
+.stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--settings-list-background, var(--background));
+}
+
+.stats-card__label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.stats-card__value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.stats-card__number {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.stats-card__unit {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 </style>

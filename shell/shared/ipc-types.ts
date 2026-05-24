@@ -319,6 +319,25 @@ export interface KeplerApi {
     ): () => void;
   };
 
+  /** Диктация (Phase 1, Groq cloud). Main process владеет global hotkey
+      регистрацией + pill window lifecycle. Audio capture происходит в
+      pill renderer'е (Web Audio API → Int16 PCM → WAV → base64 → backend
+      `dictation.submit_audio`). Backend инжектит транскрипт в активное
+      окно через `enigo` (см. services/kepler-backend/src/dictation). */
+  dictation: {
+    /** Toggle (start ↔ stop) текущей сессии. Вызывается из global hotkey
+        handler в main И из UI «Тест» кнопки в Settings. */
+    toggle(): Promise<void>;
+    /** Сброс текущей сессии (Esc в pill). */
+    cancel(): Promise<void>;
+    /** Pill renderer уведомляет main о завершении (transcript отправлен или
+        ошибка) — main hide'ит окно и сбрасывает recording-флаг. */
+    pillFinished(): Promise<void>;
+    /** Subscribe на команды от main к pill renderer (`start` / `stop` /
+        `cancel`). Pill renderer слушает и переключает audio-capture. */
+    onCommand(cb: (cmd: { kind: "start" | "stop" | "cancel" }) => void): () => void;
+  };
+
   /** Focus mode Windows Service control. Service устанавливается опционально
       (Settings → Focus → «Установить daemon»). Когда running — hosts
       модификации идут через named pipe (no UAC). Без service — fallback

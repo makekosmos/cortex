@@ -39,7 +39,12 @@ sha2.workspace = true
 # Phase 7 — export module: CSV для task/time_entry конвертеров.
 csv = "1"
 # Arrancador RAWG client (subagent B) — HTTP в RAWG.io.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+  "multipart",
+  "socks",
+] }
 urlencoding = "2"
 async-trait = "0.1"
 # Arrancador SQOBA (subagent C) — zip backup/restore save-files.
@@ -54,6 +59,17 @@ walkdir = "2"
 ignore = "0.4"
 globset = "0.4"
 image = { version = "0.25", default-features = false, features = ["png"] }
+# Dictation Phase 1 (2026-05-24): диктация Groq cloud.
+# enigo — кросс-платформенная симуляция клавиш (Win32 SendInput) для Ctrl+V инжекта.
+# arboard — clipboard read/write с восстановлением оригинала после inject.
+# keyring — Windows Credential Manager для API key (enterprise-standard, не plaintext).
+# hickory-resolver — DoH resolver для AI HTTP клиентов (РФ обход DNS poisoning).
+# base64 — encode/decode WAV bytes между renderer и backend.
+enigo = "0.2"
+arboard = "3"
+keyring = { version = "3", features = ["windows-native"] }
+hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
+base64 = "0.22"
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
 # rolling daily file под `<data_dir>/logs/<slot>/`.

@@ -272,6 +272,27 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 - ❌ Расширять SDDL `kepler-focus-svc` pipe'а за пределы `D:(A;;GA;;;AU)` (Authenticated Users). NULL-DACL = network exposure, не нужно.
 - ❌ Автоматически re-prompt'ить UAC для auto-install `kepler-focus-svc` после того, как юзер отказался. `autoInstallAttemptedThisSession` (session-scope) + `setFocusServiceAutoInstallDeclined` (persisted) гарантируют один промпт максимум.
 
+### Dictation
+
+См. [Dictation](docs-site/concepts/dictation.md).
+
+- ❌ Хранить Groq API key в `dictation-config.json` или любом JSON-конфиге. Только Windows Credential Manager через `keyring::Entry::new("kosmos-kepler", "groq-api-key")`. Reason: ключ не должен утекать через бэкап `%APPDATA%\Kosmos\`, случайный коммит, crash dump.
+- ❌ `BrowserWindow` для pill вне `shell/electron/dictation-pill.ts`. Все show/hide/close — через IPC `kepler:dictation:*` или экспортированные функции модуля.
+- ❌ Inject без сохранения и восстановления оригинального clipboard. Поток обязан: save → set transcript → paste → restore. Иначе мы стираем буфер пользователя.
+- ❌ Restore clipboard раньше чем через 80ms (`tokio::time::sleep`) после симуляции Ctrl+V. Race с ОС: Windows ещё не успеет paste'нуть → восстановим старое поверх transcript'а → юзер увидит **старое** содержимое. Реальная задержка типичных paste'ов 30-50ms; 80ms — запас на медленные машины и Electron-based target'ы (VS Code).
+- ❌ Симуляция Ctrl+V без предварительного `SetForegroundWindow(prev_hwnd)` + `sleep 80ms`. HWND captured **до** показа pill (в `dictation.capture_foreground_window`). Без re-focus + sleep'а текст уходит в pill (если пилл случайно получил фокус) или в случайное окно.
+- ❌ `BrowserWindow` pill без `focusable: false`. Pill **не должен воровать фокус** с активного окна — иначе re-focus до Ctrl+V не нужен, но клавиатурные shortcut'ы в подложенном окне ломаются пока pill виден. `focusable: false` + `showInactive()` гарантирует невмешательство.
+- ❌ Streaming audio chunks в Phase 1. Groq endpoint не принимает streaming (только batch transcription). Усложнять state machine ради этого нельзя — `submit_audio` принимает одну полную WAV в base64.
+- ❌ `getUserMedia` без graceful permission-denied handling. Показать понятную ошибку в pill, вызвать `pillFinished()`. Не оставлять белый экран / висящую запись.
+- ❌ Hotkey registration без headless guard'а. В `KOSMOS_HEADLESS=1` / `KOSMOS_TEST_MODE=1` `globalShortcut.register` НЕ должен вызываться — Playwright driver'ит state через IPC напрямую, accelerator не должен мешать host'у машины разработчика.
+- ❌ Использовать настраиваемый DoH resolver (`dictation::network::build_client`) для не-AI запросов (sync / RAWG / прочее) в Phase 1. Scope явно ограничен — generic API спроектирована переиспользуемой для будущих AI-провайдеров, но не для всего backend HTTP.
+- ❌ Local model downloads (whisper.cpp, Parakeet V3) или CUDA acceleration в Phase 1. Это отдельный proof-loop Phase 2 с собственной валидацией производительности per-модель.
+- ❌ Push-to-talk через `globalShortcut.register` callback. Electron'овский globalShortcut шлёт только key-down, не key-up — hold-to-record реализован через Win32 `WH_KEYBOARD_LL` hook в `dictation::hotkey_hook` (Phase 1.5). В PTT mode globalShortcut НЕ регистрируется на стороне shell — hook драйвит через broadcast events `dictation_ptt_trigger`.
+- ❌ Блокирующие операции / longer-than-microseconds работу в callback'е `WH_KEYBOARD_LL` (`keyboard_proc` в `hotkey_hook.rs`). Windows блокирует всю клавиатуру пока callback не вернётся. Только: snapshot lock + non-blocking broadcast::Sender::send + return. Никаких allocation'ов / file I/O / sync awaits.
+- ❌ Регистрировать `dictation::hotkey_hook` thread больше одного раза за процесс. `ensure_thread_started` — idempotent через `OnceLock`. Множественные hook'и → дубликаты events.
+- ❌ Hotkey hook в `kepler-backend` без `cfg(windows)` guard'а. `WH_KEYBOARD_LL` Win32-specific. На non-Windows модуль stub'нут.
+- ❌ Применять `httpProxy` config-поле к не-AI запросам (RAWG / sync / прочее) в Phase 1.5. Scope ограничен `dictation::network::build_client`.
+
 ### Spaces concept
 
 - ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user

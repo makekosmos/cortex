@@ -34,6 +34,12 @@ function rootView() {
     const FocusWidgetView = defineAsyncComponent(() => import("./views/FocusWidgetView.vue"));
     return FocusWidgetView;
   }
+  if (hash.startsWith("#dictation-pill")) {
+    // Дикта-pill — overlay с waveform + таймером во время записи.
+    // Async — audio capture / encoding в launcher bundle не нужны.
+    const DictationPillView = defineAsyncComponent(() => import("./views/DictationPillView.vue"));
+    return DictationPillView;
+  }
   return App;
 }
 

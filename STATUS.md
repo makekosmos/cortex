@@ -1,4 +1,20 @@
-# Kosmos — статус проекта (2026-05-23)
+# Kosmos — статус проекта (2026-05-25)
+
+## 2026-05-25 — Диктация (STT) Phase 1 + 1.5 (Kepler 0.2.10 → 0.3.0)
+
+Голосовой ввод по образцу Raycast Dictation. Hotkey → pill снизу экрана → Groq Cloud (whisper-large-v3) → авто-вставка в активное окно через нативный Win32 `SendInput`.
+
+### Что есть в 0.3.0
+
+- **Backend модуль** `services/kepler-backend/src/dictation/`: host (state machine + broadcast events), Groq client с anti-hallucination фильтрацией сегментов (`no_speech_prob > 0.6`, `avg_logprob < -1.0`) + `temperature=0` + захардкоженный prompt, inject через `windows::Win32::SendInput` (`Ctrl+V`), Windows Credential Manager для API-ключа, DoH/SOCKS proxy для AI HTTP, low-level keyboard hook для push-to-talk, persistent stats (WPM / Time Saved / Total Words).
+- **Pill window** — frameless, alwaysOnTop, `focusable: false`, 200×56 в окне 240×72, снизу экрана 100px от низа. Glossy чёрный с waveform внутри. Audio capture в renderer через Web Audio API (16kHz mono PCM → WAV → base64).
+- **Settings**:
+  - **Безопасность** — DNS-резолвер (System / Cloudflare DoH / Google DoH / Custom) + HTTP/SOCKS proxy + test connectivity.
+  - **Секреты** — Groq API key (keyring).
+  - **Диктация** — статистика-карточки (Raycast-style), выбор микрофона, язык (23 варианта), hotkey, trigger mode, inject mode, провайдер.
+- **`@kosmos/visuals`** — 6 новых компонентов: `Button`, `TextInput`, `Textarea`, `RadioGroup`, `HotkeyCapture`, и settings primitives.
+
+Proof loop: `.agent/tasks/2026-05-24-dictation/spec.md`. Docs: `docs-site/concepts/dictation.md`. ADR: `docs-site/reference/decisions.md` § 2026-05-24.
 
 ## 2026-05-23 — Settings sidebar + command visibility (Kepler 0.2.7 → 0.2.8)
 

@@ -82,6 +82,7 @@ import {
 import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
 import { setupFocusWidgetBackendSync, teardownFocusWidgetBackendSync } from "./focus-widget";
+import { setupDictationHotkey } from "./dictation-pill";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
 import {
@@ -802,6 +803,12 @@ async function initArkClient(): Promise<void> {
     } catch (e) {
       keplerLog.error("focus-widget", "backend sync setup failed", { err: String(e) });
     }
+    // Dictation hotkey — registers globalShortcut из dictation-config'а
+    // backend'а и подписывается на `dictation_config_changed` для
+    // перерегистрации. Headless / test mode skip'ает регистрацию.
+    void setupDictationHotkey().catch((e) =>
+      keplerLog.error("dictation", "hotkey setup failed", { err: String(e) }),
+    );
     // Bridge для Vue-extensions: extension-host прокидывает renderer-запросы
     // сюда через IPC. invokeOperation — public escape-hatch для generic RPC,
     // onArkEvent — generic подписка, фильтруем по event-имени.

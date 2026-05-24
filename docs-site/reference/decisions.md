@@ -115,6 +115,31 @@ Phase 5+ план — либо вынести scanner в `kepler-backend` (Rust)
 
 Лаунчер Kepler — окно фиксированного размера 720×460. Animated resize (per-frame) отброшен после экспериментов: Win32 не успевает синхронно прокидывать события, окно дёргается. Решение — фиксированный размер; expand/collapse состояния выражаются через layout внутри renderer, не через resize окна.
 
+### 2026-05-24 — Dictation Phase 1: облачный Groq, не локальный whisper.cpp
+
+Источник: `concepts/dictation.md` + `.agent/tasks/2026-05-24-dictation/spec.md`.
+
+Phase 1 диктации — **только облачная транскрипция через Groq Cloud** (whisper-large-v3-turbo). Audio capture — в renderer'е через Web Audio API; backend получает готовый WAV в `dictation.submit_audio`. Локальные модели (whisper.cpp через `whisper-rs`, Parakeet V3 через onnx-runtime) — отдельный proof-loop Phase 2.
+
+Причина: MVP за разумные часы. Cloud-only требует ~12 файлов (Rust dictation module + Electron pill + Vue settings); локальные модели добавляют download manager, model storage, CUDA acceleration setup (на Windows капризный, см. [whisper.cpp#2857](https://github.com/ggml-org/whisper.cpp/issues/2857)), AudioWorklet streaming. Это ещё ~3-5× scope'а и требует отдельной валидации производительности per-модель.
+
+Sub-решения:
+
+- **API key** — Windows Credential Manager через крейт `keyring` (enterprise standard, как Raycast/macOS Keychain, gh CLI). НЕ в `dictation-config.json`.
+- **DNS для AI HTTP** — настраиваемый DoH resolver (Cloudflare / Google / custom) через `hickory-resolver` в `reqwest::Client::dns_resolver`. Scope: только dictation HTTP. РФ Groq блок — преимущественно DNS poisoning, DoH покрывает 80%.
+- **Trigger mode** — только Toggle в Phase 1. Push-to-talk требует low-level hook (`globalShortcut` не даёт keyup) — Phase 1.5.
+- **Inject** — `enigo` Ctrl+V симуляция + `arboard` clipboard save/restore + Win32 `SetForegroundWindow(prev_hwnd)` с `sleep 80ms` до и после Ctrl+V. Race с slow paste'ом → restore старого клипа поверх transcript'а — закрыто sleep'ами.
+- **Batch submit, не streaming chunks** — Groq endpoint не принимает streaming audio (это transcription, не realtime ASR). Усложнять state machine ради этого не имеет смысла.
+
+Roadmap:
+
+- Phase 2 — локальные модели + download manager + AudioWorklet streaming.
+- Phase 3 — LLM post-processing транскрипта (cleanup, пунктуация, стиль под контекст).
+- ~~Phase 1.5~~ — push-to-talk через low-level hook + HTTP/SOCKS proxy + custom Whisper prompt — **DONE 2026-05-24**:
+  - PTT через Win32 `WH_KEYBOARD_LL` hook в `services/kepler-backend/src/dictation/hotkey_hook.rs`. Hook парсит accelerator → `Matcher`, emit'ит broadcast `dictation_ptt_trigger { phase }`. Electron в PTT mode НЕ регистрирует globalShortcut, листает hook events и вызывает `toggleDictation()` на каждое (down → старт, up → отправка).
+  - Proxy через `reqwest::Proxy::all(url)` (feature `socks` в reqwest). Ортогонально DoH — можно комбинировать.
+  - Custom prompt — поле `transcriptionPrompt` в config'е, проходит в Groq multipart `prompt` field. Подсказка модели для domain-specific терминов и стиля.
+
 ## Шаблон для нового решения
 
 Все новые архитектурные/безопасностные решения **обязаны** попадать сюда. Минимальный шаблон ADR:

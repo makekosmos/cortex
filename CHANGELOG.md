@@ -4,6 +4,38 @@
 
 Поддерживается вручную: при каждом version bump'е в `shell/package.json` добавляется новая секция с датой и списком изменений.
 
+## [0.3.0] — 2026-05-25
+
+Голосовой ввод (диктация) по образцу Raycast — global hotkey → плавающая pill → транскрипция в Groq Cloud → авто-вставка в активное окно.
+
+### Добавлено
+
+- **Dictation модуль** (`services/kepler-backend/src/dictation/`): host (state machine), Groq client, inject через нативный Win32 `SendInput` (Ctrl+V), keyring для API-ключа, DoH/proxy для AI HTTP, low-level keyboard hook для push-to-talk, persistent stats (WPM / Total Words / Time Saved).
+- **Pill window** — frameless, alwaysOnTop, `focusable: false`, снизу экрана 100px от низа, glossy чёрный визуал с waveform. Audio capture в renderer через Web Audio API (16kHz mono PCM → WAV → base64).
+- **Settings → Безопасность** — DNS-резолвер для AI-провайдеров (System / Cloudflare DoH / Google DoH / Custom DoH) + HTTP/SOCKS proxy + кнопка проверки соединения.
+- **Settings → Секреты** — управление Groq API key (Windows Credential Manager через `keyring`).
+- **Settings → Диктация** — статистика, выбор микрофона, язык (23 варианта), горячая клавиша, режим триггера (Toggle / PTT), способ инжекта (Auto-paste / Clipboard only), выбор поставщика.
+- **Anti-hallucination**: `language` hint + `temperature=0` + `verbose_json` segment filtering (`no_speech_prob > 0.6`, `avg_logprob < -1.0`) + hardcoded короткий prompt с domain-терминами.
+- **`@kosmos/visuals`** — 6 новых компонентов: `Button`, `TextInput`, `Textarea`, `RadioGroup`, `HotkeyCapture`, общий primitive-набор для settings.
+
+### Изменено
+
+- **Settings window** теперь имеет `minWidth: 800, minHeight: 560`.
+- **Sidebar порядок:** Main = Общие → Безопасность → Секреты → Дебаг → О приложении. Advanced = Поиск файлов → Расширения → Диктация → Фокус → Задачи → Заметки → Времяметр → Игры.
+- **Settings → Общие** — кнопка hotkey'я launcher'а перевязана на общий `HotkeyCapture`.
+
+### Исправлено
+
+- **Pill race condition** — при первом запуске `start` команда уходила в renderer до `onMounted` Vue компонента. Добавлен `pillReady: Promise<void>` (резолвится на `did-finish-load` + 50ms tick).
+- **Inject `TryFromIntError`** — `enigo::Key::Unicode('v')` отправлял `v` через VK_PACKET (Unicode-канал), на котором модификаторы не работают как shortcut, и сам enigo падал. Заменено на нативный `windows::Win32::SendInput` с `VK_CONTROL` + `VK_V` (0x56).
+- **`update_config` игнорировал `provider`/`model`** — UI слал patch, backend терял поля.
+
+### Заметки
+
+- Default модель — `whisper-large-v3` (не turbo). См. `docs-site/concepts/dictation.md` § «Выбор модели» — turbo даёт пропуски слов и больше галлюцинаций на русском.
+- Default hotkey — `Ctrl+Shift+;`. На русской раскладке `;` отсутствует (там `ж`) — Electron `globalShortcut` маппит по scan-code OEM_1, всё равно работает, но визуально юзер может видеть это как `Ctrl+Shift+~` (label ОС). Поменять в Settings → Диктация.
+- Roadmap: локальные модели (whisper.cpp / Parakeet) — Phase 2. LLM post-processing — Phase 3. Silero-VAD предобработка — отдельно.
+
 ## [0.2.0] — 2026-05-19
 
 Milestone-релиз, объединяет работу `0.1.20` и `0.1.21` под единым тегом и фиксирует расширение публичного API для extension-разработчиков.

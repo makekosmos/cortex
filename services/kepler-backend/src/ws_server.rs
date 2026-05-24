@@ -19,6 +19,7 @@ use crate::ark_host::ArkHost;
 use crate::arrancador;
 use crate::auth;
 use crate::command_bus::{ClientId, CommandBus, CommandBusEvent, CommandManifest};
+use crate::dictation::{handle_dictation_op, DictationHost};
 use crate::export;
 use crate::file_index::{FileIndex, FileIndexSettingsPatch};
 use crate::focus::handle_focus_op;
@@ -174,6 +175,7 @@ pub struct WsServer {
     auth_token: Arc<String>,
     command_bus: Arc<CommandBus>,
     pomodoro_host: Arc<PomodoroHost>,
+    dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
     next_client_id: Arc<AtomicU64>,
@@ -199,6 +201,7 @@ impl WsServer {
             auth_token: Arc::new(auth_token),
             command_bus: Arc::new(CommandBus::new()),
             pomodoro_host: PomodoroHost::new(data_dir),
+            dictation_host: DictationHost::new(),
             app_index,
             file_index,
             next_client_id: Arc::new(AtomicU64::new(1)),
@@ -225,12 +228,13 @@ impl WsServer {
             let token = self.auth_token.clone();
             let bus = self.command_bus.clone();
             let pomo = self.pomodoro_host.clone();
+            let dict = self.dictation_host.clone();
             let app_idx = self.app_index.clone();
             let file_idx = self.file_index.clone();
             let client_id = self.next_client_id.fetch_add(1, Ordering::Relaxed);
             tokio::spawn(async move {
                 if let Err(e) = handle_connection(
-                    stream, ark_host, token, bus, pomo, app_idx, file_idx, client_id,
+                    stream, ark_host, token, bus, pomo, dict, app_idx, file_idx, client_id,
                 )
                 .await
                 {
@@ -247,6 +251,7 @@ async fn handle_connection(
     expected_token: Arc<String>,
     command_bus: Arc<CommandBus>,
     pomodoro_host: Arc<PomodoroHost>,
+    dictation_host: Arc<DictationHost>,
     app_index: Arc<AppIndex>,
     file_index: Arc<FileIndex>,
     client_id: ClientId,
@@ -315,6 +320,7 @@ async fn handle_connection(
 
     let mut bus_rx = command_bus.subscribe();
     let mut pomo_rx = pomodoro_host.subscribe();
+    let mut dict_rx = dictation_host.subscribe();
     // Forward ark-core events (object_upserted/object_deleted/entity_changed/peer_*
     // и т.п.) — до 2026-05-20 это broadcast channel был не подключён к WS,
     // events не доходили до клиентов. Cross-app live updates (Eden subscribed
@@ -373,6 +379,19 @@ async fn handle_connection(
             // 2a'. Pomodoro events → forward as wire-formatted JSON.
             pevt = pomo_rx.recv() => {
                 match pevt {
+                    Ok(payload) => {
+                        if sink.send(Message::Text(payload.to_string())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+
+            // 2a''. Dictation events (state_changed / transcript / config_changed) → forward.
+            devt = dict_rx.recv() => {
+                match devt {
                     Ok(payload) => {
                         if sink.send(Message::Text(payload.to_string())).await.is_err() {
                             break;
@@ -452,6 +471,25 @@ async fn handle_connection(
                     if !has_req_id_field {
                         map.remove("id");
                     }
+                }
+
+                // Intercept dictation.* — STT через DictationHost.
+                if let Some(rest) = operation.strip_prefix("dictation.") {
+                    let resp = handle_dictation_op(rest, params, &dictation_host).await;
+                    let mut envelope = serde_json::Map::new();
+                    if let Some(id) = req_id {
+                        envelope.insert("id".into(), serde_json::Value::String(id));
+                    }
+                    envelope.insert("ok".into(), serde_json::Value::Bool(resp.ok));
+                    envelope.insert("data".into(), resp.data);
+                    if let Some(err) = resp.error {
+                        envelope.insert("error".into(), serde_json::Value::String(err));
+                    }
+                    let payload = serde_json::Value::Object(envelope).to_string();
+                    if sink.send(Message::Text(payload)).await.is_err() {
+                        break;
+                    }
+                    continue;
                 }
 
                 // Intercept pomodoro.* — обрабатываем локально через PomodoroHost.

@@ -106,6 +106,17 @@ const api: KeplerApi = {
       return () => ipcRenderer.removeListener("kepler:focus-widget:state", wrapper);
     },
   },
+  dictation: {
+    toggle: () => ipcRenderer.invoke("kepler:dictation:toggle"),
+    cancel: () => ipcRenderer.invoke("kepler:dictation:cancel"),
+    pillFinished: () => ipcRenderer.invoke("kepler:dictation:pill-finished"),
+    onCommand: (cb) => {
+      const wrapper = (_e: Electron.IpcRendererEvent, cmd: unknown) =>
+        cb(cmd as { kind: "start" | "stop" | "cancel" });
+      ipcRenderer.on("kepler:dictation:command", wrapper);
+      return () => ipcRenderer.removeListener("kepler:dictation:command", wrapper);
+    },
+  },
   focusService: {
     status: () => ipcRenderer.invoke("kepler:focus-service:status"),
     ping: () => ipcRenderer.invoke("kepler:focus-service:ping"),

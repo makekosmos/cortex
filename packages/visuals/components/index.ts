@@ -77,3 +77,13 @@ export { default as BlocklistCard } from "./BlocklistCard.vue";
 export { default as Toast } from "./Toast.vue";
 
 export { default as ToastHost } from "./ToastHost.vue";
+
+export { default as Button } from "./Button.vue";
+
+export { default as TextInput } from "./TextInput.vue";
+
+export { default as Textarea } from "./Textarea.vue";
+
+export { default as RadioGroup } from "./RadioGroup.vue";
+
+export { default as HotkeyCapture } from "./HotkeyCapture.vue";
