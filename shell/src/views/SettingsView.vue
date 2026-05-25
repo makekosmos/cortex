@@ -38,10 +38,12 @@ import {
   HotkeyCapture,
   RadioGroup,
   SettingsAdvancedIntro,
+  SettingsButtonRow,
   SettingsDropdownRow,
   SettingsList,
   SettingsRow,
   SettingsSearchInput,
+  SettingsTextInputRow,
   SettingsSidebar,
   SettingsSidebarButton,
   Textarea,
@@ -2476,49 +2478,33 @@ onBeforeUnmount(() => {
                   />
                 </template>
               </SettingsRow>
-              <SettingsRow
+              <SettingsTextInputRow
                 v-if="dictationConfig.networkProfile.kind === 'custom_doh'"
+                v-model="dictationCustomDohUrl"
                 title="Свой DoH URL"
                 description="Endpoint в формате https://example/dns-query."
-              >
-                <template #control>
-                  <TextInput
-                    v-model="dictationCustomDohUrl"
-                    placeholder="https://comss.dns.controld.com/dns-query"
-                    @blur="onDictationCustomDohBlur"
-                  />
-                </template>
-              </SettingsRow>
-              <SettingsRow
+                placeholder="https://comss.dns.controld.com/dns-query"
+                @blur="onDictationCustomDohBlur"
+              />
+              <SettingsTextInputRow
+                v-model="dictationProxyInput"
                 title="HTTP / SOCKS proxy"
                 description="Опционально. Если DoH недостаточно (SNI / IP блок). http://, https://, socks5://host:port. Пусто — без proxy."
-              >
-                <template #control>
-                  <TextInput
-                    v-model="dictationProxyInput"
-                    placeholder="socks5://127.0.0.1:1080"
-                    @blur="onDictationProxyBlur"
-                  />
-                </template>
-              </SettingsRow>
-              <SettingsRow
+                placeholder="socks5://127.0.0.1:1080"
+                @blur="onDictationProxyBlur"
+              />
+              <SettingsButtonRow
                 title="Проверить соединение"
                 :description="
                   dictationConnTestResult ||
                   'HEAD-запрос к api.groq.com через выбранный DNS + proxy.'
                 "
-              >
-                <template #control>
-                  <Button
-                    variant="ghost"
-                    :loading="dictationConnTestBusy"
-                    :disabled="dictationConnTestBusy"
-                    @click="onDictationTestConnectivity"
-                  >
-                    {{ dictationConnTestBusy ? "Проверяю…" : "Проверить" }}
-                  </Button>
-                </template>
-              </SettingsRow>
+                variant="ghost"
+                :loading="dictationConnTestBusy"
+                :disabled="dictationConnTestBusy"
+                :button-label="dictationConnTestBusy ? 'Проверяю…' : 'Проверить'"
+                @click="onDictationTestConnectivity"
+              />
             </SettingsList>
           </div>
         </template>

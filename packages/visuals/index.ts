@@ -48,6 +48,7 @@ export {
   SettingsDropdownRow,
   SettingsToggleRow,
   SettingsButtonRow,
+  SettingsTextInputRow,
   SettingsAdvancedIntro,
   SettingsSidebar,
   SettingsSidebarButton,

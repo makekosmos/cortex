@@ -68,6 +68,8 @@ export { default as SettingsToggleRow } from "./SettingsToggleRow.vue";
 
 export { default as SettingsButtonRow } from "./SettingsButtonRow.vue";
 
+export { default as SettingsTextInputRow } from "./SettingsTextInputRow.vue";
+
 export { default as SettingsSidebar } from "./SettingsSidebar.vue";
 
 export { default as SettingsSidebarButton } from "./SettingsSidebarButton.vue";
