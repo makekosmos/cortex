@@ -21,6 +21,9 @@ import {
 } from "@lucide/vue";
 import LegacyToggle from "./settings/components/LegacyToggle.vue";
 import UpdateBanner from "./settings/components/UpdateBanner.vue";
+import AboutTab from "./settings/tabs/AboutTab.vue";
+import DebugTab from "./settings/tabs/DebugTab.vue";
+import GeneralTab from "./settings/tabs/GeneralTab.vue";
 import { useKeplerUpdate } from "./settings/composables/useKeplerUpdate";
 import "./settings/settings-shared.css";
 import holoSvg from "../assets/holo.svg";
@@ -2261,190 +2264,49 @@ onBeforeUnmount(() => {
 
         <!-- General tab -->
         <template v-else-if="activeTab === 'general'">
-          <div v-if="loading" class="empty">Загрузка…</div>
-
-          <div v-else class="rows kosmos-scroll">
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Глобальный хоткей</div>
-                <div class="hint">Показать или скрыть launcher</div>
-                <div v-if="hotkeyError" class="error">{{ hotkeyError }}</div>
-              </div>
-              <div class="hotkey-control">
-                <HotkeyCapture
-                  :model-value="hotkey"
-                  capture-prompt="Нажми сочетание…"
-                  @update:modelValue="onLauncherHotkeyChange"
-                />
-                <Button variant="ghost" size="sm" @click="resetHotkey">Сброс</Button>
-              </div>
-            </div>
-
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Автозапуск с Windows</div>
-                <div class="hint">
-                  <template v-if="autostartAllowed">Запускать Kepler при входе в систему</template>
-                  <template v-else
-                    >Доступно только в установленной версии (не в dev-сборке)</template
-                  >
-                </div>
-                <div v-if="autostartError" class="error">{{ autostartError }}</div>
-              </div>
-              <LegacyToggle
-                :checked="autostart"
-                :disabled="!autostartAllowed"
-                @change="onToggleAutostart"
-              />
-            </div>
-
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Показывать в трее</div>
-                <div class="hint">Оставлять значок Kepler в системном трее</div>
-              </div>
-              <LegacyToggle :checked="trayIcon" @change="onToggleTrayIcon" />
-            </div>
-          </div>
+          <GeneralTab
+            :loading="loading"
+            :hotkey="hotkey"
+            :hotkey-error="hotkeyError"
+            :autostart="autostart"
+            :autostart-allowed="autostartAllowed"
+            :autostart-error="autostartError"
+            :tray-icon="trayIcon"
+            @launcher-hotkey-change="onLauncherHotkeyChange"
+            @reset-hotkey="resetHotkey"
+            @toggle-autostart="onToggleAutostart"
+            @toggle-tray-icon="onToggleTrayIcon"
+          />
         </template>
 
         <template v-else-if="activeTab === 'about'">
-          <section class="advanced-page kosmos-scroll">
-            <SettingsAdvancedIntro
-              v-if="activeAdvancedIntro"
-              :icon="activeAdvancedIntro.icon"
-              :title="activeAdvancedIntro.label"
-              :description="activeAdvancedIntro.description"
-              :image-src="activeAdvancedIntro.introImage"
-              :icon-from="activeAdvancedIntro.iconGradient?.from"
-              :icon-to="activeAdvancedIntro.iconGradient?.to"
-            />
-
-            <div class="advanced-page__body rows">
-              <div class="row">
-                <div class="row-label">
-                  <div class="label">Версия Kepler</div>
-                  <div v-if="checkResultLabel" class="hint">{{ checkResultLabel }}</div>
-                </div>
-                <div class="row-actions">
-                  <code class="value">{{ version }}</code>
-                  <button
-                    type="button"
-                    class="btn ghost"
-                    :disabled="updateChecking || updateState.kind === 'downloading'"
-                    @click="onCheckUpdates"
-                  >
-                    {{ updateChecking ? "Проверяем…" : "Проверить обновления" }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
+          <AboutTab
+            :intro="activeAdvancedIntro"
+            :version="version"
+            :check-result-label="checkResultLabel"
+            :update-checking="updateChecking"
+            :is-downloading="updateState.kind === 'downloading'"
+            @check-updates="onCheckUpdates"
+          />
         </template>
 
         <template v-else-if="activeTab === 'debug'">
-          <div class="rows kosmos-scroll">
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Developer mode</div>
-                <div class="hint">
-                  Hot reload extension'ов через Vite + F12 для DevTools. Перезапусти extension чтобы
-                  применить.
-                </div>
-              </div>
-              <LegacyToggle :checked="developerMode" @change="onToggleDeveloperMode" />
-            </div>
-
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Запоминать позицию в лаунчере</div>
-                <div class="hint">
-                  Сохраняет введённый текст, выбранный пункт и прокрутку между открытиями лаунчера.
-                  <code>0</code> — всегда ресетить при открытии.
-                </div>
-              </div>
-              <label class="ttl-input">
-                <input
-                  type="number"
-                  min="0"
-                  max="1440"
-                  step="1"
-                  :value="launcherStateTtl"
-                  @change="onLauncherStateTtlChange"
-                />
-                <span>мин</span>
-              </label>
-            </div>
-
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Backend</div>
-                <div class="hint">kepler-backend подпроцесс</div>
-              </div>
-              <code v-if="backend.running" class="value">
-                pid {{ backend.pid }} • port {{ backend.wsPort }}
-              </code>
-              <span v-else class="value muted">не запущен</span>
-            </div>
-
-            <div class="row" v-if="backend.lockFilePath">
-              <div class="row-label">
-                <div class="label">Lock-файл</div>
-              </div>
-              <code class="value lock">{{ backend.lockFilePath }}</code>
-            </div>
-
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Отчёты об ошибках</div>
-                <div class="hint">
-                  <template v-if="crashFiles.length === 0">
-                    Crash-логов нет. Если Kepler упадёт, файлы появятся здесь.
-                  </template>
-                  <template v-else>
-                    {{ crashFiles.length }} {{ crashFiles.length === 1 ? "файл" : "файла(-ов)" }} в
-                    папке отчётов.
-                  </template>
-                </div>
-              </div>
-              <div class="row-actions">
-                <button type="button" class="btn ghost" @click="onOpenCrashesFolder">
-                  Открыть папку
-                </button>
-                <button
-                  type="button"
-                  class="btn ghost"
-                  :disabled="crashFiles.length === 0"
-                  @click="onClearCrashes"
-                >
-                  Очистить
-                </button>
-              </div>
-            </div>
-            <div v-if="crashesError" class="error-banner">{{ crashesError }}</div>
-
-            <div class="row">
-              <div class="row-label">
-                <div class="label">Bug-report (ZIP)</div>
-                <div class="hint">
-                  <template v-if="bundleSavedPath">
-                    Сохранён: <code>{{ bundleSavedPath }}</code>
-                  </template>
-                  <template v-else-if="bundling">Собираю отчёт…</template>
-                  <template v-else>Логи + crash-reports + версии.</template>
-                </div>
-              </div>
-              <div class="row-actions">
-                <button type="button" class="btn ghost" :disabled="bundling" @click="onBundleSave">
-                  Создать отчёт
-                </button>
-                <button type="button" class="btn ghost" @click="onOpenLogsFolder">
-                  Открыть logs/
-                </button>
-              </div>
-            </div>
-            <div v-if="bundleError" class="error-banner">{{ bundleError }}</div>
-          </div>
+          <DebugTab
+            :developer-mode="developerMode"
+            :launcher-state-ttl="launcherStateTtl"
+            :backend="backend"
+            :crash-files="crashFiles"
+            :crashes-error="crashesError"
+            :bundle-saved-path="bundleSavedPath"
+            :bundling="bundling"
+            :bundle-error="bundleError"
+            @toggle-developer-mode="onToggleDeveloperMode"
+            @launcher-state-ttl-change="onLauncherStateTtlChange"
+            @open-crashes-folder="onOpenCrashesFolder"
+            @clear-crashes="onClearCrashes"
+            @bundle-save="onBundleSave"
+            @open-logs-folder="onOpenLogsFolder"
+          />
         </template>
 
         <!-- Безопасность — сеть для AI-провайдеров (DNS resolver). -->
