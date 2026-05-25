@@ -29,7 +29,6 @@ import {
 import { useKeplerUpdate } from "./settings/composables/useKeplerUpdate";
 import "./settings/settings-shared.css";
 import {
-  SettingsAdvancedIntro,
   SettingsSearchInput,
   SettingsSidebar,
   SettingsSidebarButton,
