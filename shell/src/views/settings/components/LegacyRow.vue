@@ -15,7 +15,9 @@
 // и в дочерних tab-компонентах.
 
 defineProps<{
-  title: string;
+  /** Заголовок строки. Если нужен сложный label (HTML / inline span hint) —
+   *  использовать слот #title. */
+  title?: string;
   hint?: string;
   /** Когда есть значение — рендерится как `<div class="error">{{ error }}</div>`
    *  под hint'ом. */
@@ -26,7 +28,9 @@ defineProps<{
 <template>
   <div class="row">
     <div class="row-label">
-      <div class="label">{{ title }}</div>
+      <div class="label">
+        <slot name="title">{{ title }}</slot>
+      </div>
       <div v-if="$slots.hint || hint" class="hint">
         <slot name="hint">{{ hint }}</slot>
       </div>

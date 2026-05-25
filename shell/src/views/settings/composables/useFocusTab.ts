@@ -2,7 +2,7 @@
 // deactivate + системный демон + drafting (create / edit) + @-mention автокомплит
 // в textarea доменов + drag-drop .txt файлов.
 
-import { computed, ref } from "vue";
+import { computed, ref, type InjectionKey } from "vue";
 
 export interface FocusBlocklist {
   id: string;
@@ -451,3 +451,7 @@ export function useFocusTab() {
     onDraftDrop,
   };
 }
+
+export type FocusTabCtx = ReturnType<typeof useFocusTab>;
+
+export const FocusTabKey: InjectionKey<FocusTabCtx> = Symbol("FocusTabKey");

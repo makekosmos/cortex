@@ -3,6 +3,7 @@
 // инкапсулированы в composable `useExportTab`. При маунте тянем конвертеры.
 
 import { onMounted } from "vue";
+import LegacyRow from "../components/LegacyRow.vue";
 import { useExportTab } from "../composables/useExportTab";
 import type { ExportConverterInfo } from "@shared/ipc-types";
 
@@ -38,17 +39,20 @@ function runExport(c: ExportConverterInfo) {
       Нет доступных конвертеров. Backend ещё не зарегистрировал ни одного.
     </div>
 
-    <div v-for="c in exportConverters" :key="c.converter_id" class="row export-row">
-      <div class="row-label">
-        <div class="label">{{ c.display_name }}</div>
-        <div class="hint">
-          {{ c.object_type }} →
-          {{ exportSelectedFormat[c.converter_id] ?? c.default_format }}
-        </div>
+    <LegacyRow
+      v-for="c in exportConverters"
+      :key="c.converter_id"
+      class="export-row"
+      :title="c.display_name"
+    >
+      <template #hint>
+        {{ c.object_type }} → {{ exportSelectedFormat[c.converter_id] ?? c.default_format }}
+      </template>
+      <template #extra>
         <div v-if="exportStatusByConverter[c.converter_id]" class="hint export-status">
           {{ exportStatusByConverter[c.converter_id] }}
         </div>
-      </div>
+      </template>
       <div class="row-actions">
         <select
           v-if="c.supported_formats.length > 1"
@@ -69,27 +73,27 @@ function runExport(c: ExportConverterInfo) {
           {{ exportBusyId === c.converter_id ? "Экспорт…" : "Экспортировать" }}
         </button>
       </div>
-    </div>
+    </LegacyRow>
 
     <div v-if="exportHistory.length > 0" class="ext-section-header">Последние экспорты</div>
-    <div v-for="(h, i) in exportHistory" :key="i" class="row export-history-row">
-      <div class="row-label">
-        <div class="label">
-          {{ h.display_name }}
-          <span class="hint">({{ h.format }})</span>
-        </div>
-        <div class="hint">
-          {{ formatHistoryTime(h.timestamp) }} · {{ h.file_count }} файлов ·
-          {{ (h.bytes / 1024).toFixed(1) }} KB
-        </div>
+    <LegacyRow v-for="(h, i) in exportHistory" :key="i" class="export-history-row">
+      <template #title>
+        {{ h.display_name }}
+        <span class="hint">({{ h.format }})</span>
+      </template>
+      <template #hint>
+        {{ formatHistoryTime(h.timestamp) }} · {{ h.file_count }} файлов ·
+        {{ (h.bytes / 1024).toFixed(1) }} KB
+      </template>
+      <template #extra>
         <code class="value lock">{{ h.dest_dir }}</code>
-      </div>
+      </template>
       <div class="row-actions">
         <span class="value" :class="{ muted: !h.ok }">
           {{ h.ok ? "ok" : "с ошибками" }}
         </span>
       </div>
-    </div>
+    </LegacyRow>
   </div>
 </template>
 
