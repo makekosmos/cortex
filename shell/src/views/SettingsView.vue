@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, ref, type Component } from "vue";
 import {
   BookOpen,
   Bug,
-  Check,
   ChevronLeft,
   ChevronRight,
   Gamepad2,
@@ -18,9 +17,9 @@ import {
   ShieldCheck,
   Timer,
 } from "@lucide/vue";
-import LegacyToggle from "./settings/components/LegacyToggle.vue";
 import UpdateBanner from "./settings/components/UpdateBanner.vue";
 import AboutTab from "./settings/tabs/AboutTab.vue";
+import AppCommandsTab from "./settings/tabs/AppCommandsTab.vue";
 import DebugTab from "./settings/tabs/DebugTab.vue";
 import DictationTab from "./settings/tabs/DictationTab.vue";
 import ExportTab from "./settings/tabs/ExportTab.vue";
@@ -896,66 +895,15 @@ onBeforeUnmount(() => {
             activeTab === 'games'
           "
         >
-          <section class="advanced-page kosmos-scroll">
-            <SettingsAdvancedIntro
-              v-if="activeAdvancedIntro"
-              :icon="activeAdvancedIntro.icon"
-              :title="activeAdvancedIntro.label"
-              :description="activeAdvancedIntro.description"
-              :image-src="activeAdvancedIntro.introImage"
-              :icon-from="activeAdvancedIntro.iconGradient?.from"
-              :icon-to="activeAdvancedIntro.iconGradient?.to"
-            />
-
-            <div class="advanced-page__body">
-              <div
-                v-if="activeTab === 'time-tracker'"
-                class="rows command-settings-list time-settings-list"
-              >
-                <div class="row">
-                  <div class="row-label">
-                    <div class="label">Трекать активные приложения</div>
-                    <div class="hint">
-                      Записывает в ARK какое окно сейчас активно. Изменение применится после
-                      перезапуска Kepler.
-                    </div>
-                  </div>
-                  <LegacyToggle :checked="usageTracker" @change="onToggleUsageTracker" />
-                </div>
-              </div>
-
-              <div>
-                <h2 class="advanced-section-title">Команды</h2>
-                <div class="rows command-settings-list">
-                  <div v-for="command in activeAppCommands" :key="command.id" class="row">
-                    <div class="command-row-label">
-                      <span
-                        class="command-row-icon"
-                        :style="{
-                          '--command-row-icon-from': command.iconFrom,
-                          '--command-row-icon-to': command.iconTo,
-                        }"
-                        aria-hidden="true"
-                      >
-                        <img :src="command.icon" alt="" />
-                      </span>
-                      <div class="label">{{ command.title }}</div>
-                    </div>
-                    <label class="command-checkbox" :aria-label="`Показывать ${command.title}`">
-                      <input
-                        type="checkbox"
-                        :checked="isCommandVisible(command.id)"
-                        @change="onToggleCommandVisibility(command.id, $event)"
-                      />
-                      <span class="command-checkbox__box" aria-hidden="true">
-                        <Check :size="13" :stroke-width="3" />
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+          <AppCommandsTab
+            :intro="activeAdvancedIntro"
+            :active-tab="activeTab"
+            :commands="activeAppCommands"
+            :usage-tracker="usageTracker"
+            :is-command-visible="isCommandVisible"
+            @toggle-usage-tracker="onToggleUsageTracker"
+            @toggle-command-visibility="onToggleCommandVisibility"
+          />
         </template>
 
         <template v-else-if="activeTab === 'file-search'">
@@ -988,108 +936,12 @@ onBeforeUnmount(() => {
    `.settings-shell`, поэтому работают и в дочерних tab-компонентах без
    `:deep()` хаков. Здесь ниже остаются только tab-specific классы. */
 
-.command-settings-list {
-  width: 100%;
-}
-
-.time-settings-list {
-  margin-top: 16px;
-}
-
-.command-row-label {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-}
-
-.command-row-icon {
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 4px;
-  background-image: linear-gradient(
-    to bottom left,
-    var(--command-row-icon-from),
-    var(--command-row-icon-to)
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, oklch(1 0 0) 6%, transparent);
-  overflow: hidden;
-}
-
-.command-row-icon img {
-  display: block;
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-}
-
-.command-checkbox {
-  position: relative;
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.command-checkbox input {
-  position: absolute;
-  width: 0;
-  height: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.command-checkbox__box {
-  display: inline-flex;
-  width: 16px;
-  height: 16px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--foreground) 24%, transparent);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--main-background-color);
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease;
-}
-
-.command-checkbox__box svg {
-  opacity: 0;
-  transform: scale(0.82);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease;
-}
-
-.command-checkbox input:checked + .command-checkbox__box {
-  border-color: var(--foreground);
-  background: var(--foreground);
-  color: #0d0d0d;
-}
-
-.command-checkbox input:checked + .command-checkbox__box svg {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.command-checkbox input:focus-visible + .command-checkbox__box {
-  outline: 2px solid color-mix(in srgb, var(--foreground) 35%, transparent);
-  outline-offset: 2px;
-}
-
-/* `.toggle`/`.track`/`.thumb` стили переехали в
-   `./settings/components/LegacyToggle.vue`. */
-
-/* Extensions tab CSS переехал в `./settings/tabs/ExtensionsTab.vue`. */
-
-/* FileSearch tab CSS переехал в `./settings/tabs/FileSearchTab.vue`. */
+/* Все scoped tab-specific CSS переехали в соответствующие per-tab компоненты:
+ * - LegacyToggle / UpdateBanner (shell-local components)
+ * - AppCommandsTab / ExtensionsTab / FileSearchTab / FocusTab / ExportTab
+ *   (per-tab .vue с собственным scoped-style)
+ *
+ * Утилитарные классы (.row, .btn, .label, .hint, .advanced-page и т.д.)
+ * живут в `./settings/settings-shared.css` (non-scoped, namespaced под
+ * .settings-shell). */
 </style>
