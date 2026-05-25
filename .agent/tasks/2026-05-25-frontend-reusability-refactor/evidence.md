@@ -218,22 +218,40 @@ $ for dir in extensions/eden extensions/delphi extensions/horologion extensions/
 
 | Область               | Baseline   | После      | Δ        |
 | --------------------- | ---------- | ---------- | -------- |
-| extensions/eden       | 24 301     | 24 301     | 0        |
+| extensions/eden       | 24 301     | 24 262     | −39      |
 | extensions/delphi     | 10 065     | 10 065     | 0        |
-| extensions/horologion | 5 860      | 5 871      | +11      |
+| extensions/horologion | 5 860      | 5 865      | +5       |
 | extensions/arrancador | 2 856      | 2 853      | −3       |
 | shell/src             | 7 703      | 7 720      | +17      |
 | packages/visuals      | 9 624      | 9 930      | +306     |
 | packages/ark/src      | 1 859      | 1 859      | 0        |
-| **ИТОГО**             | **62 268** | **62 599** | **+331** |
+| **ИТОГО**             | **62 268** | **62 554** | **+286** |
 
-**Honest assessment:** total LOC вырос на 331 строку, потому что:
+### Источники изменений LOC
 
-- `packages/visuals` получил 4 атома (~ 200 строк) + 3 stories (~ 100 строк).
+| Изменение                                              | Δ строк |
+| ------------------------------------------------------ | ------- |
+| 4 атома Settings\*Row в @kosmos/visuals                | +180    |
+| 4 \*.stories.ts для атомов                             | +120    |
+| UpdateBanner + useKeplerUpdate в shell                 | +140    |
+| SettingsNumberRow в horologion                         | +100    |
+| Сокращение shell/SettingsView.vue                      | −122    |
+| Сокращение horologion/SettingsView.vue                 | −89     |
+| Сокращение arrancador/SettingsPage.vue                 | −3      |
+| Удаление 8 truly-duplicate CSS rules в Eden App.css    | −31     |
+| Удаление 3 truly-duplicate CSS rules в Eden Editor.css | −8      |
+| **Net δ**                                              | +286    |
+
+**Честная оценка:** total LOC вырос на 286 строк, потому что:
+
+- `packages/visuals` получил 4 атома (~ 180 строк) + 3 stories (~ 120 строк).
 - `shell/src` получил `UpdateBanner.vue` + `useKeplerUpdate.ts` (~ 140 строк),
   но `SettingsView.vue` сократился на 122 строки → net +17.
 - `horologion` получил `SettingsNumberRow.vue` (100 строк), `SettingsView.vue`
-  сократился на 89 строк → net +11.
+  сократился на 89 строк → net +11. CSS-стили `.row__control input[type=number]`
+  переехали из родителя в новый компонент 1:1.
+- `extensions/eden`: −39 строк только за счёт удаления 11 истинных CSS-дубликатов
+  (одинаковый селектор + полностью идентичное тело правила).
 
 Я добавил **переиспользуемую foundation**, которая ОКУПИТСЯ при следующих
 расширениях: каждый новый settings-tab теперь стоит в 3-4 раза меньше строк, чем
