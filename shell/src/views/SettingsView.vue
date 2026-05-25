@@ -24,6 +24,7 @@ import UpdateBanner from "./settings/components/UpdateBanner.vue";
 import AboutTab from "./settings/tabs/AboutTab.vue";
 import DebugTab from "./settings/tabs/DebugTab.vue";
 import ExportTab from "./settings/tabs/ExportTab.vue";
+import ExtensionsTab from "./settings/tabs/ExtensionsTab.vue";
 import FocusTab from "./settings/tabs/FocusTab.vue";
 import GeneralTab from "./settings/tabs/GeneralTab.vue";
 import { useKeplerUpdate } from "./settings/composables/useKeplerUpdate";
@@ -56,13 +57,7 @@ import {
   ToastHost,
   provideToastHost,
 } from "@kosmos/visuals";
-import type {
-  BackendStatus,
-  FileIndexSettings,
-  InstalledExtensionInfo,
-  MarketplaceCatalog,
-  MarketplaceExtension,
-} from "@shared/ipc-types";
+import type { BackendStatus, FileIndexSettings } from "@shared/ipc-types";
 
 type Tab =
   | "general"
@@ -946,76 +941,6 @@ async function onRescanFileSearch() {
   }
 }
 
-// --- Extensions -------------------------------------------------------------
-
-const installed = ref<InstalledExtensionInfo[]>([]);
-const extensionsLoading = ref<boolean>(false);
-const extensionsError = ref<string>("");
-const busyExt = ref<string>("");
-
-async function loadExtensions() {
-  extensionsLoading.value = true;
-  extensionsError.value = "";
-  try {
-    installed.value = await window.kepler.extension.installedList();
-  } catch (e) {
-    extensionsError.value = (e as Error).message;
-  } finally {
-    extensionsLoading.value = false;
-  }
-}
-
-async function onRevert(id: string) {
-  if (busyExt.value) return;
-  busyExt.value = id;
-  extensionsError.value = "";
-  try {
-    const ok = await window.kepler.extension.revert(id);
-    if (!ok) {
-      extensionsError.value = `${id}: нет доступных backup'ов для отката`;
-    }
-    await loadExtensions();
-  } catch (e) {
-    extensionsError.value = `${id}: ${(e as Error).message}`;
-  } finally {
-    busyExt.value = "";
-  }
-}
-
-async function onUninstall(id: string) {
-  if (busyExt.value) return;
-  busyExt.value = id;
-  extensionsError.value = "";
-  try {
-    await window.kepler.extension.uninstall(id);
-    await loadExtensions();
-  } catch (e) {
-    extensionsError.value = `${id}: ${(e as Error).message}`;
-  } finally {
-    busyExt.value = "";
-  }
-}
-
-// --- Marketplace ------------------------------------------------------------
-
-const catalog = ref<MarketplaceCatalog | null>(null);
-const marketLoading = ref<boolean>(false);
-const marketError = ref<string>("");
-const installingId = ref<string>("");
-
-async function loadCatalog(force = false) {
-  marketLoading.value = true;
-  marketError.value = "";
-  try {
-    catalog.value = await window.kepler.extension.catalogFetch(force);
-  } catch (e) {
-    marketError.value = (e as Error).message;
-  } finally {
-    marketLoading.value = false;
-  }
-}
-
-// Focus tab — state и handlers перенесены в `./settings/composables/useFocusTab.ts`,
 // инициализация и lifecycle — в `./settings/tabs/FocusTab.vue`.
 
 function onClose() {
@@ -1030,10 +955,7 @@ function onKey(e: KeyboardEvent) {
 }
 
 function loadTabData(t: Tab) {
-  if (t === "extensions") {
-    void loadExtensions();
-    if (!catalog.value) void loadCatalog();
-  }
+  // Export/Focus/Extensions: state + load инкапсулированы в их composables.
   if (t === "file-search") {
     void loadFileSearchSettings();
   }
@@ -1052,49 +974,6 @@ function selectTab(t: Tab) {
   tab.value = t;
 }
 
-function catalogById(id: string): MarketplaceExtension | undefined {
-  return catalog.value?.extensions.find((e) => e.id === id);
-}
-
-function hasUpdate(i: InstalledExtensionInfo): boolean {
-  const c = catalogById(i.id);
-  return !!(c && i.version && c.version !== i.version);
-}
-
-async function onUpdate(i: InstalledExtensionInfo) {
-  const c = catalogById(i.id);
-  if (!c || installingId.value) return;
-  installingId.value = i.id;
-  marketError.value = "";
-  try {
-    await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
-    await loadExtensions();
-  } catch (e) {
-    marketError.value = `${i.id}: ${(e as Error).message}`;
-  } finally {
-    installingId.value = "";
-  }
-}
-
-async function onInstallNew(c: MarketplaceExtension) {
-  if (installingId.value) return;
-  installingId.value = c.id;
-  marketError.value = "";
-  try {
-    await window.kepler.extension.installFromUrl(c.downloadUrl, c.sha256);
-    await loadExtensions();
-  } catch (e) {
-    marketError.value = `${c.id}: ${(e as Error).message}`;
-  } finally {
-    installingId.value = "";
-  }
-}
-
-const availableInCatalog = computed<MarketplaceExtension[]>(() => {
-  if (!catalog.value) return [];
-  const installedIds = new Set(installed.value.map((i) => i.id));
-  return catalog.value.extensions.filter((c) => !installedIds.has(c.id));
-});
 
 // --- Dictation (Phase 1, Groq) ----------------------------------------------
 
@@ -2244,145 +2123,7 @@ onBeforeUnmount(() => {
 
         <!-- Extensions tab — плоский список установленных. Обновления подтягиваются из catalog.json. -->
         <template v-else-if="activeTab === 'extensions'">
-          <section class="advanced-page kosmos-scroll">
-            <SettingsAdvancedIntro
-              v-if="activeAdvancedIntro"
-              :icon="activeAdvancedIntro.icon"
-              :title="activeAdvancedIntro.label"
-              :description="activeAdvancedIntro.description"
-              :image-src="activeAdvancedIntro.introImage"
-              :icon-from="activeAdvancedIntro.iconGradient?.from"
-              :icon-to="activeAdvancedIntro.iconGradient?.to"
-            />
-
-            <div class="advanced-page__body">
-              <div v-if="marketError" class="error-banner">{{ marketError }}</div>
-              <div v-if="extensionsError" class="error-banner">{{ extensionsError }}</div>
-
-              <div class="ext-list kosmos-scroll">
-                <!-- Доступные из marketplace, ещё не установленные -->
-                <div v-if="availableInCatalog.length > 0" class="ext-section-title">
-                  Доступные расширения
-                </div>
-                <div v-for="c in availableInCatalog" :key="`catalog-${c.id}`" class="ext-item">
-                  <img
-                    v-if="c.iconUrl"
-                    class="ext-icon"
-                    :src="c.iconUrl"
-                    alt=""
-                    @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
-                  />
-                  <div v-else class="ext-icon ext-icon-fallback">
-                    {{ c.name.slice(0, 1) }}
-                  </div>
-                  <div class="ext-info">
-                    <div class="ext-name">{{ c.name }}</div>
-                    <div class="ext-meta">
-                      <span class="ext-version">v{{ c.version }}</span>
-                      <span v-if="c.author" class="ext-author">· {{ c.author }}</span>
-                    </div>
-                    <div v-if="c.description" class="ext-description">
-                      {{ c.description }}
-                    </div>
-                  </div>
-                  <div class="ext-actions">
-                    <button
-                      type="button"
-                      class="btn"
-                      :disabled="installingId === c.id"
-                      @click="onInstallNew(c)"
-                    >
-                      <template v-if="installingId === c.id">Установка…</template>
-                      <template v-else>Установить</template>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Установленные -->
-                <div
-                  v-if="installed.length > 0 && availableInCatalog.length > 0"
-                  class="ext-section-title"
-                >
-                  Установленные
-                </div>
-                <div v-if="installed.length === 0 && availableInCatalog.length === 0" class="empty">
-                  <template v-if="marketLoading">Загрузка каталога…</template>
-                  <template v-else>Расширений нет. Каталог пуст или недоступен.</template>
-                </div>
-
-                <div v-for="ext in installed" :key="ext.id" class="ext-item">
-                  <img v-if="ext.iconDataUri" class="ext-icon" :src="ext.iconDataUri" alt="" />
-                  <div v-else class="ext-icon ext-icon-fallback">
-                    {{ ext.name.slice(0, 1) }}
-                  </div>
-                  <div class="ext-info">
-                    <div class="ext-name">{{ ext.name }}</div>
-                    <div class="ext-meta">
-                      <span class="ext-version">v{{ ext.version ?? "—" }}</span>
-                      <span v-if="ext.source === 'dev'" class="ext-dev-badge">dev</span>
-                      <span v-if="ext.author" class="ext-author">· {{ ext.author }}</span>
-                      <span v-if="hasUpdate(ext) && ext.source !== 'dev'" class="ext-author">
-                        · доступно v{{ catalogById(ext.id)?.version }}
-                      </span>
-                      <span v-if="ext.backupCount > 0" class="ext-backups">
-                        · backup'ов: {{ ext.backupCount }}
-                      </span>
-                    </div>
-                    <div v-if="ext.description" class="ext-description">
-                      {{ ext.description }}
-                    </div>
-                  </div>
-                  <div class="ext-actions">
-                    <!-- Dev-source extension'ы (из repo) НЕ имеют update/revert/uninstall —
-                 source code управляется git'ом, не Kepler installer'ом. -->
-                    <span v-if="ext.source === 'dev'" class="ext-dev-hint">
-                      источник: репозиторий
-                    </span>
-                    <template v-else>
-                      <button
-                        v-if="hasUpdate(ext)"
-                        type="button"
-                        class="btn"
-                        :disabled="installingId === ext.id || busyExt === ext.id"
-                        @click="onUpdate(ext)"
-                      >
-                        <template v-if="installingId === ext.id">Обновление…</template>
-                        <template v-else>Обновить</template>
-                      </button>
-                      <button
-                        v-if="ext.backupCount > 0"
-                        type="button"
-                        class="btn ghost"
-                        :disabled="busyExt === ext.id || installingId === ext.id"
-                        @click="onRevert(ext.id)"
-                      >
-                        Откатить
-                      </button>
-                      <button
-                        type="button"
-                        class="btn ghost danger"
-                        :disabled="busyExt === ext.id || installingId === ext.id"
-                        @click="onUninstall(ext.id)"
-                      >
-                        Удалить
-                      </button>
-                    </template>
-                  </div>
-                </div>
-              </div>
-
-              <div class="ext-footer">
-                <button
-                  type="button"
-                  class="btn ghost"
-                  :disabled="marketLoading"
-                  @click="loadCatalog(true)"
-                >
-                  {{ marketLoading ? "Проверка…" : "Проверить обновления" }}
-                </button>
-              </div>
-            </div>
-          </section>
+          <ExtensionsTab :intro="activeAdvancedIntro" />
         </template>
 
         <!-- Focus tab — управление блок-листами доменов и активной блокировкой -->
@@ -2507,117 +2248,7 @@ onBeforeUnmount(() => {
 /* `.toggle`/`.track`/`.thumb` стили переехали в
    `./settings/components/LegacyToggle.vue`. */
 
-.ext-footer {
-  display: flex;
-  justify-content: flex-start;
-  padding: 12px 16px;
-  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.market-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px 0;
-}
-
-.ext-section-header {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-  margin: 16px 0 4px;
-  padding: 0 2px;
-}
-
-/* Extensions list */
-
-.ext-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.ext-section-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground);
-  padding: 8px 4px 4px;
-  margin-top: 4px;
-}
-.ext-section-title:first-child {
-  margin-top: 0;
-}
-
-.ext-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--foreground) 4%, transparent);
-}
-
-.ext-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.ext-icon-fallback {
-  background: color-mix(in srgb, var(--foreground) 10%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-}
-
-.ext-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.ext-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--foreground);
-}
-
-.ext-meta {
-  font-size: 11px;
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
-  margin-top: 1px;
-  /* gap 4px между токенами (версия / dev badge / автор / backup count) —
-     раньше токены липли друг к другу, выглядело как один слово `v0.1.6·Kazui`. */
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 4px;
-  align-items: baseline;
-}
-
-.ext-description {
-  font-size: 11px;
-  color: color-mix(in srgb, var(--foreground) 65%, transparent);
-  margin-top: 3px;
-}
-
-.ext-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-
-/* Focus tab */
+/* Extensions tab CSS переехал в `./settings/tabs/ExtensionsTab.vue`. */
 
 /* Focus tab CSS переехал в `./settings/tabs/FocusTab.vue`. Здесь — только
    `.focus-input` (используется и в FileSearch tab'е для совместимости
