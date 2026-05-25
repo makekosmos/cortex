@@ -1,6 +1,6 @@
 {
   "task_id": "2026-05-25-frontend-reusability-refactor",
-  "verified_at": "2026-05-25T01:35:00Z",
+  "verified_at": "2026-05-25T02:00:00Z",
   "results": [
     {
       "ac": "AC1",
@@ -12,49 +12,56 @@
       "ac": "AC2",
       "verdict": "PASS",
       "command": "grep -rnE '<template #control>\\s*<div>\\s*<Dropdown' shell/src/views extensions/*/src",
-      "note": "All direct duplicate dropdown/toggle/button/textinput patterns rewritten via atoms in shell/SettingsView, horologion/SettingsView, arrancador/SettingsPage"
+      "note": "All direct duplicate patterns rewritten via atoms; 8 LegacyToggle replacements in shell; 4 SettingsNumberRow + 2 SoundPickerRow in horologion"
     },
     {
       "ac": "AC3",
       "verdict": "PASS",
       "command": "wc -l shell/src/views/SettingsView.vue",
-      "note": "4629 → 4507 (-122 lines); UpdateBanner.vue + useKeplerUpdate.ts extracted into shell/src/views/settings/"
+      "note": "4629 → 4433 (-196 lines); UpdateBanner + LegacyToggle + useKeplerUpdate extracted"
     },
     {
       "ac": "AC4",
       "verdict": "PASS",
       "command": "cd shell && bunx vue-tsc --noEmit 2>&1 | grep 'error TS' | wc -l",
-      "note": "8 errors (vs baseline 12); subset of baseline, 4 TS4104 readonly-options errors fixed by SettingsDropdownRow.slice() wrapper"
+      "note": "0 errors (down from 12 baseline) — improvement, all baseline TS errors fixed"
     },
     {
       "ac": "AC5",
       "verdict": "PASS",
       "command": "wc -l extensions/horologion/src/views/SettingsView.vue",
-      "note": "449 → 360 (-89); SettingsNumberRow extracted with .row__control input[type=number] CSS"
+      "note": "449 → 343 (-106); SettingsNumberRow + SoundPickerRow extracted"
     },
     {
       "ac": "AC6",
       "verdict": "PASS",
       "command": "git diff HEAD --stat -- '*.css' '*.vue'",
-      "note": "All CSS rules either preserved in place or moved 1:1 to the new component's scoped style. Class names unchanged."
+      "note": "All CSS preserved 1:1; 11 truly-duplicate CSS rule blocks removed from Eden App.css/Editor.css (cascade-neutral)"
     },
     {
       "ac": "AC7",
       "verdict": "PASS",
-      "command": "manual review of @click/@update:modelValue/@blur bindings",
-      "note": "Event signatures preserved verbatim through atom passthrough; clamp helpers passed as :clamp prop to SettingsNumberRow"
+      "command": "manual review + typecheck",
+      "note": "All event signatures, v-model bindings, computed properties preserved verbatim"
     },
     {
       "ac": "AC8",
       "verdict": "PASS",
       "command": "ls packages/visuals/components/Settings*Row.stories.ts && ls .agent/tasks/2026-05-25-frontend-reusability-refactor/",
-      "note": "JSDoc on each new component; stories for 3/4 new atoms; spec/evidence/json present"
+      "note": "JSDoc on every new component; stories for 3/4 new general atoms; spec/evidence/json present"
     }
   ],
   "loc_summary": {
     "baseline_total": 62268,
-    "current_total": 62554,
-    "delta": 286,
-    "honest_assessment": "Total LOC increased by 286 lines. The atomic foundation cost ~540 new lines (4 atoms + 4 stories + 1 composable + 1 UpdateBanner + 1 SettingsNumberRow). Reductions in consumer files were ~253 lines (-122 shell/SettingsView, -89 horologion/SettingsView, -3 arrancador/SettingsPage, -39 Eden CSS dedup). Atoms become net-positive when applied to more locations in future refactors. Substantial monolith decomposition (full SettingsView per-tab split, full Eden App.css dedup) was blocked by scoped-CSS coupling and lack of visual-regression testing infrastructure."
+    "current_total": 62582,
+    "delta": 314,
+    "honest_assessment": "Total LOC increased by 314 lines (+0.5%). New atomic foundation cost ~677 lines (4 general atoms + 4 stories + composable + 4 shell/extension-local atoms). Reductions in consumer files were ~357 lines (-196 shell/SettingsView, -106 horologion/SettingsView, -3 arrancador, -39 Eden CSS dedup, -13 unused-code cleanup). Atoms are net-positive when applied to many locations (LegacyToggle: 8 uses; SettingsDropdownRow: 5 uses; SettingsNumberRow: 4 uses). Full SettingsView per-tab split + full Eden App.css dedup blocked by scoped-CSS coupling and lack of visual-regression testing infrastructure."
+  },
+  "quality_improvements": {
+    "ts_errors": "12 → 0 (all pre-existing baseline errors fixed)",
+    "duplicate_css_rules": "11 → 0 in Eden App.css + Editor.css",
+    "atomic_components_created": 7,
+    "places_atoms_applied": 28,
+    "settings_view_reduction_pct": "4.2%"
   }
 }
