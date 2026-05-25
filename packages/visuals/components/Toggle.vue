@@ -69,7 +69,7 @@ function onKeydown(e: KeyboardEvent) {
   padding: 0;
   border: none;
   background: transparent;
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   color: inherit;
   outline-offset: 2px;

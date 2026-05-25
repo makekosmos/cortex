@@ -211,6 +211,30 @@ UI не даёт менять модель — вшит **`whisper-large-v3`**. 
 
 **Урок:** Windows shell отслеживает Win key как modifier через **state machine** (Win pressed → other key seen?), не через message flow. Перехват single key не нарушает этот state machine — нужно явно его «накормить» dummy событием.
 
+## Known issues / tech debt
+
+Накапливаем здесь то, что обнаружено в продакшене, но не успели или не смогли починить с первой итерации. При следующем proof loop'е по диктации — раскопать и закрыть.
+
+### `Win+Ctrl+V` (audio output picker) иногда открывается при Win+H (2026-05-25)
+
+**Симптом:** при использовании `Win+H` как hotkey'я диктации, **иногда** при отпускании `H` (когда `Win` всё ещё зажат) Windows открывает popup аудио-выхода («Аудиовыход», Win+Ctrl+V).
+
+**Что уже пробовали:**
+
+1. Defer `swallow_win_shortcut_if_active` SendInput в spawned thread (был race с hook timeout / рекурсия через свою же hook chain). Помогло частично.
+2. Сменили dummy VK с `VK_RESERVED (0xFF)` на `VK_NONAME (0xFC)` — официально reserved by Microsoft. `0xFF` undefined, Windows иногда интерпретировал как edge-case с `Win+Ctrl+V` mapping. После смены ещё пробивается.
+
+**Возможные направления:**
+
+- Использовать `KEYEVENTF_SCANCODE` со scan code 0x00 вместо virtual key — обходит VK mapping вообще.
+- Делать два разных swallow: на keydown (как сейчас) **и** на keyup непосредственно перед reлизом Win — чтобы Windows точно увидела «modifier consumed».
+- Посмотреть как именно делает [PowerToys Keyboard Manager](https://github.com/microsoft/PowerToys) — у них работает 100%.
+- Альтернатива: рекомендовать пользователям не Win+H, а Ctrl+Alt+Space / другую non-system комбинацию — но это компромисс с UX.
+
+**Workaround для пользователя:** отпускать `Win` раньше `H` (или одновременно).
+
+---
+
 ## Что НЕ делает Phase 1 / 1.5
 
 - Локальные модели (whisper.cpp, Parakeet V3) — отдельный proof-loop Phase 2.

@@ -200,49 +200,57 @@ fn handle_capture(vk: u32, is_down: bool) -> bool {
     true
 }
 
-/// Если Win key зажат и мы только что intercept'или акорд — посылаем
-/// **dummy** SendInput с VK_RESERVED (0xFF). Это не имеет визуального эффекта,
-/// но Windows считает что Win key был использован как modifier (не "lonely
-/// press") → при отпускании Win-up Start menu НЕ откроется.
+/// Если Win key зажат и мы только что intercept'или акорд — асинхронно
+/// (в отдельном thread'е) посылаем **dummy** SendInput с VK_NONAME (0xFC).
+/// Это не имеет визуального эффекта, но Windows считает что Win key был
+/// использован как modifier (не "lonely press") → при отпускании Win-up
+/// Start menu НЕ откроется.
 ///
-/// Это стандартный приём AutoHotKey / PowerToys для "swallow"'а Win
-/// shortcut'а который перехватили на keyboard hook уровне.
+/// КРИТИЧНО: SendInput вызывается из spawned thread, НЕ из hook callback'а.
+/// Если делать sync внутри callback'а:
+///   1. SendInput генерирует input event, который проходит через ту же
+///      hook chain ещё раз → рекурсия → timing-чувствительный race.
+///   2. Hook callback должен возвращаться < ~300ms (LowLevelHooksTimeout),
+///      иначе Windows временно деактивирует hook → системный shortcut
+///      пробивается (Voice Typing / audio picker открывается).
 fn swallow_win_shortcut_if_active() {
     if !check_mod_win(true) {
         return;
     }
-    // Dummy down + up для VK_RESERVED (0xFF). Не привязан ни к одной реальной
-    // клавише, но идёт через системный input pipeline и засчитывается как
-    // "key with modifier" → отменяет Start menu trigger.
-    let dummy_down = INPUT {
-        r#type: INPUT_KEYBOARD,
-        Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
-                wVk: VIRTUAL_KEY(0xFF),
-                wScan: 0,
-                dwFlags: KEYBD_EVENT_FLAGS(0),
-                time: 0,
-                dwExtraInfo: 0,
+    thread::spawn(|| {
+        // Dummy down + up для VK_NONAME (0xFC). Не привязан ни к одной
+        // реальной клавише, но идёт через системный input pipeline и
+        // засчитывается как "key with modifier" → отменяет Start menu trigger.
+        let dummy_down = INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VIRTUAL_KEY(0xFC),
+                    wScan: 0,
+                    dwFlags: KEYBD_EVENT_FLAGS(0),
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
             },
-        },
-    };
-    let dummy_up = INPUT {
-        r#type: INPUT_KEYBOARD,
-        Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
-                wVk: VIRTUAL_KEY(0xFF),
-                wScan: 0,
-                dwFlags: KEYEVENTF_KEYUP,
-                time: 0,
-                dwExtraInfo: 0,
+        };
+        let dummy_up = INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: VIRTUAL_KEY(0xFC),
+                    wScan: 0,
+                    dwFlags: KEYEVENTF_KEYUP,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
             },
-        },
-    };
-    let inputs = [dummy_down, dummy_up];
-    let cb = std::mem::size_of::<INPUT>() as i32;
-    unsafe {
-        SendInput(&inputs, cb);
-    }
+        };
+        let inputs = [dummy_down, dummy_up];
+        let cb = std::mem::size_of::<INPUT>() as i32;
+        unsafe {
+            SendInput(&inputs, cb);
+        }
+    });
 }
 
 fn is_modifier_vk(vk: u32) -> bool {
@@ -265,37 +273,42 @@ fn is_modifier_vk(vk: u32) -> bool {
 /// Возвращает `true` если событие consumed (intercept). Включает logging
 /// в broadcast при match + дедуп auto-repeat'а.
 fn handle_event(vk: u32, is_down: bool) -> bool {
-    // Lock короткий — только snapshot + send. Если lock poisoned —
-    // recover через into_inner (poison из panic в predшествующей секции;
-    // sender/matcher остаются valid).
-    let guard = match state_mtx().lock() {
-        Ok(g) => g,
-        Err(p) => p.into_inner(),
+    // Атомарно: проверка дедупа + update pressed-flag + snapshot для emit.
+    // КРИТИЧНО: pressed-flag ставится ПОД ТЕМ ЖЕ LOCK'ом до emit'а — иначе
+    // auto-repeat от удержания клавиши (Windows шлёт WM_KEYDOWN каждые
+    // ~33ms) проскакивает через флаг пока мы выполняли emit без lock'а →
+    // toggleDictation вызывался 6 раз на одно нажатие.
+    let (mode, sender_opt) = {
+        let mut guard = match state_mtx().lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        let Some(m) = guard.matcher else {
+            return false;
+        };
+        if vk != m.vk {
+            return false;
+        }
+        if is_down && guard.pressed {
+            // Auto-repeat от удержания — игнор события. Intercept (return true)
+            // чтобы системный shortcut не сработал на втором tick'е.
+            return true;
+        }
+        let mods_ok = check_mod(m.ctrl, VK_CONTROL.0)
+            && check_mod(m.shift, VK_SHIFT.0)
+            && check_mod(m.alt, VK_MENU.0)
+            && check_mod_win(m.win);
+        if !mods_ok {
+            return false;
+        }
+        // ВАЖНО: ставим pressed=is_down ДО emit'а, под тем же lock'ом, который
+        // проверял дедуп — соседний WM_KEYDOWN не сможет проскочить.
+        guard.pressed = is_down;
+        (guard.mode, guard.sender.clone())
     };
-    let Some(m) = guard.matcher else {
-        return false;
-    };
-    if vk != m.vk {
-        return false;
-    }
-    if is_down && guard.pressed {
-        // Auto-repeat от удержания — игнор события. Не пропускаем дальше
-        // тоже (всё ещё intercept), иначе системный shortcut сработает
-        // на втором tick'е.
-        return true;
-    }
-    let mods_ok = check_mod(m.ctrl, VK_CONTROL.0)
-        && check_mod(m.shift, VK_SHIFT.0)
-        && check_mod(m.alt, VK_MENU.0)
-        && check_mod_win(m.win);
-    if !mods_ok {
-        return false;
-    }
-    let mode = guard.mode;
-    let sender_opt = guard.sender.clone();
-    drop(guard);
 
-    // Emit event соответственно режиму.
+    // Emit event соответственно режиму (вне lock'а, чтобы broadcast не
+    // блокировал hook callback'у нашему же thread'у).
     match mode {
         HookMode::PushToTalk => {
             let phase = if is_down { "down" } else { "up" };
@@ -317,10 +330,6 @@ fn handle_event(vk: u32, is_down: bool) -> bool {
         }
     }
 
-    // Update pressed-flag для дедупа.
-    if let Ok(mut g) = state_mtx().lock() {
-        g.pressed = is_down;
-    }
     // Подавить Start menu trigger при intercept'е Win-shortcut'а
     // (см. swallow_win_shortcut_if_active).
     if is_down {

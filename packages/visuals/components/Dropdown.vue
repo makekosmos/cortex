@@ -25,12 +25,19 @@ interface Props<V> {
   matchTriggerWidth?: boolean;
   /** Disable весь триггер. */
   disabled?: boolean;
+  /** Показывать ли search field в popup'е. По умолчанию — auto: search
+   * появляется когда опций ≥ 6 (для коротких списков он избыточен). */
+  searchable?: boolean | "auto";
+  /** Placeholder для search input'а. */
+  searchPlaceholder?: string;
 }
 
 const props = withDefaults(defineProps<Props<T>>(), {
   placeholder: "Выбрать…",
   matchTriggerWidth: true,
   disabled: false,
+  searchable: "auto",
+  searchPlaceholder: "Поиск…",
 });
 
 const emit = defineEmits<{
@@ -40,12 +47,29 @@ const emit = defineEmits<{
 const open = ref(false);
 const triggerRef = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
+const searchInputRef = ref<HTMLInputElement | null>(null);
+const searchQuery = ref("");
 const panelPosition = ref<{ top: number; left: number; width: number }>({
   top: 0,
   left: 0,
   width: 0,
 });
 const highlightIdx = ref(0);
+
+const isSearchable = computed(() => {
+  if (props.searchable === "auto") return props.options.length >= 6;
+  return !!props.searchable;
+});
+
+const filteredOptions = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return props.options;
+  return props.options.filter(
+    (o) =>
+      o.label.toLowerCase().includes(q) ||
+      (o.description && o.description.toLowerCase().includes(q)),
+  );
+});
 
 const selectedOption = computed<Option<T> | null>(() => {
   if (props.modelValue === null || props.modelValue === undefined) return null;
@@ -83,10 +107,15 @@ function toggle() {
   if (props.disabled) return;
   open.value = !open.value;
   if (open.value) {
+    searchQuery.value = "";
     // Подсветим текущий выбранный (или первый) элемент.
     const idx = props.options.findIndex((o) => o.value === props.modelValue);
     highlightIdx.value = idx >= 0 ? idx : 0;
-    nextTick(reposition);
+    nextTick(() => {
+      reposition();
+      // Auto-focus в search field (если есть) — UX как в macOS dropdown.
+      if (isSearchable.value) searchInputRef.value?.focus();
+    });
   }
 }
 
@@ -103,10 +132,11 @@ function onKey(e: KeyboardEvent) {
     open.value = false;
     return;
   }
+  const opts = filteredOptions.value;
   if (e.key === "ArrowDown") {
     e.preventDefault();
-    for (let i = highlightIdx.value + 1; i < props.options.length; i++) {
-      if (!props.options[i].disabled) {
+    for (let i = highlightIdx.value + 1; i < opts.length; i++) {
+      if (!opts[i].disabled) {
         highlightIdx.value = i;
         return;
       }
@@ -116,7 +146,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key === "ArrowUp") {
     e.preventDefault();
     for (let i = highlightIdx.value - 1; i >= 0; i--) {
-      if (!props.options[i].disabled) {
+      if (!opts[i].disabled) {
         highlightIdx.value = i;
         return;
       }
@@ -125,11 +155,20 @@ function onKey(e: KeyboardEvent) {
   }
   if (e.key === "Enter") {
     e.preventDefault();
-    const opt = props.options[highlightIdx.value];
+    const opt = opts[highlightIdx.value];
     if (opt) pick(opt);
     return;
   }
 }
+
+// При фильтрации сбрасываем highlight на первую видимую опцию.
+watch(searchQuery, () => {
+  if (filteredOptions.value.length === 0) {
+    highlightIdx.value = -1;
+  } else {
+    highlightIdx.value = 0;
+  }
+});
 
 function onDocPointerDown(e: PointerEvent) {
   if (!open.value) return;
@@ -205,35 +244,46 @@ onBeforeUnmount(() => {
             width: matchTriggerWidth ? panelPosition.width + 'px' : undefined,
           }"
         >
-          <button
-            v-for="(opt, i) in options"
-            :key="String(opt.value)"
-            type="button"
-            class="kosmos-dd__option"
-            :class="{
-              'kosmos-dd__option--selected': opt.value === modelValue,
-              'kosmos-dd__option--highlighted': i === highlightIdx,
-              'kosmos-dd__option--disabled': opt.disabled,
-            }"
-            role="option"
-            :aria-selected="opt.value === modelValue"
-            :disabled="opt.disabled"
-            @mouseenter="!opt.disabled && (highlightIdx = i)"
-            @click="pick(opt)"
-          >
-            <span class="kosmos-dd__option-main">
-              <span class="kosmos-dd__option-label">{{ opt.label }}</span>
-              <span v-if="opt.description" class="kosmos-dd__option-desc">{{
-                opt.description
-              }}</span>
-            </span>
-            <Check
-              v-if="opt.value === modelValue"
-              class="kosmos-dd__check"
-              :size="14"
-              :stroke-width="2.4"
+          <div v-if="isSearchable" class="kosmos-dd__search">
+            <input
+              ref="searchInputRef"
+              v-model="searchQuery"
+              type="text"
+              class="kosmos-dd__search-input"
+              :placeholder="searchPlaceholder"
+              spellcheck="false"
+              autocomplete="off"
             />
-          </button>
+          </div>
+          <div class="kosmos-dd__options">
+            <button
+              v-for="(opt, i) in filteredOptions"
+              :key="String(opt.value)"
+              type="button"
+              class="kosmos-dd__option"
+              :class="{
+                'kosmos-dd__option--selected': opt.value === modelValue,
+                'kosmos-dd__option--highlighted': i === highlightIdx,
+                'kosmos-dd__option--disabled': opt.disabled,
+              }"
+              role="option"
+              :aria-selected="opt.value === modelValue"
+              :disabled="opt.disabled"
+              @mouseenter="!opt.disabled && (highlightIdx = i)"
+              @click="pick(opt)"
+            >
+              <span class="kosmos-dd__option-label">{{ opt.label }}</span>
+              <Check
+                v-if="opt.value === modelValue"
+                class="kosmos-dd__check"
+                :size="14"
+                :stroke-width="2.4"
+              />
+            </button>
+            <div v-if="filteredOptions.length === 0" class="kosmos-dd__empty">
+              Ничего не найдено
+            </div>
+          </div>
         </div>
       </transition>
     </Teleport>
@@ -244,32 +294,35 @@ onBeforeUnmount(() => {
 .kosmos-dd {
   position: relative;
   display: inline-flex;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .kosmos-dd__trigger {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  width: 100%;
+  width: fit-content;
+  min-width: 120px;
+  max-width: 100%;
   height: 34px;
   padding: 0 0.625rem;
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 2px solid var(--border);
+  background: transparent;
+  border: 2px solid transparent;
   border-radius: calc(var(--radius) * 0.7);
   corner-shape: var(--corner-shape);
   color: var(--foreground);
   font-family: inherit;
   font-size: 0.875rem;
-  cursor: pointer;
+  cursor: default;
   transition:
     border-color 140ms cubic-bezier(0.2, 0, 0, 1),
     background-color 140ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .kosmos-dd__trigger:hover:not(.kosmos-dd__trigger--disabled) {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: #ffffff;
 }
 
 .kosmos-dd__trigger--open {
@@ -308,17 +361,55 @@ onBeforeUnmount(() => {
   z-index: 9500;
   display: flex;
   flex-direction: column;
-  padding: 0.25rem;
-  min-width: 180px;
-  max-height: min(320px, calc(100vh - 32px));
-  overflow-y: auto;
-  background: var(--popover, var(--background));
-  border: 1px solid var(--border);
+  padding: 0;
+  min-width: 200px;
+  max-height: min(360px, calc(100vh - 32px));
+  background: var(--popover, color-mix(in srgb, var(--background) 92%, black));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   border-radius: calc(var(--radius) * 0.85);
   corner-shape: var(--corner-shape);
   box-shadow:
-    0 12px 32px rgb(0 0 0 / 28%),
-    0 4px 12px rgb(0 0 0 / 14%);
+    0 16px 40px rgb(0 0 0 / 36%),
+    0 6px 16px rgb(0 0 0 / 18%);
+  overflow: hidden;
+}
+
+.kosmos-dd__search {
+  padding: 8px 8px 4px;
+}
+
+.kosmos-dd__search-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: calc(var(--radius) * 0.55);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: border-color 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.kosmos-dd__search-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.kosmos-dd__search-input::placeholder {
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+.kosmos-dd__options {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .kosmos-dd__option {
@@ -326,7 +417,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.5rem 0.625rem;
+  padding: 8px 10px;
   background: transparent;
   border: none;
   border-radius: calc(var(--radius) * 0.55);
@@ -334,18 +425,23 @@ onBeforeUnmount(() => {
   color: var(--foreground);
   font-family: inherit;
   font-size: 0.875rem;
+  font-weight: 500;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .kosmos-dd__option--highlighted {
-  background: color-mix(in srgb, var(--foreground) 7%, transparent);
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .kosmos-dd__option--selected {
-  color: var(--accent);
-  font-weight: 600;
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  color: var(--foreground);
+}
+
+.kosmos-dd__option--selected.kosmos-dd__option--highlighted {
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
 }
 
 .kosmos-dd__option--disabled {
@@ -353,23 +449,19 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-.kosmos-dd__option-main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  flex: 1;
-  min-width: 0;
+.kosmos-dd__empty {
+  padding: 12px 10px;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 
 .kosmos-dd__option-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.kosmos-dd__option-desc {
-  font-size: 0.75rem;
-  color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
 
 .kosmos-dd__check {

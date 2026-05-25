@@ -106,7 +106,7 @@ function pick(opt: Option<T>) {
   border-radius: calc(var(--radius) * 0.7);
   corner-shape: var(--corner-shape);
   background: color-mix(in srgb, var(--foreground) 3%, var(--background));
-  cursor: pointer;
+  cursor: default;
   transition:
     border-color 140ms cubic-bezier(0.2, 0, 0, 1),
     background-color 140ms cubic-bezier(0.2, 0, 0, 1);

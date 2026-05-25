@@ -2684,7 +2684,7 @@ onBeforeUnmount(() => {
                   "
                 >
                   <template #control>
-                    <div class="control-min">
+                    <div>
                       <Dropdown
                         :model-value="dictationConfig.microphoneDeviceId ?? 'default'"
                         :options="dictationMicOptions"
@@ -2704,7 +2704,7 @@ onBeforeUnmount(() => {
                   description="Подсказка для Whisper. «Авто» — автоопределение."
                 >
                   <template #control>
-                    <div class="control-min">
+                    <div>
                       <Dropdown
                         :model-value="dictationConfig.language"
                         :options="dictationLanguageOptions"
@@ -2729,12 +2729,13 @@ onBeforeUnmount(() => {
                 </SettingsRow>
                 <SettingsRow title="Режим триггера" description="Как срабатывает горячая клавиша.">
                   <template #control>
-                    <RadioGroup
-                      :model-value="dictationConfig.triggerMode"
-                      :options="dictationTriggerOptions"
-                      name="dictation-trigger"
-                      @update:modelValue="onDictationTriggerModeChange"
-                    />
+                    <div>
+                      <Dropdown
+                        :model-value="dictationConfig.triggerMode"
+                        :options="dictationTriggerOptions"
+                        @update:modelValue="onDictationTriggerModeChange"
+                      />
+                    </div>
                   </template>
                 </SettingsRow>
                 <SettingsRow
@@ -2742,17 +2743,18 @@ onBeforeUnmount(() => {
                   description="Auto-paste симулирует Ctrl+V и восстанавливает буфер. Clipboard — только записать текст, вы жмёте Ctrl+V сами."
                 >
                   <template #control>
-                    <RadioGroup
-                      :model-value="dictationConfig.injectMode"
-                      :options="dictationInjectOptions"
-                      name="dictation-inject"
-                      @update:modelValue="onDictationInjectModeChange"
-                    />
+                    <div>
+                      <Dropdown
+                        :model-value="dictationConfig.injectMode"
+                        :options="dictationInjectOptions"
+                        @update:modelValue="onDictationInjectModeChange"
+                      />
+                    </div>
                   </template>
                 </SettingsRow>
                 <SettingsRow title="Поставщик" :description="dictationProviderDescription">
                   <template #control>
-                    <div class="control-min">
+                    <div>
                       <Dropdown
                         :model-value="dictationConfig.provider"
                         :options="dictationProviderOptions"
@@ -4546,10 +4548,6 @@ onBeforeUnmount(() => {
 
 .advanced-page__body :deep(.kosmos-settings-list) {
   margin-bottom: 12px;
-}
-
-.control-min {
-  min-width: 180px;
 }
 
 .control-stack {

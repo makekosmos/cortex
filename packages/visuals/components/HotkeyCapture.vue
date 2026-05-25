@@ -167,7 +167,7 @@ function onKey(e: KeyboardEvent) {
   color: var(--foreground);
   font-family: inherit;
   font-size: 0.875rem;
-  cursor: pointer;
+  cursor: default;
   transition:
     border-color 140ms cubic-bezier(0.2, 0, 0, 1),
     background-color 140ms cubic-bezier(0.2, 0, 0, 1);

@@ -4,6 +4,46 @@
 
 Поддерживается вручную: при каждом version bump'е в `shell/package.json` добавляется новая секция с датой и списком изменений.
 
+## [0.3.2] — 2026-05-25
+
+Доводка hotkey'ев и UI после второго раунда реального использования. State management диктации стал bullet-proof.
+
+### Добавлено
+
+- **`HotkeyCapture` external mode** для назначения системных shortcut'ов (Win+H, Win+Space): Settings UI поднимает `dictation.begin_hotkey_capture` op'у, Rust hook intercept'ит первое non-modifier нажатие с моделью «требуется минимум 1 modifier», эмитит `dictation_capture_key { vk, ctrl, shift, alt, win }` в Settings window через preload `dictation.onCaptureEvent`. WebContents keyboard handler больше не использовался для назначения.
+- **`swallow_win_shortcut_if_active`** — после успешного intercept'а с зажатой Win-клавишей шлём dummy `SendInput` (теперь `VK_NONAME (0xFC)`, **в spawned thread'е**) → Start menu не открывается. Defer на thread потому что синхронный SendInput внутри hook callback'а ломал LowLevelHooksTimeout и иногда системный shortcut пробивался.
+- **Persistent audio stream с 30s keep-alive** (`shell/src/views/DictationPillView.vue`): `mediaStream` + `audioCtx` остаются открытыми между сессиями. Серия диктовок подряд → 0ms latency. Через 30s idle stream закрывается, Windows mic indicator гаснет.
+- **Idle warmup pill window** через 3s после старта Kepler (`setImmediate`).
+- **Defensive `cancel` в `pillFinished`** — backend гарантированно возвращается в `Idle` после любого пути завершения pill (success/error/empty pcm/permission denied). Закрывает корень «backend застрял в Recording» bug'а.
+- **Auto-recovery в `start_recording`** — на `state must be idle` шлём `cancel` + retry. Никакого «sync isRecording» обмана.
+- **Reentrancy guard в `toggleDictation`** (`toggleInFlight`) + cleanup ARK подписки (`arkUnsubscribe`) при повторном `setupDictationHotkey` — защита от дубля событий.
+- **Расширенное логирование** hook events: `[dictation-pill] hook event: toggle | ptt down | ptt up`.
+
+### Изменено
+
+- **`Dropdown`** (`@kosmos/visuals`):
+  - Search field автоматически появляется при ≥6 опциях (опционально через prop `searchable`).
+  - Visual: macOS-style backdrop blur + saturate, selected highlight как rectangular fill.
+  - Width: `fit-content` (по содержимому) + `min-width: 120px`.
+  - Background trigger'а: `transparent` (без заливки до open).
+  - Border default — `transparent`, hover — **`#ffffff`** (белый), open — accent.
+  - `cursor: default` на trigger + options (как в macOS native dropdowns).
+  - Option description скрыт визуально (фильтрация в search по нему сохранена).
+- **Settings → Диктация:** «Режим триггера» и «Вставка» переведены с `RadioGroup` на `Dropdown`.
+- **`cursor: default`** на интерактивных primitive'ах: `Button`, `IconButton`, `Dropdown`, `HotkeyCapture`, `RadioGroup`, `Toggle`.
+- **Pill визуал** — drop-shadow убран; только тонкий inset bevel внутри пилюли.
+
+### Исправлено
+
+- **Auto-repeat дедуп** в `hotkey_hook::handle_event` — `pressed` flag теперь устанавливается **под тем же lock'ом** что и check, до `drop(guard)` и emit'а. Раньше Windows успевала послать 33ms auto-repeat'ы пока мы emit'или event без lock'а, → 5-6 `toggleDictation` calls на одно нажатие.
+- **`Win+H` capture терял модификаторы** (приходил только `H`) — modifier-нажатия (Win/Ctrl/Shift/Alt) теперь пропускаются через `CallNextHookEx` без intercept'а, чтобы Windows успела обновить keyboard state до того как мы вызовем `GetAsyncKeyState`.
+- **`Win+Ctrl+V` audio output popup иногда открывался** при Win+H — сменили dummy VK с `VK_RESERVED (0xFF, undefined)` на `VK_NONAME (0xFC, official reserved)`. Уменьшило частоту, но **не закрыло полностью** — известная проблема, в техдолге (см. `docs-site/concepts/dictation.md` § Known issues / tech debt).
+- **4 dead-code warning'а** в `file_index/{store,watcher}.rs` (поле `StatsSnapshot.ignore_patterns`, метод `count_files`, regression-функции получили `#[allow(dead_code)]` с обоснованием).
+
+### Известная проблема
+
+- **Win+Ctrl+V иногда пробивается при `Win+H` hotkey** — Windows показывает popup аудио-выхода когда юзер отпускает H раньше Win. Workaround: отпускать Win раньше H. Идеи для фикса (scan code dummy, PowerToys-style approach) — в `docs-site/concepts/dictation.md`.
+
 ## [0.3.1] — 2026-05-25
 
 Полировка диктации поверх 0.3.0 — фиксы латентности, системные shortcut'ы, визуал pill.

@@ -1,5 +1,18 @@
 # Kosmos — статус проекта (2026-05-25)
 
+## 2026-05-25 — Диктация: state management + UI doводка (Kepler 0.3.1 → 0.3.2)
+
+Bulletproof'инг диктации после второго раунда реального использования.
+
+- **`HotkeyCapture` external mode** для системных shortcut'ов (Win+H, Win+Space) — Settings UI поднимает `begin_hotkey_capture` op'у, hook ловит accelerator ниже системного уровня.
+- **`swallow_win_shortcut`** через defer thread + `VK_NONAME` (0xFC) — Start menu не открывается после Win+H. Hook callback возвращается мгновенно (нет race с `LowLevelHooksTimeout`).
+- **Defensive cancel в `pillFinished`** + auto-recovery в `start_recording` — backend больше не застревает в Recording state.
+- **Auto-repeat дедуп** в hook фикснут — `pressed` flag устанавливается под тем же lock'ом что и check.
+- **`Dropdown`** в `@kosmos/visuals`: search автоматом при ≥6 опциях, macOS-style blur + selected fill, fit-content width, white hover border, `cursor: default`.
+- **Settings → Диктация:** `RadioGroup` → `Dropdown` для «Режим триггера» и «Вставка».
+
+Известная проблема: **Win+Ctrl+V audio picker иногда пробивается при Win+H** — в техдолге (`docs-site/concepts/dictation.md` § Known issues). Workaround: отпускать Win раньше H.
+
 ## 2026-05-25 — Диктация polish (Kepler 0.3.0 → 0.3.1)
 
 Полировка диктации после первого реального использования. 4 серьёзных бага + UX-фиксы.

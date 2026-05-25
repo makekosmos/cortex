@@ -59,7 +59,7 @@ withDefaults(
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1;
-  cursor: pointer;
+  cursor: default;
   white-space: nowrap;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),

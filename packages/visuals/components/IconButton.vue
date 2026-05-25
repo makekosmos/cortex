@@ -53,7 +53,7 @@ withDefaults(
   border: none;
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
   border-radius: var(--icon-btn-radius);
-  cursor: pointer;
+  cursor: default;
   flex-shrink: 0;
   transition:
     color 120ms cubic-bezier(0.2, 0, 0, 1),

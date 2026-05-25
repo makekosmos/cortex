@@ -36,6 +36,12 @@ const BOTTOM_MARGIN = 100;
 let pillWindow: BrowserWindow | null = null;
 let pillReady: Promise<void> | null = null;
 let isRecording = false;
+/** Reentrancy guard: hook event может прилететь дважды (PTT keydown + keyup
+ * в один tick, или дубль подписки если backend reconnect'нул и
+ * setupDictationHotkey зашёл повторно). Без этого второй toggle вызывает
+ * `start_recording` пока первый ещё в полёте — backend отвечает
+ * `state must be idle, got recording`. */
+let toggleInFlight = false;
 
 function isHeadless(): boolean {
   return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
@@ -155,28 +161,58 @@ async function callBackend(
 
 /** Главный entry-point из hotkey'я и UI "Тест" кнопки. */
 export async function toggleDictation(): Promise<void> {
-  if (!isRecording) {
-    // 1. capture HWND ДО показа pill — иначе foreground станет pill
-    //    (даже с focusable:false есть race до showInactive).
-    try {
-      await callBackend("dictation.capture_foreground_window");
-    } catch (e) {
-      console.error("[dictation-pill] capture_foreground_window failed:", e);
+  if (toggleInFlight) {
+    console.warn("[dictation-pill] toggleDictation re-entry ignored");
+    return;
+  }
+  toggleInFlight = true;
+  try {
+    if (!isRecording) {
+      // 1. capture HWND ДО показа pill — иначе foreground станет pill
+      //    (даже с focusable:false есть race до showInactive).
+      try {
+        await callBackend("dictation.capture_foreground_window");
+      } catch (e) {
+        console.error("[dictation-pill] capture_foreground_window failed:", e);
+      }
+      // 2. transition Idle → Recording. Если backend застрял в Recording
+      // (например renderer не дошёл до submit_audio из-за пустого pcm или
+      // upstream race) — `cancel` сбрасывает state в Idle из любой phase,
+      // и мы retry'им start_recording. После cancel state точно Idle.
+      let started = false;
+      try {
+        await callBackend("dictation.start_recording");
+        started = true;
+      } catch (e) {
+        const msg = String(e);
+        if (msg.includes("state must be idle")) {
+          console.warn("[dictation-pill] backend stuck — calling cancel + retry");
+          try {
+            await callBackend("dictation.cancel");
+          } catch (e2) {
+            console.error("[dictation-pill] auto-cancel failed:", e2);
+          }
+          try {
+            await callBackend("dictation.start_recording");
+            started = true;
+          } catch (e2) {
+            console.error("[dictation-pill] start_recording retry failed:", e2);
+          }
+        } else {
+          console.error("[dictation-pill] start_recording failed:", e);
+        }
+      }
+      if (!started) return;
+      isRecording = true;
+      showPill();
+      await sendPillCommand({ kind: "start" });
+    } else {
+      isRecording = false;
+      // Renderer сам отправит submit_audio и далее pillFinished.
+      await sendPillCommand({ kind: "stop" });
     }
-    // 2. transition Idle → Recording.
-    try {
-      await callBackend("dictation.start_recording");
-    } catch (e) {
-      console.error("[dictation-pill] start_recording failed:", e);
-      return;
-    }
-    isRecording = true;
-    showPill();
-    await sendPillCommand({ kind: "start" });
-  } else {
-    isRecording = false;
-    // Renderer сам отправит submit_audio и далее pillFinished.
-    await sendPillCommand({ kind: "stop" });
+  } finally {
+    toggleInFlight = false;
   }
 }
 
@@ -206,9 +242,18 @@ ipcMain.handle("kepler:dictation:cancel", async () => {
   return { ok: true };
 });
 
-ipcMain.handle("kepler:dictation:pill-finished", () => {
+ipcMain.handle("kepler:dictation:pill-finished", async () => {
   isRecording = false;
   hidePill();
+  // Защитный cancel: если renderer завершил pill (например пустой pcm,
+  // permission denied, тех. ошибка) ДО того как backend дошёл до
+  // submit_audio → backend застрянет в Recording. Cancel сбрасывает state
+  // в Idle no-op'но если уже Idle.
+  try {
+    await callBackend("dictation.cancel");
+  } catch {
+    /* ignore — best effort */
+  }
   return { ok: true };
 });
 
@@ -227,6 +272,12 @@ ipcMain.handle("kepler:dictation:pill-finished", () => {
 
 /** Текущий trigger_mode из backend config'а — для diff'а при config_changed. */
 let currentTriggerMode: "toggle" | "push_to_talk" = "toggle";
+
+/** Unsubscribe от прошлой ARK подписки. setupDictationHotkey может быть
+ * вызван повторно (например при reconnect ARK client'а) — без cleanup
+ * подписка дублируется и каждый hook event обрабатывается несколько раз,
+ * что приводит к `state must be idle, got recording`. */
+let arkUnsubscribe: (() => void) | null = null;
 
 function applyHotkeyForMode(_hotkey: string, mode: "toggle" | "push_to_talk"): void {
   currentTriggerMode = mode;
@@ -270,7 +321,13 @@ export async function setupDictationHotkey(): Promise<void> {
       setImmediate(warmupPill);
     }, 3000);
 
-    ark.onArkEvent((e: { event?: string; phase?: "down" | "up" }) => {
+    // Cleanup предыдущую подписку — защита от дубля если setupDictationHotkey
+    // зашёл повторно (reconnect / hot-reload).
+    if (arkUnsubscribe) {
+      arkUnsubscribe();
+      arkUnsubscribe = null;
+    }
+    arkUnsubscribe = ark.onArkEvent((e: { event?: string; phase?: "down" | "up" }) => {
       // 1. Re-apply mode на config_changed event (hook сам перерегистрируется
       // на backend стороне в `apply_ptt_hook`; здесь только локальный state).
       if (e.event === "dictation_config_changed") {
@@ -295,13 +352,18 @@ export async function setupDictationHotkey(): Promise<void> {
       // 2. Toggle trigger от Rust hook'а (Toggle mode): один event на каждое
       // нажатие, семантика идентична globalShortcut callback'у.
       if (e.event === "dictation_toggle_trigger") {
+        console.log("[dictation-pill] hook event: toggle");
         void toggleDictation();
         return;
       }
       // 3. PTT trigger от Rust hook'а (PTT mode): эквивалент press/release.
       // Семантика: down → toggleDictation (старт записи); up → toggleDictation
-      // (стоп + отправка). Те же два вызова что юзер делал бы вручную.
+      // (стоп + отправка). На одно нажатие приходят ДВА event'а — это by
+      // design hold-to-record. Если для юзера это выглядит как «запись
+      // началась и сразу прекратилась», значит он перепутал PTT с Toggle —
+      // поменять в Settings → Диктация → Режим триггера.
       if (e.event === "dictation_ptt_trigger") {
+        console.log(`[dictation-pill] hook event: ptt ${e.phase}`);
         void toggleDictation();
         return;
       }
