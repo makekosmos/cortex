@@ -2,14 +2,16 @@
 // DictationTab — основной tab диктации: микрофон, язык, hotkey, режим
 // триггера, inject mode, provider + статистика.
 
-import { inject, onMounted, type Component } from "vue";
+import { inject, onMounted } from "vue";
 import {
   HotkeyCapture,
-  SettingsAdvancedIntro,
   SettingsDropdownRow,
   SettingsList,
   SettingsRow,
 } from "@kosmos/visuals";
+import AdvancedPageLayout, {
+  type IntroDescriptor,
+} from "../components/AdvancedPageLayout.vue";
 import {
   DICTATION_INJECT_OPTIONS,
   DICTATION_LANGUAGE_OPTIONS,
@@ -17,14 +19,6 @@ import {
   DICTATION_TRIGGER_OPTIONS,
   DictationConfigKey,
 } from "../composables/useDictationConfig";
-
-interface IntroDescriptor {
-  icon: Component;
-  label: string;
-  description?: string;
-  introImage?: string;
-  iconGradient?: { from?: string; to?: string };
-}
 
 defineProps<{ intro: IntroDescriptor | null }>();
 
@@ -60,18 +54,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="advanced-page kosmos-scroll">
-    <SettingsAdvancedIntro
-      v-if="intro"
-      :icon="intro.icon"
-      :title="intro.label"
-      :description="intro.description"
-      :image-src="intro.introImage"
-      :icon-from="intro.iconGradient?.from"
-      :icon-to="intro.iconGradient?.to"
-    />
-    <div class="advanced-page__body">
-      <div class="stats-header">
+  <AdvancedPageLayout :intro="intro">
+    <div class="stats-header">
         <span class="stats-header__title">Статистика</span>
       </div>
       <div class="stats-cards">
@@ -147,6 +131,5 @@ onMounted(() => {
           @update:modelValue="onDictationProviderChange"
         />
       </SettingsList>
-    </div>
-  </section>
+  </AdvancedPageLayout>
 </template>

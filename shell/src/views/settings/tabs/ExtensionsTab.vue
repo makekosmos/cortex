@@ -2,17 +2,12 @@
 // ExtensionsTab — marketplace catalog + installed extensions с
 // install/update/revert/uninstall actions.
 
-import { onMounted, type Component } from "vue";
-import { SettingsAdvancedIntro } from "@kosmos/visuals";
+import { onMounted } from "vue";
+import AdvancedPageLayout, {
+  type IntroDescriptor,
+} from "../components/AdvancedPageLayout.vue";
 import { useExtensionsTab } from "../composables/useExtensionsTab";
-
-interface IntroDescriptor {
-  icon: Component;
-  label: string;
-  description?: string;
-  introImage?: string;
-  iconGradient?: { from?: string; to?: string };
-}
+import ExtensionItem from "./ExtensionItem.vue";
 
 defineProps<{ intro: IntroDescriptor | null }>();
 
@@ -41,19 +36,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="advanced-page kosmos-scroll">
-    <SettingsAdvancedIntro
-      v-if="intro"
-      :icon="intro.icon"
-      :title="intro.label"
-      :description="intro.description"
-      :image-src="intro.introImage"
-      :icon-from="intro.iconGradient?.from"
-      :icon-to="intro.iconGradient?.to"
-    />
-
-    <div class="advanced-page__body">
-      <div v-if="marketError" class="error-banner">{{ marketError }}</div>
+  <AdvancedPageLayout :intro="intro">
+    <div v-if="marketError" class="error-banner">{{ marketError }}</div>
       <div v-if="extensionsError" class="error-banner">{{ extensionsError }}</div>
 
       <div class="ext-list kosmos-scroll">
@@ -61,28 +45,16 @@ onMounted(() => {
         <div v-if="availableInCatalog.length > 0" class="ext-section-title">
           Доступные расширения
         </div>
-        <div v-for="c in availableInCatalog" :key="`catalog-${c.id}`" class="ext-item">
-          <img
-            v-if="c.iconUrl"
-            class="ext-icon"
-            :src="c.iconUrl"
-            alt=""
-            @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
-          />
-          <div v-else class="ext-icon ext-icon-fallback">
-            {{ c.name.slice(0, 1) }}
-          </div>
-          <div class="ext-info">
-            <div class="ext-name">{{ c.name }}</div>
-            <div class="ext-meta">
-              <span class="ext-version">v{{ c.version }}</span>
-              <span v-if="c.author" class="ext-author">· {{ c.author }}</span>
-            </div>
-            <div v-if="c.description" class="ext-description">
-              {{ c.description }}
-            </div>
-          </div>
-          <div class="ext-actions">
+        <ExtensionItem
+          v-for="c in availableInCatalog"
+          :key="`catalog-${c.id}`"
+          :icon-src="c.iconUrl"
+          :name="c.name"
+          :version="`v${c.version}`"
+          :author="c.author"
+          :description="c.description"
+        >
+          <template #actions>
             <button
               type="button"
               class="btn"
@@ -92,8 +64,8 @@ onMounted(() => {
               <template v-if="installingId === c.id">Установка…</template>
               <template v-else>Установить</template>
             </button>
-          </div>
-        </div>
+          </template>
+        </ExtensionItem>
 
         <!-- Установленные -->
         <div
@@ -107,34 +79,28 @@ onMounted(() => {
           <template v-else>Расширений нет. Каталог пуст или недоступен.</template>
         </div>
 
-        <div v-for="ext in installed" :key="ext.id" class="ext-item">
-          <img v-if="ext.iconDataUri" class="ext-icon" :src="ext.iconDataUri" alt="" />
-          <div v-else class="ext-icon ext-icon-fallback">
-            {{ ext.name.slice(0, 1) }}
-          </div>
-          <div class="ext-info">
-            <div class="ext-name">{{ ext.name }}</div>
-            <div class="ext-meta">
-              <span class="ext-version">v{{ ext.version ?? "—" }}</span>
-              <span v-if="ext.source === 'dev'" class="ext-dev-badge">dev</span>
-              <span v-if="ext.author" class="ext-author">· {{ ext.author }}</span>
-              <span v-if="hasUpdate(ext) && ext.source !== 'dev'" class="ext-author">
-                · доступно v{{ catalogById(ext.id)?.version }}
-              </span>
-              <span v-if="ext.backupCount > 0" class="ext-backups">
-                · backup'ов: {{ ext.backupCount }}
-              </span>
-            </div>
-            <div v-if="ext.description" class="ext-description">
-              {{ ext.description }}
-            </div>
-          </div>
-          <div class="ext-actions">
+        <ExtensionItem
+          v-for="ext in installed"
+          :key="ext.id"
+          :icon-src="ext.iconDataUri"
+          :name="ext.name"
+          :version="`v${ext.version ?? '—'}`"
+          :author="ext.author"
+          :description="ext.description"
+        >
+          <template #meta>
+            <span v-if="ext.source === 'dev'" class="ext-dev-badge">dev</span>
+            <span v-if="hasUpdate(ext) && ext.source !== 'dev'" class="ext-author">
+              · доступно v{{ catalogById(ext.id)?.version }}
+            </span>
+            <span v-if="ext.backupCount > 0" class="ext-backups">
+              · backup'ов: {{ ext.backupCount }}
+            </span>
+          </template>
+          <template #actions>
             <!-- Dev-source extension'ы (из repo) НЕ имеют update/revert/uninstall —
                  source code управляется git'ом, не Kepler installer'ом. -->
-            <span v-if="ext.source === 'dev'" class="ext-dev-hint">
-              источник: репозиторий
-            </span>
+            <span v-if="ext.source === 'dev'" class="ext-dev-hint">источник: репозиторий</span>
             <template v-else>
               <button
                 v-if="hasUpdate(ext)"
@@ -164,8 +130,8 @@ onMounted(() => {
                 Удалить
               </button>
             </template>
-          </div>
-        </div>
+          </template>
+        </ExtensionItem>
       </div>
 
       <div class="ext-footer">
@@ -178,8 +144,7 @@ onMounted(() => {
           {{ marketLoading ? "Проверка…" : "Проверить обновления" }}
         </button>
       </div>
-    </div>
-  </section>
+  </AdvancedPageLayout>
 </template>
 
 <style scoped>

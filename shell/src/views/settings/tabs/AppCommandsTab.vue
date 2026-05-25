@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // AppCommandsTab — единый таб для четырёх «приложений» (notes/tasks/
-// time-tracker/games). Показывает usage-tracker toggle для time-tracker и
-// список комманд из appCommandSettings соответствующей категории.
+// time-tracker/games).
 
 import { Check } from "@lucide/vue";
-import { SettingsAdvancedIntro } from "@kosmos/visuals";
+import AdvancedPageLayout, {
+  type IntroDescriptor,
+} from "../components/AdvancedPageLayout.vue";
+import LegacyRow from "../components/LegacyRow.vue";
 import LegacyToggle from "../components/LegacyToggle.vue";
-import type { Component } from "vue";
 
 export interface AppCommandSetting {
   id: string;
@@ -14,14 +15,6 @@ export interface AppCommandSetting {
   icon: string;
   iconFrom: string;
   iconTo: string;
-}
-
-interface IntroDescriptor {
-  icon: Component;
-  label: string;
-  description?: string;
-  introImage?: string;
-  iconGradient?: { from?: string; to?: string };
 }
 
 defineProps<{
@@ -39,69 +32,53 @@ defineEmits<{
 </script>
 
 <template>
-  <section class="advanced-page kosmos-scroll">
-    <SettingsAdvancedIntro
-      v-if="intro"
-      :icon="intro.icon"
-      :title="intro.label"
-      :description="intro.description"
-      :image-src="intro.introImage"
-      :icon-from="intro.iconGradient?.from"
-      :icon-to="intro.iconGradient?.to"
-    />
-
-    <div class="advanced-page__body">
-      <div
-        v-if="activeTab === 'time-tracker'"
-        class="rows command-settings-list time-settings-list"
+  <AdvancedPageLayout :intro="intro">
+    <div
+      v-if="activeTab === 'time-tracker'"
+      class="rows command-settings-list time-settings-list"
+    >
+      <LegacyRow
+        title="Трекать активные приложения"
+        hint="Записывает в ARK какое окно сейчас активно. Изменение применится после перезапуска Kepler."
       >
-        <div class="row">
-          <div class="row-label">
-            <div class="label">Трекать активные приложения</div>
-            <div class="hint">
-              Записывает в ARK какое окно сейчас активно. Изменение применится после перезапуска
-              Kepler.
-            </div>
-          </div>
-          <LegacyToggle
-            :checked="usageTracker"
-            @change="(e: Event) => $emit('toggleUsageTracker', e)"
-          />
-        </div>
-      </div>
+        <LegacyToggle
+          :checked="usageTracker"
+          @change="(e: Event) => $emit('toggleUsageTracker', e)"
+        />
+      </LegacyRow>
+    </div>
 
-      <div>
-        <h2 class="advanced-section-title">Команды</h2>
-        <div class="rows command-settings-list">
-          <div v-for="command in commands" :key="command.id" class="row">
-            <div class="command-row-label">
-              <span
-                class="command-row-icon"
-                :style="{
-                  '--command-row-icon-from': command.iconFrom,
-                  '--command-row-icon-to': command.iconTo,
-                }"
-                aria-hidden="true"
-              >
-                <img :src="command.icon" alt="" />
-              </span>
-              <div class="label">{{ command.title }}</div>
-            </div>
-            <label class="command-checkbox" :aria-label="`Показывать ${command.title}`">
-              <input
-                type="checkbox"
-                :checked="isCommandVisible(command.id)"
-                @change="(e: Event) => $emit('toggleCommandVisibility', command.id, e)"
-              />
-              <span class="command-checkbox__box" aria-hidden="true">
-                <Check :size="13" :stroke-width="3" />
-              </span>
-            </label>
+    <div>
+      <h2 class="advanced-section-title">Команды</h2>
+      <div class="rows command-settings-list">
+        <div v-for="command in commands" :key="command.id" class="row">
+          <div class="command-row-label">
+            <span
+              class="command-row-icon"
+              :style="{
+                '--command-row-icon-from': command.iconFrom,
+                '--command-row-icon-to': command.iconTo,
+              }"
+              aria-hidden="true"
+            >
+              <img :src="command.icon" alt="" />
+            </span>
+            <div class="label">{{ command.title }}</div>
           </div>
+          <label class="command-checkbox" :aria-label="`Показывать ${command.title}`">
+            <input
+              type="checkbox"
+              :checked="isCommandVisible(command.id)"
+              @change="(e: Event) => $emit('toggleCommandVisibility', command.id, e)"
+            />
+            <span class="command-checkbox__box" aria-hidden="true">
+              <Check :size="13" :stroke-width="3" />
+            </span>
+          </label>
         </div>
       </div>
     </div>
-  </section>
+  </AdvancedPageLayout>
 </template>
 
 <style scoped>

@@ -1,19 +1,12 @@
 <script setup lang="ts">
 // FocusTab — блок-листы доменов + системный демон + inline editor.
-// State и handlers из composable `useFocusTab`. Owner-у достаточно передать
-// `intro` для верхнего hero-блока.
 
-import { onBeforeUnmount, onMounted, type Component } from "vue";
-import { BlocklistCard, SettingsAdvancedIntro } from "@kosmos/visuals";
+import { onBeforeUnmount, onMounted } from "vue";
+import { BlocklistCard } from "@kosmos/visuals";
+import AdvancedPageLayout, {
+  type IntroDescriptor,
+} from "../components/AdvancedPageLayout.vue";
 import { ICON_CHOICES, useFocusTab } from "../composables/useFocusTab";
-
-interface IntroDescriptor {
-  icon: Component;
-  label: string;
-  description?: string;
-  introImage?: string;
-  iconGradient?: { from?: string; to?: string };
-}
 
 defineProps<{ intro: IntroDescriptor | null }>();
 
@@ -83,19 +76,8 @@ defineExpose({ mentionTextareaRef });
 </script>
 
 <template>
-  <section class="advanced-page kosmos-scroll">
-    <SettingsAdvancedIntro
-      v-if="intro"
-      :icon="intro.icon"
-      :title="intro.label"
-      :description="intro.description"
-      :image-src="intro.introImage"
-      :icon-from="intro.iconGradient?.from"
-      :icon-to="intro.iconGradient?.to"
-    />
-
-    <div class="advanced-page__body">
-      <div v-if="focusBackendMissing" class="error-banner">
+  <AdvancedPageLayout :intro="intro">
+    <div v-if="focusBackendMissing" class="error-banner">
         Backend ещё не поддерживает focus.*. Обнови Kepler.
       </div>
       <div v-if="focusError" class="error-banner">{{ focusError }}</div>
@@ -307,9 +289,8 @@ defineExpose({ mentionTextareaRef });
             </button>
           </div>
         </div>
-      </div>
     </div>
-  </section>
+  </AdvancedPageLayout>
 </template>
 
 <style scoped>

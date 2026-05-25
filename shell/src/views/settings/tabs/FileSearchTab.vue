@@ -3,19 +3,15 @@
 // Toast api приходит сверху (provideToastHost в SettingsView), потому что
 // прогресс индексации показывается toast'ом, который живёт дольше mount'а.
 
-import { onBeforeUnmount, onMounted, type Component } from "vue";
+import { onBeforeUnmount, onMounted } from "vue";
 import { Folder } from "@lucide/vue";
-import { SettingsAdvancedIntro, useToast } from "@kosmos/visuals";
+import { useToast } from "@kosmos/visuals";
+import AdvancedPageLayout, {
+  type IntroDescriptor,
+} from "../components/AdvancedPageLayout.vue";
+import LegacyRow from "../components/LegacyRow.vue";
 import LegacyToggle from "../components/LegacyToggle.vue";
 import { useFileSearchTab } from "../composables/useFileSearchTab";
-
-interface IntroDescriptor {
-  icon: Component;
-  label: string;
-  description?: string;
-  introImage?: string;
-  iconGradient?: { from?: string; to?: string };
-}
 
 defineProps<{ intro: IntroDescriptor | null }>();
 
@@ -49,19 +45,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="advanced-page kosmos-scroll">
-    <SettingsAdvancedIntro
-      v-if="intro"
-      :icon="intro.icon"
-      :title="intro.label"
-      :description="intro.description"
-      :image-src="intro.introImage"
-      :icon-from="intro.iconGradient?.from"
-      :icon-to="intro.iconGradient?.to"
-    />
-
-    <div class="advanced-page__body rows">
-      <div v-if="fileSearchError" class="error-banner">{{ fileSearchError }}</div>
+  <AdvancedPageLayout :intro="intro" body-class="rows">
+    <div v-if="fileSearchError" class="error-banner">{{ fileSearchError }}</div>
       <!-- Regression M8 (2026-05-24): show loading state instead of
            misleading "no folders chosen" while settings load. -->
       <div v-if="fileSearchSettings === null && !fileSearchError" class="hint">
@@ -163,62 +148,51 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="fileSearchSettings" class="row">
-        <div class="row-label">
-          <div class="label">Исключать шумные папки из поиска файлов</div>
-          <div class="hint">
-            Kepler индексирует файлы на локальных дисках и пропускает
-            <code>node_modules</code>, <code>.git</code>, сборки и временные каталоги. Изменение
-            сразу запускает переиндексацию.
-          </div>
-        </div>
+      <LegacyRow v-if="fileSearchSettings" title="Исключать шумные папки из поиска файлов">
+        <template #hint>
+          Kepler индексирует файлы на локальных дисках и пропускает
+          <code>node_modules</code>, <code>.git</code>, сборки и временные каталоги. Изменение
+          сразу запускает переиндексацию.
+        </template>
         <LegacyToggle
           :checked="fileSearchSettings?.exclude_noisy_folders ?? true"
           :disabled="!fileSearchSettings || fileSearchBusy"
           @change="onToggleFileSearchNoise"
         />
-      </div>
+      </LegacyRow>
 
-      <div v-if="fileSearchSettings" class="row">
-        <div class="row-label">
-          <div class="label">Учитывать <code>.gitignore</code></div>
-          <div class="hint">
-            Включено по умолчанию: Kepler пропускает файлы, которые проект сам считает мусором.
-          </div>
-        </div>
+      <LegacyRow v-if="fileSearchSettings" title="Учитывать .gitignore">
+        <template #hint>
+          Включено по умолчанию: Kepler пропускает файлы, которые проект сам считает мусором.
+        </template>
         <LegacyToggle
           :checked="fileSearchSettings?.respect_gitignore ?? true"
           :disabled="!fileSearchSettings || fileSearchBusy"
           @change="onToggleFileSearchGitignore"
         />
-      </div>
+      </LegacyRow>
 
-      <div v-if="fileSearchSettings" class="row">
-        <div class="row-label">
-          <div class="label">Показывать скрытые файлы</div>
-          <div class="hint">
-            По умолчанию выключено, чтобы не засорять результаты dotfiles и системными скрытыми
-            файлами.
-          </div>
-        </div>
+      <LegacyRow v-if="fileSearchSettings" title="Показывать скрытые файлы">
+        <template #hint>
+          По умолчанию выключено, чтобы не засорять результаты dotfiles и системными скрытыми
+          файлами.
+        </template>
         <LegacyToggle
           :checked="fileSearchSettings?.include_hidden ?? false"
           :disabled="!fileSearchSettings || fileSearchBusy"
           @change="onToggleFileSearchHidden"
         />
-      </div>
+      </LegacyRow>
 
-      <div v-if="fileSearchSettings" class="row">
-        <div class="row-label">
-          <div class="label">Ускоренный NTFS-режим</div>
-          <div class="hint">
-            Если включено, Kepler пробует быстрый NTFS/MFT scan для корней дисков. Если service или
-            права недоступны — автоматически падает назад на обычный scan. NTFS-режим не уважает
-            <code>.gitignore</code>: при включённой обработке <code>.gitignore</code> диски
-            сканируются обычным способом.
-          </div>
-          <!-- Regression H10 (2026-05-24): surface actual NTFS status,
-               not just toggle position. -->
+      <LegacyRow v-if="fileSearchSettings" title="Ускоренный NTFS-режим">
+        <template #hint>
+          Если включено, Kepler пробует быстрый NTFS/MFT scan для корней дисков. Если service или
+          права недоступны — автоматически падает назад на обычный scan. NTFS-режим не уважает
+          <code>.gitignore</code>: при включённой обработке <code>.gitignore</code> диски
+          сканируются обычным способом.
+        </template>
+        <!-- Regression H10 (2026-05-24): surface actual NTFS status, not just toggle position. -->
+        <template #extra>
           <div
             v-if="
               fileSearchSettings?.ntfs_accelerated &&
@@ -243,19 +217,19 @@ onBeforeUnmount(() => {
               недоступен
             </strong>
           </div>
-        </div>
+        </template>
         <LegacyToggle
           :checked="fileSearchSettings?.ntfs_accelerated ?? false"
           :disabled="!fileSearchSettings || fileSearchBusy"
           @change="onToggleFileSearchNtfs"
         />
-      </div>
+      </LegacyRow>
 
-      <div v-if="fileSearchSettings" class="row">
-        <div class="row-label">
-          <div class="label">Переиндексация</div>
-          <div class="hint">Запусти вручную после больших перемещений файлов.</div>
-        </div>
+      <LegacyRow
+        v-if="fileSearchSettings"
+        title="Переиндексация"
+        hint="Запусти вручную после больших перемещений файлов."
+      >
         <div class="row-actions">
           <button
             type="button"
@@ -268,9 +242,8 @@ onBeforeUnmount(() => {
             }}
           </button>
         </div>
-      </div>
-    </div>
-  </section>
+      </LegacyRow>
+  </AdvancedPageLayout>
 </template>
 
 <style scoped>
