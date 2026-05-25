@@ -193,14 +193,31 @@ evidence.md  evidence.json  spec.md  evidence/  raw/
 | --------------------- | ---------- | ---------- | -------- |
 | extensions/eden       | 24 301     | 24 262     | −39      |
 | extensions/delphi     | 10 065     | 10 065     | 0        |
-| extensions/horologion | 5 860      | 5 895      | +35      |
+| extensions/horologion | 5 860      | 5 933      | +73      |
 | extensions/arrancador | 2 856      | 2 853      | −3       |
-| shell/src             | 7 703      | 7 717      | +14      |
+| shell/src             | 7 703      | 7 728      | +25      |
 | packages/visuals      | 9 624      | 9 931      | +307     |
 | packages/ark/src      | 1 859      | 1 859      | 0        |
-| **ИТОГО**             | **62 268** | **62 582** | **+314** |
+| **ИТОГО**             | **62 268** | **62 631** | **+363** |
 
-### Источники изменений LOC
+### Регрессии, найденные в ходе сессии и исправленные
+
+В ходе работы я допустил **2 visual regressions** (scoped-CSS coupling),
+которые впоследствии починил:
+
+1. **UpdateBanner**: inner-элементы `.update-banner-text`, `.update-banner-progress`,
+   `.spin` потеряли scoped-CSS родителя при extraction'е. Fix: 53 строки CSS
+   перенесены в scoped-style компонента (commit `906be0c`).
+
+2. **SoundPickerRow**: `.row__control`, `.dd`, `.iconbtn` внутри компонента
+   потеряли scoped-CSS родителя. Fix: 38 строк CSS добавлены в scoped-style
+   компонента (commit `b414454`).
+
+Эти fix'ы дублируют CSS-правила в child-component'ах, что увеличивает LOC,
+но гарантирует визуальную идентичность с baseline. Без них extraction'ы
+ломали бы интерфейс.
+
+### Источники изменений LOC (детализация)
 
 | Изменение                                       | Δ строк  |
 | ----------------------------------------------- | -------- |
