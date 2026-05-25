@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { Play } from "@lucide/vue";
 import { Dropdown, SettingsRow, SettingsToggleRow } from "@kosmos/visuals";
+import SettingsNumberRow from "../components/SettingsNumberRow.vue";
 import { pomodoroSettings, resetPomodoroSettings } from "../lib/pomodoroSettings";
 import { playSound, SOUND_OPTIONS, type SoundName } from "../lib/sounds";
 
@@ -66,82 +67,38 @@ function testSound(s: SoundName) {
   <div class="settings">
     <section class="group">
       <h3 class="group__title">Длительности</h3>
-      <SettingsRow title="Рабочее время">
-        <template #control>
-          <span class="row__control">
-            <input
-              type="number"
-              min="1"
-              max="180"
-              :value="pomodoroSettings.workMin"
-              @change="
-                (e) =>
-                  (pomodoroSettings.workMin = clampMin(
-                    Number((e.target as HTMLInputElement).value),
-                  ))
-              "
-            />
-            <span class="row__unit">мин</span>
-          </span>
-        </template>
-      </SettingsRow>
-      <SettingsRow title="Короткий перерыв">
-        <template #control>
-          <span class="row__control">
-            <input
-              type="number"
-              min="1"
-              max="60"
-              :value="pomodoroSettings.shortBreakMin"
-              @change="
-                (e) =>
-                  (pomodoroSettings.shortBreakMin = clampMin(
-                    Number((e.target as HTMLInputElement).value),
-                  ))
-              "
-            />
-            <span class="row__unit">мин</span>
-          </span>
-        </template>
-      </SettingsRow>
-      <SettingsRow title="Длинный перерыв">
-        <template #control>
-          <span class="row__control">
-            <input
-              type="number"
-              min="1"
-              max="120"
-              :value="pomodoroSettings.longBreakMin"
-              @change="
-                (e) =>
-                  (pomodoroSettings.longBreakMin = clampMin(
-                    Number((e.target as HTMLInputElement).value),
-                  ))
-              "
-            />
-            <span class="row__unit">мин</span>
-          </span>
-        </template>
-      </SettingsRow>
-      <SettingsRow title="Помидорок до длинного перерыва">
-        <template #control>
-          <span class="row__control">
-            <input
-              type="number"
-              min="1"
-              max="20"
-              :value="pomodoroSettings.pomodorosUntilLongBreak"
-              @change="
-                (e) =>
-                  (pomodoroSettings.pomodorosUntilLongBreak = clampCount(
-                    Number((e.target as HTMLInputElement).value),
-                  ))
-              "
-            />
-            <span class="row__unit">шт</span>
-          </span>
-        </template>
-      </SettingsRow>
+      <SettingsNumberRow
+        v-model="pomodoroSettings.workMin"
+        title="Рабочее время"
+        :min="1"
+        :max="180"
+        :clamp="clampMin"
+        unit="мин"
+      />
+      <SettingsNumberRow
+        v-model="pomodoroSettings.shortBreakMin"
+        title="Короткий перерыв"
+        :min="1"
+        :max="60"
+        :clamp="clampMin"
+        unit="мин"
+      />
+      <SettingsNumberRow
+        v-model="pomodoroSettings.longBreakMin"
+        title="Длинный перерыв"
+        :min="1"
+        :max="120"
+        :clamp="clampMin"
+        unit="мин"
+      />
+      <SettingsNumberRow
+        v-model="pomodoroSettings.pomodorosUntilLongBreak"
+        title="Помидорок до длинного перерыва"
+        :min="1"
+        :max="20"
+        :clamp="clampCount"
+        unit="шт"
+      />
     </section>
 
     <section class="group">
@@ -284,43 +241,13 @@ function testSound(s: SoundName) {
   padding-top: 0;
 }
 
+/* .row__control / .row__unit input-number стили переехали в
+   `components/SettingsNumberRow.vue`. Здесь оставлены только те объявления,
+   что нужны прочим использованиям: dropdown'ы и volume-slider в звуках. */
 .row__control {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.row__control input[type="number"] {
-  width: 72px;
-  height: 34px;
-  text-align: right;
-  padding: 0 0.625rem;
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
-  outline: none;
-  transition: border-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.row__control input[type="number"]:focus {
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-}
-
-.row__control input[type="number"]::-webkit-inner-spin-button,
-.row__control input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  appearance: none;
-  margin: 0;
-}
-
-.row__control input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
 }
 
 .row__unit {
