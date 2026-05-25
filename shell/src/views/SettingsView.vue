@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Timer,
 } from "@lucide/vue";
+import LegacyToggle from "./settings/components/LegacyToggle.vue";
 import UpdateBanner from "./settings/components/UpdateBanner.vue";
 import { useKeplerUpdate } from "./settings/composables/useKeplerUpdate";
 import holoSvg from "../assets/holo.svg";
@@ -2290,15 +2291,11 @@ onBeforeUnmount(() => {
                 </div>
                 <div v-if="autostartError" class="error">{{ autostartError }}</div>
               </div>
-              <label class="toggle" :class="{ disabled: !autostartAllowed }">
-                <input
-                  type="checkbox"
-                  :checked="autostart"
-                  :disabled="!autostartAllowed"
-                  @change="onToggleAutostart"
-                />
-                <span class="track"><span class="thumb" /></span>
-              </label>
+              <LegacyToggle
+                :checked="autostart"
+                :disabled="!autostartAllowed"
+                @change="onToggleAutostart"
+              />
             </div>
 
             <div class="row">
@@ -2306,10 +2303,7 @@ onBeforeUnmount(() => {
                 <div class="label">Показывать в трее</div>
                 <div class="hint">Оставлять значок Kepler в системном трее</div>
               </div>
-              <label class="toggle">
-                <input type="checkbox" :checked="trayIcon" @change="onToggleTrayIcon" />
-                <span class="track"><span class="thumb" /></span>
-              </label>
+              <LegacyToggle :checked="trayIcon" @change="onToggleTrayIcon" />
             </div>
           </div>
         </template>
@@ -2358,10 +2352,7 @@ onBeforeUnmount(() => {
                   применить.
                 </div>
               </div>
-              <label class="toggle">
-                <input type="checkbox" :checked="developerMode" @change="onToggleDeveloperMode" />
-                <span class="track"><span class="thumb" /></span>
-              </label>
+              <LegacyToggle :checked="developerMode" @change="onToggleDeveloperMode" />
             </div>
 
             <div class="row">
@@ -2678,10 +2669,7 @@ onBeforeUnmount(() => {
                       перезапуска Kepler.
                     </div>
                   </div>
-                  <label class="toggle">
-                    <input type="checkbox" :checked="usageTracker" @change="onToggleUsageTracker" />
-                    <span class="track"><span class="thumb" /></span>
-                  </label>
+                  <LegacyToggle :checked="usageTracker" @change="onToggleUsageTracker" />
                 </div>
               </div>
 
@@ -2843,15 +2831,11 @@ onBeforeUnmount(() => {
                     Изменение сразу запускает переиндексацию.
                   </div>
                 </div>
-                <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
-                  <input
-                    type="checkbox"
-                    :checked="fileSearchSettings?.exclude_noisy_folders ?? true"
-                    :disabled="!fileSearchSettings || fileSearchBusy"
-                    @change="onToggleFileSearchNoise"
-                  />
-                  <span class="track"><span class="thumb" /></span>
-                </label>
+                <LegacyToggle
+                  :checked="fileSearchSettings?.exclude_noisy_folders ?? true"
+                  :disabled="!fileSearchSettings || fileSearchBusy"
+                  @change="onToggleFileSearchNoise"
+                />
               </div>
 
               <div v-if="fileSearchSettings" class="row">
@@ -2862,15 +2846,11 @@ onBeforeUnmount(() => {
                     мусором.
                   </div>
                 </div>
-                <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
-                  <input
-                    type="checkbox"
-                    :checked="fileSearchSettings?.respect_gitignore ?? true"
-                    :disabled="!fileSearchSettings || fileSearchBusy"
-                    @change="onToggleFileSearchGitignore"
-                  />
-                  <span class="track"><span class="thumb" /></span>
-                </label>
+                <LegacyToggle
+                  :checked="fileSearchSettings?.respect_gitignore ?? true"
+                  :disabled="!fileSearchSettings || fileSearchBusy"
+                  @change="onToggleFileSearchGitignore"
+                />
               </div>
 
               <div v-if="fileSearchSettings" class="row">
@@ -2881,15 +2861,11 @@ onBeforeUnmount(() => {
                     скрытыми файлами.
                   </div>
                 </div>
-                <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
-                  <input
-                    type="checkbox"
-                    :checked="fileSearchSettings?.include_hidden ?? false"
-                    :disabled="!fileSearchSettings || fileSearchBusy"
-                    @change="onToggleFileSearchHidden"
-                  />
-                  <span class="track"><span class="thumb" /></span>
-                </label>
+                <LegacyToggle
+                  :checked="fileSearchSettings?.include_hidden ?? false"
+                  :disabled="!fileSearchSettings || fileSearchBusy"
+                  @change="onToggleFileSearchHidden"
+                />
               </div>
 
               <div v-if="fileSearchSettings" class="row">
@@ -2928,15 +2904,11 @@ onBeforeUnmount(() => {
                     </strong>
                   </div>
                 </div>
-                <label class="toggle" :class="{ disabled: !fileSearchSettings || fileSearchBusy }">
-                  <input
-                    type="checkbox"
-                    :checked="fileSearchSettings?.ntfs_accelerated ?? false"
-                    :disabled="!fileSearchSettings || fileSearchBusy"
-                    @change="onToggleFileSearchNtfs"
-                  />
-                  <span class="track"><span class="thumb" /></span>
-                </label>
+                <LegacyToggle
+                  :checked="fileSearchSettings?.ntfs_accelerated ?? false"
+                  :disabled="!fileSearchSettings || fileSearchBusy"
+                  @change="onToggleFileSearchNtfs"
+                />
               </div>
 
               <div v-if="fileSearchSettings" class="row">
@@ -3864,54 +3836,9 @@ onBeforeUnmount(() => {
   border-color: var(--vp-c-brand-1, var(--kosmos-fg));
 }
 
-.toggle {
-  position: relative;
-  display: inline-block;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.toggle.disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.toggle input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  width: 0;
-  height: 0;
-}
-
-.track {
-  display: block;
-  width: 36px;
-  height: 20px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--foreground) 16%, transparent);
-  position: relative;
-  transition: background 0.15s ease;
-}
-
-.thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--foreground);
-  transition: transform 0.15s ease;
-}
-
-.toggle input:checked + .track {
-  background: var(--accent, oklch(0.7 0.18 250));
-}
-
-.toggle input:checked + .track .thumb {
-  transform: translateX(16px);
-}
+/* `.toggle`/`.track`/`.thumb` стили переехали в
+   `./settings/components/LegacyToggle.vue` (49 строк → одна
+   компонент-обёртка). */
 
 .hotkey-control {
   display: inline-flex;
