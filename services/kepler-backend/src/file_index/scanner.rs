@@ -640,8 +640,12 @@ mod default_roots_tests {
             ntfs_accelerated: false,
             ignore_patterns: Vec::new(),
         };
+        // Synthetic path — no I/O happens, only Path component inspection.
+        // Forward slashes parse identically on Windows and POSIX (backslash
+        // is a literal char on Linux, so a Windows-style path would collapse
+        // to a single non-dot component on CI).
         assert!(!should_index_with_options(
-            Path::new(r"D:\docs\.secret"),
+            Path::new("docs/.secret"),
             &opts
         ));
     }
