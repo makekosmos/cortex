@@ -252,10 +252,12 @@ import { useLayoutStore } from "@/store/layout";
 import { useKeyboard } from "@/composables/useKeyboard";
 import { usePlatform } from "@/composables/usePlatform";
 import { useSearch } from "@/composables/useSearch";
+import { useCharCounter } from "@/composables/useCharCounter";
+import { useDockedWidget } from "@/composables/useDockedWidget";
+import { useNavigationHistory } from "@/composables/useNavigationHistory";
 import type { SpaceId } from "@/components/sidebar/types";
 import { getEntryDisplayTitle } from "@/lib/entryTitles";
 import { getNoteTypeCollectionName } from "@/lib/typedNotes";
-import { countCharsInProseMirrorDoc } from "@/lib/charCount";
 import Titlebar from "./Titlebar.vue";
 import SearchOverlay from "@/components/SearchOverlay.vue";
 import EdenSidebar from "@/components/sidebar/EdenSidebar.vue";
@@ -276,15 +278,7 @@ const layout = useLayoutStore();
 // рендерит, не повторяет provide.
 provideToastHost();
 
-type EdenHistorySnapshot = {
-  activeScreen: "notes" | "settings" | "object-types" | "type-collection";
-  currentEntryId: string | null;
-  activeSpace: SpaceId;
-  activeNoteTypeId: string | null;
-};
-
 type SettingsTab = "general" | "trash" | "storage" | "spaces";
-const MAX_NAVIGATION_HISTORY = 30;
 
 usePlatform();
 useKeyboard();
@@ -316,44 +310,7 @@ function onTitleDblClick() {
 }
 
 // Docked-widget state — для CSS-маркера (.eden-docked) на app-container.
-// Main process broadcast'ит изменения через `onDockedChange`.
-const isDocked = shallowRef(false);
-let offDockedChange: (() => void) | null = null;
-
-interface KeplerWindowApiExt {
-  isDocked?: () => Promise<boolean>;
-  onDockedChange?: (handler: (value: boolean) => void) => () => void;
-}
-
-onMounted(async () => {
-  const winApi = (
-    window as unknown as {
-      kepler?: { window?: KeplerWindowApiExt };
-    }
-  ).kepler?.window;
-  if (!winApi) return;
-  if (winApi.isDocked) {
-    try {
-      isDocked.value = await winApi.isDocked();
-    } catch {
-      // ignore
-    }
-  }
-  if (winApi.onDockedChange) {
-    offDockedChange = winApi.onDockedChange((value) => {
-      isDocked.value = value;
-    });
-  }
-});
-
-onUnmounted(() => {
-  try {
-    offDockedChange?.();
-  } catch {
-    // ignore
-  }
-  offDockedChange = null;
-});
+const { isDocked } = useDockedWidget();
 
 // На Windows native double-click-on-titlebar разворачивает окно. В zen mode
 // это не нужно (header и так скрыт, maximize не имеет UX смысла) — отключаем,
@@ -384,20 +341,9 @@ async function onDeleteContextEntry() {
     console.error("[eden] deleteEntry failed:", err);
   }
 }
-const backStack = shallowRef<EdenHistorySnapshot[]>([]);
-const forwardStack = shallowRef<EdenHistorySnapshot[]>([]);
-const historyReady = shallowRef(false);
-const suppressHistoryRecording = shallowRef(false);
+const { canGoBack, canGoForward, navigateBack, navigateForward } = useNavigationHistory(eden);
 const settingsInitialTab = shallowRef<SettingsTab>("general");
 const objectTypeCreateToken = shallowRef(0);
-
-function appendHistorySnapshot(snapshots: EdenHistorySnapshot[], snapshot: EdenHistorySnapshot) {
-  const next = [...snapshots, snapshot];
-  if (next.length <= MAX_NAVIGATION_HISTORY) {
-    return next;
-  }
-  return next.slice(next.length - MAX_NAVIGATION_HISTORY);
-}
 
 function pickRecentEntries(entries: Entry[], limit: number) {
   const topEntries: Entry[] = [];
@@ -422,110 +368,8 @@ function pickRecentEntries(entries: Entry[], limit: number) {
 
 const recentSidebarEntries = computed(() => pickRecentEntries(eden.entries, 10));
 
-const liveCharCount = ref<number | null>(null);
-watch(
-  () => eden.currentEntry?.id ?? null,
-  () => {
-    liveCharCount.value = null;
-  },
-);
-
-const currentEntryCharCount = computed<number | null>(() => {
-  if (!eden.currentEntry) return null;
-  if (liveCharCount.value !== null) return liveCharCount.value;
-  return countCharsInProseMirrorDoc(eden.currentEntry.content_json);
-});
-
-// Border-top на counter появляется когда last block доходит до counter top.
-// Прямое сравнение bounding rects надёжнее чем overflow detection
-// (overflow зависит от layout chain'а, который может меняться).
-const charCounterHasOverlap = ref(false);
-let overlapRafId: number | null = null;
-let overlapResizeObserver: ResizeObserver | null = null;
-
-function recomputeCharCounterOverlap(): void {
-  if (!layout.isZenMode) {
-    charCounterHasOverlap.value = false;
-    return;
-  }
-  const counterEl = document.querySelector(".eden-char-counter") as HTMLElement | null;
-  const proseMirror = document.querySelector(".ProseMirror") as HTMLElement | null;
-  if (!counterEl || !proseMirror) {
-    charCounterHasOverlap.value = false;
-    return;
-  }
-  const lastBlock = proseMirror.lastElementChild as HTMLElement | null;
-  if (!lastBlock) {
-    charCounterHasOverlap.value = false;
-    return;
-  }
-  const counterRect = counterEl.getBoundingClientRect();
-  const lastBlockRect = lastBlock.getBoundingClientRect();
-  // Threshold 4px — bordertop появляется когда text почти доходит до counter.
-  charCounterHasOverlap.value = lastBlockRect.bottom > counterRect.top - 4;
-}
-
-function scheduleOverlapCheck(): void {
-  if (overlapRafId !== null) return;
-  overlapRafId = requestAnimationFrame(() => {
-    overlapRafId = null;
-    recomputeCharCounterOverlap();
-  });
-}
-
-// Re-attach observer на ProseMirror когда entry switches (Editor remount'ится
-// при смене заметки, старый PM detached, ResizeObserver на нём перестаёт
-// fire'ить). Reattach + initial check.
-function reattachProseMirrorObserver(): void {
-  overlapResizeObserver?.disconnect();
-  const pm = document.querySelector(".ProseMirror");
-  if (pm) {
-    overlapResizeObserver = new ResizeObserver(scheduleOverlapCheck);
-    overlapResizeObserver.observe(pm);
-  }
-  scheduleOverlapCheck();
-}
-
-watch(liveCharCount, () => scheduleOverlapCheck());
-watch(
-  () => layout.isZenMode,
-  () => {
-    // При переключении zen mode editor relayout'ится — даём DOM settle,
-    // потом re-attach observer (counter появляется/исчезает, PM может move).
-    nextTick(reattachProseMirrorObserver);
-  },
-);
-watch(
-  () => eden.currentEntry?.id ?? null,
-  () => {
-    // Switch entry → Editor unmount/remount → PM ref stale.
-    nextTick(reattachProseMirrorObserver);
-  },
-);
-
-onMounted(() => {
-  window.addEventListener("resize", scheduleOverlapCheck);
-  window.addEventListener("scroll", scheduleOverlapCheck, { passive: true, capture: true });
-  nextTick(reattachProseMirrorObserver);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("resize", scheduleOverlapCheck);
-  window.removeEventListener("scroll", scheduleOverlapCheck, {
-    capture: true,
-  } as EventListenerOptions);
-  overlapResizeObserver?.disconnect();
-  overlapResizeObserver = null;
-  if (overlapRafId !== null) cancelAnimationFrame(overlapRafId);
-});
-
-function pluralizeCharacters(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "символ";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "символа";
-  return "символов";
-}
+const { liveCharCount, currentEntryCharCount, charCounterHasOverlap, pluralizeCharacters } =
+  useCharCounter(eden, layout);
 
 const titlebarTitle = computed<string>(() => {
   if (eden.activeScreen === "settings") return "Настройки";
@@ -560,31 +404,6 @@ const showSidebarChrome = computed(() => true);
 const activeCollectionType = computed(
   () => eden.noteTypes.find((noteType) => noteType.id === eden.activeNoteTypeId) ?? null,
 );
-const currentHistorySnapshot = computed<EdenHistorySnapshot | null>(() => {
-  if (eden.isInitializing || !eden.vaultPath) return null;
-
-  return {
-    activeScreen: eden.activeScreen,
-    currentEntryId: eden.currentEntry?.id ?? null,
-    activeSpace: eden.activeSpace,
-    activeNoteTypeId: eden.activeNoteTypeId,
-  };
-});
-
-const canGoBack = computed(() => backStack.value.length > 0);
-const canGoForward = computed(() => forwardStack.value.length > 0);
-
-function snapshotsEqual(a: EdenHistorySnapshot | null, b: EdenHistorySnapshot | null) {
-  if (!a || !b) return a === b;
-
-  return (
-    a.activeScreen === b.activeScreen &&
-    a.currentEntryId === b.currentEntryId &&
-    a.activeSpace === b.activeSpace &&
-    a.activeNoteTypeId === b.activeNoteTypeId
-  );
-}
-
 function openSettingsTab(tab: SettingsTab = "general") {
   settingsInitialTab.value = tab;
   eden.activeScreen = "settings";
@@ -617,58 +436,6 @@ function handleSidebarBack() {
 
 function onSelectedTypeChange(noteTypeId: string | null) {
   eden.activeNoteTypeId = noteTypeId;
-}
-
-async function applyHistorySnapshot(snapshot: EdenHistorySnapshot) {
-  suppressHistoryRecording.value = true;
-
-  try {
-    eden.activeSpace = snapshot.activeSpace;
-    eden.activeScreen = snapshot.activeScreen;
-    eden.activeNoteTypeId = snapshot.activeNoteTypeId;
-
-    if (!snapshot.currentEntryId) {
-      eden.currentEntry = null;
-      return;
-    }
-
-    const existingEntry = eden.entries.find((entry) => entry.id === snapshot.currentEntryId);
-    if (existingEntry) {
-      eden.currentEntry = existingEntry;
-      return;
-    }
-
-    if (!window.api) {
-      eden.currentEntry = null;
-      return;
-    }
-
-    const loadedEntry = await window.api.loadEntry(snapshot.currentEntryId);
-    eden.currentEntry = loadedEntry ?? null;
-  } finally {
-    await nextTick();
-    suppressHistoryRecording.value = false;
-  }
-}
-
-async function navigateBack() {
-  const targetSnapshot = backStack.value.at(-1);
-  const currentSnapshot = currentHistorySnapshot.value;
-  if (!targetSnapshot || !currentSnapshot) return;
-
-  backStack.value = backStack.value.slice(0, -1);
-  forwardStack.value = appendHistorySnapshot(forwardStack.value, currentSnapshot);
-  await applyHistorySnapshot(targetSnapshot);
-}
-
-async function navigateForward() {
-  const targetSnapshot = forwardStack.value.at(-1);
-  const currentSnapshot = currentHistorySnapshot.value;
-  if (!targetSnapshot || !currentSnapshot) return;
-
-  forwardStack.value = forwardStack.value.slice(0, -1);
-  backStack.value = appendHistorySnapshot(backStack.value, currentSnapshot);
-  await applyHistorySnapshot(targetSnapshot);
 }
 
 const commandUnsubscribers: Array<() => void> = [];
@@ -712,26 +479,6 @@ onUnmounted(() => {
       // ignore — best-effort cleanup
     }
   }
-});
-
-watch(currentHistorySnapshot, (nextSnapshot, previousSnapshot) => {
-  if (!nextSnapshot) return;
-
-  if (!historyReady.value) {
-    historyReady.value = true;
-    return;
-  }
-
-  if (
-    suppressHistoryRecording.value ||
-    !previousSnapshot ||
-    snapshotsEqual(nextSnapshot, previousSnapshot)
-  ) {
-    return;
-  }
-
-  backStack.value = appendHistorySnapshot(backStack.value, previousSnapshot);
-  forwardStack.value = [];
 });
 
 // Auto-open my-space entry when needed
