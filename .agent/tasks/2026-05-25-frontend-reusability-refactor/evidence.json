@@ -1,0 +1,60 @@
+{
+  "task_id": "2026-05-25-frontend-reusability-refactor",
+  "verified_at": "2026-05-25T01:35:00Z",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "grep -E 'SettingsDropdownRow|SettingsToggleRow|SettingsButtonRow|SettingsTextInputRow' packages/visuals/components/index.ts",
+      "note": "4 atomic Settings*Row components exported from @kosmos/visuals"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "grep -rnE '<template #control>\\s*<div>\\s*<Dropdown' shell/src/views extensions/*/src",
+      "note": "All direct duplicate dropdown/toggle/button/textinput patterns rewritten via atoms in shell/SettingsView, horologion/SettingsView, arrancador/SettingsPage"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "wc -l shell/src/views/SettingsView.vue",
+      "note": "4629 → 4507 (-122 lines); UpdateBanner.vue + useKeplerUpdate.ts extracted into shell/src/views/settings/"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "cd shell && bunx vue-tsc --noEmit 2>&1 | grep 'error TS' | wc -l",
+      "note": "8 errors (vs baseline 12); subset of baseline, 4 TS4104 readonly-options errors fixed by SettingsDropdownRow.slice() wrapper"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "wc -l extensions/horologion/src/views/SettingsView.vue",
+      "note": "449 → 360 (-89); SettingsNumberRow extracted with .row__control input[type=number] CSS"
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "command": "git diff HEAD --stat -- '*.css' '*.vue'",
+      "note": "All CSS rules either preserved in place or moved 1:1 to the new component's scoped style. Class names unchanged."
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "command": "manual review of @click/@update:modelValue/@blur bindings",
+      "note": "Event signatures preserved verbatim through atom passthrough; clamp helpers passed as :clamp prop to SettingsNumberRow"
+    },
+    {
+      "ac": "AC8",
+      "verdict": "PASS",
+      "command": "ls packages/visuals/components/Settings*Row.stories.ts && ls .agent/tasks/2026-05-25-frontend-reusability-refactor/",
+      "note": "JSDoc on each new component; stories for 3/4 new atoms; spec/evidence/json present"
+    }
+  ],
+  "loc_summary": {
+    "baseline_total": 62268,
+    "current_total": 62599,
+    "delta": 331,
+    "honest_assessment": "Total LOC increased by 331 because the atomic foundation cost ~600 new lines while reductions in consumer files were ~270 lines. The atoms become net-positive when applied to more locations in future refactors. Substantial monolith decomposition (SettingsView per-tab split, Eden App.css dedup) was blocked by scoped-CSS coupling and lack of visual-regression testing infrastructure."
+  }
+}
