@@ -62,6 +62,12 @@ export { default as SettingsRow } from "./SettingsRow.vue";
 
 export { default as SettingsList } from "./SettingsList.vue";
 
+export { default as SettingsDropdownRow } from "./SettingsDropdownRow.vue";
+
+export { default as SettingsToggleRow } from "./SettingsToggleRow.vue";
+
+export { default as SettingsButtonRow } from "./SettingsButtonRow.vue";
+
 export { default as SettingsSidebar } from "./SettingsSidebar.vue";
 
 export { default as SettingsSidebarButton } from "./SettingsSidebarButton.vue";

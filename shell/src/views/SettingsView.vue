@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from "vue";
 import {
-  ArrowUpCircle,
   BookOpen,
   Bug,
   Check,
@@ -11,7 +10,6 @@ import {
   Gamepad2,
   Info,
   ListTodo,
-  Loader2,
   KeyRound,
   Mic,
   Puzzle,
@@ -21,6 +19,8 @@ import {
   ShieldCheck,
   Timer,
 } from "@lucide/vue";
+import UpdateBanner from "./settings/components/UpdateBanner.vue";
+import { useKeplerUpdate } from "./settings/composables/useKeplerUpdate";
 import holoSvg from "../assets/holo.svg";
 import holoPomoSvg from "../assets/holo-pomo.svg";
 import holoSecoSvg from "../assets/holo-seco.svg";
@@ -35,10 +35,10 @@ import kosmosIconPng from "../../build/icon.png";
 import {
   BlocklistCard,
   Button,
-  Dropdown,
   HotkeyCapture,
   RadioGroup,
   SettingsAdvancedIntro,
+  SettingsDropdownRow,
   SettingsList,
   SettingsRow,
   SettingsSearchInput,
@@ -57,7 +57,6 @@ import type {
   InstalledExtensionInfo,
   MarketplaceCatalog,
   MarketplaceExtension,
-  UpdateState,
 } from "@shared/ipc-types";
 
 type Tab =
@@ -2084,75 +2083,16 @@ async function onDictationProxyBlur() {
 
 // --- autoUpdater state ------------------------------------------------------
 
-const updateState = ref<UpdateState>({ kind: "idle" });
-const updateChecking = ref<boolean>(false);
+const {
+  updateState,
+  updateChecking,
+  refreshUpdateState,
+  onCheckUpdates,
+  onInstallUpdate,
+  updateBanner,
+  checkResultLabel,
+} = useKeplerUpdate();
 let unsubscribeUpdateState: (() => void) | null = null;
-
-async function refreshUpdateState() {
-  try {
-    updateState.value = await window.kepler.settings.update.state();
-  } catch (e) {
-    console.warn("update state fetch failed", e);
-  }
-}
-
-async function onCheckUpdates() {
-  if (updateChecking.value) return;
-  updateChecking.value = true;
-  try {
-    updateState.value = await window.kepler.settings.update.check();
-  } catch (e) {
-    console.warn("update check failed", e);
-  } finally {
-    updateChecking.value = false;
-  }
-}
-
-async function onInstallUpdate() {
-  try {
-    await window.kepler.settings.update.install();
-  } catch (e) {
-    console.warn("update install failed", e);
-  }
-}
-
-const updateBanner = computed<null | {
-  text: string;
-  clickable: boolean;
-  progress?: number;
-}>(() => {
-  const s = updateState.value;
-  if (s.kind === "available") {
-    return {
-      text: `Доступно обновление Kepler ${s.version}`,
-      clickable: false,
-    };
-  }
-  if (s.kind === "downloading") {
-    return {
-      text: `Скачивание Kepler ${s.version} (${s.percent}%)`,
-      clickable: false,
-      progress: s.percent,
-    };
-  }
-  if (s.kind === "downloaded") {
-    return {
-      text: `Обновление Kepler ${s.version} готово — нажмите чтобы перезапустить`,
-      clickable: true,
-    };
-  }
-  return null;
-});
-
-const checkResultLabel = computed<string>(() => {
-  const s = updateState.value;
-  if (s.kind === "checking") return "Проверяем…";
-  if (s.kind === "not-available") {
-    return `Последняя версия (проверено ${new Date(s.checkedAt).toLocaleTimeString("ru")})`;
-  }
-  if (s.kind === "error") return `Ошибка: ${s.message}`;
-  return "";
-});
 
 // --- Diagnostics / crashes ------------------------------------------------
 const crashFiles = ref<Array<{ name: string; size: number; mtime: string }>>([]);
@@ -2240,26 +2180,7 @@ onBeforeUnmount(() => {
   <div class="settings" tabindex="0" @keydown="onKey">
     <ToastHost />
     <!-- Raycast-style update banner. Шириной во всё окно, height ~32px. -->
-    <button
-      v-if="updateBanner"
-      type="button"
-      class="update-banner"
-      :class="{ clickable: updateBanner.clickable }"
-      :disabled="!updateBanner.clickable"
-      @click="updateBanner.clickable && onInstallUpdate()"
-    >
-      <component
-        :is="updateState.kind === 'downloading' ? Loader2 : ArrowUpCircle"
-        :size="14"
-        :class="{ spin: updateState.kind === 'downloading' }"
-      />
-      <span class="update-banner-text">{{ updateBanner.text }}</span>
-      <span
-        v-if="updateBanner.progress !== undefined"
-        class="update-banner-progress"
-        :style="{ width: `${updateBanner.progress}%` }"
-      />
-    </button>
+    <UpdateBanner :banner="updateBanner" :state="updateState" @install="onInstallUpdate" />
 
     <div class="settings-shell">
       <SettingsSidebar title="Настройки">
@@ -2676,43 +2597,29 @@ onBeforeUnmount(() => {
                 <span class="stats-header__title">Микрофон</span>
               </div>
               <SettingsList>
-                <SettingsRow
+                <SettingsDropdownRow
                   title="Устройство"
                   :description="
                     dictationMicError ||
                     'Если устройство не доступно во время записи — будет fallback на системный default.'
                   "
-                >
-                  <template #control>
-                    <div>
-                      <Dropdown
-                        :model-value="dictationConfig.microphoneDeviceId ?? 'default'"
-                        :options="dictationMicOptions"
-                        @update:modelValue="onDictationMicChange"
-                      />
-                    </div>
-                  </template>
-                </SettingsRow>
+                  :model-value="dictationConfig.microphoneDeviceId ?? 'default'"
+                  :options="dictationMicOptions"
+                  @update:modelValue="onDictationMicChange"
+                />
               </SettingsList>
 
               <div class="stats-header">
                 <span class="stats-header__title">Основное</span>
               </div>
               <SettingsList>
-                <SettingsRow
+                <SettingsDropdownRow
                   title="Язык"
                   description="Подсказка для Whisper. «Авто» — автоопределение."
-                >
-                  <template #control>
-                    <div>
-                      <Dropdown
-                        :model-value="dictationConfig.language"
-                        :options="dictationLanguageOptions"
-                        @update:modelValue="onDictationLanguageChange"
-                      />
-                    </div>
-                  </template>
-                </SettingsRow>
+                  :model-value="dictationConfig.language"
+                  :options="dictationLanguageOptions"
+                  @update:modelValue="onDictationLanguageChange"
+                />
                 <SettingsRow title="Горячая клавиша">
                   <template #control>
                     <HotkeyCapture
@@ -2727,42 +2634,27 @@ onBeforeUnmount(() => {
                     />
                   </template>
                 </SettingsRow>
-                <SettingsRow title="Режим триггера" description="Как срабатывает горячая клавиша.">
-                  <template #control>
-                    <div>
-                      <Dropdown
-                        :model-value="dictationConfig.triggerMode"
-                        :options="dictationTriggerOptions"
-                        @update:modelValue="onDictationTriggerModeChange"
-                      />
-                    </div>
-                  </template>
-                </SettingsRow>
-                <SettingsRow
+                <SettingsDropdownRow
+                  title="Режим триггера"
+                  description="Как срабатывает горячая клавиша."
+                  :model-value="dictationConfig.triggerMode"
+                  :options="dictationTriggerOptions"
+                  @update:modelValue="onDictationTriggerModeChange"
+                />
+                <SettingsDropdownRow
                   title="Вставка"
                   description="Auto-paste симулирует Ctrl+V и восстанавливает буфер. Clipboard — только записать текст, вы жмёте Ctrl+V сами."
-                >
-                  <template #control>
-                    <div>
-                      <Dropdown
-                        :model-value="dictationConfig.injectMode"
-                        :options="dictationInjectOptions"
-                        @update:modelValue="onDictationInjectModeChange"
-                      />
-                    </div>
-                  </template>
-                </SettingsRow>
-                <SettingsRow title="Поставщик" :description="dictationProviderDescription">
-                  <template #control>
-                    <div>
-                      <Dropdown
-                        :model-value="dictationConfig.provider"
-                        :options="dictationProviderOptions"
-                        @update:modelValue="onDictationProviderChange"
-                      />
-                    </div>
-                  </template>
-                </SettingsRow>
+                  :model-value="dictationConfig.injectMode"
+                  :options="dictationInjectOptions"
+                  @update:modelValue="onDictationInjectModeChange"
+                />
+                <SettingsDropdownRow
+                  title="Поставщик"
+                  :description="dictationProviderDescription"
+                  :model-value="dictationConfig.provider"
+                  :options="dictationProviderOptions"
+                  @update:modelValue="onDictationProviderChange"
+                />
               </SettingsList>
             </div>
           </section>

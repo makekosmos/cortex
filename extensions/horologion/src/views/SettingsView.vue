@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { Play } from "@lucide/vue";
-import { Dropdown, SettingsRow, Toggle } from "@kosmos/visuals";
+import { Dropdown, SettingsRow, SettingsToggleRow } from "@kosmos/visuals";
 import { pomodoroSettings, resetPomodoroSettings } from "../lib/pomodoroSettings";
 import { playSound, SOUND_OPTIONS, type SoundName } from "../lib/sounds";
 
@@ -146,35 +146,19 @@ function testSound(s: SoundName) {
 
     <section class="group">
       <h3 class="group__title">Поведение</h3>
-      <SettingsRow title="Трекать перерывы как «Отдых»">
-        <template #control>
-          <Toggle
-            v-model="pomodoroSettings.trackBreaksAsRest"
-            aria-label="Трекать перерывы как «Отдых»"
-          />
-        </template>
-      </SettingsRow>
-      <SettingsRow title="Автостарт рабочего времени">
-        <template #control>
-          <Toggle
-            v-model="pomodoroSettings.autoStartWork"
-            aria-label="Автостарт рабочего времени"
-          />
-        </template>
-      </SettingsRow>
-      <SettingsRow title="Автостарт перерыва">
-        <template #control>
-          <Toggle v-model="pomodoroSettings.autoStartBreak" aria-label="Автостарт перерыва" />
-        </template>
-      </SettingsRow>
-      <SettingsRow title="Системные уведомления">
-        <template #control>
-          <Toggle
-            v-model="pomodoroSettings.systemNotifications"
-            aria-label="Системные уведомления"
-          />
-        </template>
-      </SettingsRow>
+      <SettingsToggleRow
+        v-model="pomodoroSettings.trackBreaksAsRest"
+        title="Трекать перерывы как «Отдых»"
+      />
+      <SettingsToggleRow
+        v-model="pomodoroSettings.autoStartWork"
+        title="Автостарт рабочего времени"
+      />
+      <SettingsToggleRow v-model="pomodoroSettings.autoStartBreak" title="Автостарт перерыва" />
+      <SettingsToggleRow
+        v-model="pomodoroSettings.systemNotifications"
+        title="Системные уведомления"
+      />
       <SettingsRow
         v-if="blocklistsAvailable"
         title="Блокировки во время фокуса"

@@ -5,7 +5,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { Eye, EyeOff, ExternalLink } from "@lucide/vue";
 
-import { SettingsRow, Toggle } from "@kosmos/visuals";
+import { SettingsRow, SettingsToggleRow } from "@kosmos/visuals";
 
 import { arrancadorApi } from "../lib/arrancadorApi";
 
@@ -197,14 +197,11 @@ function openRawgApiDocs() {
         </button>
       </div>
 
-      <SettingsRow
+      <SettingsToggleRow
+        v-model="settings.showLegacyHints"
         title="Показывать подсказки"
         description="Информационные баннеры на страницах extension'а."
-      >
-        <template #control>
-          <Toggle v-model="settings.showLegacyHints" aria-label="Показывать подсказки" />
-        </template>
-      </SettingsRow>
+      />
 
       <SettingsRow
         title="Стартовый раздел"
