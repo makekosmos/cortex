@@ -44,10 +44,9 @@ import {
   SettingsList,
   SettingsRow,
   SettingsSearchInput,
-  SettingsTextInputRow,
   SettingsSidebar,
   SettingsSidebarButton,
-  Textarea,
+  SettingsTextInputRow,
   TextInput,
   ToastHost,
   provideToastHost,
@@ -592,7 +591,7 @@ const fileSearchBusy = ref<boolean>(false);
 const fileSearchError = ref<string>("");
 const fileSearchNewIgnore = ref<string>("");
 const { api: toast } = provideToastHost();
-let fileSearchPollTimer: ReturnType<typeof window.setTimeout> | null = null;
+let fileSearchPollTimer: number | null = null;
 let fileSearchToastId: number | null = null;
 const backend = ref<BackendStatus>({ running: false, lockFilePath: "" });
 const loading = ref<boolean>(true);

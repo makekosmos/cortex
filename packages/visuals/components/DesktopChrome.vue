@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, provide, useSlots } from "vue";
-import Titlebar, { type TitlebarPlatform } from "./Titlebar.vue";
+import Titlebar from "./Titlebar.vue";
+import type { TitlebarPlatform } from "./types";
 
 interface Props {
   platform?: TitlebarPlatform;

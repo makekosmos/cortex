@@ -210,11 +210,6 @@ const filteredCommands = computed<CommandRecord[]>(() => {
     .map((x) => x.cmd);
 });
 
-const filtered = computed<CommandRecord[]>(() => {
-  if (!query.value.trim()) return commands.value;
-  return filteredCommands.value.concat(fileCommands.value);
-});
-
 const RECENTS_KEY = "kepler.launcher.recents";
 const RECENTS_LIMIT = 5;
 
@@ -454,7 +449,6 @@ function moveSelection(delta: number) {
   // Clamp без wrap — упереться в границы.
   selectedIndex.value = Math.max(0, Math.min(n - 1, next));
   scheduleSaveState();
-  const direction: "up" | "down" = selectedIndex.value < prevIdx ? "up" : "down";
   void nextTick(() => {
     const list = listRef.value;
     if (!list) return;

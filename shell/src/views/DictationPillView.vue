@@ -59,13 +59,6 @@ function statusText(): string {
   }
 }
 
-const timeText = computed(() => {
-  const total = Math.max(0, Math.floor(elapsedSec.value));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-});
-
 /** Создаёт MediaStream + AudioContext если их ещё нет (cold start), либо
  *  возвращает уже warm cache. На warm-пути — мгновенно (нет getUserMedia).
  *  Reset'ит scheduleStreamShutdown — пока юзер активно диктует, idle timer

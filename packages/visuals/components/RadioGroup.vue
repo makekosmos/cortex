@@ -18,7 +18,7 @@ interface Option<V> {
 const props = withDefaults(
   defineProps<{
     modelValue: T;
-    options: Option<T>[];
+    options: ReadonlyArray<Option<T>>;
     /** Имя группы — для уникальности radio name (default — random). */
     name?: string;
     /** Layout. Default "vertical". */
