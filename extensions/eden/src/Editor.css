@@ -521,9 +521,7 @@
   transform: translateY(-10px);
 }
 
-.focus-mode .editor-content-rail {
-  min-height: 0;
-}
+/* `.focus-mode .editor-content-rail` дубликат удалён — идентичен 323. */
 
 .ProseMirror {
   outline: none;
@@ -565,14 +563,8 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-.ProseMirror ul,
-.ProseMirror ol {
-  padding-left: 1.2rem;
-}
-
-.ProseMirror li {
-  margin-bottom: 0.2em;
-}
+/* `.ProseMirror ul, .ProseMirror ol` + `.ProseMirror li` дубликаты удалены —
+   идентичны 466–472. */
 
 .ProseMirror blockquote {
   padding-left: 1rem;
