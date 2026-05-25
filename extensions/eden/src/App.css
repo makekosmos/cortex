@@ -2611,31 +2611,8 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.focus-exit-btn.is-visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.focus-mode .editor-header {
-  display: none;
-}
-
-/* Zen mode: padding-top минимальный (6px), горизонтально — `--kosmos-titlebar-inline-padding`
-   (0.75rem = 12px), чтобы текст начинался в той же горизонтальной позиции,
-   что иконки sidebar'а / window controls в обычном режиме. */
-.focus-mode .editor-content-area {
-  padding: 6px var(--kosmos-titlebar-inline-padding, 0.75rem) 42vh;
-}
-
-.focus-mode .ProseMirror,
-.focus-mode .ProseMirror p {
-  font-weight: 500;
-}
-
-.focus-mode .editor-content-rail {
-  min-height: 0;
-}
+/* `.focus-exit-btn.is-visible` + 4 `.focus-mode *` правила, идентичные строкам
+   2490–2512 — удалены как copy-paste дубликаты (2026-05-25 reusability sweep). */
 
 .ProseMirror {
   outline: none;
@@ -2677,14 +2654,8 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-.ProseMirror ul,
-.ProseMirror ol {
-  padding-left: 1.2rem;
-}
-
-.ProseMirror li {
-  margin-bottom: 0.2em;
-}
+/* `.ProseMirror ul, .ProseMirror ol` + `.ProseMirror li` дубликат блок
+   удалён — идентичен правилам 2560–2566. */
 
 .ProseMirror blockquote {
   padding-left: 1rem;
@@ -3619,9 +3590,7 @@ span[data-wikilink]:hover {
   color: var(--color-text-inversion);
 }
 
-.dialog-primary-btn:hover {
-  background: var(--accent-hover);
-}
+/* `.dialog-primary-btn:hover` дубликат удалён — идентичен правилу 1471. */
 
 .focus-exit-btn {
   color: var(--text-secondary);
