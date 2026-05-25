@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { Play } from "@lucide/vue";
 import { Dropdown, SettingsRow, SettingsToggleRow } from "@kosmos/visuals";
 import SettingsNumberRow from "../components/SettingsNumberRow.vue";
+import SoundPickerRow from "../components/SoundPickerRow.vue";
 import { pomodoroSettings, resetPomodoroSettings } from "../lib/pomodoroSettings";
 import { playSound, SOUND_OPTIONS, type SoundName } from "../lib/sounds";
 
@@ -131,36 +132,18 @@ function testSound(s: SoundName) {
 
     <section class="group">
       <h3 class="group__title">Звуки</h3>
-      <SettingsRow title="Конец рабочего времени">
-        <template #control>
-          <span class="row__control">
-            <Dropdown v-model="pomodoroSettings.workEndSound" :options="soundOptions" class="dd" />
-            <button
-              type="button"
-              class="iconbtn"
-              title="Прослушать"
-              @click="testSound(pomodoroSettings.workEndSound)"
-            >
-              <Play :size="12" :stroke-width="2" />
-            </button>
-          </span>
-        </template>
-      </SettingsRow>
-      <SettingsRow title="Конец перерыва">
-        <template #control>
-          <span class="row__control">
-            <Dropdown v-model="pomodoroSettings.breakEndSound" :options="soundOptions" class="dd" />
-            <button
-              type="button"
-              class="iconbtn"
-              title="Прослушать"
-              @click="testSound(pomodoroSettings.breakEndSound)"
-            >
-              <Play :size="12" :stroke-width="2" />
-            </button>
-          </span>
-        </template>
-      </SettingsRow>
+      <SoundPickerRow
+        v-model="pomodoroSettings.workEndSound"
+        title="Конец рабочего времени"
+        :options="soundOptions"
+        @preview="testSound"
+      />
+      <SoundPickerRow
+        v-model="pomodoroSettings.breakEndSound"
+        title="Конец перерыва"
+        :options="soundOptions"
+        @preview="testSound"
+      />
       <SettingsRow title="Громкость">
         <template #control>
           <span class="row__control row__control--volume">
