@@ -307,7 +307,6 @@ const primaryLabel = computed(() => {
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
-  cursor: pointer;
   transition:
     background-color 350ms cubic-bezier(0.2, 0, 0, 1),
     color 350ms cubic-bezier(0.2, 0, 0, 1);
@@ -340,7 +339,6 @@ const primaryLabel = computed(() => {
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 500;
-  cursor: pointer;
   transition:
     background-color 350ms cubic-bezier(0.2, 0, 0, 1),
     color 350ms cubic-bezier(0.2, 0, 0, 1);

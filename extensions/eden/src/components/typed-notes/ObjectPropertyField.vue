@@ -446,6 +446,5 @@ function formatOptionLabel(option: string) {
 }
 
 .object-property-field__chip {
-  cursor: pointer;
 }
 </style>

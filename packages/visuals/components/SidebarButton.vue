@@ -60,7 +60,6 @@ function className(active: boolean) {
   font-size: 0.875rem;
   line-height: 1.25rem;
   color: var(--sidebar-foreground);
-  cursor: pointer;
   user-select: none;
   text-decoration: none;
   text-align: left;

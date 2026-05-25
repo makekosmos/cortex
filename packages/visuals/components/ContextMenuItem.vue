@@ -38,7 +38,6 @@ defineEmits<{
   background: transparent;
   border: none;
   border-radius: calc(var(--radius) * 0.6);
-  cursor: pointer;
   text-align: left;
   color: var(--foreground);
   font-size: 0.8125rem;

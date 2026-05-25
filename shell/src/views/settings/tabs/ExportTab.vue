@@ -112,7 +112,6 @@ function runExport(c: ExportConverterInfo) {
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--foreground);
-  cursor: pointer;
 }
 
 .export-history-row {

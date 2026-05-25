@@ -139,7 +139,6 @@ function handleClose(): void {
   background: transparent;
   border: none;
   padding: 0;
-  cursor: pointer;
   color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
   transition:
     background-color 120ms ease,

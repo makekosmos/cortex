@@ -36,7 +36,6 @@ defineEmits<{ change: [e: Event] }>();
 .toggle {
   position: relative;
   display: inline-block;
-  cursor: pointer;
   flex-shrink: 0;
 }
 

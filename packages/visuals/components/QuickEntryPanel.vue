@@ -329,7 +329,6 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   font-family: inherit;
   font-size: 12px;
-  cursor: pointer;
   transition:
     background-color 120ms,
     color 120ms;
@@ -399,7 +398,6 @@ onBeforeUnmount(() => {
   font-family: inherit;
   font-size: 12px;
   color: var(--foreground);
-  cursor: pointer;
 }
 .qep-menu-item:hover {
   background: var(--surface);
@@ -422,7 +420,6 @@ onBeforeUnmount(() => {
   border: none;
   color: var(--muted-foreground);
   border-radius: 6px;
-  cursor: pointer;
   transition:
     background 100ms,
     color 100ms;

@@ -52,7 +52,9 @@
   --settings-sidebar-active: #343434;
   --settings-sidebar-icon-from: oklch(0.42 0 0);
   --settings-sidebar-icon-to: oklch(0.26 0 0);
-  --settings-list-background: #222222;
+  /* Полупрозрачный overlay (как у secrets-item изначально). Раньше был
+   * solid #222 — рядом с другими тёмными секциями выглядел плотно. */
+  --settings-list-background: color-mix(in srgb, var(--foreground) 5%, transparent);
   --settings-advanced-title-size: 24px;
   --settings-advanced-title-line-height: 1.2;
   --settings-advanced-title-weight: 500;

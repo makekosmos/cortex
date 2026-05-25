@@ -87,7 +87,6 @@ thead th {
 }
 
 tbody tr {
-  cursor: pointer;
   transition: background 0.1s var(--easing-standard);
 }
 

@@ -55,7 +55,14 @@ const mutableOptions = computed(() => props.options.slice() as Option<T>[]);
           :search-placeholder="searchPlaceholder"
           :disabled="disabled"
           @update:model-value="(v: T) => emit('update:modelValue', v)"
-        />
+        >
+          <template v-if="$slots['trigger-leading']" #trigger-leading="ctx">
+            <slot name="trigger-leading" v-bind="ctx" />
+          </template>
+          <template v-if="$slots['option-leading']" #option-leading="ctx">
+            <slot name="option-leading" v-bind="ctx" />
+          </template>
+        </Dropdown>
       </div>
     </template>
   </SettingsRow>

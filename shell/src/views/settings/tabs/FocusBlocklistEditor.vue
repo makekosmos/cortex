@@ -230,7 +230,6 @@ defineExpose({ mentionTextareaRef });
   border: 1px solid transparent;
   border-radius: 6px;
   background: color-mix(in srgb, var(--foreground) 4%, transparent);
-  cursor: pointer;
 }
 
 .icon-choice:hover {
@@ -273,7 +272,6 @@ defineExpose({ mentionTextareaRef });
   background: transparent;
   color: var(--foreground);
   border-radius: 6px;
-  cursor: pointer;
   font: inherit;
   font-size: 12px;
   text-align: left;

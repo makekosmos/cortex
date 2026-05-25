@@ -151,6 +151,19 @@ pub fn inject_blocking(
         return Ok(());
     }
 
+    // Если юзер ушёл из target окна (current foreground != prev_hwnd) —
+    // НЕ воруем фокус. Текст остаётся в clipboard, юзер сам нажмёт Ctrl+V
+    // когда будет готов. Это критично для auto-retry в фоне: если ретрай
+    // завершается пока юзер уже работает в другом приложении, мы не дёргаем
+    // его фокус и не вставляем текст в неправильное окно.
+    if let Some(prev) = prev_hwnd {
+        let current = capture_foreground_window();
+        if current != Some(prev) {
+            // Foreground сменился — fallback clipboard-only.
+            return Ok(());
+        }
+    }
+
     if let Some(hwnd) = prev_hwnd {
         restore_foreground_window(hwnd);
     }

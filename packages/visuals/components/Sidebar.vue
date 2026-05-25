@@ -738,7 +738,6 @@ const wrapperClasses = computed(() =>
   font-size: 0.875rem;
   line-height: 1.25rem;
   font-weight: 500;
-  cursor: pointer;
   text-decoration: none;
   text-align: left;
   -webkit-app-region: no-drag;

@@ -28,7 +28,6 @@ defineEmits<{
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 85%, transparent);
   font-size: 13px;
-  cursor: pointer;
   border-radius: 6px;
   text-align: left;
 }

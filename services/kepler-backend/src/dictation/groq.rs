@@ -26,7 +26,7 @@
 use serde::Deserialize;
 use thiserror::Error;
 
-const GROQ_ENDPOINT: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
+pub const GROQ_ENDPOINT: &str = "https://api.groq.com/openai/v1/audio/transcriptions";
 
 /// Hardcoded prompt для Whisper. Короткий, с domain-терминами Kosmos/Kepler
 /// + явно указывает что это русская речь с пунктуацией. Не описывает задачу
@@ -95,6 +95,7 @@ pub fn filter_segments(resp: &VerboseResponse) -> String {
 /// Любой не-200 → `GroqError::Api` с телом для диагностики.
 pub async fn transcribe(
     client: &reqwest::Client,
+    endpoint: &str,
     api_key: &str,
     wav_bytes: Vec<u8>,
     language: &str,
@@ -123,7 +124,7 @@ pub async fn transcribe(
     }
 
     let resp = client
-        .post(GROQ_ENDPOINT)
+        .post(endpoint)
         .bearer_auth(api_key)
         .multipart(form)
         .send()

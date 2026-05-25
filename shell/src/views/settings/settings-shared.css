@@ -86,7 +86,6 @@
   border-radius: 7px;
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 72%, transparent);
-  cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
@@ -312,7 +311,6 @@
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--foreground);
-  cursor: pointer;
 }
 
 .settings-shell .btn:hover:not(:disabled) {
@@ -379,7 +377,6 @@
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
   background: transparent;
   color: var(--foreground);
-  cursor: pointer;
   min-width: 110px;
   text-align: center;
 }
@@ -397,6 +394,12 @@
   flex-direction: column;
   gap: 16px;
   padding: 16px;
+  /* flex: 1 + min-height: 0 чтобы overflow:auto реально работал
+   * в flex-родителе (.settings-shell). Без этого контент ужимается до
+   * available height, scroll не появляется. Тот же паттерн что
+   * advanced-page. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -439,12 +442,9 @@
 .settings-shell .stats-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
   margin-bottom: 16px;
-  background: var(--border);
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
+  background: var(--settings-list-background, var(--background));
+  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -453,7 +453,13 @@
   flex-direction: column;
   gap: 6px;
   padding: 14px 16px;
-  background: var(--settings-list-background, var(--background));
+  /* Внутренние карты прозрачны — bg даёт контейнер. Между ними тонкий
+   * разделитель border-left начиная со второй. */
+  background: transparent;
+}
+
+.settings-shell .stats-card + .stats-card {
+  border-left: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .settings-shell .stats-card__label {

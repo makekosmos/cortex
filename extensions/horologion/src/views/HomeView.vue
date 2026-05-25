@@ -340,7 +340,6 @@ async function onSubmit() {
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  cursor: pointer;
   overflow: hidden;
   white-space: nowrap;
   transition:

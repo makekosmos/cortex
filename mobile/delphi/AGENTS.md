@@ -312,6 +312,12 @@ await arkClient.commands.register([
 - ❌ Регистрировать `dictation::hotkey_hook` thread больше одного раза за процесс. `ensure_thread_started` — idempotent через `OnceLock`. Множественные hook'и → дубликаты events.
 - ❌ Hotkey hook в `kepler-backend` без `cfg(windows)` guard'а. `WH_KEYBOARD_LL` Win32-specific. На non-Windows модуль stub'нут.
 - ❌ Применять `httpProxy` config-поле к не-AI запросам (RAWG / sync / прочее) в Phase 1.5. Scope ограничен `dictation::network::build_client`.
+- ❌ Удалять `<uuid>.wav` из `<dataDir>/dictation/pending/` до успешного inject ИЛИ явного discard юзером (Phase 2). Audio loss = unrecoverable: pill закрывается, PCM-буфер обнуляется в renderer; диск — единственный источник для retry.
+- ❌ Retry HTTP-запросов на 4xx статусах (кроме 429) в `dictation::retry::classify`. 401/400/413 — caller bug или формат-ошибка, retry — пустая трата квоты + латентность. Только 429/5xx и `reqwest::Error` ретрайятся.
+- ❌ Silent fallback на Cloudflare DoH для `NetworkProfile::CustomDoh` с невалидным URL (Phase 2). Сейчас `network::validate_custom_doh_url` возвращает `Err` — UI/тест-connectivity показывают конкретную причину, юзер сам исправляет.
+- ❌ Pending queue размером > 20 items ИЛИ старше 7 дней без GC. На app start `DictationHost::bootstrap_pending` вызывает `pending::gc(20, ChronoDuration::days(7))`. Reason: disk leak (~1MB per item × 16kHz/16bit/30s) + privacy (длинные диктовки лежат в plaintext WAV).
+- ❌ Pending файлы вне `<dataDir>/dictation/pending/`. `dataDir` пробрасывается через `DictationHost::data_dir` (`config::data_dir()` в проде, `tempdir` в тестах через `new_for_test`). Instance isolation нарушится если хардкодить путь.
+- ❌ Pill auto-close на `Error { canRetry: true }` через 1.2s. Юзеру нужно успеть кликнуть retry-кнопку. Auto-close оставлен только для fatal `canRetry=false` (битое аудио / нет ключа).
 
 ### Spaces concept
 

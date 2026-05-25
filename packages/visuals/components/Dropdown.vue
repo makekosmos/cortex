@@ -86,19 +86,34 @@ function reposition() {
   if (!trigger || !panel) return;
   const rect = trigger.getBoundingClientRect();
   const panelH = panel.offsetHeight;
+  const panelW = panel.offsetWidth;
   const margin = 4;
+  const edgePad = 8;
+
+  // Vertical: выбираем сторону с большим пространством.
   const spaceBelow = window.innerHeight - rect.bottom - margin;
   const spaceAbove = rect.top - margin;
-  // По умолчанию ниже триггера. Если внизу не помещается — наверх.
   let top: number;
-  if (panelH <= spaceBelow || spaceBelow >= spaceAbove) {
+  if (spaceBelow >= spaceAbove) {
     top = rect.bottom + margin;
   } else {
-    top = Math.max(rect.top - panelH - margin, 8);
+    top = Math.max(rect.top - panelH - margin, edgePad);
   }
+
+  // Horizontal: по умолчанию anchor по ПРАВОМУ краю trigger'а (panel
+  // расходится влево). Это естественно когда trigger — узкая кнопка справа
+  // в строке settings (язык, провайдер). Если левый край panel'а уходит за
+  // viewport — flip в left-anchor.
+  let left = rect.right - panelW;
+  if (left < edgePad) {
+    left = rect.left;
+  }
+  // Final clamp в обе стороны viewport.
+  left = Math.max(edgePad, Math.min(left, window.innerWidth - panelW - edgePad));
+
   panelPosition.value = {
     top,
-    left: rect.left,
+    left,
     width: rect.width,
   };
 }
@@ -222,6 +237,9 @@ onBeforeUnmount(() => {
       :aria-expanded="open"
       @click="toggle"
     >
+      <!-- Слот для leading-иконки в trigger'е (показывает иконку текущего
+           выбранного варианта). Если не передан — без иконки. -->
+      <slot name="trigger-leading" :option="selectedOption" />
       <span class="kosmos-dd__label">{{ displayLabel }}</span>
       <ChevronDown
         class="kosmos-dd__chevron"
@@ -255,7 +273,7 @@ onBeforeUnmount(() => {
               autocomplete="off"
             />
           </div>
-          <div class="kosmos-dd__options">
+          <div class="kosmos-dd__options kosmos-scroll">
             <button
               v-for="(opt, i) in filteredOptions"
               :key="String(opt.value)"
@@ -272,6 +290,9 @@ onBeforeUnmount(() => {
               @mouseenter="!opt.disabled && (highlightIdx = i)"
               @click="pick(opt)"
             >
+              <!-- Слот для кастомной leading-иконки (например ProviderIcon).
+                   Если не передан — просто label. -->
+              <slot name="option-leading" :option="opt" />
               <span class="kosmos-dd__option-label">{{ opt.label }}</span>
               <Check
                 v-if="opt.value === modelValue"
@@ -304,7 +325,6 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.5rem;
   width: fit-content;
-  min-width: 120px;
   max-width: 100%;
   height: 34px;
   padding: 0 0.625rem;
@@ -363,7 +383,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   padding: 0;
   min-width: 200px;
-  max-height: min(360px, calc(100vh - 32px));
+  max-height: min(200px, calc(100vh - 32px));
   background: var(--popover, color-mix(in srgb, var(--background) 92%, black));
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -432,7 +452,7 @@ onBeforeUnmount(() => {
 }
 
 .kosmos-dd__option--highlighted {
-  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
 }
 
 .kosmos-dd__option--selected {
@@ -440,8 +460,13 @@ onBeforeUnmount(() => {
   color: var(--foreground);
 }
 
-.kosmos-dd__option--selected.kosmos-dd__option--highlighted {
-  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+/* Раздельная подсветка: пока юзер не двигает курсор / клавиатуру — fill
+ * стоит на выбранном (--selected). Как только highlightIdx сменяется (hover
+ * или arrow keys на ДРУГОЙ option) — selected теряет фон, fill переезжает
+ * на highlight. Создаёт иллюзию "движущегося индикатора". */
+.kosmos-dd__options:has(.kosmos-dd__option--highlighted)
+  .kosmos-dd__option--selected:not(.kosmos-dd__option--highlighted) {
+  background: transparent;
 }
 
 .kosmos-dd__option--disabled {

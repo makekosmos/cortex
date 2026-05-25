@@ -147,7 +147,6 @@
   flex-direction: column;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
-  cursor: pointer;
   border: 1px solid transparent;
 }
 

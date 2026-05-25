@@ -72,7 +72,6 @@ function onPreview() {
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
   border-radius: calc(var(--radius) * 0.6);
   corner-shape: var(--corner-shape);
-  cursor: pointer;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),
     border-color 120ms cubic-bezier(0.2, 0, 0, 1);

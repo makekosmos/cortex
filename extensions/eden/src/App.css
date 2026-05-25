@@ -1197,7 +1197,6 @@
   display: flex;
   align-items: center;
   padding: 5px 8px;
-  cursor: pointer;
   border-radius: var(--radius-sm);
   margin: 0 6px 2px;
   transition: background-color var(--transition-fast);
@@ -1667,7 +1666,6 @@
   flex-direction: column;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
-  cursor: pointer;
   transition: all var(--transition-fast);
   border: 1px solid transparent;
 }
@@ -1799,7 +1797,6 @@
   color: var(--text-secondary);
   font-size: 11px;
   padding: 3px 6px;
-  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -1819,7 +1816,6 @@
   padding: 6px 10px;
   margin-bottom: 2px;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all var(--transition-fast);
   border: 1px solid transparent;
 }
@@ -2429,7 +2425,6 @@
   font-weight: 500;
   padding: 5px 10px;
   border-radius: var(--radius-xs);
-  cursor: pointer;
   transition: all var(--transition-fast);
   box-shadow: var(--shadow-xs);
 }
@@ -2843,7 +2838,6 @@
   line-height: 20px;
   padding: 0;
   border-radius: 0;
-  cursor: pointer;
   transition: color 0.15s ease;
   white-space: nowrap;
 }
@@ -2870,7 +2864,6 @@
   line-height: 20px;
   padding: 0;
   border-radius: 0;
-  cursor: pointer;
   white-space: nowrap;
   transition: color 0.15s ease;
 }
@@ -2937,7 +2930,6 @@
   color: var(--text-secondary);
   padding: 5px 8px;
   font-size: 12px;
-  cursor: pointer;
   transition: all 0.1s ease;
   width: 100%;
   text-align: left;
@@ -3048,7 +3040,6 @@
   color: var(--text-primary);
   font-size: 16px;
   font-weight: 500;
-  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -3076,7 +3067,6 @@
   color: var(--text-tertiary);
   font-size: 12px;
   padding: 0;
-  cursor: pointer;
   transition: color var(--transition-fast);
 }
 
@@ -3169,7 +3159,6 @@
 .settings-checkbox {
   justify-content: flex-start;
   gap: var(--space-3);
-  cursor: pointer;
 }
 
 .settings-checkbox:hover {
@@ -3224,7 +3213,6 @@ span[data-wikilink] {
   background-color: var(--accent-muted);
   padding: 0 4px;
   border-radius: var(--radius-xs);
-  cursor: pointer;
   font-weight: 500;
   transition: all var(--transition-fast);
   border-bottom: 1px solid rgba(10, 132, 255, 0.25);
@@ -3275,7 +3263,6 @@ span[data-wikilink]:hover {
   padding: var(--space-2) var(--space-3);
   text-align: left;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -4191,7 +4178,6 @@ span[data-wikilink]:hover {
   color: var(--text-primary);
   font-size: 12px;
   text-align: left;
-  cursor: pointer;
   transition: background-color 0.1s ease;
 }
 
@@ -4314,7 +4300,6 @@ span[data-wikilink]:hover {
   gap: 6px;
   padding: 5px 0;
   color: inherit;
-  cursor: pointer;
   transition: color var(--transition-fast);
 }
 
@@ -4756,7 +4741,6 @@ span[data-wikilink]:hover {
   justify-content: center;
   background: transparent;
   border: none;
-  cursor: pointer;
   color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
   transition:
     background-color 120ms ease,

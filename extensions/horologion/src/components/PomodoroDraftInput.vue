@@ -210,7 +210,6 @@ function onKeyDown(e: KeyboardEvent) {
   font-size: 0.8125rem;
   font-weight: 600;
   max-width: 140px;
-  cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
   transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1);

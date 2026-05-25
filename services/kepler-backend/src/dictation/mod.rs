@@ -16,6 +16,8 @@ pub mod host;
 pub mod hotkey_hook;
 pub mod inject;
 pub mod network;
+pub mod pending;
+pub mod retry;
 pub mod stats;
 
 pub use config::{

@@ -235,6 +235,68 @@ UI не даёт менять модель — вшит **`whisper-large-v3`**. 
 
 ---
 
+## Resilience (Phase 2)
+
+Phase 2 закрыло 3 класса проблем, выявленных в продакшене Phase 1+1.5:
+audio loss при сетевом сбое, неработающий Custom DoH, плоский «не удалось» в test_connectivity.
+
+### Disk-first очередь pending
+
+WAV пишется на диск **до** HTTP-запроса. Crash backend / kill app / network drop — аудио переживает, доступно для retry.
+
+```
+<dataDir>/dictation/pending/
+  ├── <uuid>.wav   — сырое аудио (16kHz/16bit/mono)
+  └── <uuid>.json  — { uuid, createdAt, attempts, lastError, opts, durationSec, wavBytes }
+```
+
+Атомарность через `.tmp → rename`. GC на app start: удалить items старше 7 дней ИЛИ свыше 20 штук (LRU по createdAt). См. `pending.rs`.
+
+### Retry + классификация ошибок
+
+`retry::classify(&SubmitError) -> FailureKind` различает:
+
+- **Retryable** — сетевые (`reqwest::Error` любой), Groq `429` / `5xx`. Срабатывает `retry::with_backoff(3, 500ms, 8s)` с jitter ±50%.
+- **Fatal** — Groq `401` («Неверный API key»), `413` («Аудио слишком длинное»), `400` («Groq отклонил»), `AudioDecode`, `NoApiKey`. Без retry, pill сразу в Error state.
+
+При исчерпании retry pending остаётся на диске — юзер вручную нажимает «Повторить» из Settings → Диктация → Очередь диктовок или из retry-кнопки на pill.
+
+### Custom DoH — реальная реализация
+
+Phase 1 silent-fallback'ил на Cloudflare. Phase 2: `network::validate_custom_doh_url` парсит URL (схема, host, port, path, IP-литерал), `build_resolver` собирает `hickory_resolver::NameServerConfig` с `Protocol::Https`. Невалидный URL → `Err(NetworkError::CustomDohInvalid)`, UI показывает причину inline.
+
+### Stage-by-stage диагностика
+
+`dictation.test_connectivity` теперь возвращает:
+
+```jsonc
+{
+  "ok": false,
+  "totalMs": 881,
+  "firstFailure": "tcp_connect",
+  "stages": [
+    { "name": "client_build", "ok": true, "ms": 12 },
+    { "name": "dns_resolve", "ok": true, "ms": 84, "ip": "104.18.32.115" },
+    { "name": "tcp_connect", "ok": false, "ms": 5000, "error": "TCP connect timeout (5s)" },
+  ],
+}
+```
+
+UI рендерит чек-листом + подсказку для первой failing стадии («TCP connect отвергнут — возможен IP-блок, попробуйте proxy»).
+
+### WS endpoints (Phase 2 additions)
+
+- `dictation.list_pending` → `{ items: [...] }` для UI очереди.
+- `dictation.retry { uuid }` → запуск process_pending в фоне.
+- `dictation.discard { uuid }` → удаляет файл, сбрасывает state если был активен.
+- `dictation.retry_all` → запуск всех pending параллельно.
+
+### Tracing
+
+`tracing::{info,warn,error}` во всех error path в `dictation/{host,network,retry,pending}.rs`. Включается через `RUST_LOG=kepler_backend::dictation=debug`. Без этого Phase 1 диагностика была невозможна — все ошибки молча уходили в JSON-ответ WS.
+
+---
+
 ## Что НЕ делает Phase 1 / 1.5
 
 - Локальные модели (whisper.cpp, Parakeet V3) — отдельный proof-loop Phase 2.

@@ -69,7 +69,6 @@ defineEmits<{ install: [] }>();
 }
 
 .update-banner.clickable {
-  cursor: pointer;
   background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 35%, transparent);
 }
 

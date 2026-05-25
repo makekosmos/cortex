@@ -246,7 +246,6 @@ function remove() {
   color: var(--foreground);
   font-size: 0.8125rem;
   font-weight: 500;
-  cursor: pointer;
   font-family: inherit;
   transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1);
 }

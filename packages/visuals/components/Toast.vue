@@ -102,7 +102,6 @@ const emit = defineEmits<{
   border: none;
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 58%, transparent);
-  cursor: pointer;
   font: inherit;
   font-size: 16px;
   line-height: 1;

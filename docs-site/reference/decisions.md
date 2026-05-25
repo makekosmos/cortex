@@ -140,6 +140,37 @@ Roadmap:
   - Proxy через `reqwest::Proxy::all(url)` (feature `socks` в reqwest). Ортогонально DoH — можно комбинировать.
   - Custom prompt — поле `transcriptionPrompt` в config'е, проходит в Groq multipart `prompt` field. Подсказка модели для domain-specific терминов и стиля.
 
+### 2026-05-25 — Dictation Phase 2: disk-first pending queue + retry с классификацией
+
+Источник: `concepts/dictation.md` § Resilience + `.agent/tasks/2026-05-25-dictation-resilience/spec.md`.
+
+Phase 1 + 1.5 в продакшене вскрыли три класса проблем: (1) audio loss при network drop — renderer обнулял PCM buffer сразу после `submit_audio`, retry невозможен; (2) Custom DoH silent-fallback'ил на Cloudflare — UI ручка обманывала; (3) `op_test_connectivity` пакует ошибку в JSON без tracing — диагностика недоступна.
+
+Решение — **persist-before-upload + классификация + детальный probe**:
+
+- **`dictation::pending`** — disk-first очередь WAV+JSON в `<dataDir>/dictation/pending/<uuid>.*`. Атомарная запись через `tmp → rename`. GC на app start: 7 дней / 20 items LRU.
+- **`dictation::retry`** — `classify(&SubmitError) → FailureKind { Retryable | Fatal { user_msg } }`. Network/429/5xx → retryable с `with_backoff(3, 500ms, 8s)` + jitter ±50%. 401/400/413/AudioDecode/NoApiKey → fatal без retry.
+- **`network::validate_custom_doh_url`** — реальный парсинг (схема https, host, port, path, IP-литералы IPv4/IPv6). Невалидный URL → `NetworkError::CustomDohInvalid(msg)`. Backend дублирует фронтовую валидацию (`SecurityTab` @blur).
+- **`probe_connectivity`** — пошаговый probe `client_build → dns_resolve → tcp_connect → http_head` с временами по стадиям + первая failing + IP/HTTP status в info. UI рендерит чек-листом с подсказкой для firstFailure.
+- **Tracing** — `tracing::{info,warn,error}` во все error paths `dictation/{host,network,retry,pending}.rs`. `RUST_LOG=kepler_backend::dictation=debug` теперь даёт полную картину.
+
+Почему disk-first, а не in-memory queue: backend crash, OS reboot, app kill — всё уносит in-memory. WAV (~1MB / 30s аудио × 20 items = ~20MB max) — дёшево. Прецеденты: Wispr Flow держит 14 дней, но у нас личный лаунчер, не SaaS — 7 дней покрывает 95% («ноут в самолёте на день, дома доехало»).
+
+Почему 3 попытки 500ms/1s/2s + jitter: AWS Builders' Library — thundering herd при восстановлении сети. Jitter ±50%. Суммарно <10s — юзер не успевает начать новую диктовку. На retryable исчерпан → pending остаётся на диске; юзер вручную «Повторить» из Settings → Диктация → Очередь.
+
+Sub-решения:
+
+- **WS endpoints**: `dictation.list_pending` / `retry { uuid }` / `discard { uuid }` / `retry_all`.
+- **Pill UX**: на retryable error pill остаётся открытым с retry-кнопкой (↻). Fatal error → auto-close 1.2s как раньше. Pending state — для будущего event-stream подхода (сейчас inline-await).
+- **`submit_audio` API**: всегда возвращает `{ uuid, state, error, canRetry }` (OK даже при ошибке) — pill получает uuid для retry.
+- **Backwards compat**: `groq::transcribe` теперь принимает endpoint аргументом — позволяет httpmock в тестах, прод использует `groq::GROQ_ENDPOINT`.
+
+Roadmap дальше (Phase 3+):
+
+- Локальные модели (whisper.cpp / Parakeet) с auto-fallback при offline — отдельный proof-loop.
+- Backend-pushed state events → renderer без polling (для live «attempts N/3» на pill во время retry).
+- Persistent история **успешных** транскриптов через ARK objects (история ≠ recovery-queue).
+
 ## Шаблон для нового решения
 
 Все новые архитектурные/безопасностные решения **обязаны** попадать сюда. Минимальный шаблон ADR:

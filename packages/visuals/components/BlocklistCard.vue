@@ -106,7 +106,6 @@ function onKey(e: KeyboardEvent) {
   border-radius: 12px;
   background: var(--background);
   overflow: hidden;
-  cursor: pointer;
   transition:
     transform 0.12s ease,
     border-color 0.12s ease,

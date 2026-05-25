@@ -144,7 +144,6 @@ function onClick(e: MouseEvent) {
   padding: 0;
   background: transparent;
   border: none;
-  cursor: pointer;
   flex-shrink: 0;
   color: var(--ring);
   transition:

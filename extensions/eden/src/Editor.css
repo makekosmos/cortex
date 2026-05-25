@@ -255,7 +255,6 @@
   font-weight: 500;
   padding: 5px 10px;
   border-radius: var(--radius-xs);
-  cursor: pointer;
   transition: all var(--transition-fast);
   box-shadow: var(--shadow-xs);
 }
@@ -752,7 +751,6 @@
   line-height: 20px;
   padding: 0;
   border-radius: 0;
-  cursor: pointer;
   transition: color 0.15s ease;
   white-space: nowrap;
 }
@@ -779,7 +777,6 @@
   line-height: 20px;
   padding: 0;
   border-radius: 0;
-  cursor: pointer;
   white-space: nowrap;
   transition: color 0.15s ease;
 }
@@ -846,7 +843,6 @@
   color: var(--text-secondary);
   padding: 5px 8px;
   font-size: 12px;
-  cursor: pointer;
   transition: all 0.1s ease;
   width: 100%;
   text-align: left;
@@ -876,7 +872,6 @@ span[data-wikilink] {
   background-color: color-mix(in srgb, var(--eden-accent-color) 14%, transparent);
   padding: 0 4px;
   border-radius: var(--radius-xs);
-  cursor: pointer;
   font-weight: 500;
   transition: all var(--transition-fast);
   border-bottom: 1px solid color-mix(in srgb, var(--eden-accent-color) 35%, transparent);
@@ -927,7 +922,6 @@ span[data-wikilink]:hover {
   padding: var(--space-2) var(--space-3);
   text-align: left;
   border-radius: var(--radius-sm);
-  cursor: pointer;
   transition: all var(--transition-fast);
 }
 

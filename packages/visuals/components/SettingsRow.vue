@@ -42,7 +42,10 @@ withDefaults(defineProps<Props>(), {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 12px;
-  background: var(--settings-list-background);
+  /* Без своего background — `--settings-list-background` стоит на родителе
+   * (SettingsList). С полупрозрачным overlay двойной слой здесь стекался и
+   * прямоугольник в Security выглядел темнее остальных. */
+  background: transparent;
   border-bottom: 1px solid var(--border-color-strong);
 }
 

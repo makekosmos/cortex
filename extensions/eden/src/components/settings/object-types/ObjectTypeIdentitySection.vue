@@ -313,7 +313,6 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 18px;
   background: transparent;
-  cursor: pointer;
 }
 
 .object-type-identity__picker-trigger:disabled,

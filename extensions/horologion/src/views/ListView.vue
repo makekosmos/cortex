@@ -388,7 +388,6 @@ function titleParts(g: EntryGroup): Array<{ type: "text" | "task"; text: string 
   color: var(--foreground);
   font-family: inherit;
   text-align: left;
-  cursor: pointer;
   transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -454,7 +453,6 @@ function titleParts(g: EntryGroup): Array<{ type: "text" | "task"; text: string 
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
   border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  cursor: pointer;
   transition: background-color 300ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -484,7 +482,6 @@ function titleParts(g: EntryGroup): Array<{ type: "text" | "task"; text: string 
   border-radius: 6px;
   background: color-mix(in srgb, var(--foreground) 8%, transparent);
   color: color-mix(in srgb, var(--foreground) 75%, transparent);
-  cursor: pointer;
   font-family: inherit;
   transition:
     background-color 160ms cubic-bezier(0.2, 0, 0, 1),
@@ -534,7 +531,6 @@ function titleParts(g: EntryGroup): Array<{ type: "text" | "task"; text: string 
   padding: 0.4rem 0.875rem 0.4rem 2.875rem;
   font-size: 0.8125rem;
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
-  cursor: pointer;
   transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1);
   border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }

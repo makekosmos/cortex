@@ -29,7 +29,10 @@ import { awaitArkReady } from "./main";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const WIDTH = 240;
+// 420px — компромисс между визуальной деликатностью (узкий overlay над
+// активным окном) и читаемостью error/waiting подписей. На idle/recording
+// pill CSS-узкий (200px min-width), окно с прозрачным фоном.
+const WIDTH = 420;
 const HEIGHT = 72;
 const BOTTOM_MARGIN = 100;
 

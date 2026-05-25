@@ -734,7 +734,7 @@ function openIncompatibilityWindow(manifest: ExtensionManifest, reason: string):
     p { margin: 0 0 12px; color: #cfcfcf; }
     code { background: #2a2a2a; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
     button { margin-top: 14px; background:#2d2d2d; border:1px solid #3d3d3d; color:#e6e6e6;
-      padding: 6px 14px; border-radius: 6px; cursor: pointer; font: inherit; }
+      padding: 6px 14px; border-radius: 6px; font: inherit; }
     button:hover { background:#383838; }
   </style>
 </head>

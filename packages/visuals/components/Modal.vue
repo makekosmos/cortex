@@ -8,12 +8,15 @@ interface Props {
   width?: string;
   /** Закрытие по клику вне (на backdrop). По умолчанию true. */
   closeOnBackdrop?: boolean;
+  /** Скрыть × кнопку в header'е (если у модалки есть явная "Отмена" в footer'е). */
+  hideClose?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: undefined,
   width: undefined,
   closeOnBackdrop: true,
+  hideClose: false,
 });
 
 const emit = defineEmits<{
@@ -66,6 +69,7 @@ function onBackdropPointerDown(e: PointerEvent) {
               <h2 id="kosmos-modal-title" class="kosmos-modal__title">{{ props.title }}</h2>
             </slot>
             <button
+              v-if="!props.hideClose"
               type="button"
               class="kosmos-modal__close"
               aria-label="Закрыть"
@@ -141,7 +145,6 @@ function onBackdropPointerDown(e: PointerEvent) {
   border: none;
   border-radius: 6px;
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  cursor: pointer;
 }
 
 .kosmos-modal__close:hover {

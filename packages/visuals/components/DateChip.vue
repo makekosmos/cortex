@@ -168,7 +168,6 @@ onUnmounted(() => {
   color: inherit;
   font-size: inherit;
   border-radius: inherit;
-  cursor: pointer;
 }
 
 .kosmos-datechip--compact .kosmos-datechip__toggle {
@@ -196,7 +195,6 @@ onUnmounted(() => {
   border-radius: 999px;
   background: transparent;
   color: color-mix(in srgb, currentColor 70%, transparent);
-  cursor: pointer;
 }
 
 .kosmos-datechip--compact .kosmos-datechip__clear {

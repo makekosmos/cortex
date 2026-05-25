@@ -373,7 +373,6 @@
   height: 32px;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
   padding: 0;
   background: none;
 }
@@ -621,7 +620,6 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--color-text-tertiary);
-  cursor: pointer;
 }
 
 .storage-tab-item.active {
@@ -656,7 +654,6 @@
   border: none;
   color: var(--color-text-secondary);
   font-size: 13px;
-  cursor: pointer;
   padding: 4px 6px 4px 4px;
   border-radius: 4px;
   margin-left: -4px;
@@ -678,7 +675,6 @@
   justify-content: center;
   flex-shrink: 0;
   transition: all 0.15s ease;
-  cursor: pointer;
   padding: 0;
 }
 
@@ -705,7 +701,6 @@
   background: transparent;
   border: none;
   color: var(--color-text-secondary);
-  cursor: pointer;
   flex-shrink: 0;
 }
 
@@ -746,7 +741,6 @@
   background: transparent;
   border: none;
   color: var(--color-text-tertiary);
-  cursor: pointer;
 }
 
 .storage-filter-clear:hover {
@@ -772,7 +766,6 @@
   align-items: center;
   gap: 8px;
   width: calc(100% - 26px);
-  cursor: pointer;
 }
 
 .storage-file-icon {
@@ -901,7 +894,6 @@
   color: var(--text-primary);
   font-size: 12px;
   text-align: left;
-  cursor: pointer;
   transition: background 0.1s ease;
 }
 
@@ -996,7 +988,6 @@
   border-radius: 6px;
   background: transparent;
   border: none;
-  cursor: pointer;
   transition: background 0.15s ease;
   flex-shrink: 0;
 }
@@ -1150,7 +1141,6 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--text-tertiary);
-  cursor: pointer;
 }
 
 .icon-picker-tab.active {
@@ -1196,7 +1186,6 @@
   border-radius: 6px;
   background: transparent;
   border: none;
-  cursor: pointer;
   transition: background 0.1s ease;
 }
 

@@ -365,7 +365,6 @@ onBeforeUnmount(() => {
   font-family: var(--font-sans, inherit);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
-  cursor: pointer;
   transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -463,7 +462,6 @@ onBeforeUnmount(() => {
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 500;
-  cursor: pointer;
   transition: background-color 140ms cubic-bezier(0.2, 0, 0, 1);
 }
 

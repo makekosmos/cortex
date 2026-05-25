@@ -12,6 +12,7 @@ import {
   DICTATION_TRIGGER_OPTIONS,
   DictationConfigKey,
 } from "../composables/useDictationConfig";
+import { useDictationPending } from "../composables/useDictationPending";
 
 defineProps<{ intro: IntroDescriptor | null }>();
 
@@ -39,6 +40,17 @@ const {
   onDictationCaptureEnd,
 } = ctx;
 
+const {
+  pendingItems,
+  pendingError,
+  busyUuid,
+  retryPending,
+  discardPending,
+  retryAllPending,
+  formatCreatedAt,
+  formatDuration,
+} = useDictationPending();
+
 onMounted(() => {
   void loadDictationConfig();
   void loadDictationStats();
@@ -60,6 +72,53 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <template v-if="pendingItems.length > 0 || pendingError">
+      <div class="stats-header pending-header">
+        <span class="stats-header__title">Очередь диктовок</span>
+        <button
+          v-if="pendingItems.length > 1"
+          type="button"
+          class="pending-retry-all"
+          @click="retryAllPending()"
+        >
+          Повторить все
+        </button>
+      </div>
+      <div v-if="pendingError" class="pending-error">{{ pendingError }}</div>
+      <div v-if="pendingItems.length > 0" class="pending-list">
+        <div v-for="item in pendingItems" :key="item.uuid" class="pending-item">
+          <div class="pending-item__main">
+            <div class="pending-item__meta">
+              {{ formatCreatedAt(item.createdAt) }} · {{ formatDuration(item.durationSec) }} ·
+              попыток {{ item.attempts }}
+              <span v-if="item.language"> · {{ item.language }}</span>
+            </div>
+            <div v-if="item.lastError" class="pending-item__error">
+              {{ item.lastError }}
+            </div>
+          </div>
+          <div class="pending-item__actions">
+            <button
+              type="button"
+              class="pending-btn pending-btn--primary"
+              :disabled="busyUuid === item.uuid"
+              @click="retryPending(item.uuid)"
+            >
+              {{ busyUuid === item.uuid ? "..." : "Повторить" }}
+            </button>
+            <button
+              type="button"
+              class="pending-btn"
+              :disabled="busyUuid === item.uuid"
+              @click="discardPending(item.uuid)"
+            >
+              Удалить
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <div class="stats-header">
       <span class="stats-header__title">Микрофон</span>
@@ -126,3 +185,94 @@ onMounted(() => {
     </SettingsList>
   </AdvancedPageLayout>
 </template>
+
+<style scoped>
+.pending-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pending-retry-all {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  color: var(--foreground);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.pending-retry-all:hover {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.pending-error {
+  font-size: 12px;
+  color: #f5a524;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.pending-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.pending-item__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pending-item__meta {
+  font-size: 12px;
+  color: var(--foreground);
+}
+
+.pending-item__error {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-item__actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pending-btn {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  color: var(--foreground);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.pending-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+.pending-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pending-btn--primary {
+  border-color: color-mix(in srgb, var(--foreground) 35%, transparent);
+}
+</style>

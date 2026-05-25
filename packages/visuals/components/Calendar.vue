@@ -197,7 +197,6 @@ function pickCell(c: DayCell) {
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
   border-radius: 6px;
-  cursor: pointer;
   transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -223,7 +222,6 @@ function pickCell(c: DayCell) {
   background: transparent;
   color: var(--foreground);
   border-radius: 8px;
-  cursor: pointer;
   font-family: inherit;
   transition: background-color 180ms cubic-bezier(0.2, 0, 0, 1);
 }

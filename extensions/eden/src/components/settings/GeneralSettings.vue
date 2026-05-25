@@ -68,13 +68,11 @@ function onToggleSpellcheck(e: Event): void {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  cursor: pointer;
 }
 .settings-row--toggle input[type="checkbox"] {
   flex-shrink: 0;
   width: 18px;
   height: 18px;
   accent-color: var(--accent-primary, #2aa7ee);
-  cursor: pointer;
 }
 </style>

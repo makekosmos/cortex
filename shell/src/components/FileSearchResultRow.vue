@@ -93,7 +93,6 @@ const fileIcon = computed<Component>(() => {
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  cursor: pointer;
   margin: 1px 0;
 }
 

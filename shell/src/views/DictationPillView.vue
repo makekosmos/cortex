@@ -11,10 +11,13 @@
 
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
-type PillStatus = "idle" | "recording" | "transcribing" | "error";
+type PillStatus = "idle" | "recording" | "transcribing" | "waiting" | "error";
 
 const status = ref<PillStatus>("idle");
 const errorText = ref<string>("");
+/// Подпись под индикатором (для waiting / error). На recording / transcribing
+/// pill самодостаточен (waveform / dots).
+const subText = ref<string>("");
 const elapsedSec = ref<number>(0);
 const levelBars = ref<number[]>(Array.from({ length: 12 }, () => 0));
 
@@ -51,6 +54,8 @@ function statusText(): string {
       return "Слушаю…";
     case "transcribing":
       return "Распознаю…";
+    case "waiting":
+      return subText.value || "Жду сеть…";
     case "error":
       return errorText.value || "Ошибка";
     case "idle":
@@ -315,26 +320,84 @@ async function stopAndSubmit(): Promise<void> {
   const durationSec = pcm.length / sampleRate;
   const wav = encodeWav(pcm, sampleRate);
   const b64 = bytesToBase64(wav);
+  let queuedUuid: string | null = null;
   try {
-    await window.kepler.ark.request("dictation.submit_audio", {
+    const resp = (await window.kepler.ark.request("dictation.submit_audio", {
       audioB64: b64,
       durationSec,
-    });
-    status.value = "idle";
+    })) as {
+      uuid?: string;
+      state?: PillStatus | "pending";
+      queued?: boolean;
+      error?: string;
+    };
+    if (resp.state === "error") {
+      // Fatal от backend (401/400/403/etc) — показываем user_msg, закроемся
+      // с error mark. Pending всё ещё на диске — юзер увидит в Settings.
+      status.value = "error";
+      errorText.value = resp.error ?? "Не удалось распознать";
+    } else if (resp.queued && resp.uuid) {
+      // Первая попытка fail → backend запустил auto-retry в фоне.
+      // Поллим очередь со спиннером "Жду сеть…".
+      queuedUuid = resp.uuid;
+      console.info("[dictation-pill] queued for background retry:", resp.uuid);
+    } else {
+      // Success path — text уже инжектнут, pill закрывается.
+      status.value = "idle";
+    }
   } catch (e) {
     status.value = "error";
     errorText.value = (e as Error)?.message ?? "Ошибка распознавания";
     console.error("[dictation-pill] submit_audio failed:", e);
   }
-  // В обоих случаях (success/error) закрываем pill — статус ошибки
-  // показывается через 800ms задержку для UX.
   scheduleStreamShutdown();
-  setTimeout(
-    () => {
-      void window.kepler.dictation.pillFinished();
-    },
-    status.value === "error" ? 1200 : 80,
-  );
+
+  if (queuedUuid) {
+    // Висим со спиннером пока background retry работает. Backend расписание:
+    // 1+5+10+20+40 sec = 76s sleeps + ~5×8s attempt window ≈ ~120s максимум.
+    // Даём 130s timeout — чуть больше чем полный цикл backend.
+    await waitForQueueResolve(queuedUuid, 130_000);
+    setTimeout(
+      () => void window.kepler.dictation.pillFinished(),
+      status.value === "error" ? 4500 : 80,
+    );
+  } else {
+    setTimeout(
+      () => void window.kepler.dictation.pillFinished(),
+      status.value === "error" ? 4500 : 80,
+    );
+  }
+}
+
+/// Поллит `dictation.list_pending` пока наш uuid в очереди, или истекает
+/// timeoutMs. Меняет статус pill на 'waiting' (спиннер + subText). На исходе
+/// либо переходим в idle (success — item исчез), либо в error (timeout).
+async function waitForQueueResolve(uuid: string, timeoutMs: number): Promise<void> {
+  const startMs = Date.now();
+  status.value = "waiting";
+  subText.value = "Жду сеть…";
+  while (Date.now() - startMs < timeoutMs) {
+    try {
+      const resp = (await window.kepler.ark.request("dictation.list_pending", {})) as {
+        items?: { uuid: string; attempts: number }[];
+      };
+      const item = (resp.items ?? []).find((i) => i.uuid === uuid);
+      if (!item) {
+        // Item исчез → backend сделал success+drop. Закрываемся тихо.
+        status.value = "idle";
+        return;
+      }
+      // Обновляем подпись с числом попыток для feedback'а.
+      subText.value = item.attempts > 0 ? `Жду сеть… (попытка ${item.attempts})` : "Жду сеть…";
+    } catch (e) {
+      console.warn("[dictation-pill] poll list_pending failed:", e);
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  // Timeout — auto-retry скорее всего исчерпан. Pill закрываем с error mark;
+  // pending остаётся в Settings → Очередь для ручного retry.
+  status.value = "error";
+  errorText.value = "Сеть не вернулась — открой Settings → Диктация → Очередь";
 }
 
 async function cancelCapture(): Promise<void> {
@@ -405,7 +468,14 @@ const exposeStatusText = computed(() => statusText());
         <span class="dot" />
         <span class="dot" />
       </div>
-      <div v-else-if="status === 'error'" class="idle-mark error-mark">!</div>
+      <div v-else-if="status === 'waiting'" class="waiting-row">
+        <span class="spinner" />
+        <span class="waiting-text">{{ subText }}</span>
+      </div>
+      <div v-else-if="status === 'error'" class="error-row" :title="errorText">
+        <span class="idle-mark error-mark">!</span>
+        <span class="error-text">{{ errorText }}</span>
+      </div>
       <div v-else class="idle-mark"></div>
     </div>
   </div>
@@ -425,7 +495,11 @@ const exposeStatusText = computed(() => statusText());
 
 .pill {
   pointer-events: auto;
-  width: 200px;
+  /* Базовая ширина для idle/recording/transcribing. Для waiting/error pill
+   * расширяется по контенту, ограничен `.stage` (max-width в window). */
+  min-width: 200px;
+  max-width: calc(100vw - 32px);
+  width: max-content;
   height: 56px;
   display: flex;
   align-items: center;
@@ -439,7 +513,11 @@ const exposeStatusText = computed(() => statusText());
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.55);
-  -webkit-app-region: drag;
+  /* `-webkit-app-region: drag` УБРАН: BrowserWindow создаётся с
+   * `movable: false`, так что drag всё равно ничего не делает. Но
+   * `app-region: drag` на parent блокирует click events для всех
+   * детей (Electron на Windows глючит с nested `no-drag`),
+   * из-за чего retry-кнопка на error state не нажималась. */
   user-select: none;
   transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1.4);
   animation: pill-in 260ms cubic-bezier(0.2, 0.7, 0.2, 1.4);
@@ -516,6 +594,55 @@ const exposeStatusText = computed(() => statusText());
 
 .dots .dot:nth-child(3) {
   animation-delay: 0.3s;
+}
+
+.waiting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #f5a524 30%, transparent);
+  border-top-color: #f5a524;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+.waiting-text {
+  font-family: var(--font-sans, -apple-system, sans-serif);
+  font-size: 12px;
+  color: color-mix(in srgb, #f5a524 90%, #f5f5f7 10%);
+  white-space: nowrap;
+}
+
+.error-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.error-text {
+  font-family: var(--font-sans, -apple-system, sans-serif);
+  font-size: 11px;
+  color: #f5a524;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes dot-bounce {

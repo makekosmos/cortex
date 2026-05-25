@@ -149,7 +149,6 @@ const isRunning = computed(() => running.value !== null);
   font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
-  cursor: pointer;
   transition:
     background-color 350ms cubic-bezier(0.2, 0, 0, 1),
     color 350ms cubic-bezier(0.2, 0, 0, 1);

@@ -876,7 +876,6 @@ onUnmounted(() => {
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  cursor: pointer;
   margin: 1px 0;
   /* Без transition: выделение должно срабатывать моментально. */
 }
@@ -975,7 +974,6 @@ onUnmounted(() => {
 }
 
 .post-update-tile {
-  cursor: pointer;
 }
 
 .spin {

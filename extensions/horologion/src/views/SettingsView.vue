@@ -258,7 +258,6 @@ function testSound(s: SoundName) {
   background: color-mix(in srgb, var(--foreground) 15%, transparent);
   border-radius: 999px;
   outline: none;
-  cursor: pointer;
 }
 
 .volume-slider::-webkit-slider-thumb {
@@ -268,7 +267,6 @@ function testSound(s: SoundName) {
   height: 14px;
   border-radius: 999px;
   background: var(--accent);
-  cursor: pointer;
   transition: transform 120ms var(--easing-standard);
 }
 
@@ -297,7 +295,6 @@ function testSound(s: SoundName) {
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
   border-radius: calc(var(--radius) * 0.6);
   corner-shape: var(--corner-shape);
-  cursor: pointer;
   transition:
     background-color 120ms cubic-bezier(0.2, 0, 0, 1),
     border-color 120ms cubic-bezier(0.2, 0, 0, 1);
@@ -329,7 +326,6 @@ function testSound(s: SoundName) {
   font-family: inherit;
   font-size: 0.8125rem;
   font-weight: 500;
-  cursor: pointer;
   transition:
     background-color 160ms cubic-bezier(0.2, 0, 0, 1),
     color 160ms cubic-bezier(0.2, 0, 0, 1),

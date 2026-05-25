@@ -142,7 +142,6 @@ onBeforeUnmount(() => {
   border: none;
   color: color-mix(in srgb, var(--sidebar-foreground) 55%, transparent);
   border-radius: 8px;
-  cursor: pointer;
   -webkit-app-region: no-drag;
   transition:
     color 120ms cubic-bezier(0.2, 0, 0, 1),

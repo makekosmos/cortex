@@ -124,7 +124,6 @@ defineEmits<{
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  cursor: pointer;
 }
 
 .command-checkbox input {

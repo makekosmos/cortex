@@ -21,6 +21,24 @@ export interface DictationConfigData {
   microphoneDeviceId: string | null;
 }
 
+/// Стадия probe в `dictation.test_connectivity`. См. backend
+/// `services/kepler-backend/src/dictation/host.rs::probe_connectivity`.
+export interface ConnectivityStage {
+  name: "client_build" | "dns_resolve" | "tcp_connect" | "http_head";
+  ok: boolean;
+  ms: number;
+  error?: string;
+  ip?: string;
+  status?: number;
+}
+
+export interface ConnectivityReport {
+  ok: boolean;
+  totalMs: number;
+  stages: ConnectivityStage[];
+  firstFailure: string | null;
+}
+
 export interface DictationStatsData {
   totalWords: number;
   totalRecordSeconds: number;
@@ -51,22 +69,10 @@ const DEFAULT_DICTATION_STATS: DictationStatsData = {
 };
 
 export const DNS_PROFILE_OPTIONS = [
-  {
-    value: "system",
-    label: "Системный DNS",
-    description: "OS resolver. Самый совместимый, но в РФ Groq обычно блокирован.",
-  },
-  {
-    value: "cloudflare_doh",
-    label: "Cloudflare DoH (1.1.1.1)",
-    description: "Обходит DNS poisoning. Безопасный default.",
-  },
-  { value: "google_doh", label: "Google DoH (8.8.8.8)", description: "Альтернатива Cloudflare." },
-  {
-    value: "custom_doh",
-    label: "Свой DoH URL",
-    description: "Укажите endpoint в формате https://example/dns-query.",
-  },
+  { value: "system", label: "Системный DNS" },
+  { value: "cloudflare_doh", label: "Cloudflare (1.1.1.1)" },
+  { value: "google_doh", label: "Google (8.8.8.8)" },
+  { value: "custom_doh", label: "Свой DoH URL" },
 ] as const;
 
 export const DICTATION_TRIGGER_OPTIONS = [
@@ -202,6 +208,12 @@ export function createDictationConfig() {
   const dictationProxyInput = ref("");
   const dictationConnTestBusy = ref(false);
   const dictationConnTestResult = ref<string>("");
+  // Структурированный отчёт от dictation.test_connectivity (Phase 2).
+  // `null` пока не запускали; обновляется на каждый клик «Проверить».
+  const dictationConnReport = ref<ConnectivityReport | null>(null);
+  // Валидация Custom DoH URL — frontend-сторона. На @blur устанавливается
+  // в Some(error) если URL невалиден; backend дублирует, но frontend быстрее.
+  const dictationCustomDohError = ref<string | null>(null);
   const dictationMicDevices = ref<{ deviceId: string; label: string }[]>([]);
   const dictationMicError = ref<string>("");
 
@@ -363,16 +375,59 @@ export function createDictationConfig() {
     await patchDictationConfig({ networkProfile: profile });
   }
 
+  /// Чистая валидация — синхронная, без backend round-trip.
+  /// Те же правила что в `network::validate_custom_doh_url` на backend.
+  function validateCustomDohUrl(raw: string): string | null {
+    const url = raw.trim();
+    if (!url) return "URL пустой";
+    if (!url.startsWith("https://")) return "URL должен начинаться с https://";
+    const rest = url.slice("https://".length);
+    if (!rest) return "Хост не задан";
+    if (rest.includes("@")) return "userinfo (user:pass@host) не поддерживается";
+    const slash = rest.indexOf("/");
+    const authority = slash >= 0 ? rest.slice(0, slash) : rest;
+    if (!authority) return "Хост не задан";
+    return null;
+  }
+
   async function onDictationCustomDohBlur() {
     if (dictationConfig.value.networkProfile.kind !== "custom_doh") return;
+    const url = dictationCustomDohUrl.value.trim();
+    const err = validateCustomDohUrl(url);
+    dictationCustomDohError.value = err;
+    if (err) return; // невалидный URL — не отправляем patch
     await patchDictationConfig({
-      networkProfile: { kind: "custom_doh", url: dictationCustomDohUrl.value.trim() },
+      networkProfile: { kind: "custom_doh", url },
     });
   }
 
   async function onDictationProxyBlur() {
     const v = dictationProxyInput.value.trim();
     await patchDictationConfig({ httpProxy: v === "" ? null : v });
+  }
+
+  /// Лёгкая проверка API key без сохранения — GET /v1/models с Bearer-auth.
+  /// Возвращает структуру `{ ok, reason?, status?, error?, latencyMs? }`.
+  /// `reason`: empty_key | invalid_key | provider_error | network | client_build.
+  async function verifyApiKey(key: string): Promise<{
+    ok: boolean;
+    reason?: string;
+    status?: number;
+    error?: string;
+    latencyMs?: number;
+  }> {
+    return (await window.kepler.ark.request("dictation.verify_api_key", { key })) as {
+      ok: boolean;
+      reason?: string;
+      status?: number;
+      error?: string;
+      latencyMs?: number;
+    };
+  }
+
+  async function saveApiKey(key: string): Promise<void> {
+    await window.kepler.ark.request("dictation.set_api_key", { key });
+    await loadDictationConfig();
   }
 
   async function onDictationSaveApiKey() {
@@ -409,19 +464,21 @@ export function createDictationConfig() {
   async function onDictationTestConnectivity() {
     dictationConnTestBusy.value = true;
     dictationConnTestResult.value = "";
+    dictationConnReport.value = null;
     try {
-      const resp = (await window.kepler.ark.request("dictation.test_connectivity", {})) as {
-        ok?: boolean;
-        status?: number;
-        latencyMs?: number;
-      };
+      const resp = (await window.kepler.ark.request(
+        "dictation.test_connectivity",
+        {},
+      )) as ConnectivityReport;
+      dictationConnReport.value = resp;
       if (resp.ok) {
-        dictationConnTestResult.value = `OK · ${resp.status ?? "—"} · ${resp.latencyMs ?? "?"}ms`;
+        dictationConnTestResult.value = `OK · ${resp.totalMs}ms`;
       } else {
-        dictationConnTestResult.value = "Не удалось";
+        dictationConnTestResult.value = `Сбой на стадии ${resp.firstFailure ?? "?"}`;
       }
     } catch (e) {
       dictationConnTestResult.value = `Ошибка: ${(e as Error).message}`;
+      dictationConnReport.value = null;
     } finally {
       dictationConnTestBusy.value = false;
     }
@@ -438,6 +495,8 @@ export function createDictationConfig() {
     dictationProxyInput,
     dictationConnTestBusy,
     dictationConnTestResult,
+    dictationConnReport,
+    dictationCustomDohError,
     dictationMicError,
     dictationCaptureAccelerator,
     dictationCaptureCancelTick,
@@ -460,6 +519,8 @@ export function createDictationConfig() {
     onDictationProxyBlur,
     onDictationSaveApiKey,
     onDictationClearApiKey,
+    verifyApiKey,
+    saveApiKey,
     onDictationTestConnectivity,
   };
 }

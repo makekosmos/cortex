@@ -180,7 +180,6 @@
   color: var(--text-primary);
   font-size: 16px;
   font-weight: 500;
-  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -208,7 +207,6 @@
   color: var(--text-tertiary);
   font-size: 12px;
   padding: 0;
-  cursor: pointer;
   transition: color var(--transition-fast);
 }
 
@@ -301,7 +299,6 @@
 .settings-checkbox {
   justify-content: flex-start;
   gap: var(--space-3);
-  cursor: pointer;
 }
 
 .settings-checkbox:hover {
