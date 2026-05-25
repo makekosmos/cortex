@@ -5,9 +5,7 @@
 
 import { onBeforeUnmount, onMounted, provide } from "vue";
 import { BlocklistCard } from "@kosmos/visuals";
-import AdvancedPageLayout, {
-  type IntroDescriptor,
-} from "../components/AdvancedPageLayout.vue";
+import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import LegacyRow from "../components/LegacyRow.vue";
 import { FocusTabKey, useFocusTab } from "../composables/useFocusTab";
 import FocusBlocklistEditor from "./FocusBlocklistEditor.vue";
@@ -61,113 +59,113 @@ onBeforeUnmount(() => {
 <template>
   <AdvancedPageLayout :intro="intro">
     <div v-if="focusBackendMissing" class="error-banner">
-        Backend ещё не поддерживает focus.*. Обнови Kepler.
-      </div>
-      <div v-if="focusError" class="error-banner">{{ focusError }}</div>
+      Backend ещё не поддерживает focus.*. Обнови Kepler.
+    </div>
+    <div v-if="focusError" class="error-banner">{{ focusError }}</div>
 
-      <div class="rows kosmos-scroll">
-        <!-- Демон фокус-режима — устранит UAC при каждом включении блокировки -->
-        <LegacyRow class="focus-service-row" title="Системный демон" :error="focusServiceError">
-          <template #hint>
-            <span
-              v-if="focusServiceStatus.installed && focusServiceStatus.running"
-              class="focus-service-hint-ok"
-            >
-              Установлен и работает — блокировка включается без запроса прав администратора.
-            </span>
-            <template v-else-if="focusServiceStatus.installed">
-              Установлен, но не запущен. Перезапусти Windows или нажми «Переустановить».
-            </template>
-            <template v-else>
-              Без демона Windows запрашивает права администратора при каждом включении блокировки.
-              Установи один раз — и все последующие активации будут без UAC.
-            </template>
+    <div class="rows kosmos-scroll">
+      <!-- Демон фокус-режима — устранит UAC при каждом включении блокировки -->
+      <LegacyRow class="focus-service-row" title="Системный демон" :error="focusServiceError">
+        <template #hint>
+          <span
+            v-if="focusServiceStatus.installed && focusServiceStatus.running"
+            class="focus-service-hint-ok"
+          >
+            Установлен и работает — блокировка включается без запроса прав администратора.
+          </span>
+          <template v-else-if="focusServiceStatus.installed">
+            Установлен, но не запущен. Перезапусти Windows или нажми «Переустановить».
           </template>
-          <div class="row-actions">
+          <template v-else>
+            Без демона Windows запрашивает права администратора при каждом включении блокировки.
+            Установи один раз — и все последующие активации будут без UAC.
+          </template>
+        </template>
+        <div class="row-actions">
+          <button
+            v-if="!focusServiceStatus.installed"
+            type="button"
+            class="btn primary"
+            :disabled="focusServiceBusy === 'install'"
+            @click="installFocusService"
+          >
+            {{ focusServiceBusy === "install" ? "Установка…" : "Установить" }}
+          </button>
+          <template v-else>
             <button
-              v-if="!focusServiceStatus.installed"
               type="button"
-              class="btn primary"
+              class="btn ghost"
               :disabled="focusServiceBusy === 'install'"
+              title="Переустановить если служба перестала работать"
               @click="installFocusService"
             >
-              {{ focusServiceBusy === "install" ? "Установка…" : "Установить" }}
+              {{ focusServiceBusy === "install" ? "Установка…" : "Переустановить" }}
             </button>
-            <template v-else>
-              <button
-                type="button"
-                class="btn ghost"
-                :disabled="focusServiceBusy === 'install'"
-                title="Переустановить если служба перестала работать"
-                @click="installFocusService"
-              >
-                {{ focusServiceBusy === "install" ? "Установка…" : "Переустановить" }}
-              </button>
-              <button
-                type="button"
-                class="btn ghost danger"
-                :disabled="focusServiceBusy === 'uninstall'"
-                @click="uninstallFocusService"
-              >
-                {{ focusServiceBusy === "uninstall" ? "Удаление…" : "Удалить" }}
-              </button>
-            </template>
-          </div>
-        </LegacyRow>
-
-        <!-- Активная блокировка -->
-        <LegacyRow class="focus-active-row" title="Активная блокировка">
-          <template #hint>
-            <template v-if="focusActive.active && focusActiveBlocklist">
-              «{{ focusActiveBlocklist.name }}» — {{ focusActiveBlocklist.domains.length }} доменов
-            </template>
-            <template v-else-if="focusActive.active">
-              Включена (блок-лист id: {{ focusActive.blocklist_id }})
-            </template>
-            <template v-else>Сейчас блокировка не активна</template>
-          </template>
-          <div class="row-actions">
             <button
               type="button"
               class="btn ghost danger"
-              :disabled="!focusActive.active || focusBusy === '__deactivate__'"
-              @click="onDeactivate"
+              :disabled="focusServiceBusy === 'uninstall'"
+              @click="uninstallFocusService"
             >
-              {{ focusBusy === "__deactivate__" ? "Отключение…" : "Отключить" }}
+              {{ focusServiceBusy === "uninstall" ? "Удаление…" : "Удалить" }}
             </button>
-          </div>
-        </LegacyRow>
+          </template>
+        </div>
+      </LegacyRow>
 
-        <!-- Список блок-листов как grid карточек -->
-        <div class="ext-section-title">Блок-листы</div>
-
-        <div v-if="focusLoading" class="empty">Загрузка…</div>
-
-        <div v-else class="focus-grid">
-          <BlocklistCard
-            v-for="bl in focusBlocklists"
-            :key="bl.id"
-            :name="bl.name"
-            :domains="bl.domains"
-            :icon="bl.icon ?? ''"
-            :preset="bl.preset ?? false"
-            :active="focusActive.active && focusActive.blocklist_id === bl.id"
-            :count="bl.domains.length"
-            @click="openEditBlocklist(bl)"
-            @delete="onDeleteBlocklist(bl.id)"
-          />
+      <!-- Активная блокировка -->
+      <LegacyRow class="focus-active-row" title="Активная блокировка">
+        <template #hint>
+          <template v-if="focusActive.active && focusActiveBlocklist">
+            «{{ focusActiveBlocklist.name }}» — {{ focusActiveBlocklist.domains.length }} доменов
+          </template>
+          <template v-else-if="focusActive.active">
+            Включена (блок-лист id: {{ focusActive.blocklist_id }})
+          </template>
+          <template v-else>Сейчас блокировка не активна</template>
+        </template>
+        <div class="row-actions">
           <button
             type="button"
-            class="add-card"
-            :disabled="focusEditing || focusBackendMissing"
-            @click="openCreateBlocklist"
+            class="btn ghost danger"
+            :disabled="!focusActive.active || focusBusy === '__deactivate__'"
+            @click="onDeactivate"
           >
-            + Создать блок-лист
+            {{ focusBusy === "__deactivate__" ? "Отключение…" : "Отключить" }}
           </button>
         </div>
+      </LegacyRow>
 
-        <!-- Edit modal/inline form -->
-        <FocusBlocklistEditor v-if="focusEditing" />
+      <!-- Список блок-листов как grid карточек -->
+      <div class="ext-section-title">Блок-листы</div>
+
+      <div v-if="focusLoading" class="empty">Загрузка…</div>
+
+      <div v-else class="focus-grid">
+        <BlocklistCard
+          v-for="bl in focusBlocklists"
+          :key="bl.id"
+          :name="bl.name"
+          :domains="bl.domains"
+          :icon="bl.icon ?? ''"
+          :preset="bl.preset ?? false"
+          :active="focusActive.active && focusActive.blocklist_id === bl.id"
+          :count="bl.domains.length"
+          @click="openEditBlocklist(bl)"
+          @delete="onDeleteBlocklist(bl.id)"
+        />
+        <button
+          type="button"
+          class="add-card"
+          :disabled="focusEditing || focusBackendMissing"
+          @click="openCreateBlocklist"
+        >
+          + Создать блок-лист
+        </button>
+      </div>
+
+      <!-- Edit modal/inline form -->
+      <FocusBlocklistEditor v-if="focusEditing" />
     </div>
   </AdvancedPageLayout>
 </template>
@@ -227,5 +225,4 @@ onBeforeUnmount(() => {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
 </style>

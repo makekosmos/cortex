@@ -3,9 +3,7 @@
 // time-tracker/games).
 
 import { Check } from "@lucide/vue";
-import AdvancedPageLayout, {
-  type IntroDescriptor,
-} from "../components/AdvancedPageLayout.vue";
+import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import LegacyRow from "../components/LegacyRow.vue";
 import LegacyToggle from "../components/LegacyToggle.vue";
 
@@ -33,10 +31,7 @@ defineEmits<{
 
 <template>
   <AdvancedPageLayout :intro="intro">
-    <div
-      v-if="activeTab === 'time-tracker'"
-      class="rows command-settings-list time-settings-list"
-    >
+    <div v-if="activeTab === 'time-tracker'" class="rows command-settings-list time-settings-list">
       <LegacyRow
         title="Трекать активные приложения"
         hint="Записывает в ARK какое окно сейчас активно. Изменение применится после перезапуска Kepler."

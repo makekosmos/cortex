@@ -209,7 +209,6 @@ async function loadGeneral() {
   }
 }
 
-
 async function onToggleAutostart(e: Event) {
   const target = e.target as HTMLInputElement;
   const desired = target.checked;
@@ -284,7 +283,6 @@ async function onLauncherStateTtlChange(e: Event) {
   }
 }
 
-
 // инициализация и lifecycle — в `./settings/tabs/FocusTab.vue`.
 
 function onClose() {
@@ -305,7 +303,6 @@ function onKey(e: KeyboardEvent) {
 function selectTab(t: Tab) {
   tab.value = t;
 }
-
 
 // --- autoUpdater state ------------------------------------------------------
 

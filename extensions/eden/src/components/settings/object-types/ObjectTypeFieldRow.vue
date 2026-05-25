@@ -7,9 +7,7 @@
 import type { TypeEditorFieldDraft } from "./shared";
 import { FIELD_KIND_OPTIONS } from "./shared";
 
-const FIELD_KIND_LABELS = new Map(
-  FIELD_KIND_OPTIONS.map((option) => [option.value, option.label]),
-);
+const FIELD_KIND_LABELS = new Map(FIELD_KIND_OPTIONS.map((option) => [option.value, option.label]));
 
 defineProps<{
   field: TypeEditorFieldDraft;
@@ -88,16 +86,11 @@ const emit = defineEmits<{
             :disabled="field.structuralLocked"
             @change="
               emit('updateField', index, {
-                kind: ($event.target as HTMLSelectElement)
-                  .value as TypeEditorFieldDraft['kind'],
+                kind: ($event.target as HTMLSelectElement).value as TypeEditorFieldDraft['kind'],
               })
             "
           >
-            <option
-              v-for="option in FIELD_KIND_OPTIONS"
-              :key="option.value"
-              :value="option.value"
-            >
+            <option v-for="option in FIELD_KIND_OPTIONS" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
           </select>

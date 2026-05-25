@@ -27,11 +27,7 @@ defineEmits<{
   <div v-if="loading" class="empty">Загрузка…</div>
 
   <div v-else class="rows kosmos-scroll">
-    <LegacyRow
-      title="Глобальный хоткей"
-      hint="Показать или скрыть launcher"
-      :error="hotkeyError"
-    >
+    <LegacyRow title="Глобальный хоткей" hint="Показать или скрыть launcher" :error="hotkeyError">
       <div class="hotkey-control">
         <HotkeyCapture
           :model-value="hotkey"

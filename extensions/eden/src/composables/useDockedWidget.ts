@@ -14,9 +14,8 @@ export function useDockedWidget() {
   let offDockedChange: (() => void) | null = null;
 
   onMounted(async () => {
-    const winApi = (
-      window as unknown as { kepler?: { window?: KeplerWindowApiExt } }
-    ).kepler?.window;
+    const winApi = (window as unknown as { kepler?: { window?: KeplerWindowApiExt } }).kepler
+      ?.window;
     if (!winApi) return;
     if (winApi.isDocked) {
       try {

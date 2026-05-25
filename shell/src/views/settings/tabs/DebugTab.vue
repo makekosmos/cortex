@@ -101,7 +101,9 @@ defineEmits<{
 
     <LegacyRow title="Bug-report (ZIP)">
       <template #hint>
-        <template v-if="bundleSavedPath">Сохранён: <code>{{ bundleSavedPath }}</code></template>
+        <template v-if="bundleSavedPath"
+          >Сохранён: <code>{{ bundleSavedPath }}</code></template
+        >
         <template v-else-if="bundling">Собираю отчёт…</template>
         <template v-else>Логи + crash-reports + версии.</template>
       </template>

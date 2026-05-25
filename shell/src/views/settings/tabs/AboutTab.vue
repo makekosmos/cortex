@@ -1,9 +1,7 @@
 <script setup lang="ts">
 // AboutTab — версия Kepler + кнопка «Проверить обновления».
 
-import AdvancedPageLayout, {
-  type IntroDescriptor,
-} from "../components/AdvancedPageLayout.vue";
+import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import LegacyRow from "../components/LegacyRow.vue";
 
 defineProps<{

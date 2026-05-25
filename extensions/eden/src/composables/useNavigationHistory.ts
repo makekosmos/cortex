@@ -31,10 +31,7 @@ function appendHistorySnapshot(
   return next.slice(next.length - MAX_NAVIGATION_HISTORY);
 }
 
-function snapshotsEqual(
-  a: EdenHistorySnapshot | null,
-  b: EdenHistorySnapshot | null,
-): boolean {
+function snapshotsEqual(a: EdenHistorySnapshot | null, b: EdenHistorySnapshot | null): boolean {
   if (!a || !b) return a === b;
   return (
     a.activeScreen === b.activeScreen &&
