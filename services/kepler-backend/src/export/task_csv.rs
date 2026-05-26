@@ -56,17 +56,17 @@ impl Converter for TaskCsvConverter {
             let p = &obj.props_json;
             let project_id = p.get("project_id").and_then(|v| v.as_str()).unwrap_or("");
             let area_id = p.get("area_id").and_then(|v| v.as_str()).unwrap_or("");
-            let scheduled = p.get("scheduled_date").and_then(|v| v.as_str()).unwrap_or("");
+            let scheduled = p
+                .get("scheduled_date")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let deadline = p.get("deadline").and_then(|v| v.as_str()).unwrap_or("");
             let completed = p
                 .get("completed")
                 .and_then(|v| v.as_bool())
                 .or_else(|| p.get("is_completed").and_then(|v| v.as_bool()))
                 .unwrap_or(false);
-            let priority = p
-                .get("priority")
-                .map(|v| v.to_string())
-                .unwrap_or_default();
+            let priority = p.get("priority").map(|v| v.to_string()).unwrap_or_default();
             let tags = p
                 .get("tags")
                 .and_then(|v| v.as_array())

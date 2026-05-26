@@ -2,7 +2,7 @@
 name = "kepler-focus-helper"
 version = "0.1.0"
 edition.workspace = true
-description = "Elevated helper для блокировки доменов через Windows hosts file. stdin JSON → operation → stdout JSON, exit."
+description = "Kosmos Helper — elevated short-lived helper for hosts file changes."
 
 [[bin]]
 name = "kepler-focus-helper"

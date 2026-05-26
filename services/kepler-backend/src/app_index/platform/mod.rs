@@ -5,9 +5,9 @@
 // Linux: позже — XdgDesktopSource.
 
 use crate::app_index::app::App;
-use crate::app_index::{AppSource, Result};
 #[cfg(not(target_os = "windows"))]
 use crate::app_index::AppIndexError;
+use crate::app_index::{AppSource, Result};
 
 #[cfg(target_os = "windows")]
 pub mod windows;

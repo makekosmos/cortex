@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
@@ -15,19 +16,41 @@ use windows_service::service::{
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::service_dispatcher;
 
-use crate::cli::SERVICE_NAME;
+use crate::cli::{LEGACY_SERVICE_NAME, SERVICE_NAME};
 use crate::pipe;
 
 define_windows_service!(ffi_service_main, service_main);
 
+static ACTIVE_SERVICE_NAME: Mutex<&'static str> = Mutex::new(SERVICE_NAME);
+
 /// User-mode entry. Передаёт control SCM который вызовет `service_main`.
 /// Возвращает только когда SCM решит завершить процесс.
 pub fn run_as_service_entry() -> ! {
-    if let Err(e) = service_dispatcher::start(SERVICE_NAME, ffi_service_main) {
-        eprintln!("service_dispatcher::start failed: {e}");
-        std::process::exit(1);
+    set_active_service_name(SERVICE_NAME);
+    match service_dispatcher::start(SERVICE_NAME, ffi_service_main) {
+        Ok(()) => std::process::exit(0),
+        Err(primary) => {
+            set_active_service_name(LEGACY_SERVICE_NAME);
+            if let Err(legacy) = service_dispatcher::start(LEGACY_SERVICE_NAME, ffi_service_main) {
+                eprintln!("service_dispatcher::start failed: primary={primary}; legacy={legacy}");
+                std::process::exit(1);
+            }
+            std::process::exit(0);
+        }
     }
-    std::process::exit(0);
+}
+
+fn set_active_service_name(name: &'static str) {
+    if let Ok(mut guard) = ACTIVE_SERVICE_NAME.lock() {
+        *guard = name;
+    }
+}
+
+fn active_service_name() -> &'static str {
+    ACTIVE_SERVICE_NAME
+        .lock()
+        .map(|guard| *guard)
+        .unwrap_or(SERVICE_NAME)
 }
 
 fn service_main(_args: Vec<OsString>) {
@@ -53,7 +76,7 @@ fn run_service() -> windows_service::Result<()> {
         }
     };
 
-    let status_handle = service_control_handler::register(SERVICE_NAME, event_handler)?;
+    let status_handle = service_control_handler::register(active_service_name(), event_handler)?;
 
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,

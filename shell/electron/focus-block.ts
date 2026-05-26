@@ -1,4 +1,4 @@
-// Focus block applier — спавнит `kepler-focus-helper.exe` для модификации
+// Focus block applier — спавнит `Kosmos Helper.exe` для модификации
 // hosts файла когда юзер активирует/деактивирует focus blocklist.
 //
 // Elevation flow:
@@ -37,7 +37,7 @@ interface HelperResponse {
 
 function helperBinaryPath(): string {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "kepler-focus-helper.exe");
+    return path.join(process.resourcesPath, "Kosmos Helper.exe");
   }
   return path.resolve(__dirname, "..", "..", "target", "release", "kepler-focus-helper.exe");
 }

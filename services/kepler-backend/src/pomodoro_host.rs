@@ -364,9 +364,7 @@ pub async fn handle_pomodoro_op(
             let cfg: SessionConfig = match serde_json::from_value(cfg_value) {
                 Ok(c) => c,
                 Err(e) => {
-                    return PomodoroResponse::err(format!(
-                        "pomodoro.start: invalid 'config': {e}"
-                    ));
+                    return PomodoroResponse::err(format!("pomodoro.start: invalid 'config': {e}"));
                 }
             };
             let state = host.start(cfg).await;

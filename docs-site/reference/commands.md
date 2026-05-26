@@ -101,7 +101,7 @@ bun run ext:catalog        # пересобрать catalog.json со списк
 
 Output финального билда:
 
-- Installer: `shell/release/Kepler Setup X.Y.Z.exe` (per-user oneClick).
+- Installer: `shell/release/Kosmos Setup X.Y.Z.exe` (per-user oneClick).
 - Install path: `%LOCALAPPDATA%\Programs\Kepler\` (без UAC, без выбора директории).
 - Launch: `runAfterFinish: true`, ярлык на рабочем столе + Start Menu.
 

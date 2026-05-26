@@ -108,11 +108,11 @@ pub fn validate_pid_belongs_to_current_user(pid: u32) -> Result<(), AuthError> {
 }
 
 #[cfg(windows)]
-unsafe fn get_process_user_sid(process: windows::Win32::Foundation::HANDLE) -> Result<Vec<u8>, AuthError> {
+unsafe fn get_process_user_sid(
+    process: windows::Win32::Foundation::HANDLE,
+) -> Result<Vec<u8>, AuthError> {
     use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::Security::{
-        GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
-    };
+    use windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
     use windows::Win32::System::Threading::OpenProcessToken;
 
     let mut token_handle = windows::Win32::Foundation::HANDLE::default();
@@ -143,9 +143,9 @@ unsafe fn get_process_user_sid(process: windows::Win32::Foundation::HANDLE) -> R
 
     // Вычисляем длину SID. SID имеет fixed-size header + variable subauthorities.
     // GetLengthSid даёт точную длину.
-    let sid_len = windows::Win32::Security::GetLengthSid(windows::Win32::Security::PSID(
-        sid_ptr as *mut _,
-    )) as usize;
+    let sid_len =
+        windows::Win32::Security::GetLengthSid(windows::Win32::Security::PSID(sid_ptr as *mut _))
+            as usize;
 
     let mut sid_copy = vec![0u8; sid_len];
     std::ptr::copy_nonoverlapping(sid_ptr, sid_copy.as_mut_ptr(), sid_len);
@@ -177,7 +177,9 @@ mod tests {
     fn token_is_64_hex_chars() {
         let t = generate_token();
         assert_eq!(t.len(), 64);
-        assert!(t.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(t
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     }
 
     #[test]
@@ -203,7 +205,10 @@ mod tests {
 
     #[test]
     fn validate_token_rejects_different_length() {
-        assert!(!validate_token("short", "much-longer-token-that-doesnt-match"));
+        assert!(!validate_token(
+            "short",
+            "much-longer-token-that-doesnt-match"
+        ));
     }
 
     #[test]

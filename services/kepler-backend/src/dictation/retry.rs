@@ -308,7 +308,11 @@ mod tests {
         )
         .await;
         assert_eq!(result.unwrap(), 42);
-        assert_eq!(calls.load(Ordering::SeqCst), 1, "should call op exactly once");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "should call op exactly once"
+        );
     }
 
     #[tokio::test]
@@ -450,6 +454,9 @@ mod tests {
         // attempt=20 даст 100*2^20 ms = ~104857 sec без cap. С cap=500ms +
         // jitter ±50% — max 750ms.
         let d = backoff_delay(20, base, cap);
-        assert!(d <= Duration::from_millis(760), "cap+jitter must hold: {d:?}");
+        assert!(
+            d <= Duration::from_millis(760),
+            "cap+jitter must hold: {d:?}"
+        );
     }
 }

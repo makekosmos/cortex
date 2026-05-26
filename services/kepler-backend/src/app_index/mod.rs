@@ -79,7 +79,12 @@ impl AppIndex {
 
         let sources = platform::default_sources(icon_cache_dir.clone());
 
-        Ok(Self { sources, store, cache, icon_cache_dir })
+        Ok(Self {
+            sources,
+            store,
+            cache,
+            icon_cache_dir,
+        })
     }
 
     /// Force re-index — пройти все sources, обновить SQLite + cache.
@@ -155,7 +160,13 @@ impl AppIndex {
     /// Все приложения (с лимитом). Используется когда launcher показывает
     /// apps как часть общего списка без отдельного поиска.
     pub async fn all(&self, limit: usize) -> Vec<App> {
-        self.cache.read().await.iter().take(limit).cloned().collect()
+        self.cache
+            .read()
+            .await
+            .iter()
+            .take(limit)
+            .cloned()
+            .collect()
     }
 
     /// Список источников (для launch dispatch).
@@ -178,10 +189,8 @@ pub struct RescanStats {
 }
 
 fn compute_diff(old: &[App], new: &[App]) -> RescanStats {
-    let old_ids: std::collections::HashSet<&str> =
-        old.iter().map(|a| a.id.as_str()).collect();
-    let new_ids: std::collections::HashSet<&str> =
-        new.iter().map(|a| a.id.as_str()).collect();
+    let old_ids: std::collections::HashSet<&str> = old.iter().map(|a| a.id.as_str()).collect();
+    let new_ids: std::collections::HashSet<&str> = new.iter().map(|a| a.id.as_str()).collect();
 
     let added = new_ids.difference(&old_ids).count();
     let removed = old_ids.difference(&new_ids).count();

@@ -250,12 +250,17 @@ function defaultExeCandidates(): string[] {
 
   if (process.platform === "win32") {
     if (process.env.LOCALAPPDATA) {
+      list.push(path.join(process.env.LOCALAPPDATA, "Programs", "Kosmos", "Kosmos.exe"));
+      list.push(path.join(process.env.LOCALAPPDATA, "Programs", "Kepler", "Kepler.exe"));
       list.push(path.join(process.env.LOCALAPPDATA, "Kosmos", "Kepler", "kepler.exe"));
     }
     if (process.env["ProgramFiles"]) {
+      list.push(path.join(process.env["ProgramFiles"], "Kosmos", "Kosmos.exe"));
+      list.push(path.join(process.env["ProgramFiles"], "Kepler", "Kepler.exe"));
       list.push(path.join(process.env["ProgramFiles"], "Kosmos", "Kepler", "kepler.exe"));
     }
   } else if (process.platform === "darwin") {
+    list.push("/Applications/Kosmos.app/Contents/MacOS/Kosmos");
     list.push("/Applications/Kosmos Kepler.app/Contents/MacOS/kepler");
     if (process.env.HOME) {
       list.push(

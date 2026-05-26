@@ -62,7 +62,11 @@ pub struct SessionConfig {
     pub tasks: Vec<TaskRef>,
     /// Optional override для work-фазы — используется command bus'ом
     /// (`horologion:pomodoro:25` / `:50`).
-    #[serde(rename = "workMinOverride", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "workMinOverride",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub work_min_override: Option<u32>,
 }
 

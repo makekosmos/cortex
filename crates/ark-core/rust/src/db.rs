@@ -656,7 +656,8 @@ pub fn replay_pending_for_type(conn: &Connection, type_id: &str) -> Result<usize
         .map_err(|e| e.to_string())?;
     drop(stmt);
 
-    conn.execute_batch("BEGIN IMMEDIATE").map_err(|e| e.to_string())?;
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| e.to_string())?;
     let mut replayed = 0usize;
     let result = (|| {
         for (entity_id, payload_json) in &rows {
@@ -664,8 +665,8 @@ pub fn replay_pending_for_type(conn: &Connection, type_id: &str) -> Result<usize
                 serde_json::from_str(payload_json).map_err(|e| e.to_string())?;
             let mut data = entity.data.clone();
             data.insert("id".to_string(), Value::String(entity.id.clone()));
-            let object: ArkObject = serde_json::from_value(Value::Object(data))
-                .map_err(|e| e.to_string())?;
+            let object: ArkObject =
+                serde_json::from_value(Value::Object(data)).map_err(|e| e.to_string())?;
             upsert_object(conn, &object)?;
             conn.execute(
                 "DELETE FROM sync_pending_objects WHERE id = ?1",
@@ -3782,8 +3783,7 @@ mod tests {
     #[test]
     fn list_running_time_entries_excludes_deleted() {
         let conn = setup_db();
-        let mut deleted =
-            make_time_entry("te-del", "2026-05-20T10:00:00.000Z", None, "manual");
+        let mut deleted = make_time_entry("te-del", "2026-05-20T10:00:00.000Z", None, "manual");
         deleted.deleted_at = Some("2026-05-20T10:30:00.000Z".to_string());
         upsert_object(&conn, &deleted).unwrap();
 
@@ -4572,10 +4572,7 @@ mod tests {
         // повреждённые btree pages.
         {
             use std::io::{Seek, SeekFrom, Write};
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .open(&path)
-                .unwrap();
+            let mut file = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
             file.seek(SeekFrom::Start(8192)).unwrap();
             file.write_all(&[0xFF; 4096]).unwrap();
             file.flush().unwrap();
@@ -4619,7 +4616,11 @@ mod tests {
         assert!(dest.exists(), "файл backup'а должен существовать");
         let backup_conn = open_db(dest_str).unwrap();
         let objects = list_objects(&backup_conn).unwrap();
-        assert_eq!(objects.len(), 1, "backup должен содержать оригинальный объект");
+        assert_eq!(
+            objects.len(),
+            1,
+            "backup должен содержать оригинальный объект"
+        );
         assert_eq!(objects[0].id, "obj-backup");
         assert_eq!(objects[0].title, "Backup test");
     }

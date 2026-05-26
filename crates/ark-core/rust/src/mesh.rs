@@ -142,9 +142,11 @@ mod tests {
         // wrongly return seconds+Z+counter+device as the third segment.
         let hlc = "2026-03-28T14:30:00.123Z:000042:my-device-abc";
         let msg = make_live_change(hlc);
-        let (device_id, entity_id, _hlc) =
-            MeshCoordinator::dedup_key_from_message(&msg).unwrap();
-        assert_eq!(device_id, "my-device-abc", "device_id extracted incorrectly");
+        let (device_id, entity_id, _hlc) = MeshCoordinator::dedup_key_from_message(&msg).unwrap();
+        assert_eq!(
+            device_id, "my-device-abc",
+            "device_id extracted incorrectly"
+        );
         assert_eq!(entity_id, "entity-1");
     }
 

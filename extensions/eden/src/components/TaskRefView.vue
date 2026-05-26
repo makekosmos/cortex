@@ -1044,7 +1044,6 @@ onBeforeUnmount(() => {
   background: transparent;
   border: none;
   border-radius: 4px;
-  cursor: pointer;
   color: var(--muted-foreground, #888);
   opacity: 0;
   transition:

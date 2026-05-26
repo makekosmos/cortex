@@ -53,7 +53,9 @@ async fn read_last_backup_ts(ark: &ArkHost) -> Option<DateTime<Utc>> {
         .await
         .ok()?;
     let value = resp.data.as_str()?;
-    DateTime::parse_from_rfc3339(value).ok().map(|d| d.with_timezone(&Utc))
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|d| d.with_timezone(&Utc))
 }
 
 async fn write_last_backup_ts(ark: &ArkHost, ts: DateTime<Utc>) -> Result<(), String> {
@@ -104,7 +106,10 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
     let now = Utc::now();
     let filename = backup_filename(now);
     let dest = backups_dir.join(&filename);
-    let dest_str = dest.to_str().ok_or("backup dest path is not UTF-8")?.to_string();
+    let dest_str = dest
+        .to_str()
+        .ok_or("backup dest path is not UTF-8")?
+        .to_string();
 
     eprintln!("[db-backup] starting → {dest_str}");
     ark.request("db_backup", json!({ "dest_path": dest_str.clone() }))
@@ -190,10 +195,7 @@ mod tests {
 
         // 10 fake backup'ов с разными timestamps.
         let times: Vec<DateTime<Utc>> = (0..10)
-            .map(|i| {
-                Utc::now()
-                    - chrono::Duration::hours(i as i64 * 24)
-            })
+            .map(|i| Utc::now() - chrono::Duration::hours(i as i64 * 24))
             .collect();
         for t in &times {
             std::fs::write(backups_dir.join(backup_filename(*t)), b"fake").unwrap();

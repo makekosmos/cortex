@@ -23,8 +23,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveredGame {
-    pub source: String,         // "steam" | "epic" | "gog"
-    pub source_app_id: String,  // Steam app_id, Epic CatalogItemId, GOG product id
+    pub source: String,        // "steam" | "epic" | "gog"
+    pub source_app_id: String, // Steam app_id, Epic CatalogItemId, GOG product id
     pub name: String,
     pub install_dir: PathBuf,
     pub exe_candidate: Option<PathBuf>,
@@ -231,7 +231,9 @@ pub fn pick_exe(install_dir: &Path, name: &str) -> Option<PathBuf> {
         .find(|(p, _)| {
             p.file_stem()
                 .and_then(|s| s.to_str())
-                .map(|s| normalize_for_match(s).contains(&key) || key.contains(&normalize_for_match(s)))
+                .map(|s| {
+                    normalize_for_match(s).contains(&key) || key.contains(&normalize_for_match(s))
+                })
                 .unwrap_or(false)
         })
         .map(|(p, _)| p.clone());
@@ -385,8 +387,15 @@ pub fn parse_epic_manifest(text: &str) -> Option<DiscoveredGame> {
     let name = mf.display_name?;
     let install_location = mf.install_location?;
     let install_dir = PathBuf::from(&install_location);
-    let exe = mf.launch_executable.as_deref().filter(|s| !s.is_empty()).map(|s| install_dir.join(s));
-    let app_id = mf.catalog_item_id.or(mf.app_name).unwrap_or_else(|| name.clone());
+    let exe = mf
+        .launch_executable
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|s| install_dir.join(s));
+    let app_id = mf
+        .catalog_item_id
+        .or(mf.app_name)
+        .unwrap_or_else(|| name.clone());
     Some(DiscoveredGame {
         source: "epic".into(),
         source_app_id: app_id,
@@ -512,7 +521,9 @@ mod tests {
         let paths = parse_libraryfolders(LIBRARYFOLDERS_VDF);
         assert_eq!(paths.len(), 2);
         assert!(paths.iter().any(|p| p.to_string_lossy().contains("Steam")));
-        assert!(paths.iter().any(|p| p.to_string_lossy().contains("SteamLibrary")));
+        assert!(paths
+            .iter()
+            .any(|p| p.to_string_lossy().contains("SteamLibrary")));
     }
 
     #[test]
@@ -591,7 +602,11 @@ mod tests {
         .unwrap();
         std::fs::write(steamapps.join("appmanifest_570.acf"), APPMANIFEST_DOTA).unwrap();
         std::fs::write(steamapps.join("appmanifest_1810770.acf"), APPMANIFEST_CAIRN).unwrap();
-        std::fs::write(steamapps.join("appmanifest_238320.acf"), APPMANIFEST_OUTLAST).unwrap();
+        std::fs::write(
+            steamapps.join("appmanifest_238320.acf"),
+            APPMANIFEST_OUTLAST,
+        )
+        .unwrap();
 
         // Создаём install dirs + dummy exe для pick_exe.
         let common = steamapps.join("common");
@@ -634,7 +649,11 @@ mod tests {
         )
         .unwrap();
         std::fs::write(steamapps.join("appmanifest_570.acf"), APPMANIFEST_DOTA).unwrap();
-        std::fs::write(steamapps.join("appmanifest_238320.acf"), APPMANIFEST_OUTLAST).unwrap();
+        std::fs::write(
+            steamapps.join("appmanifest_238320.acf"),
+            APPMANIFEST_OUTLAST,
+        )
+        .unwrap();
         std::fs::create_dir_all(steamapps.join("common").join("dota 2 beta")).unwrap();
         std::fs::create_dir_all(steamapps.join("common").join("Outlast")).unwrap();
 
@@ -652,7 +671,11 @@ mod tests {
         std::fs::write(dir.join("launcher.exe"), [0u8; 4096]).unwrap();
         std::fs::write(dir.join("Cairn.exe"), [0u8; 64]).unwrap();
         let pick = pick_exe(dir, "Cairn").unwrap();
-        assert!(pick.file_name().unwrap().to_string_lossy().contains("Cairn"));
+        assert!(pick
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .contains("Cairn"));
     }
 
     #[test]

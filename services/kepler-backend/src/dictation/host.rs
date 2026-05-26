@@ -16,18 +16,16 @@ use base64::Engine;
 use serde::Serialize;
 use serde_json::{json, Value};
 use thiserror::Error;
-use tokio::sync::Mutex;
 use tokio::sync::broadcast;
+use tokio::sync::Mutex;
 
-use super::config::{
-    self, has_api_key, DictationConfig, InjectMode, NetworkProfile, TriggerMode,
-};
+use super::config::{self, has_api_key, DictationConfig, InjectMode, NetworkProfile, TriggerMode};
 use super::groq::{self, GroqError};
+#[cfg(windows)]
+use super::hotkey_hook;
 use super::inject::{self, InjectError};
 use super::network;
 use super::stats::{self, DictationStats};
-#[cfg(windows)]
-use super::hotkey_hook;
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -129,11 +127,7 @@ impl DictationHost {
     /// На старте: GC pending по 7d/20 items. Если что-то осталось — emit
     /// `dictation_pending_changed` чтобы UI показал нотификацию.
     fn bootstrap_pending(&self) {
-        let _ = super::pending::gc(
-            &self.data_dir,
-            20,
-            chrono::Duration::days(7),
-        );
+        let _ = super::pending::gc(&self.data_dir, 20, chrono::Duration::days(7));
         if let Ok(items) = super::pending::list(&self.data_dir) {
             if !items.is_empty() {
                 let _ = self.events_tx.send(json!({
@@ -351,7 +345,11 @@ pub(crate) fn validate_config_patch(params: &Value) -> Result<(), String> {
     if let Some(np_val) = params.get("networkProfile") {
         let kind = np_val.get("kind").and_then(|v| v.as_str()).unwrap_or("");
         if kind == "custom_doh" {
-            let url = np_val.get("url").and_then(|v| v.as_str()).unwrap_or("").trim();
+            let url = np_val
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim();
             // Пустой URL разрешён транзитно: юзер только что выбрал radio
             // "Свой DoH URL", input ещё не заполнен. Реальная валидация в
             // момент использования (`build_client` вернёт CustomDohInvalid
@@ -361,9 +359,7 @@ pub(crate) fn validate_config_patch(params: &Value) -> Result<(), String> {
                 network::validate_custom_doh_url(url)
                     .map_err(|e| format!("Custom DoH URL: {e}"))?;
             }
-        } else if !kind.is_empty()
-            && !matches!(kind, "system" | "cloudflare_doh" | "google_doh")
-        {
+        } else if !kind.is_empty() && !matches!(kind, "system" | "cloudflare_doh" | "google_doh") {
             return Err(format!("networkProfile.kind '{kind}' неизвестен"));
         }
     }
@@ -676,7 +672,9 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             // (DoH/proxy/новый key) можно retry'ить из Settings → Очередь.
             let user_msg = {
                 let s = host.state.lock().await;
-                s.last_error.clone().unwrap_or_else(|| "Не удалось распознать".into())
+                s.last_error
+                    .clone()
+                    .unwrap_or_else(|| "Не удалось распознать".into())
             };
             // Reset state в Idle (чтобы новая диктовка работала); error
             // передаётся в response, не через state.
@@ -1020,14 +1018,8 @@ async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
         tokio::spawn(async move {
             match process_one_attempt(&host_clone, &uuid, &api_key_clone, dur).await {
                 AttemptOutcome::Retryable => {
-                    auto_retry_loop(
-                        host_clone,
-                        uuid,
-                        api_key_clone,
-                        dur,
-                        &AUTO_RETRY_DELAYS_SEC,
-                    )
-                    .await;
+                    auto_retry_loop(host_clone, uuid, api_key_clone, dur, &AUTO_RETRY_DELAYS_SEC)
+                        .await;
                 }
                 _ => {}
             }
@@ -1594,7 +1586,9 @@ mod tests {
         assert_eq!(report["firstFailure"], "dns_resolve");
         let stages = report["stages"].as_array().unwrap();
         // client_build OK, dns_resolve FAIL, tcp/http skipped
-        assert!(stages.iter().any(|s| s["name"] == "dns_resolve" && s["ok"] == false));
+        assert!(stages
+            .iter()
+            .any(|s| s["name"] == "dns_resolve" && s["ok"] == false));
     }
 
     #[tokio::test]
@@ -1717,7 +1711,9 @@ mod tests {
         assert_eq!(outcome, AttemptOutcome::Success);
 
         // pending удалён
-        assert!(super::super::pending::list(&host.data_dir).unwrap().is_empty());
+        assert!(super::super::pending::list(&host.data_dir)
+            .unwrap()
+            .is_empty());
         // state → Idle
         let snap = host.current_state().await;
         assert_eq!(snap["state"], "idle");
@@ -1843,7 +1839,14 @@ mod tests {
         .unwrap();
 
         // 3 ретрая по 0ms = 4 попытки. Все 503 → retryable исчерпан.
-        auto_retry_loop(host.clone(), uuid.clone(), "fake-key".into(), 1.0, &[0u64, 0, 0]).await;
+        auto_retry_loop(
+            host.clone(),
+            uuid.clone(),
+            "fake-key".into(),
+            1.0,
+            &[0u64, 0, 0],
+        )
+        .await;
 
         let items = super::super::pending::list(&host.data_dir).unwrap();
         assert_eq!(items.len(), 1, "pending остался");
@@ -1880,19 +1883,25 @@ mod tests {
         // Удаляем pending до начала retry-loop.
         super::super::pending::drop_item(&host.data_dir, &uuid).unwrap();
         // Loop должен сразу выйти увидев что item исчез.
-        auto_retry_loop(host.clone(), uuid.clone(), "fake-key".into(), 1.0, &[0u64, 0, 0]).await;
+        auto_retry_loop(
+            host.clone(),
+            uuid.clone(),
+            "fake-key".into(),
+            1.0,
+            &[0u64, 0, 0],
+        )
+        .await;
         // Никаких новых файлов не появилось — discard выдержан.
-        assert!(super::super::pending::list(&host.data_dir).unwrap().is_empty());
+        assert!(super::super::pending::list(&host.data_dir)
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
     async fn op_list_pending_returns_items() {
         let td = tempfile::TempDir::new().unwrap();
-        let host = DictationHost::new_for_test(
-            td.path().into(),
-            "http://localhost/".into(),
-            test_cfg(),
-        );
+        let host =
+            DictationHost::new_for_test(td.path().into(), "http://localhost/".into(), test_cfg());
         super::super::pending::enqueue(
             &host.data_dir,
             &make_wav(),
@@ -1917,11 +1926,8 @@ mod tests {
     #[tokio::test]
     async fn op_discard_removes_item_and_resets_state() {
         let td = tempfile::TempDir::new().unwrap();
-        let host = DictationHost::new_for_test(
-            td.path().into(),
-            "http://localhost/".into(),
-            test_cfg(),
-        );
+        let host =
+            DictationHost::new_for_test(td.path().into(), "http://localhost/".into(), test_cfg());
         let uuid = super::super::pending::enqueue(
             &host.data_dir,
             &make_wav(),
@@ -1944,7 +1950,9 @@ mod tests {
         }
         let resp = op_discard(json!({ "uuid": uuid }), &host).await;
         assert!(resp.ok);
-        assert!(super::super::pending::list(&host.data_dir).unwrap().is_empty());
+        assert!(super::super::pending::list(&host.data_dir)
+            .unwrap()
+            .is_empty());
         let snap = host.current_state().await;
         assert_eq!(snap["state"], "idle");
     }
@@ -1952,11 +1960,8 @@ mod tests {
     #[tokio::test]
     async fn op_discard_unknown_uuid_errors() {
         let td = tempfile::TempDir::new().unwrap();
-        let host = DictationHost::new_for_test(
-            td.path().into(),
-            "http://localhost/".into(),
-            test_cfg(),
-        );
+        let host =
+            DictationHost::new_for_test(td.path().into(), "http://localhost/".into(), test_cfg());
         let resp = op_discard(json!({ "uuid": "nope" }), &host).await;
         assert!(!resp.ok);
     }
@@ -2107,9 +2112,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_config_persists_and_emits_event() {
-        let _guard = ENV_DATA_DIR_LOCK
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let tmp = tempfile::TempDir::new().expect("tempdir");
         std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
 

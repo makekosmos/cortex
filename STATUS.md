@@ -1,4 +1,26 @@
-# Kosmos — статус проекта (2026-05-25)
+# Kosmos — статус проекта (2026-05-26)
+
+## 2026-05-26 — Product rename migration: Kepler → Kosmos (Kosmos Desktop 0.3.3 → 0.3.4)
+
+User-facing desktop app переезжает под один бренд **Kosmos** без ручной
+переустановки:
+
+- production Electron artifact: `Kosmos.exe`, installer `Kosmos Setup X.Y.Z.exe`,
+  shortcuts `Kosmos`, appId `com.kazui.kosmos`;
+- packaged Rust processes читаются в Task Manager понятнее:
+  `Kosmos Runtime.exe`, `Kosmos Data Engine.exe`, `Kosmos Helper.exe`,
+  `Kosmos System Service.exe`;
+- ARK data остаётся в `%APPDATA%\Kosmos`; Electron userData мигрирует из
+  `%APPDATA%\Kepler` в `%APPDATA%\Kosmos App` при первом запуске;
+- autostart мигрирует с legacy `Kepler` entry на `Kosmos`;
+- Windows service CLI понимает legacy `KeplerFocusSvc`, чтобы старые installs
+  можно было обслужить без ручного удаления.
+- release script пересобирает все packaged Rust exe перед NSIS build, чтобы
+  installer не мог забрать stale helper/service binary из `target/release`.
+
+Важно: `kepler:*` IPC, `kepler-backend`, `kepler.lock.json` и package name
+`kepler-shell` пока остаются internal/compat names. Слияние `kepler-backend` и
+`ark-core-rpc` в один процесс **не входит** в эту миграцию.
 
 ## 2026-05-25 — Диктация: state management + UI doводка (Kepler 0.3.1 → 0.3.2)
 
@@ -148,7 +170,7 @@ Setting в Settings → Общие.
 
 | Артефакт                                         | Версия                                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Kepler shell (`shell/package.json`)              | **0.2.7** (File Search fast path через `KeplerFocusSvc` + `ntfs-reader`)                                            |
+| Kosmos Desktop (`shell/package.json`)            | **0.3.4** (product rename migration: `Kosmos.exe`, понятные process names, legacy Kepler compatibility)             |
 | Eden extension (`extensions/eden/manifest.json`) | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
 | Delphi extension                                 | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
 | Horologion extension                             | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |

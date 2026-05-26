@@ -492,7 +492,13 @@ mod tests {
         let res = NoteMdConverter.convert(&[note], "md", dir.path());
         assert!(res.errors.is_empty());
         let content = std::fs::read_to_string(&res.files_written[0]).unwrap();
-        assert!(content.contains("[click](about:blank)"), "unsafe href not sanitized: {content}");
-        assert!(!content.contains("javascript:"), "javascript: href leaked: {content}");
+        assert!(
+            content.contains("[click](about:blank)"),
+            "unsafe href not sanitized: {content}"
+        );
+        assert!(
+            !content.contains("javascript:"),
+            "javascript: href leaked: {content}"
+        );
     }
 }

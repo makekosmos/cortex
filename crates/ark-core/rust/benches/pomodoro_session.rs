@@ -60,5 +60,10 @@ fn bench_lifecycle(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_single_tick, bench_lifecycle, bench_snapshot_only);
+criterion_group!(
+    benches,
+    bench_single_tick,
+    bench_lifecycle,
+    bench_snapshot_only
+);
 criterion_main!(benches);

@@ -374,12 +374,12 @@ mod tests {
                         .ok_or_else(|| format!("object {id} not found"))
                 }
                 "upsert_object" => {
-                    let obj = params
-                        .get("object")
-                        .cloned()
-                        .ok_or("missing object")?;
+                    let obj = params.get("object").cloned().ok_or("missing object")?;
                     if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
-                        self.objects.lock().unwrap().insert(id.to_string(), obj.clone());
+                        self.objects
+                            .lock()
+                            .unwrap()
+                            .insert(id.to_string(), obj.clone());
                     }
                     self.upserts.lock().unwrap().push(obj);
                     Ok(serde_json::json!({ "ok": true }))
@@ -582,10 +582,7 @@ mod tests {
             props.get("released").and_then(|v| v.as_str()),
             Some("2013-07-09")
         );
-        assert_eq!(
-            props.get("rawg_id").and_then(|v| v.as_u64()),
-            Some(570)
-        );
+        assert_eq!(props.get("rawg_id").and_then(|v| v.as_u64()), Some(570));
         let genres = props.get("genres").and_then(|v| v.as_array()).unwrap();
         assert_eq!(genres.len(), 2);
         assert_eq!(genres[0].as_str(), Some("MOBA"));

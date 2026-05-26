@@ -9,7 +9,7 @@ fn main() {
         embed_manifest_file("app.manifest").expect("embed app.manifest");
     } else {
         do_embed(
-            new_manifest("Kepler.FocusSvc")
+            new_manifest("Kosmos.SystemService")
                 .requested_execution_level(ExecutionLevel::AsInvoker),
         )
         .expect("embed synthesized manifest");

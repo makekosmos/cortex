@@ -17,8 +17,6 @@ const require = createRequire(import.meta.url);
 const electronBinary = require("electron") as string;
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const e2eRoot = path.join(appRoot, ".e2e");
-const userDataDir = path.join(e2eRoot, "kepler-shell-userdata-kext");
-const dataDir = path.join(e2eRoot, "kepler-data-kext");
 
 function makeKextFixture(targetKext: string, version: string): void {
   const manifest = {
@@ -42,6 +40,10 @@ function makeKextFixture(targetKext: string, version: string): void {
 
 test.describe(".kext installer + backup", () => {
   test("AC: install v1.0.0 → install v1.1.0 → backup содержит v1.0.0", async () => {
+    const runId = `${process.pid}-${Date.now()}`;
+    const userDataDir = path.join(e2eRoot, `kepler-shell-userdata-kext-${runId}`);
+    const dataDir = path.join(e2eRoot, `kepler-data-kext-${runId}`);
+
     fs.rmSync(dataDir, { recursive: true, force: true });
     fs.rmSync(userDataDir, { recursive: true, force: true });
     fs.mkdirSync(dataDir, { recursive: true });

@@ -87,20 +87,20 @@ pub fn launch_win32(exec_path: &str) -> Result<()> {
 fn start_menu_roots() -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Ok(appdata) = std::env::var("APPDATA") {
-        out.push(
-            PathBuf::from(appdata).join("Microsoft\\Windows\\Start Menu\\Programs"),
-        );
+        out.push(PathBuf::from(appdata).join("Microsoft\\Windows\\Start Menu\\Programs"));
     }
     if let Ok(programdata) = std::env::var("PROGRAMDATA") {
-        out.push(
-            PathBuf::from(programdata).join("Microsoft\\Windows\\Start Menu\\Programs"),
-        );
+        out.push(PathBuf::from(programdata).join("Microsoft\\Windows\\Start Menu\\Programs"));
     }
     out
 }
 
 fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>, icon_cache_dir: &Path) {
-    for entry in WalkDir::new(root).follow_links(false).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if !entry.file_type().is_file() {
             continue;
         }
@@ -182,12 +182,9 @@ fn scan_dir(root: &Path, by_id: &mut HashMap<String, App>, icon_cache_dir: &Path
                 // Squirrel-installer apps (Discord, Slack, Teams) кладут
                 // реальный icon location в .lnk, а target указывает на
                 // Update.exe без embedded ресурсов.
-                let icon_path = crate::app_index::icons::ensure_icon_for_lnk(
-                    icon_cache_dir,
-                    path,
-                    &exec_path,
-                )
-                .ok();
+                let icon_path =
+                    crate::app_index::icons::ensure_icon_for_lnk(icon_cache_dir, path, &exec_path)
+                        .ok();
                 let app = App {
                     id: id.clone(),
                     name: file_stem,
@@ -321,8 +318,8 @@ pub fn expand_env_vars(s: &str) -> String {
                     }
                     // Case-insensitive fallback (Windows env vars are CI).
                     let lower = var_name.to_ascii_lowercase();
-                    if let Some((_, v)) = std::env::vars()
-                        .find(|(k, _)| k.to_ascii_lowercase() == lower)
+                    if let Some((_, v)) =
+                        std::env::vars().find(|(k, _)| k.to_ascii_lowercase() == lower)
                     {
                         out.push_str(&v);
                         i += 2 + end_rel;

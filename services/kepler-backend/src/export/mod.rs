@@ -93,7 +93,11 @@ pub fn list_converters() -> Vec<ConverterInfo> {
             object_type: c.object_type().to_string(),
             display_name: c.display_name().to_string(),
             default_format: c.default_format().to_string(),
-            supported_formats: c.supported_formats().iter().map(|s| s.to_string()).collect(),
+            supported_formats: c
+                .supported_formats()
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         })
         .collect()
 }
@@ -201,7 +205,10 @@ mod tests {
         let input = "А".repeat(61);
         let out = sanitize_filename(&input);
         assert!(out.len() <= 120, "len={}", out.len());
-        assert!(std::str::from_utf8(out.as_bytes()).is_ok(), "not valid UTF-8");
+        assert!(
+            std::str::from_utf8(out.as_bytes()).is_ok(),
+            "not valid UTF-8"
+        );
         // 120 bytes / 2 bytes-per-char = 60 chars
         assert_eq!(out, "А".repeat(60));
     }
@@ -231,6 +238,10 @@ mod tests {
         }
         let path = unique_path(dir, "title", "md");
         // Must not return a path that already exists.
-        assert!(!path.exists(), "unique_path returned an existing path: {:?}", path);
+        assert!(
+            !path.exists(),
+            "unique_path returned an existing path: {:?}",
+            path
+        );
     }
 }

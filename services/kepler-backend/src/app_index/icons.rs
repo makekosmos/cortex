@@ -95,11 +95,7 @@ pub fn ensure_icon(cache_dir: &Path, app: &App) -> Result<String> {
 /// Squirrel-installer apps (Discord, Slack, Teams), где target=Update.exe
 /// без иконки, а icon_location в .lnk указывает на реальный exe.
 #[cfg(target_os = "windows")]
-pub fn ensure_icon_for_lnk(
-    cache_dir: &Path,
-    lnk_path: &Path,
-    target_path: &str,
-) -> Result<String> {
+pub fn ensure_icon_for_lnk(cache_dir: &Path, lnk_path: &Path, target_path: &str) -> Result<String> {
     let out = cached_icon_path(cache_dir, target_path);
     if out.exists() {
         return Ok(out.to_string_lossy().to_string());
@@ -107,9 +103,8 @@ pub fn ensure_icon_for_lnk(
     if let Some(parent) = out.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    win32::extract_to_png_with_lnk(lnk_path, target_path, &out).map_err(|e| {
-        crate::app_index::AppIndexError::Other(format!("lnk icon extraction: {e}"))
-    })?;
+    win32::extract_to_png_with_lnk(lnk_path, target_path, &out)
+        .map_err(|e| crate::app_index::AppIndexError::Other(format!("lnk icon extraction: {e}")))?;
     Ok(out.to_string_lossy().to_string())
 }
 
@@ -148,11 +143,11 @@ pub fn ensure_icon_for_uwp(
 
 /// 1×1 прозрачный PNG (67 байт). Placeholder если extractor не сработал.
 const PLACEHOLDER_PNG: &[u8] = &[
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
-    0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
-    0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00,
-    0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-    0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
 ];
 
 fn write_placeholder(path: &Path) -> Result<()> {
@@ -183,8 +178,9 @@ mod win32 {
         // .lnk → resolve target, prefer icon_location если выставлен.
         let (icon_source, icon_index) = resolve_icon_source(exec_path);
 
-        let hicon = unsafe { extract_hicon(&icon_source, icon_index) }
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "ExtractIconExW: no icon"))?;
+        let hicon = unsafe { extract_hicon(&icon_source, icon_index) }.ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "ExtractIconExW: no icon")
+        })?;
         let res = unsafe { hicon_to_png(hicon, out_path) };
         unsafe {
             let _ = DestroyIcon(hicon);
@@ -311,8 +307,9 @@ mod win32 {
 
     unsafe fn hicon_to_png(hicon: HICON, out_path: &Path) -> std::io::Result<()> {
         let mut info = ICONINFO::default();
-        GetIconInfo(hicon, &mut info as *mut _)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("GetIconInfo: {e}")))?;
+        GetIconInfo(hicon, &mut info as *mut _).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, format!("GetIconInfo: {e}"))
+        })?;
 
         // Guard для GDI bitmap handles.
         struct BitmapGuards {
@@ -441,7 +438,9 @@ mod win32 {
 
         image_buf
             .save_with_format(out_path, image::ImageFormat::Png)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("png save: {e}")))?;
+            .map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, format!("png save: {e}"))
+            })?;
 
         Ok(())
     }
@@ -474,7 +473,9 @@ mod uwp {
             std::io::Error::new(std::io::ErrorKind::Other, "no logo source on package")
         })?;
 
-        let open_op = stream_ref.OpenReadAsync().map_err(map_err("OpenReadAsync"))?;
+        let open_op = stream_ref
+            .OpenReadAsync()
+            .map_err(map_err("OpenReadAsync"))?;
         let stream = open_op.get().map_err(map_err("OpenReadAsync.get"))?;
 
         let size = stream.Size().map_err(map_err("Size"))? as u32;
@@ -548,14 +549,9 @@ mod uwp {
             // Полностью transparent — нечего обрезать.
             return Ok(input.to_vec());
         }
-        let cropped = image::imageops::crop_imm(
-            &rgba,
-            min_x,
-            min_y,
-            max_x - min_x + 1,
-            max_y - min_y + 1,
-        )
-        .to_image();
+        let cropped =
+            image::imageops::crop_imm(&rgba, min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+                .to_image();
         let mut out = Vec::new();
         let dyn_img = image::DynamicImage::ImageRgba8(cropped);
         dyn_img

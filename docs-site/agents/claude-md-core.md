@@ -6,8 +6,8 @@
 
 ## За 30 секунд
 
-- **Kosmos** = монорепо личной экосистемы (Bun workspaces + Cargo workspace, Windows-only).
-- **Kepler** = лаунчер (`shell/`, Electron 720×460) + `services/kepler-backend/` (Rust: command bus + WS).
+- **Kosmos** = внешний desktop product + монорепо личной экосистемы (Bun workspaces + Cargo workspace, Windows-only).
+- **Kepler** = legacy/internal namespace (`kepler:*`, `window.kepler`, `services/kepler-backend/`), не user-facing product name.
 - **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, бинарь `ark-core-rpc`).
 - **Extensions** (`extensions/<id>/`) — Vue-приложения, грузятся в Kepler shell как отдельные окна.
 - **Apps говорят с ARK только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в синхронизируемые таблицы — запрещены.
@@ -39,19 +39,19 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 
 ## Карта (где что)
 
-| Имя                                                     | Где                                                           |
-| ------------------------------------------------------- | ------------------------------------------------------------- |
-| Eden (заметки, TipTap)                                  | `extensions/eden/`                                            |
-| Delphi (задачи)                                         | `extensions/delphi/`                                          |
-| Horologion (трекер/pomodoro, focus mode host)           | `extensions/horologion/`                                      |
-| Arrancador (игровая библиотека)                         | `extensions/arrancador/`                                      |
-| Kepler shell (лаунчер + focus widget)                   | `shell/`                                                      |
-| Kepler backend (Rust: command bus, sync, usage tracker) | `services/kepler-backend/`                                    |
-| Focus helper / service (hosts write)                    | `services/kepler-focus-helper/`, `services/kepler-focus-svc/` |
-| ARK core (Rust runtime)                                 | `crates/ark-core/`                                            |
-| `@kosmos/ark` (TS SDK)                                  | `packages/ark/`                                               |
-| `@kosmos/visuals` (UI токены)                           | `packages/visuals/`                                           |
-| Dashboard (встроенный shell view)                       | `shell/src/views/Dashboard*.vue`                              |
+| Имя                                           | Где                                                           |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| Eden (заметки, TipTap)                        | `extensions/eden/`                                            |
+| Delphi (задачи)                               | `extensions/delphi/`                                          |
+| Horologion (трекер/pomodoro, focus mode host) | `extensions/horologion/`                                      |
+| Arrancador (игровая библиотека)               | `extensions/arrancador/`                                      |
+| Kosmos desktop shell (лаунчер + focus widget) | `shell/`                                                      |
+| Kosmos Runtime / kepler-backend               | `services/kepler-backend/`                                    |
+| Kosmos Helper / System Service                | `services/kepler-focus-helper/`, `services/kepler-focus-svc/` |
+| ARK core (Rust runtime)                       | `crates/ark-core/`                                            |
+| `@kosmos/ark` (TS SDK)                        | `packages/ark/`                                               |
+| `@kosmos/visuals` (UI токены)                 | `packages/visuals/`                                           |
+| Dashboard (встроенный shell view)             | `shell/src/views/Dashboard*.vue`                              |
 
 Подробное описание — `docs-site/agents/index.md` (Карта приложений).
 
@@ -84,7 +84,7 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 ### Focus mode
 
 - ❌ Прямые `BrowserWindow` манипуляции focus widget'ом вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*`.
-- ❌ Запись в `C:\Windows\System32\drivers\etc\hosts` вне `kepler-focus-helper` / `kepler-focus-svc` и вне маркерной секции `# === kepler-focus BEGIN/END ===` (иначе backup юзерских entries теряется).
+- ❌ Запись в `C:\Windows\System32\drivers\etc\hosts` вне `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev: `kepler-focus-helper` / `kepler-focus-svc`) и вне маркерной секции `# === kepler-focus BEGIN/END ===` (иначе backup юзерских entries теряется).
 - ❌ Lifecycle pomodoro мимо `pomodoro_host` / `invokeOperation("pomodoro.<op>")`. Backend — source of truth.
 
 Остальное (UAC re-prompt, SDDL pipe, `setupFocusWidgetBackendSync` без teardown, applying блокировки из backend) — `forbidden.md` § Focus mode.
@@ -112,7 +112,7 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 ### Framework / architecture
 
 - ❌ Предлагать миграцию с Electron на Tauri / Wails. Зафиксировано экспериментом 2026-05-19 (`docs-site/experiments/tauri-vs-electron.md`).
-- ❌ Возврат `apps/kosmos-shell/` / `services/kosmos-backend/` (после brand swap 2026-05-14 — `shell/` и `services/kepler-backend/`). «Kosmos launcher» / «Kosmos shell» в коде/доках. Лаунчер — Kepler, экосистема — Kosmos.
+- ❌ Массовый rename внутренних `kepler:*` / `window.kepler` / `services/kepler-backend` без отдельного proof loop. User-facing product — Kosmos; `Kepler` остаётся compat namespace'ом.
 
 ### Дисциплина
 

@@ -156,7 +156,9 @@ pub fn build_client(
     Ok(builder.build()?)
 }
 
-fn build_resolver(profile: &NetworkProfile) -> Result<Option<Arc<HickoryDnsResolver>>, NetworkError> {
+fn build_resolver(
+    profile: &NetworkProfile,
+) -> Result<Option<Arc<HickoryDnsResolver>>, NetworkError> {
     use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
     use hickory_resolver::TokioAsyncResolver;
 
@@ -165,8 +167,7 @@ fn build_resolver(profile: &NetworkProfile) -> Result<Option<Arc<HickoryDnsResol
         NetworkProfile::CloudflareDoh => ResolverConfig::cloudflare_https(),
         NetworkProfile::GoogleDoh => ResolverConfig::google_https(),
         NetworkProfile::CustomDoh { url } => {
-            let parsed = validate_custom_doh_url(url)
-                .map_err(NetworkError::CustomDohInvalid)?;
+            let parsed = validate_custom_doh_url(url).map_err(NetworkError::CustomDohInvalid)?;
             // Для не-IP host'ов нам нужен IP чтобы построить NameServerConfig.
             // Резолвим через системный DNS однократно при build (bootstrap).
             // Если системный DNS тоже отказывает — фатальная ошибка
@@ -183,13 +184,12 @@ fn build_resolver(profile: &NetworkProfile) -> Result<Option<Arc<HickoryDnsResol
                                 parsed.host, e
                             ))
                         })?;
-                    addrs
-                        .map(|s| s.ip())
-                        .next()
-                        .ok_or_else(|| NetworkError::CustomDohInvalid(format!(
+                    addrs.map(|s| s.ip()).next().ok_or_else(|| {
+                        NetworkError::CustomDohInvalid(format!(
                             "системный DNS не вернул адресов для '{}'",
                             parsed.host
-                        )))?
+                        ))
+                    })?
                 }
             };
             let mut cfg = ResolverConfig::new();
@@ -248,8 +248,7 @@ pub async fn resolve_host(
                 })?;
         return Ok(addrs.map(|s| s.ip()).collect());
     }
-    let resolver = build_resolver(profile)?
-        .expect("non-System profile must produce resolver");
+    let resolver = build_resolver(profile)?.expect("non-System profile must produce resolver");
     let name = Name::from_str(host).map_err(|_| ResolveError::InvalidHost(host.into()))?;
     let resolving = resolver.resolve(name);
     let addrs = resolving.await.map_err(|e| ResolveError::Doh {
@@ -266,13 +265,12 @@ impl Resolve for HickoryDnsResolver {
         let resolver = self.0.clone();
         Box::pin(async move {
             let host = name.as_str().trim_end_matches('.').to_owned();
-            let lookup = resolver
-                .lookup_ip(host.clone())
-                .await
-                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+            let lookup = resolver.lookup_ip(host.clone()).await.map_err(
+                |e| -> Box<dyn std::error::Error + Send + Sync> {
                     warn!(host = %host, error = %e, "dictation: DoH lookup failed");
                     Box::new(e)
-                })?;
+                },
+            )?;
             let addrs: Vec<SocketAddr> = lookup.iter().map(|ip| SocketAddr::new(ip, 0)).collect();
             let iter: Addrs = Box::new(addrs.into_iter());
             Ok(iter)
@@ -475,7 +473,10 @@ mod tests {
 
     #[test]
     fn build_client_with_socks5_proxy() {
-        let client = build_client(&NetworkProfile::CloudflareDoh, Some("socks5://127.0.0.1:1080"));
+        let client = build_client(
+            &NetworkProfile::CloudflareDoh,
+            Some("socks5://127.0.0.1:1080"),
+        );
         assert!(client.is_ok());
     }
 
@@ -499,22 +500,26 @@ mod tests {
     // ------------------------------------------------------------------
 
     async fn try_doh(name: &str, url: &str) -> (bool, String) {
-        let client = match build_client(
-            &NetworkProfile::CustomDoh { url: url.into() },
-            None,
-        ) {
+        let client = match build_client(&NetworkProfile::CustomDoh { url: url.into() }, None) {
             Ok(c) => c,
             Err(e) => return (false, format!("build_client failed: {e}")),
         };
         let start = std::time::Instant::now();
-        match client.head("https://api.groq.com/openai/v1/models").send().await {
+        match client
+            .head("https://api.groq.com/openai/v1/models")
+            .send()
+            .await
+        {
             Ok(r) => {
                 let status = r.status().as_u16();
                 let ms = start.elapsed().as_millis();
                 let ok = status < 400;
                 (ok, format!("{name}: HTTP {status} за {ms}ms"))
             }
-            Err(e) => (false, format!("{name}: {e} за {}ms", start.elapsed().as_millis())),
+            Err(e) => (
+                false,
+                format!("{name}: {e} за {}ms", start.elapsed().as_millis()),
+            ),
         }
     }
 
@@ -573,21 +578,36 @@ mod tests {
             ("System", NetworkProfile::System),
             ("Cloudflare", NetworkProfile::CloudflareDoh),
             ("Google", NetworkProfile::GoogleDoh),
-            ("Quad9", NetworkProfile::CustomDoh {
-                url: "https://dns.quad9.net/dns-query".into(),
-            }),
-            ("AdGuard", NetworkProfile::CustomDoh {
-                url: "https://dns.adguard-dns.com/dns-query".into(),
-            }),
-            ("Mullvad", NetworkProfile::CustomDoh {
-                url: "https://dns.mullvad.net/dns-query".into(),
-            }),
-            ("ControlD-free-p2", NetworkProfile::CustomDoh {
-                url: "https://freedns.controld.com/p2".into(),
-            }),
-            ("malw.link", NetworkProfile::CustomDoh {
-                url: "https://dns.malw.link/dns-query".into(),
-            }),
+            (
+                "Quad9",
+                NetworkProfile::CustomDoh {
+                    url: "https://dns.quad9.net/dns-query".into(),
+                },
+            ),
+            (
+                "AdGuard",
+                NetworkProfile::CustomDoh {
+                    url: "https://dns.adguard-dns.com/dns-query".into(),
+                },
+            ),
+            (
+                "Mullvad",
+                NetworkProfile::CustomDoh {
+                    url: "https://dns.mullvad.net/dns-query".into(),
+                },
+            ),
+            (
+                "ControlD-free-p2",
+                NetworkProfile::CustomDoh {
+                    url: "https://freedns.controld.com/p2".into(),
+                },
+            ),
+            (
+                "malw.link",
+                NetworkProfile::CustomDoh {
+                    url: "https://dns.malw.link/dns-query".into(),
+                },
+            ),
         ];
 
         println!("\n=== DNS resolve api.groq.com matrix ===");

@@ -8,6 +8,6 @@
 
 pub mod config;
 pub mod launcher;
-pub mod scanner;
 pub mod rawg;
+pub mod scanner;
 pub mod sqoba;

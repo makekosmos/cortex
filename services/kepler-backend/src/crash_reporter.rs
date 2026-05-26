@@ -139,7 +139,11 @@ mod tests {
         let result = std::panic::catch_unwind(|| panic!("test panic message xyz"));
         std::panic::set_hook(prev);
         assert!(result.is_err(), "panic should have happened");
-        let log = captured.lock().unwrap().clone().expect("hook should have captured");
+        let log = captured
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("hook should have captured");
         assert!(log.contains("test panic message xyz"), "log: {log}");
         assert!(log.contains("kepler-backend v"), "log: {log}");
         assert!(log.contains("location:"), "log: {log}");

@@ -81,7 +81,10 @@ fn parse_cli_args() -> CliArgs {
             _ => {}
         }
     }
-    CliArgs { input_file, output_file }
+    CliArgs {
+        input_file,
+        output_file,
+    }
 }
 
 fn read_request(args: &CliArgs) -> Result<String, String> {
@@ -123,9 +126,8 @@ fn run(args: &CliArgs) -> Response {
 fn main() {
     let args = parse_cli_args();
     let resp = run(&args);
-    let json = serde_json::to_string(&resp).unwrap_or_else(|e| {
-        format!(r#"{{"ok":false,"error":"serialize failed: {e}"}}"#)
-    });
+    let json = serde_json::to_string(&resp)
+        .unwrap_or_else(|e| format!(r#"{{"ok":false,"error":"serialize failed: {e}"}}"#));
 
     // Write response — либо в --output file, либо stdout.
     if let Some(out_path) = &args.output_file {

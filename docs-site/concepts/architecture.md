@@ -9,28 +9,29 @@
 
 ## Brand'ы
 
-- **Kosmos** — название экосистемы. Под Kosmos живут продуктовые приложения (Eden, Delphi, Arrancador, Horologion, Dashboard) и shared-пакеты (`@kosmos/ark`, `@kosmos/visuals`).
-- **Kepler** — Electron-launcher + shared Rust runtime (`kepler-backend`), который держит один `ark-core-rpc` child на машину, gateway-WS для апок, command bus и LAN/relay sync.
+- **Kosmos** — внешний продукт и название экосистемы. Пользователь запускает `Kosmos.exe`; внутри живут Notes/Eden, Tasks/Delphi, Games/Arrancador, Focus/Activity и shared-пакеты (`@kosmos/ark`, `@kosmos/visuals`).
+- **Kepler** — legacy/internal имя desktop host слоя: `shell/`, IPC namespace `kepler:*`, `kepler-backend`, `kepler.lock.json`. В UX и installed artifact'ах с 2026-05-26 используется **Kosmos**.
+- **Kosmos Runtime.exe** — packaged display name для `services/kepler-backend`: Rust host, который держит `ark-core-rpc` child, gateway-WS для апок, command bus и LAN/relay sync. Слияние с `ark-core-rpc` в один процесс — отдельная архитектурная задача, не часть rename migration.
 
-Раньше "Kepler" обозначал отдельный Rust+gpui фоновый sync host. Сейчас это имя перешло на Electron launcher (`shell/`, npm package `kepler-shell`) + его Rust backend (`services/kepler-backend`). Шилд старой архитектуры — снят. Phase B-E (2026-05-14) свели весь stack в плоский top-level layout: `shell/`, `extensions/`, `crates/`, `mobile/`, `services/`.
+Раньше "Kepler" обозначал отдельный Rust+gpui фоновый sync host, затем Electron launcher. После product rename 2026-05-26 Kepler остаётся только кодовым namespace'ом; user-facing app называется Kosmos. Phase B-E (2026-05-14) свели весь stack в плоский top-level layout: `shell/`, `extensions/`, `crates/`, `mobile/`, `services/`.
 
 ## Высокоуровневая картина
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│  kepler.exe  (Electron host, shell/)                         │
+│  Kosmos.exe  (Electron host, shell/)                         │
 │    ├─ Launcher BrowserWindow (Ctrl+Shift+K, FTS5 search)     │
 │    ├─ Tray icon                                              │
 │    ├─ Settings window                                        │
 │    ├─ Extension loader (extensions/<id>/)                    │
-│    └─ spawn: kepler-backend.exe                              │
+│    └─ spawn: Kosmos Runtime.exe                              │
 └──────────────────────────────────────────────────────────────┘
                             │
                             │ child process
                             ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  kepler-backend.exe  (Rust, services/kepler-backend)         │
-│    ├─ spawn: ark-core-rpc.exe (один на машину)               │
+│  Kosmos Runtime.exe  (Rust, services/kepler-backend)         │
+│    ├─ spawn: Kosmos Data Engine.exe / ark-core-rpc.exe       │
 │    ├─ WS server 127.0.0.1:<random_port>                      │
 │    ├─ Command bus (registry + invoke broadcast)              │
 │    ├─ Auth (bearer token, PID-binding, file ACL)             │

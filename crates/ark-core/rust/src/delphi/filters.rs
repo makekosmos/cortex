@@ -34,7 +34,9 @@ fn is_date_today(iso: &Option<String>, today_iso: &str) -> bool {
 fn predicate(list: SmartList, t: &TodoItem, today_iso: &str) -> bool {
     match list {
         SmartList::Inbox => t.project_id.is_none() && !t.is_someday && is_active(t),
-        SmartList::Today => is_active(t) && (t.is_today || is_date_today(&t.scheduled_date, today_iso)),
+        SmartList::Today => {
+            is_active(t) && (t.is_today || is_date_today(&t.scheduled_date, today_iso))
+        }
         SmartList::Upcoming => t.scheduled_date.is_some() && is_active(t) && !t.is_someday,
         SmartList::Anytime => is_active(t) && !t.is_someday,
         SmartList::Someday => t.is_someday && !t.is_completed && !t.is_cancelled && !t.is_trashed,
@@ -60,8 +62,16 @@ fn cmp_for(list: SmartList, a: &TodoItem, b: &TodoItem) -> std::cmp::Ordering {
         },
         // (completedAt || cancelledAt) desc
         SmartList::Logbook => {
-            let da = a.completed_at.as_deref().or(a.cancelled_at.as_deref()).unwrap_or("");
-            let db = b.completed_at.as_deref().or(b.cancelled_at.as_deref()).unwrap_or("");
+            let da = a
+                .completed_at
+                .as_deref()
+                .or(a.cancelled_at.as_deref())
+                .unwrap_or("");
+            let db = b
+                .completed_at
+                .as_deref()
+                .or(b.cancelled_at.as_deref())
+                .unwrap_or("");
             db.cmp(da)
         }
         // createdAt desc
@@ -82,7 +92,10 @@ pub fn filter_todos(list: SmartList, todos: &[TodoItem], today_iso: &str) -> Vec
 
 /// Equivalent to TS `countTodos(list, todos)`.
 pub fn count_todos(list: SmartList, todos: &[TodoItem], today_iso: &str) -> usize {
-    todos.iter().filter(|t| predicate(list, t, today_iso)).count()
+    todos
+        .iter()
+        .filter(|t| predicate(list, t, today_iso))
+        .count()
 }
 
 /// Equivalent to TS `countAll(todos)`. Single pass, returns one count per list.
@@ -112,8 +125,8 @@ pub mod fixtures;
 
 #[cfg(test)]
 mod tests {
+    use super::fixtures::{expected_counts, expected_filter_output, fixtures, TODAY_ISO};
     use super::*;
-    use super::fixtures::{expected_filter_output, expected_counts, fixtures, TODAY_ISO};
 
     #[test]
     fn golden_parity_filter_per_list() {

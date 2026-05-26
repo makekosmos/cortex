@@ -1807,7 +1807,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(heading_tombstone, 1, "DeleteHeading должен записать tombstone");
+        assert_eq!(
+            heading_tombstone, 1,
+            "DeleteHeading должен записать tombstone"
+        );
 
         let todo_tombstone: i64 = guard
             .query_row(

@@ -7,7 +7,8 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-const FOCUS_SERVICE_PIPE: &str = r"\\.\pipe\kepler-focus-svc";
+const SYSTEM_SERVICE_PIPE: &str = r"\\.\pipe\kosmos-system-service";
+const LEGACY_FOCUS_SERVICE_PIPE: &str = r"\\.\pipe\kepler-focus-svc";
 
 pub fn scan_drive_root(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
     let drive = drive_letter(root)?;
@@ -43,10 +44,26 @@ struct IndexedFileWire {
 }
 
 fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
+    match scan_via_service_pipe(SYSTEM_SERVICE_PIPE, root, exclude_noisy) {
+        Ok(files) => return Ok(files),
+        Err(primary) => {
+            let legacy = scan_via_service_pipe(LEGACY_FOCUS_SERVICE_PIPE, root, exclude_noisy);
+            return legacy.map_err(|legacy_error| {
+                format!("primary pipe failed: {primary}; legacy pipe failed: {legacy_error}")
+            });
+        }
+    }
+}
+
+fn scan_via_service_pipe(
+    pipe_path: &str,
+    root: &Path,
+    exclude_noisy: bool,
+) -> Result<Vec<IndexedFile>, String> {
     let mut pipe = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(FOCUS_SERVICE_PIPE)
+        .open(pipe_path)
         .map_err(|e| format!("connect service pipe failed: {e}"))?;
 
     let request = serde_json::json!({

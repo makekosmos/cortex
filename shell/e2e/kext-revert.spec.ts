@@ -34,8 +34,9 @@ function makeKext(file: string, id: string, version: string): void {
 }
 
 test("AC: revert восстанавливает предыдущую версию из backup'а", async () => {
-  const userDataDir = path.join(e2eRoot, "kepler-shell-userdata-revert");
-  const dataDir = path.join(e2eRoot, "kepler-data-revert");
+  const runId = `${process.pid}-${Date.now()}`;
+  const userDataDir = path.join(e2eRoot, `kepler-shell-userdata-revert-${runId}`);
+  const dataDir = path.join(e2eRoot, `kepler-data-revert-${runId}`);
   fs.rmSync(userDataDir, { recursive: true, force: true });
   fs.rmSync(dataDir, { recursive: true, force: true });
   fs.mkdirSync(userDataDir, { recursive: true });

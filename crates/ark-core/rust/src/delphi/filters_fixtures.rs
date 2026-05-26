@@ -25,10 +25,26 @@ fn mk(id: &str) -> TodoItem {
 
 pub fn fixtures() -> Vec<TodoItem> {
     vec![
-        TodoItem { sort_order: 1, created_at: "2026-05-13T10:00:00.000Z".into(), ..mk("inbox-1") },
-        TodoItem { sort_order: 2, created_at: "2026-05-14T10:00:00.000Z".into(), ..mk("inbox-2") },
-        TodoItem { is_today: true, sort_order: 10, ..mk("today-flag") },
-        TodoItem { scheduled_date: Some(TODAY_ISO.into()), sort_order: 5, ..mk("today-scheduled") },
+        TodoItem {
+            sort_order: 1,
+            created_at: "2026-05-13T10:00:00.000Z".into(),
+            ..mk("inbox-1")
+        },
+        TodoItem {
+            sort_order: 2,
+            created_at: "2026-05-14T10:00:00.000Z".into(),
+            ..mk("inbox-2")
+        },
+        TodoItem {
+            is_today: true,
+            sort_order: 10,
+            ..mk("today-flag")
+        },
+        TodoItem {
+            scheduled_date: Some(TODAY_ISO.into()),
+            sort_order: 5,
+            ..mk("today-scheduled")
+        },
         TodoItem {
             scheduled_date: Some("2026-06-01".into()),
             sort_order: 100,
@@ -41,8 +57,16 @@ pub fn fixtures() -> Vec<TodoItem> {
             created_at: "2026-05-11T00:00:00.000Z".into(),
             ..mk("upcoming-2")
         },
-        TodoItem { is_someday: true, sort_order: 50, ..mk("someday-1") },
-        TodoItem { is_someday: true, sort_order: 51, ..mk("someday-2") },
+        TodoItem {
+            is_someday: true,
+            sort_order: 50,
+            ..mk("someday-1")
+        },
+        TodoItem {
+            is_someday: true,
+            sort_order: 51,
+            ..mk("someday-2")
+        },
         TodoItem {
             project_id: Some("proj-1".into()),
             sort_order: 7,
@@ -64,8 +88,16 @@ pub fn fixtures() -> Vec<TodoItem> {
             cancelled_at: Some("2026-05-13T15:00:00.000Z".into()),
             ..mk("cancelled-1")
         },
-        TodoItem { is_trashed: true, created_at: "2026-05-12T10:00:00.000Z".into(), ..mk("trash-1") },
-        TodoItem { is_trashed: true, created_at: "2026-05-15T11:00:00.000Z".into(), ..mk("trash-2") },
+        TodoItem {
+            is_trashed: true,
+            created_at: "2026-05-12T10:00:00.000Z".into(),
+            ..mk("trash-1")
+        },
+        TodoItem {
+            is_trashed: true,
+            created_at: "2026-05-15T11:00:00.000Z".into(),
+            ..mk("trash-2")
+        },
         TodoItem {
             scheduled_date: Some(TODAY_ISO.into()),
             is_completed: true,
@@ -85,17 +117,30 @@ pub fn fixtures() -> Vec<TodoItem> {
 pub fn expected_filter_output(list: SmartList) -> Vec<String> {
     let v: Vec<&str> = match list {
         SmartList::Inbox => vec![
-            "inbox-1", "inbox-2", "today-scheduled", "today-flag", "upcoming-2", "upcoming-1",
+            "inbox-1",
+            "inbox-2",
+            "today-scheduled",
+            "today-flag",
+            "upcoming-2",
+            "upcoming-1",
         ],
         SmartList::Today => vec!["today-scheduled", "today-flag"],
         SmartList::Upcoming => vec!["today-scheduled", "upcoming-2", "proj-task", "upcoming-1"],
         SmartList::Anytime => vec![
-            "inbox-1", "inbox-2", "today-scheduled", "proj-task", "today-flag", "upcoming-2",
+            "inbox-1",
+            "inbox-2",
+            "today-scheduled",
+            "proj-task",
+            "today-flag",
+            "upcoming-2",
             "upcoming-1",
         ],
         SmartList::Someday => vec!["someday-1", "someday-2"],
         SmartList::Logbook => vec![
-            "scheduled-today-completed", "completed-2", "completed-1", "trashed-completed",
+            "scheduled-today-completed",
+            "completed-2",
+            "completed-1",
+            "trashed-completed",
             "cancelled-1",
         ],
         SmartList::Trash => vec!["trash-2", "trashed-completed", "trash-1"],

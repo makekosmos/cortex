@@ -1,6 +1,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
-//! kepler-focus-svc: Windows Service для focus mode hosts file management.
+//! Kosmos System Service: Windows Service для privileged local operations.
 //!
 //! Sub-commands:
 //!   install         — register Windows service (start mode = manual)
@@ -62,7 +62,7 @@ fn main() {
         "status" => cli::status(),
         "run-as-service" => service::run_as_service_entry(),
         "" | "help" | "--help" | "-h" => {
-            println!("usage: kepler-focus-svc <install|uninstall|start|stop|status>");
+            println!("usage: kosmos-system-service <install|uninstall|start|stop|status>");
             std::process::exit(0);
         }
         other => {
@@ -81,6 +81,6 @@ fn main() {
 
 #[cfg(not(windows))]
 fn main() {
-    eprintln!("kepler-focus-svc is Windows-only");
+    eprintln!("Kosmos System Service is Windows-only");
     std::process::exit(1);
 }

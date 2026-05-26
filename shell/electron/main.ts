@@ -220,7 +220,10 @@ function resolveBackendExe(): string {
   if (existsSync(devRelease)) return devRelease;
 
   // production: рядом с упакованным приложением (extraResources)
-  return path.join(process.resourcesPath ?? __dirname, "kepler-backend.exe");
+  const resources = process.resourcesPath ?? __dirname;
+  const packaged = path.join(resources, "Kosmos Runtime.exe");
+  if (existsSync(packaged)) return packaged;
+  return path.join(resources, "kepler-backend.exe");
 }
 
 // --- Phase 7: boot self-check ------------------------------------------------
@@ -237,19 +240,19 @@ function runBootSelfCheck(): void {
   const verify = verifyUserDataMatches(KEPLER_INSTANCE);
   if (!verify.ok) {
     const msg =
-      `Kepler boot self-check failed: userData mismatch.\n` +
+      `Kosmos boot self-check failed: userData mismatch.\n` +
       `Expected: ${verify.expected}\n` +
       `Actual:   ${verify.actual}\n` +
       `Slot:     ${KEPLER_INSTANCE.slot}\n\n` +
       `Это означает что applyInstanceToApp не успел отработать до первого ` +
-      `чтения userData path. Запустите Kepler заново; если повторяется — ` +
+      `чтения userData path. Запустите Kosmos заново; если повторяется — ` +
       `см. shell/electron/instance.ts.`;
     keplerLog.error("boot", "userData mismatch", {
       expected: verify.expected,
       actual: verify.actual,
       slot: KEPLER_INSTANCE.slot,
     });
-    dialog.showErrorBox("Kepler — ошибка запуска", msg);
+    dialog.showErrorBox("Kosmos — ошибка запуска", msg);
     app.exit(1);
     return;
   }
@@ -259,10 +262,10 @@ function runBootSelfCheck(): void {
   const backendExe = resolveBackendExe();
   if (!existsSync(backendExe)) {
     const msg =
-      `kepler-backend.exe не найден по ожидаемому пути:\n${backendExe}\n\n` +
-      `Возможно установка повреждена. Переустановите Kepler.`;
+      `Kosmos Runtime не найден по ожидаемому пути:\n${backendExe}\n\n` +
+      `Возможно установка повреждена. Переустановите Kosmos.`;
     keplerLog.error("boot", "backend exe missing", { backendExe });
-    dialog.showErrorBox("Kepler — ошибка запуска", msg);
+    dialog.showErrorBox("Kosmos — ошибка запуска", msg);
     app.exit(1);
     return;
   }
@@ -272,13 +275,13 @@ function runBootSelfCheck(): void {
   //    в production env — это ошибка конфигурации.
   if (KEPLER_INSTANCE.kind === "test" && process.env.KOSMOS_TEST_MODE !== "1") {
     const msg =
-      `Kepler запущен в test slot (${KEPLER_INSTANCE.slot}) без KOSMOS_TEST_MODE=1.\n` +
+      `Kosmos запущен в test slot (${KEPLER_INSTANCE.slot}) без KOSMOS_TEST_MODE=1.\n` +
       `Это обычно означает что KOSMOS_DATA_DIR / KEPLER_INSTANCE прокинут случайно.\n` +
       `Очистите env и запустите снова.`;
     keplerLog.error("boot", "test slot without KOSMOS_TEST_MODE", {
       slot: KEPLER_INSTANCE.slot,
     });
-    dialog.showErrorBox("Kepler — ошибка запуска", msg);
+    dialog.showErrorBox("Kosmos — ошибка запуска", msg);
     app.exit(1);
     return;
   }
@@ -295,7 +298,7 @@ function runBootSelfCheck(): void {
 function spawnBackend() {
   const exe = resolveBackendExe();
   if (!existsSync(exe)) {
-    keplerLog.error("backend", "kepler-backend.exe not found", { exe });
+    keplerLog.error("backend", "Kosmos Runtime not found", { exe });
     return;
   }
   const dataDir = keplerDataDir();
@@ -386,8 +389,8 @@ function showBackendCrashDialog(): void {
   void dialog
     .showMessageBox({
       type: "error",
-      title: "Kepler — backend не запускается",
-      message: "kepler-backend упал 5 раз подряд. Автоматический перезапуск приостановлен.",
+      title: "Kosmos — runtime не запускается",
+      message: "Kosmos Runtime упал 5 раз подряд. Автоматический перезапуск приостановлен.",
       detail:
         "Откройте Настройки → Диагностика и посмотрите последние crash-логи.\n\n" +
         `Папка с отчётами: ${crashesDir}\n\n` +
@@ -780,7 +783,7 @@ async function initArkClient(): Promise<void> {
     const client = new ArkClient({
       spaceId,
       deviceId,
-      deviceName: "Kepler Shell",
+      deviceName: "Kosmos Desktop",
       keplerLock: state.lock,
     });
     await client.start();

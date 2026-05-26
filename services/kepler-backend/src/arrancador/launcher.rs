@@ -37,7 +37,15 @@ pub enum LaunchError {
 /// Чистая функция — тестируется без процесс-spawn'а.
 pub fn resolve_launch_command(
     game: &ArkObject,
-) -> Result<(String, Vec<String>, Option<std::path::PathBuf>, &'static str), LaunchError> {
+) -> Result<
+    (
+        String,
+        Vec<String>,
+        Option<std::path::PathBuf>,
+        &'static str,
+    ),
+    LaunchError,
+> {
     let props = &game.props_json;
     let source = props
         .get("source")

@@ -198,7 +198,7 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 ## Тесты
 
-- ❌ Запускать e2e без `KOSMOS_HEADLESS=1`. Окна Kepler / extension'ов не должны лезть на экран и воровать focus у пользователя. `launchKepler` helper выставляет этот env автоматически — не override'ить в `opts.env`.
+- ❌ Запускать e2e без `KOSMOS_HEADLESS=1`. Окна Kosmos / extension'ов не должны лезть на экран и воровать focus у пользователя. `launchKepler` helper выставляет этот env автоматически — не override'ить в `opts.env`.
 - ❌ Создавать BrowserWindow в `shell/electron/` без проверки `process.env.KOSMOS_HEADLESS === "1"`. Любое новое окно должно респектать headless mode (`show: !headless`, `skipTaskbar: headless`).
 - ❌ Звать `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)` на BrowserWindow в `shell/electron/` без headless guard'а. `showLauncher`, `focusExistingExtensionWindow`, `showWidget`, `openSettings`, `openDashboardWindow`, `openInstallExtensionWindow` — все должны раннее return'ить в headless/test mode (либо пропускать визуальные операции, оставляя state / IPC). Видимые окна во время e2e — это **баг**, а не «фича тестов». Пользователь не должен видеть мигающего UI от прогона.
 - ❌ Полагаться на `getByRole("button", { name: /<text>/ })` strict-mode, если на странице потенциально несколько подходящих кнопок (Vue transitions, multi-pane layouts). Scope'ить к специфичному CSS классу. См. [Testing → ловушки](/agents/testing#vue-transition).
@@ -262,15 +262,15 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 - ❌ Прямые манипуляции `BrowserWindow` focus widget'а (show/hide/move/destroy) из extension'ов или из кода вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*` (`set-state` / `get-state` / `hide`).
 - ❌ Обход `pomodoro_host` для lifecycle pomodoro-сессии. Кнопки виджета (pause/resume/skip/stop) дёргают **только** `invokeOperation("pomodoro.<op>")` через backend — никаких прямых `setFocusState` локально после клика. Backend — source of truth, его broadcast обновит widget.
-- ❌ Прямые writes в `C:\Windows\System32\drivers\etc\hosts` из любого места кроме `kepler-focus-helper` / `kepler-focus-svc`. Никаких inline `fs.writeFile` или `child_process` поверх hosts из shell / extension'ов / `services/kepler-backend/`.
+- ❌ Прямые writes в `C:\Windows\System32\drivers\etc\hosts` из любого места кроме `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev-бинарники всё ещё называются `kepler-focus-helper` / `kepler-focus-svc`). Никаких inline `fs.writeFile` или `child_process` поверх hosts из shell / extension'ов / `services/kepler-backend/`.
 - ❌ Запись вне маркерной секции (`# === kepler-focus BEGIN/END ===`) в helper / svc. Backup создаётся **один раз** при первой модификации — если перезаписать вне маркеров, юзерские hosts entries потеряются навсегда.
 - ❌ Destructive ALTER / DROP для `blocklist_obj` или ключа `focus.active_state` в `sync_kv`. Только additive миграции (см. [ARK objects](docs-site/concepts/ark-objects.md)).
 - ❌ `setupFocusWidgetBackendSync` без последующего `teardownFocusWidgetBackendSync` при backend respawn / `resetArkClient`. Двойная подписка → каждый pomodoro event handled дважды.
 - ❌ Применение блокировки (hosts write) из `services/kepler-backend/src/focus.rs`. Модуль хранит **только state** в ARK; применение делает shell через `applyFocusBlock` middleware в `extension-host.ts`. Никакого privileged кода в backend.
 - ❌ Trust'нуть pipe ответу без safety timeout. `sendViaPipe` всегда финиширует за 3s даже при mute pipe.
-- ❌ Удалять `requireAdministrator` manifest у `kepler-focus-helper.exe`. Без него helper стартует non-elevated и hosts write молча падает с access denied.
-- ❌ Расширять SDDL `kepler-focus-svc` pipe'а за пределы `D:(A;;GA;;;AU)` (Authenticated Users). NULL-DACL = network exposure, не нужно.
-- ❌ Автоматически re-prompt'ить UAC для auto-install `kepler-focus-svc` после того, как юзер отказался. `autoInstallAttemptedThisSession` (session-scope) + `setFocusServiceAutoInstallDeclined` (persisted) гарантируют один промпт максимум.
+- ❌ Удалять `requireAdministrator` manifest у `Kosmos Helper.exe` / dev-бинаря `kepler-focus-helper.exe`. Без него helper стартует non-elevated и hosts write молча падает с access denied.
+- ❌ Расширять SDDL `Kosmos System Service` pipe'а за пределы `D:(A;;GA;;;AU)` (Authenticated Users). NULL-DACL = network exposure, не нужно.
+- ❌ Автоматически re-prompt'ить UAC для auto-install `Kosmos System Service` после того, как юзер отказался. `autoInstallAttemptedThisSession` (session-scope) + `setFocusServiceAutoInstallDeclined` (persisted) гарантируют один промпт максимум.
 
 ### Dictation
 
@@ -338,8 +338,8 @@ E2e в headless mode, universal extension contract через `manifest.tests`, 
 
 ### Brand consistency
 
-- ❌ «Kosmos launcher» / «Kosmos shell» в коде или документации. Лаунчер — **Kepler**. Экосистема — **Kosmos**.
-- ❌ Возврат `apps/kosmos-shell/` или `services/kosmos-backend/`. После swap 2026-05-14 (Phase B1) они теперь `shell/` и `services/kepler-backend/`.
+- ❌ Возврат наружного product name **Kepler** для установленного desktop app. С 2026-05-26 пользовательский продукт — **Kosmos** (`Kosmos.exe`, ярлыки `Kosmos`, `%APPDATA%/Kosmos App` для Electron userData). `Kepler` допускается только как legacy/internal namespace (`kepler:*` IPC, `kepler-backend`, `kepler.lock.json`) до отдельного cleanup.
+- ❌ Массовый rename внутренних namespaces (`window.kepler`, `kepler:*`, `services/kepler-backend`, `kepler.lock.json`) без отдельного proof loop. Эти имена — совместимость протокола и тестов, а не пользовательский бренд.
 - ❌ Возврат npm scope `@kepler/*` для shared пакетов. Runtime и UI общие для всей экосистемы используют **`@kosmos/*`**: `@kosmos/ark`, `@kosmos/visuals`. Между Phase B4 (2026-05-14) и 2026-05-18 они некоторое время жили под `@kepler/*` — это была ошибка naming'а (ARK и visuals shared across all apps, не launcher-specific). `@kepler/*` зарезервирован для launcher-specific пакетов, если такие появятся.
 
 ### Distribution
@@ -869,14 +869,14 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 | Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                                                                              |
 | Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                                                                          |
 
-## 9. Brand consistency (Kepler / Kosmos)
+## 9. Brand consistency (Kosmos / Kepler)
 
-После swap 2026-05-14:
+После product rename 2026-05-26:
 
-- **Kepler** — имя лаунчера и его UI-shell. `shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
-- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kosmos/ark`, `@kosmos/visuals`, ARK runtime, doc-site, общий бренд.
-- Не смешивай: «Kosmos launcher» — неверно, это **Kepler**. «Kepler ARK» — неверно, ARK живёт в **Kosmos**.
-- Перед PR прогоняй `pwsh scripts/check-swap-completeness.ps1` если правил что-то рядом с брендом.
+- **Kosmos** — внешний desktop product: `Kosmos.exe`, installer `Kosmos Setup`, ярлыки, autostart, settings titles.
+- **Kepler** — legacy/internal namespace для совместимости: `kepler:*` IPC, `window.kepler`, `kepler-backend`, `kepler.lock.json`, `kepler-shell`.
+- Не делай массовый rename внутренних `kepler*` имён без отдельного proof loop: это protocol/test compatibility, не косметика.
+- **ARK** — data runtime; не называй его Kepler-specific.
 
 ## 10. Command bus
 

@@ -86,6 +86,14 @@ pub fn resolve_ark_core_rpc_path() -> ArkResult<PathBuf> {
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
             #[cfg(windows)]
+            let packaged_candidate = parent.join("Kosmos Data Engine.exe");
+            #[cfg(windows)]
+            if packaged_candidate.exists() {
+                return Ok(packaged_candidate);
+            }
+            #[cfg(windows)]
+            candidates.push(packaged_candidate);
+            #[cfg(windows)]
             let candidate = parent.join("ark-core-rpc.exe");
             #[cfg(not(windows))]
             let candidate = parent.join("ark-core-rpc");
@@ -295,7 +303,10 @@ async fn dispatch_frame(
 
     let response = ArkResponse {
         ok: value.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
-        data: value.get("data").cloned().unwrap_or(serde_json::Value::Null),
+        data: value
+            .get("data")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
         error: value
             .get("error")
             .and_then(|v| v.as_str())

@@ -249,8 +249,14 @@ mod tests {
     fn enqueue_creates_wav_and_json() {
         let td = TempDir::new().expect("tempdir");
         let uuid = enqueue(td.path(), b"fake-wav-bytes", 2.5, opts()).expect("enqueue");
-        assert!(wav_path(td.path(), &uuid).exists(), "WAV должен существовать");
-        assert!(meta_path(td.path(), &uuid).exists(), "JSON должен существовать");
+        assert!(
+            wav_path(td.path(), &uuid).exists(),
+            "WAV должен существовать"
+        );
+        assert!(
+            meta_path(td.path(), &uuid).exists(),
+            "JSON должен существовать"
+        );
     }
 
     #[test]
@@ -356,7 +362,10 @@ mod tests {
                     .unwrap_or(false)
             })
             .count();
-        assert_eq!(tmp_count, 0, "после успешного enqueue .tmp не должно остаться");
+        assert_eq!(
+            tmp_count, 0,
+            "после успешного enqueue .tmp не должно остаться"
+        );
     }
 
     #[test]
@@ -366,10 +375,8 @@ mod tests {
         let fresh = enqueue(td.path(), b"fresh", 1.0, opts()).unwrap();
 
         // Делаем "old" реально старым — переписываем JSON с past created_at.
-        let mut item: PendingItem = serde_json::from_slice(
-            &fs::read(meta_path(td.path(), &old)).unwrap(),
-        )
-        .unwrap();
+        let mut item: PendingItem =
+            serde_json::from_slice(&fs::read(meta_path(td.path(), &old)).unwrap()).unwrap();
         item.created_at = Utc::now() - ChronoDuration::days(10);
         fs::write(
             meta_path(td.path(), &old),

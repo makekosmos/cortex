@@ -9,6 +9,7 @@
 
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveInstance } from "./instance";
@@ -138,7 +139,7 @@ export function openSettings(): void {
     backgroundColor: "#00000000",
     backgroundMaterial: "acrylic",
     roundedCorners: true,
-    title: "Kepler — Настройки",
+    title: "Kosmos — Настройки",
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       contextIsolation: true,
@@ -172,6 +173,60 @@ export function openSettings(): void {
 // существующих установках — менять нельзя, иначе у старых юзеров маркер
 // потеряется до следующего toggle.
 const AUTOSTART_ARGS: string[] = ["--autostart"];
+const AUTOSTART_NAME = "Kosmos";
+const LEGACY_AUTOSTART_NAMES = ["com.kazui.kepler", "Kepler"];
+
+function legacyAutostartPathCandidates(): string[] {
+  const dir = path.dirname(process.execPath);
+  const paths = [path.join(dir, "Kepler.exe")];
+  const localAppData = process.env.LOCALAPPDATA;
+  if (localAppData) {
+    paths.push(path.resolve(localAppData, "Programs", "Kepler", "Kepler.exe"));
+  }
+  return Array.from(new Set(paths));
+}
+
+function isLegacyAutostartEnabled(): boolean {
+  if (process.platform !== "win32") return false;
+  return legacyAutostartPathCandidates().some((legacyPath) => {
+    try {
+      return app.getLoginItemSettings({
+        path: legacyPath,
+        args: AUTOSTART_ARGS,
+      }).openAtLogin;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function removeLegacyAutostartEntries(): void {
+  if (process.platform !== "win32") return;
+  for (const legacyPath of legacyAutostartPathCandidates()) {
+    for (const name of LEGACY_AUTOSTART_NAMES) {
+      try {
+        app.setLoginItemSettings({
+          openAtLogin: false,
+          name,
+          path: legacyPath,
+          args: AUTOSTART_ARGS,
+        });
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
+  }
+
+  try {
+    execFileSync(
+      "reg.exe",
+      ["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "Kepler", "/f"],
+      { windowsHide: true, stdio: "ignore" },
+    );
+  } catch {
+    /* value absent or registry unavailable */
+  }
+}
 
 export function isAutostartEnabled(): boolean {
   // На Windows getLoginItemSettings() без явных { path, args } сравнивает
@@ -180,10 +235,12 @@ export function isAutostartEnabled(): boolean {
   // Из-за этого Electron видит несовпадение и возвращает openAtLogin=false,
   // даже если запись физически в реестре есть. Передаём те же path/args
   // что и при set — тогда сравнение симметрично.
-  return app.getLoginItemSettings({
-    path: process.execPath,
-    args: AUTOSTART_ARGS,
-  }).openAtLogin;
+  return (
+    app.getLoginItemSettings({
+      path: process.execPath,
+      args: AUTOSTART_ARGS,
+    }).openAtLogin || isLegacyAutostartEnabled()
+  );
 }
 
 export function setAutostartEnabled(enabled: boolean): void {
@@ -210,9 +267,11 @@ export function setAutostartEnabled(enabled: boolean): void {
   //      update) этого маркера нет → launcher показывается сразу.
   app.setLoginItemSettings({
     openAtLogin: enabled,
+    name: AUTOSTART_NAME,
     path: process.execPath,
     args: AUTOSTART_ARGS,
   });
+  removeLegacyAutostartEntries();
   // Сразу читаем обратно — если запись в HKCU не прошла, openAtLogin будет
   // false и UI покажет ошибку. Логируем для диагностики реальных установок.
   // Передаём { path, args } — без них verify фейлится из-за args mismatch

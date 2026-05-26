@@ -1,21 +1,21 @@
-# Kepler — Electron host и global launcher
+# Kosmos Desktop — Electron host и global launcher
 
 ::: tip Источник правды
 `shell/`, `services/kepler-backend/`
 :::
 
-**Kepler** — Electron-приложение, которое выступает host'ом для всей Kosmos ecosystem: global launcher по `Ctrl+Shift+K`, единый backend для апок, command bus для динамических действий и (Phase 4+) extension loader для Vue-приложений. Это **сердце десктопа Kosmos**: один процесс держит ARK, маршрутизирует команды и (в перспективе) рендерит сами апки как extensions.
+**Kosmos Desktop** — Electron-приложение, которое выступает host'ом для всей Kosmos ecosystem: global launcher по `Alt+Space`, единый runtime для апок, command bus для динамических действий и extension loader для Vue-приложений. В коде этот слой всё ещё называется `kepler-shell` / `kepler:*` для совместимости, но installed app, ярлыки и process name с 2026-05-26 — **Kosmos**.
 
 ::: info Brand swap
-До 2026-05-14 «Kepler» был именем экосистемы, а launcher назывался иначе. После pivot'а имена swap'нуты: **Kosmos** = ecosystem (общий ARK, общая БД, общие пакеты), **Kepler** = host-приложение / launcher.
+До 2026-05-14 «Kepler» был именем экосистемы, а launcher назывался иначе. После pivot'а имена swap'нуты, а 2026-05-26 user-facing launcher тоже переехал под один бренд: **Kosmos**. `Kepler` остаётся internal namespace'ом до отдельного cleanup.
 :::
 
 ## Архитектура
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│  Kepler (Electron host, single instance)                   │
-│   ├─ kepler-backend.exe (Rust child, WS server)            │
+│  Kosmos.exe (Electron host, single instance)               │
+│   ├─ Kosmos Runtime.exe (Rust child, WS server)            │
 │   │    ├─ ARK runtime (объекты, FTS5, sync)                │
 │   │    └─ command bus (register/invoke/events)             │
 │   ├─ LauncherView (frameless 720×460, Mica/Acrylic)        │
@@ -32,19 +32,19 @@
    └───────┘ └─────────┘    └──────────┘ └──────────┘ └─────────┘
 ```
 
-Каждая Electron-апка коннектится к `kepler-backend` через WebSocket (`@kosmos/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kepler launcher и выбирает команду — backend роутит её к нужной апке.
+Каждая extension-апка коннектится к `kepler-backend` через WebSocket (`@kosmos/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kosmos launcher и выбирает команду — runtime роутит её к нужной апке.
 
 ## Стек
 
-| Слой          | Технология                                                                       |
-| ------------- | -------------------------------------------------------------------------------- |
-| Shell         | Electron 41 (frameless, Mica/Acrylic, transparent)                               |
-| Renderer      | Vue 3.6 + TypeScript + Vite 8 (electron-vite)                                    |
-| Bundler       | Vite environments (renderer / main / preload через `vite.config.mjs` в `shell/`) |
-| Backend       | `kepler-backend.exe` (Rust, lib + bin из `services/kepler-backend/`)             |
-| ARK SDK       | `@kosmos/ark` (kepler mode, hello-handshake, command bus client)                 |
-| UI            | `@kosmos/visuals` (DesktopChrome, токены, компоненты)                            |
-| Tray / hotkey | Electron `Tray` + `globalShortcut`                                               |
+| Слой          | Технология                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| Shell         | Electron 41 (frameless, Mica/Acrylic, transparent)                                           |
+| Renderer      | Vue 3.6 + TypeScript + Vite 8 (electron-vite)                                                |
+| Bundler       | Vite environments (renderer / main / preload через `vite.config.mjs` в `shell/`)             |
+| Backend       | `Kosmos Runtime.exe` packaged name (`services/kepler-backend`, dev bin `kepler-backend.exe`) |
+| ARK SDK       | `@kosmos/ark` (kepler mode, hello-handshake, command bus client)                             |
+| UI            | `@kosmos/visuals` (DesktopChrome, токены, компоненты)                                        |
+| Tray / hotkey | Electron `Tray` + `globalShortcut`                                                           |
 
 ## Структура
 
@@ -172,8 +172,8 @@ Developer mode с Vite HMR per extension — [Extension dev mode](../concepts/ex
 
 В Settings:
 
-- **Autostart** toggle — пишет / удаляет ключ `Kepler` в `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` через `app.setLoginItemSettings`. Ошибки записи показываются inline («Ошибка записи в реестр»).
-- **Backend status** — состояние `kepler-backend.exe` child process'а (running / not running) + текущий порт WS.
+- **Autostart** toggle — пишет / удаляет ключ `Kosmos` в `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` через `app.setLoginItemSettings`; при миграции читает legacy `Kepler` entry как enabled и чистит его best-effort при следующей записи.
+- **Backend status** — состояние `Kosmos Runtime.exe` / dev `kepler-backend.exe` child process'а (running / not running) + текущий порт WS.
 - **Версия** — `app.getVersion()`.
 - **Developer Mode** toggle (Phase 5) — persist'ится в `%APPDATA%\Kosmos\kepler-shell-settings.json`. Когда включён, extension-host резолвит `loadURL('http://localhost:<devPort>/')` вместо `loadFile(dist/...)` для extension'ов, у которых в `manifest.json` указан `devPort`. F12 в любом extension window открывает DevTools.
 - **Update banner** (sticky 32px вверху Settings окна) — Raycast-style индикатор состояния autoUpdater'а. Состояния `available` / `downloading` (progress bar) / `downloaded` (click-to-install) / `error`. Иконки `ArrowUpCircle` / `Loader2` из `@lucide/vue`. Подписан на `window.kepler.settings.update.onStateChanged(...)`. См. [Distribution → autoUpdater](../concepts/distribution.md#kepler-launcher-autoupdater).
@@ -193,18 +193,20 @@ Pipeline:
 
 1. `build:backend` — `cargo build --release --bin kepler-backend`.
 2. `build:js` — tsc + vite build (main + preload + renderer).
-3. `electron-builder --win nsis` — `release/Kepler Setup X.Y.Z.exe`.
+3. `electron-builder --win nsis` — `release/Kosmos Setup X.Y.Z.exe`.
 
-`extraResources` (копируются рядом с упакованным `Kepler.exe`):
+`extraResources` (копируются рядом с упакованным `Kosmos.exe`):
 
-- `kepler-backend.exe` — Rust backend (из `services/kepler-backend/target/release/`).
-- `ark-core-rpc.exe` — для legacy standalone-апок, которые ещё не extensions.
+- `Kosmos Runtime.exe` — packaged `kepler-backend.exe`.
+- `Kosmos Data Engine.exe` — packaged `ark-core-rpc.exe`; это всё ещё отдельный child process. One-process runtime — отдельная будущая задача.
+- `Kosmos Helper.exe` — packaged `kepler-focus-helper.exe`.
+- `Kosmos System Service.exe` — packaged `kepler-focus-svc.exe`.
 - `extensions/` — bundle'ы Vue extensions (только `manifest.json`, `icon.png`, `index.html`, `dist/`; исключаются `src/`, `node_modules/`, `package.json`, vite configs).
 - `icon.png` — для tray и `BrowserWindow.icon`.
 
-`afterPack` (`build/afterPack.cjs`) embed'ит иконку в `Kepler.exe` через `rcedit` + `png-to-ico` (тот же паттерн, что у [Horologion](./horologion.md) / [Delphi](./delphi.md) — workaround под отключённый встроенный rcedit electron-builder из-за `win.signAndEditExecutable: false`).
+`afterPack` (`build/afterPack.cjs`) embed'ит иконку в `Kosmos.exe` через `rcedit` + `png-to-ico` (workaround под отключённый встроенный rcedit electron-builder из-за `win.signAndEditExecutable: false`).
 
-NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%LocalAppData%\Kepler` без UAC), `runAfterFinish: true`, desktop + Start Menu shortcut, `deleteAppDataOnUninstall: false` (не теряем space-данные при апдейте).
+NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%LocalAppData%\Programs\Kosmos` без UAC), `runAfterFinish: true`, desktop + Start Menu shortcut `Kosmos`, `deleteAppDataOnUninstall: false` (не теряем данные при апдейте). Custom install удаляет legacy `Kepler.lnk`.
 
 Что ещё в Phase 8 (⏳): `electron-updater` для auto-update. Legacy Rust gpui launcher уже удалён в Phase A (директория apps/kepler/ больше не существует).
 
@@ -246,7 +248,7 @@ bun run dev                 # build:backend:dev + extensions + vite + Electron
 | `bun run --cwd shell ext:install <path>` | поставить extension в `%APPDATA%\Kosmos\extensions\<id>\` (override bundled). См. [Extension installer](../concepts/extension-installer.md). |
 | `bun run --cwd shell ext:uninstall <id>` | удалить user-installed extension; bundled (если есть) поднимется автоматически.                                                              |
 
-Артефакты `build` — `shell/release/Kepler Setup X.Y.Z.exe` (NSIS one-click).
+Артефакты `build` — `shell/release/Kosmos Setup X.Y.Z.exe` (NSIS one-click).
 
 ## История legacy Rust-launcher'а
 

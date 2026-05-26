@@ -163,9 +163,8 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
         // Privacy filter — password manager'ы и подобные не пишем в БД.
         // Treat'им как «нет foreground окна» → текущая сессия finalize'нется,
         // новая не стартует пока exclude активен.
-        let sample = raw_sample.filter(|s| {
-            !opts.matches_exclude(&s.process_name, s.window_title.as_deref())
-        });
+        let sample = raw_sample
+            .filter(|s| !opts.matches_exclude(&s.process_name, s.window_title.as_deref()));
         let captured_at = iso_now();
         let delta_ms = previous_tick.elapsed().as_millis().min(i64::MAX as u128) as i64;
 
@@ -509,12 +508,7 @@ async fn ark_request(ark: &Arc<ArkHost>, op: &str, params: Value) -> Result<Valu
 }
 
 async fn load_or_create_tracker_device_id(ark: &Arc<ArkHost>) -> Result<String, String> {
-    let existing = ark_request(
-        ark,
-        "get_sync_kv",
-        json!({ "key": TRACKER_DEVICE_ID_KEY }),
-    )
-    .await?;
+    let existing = ark_request(ark, "get_sync_kv", json!({ "key": TRACKER_DEVICE_ID_KEY })).await?;
     if let Some(value) = existing.as_str() {
         let trimmed = value.trim();
         if !trimmed.is_empty() {

@@ -172,9 +172,8 @@ mod tests {
         let stale = sample_lock(std::process::id(), 60803);
         write_atomic(&lock_path, &stale).expect("write stale lock");
 
-        let (_guard, reported_pid) =
-            acquire_clearing_stale_lock(&lock_path, &singleton_path)
-                .expect("must acquire despite stale json with live unrelated pid");
+        let (_guard, reported_pid) = acquire_clearing_stale_lock(&lock_path, &singleton_path)
+            .expect("must acquire despite stale json with live unrelated pid");
 
         assert_eq!(reported_pid, Some(std::process::id()));
         assert!(
@@ -190,9 +189,8 @@ mod tests {
         let lock_path = dir.path().join("kepler.lock.json");
         let singleton_path = dir.path().join("kepler-singleton.lock.db");
 
-        let (_guard, reported_pid) =
-            acquire_clearing_stale_lock(&lock_path, &singleton_path)
-                .expect("first-time startup без существующего JSON должен пройти");
+        let (_guard, reported_pid) = acquire_clearing_stale_lock(&lock_path, &singleton_path)
+            .expect("first-time startup без существующего JSON должен пройти");
 
         assert_eq!(reported_pid, None);
         assert!(!lock_path.exists());
@@ -208,9 +206,8 @@ mod tests {
         // равно должен пройти и снести битый файл.
         std::fs::write(&lock_path, b"{ not valid json").expect("seed corrupt");
 
-        let (_guard, reported_pid) =
-            acquire_clearing_stale_lock(&lock_path, &singleton_path)
-                .expect("corrupt json не должен блокировать singleton");
+        let (_guard, reported_pid) = acquire_clearing_stale_lock(&lock_path, &singleton_path)
+            .expect("corrupt json не должен блокировать singleton");
 
         assert_eq!(reported_pid, None);
         assert!(!lock_path.exists(), "corrupt json должен быть удалён");

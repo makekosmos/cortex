@@ -1,4 +1,4 @@
-# Системные требования Kosmos / Kepler
+# Системные требования Kosmos
 
 ::: tip
 Это canonical список того, что нужно для запуска и разработки Kosmos. Обновляется когда меняются platform constraints (новый Electron, новые binary, новый OS minimum).
@@ -24,7 +24,7 @@
 
 - **Launcher only:** 235 MB Private / 382 MB Working Set
 - **All extensions idle:** 454 MB Private / 906 MB Working Set
-- **11 процессов** (1 main + 4 extension renderers + 1 dashboard + GPU + utility + kepler-backend + ark-core-rpc)
+- **11 процессов** (1 main + 4 extension renderers + 1 dashboard + GPU + utility + Kosmos Runtime + Kosmos Data Engine)
 
 ### Что НЕ поддерживается
 
@@ -51,26 +51,26 @@
 
 ## Зависимости компонентов
 
-| Subsystem                   | Bundle                                               | Внешние требования                                                                                                                                |
-| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Electron host**           | `Kepler.exe` (Chromium 144 + Node 24)                | —                                                                                                                                                 |
-| **Backend**                 | `kepler-backend.exe` (Rust + tokio + WS server)      | —                                                                                                                                                 |
-| **ARK storage**             | `ark-core-rpc.exe` (SQLite WAL + FTS5 in-process)    | —                                                                                                                                                 |
-| **Focus / file svc**        | `kepler-focus-svc.exe` (Windows Service, AutoStart)  | **Один UAC при первой установке service** — дальше zero UAC через named pipe: hosts-блокировка для Focus и быстрый NTFS/MFT scan для File Search. |
-| **Focus helper** (fallback) | `kepler-focus-helper.exe` (admin elevation manifest) | UAC per toggle — используется только если юзер отклонил auto-install service'а                                                                    |
-| **AutoUpdater**             | `electron-updater`                                   | Доступ к `github.com/yoso-industries/kepler-releases`                                                                                             |
-| **Extension marketplace**   | github raw + releases                                | Доступ к `github.com/yoso-industries/kosmos-extensions`                                                                                           |
+| Subsystem                   | Bundle                                                   | Внешние требования                                                                                                                                |
+| --------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Electron host**           | `Kosmos.exe` (Chromium 144 + Node 24)                    | —                                                                                                                                                 |
+| **Runtime**                 | `Kosmos Runtime.exe` (packaged `kepler-backend`)         | —                                                                                                                                                 |
+| **ARK storage**             | `Kosmos Data Engine.exe` (packaged `ark-core-rpc`)       | —                                                                                                                                                 |
+| **Focus / file svc**        | `Kosmos System Service.exe` (Windows Service, AutoStart) | **Один UAC при первой установке service** — дальше zero UAC через named pipe: hosts-блокировка для Focus и быстрый NTFS/MFT scan для File Search. |
+| **Focus helper** (fallback) | `Kosmos Helper.exe` (admin elevation manifest)           | UAC per toggle — используется только если юзер отклонил auto-install service'а                                                                    |
+| **AutoUpdater**             | `electron-updater`                                       | Доступ к `github.com/yoso-industries/kepler-releases`                                                                                             |
+| **Extension marketplace**   | github raw + releases                                    | Доступ к `github.com/yoso-industries/kosmos-extensions`                                                                                           |
 
 ## Размер на диске (после install)
 
 ```
-%LOCALAPPDATA%\Programs\Kepler\          ~370 MB
-  ├─ Kepler.exe                          ~225 MB (Electron runtime)
+%LOCALAPPDATA%\Programs\Kosmos\          ~370 MB
+  ├─ Kosmos.exe                          ~225 MB (Electron runtime)
   ├─ resources\app.asar                  ~40 MB  (shell + extensions bundles)
-  ├─ resources\kepler-backend.exe        ~8 MB
-  ├─ resources\ark-core-rpc.exe          ~6 MB
-  ├─ resources\kepler-focus-helper.exe   ~1 MB
-  ├─ resources\kepler-focus-svc.exe      ~1 MB
+  ├─ resources\Kosmos Runtime.exe        ~8 MB
+  ├─ resources\Kosmos Data Engine.exe    ~6 MB
+  ├─ resources\Kosmos Helper.exe         ~1 MB
+  ├─ resources\Kosmos System Service.exe ~1 MB
   ├─ resources\locales\                  ~1.6 MB (только en-US + ru, см. Exp 08)
   └─ resources\*.pak                     ~80 MB  (Chromium GPU resources)
 
@@ -86,7 +86,7 @@
 | Действие                                   | Требуется admin                                        |
 | ------------------------------------------ | ------------------------------------------------------ |
 | Установка через NSIS installer             | ✅ (UAC при install)                                   |
-| Запуск Kepler launcher / extensions        | ❌                                                     |
+| Запуск Kosmos launcher / extensions        | ❌                                                     |
 | ARK operations (read/write objects)        | ❌                                                     |
 | Установка extension через marketplace      | ❌                                                     |
 | **Focus mode: первая активация blocklist** | ✅ (один UAC — Kepler auto-install'ит фоновый service) |
@@ -97,8 +97,8 @@
 ## Известные ограничения
 
 - **Headless / RDP** — globalShortcut launcher'а (`Alt+Space` в prod, см. `shell/electron/instance.ts`) может не сработать в Remote Desktop session (Windows блокирует hotkey registration в детачнутых session'ах)
-- **Multi-monitor** — Kepler launcher позиционируется на primary display; extension окна имеют persisted position per-extension
-- **Antivirus / SmartScreen** — `Kepler.exe` и helper binaries **не подписаны EV cert** → Windows SmartScreen warning на первом запуске («Unknown publisher»). Один клик «Run anyway». EV cert ~$200/год — отложено.
+- **Multi-monitor** — Kosmos launcher позиционируется на primary display; extension окна имеют persisted position per-extension
+- **Antivirus / SmartScreen** — `Kosmos.exe` и helper binaries **не подписаны EV cert** → Windows SmartScreen warning на первом запуске («Unknown publisher»). Один клик «Run anyway». EV cert ~$200/год — отложено.
 - **Group Policy на managed машинах** — может запрещать установку Windows Service (Focus svc), service install fall back на helper-mode (UAC per toggle)
 
 ## Целевая аудитория

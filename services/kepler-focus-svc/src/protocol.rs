@@ -12,8 +12,12 @@ use kepler_focus_helper::hosts;
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum Request {
-    Add { domains: Vec<String> },
-    Remove { domains: Vec<String> },
+    Add {
+        domains: Vec<String>,
+    },
+    Remove {
+        domains: Vec<String>,
+    },
     Reset,
     Status,
     Ping,

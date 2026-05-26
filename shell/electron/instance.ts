@@ -28,7 +28,7 @@
 
 import { app } from "electron";
 import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 
 export type InstanceKind = "prod" | "dev" | "test";
 
@@ -99,34 +99,34 @@ export function resolveInstance(): Instance {
 
   // Electron userData (singleInstanceLock scope, kepler-shell-settings.json,
   // post-update.flag, window state cache, GPU cache, Local Storage).
-  //   - prod: %APPDATA%/Kepler (default — не меняем, чтобы installed Kepler
-  //     не потерял settings/window-state после этого рефакторинга)
-  //   - dev: %APPDATA%/Kepler-dev
-  //   - dev-<x>: %APPDATA%/Kepler-dev-<x>
+  //   - prod: %APPDATA%/Kosmos App (display product rename; ARK data remains
+  //     %APPDATA%/Kosmos)
+  //   - dev: %APPDATA%/Kosmos App-dev
+  //   - dev-<x>: %APPDATA%/Kosmos App-dev-<x>
   //   - test-<x>: <KOSMOS_DATA_DIR>/userdata (под data dir, чтобы Playwright
   //     auto-cleanup tests/.e2e/<slug>/ снёс и userData тоже)
   let userDataDir: string;
   if (kind === "test") {
     userDataDir = path.join(dataDir, "userdata");
   } else if (slot === "prod") {
-    userDataDir = path.join(appData, "Kepler");
+    userDataDir = path.join(appData, "Kosmos App");
   } else if (slot === "dev") {
-    userDataDir = path.join(appData, "Kepler-dev");
+    userDataDir = path.join(appData, "Kosmos App-dev");
   } else {
     const suffix = slot.slice("dev-".length);
-    userDataDir = path.join(appData, `Kepler-dev-${suffix}`);
+    userDataDir = path.join(appData, `Kosmos App-dev-${suffix}`);
   }
 
   const productName =
     slot === "prod"
-      ? "Kepler"
+      ? "Kosmos"
       : slot === "dev"
-        ? "Kepler [dev]"
+        ? "Kosmos [dev]"
         : kind === "test"
-          ? `Kepler [test]`
-          : `Kepler [${slot}]`;
+          ? `Kosmos [test]`
+          : `Kosmos [${slot}]`;
 
-  const appId = slot === "prod" ? "com.kazui.kepler" : `com.kazui.kepler.${slot}`;
+  const appId = slot === "prod" ? "com.kazui.kosmos" : `com.kazui.kosmos.${slot}`;
 
   // Hotkey: prod = Alt+Space (legacy), dev = Alt+` (legacy, не конфликтует
   // с prod-инстансом). dev-<x> и test-<x> = disabled (несколько dev-инстансов
@@ -180,6 +180,9 @@ function pickSlot(): string {
  * override после первого запуска с новой системой.
  */
 export function applyInstanceToApp(instance: Instance): void {
+  if (instance.slot === "prod") {
+    migrateLegacyProdUserData(instance.userDataDir);
+  }
   app.setName(instance.productName);
   app.setPath("userData", instance.userDataDir);
   // Windows taskbar grouping: без setAppUserModelId два инстанса с одним
@@ -194,6 +197,39 @@ export function applyInstanceToApp(instance: Instance): void {
 
   if (instance.slot === "dev") {
     migrateLegacyDevSettings(instance.userDataDir);
+  }
+}
+
+function isMissingOrEmptyDir(dir: string): boolean {
+  if (!existsSync(dir)) return true;
+  try {
+    return readdirSync(dir).length === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Kepler → Kosmos product rename migration.
+ *
+ * ARK data already lives in `%APPDATA%/Kosmos` and must not move. This copies
+ * only Electron userData (`Local Storage`, GPU cache, update flags, etc.) from
+ * the old product folder so existing installs keep their UI state.
+ */
+function migrateLegacyProdUserData(newUserDataDir: string): void {
+  try {
+    if (!isMissingOrEmptyDir(newUserDataDir)) return;
+    const legacy = path.join(app.getPath("appData"), "Kepler");
+    if (!existsSync(legacy)) return;
+    mkdirSync(newUserDataDir, { recursive: true });
+    cpSync(legacy, newUserDataDir, {
+      recursive: true,
+      force: false,
+      errorOnExist: false,
+    });
+    console.error(`[kosmos] migrated Electron userData: %APPDATA%/Kepler -> ${newUserDataDir}`);
+  } catch (e) {
+    console.error("[kosmos] prod userData migration skipped:", e);
   }
 }
 
@@ -228,15 +264,17 @@ function migrateLegacyDevSettings(newUserDataDir: string): void {
   try {
     const newSettings = path.join(newUserDataDir, "kepler-shell-settings.json");
     if (existsSync(newSettings)) return; // уже мигрировано или dev user уже что-то писал
-    const legacy = path.join(app.getPath("appData"), "Kepler", "kepler-shell-settings.json");
-    if (!existsSync(legacy)) return; // нет источника — first-time dev user
+    const candidates = [
+      path.join(app.getPath("appData"), "Kosmos App", "kepler-shell-settings.json"),
+      path.join(app.getPath("appData"), "Kepler-dev", "kepler-shell-settings.json"),
+      path.join(app.getPath("appData"), "Kepler", "kepler-shell-settings.json"),
+    ];
+    const legacy = candidates.find((p) => existsSync(p));
+    if (!legacy) return; // нет источника — first-time dev user
     const content = readFileSync(legacy, "utf8");
-    // Используем lazy mkdir — newUserDataDir Electron создаст сам при первой
-    // записи settings, но для копирования сами обеспечиваем существование.
-    const { mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
     mkdirSync(newUserDataDir, { recursive: true });
     writeFileSync(newSettings, content, "utf8");
-    console.error(`[kepler-shell] migrated dev settings: %APPDATA%/Kepler -> ${newUserDataDir}`);
+    console.error(`[kosmos] migrated dev settings: ${legacy} -> ${newUserDataDir}`);
   } catch (e) {
     // Не критично — dev user заново выставит developer mode toggle.
     console.error("[kepler-shell] dev settings migration skipped:", e);

@@ -40,9 +40,7 @@ impl AppStore {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
         // Mutex poison recovery (см. concepts/db-resilience.md).
-        self.conn
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn list_all(&self) -> Result<Vec<App>> {
@@ -152,8 +150,7 @@ mod tests {
             App {
                 id: "a2".into(),
                 name: "Calculator".into(),
-                exec_path: "shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"
-                    .into(),
+                exec_path: "shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App".into(),
                 icon_path: Some("C:\\cache\\calc.png".into()),
                 kind: AppKind::Uwp,
                 source: "uwp".into(),
@@ -168,5 +165,4 @@ mod tests {
         assert_eq!(loaded[1].name, "Notepad");
         assert_eq!(loaded[1].kind, AppKind::Win32);
     }
-
 }

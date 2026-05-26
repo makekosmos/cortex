@@ -147,7 +147,15 @@ pub fn backup_with_root(
     for (idx, src) in sources.iter().enumerate() {
         let prefix = format!("source_{}", idx);
         zw.add_directory(&prefix, opts)?;
-        write_dir_recursive(&mut zw, src, src, &prefix, opts, &mut files_count, &mut bytes)?;
+        write_dir_recursive(
+            &mut zw,
+            src,
+            src,
+            &prefix,
+            opts,
+            &mut files_count,
+            &mut bytes,
+        )?;
     }
 
     let meta = ZipMeta {
@@ -563,8 +571,7 @@ mod tests {
         fs::create_dir_all(&game_dir).unwrap();
         // Создадим один реальный zip, чтобы получить корректный архив (восстановление
         // их читать не будет, но rotate_backups смотрит только на расширение).
-        let template =
-            backup_with_root("g4", "GameFour", Some(&manual), &dest_root, 100).unwrap();
+        let template = backup_with_root("g4", "GameFour", Some(&manual), &dest_root, 100).unwrap();
         for i in 0..12 {
             let p = game_dir.join(format!("2010{:02}01T000000Z.zip", i + 1));
             fs::copy(&template.dest_path, &p).unwrap();
@@ -579,7 +586,12 @@ mod tests {
             .flatten()
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("zip"))
             .collect();
-        assert_eq!(zips.len(), 10, "files = {:?}", zips.iter().map(|e| e.file_name()).collect::<Vec<_>>());
+        assert_eq!(
+            zips.len(),
+            10,
+            "files = {:?}",
+            zips.iter().map(|e| e.file_name()).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -594,7 +606,12 @@ mod tests {
         let by_id = resolve_backup_path_with_root("g5", &b.id, &dest_root).unwrap();
         assert_eq!(by_id, b.dest_path);
 
-        let stem = b.dest_path.file_stem().unwrap().to_string_lossy().to_string();
+        let stem = b
+            .dest_path
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         let by_stem = resolve_backup_path_with_root("g5", &stem, &dest_root).unwrap();
         assert_eq!(by_stem, b.dest_path);
 
@@ -655,7 +672,10 @@ mod tests {
 
         // The absolute-path entry must be in errors, not restored.
         assert!(
-            result.errors.iter().any(|e| e.contains("unsafe path") || e.contains("outside root")),
+            result
+                .errors
+                .iter()
+                .any(|e| e.contains("unsafe path") || e.contains("outside root")),
             "expected rejection error, got errors={:?}",
             result.errors
         );
@@ -663,7 +683,10 @@ mod tests {
         // On Unix, Path::new("").join("source_0").join("/evil.txt") = /evil.txt
         let evil_path = tmp.path().join("evil.txt");
         assert!(!evil_path.exists(), "/evil.txt was written outside root");
-        assert!(!std::path::Path::new("/evil.txt").exists(), "absolute /evil.txt was written");
+        assert!(
+            !std::path::Path::new("/evil.txt").exists(),
+            "absolute /evil.txt was written"
+        );
 
         // The safe entry should still be restored.
         assert_eq!(result.restored_files, 1);

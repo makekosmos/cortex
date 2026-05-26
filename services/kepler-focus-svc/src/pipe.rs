@@ -1,4 +1,4 @@
-//! Named pipe accept loop. Слушает `\\.\pipe\kepler-focus-svc`, на каждое
+//! Named pipe accept loop. Слушает `\\.\pipe\kosmos-system-service`, на каждое
 //! connection — spawn thread, читает один JSON request, выполняет op,
 //! пишет JSON response, закрывает pipe.
 //!
@@ -7,8 +7,8 @@
 
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
-use std::os::windows::io::FromRawHandle;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::io::FromRawHandle;
 use std::path::PathBuf;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -30,7 +30,7 @@ use windows_sys::Win32::System::Pipes::{
 
 use kepler_focus_svc::protocol;
 
-const PIPE_NAME: &str = r"\\.\pipe\kepler-focus-svc";
+const PIPE_NAME: &str = r"\\.\pipe\kosmos-system-service";
 const BUF_SIZE: u32 = 64 * 1024;
 // "D:(A;;GA;;;AU)" → DACL: Allow GenericAll к группе Authenticated Users.
 // Это минимальный SDDL, при котором non-elevated user-mode процессы могут
@@ -47,7 +47,10 @@ fn hosts_path_for_dispatch() -> PathBuf {
 }
 
 fn wide(s: &str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    OsStr::new(s)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 /// Создаёт SECURITY_ATTRIBUTES с DACL из SDDL_STRING. Возвращает SA + handle

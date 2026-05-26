@@ -12,11 +12,12 @@ use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 
 use crate::CliResponse;
 
-pub const SERVICE_NAME: &str = "KeplerFocusSvc";
-pub const SERVICE_DISPLAY_NAME: &str = "Kepler Focus Service";
+pub const SERVICE_NAME: &str = "KosmosSystemSvc";
+pub const LEGACY_SERVICE_NAME: &str = "KeplerFocusSvc";
+pub const SERVICE_DISPLAY_NAME: &str = "Kosmos System Service";
 pub const SERVICE_DESCRIPTION: &str =
-    "Hosts file management для focus mode (часть Kepler / Kosmos). \
-Можно безопасно удалить: sc stop KeplerFocusSvc && sc delete KeplerFocusSvc.";
+    "Privileged local service для Kosmos: hosts blocking и fast NTFS file indexing. \
+Можно безопасно удалить: sc stop KosmosSystemSvc && sc delete KosmosSystemSvc.";
 
 fn err(msg: impl Into<String>) -> CliResponse {
     CliResponse {
@@ -45,7 +46,10 @@ fn map_open_scm_err(e: windows_service::Error) -> CliResponse {
     // Win32 ERROR_ACCESS_DENIED = 5. windows-service оборачивает в io::Error;
     // дешёвый эвристический детект по тексту.
     let lower = msg.to_lowercase();
-    if lower.contains("access is denied") || lower.contains("access denied") || lower.contains("os error 5") {
+    if lower.contains("access is denied")
+        || lower.contains("access denied")
+        || lower.contains("os error 5")
+    {
         err_elevation(msg)
     } else {
         err(msg)
@@ -54,6 +58,51 @@ fn map_open_scm_err(e: windows_service::Error) -> CliResponse {
 
 fn exe_path() -> Result<std::path::PathBuf, CliResponse> {
     std::env::current_exe().map_err(|e| err(format!("current_exe failed: {e}")))
+}
+
+fn open_installed_service(
+    scm: &ServiceManager,
+    access: ServiceAccess,
+) -> Result<(windows_service::service::Service, &'static str), windows_service::Error> {
+    match scm.open_service(SERVICE_NAME, access) {
+        Ok(svc) => Ok((svc, SERVICE_NAME)),
+        Err(primary) => match scm.open_service(LEGACY_SERVICE_NAME, access) {
+            Ok(svc) => Ok((svc, LEGACY_SERVICE_NAME)),
+            Err(_) => Err(primary),
+        },
+    }
+}
+
+fn uninstall_service_names() -> [&'static str; 2] {
+    [SERVICE_NAME, LEGACY_SERVICE_NAME]
+}
+
+fn is_missing_service_error(e: &windows_service::Error) -> bool {
+    let msg = format!("{e}").to_lowercase();
+    msg.contains("does not exist") || msg.contains("1060")
+}
+
+fn stop_and_delete_service(
+    svc: windows_service::service::Service,
+    service_name: &str,
+) -> Result<(), String> {
+    // Best-effort stop if running. Поллим до 5 сек.
+    if let Ok(status) = svc.query_status() {
+        if status.current_state != ServiceState::Stopped {
+            let _ = svc.stop();
+            for _ in 0..50 {
+                std::thread::sleep(Duration::from_millis(100));
+                if let Ok(s) = svc.query_status() {
+                    if s.current_state == ServiceState::Stopped {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    svc.delete()
+        .map_err(|e| format!("delete {service_name} failed: {e}"))
 }
 
 pub fn install() -> ! {
@@ -139,48 +188,21 @@ pub fn uninstall() -> ! {
         Err(e) => map_open_scm_err(e).print_and_exit(),
     };
 
-    let svc = match scm.open_service(
-        SERVICE_NAME,
-        ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::DELETE,
-    ) {
-        Ok(s) => s,
-        Err(e) => {
-            // Not installed → idempotent success.
-            let msg = format!("{e}");
-            if msg.to_lowercase().contains("does not exist")
-                || msg.to_lowercase().contains("1060")
-            {
-                let resp = CliResponse {
-                    ok: true,
-                    error: None,
-                    needs_elevation: None,
-                    service_name: Some(SERVICE_NAME.into()),
-                    installed: Some(false),
-                    running: None,
-                };
-                resp.print_and_exit();
-            }
-            err(format!("open_service failed: {e}")).print_and_exit();
+    let mut deleted_any = false;
+    for service_name in uninstall_service_names() {
+        // См. postmortems.md § 2026-05-26: upgrade может оставить оба сервиса.
+        let svc = match scm.open_service(
+            service_name,
+            ServiceAccess::QUERY_STATUS | ServiceAccess::STOP | ServiceAccess::DELETE,
+        ) {
+            Ok(s) => s,
+            Err(e) if is_missing_service_error(&e) => continue,
+            Err(e) => err(format!("open_service {service_name} failed: {e}")).print_and_exit(),
+        };
+        if let Err(e) = stop_and_delete_service(svc, service_name) {
+            err(e).print_and_exit();
         }
-    };
-
-    // Best-effort stop if running. Поллим до 5 сек.
-    if let Ok(status) = svc.query_status() {
-        if status.current_state != ServiceState::Stopped {
-            let _ = svc.stop();
-            for _ in 0..50 {
-                std::thread::sleep(Duration::from_millis(100));
-                if let Ok(s) = svc.query_status() {
-                    if s.current_state == ServiceState::Stopped {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    if let Err(e) = svc.delete() {
-        err(format!("delete failed: {e}")).print_and_exit();
+        deleted_any = true;
     }
 
     let resp = CliResponse {
@@ -189,7 +211,7 @@ pub fn uninstall() -> ! {
         needs_elevation: None,
         service_name: Some(SERVICE_NAME.into()),
         installed: Some(false),
-        running: Some(false),
+        running: Some(false).filter(|_| deleted_any),
     };
     resp.print_and_exit();
 }
@@ -199,11 +221,11 @@ pub fn start() -> ! {
         Ok(s) => s,
         Err(e) => map_open_scm_err(e).print_and_exit(),
     };
-    let svc = match scm.open_service(SERVICE_NAME, ServiceAccess::START | ServiceAccess::QUERY_STATUS)
-    {
-        Ok(s) => s,
-        Err(e) => err(format!("open_service failed: {e}")).print_and_exit(),
-    };
+    let (svc, service_name) =
+        match open_installed_service(&scm, ServiceAccess::START | ServiceAccess::QUERY_STATUS) {
+            Ok(s) => s,
+            Err(e) => err(format!("open_service failed: {e}")).print_and_exit(),
+        };
     if let Err(e) = svc.start::<&str>(&[]) {
         // ERROR_SERVICE_ALREADY_RUNNING (1056) — idempotent ok.
         let msg = format!("{e}");
@@ -215,7 +237,7 @@ pub fn start() -> ! {
         ok: true,
         error: None,
         needs_elevation: None,
-        service_name: Some(SERVICE_NAME.into()),
+        service_name: Some(service_name.into()),
         installed: Some(true),
         running: Some(true),
     };
@@ -227,17 +249,17 @@ pub fn stop() -> ! {
         Ok(s) => s,
         Err(e) => map_open_scm_err(e).print_and_exit(),
     };
-    let svc = match scm.open_service(SERVICE_NAME, ServiceAccess::STOP | ServiceAccess::QUERY_STATUS)
-    {
-        Ok(s) => s,
-        Err(e) => err(format!("open_service failed: {e}")).print_and_exit(),
-    };
+    let (svc, service_name) =
+        match open_installed_service(&scm, ServiceAccess::STOP | ServiceAccess::QUERY_STATUS) {
+            Ok(s) => s,
+            Err(e) => err(format!("open_service failed: {e}")).print_and_exit(),
+        };
     let _ = svc.stop();
     let resp = CliResponse {
         ok: true,
         error: None,
         needs_elevation: None,
-        service_name: Some(SERVICE_NAME.into()),
+        service_name: Some(service_name.into()),
         installed: Some(true),
         running: Some(false),
     };
@@ -252,8 +274,8 @@ pub fn status() -> ! {
             err(format!("open SCM failed: {e}")).print_and_exit();
         }
     };
-    match scm.open_service(SERVICE_NAME, ServiceAccess::QUERY_STATUS) {
-        Ok(svc) => {
+    match open_installed_service(&scm, ServiceAccess::QUERY_STATUS) {
+        Ok((svc, service_name)) => {
             let running = svc
                 .query_status()
                 .map(|s| s.current_state == ServiceState::Running)
@@ -262,7 +284,7 @@ pub fn status() -> ! {
                 ok: true,
                 error: None,
                 needs_elevation: None,
-                service_name: Some(SERVICE_NAME.into()),
+                service_name: Some(service_name.into()),
                 installed: Some(true),
                 running: Some(running),
             };
@@ -279,5 +301,19 @@ pub fn status() -> ! {
             };
             resp.print_and_exit();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uninstall_targets_new_and_legacy_service_names() {
+        // Regression: 2026-05-26. Uninstall must clean both sides of the rename.
+        assert_eq!(
+            uninstall_service_names(),
+            [SERVICE_NAME, LEGACY_SERVICE_NAME]
+        );
     }
 }

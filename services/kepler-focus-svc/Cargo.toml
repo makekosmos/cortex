@@ -2,7 +2,7 @@
 name = "kepler-focus-svc"
 version = "0.1.0"
 edition.workspace = true
-description = "Windows Service для focus mode hosts file management. Listens на named pipe \\\\.\\pipe\\kepler-focus-svc, принимает JSON ops от Kepler shell."
+description = "Kosmos System Service — privileged hosts blocking and NTFS indexing helper."
 
 [[bin]]
 name = "kepler-focus-svc"

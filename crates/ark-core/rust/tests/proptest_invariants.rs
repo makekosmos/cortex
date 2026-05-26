@@ -87,8 +87,7 @@ fn bump_local_upsert(conn: &Connection, id: &str) {
 }
 
 fn bump_local_delete(conn: &Connection, id: &str) {
-    let hlc = db::bump_sync_version_vector(conn, id, TEST_DEVICE_ID)
-        .expect("bump should succeed");
+    let hlc = db::bump_sync_version_vector(conn, id, TEST_DEVICE_ID).expect("bump should succeed");
     let _ = db::record_sync_tombstone(conn, "object", id, &hlc);
 }
 

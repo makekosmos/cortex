@@ -1,10 +1,10 @@
-// Focus service client — общается с `kepler-focus-svc.exe` (LocalSystem
-// Windows Service) через named pipe `\\.\pipe\kepler-focus-svc`.
+// System service client — общается с packaged `Kosmos System Service.exe`
+// (LocalSystem Windows Service) через named pipe `\\.\pipe\kosmos-system-service`.
 //
 // Service устанавливается опционально (Settings → Focus → "Установить
 // daemon"). Если установлен — все hosts модификации идут через pipe
 // (без UAC на каждую активацию). Если не установлен — fallback на
-// `kepler-focus-helper.exe` spawn с UAC elevation (см. focus-block.ts).
+// `Kosmos Helper.exe` spawn с UAC elevation (см. focus-block.ts).
 
 import { spawn } from "node:child_process";
 import net from "node:net";
@@ -15,8 +15,9 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const SERVICE_NAME = "KeplerFocusSvc";
-export const PIPE_PATH = "\\\\.\\pipe\\kepler-focus-svc";
+export const SERVICE_NAME = "KosmosSystemSvc";
+export const PIPE_PATH = "\\\\.\\pipe\\kosmos-system-service";
+export const LEGACY_PIPE_PATH = "\\\\.\\pipe\\kepler-focus-svc";
 
 interface ServiceRequest {
   op: "add" | "remove" | "reset" | "status" | "ping";
@@ -32,7 +33,7 @@ interface ServiceResponse {
 
 function servicePath(): string {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "kepler-focus-svc.exe");
+    return path.join(process.resourcesPath, "Kosmos System Service.exe");
   }
   return path.resolve(__dirname, "..", "..", "target", "release", "kepler-focus-svc.exe");
 }
@@ -138,7 +139,7 @@ export function runServiceCliElevated(
 
 /** Send single JSON request to running service via named pipe.
     Returns response or error если pipe не доступен (service не запущен). */
-export function sendViaPipe(req: ServiceRequest): Promise<ServiceResponse> {
+function sendViaPipePath(pipePath: string, req: ServiceRequest): Promise<ServiceResponse> {
   return new Promise((resolve) => {
     let resolved = false;
     const finish = (resp: ServiceResponse) => {
@@ -149,7 +150,7 @@ export function sendViaPipe(req: ServiceRequest): Promise<ServiceResponse> {
     };
 
     let buffer = "";
-    const client = net.connect(PIPE_PATH);
+    const client = net.connect(pipePath);
 
     client.on("connect", () => {
       try {
@@ -191,6 +192,12 @@ export function sendViaPipe(req: ServiceRequest): Promise<ServiceResponse> {
     // Safety timeout (3s)
     setTimeout(() => finish({ ok: false, error: "pipe timeout" }), 3000);
   });
+}
+
+export async function sendViaPipe(req: ServiceRequest): Promise<ServiceResponse> {
+  const primary = await sendViaPipePath(PIPE_PATH, req);
+  if (primary.ok || !primary.error?.includes("ENOENT")) return primary;
+  return sendViaPipePath(LEGACY_PIPE_PATH, req);
 }
 
 /** Ping the service to verify it's running and pipe is healthy. */

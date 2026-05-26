@@ -69,7 +69,11 @@ fn build_synthetic_library() -> TempDir {
     .unwrap();
     std::fs::write(steamapps.join("appmanifest_570.acf"), APPMANIFEST_DOTA).unwrap();
     std::fs::write(steamapps.join("appmanifest_1810770.acf"), APPMANIFEST_CAIRN).unwrap();
-    std::fs::write(steamapps.join("appmanifest_238320.acf"), APPMANIFEST_OUTLAST).unwrap();
+    std::fs::write(
+        steamapps.join("appmanifest_238320.acf"),
+        APPMANIFEST_OUTLAST,
+    )
+    .unwrap();
 
     let common = steamapps.join("common");
     std::fs::create_dir_all(common.join("dota 2 beta")).unwrap();
@@ -101,7 +105,11 @@ fn arrancador_scanner_finds_three_synthetic_games() {
     // Все игры должны быть source="steam" с непустым install_dir.
     for g in &games {
         assert_eq!(g.source, "steam");
-        assert!(g.install_dir.exists(), "install dir doesn't exist: {:?}", g.install_dir);
+        assert!(
+            g.install_dir.exists(),
+            "install dir doesn't exist: {:?}",
+            g.install_dir
+        );
         assert!(g.exe_candidate.is_some(), "exe not picked for {}", g.name);
     }
 

@@ -57,9 +57,7 @@ impl DictationStats {
 }
 
 fn count_words(s: &str) -> u64 {
-    s.split_whitespace()
-        .filter(|w| !w.is_empty())
-        .count() as u64
+    s.split_whitespace().filter(|w| !w.is_empty()).count() as u64
 }
 
 pub fn stats_path() -> PathBuf {

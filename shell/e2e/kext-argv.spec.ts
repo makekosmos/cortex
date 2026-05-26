@@ -17,8 +17,9 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const e2eRoot = path.join(appRoot, ".e2e");
 
 test("AC: spawn с --ext-install <kext> открывает install dialog window", async () => {
-  const userDataDir = path.join(e2eRoot, "kepler-shell-userdata-argv");
-  const dataDir = path.join(e2eRoot, "kepler-data-argv");
+  const runId = `${process.pid}-${Date.now()}`;
+  const userDataDir = path.join(e2eRoot, `kepler-shell-userdata-argv-${runId}`);
+  const dataDir = path.join(e2eRoot, `kepler-data-argv-${runId}`);
   fs.rmSync(userDataDir, { recursive: true, force: true });
   fs.rmSync(dataDir, { recursive: true, force: true });
   fs.mkdirSync(userDataDir, { recursive: true });

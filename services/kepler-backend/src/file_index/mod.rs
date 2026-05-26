@@ -184,7 +184,6 @@ impl FileIndex {
         })
     }
 
-
     pub async fn set_exclude_noisy_folders(&self, exclude: bool) -> Result<ScanStats> {
         self.set_settings(FileIndexSettingsPatch {
             exclude_noisy_folders: Some(exclude),
@@ -678,7 +677,9 @@ mod tests {
         // requests into one pending follow-up.
         let data = tempdir().unwrap();
         let root = tempdir().unwrap();
-        let index = std::sync::Arc::new(FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap());
+        let index = std::sync::Arc::new(
+            FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap(),
+        );
         index.bind_self();
 
         // First call sets pending.
@@ -710,7 +711,9 @@ mod tests {
         // follow-up rescan must be scheduled so eventual state is correct.
         let data = tempdir().unwrap();
         let root = tempdir().unwrap();
-        let index = std::sync::Arc::new(FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap());
+        let index = std::sync::Arc::new(
+            FileIndex::with_roots(data.path(), vec![root.path().to_path_buf()]).unwrap(),
+        );
         index.bind_self();
         std::fs::write(root.path().join("a.md"), "v").unwrap();
 

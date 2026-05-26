@@ -79,8 +79,7 @@ pub fn filter_segments(resp: &VerboseResponse) -> String {
         .segments
         .iter()
         .filter(|s| {
-            s.no_speech_prob < NO_SPEECH_PROB_THRESHOLD
-                && s.avg_logprob > AVG_LOGPROB_THRESHOLD
+            s.no_speech_prob < NO_SPEECH_PROB_THRESHOLD && s.avg_logprob > AVG_LOGPROB_THRESHOLD
         })
         .map(|s| s.text.trim())
         .filter(|t| !t.is_empty())

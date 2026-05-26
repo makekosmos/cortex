@@ -21,6 +21,20 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-05-26 — Kosmos System Service uninstall оставляет legacy service
+
+**Симптомы.** После миграции `KeplerFocusSvc` → `KosmosSystemSvc` Settings мог показывать системный сервис как установленный даже после успешного uninstall.
+
+**Где жило.** `services/kepler-focus-svc/src/cli.rs:159` — `uninstall()` открывал один “первый найденный” сервис через `open_installed_service`.
+
+**Root cause.** Compatibility helper был корректен для `status/start/stop`, где нужен один active service, но был переиспользован для `uninstall`, где семантика другая: upgrade-машина может легально иметь оба сервиса одновременно. Приоритет new-first приводил к удалению только `KosmosSystemSvc`; legacy `KeplerFocusSvc` оставался в SCM и следующий `status()` снова видел installed=true.
+
+**Fix.** `uninstall()` больше не использует “первый найденный” service helper. Он проходит по `[KosmosSystemSvc, KeplerFocusSvc]`, для каждого найденного сервиса делает best-effort stop и delete, а отсутствие одного из имён считает idempotent success.
+
+**Регрешн-защита.** `cargo test -p kepler-focus-svc uninstall_targets_new_and_legacy_service_names` проверяет, что uninstall-план всегда включает новое и legacy имя сервиса.
+
+**Prevention.** Compatibility fallback и cleanup — разные операции. Fallback обычно должен выбирать один active target, а cleanup/migration должен рассматривать все legacy targets как независимые хвосты, которые могут одновременно существовать после upgrade.
+
 ## 2026-05-23 — Kepler: singleton conflict из-за pid reuse
 
 **Симптомы.** После некорректного завершения kepler-backend (panic, kill, BSOD) при следующем запуске `bun run --cwd shell dev` backend бесконечно падает на старте с `FATAL setup: singleton conflict via lock-file`. Supervisor уходит в respawn-loop (1s → 5s → 30s → 60s → 120s), shell показывает `ArkClient not ready (timeout)`, IPC `kepler:ark:request` валится. Помогает только ручное удаление `%APPDATA%\Kosmos\kepler.lock.json`.

@@ -75,14 +75,14 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 | Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                                                                              |
 | Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                                                                          |
 
-## 9. Brand consistency (Kepler / Kosmos)
+## 9. Brand consistency (Kosmos / Kepler)
 
-После swap 2026-05-14:
+После product rename 2026-05-26:
 
-- **Kepler** — имя лаунчера и его UI-shell. `shell/`, `services/kepler-backend/`, `measure-kepler-ram.ps1` и т.п.
-- **Kosmos** — имя экосистемы / монорепо / shared packages. `@kosmos/ark`, `@kosmos/visuals`, ARK runtime, doc-site, общий бренд.
-- Не смешивай: «Kosmos launcher» — неверно, это **Kepler**. «Kepler ARK» — неверно, ARK живёт в **Kosmos**.
-- Перед PR прогоняй `pwsh scripts/check-swap-completeness.ps1` если правил что-то рядом с брендом.
+- **Kosmos** — внешний desktop product: `Kosmos.exe`, installer `Kosmos Setup`, ярлыки, autostart, settings titles.
+- **Kepler** — legacy/internal namespace для совместимости: `kepler:*` IPC, `window.kepler`, `kepler-backend`, `kepler.lock.json`, `kepler-shell`.
+- Не делай массовый rename внутренних `kepler*` имён без отдельного proof loop: это protocol/test compatibility, не косметика.
+- **ARK** — data runtime; не называй его Kepler-specific.
 
 ## 10. Command bus
 

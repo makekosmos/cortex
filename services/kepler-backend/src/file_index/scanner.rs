@@ -644,10 +644,7 @@ mod default_roots_tests {
         // Forward slashes parse identically on Windows and POSIX (backslash
         // is a literal char on Linux, so a Windows-style path would collapse
         // to a single non-dot component on CI).
-        assert!(!should_index_with_options(
-            Path::new("docs/.secret"),
-            &opts
-        ));
+        assert!(!should_index_with_options(Path::new("docs/.secret"), &opts));
     }
 
     #[cfg(windows)]

@@ -66,20 +66,18 @@ fn handle_event(event: notify::Result<Event>, store: &FileStore) {
 
 fn apply_path(path: &Path, opts: &super::ScanOptions, roots: &[PathBuf], store: &FileStore) {
     let Some(owning_root) = roots.iter().find(|root| {
-        path == root.as_path()
-            || path.starts_with(root)
-            || {
-                // Case-insensitive prefix check for Windows.
-                let path_norm = path.to_string_lossy().to_lowercase();
-                let root_norm = root
-                    .to_string_lossy()
-                    .trim_end_matches(['\\', '/'])
-                    .to_lowercase();
-                !root_norm.is_empty()
-                    && (path_norm == root_norm
-                        || path_norm.starts_with(&format!("{root_norm}\\"))
-                        || path_norm.starts_with(&format!("{root_norm}/")))
-            }
+        path == root.as_path() || path.starts_with(root) || {
+            // Case-insensitive prefix check for Windows.
+            let path_norm = path.to_string_lossy().to_lowercase();
+            let root_norm = root
+                .to_string_lossy()
+                .trim_end_matches(['\\', '/'])
+                .to_lowercase();
+            !root_norm.is_empty()
+                && (path_norm == root_norm
+                    || path_norm.starts_with(&format!("{root_norm}\\"))
+                    || path_norm.starts_with(&format!("{root_norm}/")))
+        }
     }) else {
         return;
     };
@@ -114,7 +112,10 @@ pub(super) fn path_is_under_any_root(path: &Path, roots: &[PathBuf]) -> bool {
 #[allow(dead_code)]
 fn is_path_under_root(path: &Path, root: &Path) -> bool {
     let path_norm = path.to_string_lossy().to_lowercase();
-    let root_norm = root.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
+    let root_norm = root
+        .to_string_lossy()
+        .trim_end_matches(['\\', '/'])
+        .to_lowercase();
     if root_norm.is_empty() {
         return false;
     }

@@ -114,7 +114,11 @@ fn collect_entries_from_package(
         .unwrap_or(0);
 
     // Mtime fallback — поможет invalidation если InstalledDate отсутствует.
-    let mtime = if installed_unix > 0 { installed_unix } else { 0 };
+    let mtime = if installed_unix > 0 {
+        installed_unix
+    } else {
+        0
+    };
 
     let entries_op = pkg.GetAppListEntriesAsync().map_err(|e| {
         AppIndexError::Discover("uwp".into(), format!("GetAppListEntriesAsync: {e}"))
@@ -194,4 +198,3 @@ pub fn launch_uwp(exec_path: &str) -> Result<()> {
         .map_err(|e| crate::app_index::AppIndexError::Launch(format!("{e}")))?;
     Ok(())
 }
-

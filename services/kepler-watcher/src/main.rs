@@ -60,10 +60,7 @@ fn main() {
         let mut child = match result {
             Ok(c) => c,
             Err(e) => {
-                eprintln!(
-                    "[watcher] spawn failed: {e}; retry in {}ms",
-                    backoff_ms
-                );
+                eprintln!("[watcher] spawn failed: {e}; retry in {}ms", backoff_ms);
                 sleep(Duration::from_millis(backoff_ms));
                 backoff_ms = (backoff_ms * 2).min(MAX_BACKOFF_MS);
                 continue;
@@ -82,9 +79,7 @@ fn main() {
         };
 
         let uptime_ms = started.elapsed().as_millis() as u64;
-        eprintln!(
-            "[watcher] kepler exited (status: {status}, uptime: {uptime_ms}ms)",
-        );
+        eprintln!("[watcher] kepler exited (status: {status}, uptime: {uptime_ms}ms)",);
 
         // Если процесс прожил долго — это была "нормальная" работа, backoff обнуляем.
         // Если упал быстро — наращиваем backoff.

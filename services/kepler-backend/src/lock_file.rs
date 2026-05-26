@@ -92,9 +92,11 @@ fn kosmos_config_dir() -> Result<std::path::PathBuf, LockFileError> {
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
         return Ok(std::path::PathBuf::from(xdg).join("Kosmos"));
     }
-    let home = std::env::var("HOME")
-        .map_err(|_| LockFileError::Permissions("$HOME not set".into()))?;
-    Ok(std::path::PathBuf::from(home).join(".config").join("Kosmos"))
+    let home =
+        std::env::var("HOME").map_err(|_| LockFileError::Permissions("$HOME not set".into()))?;
+    Ok(std::path::PathBuf::from(home)
+        .join(".config")
+        .join("Kosmos"))
 }
 
 /// Атомарная запись lock-файла. Создаёт parent dir, пишет в temp, fsyncит, переименовывает,
@@ -168,9 +170,9 @@ fn apply_owner_only_permissions(path: &Path) -> Result<(), LockFileError> {
     let username = std::env::var("USERNAME")
         .map_err(|_| LockFileError::Permissions("%USERNAME% not set".into()))?;
 
-    let path_str = path.to_str().ok_or_else(|| {
-        LockFileError::Permissions("path is not valid UTF-8".into())
-    })?;
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| LockFileError::Permissions("path is not valid UTF-8".into()))?;
 
     let status = Command::new("icacls")
         .args([
@@ -237,7 +239,9 @@ mod tests {
     }
 
     // Хелпер только для тестов — детерминированно вычисляет lock-path без env race.
-    fn default_lock_file_path_with_env(override_dir: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    fn default_lock_file_path_with_env(
+        override_dir: Option<std::path::PathBuf>,
+    ) -> std::path::PathBuf {
         match override_dir {
             Some(p) => p.join(LOCK_FILE_NAME),
             None => kosmos_config_dir().unwrap().join(LOCK_FILE_NAME),
@@ -270,7 +274,11 @@ mod tests {
     #[test]
     fn write_creates_parent_directory() {
         let dir = tempdir().unwrap();
-        let path = dir.path().join("nested").join("deep").join("kepler.lock.json");
+        let path = dir
+            .path()
+            .join("nested")
+            .join("deep")
+            .join("kepler.lock.json");
         assert!(!path.parent().unwrap().exists());
 
         let lock = sample_lock(std::process::id(), 12345);
@@ -326,7 +334,9 @@ mod tests {
         #[cfg(unix)]
         let mode_after = {
             use std::os::unix::fs::PermissionsExt;
-            fs::metadata(&path).ok().map(|m| m.permissions().mode() & 0o777)
+            fs::metadata(&path)
+                .ok()
+                .map(|m| m.permissions().mode() & 0o777)
         };
 
         std::env::remove_var(LOCK_PERMISSIONS_DISABLED_ENV);
@@ -341,7 +351,11 @@ mod tests {
             // 0600 невозможно для дефолтного umask (обычно 0644 или 0664).
             // Если бы hardening не пропустился — было бы ровно 0600.
             let mode = mode_after.expect("mode read");
-            assert_ne!(mode, 0o600, "expected non-0600 mode (hardening skipped), got {:o}", mode);
+            assert_ne!(
+                mode, 0o600,
+                "expected non-0600 mode (hardening skipped), got {:o}",
+                mode
+            );
         }
     }
 

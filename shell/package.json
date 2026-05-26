@@ -1,13 +1,13 @@
 {
   "name": "kepler-shell",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
-  "description": "Kepler — Electron host для Kosmos ecosystem (global launcher + extension host)",
+  "description": "Kosmos — desktop host for notes, tasks, games, focus, and activity",
   "author": "Kazui",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "build:backend": "cargo build --release --manifest-path ../Cargo.toml --bin kepler-backend --bin ark-core-rpc",
+    "build:backend": "cargo build --release --manifest-path ../Cargo.toml --bin kepler-backend --bin ark-core-rpc --bin kepler-focus-helper --bin kepler-focus-svc",
     "build:backend:dev": "cargo build --manifest-path ../Cargo.toml --bin kepler-backend",
     "build:extensions": "node -e \"import('./vite.extensions.config.mjs').then(async (m)=>{const {execSync}=await import('node:child_process');for(const id of m.vueExtensions){console.log('[build:extensions]',id);execSync('vite build --configLoader native --config vite.extensions.config.mjs --mode '+id,{stdio:'inherit'});}if(m.vueExtensions.length===0)console.log('[build:extensions] no Vue extensions to build (only static PoCs present) — skipping');})\"",
     "dev:extensions": "node scripts/dev-extensions.mjs",
@@ -49,8 +49,8 @@
     "vue": "^3.6.0-beta.12"
   },
   "build": {
-    "appId": "com.kazui.kepler",
-    "productName": "Kepler",
+    "appId": "com.kazui.kosmos",
+    "productName": "Kosmos",
     "electronLanguages": [
       "en-US",
       "ru"
@@ -75,19 +75,19 @@
     "extraResources": [
       {
         "from": "../target/release/kepler-backend.exe",
-        "to": "kepler-backend.exe"
+        "to": "Kosmos Runtime.exe"
       },
       {
         "from": "../target/release/ark-core-rpc.exe",
-        "to": "ark-core-rpc.exe"
+        "to": "Kosmos Data Engine.exe"
       },
       {
         "from": "../target/release/kepler-focus-helper.exe",
-        "to": "kepler-focus-helper.exe"
+        "to": "Kosmos Helper.exe"
       },
       {
         "from": "../target/release/kepler-focus-svc.exe",
-        "to": "kepler-focus-svc.exe"
+        "to": "Kosmos System Service.exe"
       },
       {
         "from": "build/icon.png",
@@ -102,8 +102,8 @@
     "fileAssociations": [
       {
         "ext": "kext",
-        "name": "Kepler Extension Package",
-        "description": "Установочный пакет расширения Kepler",
+        "name": "Kosmos Extension Package",
+        "description": "Установочный пакет расширения Kosmos",
         "role": "Editor"
       }
     ],
@@ -113,7 +113,7 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Kepler",
+      "shortcutName": "Kosmos",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "runAfterFinish": true,

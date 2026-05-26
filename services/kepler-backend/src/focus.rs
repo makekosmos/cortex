@@ -109,10 +109,7 @@ pub fn validate_domain(raw: &str) -> Result<String, String> {
 
     // Все символы — [a-z0-9.-].
     for &b in bytes {
-        let ok = b.is_ascii_lowercase()
-            || b.is_ascii_digit()
-            || b == b'.'
-            || b == b'-';
+        let ok = b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-';
         if !ok {
             return Err(format!("invalid character in domain {raw:?}"));
         }
@@ -210,7 +207,10 @@ fn blocklist_from_ark_object(obj: &Value) -> Option<Blocklist> {
         .or_else(|| obj.get("createdAt").and_then(|v| v.as_str()))
         .unwrap_or("")
         .to_string();
-    let preset = props.get("preset").and_then(|v| v.as_bool()).unwrap_or(false);
+    let preset = props
+        .get("preset")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let icon = props
         .get("icon")
         .and_then(|v| v.as_str())
@@ -446,10 +446,7 @@ pub async fn upsert_blocklist<R: FocusArkRequester>(
 
     let (id, created_at) = if let Some(id) = params.id.clone() {
         // Fetch existing, чтобы сохранить createdAt.
-        let existing = ark
-            .request("get_object", json!({ "id": id }))
-            .await
-            .ok();
+        let existing = ark.request("get_object", json!({ "id": id })).await.ok();
         let created_at = existing
             .as_ref()
             .and_then(|v| v.get("propsJson"))
@@ -498,9 +495,7 @@ pub async fn upsert_blocklist<R: FocusArkRequester>(
 pub async fn delete_blocklist<R: FocusArkRequester>(ark: &R, id: &str) -> Result<(), String> {
     ensure_blocklist_object_type(ark).await?;
     // Fetch existing — чтобы сохранить props + content при soft-delete.
-    let existing = ark
-        .request("get_object", json!({ "id": id }))
-        .await?;
+    let existing = ark.request("get_object", json!({ "id": id })).await?;
     let now = now_iso();
     let mut patched = match existing {
         Value::Object(map) => map,
@@ -651,17 +646,11 @@ pub async fn handle_focus_op(subop: &str, params: Value, ark: &ArkHost) -> Focus
         "resolve_blocklist_domains" => {
             let id = match params.get("id").and_then(|v| v.as_str()) {
                 Some(s) => s.to_string(),
-                None => {
-                    return FocusResponse::err(
-                        "focus.resolve_blocklist_domains: missing 'id'",
-                    )
-                }
+                None => return FocusResponse::err("focus.resolve_blocklist_domains: missing 'id'"),
             };
             match resolve_blocklist_domains(ark, &id).await {
                 Ok(domains) => FocusResponse::ok(json!({ "domains": domains })),
-                Err(e) => {
-                    FocusResponse::err(format!("focus.resolve_blocklist_domains: {e}"))
-                }
+                Err(e) => FocusResponse::err(format!("focus.resolve_blocklist_domains: {e}")),
             }
         }
         other => FocusResponse::err(format!("focus.{other}: unknown sub-operation")),
@@ -738,9 +727,7 @@ mod tests {
                     let map = self.objects.lock().unwrap();
                     let arr: Vec<Value> = map
                         .values()
-                        .filter(|v| {
-                            v.get("typeId").and_then(|t| t.as_str()) == Some(type_id)
-                        })
+                        .filter(|v| v.get("typeId").and_then(|t| t.as_str()) == Some(type_id))
                         .cloned()
                         .collect();
                     Ok(Value::Array(arr))
@@ -981,8 +968,7 @@ mod tests {
 
         delete_blocklist(&ark, &a.id).await.unwrap();
         let listed_after = list_blocklists(&ark).await.unwrap();
-        let user_after: Vec<&Blocklist> =
-            listed_after.iter().filter(|b| !b.preset).collect();
+        let user_after: Vec<&Blocklist> = listed_after.iter().filter(|b| !b.preset).collect();
         assert_eq!(user_after.len(), 1);
         assert_eq!(user_after[0].name, "B");
     }

@@ -85,7 +85,9 @@ pub async fn start_lan_sync(
     if !response.ok {
         return Err(format!(
             "ark-core-rpc rejected start_sync: {}",
-            response.error.unwrap_or_else(|| "(no error message)".to_string())
+            response
+                .error
+                .unwrap_or_else(|| "(no error message)".to_string())
         )
         .into());
     }

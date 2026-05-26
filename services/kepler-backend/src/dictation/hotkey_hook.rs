@@ -266,7 +266,7 @@ fn is_modifier_vk(vk: u32) -> bool {
         0xA4 | // VK_LMENU
         0xA5 | // VK_RMENU
         0x5B | // VK_LWIN
-        0x5C   // VK_RWIN
+        0x5C // VK_RWIN
     )
 }
 
@@ -389,10 +389,7 @@ fn ensure_thread_started() {
 /// `dictation_capture_key` event с accelerator'ом и автоматически
 /// деактивируется. ESC — `dictation_capture_cancelled`. Sender используется
 /// общий с regular hotkey hook'ом (тот же broadcast).
-pub fn set_capture_mode(
-    active: bool,
-    sender: Option<broadcast::Sender<serde_json::Value>>,
-) {
+pub fn set_capture_mode(active: bool, sender: Option<broadcast::Sender<serde_json::Value>>) {
     ensure_thread_started();
     let mut g = match state_mtx().lock() {
         Ok(g) => g,
@@ -427,7 +424,11 @@ pub fn set_active(
 /// модификаторы `Ctrl`, `Shift`, `Alt`, и базовый набор клавиш:
 /// A-Z, 0-9, F1-F12, common punctuation. Возвращает None если не распарсилось.
 pub fn parse_accelerator(s: &str) -> Option<Matcher> {
-    let parts: Vec<&str> = s.split('+').map(|p| p.trim()).filter(|p| !p.is_empty()).collect();
+    let parts: Vec<&str> = s
+        .split('+')
+        .map(|p| p.trim())
+        .filter(|p| !p.is_empty())
+        .collect();
     if parts.is_empty() {
         return None;
     }
@@ -468,25 +469,22 @@ fn key_to_vk(key: &str) -> Option<u32> {
         }
         // Common punctuation → VK_OEM_*
         return match c {
-            ';' | ':' => Some(0xBA), // VK_OEM_1
-            '/' | '?' => Some(0xBF), // VK_OEM_2
-            '`' | '~' => Some(0xC0), // VK_OEM_3
-            '[' | '{' => Some(0xDB), // VK_OEM_4
+            ';' | ':' => Some(0xBA),  // VK_OEM_1
+            '/' | '?' => Some(0xBF),  // VK_OEM_2
+            '`' | '~' => Some(0xC0),  // VK_OEM_3
+            '[' | '{' => Some(0xDB),  // VK_OEM_4
             '\\' | '|' => Some(0xDC), // VK_OEM_5
-            ']' | '}' => Some(0xDD), // VK_OEM_6
+            ']' | '}' => Some(0xDD),  // VK_OEM_6
             '\'' | '"' => Some(0xDE), // VK_OEM_7
-            ',' | '<' => Some(0xBC), // VK_OEM_COMMA
-            '.' | '>' => Some(0xBE), // VK_OEM_PERIOD
-            '-' | '_' => Some(0xBD), // VK_OEM_MINUS
-            '=' | '+' => Some(0xBB), // VK_OEM_PLUS
+            ',' | '<' => Some(0xBC),  // VK_OEM_COMMA
+            '.' | '>' => Some(0xBE),  // VK_OEM_PERIOD
+            '-' | '_' => Some(0xBD),  // VK_OEM_MINUS
+            '=' | '+' => Some(0xBB),  // VK_OEM_PLUS
             _ => None,
         };
     }
     // F1-F24
-    if let Some(rest) = key
-        .strip_prefix('F')
-        .or_else(|| key.strip_prefix('f'))
-    {
+    if let Some(rest) = key.strip_prefix('F').or_else(|| key.strip_prefix('f')) {
         if let Ok(n) = rest.parse::<u32>() {
             if (1..=24).contains(&n) {
                 return Some(0x70 + (n - 1));

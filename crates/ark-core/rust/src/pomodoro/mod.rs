@@ -17,6 +17,4 @@ pub mod session;
 
 pub use clock::{Clock, MockClock, SystemClock};
 pub use events::SessionEvent;
-pub use session::{
-    PersistedSession, Phase, Session, SessionConfig, SessionState, TaskRef,
-};
+pub use session::{PersistedSession, Phase, Session, SessionConfig, SessionState, TaskRef};

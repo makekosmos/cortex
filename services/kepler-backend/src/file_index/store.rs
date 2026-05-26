@@ -216,21 +216,17 @@ impl FileStore {
     // under a single lock — one acquisition, in-and-out.
     pub fn stats_snapshot(&self) -> Result<StatsSnapshot> {
         let conn = self.lock();
-        let total: i64 =
-            conn.query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))?;
+        let total: i64 = conn.query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))?;
         let mut roots = Vec::new();
         {
-            let mut stmt =
-                conn.prepare("SELECT path FROM file_index_roots ORDER BY path ASC")?;
+            let mut stmt = conn.prepare("SELECT path FROM file_index_roots ORDER BY path ASC")?;
             let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
             for row in rows {
                 roots.push(row?);
             }
         }
-        let exclude_noisy_folders =
-            bool_setting_with_conn(&conn, EXCLUDE_NOISY_FOLDERS_KEY, true)?;
-        let respect_gitignore =
-            bool_setting_with_conn(&conn, RESPECT_GITIGNORE_KEY, true)?;
+        let exclude_noisy_folders = bool_setting_with_conn(&conn, EXCLUDE_NOISY_FOLDERS_KEY, true)?;
+        let respect_gitignore = bool_setting_with_conn(&conn, RESPECT_GITIGNORE_KEY, true)?;
         let include_hidden = bool_setting_with_conn(&conn, INCLUDE_HIDDEN_KEY, false)?;
         let ntfs_accelerated = bool_setting_with_conn(&conn, NTFS_ACCELERATED_KEY, false)?;
         Ok(StatsSnapshot {

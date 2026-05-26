@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-05-26-kosmos-product-rename",
+  "verified_at": "2026-05-26T22:36:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell typecheck"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell typecheck"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run ark:guard:writes"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "cargo build -p kepler-focus-svc -p kepler-focus-helper -p kepler-backend && cargo test -p kepler-focus-svc uninstall_targets_new_and_legacy_service_names"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "command": "bun run ark:smoke && cargo build --release --manifest-path Cargo.toml --bin kepler-backend --bin ark-core-rpc --bin kepler-focus-helper --bin kepler-focus-svc && bun run --cwd shell package:dir && bun run --cwd shell test:e2e"
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "command": "bun run docs:check"
+    }
+  ]
+}
