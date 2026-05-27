@@ -1,0 +1,22 @@
+[package]
+name = "akasha"
+version = "0.1.0"
+edition = "2021"
+description = "Akasha native EPUB reader for Kosmos"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1"
+gpui = "0.2.2"
+gpui-component = "0.5.1"
+quick-xml = "0.38"
+rfd = "0.15"
+roxmltree = "0.20"
+serde = { workspace = true }
+serde_json = { workspace = true }
+zip = { version = "4", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }

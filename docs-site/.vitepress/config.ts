@@ -171,6 +171,7 @@ export default defineConfig({
             { text: "Eden — заметки", link: "/apps/eden" },
             { text: "Delphi — задачи", link: "/apps/delphi" },
             { text: "Arrancador — игры", link: "/apps/arrancador" },
+            { text: "Akasha — EPUB", link: "/apps/akasha" },
             { text: "Dashboard — аналитика", link: "/apps/dashboard" },
             { text: "Horologion — время (WIP)", link: "/apps/horologion" },
             { text: "Horologion — Roadmap", link: "/apps/horologion-roadmap" },

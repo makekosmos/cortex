@@ -1,0 +1,78 @@
+{
+  "task": "2026-05-27-akasha-standalone-installer",
+  "status": "PASS",
+  "artifacts": [
+    {
+      "path": "shell/release/native/akasha/akasha-0.1.0.kext",
+      "bytes": 17516659,
+      "sha256": "C90D3A62EDC0D63ABF06AABFDD2566E7E99D9C01B702C834EFBF1DF324E07894"
+    },
+    {
+      "path": "shell/release/native/akasha/Akasha Setup 0.1.0.exe",
+      "bytes": 4547153,
+      "sha256": "02A838E78CCFC77A742834BA0FA92713DBD9245A1926C926BFE77C3D110017A5"
+    }
+  ],
+  "checks": [
+    {
+      "name": "node_check_package_native_release",
+      "command": "node --check shell\\scripts\\package-native-release.mjs",
+      "status": "PASS"
+    },
+    {
+      "name": "node_check_extension_package_utils",
+      "command": "node --check shell\\scripts\\extension-package-utils.mjs",
+      "status": "PASS"
+    },
+    {
+      "name": "node_check_publish_extension",
+      "command": "node --check shell\\scripts\\publish-extension.mjs",
+      "status": "PASS"
+    },
+    {
+      "name": "cargo_fmt_akasha",
+      "command": "cargo fmt -p akasha",
+      "status": "PASS"
+    },
+    {
+      "name": "cargo_test_akasha",
+      "command": "cargo test -p akasha",
+      "status": "PASS"
+    },
+    {
+      "name": "cargo_check_akasha",
+      "command": "cargo check -p akasha",
+      "status": "PASS"
+    },
+    {
+      "name": "shell_typecheck",
+      "command": "bun run --cwd shell typecheck",
+      "status": "PASS"
+    },
+    {
+      "name": "ark_guard_writes",
+      "command": "bun run ark:guard:writes",
+      "status": "PASS"
+    },
+    {
+      "name": "native_package_akasha",
+      "command": "bun run --cwd shell native:package akasha",
+      "status": "PASS"
+    },
+    {
+      "name": "docs_sync",
+      "command": "bun run docs:sync",
+      "status": "PASS"
+    },
+    {
+      "name": "docs_check",
+      "command": "bun run docs:check",
+      "status": "PASS"
+    },
+    {
+      "name": "extensions_contract_e2e",
+      "command": "bun run test:e2e -- tests/e2e/extensions-contract.spec.ts",
+      "status": "PASS"
+    }
+  ]
+}

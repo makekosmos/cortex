@@ -18,12 +18,16 @@
 //   - gh CLI: либо в PATH, либо absolute path в KEPLER_GH_PATH env.
 //   - GH_TOKEN env (для gh) или предварительный `gh auth login`.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync, spawnSync } from "node:child_process";
-import crypto from "node:crypto";
-import { writeZip, entriesFromDir } from "./zip-utils.mjs";
+import {
+  buildNativeRelease,
+  fileSize,
+  packageExtensionKext,
+  sha256File,
+} from "./extension-package-utils.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,46 +73,18 @@ function buildExtensions() {
 }
 
 function packageKext(id, manifest) {
-  const extDir = path.join(EXTENSIONS_ROOT, id);
-  const version = manifest.version ?? "0.0.0";
   const outDir = path.join(SHELL_ROOT, ".tmp", "ext-publish");
   mkdirSync(outDir, { recursive: true });
-  const kextPath = path.join(outDir, `${id}-${version}.kext`);
-  if (existsSync(kextPath)) rmSync(kextPath, { force: true });
-
-  // Список того что попадёт в .kext: manifest.json, icon, README (если есть),
-  // dist/ (vite output).
-  const entries = [];
-  entries.push({
-    name: "manifest.json",
-    data: readFileSync(path.join(extDir, "manifest.json")),
-  });
-  if (manifest.icon) {
-    const iconPath = path.join(extDir, manifest.icon);
-    if (existsSync(iconPath)) {
-      entries.push({ name: manifest.icon, data: readFileSync(iconPath) });
-    } else {
-      console.warn(`[ext:publish] icon указан в manifest, но файл не найден: ${iconPath}`);
-    }
+  try {
+    return packageExtensionKext(id, manifest, {
+      extensionsRoot: EXTENSIONS_ROOT,
+      repoRoot: REPO_ROOT,
+      outDir,
+      logPrefix: "ext:publish",
+    });
+  } catch (error) {
+    die(error.message);
   }
-  const readmePath = path.join(extDir, "README.md");
-  if (existsSync(readmePath)) {
-    entries.push({ name: "README.md", data: readFileSync(readmePath) });
-  }
-  const distDir = path.join(extDir, "dist");
-  if (!existsSync(distDir)) die(`dist/ не найден для ${id} — build:extensions падал?`);
-  for (const e of entriesFromDir(distDir)) {
-    entries.push({ name: `dist/${e.name}`, data: e.data });
-  }
-
-  writeZip(kextPath, entries);
-  return kextPath;
-}
-
-function sha256File(p) {
-  const h = crypto.createHash("sha256");
-  h.update(readFileSync(p));
-  return h.digest("hex");
 }
 
 function ghReleaseExists(tag) {
@@ -152,10 +128,16 @@ function publishOne(id, opts) {
     );
   }
 
-  if (!opts.skipBuild) buildExtensions();
+  if (!opts.skipBuild) {
+    if (manifest.kind === "native") {
+      buildNativeRelease(id, manifest, REPO_ROOT, "ext:publish");
+    } else {
+      buildExtensions();
+    }
+  }
   const kextPath = packageKext(id, manifest);
   const sha = sha256File(kextPath);
-  const size = statSync(kextPath).size;
+  const size = fileSize(kextPath);
   console.log(`[ext:publish] ${path.basename(kextPath)} ${size}B sha256=${sha.slice(0, 12)}...`);
 
   const title = `${manifest.name} v${version}`;
@@ -191,9 +173,16 @@ if (ids.length === 0) die("no extensions to publish");
 
 console.log(`[ext:publish] publish set: ${ids.join(", ")}`);
 
-// Build один раз для всех, если --all.
 if (all && !skipBuild) {
-  buildExtensions();
+  const manifests = ids.map((id) => [id, readManifest(id)]);
+  if (manifests.some(([, manifest]) => manifest.kind !== "native")) {
+    buildExtensions();
+  }
+  for (const [id, manifest] of manifests) {
+    if (manifest.kind === "native") {
+      buildNativeRelease(id, manifest, REPO_ROOT, "ext:publish");
+    }
+  }
 }
 
 const results = [];

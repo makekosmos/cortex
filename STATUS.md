@@ -1,4 +1,28 @@
-# Kosmos — статус проекта (2026-05-26)
+# Kosmos — статус проекта (2026-05-27)
+
+## 2026-05-27 — Native apps + Akasha EPUB reader (Kosmos Desktop 0.3.4 → 0.3.5, Akasha 0.1.0)
+
+Kosmos получает первый production-ready путь для **native extensions**:
+приложения остаются частью экосистемы при запуске из Kepler/Kosmos, но могут
+существовать как самостоятельные Windows-приложения без привязки к shell'у.
+Первый такой app — Akasha, EPUB-читалка на Rust + GPUI.
+
+- `kind: "native"` в extension manifest запускает child process вместо
+  Electron `BrowserWindow`.
+- Shell передаёт native app аргументы `--kosmos-extension-id` и
+  `--kosmos-user-data-dir`; в headless/test mode GUI не spawn'ится.
+- Akasha живёт в `apps/akasha` + `extensions/akasha`, открывается командой
+  `akasha:open`, парсит EPUB spine и хранит локальный reader state в
+  `extensions-data/akasha`.
+- Reader UI теперь непрерывный: весь spine рендерится одним scroll surface,
+  оглавление открывается верхней кнопкой и скроллится отдельно, parser сохраняет
+  heading/list/blockquote + bold/italic spans.
+- `bun run --cwd shell native:package akasha` собирает один release binary в два
+  локальных артефакта: `shell/release/native/akasha/akasha-0.1.0.kext` для
+  Kosmos и standalone NSIS `Akasha Setup 0.1.0.exe`.
+- Standalone Akasha хранит `reader-state.json` в `%APPDATA%\Akasha`, а Kepler
+  по-прежнему передаёт явный `--kosmos-user-data-dir` для `extensions-data/akasha`.
+- ARK-backed highlights/notes/RAG не входят в MVP.
 
 ## 2026-05-26 — Product rename migration: Kepler → Kosmos (Kosmos Desktop 0.3.3 → 0.3.4)
 
@@ -168,14 +192,15 @@ Setting в Settings → Общие.
 
 ## Текущие версии
 
-| Артефакт                                         | Версия                                                                                                              |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Kosmos Desktop (`shell/package.json`)            | **0.3.4** (product rename migration: `Kosmos.exe`, понятные process names, legacy Kepler compatibility)             |
-| Eden extension (`extensions/eden/manifest.json`) | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
-| Delphi extension                                 | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
-| Horologion extension                             | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
-| Arrancador extension                             | **0.1.3**                                                                                                           |
-| Dashboard                                        | встроен в shell (не extension)                                                                                      |
+| Артефакт                                             | Версия                                                                                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Kosmos Desktop (`shell/package.json`)                | **0.3.5** (native extension host + Akasha packaging)                                                                |
+| Akasha extension (`extensions/akasha/manifest.json`) | **0.1.0** (native EPUB reader, `.kext` + standalone NSIS packaging)                                                 |
+| Eden extension (`extensions/eden/manifest.json`)     | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
+| Delphi extension                                     | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
+| Horologion extension                                 | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
+| Arrancador extension                                 | **0.1.3**                                                                                                           |
+| Dashboard                                            | встроен в shell (не extension)                                                                                      |
 
 ## 2026-05-22 — Horologion live-в-фоне + drag-select auto-scroll (Kepler 0.2.3 → 0.2.4, Eden 0.1.10 → 0.1.11, Horologion 0.1.5 → 0.1.6)
 

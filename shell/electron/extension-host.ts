@@ -25,6 +25,7 @@
 // extension сам отвечает за всю свою логику.
 
 import { app, BrowserWindow, ipcMain, screen, type WebContents } from "electron";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import net from "node:net";
@@ -44,7 +45,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export type ExtensionKind = "vue" | "static";
+export type ExtensionKind = "vue" | "static" | "native";
 
 /**
  * Объявление команды в `manifest.json` extension'а. Полный id рендерится
@@ -107,7 +108,22 @@ export interface ExtensionManifest {
    */
   keplerApiVersion?: string;
   kind?: ExtensionKind;
-  entryHtml: string;
+  entryHtml?: string;
+  /**
+   * Native extension entrypoint. Used only when `kind: "native"`.
+   *
+   * `executable` is relative to extension dir for installed/bundled copies.
+   * `devExecutable` is optional and used from repo dev tree when it exists
+   * (for example `../../target/debug/akasha.exe`).
+   * `args` are appended before shell-provided metadata args.
+   */
+  native?: {
+    executable: string;
+    devExecutable?: string;
+    cargoPackage?: string;
+    args?: string[];
+    singleInstance?: boolean;
+  };
   /**
    * Путь к preload-скрипту:
    *  - для "vue" по умолчанию используется shared preload из dist-electron;
@@ -210,6 +226,12 @@ interface ExtensionWindowEntry {
 }
 
 const extensionWindows = new Map<string, ExtensionWindowEntry>();
+interface NativeExtensionEntry {
+  child: ChildProcess;
+  id: string;
+}
+
+const nativeExtensions = new Map<string, NativeExtensionEntry>();
 
 // При quit'е приложения keepAliveInBackground extension'ы должны реально
 // уничтожиться, а не зацикливать preventDefault → app.exit вис. before-quit
@@ -371,6 +393,9 @@ async function resolveExtensionSource(
   manifest: ExtensionManifest,
   extensionDir: string,
 ): Promise<ExtensionSource | null> {
+  if (manifest.kind === "native") {
+    return null;
+  }
   if (isShellInDevSession() && manifest.devPort) {
     const alive = await probeExtensionDevServer(manifest.devPort);
     if (alive) {
@@ -689,6 +714,9 @@ function resolvePreloadForManifest(
 }
 
 function resolveEntryHtml(manifest: ExtensionManifest, extensionDir: string): string {
+  if (!manifest.entryHtml) {
+    throw new Error(`[kepler-shell] extension '${manifest.id}' has no entryHtml`);
+  }
   // entryHtml интерпретируется относительно extension dir. Для vue это обычно
   // "dist/index.html" (после vite build), для static — "index.html".
   return path.join(extensionDir, manifest.entryHtml);
@@ -775,6 +803,8 @@ function escapeHtml(s: string): string {
 
 /** Is extension currently running (window exists, not destroyed)? */
 export function isExtensionRunning(id: string): boolean {
+  const native = nativeExtensions.get(id);
+  if (native && !native.child.killed && native.child.exitCode === null) return true;
   const entry = extensionWindows.get(id);
   return !!entry && !entry.win.isDestroyed();
 }
@@ -838,6 +868,15 @@ export function openExtension(id: string, route?: string): Promise<void> {
 }
 
 async function openExtensionImpl(id: string, route?: string): Promise<void> {
+  const manifest = loadExtensionManifest(id);
+  if (!manifest) {
+    console.warn(`[kepler-shell] extension not found: ${id}`);
+    return;
+  }
+  if (manifest.kind === "native") {
+    await openNativeExtension(id, manifest, route);
+    return;
+  }
   const existing = extensionWindows.get(id);
   if (existing && !existing.win.isDestroyed()) {
     if (process.env.KOSMOS_HEADLESS !== "1") {
@@ -850,11 +889,6 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
         /* webContents could be torn down between isDestroyed-check и send */
       }
     }
-    return;
-  }
-  const manifest = loadExtensionManifest(id);
-  if (!manifest) {
-    console.warn(`[kepler-shell] extension not found: ${id}`);
     return;
   }
   // Kepler API compat check ДО window create — несовместимые extension'ы
@@ -1090,6 +1124,89 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   } else if (source.file) {
     void win.loadFile(source.file);
   }
+}
+
+function resolveNativeExecutable(manifest: ExtensionManifest, extensionDir: string): string | null {
+  const native = manifest.native;
+  if (!native?.executable) {
+    console.warn(`[kepler-shell] native extension '${manifest.id}' has no native.executable`);
+    return null;
+  }
+  const candidates = [native.devExecutable, native.executable].filter(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  );
+  for (const rel of candidates) {
+    const resolved = path.resolve(extensionDir, rel);
+    if (existsSync(resolved)) return resolved;
+  }
+  console.warn(
+    `[kepler-shell] native extension '${manifest.id}' executable not found: ${candidates.join(", ")}`,
+  );
+  return null;
+}
+
+async function openNativeExtension(
+  id: string,
+  manifest: ExtensionManifest,
+  route?: string,
+): Promise<void> {
+  const singleInstance = manifest.native?.singleInstance !== false;
+  const existing = nativeExtensions.get(id);
+  if (existing && existing.child.exitCode === null && !existing.child.killed) {
+    return;
+  }
+  if (singleInstance && existing) {
+    nativeExtensions.delete(id);
+  }
+  const incompat = checkApiCompat(manifest);
+  if (incompat) {
+    console.error(`[kepler-shell] ${incompat}`);
+    openIncompatibilityWindow(manifest, incompat);
+    return;
+  }
+  const extensionDir = resolveExtensionDir(id);
+  if (!extensionDir) {
+    console.warn(`[kepler-shell] extension dir disappeared: ${id}`);
+    return;
+  }
+  const exe = resolveNativeExecutable(manifest, extensionDir);
+  if (!exe) return;
+
+  if (process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1") {
+    console.log(`[kepler-shell] headless: skip native extension spawn '${id}'`);
+    return;
+  }
+
+  const args = [
+    ...(manifest.native?.args ?? []),
+    "--kosmos-extension-id",
+    id,
+    "--kosmos-user-data-dir",
+    extensionUserDataDir(id),
+  ];
+  const devSession = isShellInDevSession();
+  if (devSession) args.push("--kosmos-dev-mode");
+  if (route) args.push("--route", route);
+  const child = spawn(exe, args, {
+    cwd: path.dirname(exe),
+    env: {
+      ...process.env,
+      KOSMOS_EXTENSION_DEV_MODE: devSession ? "1" : undefined,
+    },
+    stdio: "ignore",
+    detached: false,
+    windowsHide: false,
+  });
+  nativeExtensions.set(id, { child, id });
+  child.once("exit", () => {
+    const current = nativeExtensions.get(id);
+    if (current?.child === child) nativeExtensions.delete(id);
+  });
+  child.once("error", (e) => {
+    console.error(`[kepler-shell] native extension '${id}' failed:`, e);
+    const current = nativeExtensions.get(id);
+    if (current?.child === child) nativeExtensions.delete(id);
+  });
 }
 
 function windowForSender(sender: WebContents): BrowserWindow | null {

@@ -45,7 +45,15 @@ export interface ExtensionInstallPreview {
     author?: string;
     permissions?: string[];
     keplerApiVersion?: string;
+    kind?: "vue" | "static" | "native";
     icon?: string;
+    native?: {
+      executable: string;
+      devExecutable?: string;
+      cargoPackage?: string;
+      args?: string[];
+      singleInstance?: boolean;
+    };
   };
   iconDataUri: string | null;
   apiCompatError: string | null;
@@ -122,6 +130,7 @@ export interface FileIndexSettingsPatch {
 export interface InstalledExtensionInfo {
   id: string;
   name: string;
+  kind: "vue" | "static" | "native" | null;
   version: string | null;
   description: string | null;
   author: string | null;

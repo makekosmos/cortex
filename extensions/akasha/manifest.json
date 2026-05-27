@@ -1,0 +1,25 @@
+{
+  "id": "akasha",
+  "name": "Akasha",
+  "version": "0.1.0",
+  "description": "Нативная EPUB-читалка на GPUI",
+  "keplerApiVersion": "^1.1.0",
+  "kind": "native",
+  "icon": "icon.svg",
+  "native": {
+    "executable": "bin/akasha.exe",
+    "devExecutable": "../../target/release/akasha.exe",
+    "cargoPackage": "akasha",
+    "singleInstance": true
+  },
+  "commands": [
+    {
+      "id": "open",
+      "title": "Открыть Akasha",
+      "subtitle": "EPUB-читалка",
+      "kind": "app",
+      "mode": "open"
+    }
+  ],
+  "tests": {}
+}

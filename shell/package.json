@@ -1,6 +1,6 @@
 {
   "name": "kepler-shell",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "description": "Kosmos — desktop host for notes, tasks, games, focus, and activity",
   "author": "Kazui",
@@ -9,7 +9,7 @@
   "scripts": {
     "build:backend": "cargo build --release --manifest-path ../Cargo.toml --bin kepler-backend --bin ark-core-rpc --bin kepler-focus-helper --bin kepler-focus-svc",
     "build:backend:dev": "cargo build --manifest-path ../Cargo.toml --bin kepler-backend",
-    "build:extensions": "node -e \"import('./vite.extensions.config.mjs').then(async (m)=>{const {execSync}=await import('node:child_process');for(const id of m.vueExtensions){console.log('[build:extensions]',id);execSync('vite build --configLoader native --config vite.extensions.config.mjs --mode '+id,{stdio:'inherit'});}if(m.vueExtensions.length===0)console.log('[build:extensions] no Vue extensions to build (only static PoCs present) — skipping');})\"",
+    "build:extensions": "node scripts/build-extensions.mjs",
     "dev:extensions": "node scripts/dev-extensions.mjs",
     "dev:kepler": "node -e \"process.env.KEPLER_DEV='1';require('node:child_process').spawnSync('vite',['--configLoader','native'],{stdio:'inherit',shell:true,env:process.env});\"",
     "dev": "bun run build:backend:dev && bun run build:extensions && node scripts/dev.mjs",
@@ -22,6 +22,7 @@
     "ext:publish": "node scripts/publish-extension.mjs",
     "ext:publish-all": "node scripts/publish-extension.mjs --all",
     "ext:catalog": "node scripts/generate-catalog.mjs",
+    "native:package": "node scripts/package-native-release.mjs",
     "test:e2e": "bun run build:js && playwright test --config playwright.config.ts",
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },

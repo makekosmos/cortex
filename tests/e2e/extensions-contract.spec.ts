@@ -40,6 +40,7 @@ interface ExtensionTestContract {
 interface ExtensionManifest {
   id: string;
   name: string;
+  kind?: "vue" | "static" | "native";
   tests?: ExtensionTestContract;
 }
 
@@ -91,6 +92,17 @@ for (const manifest of manifests) {
           }
         }, openCommand);
         expect(triggered, `command ${openCommand} должен invoke'аться`).toBe(true);
+
+        if (manifest.kind === "native") {
+          const commands = await launcher.evaluate(async () => {
+            return (await window.kepler.commands.list()).map((command) => command.id);
+          });
+          expect(
+            commands,
+            `native extension ${manifest.id}: command ${openCommand} виден в registry`,
+          ).toContain(openCommand);
+          return;
+        }
 
         const extWindow = await app.waitForEvent("window", { timeout: 10_000 });
         await extWindow.waitForLoadState("domcontentloaded");

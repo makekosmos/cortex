@@ -21,6 +21,62 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-05-27 — Akasha EPUB blocks overlap on resize and miss source semantics
+
+**Симптомы.** При сужении/расширении окна Akasha расстояния между абзацами не пересчитывались, текст начинал налезать друг на друга, а часть EPUB-стилей из реальной книги выглядела как обычный плоский текст. Копирование выделения было неочевидным.
+
+**Где жило.** `apps/akasha/src/main.rs` — virtual-list item heights оценивались по фиксированной ширине `70ch` и не зависели от viewport width. `apps/akasha/src/epub.rs` — parser учитывал только базовые `strong/em`, но не EPUB semantic spans вроде `epub:type="bridgehead"` и inline tags вроде `cite`.
+
+**Root cause.** Виртуализация получила стабильные item sizes, но эти sizes описывали “идеальную” ширину, а не текущую ширину reader column; при wrap на узком окне GPUI рисовал больше строк, чем virtual list зарезервировал места. Семантические EPUB-теги терялись до UI-слоя, поэтому Apple Books tokens не могли примениться к ним визуально.
+
+**Fix.** Akasha теперь хранит текущую ширину reader column и пересчитывает `reader_item_sizes` при изменении `window.viewport_size()`, поэтому virtual-list rows растут вместе с переносами текста. Paragraph/list blocks получили Apple Books-style vertical rhythm через em-based bottom margins. Parser теперь сохраняет `epub:type="bridgehead"` как bold и `cite` как emphasis. После drag-selection появляется маленькая floating-подсказка с `Copy`, которая вызывает стандартный `TextView` copy action.
+
+**Регрешн-защита.** `cargo test -p akasha` добавил regression tests на responsive item-height (`estimated_block_height_tracks_reader_width`), paragraph gap (`paragraph_estimate_includes_apple_books_gap`) и EPUB semantic inline tags (`preserves_epub_bridgehead_and_cite_semantics`). `cargo check -p akasha`, `bun run --cwd shell typecheck`, `bun run ark:guard:writes` прошли после fix.
+
+**Prevention.** Для virtualized reader/feed UI item estimate должен принимать тот же layout width, при котором реально рисуется текст; фиксированные `ch`-оценки допустимы только для фиксированной колонки. EPUB parser обязан сохранять не только HTML-теги, но и распространённые semantic attributes (`epub:type`) до UI-слоя, иначе typography tokens применяются к уже обеднённой модели.
+
+## 2026-05-27 — Akasha reader без scrollbar, незаметное открытие книги и медленный native dev launch
+
+**Симптомы.** В Akasha не было видимого scrollbar у reader'а, повторное открытие другой книги было неочевидным, а запуск native Akasha из Kepler в dev ощущался медленным.
+
+**Где жило.** `apps/akasha/src/main.rs` — `v_virtual_list` использовался без отдельного `Scrollbar::vertical`, а кнопка открытия была вторичной в toolbar. `extensions/akasha/manifest.json` и `shell/scripts/build-extensions.mjs` — dev native path/build указывали на debug binary.
+
+**Root cause.** `gpui_component::v_virtual_list` виртуализует scroll surface, но не рисует scrollbar автоматически. Для native extension dev flow был выбран `target/debug/akasha.exe`, что удобно для отладки, но плохо совпадает с ожиданием “открывается как приложение”.
+
+**Fix.** Reader virtual-list теперь обёрнут в `relative` container с `Scrollbar::vertical(&reader_scrollbar)`. Кнопка открытия книги вынесена первой в toolbar и переименована в «Открыть книгу». Native dev executable переключён на `target/release/akasha.exe`, а `build:extensions` собирает native extensions через `cargo build --release -p <pkg>`.
+
+**Регрешн-защита.** `cargo check -p akasha` проверяет scrollbar/layout интеграцию; `cargo test -p akasha` проверяет reader state/parser; `bun run --cwd shell typecheck` проверяет manifest/native host types.
+
+**Prevention.** Для virtual list в GPUI Components scrollbar не появляется сам — всегда добавлять `Scrollbar::vertical` явно. Для native extensions dev path должен совпадать с пользовательским ожиданием latency; debug binary лучше оставлять для ручного debugging, а launcher должен запускать release build.
+
+## 2026-05-27 — Akasha continuous reader грузит CPU и лагает на скролле
+
+**Симптомы.** После перехода на непрерывный reader скролл в Akasha стал заметно лагать, а приложение грузило ПК сильнее, чем ожидается от GPUI/Zed-like UI.
+
+**Где жило.** `apps/akasha/src/main.rs` — reader собирал `Vec<ReaderBlock>` на каждом render и создавал GPUI/`StyledText` element для каждого блока книги сразу.
+
+**Root cause.** Continuous flow был реализован визуально, но не архитектурно: вместо virtualized reader surface UI рендерил весь EPUB spine целиком. Для больших книг это означает сотни/тысячи text layout объектов на каждый render path, что ломает ожидаемую плавность GPUI.
+
+**Fix.** Reader теперь кэширует flatten EPUB-блоков при открытии книги и пересчитывает только rough item sizes при изменении font size. Полный `.children(all_blocks)` заменён на `gpui_component::v_virtual_list`, который материализует только видимый `Range<usize>`; chapter navigation использует `VirtualListScrollHandle::scroll_to_item`.
+
+**Регрешн-защита.** `cargo check -p akasha` проверяет интеграцию `v_virtual_list`; `cargo test -p akasha` оставляет зелёными parser/state regression tests. Proof loop: `.agent/tasks/2026-05-27-akasha-virtual-scroll/`.
+
+**Prevention.** Для любых reader/feed/table UI “continuous” должен означать continuous user model, а не full materialization. Если список может быть длиннее нескольких экранов, сначала выбирать `uniform_list`/`v_virtual_list`, а уже потом навешивать rich text styling.
+
+## 2026-05-27 — Akasha EPUB отображается как dump выбранной главы
+
+**Симптомы.** Akasha показывала постоянную левую колонку глав и текст только выбранной главы справа. Список глав не скроллился, прокрутка текста не переходила бесшовно в следующую главу, заголовки/жирный/курсив EPUB терялись и весь текст выглядел плоским.
+
+**Где жило.** `apps/akasha/src/epub.rs` — парсер схлопывал XHTML в `Vec<String>` без типа блока и inline-стилей. `apps/akasha/src/main.rs` — UI был построен вокруг `chapter_index` и рендера одной выбранной главы.
+
+**Root cause.** MVP смоделировал EPUB как “chapter selector + selected chapter body”, а не как непрерывный читательский документ. Семантика HTML удалялась до UI, поэтому GPUI-рендерер уже не мог отличить заголовок от абзаца или жирный span от обычного текста.
+
+**Fix.** Akasha parser теперь хранит структурные `ReaderBlock` + `InlineSpan` вместо плоских строк: heading level, paragraph/list/blockquote и bold/italic marks доходят до UI. Reader UI убрал постоянный sidebar, рендерит весь spine одним continuous scroll surface, а главы показывает через верхнюю scrollable panel; выбор главы скроллит основной reader к первому блоку этой главы.
+
+**Регрешн-защита.** `cargo test -p akasha` покрывает fixture EPUB со spine-order блоками и отдельный кейс `preserves_reader_structure_and_inline_emphasis`, который перед fix'ом падал на потере `<h2>`, `<strong>` и `<em>`.
+
+**Prevention.** Для reader'ов нельзя схлопывать входной формат в `String` до UI-слоя. Даже MVP должен передавать минимальную document model: block kind + inline marks + spine order, иначе любая следующая фича чтения превращается в reverse engineering уже потерянной HTML-семантики.
+
 ## 2026-05-26 — Kosmos System Service uninstall оставляет legacy service
 
 **Симптомы.** После миграции `KeplerFocusSvc` → `KosmosSystemSvc` Settings мог показывать системный сервис как установленный даже после успешного uninstall.

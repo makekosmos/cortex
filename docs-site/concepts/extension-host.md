@@ -26,7 +26,15 @@ Phase 4 цель — превратить апки в **extensions**: Vue-бан
 export interface ExtensionManifest {
   id: string;
   name: string;
-  entryHtml: string;
+  kind?: "vue" | "static" | "native";
+  entryHtml?: string; // required for vue/static
+  native?: {
+    executable: string;
+    devExecutable?: string;
+    cargoPackage?: string;
+    args?: string[];
+    singleInstance?: boolean;
+  };
   icon?: string; // optional, имя файла иконки (icon.png) рядом с manifest.json
   devPort?: number; // optional, порт Vite dev server'а для HMR (см. dev mode)
   width?: number; // default 900
@@ -38,7 +46,7 @@ export interface ExtensionManifest {
 
 export function loadExtensionManifest(id: string): ExtensionManifest | null;
 export function listExtensions(): ExtensionManifest[];
-export function openExtension(id: string, route?: string): void; // reuse if already open, иначе create; route — опциональный hash для глубоких ссылок
+export function openExtension(id: string, route?: string): Promise<void>; // reuse if already open, иначе create/spawn
 export function extensionIconDataUri(id: string): string | undefined;
 export function readDevModeSetting(): boolean;
 export function setExtensionArkBridge(opts: { request; subscribe }): void;
@@ -74,7 +82,44 @@ Per-id lookup означает, что Dashboard может быть user-instal
 
 `listExtensions()` дедуплицирует по `id` — если один и тот же `<id>` присутствует и в user-installed, и в bundled, побеждает первый встреченный (т.е. user-installed override).
 
-Reuse: `Map<id, BrowserWindow>`. Если окно уже открыто — `focus()`. На `closed` — `delete` из map.
+Reuse: `Map<id, BrowserWindow>` для `vue/static` и `Map<id, ChildProcess>` для `native`. Если окно уже открыто — `focus()`. Если native child уже жив и `singleInstance !== false` — повторный invoke не spawn'ит второй процесс. На `closed` / `exit` — запись удаляется.
+
+### Native extensions
+
+`kind: "native"` extension не получает `window.kepler` preload и не грузит
+HTML. Shell запускает executable из `manifest.native`:
+
+```json
+{
+  "id": "akasha",
+  "name": "Akasha",
+  "kind": "native",
+  "native": {
+    "executable": "bin/akasha.exe",
+    "devExecutable": "../../target/release/akasha.exe",
+    "cargoPackage": "akasha",
+    "singleInstance": true
+  }
+}
+```
+
+Shell добавляет аргументы:
+
+```text
+--kosmos-extension-id <id>
+--kosmos-user-data-dir <dataDir>/extensions-data/<id>
+```
+
+Native apps в Kosmos проектируются как Kosmos-aware, но не Kosmos-required:
+тот же executable может запускаться standalone без shell'а. Отличие режимов
+задаётся явными аргументами/env от shell'а (`--kosmos-user-data-dir`,
+`--kosmos-dev-mode`, `KOSMOS_EXTENSION_DEV_MODE=1`), а не жёсткой зависимостью
+от Kepler runtime. Standalone build не должен тащить Kepler backend, ARK RPC,
+usage tracking или command bus, если приложение само явно этого не требует.
+
+В `KOSMOS_HEADLESS=1` / `KOSMOS_TEST_MODE=1` native GUI не spawn'ится, чтобы
+e2e не показывали окна. Contract tests для native проверяют manifest-команду,
+но не ждут Playwright window.
 
 ### Deep links через `route`
 
@@ -119,7 +164,9 @@ if (nav) {
 
 Поля:
 
-- `id`, `name`, `entryHtml` — обязательные.
+- `id`, `name` — обязательные.
+- `entryHtml` — обязательный для `vue` / `static`.
+- `native.executable` — обязательный для `kind: "native"`.
 - `icon` — optional, имя файла иконки внутри директории extension'а (`extensions/<id>/icon.png`). Если есть — `extensionIconDataUri(id)` читает файл и возвращает `data:image/<ext>;base64,...` URI; launcher показывает иконку в open-команде. См. ниже [«App icons»](#app-icons).
 - `devPort` — optional, порт Vite dev server'а для HMR. Используется только когда активен developer mode. См. [Extension dev mode](/concepts/extension-dev-mode).
 - `width`, `height` — optional, дефолты `900×600`.

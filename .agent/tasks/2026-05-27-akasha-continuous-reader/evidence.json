@@ -1,0 +1,61 @@
+{
+  "task": "2026-05-27-akasha-continuous-reader",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "regression_before_fix",
+      "command": "cargo test -p akasha preserves_reader_structure_and_inline_emphasis",
+      "status": "FAIL_EXPECTED"
+    },
+    {
+      "name": "akasha_format",
+      "command": "cargo fmt -p akasha",
+      "status": "PASS"
+    },
+    {
+      "name": "akasha_check",
+      "command": "cargo check -p akasha",
+      "status": "PASS"
+    },
+    {
+      "name": "akasha_tests",
+      "command": "cargo test -p akasha",
+      "status": "PASS"
+    },
+    {
+      "name": "shell_typecheck",
+      "command": "bun run --cwd shell typecheck",
+      "status": "PASS"
+    },
+    {
+      "name": "ark_write_guard",
+      "command": "bun run ark:guard:writes",
+      "status": "PASS"
+    },
+    {
+      "name": "extensions_contract",
+      "command": "bun run test:e2e -- tests/e2e/extensions-contract.spec.ts",
+      "status": "PASS"
+    },
+    {
+      "name": "extensions_build",
+      "command": "bun run --cwd shell build:extensions",
+      "status": "PASS"
+    },
+    {
+      "name": "docs_build",
+      "command": "bun run docs:build",
+      "status": "PASS"
+    },
+    {
+      "name": "docs_check",
+      "command": "bun run docs:check",
+      "status": "PASS"
+    },
+    {
+      "name": "ark_smoke",
+      "command": "bun run ark:smoke",
+      "status": "PASS"
+    }
+  ]
+}

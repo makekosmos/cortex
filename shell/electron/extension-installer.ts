@@ -529,6 +529,7 @@ export function revertExtension(id: string, timestamp?: string): boolean {
 export interface InstalledExtensionInfo {
   id: string;
   name: string;
+  kind: ExtensionManifest["kind"] | null;
   version: string | null;
   description: string | null;
   author: string | null;
@@ -587,13 +588,19 @@ function scanExtensionsDir(root: string, source: "installed" | "dev"): Installed
     if (!stat.isDirectory()) continue;
     const manifest = readManifestSafe(dir);
     if (!manifest) continue;
-    // Dev-source extensions могут быть в repo но без built dist/ —
+    // Dev-source extensions могут быть в repo но без built dist/ / native exe —
     // не показываем их как "installed" пока bun run build:extensions не сделан.
     // Иначе UI повёл бы юзера в landing где openExtension падает на "entryHtml not found".
     if (source === "dev") {
-      const entryHtml = manifest.entryHtml ?? "dist/index.html";
-      const entryPath = path.join(dir, entryHtml);
-      if (!existsSync(entryPath)) continue;
+      if (manifest.kind === "native") {
+        const native = manifest.native;
+        const rel = native?.devExecutable ?? native?.executable;
+        if (!rel || !existsSync(path.resolve(dir, rel))) continue;
+      } else {
+        const entryHtml = manifest.entryHtml ?? "dist/index.html";
+        const entryPath = path.join(dir, entryHtml);
+        if (!existsSync(entryPath)) continue;
+      }
     }
     const iconDataUri = readIconDataUri(dir, manifest);
     // backupCount только для installed — у dev-source это repo state, revert не имеет смысла.
@@ -601,6 +608,7 @@ function scanExtensionsDir(root: string, source: "installed" | "dev"): Installed
     out.push({
       id,
       name: manifest.name,
+      kind: manifest.kind ?? null,
       version: manifest.version ?? null,
       description: manifest.description ?? null,
       author: manifest.author ?? null,

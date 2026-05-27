@@ -1,0 +1,53 @@
+{
+  "task_id": "2026-05-27-akasha-native",
+  "verified_at": "2026-05-26T23:36:52Z",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "commands": [
+        "bun run --cwd shell build:extensions",
+        "bun run test:e2e -- tests/e2e/extensions-contract.spec.ts"
+      ]
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "commands": ["bun run test:e2e -- --grep \"extension contract: akasha\""]
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "commands": ["bun run test:e2e -- --grep \"extension contract: akasha\""]
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "commands": [
+        "bun run --cwd shell build:extensions",
+        "cargo build --release -p akasha",
+        "node --check shell/scripts/build-extensions.mjs",
+        "node --check shell/scripts/publish-extension.mjs"
+      ]
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "commands": ["cargo check -p akasha"]
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "commands": ["cargo test -p akasha"]
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "commands": ["bun run docs:build", "bun run docs:check"]
+    }
+  ],
+  "guards": [
+    { "name": "ark:guard:writes", "verdict": "PASS", "command": "bun run ark:guard:writes" },
+    { "name": "ark:smoke", "verdict": "PASS", "command": "bun run ark:smoke" }
+  ]
+}

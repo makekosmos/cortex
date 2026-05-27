@@ -1,6 +1,6 @@
 # Приложения
 
-Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **четыре Vue-extension'а** внутри Kepler shell (**Eden**, Delphi, Arrancador, Horologion) + встроенный shell-view **Dashboard**, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
+Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **четыре Vue-extension'а** внутри Kepler shell (**Eden**, Delphi, Arrancador, Horologion), первый **native extension** (**Akasha**), встроенный shell-view **Dashboard**, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
 
 ::: tip Live snapshot
 Актуальное состояние миграций / Phase trackers — `STATUS.md` в корне репозитория. Эта страница — концептуальная карта; STATUS.md — what's in flight прямо сейчас.
@@ -20,6 +20,12 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **ч�
 | [Delphi](/apps/delphi)         | `extensions/delphi`     | задачи                                                         | `task_obj` (auto-миграция legacy todos на старте) |
 | [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы                           | `game_obj` + usage data                           |
 | [Horologion](/apps/horologion) | `extensions/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi)     |
+
+## Native extensions
+
+| Приложение             | Путь                                | Роль                        | Модель данных |
+| ---------------------- | ----------------------------------- | --------------------------- | ------------- |
+| [Akasha](/apps/akasha) | `extensions/akasha` + `apps/akasha` | EPUB-читалка на Rust + GPUI | local JSON v1 |
 
 ## Встроенные shell views
 
@@ -77,6 +83,7 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 | Arrancador                     | ✅ (games как `game_obj`, usage через ARK) | завершён usage backfill                                                                                                                                                |
 | Dashboard                      | ✅ (read-only inspector)                   | предпочитать ARK analytics endpoints вместо raw SQL                                                                                                                    |
 | Horologion                     | ✅ (time_entry_obj)                        | tag picker UI и реальный `object_link` task↔entry — TODO (см. roadmap)                                                                                                 |
+| Akasha                         | ❌                                         | v1 хранит состояние локально в `extensions-data/akasha`; ARK-backed highlights/notes — будущая фаза                                                                    |
 | Digital Cave                   | ⏳ TBD                                     | зарезервировано, кода нет                                                                                                                                              |
 | Kerux                          | ⏳ TBD                                     | зарезервировано, кода нет                                                                                                                                              |
 | Delphi (Android) + ark-service | ❌                                         | отдельный Room-стек; миграция на UniFFI от `ark-core` — задача на будущее                                                                                              |
