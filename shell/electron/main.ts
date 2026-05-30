@@ -93,6 +93,15 @@ import {
 } from "./autoupdater-host";
 import { setupPomodoroNotifier, teardownPomodoroNotifier } from "./pomodoro-notifier";
 
+// См. postmortems.md § 2026-05-30: focus-block dynamic chunk imports from
+// main.js after Vite/Rolldown code-splitting, so these helper APIs must remain
+// visible on the entry module namespace.
+export { getServiceStatus, runServiceCliElevated, pingService, sendViaPipe } from "./focus-service";
+export {
+  isFocusServiceAutoInstallDeclined,
+  setFocusServiceAutoInstallDeclined,
+} from "./settings-window";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

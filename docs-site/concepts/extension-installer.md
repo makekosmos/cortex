@@ -220,9 +220,26 @@ bun run --cwd shell ext:uninstall <id> --purge-data
 - **Preload API**: `window.kepler.userData.{readJson, writeJson, readFile, writeFile, path}` — см. [Extension host → User data](/concepts/extension-host#user-data).
   :::
 
+## Auto-update
+
+С 2026-05-30 Kepler/Kosmos автоматически обновляет уже установленные
+user extensions из marketplace:
+
+- стартует фоном вместе с `startPeriodicCatalogCheck()` в production slot'е;
+- повторяется каждые 24 часа;
+- не требует Settings UI, подтверждений или ручного клика;
+- обновляет только `source: "installed"`, не repo dev-source extensions;
+- ставит только strict newer semver из catalog;
+- использует тот же `installFromUrl()` → `installFromPath()` flow, поэтому
+  SHA-256 validation, backup и atomic rename остаются единым источником правды.
+- reload'ит уже открытое Vue-extension окно после успешной установки новой
+  версии.
+
+Auto-update не ставит новые extension'ы сам: каталог по-прежнему нужен для
+первичной установки пользователем.
+
 ## Что НЕ входит
 
-- **Auto-update** — checker для новых версий. Юзер сам запускает `ext:install` или открывает свежий `.kext`.
 - **Code signing / signature verification** — `.kext` не подписан, install верит источнику.
 - **Permissions enforcement** — поле `permissions` сейчас только показывается в install dialog, runtime grant'ит полный API. Capability model в потом.
 - **Cross-extension dependencies / store** — extension'ы независимы, marketplace нет.

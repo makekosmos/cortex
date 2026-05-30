@@ -11,8 +11,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import https from "node:https";
 import crypto from "node:crypto";
-import { installFromPath } from "./extension-installer";
+import { installFromPath, listInstalledUserExtensions } from "./extension-installer";
 import type { KextManifestPreview } from "./extension-installer";
+import { findExtensionUpdates } from "./extension-update-plan";
+import { reloadExtensionWindow } from "./extension-host";
 
 export interface CatalogExtension {
   id: string;
@@ -172,6 +174,61 @@ export async function installFromUrl(
 
 let registered = false;
 let periodicTimer: NodeJS.Timeout | null = null;
+let autoUpdateInFlight: Promise<void> | null = null;
+
+function notifyCommandsChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      try {
+        win.webContents.send("kepler:commands:updated");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+export async function autoUpdateExtensionsOnce(forceCatalog = true): Promise<void> {
+  if (autoUpdateInFlight) return autoUpdateInFlight;
+
+  autoUpdateInFlight = (async () => {
+    let catalog: Catalog;
+    try {
+      catalog = await fetchCatalog(forceCatalog);
+    } catch (e) {
+      console.error("[marketplace] extension auto-update catalog fetch failed:", e);
+      return;
+    }
+
+    const candidates = findExtensionUpdates(listInstalledUserExtensions(), catalog);
+    if (candidates.length === 0) {
+      console.log("[marketplace] extension auto-update: no updates");
+      return;
+    }
+
+    let installedCount = 0;
+    for (const candidate of candidates) {
+      try {
+        console.log(
+          `[marketplace] extension auto-update: ${candidate.id} ${candidate.currentVersion} -> ${candidate.nextVersion}`,
+        );
+        await installFromUrl(candidate.downloadUrl, candidate.sha256);
+        reloadExtensionWindow(candidate.id);
+        installedCount += 1;
+      } catch (e) {
+        console.error(`[marketplace] extension auto-update failed for ${candidate.id}:`, e);
+      }
+    }
+
+    if (installedCount > 0) {
+      notifyCommandsChanged();
+    }
+  })().finally(() => {
+    autoUpdateInFlight = null;
+  });
+
+  return autoUpdateInFlight;
+}
 
 /**
  * Стартует фоновый перефетч catalog.json каждые 24h. Cache TTL fetchCatalog —
@@ -181,12 +238,14 @@ let periodicTimer: NodeJS.Timeout | null = null;
  */
 export function startPeriodicCatalogCheck(): void {
   if (periodicTimer) return;
-  // initial fetch на старте (не блокирующий)
-  fetchCatalog(false).catch((e) => console.error("[marketplace] initial catalog fetch failed:", e));
+  // initial fetch + unattended update на старте (не блокирующий)
+  autoUpdateExtensionsOnce(false).catch((e) =>
+    console.error("[marketplace] initial extension auto-update failed:", e),
+  );
   periodicTimer = setInterval(
     () => {
-      fetchCatalog(true).catch((e) =>
-        console.error("[marketplace] periodic catalog fetch failed:", e),
+      autoUpdateExtensionsOnce(true).catch((e) =>
+        console.error("[marketplace] periodic extension auto-update failed:", e),
       );
     },
     24 * 60 * 60 * 1000,
@@ -210,13 +269,7 @@ export function registerMarketplaceIpc(): void {
       const result = await installFromUrl(url, expectedSha256 ?? null);
       // Notify all windows: static commands list зависит от установленных
       // extension'ов (см. requiresExtension в commands.ts).
-      for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) {
-          try {
-            win.webContents.send("kepler:commands:updated");
-          } catch {}
-        }
-      }
+      notifyCommandsChanged();
       return result;
     },
   );

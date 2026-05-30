@@ -26,8 +26,9 @@ yoso-industries/kepler-releases             yoso-industries/kosmos-extensions
    End-user Kepler.exe ───────────────────────────┘
 ```
 
-Launcher и marketplace полностью независимы — пользователь обновляет
-лаунчер и расширения отдельно.
+Launcher и marketplace полностью независимы: launcher обновляется через
+`electron-updater`, а уже установленные user extensions обновляются фоном из
+marketplace catalog.
 
 ## Kepler launcher: autoUpdater
 
@@ -216,9 +217,21 @@ Settings → **Расширения** — плоский список устан
 
 `startPeriodicCatalogCheck()`:
 
-- Initial fetch на `whenReady` (вместе с `setupAutoUpdater()`).
-- `setInterval(24h)` для перефетча в фоне.
+- Initial fetch на `whenReady` (вместе с `setupAutoUpdater()`) и unattended
+  update уже установленных user extensions.
+- `setInterval(24h)` для force-перефетча и unattended update в фоне.
 - Skip в `KOSMOS_TEST_MODE=1`.
+- Skip в dev / dev-<x> slots через `periodicMarketplaceCheckEnabled=false`.
+- Обновляются только `source: "installed"` extension'ы. Repo dev-source
+  extension'ы не трогаются.
+- Новые extension'ы из каталога автоматически не ставятся.
+- Решение об update — strict semver: catalog version должна быть новее
+  installed version; равные/старые/невалидные версии пропускаются.
+- Каждый update идёт через `installFromUrl(downloadUrl, sha256)` →
+  `installFromPath`, то есть сохраняет SHA-256 validation, backup и atomic
+  install. Ошибка одного extension'а логируется и не останавливает остальные.
+- Если Vue-extension уже открыт, его окно reload'ится после успешного install,
+  чтобы пользователь не ждал ручного переоткрытия.
 
 ### Install flow
 

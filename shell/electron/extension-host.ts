@@ -867,6 +867,13 @@ export function openExtension(id: string, route?: string): Promise<void> {
   return promise;
 }
 
+export function reloadExtensionWindow(id: string): boolean {
+  const entry = extensionWindows.get(id);
+  if (!entry || entry.win.isDestroyed()) return false;
+  entry.win.webContents.reloadIgnoringCache();
+  return true;
+}
+
 async function openExtensionImpl(id: string, route?: string): Promise<void> {
   const manifest = loadExtensionManifest(id);
   if (!manifest) {

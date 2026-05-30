@@ -1,10 +1,10 @@
-// Focus widget — inline controls (Pause / Skip / Stop) для pomodoro и
+// Focus widget — inline controls (Pause / Done / More) для pomodoro и
 // stopwatch режимов.
 //
 // Файлы:
-//   - shell/src/views/FocusWidgetView.vue — UI (.ctl-btn[aria-label=...])
+//   - shell/src/views/FocusWidgetView.vue — UI (btn + IconButton + aria-labels)
 //   - shell/electron/focus-widget.ts — `kepler:focus-widget:pomodoro:{pause,
-//     resume,skip,stop}` + `kepler:focus-widget:stopwatch:stop`
+//     resume,skip,stop}` + native context menu для «Ещё»
 //   - FocusState расширен `isPaused: boolean`
 //
 // В headless mode widget BrowserWindow создаётся (show:false) — Playwright
@@ -22,6 +22,7 @@ import {
 } from "./helpers/horologion";
 import {
   pomodoroStateFileExists,
+  waitForPomodoroStateFile,
   waitForPomodoroStateFileAbsent,
 } from "./helpers/pomodoro-state-file";
 
@@ -32,6 +33,7 @@ async function openWidget(
   await setFocusWidgetState(app, {
     active: true,
     remainingSec: 1500,
+    totalSec: 1500,
     label: "Тестовая сессия",
     mode: "work",
     blockingActive: false,
@@ -42,12 +44,15 @@ async function openWidget(
   if (widget) {
     await widget.waitForLoadState("domcontentloaded");
     // Ждём пока Vue смонтирует кнопки.
-    await widget.waitForSelector(".ctl-btn", { timeout: 5_000 });
+    await widget.waitForSelector('[aria-label="Пауза"], [aria-label="Продолжить"]', {
+      state: "attached",
+      timeout: 5_000,
+    });
   }
   return widget;
 }
 
-test("focus widget: показывает 3 inline кнопки когда active=true (pomodoro mode)", async () => {
+test("focus widget: controls появляются только на hover/focus (pomodoro mode)", async () => {
   test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-buttons-visible");
   const app = await launchKeplerWithDataDir(dataDir);
@@ -56,12 +61,19 @@ test("focus widget: показывает 3 inline кнопки когда active
     const widget = await openWidget(app);
     expect(widget, "focus widget Page не найден").not.toBeNull();
 
-    const buttons = widget!.locator(".controls .ctl-btn");
-    await expect(buttons).toHaveCount(3);
-    // Pause / Skip / Stop — все aria-label есть.
-    await expect(widget!.locator('.ctl-btn[aria-label="Пауза"]')).toBeVisible();
-    await expect(widget!.locator('.ctl-btn[aria-label="Пропустить фазу"]')).toBeVisible();
-    await expect(widget!.locator('.ctl-btn[aria-label="Остановить"]')).toBeVisible();
+    const actions = widget!.locator(".actions");
+    await expect(actions).toHaveCSS("opacity", "0");
+
+    await expect(widget!.locator(".content")).toHaveCSS("-webkit-app-region", "no-drag");
+    await expect(widget!.locator(".drag-handle")).toHaveCSS("-webkit-app-region", "drag");
+    // Pause / Done / More — все aria-label есть.
+    await widget!.locator(".widget").hover();
+    await expect(actions).toHaveCSS("opacity", "1");
+    await expect(
+      widget!.locator('.btn[aria-label="Пауза"], .btn[aria-label="Продолжить"]'),
+    ).toBeVisible();
+    await expect(widget!.locator('.btn[aria-label="Выполнено"]')).toBeVisible();
+    await expect(widget!.locator('.icon-btn[aria-label="Ещё"]')).toBeVisible();
   } finally {
     await gracefulQuit(app);
   }
@@ -78,19 +90,39 @@ test("focus widget: Pause кнопка триггерит backend pomodoro.pause
     const widget = await openWidget(app);
     expect(widget).not.toBeNull();
 
-    await widget!.locator('.ctl-btn[aria-label="Пауза"]').click();
+    await widget!.locator(".widget").hover();
+    await widget!.locator('.btn[aria-label="Пауза"]').click();
     await new Promise((r) => setTimeout(r, 800));
 
     const pomo = await getPomodoroState(app);
     expect(pomo).not.toBeNull();
     expect(pomo!.isPaused).toBe(true);
     expect(pomo!.phase).toBe("work");
+
+    // Regression: 2026-05-30. pause/resume не эмитят backend event, поэтому
+    // виджет обязан применить state из RPC response сразу после клика.
+    await expect(widget!.locator('.btn[aria-label="Продолжить"]')).toBeVisible();
+    const widgetState = await getFocusWidgetState(app);
+    expect(widgetState).not.toBeNull();
+    expect((widgetState as unknown as { isPaused: boolean }).isPaused).toBe(true);
+    expect(widgetState!.phaseEndsAtMs).toBeNull();
+
+    await widget!.locator('.btn[aria-label="Продолжить"]').click();
+    await expect(widget!.locator('.btn[aria-label="Пауза"]')).toBeVisible();
+    const resumed = await getPomodoroState(app);
+    expect(resumed).not.toBeNull();
+    expect(resumed!.isPaused).toBe(false);
+    expect(resumed!.isRunning).toBe(true);
+    const resumedWidgetState = await getFocusWidgetState(app);
+    expect(resumedWidgetState).not.toBeNull();
+    expect((resumedWidgetState as unknown as { isPaused: boolean }).isPaused).toBe(false);
+    expect(resumedWidgetState!.phaseEndsAtMs).not.toBeNull();
   } finally {
     await gracefulQuit(app);
   }
 });
 
-test("focus widget: Skip кнопка двигает phase work → shortBreak", async () => {
+test("focus widget: Skip через dropdown меню двигает phase work → shortBreak", async () => {
   test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-skip");
   const app = await launchKeplerWithDataDir(dataDir);
@@ -100,7 +132,17 @@ test("focus widget: Skip кнопка двигает phase work → shortBreak",
     const widget = await openWidget(app);
     expect(widget).not.toBeNull();
 
-    await widget!.locator('.ctl-btn[aria-label="Пропустить фазу"]').click();
+    // Skip теперь в native context menu (недоступен из Playwright DOM).
+    // Вызываем напрямую через IPC для проверки backend функциональности.
+    await widget!.evaluate(() =>
+      (window as unknown as Record<string, unknown>).kepler
+        ? (
+            window as unknown as {
+              kepler: { focusWidget: { pomodoro: { skip: () => Promise<void> } } };
+            }
+          ).kepler.focusWidget.pomodoro.skip()
+        : Promise.resolve(),
+    );
     await new Promise((r) => setTimeout(r, 800));
 
     const pomo = await getPomodoroState(app);
@@ -112,20 +154,20 @@ test("focus widget: Skip кнопка двигает phase work → shortBreak",
   }
 });
 
-test("focus widget: Stop кнопка останавливает pomodoro и удаляет state-файл", async () => {
+test("focus widget: Done кнопка останавливает pomodoro и удаляет state-файл", async () => {
   test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-stop");
   const app = await launchKeplerWithDataDir(dataDir);
   try {
     await new Promise((r) => setTimeout(r, 2500));
     await startPomodoroViaArk(app, { workMin: 25 });
-    // Дать backend'у пописать persist.
-    await new Promise((r) => setTimeout(r, 500));
+    await waitForPomodoroStateFile(dataDir, 5_000);
     expect(pomodoroStateFileExists(dataDir)).toBe(true);
 
     const widget = await openWidget(app);
     expect(widget).not.toBeNull();
-    await widget!.locator('.ctl-btn[aria-label="Остановить"]').click();
+    await widget!.locator(".widget").hover();
+    await widget!.locator('.btn[aria-label="Выполнено"]').click();
     await new Promise((r) => setTimeout(r, 1000));
 
     const pomo = await getPomodoroState(app);
@@ -147,6 +189,7 @@ test("focus widget: isPaused прокидывается в state через get-
     await setFocusWidgetState(app, {
       active: true,
       remainingSec: 1500,
+      totalSec: 1500,
       label: "Тест",
       mode: "work",
       blockingActive: false,
@@ -163,7 +206,44 @@ test("focus widget: isPaused прокидывается в state через get-
   }
 });
 
-test("focus widget: Stopwatch mode скрывает Skip кнопку", async () => {
+test("focus widget: backend generic label не перетирает конкретное название", async () => {
+  test.setTimeout(60_000);
+  const dataDir = freshDataDir("focus-widget-label-stability");
+  const app = await launchKeplerWithDataDir(dataDir);
+  try {
+    await new Promise((r) => setTimeout(r, 2500));
+    await setFocusWidgetState(app, {
+      active: true,
+      remainingSec: 1500,
+      totalSec: 1500,
+      label: "Собрать релиз",
+      mode: "work",
+      blockingActive: false,
+      isPaused: false,
+      phaseEndsAtMs: Date.now() + 1_500_000,
+    });
+    await setFocusWidgetState(app, {
+      active: true,
+      remainingSec: 1499,
+      totalSec: 1500,
+      label: "Фокус",
+      mode: "work",
+      blockingActive: false,
+      isPaused: false,
+      phaseEndsAtMs: Date.now() + 1_499_000,
+    });
+
+    const state = await getFocusWidgetState(app);
+    expect(state).not.toBeNull();
+    // Regression: 2026-05-28. Main-process backend tick не должен сбрасывать renderer label.
+    expect(state!.label).toBe("Собрать релиз");
+    expect(state!.remainingSec).toBeLessThanOrEqual(1499);
+  } finally {
+    await gracefulQuit(app);
+  }
+});
+
+test("focus widget: Stopwatch mode показывает 3 кнопки (Done + More в dropdown)", async () => {
   test.setTimeout(60_000);
   const dataDir = freshDataDir("focus-widget-stopwatch-no-skip");
   const app = await launchKeplerWithDataDir(dataDir);
@@ -172,6 +252,7 @@ test("focus widget: Stopwatch mode скрывает Skip кнопку", async ()
     await setFocusWidgetState(app, {
       active: true,
       remainingSec: 0,
+      totalSec: 0,
       label: "Секундомер",
       mode: "stopwatch",
       blockingActive: false,
@@ -181,13 +262,14 @@ test("focus widget: Stopwatch mode скрывает Skip кнопку", async ()
     const widget = await findFocusWidgetPage(app, 5_000);
     expect(widget).not.toBeNull();
     await widget!.waitForLoadState("domcontentloaded");
-    await widget!.waitForSelector(".ctl-btn", { timeout: 5_000 });
+    await widget!.waitForSelector('[aria-label="Пауза"]', { state: "attached", timeout: 5_000 });
 
-    // Skip отсутствует, Pause + Stop есть.
-    await expect(widget!.locator(".controls .ctl-btn")).toHaveCount(2);
-    await expect(widget!.locator('.ctl-btn[aria-label="Пропустить фазу"]')).toHaveCount(0);
-    await expect(widget!.locator('.ctl-btn[aria-label="Пауза"]')).toBeVisible();
-    await expect(widget!.locator('.ctl-btn[aria-label="Остановить"]')).toBeVisible();
+    // В stopwatch всегда 3 кнопки: Pause / Done / More.
+    await widget!.locator(".widget").hover();
+    await expect(widget!.locator(".controls button")).toHaveCount(3);
+    await expect(widget!.locator('.btn[aria-label="Пауза"]')).toBeVisible();
+    await expect(widget!.locator('.btn[aria-label="Выполнено"]')).toBeVisible();
+    await expect(widget!.locator('.controls button[aria-label="Ещё"]')).toBeVisible();
   } finally {
     await gracefulQuit(app);
   }

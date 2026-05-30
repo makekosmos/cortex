@@ -186,6 +186,7 @@ export async function seedPomodoroDraft(horo: Page, draft: SeedPomodoroDraftInpu
 export interface FocusWidgetStateSnapshot {
   active: boolean;
   remainingSec: number;
+  totalSec: number;
   label: string;
   mode: string;
   blockingActive: boolean;

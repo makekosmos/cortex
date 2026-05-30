@@ -1,4 +1,38 @@
-# Kosmos — статус проекта (2026-05-27)
+# Kosmos — статус проекта (2026-05-30)
+
+## 2026-05-30 — Focus widget + extension auto-update (Kosmos Desktop 0.3.5 → 0.3.6)
+
+Release 0.3.6 закрывает два пользовательских хвоста в desktop shell:
+компактный pomodoro/focus widget и unattended updates для установленных
+расширений.
+
+Focus widget:
+
+- базово показывает только время и название задачи;
+- hover/focus раскрывает controls поверх той же зоны, без расширения вправо;
+- отдельная drag-handle зона с `GripVertical` отвечает за перемещение;
+- position menu получил reset к нижнему центру экрана с отступом 50px;
+- progress теперь заполняет саму плашку, без левой border/accent-полосы;
+- длинные названия обрезаются ellipsis, не дёргая ширину;
+- pause/resume применяют snapshot из backend response сразу, без ожидания
+  внешнего event.
+
+Установленные через marketplace/user install расширения теперь обновляются
+фоном без открытия Settings и без подтверждения:
+
+- production startup запускает catalog fetch и unattended update;
+- каждые 24 часа выполняется force refresh каталога и повторный update pass;
+- обновляются только user-installed extensions (`source: "installed"`), repo
+  dev-source расширения не трогаются;
+- решение об update — strict newer semver, равные/старые/невалидные версии
+  пропускаются;
+- установка идёт через существующий `installFromUrl()` → `installFromPath()`
+  flow, поэтому SHA-256 validation, backup и atomic replace остаются общими.
+- открытое Vue-extension окно reload'ится после успешного обновления.
+
+Dev fix: focus-block dynamic chunk снова видит `pingService` и settings-service
+helpers через explicit exports из Electron main entry, поэтому `bun run --cwd
+shell dev` больше не падает в `pingService is not a function`.
 
 ## 2026-05-27 — Native apps + Akasha EPUB reader (Kosmos Desktop 0.3.4 → 0.3.5, Akasha 0.1.0)
 

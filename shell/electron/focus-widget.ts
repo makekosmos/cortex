@@ -12,7 +12,7 @@
 //   - На active=false (pomodoro stopped) → hide(), но window не destroy
 //     чтобы reopen был мгновенным.
 
-import { BrowserWindow, ipcMain, screen, app } from "electron";
+import { BrowserWindow, ipcMain, screen, app, Menu } from "electron";
 import type { ArkClient } from "@kosmos/ark";
 import { openExtension } from "./extension-host";
 import { awaitArkReady } from "./main";
@@ -24,13 +24,14 @@ import { keplerDataDir } from "./data-dir";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const WIDGET_WIDTH = 320;
+const WIDGET_WIDTH = 280;
 const WIDGET_HEIGHT = 52;
 const STATE_FILENAME = "kepler-focus-widget-state.json";
 
 export interface FocusState {
   active: boolean;
   remainingSec: number;
+  totalSec: number;
   label: string;
   mode: "work" | "break" | "stopwatch";
   /** Применён ли активный блоклист (focus mode blocking). Управляет 🛡️ индикатором в widget. */
@@ -57,6 +58,7 @@ interface PersistedBounds {
 const DEFAULT_STATE: FocusState = {
   active: false,
   remainingSec: 0,
+  totalSec: 0,
   label: "",
   mode: "work",
   blockingActive: false,
@@ -121,11 +123,24 @@ function isOnSomeDisplay(x: number, y: number): boolean {
 
 function defaultPosition(): PersistedBounds {
   const primary = screen.getPrimaryDisplay().workArea;
-  // Top-right corner, 24px from edges.
+  return defaultPositionForWorkArea(primary);
+}
+
+function defaultPositionForWorkArea(workArea: Electron.Rectangle): PersistedBounds {
+  const bottomOffset = 50;
   return {
-    x: primary.x + primary.width - WIDGET_WIDTH - 24,
-    y: primary.y + 24,
+    x: Math.round(workArea.x + (workArea.width - WIDGET_WIDTH) / 2),
+    y: Math.max(workArea.y + 24, workArea.y + workArea.height - WIDGET_HEIGHT - bottomOffset),
   };
+}
+
+function resetWidgetPosition(): void {
+  const win = ensureWindow();
+  const [x, y] = win.getPosition();
+  const display = screen.getDisplayNearestPoint({ x, y });
+  const pos = defaultPositionForWorkArea(display.workArea);
+  win.setPosition(pos.x, pos.y, false);
+  writePersistedBoundsNow(pos);
 }
 
 // --- Window lifecycle -------------------------------------------------------
@@ -261,10 +276,27 @@ function clearTickTimer(): void {
   }
 }
 
+function isDefaultFocusLabel(label: string | undefined): boolean {
+  const normalized = (label ?? "").trim();
+  return normalized === "" || normalized === "Фокус" || normalized === "Перерыв";
+}
+
 // --- Public API -------------------------------------------------------------
 
 export function setFocusState(next: Partial<FocusState>): void {
+  const previousLabel = currentState.label;
+  const shouldKeepCurrentLabel =
+    currentState.active &&
+    next.active !== false &&
+    next.mode === currentState.mode &&
+    isDefaultFocusLabel(next.label) &&
+    !isDefaultFocusLabel(currentState.label);
+
   currentState = { ...currentState, ...next };
+  if (shouldKeepCurrentLabel) {
+    // См. postmortems.md § 2026-05-28: backend ticks may carry only generic UI context.
+    currentState.label = previousLabel;
+  }
   // active=true → ensure widget shown.
   // active=false → hide (но не destroy, чтобы reopen был быстрым).
   if (currentState.active) {
@@ -306,6 +338,39 @@ ipcMain.handle("kepler:focus-widget:open-horologion", async () => {
   await openExtension("horologion");
 });
 
+ipcMain.handle("kepler:focus-widget:show-menu", () => {
+  const win = widgetWindow;
+  if (!win || win.isDestroyed()) return;
+  const menu = Menu.buildFromTemplate([
+    {
+      label: "Редактировать",
+      click: () => {
+        void openExtension("horologion");
+      },
+    },
+    {
+      label: "Пропустить сессию",
+      click: () => {
+        void invokePomodoro("skip");
+      },
+    },
+    {
+      label: "Сбросить позицию",
+      click: () => {
+        resetWidgetPosition();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Скрыть виджет",
+      click: () => {
+        hideWidget();
+      },
+    },
+  ]);
+  menu.popup({ window: win });
+});
+
 // --- Inline controls (Pause / Resume / Skip / Stop) -------------------------
 //
 // IPC от FocusWidgetView'ы. Все pomodoro операции идут через kepler-backend
@@ -337,7 +402,14 @@ interface ArkObjectLike {
 async function invokePomodoro(op: "pause" | "resume" | "skip" | "stop"): Promise<void> {
   try {
     const client = await awaitArkReady();
-    await client.invokeOperation({ operation: `pomodoro.${op}` });
+    const state = await client.invokeOperation<PomodoroEventState>({
+      operation: `pomodoro.${op}`,
+    });
+    if (state && typeof state === "object") {
+      // См. postmortems.md § 2026-05-30: pause/resume return state but do not emit
+      // pomodoro events, so the widget must apply the operation response directly.
+      setFocusState(deriveFocusStateFromBackend(state));
+    }
   } catch (e) {
     console.error(`[focus-widget] pomodoro.${op} failed:`, e);
   }
@@ -453,6 +525,7 @@ function deriveFocusStateFromBackend(raw: PomodoroEventState): Partial<FocusStat
 
   const mode: FocusState["mode"] = phase === "work" ? "work" : "break";
   const remainingSec = Math.max(0, Math.ceil((raw.remainingMs ?? 0) / 1000));
+  const totalSec = Math.max(0, Math.ceil((raw.totalMs ?? 0) / 1000));
 
   const title = (raw.title ?? "").trim();
   const firstTask = raw.tasks?.[0];
@@ -461,6 +534,7 @@ function deriveFocusStateFromBackend(raw: PomodoroEventState): Partial<FocusStat
   return {
     active: widgetActive,
     remainingSec,
+    totalSec,
     label,
     mode,
     isPaused,

@@ -90,12 +90,14 @@ const api: KeplerApi = {
     stopwatch: {
       stop: () => ipcRenderer.invoke("kepler:focus-widget:stopwatch:stop"),
     },
+    showMenu: () => ipcRenderer.invoke("kepler:focus-widget:show-menu"),
     onState: (handler) => {
       const wrapper = (_e: Electron.IpcRendererEvent, state: unknown) =>
         handler(
           state as {
             active: boolean;
             remainingSec: number;
+            totalSec: number;
             label: string;
             mode: "work" | "break" | "stopwatch";
             blockingActive: boolean;

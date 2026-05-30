@@ -174,6 +174,7 @@ function createSessionState() {
     void api.setState({
       active,
       remainingSec,
+      totalSec: Math.ceil(totalMs.value / 1000),
       label,
       mode,
       blockingActive,

@@ -1,0 +1,31 @@
+{
+  "task_id": "2026-05-28-focus-widget-stability",
+  "verified_at": "2026-05-28T21:52:44+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "command": "bun run test:e2e tests/e2e/focus-widget-controls.spec.ts"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "bun run test:e2e tests/e2e/focus-widget-controls.spec.ts"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run test:e2e tests/e2e/focus-widget-controls.spec.ts"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "bun run test:e2e tests/e2e/focus-widget-controls.spec.ts"
+    },
+    {
+      "ac": "substantial-guard",
+      "verdict": "PASS",
+      "command": "bun run ark:smoke"
+    }
+  ]
+}

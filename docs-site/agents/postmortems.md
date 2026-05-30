@@ -21,6 +21,48 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-05-30 — Focus widget pause ignores operation response
+
+**Симптомы.** В focus widget кнопка «Пауза» не выглядела рабочей: клик уходил в backend, но сам виджет продолжал показывать running-состояние/кнопку «Пауза» и автономный тик мог продолжаться до следующего внешнего push.
+
+**Где жило.** `shell/electron/focus-widget.ts:402` — `invokePomodoro()` вызывал `pomodoro.pause` / `pomodoro.resume`, но игнорировал returned state и полагался только на backend events.
+
+**Root cause.** `PomodoroHost::pause()` и `PomodoroHost::resume()` в `services/kepler-backend/src/pomodoro_host.rs` intentionally не эмитят `pomodoro_phase_changed`: фаза не меняется, операция только меняет `isPaused`, `isRunning`, `remainingMs` и `phaseEndsAtMs`, возвращая новый snapshot в RPC response. Focus widget main-process path ожидал event-driven обновление для всех pomodoro ops, поэтому для pause/resume локальный `currentState` оставался stale.
+
+**Fix.** `invokePomodoro()` теперь типизированно читает snapshot из `client.invokeOperation<PomodoroEventState>()` и сразу применяет `setFocusState(deriveFocusStateFromBackend(state))`. Event subscription остаётся для tick/phase_changed/finished, но inline controls больше не зависят от события там, где backend contract возвращает state response без event.
+
+**Регрешн-защита.** `tests/e2e/focus-widget-controls.spec.ts` расширил pause test: после клика «Пауза» он проверяет появление кнопки «Продолжить», `focusWidget.getState().isPaused === true` и `phaseEndsAtMs === null`; затем кликает «Продолжить» и проверяет возврат к running state. Перед fix этот тест падал на отсутствии `.btn[aria-label="Продолжить"]`. После fix прошли `bun run --cwd shell typecheck`, `bun run format:check shell/electron/focus-widget.ts tests/e2e/focus-widget-controls.spec.ts docs-site/agents/postmortems.md`, `bun run test:e2e tests/e2e/focus-widget-controls.spec.ts`, `bun run --cwd shell build:js`.
+
+**Prevention.** Для IPC/RPC controls нельзя предполагать, что mutation всегда придёт вторым событием. Если backend operation возвращает authoritative snapshot, UI-owner должен применить response немедленно; event stream — это синхронизация для внешних изменений и тиков, а не единственный способ обновить state после user action.
+
+## 2026-05-30 — Focus block dev bundle loses dynamic imports
+
+**Симптомы.** При `bun run --cwd shell dev` после старта Kepler в логах появлялись `[focus-block] service path failed: pingService is not a function` и `[extension-host] focus block apply failed: TypeError: isFocusServiceAutoInstallDeclined is not a function`. Focus-block fallback мог падать до helper/service path, хотя приложение продолжало запускаться.
+
+**Где жило.** `shell/electron/focus-block.ts:169` и `shell/electron/focus-block.ts:218` — dynamic imports `./focus-service` / `./settings-window`; `shell/electron/main.ts` — Electron main entry экспортировал только `awaitArkReady` / `shouldShowLauncherOnStartup`.
+
+**Root cause.** Vite/Rolldown code-splitting вынес `focus-block.ts` в отдельный dynamic chunk и переписал его dynamic imports модулей, уже попавших в main entry, в `import("./main.js")`. Но entry bundle не реэкспортировал нужные функции из `focus-service.ts` и `settings-window.ts`; на TypeScript уровне всё было валидно, а runtime module namespace в dev/prod bundle не содержал `pingService` / `isFocusServiceAutoInstallDeclined`.
+
+**Fix.** `shell/electron/main.ts` теперь явно реэкспортит `getServiceStatus`, `runServiceCliElevated`, `pingService`, `sendViaPipe`, `isFocusServiceAutoInstallDeclined` и `setFocusServiceAutoInstallDeclined`. Это сохраняет текущую chunking-схему, но делает runtime namespace `main.js` совместимым с тем, во что bundler превращает dynamic imports из `focus-block.ts`.
+
+**Регрешн-защита.** `bun run --cwd shell typecheck`, `bun run --cwd shell build:js`, `bun run format:check shell/electron/main.ts docs-site/agents/postmortems.md`, `bun run docs:check` прошли после fix. Дополнительно проверен собранный `shell/dist-electron/main.js`: export namespace содержит `pingService`, `sendViaPipe`, `isFocusServiceAutoInstallDeclined` и остальные API, которые импортирует `focus-block-*.js`.
+
+**Prevention.** Если Electron main использует dynamic import для модулей, которые уже импортированы entrypoint'ом, обязательно проверять не только TypeScript, но и форму production/dev bundle. Code-splitting может переписать source-level imports на entry module namespace; тогда нужные функции должны быть entry exports либо модуль должен быть вынесен в отдельный shared chunk явно.
+
+## 2026-05-28 — Focus widget label flicker and noisy controls
+
+**Симптомы.** Pomodoro focus widget визуально дёргался при задаче: label мог прыгать между конкретным названием и дефолтным pomodoro label. Сам виджет был перегружен: controls постоянно занимали место вместо базового режима «время + задача».
+
+**Где жило.** `shell/electron/focus-widget.ts` — `setFocusState` без различения качества источников сливал patches от backend events и renderer push. `shell/src/views/FocusWidgetView.vue` — controls были всегда видимыми при active session.
+
+**Root cause.** Focus widget имеет два источника правды: backend events дают надёжный lifecycle/tick, а Horologion renderer знает более богатый UI context (draft title, tasks, focus blocking). Main process принимал последний patch целиком, поэтому более бедный backend tick мог перезаписать уже показанный конкретный label дефолтом. В UI controls были частью обычного flex layout, поэтому даже idle visual state выглядел как toolbar, а не compact status widget. Первый hover-only fix повесил reveal на область с `-webkit-app-region: drag`; в реальном Electron drag-region не ведёт себя как обычная DOM hover target, поэтому кнопки пропали и не раскрывались.
+
+**Fix.** `setFocusState` теперь сохраняет уже известный конкретный label, когда следующий active patch в том же mode несёт только дефолтный `Фокус`/`Перерыв`. `FocusWidgetView` переведён в compact baseline: время и label занимают обычную no-drag hover area, а `IconButton` controls из `@kosmos/visuals` появляются на их месте поверх content overlay. Перетаскивание вынесено в отдельную `.drag-handle` с `GripVertical`, окно стало уже, левая accent-полоса удалена, а mode-индикация стала заполняющим progress-fill внутри плашки через новый `totalSec` в focus widget state.
+
+**Регрешн-защита.** `tests/e2e/focus-widget-controls.spec.ts` добавил regression `backend generic label не перетирает конкретное название` и проверяет, что controls скрыты до hover/focus, content-zone `no-drag`, handle-zone `drag`, а pause/skip/stop остаются кликабельны. `bun run --cwd shell typecheck`, `bun run format:check ...`, `bun run --cwd shell build:js`, `bun run test:e2e tests/e2e/focus-widget-controls.spec.ts` прошли после fix.
+
+**Prevention.** Для state, который собирается из нескольких источников разной полноты, merge обязан учитывать качество поля, а не только “последний patch победил”. Backend lifecycle/tick может быть authoritative по времени, но не по UI context; renderer-owned label/task context нельзя затирать дефолтами из более бедного события. В Electron floating widgets нельзя совмещать hover-only controls с `-webkit-app-region: drag` на той же DOM-зоне; drag должен жить в отдельной маленькой области, а hover/click controls — в `no-drag`.
+
 ## 2026-05-27 — Akasha EPUB blocks overlap on resize and miss source semantics
 
 **Симптомы.** При сужении/расширении окна Akasha расстояния между абзацами не пересчитывались, текст начинал налезать друг на друга, а часть EPUB-стилей из реальной книги выглядела как обычный плоский текст. Копирование выделения было неочевидным.
@@ -220,6 +262,15 @@ Manual repro для AC7: запустить `bun run --cwd shell dev`, дожд�
 
 **Prevention.** **Когда Electron-API имеет парный `set`/`get`, проверяй симметричность сигнатур сразу.** Любая запись в реестр с non-default arguments должна верифицироваться чтением **с теми же** arguments. Применимо везде где есть `app.getXxx()` / `app.setXxx()` с optional parameters — `setUserTasks`, `setJumpList`, `setLoginItemSettings`.
 
+### UPDATE 2026-05-28 — readback должен смотреть на фактические Windows launch items
+
+**Симптомы.** Пользователь снова видит «Не удалось применить настройку» в Settings → «Автозапуск с Windows», при этом в `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` уже есть запись `Kosmos = "<...>\Kosmos.exe" --autostart`.
+**Где жило.** `shell/electron/settings-window.ts` — `isAutostartEnabled()` полагался только на `openAtLogin` + legacy path probe, а UI делал второй `get()` после `set()`.
+**Root cause.** Windows/Electron readback имеет больше состояния, чем один boolean: `getLoginItemSettings()` возвращает `launchItems[]` и `executableWillLaunchAtLogin`, а `openAtLogin` зависит от точного match'а `path`/`args`. После rename/install-path хвостов физически валидная HKCU Run запись может существовать под другим value-name или быть видна в `launchItems`, но UI всё равно покажет ошибку, если мы не сверяем фактический launch item.
+**Fix.** `isAutostartEnabled()` теперь после симметричного `getLoginItemSettings({ path, args })` дополнительно проверяет `settings.launchItems[]`: enabled item с тем же normalized `process.execPath` и `["--autostart"]` считается валидным автозапуском даже если `openAtLogin` не совпал. Legacy cleanup расширен на `KeplerKosmos` / `KosmosKepler`, чтобы rename-хвосты не оставляли дубликаты. Settings UI переименован с Kepler на Kosmos.
+**Регрешн-защита.** `bun run --cwd shell typecheck`, `bun run --cwd shell build:js`, `bun run docs:check`. На машине проверено, что HKCU Run содержит валидную запись `Kosmos = "<...>\Kosmos.exe" --autostart`.
+**Prevention.** Для Windows autorun не считать `openAtLogin` единственным источником правды. Если API возвращает structured readback (`launchItems[]`), сверяй фактические path/args enabled items; value-name после rename/migration — metadata, а launchability определяется executable + args + StartupApproved state.
+
 ---
 
 ## 2026-05-23 — Kepler: launcher window не показывается при manual launch
@@ -267,6 +318,15 @@ Manual repro для AC7: запустить `bun run --cwd shell dev`, дожд�
 **Регрешн-защита.** Чистый CSS-фикс — JS-тест не нужен. В `Editor.css` оставлен комментарий объясняющий почему НЕ возвращать `scroll-padding`. Manual repro: открыть длинную заметку, поставить курсор в центр, drag-select мышью в пределах viewport — viewport должен оставаться стабильным.
 
 **Prevention.** `scroll-padding` >> 0 на скролл-контейнере, содержащем contentEditable / textarea — **анти-паттерн**. Любой UA-инициированный scrollIntoView (drag-select, IME composition, find-in-page, accessibility focus) будет двигать viewport относительно padding-зоны, не относительно реальных краёв. Если нужно breathing room — используй реальный `padding-bottom` / spacer элемент.
+
+### UPDATE 2026-05-28 — text drag у верхнего края снова уезжает вниз
+
+**Симптомы.** При попытке выделить обычный текст в верхней части заметки Eden viewport снова резко скроллится вниз, хотя старый `scroll-padding: 30vh` уже удалён.
+**Где жило.** `extensions/eden/src/Editor.vue:onContentMouseDown` запускает `useBlockSelection.startTracking` даже когда mousedown пришёл из текста внутри `.ProseMirror`; `extensions/eden/src/composables/useBlockSelection.ts:updateDrag` после пересечения границы блока активирует block-selection, блюрит TipTap, чистит native selection и включает auto-scroll.
+**Root cause.** Block-selection был повешен на весь editor content area, а не только на gutter/пустые области. Обычный browser text-selection, начатый на тексте, при протягивании через соседний блок проходил `CROSSING_MIN_PX` и превращался в rubber-band block drag; дальше кастомный auto-scroll двигал `.editor-wrapper`, что пользователь видел как резкий уход вниз.
+**Fix.** `onContentMouseDown` теперь проверяет `shouldStartBlockSelectionTracking`: block-selection стартует только из gutter/пустой editor surface, а mousedown по реальному тексту внутри `.ProseMirror` остаётся за browser-native text selection. DOM-gate вынесен в `extensions/eden/src/lib/blockSelectionPointer.ts`. `kepler-block-select-active` и `kepler-block-drag-active` разделены: `overflow:hidden` и `pointer-events:none` живут только на active drag, поэтому после mouseup persisted block selection больше не замораживает editor scroll. Edge-autoscroll delta вынесен в pure helper, cleanup теперь отменяет drag/rAF при unmount. TaskRef programmatic input focus при sibling navigation / autoFocus теперь тоже использует `{ preventScroll: true }`.
+**Регрешн-защита.** `extensions/eden/tests/components/BlockSelectionPointer.spec.ts` проверяет, что paragraph/span/text-node/input внутри `.ProseMirror` не запускают block-selection tracking, а gutter/empty `.ProseMirror` surface всё ещё запускают. `BlockSelectionClasses.spec.ts` фиксирует split между persisted selection и active drag class. `BlockSelectionAutoScroll.spec.ts` фиксирует edge-zone autoscroll. Playwright smoke `.agent/tasks/2026-05-28-eden-scroll-drag-select/smoke/verify-eden-scroll-drag-select.mjs` грузит реальный `Editor.css` и проверяет: no large scroll-padding, persisted selection keeps `overflow-y:auto`, drag sets `overflow-y:hidden`, after drag returns to auto.
+**Prevention.** Любой кастомный drag-layer поверх contentEditable должен иметь явный pointer gate: native text-selection владеет gesture, начатым на тексте, а кастомный selection-layer — только gutter/empty surface. Состояния “selection exists” и “drag is active” нельзя склеивать одним CSS class: scroll freeze, hover suppression и selection visuals имеют разные lifecycle. Threshold по движению не отличает “выделяю текст через соседний блок” от “выделяю блоки”, поэтому решать нужно на mousedown target, а не позднее в mousemove.
 
 ---
 

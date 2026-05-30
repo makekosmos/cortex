@@ -149,6 +149,7 @@ const api = {
     setState: (patch: {
       active?: boolean;
       remainingSec?: number;
+      totalSec?: number;
       label?: string;
       mode?: "work" | "break" | "stopwatch";
       blockingActive?: boolean;

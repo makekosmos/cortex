@@ -287,6 +287,7 @@ export interface KeplerApi {
     setState(patch: {
       active?: boolean;
       remainingSec?: number;
+      totalSec?: number;
       label?: string;
       mode?: "work" | "break" | "stopwatch";
       blockingActive?: boolean;
@@ -295,6 +296,7 @@ export interface KeplerApi {
     getState(): Promise<{
       active: boolean;
       remainingSec: number;
+      totalSec: number;
       label: string;
       mode: "work" | "break" | "stopwatch";
       blockingActive: boolean;
@@ -315,11 +317,14 @@ export interface KeplerApi {
     stopwatch: {
       stop(): Promise<void>;
     };
+    /** Показать native context menu (Редактировать / Пропустить / Скрыть). */
+    showMenu(): Promise<void>;
     /** Subscribe на push state updates от main. Returns unsubscribe. */
     onState(
       handler: (state: {
         active: boolean;
         remainingSec: number;
+        totalSec: number;
         label: string;
         mode: "work" | "break" | "stopwatch";
         blockingActive: boolean;
