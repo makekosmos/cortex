@@ -7,1027 +7,184 @@
 Открой собранный сайт (`bun run docs:dev`, http://localhost:5173/) для
 удобного чтения.
 
----
-
-## Содержание
-
-1. [Старт](#старт)
-2. [Запреты](#запреты)
-3. [Чек-листы](#чек-листы)
-4. [Поддержка документации](#поддержка-документации)
-5. [Сжатые правила](#сжатые-правила)
-6. [Proof loop](#proof-loop)
+Этот файл намеренно компактный: он грузится в агентский контекст по умолчанию.
+Детальные правила живут в `docs-site/` и подгружаются по ссылкам только когда задача касается области.
+Полный inline-reference для редких случаев — `docs-site/public/full-llms.txt`.
 
 ---
 
-## Старт
+# Core context для Claude Code
 
-# Для AI-агента — старт работы
-
-::: tip Прочитай это ПЕРВЫМ
-Эта страница заменяет тонкие `AGENTS.md` / `CLAUDE.md` в корне. Полный контекст репо — в этом сайте документации. Все правила в одном месте.
+::: tip Что это
+Единственный источник корневых `AGENTS.md` и `CLAUDE.md`. Цель ≤ 200 строк по [Anthropic best-practices](https://code.claude.com/docs/en/best-practices) — эти файлы грузятся в агентский контекст по умолчанию, переполнение убивает следование правилам. Здесь только то, без чего агент **сделает ошибку**. Детали — за pointer'ами.
 :::
-
-Ты работаешь в монорепо **Kosmos** (после brand swap 2026-05-14). Перед любым изменением кода обязательно сверься с разделами ниже. Если задача нетривиальна — иди по [Proof loop](docs-site/concepts/proof-loop.md).
 
 ## За 30 секунд
 
-- **Kosmos** = монорепо / экосистема для личного софта. Bun workspaces + Cargo workspace.
-- **Kepler** = имя лаунчера (`shell/`, npm name `kepler-shell`) и его shared backend (`services/kepler-backend/`).
+- **Kosmos** = внешний desktop product + монорепо личной экосистемы (Bun workspaces + Cargo workspace, Windows-only).
+- **Kepler** = legacy/internal namespace (`kepler:*`, `window.kepler`, `services/kepler-backend/`), не user-facing product name.
 - **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, бинарь `ark-core-rpc`).
-- **Apps** говорят с ARK **только** через `@kosmos/ark` или `ark_core::db` (Rust direct writers).
-- **Прямые SQL writes в ARK** из app services — **запрещены**.
-- **Apps интегрируются с лаунчером через command bus** (apps регистрируют commands, Kepler invoke'ает).
-- **Native extensions** (`kind: "native"`) запускаются shell'ом как child process, а не как `BrowserWindow`.
-- **Тесты** — только на изолированных БД.
+- **Extensions** (`extensions/<id>/`) — Vue-приложения, грузятся в Kepler shell как отдельные окна.
+- **Apps говорят с ARK только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в синхронизируемые таблицы — запрещены.
 - **Substantial-правки** — через `.agent/tasks/<DATE>-<slug>/` proof loop.
 
-## Что должно сработать прежде, чем ты начнёшь редактировать код
+## 🚨 Прежде чем менять код
 
-Прочитай в указанном порядке:
+| Область правки                                                                                   | Обязательно прочитать                                                              |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| Data-слой (`shell/electron`, `extensions/<id>/src`, `services/kepler-backend/src/usage_tracker`) | `docs-site/concepts/write-boundary.md` + `agents/forbidden.md` § ARK writes / Sync |
+| `extensions/<id>/src/`                                                                           | `docs-site/apps/<name>.md` + `forbidden.md` § per-app                              |
+| `shell/electron/focus-*`, `kepler-focus-helper/svc`                                              | `docs-site/concepts/focus-mode.md` + `forbidden.md` § Focus mode                   |
+| `shell/electron/extension-host.ts`, command bus                                                  | `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md`  |
+| Sync / schema / write-boundary                                                                   | `docs-site/concepts/sync.md` + `ark-objects.md`                                    |
+| Substantial-задача (фича / endpoint / архитектура)                                               | `docs-site/concepts/proof-loop.md` + spec в `.agent/tasks/<DATE>-<slug>/`          |
+| Перед оценкой срока пользователю                                                                 | skill `estimate-calibration` (читать `log.jsonl`)                                  |
 
-1. **[Архитектура](docs-site/concepts/architecture.md)** — общая картина.
-2. **[Системные требования](docs-site/concepts/system-requirements.md)** — что нужно для запуска и сборки (Windows-only сейчас, x64, Node 20+, Rust 1.80+, Bun).
-3. **[Модель данных ARK](docs-site/concepts/ark-objects.md)** — что за таблицы и типы.
-4. **[Граница записи в ARK](docs-site/concepts/write-boundary.md)** — что можно, что нельзя.
-5. **[Изоляция тестовых БД](docs-site/concepts/test-isolation.md)** — как писать тесты.
-6. **[Proof loop](docs-site/concepts/proof-loop.md)** — как оформлять substantial-задачи.
-7. **[Запреты и гварды](docs-site/agents/forbidden.md)** — список «никогда».
-8. **[Чек-листы по областям](docs-site/agents/checklists.md)** — что прогнать перед сдачей.
-
-## Принципы работы
-
-### 1. Не угадывай — читай источник
-
-Перед правкой в `apps/<name>` прочитай `apps/<name>/AGENTS.md`. Перед правкой в data-слое — `docs/ARK-READONLY-SQL-BOUNDARY.md` и [Граница записи](docs-site/concepts/write-boundary.md).
-
-### 2. Меньший defensible diff
-
-Не «попутно отрефактори». Делай только то, что в задаче.
-
-### 3. Не добавляй лишнее
-
-- Не добавляй обработку ошибок для случаев, которые не могут случиться.
-- Не добавляй fallback'и «на всякий случай».
-- Не добавляй комментарии, объясняющие **что**. Имена и так это делают.
-- Не добавляй feature flags, когда можно просто изменить код.
-
-### 4. Прогоняй гварды
-
-После любой правки в data-слой:
+## Команды (всегда под рукой)
 
 ```powershell
-bun run ark:guard:writes
+bun run ark:guard:writes   # после правок в data-слой
+bun run ark:smoke          # после любой substantial-задачи
+bun run docs:check         # после правок docs-site/
+bun run docs:sync          # регенерация CLAUDE.md / AGENTS.md / llms.txt
+bunx playwright test --config shell/playwright.config.ts   # e2e (всегда headless)
 ```
 
-После любой substantial-правки:
+Полный набор скриптов — `docs-site/reference/commands.md`. Что прогонять перед PR — `docs-site/reference/smoke-matrix.md`.
 
-```powershell
-bun run ark:smoke
-```
+## Карта (где что)
 
-### 5. Не клейми «готово» если AC не PASS
+| Имя                                           | Где                                                           |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| Eden (заметки, TipTap)                        | `extensions/eden/`                                            |
+| Delphi (задачи)                               | `extensions/delphi/`                                          |
+| Horologion (трекер/pomodoro, focus mode host) | `extensions/horologion/`                                      |
+| Arrancador (игровая библиотека)               | `extensions/arrancador/`                                      |
+| Kosmos desktop shell (лаунчер + focus widget) | `shell/`                                                      |
+| Kosmos Runtime / kepler-backend               | `services/kepler-backend/`                                    |
+| Kosmos Helper / System Service                | `services/kepler-focus-helper/`, `services/kepler-focus-svc/` |
+| ARK core (Rust runtime)                       | `crates/ark-core/`                                            |
+| `@kosmos/ark` (TS SDK)                        | `packages/ark/`                                               |
+| `@kosmos/visuals` (UI токены)                 | `packages/visuals/`                                           |
+| Dashboard (встроенный shell view)             | `shell/src/views/Dashboard*.vue`                              |
 
-Если задача через proof loop — каждый AC должен быть `PASS` в `evidence.md`. Не пиши «готово» в чате, пока это не так.
+Подробное описание — `docs-site/agents/index.md` (Карта приложений).
 
-### 6. Failing тесты исправляются всегда
-
-Если в ходе работы обнаружен failing test / regression / баг — исправляется обязательно. Не важно, был ли он до моих правок или нет. Либо в текущем коммите (если по смыслу подходит), либо отдельным коммитом / proof loop'ом. «Pre-existing» — не оправдание.
-
-### 7. Калибруй оценки времени
-
-Перед тем как назвать пользователю срок («займёт N часов»), сверься со skill'ом `estimate-calibration` (`~/.claude/skills/estimate-calibration/`): прочитал log.jsonl прошлых prediction vs actual → скорректировал gut estimate → записал prediction до начала → закрыл row после AC PASS. Подробно — [Estimation](./estimation).
-
-### 8. Тесты пишутся по стандартному паттерну
-
-E2e в headless mode, universal extension contract через `manifest.tests`, per-app spec только для нетривиальных UI flow'ов. Полный гайд — [Testing](./testing).
-
-## Карта приложений и пакетов
-
-::: tip STATUS.md — always-current snapshot
-Корневой `STATUS.md` хранит актуальный snapshot состояния проекта (что работает, что в работе, что сломано). Перед началом substantial-задачи открой его — карта ниже описывает «где что», а `STATUS.md` — «что сейчас в каком состоянии». Обновлять `STATUS.md` нужно, когда меняется статус приложения или появляется/исчезает заметная багу/фича.
-:::
-
-Когда пользователь упоминает имя — ты должен моментально знать, где это.
-
-| Имя                       | Где                                                                               | Что                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Eden**                  | `extensions/eden`                                                                 | заметки и дневник — Vue-extension в Kepler shell (TipTap editor). Phase 6.0 + 6.0.A + **6.1 (2026-05-19)** done. Standalone `apps/eden/ts/` удалён. Phase 6.1: system type «Дневник» + ISO `YYYY-MM-DD` title; static open-команды `eden:note:open-today` / `eden:note:create`; zen-mode chord `Ctrl+K Z` + acrylic backdrop в zen; titlebar page-title + `WindowControls` (без min/max в zen); char counter; ПКМ-меню «Удалить» через `ContextMenu`; иконки Lucide через `iconResolver.ts` (anytype-папка удалена); layout-agnostic hotkeys через `e.code`. |
-| **Delphi**                | `extensions/delphi`                                                               | задачи — Vue-extension в Kepler shell                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **Arrancador**            | `extensions/arrancador`                                                           | игровая библиотека — Vue-extension                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Dashboard**             | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`                         | встроенный ARK browser: sidebar по типам + таблица объектов. До 2026-05-14 был extension'ом (заморожен в `legacy/dashboard-extension/`), 2026-05-15 убран welcome screen — single DB per user.                                                                                                                                                                                                                                                                                                                                                               |
-| **Horologion**            | `extensions/horologion`                                                           | трекер времени, pomodoro — Vue-extension. `time_entry_obj` + общий `tag_obj`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Akasha**                | `extensions/akasha` + `apps/akasha`                                               | EPUB-читалка — native extension на Rust + GPUI. Launcher command `akasha:open`; состояние v1 локально в `extensions-data/akasha`, без ARK writes.                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Kepler Shell**          | `shell/` (npm name: `kepler-shell`)                                               | лаунчер экосистемы (Electron, fixed 720×460). [Command bus](docs-site/concepts/command-bus.md) + [Extension host](docs-site/concepts/extension-host.md) (Phase 4 + 6.0 ✅: Eden / Horologion / Delphi / Arrancador как Vue extensions; Dashboard — встроенный shell view).                                                                                                                                                                                                                                                                                   |
-| **Kepler Backend**        | `services/kepler-backend`                                                         | Rust-сервис: command bus host + WS server + встроенный `usage_tracker` модуль (после Phase E2)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Extension host**        | `shell/electron/extension-host.ts` + `extensions/<id>/`                           | Loader Vue-бандлов как extension windows внутри Kepler shell. Manifest + `openExtension(id)` + dev mode (HMR). См. [Extension host](docs-site/concepts/extension-host.md), [Extension dev mode](docs-site/concepts/extension-dev-mode.md).                                                                                                                                                                                                                                                                                                                   |
-| **Command bus**           | `services/kepler-backend/src/command_bus.rs` + `@kosmos/ark` `commands` namespace | In-memory registry команд + WS-операции `commands.{register,unregister,list,invoke}` + события `command_invoked` / `commands_changed`. См. [Command bus](docs-site/concepts/command-bus.md).                                                                                                                                                                                                                                                                                                                                                                 |
-| **Digital Cave**          | `apps/digital-cave`                                                               | focus-блокер (TBD, имя зарезервировано)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Kerux**                 | `apps/kerux`                                                                      | голосовой ввод по хоткею, faster-whisper / Groq Whisper-v3 (TBD, имя зарезервировано)                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **ark-service (Android)** | `mobile/ark-service`                                                              | Android Room ContentProvider для `mobile/delphi` (отдельно от desktop ARK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| **ark-core**              | `crates/ark-core/rust`                                                            | Rust runtime + ark-core-rpc bin                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **@kosmos/ark**           | `packages/ark`                                                                    | TS SDK                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **@kosmos/visuals**       | `packages/visuals`                                                                | UI токены, тема, компоненты                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **ark-relay-server**      | `services/ark-relay-server`                                                       | WebSocket relay (опционально, для NAT)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **kepler-watcher**        | `services/kepler-watcher`                                                         | watcher-демон над `crates/ark-core`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **usage-tracker**         | `services/kepler-backend/src/usage_tracker/`                                      | модуль внутри kepler-backend (был standalone до Phase E3 → `legacy/usage-tracker`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-
-## Что считается substantial (нужен proof loop)
-
-- Новая фича приложения.
-- Новый ARK endpoint в `ark-core-rpc` или метод в `@kosmos/ark`.
-- Изменение схемы SQLite.
-- Изменение sync-протокола.
-- Изменение write-boundary (правил доступа к данным).
-- Нетривиальный багфикс (затрагивающий несколько файлов).
-- Архитектурное решение (требует ADR в `docs/`).
-
-## Что НЕ substantial
-
-- Опечатки.
-- Локальное переименование переменной.
-- Косметика README / комментариев.
-- Edit-level правка одной строки в UI.
-- Обновление зависимости patch-версии.
-
-Для не-substantial proof loop **не нужен**. Просто правь.
-
-## Дальше
-
-- [Чек-листы по областям](docs-site/agents/checklists.md) — что прогнать перед сдачей в каждой области.
-- [Запреты и гварды](docs-site/agents/forbidden.md) — список «никогда».
-- [Шаблоны спецификаций](docs-site/agents/spec-templates.md) — типовые `spec.md` для proof loop.
-- [Testing](docs-site/agents/testing.md) — как писать e2e (headless mode, universal contract, ловушки).
-- [Estimation](docs-site/agents/estimation.md) — калибровка оценок времени через skill.
-- [Manual tests waiting](docs-site/agents/manual-tests-pending.md) — твой TODO-чек-лист визуальных проверок, не покрытых автоматическими тестами.
-
-Полный справочник правил — [Правила репозитория](docs-site/reference/rules.md).
-
----
-
-## Запреты
-
-# Запреты и гварды
+## Жёсткие запреты (universal)
 
 ::: danger Никогда
-Этот список — нерушимое. Не «лучше не делать», а **запрещено**. Если ты как агент думаешь нарушить что-то отсюда — остановись и спроси человека.
+Полный список с обоснованиями (включая per-app: Eden / Delphi / Horologion / Focus mode / Kepler Shell / Command bus / Distribution / usage-tracker / Brand / Spaces / Dashboard) — `docs-site/agents/forbidden.md`. **Читай соответствующую секцию перед работой в области.**
 :::
 
-## ARK writes
+### ARK / data
 
-- ❌ **Прямой SQL `INSERT` / `UPDATE` / `DELETE`** в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из **app TS services**.
-- ❌ **Открытие ARK SQLite на запись** в app services через `better-sqlite3`, `sqlite3`, `node:sqlite` и т.п.
-- ❌ Renderer открывает SQLite (любой) напрямую.
+- ❌ Прямой SQL `INSERT` / `UPDATE` / `DELETE` в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из app TS services.
+- ❌ Открытие ARK SQLite на запись через `better-sqlite3` / `sqlite3` / `node:sqlite`. Renderer — никакого SQLite вообще.
+- ❌ Direct Rust writer в синхронизируемую таблицу без `ark_core::db::bump_sync_version_vector` (или `record_local_upsert` / `record_local_delete` per-entity для legacy/batch handler'ов).
+- ❌ Destructive schema migration (`DROP TABLE`, несовместимый `ALTER COLUMN`). Только additive `CREATE TABLE IF NOT EXISTS`.
 
-## Rust panic / Mutex discipline
+### Rust
 
-- ❌ `Mutex::lock().unwrap()` в production code paths (вне `#[cfg(test)]`). Используй `lock().unwrap_or_else(|e| e.into_inner())` для poison recovery — SQLite transactions atomic, данные внутри guard'а валидны после panic'а другого thread'а. Без recovery один panic делает sync неработоспособным **forever до process restart**. См. [DB resilience](/concepts/db-resilience#mutex-poison-recovery).
-- ❌ Удалять `crash_reporter::install(data_dir)` из `services/kepler-backend/src/main.rs::setup`. Это early init для panic_hook'а — без него panic'ы остаются только в stderr (который пропадает после process exit), real user не сможет прислать artifact.
-- ❌ Spawn'ить `kepler-backend` без `RUST_BACKTRACE=1` env. Backtrace в crash log = readability для diagnosability.
-- ❌ Снижать `BACKEND_MAX_CRASH_STREAK` ниже 3 или удалять supervisor logic в `shell/electron/main.ts::scheduleBackendRespawn`. Без supervisor backend crash = dead app для пользователя; renderer окна виснут "загрузка" forever.
-- ❌ Удалять `db_backup::maybe_backup_on_startup` из `main.rs`. Real user data loss — это раз и навсегда; backup это единственный recovery path.
-- ❌ Удалять `db::check_integrity` из `init_schema`. Silent corruption хуже чем fail-loud — пользователь не узнает что DB битая, пока данные не разъедутся через sync.
+- ❌ `Mutex::lock().unwrap()` в production paths. Только `lock().unwrap_or_else(|e| e.into_inner())` (poison recovery). См. `concepts/db-resilience.md`.
+- ❌ Spawn `kepler-backend` без `RUST_BACKTRACE=1`.
+- ❌ Удалять `crash_reporter::install`, `db_backup::maybe_backup_on_startup`, `db::check_integrity` из `services/kepler-backend/src/main.rs::setup`.
 
-## Sync
+### Тесты (всегда headless)
 
-- ❌ Direct Rust writer пишет в ARK без вызова `ark_core::db::bump_sync_version_vector`.
-- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete\*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
-- ❌ Batch upsert handler без bump'а `record_local_upsert` per-entity. Один общий bump на батч недостаточен — peer-side sync проверяет HLC entity-id'шно.
-- ❌ Ослабление self-peer filtering при изменениях в sync startup.
-- ❌ Ослабление routable-address filtering при изменениях в peer persistence.
-- ❌ Изменение sync wire-протокола из `snake_case` в что-то другое.
-- ❌ Destructive schema migration (`DROP TABLE`, `ALTER COLUMN` несовместимо). Только `CREATE TABLE IF NOT EXISTS` и additive.
-
-## Тесты
-
-- ❌ Запускать e2e без `KOSMOS_HEADLESS=1`. Окна Kosmos / extension'ов не должны лезть на экран и воровать focus у пользователя. `launchKepler` helper выставляет этот env автоматически — не override'ить в `opts.env`.
-- ❌ Создавать BrowserWindow в `shell/electron/` без проверки `process.env.KOSMOS_HEADLESS === "1"`. Любое новое окно должно респектать headless mode (`show: !headless`, `skipTaskbar: headless`).
-- ❌ Звать `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)` на BrowserWindow в `shell/electron/` без headless guard'а. `showLauncher`, `focusExistingExtensionWindow`, `showWidget`, `openSettings`, `openDashboardWindow`, `openInstallExtensionWindow` — все должны раннее return'ить в headless/test mode (либо пропускать визуальные операции, оставляя state / IPC). Видимые окна во время e2e — это **баг**, а не «фича тестов». Пользователь не должен видеть мигающего UI от прогона.
-- ❌ Полагаться на `getByRole("button", { name: /<text>/ })` strict-mode, если на странице потенциально несколько подходящих кнопок (Vue transitions, multi-pane layouts). Scope'ить к специфичному CSS классу. См. [Testing → ловушки](/agents/testing#vue-transition).
-- ❌ Lazy-регистрировать object_type extension'ом при первом write если extension объявлен в `manifest.tests.smoke`. Eager register на boot в shim'е — иначе universal contract spec падает с FK constraint.
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
-- ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
-- ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
-- ❌ Запуск Playwright против user vault Eden.
-- ❌ Указывать тестам `KOSMOS_DATA_DIR` равным `%APPDATA%\Kosmos\` (real user data). Backend поддерживает `KOSMOS_DATA_DIR` override именно чтобы тесты могли подсунуть свой dir под `tests/.e2e/<spec>/`. Helper `tests/e2e/helpers/launch.ts` явно отказывается принимать путь внутри `%APPDATA%`.
-- ❌ Запускать Playwright без `KOSMOS_DATA_DIR` override — тогда backend упадёт в user data dir.
-- ❌ Хардкодить `path.join(appData, "Kosmos", ...)` или `"Kepler"` userData в shell / extension main process. Используй `resolveInstance()` / `keplerDataDir()` из `shell/electron/instance.ts` — single source of truth для slot-based изоляции (`prod` / `dev` / `dev-<x>` / `test-<x>`). См. [Instance slots](docs-site/concepts/instances.md). Иначе dev/test/multi-dev изоляция тихо ломается.
-- ❌ Звать `app.requestSingleInstanceLock()` ДО `applyInstanceToApp(resolveInstance())` в `shell/electron/main.ts`. Lock scope'ится по `app.getPath('userData')`; если он ещё «Kepler» (default) — prod и dev делят один lock и второй инстанс молча выходит. Порядок в module top-level main.ts критичен.
-- ❌ `setLoginItemSettings({ path: process.execPath, ... })` без проверки `resolveInstance().autorunEnabled`. Из dev процесса `process.execPath` это `electron.exe` из `node_modules/` — нечего прописывать в HKCU Run.
-- ❌ Включать `bun run --cwd shell dev` в production install path или launcher для конечного юзера. Dev mode пишет в `Kosmos-dev/`, а production install — в `Kosmos/`. Путать их → разные данные у разработчика и установленного приложения.
-
-## Proof loop
-
-- ❌ Объявить задачу завершённой, пока **каждый** AC не `PASS`.
-- ❌ Редактировать `spec.md` после старта реализации.
-- ❌ Fixer делает «попутный рефактор» вместе с fix'ом.
-
-## Per-app запреты
-
-### Eden
-
-- ❌ Возврат к ripgrep / Tantivy / Heart Rust sidecar. Search 100% через ARK FTS5 (`search_objects`).
-- ❌ Возрождение `apps/eden/ts/` или standalone Eden.exe. Удалены в Phase 6.0.A.
-- ❌ Возврат Hevy fitness integration в Eden. Замена — Olympia (отдельное приложение, ещё не реализовано).
-- ❌ Возврат UI для code lint/format. Code-tools UI удалены в 6.0.A; TipTap CodeBlock + lowlight (синтакс highlight) остаются.
-- ❌ Vault picker UI / welcome screen / multi-vault. Single ARK DB per user после удаления spaces (2026-05-15).
-- ❌ Прямое использование `window.kepler.ark.request` из Eden компонентов и `store/`. Только через `kepler-api-shim` (или `edenApi.ts` фасад над ним) — это единственный мост, чтобы code review мог локально проверить ARK границу.
-- ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
-- ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
-- ❌ Удаление lazy-load Editor.vue (`defineAsyncComponent`). Main bundle Eden должен оставаться < 800KB.
-- ❌ `await props.onSave(...)` в `Editor.vue` без try/catch. Throw'и из onSave (network error, ARK недоступен) при отсутствии catch'а превращают autosave в silent retry storm — `lastPersisted*` не обновляется, autosave таймер ретраит каждые 800ms бесконечно, пользователю никаких индикаторов. На failure — выставить `saveConflict` с human-readable текстом.
-- ❌ `void save()` в `onBeforeUnmount` без `.catch(...)`. Promise rejected после unmount'а компонента → unhandled rejection. Component-instance-aware error handling не сработает (компонент уже размонтирован).
-
-### Delphi
-
-- ❌ Восстановление, упаковка или использование legacy Delphi DB sidecar.
-- ❌ Использование old todo таблиц как long-term fallback после миграции в `task_obj`.
-
-### Arrancador
-
-- ❌ In-process activity tracker / window polling loop внутри Arrancador.
-- ❌ Arrancador-owned usage SQLite.
-- ❌ Tauri зависимости / Tauri runtime пути.
-- ❌ React зависимости / React runtime пути.
-
-### Horologion
-
-- ❌ `window.horologion.timeEntries.listRunning()` без `{ source: "manual" }` в `StopwatchView.vue` и для команды `horologion:stopwatch:start`. Без фильтра подхватывается pomodoro_break entry (созданная pomodoro session при `trackBreaksAsRest=true`), и кнопка «Стоп» в StopwatchView закрывает её в обход pomodoro lifecycle. Pomodoro session теряет синхронизацию с ARK.
-- ❌ Side-effect операции над ARK time_entry (createArkEntry / closeArkEntry) в `usePomodoroSession.ts` фоном через `void (async () => {...})()`. Pause + phase_changed handler могут гоняться → двойной stopTimer / создание дубликата entry. Все side effects идут через `enqueueSideEffect()` (serial queue) — гарантирует строгий порядок и единственного владельца `currentEntryId`.
-- ❌ Создание `currentEntryId` без проверки `currentEntryId.value == null` в phase_changed handler'е. Двойной phase_changed (quick double-click «Старт» / backend retry) создаёт два entry, первый orphan'ится с null id-references.
-- ❌ Пропустить `rehydrateCurrentEntryId(phase)` в `ensureInit()` когда backend сообщил `isRunning && phase !== "idle"`. После reload extension'а renderer теряет id открытого ARK entry — последующий pause/stop становится no-op'ом, entry «running вечно». Фикс: смотрим `listRunning({ source: 'pomodoro' | 'pomodoro_break' })` и берём последнюю.
+- ❌ E2e без `KOSMOS_HEADLESS=1`. Любой `BrowserWindow` в `shell/electron/` обязан респектить `process.env.KOSMOS_HEADLESS === "1"` (`show: !headless`, `skipTaskbar: headless`).
+- ❌ `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)` без headless guard'а. Включая launcher, Settings, Dashboard, focus widget, install dialog.
+- ❌ Захардкоженный путь к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах. Override через `KOSMOS_DATA_DIR` под `tests/.e2e/<spec>/`.
+- ❌ `path.join(appData, "Kosmos"|"Kepler", ...)` где попало. Используй `resolveInstance()` / `keplerDataDir()` из `shell/electron/instance.ts` (slot-based изоляция prod/dev/test).
 
 ### Focus mode
 
-См. [Focus mode](docs-site/concepts/focus-mode.md).
+- ❌ Прямые `BrowserWindow` манипуляции focus widget'ом вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*`.
+- ❌ Запись в `C:\Windows\System32\drivers\etc\hosts` вне `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev: `kepler-focus-helper` / `kepler-focus-svc`) и вне маркерной секции `# === kepler-focus BEGIN/END ===` (иначе backup юзерских entries теряется).
+- ❌ Lifecycle pomodoro мимо `pomodoro_host` / `invokeOperation("pomodoro.<op>")`. Backend — source of truth.
 
-- ❌ Прямые манипуляции `BrowserWindow` focus widget'а (show/hide/move/destroy) из extension'ов или из кода вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*` (`set-state` / `get-state` / `hide`).
-- ❌ Обход `pomodoro_host` для lifecycle pomodoro-сессии. Кнопки виджета (pause/resume/skip/stop) дёргают **только** `invokeOperation("pomodoro.<op>")` через backend — никаких прямых `setFocusState` локально после клика. Backend — source of truth, его broadcast обновит widget.
-- ❌ Прямые writes в `C:\Windows\System32\drivers\etc\hosts` из любого места кроме `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev-бинарники всё ещё называются `kepler-focus-helper` / `kepler-focus-svc`). Никаких inline `fs.writeFile` или `child_process` поверх hosts из shell / extension'ов / `services/kepler-backend/`.
-- ❌ Запись вне маркерной секции (`# === kepler-focus BEGIN/END ===`) в helper / svc. Backup создаётся **один раз** при первой модификации — если перезаписать вне маркеров, юзерские hosts entries потеряются навсегда.
-- ❌ Destructive ALTER / DROP для `blocklist_obj` или ключа `focus.active_state` в `sync_kv`. Только additive миграции (см. [ARK objects](docs-site/concepts/ark-objects.md)).
-- ❌ `setupFocusWidgetBackendSync` без последующего `teardownFocusWidgetBackendSync` при backend respawn / `resetArkClient`. Двойная подписка → каждый pomodoro event handled дважды.
-- ❌ Применение блокировки (hosts write) из `services/kepler-backend/src/focus.rs`. Модуль хранит **только state** в ARK; применение делает shell через `applyFocusBlock` middleware в `extension-host.ts`. Никакого privileged кода в backend.
-- ❌ Trust'нуть pipe ответу без safety timeout. `sendViaPipe` всегда финиширует за 3s даже при mute pipe.
-- ❌ Удалять `requireAdministrator` manifest у `Kosmos Helper.exe` / dev-бинаря `kepler-focus-helper.exe`. Без него helper стартует non-elevated и hosts write молча падает с access denied.
-- ❌ Расширять SDDL `Kosmos System Service` pipe'а за пределы `D:(A;;GA;;;AU)` (Authenticated Users). NULL-DACL = network exposure, не нужно.
-- ❌ Автоматически re-prompt'ить UAC для auto-install `Kosmos System Service` после того, как юзер отказался. `autoInstallAttemptedThisSession` (session-scope) + `setFocusServiceAutoInstallDeclined` (persisted) гарантируют один промпт максимум.
+Остальное (UAC re-prompt, SDDL pipe, `setupFocusWidgetBackendSync` без teardown, applying блокировки из backend) — `forbidden.md` § Focus mode.
 
-### Dictation
+### UI
 
-См. [Dictation](docs-site/concepts/dictation.md).
+- ❌ Английский в user-facing UI приложений. Только русский (technical id'ы типа `task_obj` OK).
+- ❌ Hardcoded `#hex` / `rgb()` / кастомные шрифты. Только `var(--*)` из `@kosmos/visuals`.
+- ❌ Свой titlebar / safe-area. Используй `<DesktopChrome>` + `<DesktopContentSurface>`.
+- ❌ `e.key === "<латинская буква>"` для Ctrl/Cmd-shortcut'ов. Используй `e.code === "KeyA"` (RU-раскладка иначе ломает). Non-letter (`Enter`, `Escape`, arrows, F1-F12) — `e.key` OK.
+- ❌ `addEventListener` в `onMounted` без `removeEventListener` в `onBeforeUnmount` (HMR накапливает duplicate listeners).
+- ❌ Nested interactive elements (`role="button"` на `<span>` внутри `<button>`).
 
-- ❌ Хранить Groq API key в `dictation-config.json` или любом JSON-конфиге. Только Windows Credential Manager через `keyring::Entry::new("kosmos-kepler", "groq-api-key")`. Reason: ключ не должен утекать через бэкап `%APPDATA%\Kosmos\`, случайный коммит, crash dump.
-- ❌ `BrowserWindow` для pill вне `shell/electron/dictation-pill.ts`. Все show/hide/close — через IPC `kepler:dictation:*` или экспортированные функции модуля.
-- ❌ Inject без сохранения и восстановления оригинального clipboard. Поток обязан: save → set transcript → paste → restore. Иначе мы стираем буфер пользователя.
-- ❌ Restore clipboard раньше чем через 80ms (`tokio::time::sleep`) после симуляции Ctrl+V. Race с ОС: Windows ещё не успеет paste'нуть → восстановим старое поверх transcript'а → юзер увидит **старое** содержимое. Реальная задержка типичных paste'ов 30-50ms; 80ms — запас на медленные машины и Electron-based target'ы (VS Code).
-- ❌ Симуляция Ctrl+V без предварительного `SetForegroundWindow(prev_hwnd)` + `sleep 80ms`. HWND captured **до** показа pill (в `dictation.capture_foreground_window`). Без re-focus + sleep'а текст уходит в pill (если пилл случайно получил фокус) или в случайное окно.
-- ❌ `BrowserWindow` pill без `focusable: false`. Pill **не должен воровать фокус** с активного окна — иначе re-focus до Ctrl+V не нужен, но клавиатурные shortcut'ы в подложенном окне ломаются пока pill виден. `focusable: false` + `showInactive()` гарантирует невмешательство.
-- ❌ Streaming audio chunks в Phase 1. Groq endpoint не принимает streaming (только batch transcription). Усложнять state machine ради этого нельзя — `submit_audio` принимает одну полную WAV в base64.
-- ❌ `getUserMedia` без graceful permission-denied handling. Показать понятную ошибку в pill, вызвать `pillFinished()`. Не оставлять белый экран / висящую запись.
-- ❌ Hotkey registration без headless guard'а. В `KOSMOS_HEADLESS=1` / `KOSMOS_TEST_MODE=1` `globalShortcut.register` НЕ должен вызываться — Playwright driver'ит state через IPC напрямую, accelerator не должен мешать host'у машины разработчика.
-- ❌ Использовать настраиваемый DoH resolver (`dictation::network::build_client`) для не-AI запросов (sync / RAWG / прочее) в Phase 1. Scope явно ограничен — generic API спроектирована переиспользуемой для будущих AI-провайдеров, но не для всего backend HTTP.
-- ❌ Local model downloads (whisper.cpp, Parakeet V3) или CUDA acceleration в Phase 1. Это отдельный proof-loop Phase 2 с собственной валидацией производительности per-модель.
-- ❌ Push-to-talk через `globalShortcut.register` callback. Electron'овский globalShortcut шлёт только key-down, не key-up — hold-to-record реализован через Win32 `WH_KEYBOARD_LL` hook в `dictation::hotkey_hook` (Phase 1.5). В PTT mode globalShortcut НЕ регистрируется на стороне shell — hook драйвит через broadcast events `dictation_ptt_trigger`.
-- ❌ Блокирующие операции / longer-than-microseconds работу в callback'е `WH_KEYBOARD_LL` (`keyboard_proc` в `hotkey_hook.rs`). Windows блокирует всю клавиатуру пока callback не вернётся. Только: snapshot lock + non-blocking broadcast::Sender::send + return. Никаких allocation'ов / file I/O / sync awaits.
-- ❌ Регистрировать `dictation::hotkey_hook` thread больше одного раза за процесс. `ensure_thread_started` — idempotent через `OnceLock`. Множественные hook'и → дубликаты events.
-- ❌ Hotkey hook в `kepler-backend` без `cfg(windows)` guard'а. `WH_KEYBOARD_LL` Win32-specific. На non-Windows модуль stub'нут.
-- ❌ Применять `httpProxy` config-поле к не-AI запросам (RAWG / sync / прочее) в Phase 1.5. Scope ограничен `dictation::network::build_client`.
-- ❌ Удалять `<uuid>.wav` из `<dataDir>/dictation/pending/` до успешного inject ИЛИ явного discard юзером (Phase 2). Audio loss = unrecoverable: pill закрывается, PCM-буфер обнуляется в renderer; диск — единственный источник для retry.
-- ❌ Retry HTTP-запросов на 4xx статусах (кроме 429) в `dictation::retry::classify`. 401/400/413 — caller bug или формат-ошибка, retry — пустая трата квоты + латентность. Только 429/5xx и `reqwest::Error` ретрайятся.
-- ❌ Silent fallback на Cloudflare DoH для `NetworkProfile::CustomDoh` с невалидным URL (Phase 2). Сейчас `network::validate_custom_doh_url` возвращает `Err` — UI/тест-connectivity показывают конкретную причину, юзер сам исправляет.
-- ❌ Pending queue размером > 20 items ИЛИ старше 7 дней без GC. На app start `DictationHost::bootstrap_pending` вызывает `pending::gc(20, ChronoDuration::days(7))`. Reason: disk leak (~1MB per item × 16kHz/16bit/30s) + privacy (длинные диктовки лежат в plaintext WAV).
-- ❌ Pending файлы вне `<dataDir>/dictation/pending/`. `dataDir` пробрасывается через `DictationHost::data_dir` (`config::data_dir()` в проде, `tempdir` в тестах через `new_for_test`). Instance isolation нарушится если хардкодить путь.
-- ❌ Pill auto-close на `Error { canRetry: true }` через 1.2s. Юзеру нужно успеть кликнуть retry-кнопку. Auto-close оставлен только для fatal `canRetry=false` (битое аудио / нет ключа).
+### Git / tooling
 
-### Spaces concept
+- ❌ `--no-verify` при коммите. `git push --force` в `main`/`master`. `git reset --hard` / `git checkout .` поверх чужих изменений.
+- ❌ Амендить уже опубликованные коммиты. Коммит секретов (`.env`, `credentials.json`, `GH_TOKEN`), `dist/`, `build/`, `coverage/`, `.tmp/`, `.e2e/`, `node_modules/`.
+- ❌ `git add -A` на shared working tree — забирает user WIP. Точечно `git add <file>` после `git status --short`.
+- ❌ `Move-Item -Force` / `Remove-Item -Recurse -Force` на `apps/<name>/` или `extensions/<id>/` пока внутри есть `node_modules/` (junction'ы → удаление таргета). Сначала удали `node_modules/`.
 
-- ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user
-  (`%APPDATA%\Kosmos\ark.db`). Никаких welcome screen / space picker /
-  `KOSMOS_DB_PATH` / `selected-space.json` / `spaces.json`.
+### Bump / release
 
-### Dashboard
+- ❌ **Bump версии без явного запроса пользователя.** Никакого «попутно с фиксом» / «логически завершить релизом». Bump = release = пуш-уведомление пользователю. Менять `manifest.json::version` / `package.json::version` или запускать `ext:publish` / `electron-builder --publish` — только по команде («бамп eden», «релизни»). См. skill `bump`.
 
-- ❌ SQLite open в renderer.
-- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kosmos/ark` через main proxy).
-- ❌ Любые **writes** в ARK таблицы.
-- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый код заморожен в `legacy/dashboard-extension/`.
-- ❌ Возврат welcome screen с карточками spaces. После 2026-05-15 Dashboard сразу открывается на список объектов — single DB per user.
+### Framework / architecture
 
-### Kepler Shell (launcher)
+- ❌ Предлагать миграцию с Electron на Tauri / Wails. Зафиксировано экспериментом 2026-05-19 (`docs-site/experiments/tauri-vs-electron.md`).
+- ❌ Массовый rename внутренних `kepler:*` / `window.kepler` / `services/kepler-backend` без отдельного proof loop. User-facing product — Kosmos; `Kepler` остаётся compat namespace'ом.
 
-- ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
-- ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
-- ❌ Hardcoded extension команды в `shell/electron/commands.ts`. С Phase 6.2 (2026-05-19) `COMMANDS[]` содержит **только** kepler-internal (`settings:open` / `dashboard:open` / `kepler:check-updates`). Extension-команды (включая `eden:open`, `horologion:pomodoro`, `delphi:inbox`) объявляются в `extensions/<id>/manifest.json` `commands[]` — manifest = source of truth. `loadDeclaredCommands` в `extension-host.ts` собирает их. Видны в launcher всегда (пока extension установлен), uninstall их убирает. См. [Command bus → три слоя](/concepts/command-bus#архитектура-три-слоя-команд-v1-v2-2026-05-19).
-- ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
-- ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
-- ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (Settings → Developer Mode toggle, **не** `KEPLER_DEV=1`) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
-- ❌ Загружать extension из `http://localhost:<devPort>/` без TCP probe порта. Архитектура с 2026-05-19 — `resolveExtensionSource()` в `extension-host.ts` всегда вызывает `probeExtensionDevServer(port)` (timeout 500ms) перед тем как взять Vite-путь; если порт мёртв — graceful fallback на `dist/`. Старая логика (грузить с localhost когда `developerMode: true` в settings) приводила к пустым окнам если dev server упал/не поднят, и persisted setting утекал в installed Kepler.
-- ❌ Делать `openExtension(id)` синхронным или без in-flight Map. Probe — async, поэтому два rapid invoke на один id без дедупа создадут два BrowserWindow'а. См. `openInflight` Map в `extension-host.ts`.
-- ❌ Дублирование install-flow логики (backup / atomic rename / semver-проверка). Источник правды — `shell/electron/extension-installer.ts`. CLI скрипт `shell/scripts/install-extension.mjs` копирует semver matcher inline (~40 строк) только потому, что mjs скрипт не имеет доступа к dist-electron bundle; не размножай это в третьем месте — дёргай IPC `kepler:extension:install:do` или сам runtime API.
-- ❌ Ослабление `keplerApiVersion` compat check в `extension-host.ts → checkApiCompat()`. Несовместимый extension **не** должен получать live preload bridge — иначе ломается инвариант API contract'а. Если правишь — bump `KEPLER_API_VERSION` в `shell/electron/kepler-api.ts` соответственно (patch/minor/major по семантике).
-- ❌ Path traversal в `.kext` extract'е. `extension-installer.ts → safeEntryName` отвергает `..`, абсолютные пути, drive letter'ы. Не упрощай эту проверку — `.kext` может приехать из untrusted источника.
-- ❌ Выход из `initArkClient()` без вызова `arkClientReadyReject?.()` когда `state.kind !== "connected"`. До 2026-05-18 функция тихо `return`'ила и все pending `awaitArkReady()` висели 15 секунд до generic timeout. Каждый failure path в `initArkClient` должен либо reject'нуть resolver, либо успешно его resolve'нуть.
-- ❌ Перезапуск `kepler-backend` (через `kepler:backend:restart`) или его exit без вызова cleanup'а `arkClient` (stop + null + сброс `arkClientReady`). Без этого WS-соединение указывает на мёртвый порт и `invokeOperation` зависает на reconnect-логике клиента, не возвращая ошибки. См. `resetArkClient` helper в `shell/electron/main.ts`.
-- ❌ `setTimeout` в `Promise.race([..., new Promise((_, rej) => setTimeout(rej, ms))])` без `clearTimeout` на successful resolve. Таймер продолжает держать event loop до полного TTL даже после того как race выиграла другая ветка.
+### Дисциплина
 
-### Command bus
+- ❌ Попутный рефакторинг вместе с задачей. Один логический change — один коммит.
+- ❌ Защитный код для невозможных случаев. Fallback'и «на всякий случай».
+- ❌ Новые `.md` файлы без явного запроса. Новые правила в `MEMORY.md` / `AGENTS.md` без согласования.
+- ❌ Объявление «готово» без PASS по AC, без прогона гвардов, без visual verify для UI правок (build/typecheck недостаточно — Playwright spec + screenshot или честно «не проверял»).
+- ❌ Игнорирование failing test'ов как «pre-existing». Чинить всегда.
 
-- ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
-- ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
+## Что substantial → нужен proof loop
 
-### Brand consistency
+Новая фича / новый ARK endpoint / изменение схемы / sync-протокола / write-boundary / нетривиальный багфикс (несколько файлов) / архитектурное решение (ADR).
 
-- ❌ Возврат наружного product name **Kepler** для установленного desktop app. С 2026-05-26 пользовательский продукт — **Kosmos** (`Kosmos.exe`, ярлыки `Kosmos`, `%APPDATA%/Kosmos App` для Electron userData). `Kepler` допускается только как legacy/internal namespace (`kepler:*` IPC, `kepler-backend`, `kepler.lock.json`) до отдельного cleanup.
-- ❌ Массовый rename внутренних namespaces (`window.kepler`, `kepler:*`, `services/kepler-backend`, `kepler.lock.json`) без отдельного proof loop. Эти имена — совместимость протокола и тестов, а не пользовательский бренд.
-- ❌ Возврат npm scope `@kepler/*` для shared пакетов. Runtime и UI общие для всей экосистемы используют **`@kosmos/*`**: `@kosmos/ark`, `@kosmos/visuals`. Между Phase B4 (2026-05-14) и 2026-05-18 они некоторое время жили под `@kepler/*` — это была ошибка naming'а (ARK и visuals shared across all apps, не launcher-specific). `@kepler/*` зарезервирован для launcher-specific пакетов, если такие появятся.
+**Не substantial:** опечатки, переименование переменной, одна строка UI, косметика, patch-bump зависимости — просто правь.
 
-### Distribution
-
-См. [Distribution](docs-site/concepts/distribution.md).
-
-- ❌ Коммитить `GH_TOKEN` (или любой PAT) в repo. Если случайно — rotate immediately.
-- ❌ Bundle'ить extensions в Kepler installer (`shell/package.json → build.extraResources`). Lean installer — marketplace flow обеспечивает установку. Нарушение → лишний размер инсталлера + рассинхрон версий extension'ов между installer'ом и marketplace.
-- ❌ Push release tag в `yoso-industries/kepler-releases` или `yoso-industries/kosmos-extensions` manually без `electron-builder publish` (launcher) / `ext:publish` (extensions). Эти скрипты генерируют `sha256` + `latest.yml` — autoUpdater сломается без них.
-- ❌ Менять wire format `catalog.json` без bump `schemaVersion`. Installed Kepler'ы должны продолжать читать старый format (tolerant к unknown fields).
-- ❌ Удалять published GitHub releases retroactive. Installed Kepler'ы (или offline users) могут пытаться downgrade / re-install; ломается trust в URL'ы из cached catalog.json.
-- ❌ Менять owner с `yoso-industries` на что-то ещё без обновления `shell/package.json → build.publish[0].owner` + `extension-marketplace.ts → CATALOG_URL` + `publish-extension.mjs → RELEASES_REPO` + `generate-catalog.mjs → RELEASES_REPO`. Все 4 источника must match.
-
-### usage-tracker
-
-- ❌ Превращение в Windows Service.
-- ❌ Добавление UI / tray icon / окон.
-- ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
-- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 он заморожен в `legacy/usage-tracker/`, а активный код живёт как модуль `services/kepler-backend/src/usage_tracker/`.
-
-## Файловые операции на Windows
-
-::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `shell/node_modules/@kepler/<pkg>` → `packages/<pkg>` и аналогично в `extensions/<id>/node_modules/`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/visuals/` до brand swap. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
-:::
-
-- ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
-- ❌ Переименование/перемещение `apps/<name>/` без предварительной коммитной зачистки untracked-файлов в `packages/*`. Если что-то ценное лежит как `??` в `git status` — закоммить или временно сохрани вне репо, иначе `Move-Item` уничтожит таргет junction'а навсегда.
-- ❌ Удаление любых директорий внутри `apps/` или `packages/` через GUI-проводник Windows. Используй `git rm`, `Remove-Item` после удаления `node_modules`, или CLI с явным контролем.
-- ❌ `rm -rf packages/...` или эквиваленты, если результат можно достичь через `git restore` / переключение веток.
-
-## Bump / release
-
-- ❌ **Бамп версии без явного запроса пользователя.** Никогда не делать bump «попутно с фиксом», «логически завершить релизом», «раз изменил manifest». Bump = release = пользователи получают update через auto-updater и видят пуш-уведомление. Каждый bump — отдельная команда пользователя («бамп eden», «бамп shell», «релизни»). Edit'ить код, чинить баги, обновлять docs, коммитить, пушить — без bump'а можно и нужно. Менять `manifest.json::version` / `package.json::version` или запускать `ext:publish` / `electron-builder --publish` — **только** по явному запросу. См. [bump skill](/.agents/skills/bump/SKILL.md).
-- ❌ Bump'ить чтобы «закрыть тест-цикл» / «убедить юзера что фикс работает». Юзер сам решит когда релизить.
-
-## Git / tooling
-
-- ❌ `--no-verify` при коммите.
-- ❌ `git push --force` в `main` / `master`.
-- ❌ `git reset --hard` или `git checkout .` для уничтожения чужих изменений.
-- ❌ Амендить уже опубликованные коммиты.
-- ❌ Коммит файлов с секретами (`.env`, `credentials.json`).
-- ❌ Коммит `dist/`, `build/`, `coverage/`, `.tmp/`, `.e2e/`, `node_modules/`.
-- ❌ Создание новых правил в `MEMORY.md` или AGENTS.md без согласования с человеком.
-
-## UI
-
-- ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
-- ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
-- ❌ Nested interactive elements: `role="button"` (или любой другой interactive role) на `<span>` / `<div>` **внутри** `<button>`. HTML это запрещает; screen reader'ы collapse'ят в одну кнопку и inner action становится недоступным с клавиатуры. Решение — два sibling `<button>` в композитной обёртке (см. `DateChip.vue` после 2026-05-18 фикса).
-- ❌ Outside-click listener'ы через nested `watch(..., { once: true })` для cleanup'а. Паттерн ломается при quick open→close→open: новый handler регистрируется до того как старый отпишется. Используй symmetric `watch(isOpen, (val) => val ? addEventListener : removeEventListener)` + `onBeforeUnmount → removeEventListener` (mirror `ContextMenu.vue`).
-- ❌ `addEventListener` в `onMounted` без соответствующего `removeEventListener` в `onBeforeUnmount`. Component re-mount (HMR, route navigation) накапливает duplicate listeners на `document` / `window`.
-- ❌ `e.key === "<латинская буква>"` / `event.key === "a"` (и т.п.) для Ctrl/Cmd-shortcut'ов. **Раскладка обязана быть layout-agnostic**: на русской раскладке та же физическая клавиша возвращает `"ф"`, и Ctrl+A ловится только на EN. Используй **`e.code === "KeyA"`** (физическая клавиша). Аналогично `KeyC`, `KeyX`, `KeyS`, `KeyK`, `KeyN`, `KeyZ`. Исключение — non-letter keys (`Enter`, `Escape`, `ArrowUp`, цифры, F1-F12): для них `e.key` valid, потому что не зависит от alpha layout. Подтверждение — `docs-site/concepts/eden-zen-mode.md` (chord `Ctrl+K Z` через `e.code`) и regression test `tests/e2e/eden-clipboard-markdown.spec.ts`.
-
-## Framework выбор
-
-- ❌ Предлагать миграцию с Electron на Tauri / Wails / Neutralino. Решение
-  зафиксировано экспериментом 2026-05-19: на Windows экономия RAM 24% при цене
-  3-6 недель работы; на Linux WebKitGTK ломает TipTap в Eden. Полное обоснование
-  с цифрами — [Tauri vs Electron эксперимент](docs-site/experiments/tauri-vs-electron.md).
-  Если у тебя новые данные, опровергающие выводы — поднимай отдельный proof loop,
-  не молча начинай миграцию.
-
-## Общая дисциплина
-
-- ❌ «Попутно отрефакторил» вместе с задачей. Один логический change — один коммит.
-- ❌ Добавление защитного кода для невозможных случаев.
-- ❌ Создание новых документов (`.md` файлов) без явного запроса.
-- ❌ Изменение `package.json` без видимой причины (особенно версий зависимостей).
-- ❌ Игнорирование AC из `spec.md`. Если AC кажется неверным — это новая задача / обсуждение.
-- ❌ Объявление «всё работает» без прогона гвардов и smoke.
-
-## Гварды-команды
-
-Прогнать **обязательно** в указанных случаях:
-
-```powershell
-# Перед PR в data services (shell/electron, extensions/<id>/src,
-# services/kepler-backend/src/usage_tracker)
-bun run ark:guard:writes
-
-# Перед PR в любую substantial-задачу
-bun run ark:smoke
-```
-
-См. [Smoke-матрица](docs-site/reference/smoke-matrix.md).
-
----
-
-## Чек-листы
-
-# Чек-листы по областям
-
-Перед тем как сказать «готово» — пройди соответствующий чек-лист. По одному пункту, не пропускай.
-
-## Я писал / правил e2e тесты (`tests/e2e/*.spec.ts`)
-
-- [ ] `launchKepler({ slug })` — slug уникален, не пересекается с другими spec'ами.
-- [ ] `KOSMOS_HEADLESS=1` не overridden в `opts.env` (стартует автоматически из helper'а).
-- [ ] Backend warmup (~2.5s) перед `commands.invoke` если test чувствителен к timing.
-- [ ] Locator'ы scope'ятся к специфичному CSS классу, если возможны множественные match'и (Vue transitions, panes).
-- [ ] `app.close()` / `app.quit()` в `finally`.
-- [ ] Если test покрывает архитектурный baseline (extension boots + commands + ARK) — это уже покрыто `extensions-contract.spec.ts` через `manifest.tests`. Не дублировать.
-- [ ] Если test покрывает UI flow специфичный для extension'а — добавлен `tests` блок в manifest для contract coverage.
-- [ ] Прогон в headless mode (`bun run test:e2e`) — окна не лезут на экран.
-
-Подробнее — [Testing](docs-site/agents/testing.md).
-
-## Я добавил новый extension (`extensions/<id>/`)
-
-- [ ] `manifest.json` имеет поле `tests` (даже минимальное — `{}`).
-- [ ] Если extension использует свой `object_type` — eager registration в shim на boot (не lazy перед первым upsert), иначе universal contract spec падает с FK constraint.
-- [ ] Если extension'у нужен per-app UI spec — `tests/e2e/<id>.spec.ts` с helper-функцией `open<Id>(app)` для повторного использования.
-- [ ] `extensions-contract.spec.ts` автоматически подхватит твой extension — прогнать `bun run test:e2e -- --grep "extension contract: <id>"`.
-
-## Я правил ARK runtime (`crates/ark-core/rust`)
-
-- [ ] `cargo test --manifest-path crates\ark-core\rust\Cargo.toml` — зелёный.
-- [ ] `cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc` — собирается.
-- [ ] `cargo build --workspace` — workspace целиком собирается (после Phase C2 общий target/).
-- [ ] Если менял schema — миграция additive (`CREATE TABLE IF NOT EXISTS`), не destructive.
-- [ ] Если менял sync — добавлены или обновлены тесты миграции/репликации.
-- [ ] Если менял wire-протокол — остался `snake_case`.
-- [ ] Self-peer filtering и routable-address filtering не ослаблены.
-- [ ] `bun run --cwd packages/ark typecheck` — зелёный (если правил публичные типы).
-
-## Я правил `@kosmos/ark` (`packages/ark`)
-
-- [ ] `bun run --cwd packages/ark typecheck` — зелёный.
-- [ ] `bun run --cwd packages/ark build` — собирается.
-- [ ] `bun run --cwd packages/ark test` — зелёный (bun test).
-- [ ] Если добавил новый метод — он реальный RPC к sidecar, не SDK-фильтрация.
-- [ ] Self-managed и injected режимы оба работают, request id есть только в self-managed.
-
-## Я правил Eden extension (`extensions/eden`)
-
-- [ ] `bun run --cwd shell build:extensions` — собирается (Eden — часть extension build pipeline).
-- [ ] `bun run --cwd shell typecheck` — clean.
-- [ ] Все ARK операции идут через `kepler-api-shim` (`extensions/eden/src/lib/kepler-api-shim.ts`), внутри — `window.kepler.ark.request(...)`. Renderer не открывает SQLite напрямую.
-- [ ] `bun run ark:guard:writes` — зелёный.
-- [ ] TipTap CodeBlock + lowlight остаются для синтакс-highlight. Никаких runtime lint/format вызовов.
-- [ ] Search через ARK FTS5 (`search_objects`). Heart Rust / Tantivy / ripgrep — не возвращаем.
-- [ ] Lazy Editor.vue (`defineAsyncComponent`) сохранён — main bundle должен оставаться < 800KB.
-- [ ] Desktop shell — через `DesktopChrome`/`DesktopContentSurface` из `@kosmos/visuals`. Никаких ручных `--titlebar-height` хаков.
-- [ ] Trash UI работает поверх ARK soft-delete (`deletedAt != null`).
-- [ ] Hevy / code lint-format / vault picker / Heart sidecar — **не возвращаем** в Phase 6.0.A. См. forbidden.md.
-
-## Я правил Delphi extension (`extensions/delphi`)
-
-- [ ] `bun run --cwd shell build:js` — собирается (extension билдится из shell сборки).
-- [ ] Если правил task storage — пишет в `task_obj`, не в legacy todos.
-- [ ] Не восстановлен legacy Delphi DB sidecar (DB sidecar заморожен).
-- [ ] `electron-api-shim.ts` **не удалён** — он эмулирует `window.electronAPI` поверх Kepler ark bridge. Без него ломается ~30 CRUD call sites.
-- [ ] Если ввёл новый `window.electronAPI.*` вызов — добавил эквивалент в `electron-api-shim.ts`.
-- [ ] Tailwind plugin (`@tailwindcss/vite`) подключён в `extensions/delphi/vite.config.mjs`.
-- [ ] Если правил `mobile/delphi` (Kotlin) — Android-only, не лезет в TS extension.
-
-## Я правил Arrancador extension (`extensions/arrancador`)
-
-- [ ] `bun run --cwd shell build:js` — собирается.
-- [ ] Vue Router (memory history) routes остаются актуальными — каждый новый view зарегистрирован.
-- [ ] Native scanner (`child_process` + FS-сканирование Steam/Epic/GOG) **не переписывай в renderer**.
-- [ ] Game launch / catalogue / scan — TODO в extension, не возвращай stub'ы как «работающие».
-- [ ] Не добавлены Tauri или React зависимости.
-- [ ] ARK writes идут через `@kosmos/ark`.
-
-## Я правил Dashboard (встроенный shell view, `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`)
-
-- [ ] `bun run --cwd shell build:js` — собирается.
-- [ ] `bun run --cwd shell typecheck` — clean.
-- [ ] Renderer не открывает SQLite напрямую.
-- [ ] ARK queries — только через `window.kepler.ark.request(...)`.
-- [ ] Никаких writes в ARK таблицы (Dashboard — read-only inspector).
-- [ ] `@kosmos/visuals` (`DesktopChrome`, `DesktopContentSurface`) через import/alias, не скопирован.
-- [ ] Tray menu всё ещё содержит «Dashboard» entry.
-- [ ] Закрытие dashboard окна не закрывает Kepler shell.
-- [ ] Hash routing остался `#/dashboard` (без `/welcome` / `/space/<id>` — spaces убраны 2026-05-15).
-
-## Я правил Horologion extension (`extensions/horologion`)
-
-- [ ] `bun run --cwd shell build:js` — собирается.
-- [ ] Если правил pomodoro — multi-task split в `closeArkEntry` читает АКТУАЛЬНЫЙ `pomodoroDraft`, не снапшот со старта.
-- [ ] Если правил Settings — settings-окно открывается через `shell/electron/settings-window.ts` (отдельный BrowserWindow).
-- [ ] Тесты — на изолированной БД (`ARK_DB_PATH=.e2e/horologion-e2e.db`).
-- [ ] `time_entry_obj` и `tag_obj` — типы остаются согласованы с `crates/ark-core/rust/src/types.rs`.
-
-## Я правил kepler-shell (`shell/`)
-
-- [ ] `bun run --cwd shell typecheck` — clean (или `cd shell && bunx tsc --noEmit`).
-- [ ] `bun run --cwd shell build:js` — clean.
-- [ ] `bunx vite build --configLoader native` (внутри `shell/`) — renderer / main / preload собираются.
-- [ ] Команды в `shell/electron/commands.ts` имеют корректный category (`open` / `action`); action-команды не захардкожены.
-- [ ] Если правил commands — обновил `docs-site/concepts/command-bus.md`.
-- [ ] Settings-окно не сломано после изменений `shell/electron/main.ts`.
-- [ ] Размер окна остался fixed 720×460, без per-frame resize animation.
-
-## Я правил extension dev mode (`shell/` + `extensions/`)
-
-- [ ] Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`) + `bun run --cwd shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
-- [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id, route?)` в `shell/electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно и прокидывает `route` как hash в обоих вариантах.
-- [ ] `isDeveloperModeActive()` **не** смотрит на `process.env.KEPLER_DEV` — только на `developerMode` из JSON. `KEPLER_DEV=1` влияет лишь на shell-level dev, не на extension loader.
-- [ ] F12 toggles DevTools на любом extension window (detached, не блокирует).
-- [ ] Если правил manifest format или signature `openExtension` — обновил [Extension dev mode](docs-site/concepts/extension-dev-mode.md) и [Extension host](docs-site/concepts/extension-host.md).
-- [ ] Production build (без Developer Mode toggle) грузит extensions из `dist/`, не из dev server'ов.
-
-## Я правил extension installer (`shell/scripts/install-extension.mjs`)
-
-- [ ] `bun run --cwd shell ext:install <path|url>` отрабатывает на локальную папку и на zip-архив.
-- [ ] User overrides пишутся в `%APPDATA%\Kosmos\extensions\<id>\` (не в репозиторий).
-- [ ] `bun run --cwd shell ext:uninstall <id>` корректно убирает override.
-- [ ] Если правил формат manifest'а — обновил [Extension installer](docs-site/concepts/extension-installer.md).
-
-## Я правил command bus (`services/kepler-backend` + `@kosmos/ark`)
-
-- [ ] Backend (`services/kepler-backend/src/command_bus.rs` + `ws_server.rs`) — `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` зелёный.
-- [ ] SDK (`packages/ark/src/ark-client.ts`) — `bun test` зелёный.
-- [ ] Wire format — flat events `{event: "...", ...fields}`, согласован между backend и SDK.
-- [ ] Apps register обёрнут в `try/catch` (self-managed mode без commands API — норма, не ошибка).
-- [ ] Если менял публичный shape события — обновил `docs-site/concepts/command-bus.md`.
-
-## Я правил usage-tracker module (`services/kepler-backend/src/usage_tracker/`)
-
-- [ ] `cargo test --manifest-path services\kepler-backend\Cargo.toml --lib` — зелёный.
-- [ ] Прямые ARK writes используют `ark_core::db` хелперы.
-- [ ] `lan_sync.version_vector` обновляется после прямых писей.
-- [ ] Default DB path остался `%APPDATA%\Kosmos\ark.db`.
-- [ ] Тесты переопределяют DB path в `.tmp` / `.e2e` / OS temp.
-- [ ] Tracker-модуль стартует/останавливается из `services/kepler-backend/src/main.rs` (Phase E2). Standalone-бинарь — frozen в `legacy/usage-tracker/`.
-- [ ] Tracker остаётся user-level, не Windows Service.
-
-## Я правил focus-mode (`shell/electron/focus-*.ts` + `services/kepler-focus-*` + `services/kepler-backend/src/focus.rs`)
-
-- [ ] `bun run --cwd shell typecheck` — clean.
-- [ ] `bun run --cwd shell build:js` — clean.
-- [ ] `cargo test -p kepler-focus-helper` — зелёный (`hosts.rs` unit-тесты с tempfile).
-- [ ] `cargo test -p kepler-focus-svc` — зелёный (`protocol.rs` dispatch-тесты).
-- [ ] `cargo build --workspace` — собирается (включая helper + svc, оба Windows-only).
-- [ ] Прямые writes в hosts file идут **только** из `kepler-focus-helper` или `kepler-focus-svc` (никаких новых `fs.writeFile("C:\\Windows\\...")` в shell / backend).
-- [ ] Модификации hosts остаются между маркерами `# === kepler-focus BEGIN/END ===`. Backup `hosts.kepler-backup` создаётся один раз и не перезаписывается.
-- [ ] Widget operations (pause/resume/skip/stop) идут через `invokeOperation("pomodoro.<op>")`, не через локальный `setFocusState` после клика.
-- [ ] Backend `focus.rs` не делает privileged operations — только хранит state.
-- [ ] Если правил `setupFocusWidgetBackendSync` / `teardownFocusWidgetBackendSync` — wiring в `main.ts` зовёт teardown перед resubscribe при backend respawn.
-- [ ] Если правил pipe protocol (`kepler-focus-svc/src/protocol.rs`) — request/response shape остаётся backward compatible (shell может говорить со старой версией service'а и наоборот).
-- [ ] Если менял auto-install flow — `autoInstallAttemptedThisSession` + `setFocusServiceAutoInstallDeclined` гварды не ослаблены (один UAC промпт максимум).
-- [ ] Если добавил новую `focus.*` ARK операцию — диспатч в `ws_server.rs` + middleware в `extension-host.ts` (если требует apply на hosts).
-- [ ] `requireAdministrator` manifest у `kepler-focus-helper.exe` на месте (`build.rs` embed-manifest).
-- [ ] Headless e2e не показывает widget (`process.env.KOSMOS_HEADLESS === "1"` гвард в `showWidget`).
-
-См. [Focus mode](docs-site/concepts/focus-mode.md).
-
-## Я правил `@kosmos/visuals` (`packages/visuals`)
-
-- [ ] Не сломан public API (`index.ts` экспортирует те же имена).
-- [ ] Если меняешь CSS-переменные в `theme/css-variables.css` — сразу отрази в `docs-site/.vitepress/theme/custom.css`.
-- [ ] Token-файлы (`tokens/*.ts`) остаются source of truth для соответствующих переменных.
-
-## Я правил мобильный код (`mobile/`)
-
-- [ ] `mobile/delphi/` — Kotlin Room. Изменения в схеме согласованы с `mobile/ark-service/` ContentProvider.
-- [ ] `mobile/ark-service/` — ContentProvider публикует только то, что приложение само пишет. Чужие writes не разрешены.
-
-## Я правил документацию (`docs-site/`)
-
-- [ ] `bun run docs:build` — собирается.
-- [ ] `bun run docs:check` — зелёный (нет stale references).
-- [ ] Все внутренние ссылки рабочие.
-- [ ] Русский язык, без английских заглушек.
-- [ ] Не дублирую правила, лучше ссылка на канон-страницу.
-- [ ] Запустил `bun run docs:sync` для регенерации AGENTS.md / CLAUDE.md / llms.txt.
-
-## Я делал substantial задачу через proof loop
-
-- [ ] Создан `.agent/tasks/<DATE>-<slug>/spec.md` **до** реализации.
-- [ ] `spec.md` содержит явные AC1..ACn, проверяемые утверждения.
-- [ ] `evidence.md` со ссылками на `raw/<cmd>.md` логи.
-- [ ] `evidence.json` с PASS/FAIL по каждому AC.
-- [ ] Свежая верификация после `evidence.md` — против текущего кода.
-- [ ] Если был FAIL — `problems.md` + минимальный fix + reverify.
-- [ ] **Каждый** AC = PASS, иначе не клейми «готово».
-
-## Общий финальный чек-лист
-
-- [ ] `bun run ark:guard:writes` — зелёный (если трогал data-слой).
-- [ ] `bun run ark:smoke` — зелёный (для substantial задач).
-- [ ] Коммит-сообщение осмысленное (про **почему**, не «add big»).
-- [ ] Не амендил опубликованные коммиты.
-- [ ] Не использовал `--no-verify` для коммита.
-- [ ] Все новые `.tmp` / `.e2e` / `dist/` пути в `.gitignore`.
-
----
+Полный flow — `docs-site/concepts/proof-loop.md`.
 
 ## Поддержка документации
 
-# Поддержка документации в актуальном состоянии
+Источник правды — `docs-site/`. После публичных правок: правь страницы (**не** root `AGENTS.md` / `CLAUDE.md` — auto-generated, затрутся) → `bun run docs:sync` → `bun run docs:check`.
 
-::: danger Ты — агент, читающий это
-Эта страница — **обязательный** контекст. Документация Kosmos сейчас — единственный источник правды для людей и агентов. Если она устарела, ты как агент примешь неверные решения и сломаешь ожидания пользователя. Перед закрытием **любой** substantial-задачи пройди раздел [«Что проверить»](#что-проверить).
+## Pointer'ы (читай по необходимости)
+
+::: tip Не загружаются автоматически
+Открывай по мере необходимости — когда задача коснулась области.
 :::
 
-## Базовый принцип
-
-```
-Изменил поведение / API / структуру → обновил docs-site/ → bun run docs:sync → bun run docs:check
-```
-
-Документация **обязана** меняться в **той же** задаче, что и код. Не «потом», не «когда руки дойдут». Иначе drift начинается в день один.
-
-## Когда обновлять документацию
-
-| Что изменил                                    | Где обновить                                                                                  |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Добавил/убрал команду в `package.json`         | `docs-site/reference/commands.md` + соответствующее место в `docs-site/apps/<name>.md`        |
-| Изменил ARK schema / endpoint в `ark-core-rpc` | `docs-site/concepts/ark-objects.md` + `docs-site/packages/ark-core.md`                        |
-| Добавил/изменил метод в `@kosmos/ark`          | `docs-site/packages/ark.md` + примеры в `docs-site/concepts/ark-objects.md`                   |
-| Изменил структуру папок приложения             | `docs-site/apps/<name>.md` и `docs-site/guide/layout.md`                                      |
-| Удалил/перенёс файл, упомянутый в доке         | grep по `docs-site/` на имя файла → обновить или удалить упоминание                           |
-| Изменил sync-протокол / HLC / relay            | `docs-site/concepts/sync.md`                                                                  |
-| Добавил/убрал зависимость в стеке              | `docs-site/guide/tooling.md`                                                                  |
-| Добавил smoke-команду                          | `docs-site/reference/smoke-matrix.md`                                                         |
-| Изменил правило/запрет                         | `docs-site/agents/forbidden.md` или `docs-site/reference/rules.md`                            |
-| Принял архитектурное решение                   | новый файл `docs/<DECISION>.md` (полный ADR) + ссылка в `docs-site/reference/decisions.md`    |
-| Изменил дизайн-токены `@kosmos/visuals`        | `docs-site/packages/visuals.md` + при необходимости `docs-site/.vitepress/theme/custom.css`   |
-| Создал/убрал `object_type`                     | `docs-site/concepts/ark-objects.md` (таблица «Известные типы») + соответствующая app-страница |
-| Запланировал фичу / нашёл баг приложения       | `docs-site/apps/<name>-roadmap.md` (см. [Roadmap-конвенция](#roadmap))                        |
-
-## Когда **НЕ** надо трогать документацию
-
-- Локальное переименование private-переменной без публичного эффекта.
-- Чистка `console.log`, опечатки в комментариях.
-- Edit-level правка одной строки в UI без изменения поведения.
-- Patch-обновление зависимости без эффекта на пользователя.
-
-## Workflow обновления
-
-1. **Сначала правь под `docs-site/`.** Не правь сгенерированные `AGENTS.md` / `CLAUDE.md` / `apps/*/AGENTS.md` напрямую — твои изменения будут затёрты при следующем `docs:sync`.
-2. **Запусти `bun run docs:sync`.** Регенерирует все `AGENTS.md`, `CLAUDE.md`, `llms.txt`.
-3. **Запусти `bun run docs:check`.** Проверяет, что упомянутые в доке пути/команды/файлы реально существуют.
-4. **Коммить и доку, и код в одном PR.** Не отдельно.
-
-## Что проверить перед закрытием задачи
-
-Чек-лист обязательный, не пропускай:
-
-- [ ] Я перечитал `docs-site/apps/<которые трогал>.md` — там нет устаревших фактов?
-- [ ] Если добавил/убрал команду — отразил в `docs-site/reference/commands.md`?
-- [ ] Если изменил публичный API (ARK endpoint, `@kosmos/ark` метод, preload) — обновил соответствующую страницу пакета/приложения?
-- [ ] Если ввёл новое архитектурное решение — есть ADR в `docs/` и ссылка в `docs-site/reference/decisions.md`?
-- [ ] `bun run docs:sync` прошёл без ошибок.
-- [ ] `bun run docs:check` зелёный (нет stale-references).
-- [ ] `bun run docs:build` собирается без warnings про невалидные ссылки.
-
-## Команда `docs:check`
-
-Полная аудит-команда:
-
-```powershell
-bun run docs:check
-```
-
-Что делает (`scripts/check-docs-freshness.mjs`):
-
-- Парсит все `docs-site/**/*.md` (кроме сгенерированных).
-- Извлекает упоминания путей (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
-- Проверяет, что эти пути существуют в репозитории.
-- Извлекает упоминания команд (`bun run <name>`, `cargo <subcmd>`).
-- Проверяет, что `bun run <name>` есть в каком-то `package.json` workspace'а.
-- Извлекает внутренние ссылки (`/concepts/architecture` и т.п.) и проверяет, что страница существует.
-- Печатает stale-references как warnings.
-
-Если падает — открой соответствующий `.md` и обнови или удали упоминание.
-
-## Регенерация при подозрении на drift
-
-Если кажется, что `AGENTS.md` или `llms.txt` устарели (например, после ребейза/мерджа):
-
-```powershell
-bun run docs:sync       # перегенерация всех auto-context файлов
-bun run docs:check      # верификация
-git diff                # увидишь что регенерация поменяла
-```
-
-## Анти-паттерны
-
-- ❌ Править `AGENTS.md` напрямую «потому что я знаю что мне нужно». Будет затёрто.
-- ❌ Откладывать обновление доки на «потом». Drift начинается мгновенно.
-- ❌ Документировать **намерения**, а не **факты**. Не пиши «в будущем будет X». Пиши «X есть» или вообще не упоминай.
-- ❌ Скрывать удаление функционала. Если убрал — убери из доки.
-- ❌ Дублировать концепт на несколько страниц. Концепт живёт на одной странице, остальные ссылаются.
-
-## Что важно понять про auto-generation
-
-Поток:
-
-```
-docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/*/AGENTS.md / llms.txt
-                                              (все помечены <!-- AUTO-GENERATED -->)
-```
-
-Скрипт `scripts/sync-agents-docs.mjs` берёт:
-
-- `docs-site/agents/index.md` + `forbidden.md` + `checklists.md` + `reference/rules.md` + `concepts/proof-loop.md` → корневой `AGENTS.md` и `CLAUDE.md`.
-- `docs-site/apps/delphi.md` (Kotlin-часть) → `mobile/delphi/AGENTS.md`.
-- `docs-site/packages/ark-core.md` → `crates/ark-core/AGENTS.md`.
-- Весь набор ключевых страниц inline → `docs-site/public/llms.txt`.
-
-::: tip Eden / Dashboard / Horologion / Arrancador
-Per-extension `AGENTS.md` не генерируются (папки `apps/<name>/` упразднены — расширения живут в `extensions/<id>/` и читают общий корневой `AGENTS.md`). Если нужны жёсткие per-extension правила — добавляй их в соответствующую страницу `docs-site/apps/<name>.md` либо в `docs-site/agents/forbidden.md` (секция per-app).
-:::
-
-Если меняешь логику генерации — правь сам `scripts/sync-agents-docs.mjs`, потом `bun run docs:sync`.
-
-## Roadmap
-
-У каждого приложения может быть **отдельная страница roadmap** — `docs-site/apps/<name>-roadmap.md`. Это список того, что хочется сделать в приложении / баги / TODO. Источник информации:
-
-- Что-то обсудили с пользователем — записываешь в roadmap (не в код, не в TODO.md, не «запомнишь»).
-- Нашёл баг или ограничение в процессе работы — записываешь в roadmap → `Баги / замечания`.
-
-### Структура roadmap-страницы
-
-Три обязательных секции:
-
-1. **Ближайшее** — фичи, над которыми работают сейчас или планируют скоро (по приоритету ↓). Если фича в работе — пометка статуса (`WIP — scaffold`, `WIP — UI готов`).
-2. **Потом** — идеи / nice-to-have. Не критично, но не теряем.
-3. **Баги / замечания** — открытые проблемы.
-
-Пример — [Horologion Roadmap](docs-site/apps/horologion-roadmap.md).
-
-### Как поддерживать
-
-- **Когда фича в roadmap начинает делаться** — оставляй её в «Ближайшее» с пометкой статуса.
-- **Когда фича завершена** — убирай из roadmap и фиксируй в обзоре приложения (`docs-site/apps/<name>.md`).
-- **Баг исправили** — убираем из «Баги».
-- **Не дублируй с code-комментариями `// TODO`** — комментарии в коде про _локальное место_; roadmap про _направление приложения_.
-
-### Когда roadmap-страницы нет
-
-Создаёшь новую — добавь её в `docs-site/.vitepress/config.ts` sidebar под соответствующим приложением как «`<Name> — Roadmap`».
-
-## Связанные документы
-
-- [Старт работы](docs-site/agents.md) — общая стартовая страница агента.
-- [Чек-листы по областям](docs-site/agents/checklists.md) — что прогнать после правок в коде.
-- [Шаблоны спецификаций](docs-site/agents/spec-templates.md) — proof-loop templates.
-- [Команды и скрипты](docs-site/reference/commands.md).
-
----
-
-## Сжатые правила
-
-# Правила репозитория
-
-Сжатый чек-лист правил. Полные тексты — в `docs/`, `AGENTS.md` каждого приложения и в [концептах](docs-site/concepts/architecture.md).
-
-## 1. Граница записи в ARK
-
-::: danger
-
-- Все ARK writes через `@kosmos/ark` (TS) или `ark_core::db` (Rust).
-- **Прямые SQL writes** в `objects` / `object_types` / `object_links` / `tracked_apps` / `usage_sessions` / `usage_events` / `sync_kv` из app services — **запрещены**.
-- Dashboard — read-only.
-- Перед PR в data services: `bun run ark:guard:writes`.
-  :::
-
-См. [Граница записи в ARK](docs-site/concepts/write-boundary.md).
-
-## 2. Read-only SQL
-
-- Renderer **никогда** не открывает SQLite напрямую.
-- В Electron main read-only SQLite — fallback, отделённый от write paths.
-- Dashboard — единственный полноценный read-only inspector.
-- Read-only пути **не запускаются** против user DB в автотестах.
-
-См. [Read-only SQL boundary](docs-site/concepts/readonly-sql.md).
-
-## 3. Изоляция тестовых БД
-
-::: danger
-
-- Тесты / smoke / Playwright / migration verify — **только** на изолированных DB.
-- Разрешённые пути: `.tmp`, `.e2e`, `.agent/tasks/<TASK_ID>/smoke/`, OS temp.
-- Любой тест, дефолтящийся в user data dir, **отвергается** на code review.
-  :::
-
-См. [Изоляция тестовых БД](docs-site/concepts/test-isolation.md).
-
-## 4. Proof loop
-
-Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
-
-`spec.md` → реализация → `evidence.{md,json}` → если не PASS → `problems.md` → fix → reverify.
-
-Каждый AC должен быть `PASS`. См. [Proof loop](docs-site/concepts/proof-loop.md).
-
-## 5. Sync state у direct writers
-
-- Любой Rust-writer, пишущий напрямую в синхронизируемые таблицы, **обязан** вызывать `ark_core::db::bump_sync_version_vector` (или хелпер, который это делает).
-- Self-peer filtering и routable-address filtering — обязательные инварианты sync. Не ослабляй.
-
-См. [Синхронизация](docs-site/concepts/sync.md).
-
-## 6. Tooling-минимум
-
-- `bun install` после клона.
-- `bun run ark:guard:writes` перед PR в data-слой.
-- `bun run ark:smoke` перед нетривиальным PR.
-- `cargo test` в `crates/ark-core/rust` при правках runtime.
-
-См. [Стек и инструменты](docs-site/guide/tooling.md) и [Smoke-матрица](docs-site/reference/smoke-matrix.md).
-
-## 7. UI и Visuals
-
-- Используй `@kosmos/visuals` для shared chrome / сайдбара / titlebar.
-- **Не копируй** shared компоненты внутрь приложения.
-- Не возвращай ручные titlebar-offset / safe-area хаки — есть `DesktopChrome` / `DesktopContentSurface`.
-
-См. [kosmos-visuals](docs-site/packages/visuals.md).
-
-## 8. Запреты per-app
-
-| Приложение | Не делать                                                                                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                                                                           |
-| Eden       | Возвращаться к ripgrep / Heart sidecar, ломать `save/move/delete` hardening в Pinia store (`extensions/eden/src/store/eden.ts`), возвращать ручные titlebar-offset |
-| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                                                                              |
-| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                                                                          |
-
-## 9. Brand consistency (Kosmos / Kepler)
-
-После product rename 2026-05-26:
-
-- **Kosmos** — внешний desktop product: `Kosmos.exe`, installer `Kosmos Setup`, ярлыки, autostart, settings titles.
-- **Kepler** — legacy/internal namespace для совместимости: `kepler:*` IPC, `window.kepler`, `kepler-backend`, `kepler.lock.json`, `kepler-shell`.
-- Не делай массовый rename внутренних `kepler*` имён без отдельного proof loop: это protocol/test compatibility, не косметика.
-- **ARK** — data runtime; не называй его Kepler-specific.
-
-## 10. Command bus
-
-- Apps регистрируют свои commands через `ArkClient.commands.register(...)` **только** в `kepler-mode` (когда лаунчер их вызвал). Регистрация — в `try/catch`: standalone-режим (без лаунчера) не имеет commands API, и это норма, не ошибка.
-- Wire format событий command bus — **flat**: `{event: "command:invoked", id: "...", ...fields}`. Не `{kind: "event", type: "...", payload: {...}}`. Согласовано с peer/sync events.
-- Command-категории в `shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
-- Extension content в `extensions/<id>/` — static (no build step yet, PoC).
-
-## 11. Стиль коммитов и кода
-
-- Коммит — про **почему**, не про **что**. Не «add big».
-- Никаких `--no-verify`.
-- Не амендь опубликованные коммиты, делай новый.
-- Не пиши документацию ради документации; обновляй concept-страницы только если меняешь концепт.
-- Минимум комментариев. Понятные имена > комментарии.
-
-См. [Рабочий процесс](docs-site/guide/workflow.md).
-
----
-
-## Proof loop
-
-# Proof loop
-
-Substantial-правки в репо проходят через формальный цикл доказательства в `.agent/tasks/<DATE>-<slug>/`. Это политика, закреплённая в корневом `AGENTS.md`.
-
-## Когда применяется
-
-| Тип правки                            | Proof loop?     |
-| ------------------------------------- | --------------- |
-| Новая фича приложения                 | ✅ да           |
-| Нетривиальный рефактор                | ✅ да           |
-| Нетривиальный багфикс                 | ✅ да           |
-| Изменение data-слоя ARK / SDK / smoke | ✅ да           |
-| Архитектурное решение                 | ✅ да, плюс ADR |
-| Опечатка / форматирование             | ❌ нет          |
-| Локальное переименование переменной   | ❌ нет          |
-| Косметика README                      | ❌ нет          |
-| Edit-level правка одной строки в UI   | ❌ нет          |
-
-## Структура task-папки
-
-```text
-.agent/tasks/2026-04-26-ark-app-completion/
-├─ spec.md             # AC1..ACn, замёрзлено до реализации
-├─ evidence.md         # как и чем проверено
-├─ evidence.json       # машино-читаемая копия evidence
-├─ problems.md         # если не PASS — что и где не сошлось
-├─ raw/                # сырые логи команд (часто command-results.md)
-└─ smoke/              # изолированные тестовые БД и артефакты
-```
-
-Имя папки — `<YYYY-MM-DD>-<short-slug>`. Дата — день начала задачи.
-
-## Последовательность
-
-```mermaid
-flowchart LR
-    S[spec.md] --> I[Реализация]
-    I --> E[evidence]
-    E --> V[Verify]
-    V --> Q{Все AC PASS?}
-    Q -->|да| D[Готово]
-    Q -->|нет| P[problems.md]
-    P --> F[Fix]
-    F --> V
-
-    class S,E,V,D canon
-    class I,F neutral
-    class P legacy
-    class Q neutral
-```
-
-`evidence` — это `evidence.md` + `evidence.json`. `Verify` — свежий прогон команд против текущего состояния репо.
-
-### 1. Заморозить spec
-
-`spec.md` пишется **до** реализации. Включает:
-
-- Цель и контекст.
-- Скоуп (что в задаче, что нет).
-- Acceptance Criteria, пронумерованные `AC1`, `AC2`, …
-- Каждый AC формулируется как **проверяемое** утверждение, не «улучшить производительность».
-
-Пример AC из реальной задачи:
-
-> **AC1.** Arrancador ARK write-path audit passes: любые writes в ARK `objects`, `object_types`, `object_links`, или usage sync tables идут через `@kosmos/ark` APIs или Rust `ark_core` helpers, не через raw `better-sqlite3` SQL в app services.
-
-Когда `spec.md` готов — он **не редактируется** в процессе реализации. Если что-то меняется по дороге — это либо новая задача, либо отдельное решение в `problems.md` с обоснованием.
-
-### 2. Реализовать
-
-Наименьший защитимый diff. Не тащи в одну задачу несвязанные правки.
-
-### 3. Создать evidence
-
-`evidence.md` — как ты проверил каждый AC. Каждый AC должен иметь:
-
-- Команды, которые ты прогнал.
-- Их вывод (или ссылку на `raw/<cmd>.md`).
-- Явный вердикт: `PASS` или `FAIL`.
-
-`evidence.json` — машино-читаемая копия:
-
-```json
-{
-  "task_id": "2026-04-26-ark-app-completion",
-  "verified_at": "2026-04-26T15:00:00Z",
-  "results": [
-    { "ac": "AC1", "verdict": "PASS", "command": "bun run ark:guard:writes" },
-    { "ac": "AC2", "verdict": "PASS", "command": "bun run --cwd extensions/arrancador test" }
-  ]
-}
-```
-
-### 4. Свежая верификация
-
-После записи evidence — прогон ещё раз, **с нуля**, против текущего кода. Verifier судит по текущему состоянию репо, не по предыдущим утверждениям в чате.
-
-### 5. Если не PASS — `problems.md`
-
-Описание, что именно не сошлось, минимальный безопасный fix, и **reverify** после fix'а.
-
-## Жёсткие правила
-
-::: danger Не нарушай
-
-- Не объявляй задачу завершённой, пока **каждый** AC не `PASS`.
-- Verifier судит по текущему коду и текущим выводам команд, не по предыдущим сообщениям в чате.
-- Fixer делает наименьший защитимый diff. Не «попутно отрефакторил», только fix.
-  :::
-
-## Workflow-агенты
-
-В репо лежат TOML/MD-описания специализированных агентов, помогающих с loop'ом:
-
-- `.agents/agents/task-spec-freezer.{toml,md}` — помогает оформить `spec.md`.
-- `.agents/agents/task-builder.{toml,md}` — реализация.
-- `.agents/agents/task-verifier.{toml,md}` — независимая верификация.
-- `.agents/agents/task-fixer.{toml,md}` — минимальные fix'ы.
-
-## Зачем это всё
-
-- **Auditable.** Через год можно открыть `.agent/tasks/<old>/` и понять, что и как делалось.
-- **No drift.** Утверждения «сделано» подтверждены `evidence`, а не «я сказал так в чате».
-- **AI-friendly.** Агент видит ровно те же критерии, что человек, и не уезжает в собственную интерпретацию.
-
-## Связанные документы
-
-- Корневой `AGENTS.md` — формальная политика.
-- [Изоляция тестовых БД](docs-site/concepts/test-isolation.md) — каждая smoke-проверка использует свою БД.
-- [Шаблоны спецификаций](docs-site/agents/spec-templates.md) — типовые spec'и для агента.
+**Главные:**
+
+- `docs-site/agents/forbidden.md` — **полный** список «никогда» с обоснованиями (per-app).
+- `docs-site/agents/index.md` — карта приложений + общие принципы.
+- `docs-site/agents/checklists.md` — чек-листы по областям перед сдачей.
+- `STATUS.md` (корень) — актуальный snapshot проекта.
+
+**Концепты:**
+
+- `docs-site/concepts/architecture.md`, `ark-objects.md`, `write-boundary.md`, `sync.md` — модель данных и граница записи.
+- `docs-site/concepts/proof-loop.md`, `test-isolation.md` — substantial-задачи и изоляция тестов.
+- `docs-site/concepts/command-bus.md`, `extension-host.md`, `extension-dev-mode.md` — runtime extensions (probe-based HMR, opt-in dev mode).
+- `docs-site/concepts/focus-mode.md` — focus widget, hosts write, helper/svc lifecycle.
+- `docs-site/concepts/instances.md` — slot-based изоляция (prod / dev / test).
+- `docs-site/concepts/db-resilience.md` — Mutex poison recovery, backup, integrity check.
+
+**Reference:**
+
+- `docs-site/reference/rules.md` — сжатый TL;DR.
+- `docs-site/reference/commands.md` — все bun scripts.
+- `docs-site/reference/glossary.md` — термины.
+- `docs-site/reference/decisions.md` — ADR журнал.
+- `docs-site/reference/smoke-matrix.md` — что прогонять перед PR.
+
+**Operational:**
+
+- `docs-site/agents/testing.md` — e2e правила (headless, universal contract).
+- `docs-site/agents/spec-templates.md` — шаблоны `spec.md`.
+- `docs-site/agents/estimation.md` — калибровка оценок.
+- `docs-site/agents/manual-tests-pending.md` — TODO визуальных проверок.
+- `docs-site/agents/docs-maintenance.md` — поддержка документации.
+
+Полный набор правил — страницы `docs-site/` и `docs-site/public/full-llms.txt` для редких случаев, когда нужен весь reference одним файлом.

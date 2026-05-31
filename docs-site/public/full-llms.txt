@@ -2157,10 +2157,37 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/
 
 Скрипт `scripts/sync-agents-docs.mjs` берёт:
 
-- `docs-site/agents/index.md` + `forbidden.md` + `checklists.md` + `reference/rules.md` + `concepts/proof-loop.md` → корневой `AGENTS.md` и `CLAUDE.md`.
-- `docs-site/apps/delphi.md` (Kotlin-часть) → `mobile/delphi/AGENTS.md`.
-- `docs-site/packages/ark-core.md` → `crates/ark-core/AGENTS.md`.
-- Весь набор ключевых страниц inline → `docs-site/public/llms.txt`.
+- `docs-site/agents/claude-md-core.md` → корневые `AGENTS.md` и `CLAUDE.md`.
+- Compact per-area summaries from `scripts/sync-agents-docs.mjs::TARGETS` + source-doc pointers → `mobile/delphi/AGENTS.md`, `crates/ark-core/AGENTS.md`.
+- Ссылочный manifest ключевых страниц → `docs-site/public/llms.txt`.
+- Весь набор ключевых страниц inline → `docs-site/public/full-llms.txt`.
+
+Все `AGENTS.md` / `CLAUDE.md` — **boot context**, а не энциклопедия. Генератор держит жёсткий budget:
+
+| Файл                        | Budget              |
+| --------------------------- | ------------------- |
+| `AGENTS.md`                 | ≤ 220 строк / 32 KB |
+| `CLAUDE.md`                 | ≤ 220 строк / 32 KB |
+| `mobile/delphi/AGENTS.md`   | ≤ 180 строк / 24 KB |
+| `crates/ark-core/AGENTS.md` | ≤ 180 строк / 24 KB |
+
+Если `bun run docs:sync` падает на budget'е, не повышай лимит первым делом: вынеси подробности в тематическую страницу `docs-site/`, оставь в generated context одно правило или pointer.
+
+Что должно попадать в `claude-md-core.md`:
+
+- Инвариант, нарушение которого почти гарантированно сломает задачу.
+- Карта «где что», без changelog-деталей.
+- Команда или guard, которые агент должен помнить до чтения deep docs.
+- Pointer на подробную страницу.
+
+Что не должно попадать в `claude-md-core.md`:
+
+- История фаз, длинные списки прошлых фиксов, полные API reference.
+- Per-app детали, которые нужны только при работе в конкретной области.
+- Большие чек-листы; оставляй ссылку на `docs-site/agents/checklists.md`.
+- Содержимое `spec.md`, `evidence.md`, `postmortems.md`; для этого есть `.agent/tasks/**` и отдельные docs-site страницы.
+
+Per-area `AGENTS.md` тоже не должны инлайнить полные app/package страницы или полный `forbidden.md`. Формат: scope → source docs → локальные invariants → команды → общий TL;DR. Если нужны новые локальные правила, добавляй 1-2 строки в соответствующий `TARGETS` entry и оставляй ссылку на полный doc.
 
 ::: tip Eden / Dashboard / Horologion / Arrancador
 Per-extension `AGENTS.md` не генерируются (папки `apps/<name>/` упразднены — расширения живут в `extensions/<id>/` и читают общий корневой `AGENTS.md`). Если нужны жёсткие per-extension правила — добавляй их в соответствующую страницу `docs-site/apps/<name>.md` либо в `docs-site/agents/forbidden.md` (секция per-app).

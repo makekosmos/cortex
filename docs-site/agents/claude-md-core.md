@@ -1,7 +1,7 @@
 # Core context для Claude Code
 
 ::: tip Что это
-Единственный источник корневого `CLAUDE.md`. Цель ≤ 200 строк по [Anthropic best-practices](https://code.claude.com/docs/en/best-practices) — файл грузится каждый turn, переполнение убивает следование правилам. Здесь только то, без чего Claude **сделает ошибку**. Детали — за pointer'ами.
+Единственный источник корневых `AGENTS.md` и `CLAUDE.md`. Цель ≤ 200 строк по [Anthropic best-practices](https://code.claude.com/docs/en/best-practices) — эти файлы грузятся в агентский контекст по умолчанию, переполнение убивает следование правилам. Здесь только то, без чего агент **сделает ошибку**. Детали — за pointer'ами.
 :::
 
 ## За 30 секунд
@@ -172,4 +172,4 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 - `docs-site/agents/manual-tests-pending.md` — TODO визуальных проверок.
 - `docs-site/agents/docs-maintenance.md` — поддержка документации.
 
-Полный жирный набор правил — корневой `AGENTS.md` (auto-generated, ~92k байт; не для каждой сессии).
+Полный набор правил — страницы `docs-site/` и `docs-site/public/full-llms.txt` для редких случаев, когда нужен весь reference одним файлом.

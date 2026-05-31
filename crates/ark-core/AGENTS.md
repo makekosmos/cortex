@@ -7,438 +7,45 @@
 Открой собранный сайт (`bun run docs:dev`, http://localhost:5173/) для
 удобного чтения.
 
-Полная страница: `docs-site/packages/ark-core.md`.
+Компактный локальный boot context. Подробности читай в source docs ниже по необходимости.
 
 ---
 
-## Контекст: ark-core
+## Source Docs
 
-# ark-core
+- `docs-site/packages/ark-core.md`
+- `docs-site/concepts/ark-objects.md`
+- `docs-site/concepts/sync.md`
+- `docs-site/concepts/write-boundary.md`
+- `docs-site/concepts/db-resilience.md`
 
-::: tip Источник правды
-`crates/ark-core/README.md`, `crates/ark-core/AGENTS.md`
-:::
+## Scope
 
-Канонический local-first data runtime для Kosmos. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
+- `crates/ark-core/` is the shared Rust + SQLite runtime and `ark-core-rpc` sidecar.
+- Electron callers use newline-delimited JSON-RPC; Android/Swift integration goes through UniFFI surfaces.
+- Full RPC/entity reference lives in `docs-site/packages/ark-core.md`; do not inline it here.
 
-## Статус (2026-04-16)
+## Must Read
 
-- **DB layer** в продакшен-приложениях. Electron sidecars и Rust callers используют одну SQLite-схему и CRUD-хелперы.
-- **Sync layer** в продакшене. `main.rs` экспонирует sync lifecycle RPCs; `ffi.rs` — те же операции для UniFFI.
-- **Usage tracking entities** — first-class ARK data. `tracked_apps`, `usage_sessions`, `usage_events` лежат в основной ARK DB и участвуют в sync.
-- **Schema evolution — additive.** Существующие ARK DBs мигрируются на месте через `init_schema` без замены файла.
+- `docs-site/packages/ark-core.md` — package contract and verification expectations.
+- `docs-site/concepts/sync.md` — sync protocol, HLC, peer rules.
+- `docs-site/concepts/write-boundary.md` — allowed write paths.
+- `docs-site/concepts/db-resilience.md` — Mutex poison recovery, backups, integrity checks.
 
-## Архитектура
+## Invariants
 
-```text
-crates/ark-core/rust/src/
-  main.rs              # stdin/stdout JSON-RPC sidecar для Electron callers
-  ffi.rs               # UniFFI facade для Android / Swift / embedded callers
-  lib.rs               # library entry point, public re-exports
-  types.rs             # shared entities и sync payloads
-  schema.rs            # CREATE TABLE / index statements
-  db.rs                # SQLite CRUD, миграции, sync entity loading
-  events.rs            # event bus для cross-module нотификаций
-  hlc.rs               # Hybrid Logical Clock helpers
-  protocol.rs          # sync wire messages и батчинг
-  sync_server.rs       # WebSocket sync server
-  sync_client.rs       # WebSocket sync client
-  beacon.rs            # UDP peer discovery
-  relay_transport.rs   # outbound relay client
-  relay_sync.rs        # relay bridge поверх sync
-  mesh.rs              # LAN + relay coordination
-  host.rs / net.rs     # hostname + routable address filtering
-  space.rs             # пространство данных
-  delphi/              # Delphi-specific runtime extensions
-  pomodoro/            # pomodoro engine модуль
-```
+- Production Rust must not use `Mutex::lock().unwrap()`; recover poison with `unwrap_or_else(|e| e.into_inner())`.
+- Schema evolution is additive only: no destructive migrations; prefer idempotent `CREATE TABLE IF NOT EXISTS` / additive indexes.
+- Every direct writer to syncable data must update sync state through the appropriate `record_local_*` / version-vector path.
+- Sync wire messages stay `snake_case`; do not weaken self-peer or routable-address filtering.
+- `ark-core-rpc` stdout is protocol output: keep framing newline-delimited JSON and avoid noisy logs there.
 
-## Сборка и тесты
+## Commands
 
-```powershell
-cargo build --manifest-path crates/ark-core/rust/Cargo.toml --bin ark-core-rpc
-cargo test  --manifest-path crates/ark-core/rust/Cargo.toml
-bun run --cwd packages/ark typecheck
-bun run --cwd packages/ark build
-```
-
-## Sidecar контракт
-
-`ark-core-rpc` читает newline-delimited JSON со stdin и пишет ответы / events в stdout. Запросная envelope:
-
-```json
-{ "operation": "snake_case_name", "...params": "..." }
-```
-
-Modern callers могут включать `id`; ответы echo'ят его. Legacy callers без `id` работают.
-
-Лайфцикл:
-
-1. `init` с `dbPath`.
-2. Object / usage CRUD и query через RPC.
-3. Опционально `start_sync`.
-4. `stop_sync` перед shutdown.
-
-Когда `relay_url` передан в `start_sync`, sidecar поднимает relay-bridge рядом с LAN sync. Bridge обменивается `hello`, `version_vector`, `sync_changes`, `live_change` фреймами через relay сервер.
-
-`start_sync` принимает опциональный `auth_secret`. Когда настроен, LAN/P2P пиры обязаны доказать знание секрета через `auth_nonce` + `auth_hmac` в `hello`. Это аутентификация, **не** шифрование.
-
-## Полный список RPC
-
-### DB lifecycle
-
-- `init` — инициализация runtime с путём к БД.
-- `load_all` — загрузить все сущности (для bootstrap renderer).
-- `clear_all` — очистить (для тестов).
-- `delete_trashed` — почистить мусор.
-
-### Core entity CRUD (legacy планнинг)
-
-- `upsert_todo`, `delete_todo`, `batch_upsert_todos`
-- `upsert_project`, `delete_project`
-- `upsert_area`
-- `upsert_tag`
-- `upsert_heading`, `delete_heading`
-
-### Object model
-
-- `upsert_object_type`, `delete_object_type`
-- `upsert_object`, `delete_object`
-- `upsert_object_link`, `delete_object_link`
-- `list_objects_by_type`
-- `list_running_time_entries` — running `time_entry_obj` (endedAt IS NULL), opt. `source` filter
-- `get_objects_by_ids`
-- `search_objects`
-
-### Usage entity CRUD
-
-- `upsert_tracked_app`, `delete_tracked_app`
-- `upsert_usage_session`, `delete_usage_session`
-- `upsert_usage_event`, `delete_usage_event`
-- `list_recent_usage_processes`
-- `search_usage_processes`
-- `get_usage_game_playtime_summary`
-
-### Sync KV
-
-- `get_sync_kv`, `set_sync_kv`
-
-### Sync runtime
-
-- `start_sync`, `stop_sync`
-- `broadcast_change`
-- `get_connected_peers`
-- `add_seed_peer`
-- `leave_space`
-- `get_own_addresses`
-- `get_host_device_name`
-
-## Первичные сущности
-
-- **Legacy planning**: `TodoItem`, `Project`, `Area`, `Tag`, `Heading`.
-- **Usage**: `TrackedApp`, `UsageSession`, `UsageEvent`.
-- **Sync metadata**: `PeerRecord`, `VersionVector`, HLC strings в `sync_kv`.
-- **Object model**: `ObjectType`, `Object`, `ObjectLink`.
-
-## Sync rules
-
-::: warning Жёстко
-
-- Каждая persisted syncable сущность обязана round-trip'иться через `db.rs::load_entities` и `db.rs::apply_entity`.
-- Direct writers вне RPC layer (`services/kepler-backend/src/usage_tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
-- Schema-добавления **идемпотентны**. Используй `CREATE TABLE IF NOT EXISTS` / additive миграции, не destructive rewrites.
-- Wire-протокол sync остаётся `snake_case`. RPC может быть `camelCase` где зависят legacy Electron callers.
-- **Self-peer filtering** и **routable-address filtering** — обязательные инварианты. Не ослабляй при изменениях в sync startup или peer persistence.
-  :::
-
-## Verification expectations
-
-- Запускай `cargo test` в `crates/ark-core/rust`.
-- Если трогаешь sync или schema — добавь/обнови тесты миграции и репликации, а не только локальный CRUD.
-
-## Текущие ограничения
-
-- Relay sync подключён в `ark-core-rpc` и в UniFFI `ArkCore::start_sync`.
-- LAN sync поддерживает опциональную HMAC peer auth, но трафик не шифруется.
-- Generic object search использует SQLite FTS5 если доступен; fallback на in-memory matching когда FTS не работает.
-- Часть исторических docs/скриптов остаётся как migration aids, не текущий integration contract.
-
-## Связанные документы
-
-- [@kosmos/ark](docs-site/packages/ark.md) — TS SDK.
-- [Модель данных ARK](docs-site/concepts/ark-objects.md).
-- [Синхронизация](docs-site/concepts/sync.md).
-- [Граница записи в ARK](docs-site/concepts/write-boundary.md).
-
----
-
-## Общие запреты (повторение)
-
-# Запреты и гварды
-
-::: danger Никогда
-Этот список — нерушимое. Не «лучше не делать», а **запрещено**. Если ты как агент думаешь нарушить что-то отсюда — остановись и спроси человека.
-:::
-
-## ARK writes
-
-- ❌ **Прямой SQL `INSERT` / `UPDATE` / `DELETE`** в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из **app TS services**.
-- ❌ **Открытие ARK SQLite на запись** в app services через `better-sqlite3`, `sqlite3`, `node:sqlite` и т.п.
-- ❌ Renderer открывает SQLite (любой) напрямую.
-
-## Rust panic / Mutex discipline
-
-- ❌ `Mutex::lock().unwrap()` в production code paths (вне `#[cfg(test)]`). Используй `lock().unwrap_or_else(|e| e.into_inner())` для poison recovery — SQLite transactions atomic, данные внутри guard'а валидны после panic'а другого thread'а. Без recovery один panic делает sync неработоспособным **forever до process restart**. См. [DB resilience](/concepts/db-resilience#mutex-poison-recovery).
-- ❌ Удалять `crash_reporter::install(data_dir)` из `services/kepler-backend/src/main.rs::setup`. Это early init для panic_hook'а — без него panic'ы остаются только в stderr (который пропадает после process exit), real user не сможет прислать artifact.
-- ❌ Spawn'ить `kepler-backend` без `RUST_BACKTRACE=1` env. Backtrace в crash log = readability для diagnosability.
-- ❌ Снижать `BACKEND_MAX_CRASH_STREAK` ниже 3 или удалять supervisor logic в `shell/electron/main.ts::scheduleBackendRespawn`. Без supervisor backend crash = dead app для пользователя; renderer окна виснут "загрузка" forever.
-- ❌ Удалять `db_backup::maybe_backup_on_startup` из `main.rs`. Real user data loss — это раз и навсегда; backup это единственный recovery path.
-- ❌ Удалять `db::check_integrity` из `init_schema`. Silent corruption хуже чем fail-loud — пользователь не узнает что DB битая, пока данные не разъедутся через sync.
-
-## Sync
-
-- ❌ Direct Rust writer пишет в ARK без вызова `ark_core::db::bump_sync_version_vector`.
-- ❌ Добавление нового `Request::Upsert*` / `Request::Delete*` handler'а в `crates/ark-core/rust/src/main.rs` без вызова `record_local_upsert` / `record_local_delete`. Раньше legacy handler'ы (UpsertTodo, UpsertProject, UpsertArea, UpsertTag, UpsertHeading, BatchUpsertTodos + Delete\*) тихо пропускали bump → multi-device sync терял локальные правки (2026-05-18 audit). Любой write путь, не записавший в `sync_kv.version_vector`, **не существует** для peers.
-- ❌ Batch upsert handler без bump'а `record_local_upsert` per-entity. Один общий bump на батч недостаточен — peer-side sync проверяет HLC entity-id'шно.
-- ❌ Ослабление self-peer filtering при изменениях в sync startup.
-- ❌ Ослабление routable-address filtering при изменениях в peer persistence.
-- ❌ Изменение sync wire-протокола из `snake_case` в что-то другое.
-- ❌ Destructive schema migration (`DROP TABLE`, `ALTER COLUMN` несовместимо). Только `CREATE TABLE IF NOT EXISTS` и additive.
-
-## Тесты
-
-- ❌ Запускать e2e без `KOSMOS_HEADLESS=1`. Окна Kosmos / extension'ов не должны лезть на экран и воровать focus у пользователя. `launchKepler` helper выставляет этот env автоматически — не override'ить в `opts.env`.
-- ❌ Создавать BrowserWindow в `shell/electron/` без проверки `process.env.KOSMOS_HEADLESS === "1"`. Любое новое окно должно респектать headless mode (`show: !headless`, `skipTaskbar: headless`).
-- ❌ Звать `.show()` / `.showInactive()` / `.focus()` / `.setAlwaysOnTop(true)` на BrowserWindow в `shell/electron/` без headless guard'а. `showLauncher`, `focusExistingExtensionWindow`, `showWidget`, `openSettings`, `openDashboardWindow`, `openInstallExtensionWindow` — все должны раннее return'ить в headless/test mode (либо пропускать визуальные операции, оставляя state / IPC). Видимые окна во время e2e — это **баг**, а не «фича тестов». Пользователь не должен видеть мигающего UI от прогона.
-- ❌ Полагаться на `getByRole("button", { name: /<text>/ })` strict-mode, если на странице потенциально несколько подходящих кнопок (Vue transitions, multi-pane layouts). Scope'ить к специфичному CSS классу. См. [Testing → ловушки](/agents/testing#vue-transition).
-- ❌ Lazy-регистрировать object_type extension'ом при первом write если extension объявлен в `manifest.tests.smoke`. Eager register на boot в shim'е — иначе universal contract spec падает с FK constraint.
-- ❌ Дефолт пути к user ARK DB (`%APPDATA%\Kosmos\ark.db`) в тестах.
-- ❌ Захардкоженный путь к real user dir (типа `C:\Users\me\AppData\...`).
-- ❌ Запуск миграции/backfill против реальной ARK DB «чтобы проверить».
-- ❌ Запуск Playwright против user vault Eden.
-- ❌ Указывать тестам `KOSMOS_DATA_DIR` равным `%APPDATA%\Kosmos\` (real user data). Backend поддерживает `KOSMOS_DATA_DIR` override именно чтобы тесты могли подсунуть свой dir под `tests/.e2e/<spec>/`. Helper `tests/e2e/helpers/launch.ts` явно отказывается принимать путь внутри `%APPDATA%`.
-- ❌ Запускать Playwright без `KOSMOS_DATA_DIR` override — тогда backend упадёт в user data dir.
-- ❌ Хардкодить `path.join(appData, "Kosmos", ...)` или `"Kepler"` userData в shell / extension main process. Используй `resolveInstance()` / `keplerDataDir()` из `shell/electron/instance.ts` — single source of truth для slot-based изоляции (`prod` / `dev` / `dev-<x>` / `test-<x>`). См. [Instance slots](docs-site/concepts/instances.md). Иначе dev/test/multi-dev изоляция тихо ломается.
-- ❌ Звать `app.requestSingleInstanceLock()` ДО `applyInstanceToApp(resolveInstance())` в `shell/electron/main.ts`. Lock scope'ится по `app.getPath('userData')`; если он ещё «Kepler» (default) — prod и dev делят один lock и второй инстанс молча выходит. Порядок в module top-level main.ts критичен.
-- ❌ `setLoginItemSettings({ path: process.execPath, ... })` без проверки `resolveInstance().autorunEnabled`. Из dev процесса `process.execPath` это `electron.exe` из `node_modules/` — нечего прописывать в HKCU Run.
-- ❌ Включать `bun run --cwd shell dev` в production install path или launcher для конечного юзера. Dev mode пишет в `Kosmos-dev/`, а production install — в `Kosmos/`. Путать их → разные данные у разработчика и установленного приложения.
-
-## Proof loop
-
-- ❌ Объявить задачу завершённой, пока **каждый** AC не `PASS`.
-- ❌ Редактировать `spec.md` после старта реализации.
-- ❌ Fixer делает «попутный рефактор» вместе с fix'ом.
-
-## Per-app запреты
-
-### Eden
-
-- ❌ Возврат к ripgrep / Tantivy / Heart Rust sidecar. Search 100% через ARK FTS5 (`search_objects`).
-- ❌ Возрождение `apps/eden/ts/` или standalone Eden.exe. Удалены в Phase 6.0.A.
-- ❌ Возврат Hevy fitness integration в Eden. Замена — Olympia (отдельное приложение, ещё не реализовано).
-- ❌ Возврат UI для code lint/format. Code-tools UI удалены в 6.0.A; TipTap CodeBlock + lowlight (синтакс highlight) остаются.
-- ❌ Vault picker UI / welcome screen / multi-vault. Single ARK DB per user после удаления spaces (2026-05-15).
-- ❌ Прямое использование `window.kepler.ark.request` из Eden компонентов и `store/`. Только через `kepler-api-shim` (или `edenApi.ts` фасад над ним) — это единственный мост, чтобы code review мог локально проверить ARK границу.
-- ❌ Возврат ручных `--titlebar-height` / `--titlebar-left-safe-area` костылей.
-- ❌ Использование `vue-router` для titlebar history controls (нужна локальная история Eden).
-- ❌ Deep import shared компонентов вместо public API `@kosmos/visuals`.
-- ❌ Удаление lazy-load Editor.vue (`defineAsyncComponent`). Main bundle Eden должен оставаться < 800KB.
-- ❌ `await props.onSave(...)` в `Editor.vue` без try/catch. Throw'и из onSave (network error, ARK недоступен) при отсутствии catch'а превращают autosave в silent retry storm — `lastPersisted*` не обновляется, autosave таймер ретраит каждые 800ms бесконечно, пользователю никаких индикаторов. На failure — выставить `saveConflict` с human-readable текстом.
-- ❌ `void save()` в `onBeforeUnmount` без `.catch(...)`. Promise rejected после unmount'а компонента → unhandled rejection. Component-instance-aware error handling не сработает (компонент уже размонтирован).
-
-### Delphi
-
-- ❌ Восстановление, упаковка или использование legacy Delphi DB sidecar.
-- ❌ Использование old todo таблиц как long-term fallback после миграции в `task_obj`.
-
-### Arrancador
-
-- ❌ In-process activity tracker / window polling loop внутри Arrancador.
-- ❌ Arrancador-owned usage SQLite.
-- ❌ Tauri зависимости / Tauri runtime пути.
-- ❌ React зависимости / React runtime пути.
-
-### Horologion
-
-- ❌ `window.horologion.timeEntries.listRunning()` без `{ source: "manual" }` в `StopwatchView.vue` и для команды `horologion:stopwatch:start`. Без фильтра подхватывается pomodoro_break entry (созданная pomodoro session при `trackBreaksAsRest=true`), и кнопка «Стоп» в StopwatchView закрывает её в обход pomodoro lifecycle. Pomodoro session теряет синхронизацию с ARK.
-- ❌ Side-effect операции над ARK time_entry (createArkEntry / closeArkEntry) в `usePomodoroSession.ts` фоном через `void (async () => {...})()`. Pause + phase_changed handler могут гоняться → двойной stopTimer / создание дубликата entry. Все side effects идут через `enqueueSideEffect()` (serial queue) — гарантирует строгий порядок и единственного владельца `currentEntryId`.
-- ❌ Создание `currentEntryId` без проверки `currentEntryId.value == null` в phase_changed handler'е. Двойной phase_changed (quick double-click «Старт» / backend retry) создаёт два entry, первый orphan'ится с null id-references.
-- ❌ Пропустить `rehydrateCurrentEntryId(phase)` в `ensureInit()` когда backend сообщил `isRunning && phase !== "idle"`. После reload extension'а renderer теряет id открытого ARK entry — последующий pause/stop становится no-op'ом, entry «running вечно». Фикс: смотрим `listRunning({ source: 'pomodoro' | 'pomodoro_break' })` и берём последнюю.
-
-### Focus mode
-
-См. [Focus mode](docs-site/concepts/focus-mode.md).
-
-- ❌ Прямые манипуляции `BrowserWindow` focus widget'а (show/hide/move/destroy) из extension'ов или из кода вне `shell/electron/focus-widget.ts`. Только через IPC `kepler:focus-widget:*` (`set-state` / `get-state` / `hide`).
-- ❌ Обход `pomodoro_host` для lifecycle pomodoro-сессии. Кнопки виджета (pause/resume/skip/stop) дёргают **только** `invokeOperation("pomodoro.<op>")` через backend — никаких прямых `setFocusState` локально после клика. Backend — source of truth, его broadcast обновит widget.
-- ❌ Прямые writes в `C:\Windows\System32\drivers\etc\hosts` из любого места кроме `Kosmos Helper.exe` / `Kosmos System Service.exe` (dev-бинарники всё ещё называются `kepler-focus-helper` / `kepler-focus-svc`). Никаких inline `fs.writeFile` или `child_process` поверх hosts из shell / extension'ов / `services/kepler-backend/`.
-- ❌ Запись вне маркерной секции (`# === kepler-focus BEGIN/END ===`) в helper / svc. Backup создаётся **один раз** при первой модификации — если перезаписать вне маркеров, юзерские hosts entries потеряются навсегда.
-- ❌ Destructive ALTER / DROP для `blocklist_obj` или ключа `focus.active_state` в `sync_kv`. Только additive миграции (см. [ARK objects](docs-site/concepts/ark-objects.md)).
-- ❌ `setupFocusWidgetBackendSync` без последующего `teardownFocusWidgetBackendSync` при backend respawn / `resetArkClient`. Двойная подписка → каждый pomodoro event handled дважды.
-- ❌ Применение блокировки (hosts write) из `services/kepler-backend/src/focus.rs`. Модуль хранит **только state** в ARK; применение делает shell через `applyFocusBlock` middleware в `extension-host.ts`. Никакого privileged кода в backend.
-- ❌ Trust'нуть pipe ответу без safety timeout. `sendViaPipe` всегда финиширует за 3s даже при mute pipe.
-- ❌ Удалять `requireAdministrator` manifest у `Kosmos Helper.exe` / dev-бинаря `kepler-focus-helper.exe`. Без него helper стартует non-elevated и hosts write молча падает с access denied.
-- ❌ Расширять SDDL `Kosmos System Service` pipe'а за пределы `D:(A;;GA;;;AU)` (Authenticated Users). NULL-DACL = network exposure, не нужно.
-- ❌ Автоматически re-prompt'ить UAC для auto-install `Kosmos System Service` после того, как юзер отказался. `autoInstallAttemptedThisSession` (session-scope) + `setFocusServiceAutoInstallDeclined` (persisted) гарантируют один промпт максимум.
-
-### Dictation
-
-См. [Dictation](docs-site/concepts/dictation.md).
-
-- ❌ Хранить Groq API key в `dictation-config.json` или любом JSON-конфиге. Только Windows Credential Manager через `keyring::Entry::new("kosmos-kepler", "groq-api-key")`. Reason: ключ не должен утекать через бэкап `%APPDATA%\Kosmos\`, случайный коммит, crash dump.
-- ❌ `BrowserWindow` для pill вне `shell/electron/dictation-pill.ts`. Все show/hide/close — через IPC `kepler:dictation:*` или экспортированные функции модуля.
-- ❌ Inject без сохранения и восстановления оригинального clipboard. Поток обязан: save → set transcript → paste → restore. Иначе мы стираем буфер пользователя.
-- ❌ Restore clipboard раньше чем через 80ms (`tokio::time::sleep`) после симуляции Ctrl+V. Race с ОС: Windows ещё не успеет paste'нуть → восстановим старое поверх transcript'а → юзер увидит **старое** содержимое. Реальная задержка типичных paste'ов 30-50ms; 80ms — запас на медленные машины и Electron-based target'ы (VS Code).
-- ❌ Симуляция Ctrl+V без предварительного `SetForegroundWindow(prev_hwnd)` + `sleep 80ms`. HWND captured **до** показа pill (в `dictation.capture_foreground_window`). Без re-focus + sleep'а текст уходит в pill (если пилл случайно получил фокус) или в случайное окно.
-- ❌ `BrowserWindow` pill без `focusable: false`. Pill **не должен воровать фокус** с активного окна — иначе re-focus до Ctrl+V не нужен, но клавиатурные shortcut'ы в подложенном окне ломаются пока pill виден. `focusable: false` + `showInactive()` гарантирует невмешательство.
-- ❌ Streaming audio chunks в Phase 1. Groq endpoint не принимает streaming (только batch transcription). Усложнять state machine ради этого нельзя — `submit_audio` принимает одну полную WAV в base64.
-- ❌ `getUserMedia` без graceful permission-denied handling. Показать понятную ошибку в pill, вызвать `pillFinished()`. Не оставлять белый экран / висящую запись.
-- ❌ Hotkey registration без headless guard'а. В `KOSMOS_HEADLESS=1` / `KOSMOS_TEST_MODE=1` `globalShortcut.register` НЕ должен вызываться — Playwright driver'ит state через IPC напрямую, accelerator не должен мешать host'у машины разработчика.
-- ❌ Использовать настраиваемый DoH resolver (`dictation::network::build_client`) для не-AI запросов (sync / RAWG / прочее) в Phase 1. Scope явно ограничен — generic API спроектирована переиспользуемой для будущих AI-провайдеров, но не для всего backend HTTP.
-- ❌ Local model downloads (whisper.cpp, Parakeet V3) или CUDA acceleration в Phase 1. Это отдельный proof-loop Phase 2 с собственной валидацией производительности per-модель.
-- ❌ Push-to-talk через `globalShortcut.register` callback. Electron'овский globalShortcut шлёт только key-down, не key-up — hold-to-record реализован через Win32 `WH_KEYBOARD_LL` hook в `dictation::hotkey_hook` (Phase 1.5). В PTT mode globalShortcut НЕ регистрируется на стороне shell — hook драйвит через broadcast events `dictation_ptt_trigger`.
-- ❌ Блокирующие операции / longer-than-microseconds работу в callback'е `WH_KEYBOARD_LL` (`keyboard_proc` в `hotkey_hook.rs`). Windows блокирует всю клавиатуру пока callback не вернётся. Только: snapshot lock + non-blocking broadcast::Sender::send + return. Никаких allocation'ов / file I/O / sync awaits.
-- ❌ Регистрировать `dictation::hotkey_hook` thread больше одного раза за процесс. `ensure_thread_started` — idempotent через `OnceLock`. Множественные hook'и → дубликаты events.
-- ❌ Hotkey hook в `kepler-backend` без `cfg(windows)` guard'а. `WH_KEYBOARD_LL` Win32-specific. На non-Windows модуль stub'нут.
-- ❌ Применять `httpProxy` config-поле к не-AI запросам (RAWG / sync / прочее) в Phase 1.5. Scope ограничен `dictation::network::build_client`.
-- ❌ Удалять `<uuid>.wav` из `<dataDir>/dictation/pending/` до успешного inject ИЛИ явного discard юзером (Phase 2). Audio loss = unrecoverable: pill закрывается, PCM-буфер обнуляется в renderer; диск — единственный источник для retry.
-- ❌ Retry HTTP-запросов на 4xx статусах (кроме 429) в `dictation::retry::classify`. 401/400/413 — caller bug или формат-ошибка, retry — пустая трата квоты + латентность. Только 429/5xx и `reqwest::Error` ретрайятся.
-- ❌ Silent fallback на Cloudflare DoH для `NetworkProfile::CustomDoh` с невалидным URL (Phase 2). Сейчас `network::validate_custom_doh_url` возвращает `Err` — UI/тест-connectivity показывают конкретную причину, юзер сам исправляет.
-- ❌ Pending queue размером > 20 items ИЛИ старше 7 дней без GC. На app start `DictationHost::bootstrap_pending` вызывает `pending::gc(20, ChronoDuration::days(7))`. Reason: disk leak (~1MB per item × 16kHz/16bit/30s) + privacy (длинные диктовки лежат в plaintext WAV).
-- ❌ Pending файлы вне `<dataDir>/dictation/pending/`. `dataDir` пробрасывается через `DictationHost::data_dir` (`config::data_dir()` в проде, `tempdir` в тестах через `new_for_test`). Instance isolation нарушится если хардкодить путь.
-- ❌ Pill auto-close на `Error { canRetry: true }` через 1.2s. Юзеру нужно успеть кликнуть retry-кнопку. Auto-close оставлен только для fatal `canRetry=false` (битое аудио / нет ключа).
-
-### Spaces concept
-
-- ❌ Возврат multi-space концепции. 2026-05-15 убрана: single DB per user
-  (`%APPDATA%\Kosmos\ark.db`). Никаких welcome screen / space picker /
-  `KOSMOS_DB_PATH` / `selected-space.json` / `spaces.json`.
-
-### Dashboard
-
-- ❌ SQLite open в renderer.
-- ❌ ARK queries в обход `window.kepler.ark.request` (то есть в обход `@kosmos/ark` через main proxy).
-- ❌ Любые **writes** в ARK таблицы.
-- ❌ Возврат Dashboard как extension. После 2026-05-14 он **встроенный** shell view (`shell/src/views/DashboardRoot.vue` + `DashboardView.vue`), старый код заморожен в `legacy/dashboard-extension/`.
-- ❌ Возврат welcome screen с карточками spaces. После 2026-05-15 Dashboard сразу открывается на список объектов — single DB per user.
-
-### Kepler Shell (launcher)
-
-- ❌ Возврат к ARK FTS5 search внутри лаунчера вместо command bus (был pivot — отброшен).
-- ❌ Per-frame window resize animation: Win32 не успевает, окно дёргается. Размер окна — fixed 720×460.
-- ❌ Hardcoded extension команды в `shell/electron/commands.ts`. С Phase 6.2 (2026-05-19) `COMMANDS[]` содержит **только** kepler-internal (`settings:open` / `dashboard:open` / `kepler:check-updates`). Extension-команды (включая `eden:open`, `horologion:pomodoro`, `delphi:inbox`) объявляются в `extensions/<id>/manifest.json` `commands[]` — manifest = source of truth. `loadDeclaredCommands` в `extension-host.ts` собирает их. Видны в launcher всегда (пока extension установлен), uninstall их убирает. См. [Command bus → три слоя](/concepts/command-bus#архитектура-три-слоя-команд-v1-v2-2026-05-19).
-- ❌ Использование `win.webContents.id` внутри `closed` event handler. После `closed` webContents уже destroyed — capture id в локальную `const wcId` **до** `win.on("closed", ...)`. См. [Extension host → Crash safety](/concepts/extension-host#crash-safety).
-- ❌ Удаление `electron-api-shim.ts` в Delphi extension. Это compat-слой эмулирующий `window.electronAPI` поверх kepler ark bridge — без него сломаются ~30 call sites Delphi CRUD без переписывания. Миграция UI на нативный API — отдельная Phase 9.
-- ❌ Загрузка extension renderer с `file://path/to/dist` когда хочешь HMR. В dev mode (Settings → Developer Mode toggle, **не** `KEPLER_DEV=1`) используй `loadURL('http://localhost:<devPort>/')` с поднятым Vite dev server'ом. См. [Extension dev mode](docs-site/concepts/extension-dev-mode.md).
-- ❌ Загружать extension из `http://localhost:<devPort>/` без TCP probe порта. Архитектура с 2026-05-19 — `resolveExtensionSource()` в `extension-host.ts` всегда вызывает `probeExtensionDevServer(port)` (timeout 500ms) перед тем как взять Vite-путь; если порт мёртв — graceful fallback на `dist/`. Старая логика (грузить с localhost когда `developerMode: true` в settings) приводила к пустым окнам если dev server упал/не поднят, и persisted setting утекал в installed Kepler.
-- ❌ Делать `openExtension(id)` синхронным или без in-flight Map. Probe — async, поэтому два rapid invoke на один id без дедупа создадут два BrowserWindow'а. См. `openInflight` Map в `extension-host.ts`.
-- ❌ Дублирование install-flow логики (backup / atomic rename / semver-проверка). Источник правды — `shell/electron/extension-installer.ts`. CLI скрипт `shell/scripts/install-extension.mjs` копирует semver matcher inline (~40 строк) только потому, что mjs скрипт не имеет доступа к dist-electron bundle; не размножай это в третьем месте — дёргай IPC `kepler:extension:install:do` или сам runtime API.
-- ❌ Ослабление `keplerApiVersion` compat check в `extension-host.ts → checkApiCompat()`. Несовместимый extension **не** должен получать live preload bridge — иначе ломается инвариант API contract'а. Если правишь — bump `KEPLER_API_VERSION` в `shell/electron/kepler-api.ts` соответственно (patch/minor/major по семантике).
-- ❌ Path traversal в `.kext` extract'е. `extension-installer.ts → safeEntryName` отвергает `..`, абсолютные пути, drive letter'ы. Не упрощай эту проверку — `.kext` может приехать из untrusted источника.
-- ❌ Выход из `initArkClient()` без вызова `arkClientReadyReject?.()` когда `state.kind !== "connected"`. До 2026-05-18 функция тихо `return`'ила и все pending `awaitArkReady()` висели 15 секунд до generic timeout. Каждый failure path в `initArkClient` должен либо reject'нуть resolver, либо успешно его resolve'нуть.
-- ❌ Перезапуск `kepler-backend` (через `kepler:backend:restart`) или его exit без вызова cleanup'а `arkClient` (stop + null + сброс `arkClientReady`). Без этого WS-соединение указывает на мёртвый порт и `invokeOperation` зависает на reconnect-логике клиента, не возвращая ошибки. См. `resetArkClient` helper в `shell/electron/main.ts`.
-- ❌ `setTimeout` в `Promise.race([..., new Promise((_, rej) => setTimeout(rej, ms))])` без `clearTimeout` на successful resolve. Таймер продолжает держать event loop до полного TTL даже после того как race выиграла другая ветка.
-
-### Command bus
-
-- ❌ Nested wire format событий `{kind: "event", type: "...", payload: {...}}`. Только flat: `{event: "...", ...fields}` — это согласовано с peer/sync events.
-- ❌ Регистрация commands вне `kepler-mode`. Self-managed / standalone-запуск приложения **не** должен падать из-за отсутствия commands API — оборачивай в `try/catch`.
-- ❌ Прямой WS-доступ к backend из renderer'а приложений в обход `@kosmos/ark` SDK.
-
-### Brand consistency
-
-- ❌ Возврат наружного product name **Kepler** для установленного desktop app. С 2026-05-26 пользовательский продукт — **Kosmos** (`Kosmos.exe`, ярлыки `Kosmos`, `%APPDATA%/Kosmos App` для Electron userData). `Kepler` допускается только как legacy/internal namespace (`kepler:*` IPC, `kepler-backend`, `kepler.lock.json`) до отдельного cleanup.
-- ❌ Массовый rename внутренних namespaces (`window.kepler`, `kepler:*`, `services/kepler-backend`, `kepler.lock.json`) без отдельного proof loop. Эти имена — совместимость протокола и тестов, а не пользовательский бренд.
-- ❌ Возврат npm scope `@kepler/*` для shared пакетов. Runtime и UI общие для всей экосистемы используют **`@kosmos/*`**: `@kosmos/ark`, `@kosmos/visuals`. Между Phase B4 (2026-05-14) и 2026-05-18 они некоторое время жили под `@kepler/*` — это была ошибка naming'а (ARK и visuals shared across all apps, не launcher-specific). `@kepler/*` зарезервирован для launcher-specific пакетов, если такие появятся.
-
-### Distribution
-
-См. [Distribution](docs-site/concepts/distribution.md).
-
-- ❌ Коммитить `GH_TOKEN` (или любой PAT) в repo. Если случайно — rotate immediately.
-- ❌ Bundle'ить extensions в Kepler installer (`shell/package.json → build.extraResources`). Lean installer — marketplace flow обеспечивает установку. Нарушение → лишний размер инсталлера + рассинхрон версий extension'ов между installer'ом и marketplace.
-- ❌ Push release tag в `yoso-industries/kepler-releases` или `yoso-industries/kosmos-extensions` manually без `electron-builder publish` (launcher) / `ext:publish` (extensions). Эти скрипты генерируют `sha256` + `latest.yml` — autoUpdater сломается без них.
-- ❌ Менять wire format `catalog.json` без bump `schemaVersion`. Installed Kepler'ы должны продолжать читать старый format (tolerant к unknown fields).
-- ❌ Удалять published GitHub releases retroactive. Installed Kepler'ы (или offline users) могут пытаться downgrade / re-install; ломается trust в URL'ы из cached catalog.json.
-- ❌ Менять owner с `yoso-industries` на что-то ещё без обновления `shell/package.json → build.publish[0].owner` + `extension-marketplace.ts → CATALOG_URL` + `publish-extension.mjs → RELEASES_REPO` + `generate-catalog.mjs → RELEASES_REPO`. Все 4 источника must match.
-
-### usage-tracker
-
-- ❌ Превращение в Windows Service.
-- ❌ Добавление UI / tray icon / окон.
-- ❌ Прямой SQL write без `ark_core::db` хелперов и без обновления `version_vector`.
-- ❌ Возврат standalone-бинарника по пути services/usage-tracker. После Phase E3 он заморожен в `legacy/usage-tracker/`, а активный код живёт как модуль `services/kepler-backend/src/usage_tracker/`.
-
-## Файловые операции на Windows
-
-::: danger Junction'ы bun workspaces
-В этом репо `bun install` создаёт junction'ы (Windows-симлинки) в `shell/node_modules/@kepler/<pkg>` → `packages/<pkg>` и аналогично в `extensions/<id>/node_modules/`. PowerShell `Move-Item -Force` (и многие GUI-операции) **разрешают** junction'ы и удаляют **таргет** вместе с источником — а Корзину минуют. Так уже было потеряно несколько часов untracked-работы в `packages/visuals/` до brand swap. Восстановление возможно только если файлы успели попасть в asar предыдущего билда.
-:::
-
-- ❌ `Move-Item -Force` или `Remove-Item -Recurse -Force` на `apps/<name>/` целиком, пока внутри есть `node_modules/`. Сначала **удали** `apps/<name>/node_modules/` (`Remove-Item -Recurse -Force apps\<name>\node_modules`), и **только потом** перемещай или удаляй директорию.
-- ❌ Переименование/перемещение `apps/<name>/` без предварительной коммитной зачистки untracked-файлов в `packages/*`. Если что-то ценное лежит как `??` в `git status` — закоммить или временно сохрани вне репо, иначе `Move-Item` уничтожит таргет junction'а навсегда.
-- ❌ Удаление любых директорий внутри `apps/` или `packages/` через GUI-проводник Windows. Используй `git rm`, `Remove-Item` после удаления `node_modules`, или CLI с явным контролем.
-- ❌ `rm -rf packages/...` или эквиваленты, если результат можно достичь через `git restore` / переключение веток.
-
-## Bump / release
-
-- ❌ **Бамп версии без явного запроса пользователя.** Никогда не делать bump «попутно с фиксом», «логически завершить релизом», «раз изменил manifest». Bump = release = пользователи получают update через auto-updater и видят пуш-уведомление. Каждый bump — отдельная команда пользователя («бамп eden», «бамп shell», «релизни»). Edit'ить код, чинить баги, обновлять docs, коммитить, пушить — без bump'а можно и нужно. Менять `manifest.json::version` / `package.json::version` или запускать `ext:publish` / `electron-builder --publish` — **только** по явному запросу. См. [bump skill](/.agents/skills/bump/SKILL.md).
-- ❌ Bump'ить чтобы «закрыть тест-цикл» / «убедить юзера что фикс работает». Юзер сам решит когда релизить.
-
-## Git / tooling
-
-- ❌ `--no-verify` при коммите.
-- ❌ `git push --force` в `main` / `master`.
-- ❌ `git reset --hard` или `git checkout .` для уничтожения чужих изменений.
-- ❌ Амендить уже опубликованные коммиты.
-- ❌ Коммит файлов с секретами (`.env`, `credentials.json`).
-- ❌ Коммит `dist/`, `build/`, `coverage/`, `.tmp/`, `.e2e/`, `node_modules/`.
-- ❌ Создание новых правил в `MEMORY.md` или AGENTS.md без согласования с человеком.
-
-## UI
-
-- ❌ Английский язык в UI приложений (placeholder'ы, лейблы, кнопки, эмпти-стейты, заголовки). User-facing — только русский. Английский OK для technical id'ов (`task_obj`, `time_entry_obj`).
-- ❌ Hardcoded `#hex`, `rgb()`, кастомные шрифты в renderer-коде. Все цвета / радиусы / шрифты — через `var(--*)` из `@kosmos/visuals`.
-- ❌ Свой titlebar / safe-area код. Всегда через `<DesktopChrome>` + `<DesktopContentSurface>`.
-- ❌ Nested interactive elements: `role="button"` (или любой другой interactive role) на `<span>` / `<div>` **внутри** `<button>`. HTML это запрещает; screen reader'ы collapse'ят в одну кнопку и inner action становится недоступным с клавиатуры. Решение — два sibling `<button>` в композитной обёртке (см. `DateChip.vue` после 2026-05-18 фикса).
-- ❌ Outside-click listener'ы через nested `watch(..., { once: true })` для cleanup'а. Паттерн ломается при quick open→close→open: новый handler регистрируется до того как старый отпишется. Используй symmetric `watch(isOpen, (val) => val ? addEventListener : removeEventListener)` + `onBeforeUnmount → removeEventListener` (mirror `ContextMenu.vue`).
-- ❌ `addEventListener` в `onMounted` без соответствующего `removeEventListener` в `onBeforeUnmount`. Component re-mount (HMR, route navigation) накапливает duplicate listeners на `document` / `window`.
-- ❌ `e.key === "<латинская буква>"` / `event.key === "a"` (и т.п.) для Ctrl/Cmd-shortcut'ов. **Раскладка обязана быть layout-agnostic**: на русской раскладке та же физическая клавиша возвращает `"ф"`, и Ctrl+A ловится только на EN. Используй **`e.code === "KeyA"`** (физическая клавиша). Аналогично `KeyC`, `KeyX`, `KeyS`, `KeyK`, `KeyN`, `KeyZ`. Исключение — non-letter keys (`Enter`, `Escape`, `ArrowUp`, цифры, F1-F12): для них `e.key` valid, потому что не зависит от alpha layout. Подтверждение — `docs-site/concepts/eden-zen-mode.md` (chord `Ctrl+K Z` через `e.code`) и regression test `tests/e2e/eden-clipboard-markdown.spec.ts`.
-
-## Framework выбор
-
-- ❌ Предлагать миграцию с Electron на Tauri / Wails / Neutralino. Решение
-  зафиксировано экспериментом 2026-05-19: на Windows экономия RAM 24% при цене
-  3-6 недель работы; на Linux WebKitGTK ломает TipTap в Eden. Полное обоснование
-  с цифрами — [Tauri vs Electron эксперимент](docs-site/experiments/tauri-vs-electron.md).
-  Если у тебя новые данные, опровергающие выводы — поднимай отдельный proof loop,
-  не молча начинай миграцию.
-
-## Общая дисциплина
-
-- ❌ «Попутно отрефакторил» вместе с задачей. Один логический change — один коммит.
-- ❌ Добавление защитного кода для невозможных случаев.
-- ❌ Создание новых документов (`.md` файлов) без явного запроса.
-- ❌ Изменение `package.json` без видимой причины (особенно версий зависимостей).
-- ❌ Игнорирование AC из `spec.md`. Если AC кажется неверным — это новая задача / обсуждение.
-- ❌ Объявление «всё работает» без прогона гвардов и smoke.
-
-## Гварды-команды
-
-Прогнать **обязательно** в указанных случаях:
-
-```powershell
-# Перед PR в data services (shell/electron, extensions/<id>/src,
-# services/kepler-backend/src/usage_tracker)
-bun run ark:guard:writes
-
-# Перед PR в любую substantial-задачу
-bun run ark:smoke
-```
-
-См. [Smoke-матрица](docs-site/reference/smoke-matrix.md).
-
----
+- `cargo test --manifest-path crates/ark-core/rust/Cargo.toml` — core tests.
+- `cargo build --manifest-path crates/ark-core/rust/Cargo.toml --bin ark-core-rpc` — sidecar build.
+- `bun run ark:guard:writes` — after data-layer/write-boundary changes.
+- `bun run ark:smoke` — after substantial runtime changes.
 
 ## Сжатые правила репозитория (TL;DR)
 
@@ -449,4 +56,4 @@ bun run ark:smoke
 - **Sync state** — direct writers в синхронизируемые таблицы обязаны вызывать `ark_core::db::bump_sync_version_vector`.
 - **Tooling** — `bun run ark:guard:writes` перед PR в data-слой; `bun run ark:smoke` перед нетривиальным PR.
 
-Полный текст: [`AGENTS.md`](../../AGENTS.md#сжатые-правила) и `docs-site/reference/rules.md`.
+Полный текст: `docs-site/reference/rules.md`.

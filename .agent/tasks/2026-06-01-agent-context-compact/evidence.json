@@ -1,0 +1,74 @@
+{
+  "overall": "PASS",
+  "agentFiles": [
+    {
+      "file": "AGENTS.md",
+      "classification": "root generated boot context",
+      "lines": 190,
+      "bytes": 16213,
+      "verdict": "PASS"
+    },
+    {
+      "file": "CLAUDE.md",
+      "classification": "root generated boot context",
+      "lines": 186,
+      "bytes": 15755,
+      "verdict": "PASS"
+    },
+    {
+      "file": "mobile/delphi/AGENTS.md",
+      "classification": "per-area generated boot context",
+      "lines": 53,
+      "bytes": 3278,
+      "verdict": "PASS"
+    },
+    {
+      "file": "crates/ark-core/AGENTS.md",
+      "classification": "per-area generated boot context",
+      "lines": 59,
+      "bytes": 3648,
+      "verdict": "PASS"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "All files returned by rg --files -g \"AGENTS.md\" -g \"CLAUDE.md\" are classified with lines and bytes."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": "Root AGENTS.md and CLAUDE.md are below 220 lines and 32 KB."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": "Per-area AGENTS.md files are below 180 lines and 24 KB."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": "scripts/sync-agents-docs.mjs enforces GENERATED_CONTEXT_BUDGETS during write()."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": "Per-area outputs contain source-doc pointers and compact local invariants instead of full inline docs."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "evidence": "docs-site/agents/docs-maintenance.md documents compact-context budgets and rules."
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "commands": [
+        "bun run docs:sync",
+        "bun run docs:check",
+        "bun run lint -- scripts/sync-agents-docs.mjs"
+      ]
+    }
+  ]
+}
