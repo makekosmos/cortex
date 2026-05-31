@@ -5,16 +5,20 @@
 // state per-window, hot-reload и debugging проще через нативные ref'ы.
 
 import { ref } from "vue";
-import type { DashboardObjectRow, DashboardObjectType } from "./types";
+import type { DashboardObjectRow, DashboardObjectType, DashboardUsageRow } from "./types";
 
 export const objectTypes = ref<DashboardObjectType[]>([]);
 export const objectTypesLoading = ref<boolean>(false);
 
-// null → «Всё» (все типы микшем), id → конкретный type, "__settings__" → settings stub.
+// null → «Всё» (all objects), id → object type, "__usage__" → usage tracker,
+// "__settings__" → settings stub.
 export const currentTypeId = ref<string | null>(null);
 
 export const objects = ref<DashboardObjectRow[]>([]);
 export const objectsLoading = ref<boolean>(false);
+
+export const usageRows = ref<DashboardUsageRow[]>([]);
+export const usageLoading = ref<boolean>(false);
 
 interface RawObjectRecord {
   id: string;
@@ -30,6 +34,21 @@ interface RawObjectTypeRecord {
   id: string;
   name?: string;
   schemaJson?: string;
+}
+
+interface RawTopAppEntry {
+  id: string;
+  displayName: string;
+  processName: string;
+  normalizedPath: string;
+  foregroundMs: number;
+  idleMs: number;
+  sessions: number;
+  lastSeenAt?: string | null;
+}
+
+interface RawUsageAnalyticsSnapshot {
+  topApps: RawTopAppEntry[];
 }
 
 function arkRequest<T>(operation: string, params?: Record<string, unknown>): Promise<T> {
@@ -90,5 +109,37 @@ export async function loadObjects(typeId: string | null): Promise<void> {
     objects.value = [];
   } finally {
     objectsLoading.value = false;
+  }
+}
+
+function toUsageRow(rec: RawTopAppEntry): DashboardUsageRow {
+  return {
+    id: rec.id,
+    processName: rec.processName,
+    displayName: rec.displayName,
+    totalMs: rec.foregroundMs,
+    idleMs: rec.idleMs,
+    sessions: rec.sessions,
+    lastSeenAt: rec.lastSeenAt,
+    normalizedPath: rec.normalizedPath,
+  };
+}
+
+export async function loadUsageRows(): Promise<void> {
+  usageLoading.value = true;
+  currentTypeId.value = "__usage__";
+  try {
+    // См. postmortems.md § 2026-06-01: usage tracker lives outside object_types.
+    const raw = await arkRequest<RawUsageAnalyticsSnapshot>("get_usage_analytics", {
+      range_days: 3650,
+      top_apps_limit: 500,
+      recent_sessions_limit: 1,
+    });
+    usageRows.value = raw.topApps.map(toUsageRow);
+  } catch (e) {
+    console.warn("[dashboard] loadUsageRows failed", e);
+    usageRows.value = [];
+  } finally {
+    usageLoading.value = false;
   }
 }

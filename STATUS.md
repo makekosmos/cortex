@@ -1,4 +1,23 @@
-# Kosmos — статус проекта (2026-05-30)
+# Kosmos — статус проекта (2026-06-01)
+
+## 2026-06-01 — Dashboard usage data visibility (Kosmos Desktop 0.3.6 → 0.3.7)
+
+Dashboard теперь показывает не только универсальные ARK objects, но и данные
+usage tracker'а из отдельных ARK usage tables.
+
+- В sidebar добавлен раздел «Затреканное время».
+- Раздел грузит read-only aggregate через `get_usage_analytics`, без raw SQLite
+  writes и без расширения object model.
+- Таблица показывает process name, суммарное foreground-время, display name,
+  количество foreground-отрезков, idle-время, последний запуск и normalized path.
+- Колонка «Отрезки» намеренно не называется «Сессии»: tracker режет usage по
+  непрерывному `tracked_app_id + PID` foreground interval, поэтому Alt+Tab
+  away/back обычно создаёт новый отрезок.
+- Таблицы Dashboard используют общий `.kosmos-scroll` из `@kosmos/visuals`;
+  scrollbar живёт только в зоне данных под заголовками колонок.
+- Root cause зафиксирован в `docs-site/agents/postmortems.md`:
+  Dashboard раньше перечислял только `object_types`, а usage tracker хранит
+  `tracked_apps` / `usage_sessions` / `usage_events` отдельно.
 
 ## 2026-05-30 — Focus widget + extension auto-update (Kosmos Desktop 0.3.5 → 0.3.6)
 

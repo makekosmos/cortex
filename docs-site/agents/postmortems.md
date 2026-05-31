@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-01 — Dashboard не показывает usage tracker
+
+**Симптомы.** В Kepler Dashboard при открытии базы видны почти все пользовательские данные, но нет записей затреканных приложений / тайм-трекинга, хотя usage tracker пишет их в ARK DB.
+**Где жило.** `shell/src/dashboard/store.ts` грузил только `list_object_types`, `list_objects` и `list_objects_by_type`; `shell/src/views/DashboardView.vue` строил sidebar только из object types.
+**Root cause.** Dashboard был реализован как object browser поверх универсальной ARK object model. Usage tracker хранит данные в отдельных таблицах `tracked_apps`, `usage_sessions`, `usage_events`, которые не представлены в `object_types`, поэтому корректно записанные usage rows не могли появиться ни в sidebar, ни в таблице. При этом read-only aggregate endpoint `get_usage_analytics` уже существовал, но Dashboard его не использовал.
+**Fix.** Dashboard получил отдельный sidebar-пункт «Затреканное время», который загружает `get_usage_analytics` и показывает aggregate по приложениям: название процесса, суммарное foreground-время, display name, число сессий, idle-время, последний запуск и normalized path. Object browser остался без raw SQLite и продолжает использовать ARK read-only IPC.
+**Регрешн-защита.** `bun run --cwd shell typecheck`, `bun run format:check shell/src/dashboard/types.ts shell/src/dashboard/store.ts shell/src/dashboard/UsageTable.vue shell/src/views/DashboardView.vue docs-site/agents/postmortems.md`, `bun run docs:check`.
+**Prevention.** Dashboard нельзя считать «полным просмотром базы», если он перечисляет только `object_types`. Для ARK-инспектора каждый non-object domain (`tracked_apps` / `usage_sessions` / `usage_events`, sync metadata, future side tables) должен иметь явный navigation surface или осознанно задокументированное исключение; иначе данные будут записываться корректно, но оставаться невидимыми в UI.
+
 ## 2026-05-30 — Focus widget pause ignores operation response
 
 **Симптомы.** В focus widget кнопка «Пауза» не выглядела рабочей: клик уходил в backend, но сам виджет продолжал показывать running-состояние/кнопку «Пауза» и автономный тик мог продолжаться до следующего внешнего push.

@@ -1,13 +1,25 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { DashboardObjectRow } from "./types";
+import type { DashboardUsageRow } from "./types";
 
 const props = defineProps<{
-  rows: DashboardObjectRow[];
+  rows: DashboardUsageRow[];
   loading: boolean;
 }>();
 
-function fmtCreatedAt(iso: string): string {
+const hasRows = computed(() => props.rows.length > 0);
+
+function fmtDuration(ms: number): string {
+  const totalMinutes = Math.round(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes} мин`;
+  if (minutes === 0) return `${hours} ч`;
+  return `${hours} ч ${minutes} мин`;
+}
+
+function fmtDate(iso?: string | null): string {
+  if (!iso) return "—";
   try {
     const d = new Date(iso);
     return d.toLocaleString("ru", {
@@ -21,29 +33,33 @@ function fmtCreatedAt(iso: string): string {
     return iso;
   }
 }
-
-const hasRows = computed(() => props.rows.length > 0);
 </script>
 
 <template>
   <div class="wrap">
     <div v-if="loading" class="state">Загрузка…</div>
-    <div v-else-if="!hasRows" class="state">Объекты не найдены</div>
-    <table v-else class="table">
+    <div v-else-if="!hasRows" class="state">Затреканное время не найдено</div>
+    <table v-else class="usage-table">
       <thead>
         <tr>
-          <th>Значение</th>
-          <th>Тип</th>
-          <th>Добавлено</th>
+          <th>Название процесса</th>
+          <th>Суммарное время</th>
+          <th>Название</th>
+          <th>Отрезки</th>
+          <th>Idle</th>
+          <th>Последний запуск</th>
+          <th>Путь</th>
         </tr>
       </thead>
       <tbody class="kosmos-scroll">
-        <tr v-for="row in rows" :key="row.id" @click="console.log('[dashboard] row', row)">
-          <td class="primary">{{ row.primary }}</td>
-          <td>
-            <code class="type-id">{{ row.typeId }}</code>
-          </td>
-          <td class="created">{{ fmtCreatedAt(row.createdAt) }}</td>
+        <tr v-for="row in rows" :key="row.id">
+          <td class="process">{{ row.processName }}</td>
+          <td class="duration">{{ fmtDuration(row.totalMs) }}</td>
+          <td>{{ row.displayName }}</td>
+          <td>{{ row.sessions }}</td>
+          <td>{{ fmtDuration(row.idleMs) }}</td>
+          <td class="date">{{ fmtDate(row.lastSeenAt) }}</td>
+          <td class="path" :title="row.normalizedPath">{{ row.normalizedPath }}</td>
         </tr>
       </tbody>
     </table>
@@ -64,7 +80,7 @@ const hasRows = computed(() => props.rows.length > 0);
   font-size: 13px;
 }
 
-.table {
+.usage-table {
   width: 100%;
   height: 100%;
   border-collapse: separate;
@@ -73,7 +89,7 @@ const hasRows = computed(() => props.rows.length > 0);
   table-layout: fixed;
 }
 
-thead th {
+.usage-table th {
   background: var(--background);
   border-bottom: 1px solid var(--border);
   padding: 10px 12px;
@@ -86,52 +102,50 @@ thead th {
   z-index: 1;
 }
 
-thead,
-tbody tr {
+.usage-table thead,
+.usage-table tbody tr {
   display: table;
   width: 100%;
   table-layout: fixed;
 }
 
-tbody {
+.usage-table tbody {
   display: block;
   height: calc(100% - 37px);
   overflow: auto;
 }
 
-tbody tr {
+.usage-table tr {
   transition: background 0.1s var(--easing-standard);
 }
 
-tbody tr:hover {
+.usage-table tbody tr:hover {
   background: var(--surface);
 }
 
-tbody td {
+.usage-table td {
   padding: 10px 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
   color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
+  max-width: 260px;
 }
 
-td.primary {
+.process,
+.duration {
   font-weight: 500;
 }
 
-.type-id {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  color: color-mix(in srgb, var(--foreground) 65%, transparent);
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-td.created {
+.date,
+.path {
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
   font-size: 12px;
+}
+
+.path {
+  font-family: var(--font-mono, monospace);
+  max-width: 360px;
 }
 </style>

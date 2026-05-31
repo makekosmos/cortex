@@ -3,13 +3,17 @@ import { computed, onMounted } from "vue";
 import { DesktopChrome, DesktopContentSurface } from "@kosmos/visuals";
 import SidebarItem from "../dashboard/SidebarItem.vue";
 import ObjectTable from "../dashboard/ObjectTable.vue";
+import UsageTable from "../dashboard/UsageTable.vue";
 import {
   currentTypeId,
   loadObjects,
   loadObjectTypes,
+  loadUsageRows,
   objects,
   objectsLoading,
   objectTypes,
+  usageLoading,
+  usageRows,
 } from "../dashboard/store";
 
 const TYPE_COLORS = [
@@ -30,9 +34,11 @@ function colorForType(id: string): string {
 }
 
 const showSettings = computed(() => currentTypeId.value === "__settings__");
+const showUsage = computed(() => currentTypeId.value === "__usage__");
 
 const titleLabel = computed(() => {
   if (showSettings.value) return "Настройки";
+  if (showUsage.value) return "Затреканное время";
   if (currentTypeId.value === null) return "Всё";
   const t = objectTypes.value.find((x) => x.id === currentTypeId.value);
   return t?.name ?? currentTypeId.value;
@@ -51,6 +57,10 @@ function selectSettings(): void {
   currentTypeId.value = "__settings__";
 }
 
+function selectUsage(): void {
+  void loadUsageRows();
+}
+
 function selectType(id: string): void {
   void loadObjects(id);
 }
@@ -64,8 +74,14 @@ function selectType(id: string): void {
           <SidebarItem
             label="Всё"
             color="#ef4444"
-            :active="!showSettings && currentTypeId === null"
+            :active="!showSettings && !showUsage && currentTypeId === null"
             @click="selectAll"
+          />
+          <SidebarItem
+            label="Затреканное время"
+            color="#06b6d4"
+            :active="showUsage"
+            @click="selectUsage"
           />
           <SidebarItem
             label="Настройки"
@@ -84,7 +100,7 @@ function selectType(id: string): void {
             :key="t.id"
             :label="t.name"
             :color="colorForType(t.id)"
-            :active="!showSettings && currentTypeId === t.id"
+            :active="!showSettings && !showUsage && currentTypeId === t.id"
             @click="selectType(t.id)"
           />
         </div>
@@ -97,6 +113,7 @@ function selectType(id: string): void {
       </header>
       <div class="main-body">
         <div v-if="showSettings" class="settings-stub">Настройки — в разработке.</div>
+        <UsageTable v-else-if="showUsage" :rows="usageRows" :loading="usageLoading" />
         <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
       </div>
     </DesktopContentSurface>
@@ -155,7 +172,7 @@ function selectType(id: string): void {
 .main-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .settings-stub {
