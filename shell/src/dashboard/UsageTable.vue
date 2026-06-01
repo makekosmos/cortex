@@ -9,6 +9,12 @@ const props = defineProps<{
 
 const hasRows = computed(() => props.rows.length > 0);
 
+function iconSrc(iconRef?: string | null): string | null {
+  if (!iconRef) return null;
+  if (/^(file|https?|data):/i.test(iconRef)) return iconRef;
+  return `file:///${iconRef.replace(/\\/g, "/")}`;
+}
+
 function fmtDuration(ms: number): string {
   const totalMinutes = Math.round(ms / 60000);
   const hours = Math.floor(totalMinutes / 60);
@@ -45,7 +51,8 @@ function fmtDate(iso?: string | null): string {
           <th>Название процесса</th>
           <th>Суммарное время</th>
           <th>Название</th>
-          <th>Отрезки</th>
+          <th>Активно</th>
+          <th>Запусков</th>
           <th>Idle</th>
           <th>Последний запуск</th>
           <th>Путь</th>
@@ -53,9 +60,20 @@ function fmtDate(iso?: string | null): string {
       </thead>
       <tbody class="kosmos-scroll">
         <tr v-for="row in rows" :key="row.id">
-          <td class="process">{{ row.processName }}</td>
-          <td class="duration">{{ fmtDuration(row.totalMs) }}</td>
+          <td class="process">
+            <span class="app-icon" aria-hidden="true">
+              <img
+                v-if="iconSrc(row.iconRef)"
+                :src="iconSrc(row.iconRef)!"
+                alt=""
+                draggable="false"
+              />
+            </span>
+            <span class="process-name">{{ row.processName }}</span>
+          </td>
+          <td class="duration">{{ fmtDuration(row.runtimeMs) }}</td>
           <td>{{ row.displayName }}</td>
+          <td>{{ fmtDuration(row.foregroundMs) }}</td>
           <td>{{ row.sessions }}</td>
           <td>{{ fmtDuration(row.idleMs) }}</td>
           <td class="date">{{ fmtDate(row.lastSeenAt) }}</td>
@@ -136,6 +154,32 @@ function fmtDate(iso?: string | null): string {
 .process,
 .duration {
   font-weight: 500;
+}
+
+.process {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.process-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+
+.app-icon img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
 .date,

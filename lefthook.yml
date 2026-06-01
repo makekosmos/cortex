@@ -17,8 +17,7 @@ pre-commit:
         cd crates/ark-core/rust && \
         cargo test --features ts-rs --quiet --lib export_bindings 2>&1 > /dev/null && \
         cd - && \
-        git diff --exit-code packages/ark/src/generated/ || \
-        (echo "ts-rs bindings out of date — re-run cargo test --features ts-rs and git add" && exit 1)
+        git diff --exit-code packages/ark/src/generated/
     kepler-backend-rust:
       glob: "services/kepler-backend/src/**/*.rs"
       run: cd services/kepler-backend && cargo check --quiet

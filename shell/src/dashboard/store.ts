@@ -41,6 +41,8 @@ interface RawTopAppEntry {
   displayName: string;
   processName: string;
   normalizedPath: string;
+  iconRef?: string | null;
+  runtimeMs: number;
   foregroundMs: number;
   idleMs: number;
   sessions: number;
@@ -49,6 +51,11 @@ interface RawTopAppEntry {
 
 interface RawUsageAnalyticsSnapshot {
   topApps: RawTopAppEntry[];
+}
+
+interface RawAppIndexEntry {
+  exec_path: string;
+  icon_path: string | null;
 }
 
 function arkRequest<T>(operation: string, params?: Record<string, unknown>): Promise<T> {
@@ -112,12 +119,18 @@ export async function loadObjects(typeId: string | null): Promise<void> {
   }
 }
 
-function toUsageRow(rec: RawTopAppEntry): DashboardUsageRow {
+function normalizePath(path: string): string {
+  return path.trim().replace(/\//g, "\\").toLowerCase();
+}
+
+function toUsageRow(rec: RawTopAppEntry, appIcons: Map<string, string>): DashboardUsageRow {
   return {
     id: rec.id,
     processName: rec.processName,
     displayName: rec.displayName,
-    totalMs: rec.foregroundMs,
+    iconRef: rec.iconRef ?? appIcons.get(normalizePath(rec.normalizedPath)) ?? null,
+    runtimeMs: rec.runtimeMs,
+    foregroundMs: rec.foregroundMs,
     idleMs: rec.idleMs,
     sessions: rec.sessions,
     lastSeenAt: rec.lastSeenAt,
@@ -130,12 +143,22 @@ export async function loadUsageRows(): Promise<void> {
   currentTypeId.value = "__usage__";
   try {
     // См. postmortems.md § 2026-06-01: usage tracker lives outside object_types.
-    const raw = await arkRequest<RawUsageAnalyticsSnapshot>("get_usage_analytics", {
-      range_days: 3650,
-      top_apps_limit: 500,
-      recent_sessions_limit: 1,
-    });
-    usageRows.value = raw.topApps.map(toUsageRow);
+    const [raw, apps] = await Promise.all([
+      arkRequest<RawUsageAnalyticsSnapshot>("get_usage_analytics", {
+        range_days: 3650,
+        top_apps_limit: 500,
+        recent_sessions_limit: 1,
+      }),
+      arkRequest<{ apps: RawAppIndexEntry[] }>("app_index.list_all", { limit: 1000 }).catch(() => ({
+        apps: [],
+      })),
+    ]);
+    const appIcons = new Map(
+      apps.apps
+        .filter((app) => app.icon_path)
+        .map((app) => [normalizePath(app.exec_path), app.icon_path as string]),
+    );
+    usageRows.value = raw.topApps.map((row) => toUsageRow(row, appIcons));
   } catch (e) {
     console.warn("[dashboard] loadUsageRows failed", e);
     usageRows.value = [];

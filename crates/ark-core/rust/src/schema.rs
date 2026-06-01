@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS usage_sessions (
     platform TEXT NOT NULL,
     started_at TEXT NOT NULL,
     ended_at TEXT,
+    runtime_ms INTEGER NOT NULL DEFAULT 0,
     foreground_ms INTEGER NOT NULL DEFAULT 0,
     idle_ms INTEGER NOT NULL DEFAULT 0,
     window_title TEXT,

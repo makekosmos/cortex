@@ -195,6 +195,7 @@ export interface ArkUsageSessionRecord {
   platform: string;
   startedAt: string;
   endedAt: string | null;
+  runtimeMs: number;
   foregroundMs: number;
   idleMs: number;
   windowTitle: string | null;
@@ -239,6 +240,7 @@ export interface ArkUsageSummary {
   trackedAppCount: number;
   sessionCount: number;
   eventCount: number;
+  totalRuntimeMs: number;
   totalForegroundMs: number;
   totalIdleMs: number;
   firstRecordedAt: string | null;
@@ -263,6 +265,8 @@ export interface ArkTopAppEntry {
   displayName: string;
   processName: string;
   normalizedPath: string;
+  iconRef: string | null;
+  runtimeMs: number;
   foregroundMs: number;
   idleMs: number;
   sessions: number;
@@ -278,6 +282,7 @@ export interface ArkRecentSessionEntry {
   deviceName: string;
   startedAt: string;
   endedAt: string | null;
+  runtimeMs: number;
   foregroundMs: number;
   idleMs: number;
   windowTitle: string | null;

@@ -1,5 +1,29 @@
 # Kosmos — статус проекта (2026-06-01)
 
+## 2026-06-01 — Usage playtime precision + process icons (Kosmos Desktop 0.3.7 → 0.3.8)
+
+Usage tracker больше не подменяет playtime игры foreground-временем и не
+накручивает часы за просто живой, но свёрнутый процесс.
+
+- `usage_sessions` получил additive-only поле `runtime_ms`; старые строки
+  мигрируют из `foreground_ms + idle_ms`, destructive migration нет.
+- Tracker ведёт живые process sessions по `(tracked_app_id, pid)` и тикает раз
+  в секунду, но runtime засчитывается только пока у процесса есть visible,
+  non-minimized top-level window. Это сохраняет Discord/Steam overlay сценарии
+  и отсекает “игра свернута в фоне”.
+- `foreground_ms` и `idle_ms` остались отдельными диагностическими метриками:
+  Dashboard показывает `Суммарное время` из `runtime_ms`, а `Активно` — из
+  foreground.
+- Единичная Win32/DB ошибка теперь логируется и не убивает tracker task
+  навсегда; outer loop перезапускает tracker после fatal failure.
+- Usage Dashboard показывает реальные process icons: новые tracked apps пишут
+  `tracked_apps.icon_ref` через общий `app_index::icons` PNG cache, а старые
+  строки догружают inline icon из `app_index.list_all` по `exe_path`. Если
+  иконки нет, слот остаётся пустым, без буквенных placeholder'ов.
+- Proof loop: `.agent/tasks/2026-06-01-usage-playtime-precision/`.
+- Regression checks: `ark:smoke`, targeted ark-core/backend usage tests,
+  shell/packages typecheck, docs freshness and format checks.
+
 ## 2026-06-01 — Dashboard usage data visibility (Kosmos Desktop 0.3.6 → 0.3.7)
 
 Dashboard теперь показывает не только универсальные ARK objects, но и данные

@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-01 — Usage tracker занижает playtime игр
+
+**Симптомы.** Dashboard показывал около 2 часов The Witcher 3, хотя пользователь реально играл примерно 10 часов. Read-only проверка `%APPDATA%\Kosmos\ark.db` подтвердила: недостающего времени нет ни в live DB, ни в WAL, ни в backup'ах.
+**Где жило.** `services/kepler-backend/src/usage_tracker/mod.rs` держал один foreground-session state и завершал session при уходе с foreground окна; `services/kepler-backend/src/usage_tracker/windows_capture.rs` сэмплил только `GetForegroundWindow`.
+**Root cause.** Usage tracker смешал две разные метрики: foreground activity и playtime/runtime процесса. Для игр пользователь ожидает «пока процесс игры жив», а код считал только «пока окно игры foreground». Дополнительно tracker task мог завершиться навсегда после одной Win32/DB ошибки, потому что `spawn()` логировал `FATAL`, но caller выбрасывал `JoinHandle`.
+**Fix.** `usage_sessions` получил отдельный `runtime_ms` с additive migration/backfill из старого `foreground_ms + idle_ms`. Tracker теперь держит карту живых process sessions по `(tracked_app_id, pid)`, считает `runtime_ms` каждую секунду до завершения процесса, сохраняет session каждый tick и не завершает task из-за единичной capture/DB ошибки. Dashboard и game playtime aggregates используют `runtime_ms`, а `foreground_ms` оставлен отдельной диагностической метрикой.
+**Регрешн-защита.** `cargo test --manifest-path crates\ark-core\rust\Cargo.toml usage_analytics_snapshot_includes_summary_and_zero_filled_trend`, `cargo test --manifest-path crates\ark-core\rust\Cargo.toml usage_game_playtime_summary_matches_bindings_and_range`, `cargo test --manifest-path crates\ark-core\rust\Cargo.toml test_init_schema_adds_usage_runtime_ms_to_existing_sessions`, `cargo test --manifest-path services\kepler-backend\Cargo.toml usage_tracker --lib`.
+**Prevention.** В usage-домене нельзя использовать foreground как proxy для playtime. Для игр и долгоживущих приложений основная метрика — process runtime, foreground/idle — только дополнительные срезы. Любой бесконечный tracker loop должен переживать transient capture/persistence ошибки и иметь тест на отличие runtime от foreground.
+
 ## 2026-06-01 — Dashboard не показывает usage tracker
 
 **Симптомы.** В Kepler Dashboard при открытии базы видны почти все пользовательские данные, но нет записей затреканных приложений / тайм-трекинга, хотя usage tracker пишет их в ARK DB.

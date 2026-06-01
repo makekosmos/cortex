@@ -17,7 +17,9 @@ export interface DashboardUsageRow {
   id: string;
   processName: string;
   displayName: string;
-  totalMs: number;
+  iconRef?: string | null;
+  runtimeMs: number;
+  foregroundMs: number;
   idleMs: number;
   sessions: number;
   lastSeenAt?: string | null;

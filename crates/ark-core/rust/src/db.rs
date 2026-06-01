@@ -46,11 +46,40 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
     check_integrity(conn)?;
     conn.execute_batch(CREATE_TABLES)
         .map_err(|e| e.to_string())?;
+    ensure_usage_runtime_ms(conn)?;
     let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
     seed_builtin_object_types(conn)?;
     if object_search_fts_enabled {
         rebuild_object_search_fts(conn)?;
     }
+    Ok(())
+}
+
+fn ensure_usage_runtime_ms(conn: &Connection) -> Result<(), String> {
+    let has_runtime_ms = conn
+        .prepare("PRAGMA table_info(usage_sessions)")
+        .map_err(|e| e.to_string())?
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .any(|name| name == "runtime_ms");
+
+    if !has_runtime_ms {
+        conn.execute_batch(
+            "ALTER TABLE usage_sessions ADD COLUMN runtime_ms INTEGER NOT NULL DEFAULT 0;",
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    conn.execute(
+        "UPDATE usage_sessions
+         SET runtime_ms = COALESCE(foreground_ms, 0) + COALESCE(idle_ms, 0)
+         WHERE runtime_ms = 0 AND (COALESCE(foreground_ms, 0) > 0 OR COALESCE(idle_ms, 0) > 0)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1424,11 +1453,11 @@ pub fn upsert_usage_session(conn: &Connection, session: &UsageSession) -> Result
     conn.execute(
         "INSERT OR REPLACE INTO usage_sessions
             (id, tracked_app_id, device_id, device_name, platform, started_at, ended_at,
-             foreground_ms, idle_ms, window_title, process_name, exe_path,
+             runtime_ms, foreground_ms, idle_ms, window_title, process_name, exe_path,
              pid_start, pid_end, meta_json)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
-                 ?8, ?9, ?10, ?11, ?12,
-                 ?13, ?14, ?15)",
+                 ?8, ?9, ?10, ?11, ?12, ?13,
+                 ?14, ?15, ?16)",
         params![
             session.id,
             session.tracked_app_id,
@@ -1437,6 +1466,7 @@ pub fn upsert_usage_session(conn: &Connection, session: &UsageSession) -> Result
             session.platform,
             session.started_at,
             session.ended_at,
+            session.runtime_ms,
             session.foreground_ms,
             session.idle_ms,
             session.window_title,
@@ -1532,6 +1562,7 @@ pub fn load_usage_analytics(
             "SELECT COUNT(DISTINCT tracked_apps.id) AS tracked_app_count,
                     COUNT(DISTINCT usage_sessions.id) AS session_count,
                     (SELECT COUNT(*) FROM usage_events) AS event_count,
+                    COALESCE(SUM(usage_sessions.runtime_ms), 0) AS total_runtime_ms,
                     COALESCE(SUM(usage_sessions.foreground_ms), 0) AS total_foreground_ms,
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS total_idle_ms,
                     MIN(usage_sessions.started_at) AS first_recorded_at,
@@ -1544,10 +1575,11 @@ pub fn load_usage_analytics(
                     tracked_app_count: row.get::<_, Option<i64>>(0)?.unwrap_or(0),
                     session_count: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
                     event_count: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
-                    total_foreground_ms: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
-                    total_idle_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
-                    first_recorded_at: row.get(5)?,
-                    last_recorded_at: row.get(6)?,
+                    total_runtime_ms: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    total_foreground_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                    total_idle_ms: row.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                    first_recorded_at: row.get(6)?,
+                    last_recorded_at: row.get(7)?,
                 })
             },
         )
@@ -1633,6 +1665,8 @@ pub fn load_usage_analytics(
                     tracked_apps.display_name,
                     tracked_apps.process_name,
                     tracked_apps.normalized_exe_path AS normalized_path,
+                    tracked_apps.icon_ref,
+                    COALESCE(SUM(usage_sessions.runtime_ms), 0) AS runtime_ms,
                     COALESCE(SUM(usage_sessions.foreground_ms), 0) AS foreground_ms,
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS idle_ms,
                     COUNT(usage_sessions.id) AS sessions,
@@ -1640,7 +1674,7 @@ pub fn load_usage_analytics(
              FROM tracked_apps
              JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id
              GROUP BY tracked_apps.id
-             ORDER BY foreground_ms DESC, last_seen_at DESC
+             ORDER BY runtime_ms DESC, foreground_ms DESC, last_seen_at DESC
              LIMIT ?1",
         )
         .map_err(|e| e.to_string())?;
@@ -1658,10 +1692,12 @@ pub fn load_usage_analytics(
                     .to_string(),
                 process_name,
                 normalized_path: row.get(3)?,
-                foreground_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
-                idle_ms: row.get::<_, Option<i64>>(5)?.unwrap_or(0),
-                sessions: row.get::<_, Option<i64>>(6)?.unwrap_or(0),
-                last_seen_at: row.get(7)?,
+                icon_ref: row.get(4)?,
+                runtime_ms: row.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                foreground_ms: row.get::<_, Option<i64>>(6)?.unwrap_or(0),
+                idle_ms: row.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                sessions: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
+                last_seen_at: row.get(9)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1678,6 +1714,7 @@ pub fn load_usage_analytics(
                     usage_sessions.device_name,
                     usage_sessions.started_at,
                     usage_sessions.ended_at,
+                    usage_sessions.runtime_ms,
                     usage_sessions.foreground_ms,
                     usage_sessions.idle_ms,
                     usage_sessions.window_title
@@ -1705,9 +1742,10 @@ pub fn load_usage_analytics(
                 device_name: row.get(5)?,
                 started_at: row.get(6)?,
                 ended_at: row.get(7)?,
-                foreground_ms: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
-                idle_ms: row.get::<_, Option<i64>>(9)?.unwrap_or(0),
-                window_title: row.get(10)?,
+                runtime_ms: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
+                foreground_ms: row.get::<_, Option<i64>>(9)?.unwrap_or(0),
+                idle_ms: row.get::<_, Option<i64>>(10)?.unwrap_or(0),
+                window_title: row.get(11)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -1821,7 +1859,7 @@ pub fn list_recent_usage_processes(
                     NULLIF(tracked_apps.exe_path, '') AS exe_path,
                     NULLIF(tracked_apps.process_name, '') AS process_name,
                     MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at,
-                    SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count
+                    SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS session_count
              FROM usage_sessions
              JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
              WHERE NULLIF(COALESCE(tracked_apps.exe_path, tracked_apps.process_name), '') IS NOT NULL
@@ -1861,7 +1899,7 @@ pub fn search_usage_processes(
                     NULLIF(tracked_apps.exe_path, '') AS exe_path,
                     NULLIF(tracked_apps.process_name, '') AS process_name,
                     MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at,
-                    SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count
+                    SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS session_count
              FROM usage_sessions
              JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
              WHERE (
@@ -2064,8 +2102,8 @@ pub fn load_usage_game_playtime_summary(
     let aggregate_sql = format!(
         "SELECT tracked_apps.normalized_exe_path AS normalized_path,
                 LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
-                CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS total_seconds,
-                SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count,
+                CAST(SUM(usage_sessions.runtime_ms) / 1000 AS INTEGER) AS total_seconds,
+                SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS session_count,
                 MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_played
          FROM usage_sessions
          JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
@@ -2148,7 +2186,7 @@ pub fn load_usage_game_playtime_summary(
             "SELECT tracked_apps.normalized_exe_path AS normalized_path,
                     LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
                     SUBSTR(COALESCE(usage_sessions.ended_at, usage_sessions.started_at), 1, 10) AS date,
-                    CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS seconds
+                    CAST(SUM(usage_sessions.runtime_ms) / 1000 AS INTEGER) AS seconds
              FROM usage_sessions
              JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
              {daily_where_sql}
@@ -2577,7 +2615,7 @@ fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, Strin
     let mut stmt = conn
         .prepare(
             "SELECT id, tracked_app_id, device_id, device_name, platform, started_at,
-                    ended_at, foreground_ms, idle_ms, window_title, process_name,
+                    ended_at, runtime_ms, foreground_ms, idle_ms, window_title, process_name,
                     exe_path, pid_start, pid_end, meta_json
              FROM usage_sessions
              ORDER BY started_at DESC, id ASC",
@@ -2586,7 +2624,7 @@ fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, Strin
 
     let rows = stmt
         .query_map([], |row| {
-            let meta_json_str: String = row.get(14)?;
+            let meta_json_str: String = row.get(15)?;
             let meta_json: Value = serde_json::from_str(&meta_json_str).unwrap_or(json!({}));
             Ok(UsageSession {
                 id: row.get(0)?,
@@ -2596,13 +2634,14 @@ fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, Strin
                 platform: row.get(4)?,
                 started_at: row.get(5)?,
                 ended_at: row.get(6)?,
-                foreground_ms: row.get(7)?,
-                idle_ms: row.get(8)?,
-                window_title: row.get(9)?,
-                process_name: row.get(10)?,
-                exe_path: row.get(11)?,
-                pid_start: row.get(12)?,
-                pid_end: row.get(13)?,
+                runtime_ms: row.get(7)?,
+                foreground_ms: row.get(8)?,
+                idle_ms: row.get(9)?,
+                window_title: row.get(10)?,
+                process_name: row.get(11)?,
+                exe_path: row.get(12)?,
+                pid_start: row.get(13)?,
+                pid_end: row.get(14)?,
                 meta_json,
             })
         })
@@ -3087,6 +3126,7 @@ mod tests {
             platform: "windows".to_string(),
             started_at: "2026-01-01T00:00:00.000Z".to_string(),
             ended_at: Some("2026-01-01T00:10:00.000Z".to_string()),
+            runtime_ms: 600_000,
             foreground_ms: 600_000,
             idle_ms: 0,
             window_title: Some("Demo Window".to_string()),
@@ -3308,6 +3348,70 @@ mod tests {
     }
 
     #[test]
+    fn test_init_schema_adds_usage_runtime_ms_to_existing_sessions() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "
+            CREATE TABLE tracked_apps (
+                id TEXT PRIMARY KEY,
+                platform TEXT NOT NULL,
+                exe_path TEXT NOT NULL,
+                normalized_exe_path TEXT NOT NULL,
+                process_name TEXT NOT NULL,
+                display_name TEXT,
+                publisher TEXT,
+                icon_ref TEXT,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
+            CREATE TABLE usage_sessions (
+                id TEXT PRIMARY KEY,
+                tracked_app_id TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                device_name TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                foreground_ms INTEGER NOT NULL DEFAULT 0,
+                idle_ms INTEGER NOT NULL DEFAULT 0,
+                window_title TEXT,
+                process_name TEXT NOT NULL,
+                exe_path TEXT NOT NULL,
+                pid_start INTEGER,
+                pid_end INTEGER,
+                meta_json TEXT NOT NULL DEFAULT '{}'
+            );
+            INSERT INTO tracked_apps
+                (id, platform, exe_path, normalized_exe_path, process_name, display_name, first_seen_at, last_seen_at)
+            VALUES
+                ('app-legacy', 'windows', 'C:\\Games\\Legacy\\legacy.exe', 'c:\\games\\legacy\\legacy.exe',
+                 'legacy.exe', 'Legacy', '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z');
+            INSERT INTO usage_sessions
+                (id, tracked_app_id, device_id, device_name, platform, started_at, ended_at,
+                 foreground_ms, idle_ms, window_title, process_name, exe_path)
+            VALUES
+                ('session-legacy', 'app-legacy', 'device-1', 'Device', 'windows',
+                 '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z',
+                 2400000, 300000, 'Legacy', 'legacy.exe', 'C:\\Games\\Legacy\\legacy.exe');
+            ",
+        )
+        .unwrap();
+
+        init_schema(&conn).unwrap();
+
+        let runtime_ms: i64 = conn
+            .query_row(
+                "SELECT runtime_ms FROM usage_sessions WHERE id = 'session-legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(runtime_ms, 2_700_000);
+        let data = load_all(&conn).unwrap();
+        assert_eq!(data.usage_sessions[0].runtime_ms, 2_700_000);
+    }
+
+    #[test]
     fn test_todo_crud() {
         let conn = setup_db();
         let todo = make_todo("t1", "Buy milk");
@@ -3445,6 +3549,7 @@ mod tests {
         let mut session = make_usage_session("session-analytics", &tracked_app.id);
         session.started_at = today_start.clone();
         session.ended_at = Some(today_end);
+        session.runtime_ms = 1_500;
         session.foreground_ms = 1_200;
         session.idle_ms = 300;
         upsert_usage_session(&conn, &session).unwrap();
@@ -3458,6 +3563,7 @@ mod tests {
         assert_eq!(snapshot.summary.tracked_app_count, 1);
         assert_eq!(snapshot.summary.session_count, 1);
         assert_eq!(snapshot.summary.event_count, 1);
+        assert_eq!(snapshot.summary.total_runtime_ms, 1_500);
         assert_eq!(snapshot.summary.total_foreground_ms, 1_200);
         assert_eq!(snapshot.summary.total_idle_ms, 300);
         assert_eq!(snapshot.daily_trend.len(), 3);
@@ -3472,8 +3578,11 @@ mod tests {
         );
         assert_eq!(snapshot.daily_trend.last().unwrap().sessions, 1);
         assert_eq!(snapshot.top_apps[0].display_name, "demo.exe");
+        assert_eq!(snapshot.top_apps[0].icon_ref, None);
+        assert_eq!(snapshot.top_apps[0].runtime_ms, 1_500);
         assert_eq!(snapshot.top_apps[0].foreground_ms, 1_200);
         assert_eq!(snapshot.recent_sessions[0].id, "session-analytics");
+        assert_eq!(snapshot.recent_sessions[0].runtime_ms, 1_500);
         assert_eq!(snapshot.hourly_heatmap[0].foreground_ms, 1_200);
     }
 
@@ -3489,6 +3598,7 @@ mod tests {
         let mut session = make_usage_session("session-process", &app.id);
         session.started_at = "2026-04-26T10:00:00.000Z".to_string();
         session.ended_at = Some("2026-04-26T11:00:00.000Z".to_string());
+        session.runtime_ms = 3_600_000;
         session.foreground_ms = 3_600_000;
         upsert_usage_session(&conn, &session).unwrap();
 
@@ -3567,6 +3677,7 @@ mod tests {
             let mut session = make_usage_session(session_id, tracked_app_id);
             session.started_at = started_at.to_string();
             session.ended_at = Some(started_at.replace(":00.000Z", ":30.000Z"));
+            session.runtime_ms = foreground_ms;
             session.foreground_ms = foreground_ms;
             upsert_usage_session(&conn, &session).unwrap();
         }

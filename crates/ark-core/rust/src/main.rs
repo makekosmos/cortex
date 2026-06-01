@@ -1432,6 +1432,7 @@ mod tests {
             platform: "windows".to_string(),
             started_at: "2026-04-24T00:00:00.000Z".to_string(),
             ended_at: None,
+            runtime_ms: 1000,
             foreground_ms: 1000,
             idle_ms: 0,
             window_title: Some("Demo".to_string()),

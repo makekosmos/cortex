@@ -122,6 +122,7 @@ fn usage_session_entity(
         platform: "windows".to_string(),
         started_at: "2026-04-01T00:00:00.000Z".to_string(),
         ended_at: Some("2026-04-01T00:45:00.000Z".to_string()),
+        runtime_ms: 2_700_000,
         foreground_ms: 2_400_000,
         idle_ms: 300_000,
         window_title: Some("Atlas Launcher".to_string()),

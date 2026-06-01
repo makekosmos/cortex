@@ -571,11 +571,13 @@ TrackedApp {
 
 ### `usage_sessions`
 
-Агрегированные сессии (foreground time):
+Агрегированные сессии использования:
 
 ```rust
-UsageSession { id, tracked_app_id, started_at, ended_at, duration_ms, ... }
+UsageSession { id, tracked_app_id, started_at, ended_at, runtime_ms, foreground_ms, idle_ms, ... }
 ```
+
+`runtime_ms` — основной playtime/process runtime: время, пока процесс жив и имеет видимое не-свёрнутое окно после первого наблюдения tracker'ом. `foreground_ms` — только время, когда окно было foreground; `idle_ms` — idle внутри foreground.
 
 ### `usage_events`
 

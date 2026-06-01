@@ -112,7 +112,11 @@ async fn main() -> ExitCode {
     let usage_tracker_enabled = std::env::var("KEPLER_USAGE_TRACKER").as_deref() != Ok("0");
     if usage_tracker_enabled {
         let ark_for_tracker = ark.clone();
-        let opts = UsageTrackerOpts::from_env();
+        let icon_cache_dir = lock_path
+            .parent()
+            .map(|p| p.join("app-icons"))
+            .unwrap_or_else(|| PathBuf::from("app-icons"));
+        let opts = UsageTrackerOpts::from_env().with_icon_cache_dir(icon_cache_dir);
         usage_tracker::spawn(ark_for_tracker, opts);
         eprintln!("[kepler-backend] usage_tracker spawned (in-process)");
     } else {

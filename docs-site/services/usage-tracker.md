@@ -4,12 +4,12 @@
 После Phase E3 (2026-05-14) `usage-tracker` **больше не standalone-сервис**. Активный код живёт как модуль в составе kepler-backend — `services/kepler-backend/src/usage_tracker/`. Старый бинарь (исторический путь services/usage-tracker) заморожен в `legacy/usage-tracker/`.
 :::
 
-Записывает foreground application usage **напрямую в ARK DB** изнутри kepler-backend процесса. На устройстве пользователя нет отдельного `usage-tracker.exe` — модуль стартует автоматически вместе с backend'ом (Phase E2 wiring).
+Записывает process runtime/playtime и foreground activity **напрямую в ARK DB** изнутри kepler-backend процесса. На устройстве пользователя нет отдельного `usage-tracker.exe` — модуль стартует автоматически вместе с backend'ом (Phase E2 wiring).
 
 ## Что записывает
 
 - `tracked_apps`
-- `usage_sessions`
+- `usage_sessions` — `runtime_ms` считает время процесса после первого наблюдения только пока у него есть видимое не-свёрнутое top-level окно; `foreground_ms` — только активное foreground-окно, `idle_ms` — foreground-idle.
 - `usage_events`
 
 После каждой группы прямых записей обновляет `lan_sync.version_vector`, чтобы прямые DB writes оставались видимы ARK sync-слою на следующем sync проходе.
@@ -26,8 +26,8 @@
 services/kepler-backend/
 └─ src/
    └─ usage_tracker/
-      ├─ mod.rs                # активный runtime: polling, session reconciliation, ARK writes
-      └─ windows_capture.rs    # Win32 foreground window sampling, idle detection
+      ├─ mod.rs                # активный runtime: polling, process sessions, ARK writes
+      └─ windows_capture.rs    # Win32 foreground sampling, visible-window checks, idle detection
 ```
 
 Подключён в `services/kepler-backend/src/lib.rs` и стартует из `services/kepler-backend/src/main.rs` после того как backend подключился к `ark-core-rpc`.
@@ -35,7 +35,7 @@ services/kepler-backend/
 ## Defaults
 
 - ARK DB path: `%APPDATA%\Kosmos\ark.db` (либо `KOSMOS_DB_PATH`, если backend получил его от `shell/electron/main.ts`).
-- Poll interval: `5000` ms
+- Poll interval: `1000` ms
 - Idle threshold: `60` s
 
 ## Overrides
@@ -45,7 +45,6 @@ services/kepler-backend/
 - `ARK_DB_PATH` / `KOSMOS_DB_PATH`
 - `USAGE_TRACKER_POLL_MS`
 - `USAGE_TRACKER_IDLE_SECS`
-- `USAGE_TRACKER_RUN_ONCE=1`
 
 ## Сборка и тесты
 
@@ -84,7 +83,9 @@ Standalone бинарь `usage-tracker.exe` со собственным installe
 - Tracker остаётся user-level — внутри backend процесса, который spawn'ит Kepler shell.
 - `Arrancador` extension потребляет результирующую ARK usage data через `@kosmos/ark`, не запускает и не владеет процессом.
 - Windows-only capture. Поздний macOS backend подключается за тем же capture/persistence split.
-- `tracked_apps` обновляются на session boundaries; `usage_sessions` и `usage_events` несут fine-grained usage stream.
+- `tracked_apps` обновляются при старте и foreground-сэмплах; `usage_sessions` сохраняются каждый poll tick, чтобы crash/backend restart терял максимум последний tick.
+- Game playtime и Dashboard “Суммарное время” используют `runtime_ms`; `foreground_ms` остаётся диагностикой “активно на экране”.
+- Свёрнутая игра не накручивает runtime. Overlay-сценарии вроде Discord/Steam продолжают считаться, пока окно игры остаётся visible/non-iconic под overlay.
 
 ## Связанные документы
 

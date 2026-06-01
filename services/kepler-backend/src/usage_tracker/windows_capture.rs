@@ -8,14 +8,15 @@ use std::time::Duration;
 use sha2::{Digest, Sha256};
 
 use windows::core::PWSTR;
-use windows::Win32::Foundation::{CloseHandle, HWND};
+use windows::Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM};
 use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+    EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    GetWindowThreadProcessId, IsIconic, IsWindowVisible,
 };
 
 pub const PLATFORM: &str = "windows";
@@ -29,6 +30,13 @@ pub struct ForegroundWindowSample {
     pub window_title: Option<String>,
     pub pid: u32,
     pub is_idle: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessWindowState {
+    Dead,
+    AliveHidden,
+    AliveVisible,
 }
 
 pub fn capture_foreground_window(
@@ -134,6 +142,49 @@ fn current_idle_duration() -> Result<Duration, String> {
 
 pub fn normalize_exe_path(input: &str) -> String {
     input.trim().replace('/', "\\").to_ascii_lowercase()
+}
+
+pub fn process_window_state(
+    pid: u32,
+    expected_normalized_exe_path: &str,
+) -> Result<ProcessWindowState, String> {
+    let exe_path = resolve_process_image_path(pid)?;
+    if normalize_exe_path(&exe_path) != expected_normalized_exe_path {
+        return Ok(ProcessWindowState::Dead);
+    }
+    if process_has_visible_window(pid) {
+        Ok(ProcessWindowState::AliveVisible)
+    } else {
+        Ok(ProcessWindowState::AliveHidden)
+    }
+}
+
+fn process_has_visible_window(pid: u32) -> bool {
+    #[derive(Debug)]
+    struct EnumState {
+        pid: u32,
+        found: bool,
+    }
+
+    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let state = &mut *(lparam.0 as *mut EnumState);
+        let mut window_pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut window_pid));
+        if window_pid == state.pid && IsWindowVisible(hwnd).as_bool() && !IsIconic(hwnd).as_bool() {
+            state.found = true;
+            return BOOL(0);
+        }
+        BOOL(1)
+    }
+
+    let mut state = EnumState { pid, found: false };
+    unsafe {
+        let _ = EnumWindows(
+            Some(enum_proc),
+            LPARAM((&mut state as *mut EnumState) as isize),
+        );
+    }
+    state.found
 }
 
 pub fn tracked_app_id_for(exe_path: &str) -> String {

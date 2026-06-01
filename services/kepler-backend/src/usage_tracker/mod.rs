@@ -13,19 +13,27 @@
 mod windows_capture;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{json, Value};
 use tokio::task::JoinHandle;
 
+use crate::app_index::{
+    app::{App, AppKind},
+    icons,
+};
 use crate::ark_host::ArkHost;
 
 #[cfg(target_os = "windows")]
-use windows_capture::{capture_foreground_window, ForegroundWindowSample, PLATFORM};
+use windows_capture::{
+    capture_foreground_window, process_window_state, ForegroundWindowSample, ProcessWindowState,
+    PLATFORM,
+};
 
 const TRACKER_DEVICE_ID_KEY: &str = "usage_tracker.device_id";
-const DEFAULT_POLL_MS: u64 = 5_000;
+const DEFAULT_POLL_MS: u64 = 1_000;
 const DEFAULT_IDLE_SECS: u64 = 60;
 
 /// Дефолтный blocklist для privacy. Match — case-insensitive substring в
@@ -47,6 +55,7 @@ const DEFAULT_EXCLUDE_PATTERNS: &[&str] = &[
 pub struct UsageTrackerOpts {
     pub poll_interval: Duration,
     pub idle_threshold: Duration,
+    pub icon_cache_dir: Option<PathBuf>,
     /// Lowercased substrings; sample матчится если ЛЮБОЙ из паттернов входит
     /// в process_name ИЛИ в window_title. Дефолт — DEFAULT_EXCLUDE_PATTERNS.
     pub exclude_patterns: Vec<String>,
@@ -57,6 +66,7 @@ impl Default for UsageTrackerOpts {
         Self {
             poll_interval: Duration::from_millis(DEFAULT_POLL_MS),
             idle_threshold: Duration::from_secs(DEFAULT_IDLE_SECS),
+            icon_cache_dir: None,
             exclude_patterns: DEFAULT_EXCLUDE_PATTERNS
                 .iter()
                 .map(|s| (*s).to_string())
@@ -94,8 +104,14 @@ impl UsageTrackerOpts {
         Self {
             poll_interval: Duration::from_millis(poll_ms),
             idle_threshold: Duration::from_secs(idle_secs),
+            icon_cache_dir: None,
             exclude_patterns: excludes,
         }
+    }
+
+    pub fn with_icon_cache_dir(mut self, icon_cache_dir: PathBuf) -> Self {
+        self.icon_cache_dir = Some(icon_cache_dir);
+        self
     }
 
     fn matches_exclude(&self, process_name: &str, window_title: Option<&str>) -> bool {
@@ -121,8 +137,11 @@ impl UsageTrackerOpts {
 #[cfg(target_os = "windows")]
 pub fn spawn(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> JoinHandle<()> {
     tokio::spawn(async move {
-        if let Err(e) = run(ark, opts).await {
-            eprintln!("[usage-tracker] FATAL: {e}");
+        loop {
+            if let Err(e) = run(Arc::clone(&ark), opts.clone()).await {
+                eprintln!("[usage-tracker] loop crashed, restarting in 5s: {e}");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
         }
     })
 }
@@ -145,7 +164,7 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
         identity.device_id, identity.device_name
     );
 
-    let mut current_session: Option<ActiveSession> = None;
+    let mut active_sessions: HashMap<SessionKey, ActiveSession> = HashMap::new();
     let mut previous_tick = std::time::Instant::now();
     // first_seen_at cache: stable между запусками backend'а сохраняется через
     // upsert (DB) — но в рамках одного процесса нам достаточно in-memory HashMap,
@@ -157,37 +176,110 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
 
     loop {
         let idle = opts.idle_threshold;
-        let raw_sample = tokio::task::spawn_blocking(move || capture_foreground_window(idle))
-            .await
-            .map_err(|e| format!("capture join: {e}"))??;
+        let raw_sample =
+            match tokio::task::spawn_blocking(move || capture_foreground_window(idle)).await {
+                Ok(Ok(sample)) => sample,
+                Ok(Err(error)) => {
+                    eprintln!("[usage-tracker] capture failed: {error}");
+                    None
+                }
+                Err(error) => {
+                    eprintln!("[usage-tracker] capture join failed: {error}");
+                    None
+                }
+            };
         // Privacy filter — password manager'ы и подобные не пишем в БД.
-        // Treat'им как «нет foreground окна» → текущая сессия finalize'нется,
-        // новая не стартует пока exclude активен.
+        // Treat'им как «нет foreground окна»: excluded process не стартует,
+        // уже известные non-excluded процессы продолжают runtime tracking.
         let sample = raw_sample
             .filter(|s| !opts.matches_exclude(&s.process_name, s.window_title.as_deref()));
         let captured_at = iso_now();
         let delta_ms = previous_tick.elapsed().as_millis().min(i64::MAX as u128) as i64;
+        let foreground_key = sample.as_ref().map(SessionKey::from_sample);
 
-        if let Some(session) = current_session.as_mut() {
-            session.accumulate(delta_ms);
-            persist_usage_session(
+        let mut ended_keys = Vec::new();
+        for (key, session) in active_sessions.iter_mut() {
+            let window_state =
+                match process_window_state(key.pid, &session.tracked_app.normalized_exe_path) {
+                    Ok(state) => state,
+                    Err(error) => {
+                        eprintln!(
+                            "[usage-tracker] process window check failed for pid {}: {error}",
+                            key.pid
+                        );
+                        ProcessWindowState::AliveHidden
+                    }
+                };
+            if window_state == ProcessWindowState::Dead {
+                ended_keys.push(key.clone());
+                continue;
+            }
+            session.accumulate(
+                delta_ms,
+                foreground_key.as_ref() == Some(key),
+                window_state == ProcessWindowState::AliveVisible,
+            );
+            if let Err(error) = persist_usage_session(
                 &ark,
                 &session.to_usage_session(&identity, None),
                 &identity.device_id,
             )
-            .await?;
+            .await
+            {
+                eprintln!("[usage-tracker] persist session failed: {error}");
+            }
         }
 
-        reconcile_session(
-            &ark,
-            &identity,
-            &mut current_session,
-            &mut first_seen_cache,
-            sample,
-            captured_at,
-            opts.poll_interval.as_millis() as i64,
-        )
-        .await?;
+        if let Some(sample) = sample {
+            let key = SessionKey::from_sample(&sample);
+            if let Some(active) = active_sessions.get_mut(&key) {
+                if let Err(error) = update_active_session(
+                    &ark,
+                    &identity,
+                    active,
+                    sample,
+                    captured_at.clone(),
+                    opts.poll_interval.as_millis() as i64,
+                )
+                .await
+                {
+                    eprintln!("[usage-tracker] update active session failed: {error}");
+                }
+            } else {
+                match start_session(
+                    &ark,
+                    &identity,
+                    &mut first_seen_cache,
+                    sample,
+                    captured_at.clone(),
+                    opts.poll_interval.as_millis() as i64,
+                    opts.icon_cache_dir.clone(),
+                )
+                .await
+                {
+                    Ok(session) => {
+                        active_sessions.insert(key, session);
+                    }
+                    Err(error) => eprintln!("[usage-tracker] start session failed: {error}"),
+                }
+            }
+        }
+
+        for key in ended_keys {
+            if let Some(active) = active_sessions.remove(&key) {
+                if let Err(error) = finalize_session(
+                    &ark,
+                    &identity,
+                    &active,
+                    captured_at.clone(),
+                    "session_ended",
+                )
+                .await
+                {
+                    eprintln!("[usage-tracker] finalize session failed: {error}");
+                }
+            }
+        }
 
         previous_tick = std::time::Instant::now();
         tokio::time::sleep(opts.poll_interval).await;
@@ -201,11 +293,29 @@ struct TrackerIdentity {
 }
 
 #[cfg(target_os = "windows")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct SessionKey {
+    tracked_app_id: String,
+    pid: u32,
+}
+
+#[cfg(target_os = "windows")]
+impl SessionKey {
+    fn from_sample(sample: &ForegroundWindowSample) -> Self {
+        Self {
+            tracked_app_id: sample.tracked_app_id.clone(),
+            pid: sample.pid,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 #[derive(Debug, Clone)]
 struct ActiveSession {
     tracked_app: TrackedAppFields,
     session_id: String,
     started_at: String,
+    runtime_ms: i64,
     foreground_ms: i64,
     idle_ms: i64,
     window_title: Option<String>,
@@ -213,6 +323,8 @@ struct ActiveSession {
     exe_path: String,
     pid_start: i64,
     pid_end: i64,
+    current_is_foreground: bool,
+    current_is_visible: bool,
     current_is_idle: bool,
     sample_count: u64,
 }
@@ -229,6 +341,7 @@ struct TrackedAppFields {
     normalized_exe_path: String,
     process_name: String,
     display_name: Option<String>,
+    icon_ref: Option<String>,
     first_seen_at: String,
     last_seen_at: String,
 }
@@ -239,10 +352,15 @@ impl ActiveSession {
         self.tracked_app.id == sample.tracked_app_id && self.pid_end == i64::from(sample.pid)
     }
 
-    fn accumulate(&mut self, delta_ms: i64) {
-        if self.current_is_idle {
+    fn accumulate(&mut self, delta_ms: i64, is_foreground: bool, is_visible: bool) {
+        self.current_is_foreground = is_foreground;
+        self.current_is_visible = is_visible;
+        if is_visible {
+            self.runtime_ms += delta_ms;
+        }
+        if is_visible && is_foreground && self.current_is_idle {
             self.idle_ms += delta_ms;
-        } else {
+        } else if is_visible && is_foreground {
             self.foreground_ms += delta_ms;
         }
         self.sample_count += 1;
@@ -257,6 +375,7 @@ impl ActiveSession {
             "platform": PLATFORM,
             "startedAt": self.started_at,
             "endedAt": ended_at,
+            "runtimeMs": self.runtime_ms,
             "foregroundMs": self.foreground_ms,
             "idleMs": self.idle_ms,
             "windowTitle": self.window_title,
@@ -267,102 +386,71 @@ impl ActiveSession {
             "metaJson": {
                 "source": "usage-tracker",
                 "sampleCount": self.sample_count,
+                "runtimeMs": self.runtime_ms,
+                "visible": self.current_is_visible,
             },
         })
     }
 }
 
 #[cfg(target_os = "windows")]
-async fn reconcile_session(
+async fn update_active_session(
     ark: &Arc<ArkHost>,
     identity: &TrackerIdentity,
-    current_session: &mut Option<ActiveSession>,
-    first_seen_cache: &mut HashMap<String, String>,
-    sample: Option<ForegroundWindowSample>,
+    active: &mut ActiveSession,
+    sample: ForegroundWindowSample,
     captured_at: String,
     poll_interval_ms: i64,
 ) -> Result<(), String> {
-    match (current_session.as_mut(), sample) {
-        (Some(active), Some(sample)) if active.matches(&sample) => {
-            let previous_window_title = active.window_title.clone();
-            let previous_idle = active.current_is_idle;
-            active.window_title = sample.window_title.clone();
-            active.current_is_idle = sample.is_idle;
-            active.pid_end = i64::from(sample.pid);
-            if previous_window_title != sample.window_title {
-                persist_usage_event(
-                    ark,
-                    &build_event(
-                        active,
-                        identity,
-                        "window_changed",
-                        captured_at.clone(),
-                        json!({
-                            "pollIntervalMs": poll_interval_ms,
-                            "windowTitle": sample.window_title,
-                        }),
-                    ),
-                    &identity.device_id,
-                )
-                .await?;
-            }
-            if previous_idle != sample.is_idle {
-                persist_usage_event(
-                    ark,
-                    &build_event(
-                        active,
-                        identity,
-                        if sample.is_idle {
-                            "idle_started"
-                        } else {
-                            "idle_ended"
-                        },
-                        captured_at,
-                        json!({
-                            "idle": sample.is_idle,
-                            "pollIntervalMs": poll_interval_ms,
-                        }),
-                    ),
-                    &identity.device_id,
-                )
-                .await?;
-            }
-            Ok(())
-        }
-        (Some(active), Some(sample)) => {
-            finalize_session(ark, identity, active, captured_at.clone(), "session_ended").await?;
-            let new_session = start_session(
-                ark,
+    debug_assert!(active.matches(&sample));
+    let previous_window_title = active.window_title.clone();
+    let previous_idle = active.current_is_idle;
+    active.tracked_app.last_seen_at = captured_at.clone();
+    active.window_title = sample.window_title.clone();
+    active.current_is_foreground = true;
+    active.current_is_idle = sample.is_idle;
+    active.pid_end = i64::from(sample.pid);
+
+    persist_tracked_app(ark, &active.tracked_app, &identity.device_id).await?;
+    if previous_window_title != sample.window_title {
+        persist_usage_event(
+            ark,
+            &build_event(
+                active,
                 identity,
-                first_seen_cache,
-                sample,
-                captured_at,
-                poll_interval_ms,
-            )
-            .await?;
-            *current_session = Some(new_session);
-            Ok(())
-        }
-        (Some(active), None) => {
-            finalize_session(ark, identity, active, captured_at, "session_ended").await?;
-            *current_session = None;
-            Ok(())
-        }
-        (None, Some(sample)) => {
-            let new_session = start_session(
-                ark,
-                identity,
-                first_seen_cache,
-                sample,
-                captured_at,
-                poll_interval_ms,
-            )
-            .await?;
-            *current_session = Some(new_session);
-            Ok(())
-        }
-        (None, None) => Ok(()),
+                "window_changed",
+                captured_at.clone(),
+                json!({
+                    "pollIntervalMs": poll_interval_ms,
+                    "windowTitle": sample.window_title,
+                }),
+            ),
+            &identity.device_id,
+        )
+        .await?;
     }
+    if previous_idle != sample.is_idle {
+        persist_usage_event(
+            ark,
+            &build_event(
+                active,
+                identity,
+                if sample.is_idle {
+                    "idle_started"
+                } else {
+                    "idle_ended"
+                },
+                captured_at,
+                json!({
+                    "idle": sample.is_idle,
+                    "pollIntervalMs": poll_interval_ms,
+                }),
+            ),
+            &identity.device_id,
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "windows")]
@@ -373,6 +461,7 @@ async fn start_session(
     sample: ForegroundWindowSample,
     captured_at: String,
     poll_interval_ms: i64,
+    icon_cache_dir: Option<PathBuf>,
 ) -> Result<ActiveSession, String> {
     let first_seen_at = first_seen_cache
         .entry(sample.tracked_app_id.clone())
@@ -385,6 +474,7 @@ async fn start_session(
         normalized_exe_path: sample.normalized_exe_path.clone(),
         process_name: sample.process_name.clone(),
         display_name: derive_display_name(&sample.process_name, &sample.window_title),
+        icon_ref: resolve_icon_ref(&sample, icon_cache_dir).await,
         first_seen_at,
         last_seen_at: captured_at.clone(),
     };
@@ -395,6 +485,7 @@ async fn start_session(
         tracked_app,
         session_id: new_uuid(),
         started_at: captured_at.clone(),
+        runtime_ms: 0,
         foreground_ms: 0,
         idle_ms: 0,
         window_title: sample.window_title.clone(),
@@ -402,6 +493,8 @@ async fn start_session(
         exe_path: sample.exe_path.clone(),
         pid_start: i64::from(sample.pid),
         pid_end: i64::from(sample.pid),
+        current_is_foreground: true,
+        current_is_visible: true,
         current_is_idle: sample.is_idle,
         sample_count: 1,
     };
@@ -455,7 +548,9 @@ async fn finalize_session(
             json!({
                 "foregroundMs": active.foreground_ms,
                 "idleMs": active.idle_ms,
+                "runtimeMs": active.runtime_ms,
                 "sampleCount": active.sample_count,
+                "visible": active.current_is_visible,
             }),
         ),
         &identity.device_id,
@@ -485,7 +580,7 @@ fn build_event(
         "processName": active.process_name,
         "exePath": active.exe_path,
         "pid": active.pid_end,
-        "isForeground": true,
+        "isForeground": active.current_is_foreground,
         "isIdle": active.current_is_idle,
         "metaJson": meta_json,
     })
@@ -539,6 +634,7 @@ async fn persist_tracked_app(
         "normalizedExePath": tracked_app.normalized_exe_path,
         "processName": tracked_app.process_name,
         "displayName": tracked_app.display_name,
+        "iconRef": tracked_app.icon_ref,
         "firstSeenAt": tracked_app.first_seen_at,
         "lastSeenAt": tracked_app.last_seen_at,
     });
@@ -580,6 +676,31 @@ async fn persist_usage_event(
 }
 
 // ----- utils -----
+
+#[cfg(target_os = "windows")]
+async fn resolve_icon_ref(
+    sample: &ForegroundWindowSample,
+    icon_cache_dir: Option<PathBuf>,
+) -> Option<String> {
+    let icon_cache_dir = icon_cache_dir?;
+    let app = App {
+        id: sample.tracked_app_id.clone(),
+        name: sample
+            .window_title
+            .clone()
+            .unwrap_or_else(|| sample.process_name.clone()),
+        exec_path: sample.exe_path.clone(),
+        icon_path: None,
+        kind: AppKind::Win32,
+        source: "usage_tracker".to_string(),
+        mtime: 0,
+    };
+
+    tokio::task::spawn_blocking(move || icons::ensure_icon(&icon_cache_dir, &app).ok())
+        .await
+        .ok()
+        .flatten()
+}
 
 fn resolve_device_name() -> String {
     std::env::var("KOSMOS_DEVICE_NAME")
@@ -648,10 +769,79 @@ mod tests {
         let opts = UsageTrackerOpts {
             poll_interval: Duration::from_millis(DEFAULT_POLL_MS),
             idle_threshold: Duration::from_secs(DEFAULT_IDLE_SECS),
+            icon_cache_dir: None,
             exclude_patterns: vec!["telegram".into(), "signal".into()],
         };
         assert!(opts.matches_exclude("telegram.exe", None));
         assert!(opts.matches_exclude("signal.exe", None));
         assert!(!opts.matches_exclude("chrome.exe", None));
+    }
+
+    #[cfg(target_os = "windows")]
+    fn test_session() -> ActiveSession {
+        ActiveSession {
+            tracked_app: TrackedAppFields {
+                id: "app-1".to_string(),
+                platform: PLATFORM.to_string(),
+                exe_path: r"C:\Games\Demo\demo.exe".to_string(),
+                normalized_exe_path: r"c:\games\demo\demo.exe".to_string(),
+                process_name: "demo.exe".to_string(),
+                display_name: Some("Demo".to_string()),
+                icon_ref: None,
+                first_seen_at: "2026-01-01T00:00:00.000Z".to_string(),
+                last_seen_at: "2026-01-01T00:00:00.000Z".to_string(),
+            },
+            session_id: "session-1".to_string(),
+            started_at: "2026-01-01T00:00:00.000Z".to_string(),
+            runtime_ms: 0,
+            foreground_ms: 0,
+            idle_ms: 0,
+            window_title: Some("Demo".to_string()),
+            process_name: "demo.exe".to_string(),
+            exe_path: r"C:\Games\Demo\demo.exe".to_string(),
+            pid_start: 100,
+            pid_end: 100,
+            current_is_foreground: true,
+            current_is_visible: true,
+            current_is_idle: false,
+            sample_count: 0,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn active_session_counts_background_runtime_without_foreground() {
+        let mut session = test_session();
+        session.accumulate(1_000, true, true);
+        session.accumulate(2_000, false, true);
+
+        assert_eq!(session.runtime_ms, 3_000);
+        assert_eq!(session.foreground_ms, 1_000);
+        assert_eq!(session.idle_ms, 0);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn active_session_counts_idle_foreground_separately_from_runtime() {
+        let mut session = test_session();
+        session.current_is_idle = true;
+        session.accumulate(1_000, true, true);
+        session.accumulate(2_000, false, true);
+
+        assert_eq!(session.runtime_ms, 3_000);
+        assert_eq!(session.foreground_ms, 0);
+        assert_eq!(session.idle_ms, 1_000);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn active_session_does_not_count_hidden_runtime() {
+        let mut session = test_session();
+        session.accumulate(1_000, true, true);
+        session.accumulate(5_000, false, false);
+
+        assert_eq!(session.runtime_ms, 1_000);
+        assert_eq!(session.foreground_ms, 1_000);
+        assert_eq!(session.idle_ms, 0);
     }
 }
