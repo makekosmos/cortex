@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
-import { DesktopChrome, DesktopContentSurface } from "@kosmos/visuals";
-import SidebarItem from "../dashboard/SidebarItem.vue";
+import { computed, h, onMounted, type Component } from "vue";
+import { PhCaretLeft, PhCaretRight, PhClock, PhDatabase } from "@phosphor-icons/vue";
+import { SettingsSidebar, SettingsSidebarButton } from "@kosmos/visuals";
 import ObjectTable from "../dashboard/ObjectTable.vue";
 import UsageTable from "../dashboard/UsageTable.vue";
 import {
@@ -15,34 +15,27 @@ import {
   usageLoading,
   usageRows,
 } from "../dashboard/store";
+import { typeVisualFor } from "../dashboard/typeVisuals";
 
-const TYPE_COLORS = [
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#06b6d4",
-  "#3b82f6",
-  "#a855f7",
-  "#ec4899",
-];
-
-function colorForType(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  return TYPE_COLORS[hash % TYPE_COLORS.length];
-}
-
-const showSettings = computed(() => currentTypeId.value === "__settings__");
 const showUsage = computed(() => currentTypeId.value === "__usage__");
 
-const titleLabel = computed(() => {
-  if (showSettings.value) return "Настройки";
-  if (showUsage.value) return "Затреканное время";
-  if (currentTypeId.value === null) return "Всё";
-  const t = objectTypes.value.find((x) => x.id === currentTypeId.value);
-  return t?.name ?? currentTypeId.value;
-});
+function phosphorSidebarIcon(icon: Component, weight: "duotone" | "fill"): Component {
+  return {
+    inheritAttrs: false,
+    setup(_, { attrs }) {
+      return () => h(icon, { ...attrs, size: 14, weight });
+    },
+  };
+}
+
+const DatabaseDuotone = phosphorSidebarIcon(PhDatabase, "duotone");
+const DatabaseFill = phosphorSidebarIcon(PhDatabase, "fill");
+const ClockDuotone = phosphorSidebarIcon(PhClock, "duotone");
+const ClockFill = phosphorSidebarIcon(PhClock, "fill");
+
+function sidebarIconForType(id: string, active: boolean): Component {
+  return phosphorSidebarIcon(typeVisualFor(id).icon, active ? "fill" : "duotone");
+}
 
 onMounted(async () => {
   await loadObjectTypes();
@@ -51,10 +44,6 @@ onMounted(async () => {
 
 function selectAll(): void {
   void loadObjects(null);
-}
-
-function selectSettings(): void {
-  currentTypeId.value = "__settings__";
 }
 
 function selectUsage(): void {
@@ -67,84 +56,94 @@ function selectType(id: string): void {
 </script>
 
 <template>
-  <DesktopChrome platform="windows">
-    <template #sidebar>
-      <aside class="sidebar">
-        <div class="sidebar-section">
-          <SidebarItem
-            label="Всё"
-            color="#ef4444"
-            :active="!showSettings && !showUsage && currentTypeId === null"
+  <div class="dashboard" tabindex="0">
+    <div class="dashboard-shell">
+      <SettingsSidebar title="Таблица данных">
+        <div class="dashboard-sidebar-group">
+          <SettingsSidebarButton
+            :icon="currentTypeId === null ? DatabaseFill : DatabaseDuotone"
+            label="Все объекты"
+            icon-from="var(--destructive)"
+            icon-to="color-mix(in srgb, var(--destructive) 60%, var(--background))"
+            :active="!showUsage && currentTypeId === null"
             @click="selectAll"
           />
-          <SidebarItem
+          <SettingsSidebarButton
+            :icon="showUsage ? ClockFill : ClockDuotone"
             label="Затреканное время"
-            color="#06b6d4"
+            icon-from="var(--accent)"
+            icon-to="color-mix(in srgb, var(--accent) 60%, var(--background))"
             :active="showUsage"
             @click="selectUsage"
           />
-          <SidebarItem
-            label="Настройки"
-            color="#9ca3af"
-            :active="showSettings"
-            @click="selectSettings"
-          />
         </div>
 
-        <div class="sidebar-divider"></div>
-
-        <div class="sidebar-section">
-          <div class="sidebar-header">Типы</div>
-          <SidebarItem
-            v-for="t in objectTypes"
-            :key="t.id"
-            :label="t.name"
-            :color="colorForType(t.id)"
-            :active="!showSettings && !showUsage && currentTypeId === t.id"
-            @click="selectType(t.id)"
+        <div class="dashboard-sidebar-group">
+          <div class="dashboard-sidebar-header">Типы</div>
+          <SettingsSidebarButton
+            v-for="type in objectTypes"
+            :key="type.id"
+            :icon="sidebarIconForType(type.id, currentTypeId === type.id)"
+            :label="type.name"
+            :icon-from="typeVisualFor(type.id).from"
+            :icon-to="typeVisualFor(type.id).to"
+            :active="!showUsage && currentTypeId === type.id"
+            @click="selectType(type.id)"
           />
         </div>
-      </aside>
-    </template>
+      </SettingsSidebar>
 
-    <DesktopContentSurface :padding-top="'0'" :padding-inline="'0'" class="main-surface">
-      <header class="main-header">
-        <h1>{{ titleLabel }}</h1>
-      </header>
-      <div class="main-body">
-        <div v-if="showSettings" class="settings-stub">Настройки — в разработке.</div>
-        <UsageTable v-else-if="showUsage" :rows="usageRows" :loading="usageLoading" />
-        <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
+      <div class="dashboard-content">
+        <header class="dashboard-titlebar">
+          <div class="dashboard-titlebar__nav">
+            <button type="button" class="chrome-control" disabled title="Назад" aria-label="Назад">
+              <PhCaretLeft :size="14" weight="bold" />
+            </button>
+            <button
+              type="button"
+              class="chrome-control"
+              disabled
+              title="Вперёд"
+              aria-label="Вперёд"
+            >
+              <PhCaretRight :size="14" weight="bold" />
+            </button>
+          </div>
+        </header>
+
+        <div class="dashboard-body">
+          <UsageTable v-if="showUsage" :rows="usageRows" :loading="usageLoading" />
+          <ObjectTable v-else :rows="objects" :loading="objectsLoading" />
+        </div>
       </div>
-    </DesktopContentSurface>
-  </DesktopChrome>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.sidebar {
+.dashboard {
   display: flex;
-  flex-direction: column;
-  width: 240px;
+  width: 100%;
   height: 100%;
-  background: var(--sidebar-bg, var(--background));
-  padding: 16px 12px;
-  gap: 8px;
-  box-sizing: border-box;
+  flex-direction: column;
+  background: var(--main-background-color);
+  outline: none;
 }
 
-.sidebar-section {
+.dashboard-shell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.dashboard-sidebar-group {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
-.sidebar-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 8px 0;
-}
-
-.sidebar-header {
+.dashboard-sidebar-header {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -153,32 +152,97 @@ function selectType(id: string): void {
   padding: 4px 10px 6px;
 }
 
-.main-surface {
-  border-left: 1px solid var(--border);
+.dashboard-content {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: var(--main-background-color);
 }
 
-.main-header {
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--border);
-  text-align: center;
+.dashboard-titlebar {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 8px 140px 4px 10px;
+  -webkit-app-region: drag;
 }
 
-.main-header h1 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+.dashboard-titlebar__nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
 }
 
-.main-body {
+.chrome-control {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 72%, transparent);
+  -webkit-app-region: no-drag;
+}
+
+.chrome-control:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+.chrome-control:disabled {
+  cursor: default;
+  opacity: 0.32;
+}
+
+.dashboard-body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-.settings-stub {
-  padding: 48px;
-  text-align: center;
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
-  font-size: 13px;
+@media (max-width: 760px) {
+  :deep(.kosmos-settings-sidebar) {
+    width: 188px;
+    min-width: 188px;
+  }
+
+  :deep(.kosmos-settings-sidebar-button) {
+    width: 172px;
+  }
+
+  .dashboard-titlebar {
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  :deep(.kosmos-settings-sidebar) {
+    width: 56px;
+    min-width: 56px;
+    padding: 8px;
+  }
+
+  :deep(.kosmos-settings-sidebar__title),
+  :deep(.kosmos-settings-sidebar-button__label),
+  .dashboard-sidebar-header {
+    display: none;
+  }
+
+  :deep(.kosmos-settings-sidebar__content) {
+    gap: 16px;
+  }
+
+  :deep(.kosmos-settings-sidebar-button) {
+    width: 40px;
+    height: 34px;
+    justify-content: center;
+    padding: 6px;
+  }
 }
 </style>

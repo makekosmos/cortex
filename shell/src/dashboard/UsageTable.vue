@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { EmptyState } from "@kosmos/visuals";
 import type { DashboardUsageRow } from "./types";
 
 const props = defineProps<{
@@ -13,6 +14,10 @@ function iconSrc(iconRef?: string | null): string | null {
   if (!iconRef) return null;
   if (/^(file|https?|data):/i.test(iconRef)) return iconRef;
   return `file:///${iconRef.replace(/\\/g, "/")}`;
+}
+
+function onIconError(event: Event): void {
+  (event.currentTarget as HTMLImageElement).hidden = true;
 }
 
 function fmtDuration(ms: number): string {
@@ -43,44 +48,46 @@ function fmtDate(iso?: string | null): string {
 
 <template>
   <div class="wrap">
-    <div v-if="loading" class="state">Загрузка…</div>
-    <div v-else-if="!hasRows" class="state">Затреканное время не найдено</div>
-    <table v-else class="usage-table">
-      <thead>
-        <tr>
-          <th>Название процесса</th>
-          <th>Суммарное время</th>
-          <th>Название</th>
-          <th>Активно</th>
-          <th>Запусков</th>
-          <th>Idle</th>
-          <th>Последний запуск</th>
-          <th>Путь</th>
-        </tr>
-      </thead>
-      <tbody class="kosmos-scroll">
-        <tr v-for="row in rows" :key="row.id">
-          <td class="process">
+    <EmptyState v-if="loading" title="Загрузка…" compact />
+    <EmptyState v-else-if="!hasRows" title="Затреканное время не найдено" compact />
+    <div v-else class="usage-table">
+      <div class="usage-table__header">
+        <span class="usage-table__header-app">
+          <span class="usage-table__header-icon" aria-hidden="true"></span>
+          <span>Приложение</span>
+        </span>
+        <span>Всего</span>
+        <span>Активно</span>
+        <span>Запусков</span>
+        <span>Последний запуск</span>
+        <span>Путь</span>
+      </div>
+      <div class="usage-table__body kosmos-scroll">
+        <div v-for="row in rows" :key="row.id" class="usage-row">
+          <div class="usage-row__app">
             <span class="app-icon" aria-hidden="true">
               <img
                 v-if="iconSrc(row.iconRef)"
                 :src="iconSrc(row.iconRef)!"
                 alt=""
                 draggable="false"
+                @error="onIconError"
               />
             </span>
-            <span class="process-name">{{ row.processName }}</span>
-          </td>
-          <td class="duration">{{ fmtDuration(row.runtimeMs) }}</td>
-          <td>{{ row.displayName }}</td>
-          <td>{{ fmtDuration(row.foregroundMs) }}</td>
-          <td>{{ row.sessions }}</td>
-          <td>{{ fmtDuration(row.idleMs) }}</td>
-          <td class="date">{{ fmtDate(row.lastSeenAt) }}</td>
-          <td class="path" :title="row.normalizedPath">{{ row.normalizedPath }}</td>
-        </tr>
-      </tbody>
-    </table>
+            <span class="usage-row__names">
+              <span class="process-name">{{ row.displayName || row.processName }}</span>
+            </span>
+          </div>
+          <div class="duration">{{ fmtDuration(row.runtimeMs) }}</div>
+          <div>{{ fmtDuration(row.foregroundMs) }}</div>
+          <div>{{ row.sessions }}</div>
+          <time class="date" :datetime="row.lastSeenAt ?? undefined">
+            {{ fmtDate(row.lastSeenAt) }}
+          </time>
+          <div class="path" :title="row.normalizedPath">{{ row.normalizedPath }}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -91,73 +98,68 @@ function fmtDate(iso?: string | null): string {
   overflow: hidden;
 }
 
-.state {
-  padding: 48px 24px;
-  text-align: center;
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-  font-size: 13px;
-}
-
 .usage-table {
-  width: 100%;
+  display: flex;
   height: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  flex-direction: column;
+  overflow: hidden;
   font-size: 13px;
-  table-layout: fixed;
 }
 
-.usage-table th {
-  background: var(--background);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 12px;
-  text-align: left;
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0.3px;
+.usage-table__header,
+.usage-row {
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 1.6fr) minmax(92px, 0.48fr) minmax(92px, 0.48fr) minmax(76px, 0.34fr)
+    minmax(150px, 0.72fr) minmax(220px, 1.2fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.usage-table__header {
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border-color-strong);
+  background: var(--main-background-color);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--foreground) 55%, transparent);
-  z-index: 1;
 }
 
-.usage-table thead,
-.usage-table tbody tr {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
+.usage-table__header-app {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
-.usage-table tbody {
-  display: block;
-  height: calc(100% - 37px);
+.usage-table__header-icon {
+  width: 20px;
+  justify-self: center;
+}
+
+.usage-table__body {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
-.usage-table tr {
-  transition: background 0.1s var(--easing-standard);
-}
-
-.usage-table tbody tr:hover {
-  background: var(--surface);
-}
-
-.usage-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+.usage-row {
+  min-height: 36px;
+  padding: 6px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color-strong) 72%, transparent);
   color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 260px;
 }
 
-.process,
-.duration {
-  font-weight: 500;
+.usage-row:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
 }
 
-.process {
-  display: flex;
+.usage-row__app {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -171,15 +173,38 @@ function fmtDate(iso?: string | null): string {
 .app-icon {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 20px;
+  height: 20px;
+  justify-self: center;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.usage-row__names {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
 }
 
 .app-icon img {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
+  width: 20px;
+  height: 20px;
+  display: block;
+  object-fit: cover;
+}
+
+.process-name,
+.date,
+.path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.duration,
+.process-name {
+  font-weight: 500;
 }
 
 .date,
@@ -190,6 +215,49 @@ function fmtDate(iso?: string | null): string {
 
 .path {
   font-family: var(--font-mono, monospace);
-  max-width: 360px;
+}
+
+@media (max-width: 1120px) {
+  .usage-table__header,
+  .usage-row {
+    grid-template-columns:
+      minmax(200px, 1.8fr) minmax(88px, 0.52fr) minmax(88px, 0.52fr)
+      minmax(72px, 0.36fr) minmax(136px, 0.72fr);
+  }
+
+  .usage-table__header span:nth-child(6),
+  .path {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) {
+  .usage-table__header,
+  .usage-row {
+    grid-template-columns: minmax(0, 1fr) 92px 72px;
+  }
+
+  .usage-table__header span:nth-child(3),
+  .usage-table__header span:nth-child(5),
+  .usage-row > div:nth-child(3),
+  .date {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .usage-table__header {
+    display: none;
+  }
+
+  .usage-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 8px 12px;
+  }
+
+  .usage-row > div:nth-child(4) {
+    display: none;
+  }
 }
 </style>

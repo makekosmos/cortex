@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { EmptyState } from "@kosmos/visuals";
 import type { DashboardObjectRow } from "./types";
+import { typeVisualFor } from "./typeVisuals";
 
 const props = defineProps<{
   rows: DashboardObjectRow[];
   loading: boolean;
 }>();
 
-function fmtCreatedAt(iso: string): string {
+function fmtUpdatedAt(iso: string): string {
   try {
     const d = new Date(iso);
     return d.toLocaleString("ru", {
@@ -27,26 +29,34 @@ const hasRows = computed(() => props.rows.length > 0);
 
 <template>
   <div class="wrap">
-    <div v-if="loading" class="state">Загрузка…</div>
-    <div v-else-if="!hasRows" class="state">Объекты не найдены</div>
-    <table v-else class="table">
-      <thead>
-        <tr>
-          <th>Значение</th>
-          <th>Тип</th>
-          <th>Добавлено</th>
-        </tr>
-      </thead>
-      <tbody class="kosmos-scroll">
-        <tr v-for="row in rows" :key="row.id" @click="console.log('[dashboard] row', row)">
-          <td class="primary">{{ row.primary }}</td>
-          <td>
-            <code class="type-id">{{ row.typeId }}</code>
-          </td>
-          <td class="created">{{ fmtCreatedAt(row.createdAt) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <EmptyState v-if="loading" title="Загрузка…" compact />
+    <EmptyState v-else-if="!hasRows" title="Объекты не найдены" compact />
+    <div v-else class="object-table">
+      <div class="object-table__header">
+        <span class="object-table__header-icon" aria-hidden="true"></span>
+        <span>Название</span>
+        <span>Последняя модификация</span>
+      </div>
+      <div class="object-table__body kosmos-scroll">
+        <div v-for="row in rows" :key="row.id" class="object-row">
+          <span
+            class="object-type-icon"
+            :title="row.typeName"
+            :style="{
+              '--object-type-icon-from': typeVisualFor(row.typeId).from,
+              '--object-type-icon-to': typeVisualFor(row.typeId).to,
+            }"
+            aria-hidden="true"
+          >
+            <component :is="typeVisualFor(row.typeId).icon" :size="14" weight="duotone" />
+          </span>
+          <div class="object-row__primary">{{ row.primary }}</div>
+          <time class="object-table__updated" :datetime="row.updatedAt">
+            {{ fmtUpdatedAt(row.updatedAt) }}
+          </time>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -57,81 +67,108 @@ const hasRows = computed(() => props.rows.length > 0);
   overflow: hidden;
 }
 
-.state {
-  padding: 48px 24px;
-  text-align: center;
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-  font-size: 13px;
-}
-
-.table {
-  width: 100%;
+.object-table {
+  display: flex;
   height: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
   font-size: 13px;
-  table-layout: fixed;
 }
 
-thead th {
-  background: var(--background);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 12px;
-  text-align: left;
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0.3px;
+.object-table__header {
+  display: grid;
+  grid-template-columns: 40px minmax(180px, 1fr) 188px;
+  gap: 12px;
+  padding: 8px 24px;
+  background: var(--main-background-color);
+  border-bottom: 1px solid var(--border-color-strong);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--foreground) 55%, transparent);
-  z-index: 1;
+  color: var(--muted-foreground);
 }
 
-thead,
-tbody tr {
-  display: table;
-  width: 100%;
-  table-layout: fixed;
-}
-
-tbody {
-  display: block;
-  height: calc(100% - 37px);
+.object-table__body {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
-tbody tr {
-  transition: background 0.1s var(--easing-standard);
-}
-
-tbody tr:hover {
-  background: var(--surface);
-}
-
-tbody td {
-  padding: 10px 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+.object-row {
+  display: grid;
+  grid-template-columns: 40px minmax(180px, 1fr) 188px;
+  gap: 12px;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 24px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color-strong) 72%, transparent);
   color: var(--foreground);
-  white-space: nowrap;
+}
+
+.object-row:hover {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.object-type-icon {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  justify-self: center;
+  border-radius: 6px;
+  background-image: linear-gradient(
+    to bottom left,
+    var(--object-type-icon-from),
+    var(--object-type-icon-to)
+  );
+  color: var(--accent-foreground);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, oklch(1 0 0) 6%, transparent);
+}
+
+.object-row__primary {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 240px;
-}
-
-td.primary {
+  white-space: nowrap;
   font-weight: 500;
 }
 
-.type-id {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  color: color-mix(in srgb, var(--foreground) 65%, transparent);
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-td.created {
+.object-table__updated {
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
   font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 820px) {
+  .object-table__header,
+  .object-row {
+    grid-template-columns: 36px minmax(0, 1fr) 136px;
+  }
+
+  .object-table__header {
+    padding-inline: 16px;
+  }
+
+  .object-row {
+    padding-inline: 16px;
+  }
+
+  .object-table__updated {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 620px) {
+  .object-table__header,
+  .object-row {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .object-table__header span:nth-child(3),
+  .object-table__updated {
+    display: none;
+  }
 }
 </style>

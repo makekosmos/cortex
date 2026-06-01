@@ -6,12 +6,12 @@
 
 import { ref } from "vue";
 import type { DashboardObjectRow, DashboardObjectType, DashboardUsageRow } from "./types";
+import { HIDDEN_DASHBOARD_TYPE_IDS } from "./typeVisuals";
 
 export const objectTypes = ref<DashboardObjectType[]>([]);
 export const objectTypesLoading = ref<boolean>(false);
 
-// null → «Всё» (all objects), id → object type, "__usage__" → usage tracker,
-// "__settings__" → settings stub.
+// null → «Всё» (all objects), id → object type, "__usage__" → usage tracker.
 export const currentTypeId = ref<string | null>(null);
 
 export const objects = ref<DashboardObjectRow[]>([]);
@@ -20,6 +20,14 @@ export const objectsLoading = ref<boolean>(false);
 export const usageRows = ref<DashboardUsageRow[]>([]);
 export const usageLoading = ref<boolean>(false);
 
+const objectRowsCache = new Map<string, DashboardObjectRow[]>();
+let objectTypesLoaded = false;
+let usageRowsLoaded = false;
+
+function objectCacheKey(typeId: string | null): string {
+  return typeId ?? "__all__";
+}
+
 interface RawObjectRecord {
   id: string;
   typeId: string;
@@ -27,6 +35,7 @@ interface RawObjectRecord {
   contentJson?: unknown;
   propsJson?: unknown;
   createdAt: string;
+  updatedAt?: string;
   deletedAt?: string | null;
 }
 
@@ -63,13 +72,17 @@ function arkRequest<T>(operation: string, params?: Record<string, unknown>): Pro
 }
 
 export async function loadObjectTypes(): Promise<void> {
+  if (objectTypesLoaded) return;
   objectTypesLoading.value = true;
   try {
     const raw = await arkRequest<RawObjectTypeRecord[]>("list_object_types");
-    objectTypes.value = raw.map((t) => ({
-      id: t.id,
-      name: t.name && t.name.length > 0 ? t.name : t.id,
-    }));
+    objectTypes.value = raw
+      .filter((t) => !HIDDEN_DASHBOARD_TYPE_IDS.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        name: t.name && t.name.length > 0 ? t.name : t.id,
+      }));
+    objectTypesLoaded = true;
   } catch (e) {
     console.warn("[dashboard] loadObjectTypes failed", e);
     objectTypes.value = [];
@@ -89,18 +102,32 @@ function pickPrimary(rec: RawObjectRecord): string {
   return rec.id;
 }
 
+function typeNameFor(typeId: string): string {
+  return objectTypes.value.find((type) => type.id === typeId)?.name ?? typeId;
+}
+
 function toRow(rec: RawObjectRecord): DashboardObjectRow {
   return {
     id: rec.id,
     typeId: rec.typeId,
+    typeName: typeNameFor(rec.typeId),
     primary: pickPrimary(rec),
     createdAt: rec.createdAt,
+    updatedAt: rec.updatedAt ?? rec.createdAt,
   };
 }
 
 export async function loadObjects(typeId: string | null): Promise<void> {
-  objectsLoading.value = true;
   currentTypeId.value = typeId;
+  const cacheKey = objectCacheKey(typeId);
+  const cached = objectRowsCache.get(cacheKey);
+  if (cached) {
+    objects.value = cached;
+    objectsLoading.value = false;
+    return;
+  }
+
+  objectsLoading.value = true;
   try {
     let raw: RawObjectRecord[];
     if (typeId === null) {
@@ -110,12 +137,22 @@ export async function loadObjects(typeId: string | null): Promise<void> {
         type_id: typeId,
       });
     }
-    objects.value = raw.filter((r) => !r.deletedAt).map(toRow);
+    const rows = raw
+      .filter((r) => !r.deletedAt && !HIDDEN_DASHBOARD_TYPE_IDS.has(r.typeId))
+      .map(toRow);
+    objectRowsCache.set(cacheKey, rows);
+    if (currentTypeId.value === typeId) {
+      objects.value = rows;
+    }
   } catch (e) {
     console.warn("[dashboard] loadObjects failed", e);
-    objects.value = [];
+    if (currentTypeId.value === typeId) {
+      objects.value = [];
+    }
   } finally {
-    objectsLoading.value = false;
+    if (currentTypeId.value === typeId) {
+      objectsLoading.value = false;
+    }
   }
 }
 
@@ -123,12 +160,23 @@ function normalizePath(path: string): string {
   return path.trim().replace(/\//g, "\\").toLowerCase();
 }
 
+export function chooseUsageIconRef(
+  usageIconRef: string | null | undefined,
+  appIndexIconRef: string | null | undefined,
+): string | null {
+  if (appIndexIconRef) return appIndexIconRef;
+  if (usageIconRef && usageIconRef.startsWith("data:image/")) return usageIconRef;
+  return null;
+}
+
 function toUsageRow(rec: RawTopAppEntry, appIcons: Map<string, string>): DashboardUsageRow {
   return {
     id: rec.id,
     processName: rec.processName,
     displayName: rec.displayName,
-    iconRef: rec.iconRef ?? appIcons.get(normalizePath(rec.normalizedPath)) ?? null,
+    // См. postmortems.md § 2026-06-01 — app_index отдаёт renderer-safe data URL,
+    // а tracked_apps.icon_ref может быть stale path'ом, который ломает <img>.
+    iconRef: chooseUsageIconRef(rec.iconRef, appIcons.get(normalizePath(rec.normalizedPath))),
     runtimeMs: rec.runtimeMs,
     foregroundMs: rec.foregroundMs,
     idleMs: rec.idleMs,
@@ -139,8 +187,13 @@ function toUsageRow(rec: RawTopAppEntry, appIcons: Map<string, string>): Dashboa
 }
 
 export async function loadUsageRows(): Promise<void> {
-  usageLoading.value = true;
   currentTypeId.value = "__usage__";
+  if (usageRowsLoaded) {
+    usageLoading.value = false;
+    return;
+  }
+
+  usageLoading.value = true;
   try {
     // См. postmortems.md § 2026-06-01: usage tracker lives outside object_types.
     const [raw, apps] = await Promise.all([
@@ -158,11 +211,19 @@ export async function loadUsageRows(): Promise<void> {
         .filter((app) => app.icon_path)
         .map((app) => [normalizePath(app.exec_path), app.icon_path as string]),
     );
-    usageRows.value = raw.topApps.map((row) => toUsageRow(row, appIcons));
+    const rows = raw.topApps.map((row) => toUsageRow(row, appIcons));
+    usageRowsLoaded = true;
+    if (currentTypeId.value === "__usage__") {
+      usageRows.value = rows;
+    }
   } catch (e) {
     console.warn("[dashboard] loadUsageRows failed", e);
-    usageRows.value = [];
+    if (currentTypeId.value === "__usage__") {
+      usageRows.value = [];
+    }
   } finally {
-    usageLoading.value = false;
+    if (currentTypeId.value === "__usage__") {
+      usageLoading.value = false;
+    }
   }
 }

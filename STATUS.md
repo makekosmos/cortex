@@ -1,4 +1,34 @@
-# Kosmos — статус проекта (2026-06-01)
+# Kosmos — статус проекта (2026-06-02)
+
+## 2026-06-02 — Dashboard table visual polish (Kosmos Desktop 0.3.8 → 0.3.9)
+
+Dashboard «Таблица данных» получил визуальный pass после реального просмотра
+через Playwright screenshots:
+
+- левая навигация переехала на settings primitives из `@kosmos/visuals`, без
+  legacy content-подложки и отдельной страницы «Настройки»;
+- тип `blocklist_obj` скрыт из Dashboard: focus blocklists — это настройки
+  Focus mode, а не пользовательские объекты таблицы данных;
+- object table показывает `иконка / название / последняя модификация`, а
+  `note_obj`, `system-type-journal`, `time_entry_obj`, `game_obj`, `tag_obj`,
+  `task_obj` получили отдельные Phosphor duotone/fill иконки и глубокие
+  контрастные цвета;
+- usage table стала плотнее и ближе к Linear-style спискам: заголовки отделены
+  от scrollable body, scrollbar не заезжает на header, первая колонка
+  выровнена по названиям приложений, а не по icon-slot;
+- Dashboard кеширует загруженные object types, object rows по type id и usage
+  rows, поэтому повторный переход по вкладкам не показывает лишний loading
+  flicker, если данных не меняли;
+- process icons теперь берутся только из renderer-safe источников:
+  `app_index.list_all` inline `data:image/*` имеет приоритет, stale file-path
+  refs из usage-domain отбрасываются;
+- добавлен repo-local skill `.agents/skills/visual-verify/`: будущие UI-правки
+  должны проверяться не только typecheck'ом, но и Playwright screenshot +
+  `view_image`.
+
+Checks: `bun run --cwd shell typecheck`,
+`bun shell/src/dashboard/store.regression.mjs`, Playwright screenshot checks for
+object type colors and usage header alignment.
 
 ## 2026-06-01 — Usage playtime precision + process icons (Kosmos Desktop 0.3.7 → 0.3.8)
 

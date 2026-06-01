@@ -127,8 +127,8 @@ export function openDashboardWindow(): void {
     frame: true,
     titleBarStyle: "hidden",
     titleBarOverlay: {
-      color: "#0d0d0d",
-      symbolColor: "#cccccc",
+      color: "#00000000",
+      symbolColor: "#FFFFFF",
       height: 36,
     },
     webPreferences: {

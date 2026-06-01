@@ -9,8 +9,10 @@ export interface DashboardObjectType {
 export interface DashboardObjectRow {
   id: string;
   typeId: string;
+  typeName: string;
   primary: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardUsageRow {
