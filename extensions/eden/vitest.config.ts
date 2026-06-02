@@ -26,6 +26,9 @@ export default defineConfig({
       "@kosmos/visuals": path.resolve(__dirname, "../../packages/visuals"),
     },
   },
+  optimizeDeps: {
+    include: ["@tiptap/pm/state"],
+  },
   test: {
     include: ["tests/components/**/*.{test,spec}.ts"],
     browser: {

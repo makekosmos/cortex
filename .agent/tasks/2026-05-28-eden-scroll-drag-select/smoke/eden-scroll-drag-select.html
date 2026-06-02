@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Eden scroll / drag-select smoke</title>
+    <link rel="stylesheet" href="../../../../extensions/eden/src/Editor.css" />
+    <style>
+      :root {
+        --kosmos-page-max-width: 700px;
+        --editor-inline-gutter: 48px;
+        --space-10: 40px;
+        --text-primary: #111;
+        --block-selection-bg: rgba(55, 122, 255, 0.25);
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      .editor-wrapper {
+        height: 420px;
+        border: 1px solid #ccc;
+      }
+
+      .ProseMirror > p {
+        min-height: 28px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="editor-wrapper kosmos-scroll">
+      <div class="editor-content-area">
+        <div class="editor-rail editor-content-rail">
+          <div class="ProseMirror" contenteditable="true">
+            <p>Top selectable paragraph</p>
+            <p>Second selectable paragraph</p>
+            <p>Third selectable paragraph</p>
+            <p>Fourth selectable paragraph</p>
+            <p>Fifth selectable paragraph</p>
+            <p>Sixth selectable paragraph</p>
+            <p>Seventh selectable paragraph</p>
+            <p>Eighth selectable paragraph</p>
+            <p>Ninth selectable paragraph</p>
+            <p>Tenth selectable paragraph</p>
+            <p>Eleventh selectable paragraph</p>
+            <p>Twelfth selectable paragraph</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

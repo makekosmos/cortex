@@ -146,6 +146,11 @@ import { SYSTEM_TYPE_NOTE_ID, SYSTEM_TYPE_JOURNAL_ID } from "@/lib/systemTypes";
 import { countCharsInProseMirrorDoc, countCharsInProseMirrorNode } from "@/lib/charCount";
 import { objectIconUri } from "@/lib/iconResolver";
 import {
+  resolvePointerTargetElement,
+  shouldStartBlockSelectionTracking,
+} from "@/lib/blockSelectionPointer";
+import { applyBlockSelectionClasses } from "@/lib/blockSelectionClasses";
+import {
   getEditableEntryTitle,
   resolveStoredEntryTitle,
   syncUntitledEntryTitleFlag,
@@ -282,7 +287,7 @@ let justClearedSelection = false;
 // Никакого preventDefault на mousedown → нет broken intermediate state.
 function onContentMouseDown(e: MouseEvent): void {
   if (!editor.value || !contentAreaRef.value) return;
-  const target = e.target as HTMLElement | null;
+  const target = resolvePointerTargetElement(e.target);
   if (!target) return;
   // Global mousedown handler в capture-фазе уже мог очистить block
   // selection до того как событие дошло до bubble-фазы — тогда hasSelection
@@ -295,13 +300,13 @@ function onContentMouseDown(e: MouseEvent): void {
     justClearedSelection = false;
     return;
   }
-  // Drag tracking — только LMB и только на действительно interactive
-  // controls (buttons / checkboxes). НЕ фильтруем input/textarea — там
-  // браузер сам обработает focus + caret по click default'у, а drag
-  // через границу блока должен запуститься (юзер тянет от текста
-  // задачи в следующий блок).
+  // Drag tracking — только LMB и только из gutter / empty editor surface.
+  // Если mousedown начался в реальном тексте ProseMirror, browser-native
+  // selection должен владеть жестом; иначе block-selection перехватывает
+  // drag через границу блока и включает auto-scroll. См. postmortems.md
+  // § 2026-05-23 Eden UPDATE 2026-05-28.
   if (e.button !== 0) return;
-  if (target.closest("button, [role=button], [role=checkbox]")) return;
+  if (!shouldStartBlockSelectionTracking(e.target, contentAreaRef.value)) return;
   // Клик в пустое пространство ниже последнего блока (на сам
   // .editor-content-area или .editor-rail, не на .ProseMirror и его
   // потомков) → фокус в конец документа. Без этого пользователь не может
@@ -547,16 +552,20 @@ function serializeSelectedBlocks(): string {
   return parts.join("\n");
 }
 
-// Container class toggle — `kepler-block-select-active` ставится когда
-// активен drag ИЛИ есть persisted block selection. CSS этого класса
-// отключает `::selection` и `user-select` в .ProseMirror, чтобы native
-// text selection не рисовался параллельно с нашим block-overlay
-// (это была главная косметическая проблема первой итерации).
+// Container class toggle:
+// - `kepler-block-select-active`: active drag ИЛИ persisted block selection,
+//   чтобы native text selection не рисовался параллельно block-overlay.
+// - `kepler-block-drag-active`: только active drag; CSS замораживает scroll
+//   и pointer hover только в этот период. См. postmortems.md § 2026-05-23
+//   Eden UPDATE 2026-05-28.
 watch(
-  () => blockSelection.dragRect.value !== null || blockSelection.hasSelection.value,
-  (active) => {
+  () => [blockSelection.dragRect.value !== null, blockSelection.hasSelection.value] as const,
+  ([isDragging, hasSelection]) => {
     if (!contentAreaRef.value) return;
-    contentAreaRef.value.classList.toggle("kepler-block-select-active", active);
+    applyBlockSelectionClasses(contentAreaRef.value, {
+      hasSelection,
+      isDragging,
+    });
   },
   { flush: "post" },
 );
@@ -1581,9 +1590,11 @@ watchEffect((onCleanup) => {
     window.removeEventListener("beforeunload", handleBeforeUnload);
     window.removeEventListener("keydown", onWindowKeyDown);
     window.removeEventListener("mousemove", onWindowMouseMove);
+    window.removeEventListener("mouseup", onWindowMouseUp);
     window.removeEventListener("mousedown", handleGlobalMouseDown, {
       capture: true,
     } as EventListenerOptions);
+    blockSelection.cancelDrag();
   });
 });
 
@@ -1597,6 +1608,7 @@ onBeforeUnmount(() => {
   });
 
   clearScheduledWork();
+  blockSelection.cancelDrag();
   if (window.__edenPerf === perfTracker) {
     delete window.__edenPerf;
   }

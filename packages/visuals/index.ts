@@ -1,10 +1,5 @@
-// Tokens
-
-export { colors, spacing, typography, radius, animations } from "./tokens";
-
-// Theme
-
-export { type ThemeMode, type ColorToken, getColor } from "./theme";
+// Theme CSS is exported as `@kosmos/visuals/theme/css` from package.json.
+// `theme/css-variables.css` is the single source of truth for runtime tokens.
 
 // Components
 

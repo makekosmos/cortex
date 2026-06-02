@@ -174,7 +174,31 @@ export function openSettings(): void {
 // потеряется до следующего toggle.
 const AUTOSTART_ARGS: string[] = ["--autostart"];
 const AUTOSTART_NAME = "Kosmos";
-const LEGACY_AUTOSTART_NAMES = ["com.kazui.kepler", "Kepler"];
+const LEGACY_AUTOSTART_NAMES = ["com.kazui.kepler", "Kepler", "KeplerKosmos", "KosmosKepler"];
+
+type WindowsLaunchItem = {
+  name?: string;
+  path?: string;
+  args?: string[];
+  enabled?: boolean;
+};
+
+function normalizeWinExecutablePath(value: string): string {
+  return path.normalize(value).toLowerCase();
+}
+
+function sameArgs(actual: string[] | undefined, expected: string[]): boolean {
+  const args = actual ?? [];
+  return args.length === expected.length && args.every((arg, i) => arg === expected[i]);
+}
+
+function launchItemMatchesAutostart(item: WindowsLaunchItem): boolean {
+  if (!item.path || item.enabled === false) return false;
+  return (
+    normalizeWinExecutablePath(item.path) === normalizeWinExecutablePath(process.execPath) &&
+    sameArgs(item.args, AUTOSTART_ARGS)
+  );
+}
 
 function legacyAutostartPathCandidates(): string[] {
   const dir = path.dirname(process.execPath);
@@ -235,11 +259,14 @@ export function isAutostartEnabled(): boolean {
   // Из-за этого Electron видит несовпадение и возвращает openAtLogin=false,
   // даже если запись физически в реестре есть. Передаём те же path/args
   // что и при set — тогда сравнение симметрично.
+  const settings = app.getLoginItemSettings({
+    path: process.execPath,
+    args: AUTOSTART_ARGS,
+  });
   return (
-    app.getLoginItemSettings({
-      path: process.execPath,
-      args: AUTOSTART_ARGS,
-    }).openAtLogin || isLegacyAutostartEnabled()
+    settings.openAtLogin ||
+    (settings.launchItems ?? []).some((item) => launchItemMatchesAutostart(item)) ||
+    isLegacyAutostartEnabled()
   );
 }
 
@@ -255,7 +282,7 @@ export function setAutostartEnabled(enabled: boolean): void {
   }
   // args: ['--autostart'] — два эффекта:
   //   1) Передача args форсит Electron записать в HKCU\...\Run строку вида
-  //      `"C:\...\Kepler.exe" --autostart` (с кавычками вокруг path). Без
+  //      `"C:\...\Kosmos.exe" --autostart` (с кавычками вокруг path). Без
   //      args Electron на некоторых версиях кладёт path без кавычек; если в
   //      пути есть пробелы (system-wide install в "Program Files"), Windows
   //      shell не парсит и autorun не срабатывает. Per-user install в
@@ -281,8 +308,11 @@ export function setAutostartEnabled(enabled: boolean): void {
       path: process.execPath,
       args: AUTOSTART_ARGS,
     });
+    const launchItemVerified = (verify.launchItems ?? []).some((item) =>
+      launchItemMatchesAutostart(item),
+    );
     console.log(
-      `[kepler-shell] autostart set → enabled=${enabled}, verified openAtLogin=${verify.openAtLogin}, execPath=${process.execPath}`,
+      `[kepler-shell] autostart set → enabled=${enabled}, verified openAtLogin=${verify.openAtLogin}, launchItem=${launchItemVerified}, execPath=${process.execPath}`,
     );
   } catch (e) {
     console.warn("[kepler-shell] autostart verify failed:", e);

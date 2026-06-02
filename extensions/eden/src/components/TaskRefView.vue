@@ -635,7 +635,7 @@ function focusTaskRefInputDOM(view: { dom: HTMLElement }, taskRefId: string): bo
   ) as HTMLInputElement | null;
   if (!input) return false;
   focusDefenderActive = false;
-  input.focus();
+  input.focus({ preventScroll: true });
   const len = input.value.length;
   input.setSelectionRange(len, len);
   return true;
@@ -871,7 +871,7 @@ onMounted(() => {
   // autosave reload) не фокусил снова.
   if (props.node?.attrs?.autoFocus) {
     nextTick(() => {
-      titleInputRef.value?.focus();
+      titleInputRef.value?.focus({ preventScroll: true });
       const len = titleInputValue.value.length;
       titleInputRef.value?.setSelectionRange(len, len);
     });

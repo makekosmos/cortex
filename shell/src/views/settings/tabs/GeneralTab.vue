@@ -40,7 +40,7 @@ defineEmits<{
 
     <LegacyRow title="Автозапуск с Windows" :error="autostartError">
       <template #hint>
-        <template v-if="autostartAllowed">Запускать Kepler при входе в систему</template>
+        <template v-if="autostartAllowed">Запускать Kosmos при входе в систему</template>
         <template v-else>Доступно только в установленной версии (не в dev-сборке)</template>
       </template>
       <LegacyToggle
@@ -50,7 +50,7 @@ defineEmits<{
       />
     </LegacyRow>
 
-    <LegacyRow title="Показывать в трее" hint="Оставлять значок Kepler в системном трее">
+    <LegacyRow title="Показывать в трее" hint="Оставлять значок Kosmos в системном трее">
       <LegacyToggle :checked="trayIcon" @change="(e: Event) => $emit('toggleTrayIcon', e)" />
     </LegacyRow>
   </div>

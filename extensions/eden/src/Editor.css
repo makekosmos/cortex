@@ -378,14 +378,14 @@
   -webkit-user-select: none;
 }
 
-/* Замораживаем scroll в editor-wrapper'е пока активен block-select
+/* Замораживаем scroll в editor-wrapper'е только пока идёт block-select
    drag. Cache block rect'ов хранится в client coords при mousedown'е —
    browser auto-scroll (cursor у edge) сдвинул бы фактические Y, а cache
    остался бы старым → wrong hit-test → wrong selection.
    `:has()` selector — editor-wrapper PARENT для editor-content-area;
-   когда внутри есть active class, замораживаем outer scroll. Chromium
+   когда внутри есть drag class, замораживаем outer scroll. Chromium
    105+ поддерживает (Electron). */
-.editor-wrapper:has(.editor-content-area.kepler-block-select-active) {
+.editor-wrapper:has(.editor-content-area.kepler-block-drag-active) {
   overflow: hidden !important;
 }
 
@@ -400,9 +400,9 @@
    Без этого браузер на каждый mousemove через таску дёргает :hover,
    подсвечивая чекбокс/появляя arrow → визуальный шум во время drag.
    pointer-events: none на drag-time = no hover, no accidental click. */
-.editor-content-area.kepler-block-select-active .task-status-icon,
-.editor-content-area.kepler-block-select-active .task-ref-open,
-.editor-content-area.kepler-block-select-active .task-ref-title-input {
+.editor-content-area.kepler-block-drag-active .task-status-icon,
+.editor-content-area.kepler-block-drag-active .task-ref-open,
+.editor-content-area.kepler-block-drag-active .task-ref-title-input {
   pointer-events: none;
 }
 

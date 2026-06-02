@@ -46,6 +46,26 @@ const CROSSING_MIN_PX = 8;
 const AUTO_SCROLL_EDGE_PX = 48;
 const AUTO_SCROLL_MAX_SPEED_PX = 16;
 
+export function computeBlockSelectionAutoScrollDelta(
+  clientY: number,
+  container: HTMLElement,
+): number {
+  const rect = container.getBoundingClientRect();
+  const fromTop = clientY - rect.top;
+  const fromBottom = rect.bottom - clientY;
+  if (fromTop < AUTO_SCROLL_EDGE_PX && fromTop < fromBottom) {
+    const depth = Math.max(0, AUTO_SCROLL_EDGE_PX - fromTop);
+    const intensity = Math.min(1, depth / AUTO_SCROLL_EDGE_PX);
+    return -Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED_PX);
+  }
+  if (fromBottom < AUTO_SCROLL_EDGE_PX) {
+    const depth = Math.max(0, AUTO_SCROLL_EDGE_PX - fromBottom);
+    const intensity = Math.min(1, depth / AUTO_SCROLL_EDGE_PX);
+    return Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED_PX);
+  }
+  return 0;
+}
+
 export function useBlockSelection() {
   /** Set позиций выделенных блоков. Position стабилен в течение drag-session. */
   const selectedPositions = ref<Set<number>>(new Set());
@@ -213,25 +233,6 @@ export function useBlockSelection() {
    * blur'нуть editor + collapse selection). Дальше возвращает `"dragging"`.
    * До threshold возвращает `null`.
    */
-  /** Считает, сколько scrollTop нужно прибавить для авто-скролла в текущем
-      кадре. 0 = курсор не у края, скроллить не надо. */
-  function computeAutoScrollDelta(clientY: number, container: HTMLElement): number {
-    const rect = container.getBoundingClientRect();
-    const fromTop = clientY - rect.top;
-    const fromBottom = rect.bottom - clientY;
-    if (fromTop < AUTO_SCROLL_EDGE_PX && fromTop < fromBottom) {
-      const depth = Math.max(0, AUTO_SCROLL_EDGE_PX - fromTop);
-      const intensity = Math.min(1, depth / AUTO_SCROLL_EDGE_PX);
-      return -Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED_PX);
-    }
-    if (fromBottom < AUTO_SCROLL_EDGE_PX) {
-      const depth = Math.max(0, AUTO_SCROLL_EDGE_PX - fromBottom);
-      const intensity = Math.min(1, depth / AUTO_SCROLL_EDGE_PX);
-      return Math.ceil(intensity * AUTO_SCROLL_MAX_SPEED_PX);
-    }
-    return 0;
-  }
-
   /** Пересчитать dragRect + hit-test selection из current startX/Y + lastClientX/Y.
       Вызывается после auto-scroll tick'а (startY сдвинут, cache пересобран). */
   function recomputeDragGeometry(): void {
@@ -269,7 +270,7 @@ export function useBlockSelection() {
     autoScrollRafId = null;
     if (!active || !hasMoved) return;
     if (scrollContainerEl && editorRef) {
-      const delta = computeAutoScrollDelta(lastClientY, scrollContainerEl);
+      const delta = computeBlockSelectionAutoScrollDelta(lastClientY, scrollContainerEl);
       if (delta !== 0) {
         const before = scrollContainerEl.scrollTop;
         scrollContainerEl.scrollTop = before + delta;

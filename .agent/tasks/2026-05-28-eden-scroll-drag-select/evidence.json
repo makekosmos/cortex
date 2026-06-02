@@ -1,0 +1,46 @@
+{
+  "task_id": "2026-05-28-eden-scroll-drag-select",
+  "verified_at": "2026-05-28T21:10:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "BlockSelectionPointer.spec.ts + Editor.vue gate"
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": "BlockSelectionPointer.spec.ts"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": "BlockSelectionClasses.spec.ts + Playwright smoke"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": "BlockSelectionAutoScroll.spec.ts + finishDrag cleanup"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": "rg scroll-padding + Playwright smoke"
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "evidence": "Eden browser/unit tests"
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "evidence": "Eden tests, shell build/typecheck, ark guards, docs checks"
+    },
+    {
+      "ac": "AC8",
+      "verdict": "PASS",
+      "evidence": "postmortem + proof-loop artifacts"
+    }
+  ]
+}

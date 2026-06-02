@@ -6,16 +6,14 @@
   "types": "index.ts",
   "exports": {
     ".": "./index.ts",
-    "./tokens": "./tokens/index.ts",
-    "./theme": "./theme/index.ts",
     "./components": "./components/index.ts",
     "./patterns": "./patterns/index.ts",
     "./theme/css": "./theme/css-variables.css",
     "./components/sidebar.css": "./components/sidebar.css"
   },
   "scripts": {
-    "format": "oxfmt components/ tokens/ *.ts",
-    "format:check": "oxfmt --check components/ tokens/ *.ts",
+    "format": "oxfmt components/ composables/ patterns/ runtime/ *.ts",
+    "format:check": "oxfmt --check components/ composables/ patterns/ runtime/ *.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static",
     "test": "vitest run",
