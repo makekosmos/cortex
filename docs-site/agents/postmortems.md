@@ -21,6 +21,24 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-01 — Dashboard usage показывает битые app icons
+
+**Симптомы.** В Dashboard → «Затреканное время» часть строк показывала browser broken-image placeholder вместо иконки приложения.
+**Где жило.** `shell/src/dashboard/store.ts` выбирал `RawTopAppEntry.iconRef` перед inline `app_index.list_all.icon_path`; `shell/src/dashboard/UsageTable.vue` рендерил `<img>` без fallback on-error.
+**Root cause.** Usage analytics может вернуть stale/renderer-недоступный `tracked_apps.icon_ref` из usage-domain данных. При этом `app_index.list_all` уже специально инлайнит иконки как `data:image/png;base64,...`, но Dashboard отдавал приоритет `iconRef`, поэтому renderer пытался загрузить непригодный путь и показывал native broken-image icon.
+**Fix.** Dashboard теперь выбирает иконку через `chooseUsageIconRef()`: сначала renderer-safe inline icon из `app_index.list_all`, затем только inline `data:image/*` из usage-domain; file/path-like `iconRef` без app-index fallback отбрасывается. `UsageTable` дополнительно скрывает `<img>` на `error`, чтобы единичная битая data-url не показывала browser placeholder.
+**Регрешн-защита.** `bun shell/src/dashboard/store.regression.mjs`, `bun run --cwd shell typecheck`.
+**Prevention.** Renderer-facing image fields должны быть либо уже inline/data URL, либо проходить через явный sanitizer/fallback. Нельзя смешивать storage/internal icon refs и browser-safe image src в одном приоритете: если endpoint специально инлайнит assets для renderer'а, UI должен предпочитать именно его.
+
+## 2026-06-01 — Usage tracker спамит process window check failed
+
+**Симптомы.** В логах `kepler-backend` каждую секунду повторялись строки `[usage-tracker] process window check failed for pid ...: Присоединенное к системе устройство не работает. (0x8007001F)` для одних и тех же PID.
+**Где жило.** `services/kepler-backend/src/usage_tracker/mod.rs` в loop проверки `process_window_state`; Win32 probe живёт в `services/kepler-backend/src/usage_tracker/windows_capture.rs`.
+**Root cause.** Tracker после ошибки Win32 probe классифицировал процесс как `AliveHidden`. Для умершего или transient-недоступного PID это оставляло `ActiveSession` в карте навсегда: runtime уже не рос, но каждый следующий tick снова вызывал тот же probe и снова писал ошибку в stderr.
+**Fix.** Ошибка `process_window_state` теперь проходит через `process_window_state_or_dead`: если tracker не может подтвердить, что PID всё ещё принадлежит ожидаемому exe path, активная session считается `Dead`, финализируется и удаляется из `active_sessions`.
+**Регрешн-защита.** `cargo test --manifest-path services\kepler-backend\Cargo.toml usage_tracker --lib` покрывает `process_window_probe_error_ends_session`: probe `Err("...0x8007001F")` должен возвращать `ProcessWindowState::Dead`.
+**Prevention.** Для process accounting “не могу проверить identity процесса” нельзя трактовать как “процесс жив, но hidden”. Hidden допустим только после успешного чтения exe path и проверки совпадения identity; ошибки identity probe должны завершать session или иметь явный bounded retry.
+
 ## 2026-06-01 — Usage tracker занижает playtime игр
 
 **Симптомы.** Dashboard показывал около 2 часов The Witcher 3, хотя пользователь реально играл примерно 10 часов. Read-only проверка `%APPDATA%\Kosmos\ark.db` подтвердила: недостающего времени нет ни в live DB, ни в WAL, ни в backup'ах.

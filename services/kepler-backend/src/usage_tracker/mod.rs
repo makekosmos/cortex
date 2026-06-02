@@ -200,16 +200,7 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
         let mut ended_keys = Vec::new();
         for (key, session) in active_sessions.iter_mut() {
             let window_state =
-                match process_window_state(key.pid, &session.tracked_app.normalized_exe_path) {
-                    Ok(state) => state,
-                    Err(error) => {
-                        eprintln!(
-                            "[usage-tracker] process window check failed for pid {}: {error}",
-                            key.pid
-                        );
-                        ProcessWindowState::AliveHidden
-                    }
-                };
+                process_window_state_or_dead(key.pid, &session.tracked_app.normalized_exe_path);
             if window_state == ProcessWindowState::Dead {
                 ended_keys.push(key.clone());
                 continue;
@@ -290,6 +281,32 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
 struct TrackerIdentity {
     device_id: String,
     device_name: String,
+}
+
+#[cfg(target_os = "windows")]
+fn process_window_state_or_dead(
+    pid: u32,
+    expected_normalized_exe_path: &str,
+) -> ProcessWindowState {
+    process_window_state_from_probe_result(
+        pid,
+        process_window_state(pid, expected_normalized_exe_path),
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn process_window_state_from_probe_result(
+    pid: u32,
+    result: Result<ProcessWindowState, String>,
+) -> ProcessWindowState {
+    match result {
+        Ok(state) => state,
+        Err(error) => {
+            eprintln!("[usage-tracker] process window check failed for pid {pid}: {error}");
+            // См. postmortems.md § 2026-06-01 — Usage tracker спамит process window check failed.
+            ProcessWindowState::Dead
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -843,5 +860,18 @@ mod tests {
         assert_eq!(session.runtime_ms, 1_000);
         assert_eq!(session.foreground_ms, 1_000);
         assert_eq!(session.idle_ms, 0);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn process_window_probe_error_ends_session() {
+        // Regression: 2026-06-01. Win32 probe errors for stale PIDs must not keep
+        // sessions alive forever while logging every poll tick.
+        let state = process_window_state_from_probe_result(
+            1364,
+            Err("Присоединенное к системе устройство не работает. (0x8007001F)".to_string()),
+        );
+
+        assert_eq!(state, ProcessWindowState::Dead);
     }
 }
