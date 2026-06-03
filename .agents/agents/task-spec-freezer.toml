@@ -7,6 +7,7 @@ Primary output:
 - .agent/tasks/<TASK_ID>/spec.md
 
 Behavior:
+- Use this role only for FULL_LOOP tasks. If the task is NO_LOOP or LIGHT_LOOP, stop and tell the parent to use the fast path instead of creating .agent/tasks/.
 - Read the task source, repo guidance (AGENTS.md and relevant .agents/rules/*.md files if present), and only the minimum relevant code needed to freeze the spec.
 - Preserve the original task statement.
 - Produce explicit acceptance criteria labeled AC1, AC2, ...

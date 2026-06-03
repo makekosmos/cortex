@@ -54,6 +54,13 @@ bun run lint                     # oxlint по всему репо
 bun run format                   # oxfmt — переформатировать
 bun run format:check             # oxfmt --check (CI guard)
 
+bun run shell:typecheck          # быстрый alias: shell tsc --noEmit
+bun run shell:build              # shell renderer/main/preload без сборки extensions
+bun run ext:build <id[,id]>      # targeted build Vue extension'ов
+bun run visual:regression        # Playwright visual regression snapshots
+bun run visual:launcher          # targeted launcher visual snapshots
+bun run visual:eden              # targeted Eden visual snapshots
+
 bun run test:e2e                 # Playwright (root config, общие e2e наборы)
 bun run test:e2e:headed          # то же, с видимым окном (DEBUG only)
 bun run test:e2e:debug           # Playwright --debug (инспектор)
@@ -78,7 +85,9 @@ bun run --cwd packages/ark test
 ```powershell
 cd shell
 bun run dev                # backend + extensions + Vite + Electron
+bun run dev:no-build       # Electron dev без предварительной сборки backend/extensions
 bun run typecheck          # TS check (renderer + main + preload)
+bun run build:js:shell     # сборка shell renderer/main/preload без extensions
 bun run build:js           # сборка renderer + main + preload + extensions (без установщика)
 bun run build              # full production chain:
                             #   1. cargo build --release services/kepler-backend
@@ -111,6 +120,9 @@ Extension dev mode (Raycast-style HMR, см. [Extension dev mode](/concepts/exte
 # Vite dev servers всех Vue extension'ов (порты 5180–5185)
 bun run --cwd shell dev:extensions
 
+# Только выбранные Vue extension'ы
+bun run --cwd shell dev:extensions:only eden,delphi
+
 # Shell dev + Akasha HMR (:5185) по умолчанию
 bun run --cwd shell dev
 
@@ -136,10 +148,24 @@ cargo test  --manifest-path services/kepler-backend/Cargo.toml --lib
 
 Сборка extension'ов проходит **через Kepler shell**. У каждого extension'а есть свой `vite.config.mjs`, но командой `bun run --cwd shell build:extensions` Kepler shell их все билдит подряд.
 
+Для `LIGHT_LOOP` можно строить только затронутые Vue extension'ы. Full-команды (`build:extensions`, `build:js`, `test:e2e`) остаются safe path для substantial-задач.
+
 ```powershell
 bun run --cwd shell build:extensions     # билд всех extensions/<id>/dist
+bun run --cwd shell build:extensions:only eden,delphi --skip-native
+bun run --cwd shell build:extensions:changed    # affected Vue extensions по git changes
+bun run --cwd shell build:extensions:vue
 bun run --cwd shell dev:extensions       # HMR dev servers на портах 5180-5185
+bun run --cwd shell dev:extensions:only eden
 ```
+
+`build-extensions.mjs` поддерживает:
+
+- `--only <id[,id...]>` / `--only=<id[,id...]>` — выбранные extension id.
+- `--changed` — вывести affected extensions из `git diff` + untracked файлов.
+- `--vue-only` / `--skip-native` — не запускать native release build.
+
+`--only` и `--changed` взаимоисключающие. Shared frontend changes (`packages/visuals/**`, `packages/ark/**`, `shell/vite.extensions.config.mjs`, `bun.lock`) считаются affecting all Vue extensions.
 
 ## Android
 

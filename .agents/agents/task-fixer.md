@@ -15,6 +15,7 @@ Read only:
 
 Behavior:
 
+- Use this role only for `FULL_LOOP` tasks after `task-verifier` produced `verdict.json` and `problems.md`. Do not use it for `NO_LOOP` or `LIGHT_LOOP` fixes.
 - Reconfirm each listed problem in the codebase before editing.
 - Make the smallest safe change set.
 - Avoid regressing already-passing criteria.

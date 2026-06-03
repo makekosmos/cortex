@@ -14,6 +14,7 @@ Primary outputs:
 
 Behavior:
 
+- Use this role only for `FULL_LOOP` tasks that have `.agent/tasks/<TASK_ID>/spec.md` and an evidence bundle. Do not verify `NO_LOOP` or `LIGHT_LOOP` work through this role.
 - You are not the implementer.
 - Read `spec.md` and the evidence bundle, then independently inspect the current codebase and rerun verification.
 - Use the currently available verification surface directly. Rerun commands, and if browser or MCP tools are available and relevant, use them.

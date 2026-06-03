@@ -177,7 +177,20 @@
 - [ ] Не дублирую правила, лучше ссылка на канон-страницу.
 - [ ] Запустил `bun run docs:sync` для регенерации AGENTS.md / CLAUDE.md / llms.txt.
 
-## Я делал substantial задачу через proof loop
+## Я делал `LIGHT_LOOP`
+
+- [ ] Классификация явно названа как `LIGHT_LOOP`, и задача не содержит триггеров `FULL_LOOP`.
+- [ ] Если появились ARK/data/sync/schema/write-boundary/focus/command bus/security/architecture признаки — задача эскалирована в `FULL_LOOP`.
+- [ ] Прогнаны минимальные релевантные проверки для затронутой области.
+- [ ] Для UI/visual правки сделан visual verify, screenshot сохранён под `.tmp/`.
+- [ ] В финальном отчёте указано, что проверено и что не проверено.
+
+## Я делал `NO_LOOP`
+
+- [ ] Правка действительно trivial/edit-level и не меняет правила, архитектуру, data path или user workflow.
+- [ ] Прогнана релевантная быстрая проверка или честно указано, почему она не нужна.
+
+## Я делал `FULL_LOOP` / substantial задачу через proof loop
 
 - [ ] Создан `.agent/tasks/<DATE>-<slug>/spec.md` **до** реализации.
 - [ ] `spec.md` содержит явные AC1..ACn, проверяемые утверждения.

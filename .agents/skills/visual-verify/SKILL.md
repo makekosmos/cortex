@@ -17,6 +17,32 @@ After UI changes, verify the visible result, not only the code:
 6. Check the actual acceptance criteria visually: contrast, icon rendering, scroll placement, sticky headers, text overflow, spacing, responsive behavior, and active/inactive states.
 7. Report what was visually verified and be explicit if any part was not checked.
 
+## Fast Path Artifacts
+
+For `LIGHT_LOOP` UI work, save deterministic screenshots under:
+
+```text
+.tmp/visual/<YYYY-MM-DD>-<task-slug>/<surface>-<viewport>-<state>.png
+```
+
+Examples:
+
+```text
+.tmp/visual/2026-06-03-fast-task-workflow/eden-desktop-empty.png
+.tmp/visual/2026-06-03-fast-task-workflow/settings-1000x760-sidebar-filtered.png
+```
+
+Final reports should include:
+
+- verified surfaces;
+- screenshot artifact paths;
+- what was not verified;
+- whether escalation or manual follow-up is needed.
+
+Screenshot-only verification is enough only when the change is visual/layout/CSS/text/icon-only, the UI can be rendered with narrow representative mocks or stable local data, and acceptance criteria are visible in static states.
+
+Escalate beyond fast-path screenshot verification when interaction, persistence, IPC, ARK writes, sync, export, usage tracking, native dialogs, tray, UAC, titlebar drag, always-on-top, or real backend behavior is central to the change.
+
 ## Playwright Pattern
 
 Use one-off scripts when a permanent test is unnecessary:

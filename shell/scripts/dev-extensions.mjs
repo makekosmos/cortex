@@ -24,20 +24,36 @@ const shellRoot = path.resolve(__dirname, "..");
 // workspace symlinks @kosmos/*). Используем bin'арник из shell/node_modules.
 const viteBin = path.join(shellRoot, "node_modules", "vite", "bin", "vite.js");
 
-const onlyArgIndex = process.argv.indexOf("--only");
-const onlyIds =
-  onlyArgIndex >= 0 && process.argv[onlyArgIndex + 1]
-    ? new Set(
-        process.argv[onlyArgIndex + 1]
-          .split(",")
-          .map((id) => id.trim())
-          .filter(Boolean),
-      )
-    : null;
+function argValue(name) {
+  const index = process.argv.indexOf(name);
+  if (index >= 0 && process.argv[index + 1] && !process.argv[index + 1].startsWith("--")) {
+    return process.argv[index + 1];
+  }
+  const prefix = `${name}=`;
+  const match = process.argv.find((arg) => arg.startsWith(prefix));
+  return match ? match.slice(prefix.length) : null;
+}
+
+const onlyValue = argValue("--only");
+const onlyIds = onlyValue
+  ? new Set(
+      onlyValue
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    )
+  : null;
+
+if (onlyValue !== null && onlyIds?.size === 0) {
+  console.error("[dev:extensions] --only requires at least one extension id");
+  process.exit(1);
+}
+
+const requestedIds = onlyIds ? new Set(onlyIds) : null;
 
 const extensions = readdirSync(extensionsRoot, { withFileTypes: true })
   .filter((d) => d.isDirectory())
-  .filter((d) => !onlyIds || onlyIds.has(d.name))
+  .filter((d) => !requestedIds || requestedIds.has(d.name))
   .map((d) => {
     const dir = path.join(extensionsRoot, d.name);
     const manifestPath = path.join(dir, "manifest.json");
@@ -52,6 +68,18 @@ const extensions = readdirSync(extensionsRoot, { withFileTypes: true })
     }
   })
   .filter(Boolean);
+
+if (requestedIds) {
+  for (const extension of extensions) requestedIds.delete(extension.id);
+  if (requestedIds.size > 0) {
+    console.error(
+      `[dev:extensions] unknown or non-dev Vue extension id(s): ${Array.from(requestedIds).join(
+        ", ",
+      )}`,
+    );
+    process.exit(1);
+  }
+}
 
 if (extensions.length === 0) {
   const suffix = onlyIds ? ` for --only ${Array.from(onlyIds).join(",")}` : "";

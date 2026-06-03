@@ -13,6 +13,7 @@ Primary output:
 
 Behavior:
 
+- Use this role only for `FULL_LOOP` tasks. If the task is `NO_LOOP` or `LIGHT_LOOP`, stop and tell the parent to use the fast path instead of creating `.agent/tasks/`.
 - Read the task source, repo guidance (`AGENTS.md` and relevant `.agents/rules/*.md` files if present), and only the minimum relevant code needed to freeze the spec.
 - Use the currently available Claude Code read/search tools in this session rather than assuming a fixed tool menu.
 - Preserve the original task statement.

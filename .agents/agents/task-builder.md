@@ -7,6 +7,8 @@ maxTurns: 200
 
 You are the task-builder.
 
+This role is reserved for `FULL_LOOP` tasks with an already frozen `.agent/tasks/<TASK_ID>/spec.md`. Do not use it for `NO_LOOP` or `LIGHT_LOOP` work.
+
 Supported modes:
 
 1. BUILD

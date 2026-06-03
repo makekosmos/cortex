@@ -22,6 +22,12 @@
     "docs:preview": "bun run --cwd docs-site preview",
     "docs:sync": "node scripts/sync-agents-docs.mjs",
     "docs:check": "node scripts/check-docs-freshness.mjs",
+    "shell:typecheck": "bun run --cwd shell typecheck",
+    "shell:build": "bun run --cwd shell build:js:shell",
+    "ext:build": "bun run --cwd shell build:extension",
+    "visual:regression": "playwright test tests/e2e/visual.spec.ts",
+    "visual:launcher": "playwright test tests/e2e/visual.spec.ts --grep \"launcher\"",
+    "visual:eden": "playwright test tests/e2e/visual.spec.ts --grep \"eden\"",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug"

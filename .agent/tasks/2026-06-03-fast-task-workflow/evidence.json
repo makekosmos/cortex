@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-06-03-fast-task-workflow",
+  "verified_at": "2026-06-03",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "docs-site/concepts/proof-loop.md and docs-site/agents/claude-md-core.md define NO_LOOP, LIGHT_LOOP, FULL_LOOP and escalation triggers."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": "Added task-classifier MD/TOML and reserved existing proof-loop agents for FULL_LOOP."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell build:extensions:only eden --skip-native; bun run --cwd shell build:extensions:changed"
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "command": "node shell/scripts/dev-extensions.mjs --only=__missing__"
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": ".agents/skills/visual-verify/SKILL.md, docs-site/agents/checklists.md, and root visual scripts document the visual fast path."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "command": "bun run docs:sync; bun run docs:check"
+    }
+  ]
+}

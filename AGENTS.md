@@ -26,7 +26,7 @@
 - **ARK** = общий Rust+SQLite рантайм (`crates/ark-core`, бинарь `ark-core-rpc`).
 - **Extensions** (`extensions/<id>/`) — Vue-приложения, грузятся в Kepler shell как отдельные окна.
 - **Apps говорят с ARK только** через `@kosmos/ark` (TS) или `ark_core::db` (Rust). Прямые SQL writes в синхронизируемые таблицы — запрещены.
-- **Substantial-правки** — через `.agent/tasks/<DATE>-<slug>/` proof loop.
+- **Сначала классифицируй задачу**: `NO_LOOP`, `LIGHT_LOOP`, `FULL_LOOP`. Substantial-правки всегда `FULL_LOOP` через `.agent/tasks/<DATE>-<slug>/` proof loop.
 
 ## 🚨 Прежде чем менять код
 
@@ -137,11 +137,15 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 - ❌ Объявление «готово» без PASS по AC, без прогона гвардов, без visual verify для UI правок (build/typecheck недостаточно — Playwright spec + screenshot или честно «не проверял»).
 - ❌ Игнорирование failing test'ов как «pre-existing». Чинить всегда.
 
-## Что substantial → нужен proof loop
+## Классификация задач
 
-Новая фича / новый ARK endpoint / изменение схемы / sync-протокола / write-boundary / нетривиальный багфикс (несколько файлов) / архитектурное решение (ADR).
+Перед правками выбери класс:
 
-**Не substantial:** опечатки, переименование переменной, одна строка UI, косметика, patch-bump зависимости — просто правь.
+- `NO_LOOP` — опечатка, форматирование, локальное переименование, edit-level правка одной строки, косметика README/docs без изменения правил. Просто правь и проверь релевантно.
+- `LIGHT_LOOP` — маленькая ограниченная low-risk правка, например визуальный/UI fix в одном extension/view или точечный script/tooling fix без архитектуры. Без `.agent/tasks/`, но с явным финальным отчётом: классификация, проверки, что не проверено; для UI — visual verify + screenshot под `.tmp/`.
+- `FULL_LOOP` — substantial-задача: новая фича / endpoint / изменение схемы / sync-протокола / write-boundary / data-слоя / focus-mode safety / command bus contract / архитектурное решение / нетривиальный багфикс / несколько подсистем. Нужен полный proof loop.
+
+`LIGHT_LOOP` обязан эскалироваться в `FULL_LOOP`, если задача затронула ARK/data/sync/focus/command bus/schema/security boundary, расползлась на несколько подсистем, требует независимого verifier/evidence bundle, не проверяется локально, или есть сомнение в классификации.
 
 Полный flow — `docs-site/concepts/proof-loop.md`.
 
