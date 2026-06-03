@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-  "apps/akasha",
   "crates/ark-core/rust",
   "services/kepler-backend",
   "services/ark-relay-server",

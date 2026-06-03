@@ -45,9 +45,9 @@ extension.kext        (ZIP)
   "icon": "icon.png", // путь к иконке внутри .kext
   "entryHtml": "dist/index.html", // для vue — после Vite build; для static — "index.html"
   "native": {
-    "executable": "bin/akasha.exe",
-    "devExecutable": "../../target/debug/akasha.exe",
-    "cargoPackage": "akasha",
+    "executable": "bin/my-native-app.exe",
+    "devExecutable": "../../target/debug/my-native-app.exe",
+    "cargoPackage": "my-native-app",
     "singleInstance": true,
   },
   "devPort": 5181, // optional, Vite dev port (только developer mode)
@@ -61,25 +61,6 @@ extension.kext        (ZIP)
 Для `kind: "native"` `entryHtml` не нужен. `.kext` должен содержать файл по
 `native.executable`; repo dev flow может использовать `native.devExecutable`
 после `cargo build --release -p <cargoPackage>`.
-
-Native extensions may also ship as standalone Windows apps. The local native
-packaging flow builds one release binary and emits both channels:
-
-```powershell
-bun run --cwd shell native:package akasha
-```
-
-Output:
-
-```text
-shell/release/native/akasha/akasha-<version>.kext
-shell/release/native/akasha/Akasha Setup <version>.exe
-```
-
-The standalone installer is intentionally separate from Kepler: it installs the
-native app only, registers its own shortcuts/file associations, and does not
-bundle Kepler backend/ARK services. Kepler-specific behavior is enabled only
-when shell launches the app with explicit `--kosmos-*` arguments.
 
 ### `keplerApiVersion` — strict compat check
 

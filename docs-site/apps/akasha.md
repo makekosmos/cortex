@@ -1,97 +1,82 @@
 # Akasha
 
-Akasha — нативная EPUB-читалка для Kosmos.
+Akasha — EPUB-читалка для Kosmos.
 
 ## Статус
 
-MVP: `kind: "native"` extension и самостоятельное Windows-приложение.
-Из Kosmos запускается launcher-командой `akasha:open`, но рендерится не внутри
-Electron `BrowserWindow`, а отдельным Rust/GPUI процессом `akasha.exe`.
-Без Kosmos устанавливается standalone NSIS installer'ом и открывает EPUB
-напрямую.
+MVP: обычный `kind: "vue"` extension внутри Kosmos shell. Запускается
+launcher-командой `akasha:open`, рендерится в стандартном extension
+`BrowserWindow` и собирается тем же Vite pipeline, что Eden, Delphi,
+Arrancador и Horologion.
 
-Reader UI — один непрерывный virtualized поток EPUB spine вниз: главы идут друг
-за другом без ручного переключения. Верхняя кнопка оглавления открывает
-scrollable panel, `Aa` открывает выбор шрифта (Georgia / Palatino / Inter /
-Geist), а основной текст сохраняет базовую XHTML-структуру: заголовки, абзацы,
-списки, цитаты, bold и italic. Видимые блоки рендерятся через selectable
-`TextView`, поэтому выделение и `Ctrl+C` работают на уровне текста. Средний клик
-включает autoscroll: движение мыши выше/ниже маркера задаёт скорость, повторный
-middle-click или left-click выключает режим.
+Старый Rust/GPUI reader вынесен в приватный standalone-репозиторий
+`ksanrse/akasha-gpui` и удалён из локального Kosmos workspace.
+
+Akasha теперь стартует с локальной библиотеки: пользователь добавляет `.epub`,
+файл импортируется в `extensions-data/akasha/books/<bookId>.epub`, а карточка
+книги появляется в UI с прогрессом и действием «Продолжить». `bookId` считается
+как SHA-256 содержимого EPUB, поэтому модель готова к дедупликации повторного
+импорта.
+
+Reader UI — один непрерывный поток EPUB spine вниз: главы идут друг за другом
+без ручного переключения. Слева показывается оглавление, toolbar управляет
+шрифтом/размером текста и может добавить новую книгу. XHTML-структура
+сохраняется в безопасную internal-модель: заголовки, абзацы, списки, цитаты,
+bold и italic рендерятся Vue-компонентами без `v-html`.
 
 ## Где код
 
-| Часть             | Путь                                       | Роль                                      |
-| ----------------- | ------------------------------------------ | ----------------------------------------- |
-| Manifest          | `extensions/akasha`                        | Команда launcher'а + native entrypoint    |
-| Native app        | `apps/akasha`                              | Rust + GPUI reader                        |
-| User data         | `extensions-data/akasha`                   | `reader-state.json` и будущий local cache |
-| Build integration | `shell/scripts/build-extensions.mjs`       | Cargo release build native extension'ов   |
-| Native packaging  | `shell/scripts/package-native-release.mjs` | `.kext` + standalone NSIS installer       |
+| Часть             | Путь                                 | Роль                                              |
+| ----------------- | ------------------------------------ | ------------------------------------------------- |
+| Manifest          | `extensions/akasha/manifest.json`    | Команда launcher'а + Vue entrypoint               |
+| Vue app           | `extensions/akasha/src`              | EPUB reader UI + parser                           |
+| User data         | `extensions-data/akasha`             | Библиотека, EPUB-копии, progress, reader settings |
+| Build integration | `shell/scripts/build-extensions.mjs` | Vite build через shared extension config          |
 
 ## Контракт
 
 `extensions/akasha/manifest.json` объявляет:
 
-- `kind: "native"`;
-- `native.executable: "bin/akasha.exe"` для `.kext` / installed copy;
-- `native.devExecutable: "../../target/release/akasha.exe"` для repo dev flow;
-- `native.cargoPackage: "akasha"`;
+- `kind: "vue"`;
+- `entryHtml: "dist/index.html"`;
+- `devPort: 5185`;
 - manifest-команду `akasha:open`.
 
-Kepler shell при запуске добавляет аргументы:
+Akasha использует стандартный extension preload. Reader-local настройки
+пишутся через `window.kepler.userData.writeJson("reader-state.json", ...)`, а
+EPUB-копии — через binary userData API (`readBinary` / `writeBinary`) с safe
+relative paths внутри namespace extension'а. Для dev/browser-сценариев каталог
+имеет fallback в `localStorage`.
 
-```text
---kosmos-extension-id akasha
---kosmos-user-data-dir <Kosmos/extensions-data/akasha>
-```
+## EPUB parser
 
-В dev session shell также передаёт `--kosmos-dev-mode`; Akasha показывает
-compact FPS overlay в правом верхнем углу reader'а.
+Akasha читает `.epub` в renderer'е как ZIP:
 
-В headless/test mode native GUI не spawn'ится: contract e2e проверяет команду,
-но не ждёт Playwright window.
+1. Находит `META-INF/container.xml`.
+2. Читает OPF package и spine order.
+3. Распаковывает XHTML-файлы из spine.
+4. Превращает XHTML в `ReaderBlock[]` + `InlineSpan[]`.
 
-## Distribution
-
-Akasha собирается в двух формах из одного release binary:
-
-- `.kext` — Kosmos extension package, содержит `manifest.json`, icon/README и
-  `bin/akasha.exe`; ставится через Kepler/Kosmos installer flow.
-- `Akasha Setup <version>.exe` — standalone NSIS installer, ставит только
-  Akasha, создаёт ярлыки и регистрирует `.epub` opening через
-  `Akasha.exe --open "%1"`.
-
-Локальная команда упаковки:
-
-```powershell
-bun run --cwd shell native:package akasha
-```
-
-Артефакты:
-
-```text
-shell/release/native/akasha/akasha-<version>.kext
-shell/release/native/akasha/Akasha Setup <version>.exe
-```
+В UI не используется `v-html`: EPUB-текст выводится как escaped Vue text nodes,
+а emphasis/strong представлены классами на spans.
 
 ## Данные
 
-Akasha v1 не пишет в ARK. При запуске из Kosmos shell передаёт
-`--kosmos-user-data-dir`, поэтому настройки и последний открытый файл живут в
-`extensions-data/akasha/reader-state.json`.
+Akasha v1 не пишет в ARK. Локально сохраняются:
 
-Standalone Akasha без Kosmos использует `%APPDATA%\Akasha\reader-state.json`.
-Uninstall standalone app не удаляет эту папку.
+- `library.json` — catalog imported books;
+- `books/<bookId>.epub` — app-local EPUB copy;
+- `reader-state.json` — reader settings;
+- progress внутри `library.json`: `chapterId`, `blockId`, `percentage`,
+  `updatedAt`.
 
-ARK-backed highlights, notes, semantic/RAG features — отдельная будущая фаза.
+Позиция чтения намеренно сохраняется не как `scrollTop`, а как EPUB block id:
+это устойчивее к изменению шрифта, размера окна и line-height. ARK-backed
+highlights, notes, semantic/RAG features — отдельная будущая фаза.
 
 ## Проверки
 
 ```powershell
-cargo check -p akasha
-cargo test -p akasha
-bun run --cwd shell typecheck
 bun run --cwd shell build:extensions
-bun run --cwd shell native:package akasha
+bun run --cwd shell typecheck
 ```

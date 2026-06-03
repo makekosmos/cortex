@@ -3,7 +3,7 @@
 Extension host — production foundation Kepler shell: продуктовые апки рендерятся как **Vue extension bundles** в отдельных BrowserWindow внутри kepler-shell, без собственных Electron .exe.
 
 ::: tip Текущий статус — Production foundation (Phase 4 + 6.0 ✅)
-Loader (`shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Мигрированы **все 5 продуктовых апок**: Dashboard, Horologion, Delphi, Arrancador (full completion 2026-05-18: scanner + launcher + RAWG + SQOBA), Eden (Phase 6.0).
+Loader (`shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Мигрированы **все 5 Vue-extension апок**: Horologion, Delphi, Arrancador (full completion 2026-05-18: scanner + launcher + RAWG + SQOBA), Eden (Phase 6.0), Akasha (Vue reader). Dashboard теперь встроенный shell view.
 
 RAM-эффект миграции зафиксирован в [RAM benchmarks](/concepts/ram-benchmarks): −124 MB Working Set / −209 MB Private Bytes / −4 процесса относительно baseline'а из 4 standalone Electron-апок (без Eden — Eden replaced standalone в Phase 6.0.A).
 :::
@@ -91,13 +91,13 @@ HTML. Shell запускает executable из `manifest.native`:
 
 ```json
 {
-  "id": "akasha",
-  "name": "Akasha",
+  "id": "my-native-app",
+  "name": "My Native App",
   "kind": "native",
   "native": {
-    "executable": "bin/akasha.exe",
-    "devExecutable": "../../target/release/akasha.exe",
-    "cargoPackage": "akasha",
+    "executable": "bin/my-native-app.exe",
+    "devExecutable": "../../target/release/my-native-app.exe",
+    "cargoPackage": "my-native-app",
     "singleInstance": true
   }
 }
@@ -171,7 +171,7 @@ if (nav) {
 - `devPort` — optional, порт Vite dev server'а для HMR. Используется только когда активен developer mode. См. [Extension dev mode](/concepts/extension-dev-mode).
 - `width`, `height` — optional, дефолты `900×600`.
 - `minWidth`, `minHeight` — optional. Передаются в `BrowserWindow` как `minWidth`/`minHeight`. Используются extension'ами, у которых есть собственный layout-breakpoint (например, Eden = `450×400`).
-- `windowEffect` — optional. Включает Win32 system backdrop для окна: `"acrylic"` (blur с прозрачностью, Win10/11), `"mica"` (desktop tint, Win11), `"none"` (default). Если задан, `BrowserWindow` создаётся с `backgroundColor: "#00000000"` + `backgroundMaterial: <effect>`, нативный `titleBarOverlay` не применяется (extension рисует свой titlebar поверх). Renderer обязан использовать прозрачный/полупрозрачный фон body, иначе эффект перекрывается сплошной заливкой. См. [«Window backdrop (acrylic / mica)»](#window-backdrop-acrylic-mica).
+- `windowEffect` — optional. Включает Win32 system backdrop для окна: `"acrylic"` (blur с прозрачностью, Win10/11), `"mica"` (desktop tint, Win11), `"none"` (default). Если задан, `BrowserWindow` создаётся с `backgroundColor: "#00000000"` + `backgroundMaterial: <effect>`. Native `titleBarOverlay` остаётся включённым; renderer учитывает safe-area через `env(titlebar-area-*)`. Renderer обязан использовать прозрачный/полупрозрачный фон body, иначе эффект перекрывается сплошной заливкой. См. [«Window backdrop (acrylic / mica)»](#window-backdrop-acrylic-mica).
 
 ### Структура extension директории
 
@@ -272,7 +272,27 @@ win.webContents.on("before-input-event", (e, input) => {
 
 ## Window controls
 
-Shared preload exposes:
+Extension windows используют нативные системные кнопки через Electron
+`titleBarOverlay`:
+
+```ts
+new BrowserWindow({
+  frame: true,
+  titleBarStyle: "hidden",
+  titleBarOverlay: {
+    color: "#00000000",
+    symbolColor: "#f5f5f5",
+    height: 40,
+  },
+});
+```
+
+Renderer не рисует min/max/close сам. `DesktopChrome` / `Titlebar`
+учитывают native safe-area через `env(titlebar-area-*)`, поэтому
+app-specific кнопки в `#titlebar-trailing` не заезжают под системные
+контролы.
+
+Shared preload всё ещё exposes:
 
 ```ts
 window.kepler.window.close();
@@ -280,7 +300,7 @@ window.kepler.window.minimize();
 window.kepler.window.maximize();
 ```
 
-Они шлют `kepler:extension:window:{close,minimize,maximize}` IPC. Main resolves окно через `BrowserWindow.fromWebContents(e.sender)` и вызывает соответствующий метод. Это позволяет extension'ам с `titleBarStyle: "hidden"` рисовать свой titlebar и управлять окном без node integration.
+Они шлют `kepler:extension:window:{close,minimize,maximize}` IPC. Main resolves окно через `BrowserWindow.fromWebContents(e.sender)` и вызывает соответствующий метод. API оставлен для programmatic window actions, но не для рендера кастомных кнопок.
 
 Дополнительно к управляющим методам preload exposes текущее состояние maximize:
 
@@ -291,10 +311,6 @@ window.kepler.window.onMaximizedChange(cb: (value: boolean) => void): () => void
 
 - `isMaximized()` → IPC `kepler:extension:window:is-maximized` → `win.isMaximized()` для окна-владельца `webContents`.
 - `onMaximizedChange(cb)` подписывается на push-event `kepler:extension:window:maximized-changed`, который main процесс отправляет конкретному окну при `maximize` / `unmaximize`. Возвращает функцию отписки.
-
-Используется в `WindowControls` из `@kosmos/visuals` (см. [packages/visuals](/packages/visuals#windowcontrols)) — компонент переключает иконку «развернуть»↔«свернуть в окно» реактивно без polling'а.
-
-Native `titleBarOverlay` для extension окон **не используется** — frame убирается полностью (`titleBarStyle: "hidden"`), кнопки управления окном рисует extension через `<WindowControls />`. Это даёт консистентный look across acrylic / non-acrylic extension'ов.
 
 ### Maximizable toggle
 

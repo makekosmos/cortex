@@ -6,7 +6,7 @@
 //   - kepler.window.{close,minimize,maximize}()     — управление окном
 //   - kepler.meta.id()                              — id текущего extension'а
 //   - kepler.host.invoke(action, payload?)          — host-level действия
-//   - kepler.userData.{readJson,writeJson,readFile,writeFile,path}()
+//   - kepler.userData.{readJson,writeJson,readFile,writeFile,readBinary,writeBinary,deleteFile,path}()
 //     — persistent user data extension'а в <APPDATA>/Kosmos/extensions-data/<id>/.
 //       Эта папка не трогается install/uninstall'ом — settings и кеш переживают
 //       реинсталл кода extension'а.
@@ -180,6 +180,12 @@ const api = {
       ipcRenderer.invoke("kepler:extension:userData:readFile", name) as Promise<string | null>,
     writeFile: (name: string, content: string): Promise<void> =>
       ipcRenderer.invoke("kepler:extension:userData:writeFile", name, content) as Promise<void>,
+    readBinary: (name: string): Promise<string | null> =>
+      ipcRenderer.invoke("kepler:extension:userData:readBinary", name) as Promise<string | null>,
+    writeBinary: (name: string, base64: string): Promise<void> =>
+      ipcRenderer.invoke("kepler:extension:userData:writeBinary", name, base64) as Promise<void>,
+    deleteFile: (name: string): Promise<boolean> =>
+      ipcRenderer.invoke("kepler:extension:userData:deleteFile", name) as Promise<boolean>,
     path: (): Promise<string> =>
       ipcRenderer.invoke("kepler:extension:userData:path") as Promise<string>,
   },

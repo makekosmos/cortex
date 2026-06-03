@@ -105,9 +105,9 @@
 
 ## Я правил extension dev mode (`shell/` + `extensions/`)
 
-- [ ] Settings → Developer Mode toggle (persist в `%APPDATA%\Kosmos\kepler-shell-settings.json`) + `bun run --cwd shell dev:extensions` поднимают Vite dev server на каждом из портов 5180–5183.
+- [ ] `bun run --cwd shell dev` поднимает Akasha HMR на `:5185`; `KEPLER_DEV_EXTENSIONS=1 bun run --cwd shell dev` или `bun run --cwd shell dev:extensions` поднимают Vite dev server'ы всех Vue extension'ов на портах 5180–5185.
 - [ ] Extension manifest поддерживает поле `devPort` (optional); resolver `openExtension(id, route?)` в `shell/electron/extension-host.ts` выбирает `loadURL` vs `loadFile` корректно и прокидывает `route` как hash в обоих вариантах.
-- [ ] `isDeveloperModeActive()` **не** смотрит на `process.env.KEPLER_DEV` — только на `developerMode` из JSON. `KEPLER_DEV=1` влияет лишь на shell-level dev, не на extension loader.
+- [ ] Extension source resolution probe-based: `process.env.VITE_DEV_SERVER_URL` включает TCP probe, живой `devPort` → `loadURL`, мёртвый порт → dist fallback.
 - [ ] F12 toggles DevTools на любом extension window (detached, не блокирует).
 - [ ] Если правил manifest format или signature `openExtension` — обновил [Extension dev mode](/concepts/extension-dev-mode) и [Extension host](/concepts/extension-host).
 - [ ] Production build (без Developer Mode toggle) грузит extensions из `dist/`, не из dev server'ов.

@@ -10,8 +10,6 @@ export { default as Titlebar } from "./Titlebar.vue";
 
 export { default as TitlebarHistoryControls } from "./TitlebarHistoryControls.vue";
 
-export { default as WindowControls } from "./WindowControls.vue";
-
 export { default as DesktopChrome } from "./DesktopChrome.vue";
 
 export { default as DesktopContentSurface } from "./DesktopContentSurface.vue";

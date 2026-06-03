@@ -6,10 +6,10 @@
 
 ## Архитектура: probe-based auto-detect
 
-Раньше extension dev mode требовал тройной opt-in (env var + Settings toggle + ручной `dev:extensions`). Сейчас — **probe-based**, но Vite dev server'ы **по умолчанию выключены**:
+Раньше extension dev mode требовал тройной opt-in (env var + Settings toggle + ручной `dev:extensions`). Сейчас — **probe-based**, а Akasha поднимается с HMR по умолчанию:
 
-1. **`bun run --cwd shell dev`** по дефолту НЕ поднимает Vite dev server'ы для extension'ов (`shell/scripts/dev.mjs` около строк 97-111). Причина: HMR трогает `Editor.vue` mid-typing — при правке файла в working tree Vite реклоадит Eden window, useEditor создаёт новый editor instance, и напечатанный пользователем но не сохранённый autosave'ом (debounce 800ms) контент теряется. Для агента, активно правящего код пока user тестит, это destructive.
-   **Opt-in:** `KEPLER_DEV_EXTENSIONS=1 bun run --cwd shell dev`.
+1. **`bun run --cwd shell dev`** поднимает shell dev session и Akasha Vite dev server (`:5185`). Это даёт HMR для текущей reader-разработки без дополнительных env vars.
+   Все остальные extension Vite servers остаются opt-in через `KEPLER_DEV_EXTENSIONS=1 bun run --cwd shell dev`. Причина: HMR трогает Eden `Editor.vue` mid-typing — при правке файла в working tree Vite реклоадит Eden window, useEditor создаёт новый editor instance, и напечатанный пользователем но не сохранённый autosave'ом (debounce 800ms) контент теряется.
 2. **`openExtension(id, route?)`** при каждом вызове делает **TCP probe** `localhost:<manifest.devPort>` (timeout 500ms, кэш «alive» — 10s):
    - Порт отвечает → грузим с `http://localhost:<devPort>/` (Vite HMR).
    - Порт не отвечает → fallback на `dist/index.html` (warning в console).
@@ -24,14 +24,14 @@
 ## Workflow
 
 ```powershell
-# Дефолт — без HMR extension'ов (безопасно для активной правки кода во время теста):
+# Дефолт — shell + Akasha HMR:
 bun run --cwd shell dev
 
-# Opt-in HMR — когда нужен живой reload extension'а:
+# Opt-in HMR для всех extension'ов:
 $env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd shell dev
 ```
 
-- Shell и backend поднимаются всегда. Vite dev servers extension'ов — только при `KEPLER_DEV_EXTENSIONS=1`.
+- Shell и backend поднимаются всегда. Akasha Vite dev server поднимается по умолчанию; остальные extension dev servers — только при `KEPLER_DEV_EXTENSIONS=1`.
 - При включённом HMR: edit `.vue` файла в `extensions/<id>/src/` → Vue HMR обновляет компонент в открытом extension window **без reload** окна.
 - F12 в любом extension window — toggle DevTools (detached, не блокирует extension).
 - DevTools auto-open на extension windows — dev-only поведение (probe вернул `dev-server`).
@@ -49,6 +49,7 @@ $env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd shell dev
 | Delphi     | 5182    |
 | Arrancador | 5183    |
 | Eden       | 5184    |
+| Akasha     | 5185    |
 
 `shell/scripts/dev-extensions.mjs` поднимает по одному Vite dev server'у на порт, используя `extensions/<id>/vite.config.mjs`.
 
@@ -102,14 +103,14 @@ Settings window kepler-shell имеет checkbox «Developer Mode» в `%APPDATA
 
 ## Code refs
 
-| Файл                                | Что                                                                                            |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `shell/electron/extension-host.ts`  | `probeExtensionDevServer`, `resolveExtensionSource`, `openExtension` (async + inflight dedupe) |
-| `shell/scripts/dev.mjs`             | Orchestrator: extension Vite servers по дефолту выключены, opt-in `KEPLER_DEV_EXTENSIONS=1`    |
-| `shell/scripts/dev-extensions.mjs`  | Per-extension Vite dev server spawn                                                            |
-| `shell/vite.extensions.config.mjs`  | Vite config для extension build (one-shot dist)                                                |
-| `extensions/<id>/vite.config.mjs`   | Per-extension vite config (HMR server, alias)                                                  |
-| `shell/electron/settings-window.ts` | `developerMode` setting (legacy, UI hint only)                                                 |
+| Файл                                | Что                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `shell/electron/extension-host.ts`  | `probeExtensionDevServer`, `resolveExtensionSource`, `openExtension` (async + inflight dedupe)    |
+| `shell/scripts/dev.mjs`             | Orchestrator: Akasha HMR default-on, все extension servers opt-in через `KEPLER_DEV_EXTENSIONS=1` |
+| `shell/scripts/dev-extensions.mjs`  | Per-extension Vite dev server spawn                                                               |
+| `shell/vite.extensions.config.mjs`  | Vite config для extension build (one-shot dist)                                                   |
+| `extensions/<id>/vite.config.mjs`   | Per-extension vite config (HMR server, alias)                                                     |
+| `shell/electron/settings-window.ts` | `developerMode` setting (legacy, UI hint only)                                                    |
 
 ## См. также
 

@@ -2,16 +2,16 @@
   "id": "akasha",
   "name": "Akasha",
   "version": "0.1.0",
-  "description": "Нативная EPUB-читалка на GPUI",
+  "description": "EPUB-читалка",
   "keplerApiVersion": "^1.1.0",
-  "kind": "native",
+  "kind": "vue",
   "icon": "icon.svg",
-  "native": {
-    "executable": "bin/akasha.exe",
-    "devExecutable": "../../target/release/akasha.exe",
-    "cargoPackage": "akasha",
-    "singleInstance": true
-  },
+  "entryHtml": "dist/index.html",
+  "devPort": 5185,
+  "width": 1040,
+  "height": 760,
+  "minWidth": 760,
+  "minHeight": 520,
   "commands": [
     {
       "id": "open",

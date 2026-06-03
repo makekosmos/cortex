@@ -26,7 +26,15 @@
 
 import { app, BrowserWindow, ipcMain, screen, type WebContents } from "electron";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
@@ -114,7 +122,7 @@ export interface ExtensionManifest {
    *
    * `executable` is relative to extension dir for installed/bundled copies.
    * `devExecutable` is optional and used from repo dev tree when it exists
-   * (for example `../../target/debug/akasha.exe`).
+   * (for example `../../target/debug/my-native-app.exe`).
    * `args` are appended before shell-provided metadata args.
    */
   native?: {
@@ -475,11 +483,36 @@ export function extensionUserDataDir(id: string): string {
 // никаких `/`, `\`, `..`, не начинается с `.`. Используется во всех
 // userData handler'ах перед join'ом с user data dir.
 const USER_DATA_NAME_RE = /^[\w][\w.-]*$/;
+const USER_DATA_PATH_SEGMENT_RE = /^[\w][\w.-]*$/;
 
 function assertSafeUserDataName(name: unknown): asserts name is string {
   if (typeof name !== "string" || !USER_DATA_NAME_RE.test(name)) {
     throw new Error(`[kepler-shell] invalid user data file name: ${String(name)}`);
   }
+}
+
+function resolveSafeUserDataPath(dir: string, name: unknown): string {
+  if (typeof name !== "string") {
+    throw new Error(`[kepler-shell] invalid user data path: ${String(name)}`);
+  }
+  const normalized = name.replace(/\\/g, "/");
+  if (!normalized || path.isAbsolute(normalized) || normalized.includes("\0")) {
+    throw new Error(`[kepler-shell] invalid user data path: ${name}`);
+  }
+  const parts = normalized.split("/");
+  if (
+    parts.some((part) => part === "." || part === ".." || !USER_DATA_PATH_SEGMENT_RE.test(part))
+  ) {
+    throw new Error(`[kepler-shell] invalid user data path: ${name}`);
+  }
+
+  const resolvedDir = path.resolve(dir);
+  const resolvedPath = path.resolve(resolvedDir, ...parts);
+  const relative = path.relative(resolvedDir, resolvedPath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`[kepler-shell] invalid user data path: ${name}`);
+  }
+  return resolvedPath;
 }
 
 function ensureUserDataDir(extId: string): string {
@@ -993,10 +1026,15 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     title: manifest.name,
     backgroundColor: wantsBackdrop ? "#00000000" : "#1a1a1a",
     ...(backgroundMaterial ? { backgroundMaterial } : {}),
-    // Native frame с hidden titlebar — custom controls рисует extension UI
-    // (см. WindowControls в @kosmos/visuals, IPC kepler:extension:window:*).
+    // Native controls живут в titleBarOverlay; renderer рисует только drag-region
+    // и учитывает safe-area через env(titlebar-area-*).
     frame: true,
     titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#00000000",
+      symbolColor: "#f5f5f5",
+      height: 40,
+    },
     webPreferences: {
       preload,
       contextIsolation: true,
@@ -1562,6 +1600,36 @@ ipcMain.handle("kepler:extension:userData:writeFile", (e, name: string, content:
   const dir = senderUserDataDir(e.sender);
   const filePath = path.join(dir, name);
   writeFileSync(filePath, content, "utf8");
+});
+
+ipcMain.handle("kepler:extension:userData:readBinary", (e, name: string): string | null => {
+  const dir = senderUserDataDir(e.sender);
+  const filePath = resolveSafeUserDataPath(dir, name);
+  if (!existsSync(filePath)) return null;
+  try {
+    return readFileSync(filePath).toString("base64");
+  } catch (err) {
+    console.warn(`[kepler-shell] userData.readBinary failed for ${filePath}:`, err);
+    return null;
+  }
+});
+
+ipcMain.handle("kepler:extension:userData:writeBinary", (e, name: string, base64: string): void => {
+  if (typeof base64 !== "string") {
+    throw new Error("[kepler-shell] userData.writeBinary: content must be a base64 string");
+  }
+  const dir = senderUserDataDir(e.sender);
+  const filePath = resolveSafeUserDataPath(dir, name);
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, Buffer.from(base64, "base64"));
+});
+
+ipcMain.handle("kepler:extension:userData:deleteFile", (e, name: string): boolean => {
+  const dir = senderUserDataDir(e.sender);
+  const filePath = resolveSafeUserDataPath(dir, name);
+  if (!existsSync(filePath)) return false;
+  rmSync(filePath, { force: true });
+  return true;
 });
 
 // ---------------------------------------------------------------------------

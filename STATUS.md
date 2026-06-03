@@ -1,5 +1,25 @@
 # Kosmos — статус проекта (2026-06-03)
 
+## 2026-06-03 — Akasha GPUI extracted, Vue reader in Kosmos
+
+Akasha больше не живёт как Rust/GPUI app внутри Kosmos workspace.
+
+- Старый GPUI-код из `apps/akasha` вынесен в приватный standalone repo
+  `ksanrse/akasha-gpui`.
+- `apps/akasha` удалён из Cargo workspace.
+- `extensions/akasha` переведён на обычный Vue-extension contract:
+  `kind: "vue"`, `entryHtml: "dist/index.html"`, `devPort: 5185`.
+- Новый reader открывает `.epub` через file input, читает ZIP/OPF/spine в
+  renderer'е, рендерит главы непрерывным потоком и сохраняет настройки чтения в
+  `extensions-data/akasha/reader-state.json`.
+- Reader получил локальную библиотеку без магазина: EPUB импортируется в
+  `extensions-data/akasha/books/<sha256>.epub`, `library.json` хранит карточки
+  книг, а позиция чтения сохраняется как `chapterId` + `blockId` + процент.
+- EPUB XHTML не рендерится через `v-html`; parser превращает его в безопасные
+  `ReaderBlock` / `InlineSpan`.
+
+Proof loop: `.agent/tasks/2026-06-03-akasha-vue-migration/`.
+
 ## 2026-06-03 — Visuals Tailwind scale pass (Kosmos Desktop 0.3.9 → 0.3.10)
 
 `@kosmos/visuals` переведён на Tailwind v4 как implementation layer для shared
@@ -132,28 +152,23 @@ Dev fix: focus-block dynamic chunk снова видит `pingService` и settin
 helpers через explicit exports из Electron main entry, поэтому `bun run --cwd
 shell dev` больше не падает в `pingService is not a function`.
 
-## 2026-05-27 — Native apps + Akasha EPUB reader (Kosmos Desktop 0.3.4 → 0.3.5, Akasha 0.1.0)
+## 2026-05-27 — Native apps experiment + Akasha GPUI reader (historical)
 
-Kosmos получает первый production-ready путь для **native extensions**:
+Kosmos получил первый путь для **native extensions**:
 приложения остаются частью экосистемы при запуске из Kepler/Kosmos, но могут
 существовать как самостоятельные Windows-приложения без привязки к shell'у.
-Первый такой app — Akasha, EPUB-читалка на Rust + GPUI.
+Первым таким экспериментом была Akasha, EPUB-читалка на Rust + GPUI.
+
+С 2026-06-03 это больше не current architecture: Akasha в Kosmos стала
+Vue-extension, а старый GPUI-код вынесен в приватный repo `ksanrse/akasha-gpui`.
 
 - `kind: "native"` в extension manifest запускает child process вместо
   Electron `BrowserWindow`.
 - Shell передаёт native app аргументы `--kosmos-extension-id` и
   `--kosmos-user-data-dir`; в headless/test mode GUI не spawn'ится.
-- Akasha живёт в `apps/akasha` + `extensions/akasha`, открывается командой
-  `akasha:open`, парсит EPUB spine и хранит локальный reader state в
-  `extensions-data/akasha`.
 - Reader UI теперь непрерывный: весь spine рендерится одним scroll surface,
   оглавление открывается верхней кнопкой и скроллится отдельно, parser сохраняет
   heading/list/blockquote + bold/italic spans.
-- `bun run --cwd shell native:package akasha` собирает один release binary в два
-  локальных артефакта: `shell/release/native/akasha/akasha-0.1.0.kext` для
-  Kosmos и standalone NSIS `Akasha Setup 0.1.0.exe`.
-- Standalone Akasha хранит `reader-state.json` в `%APPDATA%\Akasha`, а Kepler
-  по-прежнему передаёт явный `--kosmos-user-data-dir` для `extensions-data/akasha`.
 - ARK-backed highlights/notes/RAG не входят в MVP.
 
 ## 2026-05-26 — Product rename migration: Kepler → Kosmos (Kosmos Desktop 0.3.3 → 0.3.4)
@@ -326,8 +341,8 @@ Setting в Settings → Общие.
 
 | Артефакт                                             | Версия                                                                                                              |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Kosmos Desktop (`shell/package.json`)                | **0.3.5** (native extension host + Akasha packaging)                                                                |
-| Akasha extension (`extensions/akasha/manifest.json`) | **0.1.0** (native EPUB reader, `.kext` + standalone NSIS packaging)                                                 |
+| Kosmos Desktop (`shell/package.json`)                | **0.3.10**                                                                                                          |
+| Akasha extension (`extensions/akasha/manifest.json`) | **0.1.0** (Vue EPUB reader; old GPUI prototype extracted to private repo)                                           |
 | Eden extension (`extensions/eden/manifest.json`)     | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
 | Delphi extension                                     | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
 | Horologion extension                                 | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
@@ -353,7 +368,7 @@ Setting в Settings → Общие.
 
 ### @kosmos/visuals → `IconButton` primitive
 
-Выделен ghost icon button (`size`, `tone: default | destructive`, `draggable`). Заменяет ad-hoc `.iconbtn` / `.ctl-btn` / `.close-btn` CSS, которые тиражировались по shell / extensions. FocusWidgetView мигрирован — close button получает Lucide `X` вместо glyph `×` для консистентности с `WindowControls`.
+Выделен ghost icon button (`size`, `tone: default | destructive`, `draggable`). Заменяет ad-hoc `.iconbtn` / `.ctl-btn` / `.close-btn` CSS, которые тиражировались по shell / extensions. Extension windows используют native controls через Electron `titleBarOverlay`; renderer-компонент `WindowControls` удалён из `@kosmos/visuals`.
 
 ### Eden 0.1.10 → 0.1.11
 

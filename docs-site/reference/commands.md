@@ -108,11 +108,14 @@ Output финального билда:
 Extension dev mode (Raycast-style HMR, см. [Extension dev mode](/concepts/extension-dev-mode)):
 
 ```powershell
-# Vite dev servers per extension (порты 5180–5183)
+# Vite dev servers всех Vue extension'ов (порты 5180–5185)
 bun run --cwd shell dev:extensions
 
-# Kepler shell с включённым dev режимом (loadURL вместо loadFile для extensions)
-$env:KEPLER_DEV = "1"; bun run --cwd shell dev
+# Shell dev + Akasha HMR (:5185) по умолчанию
+bun run --cwd shell dev
+
+# Shell dev + HMR всех extension'ов
+$env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd shell dev
 
 # Авто-открыть все 4 extension'а через 5s после старта (для RAM benchmark или smoke)
 $env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd shell dev
@@ -135,7 +138,7 @@ cargo test  --manifest-path services/kepler-backend/Cargo.toml --lib
 
 ```powershell
 bun run --cwd shell build:extensions     # билд всех extensions/<id>/dist
-bun run --cwd shell dev:extensions       # HMR dev servers на портах 5180-5183
+bun run --cwd shell dev:extensions       # HMR dev servers на портах 5180-5185
 ```
 
 ## Android

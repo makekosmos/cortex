@@ -22,7 +22,6 @@
     "ext:publish": "node scripts/publish-extension.mjs",
     "ext:publish-all": "node scripts/publish-extension.mjs --all",
     "ext:catalog": "node scripts/generate-catalog.mjs",
-    "native:package": "node scripts/package-native-release.mjs",
     "test:e2e": "bun run build:js && playwright test --config playwright.config.ts",
     "test:e2e:headed": "bun run build:js && playwright test --config playwright.config.ts --headed"
   },

@@ -94,20 +94,24 @@ function shutdown(signal) {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-// 1) Vite dev server'ы для extension'ов (HMR live-reload). По дефолту ВЫКЛЮЧЕНО.
-//    Включил было default-on (2026-05-19), но обнаружилось что HMR трогает
-//    Editor.vue mid-typing: при любом edit'е файла в working tree Vite
-//    реклоадит Eden window, useEditor создаёт новый editor instance, и
-//    напечатанный пользователем но не успевший в autosave (debounce 800ms)
-//    контент теряется. Для агента, активно редактирующего код во время того
-//    как user тестит, это destructive.
+// 1) Vite dev server'ы для extension'ов (HMR live-reload).
 //
-//    Opt-in: `KEPLER_DEV_EXTENSIONS=1`. Когда сервера подняты — extension-host
-//    автоматически использует их через TCP probe (см. resolveExtensionSource
-//    в extension-host.ts). Без них — fallback на one-shot dist build (быстрый
-//    rebuild через `bun run --cwd shell build:extensions`).
+//    Akasha default-on: это маленький reader extension без editor autosave
+//    footgun'а, и в активной разработке он должен hot-reload'иться из обычного
+//    `bun run --cwd shell dev`.
+//
+//    Все extensions opt-in через `KEPLER_DEV_EXTENSIONS=1`. Это сохраняет
+//    прежнюю защиту Eden: HMR трогает Editor.vue mid-typing, useEditor создаёт
+//    новый editor instance, и напечатанный пользователем но не успевший в
+//    autosave (debounce 800ms) контент может потеряться.
+//
+//    Когда сервера подняты — extension-host автоматически использует их через
+//    TCP probe (см. resolveExtensionSource в extension-host.ts). Без живого
+//    порта — fallback на one-shot dist build.
 if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
   startChild("dev-extensions", "node", ["scripts/dev-extensions.mjs"]);
+} else {
+  startChild("dev-extensions:akasha", "node", ["scripts/dev-extensions.mjs", "--only", "akasha"]);
 }
 
 // 2) Shell renderer Vite + Electron (KEPLER_DEV=1 → main process знает что

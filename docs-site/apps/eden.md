@@ -149,7 +149,7 @@ CSS-сторона (Eden-specific):
 
 ### Zen UI элементы
 
-- **WindowControls в zen** — hide minimize/maximize через props (`hideMinimize`, `hideMaximize`), оставлен только close. Слева в titlebar — `<LoaderPinwheel>` Lucide иконка для exit'а.
+- **Native window controls** — кнопки окна рисует Electron `titleBarOverlay`; Eden в titlebar оставляет только app-specific controls. Слева в zen titlebar — `<LoaderPinwheel>` Lucide иконка для exit'а.
 - **Title в titlebar** — slot `#titlebar-center` показывает имя текущей заметки / название экрана (через App.vue).
 - **Char counter** в zen — fixed bottom center, считает символы в ProseMirror doc (`countCharsInProseMirrorDoc`), с русской плюрализацией («символ / символа / символов»).
 - **font-weight: 500** для текста в `.focus-mode .ProseMirror`.

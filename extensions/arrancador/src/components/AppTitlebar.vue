@@ -1,11 +1,7 @@
 <script setup lang="ts">
 // Упрощённая titlebar Arrancador'а для Kepler-shell extension'а.
-//
-// Window controls (minimize/maximize/close) рендерятся через
-// `WindowControls` из `@kosmos/visuals` — компонент сам вызывает
-// `window.kepler.window.*` bridge.
-
-import { WindowControls } from "@kosmos/visuals";
+// Кнопки окна нативные через Electron titleBarOverlay; здесь остаётся
+// только app-specific drag-region и safe-area справа.
 
 defineProps<{
   sidebarHidden: boolean;
@@ -47,7 +43,6 @@ defineEmits<{
     </div>
     <div class="arrancador-titlebar__right">
       <slot name="right" />
-      <WindowControls />
     </div>
   </header>
 </template>

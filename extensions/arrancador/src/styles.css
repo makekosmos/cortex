@@ -79,7 +79,9 @@ input {
   justify-content: space-between;
   gap: 12px;
   height: 44px;
-  padding: 0 16px;
+  padding: 0
+    max(16px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px)) 0
+    16px;
   border-bottom: 1px solid var(--border);
   background: var(--card);
   -webkit-app-region: drag;

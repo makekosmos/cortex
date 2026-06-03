@@ -1,10 +1,7 @@
 # Akasha
 
-Akasha is a native GPUI EPUB reader for Kosmos.
+Akasha is the Kosmos EPUB reader.
 
-MVP scope:
-
-- launch from the Kosmos command palette;
-- open `.epub` files in a native GPUI window;
-- render spine text in reading order;
-- persist reader-local state in `extensions-data/akasha`.
+It is a regular Vue extension that opens `.epub` files in the Kosmos extension
+window, renders the EPUB spine as a continuous reader, and stores reader-local
+settings in `extensions-data/akasha`.

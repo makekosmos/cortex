@@ -77,7 +77,7 @@ bun run --cwd shell dev
 
 ### Известные ограничения мульти-dev
 
-- **HMR для extension'ов** (Vite dev server, порты 5180-5183) — opt-in через `KEPLER_DEV_EXTENSIONS=1`. Одновременно может быть запущен только **один** worktree с HMR (порты hardcoded в `manifest.json::devPort`). Остальные dev-инстансы работают с prebuilt `dist/` extension'ов — это всё ещё дает HMR для shell main process, но не для Vue extension'ов. На практике одного агента с HMR хватает.
+- **HMR для extension'ов** (Vite dev server, порты 5180-5185) — Akasha (`:5185`) поднимается в обычном `bun run --cwd shell dev`, все остальные extension'ы opt-in через `KEPLER_DEV_EXTENSIONS=1`. Одновременно может быть запущен только **один** worktree с HMR (порты hardcoded в `manifest.json::devPort`). Остальные dev-инстансы работают с prebuilt `dist/` extension'ов — это всё ещё дает HMR для shell main process, но не для Vue extension'ов. На практике одного агента с HMR хватает.
 - **`globalShortcut F12`** (toggle DevTools в dev) — Windows route'ит accelerator одному фокусному окну. В multi-dev только первый зарегистрировавшийся инстанс получит F12; остальные пользуются Tray → DevTools или меняют код через redocking.
 - **Storage на диске**: каждый dev-slot хранит **полную** копию ARK DB (extensions + backups + crashes). Один dev-slot = ~50-200 MB. Имей это в виду при настройке 3-4 worktree'ев.
 

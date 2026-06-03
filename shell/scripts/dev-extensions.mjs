@@ -6,6 +6,8 @@
 //   bun run dev:extensions
 //   # или
 //   node scripts/dev-extensions.mjs
+//   # optional:
+//   node scripts/dev-extensions.mjs --only akasha,eden
 //
 // SIGINT/SIGTERM пробрасывается всем children. Каждый child запускается из
 // `extensions/<id>/` со своим `vite.config.mjs`.
@@ -22,8 +24,20 @@ const shellRoot = path.resolve(__dirname, "..");
 // workspace symlinks @kosmos/*). Используем bin'арник из shell/node_modules.
 const viteBin = path.join(shellRoot, "node_modules", "vite", "bin", "vite.js");
 
+const onlyArgIndex = process.argv.indexOf("--only");
+const onlyIds =
+  onlyArgIndex >= 0 && process.argv[onlyArgIndex + 1]
+    ? new Set(
+        process.argv[onlyArgIndex + 1]
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean),
+      )
+    : null;
+
 const extensions = readdirSync(extensionsRoot, { withFileTypes: true })
   .filter((d) => d.isDirectory())
+  .filter((d) => !onlyIds || onlyIds.has(d.name))
   .map((d) => {
     const dir = path.join(extensionsRoot, d.name);
     const manifestPath = path.join(dir, "manifest.json");
@@ -40,7 +54,10 @@ const extensions = readdirSync(extensionsRoot, { withFileTypes: true })
   .filter(Boolean);
 
 if (extensions.length === 0) {
-  console.error("[dev:extensions] no Vue extensions with devPort found — nothing to start");
+  const suffix = onlyIds ? ` for --only ${Array.from(onlyIds).join(",")}` : "";
+  console.error(
+    `[dev:extensions] no Vue extensions with devPort found${suffix} — nothing to start`,
+  );
   process.exit(1);
 }
 

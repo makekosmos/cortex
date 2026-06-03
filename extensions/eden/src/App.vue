@@ -89,10 +89,6 @@
         >
       </template>
 
-      <template #titlebar-trailing>
-        <WindowControls :hide-minimize="layout.isZenMode" :hide-maximize="layout.isZenMode" />
-      </template>
-
       <template v-if="showSidebarChrome && !layout.isZenMode" #sidebar>
         <div class="sidebar-layout">
           <EdenSidebar
@@ -242,7 +238,6 @@ import {
   DesktopContentSurface,
   TitlebarHistoryControls,
   ToastHost,
-  WindowControls,
   type TitlebarPlatform,
   provideToastHost,
   useContextMenu,

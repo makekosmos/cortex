@@ -103,7 +103,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 **Симптомы.** При сужении/расширении окна Akasha расстояния между абзацами не пересчитывались, текст начинал налезать друг на друга, а часть EPUB-стилей из реальной книги выглядела как обычный плоский текст. Копирование выделения было неочевидным.
 
-**Где жило.** `apps/akasha/src/main.rs` — virtual-list item heights оценивались по фиксированной ширине `70ch` и не зависели от viewport width. `apps/akasha/src/epub.rs` — parser учитывал только базовые `strong/em`, но не EPUB semantic spans вроде `epub:type="bridgehead"` и inline tags вроде `cite`.
+**Где жило.** Старый GPUI reader Akasha — virtual-list item heights оценивались по фиксированной ширине `70ch` и не зависели от viewport width. Parser учитывал только базовые `strong/em`, но не EPUB semantic spans вроде `epub:type="bridgehead"` и inline tags вроде `cite`.
 
 **Root cause.** Виртуализация получила стабильные item sizes, но эти sizes описывали “идеальную” ширину, а не текущую ширину reader column; при wrap на узком окне GPUI рисовал больше строк, чем virtual list зарезервировал места. Семантические EPUB-теги терялись до UI-слоя, поэтому Apple Books tokens не могли примениться к ним визуально.
 
@@ -117,7 +117,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 **Симптомы.** В Akasha не было видимого scrollbar у reader'а, повторное открытие другой книги было неочевидным, а запуск native Akasha из Kepler в dev ощущался медленным.
 
-**Где жило.** `apps/akasha/src/main.rs` — `v_virtual_list` использовался без отдельного `Scrollbar::vertical`, а кнопка открытия была вторичной в toolbar. `extensions/akasha/manifest.json` и `shell/scripts/build-extensions.mjs` — dev native path/build указывали на debug binary.
+**Где жило.** Старый GPUI reader Akasha — `v_virtual_list` использовался без отдельного `Scrollbar::vertical`, а кнопка открытия была вторичной в toolbar. `extensions/akasha/manifest.json` и `shell/scripts/build-extensions.mjs` — dev native path/build указывали на debug binary.
 
 **Root cause.** `gpui_component::v_virtual_list` виртуализует scroll surface, но не рисует scrollbar автоматически. Для native extension dev flow был выбран `target/debug/akasha.exe`, что удобно для отладки, но плохо совпадает с ожиданием “открывается как приложение”.
 
@@ -131,7 +131,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 **Симптомы.** После перехода на непрерывный reader скролл в Akasha стал заметно лагать, а приложение грузило ПК сильнее, чем ожидается от GPUI/Zed-like UI.
 
-**Где жило.** `apps/akasha/src/main.rs` — reader собирал `Vec<ReaderBlock>` на каждом render и создавал GPUI/`StyledText` element для каждого блока книги сразу.
+**Где жило.** Старый GPUI reader Akasha — reader собирал `Vec<ReaderBlock>` на каждом render и создавал GPUI/`StyledText` element для каждого блока книги сразу.
 
 **Root cause.** Continuous flow был реализован визуально, но не архитектурно: вместо virtualized reader surface UI рендерил весь EPUB spine целиком. Для больших книг это означает сотни/тысячи text layout объектов на каждый render path, что ломает ожидаемую плавность GPUI.
 
@@ -145,7 +145,7 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 **Симптомы.** Akasha показывала постоянную левую колонку глав и текст только выбранной главы справа. Список глав не скроллился, прокрутка текста не переходила бесшовно в следующую главу, заголовки/жирный/курсив EPUB терялись и весь текст выглядел плоским.
 
-**Где жило.** `apps/akasha/src/epub.rs` — парсер схлопывал XHTML в `Vec<String>` без типа блока и inline-стилей. `apps/akasha/src/main.rs` — UI был построен вокруг `chapter_index` и рендера одной выбранной главы.
+**Где жило.** Старый GPUI reader Akasha — парсер схлопывал XHTML в `Vec<String>` без типа блока и inline-стилей, а UI был построен вокруг `chapter_index` и рендера одной выбранной главы.
 
 **Root cause.** MVP смоделировал EPUB как “chapter selector + selected chapter body”, а не как непрерывный читательский документ. Семантика HTML удалялась до UI, поэтому GPUI-рендерер уже не мог отличить заголовок от абзаца или жирный span от обычного текста.
 

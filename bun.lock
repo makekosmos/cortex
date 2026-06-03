@@ -30,6 +30,19 @@
         "vue": "^3.5.31",
       },
     },
+    "extensions/akasha": {
+      "name": "@kosmos/extension-akasha",
+      "version": "0.1.0",
+      "dependencies": {
+        "@fontsource/source-serif-4": "^5.2.8",
+        "@kosmos/visuals": "workspace:*",
+        "@lucide/vue": "^1.16.0",
+        "vue": "^3.6.0-beta.12",
+      },
+      "devDependencies": {
+        "@vitejs/plugin-vue": "^6.0.7",
+      },
+    },
     "extensions/arrancador": {
       "name": "@kosmos/extension-arrancador",
       "version": "0.1.3",
@@ -152,7 +165,7 @@
     },
     "shell": {
       "name": "kepler-shell",
-      "version": "0.3.9",
+      "version": "0.3.10",
       "dependencies": {
         "@kosmos/ark": "workspace:*",
         "@kosmos/visuals": "workspace:*",
@@ -297,6 +310,8 @@
 
     "@fontsource/ibm-plex-mono": ["@fontsource/ibm-plex-mono@5.2.7", "", {}, "sha512-MKAb8qV+CaiMQn2B0dIi1OV3565NYzp3WN5b4oT6LTkk+F0jR6j0ZN+5BKJiIhffDC3rtBULsYZE65+0018z9w=="],
 
+    "@fontsource/source-serif-4": ["@fontsource/source-serif-4@5.2.9", "", {}, "sha512-er/Pym9emsEVJNf947umJ4kXarXfsiN6CN7kTYinefKRaHLwiquiiHOZvKvxWgkV8JMCf3pV3g0NcsPFpVCH9w=="],
+
     "@iconify-json/simple-icons": ["@iconify-json/simple-icons@1.2.82", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-4p978qHx8eD/QBOhgBzp/p7uS3OO2KCnVpFPJTUvuhuDXv1Hr4RcxcZ5MWc6ptkf/3Dlb1xb23068OtPyx10mA=="],
 
     "@iconify/types": ["@iconify/types@2.0.0", "", {}, "sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg=="],
@@ -320,6 +335,8 @@
     "@kosmos/ark": ["@kosmos/ark@workspace:packages/ark"],
 
     "@kosmos/docs-site": ["@kosmos/docs-site@workspace:docs-site"],
+
+    "@kosmos/extension-akasha": ["@kosmos/extension-akasha@workspace:extensions/akasha"],
 
     "@kosmos/extension-arrancador": ["@kosmos/extension-arrancador@workspace:extensions/arrancador"],
 

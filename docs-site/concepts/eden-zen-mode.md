@@ -65,11 +65,12 @@ titlebar center / editor header (`.editor-header { display: none }` в
   либо клик по иконке `LoaderPinwheel` слева в titlebar.
 - **Legacy**: `Ctrl+Alt+Z` оставлен как альтернатива.
 
-### WindowControls в zen
+### Native controls в zen
 
-В zen mode `WindowControls` (компонент в `@kosmos/visuals`) получает
-`hide-minimize` + `hide-maximize` — остаётся только close. LoaderPinwheel
-слева заменяет sidebar-toggle и history-controls.
+Кнопки окна рисует Electron `titleBarOverlay`, а не renderer-компонент.
+LoaderPinwheel слева заменяет sidebar-toggle и history-controls; native
+min/max/close остаются системным overlay-слоем и получают safe-area через
+`env(titlebar-area-*)`.
 
 ### Char counter
 

@@ -15,7 +15,6 @@ export {
   Titlebar,
   type TitlebarPlatform,
   TitlebarHistoryControls,
-  WindowControls,
   DesktopChrome,
   DesktopContentSurface,
   StatusDot,

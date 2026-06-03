@@ -39,7 +39,6 @@ import {
   DesktopChrome,
   DesktopContentSurface,
   StatusDot,
-  WindowControls,
   type StatusDotTone,
   TitlebarHistoryControls,
   type TitlebarPlatform,
@@ -667,7 +666,6 @@ function leaveSpaceListener() {
 
       <template #titlebar-trailing>
         <StatusDot :tone="arkStatusTone" :label="arkStatusMessage" />
-        <WindowControls />
       </template>
 
       <template #sidebar>
