@@ -16,7 +16,21 @@ const props = withDefaults(defineProps<Props>(), {
 const rootRef = ref<HTMLElement | null>(null);
 const open = ref(false);
 
-const buttonClasses = computed(() => ["kosmos-status-dot", `kosmos-status-dot--${props.tone}`]);
+const toneClass = computed(() => {
+  switch (props.tone) {
+    case "success":
+      return "text-[var(--status-success)]";
+    case "warning":
+      return "text-[var(--status-warning)]";
+    case "danger":
+      return "text-[var(--destructive)]";
+    case "neutral":
+    default:
+      return "text-[color-mix(in_srgb,var(--muted-foreground)_72%,transparent)]";
+  }
+});
+
+const normalizedSideOffset = computed(() => Math.max(0, Math.round(props.sideOffset / 8) * 8));
 
 function toggle() {
   open.value = !open.value;
@@ -57,102 +71,29 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="kosmos-status-dot-anchor">
+  <div ref="rootRef" class="relative inline-flex items-center justify-center">
     <button
       type="button"
-      :class="buttonClasses"
+      class="inline-flex size-8 items-center justify-center rounded-lg transition-[background-color,color] duration-150 ease-out [corner-shape:var(--corner-shape)] hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_8%,transparent)]"
+      :class="toneClass"
       :title="label"
       :aria-label="label"
       :aria-expanded="open"
       @click="toggle()"
     >
-      <span class="kosmos-status-dot__core" />
+      <span class="size-2 rounded-full bg-current" />
     </button>
 
     <div
       v-if="open"
-      class="kosmos-status-dot__popover"
-      :style="{ top: `calc(100% + ${props.sideOffset}px)` }"
+      class="absolute right-0 z-[80] min-w-56 max-w-80 rounded-lg border border-[var(--border)] bg-[var(--popover,var(--background))] p-4 text-[var(--popover-foreground,var(--foreground))] shadow-[0_8px_24px_color-mix(in_srgb,var(--foreground)_22%,transparent),0_2px_8px_color-mix(in_srgb,var(--foreground)_12%,transparent)]"
+      :style="{ top: `calc(100% + ${normalizedSideOffset}px)` }"
       role="dialog"
       :aria-label="label"
     >
       <slot>
-        <p class="kosmos-status-dot__label">{{ label }}</p>
+        <p class="m-0 text-[0.8125rem] leading-[1.45]">{{ label }}</p>
       </slot>
     </div>
   </div>
 </template>
-
-<style scoped>
-.kosmos-status-dot-anchor {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.kosmos-status-dot {
-  --kosmos-status-dot-color: color-mix(in srgb, var(--muted-foreground) 75%, transparent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: calc(var(--radius) * 0.9);
-  corner-shape: var(--corner-shape);
-  color: var(--kosmos-status-dot-color);
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-status-dot:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
-}
-
-.kosmos-status-dot__core {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.kosmos-status-dot--success {
-  --kosmos-status-dot-color: var(--status-success);
-}
-
-.kosmos-status-dot--warning {
-  --kosmos-status-dot-color: #c59f4d;
-}
-
-.kosmos-status-dot--danger {
-  --kosmos-status-dot-color: #c87373;
-}
-
-.kosmos-status-dot--neutral {
-  --kosmos-status-dot-color: color-mix(in srgb, var(--muted-foreground) 72%, transparent);
-}
-
-.kosmos-status-dot__popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 80;
-  min-width: 220px;
-  max-width: 320px;
-  padding: 0.75rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--popover, var(--background));
-  color: var(--popover-foreground, var(--foreground));
-  box-shadow:
-    0 8px 24px color-mix(in srgb, #000 22%, transparent),
-    0 2px 8px color-mix(in srgb, #000 12%, transparent);
-}
-
-.kosmos-status-dot__label {
-  margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-</style>

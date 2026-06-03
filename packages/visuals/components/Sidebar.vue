@@ -49,7 +49,7 @@ const props = withDefaults(defineProps<Props>(), {
   hidden: undefined,
   offsetX: 0,
   toggleTitle: "Скрыть сайдбар (⌘B)",
-  defaultWidth: 200,
+  defaultWidth: 240,
   minWidth: 160,
   maxWidth: 320,
   toggleShortcut: "meta+b|ctrl+b",
@@ -102,7 +102,19 @@ const reverseKeyLayoutAliases = Object.fromEntries(
   Object.entries(keyLayoutAliases).map(([latinKey, localizedKey]) => [localizedKey, latinKey]),
 ) as Record<string, string>;
 
-const width = shallowRef(props.initialConfig?.width ?? props.defaultWidth);
+const SIDEBAR_WIDTH_STEP = 8;
+
+function snapSidebarWidth(value: number): number {
+  return Math.round(value / SIDEBAR_WIDTH_STEP) * SIDEBAR_WIDTH_STEP;
+}
+
+function clampSidebarWidth(value: number): number {
+  const snappedMin = snapSidebarWidth(props.minWidth);
+  const snappedMax = snapSidebarWidth(props.maxWidth);
+  return Math.max(snappedMin, Math.min(snappedMax, snapSidebarWidth(value)));
+}
+
+const width = shallowRef(clampSidebarWidth(props.initialConfig?.width ?? props.defaultWidth));
 const _hidden = shallowRef(
   props.hidden !== undefined ? props.hidden : (props.initialConfig?.hidden ?? false),
 );
@@ -155,10 +167,22 @@ const hasProjectGroups = computed(() => groupedProjectSections.value.length > 0)
 const hasTopBar = computed(() => props.showToggle || Boolean(props.topItem));
 const shellClasses = computed(() => [
   "kosmos-sidebar-shell",
+  "absolute inset-0 box-border flex h-full min-h-full w-full min-h-0 flex-col justify-between bg-(--sidebar-bg) p-2",
   { "kosmos-sidebar-shell--mac-safe-top": props.isMac && props.reserveTopInset },
   { "kosmos-sidebar-shell--with-top-bar": hasTopBar.value },
   { "kosmos-sidebar-shell--drag-region": props.dragRegion },
 ]);
+
+const topToggleClass =
+  "kosmos-sidebar-top-toggle inline-flex size-8 items-center justify-center rounded-lg p-2 text-[color-mix(in_srgb,var(--sidebar-foreground)_40%,transparent)] transition-[background-color,color] duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_6%,transparent)] hover:text-(--sidebar-foreground)";
+const groupHeaderClass =
+  "inline-flex min-w-0 flex-1 items-center gap-2 px-2 text-left text-[0.8125rem] font-semibold text-[color-mix(in_srgb,var(--muted-foreground)_88%,transparent)] hover:text-(--foreground)";
+const groupActionClass =
+  "inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[color-mix(in_srgb,var(--muted-foreground)_88%,transparent)] transition-[background-color,color] duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_8%,transparent)] hover:text-(--foreground)";
+const projectLinkBaseClass =
+  "kosmos-sidebar-project-link widget-nav-item flex min-h-8 w-full items-center justify-start gap-2 rounded-lg p-2 text-left text-sm leading-5 font-medium text-(--muted-foreground) no-underline transition-[background-color,color] duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_6%,transparent)] hover:text-(--foreground)";
+const projectLinkActiveClass =
+  "bg-[color-mix(in_srgb,var(--sidebar-foreground)_10%,transparent)] text-(--foreground)";
 
 watch([width, _hidden], () => {
   configRef.value = { width: width.value, hidden: _hidden.value };
@@ -282,7 +306,7 @@ function handleResizeMove(e: MouseEvent) {
     if (isAnimatingRef.value) return;
 
     const newWidth = e.clientX - (props.offsetX ?? 0);
-    const clamped = Math.max(props.minWidth, Math.min(props.maxWidth, newWidth));
+    const clamped = clampSidebarWidth(newWidth);
     width.value = clamped;
     configRef.value = { ...configRef.value, width: clamped };
   });
@@ -352,6 +376,7 @@ const wrapperStyle = computed(() => {
 const wrapperClasses = computed(() =>
   [
     "kosmos-sidebar-wrapper",
+    "relative z-[2] block h-full min-h-full shrink-0 self-stretch overflow-visible box-border transition-[width] duration-[375ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
     _hidden.value ? "hidden collapsed" : "",
     animating.value ? "animating" : "",
     isResizing.value ? "is-resizing" : "",
@@ -364,13 +389,18 @@ const wrapperClasses = computed(() =>
 
 <template>
   <div :class="wrapperClasses" :style="wrapperStyle" data-testid="kosmos-sidebar">
-    <div class="kosmos-sidebar-content">
+    <div
+      class="kosmos-sidebar-content absolute inset-0 flex min-h-0 min-w-0 overflow-hidden bg-(--sidebar-bg) opacity-100 transition-[opacity,background,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+    >
       <aside v-if="!_hidden" :class="shellClasses">
-        <div v-if="hasTopBar" class="kosmos-sidebar-top">
+        <div
+          v-if="hasTopBar"
+          class="kosmos-sidebar-top relative z-[1] flex items-center justify-end pb-4"
+        >
           <button
             v-if="props.topItem"
             type="button"
-            class="kosmos-sidebar-top-toggle"
+            :class="topToggleClass"
             :data-testid="props.topItem.testId"
             :title="props.topItem.label"
             @click="
@@ -379,21 +409,23 @@ const wrapperClasses = computed(() =>
                 : undefined
             "
           >
-            <component :is="props.topItem.icon" :size="16" />
+            <component :is="props.topItem.icon" :size="24" />
           </button>
           <button
             v-if="props.showToggle"
             type="button"
-            class="kosmos-sidebar-top-toggle"
+            :class="topToggleClass"
             data-testid="sidebar-toggle"
             :title="toggleTitle"
             @click="toggle"
           >
-            <PanelLeftClose :size="16" />
+            <PanelLeftClose :size="24" />
           </button>
         </div>
 
-        <div class="kosmos-sidebar-body">
+        <div
+          class="kosmos-sidebar-body relative z-[1] flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto"
+        >
           <SidebarButton
             v-for="item in primaryItems"
             :key="item.id"
@@ -408,24 +440,20 @@ const wrapperClasses = computed(() =>
           />
 
           <template v-if="hasProjectGroups">
-            <div class="kosmos-sidebar-groups">
-              <section
-                v-for="group in groupedProjectSections"
-                :key="group.id"
-                class="kosmos-sidebar-group"
-              >
-                <div class="kosmos-sidebar-group-header-row">
+            <div class="mt-4 grid gap-4">
+              <section v-for="group in groupedProjectSections" :key="group.id" class="grid gap-2">
+                <div class="flex items-center gap-2">
                   <button
                     type="button"
-                    class="kosmos-sidebar-group-header"
+                    :class="groupHeaderClass"
                     :data-testid="`sidebar-group-${group.id}`"
                     @click="toggleGroup(group.id)"
                   >
                     <ChevronRight
-                      :size="14"
+                      :size="16"
                       :class="[
-                        'kosmos-sidebar-group-chevron',
-                        isGroupCollapsed(group.id) ? '' : 'kosmos-sidebar-group-chevron--expanded',
+                        'shrink-0 transition-transform duration-[140ms] ease-in',
+                        isGroupCollapsed(group.id) ? '' : 'rotate-90',
                       ]"
                     />
                     <span>{{ group.label }}</span>
@@ -434,41 +462,37 @@ const wrapperClasses = computed(() =>
                   <button
                     v-if="group.actionIcon && group.onAction"
                     type="button"
-                    class="kosmos-sidebar-group-action"
+                    :class="groupActionClass"
                     :title="group.actionLabel"
                     :data-testid="group.actionTestId"
                     @click="group.onAction()"
                   >
-                    <component :is="group.actionIcon" :size="14" />
+                    <component :is="group.actionIcon" :size="16" />
                   </button>
                 </div>
 
                 <div
                   v-if="!isGroupCollapsed(group.id) && group.items.length > 0"
-                  class="kosmos-sidebar-group-surface"
+                  class="grid gap-2 rounded-2xl bg-[color-mix(in_srgb,var(--sidebar-foreground)_4%,transparent)] p-2"
                 >
                   <template v-for="project in group.items" :key="project.id">
                     <RouterLink
                       v-if="project.to"
                       :to="project.to"
                       :data-testid="project.testId"
-                      :class="[
-                        'kosmos-sidebar-project-link',
-                        'widget-nav-item',
-                        project.active ? 'kosmos-sidebar-project-link--active' : '',
-                      ]"
+                      :class="[projectLinkBaseClass, project.active ? projectLinkActiveClass : '']"
                       @contextmenu="project.onContextMenu?.($event)"
                     >
                       <span
                         v-if="project.iconSrc"
-                        class="kosmos-sidebar-project-icon-wrap"
+                        class="kosmos-sidebar-project-icon-wrap inline-flex size-4 shrink-0 items-center justify-center"
                         :style="{
                           '--kosmos-project-icon-color':
                             project.iconColor ?? project.color ?? 'var(--muted-foreground)',
                         }"
                       >
                         <span
-                          class="kosmos-sidebar-project-icon"
+                          class="kosmos-sidebar-project-icon block size-4 bg-(--kosmos-project-icon-color) opacity-[0.92]"
                           :style="{ '--kosmos-project-icon-src': `url(${project.iconSrc})` }"
                           aria-hidden="true"
                         />
@@ -477,22 +501,19 @@ const wrapperClasses = computed(() =>
                         v-else
                         :class="[
                           'kosmos-sidebar-project-dot',
+                          'block size-2 shrink-0 rounded-full',
                           project.colorClass ?? 'bg-(--muted-foreground)',
                         ]"
                         :style="project.color ? { backgroundColor: project.color } : undefined"
                       />
-                      <span class="kosmos-sidebar-project-label">{{ project.label }}</span>
+                      <span class="min-w-0 flex-1 truncate select-none">{{ project.label }}</span>
                     </RouterLink>
 
                     <button
                       v-else
                       type="button"
                       :data-testid="project.testId"
-                      :class="[
-                        'kosmos-sidebar-project-link',
-                        'widget-nav-item',
-                        project.active ? 'kosmos-sidebar-project-link--active' : '',
-                      ]"
+                      :class="[projectLinkBaseClass, project.active ? projectLinkActiveClass : '']"
                       @click="
                         'onClick' in project && typeof project.onClick === 'function'
                           ? project.onClick()
@@ -502,14 +523,14 @@ const wrapperClasses = computed(() =>
                     >
                       <span
                         v-if="project.iconSrc"
-                        class="kosmos-sidebar-project-icon-wrap"
+                        class="kosmos-sidebar-project-icon-wrap inline-flex size-4 shrink-0 items-center justify-center"
                         :style="{
                           '--kosmos-project-icon-color':
                             project.iconColor ?? project.color ?? 'var(--muted-foreground)',
                         }"
                       >
                         <span
-                          class="kosmos-sidebar-project-icon"
+                          class="kosmos-sidebar-project-icon block size-4 bg-(--kosmos-project-icon-color) opacity-[0.92]"
                           :style="{ '--kosmos-project-icon-src': `url(${project.iconSrc})` }"
                           aria-hidden="true"
                         />
@@ -518,11 +539,12 @@ const wrapperClasses = computed(() =>
                         v-else
                         :class="[
                           'kosmos-sidebar-project-dot',
+                          'block size-2 shrink-0 rounded-full',
                           project.colorClass ?? 'bg-(--muted-foreground)',
                         ]"
                         :style="project.color ? { backgroundColor: project.color } : undefined"
                       />
-                      <span class="kosmos-sidebar-project-label">{{ project.label }}</span>
+                      <span class="min-w-0 flex-1 truncate select-none">{{ project.label }}</span>
                     </button>
                   </template>
                 </div>
@@ -531,7 +553,7 @@ const wrapperClasses = computed(() =>
           </template>
         </div>
 
-        <div v-if="footerItems.length > 0" class="kosmos-sidebar-footer">
+        <div v-if="footerItems.length > 0" class="relative z-[1] flex flex-col gap-2">
           <SidebarButton
             v-for="item in footerItems"
             :key="item.id"
@@ -550,31 +572,21 @@ const wrapperClasses = computed(() =>
 
     <div
       v-if="!_hidden"
-      class="kosmos-sidebar-resize-handle"
+      class="kosmos-sidebar-resize-handle absolute top-0 right-0 z-[80] block h-full w-2 shrink-0 cursor-ew-resize bg-transparent p-0 [touch-action:none] [-webkit-app-region:no-drag]"
       data-testid="kosmos-sidebar-resize-handle"
       @mousedown="handleResizeStart"
     >
-      <div :class="['kosmos-resize-handle-line', lineExpanded ? 'expanded' : '']" />
+      <div
+        :class="[
+          'kosmos-resize-handle-line pointer-events-none absolute top-1/2 left-1/2 h-[var(--kosmos-resize-handle-height,32px)] w-[var(--kosmos-resize-handle-thickness,2px)] -translate-x-1/2 -translate-y-1/2 rounded-[1px] bg-[var(--kosmos-resize-handle-color,color-mix(in_oklab,var(--sidebar-foreground,var(--foreground,currentColor))_60%,transparent))] opacity-0 transition-opacity duration-[150ms] ease-in',
+          lineExpanded ? 'expanded' : '',
+        ]"
+      />
     </div>
   </div>
 </template>
 
 <style scoped>
-.kosmos-sidebar-shell {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  min-height: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 0;
-  padding: 0.5rem;
-  background: var(--sidebar-bg);
-}
-
 .kosmos-sidebar-shell::before {
   content: "";
   position: absolute;
@@ -586,199 +598,37 @@ const wrapperClasses = computed(() =>
   -webkit-app-region: drag;
 }
 
-.kosmos-sidebar-top,
-.kosmos-sidebar-body,
-.kosmos-sidebar-footer {
-  position: relative;
-  z-index: 1;
-}
-
 .kosmos-sidebar-shell--mac-safe-top {
-  padding-top: var(--kosmos-mac-sidebar-top-safe-area, 52px);
+  padding-top: var(--kosmos-mac-sidebar-top-safe-area, 56px);
 }
 
 .kosmos-sidebar-shell--mac-safe-top.kosmos-sidebar-shell--with-top-bar {
   padding-top: 0.5rem;
 }
 
-.kosmos-sidebar-top {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-bottom: 0.75rem;
-}
-
 .kosmos-sidebar-shell--mac-safe-top .kosmos-sidebar-top {
   position: absolute;
-  top: 12px;
+  top: 16px;
   right: 0.5rem;
-  min-height: 28px;
+  min-height: 32px;
   justify-content: flex-end;
   padding-bottom: 0;
   z-index: 1;
 }
 
 .kosmos-sidebar-top-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.375rem;
-  border-radius: 0.5rem;
-  color: color-mix(in srgb, var(--sidebar-foreground) 40%, transparent);
   -webkit-app-region: no-drag;
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-sidebar-top-toggle:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
-  color: var(--sidebar-foreground);
-}
-
-.kosmos-sidebar-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  gap: 0.125rem;
-  overflow-y: auto;
 }
 
 .kosmos-sidebar-shell--mac-safe-top.kosmos-sidebar-shell--with-top-bar .kosmos-sidebar-body {
   padding-top: 2.5rem;
 }
 
-.kosmos-sidebar-divider {
-  margin: 0.5rem 0;
-  border-top: 1px solid var(--border);
-}
-
-.kosmos-sidebar-groups {
-  display: grid;
-  margin-top: 0.875rem;
-  gap: 1.25rem;
-}
-
-.kosmos-sidebar-group {
-  display: grid;
-  gap: 0.375rem;
-}
-
-.kosmos-sidebar-group-header-row {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.kosmos-sidebar-group-header {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex: 1;
-  min-width: 0;
-  padding: 0 0.375rem;
-  color: color-mix(in srgb, var(--muted-foreground) 88%, transparent);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  text-align: left;
-}
-
-.kosmos-sidebar-group-header:hover {
-  color: var(--foreground);
-}
-
-.kosmos-sidebar-group-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  flex-shrink: 0;
-  border-radius: 999px;
-  color: color-mix(in srgb, var(--muted-foreground) 88%, transparent);
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-sidebar-group-action:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.kosmos-sidebar-group-chevron {
-  flex-shrink: 0;
-  transition: transform 140ms ease;
-}
-
-.kosmos-sidebar-group-chevron--expanded {
-  transform: rotate(90deg);
-}
-
-.kosmos-sidebar-group-surface {
-  display: grid;
-  gap: 0.125rem;
-  padding: 0.375rem;
-  border-radius: 1.125rem;
-  background: color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
-}
-
 .kosmos-sidebar-project-link {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.625rem;
-  width: 100%;
-  min-height: 1.75rem;
-  padding: 0.25rem;
-  border-radius: calc(var(--radius) * 1.4);
-  corner-shape: var(--corner-shape);
-  color: var(--muted-foreground);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  font-weight: 500;
-  text-decoration: none;
-  text-align: left;
   -webkit-app-region: no-drag;
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-sidebar-project-link:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
-  color: var(--foreground);
-}
-
-.kosmos-sidebar-project-link--active {
-  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
-  color: var(--foreground);
-  font-weight: 500;
-}
-
-.kosmos-sidebar-project-dot {
-  display: block;
-  width: 0.625rem;
-  height: 0.625rem;
-  flex-shrink: 0;
-  border-radius: 999px;
-}
-
-.kosmos-sidebar-project-icon-wrap {
-  width: 1rem;
-  height: 1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
 }
 
 .kosmos-sidebar-project-icon {
-  width: 1rem;
-  height: 1rem;
-  display: block;
-  background-color: var(--kosmos-project-icon-color);
   -webkit-mask-image: var(--kosmos-project-icon-src);
   mask-image: var(--kosmos-project-icon-src);
   -webkit-mask-repeat: no-repeat;
@@ -787,21 +637,5 @@ const wrapperClasses = computed(() =>
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
-  opacity: 0.92;
-}
-
-.kosmos-sidebar-project-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.kosmos-sidebar-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 </style>

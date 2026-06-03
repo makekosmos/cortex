@@ -69,7 +69,7 @@ defineProps<{
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
 }
@@ -80,13 +80,13 @@ defineProps<{
 }
 
 .ext-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--foreground);
 }
 
 .ext-meta {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
   margin-top: 1px;
   display: flex;
@@ -96,7 +96,7 @@ defineProps<{
 }
 
 .ext-description {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
   margin-top: 3px;
 }

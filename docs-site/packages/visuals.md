@@ -13,23 +13,16 @@
 3. Использовать только токены (`var(--*)`) для цветов / радиусов / шрифтов в собственных компонентах — никаких hardcoded `#hex`, `rgb()`, `font-family: "Inter"` и тому подобного.
 4. Брать готовые компоненты (`Sidebar`, `Titlebar`, `StatusDot`, `CommandPalette`, и т.д.) вместо своих копий.
 
-Свой UI пишется в `apps/<name>/src/` и должен **только** использовать токены и компоненты из `@kosmos/visuals`. App-specific компоненты (например, `TimeEntryRow` в Horologion) — это потребители kosmos-visuals токенов, не альтернатива им.
+Свой UI пишется в `extensions/<name>/src/` / `shell/src/` и должен **только** использовать токены и компоненты из `@kosmos/visuals`. App-specific компоненты (например, `TimeEntryRow` в Horologion) — это потребители kosmos-visuals токенов, не альтернатива им.
 :::
 
 ## Структура
 
 ```
 packages/visuals/
-├─ tokens/                  # colors, typography, radius, spacing, animations
-│  ├─ colors.ts             # OKLCH палитры (light + dark + status + smartList)
-│  ├─ typography.ts         # SF Pro / Inter, IBM Plex Mono, sizes, weights
-│  ├─ radius.ts
-│  ├─ spacing.ts
-│  ├─ animations.ts
-│  └─ index.ts
 ├─ theme/
 │  ├─ css-variables.css     # ⭐ источник правды для CSS-переменных
-│  └─ index.ts              # ThemeMode, ColorToken, getColor
+│  └─ storybook.css         # Tailwind entry для Storybook + theme import
 ├─ components/              # Vue компоненты
 ├─ patterns/                # композиционные паттерны
 ├─ composables/             # useContextMenu и т.п.
@@ -54,9 +47,36 @@ Histoire был параллельно поднят раньше (`.story.vue` �
 
 ## Дизайн-токены
 
-### Палитра — OKLCH
+### Tailwind + CSS variables
 
-Используется OKLCH (а не sRGB) для лучшего восприятия яркости. Light и dark темы определены параллельно.
+`@kosmos/visuals` теперь реализует shared-компоненты в основном через Tailwind v4 utilities, но значения берутся из CSS variables. Tailwind — implementation detail design system'ы; приложения не должны копировать utility-наборы из shared-компонентов, если уже есть готовый primitive.
+
+Storybook подключает `@tailwindcss/vite` и `theme/storybook.css`, поэтому stories проверяют тот же Tailwind output, который видят shell и extensions.
+
+### Layout scale
+
+`theme/css-variables.css` фиксирует компактную шкалу:
+
+```css
+--space-1: 8px;
+--space-2: 16px;
+--space-3: 24px;
+--space-4: 32px;
+--space-5: 40px;
+--space-6: 48px;
+--space-8: 64px;
+
+--size-control-xs: 24px;
+--size-control-sm: 32px;
+--size-control-md: 40px;
+--size-row-sm: 32px;
+--size-row-md: 40px;
+--size-row-lg: 48px;
+```
+
+Правило: крупные размеры, отступы и control dimensions сидят на 8px multiples; маленькие внутренние детали могут использовать 2px/4px; typography, line-height, opacity, timing и transform-scale не обязаны быть 8px-based.
+
+### Палитра
 
 Ключевые токены (light):
 
@@ -70,7 +90,7 @@ Histoire был параллельно поднят раньше (`.story.vue` �
 | `ring`            | `oklch(0.708 0 0)`                         |
 | `accent`          | `oklch(0.546 0.229 264.1)` (Kosmos-purple) |
 
-Полный список — `tokens/colors.ts`.
+Полный список — `theme/css-variables.css`.
 
 ### Типографика
 
@@ -86,12 +106,12 @@ fontWeight: { normal: "400", medium: "500", semibold: "600", bold: "700" }
 Heading-токены в `theme/css-variables.css`:
 
 ```css
---kosmos-text-heading-size: 28px;
+--kosmos-text-heading-size: 1.75rem;
 --kosmos-text-heading-line-height: 1.02;
 --kosmos-text-heading-letter-spacing: -0.4px;
 --kosmos-text-heading-weight: 700;
 
---kosmos-text-page-title-size: 34px;
+--kosmos-text-page-title-size: 2.125rem;
 --kosmos-text-page-title-line-height: 1.02;
 --kosmos-text-page-title-letter-spacing: -0.5px;
 --kosmos-text-page-title-weight: 700;
@@ -100,7 +120,10 @@ Heading-токены в `theme/css-variables.css`:
 ### Радиус
 
 ```css
---radius: 0.85rem;
+--radius: 16px;
+--radius-card: 24px;
+--radius-button: 16px;
+--radius-input: 8px;
 --corner-shape: squircle;
 ```
 
@@ -390,7 +413,7 @@ import {
 
 Этого достаточно. Не нужно:
 
-- стилизовать `::-webkit-scrollbar`, `::-webkit-scrollbar-thumb`, `::-webkit-scrollbar-track` руками — класс уже всё закрывает (width/height 5px, border-radius 3px, без фона у track'а);
+- стилизовать `::-webkit-scrollbar`, `::-webkit-scrollbar-thumb`, `::-webkit-scrollbar-track` руками — класс уже всё закрывает (width/height 8px, border-radius 8px, без фона у track'а);
 - задавать свой `transition` на `background-color` thumb'а — переход управляется через CSS-переменную и `@property`, чтобы цвет thumb'а пересчитывался каждый кадр анимации;
 - ставить `data-scrolling` руками — это делает глобальный listener из shared helper'а `installScrollFadeListener()` (см. ниже).
 
@@ -425,6 +448,9 @@ off(); // unsubscribe (idempotent)
 }
 
 .kosmos-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
   background-color: rgb(from var(--foreground) r g b / var(--kosmos-scroll-alpha));
 }
 ```

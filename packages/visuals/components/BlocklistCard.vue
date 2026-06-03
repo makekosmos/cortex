@@ -60,176 +60,70 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <div
-    class="kosmos-blocklist-card"
+    class="relative flex h-36 w-full select-none flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] transition-[transform,border-color,box-shadow] duration-150 ease-out hover:scale-[1.02] hover:border-[color-mix(in_srgb,var(--foreground)_30%,var(--border))] focus-visible:border-[var(--primary)] focus-visible:shadow-[0_0_0_2px_color-mix(in_srgb,var(--primary)_35%,transparent)] focus-visible:outline-none"
     :class="{
-      'kosmos-blocklist-card--active': active,
-      'kosmos-blocklist-card--empty': previewLines.length === 0,
+      'border-2 border-[var(--primary)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_25%,transparent)]':
+        active,
     }"
     role="button"
     tabindex="0"
     @click="onClick"
     @keydown="onKey"
   >
-    <div class="kosmos-blocklist-card__preview" aria-hidden="true">
+    <div
+      class="relative min-h-0 flex-auto overflow-hidden px-4 pt-4 font-[var(--font-mono,ui-monospace,SFMono-Regular,Menlo,monospace)] text-[11px] leading-[1.4] text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] [mask-image:linear-gradient(to_bottom,black_0%,black_50%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_0%,black_50%,transparent_100%)]"
+      aria-hidden="true"
+    >
       <slot>
-        <div v-for="(domain, i) in previewLines" :key="i" class="kosmos-blocklist-card__domain">
+        <div
+          v-for="(domain, i) in previewLines"
+          :key="i"
+          class="overflow-hidden text-ellipsis whitespace-nowrap"
+        >
           {{ domain }}
         </div>
       </slot>
 
-      <span v-if="preset" class="kosmos-blocklist-card__preset-badge">preset</span>
+      <span
+        v-if="previewLines.length === 0"
+        class="absolute top-4 left-4 text-[color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+      >
+        —
+      </span>
 
-      <span v-if="active" class="kosmos-blocklist-card__active-dot" aria-hidden="true" />
+      <span
+        v-if="preset"
+        class="pointer-events-none absolute top-2 right-2 h-4 rounded-full bg-[color-mix(in_srgb,var(--secondary,var(--muted-foreground))_70%,transparent)] px-2 font-[var(--font-sans,system-ui,sans-serif)] text-[9px] font-semibold leading-4 tracking-[0.04em] text-[var(--secondary-foreground,var(--background))] lowercase"
+      >
+        preset
+      </span>
+
+      <span
+        v-if="active"
+        class="absolute top-2 right-2 size-2 rounded-full bg-[var(--primary)] shadow-[0_0_6px_color-mix(in_srgb,var(--primary)_80%,transparent)]"
+        aria-hidden="true"
+      />
     </div>
 
-    <div class="kosmos-blocklist-card__footer">
-      <span v-if="icon" class="kosmos-blocklist-card__icon">{{ icon }}</span>
-      <div class="kosmos-blocklist-card__titlebox">
-        <div class="kosmos-blocklist-card__title">{{ name }}</div>
-        <div class="kosmos-blocklist-card__subtitle">{{ subtitle }}</div>
+    <div
+      class="flex select-none items-center gap-2 border-t border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_92%,var(--foreground))] px-4 py-2"
+    >
+      <span v-if="icon" class="shrink-0 text-lg leading-none">{{ icon }}</span>
+      <div class="flex min-w-0 flex-auto flex-col">
+        <div
+          class="overflow-hidden text-ellipsis whitespace-nowrap font-[var(--font-sans,system-ui,sans-serif)] text-sm font-semibold text-[var(--foreground)]"
+        >
+          {{ name }}
+        </div>
+        <div
+          class="overflow-hidden text-ellipsis whitespace-nowrap font-[var(--font-sans,system-ui,sans-serif)] text-[11px] text-[var(--muted-foreground)]"
+        >
+          {{ subtitle }}
+        </div>
       </div>
-      <div class="kosmos-blocklist-card__actions">
+      <div class="flex shrink-0 items-center gap-2">
         <slot name="actions" />
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.kosmos-blocklist-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 140px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--background);
-  overflow: hidden;
-  transition:
-    transform 0.12s ease,
-    border-color 0.12s ease,
-    box-shadow 0.12s ease;
-  user-select: none;
-}
-
-.kosmos-blocklist-card:hover {
-  transform: scale(1.02);
-  border-color: color-mix(in srgb, var(--foreground) 30%, var(--border));
-}
-
-.kosmos-blocklist-card:focus-visible {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent);
-}
-
-.kosmos-blocklist-card--active {
-  border: 2px solid var(--primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 25%, transparent);
-}
-
-.kosmos-blocklist-card__preview {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 12px 12px 0;
-  overflow: hidden;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 11px;
-  line-height: 1.4;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 50%, transparent 100%);
-}
-
-.kosmos-blocklist-card__domain {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.kosmos-blocklist-card--empty .kosmos-blocklist-card__preview::after {
-  content: "—";
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  color: color-mix(in srgb, var(--foreground) 40%, transparent);
-}
-
-.kosmos-blocklist-card__preset-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--secondary, var(--muted-foreground)) 70%, transparent);
-  color: var(--secondary-foreground, var(--background));
-  font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
-  pointer-events: none;
-}
-
-.kosmos-blocklist-card__active-dot {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--primary) 80%, transparent);
-}
-
-.kosmos-blocklist-card__footer {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--background) 92%, var(--foreground));
-  user-select: none;
-}
-
-.kosmos-blocklist-card__icon {
-  font-size: 18px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.kosmos-blocklist-card__titlebox {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.kosmos-blocklist-card__title {
-  font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.kosmos-blocklist-card__subtitle {
-  font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 11px;
-  color: var(--muted-foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.kosmos-blocklist-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-</style>

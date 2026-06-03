@@ -32,66 +32,35 @@ function handleForward() {
 </script>
 
 <template>
-  <div class="kosmos-titlebar-history-controls">
+  <div class="kosmos-titlebar-history-controls inline-flex items-center gap-2">
     <button
       type="button"
-      class="kosmos-titlebar-history-controls__button"
-      :class="{ 'kosmos-titlebar-history-controls__button--disabled': backDisabled }"
+      class="inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in hover:not-disabled:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:not-disabled:text-(--foreground) disabled:cursor-default disabled:opacity-[0.38]"
       :disabled="backDisabled"
       :title="backTitle"
       :aria-label="backTitle"
       data-testid="titlebar-history-back"
       @click="handleBack"
     >
-      <ChevronLeft :size="14" />
+      <ChevronLeft :size="16" />
     </button>
 
     <button
       type="button"
-      class="kosmos-titlebar-history-controls__button"
-      :class="{ 'kosmos-titlebar-history-controls__button--disabled': forwardDisabled }"
+      class="inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color,opacity] duration-[120ms] ease-in hover:not-disabled:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:not-disabled:text-(--foreground) disabled:cursor-default disabled:opacity-[0.38]"
       :disabled="forwardDisabled"
       :title="forwardTitle"
       :aria-label="forwardTitle"
       data-testid="titlebar-history-forward"
       @click="handleForward"
     >
-      <ChevronRight :size="14" />
+      <ChevronRight :size="16" />
     </button>
   </div>
 </template>
 
 <style scoped>
 .kosmos-titlebar-history-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
   -webkit-app-region: no-drag;
-}
-
-.kosmos-titlebar-history-controls__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--kosmos-titlebar-control-size, 32px);
-  height: var(--kosmos-titlebar-control-size, 32px);
-  border-radius: var(--kosmos-titlebar-control-radius, 10px);
-  color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
-  transition:
-    background-color 120ms ease,
-    color 120ms ease,
-    opacity 120ms ease;
-  -webkit-app-region: no-drag;
-}
-
-.kosmos-titlebar-history-controls__button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.kosmos-titlebar-history-controls__button--disabled,
-.kosmos-titlebar-history-controls__button:disabled {
-  opacity: 0.38;
-  cursor: default;
 }
 </style>

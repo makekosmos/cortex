@@ -162,7 +162,7 @@ defineExpose({ mentionTextareaRef });
 
 .focus-input {
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
@@ -177,7 +177,7 @@ defineExpose({ mentionTextareaRef });
 
 .focus-textarea {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
@@ -221,7 +221,7 @@ defineExpose({ mentionTextareaRef });
 
 .icon-choice {
   font: inherit;
-  font-size: 16px;
+  font-size: 1rem;
   width: 28px;
   height: 28px;
   display: flex;
@@ -273,7 +273,7 @@ defineExpose({ mentionTextareaRef });
   color: var(--foreground);
   border-radius: 6px;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: left;
 }
 
@@ -283,7 +283,7 @@ defineExpose({ mentionTextareaRef });
 }
 
 .mention-icon {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .mention-name {
@@ -295,7 +295,7 @@ defineExpose({ mentionTextareaRef });
 }
 
 .mention-id {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-family: var(--font-mono, ui-monospace, monospace);
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }

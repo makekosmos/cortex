@@ -59,37 +59,39 @@ function selectType(id: string): void {
   <div class="dashboard" tabindex="0">
     <div class="dashboard-shell">
       <SettingsSidebar title="Таблица данных">
-        <div class="dashboard-sidebar-group">
-          <SettingsSidebarButton
-            :icon="currentTypeId === null ? DatabaseFill : DatabaseDuotone"
-            label="Все объекты"
-            icon-from="var(--destructive)"
-            icon-to="color-mix(in srgb, var(--destructive) 60%, var(--background))"
-            :active="!showUsage && currentTypeId === null"
-            @click="selectAll"
-          />
-          <SettingsSidebarButton
-            :icon="showUsage ? ClockFill : ClockDuotone"
-            label="Затреканное время"
-            icon-from="var(--accent)"
-            icon-to="color-mix(in srgb, var(--accent) 60%, var(--background))"
-            :active="showUsage"
-            @click="selectUsage"
-          />
-        </div>
+        <div class="dashboard-sidebar-scroll kosmos-scroll">
+          <div class="dashboard-sidebar-group">
+            <SettingsSidebarButton
+              :icon="currentTypeId === null ? DatabaseFill : DatabaseDuotone"
+              label="Все объекты"
+              icon-from="var(--destructive)"
+              icon-to="color-mix(in srgb, var(--destructive) 60%, var(--background))"
+              :active="!showUsage && currentTypeId === null"
+              @click="selectAll"
+            />
+            <SettingsSidebarButton
+              :icon="showUsage ? ClockFill : ClockDuotone"
+              label="Затреканное время"
+              icon-from="var(--accent)"
+              icon-to="color-mix(in srgb, var(--accent) 60%, var(--background))"
+              :active="showUsage"
+              @click="selectUsage"
+            />
+          </div>
 
-        <div class="dashboard-sidebar-group">
-          <div class="dashboard-sidebar-header">Типы</div>
-          <SettingsSidebarButton
-            v-for="type in objectTypes"
-            :key="type.id"
-            :icon="sidebarIconForType(type.id, currentTypeId === type.id)"
-            :label="type.name"
-            :icon-from="typeVisualFor(type.id).from"
-            :icon-to="typeVisualFor(type.id).to"
-            :active="!showUsage && currentTypeId === type.id"
-            @click="selectType(type.id)"
-          />
+          <div class="dashboard-sidebar-group">
+            <div class="dashboard-sidebar-header">Типы</div>
+            <SettingsSidebarButton
+              v-for="type in objectTypes"
+              :key="type.id"
+              :icon="sidebarIconForType(type.id, currentTypeId === type.id)"
+              :label="type.name"
+              :icon-from="typeVisualFor(type.id).from"
+              :icon-to="typeVisualFor(type.id).to"
+              :active="!showUsage && currentTypeId === type.id"
+              @click="selectType(type.id)"
+            />
+          </div>
         </div>
       </SettingsSidebar>
 
@@ -140,7 +142,17 @@ function selectType(id: string): void {
 .dashboard-sidebar-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+}
+
+.dashboard-sidebar-scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  margin-right: -8px;
+  overflow-y: auto;
 }
 
 .dashboard-sidebar-header {

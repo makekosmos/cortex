@@ -148,7 +148,7 @@ function fmtDate(iso?: string | null): string {
 
 .usage-row {
   min-height: 36px;
-  padding: 6px 20px;
+  padding: 4px 20px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-color-strong) 72%, transparent);
   color: var(--foreground);
 }

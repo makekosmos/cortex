@@ -228,6 +228,7 @@ fn config_to_value(cfg: &DictationConfig) -> Value {
         "httpProxy": cfg.http_proxy,
         "transcriptionPrompt": cfg.transcription_prompt,
         "provider": cfg.provider,
+        "providerEnabled": cfg.provider_enabled,
         "model": cfg.model,
         "microphoneDeviceId": cfg.microphone_device_id,
     })
@@ -439,6 +440,9 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
     if let Some(s) = params.get("provider").and_then(|v| v.as_str()) {
         cfg.provider = s.to_owned();
     }
+    if let Some(enabled) = params.get("providerEnabled").and_then(|v| v.as_bool()) {
+        cfg.provider_enabled = enabled;
+    }
     if let Some(s) = params.get("model").and_then(|v| v.as_str()) {
         cfg.model = s.to_owned();
     }
@@ -527,6 +531,12 @@ async fn op_set_api_key(params: Value, host: &DictationHost) -> DictationRespons
     };
     match config::set_api_key(&key) {
         Ok(()) => {
+            let mut cfg = host.config.lock().await;
+            cfg.provider_enabled = true;
+            if let Err(e) = config::save(&cfg) {
+                return DictationResponse::err(format!("set_api_key: save failed: {e}"));
+            }
+            drop(cfg);
             host.emit_config_changed();
             DictationResponse::ok(json!({ "ok": true }))
         }
@@ -647,6 +657,12 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
     }
 
     // Проверяем API key до запуска — без ключа сразу Error.
+    if !cfg.provider_enabled {
+        host.fail_session(&uuid, "Поставщик диктовки выключен в настройках", false)
+            .await;
+        host.emit_pending_changed();
+        return DictationResponse::err("submit_audio: provider disabled");
+    }
     let api_key = match config::get_api_key() {
         Some(k) => k,
         None => {
@@ -1617,6 +1633,7 @@ mod tests {
             inject_mode: InjectMode::ClipboardOnly, // не трогаем реальный clipboard
             network_profile: NetworkProfile::System,
             provider: "groq".into(),
+            provider_enabled: true,
             model: "whisper-large-v3".into(),
             http_proxy: None,
             transcription_prompt: String::new(),

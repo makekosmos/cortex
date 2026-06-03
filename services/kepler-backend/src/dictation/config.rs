@@ -81,6 +81,9 @@ pub struct DictationConfig {
     /// См. https://platform.openai.com/docs/guides/speech-to-text/prompting
     pub transcription_prompt: String,
     pub provider: String,
+    /// Ключ может быть сохранён в keyring, но временно выключен пользователем.
+    /// Это UI-level availability switch, не удаление секрета.
+    pub provider_enabled: bool,
     pub model: String,
     /// `deviceId` микрофона из `navigator.mediaDevices.enumerateDevices()`.
     /// `None` или пустая строка — использовать системный default. Хранится в
@@ -100,6 +103,7 @@ impl Default for DictationConfig {
             http_proxy: None,
             transcription_prompt: String::new(),
             provider: "groq".into(),
+            provider_enabled: true,
             model: "whisper-large-v3".into(),
             microphone_device_id: None,
         }
@@ -212,6 +216,7 @@ mod tests {
             http_proxy: Some("http://127.0.0.1:8888".into()),
             transcription_prompt: "Kepler Kosmos Groq".into(),
             provider: "groq".into(),
+            provider_enabled: true,
             model: "whisper-large-v3".into(),
             microphone_device_id: None,
         };

@@ -15,7 +15,7 @@
 // `dictation.begin_hotkey_capture` backend op'у) и передаёт результат
 // обратно через `pendingAccelerator` / `pendingCancel` events.
 
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -60,6 +60,26 @@ const emit = defineEmits<{
 }>();
 
 const capturing = ref(false);
+
+const keyParts = computed(() => {
+  if (!props.modelValue) return [];
+  return props.modelValue
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const labels: Record<string, string> = {
+        Ctrl: "Ctrl",
+        Control: "Ctrl",
+        Alt: "Alt",
+        Shift: "Shift",
+        Super: "Win",
+        Meta: "Win",
+        Space: "Space",
+      };
+      return labels[part] ?? part;
+    });
+});
 
 function start() {
   if (props.disabled) return;
@@ -140,66 +160,32 @@ function onKey(e: KeyboardEvent) {
 <template>
   <button
     type="button"
-    :class="['kosmos-hk', { 'kosmos-hk--capturing': capturing, 'kosmos-hk--disabled': disabled }]"
+    :class="[
+      'inline-flex min-h-8 min-w-[120px] cursor-default items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] px-2 font-[inherit] text-[length:var(--kosmos-text-caption-size)] text-[var(--foreground)] transition-[border-color,background-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] disabled:cursor-not-allowed disabled:opacity-55',
+      capturing
+        ? 'border-[color-mix(in_srgb,var(--accent)_65%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]'
+        : '',
+      !capturing
+        ? 'hover:not-disabled:border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] hover:not-disabled:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]'
+        : '',
+    ]"
     :disabled="disabled"
     @click="start"
     @keydown="onKey"
     @blur="stop"
   >
-    <span v-if="capturing" class="kosmos-hk__prompt">{{ capturePrompt }}</span>
-    <code v-else-if="modelValue" class="kosmos-hk__value">{{ modelValue }}</code>
-    <span v-else class="kosmos-hk__placeholder">{{ placeholder }}</span>
+    <span v-if="capturing" class="px-1 font-medium text-[var(--accent)]">{{ capturePrompt }}</span>
+    <span v-else-if="keyParts.length > 0" class="flex items-center gap-1">
+      <kbd
+        v-for="part in keyParts"
+        :key="part"
+        class="inline-flex h-5 min-w-5 items-center justify-center rounded border border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] px-1 font-[var(--font-sans)] text-[length:var(--kosmos-text-caption-size)] leading-none font-medium text-[var(--foreground)] shadow-[inset_0_-1px_0_color-mix(in_srgb,var(--background)_22%,transparent)]"
+      >
+        {{ part }}
+      </kbd>
+    </span>
+    <span v-else class="px-1 text-[color-mix(in_srgb,var(--foreground)_45%,transparent)]">
+      {{ placeholder }}
+    </span>
   </button>
 </template>
-
-<style scoped>
-.kosmos-hk {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 140px;
-  height: 34px;
-  padding: 0 0.75rem;
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.875rem;
-  cursor: default;
-  transition:
-    border-color 140ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-hk:hover:not(.kosmos-hk--disabled):not(.kosmos-hk--capturing) {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-}
-
-.kosmos-hk--capturing {
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-  background: color-mix(in srgb, var(--accent) 7%, var(--background));
-}
-
-.kosmos-hk--disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.kosmos-hk__value {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.8125rem;
-  letter-spacing: 0.02em;
-  color: var(--foreground);
-}
-
-.kosmos-hk__prompt {
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.kosmos-hk__placeholder {
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-}
-</style>

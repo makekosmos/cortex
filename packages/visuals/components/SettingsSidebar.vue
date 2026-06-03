@@ -7,47 +7,17 @@ defineProps<Props>();
 </script>
 
 <template>
-  <aside class="kosmos-settings-sidebar">
-    <div v-if="title" class="kosmos-settings-sidebar__title">
+  <aside
+    class="box-border flex h-full w-[228px] min-w-[228px] flex-col gap-4 border-r border-[var(--border-color-strong)] bg-[var(--main-background-color)] text-white"
+  >
+    <div
+      v-if="title"
+      class="px-3 pt-3 pb-0 font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium [-webkit-app-region:drag]"
+    >
       {{ title }}
     </div>
-    <div class="kosmos-settings-sidebar__content">
+    <div class="flex min-h-0 flex-1 flex-col gap-6 [-webkit-app-region:no-drag]">
       <slot />
     </div>
   </aside>
 </template>
-
-<style scoped>
-.kosmos-settings-sidebar {
-  display: flex;
-  width: 229px;
-  min-width: 229px;
-  height: 100%;
-  box-sizing: border-box;
-  flex-direction: column;
-  gap: 18px;
-  padding: 8px;
-  border-right: 1px solid var(--border-color-strong);
-  background: var(--main-background-color);
-  color: #fff;
-}
-
-.kosmos-settings-sidebar__title {
-  padding: 4px 6px 0;
-  color: #fff;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.4;
-  font-weight: 500;
-  -webkit-app-region: drag;
-}
-
-.kosmos-settings-sidebar__content {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 26px;
-  -webkit-app-region: no-drag;
-}
-</style>

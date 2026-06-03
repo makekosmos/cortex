@@ -57,39 +57,10 @@ const surfaceStyle = computed(() => ({
 
 <template>
   <section
-    class="kosmos-desktop-content-surface"
-    :class="{ 'kosmos-desktop-content-surface--scrollable': props.scrollable }"
+    class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-l border-t-[var(--kosmos-content-border-color)] border-l-[var(--kosmos-content-border-left-color)] bg-(--background) px-[var(--kosmos-content-padding-inline)] pt-[var(--kosmos-content-padding-top)] pb-[var(--kosmos-content-padding-bottom)] rounded-tl-[var(--kosmos-content-radius-top-left)] rounded-bl-[var(--kosmos-content-radius-bottom-left)] transition-[border-left-color,border-top-left-radius,border-bottom-left-radius] duration-[280ms] ease-[cubic-bezier(0.2,0,0,1)]"
+    :class="{ 'overflow-x-hidden overflow-y-auto': props.scrollable }"
     :style="surfaceStyle"
   >
     <slot />
   </section>
 </template>
-
-<style scoped>
-.kosmos-desktop-content-surface {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-  padding-top: var(--kosmos-content-padding-top);
-  padding-right: var(--kosmos-content-padding-inline);
-  padding-bottom: var(--kosmos-content-padding-bottom);
-  padding-left: var(--kosmos-content-padding-inline);
-  border-top: 1px solid var(--kosmos-content-border-color);
-  border-left: 1px solid var(--kosmos-content-border-left-color);
-  border-top-left-radius: var(--kosmos-content-radius-top-left);
-  border-bottom-left-radius: var(--kosmos-content-radius-bottom-left);
-  background: var(--background);
-  overflow: hidden;
-  transition:
-    border-left-color 280ms cubic-bezier(0.2, 0, 0, 1),
-    border-top-left-radius 280ms cubic-bezier(0.2, 0, 0, 1),
-    border-bottom-left-radius 280ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-desktop-content-surface--scrollable {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-</style>

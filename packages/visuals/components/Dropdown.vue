@@ -222,15 +222,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="kosmos-dd">
+  <div class="relative inline-flex w-fit max-w-full">
     <button
       ref="triggerRef"
       type="button"
-      class="kosmos-dd__trigger"
+      class="inline-flex h-10 w-fit max-w-full items-center justify-between gap-2 rounded-[var(--radius-input)] border-2 border-transparent bg-transparent px-2 font-[inherit] text-[length:var(--kosmos-text-control-size)] text-[var(--foreground)] transition-[background-color,border-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:not-disabled:border-white"
       :class="{
-        'kosmos-dd__trigger--open': open,
-        'kosmos-dd__trigger--placeholder': !selectedOption,
-        'kosmos-dd__trigger--disabled': disabled,
+        'border-[color-mix(in_srgb,var(--accent)_65%,transparent)]': open,
+        'text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]': !selectedOption,
+        'cursor-not-allowed opacity-[0.55] hover:border-transparent': disabled,
       }"
       :disabled="disabled"
       :aria-haspopup="'listbox'"
@@ -240,10 +240,12 @@ onBeforeUnmount(() => {
       <!-- Слот для leading-иконки в trigger'е (показывает иконку текущего
            выбранного варианта). Если не передан — без иконки. -->
       <slot name="trigger-leading" :option="selectedOption" />
-      <span class="kosmos-dd__label">{{ displayLabel }}</span>
+      <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-left">
+        {{ displayLabel }}
+      </span>
       <ChevronDown
-        class="kosmos-dd__chevron"
-        :class="{ 'kosmos-dd__chevron--open': open }"
+        class="shrink-0 text-[color-mix(in_srgb,var(--foreground)_65%,transparent)] transition-transform duration-[180ms] ease-[cubic-bezier(0.2,0,0,1)]"
+        :class="{ '-rotate-180': open }"
         :size="14"
         :stroke-width="2"
       />
@@ -254,7 +256,7 @@ onBeforeUnmount(() => {
         <div
           v-if="open"
           ref="panelRef"
-          class="kosmos-dd__panel"
+          class="fixed z-[9500] flex max-h-[min(200px,calc(100vh-32px))] min-w-[200px] flex-col overflow-hidden rounded-[var(--radius-button)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[var(--popover,color-mix(in_srgb,var(--background)_92%,black))] p-0 shadow-[0_16px_40px_color-mix(in_srgb,var(--background)_36%,transparent),0_8px_16px_color-mix(in_srgb,var(--background)_18%,transparent)] backdrop-blur-[20px] backdrop-saturate-[180%] [corner-shape:var(--corner-shape)]"
           role="listbox"
           :style="{
             top: panelPosition.top + 'px',
@@ -262,27 +264,31 @@ onBeforeUnmount(() => {
             width: matchTriggerWidth ? panelPosition.width + 'px' : undefined,
           }"
         >
-          <div v-if="isSearchable" class="kosmos-dd__search">
+          <div v-if="isSearchable" class="px-2 pt-2 pb-1">
             <input
               ref="searchInputRef"
               v-model="searchQuery"
               type="text"
-              class="kosmos-dd__search-input"
+              class="h-8 w-full rounded-[var(--radius-input)] border border-[color-mix(in_srgb,var(--border)_60%,transparent)] bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] px-2 font-[inherit] text-[length:var(--kosmos-text-body-size)] text-[var(--foreground)] outline-none transition-colors duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] placeholder:text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] focus:border-[color-mix(in_srgb,var(--accent)_55%,var(--border))]"
               :placeholder="searchPlaceholder"
               spellcheck="false"
               autocomplete="off"
             />
           </div>
-          <div class="kosmos-dd__options kosmos-scroll">
+          <div
+            class="kosmos-dd__options kosmos-scroll flex min-h-0 flex-1 flex-col overflow-y-auto p-1"
+          >
             <button
               v-for="(opt, i) in filteredOptions"
               :key="String(opt.value)"
               type="button"
-              class="kosmos-dd__option"
+              class="kosmos-dd__option flex w-full items-center gap-2 rounded-[var(--radius-input)] border-0 bg-transparent px-2 py-2 text-left font-[inherit] text-[length:var(--kosmos-text-control-size)] font-medium text-[var(--foreground)] transition-colors duration-100 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)]"
               :class="{
                 'kosmos-dd__option--selected': opt.value === modelValue,
                 'kosmos-dd__option--highlighted': i === highlightIdx,
-                'kosmos-dd__option--disabled': opt.disabled,
+                'bg-[color-mix(in_srgb,var(--foreground)_14%,transparent)]':
+                  opt.value === modelValue || i === highlightIdx,
+                'cursor-not-allowed opacity-45': opt.disabled,
               }"
               role="option"
               :aria-selected="opt.value === modelValue"
@@ -293,15 +299,20 @@ onBeforeUnmount(() => {
               <!-- Слот для кастомной leading-иконки (например ProviderIcon).
                    Если не передан — просто label. -->
               <slot name="option-leading" :option="opt" />
-              <span class="kosmos-dd__option-label">{{ opt.label }}</span>
+              <span class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                {{ opt.label }}
+              </span>
               <Check
                 v-if="opt.value === modelValue"
-                class="kosmos-dd__check"
+                class="shrink-0 text-[var(--accent)]"
                 :size="14"
                 :stroke-width="2.4"
               />
             </button>
-            <div v-if="filteredOptions.length === 0" class="kosmos-dd__empty">
+            <div
+              v-if="filteredOptions.length === 0"
+              class="px-2 py-4 text-center text-[0.8125rem] text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]"
+            >
               Ничего не найдено
             </div>
           </div>
@@ -312,154 +323,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.kosmos-dd {
-  position: relative;
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
-}
-
-.kosmos-dd__trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  width: fit-content;
-  max-width: 100%;
-  height: 34px;
-  padding: 0 0.625rem;
-  background: transparent;
-  border: 2px solid transparent;
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.875rem;
-  cursor: default;
-  transition:
-    border-color 140ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-dd__trigger:hover:not(.kosmos-dd__trigger--disabled) {
-  border-color: #ffffff;
-}
-
-.kosmos-dd__trigger--open {
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-}
-
-.kosmos-dd__trigger--placeholder {
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
-}
-
-.kosmos-dd__trigger--disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.kosmos-dd__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  text-align: left;
-}
-
-.kosmos-dd__chevron {
-  flex-shrink: 0;
-  color: color-mix(in srgb, var(--foreground) 65%, transparent);
-  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-dd__chevron--open {
-  transform: rotate(-180deg);
-}
-
-.kosmos-dd__panel {
-  position: fixed;
-  z-index: 9500;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  min-width: 200px;
-  max-height: min(200px, calc(100vh - 32px));
-  background: var(--popover, color-mix(in srgb, var(--background) 92%, black));
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: calc(var(--radius) * 0.85);
-  corner-shape: var(--corner-shape);
-  box-shadow:
-    0 16px 40px rgb(0 0 0 / 36%),
-    0 6px 16px rgb(0 0 0 / 18%);
-  overflow: hidden;
-}
-
-.kosmos-dd__search {
-  padding: 8px 8px 4px;
-}
-
-.kosmos-dd__search-input {
-  width: 100%;
-  height: 30px;
-  padding: 0 10px;
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  border-radius: calc(var(--radius) * 0.55);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  outline: none;
-  transition: border-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-dd__search-input:focus {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-}
-
-.kosmos-dd__search-input::placeholder {
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-}
-
-.kosmos-dd__options {
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-
-.kosmos-dd__option {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 8px 10px;
-  background: transparent;
-  border: none;
-  border-radius: calc(var(--radius) * 0.55);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-align: left;
-  cursor: default;
-  transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-dd__option--highlighted {
-  background: color-mix(in srgb, var(--foreground) 14%, transparent);
-}
-
-.kosmos-dd__option--selected {
-  background: color-mix(in srgb, var(--foreground) 14%, transparent);
-  color: var(--foreground);
-}
-
 /* Раздельная подсветка: пока юзер не двигает курсор / клавиатуру — fill
  * стоит на выбранном (--selected). Как только highlightIdx сменяется (hover
  * или arrow keys на ДРУГОЙ option) — selected теряет фон, fill переезжает
@@ -467,31 +330,6 @@ onBeforeUnmount(() => {
 .kosmos-dd__options:has(.kosmos-dd__option--highlighted)
   .kosmos-dd__option--selected:not(.kosmos-dd__option--highlighted) {
   background: transparent;
-}
-
-.kosmos-dd__option--disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.kosmos-dd__empty {
-  padding: 12px 10px;
-  text-align: center;
-  font-size: 0.8125rem;
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
-}
-
-.kosmos-dd__option-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kosmos-dd__check {
-  flex-shrink: 0;
-  color: var(--accent);
 }
 
 .kosmos-dd-enter-active,
@@ -504,6 +342,6 @@ onBeforeUnmount(() => {
 .kosmos-dd-enter-from,
 .kosmos-dd-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(-8px);
 }
 </style>

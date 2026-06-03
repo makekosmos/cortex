@@ -19,79 +19,33 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <div class="kosmos-settings-advanced-intro">
+  <div class="flex flex-col items-center text-center">
     <span
-      class="kosmos-settings-advanced-intro__icon"
-      :class="{ 'kosmos-settings-advanced-intro__icon--image': imageSrc }"
+      class="inline-flex size-16 items-center justify-center overflow-hidden rounded-lg text-white"
+      :class="
+        imageSrc
+          ? 'bg-none shadow-none'
+          : 'bg-linear-to-bl from-[var(--settings-advanced-intro-icon-from)] to-[var(--settings-advanced-intro-icon-to)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,oklch(1_0_0)_8%,transparent)]'
+      "
       :style="{
         '--settings-advanced-intro-icon-from': iconFrom,
         '--settings-advanced-intro-icon-to': iconTo,
       }"
       aria-hidden="true"
     >
-      <img v-if="imageSrc" class="kosmos-settings-advanced-intro__image" :src="imageSrc" alt="" />
-      <component v-else :is="icon" :size="28" :stroke-width="2" />
+      <img v-if="imageSrc" class="block size-16 object-contain" :src="imageSrc" alt="" />
+      <component v-else :is="icon" :size="32" :stroke-width="2" />
     </span>
-    <h1 class="kosmos-settings-advanced-intro__title">{{ title }}</h1>
-    <p v-if="description" class="kosmos-settings-advanced-intro__description">
+    <h1
+      class="mt-4 mb-0 font-[var(--font-sans)] text-[length:var(--settings-advanced-title-size)] leading-[var(--settings-advanced-title-line-height)] font-[var(--settings-advanced-title-weight)] text-[var(--foreground)]"
+    >
+      {{ title }}
+    </h1>
+    <p
+      v-if="description"
+      class="mt-2 mb-0 max-w-96 font-[var(--font-sans)] text-[length:var(--settings-advanced-description-size)] leading-[var(--settings-advanced-description-line-height)] font-[var(--settings-advanced-description-weight)] text-[var(--second-text-color)]"
+    >
       {{ description }}
     </p>
   </div>
 </template>
-
-<style scoped>
-.kosmos-settings-advanced-intro {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  text-align: center;
-}
-
-.kosmos-settings-advanced-intro__icon {
-  display: inline-flex;
-  width: 52px;
-  height: 52px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background-image: linear-gradient(
-    to bottom left,
-    var(--settings-advanced-intro-icon-from),
-    var(--settings-advanced-intro-icon-to)
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, oklch(1 0 0) 8%, transparent);
-  color: #fff;
-  overflow: hidden;
-}
-
-.kosmos-settings-advanced-intro__icon--image {
-  background-image: none;
-  box-shadow: none;
-}
-
-.kosmos-settings-advanced-intro__image {
-  display: block;
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
-}
-
-.kosmos-settings-advanced-intro__title {
-  margin: 14px 0 0;
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  font-size: var(--settings-advanced-title-size);
-  line-height: var(--settings-advanced-title-line-height);
-  font-weight: var(--settings-advanced-title-weight);
-}
-
-.kosmos-settings-advanced-intro__description {
-  max-width: 360px;
-  margin: 6px 0 0;
-  color: var(--second-text-color);
-  font-family: var(--font-sans);
-  font-size: var(--settings-advanced-description-size);
-  line-height: var(--settings-advanced-description-line-height);
-  font-weight: var(--settings-advanced-description-weight);
-}
-</style>

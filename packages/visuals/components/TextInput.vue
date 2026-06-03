@@ -56,61 +56,13 @@ const value = computed({
     :autocomplete="autocomplete"
     :inputmode="inputmode"
     :class="[
-      'kosmos-input',
-      `kosmos-input--${size}`,
-      { 'kosmos-input--block': block, 'kosmos-input--invalid': invalid },
+      'rounded-lg border-2 border-solid border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-4 font-[inherit] text-sm leading-[1.4] text-[var(--foreground)] transition-[border-color,background-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] placeholder:text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] hover:not-disabled:not-focus:border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] focus:border-[color-mix(in_srgb,var(--accent)_65%,transparent)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-55',
+      size === 'sm' ? 'h-8 px-2 text-[0.8125rem]' : 'h-10',
+      block ? 'w-full' : '',
+      invalid ? 'border-[var(--destructive)] focus:border-[var(--destructive)]' : '',
     ]"
     @blur="(e) => emit('blur', e)"
     @focus="(e) => emit('focus', e)"
     @keydown="(e) => emit('keydown', e)"
   />
 </template>
-
-<style scoped>
-.kosmos-input {
-  height: 34px;
-  padding: 0 0.625rem;
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  transition:
-    border-color 140ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-input--sm {
-  height: 28px;
-  font-size: 0.8125rem;
-}
-
-.kosmos-input--block {
-  width: 100%;
-}
-
-.kosmos-input:hover:not(:disabled):not(:focus) {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-}
-
-.kosmos-input:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-}
-
-.kosmos-input:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.kosmos-input--invalid {
-  border-color: var(--destructive);
-}
-
-.kosmos-input::placeholder {
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-}
-</style>

@@ -97,15 +97,15 @@ function handleListKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
+  <div v-if="open" class="fixed inset-0 z-50 flex items-start justify-center pt-32">
     <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="close" />
 
     <div
-      class="relative z-10 w-full max-w-(--bringhurst-wide) overflow-hidden rounded-xl border border-(--border) shadow-2xl"
+      class="relative z-10 w-full max-w-screen-sm overflow-hidden rounded-xl border border-(--border) shadow-2xl"
       style="background: var(--color-shape-highlight-light-solid)"
       :data-testid="dialogTestId"
     >
-      <div class="flex items-center gap-3 px-4 py-3">
+      <div class="flex items-center gap-4 px-4 py-4">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="16"
@@ -131,7 +131,7 @@ function handleListKeydown(event: KeyboardEvent) {
           @keydown="handleInputKeydown"
         />
         <kbd
-          class="hidden rounded border border-(--border) px-1.5 py-0.5 text-[10px] text-(--muted-foreground) sm:block"
+          class="hidden h-6 rounded border border-(--border) px-2 text-[10px] leading-6 text-(--muted-foreground) sm:block"
         >
           esc
         </kbd>

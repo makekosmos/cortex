@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import tailwindcss from "@tailwindcss/vite";
 import electron from "vite-plugin-electron/simple";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [
     vue({ features: { vaporInterop: true } }),
+    tailwindcss(),
     electron({
       main: { entry: "electron/main.ts" },
       // Multi-input — главный preload для launcher / settings и shared

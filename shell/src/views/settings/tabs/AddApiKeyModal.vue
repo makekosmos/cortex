@@ -233,7 +233,7 @@ function onKeyEnter(e: KeyboardEvent) {
 
 .add-api-key__note {
   margin: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.4;
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
@@ -245,7 +245,7 @@ function onKeyEnter(e: KeyboardEvent) {
 }
 
 .add-api-key__key-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--foreground);
 }
@@ -280,7 +280,7 @@ function onKeyEnter(e: KeyboardEvent) {
 }
 
 .add-api-key__verify-msg {
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.4;
 }
 

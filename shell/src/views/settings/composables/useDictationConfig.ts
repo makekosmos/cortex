@@ -17,6 +17,7 @@ export interface DictationConfigData {
   httpProxy: string | null;
   transcriptionPrompt: string;
   provider: string;
+  providerEnabled: boolean;
   model: string;
   microphoneDeviceId: string | null;
 }
@@ -56,6 +57,7 @@ const DEFAULT_DICTATION_CFG: DictationConfigData = {
   httpProxy: null,
   transcriptionPrompt: "",
   provider: "groq",
+  providerEnabled: true,
   model: "whisper-large-v3-turbo",
   microphoneDeviceId: null,
 };
@@ -69,7 +71,7 @@ const DEFAULT_DICTATION_STATS: DictationStatsData = {
 };
 
 export const DNS_PROFILE_OPTIONS = [
-  { value: "system", label: "Системный DNS" },
+  { value: "system", label: "Системный" },
   { value: "cloudflare_doh", label: "Cloudflare (1.1.1.1)" },
   { value: "google_doh", label: "Google (8.8.8.8)" },
   { value: "custom_doh", label: "Свой DoH URL" },
@@ -205,7 +207,6 @@ export function createDictationConfig() {
   const dictationApiKeyBusy = ref(false);
   const dictationApiKeyMsg = ref("");
   const dictationCustomDohUrl = ref("");
-  const dictationProxyInput = ref("");
   const dictationConnTestBusy = ref(false);
   const dictationConnTestResult = ref<string>("");
   // Структурированный отчёт от dictation.test_connectivity (Phase 2).
@@ -263,7 +264,6 @@ export function createDictationConfig() {
         if (dictationConfig.value.networkProfile.kind === "custom_doh") {
           dictationCustomDohUrl.value = dictationConfig.value.networkProfile.url ?? "";
         }
-        dictationProxyInput.value = dictationConfig.value.httpProxy ?? "";
       }
       dictationHasApiKey.value = resp.hasApiKey ?? false;
     } catch (e) {
@@ -337,6 +337,10 @@ export function createDictationConfig() {
     await patchDictationConfig({ provider: v });
   }
 
+  async function onDictationProviderEnabledChange(enabled: boolean) {
+    await patchDictationConfig({ providerEnabled: enabled });
+  }
+
   async function onDictationHotkeyCapture(acc: string) {
     if (!acc) return;
     await patchDictationConfig({ hotkey: acc });
@@ -399,11 +403,6 @@ export function createDictationConfig() {
     await patchDictationConfig({
       networkProfile: { kind: "custom_doh", url },
     });
-  }
-
-  async function onDictationProxyBlur() {
-    const v = dictationProxyInput.value.trim();
-    await patchDictationConfig({ httpProxy: v === "" ? null : v });
   }
 
   /// Лёгкая проверка API key без сохранения — GET /v1/models с Bearer-auth.
@@ -492,7 +491,6 @@ export function createDictationConfig() {
     dictationApiKeyBusy,
     dictationApiKeyMsg,
     dictationCustomDohUrl,
-    dictationProxyInput,
     dictationConnTestBusy,
     dictationConnTestResult,
     dictationConnReport,
@@ -511,12 +509,12 @@ export function createDictationConfig() {
     onDictationInjectModeChange,
     onDictationTriggerModeChange,
     onDictationProviderChange,
+    onDictationProviderEnabledChange,
     onDictationHotkeyCapture,
     onDictationCaptureStart,
     onDictationCaptureEnd,
     onDictationDnsKindChange,
     onDictationCustomDohBlur,
-    onDictationProxyBlur,
     onDictationSaveApiKey,
     onDictationClearApiKey,
     verifyApiKey,

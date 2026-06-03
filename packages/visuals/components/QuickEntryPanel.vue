@@ -115,19 +115,24 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="open" class="qep-root">
+  <div v-if="open" class="absolute inset-0 z-40 flex items-start justify-center pt-24">
     <!-- Backdrop -->
-    <div class="qep-backdrop" @click="close" />
+    <div
+      class="absolute inset-0 bg-[color-mix(in_srgb,var(--background)_40%,transparent)] backdrop-blur-sm"
+      @click="close"
+    />
 
     <!-- Panel -->
-    <div class="qep-panel">
-      <div class="qep-content">
+    <div
+      class="relative z-10 w-full max-w-screen-sm overflow-visible rounded-xl border border-(--border) bg-(--color-shape-highlight-light-solid) shadow-[0_16px_48px_color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+    >
+      <div class="flex flex-col gap-4 px-4 pt-4">
         <input
           ref="titleInput"
           type="text"
           placeholder="Новая задача"
           :value="title"
-          class="qep-title"
+          class="w-full border-0 bg-transparent text-sm font-semibold text-(--foreground) outline-none placeholder:text-(--muted-foreground)"
           @input="title = ($event.target as HTMLInputElement).value"
           @keydown="onTitleKeyDown"
         />
@@ -136,16 +141,16 @@ onBeforeUnmount(() => {
           placeholder="Заметки"
           :value="notes"
           :rows="2"
-          class="qep-notes"
+          class="w-full resize-none border-0 bg-transparent text-xs text-(--muted-foreground) outline-none placeholder:text-[color-mix(in_srgb,var(--muted-foreground)_60%,transparent)]"
           @input="notes = ($event.target as HTMLTextAreaElement).value"
           @keydown="onNotesKeyDown"
         />
       </div>
 
-      <div class="qep-divider" />
+      <div class="mt-4 h-px bg-(--border)" />
 
-      <div class="qep-meta">
-        <div class="qep-meta-row">
+      <div class="px-4 py-2">
+        <div class="flex flex-wrap items-center gap-2">
           <DateChip
             :value="scheduledDate"
             placeholder="Без даты"
@@ -154,16 +159,23 @@ onBeforeUnmount(() => {
 
           <button
             type="button"
-            class="qep-chip"
-            :class="{ 'qep-chip--billable': billable }"
+            :class="[
+              'inline-flex h-8 items-center gap-2 rounded-full border-0 px-4 text-xs transition-colors',
+              billable
+                ? 'bg-[color-mix(in_srgb,var(--status-success)_15%,transparent)] text-(--status-success) hover:bg-[color-mix(in_srgb,var(--status-success)_22%,transparent)]'
+                : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
+            ]"
             :title="billable ? 'Оплачиваемая задача' : 'Сделать оплачиваемой'"
             @click="billable = !billable"
           >
-            <DollarSign :size="12" />
+            <DollarSign :size="16" />
             <span>Оплачиваемая</span>
           </button>
 
-          <label v-if="billable" class="qep-chip qep-chip--input">
+          <label
+            v-if="billable"
+            class="inline-flex h-8 cursor-text items-center gap-2 rounded-full border-0 bg-(--secondary) px-4 text-xs text-(--muted-foreground)"
+          >
             <input
               type="number"
               inputmode="decimal"
@@ -171,29 +183,38 @@ onBeforeUnmount(() => {
               step="0.01"
               placeholder="Цена"
               :value="priceInput"
-              class="qep-price-input"
+              class="w-16 border-0 bg-transparent text-xs text-(--foreground) outline-none placeholder:text-[color-mix(in_srgb,var(--muted-foreground)_60%,transparent)]"
               @input="priceInput = ($event.target as HTMLInputElement).value"
             />
           </label>
 
-          <div class="qep-spacer" />
+          <div class="flex-1" />
 
-          <div ref="projectMenu" class="qep-project-wrap">
+          <div ref="projectMenu" class="relative">
             <button
               type="button"
-              class="qep-chip"
-              :class="{ 'qep-chip--active': selectedProject() }"
+              :class="[
+                'inline-flex h-8 items-center gap-2 rounded-full border-0 px-4 text-xs transition-colors',
+                selectedProject()
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-(--accent) hover:bg-[color-mix(in_srgb,var(--accent)_22%,transparent)]'
+                  : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
+              ]"
               @click="showProjectMenu = !showProjectMenu"
             >
-              <Folder :size="12" />
+              <Folder :size="16" />
               <span>{{ selectedProject()?.title ?? "Входящие" }}</span>
             </button>
 
-            <div v-if="showProjectMenu" class="qep-menu">
+            <div
+              v-if="showProjectMenu"
+              class="absolute right-0 top-full z-20 mt-2 max-h-64 min-w-48 overflow-y-auto rounded-lg border border-(--border) bg-(--color-shape-highlight-light-solid) py-2 shadow-[0_8px_24px_color-mix(in_srgb,var(--foreground)_28%,transparent)]"
+            >
               <button
                 type="button"
-                class="qep-menu-item"
-                :class="{ 'qep-menu-item--selected': selectedProjectId === null }"
+                :class="[
+                  'block w-full border-0 bg-transparent px-4 py-2 text-left text-xs text-(--foreground) hover:bg-(--surface)',
+                  selectedProjectId === null ? 'text-(--accent)' : '',
+                ]"
                 @click="
                   selectedProjectId = null;
                   billable = false;
@@ -206,8 +227,10 @@ onBeforeUnmount(() => {
                 v-for="project in projects ?? []"
                 :key="project.id"
                 type="button"
-                class="qep-menu-item"
-                :class="{ 'qep-menu-item--selected': selectedProjectId === project.id }"
+                :class="[
+                  'block w-full border-0 bg-transparent px-4 py-2 text-left text-xs text-(--foreground) hover:bg-(--surface)',
+                  selectedProjectId === project.id ? 'text-(--accent)' : '',
+                ]"
                 @click="
                   selectedProjectId = project.id;
                   billable = Boolean(project.billable);
@@ -221,211 +244,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <button type="button" class="qep-close" @click="close">
-        <X :size="14" />
+      <button
+        type="button"
+        class="absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-md border-0 bg-transparent p-2 text-(--muted-foreground) transition-colors hover:bg-(--surface) hover:text-(--foreground)"
+        @click="close"
+      >
+        <X :size="16" />
       </button>
     </div>
   </div>
 </template>
-
-<style scoped>
-/* QuickEntryPanel — modal for task creation. Использует @kosmos/visuals
-   tokens, никакого Tailwind. Временный handcrafted-кандидат — стиль будет
-   дополирован, см. STORYBOOK handcrafted tag. */
-
-.qep-root {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 15vh;
-}
-
-.qep-backdrop {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, #000 40%, transparent);
-  backdrop-filter: blur(4px);
-}
-
-.qep-panel {
-  position: relative;
-  z-index: 10;
-  width: 100%;
-  max-width: var(--bringhurst-wide);
-  background: var(--color-shape-highlight-light-solid, var(--background));
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 16px 48px color-mix(in srgb, #000 40%, transparent);
-  overflow: visible;
-}
-
-.qep-content {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 16px 0;
-}
-
-.qep-title,
-.qep-notes {
-  width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-family: inherit;
-  color: var(--foreground);
-}
-
-.qep-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-.qep-title::placeholder {
-  color: var(--muted-foreground);
-}
-
-.qep-notes {
-  font-size: 12px;
-  color: var(--muted-foreground);
-  resize: none;
-}
-.qep-notes::placeholder {
-  color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
-}
-
-.qep-divider {
-  height: 1px;
-  background: var(--border);
-  margin-top: 12px;
-}
-
-.qep-meta {
-  padding: 8px 16px;
-}
-
-.qep-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.qep-spacer {
-  flex: 1;
-}
-
-.qep-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 12px;
-  background: var(--secondary);
-  color: var(--muted-foreground);
-  border: none;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: 12px;
-  transition:
-    background-color 120ms,
-    color 120ms;
-}
-.qep-chip:hover {
-  background: var(--surface);
-}
-.qep-chip--billable {
-  background: color-mix(in srgb, var(--status-success) 15%, transparent);
-  color: var(--status-success);
-}
-.qep-chip--billable:hover {
-  background: color-mix(in srgb, var(--status-success) 22%, transparent);
-}
-.qep-chip--active {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--accent);
-}
-.qep-chip--active:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-}
-.qep-chip--input {
-  padding: 0 10px;
-  cursor: text;
-}
-
-.qep-price-input {
-  width: 70px;
-  background: transparent;
-  border: none;
-  outline: none;
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--foreground);
-}
-.qep-price-input::placeholder {
-  color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
-}
-
-.qep-project-wrap {
-  position: relative;
-}
-
-.qep-menu {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 20;
-  margin-top: 4px;
-  min-width: 180px;
-  max-height: 256px;
-  overflow-y: auto;
-  padding: 4px 0;
-  background: var(--color-shape-highlight-light-solid, var(--background));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px color-mix(in srgb, #000 28%, transparent);
-}
-
-.qep-menu-item {
-  display: block;
-  width: 100%;
-  padding: 6px 12px;
-  text-align: left;
-  background: transparent;
-  border: none;
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--foreground);
-}
-.qep-menu-item:hover {
-  background: var(--surface);
-}
-.qep-menu-item--selected {
-  color: var(--accent);
-}
-
-.qep-close {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 4px;
-  background: transparent;
-  border: none;
-  color: var(--muted-foreground);
-  border-radius: 6px;
-  transition:
-    background 100ms,
-    color 100ms;
-}
-.qep-close:hover {
-  background: var(--surface);
-  color: var(--foreground);
-}
-</style>

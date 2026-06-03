@@ -25,17 +25,30 @@ const emit = defineEmits<{
   <!-- Regression L6 (2026-05-24): aria-live lives on ToastHost (the polite
        live region). Double aria-live on a child inside a live region causes
        screen readers to announce twice. role="status" is kept for semantics. -->
-  <div class="kosmos-toast" :class="`kosmos-toast--${tone}`" role="status">
+  <div
+    class="relative flex max-w-80 items-start gap-2 overflow-hidden rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_92%,transparent)] px-4 py-2 text-sm leading-[1.35] text-[var(--foreground)] shadow-[0_4px_16px_color-mix(in_srgb,var(--foreground)_12%,transparent)] backdrop-blur-sm pointer-events-auto"
+    :class="{
+      'border-[color-mix(in_srgb,var(--accent)_55%,var(--border))]': tone === 'success',
+      'border-[color-mix(in_srgb,var(--destructive)_55%,var(--border))] text-[color-mix(in_srgb,var(--destructive)_85%,var(--foreground))]':
+        tone === 'error',
+    }"
+    role="status"
+  >
     <div v-if="loading" class="kosmos-toast__spinner" aria-hidden="true" />
-    <div class="kosmos-toast__body">
-      <div v-if="title" class="kosmos-toast__title">{{ title }}</div>
-      <div class="kosmos-toast__message">{{ message }}</div>
-      <div v-if="description" class="kosmos-toast__description">{{ description }}</div>
+    <div class="min-w-0">
+      <div v-if="title" class="mb-2 text-[0.82rem] font-[650]">{{ title }}</div>
+      <div class="[overflow-wrap:anywhere]">{{ message }}</div>
+      <div
+        v-if="description"
+        class="mt-2 text-[0.76rem] text-[color-mix(in_srgb,var(--foreground)_58%,transparent)]"
+      >
+        {{ description }}
+      </div>
     </div>
     <button
       v-if="closable"
       type="button"
-      class="kosmos-toast__close"
+      class="ml-2 inline-flex size-6 items-center justify-center rounded-lg border-0 bg-transparent p-0 text-base leading-none text-[color-mix(in_srgb,var(--foreground)_58%,transparent)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
       aria-label="Закрыть уведомление"
       @click="emit('dismiss')"
     >
@@ -46,69 +59,15 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.kosmos-toast {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 0.5rem 0.875rem;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  line-height: 1.35;
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--background) 92%, transparent);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--foreground) 12%, transparent);
-  backdrop-filter: blur(8px);
-  max-width: 320px;
-  pointer-events: auto;
-  overflow: hidden;
-}
-
-.kosmos-toast__body {
-  min-width: 0;
-}
-
-.kosmos-toast__title {
-  margin-bottom: 2px;
-  font-size: 0.82rem;
-  font-weight: 650;
-}
-
-.kosmos-toast__message {
-  overflow-wrap: anywhere;
-}
-
-.kosmos-toast__description {
-  margin-top: 2px;
-  color: color-mix(in srgb, var(--foreground) 58%, transparent);
-  font-size: 0.76rem;
-}
-
 .kosmos-toast__spinner {
-  width: 14px;
-  height: 14px;
-  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  margin-top: 0;
   flex-shrink: 0;
   border-radius: 999px;
   border: 2px solid color-mix(in srgb, var(--foreground) 18%, transparent);
   border-top-color: color-mix(in srgb, var(--accent) 82%, var(--foreground));
   animation: kosmos-toast-spin 800ms linear infinite;
-}
-
-.kosmos-toast__close {
-  margin: -3px -5px 0 4px;
-  padding: 0 4px;
-  border: none;
-  background: transparent;
-  color: color-mix(in srgb, var(--foreground) 58%, transparent);
-  font: inherit;
-  font-size: 16px;
-  line-height: 1;
-}
-
-.kosmos-toast__close:hover {
-  color: var(--foreground);
 }
 
 .kosmos-toast__progress {
@@ -124,15 +83,6 @@ const emit = defineEmits<{
     transparent
   );
   animation: kosmos-toast-progress 1.2s ease-in-out infinite;
-}
-
-.kosmos-toast--success {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-}
-
-.kosmos-toast--error {
-  border-color: color-mix(in srgb, #d54a4a 55%, var(--border));
-  color: color-mix(in srgb, #d54a4a 85%, var(--foreground));
 }
 
 @keyframes kosmos-toast-spin {

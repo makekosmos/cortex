@@ -25,84 +25,30 @@ defineEmits<{
 <template>
   <button
     type="button"
-    class="kosmos-settings-sidebar-button"
-    :class="{ 'kosmos-settings-sidebar-button--active': active }"
+    class="flex w-full cursor-default items-center gap-2 rounded border-0 bg-transparent p-1 text-left text-white data-[active=true]:bg-[var(--settings-sidebar-active)]"
+    :data-active="active ? 'true' : undefined"
     @click="$emit('click')"
   >
     <span
-      class="kosmos-settings-sidebar-button__icon"
-      :class="{ 'kosmos-settings-sidebar-button__icon--image': iconImage }"
+      class="inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded text-white"
+      :class="
+        iconImage
+          ? 'bg-none shadow-none'
+          : 'bg-linear-to-bl from-[var(--settings-sidebar-button-icon-from)] to-[var(--settings-sidebar-button-icon-to)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,oklch(1_0_0)_6%,transparent)]'
+      "
       :style="{
         '--settings-sidebar-button-icon-from': iconFrom,
         '--settings-sidebar-button-icon-to': iconTo,
       }"
       aria-hidden="true"
     >
-      <img v-if="iconImage" class="kosmos-settings-sidebar-button__image" :src="iconImage" alt="" />
+      <img v-if="iconImage" class="block size-6 object-contain" :src="iconImage" alt="" />
       <component v-else :is="icon" :size="14" :stroke-width="2" />
     </span>
-    <span class="kosmos-settings-sidebar-button__label">{{ label }}</span>
+    <span
+      class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-[var(--font-sans)] text-[13px] leading-[1.4] font-medium"
+    >
+      {{ label }}
+    </span>
   </button>
 </template>
-
-<style scoped>
-.kosmos-settings-sidebar-button {
-  display: flex;
-  width: 212px;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #fff;
-  cursor: default;
-  text-align: left;
-}
-
-.kosmos-settings-sidebar-button--active {
-  background: var(--settings-sidebar-active);
-}
-
-.kosmos-settings-sidebar-button__icon {
-  display: inline-flex;
-  width: 22px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: 4px;
-  background-image: linear-gradient(
-    to bottom left,
-    var(--settings-sidebar-button-icon-from),
-    var(--settings-sidebar-button-icon-to)
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, oklch(1 0 0) 6%, transparent);
-  color: #fff;
-  overflow: hidden;
-}
-
-.kosmos-settings-sidebar-button__icon--image {
-  background-image: none;
-  box-shadow: none;
-}
-
-.kosmos-settings-sidebar-button__image {
-  display: block;
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-}
-
-.kosmos-settings-sidebar-button__label {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.4;
-  font-weight: 500;
-}
-</style>

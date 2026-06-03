@@ -1,4 +1,29 @@
-# Kosmos — статус проекта (2026-06-02)
+# Kosmos — статус проекта (2026-06-03)
+
+## 2026-06-03 — Visuals Tailwind scale pass (Kosmos Desktop 0.3.9 → 0.3.10)
+
+`@kosmos/visuals` переведён на Tailwind v4 как implementation layer для shared
+Vue primitives, но public contract остался через CSS variables и public exports.
+
+- `theme/css-variables.css` теперь явно фиксирует layout scale: большие
+  размеры/отступы на 8px multiples, мелкие детали допускают 2px/4px, typography
+  живёт на отдельной rem-шкале.
+- Shared controls выровнены под predictable dimensions: 24/32/40px controls,
+  32/40/48px rows, tokenized radii `--radius-card`, `--radius-button`,
+  `--radius-input`.
+- Storybook 10 теперь грузит Tailwind через `@tailwindcss/vite` и отдельный
+  `theme/storybook.css`, а не вручную подтягивает старые component CSS entry.
+- Починен Storybook/Bun/Windows resolution: framework идёт package specifier'ом,
+  `vue-component-type-helpers@2.2.12` добавлен как explicit visuals dev dep.
+- Починены broken composed stories `DesktopChrome` и `Titlebar in window`, где
+  Storybook decorator рендерил `[object Object]`, а pattern использовал старый
+  `#titlebar` slot вместо `#titlebar-leading/center/trailing`.
+
+Checks: `bun run --cwd packages/visuals format:check`,
+`bun run --cwd packages/visuals test`, `bun run --cwd packages/visuals build-storybook`,
+`bun run --cwd shell typecheck`, `bun run --cwd shell build:extensions`,
+Playwright screenshots of Dropdown / Toggle / SettingsRow / DesktopChrome /
+Titlebar-in-window stories under `.tmp/visuals-check/`.
 
 ## 2026-06-02 — Dashboard table visual polish (Kosmos Desktop 0.3.8 → 0.3.9)
 

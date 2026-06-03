@@ -102,7 +102,7 @@ const hasRows = computed(() => props.rows.length > 0);
   gap: 12px;
   align-items: center;
   min-height: 36px;
-  padding: 6px 24px;
+  padding: 4px 24px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-color-strong) 72%, transparent);
   color: var(--foreground);
 }

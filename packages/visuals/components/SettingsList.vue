@@ -7,17 +7,10 @@ defineProps<Props>();
 </script>
 
 <template>
-  <div class="kosmos-settings-list" :class="className">
+  <div
+    class="flex flex-col overflow-hidden rounded-lg bg-[var(--settings-list-background)]"
+    :class="className"
+  >
     <slot />
   </div>
 </template>
-
-<style scoped>
-.kosmos-settings-list {
-  display: flex;
-  flex-direction: column;
-  background: var(--settings-list-background);
-  border-radius: 12px;
-  overflow: hidden;
-}
-</style>

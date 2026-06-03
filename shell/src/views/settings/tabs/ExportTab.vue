@@ -106,7 +106,7 @@ function runExport(c: ExportConverterInfo) {
 
 .export-format-select {
   font: inherit;
-  font-size: 11px;
+  font-size: 0.6875rem;
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);

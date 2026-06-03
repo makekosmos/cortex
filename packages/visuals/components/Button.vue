@@ -8,7 +8,7 @@ withDefaults(
   defineProps<{
     /** Внешний вид. */
     variant?: "primary" | "ghost" | "danger";
-    /** Размер: md (default, 34px h) или sm (28px h). */
+    /** Размер: md (default, 40px h) или sm (28px h). */
     size?: "md" | "sm";
     /** Кнопка занимает всю ширину контейнера. */
     block?: boolean;
@@ -33,98 +33,29 @@ withDefaults(
     :type="type"
     :disabled="disabled || loading"
     :class="[
-      'kosmos-btn',
-      `kosmos-btn--${variant}`,
-      `kosmos-btn--${size}`,
-      { 'kosmos-btn--block': block, 'kosmos-btn--loading': loading },
+      'inline-flex cursor-default items-center justify-center gap-2 whitespace-nowrap border-solid border-transparent font-[inherit] font-medium leading-none transition-[background-color,border-color,color] duration-120 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] disabled:cursor-not-allowed disabled:opacity-55',
+      size === 'sm'
+        ? 'kosmos-btn--sm h-7 rounded-md border px-2.5'
+        : 'h-10 rounded-lg border-2 px-4 text-[length:var(--kosmos-text-control-size)]',
+      block ? 'w-full' : '',
+      variant === 'primary'
+        ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground,var(--background))] hover:not-disabled:border-[color-mix(in_srgb,var(--accent)_88%,white)] hover:not-disabled:bg-[color-mix(in_srgb,var(--accent)_88%,white)] active:not-disabled:bg-[color-mix(in_srgb,var(--accent)_80%,black)]'
+        : '',
+      variant === 'ghost'
+        ? 'border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] text-[var(--foreground)] hover:not-disabled:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] hover:not-disabled:bg-[color-mix(in_srgb,var(--foreground)_7%,var(--background))]'
+        : '',
+      variant === 'danger'
+        ? 'border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-transparent text-[var(--destructive)] hover:not-disabled:border-[var(--destructive)] hover:not-disabled:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)]'
+        : '',
     ]"
   >
-    <span v-if="$slots.icon" class="kosmos-btn__icon"><slot name="icon" /></span>
-    <span class="kosmos-btn__label"><slot /></span>
+    <span v-if="$slots.icon" class="inline-flex items-center"><slot name="icon" /></span>
+    <span :class="loading ? 'opacity-70' : ''"><slot /></span>
   </button>
 </template>
 
 <style scoped>
-.kosmos-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  height: 34px;
-  padding: 0 0.9rem;
-  border: 2px solid transparent;
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1;
-  cursor: default;
-  white-space: nowrap;
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    border-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
 .kosmos-btn--sm {
-  height: 28px;
-  padding: 0 0.7rem;
-  font-size: 0.8125rem;
-}
-
-.kosmos-btn--block {
-  width: 100%;
-}
-
-.kosmos-btn--primary {
-  background: var(--accent);
-  color: var(--accent-foreground, var(--background));
-  border-color: var(--accent);
-}
-
-.kosmos-btn--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 88%, white);
-  border-color: color-mix(in srgb, var(--accent) 88%, white);
-}
-
-.kosmos-btn--primary:active:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 80%, black);
-}
-
-.kosmos-btn--ghost {
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  color: var(--foreground);
-  border-color: var(--border);
-}
-
-.kosmos-btn--ghost:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  background: color-mix(in srgb, var(--foreground) 7%, var(--background));
-}
-
-.kosmos-btn--danger {
-  background: transparent;
-  color: var(--destructive);
-  border-color: color-mix(in srgb, var(--destructive) 35%, var(--border));
-}
-
-.kosmos-btn--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--destructive) 10%, transparent);
-  border-color: var(--destructive);
-}
-
-.kosmos-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.kosmos-btn--loading .kosmos-btn__label {
-  opacity: 0.7;
-}
-
-.kosmos-btn__icon {
-  display: inline-flex;
-  align-items: center;
+  font-size: var(--kosmos-text-caption-size);
 }
 </style>

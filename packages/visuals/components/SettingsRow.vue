@@ -20,71 +20,26 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <div class="kosmos-settings-row" :class="{ 'kosmos-settings-row--muted': muted }">
-    <div class="kosmos-settings-row__left">
-      <div class="kosmos-settings-row__title">{{ title }}</div>
-      <div v-if="description" class="kosmos-settings-row__description">
+  <div
+    class="flex items-center justify-between gap-4 border-b border-[var(--border-color-strong)] bg-transparent px-4 py-4 last:border-b-0"
+  >
+    <div class="flex min-w-0 flex-col gap-2" :class="{ 'opacity-60': muted }">
+      <div
+        class="font-[var(--font-sans)] text-[length:var(--kosmos-text-body-size)] leading-[1.4] font-medium text-[var(--foreground)]"
+      >
+        {{ title }}
+      </div>
+      <div
+        v-if="description"
+        class="font-[var(--font-sans)] text-[length:var(--kosmos-text-caption-size)] leading-[1.4] font-medium text-[var(--muted-foreground)]"
+      >
         {{ description }}
       </div>
     </div>
-    <div class="kosmos-settings-row__right">
+    <div class="flex shrink-0 items-center gap-2">
       <slot name="control">
         <slot />
       </slot>
     </div>
   </div>
 </template>
-
-<style scoped>
-.kosmos-settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 12px;
-  /* Без своего background — `--settings-list-background` стоит на родителе
-   * (SettingsList). С полупрозрачным overlay двойной слой здесь стекался и
-   * прямоугольник в Security выглядел темнее остальных. */
-  background: transparent;
-  border-bottom: 1px solid var(--border-color-strong);
-}
-
-.kosmos-settings-row:last-child {
-  border-bottom: none;
-}
-
-.kosmos-settings-row__left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.kosmos-settings-row__title {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.4;
-  font-weight: 500;
-  color: var(--foreground);
-}
-
-.kosmos-settings-row__description {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  line-height: 1.4;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-
-.kosmos-settings-row__right {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.kosmos-settings-row--muted .kosmos-settings-row__title,
-.kosmos-settings-row--muted .kosmos-settings-row__description {
-  opacity: 0.6;
-}
-</style>

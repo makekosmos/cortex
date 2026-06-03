@@ -19,51 +19,14 @@ defineEmits<{
   <button
     type="button"
     role="menuitem"
-    class="kosmos-context-menu-item"
-    :class="{ 'kosmos-context-menu-item--destructive': destructive }"
+    class="flex min-h-8 w-full items-center gap-2 rounded-lg border-0 bg-transparent px-2 py-2 text-left font-[inherit] text-[0.8125rem] text-[var(--foreground)] transition-colors duration-[90ms] ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] disabled:cursor-not-allowed disabled:text-[color-mix(in_srgb,var(--foreground)_40%,transparent)] [&_svg]:shrink-0"
+    :class="{
+      'text-[var(--destructive)] hover:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)]':
+        destructive,
+    }"
     :disabled="disabled"
     @click="(e) => $emit('click', e)"
   >
     <slot />
   </button>
 </template>
-
-<style scoped>
-.kosmos-context-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.4rem 0.625rem;
-  background: transparent;
-  border: none;
-  border-radius: calc(var(--radius) * 0.6);
-  text-align: left;
-  color: var(--foreground);
-  font-size: 0.8125rem;
-  font-family: inherit;
-  transition: background-color 90ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-context-menu-item:hover:not(:disabled),
-.kosmos-context-menu-item:focus-visible:not(:disabled) {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.kosmos-context-menu-item:disabled {
-  color: color-mix(in srgb, var(--foreground) 40%, transparent);
-  cursor: not-allowed;
-}
-
-.kosmos-context-menu-item--destructive {
-  color: var(--destructive);
-}
-
-.kosmos-context-menu-item--destructive:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--destructive) 14%, transparent);
-}
-
-.kosmos-context-menu-item :deep(svg) {
-  flex-shrink: 0;
-}
-</style>

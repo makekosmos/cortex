@@ -12,22 +12,29 @@ const props = withDefaults(defineProps<Props>(), {
   title: undefined,
 });
 
-const titlebarClasses = computed(() => ["kosmos-titlebar", `kosmos-titlebar--${props.platform}`]);
+const titlebarClasses = computed(() => [
+  "kosmos-titlebar relative z-[10000] grid box-border select-none grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 bg-(--sidebar-bg) px-(--kosmos-titlebar-inline-padding) py-(--kosmos-titlebar-vertical-padding) text-(--sidebar-foreground)",
+  `kosmos-titlebar--${props.platform}`,
+]);
 </script>
 
 <template>
   <header :class="titlebarClasses">
-    <div class="kosmos-titlebar__leading">
+    <div class="flex min-h-full min-w-0 items-center justify-start gap-2">
       <slot name="leading" />
     </div>
 
-    <div class="kosmos-titlebar__center">
+    <div class="flex min-h-full min-w-0 items-center justify-center gap-2">
       <slot name="center">
-        <span v-if="title" class="kosmos-titlebar__title">{{ title }}</span>
+        <span
+          v-if="title"
+          class="whitespace-nowrap text-[0.8125rem] font-semibold tracking-[0.02em] text-[color-mix(in_srgb,var(--sidebar-foreground)_82%,transparent)]"
+          >{{ title }}</span
+        >
       </slot>
     </div>
 
-    <div class="kosmos-titlebar__trailing">
+    <div class="flex min-h-full min-w-0 items-center justify-end gap-2">
       <slot name="trailing" />
     </div>
   </header>
@@ -35,34 +42,23 @@ const titlebarClasses = computed(() => ["kosmos-titlebar", `kosmos-titlebar--${p
 
 <style scoped>
 .kosmos-titlebar {
-  --kosmos-titlebar-height: 36px;
+  --kosmos-titlebar-height: 40px;
   --kosmos-titlebar-control-size: 32px;
-  --kosmos-titlebar-control-radius: 10px;
-  --kosmos-titlebar-inline-padding: 0.75rem;
-  --kosmos-titlebar-vertical-padding: 0.375rem;
-  box-sizing: border-box;
-  position: relative;
+  --kosmos-titlebar-control-radius: 8px;
+  --kosmos-titlebar-inline-padding: 16px;
+  --kosmos-titlebar-vertical-padding: 0px;
   /* Тайтлбар всегда поверх Modal backdrop/panel (Modal = 9000) и любых
        app-overlay'ов: пользователь должен видеть/нажимать наши leading
        (sidebar toggle, app name) и trailing (status, settings) даже при
        открытом модальном окне. Native window controls (titleBarOverlay)
        и так выше любого CSS-слоя. */
-  z-index: 10000;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0.75rem;
   height: calc(var(--kosmos-titlebar-height) + (var(--kosmos-titlebar-vertical-padding) * 2));
   min-height: calc(var(--kosmos-titlebar-height) + (var(--kosmos-titlebar-vertical-padding) * 2));
-  padding: var(--kosmos-titlebar-vertical-padding) var(--kosmos-titlebar-inline-padding);
-  background: var(--sidebar-bg);
-  color: var(--sidebar-foreground);
   -webkit-app-region: drag;
-  user-select: none;
 }
 
 .kosmos-titlebar--mac {
-  padding-left: var(--kosmos-mac-traffic-light-left-safe-area, 92px);
+  padding-left: var(--kosmos-mac-traffic-light-left-safe-area, 96px);
 }
 
 .kosmos-titlebar--windows {
@@ -85,36 +81,6 @@ const titlebarClasses = computed(() => ["kosmos-titlebar", `kosmos-titlebar--${p
         var(--kosmos-titlebar-inline-padding)
     )
   );
-}
-
-.kosmos-titlebar__leading,
-.kosmos-titlebar__center,
-.kosmos-titlebar__trailing {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  min-height: 100%;
-  gap: 0.5rem;
-}
-
-.kosmos-titlebar__leading {
-  justify-content: flex-start;
-}
-
-.kosmos-titlebar__center {
-  justify-content: center;
-}
-
-.kosmos-titlebar__trailing {
-  justify-content: flex-end;
-}
-
-.kosmos-titlebar__title {
-  color: color-mix(in srgb, var(--sidebar-foreground) 82%, transparent);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
 }
 
 .kosmos-titlebar :deep(button),

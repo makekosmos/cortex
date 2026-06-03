@@ -20,7 +20,7 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   description: undefined,
   variant: "ghost",
-  size: "md",
+  size: "sm",
   disabled: false,
   loading: false,
   muted: false,

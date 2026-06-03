@@ -7,6 +7,7 @@
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+@source "../../../packages/visuals/**/*.{vue,ts}";
 
 :root {
   /* Acrylic-overlay цвет — используется только в zen mode (см. App.css

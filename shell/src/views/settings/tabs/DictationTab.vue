@@ -199,7 +199,7 @@ onMounted(() => {
   color: var(--foreground);
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .pending-retry-all:hover {
@@ -207,7 +207,7 @@ onMounted(() => {
 }
 
 .pending-error {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #f5a524;
   padding: 8px 12px;
   margin-bottom: 8px;
@@ -235,12 +235,12 @@ onMounted(() => {
 }
 
 .pending-item__meta {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--foreground);
 }
 
 .pending-item__error {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
   margin-top: 2px;
   overflow: hidden;
@@ -260,7 +260,7 @@ onMounted(() => {
   color: var(--foreground);
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .pending-btn:hover:not(:disabled) {

@@ -396,41 +396,43 @@ onBeforeUnmount(() => {
 
     <div class="settings-shell">
       <SettingsSidebar title="Настройки">
-        <div class="settings-sidebar-group">
+        <div class="settings-sidebar-search">
           <SettingsSearchInput v-model="searchQuery" placeholder="Поиск" />
         </div>
 
-        <template v-if="hasSidebarMatches">
-          <div v-if="mainNavigationItems.length > 0" class="settings-sidebar-group">
-            <SettingsSidebarButton
-              v-for="item in mainNavigationItems"
-              :key="item.tab"
-              :icon="item.icon"
-              :icon-image="item.sidebarImage"
-              :icon-from="item.iconGradient?.from"
-              :icon-to="item.iconGradient?.to"
-              :label="item.label"
-              :active="activeTab === item.tab"
-              @click="selectTab(item.tab)"
-            />
-          </div>
+        <div class="settings-sidebar-scroll kosmos-scroll">
+          <template v-if="hasSidebarMatches">
+            <div v-if="mainNavigationItems.length > 0" class="settings-sidebar-group">
+              <SettingsSidebarButton
+                v-for="item in mainNavigationItems"
+                :key="item.tab"
+                :icon="item.icon"
+                :icon-image="item.sidebarImage"
+                :icon-from="item.iconGradient?.from"
+                :icon-to="item.iconGradient?.to"
+                :label="item.label"
+                :active="activeTab === item.tab"
+                @click="selectTab(item.tab)"
+              />
+            </div>
 
-          <div v-if="advancedNavigationItems.length > 0" class="settings-sidebar-group">
-            <SettingsSidebarButton
-              v-for="item in advancedNavigationItems"
-              :key="item.tab"
-              :icon="item.icon"
-              :icon-image="item.sidebarImage"
-              :icon-from="item.iconGradient?.from"
-              :icon-to="item.iconGradient?.to"
-              :label="item.label"
-              :active="activeTab === item.tab"
-              @click="selectTab(item.tab)"
-            />
-          </div>
-        </template>
+            <div v-if="advancedNavigationItems.length > 0" class="settings-sidebar-group">
+              <SettingsSidebarButton
+                v-for="item in advancedNavigationItems"
+                :key="item.tab"
+                :icon="item.icon"
+                :icon-image="item.sidebarImage"
+                :icon-from="item.iconGradient?.from"
+                :icon-to="item.iconGradient?.to"
+                :label="item.label"
+                :active="activeTab === item.tab"
+                @click="selectTab(item.tab)"
+              />
+            </div>
+          </template>
 
-        <div v-else class="settings-sidebar-empty">Ничего не найдено</div>
+          <div v-else class="settings-sidebar-empty">Ничего не найдено</div>
+        </div>
       </SettingsSidebar>
 
       <div class="settings-content">

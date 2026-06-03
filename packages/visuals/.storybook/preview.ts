@@ -5,8 +5,7 @@ import { create } from "storybook/theming";
 // Global tokens / theme variables — обязательно для всех stories.
 // `css-variables.css` сам загружает Inter Variable + IBM Plex Mono через
 // fontsource @import'ы — единый источник правды для шрифтов visuals.
-import "../theme/css-variables.css";
-import "../components/sidebar.css";
+import "../theme/storybook.css";
 
 // Dark theme для Docs page (autodocs) — синхронизирован с manager.ts.
 // Без этого argTypes table / story sub-nav рендерятся на белом.

@@ -218,7 +218,7 @@ function reposition() {
   const rect = trigger.getBoundingClientRect();
   const panelH = panel.offsetHeight;
   const panelW = panel.offsetWidth;
-  const margin = 6;
+  const margin = 8;
   const spaceBelow = window.innerHeight - rect.bottom - margin;
   const spaceAbove = rect.top - margin;
   const placement: "below" | "above" =
@@ -285,33 +285,39 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="kosmos-dtp">
+  <div class="relative inline-flex w-full">
     <button
       ref="triggerRef"
       type="button"
-      class="kosmos-dtp__trigger"
-      :class="{ 'kosmos-dtp__trigger--placeholder': !value }"
+      class="flex h-8 w-full items-center justify-between gap-2 rounded-lg border-2 border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-2 font-[var(--font-sans,inherit)] text-[0.8125rem] tabular-nums text-[var(--foreground)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:border-[color-mix(in_srgb,var(--accent)_35%,transparent)]"
+      :class="{ 'text-[color-mix(in_srgb,var(--foreground)_50%,transparent)]': !value }"
       :aria-label="label ?? 'Выбрать дату и время'"
       @click="onTriggerClick"
     >
-      <span class="kosmos-dtp__label">{{ displayLabel }}</span>
-      <CalendarIcon :size="14" :stroke-width="1.7" class="kosmos-dtp__icon" />
+      <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{{
+        displayLabel
+      }}</span>
+      <CalendarIcon
+        :size="14"
+        :stroke-width="1.7"
+        class="shrink-0 text-[var(--foreground)] opacity-70"
+      />
     </button>
 
     <Teleport to="body">
       <div
         v-if="open"
         ref="panelRef"
-        class="kosmos-dtp__panel"
+        class="fixed z-[9500] flex min-w-72 max-w-[min(416px,calc(100vw-16px))] flex-col rounded-xl border border-[var(--border)] bg-[var(--popover,var(--background))] font-[var(--font-sans,inherit)] shadow-[var(--shadow-floating)] [corner-shape:var(--corner-shape)]"
         role="dialog"
         :style="{ top: panelPosition.top + 'px', left: panelPosition.left + 'px' }"
       >
         <Calendar :value="dateIso" @pick="onDatePick" />
 
-        <div class="kosmos-dtp__time">
+        <div class="flex items-center border-t border-[var(--border)] px-4 py-2">
           <input
             id="kosmos-dtp-time-input"
-            class="kosmos-dtp__time-input"
+            class="h-8 flex-1 rounded-lg border-2 border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-2 text-center font-[var(--font-mono,ui-monospace,monospace)] text-[1.0625rem] font-semibold tracking-[0.02em] text-[var(--foreground)] tabular-nums outline-none [corner-shape:var(--corner-shape)] focus:border-[color-mix(in_srgb,var(--accent)_55%,transparent)] focus:bg-[var(--background)]"
             type="text"
             inputmode="numeric"
             placeholder="HH:MM"
@@ -323,15 +329,25 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <footer class="kosmos-dtp__foot">
-          <button type="button" class="kosmos-dtp__btn kosmos-dtp__btn--danger" @click="clearValue">
-            Очистить
-          </button>
-          <div class="kosmos-dtp__foot-spacer" />
-          <button type="button" class="kosmos-dtp__btn" @click="open = false">Отмена</button>
+        <footer class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-2">
           <button
             type="button"
-            class="kosmos-dtp__btn kosmos-dtp__btn--primary"
+            class="inline-flex h-8 items-center justify-center rounded-lg border border-[color-mix(in_srgb,var(--destructive)_35%,transparent)] bg-transparent px-4 font-[inherit] text-[0.8125rem] font-medium text-[var(--destructive)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)]"
+            @click="clearValue"
+          >
+            Очистить
+          </button>
+          <div class="flex-1" />
+          <button
+            type="button"
+            class="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--border)] bg-transparent px-4 font-[inherit] text-[0.8125rem] font-medium text-[var(--foreground)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
+            @click="open = false"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-8 items-center justify-center rounded-lg border border-[var(--accent)] bg-[var(--accent)] px-4 font-[inherit] text-[0.8125rem] font-medium text-[var(--accent-foreground)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:bg-[color-mix(in_srgb,var(--accent)_90%,var(--foreground))]"
             @click="applyDraft"
           >
             Сохранить
@@ -341,150 +357,3 @@ onBeforeUnmount(() => {
     </Teleport>
   </div>
 </template>
-
-<style scoped>
-.kosmos-dtp {
-  position: relative;
-  display: inline-flex;
-  width: 100%;
-}
-
-.kosmos-dtp__trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  width: 100%;
-  height: 34px;
-  padding: 0 0.625rem;
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: var(--font-sans, inherit);
-  font-size: 0.8125rem;
-  font-variant-numeric: tabular-nums;
-  transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-dtp__trigger:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-}
-
-.kosmos-dtp__trigger--placeholder {
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
-}
-
-.kosmos-dtp__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.kosmos-dtp__icon {
-  color: var(--foreground);
-  opacity: 0.7;
-  flex-shrink: 0;
-}
-
-.kosmos-dtp__panel {
-  position: fixed;
-  z-index: 9500;
-  display: flex;
-  flex-direction: column;
-  min-width: 280px;
-  max-width: min(420px, calc(100vw - 16px));
-  background: var(--popover, var(--background));
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.85);
-  corner-shape: var(--corner-shape);
-  box-shadow:
-    0 12px 32px rgb(0 0 0 / 28%),
-    0 4px 12px rgb(0 0 0 / 14%);
-  font-family: var(--font-sans, inherit);
-}
-
-.kosmos-dtp__time {
-  display: flex;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  border-top: 1px solid var(--border);
-}
-
-.kosmos-dtp__time-input {
-  flex: 1;
-  height: 34px;
-  text-align: center;
-  padding: 0 0.625rem;
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  outline: none;
-}
-
-.kosmos-dtp__time-input:focus {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: var(--background);
-}
-
-.kosmos-dtp__foot {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  border-top: 1px solid var(--border);
-}
-
-.kosmos-dtp__foot-spacer {
-  flex: 1;
-}
-
-.kosmos-dtp__btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  padding: 0 0.875rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.6);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  transition: background-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-dtp__btn:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.kosmos-dtp__btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.kosmos-dtp__btn--primary:hover {
-  background: color-mix(in srgb, var(--accent) 90%, var(--foreground));
-}
-
-.kosmos-dtp__btn--danger {
-  color: var(--destructive);
-  border-color: color-mix(in srgb, var(--destructive) 35%, transparent);
-}
-
-.kosmos-dtp__btn--danger:hover {
-  background: color-mix(in srgb, var(--destructive) 14%, transparent);
-}
-</style>

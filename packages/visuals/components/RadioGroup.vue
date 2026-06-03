@@ -48,18 +48,21 @@ function pick(opt: Option<T>) {
 
 <template>
   <div
-    :class="['kosmos-rg', `kosmos-rg--${direction}`, { 'kosmos-rg--disabled': disabled }]"
+    :class="['flex gap-2', direction === 'horizontal' ? 'flex-row flex-wrap' : 'flex-col']"
     role="radiogroup"
   >
     <label
       v-for="opt in options"
       :key="String(opt.value)"
       :class="[
-        'kosmos-rg__item',
-        {
-          'kosmos-rg__item--selected': opt.value === modelValue,
-          'kosmos-rg__item--disabled': opt.disabled || disabled,
-        },
+        'flex cursor-default items-start gap-2 rounded-lg border-2 border-solid border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_3%,var(--background))] px-4 py-2 transition-[border-color,background-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)]',
+        opt.value === modelValue
+          ? 'border-[color-mix(in_srgb,var(--accent)_65%,transparent)] bg-[color-mix(in_srgb,var(--accent)_7%,var(--background))]'
+          : '',
+        opt.disabled || disabled ? 'cursor-not-allowed opacity-55' : '',
+        !opt.disabled && !disabled && opt.value !== modelValue
+          ? 'hover:border-[color-mix(in_srgb,var(--accent)_30%,var(--border))]'
+          : '',
       ]"
     >
       <input
@@ -68,126 +71,36 @@ function pick(opt: Option<T>) {
         :value="opt.value"
         :checked="opt.value === modelValue"
         :disabled="opt.disabled || disabled"
-        class="kosmos-rg__native"
+        class="sr-only"
         @change="pick(opt)"
       />
-      <span class="kosmos-rg__dot" aria-hidden="true">
-        <span class="kosmos-rg__dot-inner" />
+      <span
+        :class="[
+          'inline-flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-solid border-[color-mix(in_srgb,var(--foreground)_35%,transparent)] transition-[border-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)]',
+          opt.value === modelValue ? 'border-[var(--accent)]' : '',
+        ]"
+        aria-hidden="true"
+      >
+        <span
+          :class="[
+            'size-2 rounded-full bg-[var(--accent)] transition-transform duration-140 ease-[cubic-bezier(0.2,0,0,1)]',
+            opt.value === modelValue ? 'scale-100' : 'scale-0',
+          ]"
+        />
       </span>
-      <span class="kosmos-rg__text">
-        <span class="kosmos-rg__label">{{ opt.label }}</span>
-        <span v-if="opt.description" class="kosmos-rg__desc">{{ opt.description }}</span>
+      <span class="flex min-w-0 flex-col gap-0">
+        <span
+          class="font-[var(--font-sans)] text-[13px] font-medium leading-[1.4] text-[var(--foreground)]"
+        >
+          {{ opt.label }}
+        </span>
+        <span
+          v-if="opt.description"
+          class="font-[var(--font-sans)] text-[11px] font-medium leading-[1.4] text-[var(--muted-foreground)]"
+        >
+          {{ opt.description }}
+        </span>
       </span>
     </label>
   </div>
 </template>
-
-<style scoped>
-.kosmos-rg {
-  display: flex;
-  gap: 6px;
-}
-
-.kosmos-rg--vertical {
-  flex-direction: column;
-}
-
-.kosmos-rg--horizontal {
-  flex-direction: row;
-  flex-wrap: wrap;
-}
-
-.kosmos-rg__item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  background: color-mix(in srgb, var(--foreground) 3%, var(--background));
-  cursor: default;
-  transition:
-    border-color 140ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-rg__item:hover:not(.kosmos-rg__item--disabled):not(.kosmos-rg__item--selected) {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-}
-
-.kosmos-rg__item--selected {
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-  background: color-mix(in srgb, var(--accent) 7%, var(--background));
-}
-
-.kosmos-rg__item--disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.kosmos-rg__native {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.kosmos-rg__dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
-  border: 2px solid color-mix(in srgb, var(--foreground) 35%, transparent);
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: border-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-rg__item--selected .kosmos-rg__dot {
-  border-color: var(--accent);
-}
-
-.kosmos-rg__dot-inner {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: scale(0);
-  transition: transform 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-rg__item--selected .kosmos-rg__dot-inner {
-  transform: scale(1);
-}
-
-.kosmos-rg__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.kosmos-rg__label {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--foreground);
-}
-
-.kosmos-rg__desc {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--muted-foreground);
-}
-</style>

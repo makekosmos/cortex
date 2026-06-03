@@ -90,7 +90,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="anchorRef" class="kosmos-datechip-anchor">
+  <div ref="anchorRef" class="relative inline-flex">
     <!--
       Composite chip = 2 sibling button'а в одном flex-контейнере. Раньше
       clear был `<span role="button">` внутри `<button>` — невалидный
@@ -100,19 +100,26 @@ onUnmounted(() => {
     -->
     <div
       :class="[
-        'kosmos-datechip',
-        props.value ? 'kosmos-datechip--active' : '',
-        compact ? 'kosmos-datechip--compact' : '',
+        'inline-flex items-center rounded-lg bg-[var(--secondary)] text-xs text-[color-mix(in_srgb,var(--foreground)_65%,transparent)] transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,var(--secondary))] hover:text-[var(--foreground)]',
+        props.value
+          ? 'bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_26%,transparent)]'
+          : '',
       ]"
     >
-      <button type="button" class="kosmos-datechip__toggle" @click="toggle">
-        <CalendarIcon :size="compact ? 11 : 12" class="kosmos-datechip__icon" />
-        <span class="kosmos-datechip__label">{{ label }}</span>
+      <button
+        type="button"
+        class="inline-flex items-center gap-2 rounded-[inherit] border-0 bg-transparent px-4 py-2 text-[inherit] text-inherit"
+        :class="{ 'px-2 py-0 text-[0.7rem]': compact }"
+        @click="toggle"
+      >
+        <CalendarIcon :size="compact ? 11 : 12" class="shrink-0 text-current" />
+        <span class="leading-none">{{ label }}</span>
       </button>
       <button
         v-if="props.value"
         type="button"
-        class="kosmos-datechip__clear"
+        class="mr-2 inline-flex size-4 items-center justify-center rounded-lg border-0 bg-transparent text-[color-mix(in_srgb,currentColor_70%,transparent)] hover:bg-[color-mix(in_srgb,currentColor_18%,transparent)] hover:text-current focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent,currentColor)]"
+        :class="{ 'mr-2': compact }"
         aria-label="Очистить дату"
         @click.stop="clear"
       >
@@ -120,109 +127,11 @@ onUnmounted(() => {
       </button>
     </div>
 
-    <div v-if="open" class="kosmos-datechip__popover">
+    <div
+      v-if="open"
+      class="absolute left-0 top-[calc(100%+8px)] z-[60] min-w-80 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--popover,var(--background))] shadow-[var(--shadow-floating)]"
+    >
       <Calendar :value="props.value" :today="todayIso" @pick="pick" />
     </div>
   </div>
 </template>
-
-<style scoped>
-.kosmos-datechip-anchor {
-  position: relative;
-  display: inline-flex;
-}
-
-.kosmos-datechip {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: var(--secondary);
-  color: color-mix(in srgb, var(--foreground) 65%, transparent);
-  font-size: 0.75rem;
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-datechip:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, var(--secondary));
-  color: var(--foreground);
-}
-
-.kosmos-datechip--active {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-}
-
-.kosmos-datechip--active:hover {
-  background: color-mix(in srgb, var(--accent) 26%, transparent);
-}
-
-.kosmos-datechip__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font-size: inherit;
-  border-radius: inherit;
-}
-
-.kosmos-datechip--compact .kosmos-datechip__toggle {
-  padding: 0.25rem 0.55rem;
-  font-size: 0.7rem;
-}
-
-.kosmos-datechip__icon {
-  flex-shrink: 0;
-  color: currentColor;
-}
-
-.kosmos-datechip__label {
-  line-height: 1;
-}
-
-.kosmos-datechip__clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  margin-right: 0.5rem;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: color-mix(in srgb, currentColor 70%, transparent);
-}
-
-.kosmos-datechip--compact .kosmos-datechip__clear {
-  margin-right: 0.35rem;
-}
-
-.kosmos-datechip__clear:hover {
-  background: color-mix(in srgb, currentColor 18%, transparent);
-  color: currentColor;
-}
-
-.kosmos-datechip__clear:focus-visible {
-  outline: 2px solid var(--accent, currentColor);
-  outline-offset: 1px;
-}
-
-.kosmos-datechip__popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 60;
-  min-width: 320px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--popover, var(--background));
-  box-shadow:
-    0 10px 32px color-mix(in srgb, #000 28%, transparent),
-    0 3px 10px color-mix(in srgb, #000 14%, transparent);
-  overflow: hidden;
-}
-</style>

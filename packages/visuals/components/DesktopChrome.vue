@@ -22,7 +22,7 @@ provide("kosmosHasSidebar", hasSidebar);
 </script>
 
 <template>
-  <div class="kosmos-desktop-chrome">
+  <div class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-(--sidebar-bg)">
     <Titlebar :platform="props.platform" :title="props.title">
       <template #leading>
         <slot name="titlebar-leading" />
@@ -35,55 +35,14 @@ provide("kosmosHasSidebar", hasSidebar);
       </template>
     </Titlebar>
 
-    <div class="kosmos-desktop-chrome__body">
-      <aside v-if="hasSidebar" class="kosmos-desktop-chrome__sidebar">
+    <div class="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <aside v-if="hasSidebar" class="relative z-10 flex h-full min-h-0 shrink-0 overflow-visible">
         <slot name="sidebar" />
       </aside>
 
-      <div class="kosmos-desktop-chrome__content">
+      <div class="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <slot />
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.kosmos-desktop-chrome {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--sidebar-bg);
-}
-
-.kosmos-desktop-chrome__body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.kosmos-desktop-chrome__sidebar {
-  position: relative;
-  display: flex;
-  flex-shrink: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: visible;
-  z-index: 10;
-}
-
-.kosmos-desktop-chrome__content {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  z-index: 1;
-}
-</style>

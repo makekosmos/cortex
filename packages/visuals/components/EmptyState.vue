@@ -21,61 +21,24 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <div class="kosmos-empty-state" :class="{ 'kosmos-empty-state--compact': compact }">
-    <div v-if="$slots.icon" class="kosmos-empty-state__icon">
+  <div
+    class="flex flex-col items-center justify-center text-center text-[var(--muted-foreground)]"
+    :class="compact ? 'gap-2 px-4 py-4' : 'gap-2 px-8 py-8'"
+  >
+    <div
+      v-if="$slots.icon"
+      class="mb-2 flex items-center justify-center text-[color-mix(in_srgb,var(--muted-foreground)_70%,transparent)]"
+    >
       <slot name="icon" />
     </div>
-    <div class="kosmos-empty-state__title">{{ title }}</div>
-    <div v-if="description" class="kosmos-empty-state__description">
+    <div class="text-[var(--foreground)]" :class="compact ? 'text-sm' : 'text-[0.9375rem]'">
+      {{ title }}
+    </div>
+    <div v-if="description" class="max-w-80 text-[0.8125rem] leading-[1.45]">
       {{ description }}
     </div>
-    <div v-if="$slots.action" class="kosmos-empty-state__action">
+    <div v-if="$slots.action" class="mt-2">
       <slot name="action" />
     </div>
   </div>
 </template>
-
-<style scoped>
-.kosmos-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 2rem 1.5rem;
-  text-align: center;
-  color: var(--muted-foreground);
-}
-
-.kosmos-empty-state--compact {
-  padding: 1rem 0.75rem;
-  gap: 0.25rem;
-}
-
-.kosmos-empty-state__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
-  margin-bottom: 0.25rem;
-}
-
-.kosmos-empty-state__title {
-  font-size: 0.9375rem;
-  color: var(--foreground);
-}
-
-.kosmos-empty-state--compact .kosmos-empty-state__title {
-  font-size: 0.875rem;
-}
-
-.kosmos-empty-state__description {
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  max-width: 320px;
-}
-
-.kosmos-empty-state__action {
-  margin-top: 0.5rem;
-}
-</style>

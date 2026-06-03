@@ -6,7 +6,7 @@
 /* @source — Tailwind v4 directive, расширяет content scan на shared visuals
  * package'и (где живут .vue компоненты с tailwind classes). Без этого
  * утилиты, используемые только в @kosmos/visuals/*.vue, не попадут в bundle. */
-@source "../../../../packages/kosmos-visuals/**/*.{vue,ts}";
+@source "../../../packages/visuals/**/*.{vue,ts}";
 
 /* Theme CSS variables from @kosmos/visuals — single source of truth.
  * Резолвится через alias `@kosmos/visuals/theme/css` (см. shared vite config). */

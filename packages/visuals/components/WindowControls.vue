@@ -76,90 +76,52 @@ function handleClose(): void {
 </script>
 
 <template>
-  <div class="kosmos-window-controls">
+  <div class="kosmos-window-controls inline-flex items-center gap-2">
     <button
       v-if="!hideMinimize"
       type="button"
-      class="kosmos-window-controls__button"
+      class="kosmos-window-controls__button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] border-0 bg-transparent p-0 text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color] duration-[120ms] ease-in hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
       title="Свернуть"
       aria-label="Свернуть"
       data-testid="window-control-minimize"
       @click="handleMinimize"
     >
-      <Minus :size="14" :stroke-width="2" />
+      <Minus :size="16" :stroke-width="2" />
     </button>
 
     <button
       v-if="!hideMaximize"
       type="button"
-      class="kosmos-window-controls__button"
+      class="kosmos-window-controls__button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] border-0 bg-transparent p-0 text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color] duration-[120ms] ease-in hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-(--foreground)"
       :title="isMaximized ? 'Свернуть в окно' : 'Развернуть'"
       :aria-label="isMaximized ? 'Свернуть в окно' : 'Развернуть'"
       data-testid="window-control-maximize"
       @click="handleMaximize"
     >
-      <Copy
-        v-if="isMaximized"
-        :size="12"
-        :stroke-width="2"
-        class="kosmos-window-controls__restore-icon"
-      />
-      <Square v-else :size="12" :stroke-width="2" />
+      <Copy v-if="isMaximized" :size="16" :stroke-width="2" class="scale-x-[-1]" />
+      <Square v-else :size="16" :stroke-width="2" />
     </button>
 
     <button
       v-if="!hideClose"
       type="button"
-      class="kosmos-window-controls__button kosmos-window-controls__button--danger"
+      class="kosmos-window-controls__button inline-flex size-[var(--kosmos-titlebar-control-size,32px)] items-center justify-center rounded-[var(--kosmos-titlebar-control-radius,8px)] border-0 bg-transparent p-0 text-[color-mix(in_srgb,var(--sidebar-foreground)_72%,transparent)] transition-[background-color,color] duration-[120ms] ease-in hover:bg-[var(--destructive)] hover:text-[var(--destructive-foreground)]"
       title="Закрыть"
       aria-label="Закрыть"
       data-testid="window-control-close"
       @click="handleClose"
     >
-      <X :size="14" :stroke-width="2" />
+      <X :size="16" :stroke-width="2" />
     </button>
   </div>
 </template>
 
 <style scoped>
 .kosmos-window-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
   -webkit-app-region: no-drag;
 }
 
 .kosmos-window-controls__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--kosmos-titlebar-control-size, 32px);
-  height: var(--kosmos-titlebar-control-size, 32px);
-  border-radius: var(--kosmos-titlebar-control-radius, 10px);
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: color-mix(in srgb, var(--sidebar-foreground) 72%, transparent);
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
   -webkit-app-region: no-drag;
-}
-
-.kosmos-window-controls__button:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.kosmos-window-controls__button--danger:hover {
-  background: #c42b1c;
-  color: #ffffff;
-}
-
-.kosmos-window-controls__restore-icon {
-  /* Lucide Copy визуально имеет смещение «верхнего» rect'а — для restore
-     иконки это семантически правильно, но мы зеркалим горизонтально, чтобы
-     стиль совпадал с Windows 11 (передний rect снизу-слева, задний — сверху-справа). */
-  transform: scaleX(-1);
 }
 </style>

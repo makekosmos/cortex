@@ -1,3 +1,7 @@
+/* Tailwind v4 utilities for shell + shared @kosmos/visuals components. */
+@import "tailwindcss";
+@source "../../packages/visuals/**/*.{vue,ts}";
+
 @import "@kosmos/visuals/theme/css";
 
 /* Accent наследуется из @kosmos/visuals theme; никаких локальных override'ов. */

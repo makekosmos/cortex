@@ -118,13 +118,15 @@ function pickCell(c: DayCell) {
 </script>
 
 <template>
-  <div class="kosmos-calendar">
-    <header class="kosmos-calendar__head">
-      <span class="kosmos-calendar__month">{{ monthYearLabel }}</span>
-      <div class="kosmos-calendar__nav">
+  <div
+    class="flex flex-col gap-2 bg-[var(--popover,var(--background))] p-4 font-[var(--font-sans,inherit)] text-[var(--popover-foreground,var(--foreground))]"
+  >
+    <header class="flex items-center justify-between">
+      <span class="text-sm font-semibold">{{ monthYearLabel }}</span>
+      <div class="flex gap-2">
         <button
           type="button"
-          class="kosmos-calendar__navbtn"
+          class="inline-flex size-6 items-center justify-center rounded-lg border-0 bg-transparent text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
           aria-label="Предыдущая неделя"
           @click="shiftWeek(-1)"
         >
@@ -132,7 +134,7 @@ function pickCell(c: DayCell) {
         </button>
         <button
           type="button"
-          class="kosmos-calendar__navbtn"
+          class="inline-flex size-6 items-center justify-center rounded-lg border-0 bg-transparent text-[color-mix(in_srgb,var(--foreground)_60%,transparent)] transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
           aria-label="Следующая неделя"
           @click="shiftWeek(1)"
         >
@@ -141,124 +143,33 @@ function pickCell(c: DayCell) {
       </div>
     </header>
 
-    <div class="kosmos-calendar__strip">
+    <div class="grid grid-cols-7 gap-2">
       <button
         v-for="c in cells"
         :key="c.iso"
         type="button"
-        class="kosmos-calendar__cell"
+        class="flex flex-col items-center justify-center gap-0 rounded-lg border-0 bg-transparent py-2 font-[inherit] text-[var(--foreground)] transition-colors duration-[180ms] ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]"
         :class="{
-          'kosmos-calendar__cell--today': c.isToday,
-          'kosmos-calendar__cell--selected': c.isSelected,
+          'outline outline-1 outline-[color-mix(in_srgb,var(--accent)_55%,transparent)]': c.isToday,
+          'bg-[var(--accent)] text-[var(--accent-foreground)] hover:bg-[var(--accent)]':
+            c.isSelected,
         }"
         @click="pickCell(c)"
       >
-        <span class="kosmos-calendar__wkday">{{ c.weekday }}</span>
-        <span class="kosmos-calendar__day">{{ c.date.getDate() }}</span>
+        <span
+          class="text-[0.625rem] font-semibold uppercase tracking-[0.05em] text-[color-mix(in_srgb,var(--foreground)_55%,transparent)]"
+          :class="{
+            'text-[color-mix(in_srgb,var(--accent-foreground)_75%,transparent)]': c.isSelected,
+          }"
+        >
+          {{ c.weekday }}
+        </span>
+        <span
+          class="font-[var(--font-mono,ui-monospace,monospace)] text-[0.9375rem] font-medium tabular-nums"
+        >
+          {{ c.date.getDate() }}
+        </span>
       </button>
     </div>
   </div>
 </template>
-
-<style scoped>
-.kosmos-calendar {
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-  padding: 0.75rem;
-  background: var(--popover, var(--background));
-  color: var(--popover-foreground, var(--foreground));
-  font-family: var(--font-sans, inherit);
-}
-
-.kosmos-calendar__head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.kosmos-calendar__month {
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.kosmos-calendar__nav {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.kosmos-calendar__navbtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: color-mix(in srgb, var(--foreground) 60%, transparent);
-  border-radius: 6px;
-  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-calendar__navbtn:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.kosmos-calendar__strip {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-}
-
-.kosmos-calendar__cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 0.375rem 0;
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-  border-radius: 8px;
-  font-family: inherit;
-  transition: background-color 180ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-calendar__cell:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.kosmos-calendar__wkday {
-  font-size: 0.625rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: color-mix(in srgb, var(--foreground) 55%, transparent);
-  font-weight: 600;
-}
-
-.kosmos-calendar__day {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono, ui-monospace, monospace);
-}
-
-.kosmos-calendar__cell--today {
-  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-}
-
-.kosmos-calendar__cell--selected {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.kosmos-calendar__cell--selected .kosmos-calendar__wkday {
-  color: color-mix(in srgb, var(--accent-foreground) 75%, transparent);
-}
-
-.kosmos-calendar__cell--selected:hover {
-  background: var(--accent);
-}
-</style>

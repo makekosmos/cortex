@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
 
 .focus-domains-preview {
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
   word-break: break-all;
 }
@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
     border-color 120ms ease,
     color 120ms ease;
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
 }
 

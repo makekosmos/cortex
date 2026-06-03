@@ -15,7 +15,11 @@ const emit = defineEmits<{
 }>();
 
 function className(active: boolean) {
-  return active ? "kosmos-sidebar-btn kosmos-sidebar-btn--active" : "kosmos-sidebar-btn";
+  const base =
+    "kosmos-sidebar-btn flex min-h-8 w-full items-center justify-start gap-2 rounded-lg p-2 text-left text-sm leading-5 font-medium text-(--sidebar-foreground) no-underline select-none transition-[background-color,color] duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] hover:bg-[color-mix(in_srgb,var(--sidebar-foreground)_6%,transparent)] [&_svg]:shrink-0";
+  return active
+    ? `${base} bg-[color-mix(in_srgb,var(--sidebar-foreground)_10%,transparent)]`
+    : base;
 }
 </script>
 
@@ -28,8 +32,8 @@ function className(active: boolean) {
       :title="label"
       @click="navigate"
     >
-      <component :is="icon" :size="18" />
-      <span v-if="label" class="truncate">{{ label }}</span>
+      <component :is="icon" :size="24" />
+      <span v-if="label" class="min-w-0 flex-1 truncate text-left">{{ label }}</span>
     </a>
   </RouterLink>
   <button
@@ -40,53 +44,13 @@ function className(active: boolean) {
     :title="label"
     @click="emit('click')"
   >
-    <component :is="icon" :size="18" />
-    <span v-if="label" class="truncate">{{ label }}</span>
+    <component :is="icon" :size="24" />
+    <span v-if="label" class="min-w-0 flex-1 truncate text-left">{{ label }}</span>
   </button>
 </template>
 
 <style scoped>
 .kosmos-sidebar-btn {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.625rem;
-  width: 100%;
-  min-height: 1.75rem;
-  padding: 0.25rem;
-  border-radius: calc(var(--radius) * 1.4);
-  corner-shape: var(--corner-shape);
-  font-weight: 500;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  color: var(--sidebar-foreground);
-  user-select: none;
-  text-decoration: none;
-  text-align: left;
   -webkit-app-region: no-drag;
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-sidebar-btn:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
-}
-
-.kosmos-sidebar-btn--active {
-  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
-}
-
-.kosmos-sidebar-btn :deep(svg) {
-  flex-shrink: 0;
-}
-
-.kosmos-sidebar-btn span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
 }
 </style>

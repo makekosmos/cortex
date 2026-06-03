@@ -4,7 +4,7 @@
 //
 // Row layout: ProviderIcon · название провайдера · Toggle (on/off) ·
 // ExternalLink (на консоль провайдера) · Trash (удалить).
-// Toggle off → clear_api_key (ключ убирается из keyring).
+// Toggle off → временно выключить provider, ключ остаётся в keyring.
 // Toggle on без ключа → открыть AddApiKeyModal.
 
 import { computed, inject, onMounted, ref } from "vue";
@@ -19,6 +19,7 @@ if (!ctx) throw new Error("SecretsTab requires DictationConfigKey provider in pa
 
 const { dictationHasApiKey, dictationApiKeyBusy, loadDictationConfig, onDictationClearApiKey } =
   ctx;
+const { dictationConfig, onDictationProviderEnabledChange } = ctx;
 
 const modalOpen = ref(false);
 
@@ -49,11 +50,10 @@ function onSaved() {
 
 function onToggleGroq(next: boolean) {
   if (next) {
-    // Был off → on. Откроем модалку чтобы юзер ввёл ключ.
     if (!dictationHasApiKey.value) openAddModal();
+    else void onDictationProviderEnabledChange(true);
   } else {
-    // On → off. Удаляем ключ из keyring.
-    void onDictationClearApiKey();
+    void onDictationProviderEnabledChange(false);
   }
 }
 
@@ -107,7 +107,7 @@ function openConsole() {
           <ExternalLink :size="14" />
         </button>
         <Toggle
-          :model-value="dictationHasApiKey"
+          :model-value="dictationHasApiKey && dictationConfig.providerEnabled"
           :disabled="dictationApiKeyBusy"
           aria-label="Включить Groq"
           @update:model-value="onToggleGroq"
@@ -129,7 +129,7 @@ function openConsole() {
 .secrets-header__note {
   margin: 0;
   flex: 1;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.4;
   color: color-mix(in srgb, var(--foreground) 55%, transparent);
 }
@@ -168,7 +168,7 @@ function openConsole() {
   border: 1px dashed color-mix(in srgb, var(--foreground) 15%, transparent);
   background: color-mix(in srgb, var(--foreground) 3%, transparent);
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: center;
 }
 
@@ -195,7 +195,7 @@ function openConsole() {
 }
 
 .secrets-item__provider {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--foreground);
 }

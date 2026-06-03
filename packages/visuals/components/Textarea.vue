@@ -36,6 +36,10 @@ const value = computed({
   get: () => props.modelValue,
   set: (v) => emit("update:modelValue", v),
 });
+
+const normalizedMinHeight = computed(() =>
+  props.minHeight ? Math.max(8, Math.round(props.minHeight / 8) * 8) : undefined,
+);
 </script>
 
 <template>
@@ -45,52 +49,15 @@ const value = computed({
     :disabled="disabled"
     :readonly="readonly"
     :rows="rows"
-    :class="['kosmos-textarea', { 'kosmos-textarea--invalid': invalid }]"
+    :class="[
+      'w-full rounded-lg border-2 border-solid border-[var(--border)] bg-[color-mix(in_srgb,var(--foreground)_4%,var(--background))] px-4 py-2 font-[inherit] text-sm leading-normal text-[var(--foreground)] transition-[border-color,background-color] duration-140 ease-[cubic-bezier(0.2,0,0,1)] [corner-shape:var(--corner-shape)] placeholder:text-[color-mix(in_srgb,var(--foreground)_45%,transparent)] hover:not-disabled:not-focus:border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] focus:border-[color-mix(in_srgb,var(--accent)_65%,transparent)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-55',
+      invalid ? 'border-[var(--destructive)] focus:border-[var(--destructive)]' : '',
+    ]"
     :style="{
       resize,
-      minHeight: minHeight ? `${minHeight}px` : undefined,
+      minHeight: normalizedMinHeight ? `${normalizedMinHeight}px` : undefined,
     }"
     @blur="(e) => emit('blur', e)"
     @focus="(e) => emit('focus', e)"
   />
 </template>
-
-<style scoped>
-.kosmos-textarea {
-  width: 100%;
-  padding: 0.5rem 0.625rem;
-  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) * 0.7);
-  corner-shape: var(--corner-shape);
-  color: var(--foreground);
-  font-family: inherit;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  transition:
-    border-color 140ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 140ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-textarea:hover:not(:disabled):not(:focus) {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-}
-
-.kosmos-textarea:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
-}
-
-.kosmos-textarea:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.kosmos-textarea--invalid {
-  border-color: var(--destructive);
-}
-
-.kosmos-textarea::placeholder {
-  color: color-mix(in srgb, var(--foreground) 45%, transparent);
-}
-</style>

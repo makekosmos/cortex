@@ -4,11 +4,13 @@
 // в context-aware controls. Заменяет ad-hoc `.iconbtn` / `.ctl-btn` /
 // `.close-btn` CSS, которые тиражировались по экосистеме.
 
-withDefaults(
+import { computed } from "vue";
+
+const props = withDefaults(
   defineProps<{
-    /** Side length в px. Default 28 (titlebar standard), 24 для mini-player. */
+    /** Side length в px. Default 32, rounded to the nearest 8px grid step. */
     size?: number;
-    /** Border-radius в px. Default — половина size для пилюли. */
+    /** Border-radius в px. Rounded to the nearest 8px grid step. */
     radius?: number;
     /** Tone влияет на hover-цвет:
         - default — нейтральный foreground hover;
@@ -23,64 +25,32 @@ withDefaults(
     /** Disabled state. */
     disabled?: boolean;
   }>(),
-  { size: 28, tone: "default", draggable: false, type: "button", disabled: false },
+  { size: 32, tone: "default", draggable: false, type: "button", disabled: false },
 );
+
+const buttonSize = computed(() => Math.max(8, Math.round(props.size / 8) * 8));
+const buttonRadius = computed(() => {
+  const requested = props.radius ?? 8;
+  return Math.max(0, Math.round(requested / 8) * 8);
+});
 </script>
 
 <template>
   <button
     :type="type"
     :disabled="disabled"
-    :class="['icon-btn', `icon-btn--${tone}`, { 'icon-btn--no-drag': !draggable }]"
+    :class="[
+      'inline-flex h-[var(--icon-btn-size)] w-[var(--icon-btn-size)] shrink-0 cursor-default items-center justify-center rounded-[var(--icon-btn-radius)] border-0 bg-transparent p-0 text-[color-mix(in_srgb,var(--foreground)_55%,transparent)] transition-[color,background-color] duration-120 ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)] active:bg-[color-mix(in_srgb,var(--foreground)_14%,transparent)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40',
+      tone === 'destructive'
+        ? 'hover:bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] hover:text-[var(--destructive)]'
+        : '',
+      !draggable ? '[-webkit-app-region:no-drag]' : '',
+    ]"
     :style="{
-      '--icon-btn-size': `${size}px`,
-      '--icon-btn-radius': `${radius ?? Math.min(8, size / 3)}px`,
+      '--icon-btn-size': `${buttonSize}px`,
+      '--icon-btn-radius': `${buttonRadius}px`,
     }"
   >
     <slot />
   </button>
 </template>
-
-<style scoped>
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--icon-btn-size);
-  height: var(--icon-btn-size);
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: color-mix(in srgb, var(--foreground) 55%, transparent);
-  border-radius: var(--icon-btn-radius);
-  cursor: default;
-  flex-shrink: 0;
-  transition:
-    color 120ms cubic-bezier(0.2, 0, 0, 1),
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.icon-btn--no-drag {
-  -webkit-app-region: no-drag;
-}
-
-.icon-btn:hover {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.icon-btn:active {
-  background: color-mix(in srgb, var(--foreground) 14%, transparent);
-}
-
-.icon-btn--destructive:hover {
-  color: var(--destructive);
-  background: color-mix(in srgb, var(--destructive) 12%, transparent);
-}
-
-.icon-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-  pointer-events: none;
-}
-</style>

@@ -1,21 +1,18 @@
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import type { StorybookConfig } from "@storybook/vue3-vite";
+import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
 
 const config: StorybookConfig = {
   framework: {
-    name: getAbsolutePath("@storybook/vue3-vite"),
+    name: "@storybook/vue3-vite",
     options: {},
   },
 
   stories: ["../components/**/*.stories.@(js|jsx|mjs|ts|tsx)"],
 
-  addons: [
-    getAbsolutePath("@storybook/addon-docs"),
-    getAbsolutePath("@storybook/addon-vitest"),
-    getAbsolutePath("@storybook/addon-vitest"),
-  ],
+  addons: [getAbsolutePath("@storybook/addon-docs"), getAbsolutePath("@storybook/addon-vitest")],
 
   core: {
     disableTelemetry: true,
@@ -29,13 +26,14 @@ const config: StorybookConfig = {
     // Storybook v10 upgrade удалил vue plugin из default config —
     // добавляем явно. Без него .vue файлы выдают "Failed to parse source"
     // в vite:import-analysis.
-    config.plugins = [...(config.plugins ?? []), vue()];
+    config.plugins = [...(config.plugins ?? []), vue(), tailwindcss()];
 
     config.optimizeDeps = config.optimizeDeps ?? {};
     config.optimizeDeps.include = [
       ...(config.optimizeDeps.include ?? []),
       "@lucide/vue",
       "vue-router",
+      "tailwindcss",
     ];
     config.ssr = config.ssr ?? {};
     (config.ssr as { noExternal?: string[] }).noExternal = [

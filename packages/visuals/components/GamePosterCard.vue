@@ -59,13 +59,10 @@ const linkAttrs = computed(() =>
     </div>
 
     <div :class="gamePosterCardClasses.content">
-      <div v-if="eyebrow" :class="gamePosterCardClasses.eyebrow" style="color: #ffffff">
+      <div v-if="eyebrow" :class="gamePosterCardClasses.eyebrow">
         {{ eyebrow }}
       </div>
-      <div
-        :class="gamePosterCardClasses.title"
-        style="color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.38)"
-      >
+      <div :class="gamePosterCardClasses.title">
         {{ title }}
       </div>
     </div>

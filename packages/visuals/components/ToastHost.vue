@@ -10,7 +10,10 @@ const state = inject(ToastKey, null);
 
 <template>
   <Teleport v-if="state" to="body">
-    <div class="kosmos-toast-host" aria-live="polite">
+    <div
+      class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"
+      aria-live="polite"
+    >
       <TransitionGroup name="kosmos-toast">
         <Toast
           v-for="item in state.items.value"
@@ -29,17 +32,6 @@ const state = inject(ToastKey, null);
 </template>
 
 <style scoped>
-.kosmos-toast-host {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 9999;
-  pointer-events: none;
-}
-
 .kosmos-toast-enter-active,
 .kosmos-toast-leave-active {
   transition:
@@ -49,11 +41,11 @@ const state = inject(ToastKey, null);
 
 .kosmos-toast-enter-from {
   opacity: 0;
-  transform: translateX(12px);
+  transform: translateX(16px);
 }
 
 .kosmos-toast-leave-to {
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(-8px);
 }
 </style>

@@ -6,7 +6,7 @@
 /* @source — расширяет content scan на shared visuals package
  * (после миграции на @kosmos/visuals.GamePosterCard utility-классы
  * патернов резолвятся именно отсюда). */
-@source "../../../../packages/visuals/**/*.{vue,ts}";
+@source "../../../packages/visuals/**/*.{vue,ts}";
 
 /* Arrancador extension — plain CSS layer.
    Legacy `apps/arrancador/` использовал tailwind; миграция компонентов

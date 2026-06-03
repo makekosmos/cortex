@@ -46,77 +46,23 @@ function onKeydown(e: KeyboardEvent) {
     :aria-checked="checked"
     :aria-label="ariaLabel ?? label"
     :disabled="disabled"
-    class="kosmos-toggle"
-    :class="{
-      'kosmos-toggle--checked': checked,
-      'kosmos-toggle--disabled': disabled,
-    }"
+    class="inline-flex cursor-default items-center gap-2 border-0 bg-transparent p-0 font-[inherit] text-[inherit] outline-offset-2 focus-visible:rounded-full focus-visible:outline-2 focus-visible:outline-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50"
     @click="toggle"
     @keydown="onKeydown"
   >
-    <span class="kosmos-toggle__track">
-      <span class="kosmos-toggle__thumb" />
+    <span
+      :class="[
+        'relative h-5 w-10 shrink-0 rounded-full bg-[color-mix(in_srgb,var(--foreground)_18%,transparent)] transition-[background-color] duration-150 ease-[cubic-bezier(0.2,0,0,1)]',
+        checked ? 'bg-[var(--accent)]' : '',
+      ]"
+    >
+      <span
+        :class="[
+          'absolute top-0.5 left-0.5 size-4 rounded-full bg-[color-mix(in_srgb,var(--foreground)_62%,var(--background)_38%)] shadow-[0_1px_3px_color-mix(in_srgb,var(--background)_24%,transparent)] transition-transform duration-150 ease-[cubic-bezier(0.2,0,0,1)]',
+          checked ? 'translate-x-5' : '',
+        ]"
+      />
     </span>
-    <span v-if="label" class="kosmos-toggle__label">{{ label }}</span>
+    <span v-if="label" class="text-sm text-[var(--foreground)]">{{ label }}</span>
   </button>
 </template>
-
-<style scoped>
-.kosmos-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: default;
-  font: inherit;
-  color: inherit;
-  outline-offset: 2px;
-}
-
-.kosmos-toggle:focus-visible {
-  outline: 2px solid var(--ring);
-  border-radius: 999px;
-}
-
-.kosmos-toggle__track {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
-  transition: background-color 140ms cubic-bezier(0.2, 0, 0, 1);
-  flex-shrink: 0;
-}
-
-.kosmos-toggle__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: var(--background);
-  transition: transform 140ms cubic-bezier(0.2, 0, 0, 1);
-  box-shadow: 0 1px 3px color-mix(in srgb, #000 25%, transparent);
-}
-
-.kosmos-toggle--checked .kosmos-toggle__track {
-  background: var(--primary);
-}
-
-.kosmos-toggle--checked .kosmos-toggle__thumb {
-  transform: translateX(16px);
-}
-
-.kosmos-toggle--disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.kosmos-toggle__label {
-  font-size: 0.875rem;
-  color: var(--foreground);
-}
-</style>

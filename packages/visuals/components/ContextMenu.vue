@@ -93,25 +93,14 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="props.open" ref="root" class="kosmos-context-menu" role="menu" :style="style">
+    <div
+      v-if="props.open"
+      ref="root"
+      class="fixed z-[9999] min-w-48 rounded-xl border border-[var(--border)] bg-[var(--popover,var(--background))] p-2 text-[var(--popover-foreground,var(--foreground))] shadow-[var(--shadow-floating)] [corner-shape:var(--corner-shape)]"
+      role="menu"
+      :style="style"
+    >
       <slot />
     </div>
   </Teleport>
 </template>
-
-<style scoped>
-.kosmos-context-menu {
-  position: fixed;
-  z-index: 9999;
-  min-width: 180px;
-  padding: 0.25rem;
-  background: var(--popover, var(--background));
-  color: var(--popover-foreground, var(--foreground));
-  border: 1px solid var(--border);
-  border-radius: calc(var(--radius) * 0.85);
-  corner-shape: var(--corner-shape);
-  box-shadow:
-    0 12px 32px rgb(0 0 0 / 28%),
-    0 4px 12px rgb(0 0 0 / 14%);
-}
-</style>

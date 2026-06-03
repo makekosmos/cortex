@@ -53,14 +53,22 @@ watch(
 </script>
 
 <template>
-  <div ref="root" class="kosmos-timecol" :aria-label="props.label" role="listbox">
+  <div
+    ref="root"
+    class="kosmos-timecol flex h-[200px] w-16 flex-col items-stretch gap-0 overflow-y-auto px-2 py-20 scroll-smooth"
+    :aria-label="props.label"
+    role="listbox"
+  >
     <button
       v-for="v in items"
       :key="v"
       type="button"
       role="option"
-      class="kosmos-timecol__item"
-      :class="{ 'kosmos-timecol__item--active': v === props.value }"
+      class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border-0 bg-transparent font-[var(--font-mono,ui-monospace,monospace)] text-sm tabular-nums text-[color-mix(in_srgb,var(--foreground)_55%,transparent)] transition-colors duration-[120ms] ease-[cubic-bezier(0.2,0,0,1)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
+      :class="{
+        'bg-[var(--accent)] font-semibold text-[var(--accent-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)]':
+          v === props.value,
+      }"
       :aria-selected="v === props.value"
       :data-value="v"
       @click="emit('update:value', v)"
@@ -72,16 +80,6 @@ watch(
 
 <style scoped>
 .kosmos-timecol {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  width: 52px;
-  height: 200px;
-  overflow-y: auto;
-  padding: 76px 4px;
-  scroll-behavior: smooth;
-
   /* Кастомный скролл под наши токены. */
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
@@ -102,39 +100,5 @@ watch(
 .kosmos-timecol::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--foreground) 35%, transparent);
   background-clip: padding-box;
-}
-
-.kosmos-timecol__item {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: color-mix(in srgb, var(--foreground) 55%, transparent);
-  font-size: 0.875rem;
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.kosmos-timecol__item:hover {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.kosmos-timecol__item--active {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  font-weight: 600;
-}
-
-.kosmos-timecol__item--active:hover {
-  background: var(--accent);
-  color: var(--accent-foreground);
 }
 </style>

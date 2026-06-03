@@ -21,10 +21,17 @@ function onInput(event: Event) {
 </script>
 
 <template>
-  <label class="kosmos-settings-search">
-    <Search class="kosmos-settings-search__icon" :size="14" :stroke-width="2" aria-hidden="true" />
+  <label
+    class="flex w-full cursor-text items-center gap-2 rounded bg-[var(--settings-search-surface)] px-2 py-2 text-xs text-white focus-within:bg-[var(--settings-search-surface-focused)]"
+  >
+    <Search
+      class="shrink-0 text-[var(--second-text-color)]"
+      :size="14"
+      :stroke-width="2"
+      aria-hidden="true"
+    />
     <input
-      class="kosmos-settings-search__input"
+      class="w-full cursor-text border-0 bg-transparent p-0 font-[var(--font-sans)] text-[inherit] leading-[1.4] font-medium text-white caret-white outline-none placeholder:text-[var(--second-text-color)]"
       :value="modelValue"
       :placeholder="placeholder"
       type="text"
@@ -32,45 +39,3 @@ function onInput(event: Event) {
     />
   </label>
 </template>
-
-<style scoped>
-.kosmos-settings-search {
-  display: flex;
-  width: 212px;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: var(--settings-search-surface);
-  color: #fff;
-  cursor: text;
-}
-
-.kosmos-settings-search:focus-within {
-  background: var(--settings-search-surface-focused);
-}
-
-.kosmos-settings-search__icon {
-  flex-shrink: 0;
-  color: var(--second-text-color);
-}
-
-.kosmos-settings-search__input {
-  width: 100%;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #fff;
-  caret-color: #fff;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.4;
-  font-weight: 500;
-  cursor: text;
-  outline: none;
-}
-
-.kosmos-settings-search__input::placeholder {
-  color: var(--second-text-color);
-}
-</style>

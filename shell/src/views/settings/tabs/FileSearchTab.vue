@@ -291,7 +291,7 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   color: color-mix(in srgb, var(--foreground) 85%, transparent);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
+  font-size: 0.75rem;
   direction: ltr;
 }
 
@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
 
 .focus-input {
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);

@@ -61,7 +61,7 @@ defineEmits<{ install: [] }>();
   background: color-mix(in srgb, var(--accent, oklch(0.7 0.18 250)) 20%, transparent);
   color: var(--foreground);
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   cursor: default;
   -webkit-app-region: no-drag;

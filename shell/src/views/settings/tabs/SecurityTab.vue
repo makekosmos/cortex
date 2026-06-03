@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// SecurityTab — DNS-резолвер и proxy для AI-провайдеров (диктация).
+// SecurityTab — DNS-резолвер для AI-провайдеров (диктация).
 
 import { inject, onMounted } from "vue";
 import {
@@ -17,14 +17,12 @@ const {
   dictationConfig,
   dictationCustomDohUrl,
   dictationCustomDohError,
-  dictationProxyInput,
   dictationConnTestBusy,
   dictationConnTestResult,
   dictationConnReport,
   loadDictationConfig,
   onDictationDnsKindChange,
   onDictationCustomDohBlur,
-  onDictationProxyBlur,
   onDictationTestConnectivity,
 } = ctx;
 
@@ -36,10 +34,10 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_HINTS: Record<string, string> = {
-  client_build: "Невалидный proxy или DoH URL — проверьте поля выше.",
+  client_build: "Невалидный DoH URL — проверьте поле выше.",
   dns_resolve: "DNS не работает. Попробуйте Cloudflare/Google DoH вместо «Системный».",
-  tcp_connect: "TCP-коннект отвергнут. Возможен IP-блок — попробуйте proxy.",
-  http_head: "TLS handshake или HTTP не прошёл. Возможен SNI-блок — нужен proxy.",
+  tcp_connect: "TCP-коннект отвергнут. Возможен IP-блок.",
+  http_head: "TLS handshake или HTTP не прошёл. Возможен SNI-блок.",
 };
 
 onMounted(() => {
@@ -67,13 +65,6 @@ onMounted(() => {
         "
         placeholder="https://comss.dns.controld.com/dns-query"
         @blur="onDictationCustomDohBlur"
-      />
-      <SettingsTextInputRow
-        v-model="dictationProxyInput"
-        title="HTTP / SOCKS proxy"
-        description="Опционально. Если DoH недостаточно (SNI / IP блок). http://, https://, socks5://host:port. Пусто — без proxy."
-        placeholder="socks5://127.0.0.1:1080"
-        @blur="onDictationProxyBlur"
       />
       <SettingsButtonRow
         title="Проверить соединение"
@@ -150,7 +141,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
 }
 
@@ -170,7 +161,7 @@ onMounted(() => {
 }
 
 .conn-stage__label {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--foreground);
   display: flex;
   flex-wrap: wrap;
@@ -179,30 +170,30 @@ onMounted(() => {
 }
 
 .conn-stage__ms {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
 }
 
 .conn-stage__info {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 60%, transparent);
 }
 
 .conn-stage__error {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: #f5a524;
   margin-top: 2px;
   word-break: break-word;
 }
 
 .conn-stage__hint {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 65%, transparent);
   margin-top: 4px;
 }
 
 .conn-stages__total {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: color-mix(in srgb, var(--foreground) 50%, transparent);
   margin-top: 4px;
   text-align: right;

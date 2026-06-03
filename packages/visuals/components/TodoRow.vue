@@ -311,9 +311,9 @@ function onDragEnd() {
     ref="rowRef"
     :data-todo-id="todo.id"
     :class="[
-      'todo-row group flex flex-col px-7 hover:bg-(--secondary)',
-      isDragging ? 'todo-row--drag-source' : '',
-      expanded ? 'todo-row--expanded' : '',
+      'group relative flex flex-col rounded-(--radius) [corner-shape:var(--corner-shape)] px-8 will-change-transform hover:bg-(--secondary)',
+      isDragging ? 'pointer-events-none opacity-0' : '',
+      expanded ? 'bg-(--secondary)' : '',
     ]"
     @pointerdown="onRowPointerDown"
     @click="onRowClick"
@@ -322,20 +322,25 @@ function onDragEnd() {
     <!-- Row header -->
     <div
       :class="[
-        'flex h-10 items-center gap-3',
+        'flex h-10 items-center gap-4',
         draggable && !expanded ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
       ]"
     >
       <!-- Checkbox -->
       <button
         type="button"
-        class="check-btn shrink-0"
+        class="group/check shrink-0"
         data-stop-toggle
         @pointerdown.stop
         @click.stop="emit('complete')"
       >
-        <span :class="['check-box', isCompleted ? 'check-box--done' : '']">
-          <span v-if="isCompleted" class="check-box__inner" />
+        <span
+          :class="[
+            'relative block size-6 rounded-md border-2 border-(--ring) transition-colors group-hover/check:border-(--accent)',
+            isCompleted ? 'border-(--accent)' : '',
+          ]"
+        >
+          <span v-if="isCompleted" class="absolute inset-1 block rounded-sm bg-(--accent)" />
         </span>
       </button>
 
@@ -343,7 +348,7 @@ function onDragEnd() {
       <div class="min-w-0 flex-1">
         <div
           :class="[
-            'truncate text-sm leading-5 px-1 py-0.5 select-none',
+            'truncate px-2 py-2 text-sm leading-5 select-none',
             isCompleted ? 'text-(--muted-foreground) line-through' : 'text-(--foreground)',
           ]"
         >
@@ -358,19 +363,19 @@ function onDragEnd() {
       </div>
 
       <!-- Trailing chips (collapsed) -->
-      <div v-if="!expanded" class="flex items-center gap-1.5 text-xs text-(--muted-foreground)">
+      <div v-if="!expanded" class="flex items-center gap-2 text-xs text-(--muted-foreground)">
         <span
           v-if="todo.billable"
-          class="flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-emerald-500"
+          class="flex h-6 items-center gap-2 rounded-full bg-emerald-500/15 px-2 text-emerald-500"
         >
-          <DollarSign :size="10" />
+          <DollarSign :size="16" />
           <span v-if="todo.price">{{ todo.price }}</span>
         </span>
         <span
           v-if="todo.scheduledDate"
-          class="flex items-center gap-0.5 rounded-full bg-(--secondary) px-2 py-0.5"
+          class="flex h-6 items-center gap-2 rounded-full bg-(--secondary) px-2"
         >
-          <CalendarIcon :size="10" />
+          <CalendarIcon :size="16" />
           {{ todo.scheduledDate }}
         </span>
       </div>
@@ -381,7 +386,7 @@ function onDragEnd() {
     <!-- Expanded editor -->
     <div
       v-if="expanded"
-      class="flex flex-col gap-2 py-3 pl-8 pr-2"
+      class="flex flex-col gap-2 py-4 pl-8 pr-2"
       data-stop-toggle
       @click.stop
       @pointerdown.stop
@@ -391,7 +396,7 @@ function onDragEnd() {
         ref="titleInput"
         type="text"
         :value="titleDraft"
-        class="w-full rounded bg-(--secondary) px-2 py-1 text-sm font-medium text-(--foreground) outline-none ring-1 ring-(--ring) focus:ring-(--accent)"
+        class="h-8 w-full rounded bg-(--secondary) px-2 text-sm font-medium text-(--foreground) outline-none ring-1 ring-(--ring) focus:ring-(--accent)"
         @input="titleDraft = ($event.target as HTMLInputElement).value"
         @blur="commitTitle"
         @keydown.enter.prevent="commitTitle"
@@ -401,7 +406,7 @@ function onDragEnd() {
         :value="notesDraft"
         :rows="2"
         placeholder="Заметки"
-        class="w-full resize-none rounded bg-(--secondary) px-2 py-1 text-xs text-(--muted-foreground) outline-none ring-1 ring-(--ring)/40 focus:ring-(--accent)"
+        class="w-full resize-none rounded bg-(--secondary) p-2 text-xs text-(--muted-foreground) outline-none ring-1 ring-(--ring)/40 focus:ring-(--accent)"
         @input="notesDraft = ($event.target as HTMLTextAreaElement).value"
         @blur="commitNotes"
       />
@@ -412,20 +417,20 @@ function onDragEnd() {
         <button
           type="button"
           :class="[
-            'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-colors',
+            'flex h-8 items-center gap-2 rounded-full px-4 text-xs transition-colors',
             billableDraft
               ? 'bg-emerald-500/15 text-emerald-500'
               : 'bg-(--secondary) text-(--muted-foreground) hover:bg-(--surface)',
           ]"
           @click="toggleBillable"
         >
-          <DollarSign :size="12" />
+          <DollarSign :size="16" />
           <span>Оплачиваемая</span>
         </button>
 
         <label
           v-if="billableDraft"
-          class="flex items-center gap-1.5 rounded-full bg-(--secondary) px-3 py-1.5 text-xs"
+          class="flex h-8 items-center gap-2 rounded-full bg-(--secondary) px-4 text-xs"
         >
           <input
             type="number"
@@ -447,73 +452,3 @@ function onDragEnd() {
     <ContextMenuItem destructive @click="handleDelete"> Удалить </ContextMenuItem>
   </ContextMenu>
 </template>
-
-<style scoped>
-.check-box {
-  display: block;
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  border: 2px solid var(--ring);
-  transition:
-    border-color 0.15s,
-    background-color 0.15s;
-  position: relative;
-}
-
-.check-box--done {
-  border-color: var(--accent);
-}
-
-.check-box__inner {
-  display: block;
-  position: absolute;
-  inset: 2px;
-  border-radius: 3px;
-  background-color: var(--accent);
-}
-
-.check-btn:hover .check-box:not(.check-box--done) {
-  border-color: var(--accent);
-}
-
-.check-btn:hover .check-box--done {
-  border-color: var(--accent);
-}
-
-.check-btn:hover .check-box--done .check-box__inner {
-  background-color: var(--accent);
-}
-
-.todo-row {
-  position: relative;
-  border-radius: var(--radius);
-  corner-shape: var(--corner-shape);
-  will-change: transform;
-}
-
-.todo-row--drag-source {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.todo-row--expanded {
-  background: var(--secondary);
-}
-
-.todo-focus-pulse {
-  animation: focus-pulse 1.2s ease;
-}
-
-@keyframes focus-pulse {
-  0% {
-    opacity: 1;
-  }
-  20% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-</style>
