@@ -32,6 +32,12 @@ function rootView() {
     const RaycastHostView = defineAsyncComponent(() => import("./views/RaycastHostView.vue"));
     return RaycastHostView;
   }
+  if (hash.startsWith("#clipboard-history")) {
+    const ClipboardHistoryView = defineAsyncComponent(
+      () => import("./views/ClipboardHistoryView.vue"),
+    );
+    return ClipboardHistoryView;
+  }
   if (hash.startsWith("#focus-widget")) {
     // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы
     // не тащить в launcher bundle.

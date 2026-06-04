@@ -73,6 +73,11 @@ import { runRaycastNoViewCommand, type RaycastCommandLaunchProps } from "./rayca
 import { listInstalledUserExtensions } from "./extension-installer";
 import { openDashboardWindow } from "./dashboard-window";
 import { openRaycastViewCommand } from "./raycast/view-host";
+import {
+  registerClipboardHistoryIpc,
+  startClipboardHistory,
+  stopClipboardHistory,
+} from "./clipboard-history";
 import { LaunchType, type AlertOptions, type LaunchCommandOptions } from "@raycast/api";
 // Side-effect import — регистрирует IPC handlers для окна настроек
 // (kepler:settings:*). Окно создаётся лениво из openSettings().
@@ -1667,6 +1672,8 @@ app.whenReady().then(async () => {
 
   void initArkClient();
 
+  registerClipboardHistoryIpc();
+  startClipboardHistory();
   registerMarketplaceIpc();
   // autoupdater + periodic marketplace check разрешены только в prod slot'е.
   // Dev / dev-<x> / test не должны пуллить релизы и спамить GitHub.
@@ -1826,6 +1833,7 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   setExtensionArkBridge({ request: null, subscribe: null });
   teardownPomodoroNotifier();
+  stopClipboardHistory();
   if (windowStateSaveTimer) {
     clearTimeout(windowStateSaveTimer);
     windowStateSaveTimer = null;

@@ -8,6 +8,7 @@
 // extension-команды объявляются в их manifest.commands[] и резолвятся
 // через `loadDeclaredCommands` (extension-host.ts).
 import { openDashboardWindow } from "./dashboard-window";
+import { openClipboardHistoryWindow } from "./clipboard-history";
 import { openSettings } from "./settings-window";
 import { check as checkUpdates } from "./autoupdater-host";
 
@@ -57,6 +58,15 @@ export const COMMANDS: InternalCommand[] = [
     kind: "command",
     appName: "Kepler",
     exec: () => openDashboardWindow(),
+  },
+  {
+    id: "kepler:clipboard-history",
+    title: "Открыть буфер обмена",
+    subtitle: "История скопированного текста",
+    category: "open",
+    kind: "command",
+    appName: "Kepler",
+    exec: () => openClipboardHistoryWindow(),
   },
   {
     id: "settings:open",

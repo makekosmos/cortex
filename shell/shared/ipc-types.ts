@@ -173,6 +173,14 @@ export interface CommandRecord {
   icon?: string;
 }
 
+export interface ClipboardHistoryItem {
+  id: string;
+  text: string;
+  preview: string;
+  createdAt: number;
+  charCount: number;
+}
+
 export interface KeplerApi {
   /** Состояние kepler-backend подпроцесса. */
   backend: {
@@ -238,6 +246,17 @@ export interface KeplerApi {
     /** Подписка на сигнал «список команд изменился» (апка зарегистрировала
         новые команды или вышла из эфира). Колбэк вызывается без аргументов —
         renderer'у следует заново вызвать list(). */
+    onUpdated(listener: () => void): () => void;
+  };
+
+  /** Host-local Raycast-like clipboard history. Хранится только в памяти
+      текущего процесса Kosmos и не синхронизируется через ARK. */
+  clipboardHistory: {
+    list(): Promise<ClipboardHistoryItem[]>;
+    copy(id: string): Promise<boolean>;
+    delete(id: string): Promise<boolean>;
+    clear(): Promise<void>;
+    hide(): Promise<void>;
     onUpdated(listener: () => void): () => void;
   };
 

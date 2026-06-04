@@ -49,6 +49,18 @@ const api: KeplerApi = {
       return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
     },
   },
+  clipboardHistory: {
+    list: () => ipcRenderer.invoke("kepler:clipboard-history:list"),
+    copy: (id) => ipcRenderer.invoke("kepler:clipboard-history:copy", id),
+    delete: (id) => ipcRenderer.invoke("kepler:clipboard-history:delete", id),
+    clear: () => ipcRenderer.invoke("kepler:clipboard-history:clear"),
+    hide: () => ipcRenderer.invoke("kepler:clipboard-history:hide"),
+    onUpdated: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:clipboard-history:updated", handler);
+      return () => ipcRenderer.removeListener("kepler:clipboard-history:updated", handler);
+    },
+  },
   raycast: {
     snapshot: (sessionId) => ipcRenderer.invoke("kepler:raycast:snapshot", sessionId),
     action: (sessionId, action) => ipcRenderer.invoke("kepler:raycast:action", sessionId, action),
