@@ -21,7 +21,7 @@ Delphi визуально переведён на settings-like chrome из `@ko
 
 Proof loop: `.agent/tasks/2026-06-04-delphi-kosmos-visuals/`.
 
-## 2026-06-03 — Akasha GPUI extracted, Vue reader in Kosmos
+## 2026-06-03 — Akasha GPUI extracted, Vue reader in Kosmos (Akasha 0.1.0 → 0.1.1)
 
 Akasha больше не живёт как Rust/GPUI app внутри Kosmos workspace.
 

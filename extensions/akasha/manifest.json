@@ -1,7 +1,7 @@
 {
   "id": "akasha",
   "name": "Akasha",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "EPUB-читалка",
   "keplerApiVersion": "^1.1.0",
   "kind": "vue",
