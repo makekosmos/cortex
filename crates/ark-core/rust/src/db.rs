@@ -607,10 +607,19 @@ fn parse_json_or_default(raw: String) -> Value {
 }
 
 pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result<(), String> {
+    // Do not use SQLite REPLACE here: it deletes the old row first and cascades.
+    // См. postmortems.md § 2026-06-04.
     conn.execute(
-        "INSERT OR REPLACE INTO object_types
+        "INSERT INTO object_types
             (id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            schema_json = excluded.schema_json,
+            ui_schema_json = excluded.ui_schema_json,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            system_locked = excluded.system_locked",
         params![
             object_type.id,
             object_type.name,
@@ -866,10 +875,20 @@ pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String
     conn.execute_batch("SAVEPOINT ark_upsert_object")
         .map_err(|e| e.to_string())?;
     let result = (|| -> Result<(), String> {
+        // Do not use SQLite REPLACE here: it deletes the old row first and cascades.
+        // См. postmortems.md § 2026-06-04.
         conn.execute(
-            "INSERT OR REPLACE INTO objects
+            "INSERT INTO objects
                 (id, type_id, title, content_json, props_json, created_at, updated_at, deleted_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+                type_id = excluded.type_id,
+                title = excluded.title,
+                content_json = excluded.content_json,
+                props_json = excluded.props_json,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at",
             params![
                 object.id,
                 object.type_id,
@@ -1370,10 +1389,17 @@ fn collect_plain_text(node: &Value, output: &mut String) {
 }
 
 pub fn upsert_object_link(conn: &Connection, link: &ObjectLink) -> Result<(), String> {
+    // Do not use SQLite REPLACE here: it deletes the old row first.
+    // См. postmortems.md § 2026-06-04.
     conn.execute(
-        "INSERT OR REPLACE INTO object_links
+        "INSERT INTO object_links
             (id, source_object_id, target_object_id, link_type, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(id) DO UPDATE SET
+            source_object_id = excluded.source_object_id,
+            target_object_id = excluded.target_object_id,
+            link_type = excluded.link_type,
+            created_at = excluded.created_at",
         params![
             link.id,
             link.source_object_id,
@@ -3761,6 +3787,101 @@ mod tests {
         assert_eq!(data.object_links.len(), 0);
         assert_eq!(data.objects.len(), 1);
         assert!(!data.object_types.iter().any(|item| item.id == "book_obj"));
+    }
+
+    #[test]
+    fn upsert_object_preserves_existing_links() {
+        // Regression: 2026-06-04. SQLite REPLACE deletes the old object row first.
+        let conn = setup_db();
+        let note = make_object("obj-note", "note_obj", "Первая заметка");
+        let task = make_object("obj-task", "note_obj", "Задача");
+        let tag = make_object("obj-tag", "note_obj", "Тег");
+        upsert_object(&conn, &note).unwrap();
+        upsert_object(&conn, &task).unwrap();
+        upsert_object(&conn, &tag).unwrap();
+
+        upsert_object_link(&conn, &make_object_link("link-out", "obj-note", "obj-task")).unwrap();
+        upsert_object_link(&conn, &make_object_link("link-in", "obj-tag", "obj-note")).unwrap();
+
+        let mut updated_note = make_object("obj-note", "note_obj", "Обновленная заметка");
+        updated_note.updated_at = "2026-01-02T00:00:00.000Z".to_string();
+        upsert_object(&conn, &updated_note).unwrap();
+
+        let links = list_object_links(&conn).unwrap();
+        assert_eq!(links.len(), 2);
+        assert!(links.iter().any(|link| {
+            link.id == "link-out"
+                && link.source_object_id == "obj-note"
+                && link.target_object_id == "obj-task"
+        }));
+        assert!(links.iter().any(|link| {
+            link.id == "link-in"
+                && link.source_object_id == "obj-tag"
+                && link.target_object_id == "obj-note"
+        }));
+        assert_eq!(
+            get_object(&conn, "obj-note").unwrap().unwrap().title,
+            "Обновленная заметка"
+        );
+    }
+
+    #[test]
+    fn upsert_object_type_preserves_existing_objects_and_links() {
+        // Regression: 2026-06-04. SQLite REPLACE cascades through object_types -> objects -> links.
+        let conn = setup_db();
+        let object_type = make_object_type("custom_note", "Custom Note");
+        upsert_object_type(&conn, &object_type).unwrap();
+        upsert_object(&conn, &make_object("obj-a", "custom_note", "A")).unwrap();
+        upsert_object(&conn, &make_object("obj-b", "custom_note", "B")).unwrap();
+        upsert_object_link(&conn, &make_object_link("link-custom", "obj-a", "obj-b")).unwrap();
+
+        let mut updated_type = make_object_type("custom_note", "Custom Note Updated");
+        updated_type.updated_at = "2026-01-02T00:00:00.000Z".to_string();
+        upsert_object_type(&conn, &updated_type).unwrap();
+
+        assert_eq!(list_objects_by_type(&conn, "custom_note").unwrap().len(), 2);
+        let links = list_object_links(&conn).unwrap();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].id, "link-custom");
+        assert_eq!(
+            get_object_type(&conn, "custom_note").unwrap().unwrap().name,
+            "Custom Note Updated"
+        );
+    }
+
+    #[test]
+    fn upsert_object_link_updates_existing_row_in_place() {
+        // Regression: 2026-06-04. Link upsert should update, not delete+insert.
+        let conn = setup_db();
+        upsert_object(&conn, &make_object("obj-a", "note_obj", "A")).unwrap();
+        upsert_object(&conn, &make_object("obj-b", "note_obj", "B")).unwrap();
+        upsert_object(&conn, &make_object("obj-c", "note_obj", "C")).unwrap();
+        upsert_object_link(&conn, &make_object_link("link-1", "obj-a", "obj-b")).unwrap();
+
+        let before_rowid: i64 = conn
+            .query_row(
+                "SELECT rowid FROM object_links WHERE id = ?1",
+                params!["link-1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let mut updated_link = make_object_link("link-1", "obj-a", "obj-c");
+        updated_link.link_type = "tagged".to_string();
+        upsert_object_link(&conn, &updated_link).unwrap();
+
+        let after_rowid: i64 = conn
+            .query_row(
+                "SELECT rowid FROM object_links WHERE id = ?1",
+                params!["link-1"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let links = list_object_links(&conn).unwrap();
+        assert_eq!(before_rowid, after_rowid);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].target_object_id, "obj-c");
+        assert_eq!(links[0].link_type, "tagged");
     }
 
     #[test]

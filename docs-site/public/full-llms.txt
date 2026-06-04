@@ -1407,6 +1407,7 @@ node --experimental-strip-types apps\dashboard\scripts\seedSmokeDb.ts `
 - ❌ **Прямой SQL `INSERT` / `UPDATE` / `DELETE`** в `objects`, `object_types`, `object_links`, `tracked_apps`, `usage_sessions`, `usage_events`, `sync_kv` из **app TS services**.
 - ❌ **Открытие ARK SQLite на запись** в app services через `better-sqlite3`, `sqlite3`, `node:sqlite` и т.п.
 - ❌ Renderer открывает SQLite (любой) напрямую.
+- ❌ `INSERT OR REPLACE` для `object_types` / `objects` / `object_links` в `ark_core::db`. SQLite `REPLACE` = delete+insert, а FK `ON DELETE CASCADE` сносит зависимые строки. Только `INSERT ... ON CONFLICT(id) DO UPDATE`.
 
 ## Rust panic / Mutex discipline
 

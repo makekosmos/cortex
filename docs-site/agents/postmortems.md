@@ -21,6 +21,15 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-04 — ARK upsert удаляет object_links через SQLite REPLACE
+
+**Симптомы.** Повторный upsert существующего объекта или типа мог незаметно удалить связи графа: обновление заметки/задачи/тега потенциально сносило `object_links`, которые на них ссылались.
+**Где жило.** `crates/ark-core/rust/src/db.rs:609` (`upsert_object_type`), `crates/ark-core/rust/src/db.rs:875` (`upsert_object`), `crates/ark-core/rust/src/db.rs:1389` (`upsert_object_link`).
+**Root cause.** В SQLite `INSERT OR REPLACE` реализован как delete старой строки плюс insert новой. Для `objects` и `object_types` это проходило через FK `ON DELETE CASCADE`, поэтому обычный upsert родительской строки мог каскадно удалить дочерние `object_links`/`objects`.
+**Fix.** Generic object model helpers переведены на `INSERT ... ON CONFLICT(id) DO UPDATE SET ...`: `upsert_object_type`, `upsert_object` и `upsert_object_link` теперь обновляют существующую строку без delete+insert side effects.
+**Регрешн-защита.** `cargo test --manifest-path crates\ark-core\rust\Cargo.toml --lib upsert_object` покрывает сохранение входящих/исходящих `object_links` при upsert объекта, сохранение objects/links при upsert object type и in-place update существующего link row.
+**Prevention.** В SQLite `REPLACE` нельзя использовать как синоним upsert для таблиц с FK-зависимостями или потенциальными зависимыми строками. Для canonical ARK CRUD helper'ов upsert должен быть явным `ON CONFLICT DO UPDATE`, а регрессия должна проверять сохранение зависимых строк, не только итоговые поля родительской записи.
+
 ## 2026-06-01 — Dashboard usage показывает битые app icons
 
 **Симптомы.** В Dashboard → «Затреканное время» часть строк показывала browser broken-image placeholder вместо иконки приложения.
