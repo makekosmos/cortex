@@ -28,6 +28,10 @@ function rootView() {
     const DashboardRoot = defineAsyncComponent(() => import("./views/DashboardRoot.vue"));
     return DashboardRoot;
   }
+  if (hash.startsWith("#raycast-host")) {
+    const RaycastHostView = defineAsyncComponent(() => import("./views/RaycastHostView.vue"));
+    return RaycastHostView;
+  }
   if (hash.startsWith("#focus-widget")) {
     // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы
     // не тащить в launcher bundle.

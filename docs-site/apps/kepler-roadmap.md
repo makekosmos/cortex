@@ -4,25 +4,25 @@ Pivot 2026-05-14: ecosystem `Kepler` → `Kosmos`, launcher `Kosmos` → `Kepler
 
 ## Статус по фазам
 
-| Фаза | Что                                                                                                                                         | Статус |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 0    | Backend extracted в `services/kepler-backend/` (lib + bin `kepler-backend.exe`)                                                             | ✅     |
-| 1    | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state)                                              | ✅     |
-| 2    | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher)                                                         | ✅     |
-| 3    | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC                                                     | ✅     |
-| 4    | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador)                                                        | ✅     |
-| 5    | Extension developer mode (Vite HMR per extension, Raycast-style)                                                                            | ✅     |
-| 6    | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit)      | ✅     |
-| 7    | Universal per-type data export (notes → md, tasks → md/CSV, time entries → CSV, tags/games → JSON) — Rust converter framework + Settings UI | ✅     |
-| 7.5  | Adaptive lifecycle (optional)                                                                                                               | ⏳     |
-| 11   | Backup / Disaster Recovery ARK DB (multi-disk + GitHub + encryption)                                                                        | ⏳     |
-| 8    | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅                                                       | ⏳     |
-| 9    | Delphi UI: Tailwind → plain CSS (открытый вопрос)                                                                                           | ⏳     |
-| 10   | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳                                                | ⏳     |
-| 12   | Password manager (как хранить — TBD)                                                                                                        | ⏳     |
-| 13   | Raycast API совместимость — целевая в Kepler **0.5.0**                                                                                      | ⏳     |
-| 14   | Eden state на **Pinia Colada** (auto-cache + dedup + revalidation, минус ~200 строк самопального state-sync)                                | ⏳     |
-| 16   | **AI semantic search** в ARK — sqlite-vec + fastembed-rs + DirectML на Windows, MiniLM bundle + Qwen3 opt-in                                | ⏳     |
+| Фаза | Что                                                                                                                                                                                                                       | Статус |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 0    | Backend extracted в `services/kepler-backend/` (lib + bin `kepler-backend.exe`)                                                                                                                                           | ✅     |
+| 1    | Electron shell scaffold (launcher window, tray, settings, hotkey, backend spawn, window state)                                                                                                                            | ✅     |
+| 2    | Command bus (Rust в backend + `@kosmos/ark` SDK + apps register + dynamic launcher)                                                                                                                                       | ✅     |
+| 3    | Real handlers (Horologion / Delphi / Eden wired), Settings window, extension loader PoC                                                                                                                                   | ✅     |
+| 4    | Apps как Vue extensions внутри Kepler (Dashboard / Horologion / Delphi / Arrancador)                                                                                                                                      | ✅     |
+| 5    | Extension developer mode (Vite HMR per extension, Raycast-style)                                                                                                                                                          | ✅     |
+| 6    | Eden как extension (Phase 6.0 scaffold + ARK note CRUD; Phase 6.0.A cleanup — Hevy/code-tools/standalone удалены, trash UI, codesplit)                                                                                    | ✅     |
+| 7    | Universal per-type data export (notes → md, tasks → md/CSV, time entries → CSV, tags/games → JSON) — Rust converter framework + Settings UI                                                                               | ✅     |
+| 7.5  | Adaptive lifecycle (optional)                                                                                                                                                                                             | ⏳     |
+| 11   | Backup / Disaster Recovery ARK DB (multi-disk + GitHub + encryption)                                                                                                                                                      | ⏳     |
+| 8    | Production packaging (NSIS) ✅ / auto-update ⏳ / retire legacy Rust gpui launcher ✅                                                                                                                                     | ⏳     |
+| 9    | Delphi UI: Tailwind → plain CSS (открытый вопрос)                                                                                                                                                                         | ⏳     |
+| 10   | Extension installer — CLI install/uninstall ✅ / `.kext` ⏳ / UI manager ⏳ / auto-update ⏳                                                                                                                              | ⏳     |
+| 12   | Password manager (как хранить — TBD)                                                                                                                                                                                      | ⏳     |
+| 13   | Raycast API совместимость — целевая в Kepler **0.5.0**; ready slices: manifest/no-view/view/menu-bar host, List/Form/Grid/Detail/MenuBarExtra, controlled List/Grid props, EmptyView actions, launchCommand, file actions | ⏳     |
+| 14   | Eden state на **Pinia Colada** (auto-cache + dedup + revalidation, минус ~200 строк самопального state-sync)                                                                                                              | ⏳     |
+| 16   | **AI semantic search** в ARK — sqlite-vec + fastembed-rs + DirectML на Windows, MiniLM bundle + Qwen3 opt-in                                                                                                              | ⏳     |
 
 ## Phase 0 ✅ — Backend extracted
 
@@ -342,11 +342,48 @@ baseline снят в `.agent/experiments/2026-05-19-tooling-pass/` (E3).
 
 ### Что планируется поддержать (минимальный паритет)
 
-- **Commands**: `command` / `view` / `no-view` modes — мапятся на наш `manifest.commands[]` (`open` / `action`) с расширением `view` (full UI).
-- **List / Detail / Form / Grid компоненты** — реализовать поверх `@kosmos/visuals`, чтобы Raycast `<List>` / `<Action>` JSX работал как привычный TipTap UI.
-- **`@raycast/api`**: `Clipboard.copy`, `showToast`, `getPreferenceValues`, `LocalStorage` — поверх `kepler.window` / `kepler.userData` / нового `kepler.clipboard`.
+- **Commands**: `view` / `no-view` / `menu-bar` modes из Raycast `package.json`.
+  Phase 13 foundation уже мапит `no-view` в `raycast-no-view`, а trusted
+  `view` commands — в serializable `List` host. `menu-bar` commands уже
+  мапятся в `raycast-menu-bar` и рендерятся через первый `MenuBarExtra` host.
+  Отсутствующий `mode` default'ится в `view`, явные неизвестные modes
+  отбрасываются на этапе manifest parsing.
+- **List / Detail / Form / Grid компоненты** — host-controlled command primitives,
+  а не обычные Vue widgets в `@kosmos/visuals`: `ActionPanel` должен знать
+  selected item, shortcuts, navigation, clipboard, close behavior и command lifecycle.
+  Сейчас реализован первый shell host для `List`, root/inline `Detail`
+  markdown, `List.Item.Detail` aliases, root `Detail.actions`, `Detail.Metadata`, `ActionPanel`,
+  `ActionPanel.Section`, `ActionPanel.Submenu`, `Keyboard.Shortcut.Common`
+  и action `shortcut` labels/key dispatch snapshot'ов: работают
+  `Action.CopyToClipboard`,
+  `Action.OpenInBrowser`, `Action.Open`, `Action.LaunchCommand`,
+  `Action.Pop`, `Action.PopToRoot` и локальный
+  `Action.Push` в detail target; generic `Action` callbacks, `showToast`,
+  `showHUD` и `confirmAlert` подключены к host feedback/confirm bridge;
+  `List.Section`, `List.EmptyView` with footer actions,
+  `List.Item.icon`, `List.Item.accessories`, `List.Dropdown` search accessory и controlled `List.searchText` /
+  `List.selectedItemId` / `List.filtering` с `onSearchTextChange` /
+  `onSelectionChange` уже учитываются. Также есть первый `Form`
+  host (`TextField`, `PasswordField`, `TextArea`, `Checkbox`, `Dropdown`,
+  `Dropdown.Section`, `Description`, `Separator`, `TagPicker`, `DatePicker` Date defaults/onChange, `FilePicker`) с `Action.SubmitForm` callback'ом и guarded
+  field `onChange` callback'ами, Form footer common actions, плюс guarded native file dialog для trusted commands. Первый
+  `Grid` host уже рендерит
+  `Grid.Section`, `Grid.Item`, `Grid.EmptyView` with footer actions, image/placeholder previews,
+  search, `Grid.Dropdown` search accessory, controlled `Grid.searchText` /
+  `Grid.selectedItemId` / `Grid.filtering` callbacks, `isLoading` и
+  selected-item `ActionPanel`; `List.isLoading` тоже отображается. Первый
+  `MenuBarExtra` host рендерит
+  `MenuBarExtra.Section`, `MenuBarExtra.Item`, `MenuBarExtra.Submenu` и item
+  callbacks через guarded session IPC. `useNavigation().push/pop/popToRoot`
+  ведёт session stack в Electron host и обновляет root snapshot renderer'а.
+  Rich navigation polish остаётся дальше.
+- **`@raycast/api`**: private workspace shim `packages/raycast-api` (`@raycast/api`)
+  уже содержит начальные `Clipboard.copy/read/readText/clear`, `showToast`, `getPreferenceValues`,
+  `LocalStorage` включая `allItems`, `Cache`, `launchCommand`, `List`, `Detail`, `ActionPanel`,
+  `Action` и bridge для `@raycast/api/jsx-runtime`. `launchCommand` уже ходит через shell declared-command registry для
+  trusted `view` / `no-view` / `open` targets.
 - **Preferences UI** — Raycast extensions объявляют preferences в manifest, Kepler рендерит автоматически в Settings → Расширения → <Имя>.
-- **Keyboard shortcuts** — Raycast `ActionPanel` `keyboardShortcut` → mapping в наш command bus.
+- **Keyboard shortcuts** — первый renderer-level action `shortcut` dispatch уже есть; дальше нужен command-bus-level mapping для глобальных/launcher shortcuts.
 
 ### Что НЕ войдёт в 0.5.0
 
@@ -356,8 +393,12 @@ baseline снят в `.agent/experiments/2026-05-19-tooling-pass/` (E3).
 
 ### Открытые вопросы
 
-- **Loader**: реализовать `@raycast/api` shim как npm-пакет в `packages/` + extension просто импортирует? Или JSX/React-runtime внутри extension и адаптер на наш Vue Vapor?
-- **Лицензия**: Raycast API типы (`@raycast/api`) — proprietary. Использовать TypeScript types из их пакета нельзя; нужно объявить совместимый shape в новом workspace-пакете (рабочее название `@kosmos/raycast-compat`) своими силами.
+- **Loader**: foundation использует private `@raycast/api` workspace package и
+  Raycast `package.json` parser. Открыто: command bundler / import aliasing для
+  real TS/TSX Raycast projects, включая JSX runtime entrypoints.
+- **Лицензия**: Raycast API типы (`@raycast/api`) — proprietary. Использовать
+  TypeScript types из их пакета нельзя; совместимый shape объявляется своими
+  силами в `packages/raycast-api`.
 - **Marketplace**: установка Raycast extensions через `.kext` (после конвертации) vs прямая поддержка `.raycast` бандлов.
 
 ## Phase 16 ⏳ — AI semantic search

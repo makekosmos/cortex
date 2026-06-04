@@ -49,6 +49,28 @@ const api: KeplerApi = {
       return () => ipcRenderer.removeListener("kepler:commands:updated", handler);
     },
   },
+  raycast: {
+    snapshot: (sessionId) => ipcRenderer.invoke("kepler:raycast:snapshot", sessionId),
+    action: (sessionId, action) => ipcRenderer.invoke("kepler:raycast:action", sessionId, action),
+    pickFiles: (sessionId, request) =>
+      ipcRenderer.invoke("kepler:raycast:pick-files", sessionId, request),
+    onSnapshotUpdated: (sessionId, listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+        const update = payload as { sessionId?: unknown; snapshot?: unknown };
+        if (update.sessionId === sessionId) listener(update.snapshot as never);
+      };
+      ipcRenderer.on("kepler:raycast:snapshot-updated", handler);
+      return () => ipcRenderer.removeListener("kepler:raycast:snapshot-updated", handler);
+    },
+    onFeedback: (sessionId, listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, payload: unknown) => {
+        const feedback = payload as { sessionId?: unknown; event?: unknown };
+        if (feedback.sessionId === sessionId) listener(feedback.event as never);
+      };
+      ipcRenderer.on("kepler:raycast:feedback", handler);
+      return () => ipcRenderer.removeListener("kepler:raycast:feedback", handler);
+    },
+  },
   extension: {
     installPreview: (sourcePath) =>
       ipcRenderer.invoke("kepler:extension:install:preview", sourcePath),

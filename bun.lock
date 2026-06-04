@@ -32,11 +32,12 @@
     },
     "extensions/akasha": {
       "name": "@kosmos/extension-akasha",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "dependencies": {
         "@fontsource/source-serif-4": "^5.2.8",
         "@kosmos/visuals": "workspace:*",
         "@lucide/vue": "^1.16.0",
+        "@phosphor-icons/vue": "^2.2.1",
         "vue": "^3.6.0-beta.12",
       },
       "devDependencies": {
@@ -45,7 +46,7 @@
     },
     "extensions/arrancador": {
       "name": "@kosmos/extension-arrancador",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "dependencies": {
         "@lucide/vue": "^1.16.0",
         "@tailwindcss/vite": "^4.2.2",
@@ -56,7 +57,7 @@
     },
     "extensions/delphi": {
       "name": "@kosmos/extension-delphi",
-      "version": "0.1.5",
+      "version": "0.1.7",
       "dependencies": {
         "@lucide/vue": "^1.16.0",
         "@phosphor-icons/vue": "^2.2.1",
@@ -79,7 +80,7 @@
     },
     "extensions/eden": {
       "name": "@kosmos/extension-eden",
-      "version": "0.1.11",
+      "version": "0.1.12",
       "dependencies": {
         "@kosmos/visuals": "workspace:*",
         "@lucide/vue": "^1.16.0",
@@ -109,7 +110,7 @@
     },
     "extensions/horologion": {
       "name": "@kosmos/extension-horologion",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "@kosmos/ark": "workspace:*",
         "@kosmos/visuals": "workspace:*",
@@ -132,6 +133,10 @@
         "@types/node": "^24.9.2",
         "typescript": "^6.0.3",
       },
+    },
+    "packages/raycast-api": {
+      "name": "@raycast/api",
+      "version": "0.0.0-kosmos.0",
     },
     "packages/visuals": {
       "name": "@kosmos/visuals",
@@ -166,12 +171,13 @@
     },
     "shell": {
       "name": "kepler-shell",
-      "version": "0.3.10",
+      "version": "0.3.12",
       "dependencies": {
         "@kosmos/ark": "workspace:*",
         "@kosmos/visuals": "workspace:*",
         "@lucide/vue": "^1.16.0",
         "@phosphor-icons/vue": "^2.2.1",
+        "@raycast/api": "workspace:*",
         "electron-updater": "^6.3.9",
       },
       "devDependencies": {
@@ -570,6 +576,8 @@
     "@playwright/test": ["@playwright/test@1.60.0", "", { "dependencies": { "playwright": "1.60.0" }, "bin": { "playwright": "cli.js" } }, "sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag=="],
 
     "@polka/url": ["@polka/url@1.0.0-next.29", "", {}, "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww=="],
+
+    "@raycast/api": ["@raycast/api@workspace:packages/raycast-api"],
 
     "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.0.1", "", { "os": "android", "cpu": "arm64" }, "sha512-fJI3I0r3C3Oj/zdBCpaCmBRZYf07xpaq4yCfDDoSFm+beWNzbIl26puW8RraUdugoJw/95zerNOn6jasAhzSmg=="],
 

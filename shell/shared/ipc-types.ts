@@ -3,6 +3,15 @@
 // Renderer вызывает методы через `window.kepler.*` (см. preload.ts).
 // Main process реализует handlers в electron/main.ts через ipcMain.handle().
 
+import type {
+  RaycastActionRequest,
+  RaycastActionResult,
+  RaycastFeedbackEvent,
+  RaycastFilePickerRequest,
+  RaycastFilePickerResult,
+  RaycastSnapshot,
+} from "./raycast-ipc";
+
 export interface BackendStatus {
   running: boolean;
   pid?: number;
@@ -230,6 +239,19 @@ export interface KeplerApi {
         новые команды или вышла из эфира). Колбэк вызывается без аргументов —
         renderer'у следует заново вызвать list(). */
     onUpdated(listener: () => void): () => void;
+  };
+
+  /** Raycast-compatible command host snapshots. Renderer-only read model for
+      `kind:"raycast"` view commands. */
+  raycast: {
+    snapshot(sessionId: string): Promise<RaycastSnapshot | null>;
+    action(sessionId: string, action: RaycastActionRequest): Promise<RaycastActionResult>;
+    pickFiles(
+      sessionId: string,
+      request: RaycastFilePickerRequest,
+    ): Promise<RaycastFilePickerResult>;
+    onSnapshotUpdated(sessionId: string, listener: (snapshot: RaycastSnapshot) => void): () => void;
+    onFeedback(sessionId: string, listener: (event: RaycastFeedbackEvent) => void): () => void;
   };
 
   /** Управление установкой / список / revert user-extensions. */

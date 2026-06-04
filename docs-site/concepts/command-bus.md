@@ -6,11 +6,11 @@ Command bus — communication primitive в Kepler, который позволя
 
 После Phase 6.2 команды в launcher'е приходят из **трёх** независимых источников. Merge происходит в `shell/electron/main.ts → kepler:commands:list` IPC, дедуп по `id`:
 
-| Слой                     | Источник                                                 | Видимость                     | Use case                                                                               |
-| ------------------------ | -------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------- |
-| **A. Kepler-internal**   | `shell/electron/commands.ts` `COMMANDS[]`                | всегда                        | settings/dashboard/check-updates — это сам shell                                       |
-| **B. Manifest-declared** | `extensions/<id>/manifest.json` `commands[]`             | пока extension установлен     | Entry points (Open Eden, Pomodoro, Open today) — declarative, не требует running state |
-| **C. Runtime dynamic**   | `commands.register(...)` через WS из running extension'а | только пока extension запущен | State-aware actions (Stop pomodoro, Save current note)                                 |
+| Слой                     | Источник                                                                             | Видимость                     | Use case                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------- |
+| **A. Kepler-internal**   | `shell/electron/commands.ts` `COMMANDS[]`                                            | всегда                        | settings/dashboard/check-updates — это сам shell                                            |
+| **B. Manifest-declared** | `extensions/<id>/manifest.json` `commands[]` или Raycast `package.json` `commands[]` | пока extension установлен     | Entry points (Open Eden, Pomodoro, Raycast no-view) — declarative, не требует running state |
+| **C. Runtime dynamic**   | `commands.register(...)` через WS из running extension'а                             | только пока extension запущен | State-aware actions (Stop pomodoro, Save current note)                                      |
 
 Приоритет дедупа: A > B > C. Extension **не может** claim'нуть чужой namespace — manifest-declared команды автоматически префиксуются `${extension.id}:`, registry проверяет.
 
@@ -24,13 +24,34 @@ interface KextManifestCommand {
   icon?: string; // относительный путь от extension dir
   route?: string; // hash-route для openExtension
   kind?: "app" | "command"; // UI plate (default: "command")
-  mode?: "open" | "action"; // (default: "open")
+  mode?: "open" | "action" | "raycast-view" | "raycast-no-view" | "raycast-menu-bar"; // (default: "open")
 }
 ```
 
 `mode: "open"` — invoke вызывает `openExtension(extId, route)`. Покрывает entry points через deep-link route.
 
 `mode: "action"` — invoke вызывает `arkClient.commands.invoke(fullId)` (dynamic action bus). Если extension не запущен — **auto-launch**: shell openExtension'ит, ждёт до 5 секунд пока mount + `commands.register` отработает с нужным id, потом dispatch'ит. См. `awaitExtensionCommand` в `main.ts`.
+
+Raycast-compatible `package.json` manifests мапятся в те же declared commands:
+
+- `commands[].mode = "no-view"` → `mode: "raycast-no-view"` и запуск через
+  dedicated no-view runner.
+- `commands[].mode = "view"` → `mode: "raycast-view"` и запуск через первый
+  trusted host-renderer для serializable `List` / `Detail` / `ActionPanel`
+  snapshot'ов.
+- `commands[].mode = "menu-bar"` → `mode: "raycast-menu-bar"` и запуск через
+  trusted host-renderer для serializable `MenuBarExtra` snapshot'ов.
+
+`raycast-no-view`, `raycast-view` и `raycast-menu-bar` runners сейчас
+исполняют только trusted sources (`dev` / `bundled`). User-installed Raycast JS
+не запускается в Electron main process до появления isolated runtime.
+
+`launchCommand()` внутри trusted Raycast commands резолвится через этот же
+declared-command registry: если `extensionName` не указан, target ищется внутри
+текущего extension; `view` targets открывают новый Raycast host window,
+`no-view` targets выполняются headless, а обычные `open` commands открывают
+соответствующий Kosmos extension route. Запущенной цели передаётся
+`LaunchType.LaunchCommand`, `arguments`, `fallbackText` и `context`.
 
 ### Что было до и зачем рефактор
 

@@ -26,7 +26,7 @@ Phase 4 цель — превратить апки в **extensions**: Vue-бан
 export interface ExtensionManifest {
   id: string;
   name: string;
-  kind?: "vue" | "static" | "native";
+  kind?: "vue" | "static" | "native" | "raycast";
   entryHtml?: string; // required for vue/static
   native?: {
     executable: string;
@@ -72,7 +72,8 @@ function resolveExtensionRoots(): string[] {
 function resolveExtensionDir(id: string): string | null {
   for (const root of resolveExtensionRoots()) {
     const dir = path.join(root, id);
-    if (existsSync(path.join(dir, "manifest.json"))) return dir;
+    if (existsSync(path.join(dir, "manifest.json")) || existsSync(path.join(dir, "package.json")))
+      return dir;
   }
   return null;
 }
@@ -83,6 +84,94 @@ Per-id lookup означает, что Dashboard может быть user-instal
 `listExtensions()` дедуплицирует по `id` — если один и тот же `<id>` присутствует и в user-installed, и в bundled, побеждает первый встреченный (т.е. user-installed override).
 
 Reuse: `Map<id, BrowserWindow>` для `vue/static` и `Map<id, ChildProcess>` для `native`. Если окно уже открыто — `focus()`. Если native child уже жив и `singleInstance !== false` — повторный invoke не spawn'ит второй процесс. На `closed` / `exit` — запись удаляется.
+
+### Raycast-compatible extensions
+
+`kind: "raycast"` — отдельный compatibility foundation для Raycast-style
+`package.json` manifests. Такой extension может не иметь `manifest.json`:
+loader читает `extensions/<id>/package.json`, валидирует Raycast-поля
+`name`, `title`, `version`, `description`, `commands`, `preferences` и
+мапит `commands[].mode = "no-view"` в launcher command id
+`${extensionId}:${commandName}`.
+
+Kosmos-specific настройки живут в namespace `kosmos`, а не на верхнем уровне:
+
+```json
+{
+  "name": "copy-tool",
+  "title": "Copy Tool",
+  "commands": [{ "name": "copy", "title": "Copy", "mode": "no-view" }],
+  "kosmos": {
+    "permissions": ["userData.read", "userData.write"],
+    "commands": {
+      "copy": { "entry": "dist/copy.mjs" }
+    }
+  }
+}
+```
+
+Phase 0 поддерживает только safe vertical slice:
+
+- private workspace package `@raycast/api` с runtime primitives
+  (`List`, `Detail`, `ActionPanel`, `Action`, feedback, clipboard read/write/clear,
+  LocalStorage/Cache включая `LocalStorage.allItems()`, preferences, `launchCommand`, `open`, `showInFinder`,
+  `trash`) и bridge для `@raycast/api/jsx-runtime` в trusted compiled TSX
+  командах;
+- `no-view` command runner для trusted sources (`dev` / `bundled`);
+- feedback bridge для trusted commands: `showToast` / `showHUD` доходят до
+  Raycast host feedback overlay, а `confirmAlert` использует native Electron
+  confirmation dialog;
+- basic `launchCommand()` lifecycle: trusted Raycast commands can launch
+  declared `view`, `no-view`, and regular `open` targets through the shell
+  registry, with `LaunchType.LaunchCommand` props forwarded to the target;
+- первый `view` host для trusted `List` / `Detail` commands: runner нормализует
+  serializable component tree в snapshot, shell renderer показывает список,
+  `List.Section`, `List.EmptyView` with footer actions, `List.Item.icon`, `List.Item.accessories`,
+  `List.Dropdown` search accessory, поиск,
+  controlled `List.searchText` / `List.selectedItemId`, `List.filtering`,
+  `List.onSearchTextChange` / `List.onSelectionChange`, `List.isLoading` /
+  `Grid.isLoading`, root `Detail`, выбранный item `Detail` markdown,
+  root `Detail.actions`, `Detail.Metadata` labels, links, separators,
+  tag lists, `ActionPanel`, `ActionPanel.Section`, `ActionPanel.Submenu`,
+  `Keyboard.Shortcut.Common` и action `shortcut` labels/key dispatch; `Action.CopyToClipboard` /
+  `Action.Paste` / `Action.Pop` / `Action.PopToRoot` /
+  `Action.OpenInBrowser` / `Action.Open` /
+  `Action.ShowInFinder` / `Action.Trash` / `Action.LaunchCommand`
+  выполняются через guarded session IPC, `Action.Push` переключает локальный
+  detail target, `List.Item.Detail` aliases share the same metadata renderer,
+  navigation actions/generic `Action` с callback выполняются через тот же guarded
+  callback registry, а `useNavigation().push/pop/popToRoot` ведёт
+  session-level stack в Electron host и шлёт renderer'у guarded snapshot update;
+- первый `Form` host для trusted commands: `Form.TextField`,
+  `Form.PasswordField`, `Form.TextArea`, `Form.Checkbox`, `Form.Dropdown`,
+  `Form.Dropdown.Section`, `Form.Description`, `Form.Separator`,
+  `Form.TagPicker`, `Form.DatePicker` with Date defaults/onChange,
+  `Form.FilePicker` рендерятся shell renderer'ом;
+  field `onChange` callbacks идут через guarded session IPC,
+  FilePicker открывает native file dialog через guarded session IPC, а
+  `Action.SubmitForm` вызывает trusted callback через guarded session IPC;
+  Form footer поддерживает common actions (`CopyToClipboard`, `OpenInBrowser`,
+  `Open`, `Paste`, `ShowInFinder`, `Trash`, `LaunchCommand`, generic callback)
+  и локальный `Action.Push` в detail target;
+- первый `Grid` host для trusted commands: `Grid.Section`, `Grid.Item`,
+  `Grid.EmptyView` with footer actions, `Grid.Dropdown` search accessory, card layout,
+  image/placeholder preview, search filtering, controlled `Grid.searchText` /
+  `Grid.selectedItemId`, `Grid.filtering`, `Grid.onSearchTextChange` /
+  `Grid.onSelectionChange`, selection и selected-item `ActionPanel`;
+- первый `MenuBarExtra` host для trusted `menu-bar` commands: `package.json`
+  `commands[].mode = "menu-bar"` мапится в declared `raycast-menu-bar`,
+  runner нормализует serializable `MenuBarExtra` snapshot, shell renderer
+  показывает `MenuBarExtra.Section`, `MenuBarExtra.Item`, `MenuBarExtra.Submenu`
+  и выполняет item callbacks через guarded session IPC;
+- Raycast manifest parser default'ит отсутствующий `commands[].mode` в `view`,
+  но отбрасывает явные неизвестные modes, чтобы команда не запускалась в
+  неверном host mode;
+- user-installed Raycast JS **не исполняется** в main process до появления
+  isolated runtime/sandbox. Это намеренный security gate, чтобы не создать
+  обход текущей permission model.
+
+Полный React/TSX renderer, `menu-bar`, HMR, OAuth/AI/Grid/Form rich parity,
+Store compatibility и untrusted sandbox — отдельные следующие phases.
 
 ### Native extensions
 
@@ -177,7 +266,8 @@ if (nav) {
 
 ```text
 extensions/<id>/
-├── manifest.json
+├── manifest.json          // Kosmos vue/static/native manifest
+├── package.json           // optional Raycast-compatible manifest
 ├── icon.png             // optional, ссылается через manifest.icon
 ├── src/                  // Vue sources (dev)
 └── dist/                 // build output: index.html + assets/* (entryHtml = "dist/index.html")
@@ -554,7 +644,8 @@ Open question остался не в enforcement, а в UX: marketplace/auto-upd
 | ---------------------------------- | -------------------------------------------- |
 | `shell/electron/extension-host.ts` | Loader, IPC handlers, BrowserWindow создание |
 | `shell/electron/commands.ts`       | `dashboard:extension:demo` — PoC trigger     |
-| `extensions/<id>/manifest.json`    | Per-extension манифест                       |
+| `extensions/<id>/manifest.json`    | Per-extension Kosmos манифест                |
+| `extensions/<id>/package.json`     | Raycast-compatible package manifest          |
 | `extensions/<id>/index.html`       | Entry HTML                                   |
 
 ## Связанные документы

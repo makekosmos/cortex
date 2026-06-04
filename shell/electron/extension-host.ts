@@ -54,12 +54,13 @@ import {
   assertExtensionHostPermission,
   type ExtensionSource as ExtensionPermissionSource,
 } from "./extension-permissions";
+import { loadRaycastPackageManifest, type RaycastPackageManifest } from "./raycast/manifest";
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export type ExtensionKind = "vue" | "static" | "native";
+export type ExtensionKind = "vue" | "static" | "native" | "raycast";
 
 /**
  * Объявление команды в `manifest.json` extension'а. Полный id рендерится
@@ -86,7 +87,7 @@ export interface KextManifestCommand {
    *  - `action`: invoke в running extension через ARK commands bus. Если
    *    extension не запущен — Kepler auto-launch'ит и dispatch'ит после
    *    mount. */
-  mode?: "open" | "action";
+  mode?: "open" | "action" | "raycast-view" | "raycast-no-view" | "raycast-menu-bar";
 }
 
 export interface ExtensionManifest {
@@ -122,6 +123,11 @@ export interface ExtensionManifest {
    */
   keplerApiVersion?: string;
   kind?: ExtensionKind;
+  /**
+   * Raycast-compatible package metadata derived from `package.json`.
+   * Present only for `kind: "raycast"` extensions.
+   */
+  raycast?: RaycastPackageManifest;
   entryHtml?: string;
   /**
    * Native extension entrypoint. Used only when `kind: "native"`.
@@ -549,7 +555,9 @@ function resolveExtensionLocation(
 ): { dir: string; source: ExtensionPermissionSource } | null {
   for (const root of resolveExtensionRootEntries()) {
     const dir = path.join(root.dir, id);
-    if (existsSync(path.join(dir, "manifest.json"))) return { dir, source: root.source };
+    if (existsSync(path.join(dir, "manifest.json")) || existsSync(path.join(dir, "package.json"))) {
+      return { dir, source: root.source };
+    }
   }
   return null;
 }
@@ -567,6 +575,42 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
   const dir = resolveExtensionDir(id);
   if (!dir) return null;
   const manifestPath = path.join(dir, "manifest.json");
+  if (!existsSync(manifestPath)) {
+    const raycast = loadRaycastPackageManifest(dir);
+    if (!raycast) return null;
+    if (raycast.name !== id) {
+      console.warn(
+        `[kepler-shell] Raycast package name mismatch: folder=${id}, package=${raycast.name}`,
+      );
+      return null;
+    }
+    return {
+      id: raycast.name,
+      name: raycast.title,
+      version: raycast.version,
+      description: raycast.description,
+      author: raycast.author,
+      permissions: raycast.kosmos?.permissions,
+      kind: "raycast",
+      icon: raycast.icon,
+      windowEffect: raycast.kosmos?.windowEffect,
+      keplerApiVersion: raycast.kosmos?.minKosmosApiVersion,
+      raycast,
+      commands: raycast.commands.map((command) => ({
+        id: command.name,
+        title: command.title,
+        subtitle: command.subtitle ?? raycast.title,
+        icon: command.icon ?? raycast.icon,
+        kind: "command",
+        mode:
+          command.mode === "no-view"
+            ? "raycast-no-view"
+            : command.mode === "menu-bar"
+              ? "raycast-menu-bar"
+              : "raycast-view",
+      })),
+    };
+  }
   try {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
     if (manifest.id !== id) {
@@ -679,8 +723,10 @@ export interface DeclaredCommand {
   extensionId: string;
   /** Hash-route из manifest (если задан). */
   route?: string;
-  /** Mode: `open` (openExtension) vs `action` (commands.invoke + auto-launch). */
-  mode: "open" | "action";
+  /** Mode: `open`, `action`, or Raycast-compatible command runner. */
+  mode: "open" | "action" | "raycast-view" | "raycast-no-view" | "raycast-menu-bar";
+  /** Raycast command name for `kind: "raycast"` packages. */
+  raycastCommandName?: string;
 }
 
 const declaredCommandIdRe = /^[a-z0-9][a-z0-9:_-]*$/;
@@ -717,13 +763,14 @@ export function loadDeclaredCommands(): DeclaredCommand[] {
         id: fullId,
         title: cmd.title,
         subtitle: cmd.subtitle ?? manifest.name,
-        category: cmd.mode === "action" ? "action" : "open",
+        category: cmd.mode === "action" || cmd.mode === "raycast-no-view" ? "action" : "open",
         kind: cmd.kind ?? "command",
         appName: manifest.name,
         icon,
         extensionId: manifest.id,
         route: cmd.route,
         mode: cmd.mode ?? "open",
+        raycastCommandName: manifest.kind === "raycast" ? cmd.id : undefined,
       });
     }
   }
@@ -953,6 +1000,12 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   }
   if (manifest.kind === "native") {
     await openNativeExtension(id, manifest, route);
+    return;
+  }
+  if (manifest.kind === "raycast") {
+    console.warn(
+      `[kepler-shell] Raycast view commands are not implemented yet: ${id}${route ? ` (${route})` : ""}`,
+    );
     return;
   }
   const existing = extensionWindows.get(id);
@@ -1220,6 +1273,17 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   } else if (source.file) {
     void win.loadFile(source.file);
   }
+}
+
+export function raycastRuntimeContext(id: string): {
+  manifest: ExtensionManifest;
+  dir: string;
+  source: ExtensionPermissionSource;
+} | null {
+  const manifest = loadExtensionManifest(id);
+  const location = resolveExtensionLocation(id);
+  if (!manifest || !location || manifest.kind !== "raycast") return null;
+  return { manifest, dir: location.dir, source: location.source };
 }
 
 function resolveNativeExecutable(manifest: ExtensionManifest, extensionDir: string): string | null {

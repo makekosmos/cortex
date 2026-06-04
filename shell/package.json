@@ -38,6 +38,7 @@
     "@kosmos/visuals": "workspace:*",
     "@lucide/vue": "^1.16.0",
     "@phosphor-icons/vue": "^2.2.1",
+    "@raycast/api": "workspace:*",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
