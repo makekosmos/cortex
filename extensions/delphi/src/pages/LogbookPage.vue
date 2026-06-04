@@ -4,7 +4,7 @@ import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
-import { TodoRow } from "@kosmos/visuals";
+import { EmptyState, TodoRow } from "@kosmos/visuals";
 import { useSidebarState } from "@/composables/useSidebarState";
 
 const {
@@ -38,12 +38,7 @@ const filtered = computed(() => filterTodos(SmartList.Logbook, todos.value));
 
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
       <div :class="[wrapClass, 'pb-20 pt-1']" :style="wrapStyle">
-        <div
-          v-if="filtered.length === 0"
-          class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
-        >
-          <span class="select-none">Завершённых задач нет</span>
-        </div>
+        <EmptyState v-if="filtered.length === 0" compact title="Завершённых задач нет" />
         <div v-else class="flex flex-col">
           <TodoRow
             v-for="todo in filtered"

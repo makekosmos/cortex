@@ -1,0 +1,57 @@
+{
+  "task_id": "2026-06-04-delphi-kosmos-visuals",
+  "verified_at": "2026-06-04T00:00:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "Delphi App.vue uses DesktopChrome appearance=settings plus public @kosmos/visuals controls; SideBar.vue/settings components use settings-style sidebar, settings rows, modal, button, input, and empty-state primitives. The titlebar is transparent and borderless, the ARK status dot is removed, Delphi opts into windowEffect=acrylic like Settings, and settings-like transparency is visible on the sidebar."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "command": "rg --pcre2 -n \"#[0-9A-Fa-f]{3,8}(?![0-9A-Fa-fA-Za-z_-])|rgb\\(|rgba\\(|@font-face|font-family|\\b(bg|text)-(red|orange|yellow|green|blue|purple|pink|rose|emerald)-\" extensions/delphi/src"
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "command": "bun run --cwd shell build:extension delphi",
+      "notes": "Render paths visually checked with mocked window.kepler for main shell, settings general, and settings spaces."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": "Russian UI text preserved; no new direct listener leaks or nested interactive controls added in the integration pass."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "commands": [
+        "bun run lint",
+        "bun run --cwd shell build:extension delphi",
+        "git diff --check"
+      ],
+      "screenshots": [
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-main-shell-1180x760.png",
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-settings-general-1180x760.png",
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-settings-spaces-1180x760.png",
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-today-dark-settings-sidebar-1228x768.png",
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-today-dark-transparent-titlebar-1228x768.png",
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-today-dark-desktopchrome-settings-1228x768.png",
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-today-dark-sidebar-only-translucent-1228x768.png",
+        ".tmp/visual/2026-06-04-delphi-kosmos-visuals/delphi-today-dark-acrylic-sidebar-1228x768.png"
+      ],
+      "computed_styles": {
+        "bodyBackground": "rgba(0, 0, 0, 0)",
+        "desktopChromeSidebarWrapperBackground": "rgba(0, 0, 0, 0)",
+        "settingsSidebarBackground": "oklch(0.2002 0 0 / 0.6)",
+        "sidebarButtonUserSelect": "none"
+      }
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "evidence": "No bump/release metadata changed; ARCHITECTURE-PLANS.md remains untouched."
+    }
+  ]
+}

@@ -44,9 +44,11 @@ watch(
 
 <template>
   <section :class="settingsPageClasses">
-    <div class="delphi-settings-content-inner">
-      <GeneralSettingsTab v-if="activeTab === 'general'" />
-      <SpacesSettingsTab v-else />
+    <div class="delphi-settings-content">
+      <div class="delphi-settings-content-inner">
+        <GeneralSettingsTab v-if="activeTab === 'general'" />
+        <SpacesSettingsTab v-else />
+      </div>
     </div>
   </section>
 </template>
@@ -58,6 +60,11 @@ watch(
   min-height: 0;
   overflow: auto;
   background: var(--background);
+}
+
+.delphi-settings-content {
+  min-width: 0;
+  min-height: 0;
 }
 
 .delphi-settings-content-inner {

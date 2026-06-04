@@ -8,7 +8,7 @@ import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
-import { TodoRow } from "@kosmos/visuals";
+import { Button, EmptyState, TodoRow } from "@kosmos/visuals";
 import { useSidebarState } from "@/composables/useSidebarState";
 
 const {
@@ -54,12 +54,7 @@ function handleDrop(payload: { targetId: string; after: boolean }, sourceId: str
 
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
       <div :class="[wrapClass, 'pb-20 pt-1']" :style="wrapStyle">
-        <div
-          v-if="filtered.length === 0"
-          class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
-        >
-          <span class="select-none">На сегодня задач нет</span>
-        </div>
+        <EmptyState v-if="filtered.length === 0" compact title="На сегодня задач нет" />
         <div v-else class="flex flex-col">
           <TodoRow
             v-for="todo in filtered"
@@ -74,13 +69,18 @@ function handleDrop(payload: { targetId: string; after: boolean }, sourceId: str
       </div>
     </div>
 
-    <button
+    <Button
       type="button"
-      class="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary) text-(--primary-foreground) shadow-lg transition-transform hover:scale-105 active:scale-95"
+      variant="primary"
+      class="absolute bottom-6 right-6"
       title="Новая задача (⌘N)"
+      aria-label="Новая задача"
       @click="openQuickEntry"
     >
-      <Plus :size="24" />
-    </button>
+      <template #icon>
+        <Plus :size="16" />
+      </template>
+      Новая задача
+    </Button>
   </div>
 </template>

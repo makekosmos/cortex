@@ -1047,6 +1047,14 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     },
   });
 
+  if (backgroundMaterial) {
+    try {
+      win.setBackgroundMaterial(backgroundMaterial);
+    } catch (e) {
+      console.error(`[kepler-shell] extension '${id}' setBackgroundMaterial failed:`, e);
+    }
+  }
+
   // Если в saved state окно было maximized — восстановим после ready-to-show.
   if (savedState.isMaximized) {
     win.once("ready-to-show", () => {

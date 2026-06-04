@@ -2,7 +2,6 @@
 /* eslint-disable no-console */
 import { computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
-import { PanelLeft } from "@lucide/vue";
 import {
   fetchProjectsFromArk,
   fetchTasksFromArk,
@@ -35,15 +34,8 @@ import QuickSearch from "@/components/QuickSearch.vue";
 import AuthOverlay from "@/components/AuthOverlay.vue";
 import SpaceSetup from "@/components/SpaceSetup.vue";
 import { useQuickEntry } from "@/composables/useQuickEntry";
-import {
-  DesktopChrome,
-  DesktopContentSurface,
-  StatusDot,
-  type StatusDotTone,
-  TitlebarHistoryControls,
-  type TitlebarPlatform,
-} from "@kosmos/visuals";
-import { setSidebarHidden, useSidebarState } from "@/composables/useSidebarState";
+import { DesktopChrome, TitlebarHistoryControls, type TitlebarPlatform } from "@kosmos/visuals";
+import { useSidebarState } from "@/composables/useSidebarState";
 import {
   activeSpaceCode,
   arkStatus,
@@ -92,44 +84,11 @@ const authError = shallowRef<string | null>(null);
 const isElectron = typeof window !== "undefined" && !!window.electronAPI;
 const spaceRequired = shallowRef(false);
 
-const arkStatusMessage = computed(() => {
-  switch (arkStatus.value) {
-    case "connected":
-      return "ARK подключен";
-    case "connecting":
-      return "Подключение к ARK…";
-    case "error":
-    default:
-      return "ARK недоступен";
-  }
-});
-
-const arkStatusTone = computed<StatusDotTone>(() => {
-  switch (arkStatus.value) {
-    case "connected":
-      return "success";
-    case "connecting":
-      return "warning";
-    case "error":
-    default:
-      return "danger";
-  }
-});
-
 const chromePlatform = computed<TitlebarPlatform>(() => {
   if (navigator.platform.startsWith("Mac")) return "mac";
   if (navigator.platform.startsWith("Linux")) return "linux";
   return "windows";
 });
-
-function toggleSidebar() {
-  setSidebarHidden(!sidebarHidden.value);
-}
-
-function openSettings() {
-  if (route.path === "/settings") return;
-  void router.push("/settings");
-}
 
 const browserHistoryState = computed(() => {
   void route.fullPath;
@@ -631,107 +590,40 @@ function leaveSpaceListener() {
 </script>
 
 <template>
-  <div class="flex h-screen w-screen overflow-hidden bg-(--background) text-(--foreground)">
-    <DesktopChrome :platform="chromePlatform" class="flex min-h-0 min-w-0 flex-1">
-      <template #titlebar-leading>
-        <button
-          type="button"
-          class="inline-flex h-8 min-w-8 items-center justify-center rounded-[10px] px-2 text-(--muted-foreground) transition-colors hover:bg-white/8 hover:text-(--foreground)"
-          :title="sidebarHidden ? 'Показать боковую панель' : 'Скрыть боковую панель'"
-          @click="toggleSidebar"
-        >
-          <PanelLeft :size="14" />
-        </button>
+  <DesktopChrome appearance="settings" :platform="chromePlatform" class="h-screen w-screen">
+    <template #titlebar-leading>
+      <TitlebarHistoryControls
+        :back-disabled="!canGoBack"
+        :forward-disabled="!canGoForward"
+        back-title="Назад"
+        forward-title="Вперёд"
+        @back="navigateBack"
+        @forward="navigateForward"
+      />
+    </template>
 
-        <TitlebarHistoryControls
-          :back-disabled="!canGoBack"
-          :forward-disabled="!canGoForward"
-          back-title="Назад"
-          forward-title="Вперёд"
-          @back="navigateBack"
-          @forward="navigateForward"
-        />
-        <button
-          type="button"
-          :class="[
-            'titlebar-settings-button',
-            route.path === '/settings' ? 'titlebar-settings-button--active' : '',
-          ]"
-          title="Настройки"
-          @click="openSettings"
-        >
-          <span>Настройки</span>
-        </button>
-      </template>
+    <template #sidebar>
+      <SideBar :hidden="sidebarHidden" :show-toggle="false" :reserve-top-inset="false" />
+    </template>
 
-      <template #titlebar-trailing>
-        <StatusDot :tone="arkStatusTone" :label="arkStatusMessage" />
-      </template>
+    <main class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <RouterView />
+      <QuickEntry />
+    </main>
+  </DesktopChrome>
 
-      <template #sidebar>
-        <SideBar :hidden="sidebarHidden" :show-toggle="false" :reserve-top-inset="false" />
-      </template>
+  <QuickSearch v-model:open="quickSearchOpen" />
 
-      <DesktopContentSurface
-        class="flex min-h-0 min-w-0 flex-1"
-        padding-top="0"
-        padding-inline="0"
-        padding-bottom="0"
-        :show-left-border="!sidebarHidden"
-        :radius-top-left="sidebarHidden ? '0px' : '16px'"
-      >
-        <main class="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          <RouterView />
-          <QuickEntry />
-        </main>
-      </DesktopContentSurface>
-    </DesktopChrome>
+  <AuthOverlay
+    v-if="!isElectron && authRequired"
+    :busy="authBusy"
+    :error-message="authError"
+    @submit="handleAuthSubmit"
+  />
 
-    <QuickSearch v-model:open="quickSearchOpen" />
-
-    <AuthOverlay
-      v-if="!isElectron && authRequired"
-      :busy="authBusy"
-      :error-message="authError"
-      @submit="handleAuthSubmit"
-    />
-
-    <SpaceSetup
-      v-if="spaceRequired"
-      @space-joined="handleSpaceJoined"
-      @space-deleted="handleSpaceDeleted"
-    />
-  </div>
+  <SpaceSetup
+    v-if="spaceRequired"
+    @space-joined="handleSpaceJoined"
+    @space-deleted="handleSpaceDeleted"
+  />
 </template>
-
-<style scoped>
-.titlebar-settings-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 0;
-  padding: 4px;
-  border-radius: calc(var(--radius) * 1.4);
-  corner-shape: var(--corner-shape);
-  color: var(--muted-foreground);
-  font-size: 0.6875rem;
-  line-height: 1rem;
-  font-weight: 500;
-  opacity: 0.9;
-  text-align: left;
-  transition:
-    background-color 120ms var(--easing-emphasized),
-    color 120ms var(--easing-emphasized),
-    opacity 120ms var(--easing-emphasized);
-}
-
-.titlebar-settings-button:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
-}
-
-.titlebar-settings-button--active {
-  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
-  color: var(--foreground);
-  opacity: 1;
-}
-</style>

@@ -1,69 +1,45 @@
 <script setup lang="ts">
-import { computed, shallowRef } from "vue";
-import { Archive, ArrowLeft, Book, Globe, Inbox, Plus, Settings2, Star } from "@lucide/vue";
+import { computed, h, shallowRef, type Component } from "vue";
 import {
-  Sidebar as KosmosSidebar,
-  type SidebarConfig,
+  PhArchive,
+  PhArrowLeft,
+  PhBookOpen,
+  PhFolder,
+  PhGear,
+  PhGlobe,
+  PhStar,
+  PhTrash,
+  PhTray,
+} from "@phosphor-icons/vue";
+import {
+  Button,
+  SettingsSidebar,
+  SettingsSidebarButton,
   type SidebarNavItem,
-  type SidebarProjectGroup,
-  type SidebarProjectItem,
 } from "@kosmos/visuals";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
-import { setSidebarHidden } from "@/composables/useSidebarState";
 import { useRoute, useRouter } from "vue-router";
 import ProjectCreateDialog from "@/components/projects/ProjectCreateDialog.vue";
 import type { ProjectCreatePayload } from "@/components/projects/ProjectCreateDialog.vue";
 
-const STORAGE_KEY = "delphi-sidebar-config";
-
 type SettingsTab = "general" | "spaces";
-
-function loadConfig(): Partial<SidebarConfig> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Partial<SidebarConfig>;
-  } catch {
-    // ignore
-  }
-
-  return {};
-}
-
-function saveConfig(config: SidebarConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-  setSidebarHidden(config.hidden);
-}
-
-function colorTagClass(colorTag?: string | null): string {
-  switch (colorTag) {
-    case "red":
-      return "bg-red-500";
-    case "orange":
-      return "bg-orange-500";
-    case "yellow":
-      return "bg-yellow-500";
-    case "green":
-      return "bg-green-500";
-    case "blue":
-      return "bg-blue-500";
-    case "purple":
-      return "bg-purple-500";
-    case "pink":
-      return "bg-pink-500";
-    default:
-      return "bg-(--muted-foreground)";
-  }
-}
 
 const store = useTodoStore();
 const { projects } = storeToRefs(store);
 const route = useRoute();
 const router = useRouter();
-const initialConfig = loadConfig();
-const isMac = navigator.platform.startsWith("Mac");
 const projectCreateOpen = shallowRef(false);
+
+function phosphorSidebarIcon(icon: Component, active = false): Component {
+  return {
+    inheritAttrs: false,
+    setup(_, { attrs }) {
+      return () => h(icon, { ...attrs, size: 16, weight: active ? "fill" : "duotone" });
+    },
+  };
+}
 
 const props = withDefaults(
   defineProps<{
@@ -87,7 +63,7 @@ const activeSettingsTab = computed<SettingsTab>(() => {
 
 const existingProjectTitles = computed(() => projects.value.map((project) => project.title));
 
-const activeProjectItems = computed<SidebarProjectItem[]>(() =>
+const activeProjectItems = computed(() =>
   projects.value
     .filter((project) => project.status === ProjectStatus.Active)
     .sort((left, right) => left.sortOrder - right.sortOrder)
@@ -96,29 +72,8 @@ const activeProjectItems = computed<SidebarProjectItem[]>(() =>
       label: project.title,
       to: `/project/${project.id}`,
       active: route.path === `/project/${project.id}`,
-      colorClass: colorTagClass(project.colorTag),
     })),
 );
-
-const projectGroups = computed<SidebarProjectGroup[]>(() => {
-  if (isSettingsRoute.value) {
-    return [];
-  }
-
-  return [
-    {
-      id: "projects",
-      label: "Проекты",
-      items: activeProjectItems.value,
-      actionIcon: Plus,
-      actionLabel: "Создать проект",
-      actionTestId: "sidebar-create-project",
-      onAction: () => {
-        projectCreateOpen.value = true;
-      },
-    },
-  ];
-});
 
 function setSettingsTab(tab: SettingsTab) {
   if (activeSettingsTab.value === tab) return;
@@ -153,19 +108,24 @@ function handleProjectCreate(payload: ProjectCreatePayload) {
   void router.push(`/project/${project.id}`);
 }
 
+function navigateTo(path: string) {
+  if (route.path === path) return;
+  void router.push(path);
+}
+
 const primaryItems = computed<SidebarNavItem[]>(() => {
   if (isSettingsRoute.value) {
     return [
       {
         id: "back",
-        icon: ArrowLeft,
+        icon: phosphorSidebarIcon(PhArrowLeft),
         label: "Назад",
         onClick: handleSettingsBack,
         testId: "settings-nav-back",
       },
       {
         id: "general",
-        icon: Settings2,
+        icon: phosphorSidebarIcon(PhGear, activeSettingsTab.value === "general"),
         label: "Общие",
         active: activeSettingsTab.value === "general",
         onClick: () => setSettingsTab("general"),
@@ -173,7 +133,7 @@ const primaryItems = computed<SidebarNavItem[]>(() => {
       },
       {
         id: "spaces",
-        icon: Globe,
+        icon: phosphorSidebarIcon(PhGlobe, activeSettingsTab.value === "spaces"),
         label: "Пространства",
         active: activeSettingsTab.value === "spaces",
         onClick: () => setSettingsTab("spaces"),
@@ -183,9 +143,27 @@ const primaryItems = computed<SidebarNavItem[]>(() => {
   }
 
   return [
-    { id: "inbox", icon: Inbox, to: "/", label: "Входящие" },
-    { id: "today", icon: Star, to: "/today", label: "Сегодня" },
-    { id: "someday", icon: Archive, to: "/someday", label: "Когда-нибудь" },
+    {
+      id: "inbox",
+      icon: phosphorSidebarIcon(PhTray, route.path === "/"),
+      label: "Входящие",
+      active: route.path === "/",
+      onClick: () => navigateTo("/"),
+    },
+    {
+      id: "today",
+      icon: phosphorSidebarIcon(PhStar, route.path === "/today"),
+      label: "Сегодня",
+      active: route.path === "/today",
+      onClick: () => navigateTo("/today"),
+    },
+    {
+      id: "someday",
+      icon: phosphorSidebarIcon(PhArchive, route.path === "/someday"),
+      label: "Когда-нибудь",
+      active: route.path === "/someday",
+      onClick: () => navigateTo("/someday"),
+    },
   ];
 });
 
@@ -193,30 +171,80 @@ const footerItems = computed<SidebarNavItem[]>(() =>
   isSettingsRoute.value
     ? []
     : [
-        { id: "logbook", icon: Book, to: "/logbook", label: "Журнал" },
-        { id: "trash", icon: Archive, to: "/trash", label: "Корзина" },
+        {
+          id: "logbook",
+          icon: phosphorSidebarIcon(PhBookOpen, route.path === "/logbook"),
+          label: "Журнал",
+          active: route.path === "/logbook",
+          onClick: () => navigateTo("/logbook"),
+        },
+        {
+          id: "trash",
+          icon: phosphorSidebarIcon(PhTrash, route.path === "/trash"),
+          label: "Корзина",
+          active: route.path === "/trash",
+          onClick: () => navigateTo("/trash"),
+        },
       ],
 );
 </script>
 
 <template>
-  <KosmosSidebar
-    :primary-items="primaryItems"
-    :project-groups="projectGroups"
-    :footer-items="footerItems"
-    :is-mac="isMac"
-    :default-width="200"
-    :min-width="160"
-    :max-width="320"
-    toggle-shortcut="meta+b|ctrl+b"
-    :initial-config="initialConfig"
-    :hidden="props.hidden"
-    :show-toggle="props.showToggle"
-    :reserve-top-inset="props.reserveTopInset"
-    @config-change="saveConfig"
-  />
+  <SettingsSidebar
+    v-if="!props.hidden"
+    tone="strong"
+    :title="isSettingsRoute ? 'Настройки' : 'Delphi'"
+  >
+    <div class="flex min-h-0 flex-1 flex-col gap-6 px-2 pb-2">
+      <div class="flex flex-col gap-1">
+        <SettingsSidebarButton
+          v-for="item in primaryItems"
+          :key="item.id"
+          :icon="item.icon"
+          :label="item.label ?? ''"
+          :active="item.active"
+          icon-variant="plain"
+          @click="item.onClick?.()"
+        />
+      </div>
+
+      <div v-if="!isSettingsRoute" class="flex min-h-0 flex-1 flex-col gap-2">
+        <div class="flex items-center justify-between px-1">
+          <span class="text-[11px] font-medium text-[var(--muted-foreground)]">Проекты</span>
+          <Button type="button" size="sm" variant="ghost" @click="projectCreateOpen = true">
+            Новый
+          </Button>
+        </div>
+
+        <div class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto kosmos-scroll">
+          <SettingsSidebarButton
+            v-for="project in activeProjectItems"
+            :key="project.id"
+            :icon="phosphorSidebarIcon(PhFolder, project.active)"
+            :label="project.label"
+            :active="project.active"
+            icon-variant="plain"
+            @click="navigateTo(project.to)"
+          />
+        </div>
+      </div>
+
+      <div v-if="footerItems.length > 0" class="mt-auto flex flex-col gap-1">
+        <SettingsSidebarButton
+          v-for="item in footerItems"
+          :key="item.id"
+          :icon="item.icon"
+          :label="item.label ?? ''"
+          :active="item.active"
+          icon-variant="plain"
+          @click="item.onClick?.()"
+        />
+      </div>
+    </div>
+  </SettingsSidebar>
 
   <ProjectCreateDialog
+    v-if="!isSettingsRoute"
     v-model:open="projectCreateOpen"
     :existing-titles="existingProjectTitles"
     @save="handleProjectCreate"

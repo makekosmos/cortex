@@ -7,5 +7,12 @@ defineProps<{
 </script>
 
 <template>
-  <div :class="cn('bg-accent animate-pulse rounded-md', $props.class)" />
+  <div
+    :class="
+      cn(
+        'animate-pulse rounded-[var(--radius-input)] bg-[color-mix(in_srgb,var(--foreground)_10%,var(--background))]',
+        $props.class,
+      )
+    "
+  />
 </template>

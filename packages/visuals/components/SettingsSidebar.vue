@@ -1,14 +1,28 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
 interface Props {
+  tone?: "default" | "strong";
   title?: string;
 }
 
-defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  tone: "default",
+  title: undefined,
+});
+
+const sidebarStyle = computed(() => ({
+  "--kosmos-settings-sidebar-bg":
+    props.tone === "strong"
+      ? "color-mix(in srgb, var(--main-background-color) 64%, var(--color-bg-primary) 36%)"
+      : "var(--main-background-color)",
+}));
 </script>
 
 <template>
   <aside
-    class="box-border flex h-full w-[228px] min-w-[228px] flex-col gap-4 border-r border-[var(--border-color-strong)] bg-[var(--main-background-color)] text-white"
+    class="box-border flex h-full w-[228px] min-w-[228px] flex-col gap-4 border-r border-[var(--border-color-strong)] bg-[var(--kosmos-settings-sidebar-bg)] text-white"
+    :style="sidebarStyle"
   >
     <div
       v-if="title"

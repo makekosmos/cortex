@@ -4,13 +4,17 @@ import Titlebar from "./Titlebar.vue";
 import type { TitlebarPlatform } from "./types";
 
 interface Props {
+  appearance?: "default" | "settings";
   platform?: TitlebarPlatform;
   title?: string;
+  titlebarTransparent?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  appearance: "default",
   platform: "windows",
   title: undefined,
+  titlebarTransparent: false,
 });
 
 // Провайдим наличие сайдбара вниз по дереву, чтобы DesktopContentSurface
@@ -22,8 +26,53 @@ provide("kosmosHasSidebar", hasSidebar);
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-(--sidebar-bg)">
-    <Titlebar :platform="props.platform" :title="props.title">
+  <div
+    v-if="props.appearance === 'settings'"
+    class="kosmos-desktop-chrome-settings flex h-full min-h-0 w-full overflow-hidden bg-transparent"
+  >
+    <aside v-if="hasSidebar" class="relative z-10 flex h-full min-h-0 shrink-0 overflow-visible">
+      <slot name="sidebar" />
+    </aside>
+
+    <div
+      class="relative z-[1] flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--background)]"
+    >
+      <header
+        class="kosmos-desktop-chrome-settings__header flex min-h-9 items-center justify-between gap-4 px-[10px] pb-1 pt-2 pr-[140px] [-webkit-app-region:drag]"
+      >
+        <div
+          class="kosmos-desktop-chrome-settings__header-left inline-flex min-w-0 items-center gap-2 [-webkit-app-region:no-drag]"
+        >
+          <slot name="titlebar-leading" />
+        </div>
+
+        <div
+          class="kosmos-desktop-chrome-settings__header-center inline-flex min-w-0 flex-1 items-center justify-center gap-2 [-webkit-app-region:no-drag]"
+        >
+          <slot name="titlebar-center" />
+        </div>
+
+        <div
+          class="kosmos-desktop-chrome-settings__header-right inline-flex min-w-0 items-center justify-end gap-2 [-webkit-app-region:no-drag]"
+        >
+          <slot name="titlebar-trailing" />
+        </div>
+      </header>
+
+      <div
+        class="kosmos-desktop-chrome-settings__body flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-transparent"
+      >
+        <slot />
+      </div>
+    </div>
+  </div>
+
+  <div v-else class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-(--sidebar-bg)">
+    <Titlebar
+      :platform="props.platform"
+      :title="props.title"
+      :transparent="props.titlebarTransparent"
+    >
       <template #leading>
         <slot name="titlebar-leading" />
       </template>

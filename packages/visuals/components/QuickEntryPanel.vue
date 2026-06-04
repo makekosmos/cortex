@@ -124,7 +124,7 @@ onBeforeUnmount(() => {
 
     <!-- Panel -->
     <div
-      class="relative z-10 w-full max-w-screen-sm overflow-visible rounded-xl border border-(--border) bg-(--color-shape-highlight-light-solid) shadow-[0_16px_48px_color-mix(in_srgb,var(--foreground)_40%,transparent)]"
+      class="relative z-10 w-full max-w-screen-sm overflow-visible rounded-xl border border-(--border) bg-(--color-shape-highlight-light-solid)"
     >
       <div class="flex flex-col gap-4 px-4 pt-4">
         <input
@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
 
             <div
               v-if="showProjectMenu"
-              class="absolute right-0 top-full z-20 mt-2 max-h-64 min-w-48 overflow-y-auto rounded-lg border border-(--border) bg-(--color-shape-highlight-light-solid) py-2 shadow-[0_8px_24px_color-mix(in_srgb,var(--foreground)_28%,transparent)]"
+              class="absolute right-0 top-full z-20 mt-2 max-h-64 min-w-48 overflow-y-auto rounded-lg border border-(--border) bg-(--color-shape-highlight-light-solid) py-2"
             >
               <button
                 type="button"

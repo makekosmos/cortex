@@ -6,6 +6,7 @@ interface Props {
   label: string;
   active?: boolean;
   iconImage?: string;
+  iconVariant?: "tile" | "plain";
   iconFrom?: string;
   iconTo?: string;
 }
@@ -13,6 +14,7 @@ interface Props {
 withDefaults(defineProps<Props>(), {
   active: false,
   iconImage: "",
+  iconVariant: "tile",
   iconFrom: "var(--settings-sidebar-icon-from)",
   iconTo: "var(--settings-sidebar-icon-to)",
 });
@@ -25,7 +27,7 @@ defineEmits<{
 <template>
   <button
     type="button"
-    class="flex w-full cursor-default items-center gap-2 rounded border-0 bg-transparent p-1 text-left text-white data-[active=true]:bg-[var(--settings-sidebar-active)]"
+    class="kosmos-settings-sidebar-button flex w-full cursor-default select-none items-center gap-2 rounded border-0 bg-transparent p-1 text-left text-white data-[active=true]:bg-[var(--settings-sidebar-active)]"
     :data-active="active ? 'true' : undefined"
     @click="$emit('click')"
   >
@@ -34,7 +36,9 @@ defineEmits<{
       :class="
         iconImage
           ? 'bg-none shadow-none'
-          : 'bg-linear-to-bl from-[var(--settings-sidebar-button-icon-from)] to-[var(--settings-sidebar-button-icon-to)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,oklch(1_0_0)_6%,transparent)]'
+          : iconVariant === 'plain'
+            ? 'bg-transparent shadow-none text-[color-mix(in_srgb,var(--foreground)_82%,transparent)]'
+            : 'bg-linear-to-bl from-[var(--settings-sidebar-button-icon-from)] to-[var(--settings-sidebar-button-icon-to)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,oklch(1_0_0)_6%,transparent)]'
       "
       :style="{
         '--settings-sidebar-button-icon-from': iconFrom,

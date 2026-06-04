@@ -4,7 +4,7 @@ import { SmartList } from "@/types/task";
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { filterTodos } from "@/services/filters/todoFilterService";
-import { TodoRow } from "@kosmos/visuals";
+import { Button, EmptyState, TodoRow } from "@kosmos/visuals";
 import { useSidebarState } from "@/composables/useSidebarState";
 
 const {
@@ -43,50 +43,34 @@ async function handleEmptyTrash() {
       </div>
       <div v-if="filtered.length > 0" class="ml-auto">
         <template v-if="confirmingEmpty">
-          <span class="mr-2 text-xs text-rose-400 select-none">Удалить навсегда?</span>
-          <button
+          <span class="mr-2 text-xs text-[var(--destructive)] select-none">
+            Удалить навсегда?
+          </span>
+          <Button type="button" size="sm" variant="danger" @click="handleEmptyTrash"> Да </Button>
+          <Button
             type="button"
-            class="rounded px-2 py-1 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
-            @click="handleEmptyTrash"
-          >
-            Да
-          </button>
-          <button
-            type="button"
-            class="text-(--muted-foreground) ml-1 rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
+            class="ml-1"
+            size="sm"
+            variant="ghost"
             @click="confirmingEmpty = false"
           >
             Нет
-          </button>
+          </Button>
         </template>
-        <button
-          v-else
-          type="button"
-          class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:text-rose-400"
-          @click="confirmingEmpty = true"
-        >
+        <Button v-else type="button" size="sm" variant="danger" @click="confirmingEmpty = true">
           Очистить корзину
-        </button>
+        </Button>
       </div>
     </div>
 
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
       <div :class="[wrapClass, 'pb-20 pt-1']" :style="wrapStyle">
-        <div
-          v-if="filtered.length === 0"
-          class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
-        >
-          <span class="select-none">Корзина пуста</span>
-        </div>
+        <EmptyState v-if="filtered.length === 0" compact title="Корзина пуста" />
         <div v-else class="flex flex-col">
           <TodoRow v-for="todo in filtered" :key="todo.id" :todo="todo">
-            <button
-              type="button"
-              class="rounded px-1.5 py-0.5 text-[10px] text-(--muted-foreground) hover:bg-emerald-500/15 hover:text-emerald-500"
-              @click="store.restoreTodo(todo.id)"
-            >
+            <Button type="button" size="sm" variant="ghost" @click="store.restoreTodo(todo.id)">
               Восстановить
-            </button>
+            </Button>
           </TodoRow>
         </div>
       </div>

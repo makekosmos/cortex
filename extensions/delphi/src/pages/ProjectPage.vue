@@ -18,7 +18,14 @@ const {
 import { useTodoStore } from "@/store/todos";
 import { storeToRefs } from "pinia";
 import { ProjectStatus } from "@/types/task";
-import { TodoRow } from "@kosmos/visuals";
+import {
+  Button,
+  ContextMenu,
+  ContextMenuItem,
+  EmptyState,
+  IconButton,
+  TodoRow,
+} from "@kosmos/visuals";
 
 // ---------------------------------------------------------------------------
 // Color tag helper
@@ -27,21 +34,21 @@ import { TodoRow } from "@kosmos/visuals";
 function colorTagClass(colorTag?: string | null): string {
   switch (colorTag) {
     case "red":
-      return "text-red-500";
+      return "project-page__color--red";
     case "orange":
-      return "text-orange-500";
+      return "project-page__color--orange";
     case "yellow":
-      return "text-yellow-500";
+      return "project-page__color--yellow";
     case "green":
-      return "text-green-500";
+      return "project-page__color--green";
     case "blue":
-      return "text-blue-500";
+      return "project-page__color--blue";
     case "purple":
-      return "text-purple-500";
+      return "project-page__color--purple";
     case "pink":
-      return "text-pink-500";
+      return "project-page__color--pink";
     default:
-      return "text-(--muted-foreground)";
+      return "project-page__color--none";
   }
 }
 
@@ -176,25 +183,16 @@ function commitRename() {
 // ---------------------------------------------------------------------------
 
 const menuOpen = shallowRef(false);
-const menuRef = ref<HTMLDivElement | null>(null);
+const menuX = shallowRef(0);
+const menuY = shallowRef(0);
 
-function handleOutsideClick(e: MouseEvent) {
-  if (menuRef.value && !menuRef.value.contains(e.target as Node)) {
-    menuOpen.value = false;
-  }
+function toggleProjectMenu(event: MouseEvent) {
+  const button = event.currentTarget as HTMLElement;
+  const rect = button.getBoundingClientRect();
+  menuX.value = Math.max(8, rect.right - 192);
+  menuY.value = Math.max(8, rect.bottom + 4);
+  menuOpen.value = !menuOpen.value;
 }
-
-watch(menuOpen, (val) => {
-  if (val) {
-    document.addEventListener("mousedown", handleOutsideClick);
-  } else {
-    document.removeEventListener("mousedown", handleOutsideClick);
-  }
-});
-
-onUnmounted(() => {
-  document.removeEventListener("mousedown", handleOutsideClick);
-});
 
 function handleDrop(payload: { targetId: string; after: boolean }, sourceId: string) {
   if (sourceId === payload.targetId) return;
@@ -226,7 +224,7 @@ function handleArchive() {
 <template>
   <!-- Project not found -->
   <div v-if="!project" class="flex w-full min-w-0 flex-col items-center justify-center">
-    <p class="text-(--muted-foreground)">Проект не найден</p>
+    <EmptyState title="Проект не найден" />
   </div>
 
   <!-- Project view -->
@@ -265,10 +263,7 @@ function handleArchive() {
           {{ activeTodos.length }}
         </span>
 
-        <span
-          v-if="project.billable"
-          class="ml-2 flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs text-emerald-500"
-        >
+        <span v-if="project.billable" class="project-page__billing-chip ml-2">
           <DollarSign :size="11" />
           <span v-if="project.price !== null && project.price !== undefined">
             {{ formatPrice(project.price) }}
@@ -293,53 +288,31 @@ function handleArchive() {
       </div>
 
       <!-- Context menu -->
-      <div ref="menuRef" class="absolute right-7">
-        <button
-          type="button"
-          class="rounded p-1 text-(--muted-foreground) hover:bg-(--secondary) hover:text-(--foreground)"
-          @click="menuOpen = !menuOpen"
+      <div class="absolute right-7">
+        <IconButton
+          :size="32"
+          :radius="8"
+          aria-label="Меню проекта"
+          title="Меню проекта"
+          @click="toggleProjectMenu"
         >
           <MoreHorizontal :size="18" />
-        </button>
+        </IconButton>
 
-        <div
-          v-if="menuOpen"
-          class="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-(--border) bg-(--popover) py-1 shadow-lg"
-        >
-          <button
-            type="button"
-            class="flex w-full items-center px-3 py-2 text-sm text-(--foreground) hover:bg-(--secondary)"
-            @click="startRename"
-          >
-            Переименовать
-          </button>
-          <button
-            type="button"
-            class="flex w-full items-center px-3 py-2 text-sm text-(--foreground) hover:bg-(--secondary)"
-            @click="handleArchive"
-          >
-            Архивировать
-          </button>
-          <div class="my-1 border-t border-(--border)" />
-          <button
-            type="button"
-            class="flex w-full items-center px-3 py-2 text-sm text-red-500 hover:bg-red-500/10"
-            @click="handleDelete"
-          >
-            Удалить
-          </button>
-        </div>
+        <ContextMenu :open="menuOpen" :x="menuX" :y="menuY" @close="menuOpen = false">
+          <ContextMenuItem @click="startRename"> Переименовать </ContextMenuItem>
+          <ContextMenuItem @click="handleArchive"> Архивировать </ContextMenuItem>
+          <div class="my-1 border-t border-(--border)" role="separator" />
+          <ContextMenuItem destructive @click="handleDelete"> Удалить </ContextMenuItem>
+        </ContextMenu>
       </div>
     </div>
 
     <!-- Task list -->
     <div class="scrollbar-gutter flex-1 overflow-y-auto">
       <div :class="[wrapClass, 'pb-20 pt-1']" :style="wrapStyle">
-        <div
-          v-if="activeTodos.length === 0 && completedTodos.length === 0"
-          class="px-7 py-10 text-center text-sm text-(--muted-foreground)/60"
-        >
-          Нет задач в проекте
+        <div v-if="activeTodos.length === 0 && completedTodos.length === 0" class="px-7 py-10">
+          <EmptyState compact title="Нет задач в проекте" />
         </div>
         <template v-else>
           <div v-if="activeTodos.length > 0" class="flex flex-col">
@@ -381,13 +354,63 @@ function handleArchive() {
       </div>
     </div>
 
-    <button
+    <Button
       type="button"
-      class="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary) text-(--primary-foreground) shadow-lg transition-transform hover:scale-105 active:scale-95"
+      variant="primary"
+      class="absolute bottom-6 right-6"
       title="Новая задача (⌘N)"
+      aria-label="Новая задача"
       @click="openQuickEntry"
     >
-      <Plus :size="24" />
-    </button>
+      <template #icon>
+        <Plus :size="16" />
+      </template>
+      Новая задача
+    </Button>
   </div>
 </template>
+
+<style scoped>
+.project-page__color--none {
+  color: var(--muted-foreground);
+}
+
+.project-page__color--red {
+  color: var(--destructive);
+}
+
+.project-page__color--orange {
+  color: color-mix(in srgb, var(--status-warning) 78%, var(--destructive));
+}
+
+.project-page__color--yellow {
+  color: var(--status-warning);
+}
+
+.project-page__color--green {
+  color: var(--status-success);
+}
+
+.project-page__color--blue {
+  color: var(--accent);
+}
+
+.project-page__color--purple {
+  color: color-mix(in srgb, var(--accent) 70%, var(--destructive));
+}
+
+.project-page__color--pink {
+  color: color-mix(in srgb, var(--destructive) 65%, var(--accent));
+}
+
+.project-page__billing-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 2px 10px;
+  color: var(--status-success);
+  background: color-mix(in srgb, var(--status-success) 15%, transparent);
+  font-size: var(--kosmos-text-caption-size);
+}
+</style>

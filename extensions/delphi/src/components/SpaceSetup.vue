@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, shallowRef } from "vue";
+import { Button, EmptyState, Modal, TextInput } from "@kosmos/visuals";
 import {
   type Space,
   deriveSpaceId,
@@ -105,7 +106,7 @@ async function generateQr(payload: string) {
     qrDataUrl.value = await QRCode.toDataURL(payload, {
       width: 200,
       margin: 2,
-      color: { dark: "#000000", light: "#ffffff" },
+      color: { dark: "black", light: "white" },
       errorCorrectionLevel: "M",
     });
   } catch {
@@ -169,181 +170,134 @@ function handleJoin() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
-    <div class="bg-(--background) border-(--border) w-full max-w-sm rounded-xl border p-5">
-      <!-- Choose mode -->
-      <template v-if="mode === 'choose'">
-        <h2 class="mb-1 text-lg font-semibold">Ark Space</h2>
-        <p class="text-(--muted-foreground) mb-4 text-sm">
-          Синхронизация без сервера — через локальную сеть.
+  <Modal
+    :open="true"
+    :title="
+      mode === 'choose'
+        ? 'Пространство Ark'
+        : mode === 'create'
+          ? 'Пространство создано'
+          : 'Присоединиться'
+    "
+    width="min(420px, 92vw)"
+    :close-on-backdrop="false"
+    hide-close
+  >
+    <template v-if="mode === 'choose'">
+      <p class="mb-4 text-sm text-[var(--muted-foreground)]">
+        Синхронизация без сервера через локальную сеть.
+      </p>
+
+      <div class="mb-4">
+        <p class="mb-2 text-xs font-medium text-[var(--muted-foreground)]">
+          Сохранённые пространства
         </p>
 
-        <!-- Saved spaces -->
-        <div v-if="savedSpaces.length > 0" class="mb-4">
-          <p class="text-(--muted-foreground) mb-2 text-xs font-medium uppercase tracking-wider">
-            Сохранённые пространства
-          </p>
-          <div class="space-y-2">
-            <div
-              v-for="space in savedSpaces"
-              :key="space.code"
-              class="border-(--border) flex items-center justify-between rounded-lg border px-3 py-2"
-            >
-              <!-- Delete confirmation overlay -->
-              <template v-if="deletingSpace === space.code">
-                <span class="text-xs text-rose-400">Удалить с данными?</span>
-                <div class="flex gap-2">
-                  <button
-                    class="rounded px-2 py-1 text-xs text-rose-400 transition-colors hover:bg-rose-500/10"
-                    @click="confirmDelete"
-                  >
-                    Да
-                  </button>
-                  <button
-                    class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
-                    @click="cancelDelete"
-                  >
-                    Нет
-                  </button>
-                </div>
-              </template>
-              <!-- Rename mode -->
-              <template v-else-if="renamingCode === space.code">
-                <input
-                  v-model="renameInput"
-                  class="border-(--border) bg-(--secondary) flex-1 rounded-md border px-2 py-1 text-sm outline-none focus:border-(--foreground)"
-                  @keyup.enter="confirmRename"
-                  @keyup.escape="cancelRename"
-                  autofocus
-                />
-                <div class="ml-2 flex gap-1">
-                  <button
-                    class="rounded px-2 py-1 text-xs text-emerald-400 transition-colors hover:bg-emerald-500/10"
-                    @click="confirmRename"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    class="text-(--muted-foreground) rounded px-2 py-1 text-xs transition-colors hover:bg-(--muted)"
-                    @click="cancelRename"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </template>
-              <template v-else>
-                <button
-                  class="flex-1 text-left transition-colors hover:text-(--foreground)"
-                  @click="handleRejoin(space)"
-                >
-                  <span class="block text-sm">{{ space.name }}</span>
-                  <span
-                    class="text-(--muted-foreground) block font-mono text-[11px] tracking-wider"
-                  >
-                    {{ formatSpaceCode(space.code) }}
-                  </span>
-                </button>
-                <div class="ml-2 flex gap-1">
-                  <button
-                    class="text-(--muted-foreground) rounded p-1 text-xs transition-colors hover:text-(--foreground)"
-                    @click.stop="startRename(space)"
-                    title="Переименовать"
-                  >
-                    ✎
-                  </button>
-                  <button
-                    class="text-(--muted-foreground) rounded p-1 text-xs transition-colors hover:text-rose-400"
-                    @click.stop="handleDelete(space)"
-                    title="Удалить пространство"
-                  >
-                    &times;
-                  </button>
-                </div>
-              </template>
-            </div>
-          </div>
-          <div class="border-(--border) my-4 border-t"></div>
-        </div>
-
-        <button
-          class="bg-(--foreground) text-(--background) mb-2 w-full rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
-          @click="handleCreate"
-        >
-          Создать пространство
-        </button>
-        <button
-          class="border-(--border) w-full rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-(--muted)"
-          @click="mode = 'join'"
-        >
-          Присоединиться
-        </button>
-      </template>
-
-      <!-- Create mode -->
-      <template v-else-if="mode === 'create'">
-        <button
-          class="text-(--muted-foreground) hover:text-(--foreground) mb-4 text-xs transition-colors"
-          @click="mode = 'choose'"
-        >
-          &larr; Назад
-        </button>
-        <h2 class="mb-1 text-lg font-semibold">Пространство создано</h2>
-        <p class="text-(--muted-foreground) mb-4 text-sm">
-          Отсканируйте QR-код или введите код на другом устройстве.
-        </p>
-        <div v-if="qrDataUrl" class="mb-4 flex justify-center">
-          <img :src="qrDataUrl" alt="QR Code" class="rounded-lg" width="200" height="200" />
-        </div>
-        <div
-          class="bg-(--muted) mb-3 rounded-lg p-4 text-center font-mono text-2xl tracking-widest"
-        >
-          {{ formatSpaceCode(generatedCode) }}
-        </div>
-        <button
-          v-if="qrPayloadRaw"
-          class="border-(--border) mb-5 w-full rounded-lg border px-3 py-2 text-sm font-medium transition-colors hover:bg-(--muted)"
-          @click="copyLink"
-        >
-          {{ copied ? "Скопировано!" : "Скопировать ссылку для подключения" }}
-        </button>
-        <button
-          class="bg-(--foreground) text-(--background) w-full rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
-          :disabled="!generatedCode"
-          @click="handleConfirmCreate"
-        >
-          Начать использование
-        </button>
-      </template>
-
-      <!-- Join mode -->
-      <template v-else>
-        <button
-          class="text-(--muted-foreground) hover:text-(--foreground) mb-4 text-xs transition-colors"
-          @click="mode = 'choose'"
-        >
-          &larr; Назад
-        </button>
-        <h2 class="mb-1 text-lg font-semibold">Присоединиться</h2>
-        <p class="text-(--muted-foreground) mb-4 text-sm">
-          Введите код пространства. Длинный код (XXXX-XXXX-XXXX-XXXX-XXX) включает адрес устройства
-          для прямого подключения.
-        </p>
-        <input
-          v-model="joinInput"
-          placeholder="XXXX-XXXX-XXXX или XXXX-XXXX-XXXX-XXXX-XXX"
-          class="border-(--border) bg-(--secondary) mb-1 w-full rounded-md border px-3 py-2 font-mono text-sm uppercase outline-none focus:border-(--foreground)"
-          @keyup.enter="handleJoin"
+        <EmptyState
+          v-if="savedSpaces.length === 0"
+          compact
+          title="Сохранённых пространств пока нет"
         />
-        <p v-if="joinError" class="mb-3 text-xs text-rose-400">
-          {{ joinError }}
-        </p>
-        <button
-          class="bg-(--foreground) text-(--background) mt-3 w-full rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"
-          @click="handleJoin"
-        >
-          Присоединиться
-        </button>
-      </template>
-    </div>
-  </div>
+
+        <div v-else class="space-y-2">
+          <div
+            v-for="space in savedSpaces"
+            :key="space.code"
+            class="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2"
+          >
+            <template v-if="deletingSpace === space.code">
+              <span class="text-xs text-[var(--destructive)]">Удалить с данными?</span>
+              <div class="flex gap-2">
+                <Button size="sm" variant="danger" @click="confirmDelete">Да</Button>
+                <Button size="sm" variant="ghost" @click="cancelDelete">Нет</Button>
+              </div>
+            </template>
+
+            <template v-else-if="renamingCode === space.code">
+              <TextInput
+                v-model="renameInput"
+                class="min-w-0 flex-1"
+                size="sm"
+                autofocus
+                @keydown.enter="confirmRename"
+                @keydown.escape="cancelRename"
+              />
+              <div class="ml-2 flex gap-1">
+                <Button size="sm" variant="primary" @click="confirmRename">Сохранить</Button>
+                <Button size="sm" variant="ghost" @click="cancelRename">Отмена</Button>
+              </div>
+            </template>
+
+            <template v-else>
+              <button
+                type="button"
+                class="min-w-0 flex-1 text-left transition-colors hover:text-[var(--foreground)]"
+                @click="handleRejoin(space)"
+              >
+                <span class="block text-sm">{{ space.name }}</span>
+                <span
+                  class="block font-[var(--font-mono)] text-[11px] tracking-wider text-[var(--muted-foreground)]"
+                >
+                  {{ formatSpaceCode(space.code) }}
+                </span>
+              </button>
+              <div class="ml-2 flex gap-1">
+                <Button size="sm" variant="ghost" @click.stop="startRename(space)">
+                  Переименовать
+                </Button>
+                <Button size="sm" variant="danger" @click.stop="handleDelete(space)">
+                  Удалить
+                </Button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <Button block @click="handleCreate">Создать пространство</Button>
+        <Button block variant="ghost" @click="mode = 'join'">Присоединиться</Button>
+      </div>
+    </template>
+
+    <template v-else-if="mode === 'create'">
+      <Button class="mb-4" size="sm" variant="ghost" @click="mode = 'choose'">Назад</Button>
+      <p class="mb-4 text-sm text-[var(--muted-foreground)]">
+        Отсканируйте QR-код или введите код на другом устройстве.
+      </p>
+      <div v-if="qrDataUrl" class="mb-4 flex justify-center">
+        <img :src="qrDataUrl" alt="QR-код" class="rounded-lg" width="200" height="200" />
+      </div>
+      <div
+        class="mb-3 rounded-lg bg-[var(--muted)] p-4 text-center font-[var(--font-mono)] text-2xl tracking-widest"
+      >
+        {{ formatSpaceCode(generatedCode) }}
+      </div>
+      <Button v-if="qrPayloadRaw" class="mb-5" block variant="ghost" @click="copyLink">
+        {{ copied ? "Скопировано!" : "Скопировать ссылку для подключения" }}
+      </Button>
+      <Button block :disabled="!generatedCode" @click="handleConfirmCreate">
+        Начать использование
+      </Button>
+    </template>
+
+    <template v-else>
+      <Button class="mb-4" size="sm" variant="ghost" @click="mode = 'choose'">Назад</Button>
+      <p class="mb-4 text-sm text-[var(--muted-foreground)]">
+        Введите код пространства. Длинный код (XXXX-XXXX-XXXX-XXXX-XXX) включает адрес устройства
+        для прямого подключения.
+      </p>
+      <TextInput
+        v-model="joinInput"
+        placeholder="XXXX-XXXX-XXXX или XXXX-XXXX-XXXX-XXXX-XXX"
+        class="font-[var(--font-mono)] uppercase"
+        :invalid="!!joinError"
+        @keydown.enter="handleJoin"
+      />
+      <p v-if="joinError" class="mt-2 text-xs text-[var(--destructive)]">
+        {{ joinError }}
+      </p>
+      <Button class="mt-3" block @click="handleJoin">Присоединиться</Button>
+    </template>
+  </Modal>
 </template>

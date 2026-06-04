@@ -12,6 +12,7 @@
   "height": 720,
   "minWidth": 800,
   "minHeight": 500,
+  "windowEffect": "acrylic",
   "commands": [
     {
       "id": "open",

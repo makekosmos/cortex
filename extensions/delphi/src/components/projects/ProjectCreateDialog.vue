@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue";
-import { Check, DollarSign, FolderPlus, X } from "@lucide/vue";
+import { computed, nextTick, shallowRef, watch } from "vue";
+import { Check, FolderPlus, X } from "@lucide/vue";
+import { Button, IconButton, Modal, Textarea, TextInput, Toggle } from "@kosmos/visuals";
 
 type ProjectColorTag = "red" | "orange" | "yellow" | "green" | "blue" | "purple" | "pink";
 
@@ -16,50 +17,14 @@ const COLOR_OPTIONS: Array<{
   id: ProjectColorTag;
   label: string;
   className: string;
-  softClassName: string;
 }> = [
-  {
-    id: "red",
-    label: "Красный",
-    className: "bg-red-500",
-    softClassName: "text-red-500 ring-red-500/30",
-  },
-  {
-    id: "orange",
-    label: "Оранжевый",
-    className: "bg-orange-500",
-    softClassName: "text-orange-500 ring-orange-500/30",
-  },
-  {
-    id: "yellow",
-    label: "Жёлтый",
-    className: "bg-yellow-500",
-    softClassName: "text-yellow-500 ring-yellow-500/30",
-  },
-  {
-    id: "green",
-    label: "Зелёный",
-    className: "bg-green-500",
-    softClassName: "text-green-500 ring-green-500/30",
-  },
-  {
-    id: "blue",
-    label: "Синий",
-    className: "bg-blue-500",
-    softClassName: "text-blue-500 ring-blue-500/30",
-  },
-  {
-    id: "purple",
-    label: "Фиолетовый",
-    className: "bg-purple-500",
-    softClassName: "text-purple-500 ring-purple-500/30",
-  },
-  {
-    id: "pink",
-    label: "Розовый",
-    className: "bg-pink-500",
-    softClassName: "text-pink-500 ring-pink-500/30",
-  },
+  { id: "red", label: "Красный", className: "project-create__color--red" },
+  { id: "orange", label: "Оранжевый", className: "project-create__color--orange" },
+  { id: "yellow", label: "Жёлтый", className: "project-create__color--yellow" },
+  { id: "green", label: "Зелёный", className: "project-create__color--green" },
+  { id: "blue", label: "Синий", className: "project-create__color--blue" },
+  { id: "purple", label: "Фиолетовый", className: "project-create__color--purple" },
+  { id: "pink", label: "Розовый", className: "project-create__color--pink" },
 ];
 
 const props = defineProps<{
@@ -77,8 +42,6 @@ const notes = shallowRef("");
 const colorTag = shallowRef<ProjectColorTag | null>(null);
 const billable = shallowRef(false);
 const priceInput = shallowRef("");
-
-const titleInputRef = useTemplateRef<HTMLInputElement>("titleInput");
 
 const trimmedTitle = computed(() => title.value.trim());
 const canSave = computed(() => trimmedTitle.value.length > 0);
@@ -160,8 +123,9 @@ watch(
   async (isOpen) => {
     if (isOpen) {
       await nextTick();
-      titleInputRef.value?.focus();
-      titleInputRef.value?.select();
+      const titleInput = document.getElementById("project-create-title") as HTMLInputElement | null;
+      titleInput?.focus();
+      titleInput?.select();
       return;
     }
 
@@ -171,192 +135,267 @@ watch(
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 z-60 flex items-center justify-center p-4">
-    <button
-      type="button"
-      class="absolute inset-0 bg-black/45 backdrop-blur-sm"
-      aria-label="Закрыть создание проекта"
-      @click="handleClose"
-    />
-
-    <div
-      class="relative z-10 w-full max-w-md overflow-hidden rounded-[1.5rem] border border-(--border) bg-(--popover) shadow-2xl"
-    >
-      <div class="flex items-start gap-3 border-b border-(--border) px-5 pb-4 pt-5">
-        <div
-          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-(--primary)/12 text-(--primary)"
-        >
+  <Modal :open="open" width="min(448px, 92vw)" hide-close @close="handleClose">
+    <template #header>
+      <div class="project-create__header">
+        <div class="project-create__header-icon">
           <FolderPlus :size="18" />
         </div>
 
         <div class="min-w-0 flex-1">
-          <h2 class="text-base font-semibold text-(--foreground)">Новый проект</h2>
-          <p class="mt-1 text-sm text-(--muted-foreground)">
-            Создай проект и сразу перейди внутрь него.
-          </p>
+          <h2 class="project-create__title">Новый проект</h2>
+          <p class="project-create__subtitle">Создай проект и сразу перейди внутрь него.</p>
         </div>
 
-        <button
-          type="button"
-          class="rounded-xl p-2 text-(--muted-foreground) transition-colors hover:bg-(--secondary) hover:text-(--foreground)"
-          title="Закрыть"
-          @click="handleClose"
-        >
+        <IconButton :size="32" :radius="16" title="Закрыть" @click="handleClose">
           <X :size="16" />
-        </button>
+        </IconButton>
+      </div>
+    </template>
+
+    <div class="project-create__body">
+      <div class="flex flex-col gap-2">
+        <label for="project-create-title" class="project-create__label"> Название </label>
+        <TextInput
+          id="project-create-title"
+          v-model="title"
+          type="text"
+          placeholder="Например, Новый продукт"
+          @keydown="handleTitleKeydown"
+        />
+        <p class="project-create__hint">
+          <template v-if="hasDuplicateTitle">
+            Проект с таким названием уже есть. Создание всё равно доступно.
+          </template>
+          <template v-else> `Enter` создаёт проект сразу. </template>
+        </p>
       </div>
 
-      <div class="flex flex-col gap-4 px-5 py-5">
-        <div class="flex flex-col gap-2">
-          <label
-            for="project-create-title"
-            class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)"
+      <div class="flex flex-col gap-2">
+        <label for="project-create-notes" class="project-create__label"> Описание </label>
+        <Textarea
+          id="project-create-notes"
+          v-model="notes"
+          :rows="4"
+          :min-height="96"
+          resize="none"
+          placeholder="Коротко опиши смысл проекта или следующий шаг"
+          @keydown="handleNotesKeydown"
+        />
+        <p class="project-create__hint">`Ctrl/Cmd + Enter` создаёт проект из поля описания.</p>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <span class="project-create__label"> Цвет </span>
+
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <button
+            type="button"
+            :class="[
+              'project-create__color-option',
+              colorTag === null
+                ? 'project-create__color-option--selected'
+                : 'project-create__color-option--idle',
+            ]"
+            @click="colorTag = null"
           >
-            Название
-          </label>
-          <input
-            id="project-create-title"
-            ref="titleInput"
-            v-model="title"
-            type="text"
-            placeholder="Например, Новый продукт"
-            class="w-full rounded-2xl border border-(--border) bg-(--background) px-4 py-3 text-sm text-(--foreground) outline-none transition-colors placeholder:text-(--muted-foreground)/70 focus:border-blue-500/60"
-            @keydown="handleTitleKeydown"
-          />
-          <p class="text-xs text-(--muted-foreground)">
-            <template v-if="hasDuplicateTitle">
-              Проект с таким названием уже есть. Создание всё равно доступно.
-            </template>
-            <template v-else> `Enter` создаёт проект сразу. </template>
-          </p>
-        </div>
+            <span class="project-create__color-dot project-create__color--none" />
+            <span class="truncate">Без цвета</span>
+            <Check v-if="colorTag === null" :size="14" class="ml-auto" />
+          </button>
 
-        <div class="flex flex-col gap-2">
-          <label
-            for="project-create-notes"
-            class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)"
+          <button
+            v-for="option in COLOR_OPTIONS"
+            :key="option.id"
+            type="button"
+            :class="[
+              'project-create__color-option',
+              option.className,
+              colorTag === option.id
+                ? 'project-create__color-option--selected'
+                : 'project-create__color-option--idle',
+            ]"
+            @click="colorTag = option.id"
           >
-            Описание
-          </label>
-          <textarea
-            id="project-create-notes"
-            v-model="notes"
-            rows="4"
-            placeholder="Коротко опиши смысл проекта или следующий шаг"
-            class="w-full resize-none rounded-2xl border border-(--border) bg-(--background) px-4 py-3 text-sm text-(--foreground) outline-none transition-colors placeholder:text-(--muted-foreground)/70 focus:border-blue-500/60"
-            @keydown="handleNotesKeydown"
-          />
-          <p class="text-xs text-(--muted-foreground)">
-            `Ctrl/Cmd + Enter` создаёт проект из поля описания.
-          </p>
-        </div>
-
-        <div class="flex flex-col gap-2">
-          <span class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)">
-            Цвет
-          </span>
-
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <button
-              type="button"
-              :class="[
-                'flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-sm transition-colors',
-                colorTag === null
-                  ? 'border-(--foreground) bg-(--secondary) text-(--foreground)'
-                  : 'border-(--border) bg-(--background) text-(--muted-foreground) hover:bg-(--secondary)',
-              ]"
-              @click="colorTag = null"
-            >
-              <span class="h-2.5 w-2.5 rounded-full bg-(--muted-foreground)" />
-              <span class="truncate">Без цвета</span>
-              <Check v-if="colorTag === null" :size="14" class="ml-auto" />
-            </button>
-
-            <button
-              v-for="option in COLOR_OPTIONS"
-              :key="option.id"
-              type="button"
-              :class="[
-                'flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-sm transition-colors',
-                colorTag === option.id
-                  ? ['bg-(--secondary)', option.softClassName, 'border-current']
-                  : 'border-(--border) bg-(--background) text-(--muted-foreground) hover:bg-(--secondary)',
-              ]"
-              @click="colorTag = option.id"
-            >
-              <span :class="['h-2.5 w-2.5 rounded-full', option.className]" />
-              <span class="truncate">{{ option.label }}</span>
-              <Check v-if="colorTag === option.id" :size="14" class="ml-auto" />
-            </button>
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-2">
-          <span class="text-xs font-semibold uppercase tracking-[0.18em] text-(--muted-foreground)">
-            Оплата
-          </span>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              :class="[
-                'flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition-colors',
-                billable
-                  ? 'border-emerald-500/40 bg-emerald-500/12 text-emerald-500'
-                  : 'border-(--border) bg-(--background) text-(--muted-foreground) hover:bg-(--secondary)',
-              ]"
-              @click="billable = !billable"
-            >
-              <DollarSign :size="14" />
-              <span>Оплачиваемый</span>
-              <Check v-if="billable" :size="14" class="ml-1" />
-            </button>
-
-            <label
-              v-if="billable"
-              class="flex flex-1 items-center gap-2 rounded-2xl border border-(--border) bg-(--background) px-3 py-2 text-sm text-(--foreground)"
-            >
-              <span class="text-(--muted-foreground)">Бюджет</span>
-              <input
-                v-model="priceInput"
-                type="number"
-                inputmode="decimal"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                class="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-(--muted-foreground)/60"
-              />
-            </label>
-          </div>
-          <p class="text-xs text-(--muted-foreground)">
-            Если включено, задачи внутри проекта по умолчанию оплачиваемые.
-          </p>
+            <span class="project-create__color-dot" />
+            <span class="truncate">{{ option.label }}</span>
+            <Check v-if="colorTag === option.id" :size="14" class="ml-auto" />
+          </button>
         </div>
       </div>
 
-      <div class="flex items-center justify-end gap-2 border-t border-(--border) px-5 py-4">
-        <button
-          type="button"
-          class="rounded-2xl px-4 py-2 text-sm font-medium text-(--muted-foreground) transition-colors hover:bg-(--secondary) hover:text-(--foreground)"
-          @click="handleClose"
-        >
-          Отмена
-        </button>
+      <div class="flex flex-col gap-2">
+        <span class="project-create__label"> Оплата </span>
 
-        <button
-          type="button"
-          :disabled="!canSave"
-          :class="[
-            'rounded-2xl px-4 py-2 text-sm font-semibold transition-opacity',
-            canSave
-              ? 'bg-(--foreground) text-(--background) hover:opacity-90'
-              : 'cursor-not-allowed bg-(--secondary) text-(--muted-foreground)',
-          ]"
-          @click="save"
-        >
-          Создать проект
-        </button>
+        <div class="project-create__billing">
+          <Toggle v-model="billable" label="Оплачиваемый" />
+
+          <label v-if="billable" class="project-create__price">
+            <span class="project-create__price-label">Бюджет</span>
+            <TextInput
+              v-model="priceInput"
+              type="text"
+              inputmode="decimal"
+              placeholder="0.00"
+              size="sm"
+            />
+          </label>
+        </div>
+        <p class="project-create__hint">
+          Если включено, задачи внутри проекта по умолчанию оплачиваемые.
+        </p>
       </div>
     </div>
-  </div>
+
+    <template #footer>
+      <Button variant="ghost" @click="handleClose">Отмена</Button>
+      <Button :disabled="!canSave" @click="save">Создать проект</Button>
+    </template>
+  </Modal>
 </template>
+
+<style scoped>
+.project-create__header {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.project-create__header-icon {
+  display: flex;
+  width: var(--size-control-md);
+  height: var(--size-control-md);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-button);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.project-create__title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: var(--kosmos-text-subheading-size);
+  font-weight: var(--kosmos-text-subheading-weight);
+  line-height: var(--kosmos-text-subheading-line-height);
+}
+
+.project-create__subtitle {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: var(--kosmos-text-body-size);
+  line-height: 1.45;
+}
+
+.project-create__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.project-create__label {
+  color: var(--muted-foreground);
+  font-size: var(--kosmos-text-caption-size);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.project-create__hint {
+  color: var(--muted-foreground);
+  font-size: var(--kosmos-text-caption-size);
+}
+
+.project-create__color-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+  padding: 10px 12px;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  font-size: var(--kosmos-text-body-size);
+  transition:
+    background-color 140ms var(--easing-standard),
+    border-color 140ms var(--easing-standard),
+    color 140ms var(--easing-standard);
+}
+
+.project-create__color-option:hover {
+  background: var(--secondary);
+}
+
+.project-create__color-option--selected {
+  border-color: var(--project-color, var(--foreground));
+  color: var(--project-color, var(--foreground));
+  background: color-mix(in srgb, var(--project-color, var(--foreground)) 12%, transparent);
+}
+
+.project-create__color-option--idle {
+  border-color: var(--border);
+}
+
+.project-create__color-dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--project-color, var(--muted-foreground));
+}
+
+.project-create__color--none {
+  --project-color: var(--muted-foreground);
+}
+
+.project-create__color--red {
+  --project-color: var(--destructive);
+}
+
+.project-create__color--orange {
+  --project-color: color-mix(in srgb, var(--status-warning) 78%, var(--destructive));
+}
+
+.project-create__color--yellow {
+  --project-color: var(--status-warning);
+}
+
+.project-create__color--green {
+  --project-color: var(--status-success);
+}
+
+.project-create__color--blue {
+  --project-color: var(--accent);
+}
+
+.project-create__color--purple {
+  --project-color: color-mix(in srgb, var(--accent) 70%, var(--destructive));
+}
+
+.project-create__color--pink {
+  --project-color: color-mix(in srgb, var(--destructive) 65%, var(--accent));
+}
+
+.project-create__billing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.project-create__price {
+  display: grid;
+  min-width: min(100%, 220px);
+  flex: 1;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.project-create__price-label {
+  color: var(--muted-foreground);
+  font-size: var(--kosmos-text-body-size);
+}
+</style>

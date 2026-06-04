@@ -5,16 +5,19 @@ import type { TitlebarPlatform } from "./types";
 interface Props {
   platform?: TitlebarPlatform;
   title?: string;
+  transparent?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   platform: "windows",
   title: undefined,
+  transparent: false,
 });
 
 const titlebarClasses = computed(() => [
-  "kosmos-titlebar relative z-[10000] grid box-border select-none grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 bg-(--sidebar-bg) px-(--kosmos-titlebar-inline-padding) py-(--kosmos-titlebar-vertical-padding) text-(--sidebar-foreground)",
+  "kosmos-titlebar relative z-[10000] grid box-border select-none grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-(--kosmos-titlebar-inline-padding) py-(--kosmos-titlebar-vertical-padding) text-(--sidebar-foreground)",
   `kosmos-titlebar--${props.platform}`,
+  props.transparent ? "bg-transparent" : "bg-(--sidebar-bg)",
 ]);
 </script>
 
