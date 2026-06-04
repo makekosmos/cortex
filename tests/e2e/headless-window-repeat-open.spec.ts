@@ -1,0 +1,42 @@
+import { test, expect } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
+import { freshDataDir, launchKeplerWithDataDir } from "./helpers/launch";
+import { waitForBackendReady } from "./helpers/wait";
+
+async function visibleWindows(app: Awaited<ReturnType<typeof launchKeplerWithDataDir>>) {
+  return app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .filter((win) => !win.isDestroyed() && win.isVisible())
+      .map((win) => ({ id: win.id, title: win.getTitle() })),
+  );
+}
+
+test("headless repeat-open does not show existing settings/dashboard/install windows", async () => {
+  const dataDir = freshDataDir("headless-repeat-open");
+  const fakeKext = path.join(dataDir, "dummy.kext");
+  fs.writeFileSync(fakeKext, "not-a-real-kext", "utf8");
+
+  const app = await launchKeplerWithDataDir(dataDir);
+  try {
+    const launcher = await app.firstWindow();
+    await launcher.waitForLoadState("domcontentloaded");
+    await waitForBackendReady(launcher);
+
+    await launcher.evaluate(async () => {
+      await window.kepler.settings.open();
+      await window.kepler.settings.open();
+      await window.kepler.commands.invoke("dashboard:open");
+      await window.kepler.commands.invoke("dashboard:open");
+    });
+
+    await app.evaluate(({ app: electronApp }, kextPath) => {
+      electronApp.emit("second-instance", {} as never, ["Kosmos.exe", kextPath]);
+      electronApp.emit("second-instance", {} as never, ["Kosmos.exe", kextPath]);
+    }, fakeKext);
+
+    await expect.poll(async () => visibleWindows(app), { timeout: 5_000 }).toEqual([]);
+  } finally {
+    await app.close();
+  }
+});

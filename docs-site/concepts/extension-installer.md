@@ -39,7 +39,7 @@ extension.kext        (ZIP)
   "version": "1.0.0", // semver MAJOR.MINOR.PATCH
   "description": "Что делает", // optional, одна строка
   "author": "Имя автора", // optional, info only
-  "permissions": ["ark", "userData"], // optional, documentation only — runtime не enforce
+  "permissions": ["objects.read", "userData.read"], // optional capabilities, runtime-enforced for user-installed copies
   "keplerApiVersion": "^1.0.0", // semver range — см. ниже
   "kind": "vue", // "vue" | "static" | "native"
   "icon": "icon.png", // путь к иконке внутри .kext
@@ -222,7 +222,10 @@ Auto-update не ставит новые extension'ы сам: каталог п�
 ## Что НЕ входит
 
 - **Code signing / signature verification** — `.kext` не подписан, install верит источнику.
-- **Permissions enforcement** — поле `permissions` сейчас только показывается в install dialog, runtime grant'ит полный API. Capability model в потом.
+- **Silent permission escalation in auto-update** — runtime уже enforce'ит
+  `manifest.permissions` для user-installed extension'ов, но update flow ещё
+  должен научиться сравнивать старый/новый permission set и требовать explicit
+  confirmation при добавлении capabilities.
 - **Cross-extension dependencies / store** — extension'ы независимы, marketplace нет.
 
 См. [Kepler Roadmap](/apps/kepler-roadmap) — пункты собраны в section «Extension installer / store».

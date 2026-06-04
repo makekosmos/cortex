@@ -73,7 +73,7 @@ test("focus widget: controls появляются только на hover/focus 
       widget!.locator('.btn[aria-label="Пауза"], .btn[aria-label="Продолжить"]'),
     ).toBeVisible();
     await expect(widget!.locator('.btn[aria-label="Выполнено"]')).toBeVisible();
-    await expect(widget!.locator('.icon-btn[aria-label="Ещё"]')).toBeVisible();
+    await expect(widget!.getByRole("button", { name: "Ещё" })).toBeVisible();
   } finally {
     await gracefulQuit(app);
   }

@@ -1827,7 +1827,7 @@ bun run ark:smoke
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).
 - [ ] Если меняешь CSS-переменные в `theme/css-variables.css` — сразу отрази в `docs-site/.vitepress/theme/custom.css`.
-- [ ] Token-файлы (`tokens/*.ts`) остаются source of truth для соответствующих переменных.
+- [ ] `theme/css-variables.css` остаётся source of truth для theme tokens; TypeScript exports не должны расходиться с CSS variables.
 
 ## Я правил мобильный код (`mobile/`)
 
@@ -2147,8 +2147,8 @@ bun run docs:check
 
 Что делает (`scripts/check-docs-freshness.mjs`):
 
-- Парсит все `docs-site/**/*.md` (кроме сгенерированных).
-- Извлекает упоминания путей (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
+- Парсит все `docs-site/**/*.md` (кроме сгенерированных) и корневые `README.md` / `TODO.md` / `STATUS.md`.
+- Извлекает упоминания путей в backticks и markdown-ссылках (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
 - Проверяет, что эти пути существуют в репозитории.
 - Извлекает упоминания команд (`bun run <name>`, `cargo <subcmd>`).
 - Проверяет, что `bun run <name>` есть в каком-то `package.json` workspace'а.
@@ -2180,7 +2180,7 @@ git diff                # увидишь что регенерация поме�
 Поток:
 
 ```
-docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/*/AGENTS.md / llms.txt
+docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / per-area AGENTS.md / llms.txt
                                               (все помечены <!-- AUTO-GENERATED -->)
 ```
 
@@ -2611,10 +2611,14 @@ bun run ark:guard:writes
 Промежуточная сборка только JS/Rust артефактов (без установщика) — `bun run build:js` или `bun run package:dir` для unpacked-бандла.
 :::
 
-::: warning Bump версии после билда
-**После каждого успешного `bun run build`** (который произвёл установщик NSIS) — поднимаем `version` приложения в его `package.json` на `+0.0.1` (patch). Делается **сразу же**, в том же коммите, что и сам билд, чтобы следующий релиз не перезаписал предыдущий installer-файл (`release/<App> Setup X.Y.Z.exe`).
+::: warning Bump версии только по запросу
+`bun run build` может произвести и опубликовать NSIS installer, но сам по себе
+не является разрешением менять `version` в `package.json` / `manifest.json`.
 
-Минорные/мажорные bump'ы (`+0.1.0` / `+1.0.0`) — только по явному решению человека (новая большая фича, breaking change). По умолчанию — patch.
+Bump версии и release-публикация делаются только по явной команде человека
+(`бамп shell`, `бамп eden`, `релизни`). Не bump'ай версию «после успешного
+билда», «для закрытия фикса» или «чтобы следующий installer не перезаписался».
+Если нужен новый релиз, пользователь даст отдельную release-команду.
 :::
 
 ## Корневые
@@ -2632,7 +2636,7 @@ bun run ark:smoke                # ARK smoke matrix
 
 bun run docs:dev                 # запустить этот сайт (http://localhost:5173)
 bun run docs:sync                # регенерация AGENTS.md / CLAUDE.md / llms.txt
-bun run docs:check               # верификация stale references в docs-site/
+bun run docs:check               # верификация stale references в docs-site/ + root README/TODO/STATUS
 bun run docs:build               # docs:sync + статическая сборка
 bun run docs:preview             # превью собранного
 

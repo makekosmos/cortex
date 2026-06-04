@@ -161,7 +161,7 @@
 
 - [ ] Не сломан public API (`index.ts` экспортирует те же имена).
 - [ ] Если меняешь CSS-переменные в `theme/css-variables.css` — сразу отрази в `docs-site/.vitepress/theme/custom.css`.
-- [ ] Token-файлы (`tokens/*.ts`) остаются source of truth для соответствующих переменных.
+- [ ] `theme/css-variables.css` остаётся source of truth для theme tokens; TypeScript exports не должны расходиться с CSS variables.
 
 ## Я правил мобильный код (`mobile/`)
 

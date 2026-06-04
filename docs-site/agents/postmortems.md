@@ -21,6 +21,73 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-04 — focus-widget set-state стал extension-only
+
+**Симптомы** — `window.kepler.focusWidget.setState(...)` из shell preload / launcher test helper начинает падать с `[kepler-shell] sender is not an extension` после добавления runtime permissions. Это ломает headless focus-widget tests и любые first-party shell windows, которые используют общий preload API.
+**Где жило** — `shell/electron/focus-widget.ts::kepler:focus-widget:set-state` стал безусловно вызывать `assertExtensionSenderHostPermission`; `shell/electron/preload.ts` всё ещё exposes `focusWidget.setState` для shell renderer'ов, а `tests/e2e/helpers/horologion.ts::setFocusWidgetState` вызывает его из launcher window.
+**Root cause** — permission fix смешал две разные sender-категории: untrusted extension renderers и first-party shell renderers. `webContentsToExtensionContext` знает только extension windows, поэтому shell window не может пройти extension permission lookup, хотя она не является user-installed кодом.
+**Fix** — Добавлен `assertExtensionSenderHostPermissionIfExtension(...)`: если sender является extension window, `focus.control` enforce'ится как раньше; если sender — first-party shell renderer, handler допускает вызов. `focus-widget.ts` переведён на этот helper. Дополнительно e2e selector для кнопки «Ещё» переведён с устаревшего `.icon-btn` на role/name locator, потому что `@kosmos/visuals` IconButton больше не гарантирует этот CSS-класс.
+**Регрешн-защита** — `bunx playwright test --config playwright.config.ts tests/e2e/focus-widget-controls.spec.ts` сначала воспроизвёл `[kepler-shell] sender is not an extension`, затем прошёл 7/7 после фикса. Unit permission tests также прошли.
+**Prevention** — Main-process permission checks должны различать sender classes: user-installed extension renderer, trusted first-party extension renderer, shell renderer и internal widget renderer. Нельзя применять extension-only lookup к shared preload IPC только потому, что один из callers — extension.
+
+---
+
+## 2026-06-04 — ARK legacy/usage upserts использовали SQLite REPLACE
+
+**Симптомы.** Часть ARK write helpers для legacy Delphi entities, usage entities, `sync_kv` и pending-object replay использовала `INSERT OR REPLACE`. Для таблиц с foreign keys / sync semantics это опасно: SQLite `REPLACE` удаляет старую строку и вставляет новую, а не обновляет её in-place.
+**Где жило.** `crates/ark-core/rust/src/db.rs::upsert_todo`, `upsert_project`, `upsert_area`, `upsert_tag`, `upsert_heading`, `insert_pending_object`, `upsert_tracked_app`, `upsert_usage_session`, `upsert_usage_event`, `set_sync_kv`; устаревший комментарий в `services/kepler-backend/src/focus.rs`.
+**Root cause.** Старый Delphi/usage CRUD был написан до object-model regression tests against REPLACE semantics. Позднее `objects` / `object_types` / `object_links` уже перешли на update-in-place, но legacy/usage helpers остались на прежнем SQL и могли получить delete+insert side effects при повторном apply/upsert.
+**Fix.** Все перечисленные helpers переведены на `INSERT ... ON CONFLICT(...) DO UPDATE SET ...`; внешний API и набор колонок не менялись. Комментарий backend focus обновлён на `upsert_object_type`, чтобы `rg "INSERT OR REPLACE"` не оставлял ложное ощущение разрешённого паттерна.
+**Регрешн-защита.** `cargo test -p ark-core` — 166 unit tests, RPC tests, `proptest_invariants`, relay/sync integration. Дополнительно `rg -n "INSERT OR REPLACE|REPLACE INTO" crates/ark-core/rust/src services/kepler-backend/src` больше не находит production SQL.
+**Prevention.** Для syncable или FK-linked SQLite tables запрещён `REPLACE`: он является delete+insert и меняет lifecycle строки. Upsert helpers должны использовать `ON CONFLICT DO UPDATE`; если нужна destructive replacement, она должна называться явно и иметь отдельный regression test.
+
+---
+
+## 2026-06-04 — Dictation теряет речь после 30 секунд и autostart показывает ложную ошибку
+
+**Симптомы.** Пользователи видят два эффекта: Settings → «Автозапуск с Windows» после включения показывает «Не удалось применить настройку», хотя автозапуск реально включился; диктовка длиннее ~30 секунд теряет часть речи после 30-й секунды и транскрибирует только основной/ранний фрагмент.
+**Где жило.** `shell/src/views/SettingsView.vue:onToggleAutostart` делает немедленный `get()` после `set()` и сравнивает с desired; `shell/src/views/DictationPillView.vue:stopAndSubmit` отправляет один WAV; `services/kepler-backend/src/dictation/groq.rs::transcribe` отправляет этот WAV в Groq одним multipart-запросом.
+**Root cause.** Autostart UI трактует мгновенный readback Electron/Windows autorun state как строгую postcondition, хотя Windows autorun запись уже могла быть применена, а `getLoginItemSettings()`/`launchItems` могут обновиться с задержкой или неполным match'ем. Dictation использует file-based Whisper как single-shot long-form transcription, хотя Groq/Whisper long-form аудио оптимально обрабатывается 30-секундными сегментами; без chunking модель может суммаризировать/обрезать хвост вместо дословного продолжения.
+**Fix.** Settings UI больше не показывает «Не удалось применить настройку» из-за немедленного mismatch после успешного `autostart.set`: успешный IPC-write оптимистично выставляет desired state, а последующие открытия Settings синхронизируют реальное состояние через обычный `loadGeneral()`. `groq.rs::transcribe` теперь перед отправкой парсит renderer-generated 16-bit PCM WAV и режет long-form audio на ≤30s WAV chunks; каждый chunk отправляется в Groq отдельно, transcript parts склеиваются в исходном порядке.
+**Регрешн-защита.** `tests/unit/settings-autostart-ui.test.ts` фиксирует, что успешный set не превращается в ложную ошибку UI. `services/kepler-backend/src/dictation/groq.rs::tests::{split_wav_for_transcription_chunks_long_audio_by_30_seconds,transcribe_posts_long_audio_in_ordered_chunks}` фиксируют 61s → 30/30/1 chunks и три Groq POST с конкатенацией transcript.
+**Prevention.** Native OS settings readback не всегда является мгновенным commit proof; если write API не бросил exception, UI не должен показывать ошибку только из-за immediate eventual-consistency mismatch. Для Whisper/Groq long-form audio не отправляй пользовательскую запись одним запросом только потому что API принимает файл: если модельная рекомендация говорит про рабочее окно сегментов, segmentation должен быть частью backend transport layer, чтобы pending/retry сохраняли исходный файл, а provider получал стабильные chunks.
+
+## 2026-06-04 — Akasha EPUB parser не ограничивал размер архива
+
+**Симптомы.** Akasha принимала EPUB bytes без явных лимитов на размер исходного файла, количество ZIP entries, суммарный распакованный размер и размер отдельных entries. Специально подготовленный EPUB мог привести к чрезмерной памяти/CPU при распаковке или построении reader blocks.
+**Где жило.** `extensions/akasha/src/lib/epub.ts` — `readEpubBytes()`, `readZipEntries()`, `readZipEntry()` и цикл построения `blocks`.
+**Root cause.** Parser уже безопасно превращал XHTML в text nodes, но ZIP-level guardrails остались implicit: код доверял central directory metadata и начинал читать entries без budget checks.
+**Fix.** Добавлены лимиты: 80 МБ на исходный EPUB, 4000 ZIP entries, 200 МБ суммарного uncompressed payload, 20 МБ на entry, 8 МБ на cover image и 60000 reader blocks. Oversized inputs fail fast до распаковки/рендера.
+**Регрешн-защита.** `bun test tests/unit/akasha-epub-guardrails.test.ts`; `bunx playwright test tests/e2e/extensions-contract.spec.ts --grep akasha`; `bun run shell:typecheck`; `bun run shell:build`.
+**Prevention.** Любой parser пользовательских архивов должен иметь явный budget на compressed input, central directory, uncompressed output и итоговую UI-модель. Без этого “безопасный XHTML renderer” всё ещё остаётся уязвимым к resource exhaustion.
+
+## 2026-06-04 — Raw ARK writes через invokeOperation теряли device_id
+
+**Симптомы.** Raw write-запросы через `ArkClient.invokeOperation()` могли записывать HLC в `lan_sync.version_vector` под `ark-core-rpc-local` или под переданным извне `device_id`, а не под стабильным device id текущего shell slot'а.
+**Где жило.** `packages/ark/src/ark-client.ts:783` прокидывал escape hatch request без нормализации local write identity; extension bridge в `shell/electron/extension-host.ts` использовал именно этот path для `window.kepler.ark.request(...)`.
+**Root cause.** Typed SDK methods (`objects.upsert`, `objectTypes.upsert`, usage writes) вручную добавляли `device_id: this.opts.deviceId`, но public generic escape hatch остался прозрачным. После появления extension bridge этот escape hatch стал production write path'ом, поэтому sync identity зависела от raw params.
+**Fix.** `ArkClient.invokeOperation()` теперь нормализует все local write operations (`upsert_*`, `delete_*`, `batch_upsert_todos`) через `withLocalWriteDeviceId()` и всегда ставит `device_id` из `ArkClientOptions.deviceId`, перекрывая spoofed raw value.
+**Регрешн-защита.** `bun test tests/unit/ark-client-invoke-device-id.test.ts`; `bunx playwright test tests/e2e/extension-permissions.spec.ts` проверяет фактический `lan_sync.version_vector`: extension пытается передать `spoofed-extension-device`, а HLC заканчивается на `kepler-shell-test-extension-permissions-allow`.
+**Prevention.** Любой generic RPC escape hatch обязан применять те же sync invariants, что typed SDK методы. Device identity — свойство локального клиента, а не доверенный параметр renderer/extension payload.
+
+## 2026-06-04 — Delphi runtime притворялся multi-space приложением
+
+**Симптомы.** Delphi extension всё ещё мог показывать/держать код legacy spaces и P2P sync: `SpaceSetup`, settings-вкладка «Пространства», fake `KEPLERDEFAULT`, local JSON/local DB fallback и `lan-sync:*` no-op'ы. Пользовательский runtime выглядел как старый standalone app, хотя source of truth уже single ARK DB.
+**Где жило.** `extensions/delphi/src/App.vue` запускал `activateSpace()` и показывал `SpaceSetup`; `components/settings/SpacesSettingsTab.vue` держал UI управления пространствами; `lib/electron-api-shim.ts` возвращал fake space responses; `store/todos.ts` после изменений посылал legacy LAN broadcast/local DB side effects.
+**Root cause.** Delphi был перенесён в extension через compatibility shim, но часть old standalone shell lifecycle осталась подключённой к runtime graph. Чтобы UI не падал, shim начал возвращать no-op/fake значения, и это замаскировало удалённую концепцию spaces вместо настоящего cleanup.
+**Fix.** Electron bootstrap в `App.vue` теперь сразу грузит `ark:listDelphiTasks` из single ARK DB. `SpaceSetup`, `SpacesSettingsTab`, space-service, local JSON/local DB fallback и legacy LAN protocol удалены. Sidebar/settings больше не показывают «Пространства». Store сохраняет задачи только через ARK task bridge, без legacy LAN broadcast/local DB writes. Shim оставлен минимальным: task CRUD/time-entry reads; неизвестные old channels получают `warnOnce()` + `null`, без fake spaces.
+**Регрешн-защита.** `bun run shell:typecheck`; `bunx playwright test tests/e2e/delphi-legacy-cleanup.spec.ts`; visual screenshot `.tmp/visual/2026-06-04-delphi-legacy-cleanup/delphi-main-no-space-setup.png`.
+**Prevention.** Compat shim допустим только как переходник для реально используемых call-site'ов. Удалённая продуктовая концепция не должна жить как fake UI/no-op API: если runtime больше single-source-of-truth, dead screens and fake defaults нужно убирать из import graph.
+
+## 2026-06-04 — Extension permissions не ограничивали ARK RPC
+
+**Симптомы.** Любое установленное Vue extension-окно могло вызвать `window.kepler.ark.request(operation, params)` с произвольной backend/ARK operation, даже если manifest декларировал permissions или не декларировал их вовсе.
+**Где жило.** `shell/electron/extension-host.ts:104` описывал `permissions` как documentation-only; `shell/electron/extension-host.ts:1288` прокидывал `kepler:extension:ark:request` в общий `arkRequest` без проверки sender extension capabilities.
+**Root cause.** Permission model остановился на install-dialog/documentation layer, а runtime bridge был спроектирован как trusted first-party proxy: `webContentsToExtensionId` определял владельца окна, но результат не использовался для authorization. После появления `.kext` install/user override flow это стало security boundary bug'ом: untrusted user-installed code получал тот же operation surface, что bundled apps.
+**Fix.** Runtime capability model вынесен в `shell/electron/extension-permissions.ts` и подключён в `extension-host.ts`: ARK requests, ARK event subscriptions и userData IPC теперь проверяют manifest permissions для user-installed extension'ов. `focus-widget:set-state` защищён `focus.control`. First-party trust определяется source (`dev` / `bundled`), а не id, поэтому user-installed override с id `eden` не наследует broad trust. IPC reject'ит `params.operation`, чтобы checked operation нельзя было перезаписать при merge.
+**Регрешн-защита.** `bun test tests/unit/extension-permissions.test.ts`; `bunx playwright test tests/e2e/extension-permissions.spec.ts`; `bunx playwright test tests/e2e/extensions-contract.spec.ts`; `bunx playwright test tests/e2e/commands-architecture.spec.ts`; `bun run shell:typecheck`; `bun run shell:build`.
+**Prevention.** Любое поле manifest'а, которое выглядит как security boundary (`permissions`, `apiVersion`, source/origin), должно иметь main-process enforcement до появления install/update flow. Trust нельзя выдавать по extension id: user-installed override может называться как first-party app. IPC proxy должен проверять ровно тот operation payload, который будет forwarded, и запрещать shadow fields вроде `params.operation`.
+
 ## 2026-06-04 — ARK upsert удаляет object_links через SQLite REPLACE
 
 **Симптомы.** Повторный upsert существующего объекта или типа мог незаметно удалить связи графа: обновление заметки/задачи/тега потенциально сносило `object_links`, которые на них ссылались.

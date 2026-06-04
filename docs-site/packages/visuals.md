@@ -97,7 +97,7 @@ Storybook подключает `@tailwindcss/vite` и `theme/storybook.css`, п�
 ```ts
 fontFamily: {
   sans: "-apple-system, BlinkMacSystemFont, SF Pro Display, SF Pro Text, Inter, Avenir, Helvetica, Arial, sans-serif",
-  mono: "'Zed Mono', monospace",
+  mono: "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
 }
 fontSize: { xs: "0.75rem", sm: "0.875rem", base: "1rem", lg, xl, "2xl" }
 fontWeight: { normal: "400", medium: "500", semibold: "600", bold: "700" }
@@ -298,16 +298,6 @@ ABC▌DEF      ← CustomCaret overlay (Vapor-friendly, smooth blink)
 
 ```ts
 import {
-  // Tokens
-  colors,
-  spacing,
-  typography,
-  radius,
-  animations,
-  // Theme
-  type ThemeMode,
-  type ColorToken,
-  getColor,
   // Components
   CustomCaret,
   CommandPalette,
@@ -346,10 +336,24 @@ import {
   Toggle,
   Checkbox,
   SettingsRow,
+  SettingsList,
+  SettingsDropdownRow,
+  SettingsToggleRow,
+  SettingsButtonRow,
+  SettingsTextInputRow,
+  SettingsAdvancedIntro,
+  SettingsSidebar,
+  SettingsSidebarButton,
+  SettingsSearchInput,
   EmptyState,
   BlocklistCard,
   Toast,
   ToastHost,
+  Button,
+  TextInput,
+  Textarea,
+  RadioGroup,
+  HotkeyCapture,
   // Composables
   useToast,
   provideToastHost,

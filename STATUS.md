@@ -1,5 +1,50 @@
 # Kosmos — статус проекта (2026-06-04)
 
+## 2026-06-04 — Permissions, dictation, Delphi cleanup (Kosmos Desktop 0.3.11 → 0.3.12, Akasha 0.1.1 → 0.1.2, Arrancador 0.1.3 → 0.1.4, Delphi 0.1.6 → 0.1.7, Eden 0.1.11 → 0.1.12, Horologion 0.1.6 → 0.1.7)
+
+Большой hardening/release pass после review всего worktree.
+
+- Runtime permissions для user-installed Vue extensions теперь enforce'ятся в
+  main-process IPC: ARK requests, ARK event subscriptions, userData и
+  focus-widget state больше не являются documentation-only surface.
+- First-party trust стал source-based (`dev` / `bundled`), а не id-based:
+  user-installed override с id вроде `eden` не получает права встроенного
+  приложения.
+- `@kosmos/ark::invokeOperation()` нормализует `device_id` для raw local writes,
+  чтобы sync HLC/version vector не принимал spoofed renderer payload.
+- Delphi runtime очищен от legacy spaces/P2P/local JSON/local DB graph:
+  extension сразу открывается в task UI и грузит задачи из single ARK DB.
+- Dictation режет long-form WAV на ≤30s chunks перед Groq/Whisper transport,
+  поэтому речь после первых 30 секунд не теряется. Settings autostart toggle
+  больше не показывает ложную ошибку из-за immediate Windows readback lag.
+- Akasha EPUB parser получил budget guardrails на исходный файл, ZIP entries,
+  uncompressed payload, cover и количество reader blocks.
+- ARK legacy/usage/pending/sync_kv upserts переведены с SQLite `REPLACE` на
+  `ON CONFLICT DO UPDATE`, чтобы не получать delete+insert side effects.
+- Headless/test repeat-open guards закрывают повторное `.focus()` / `.show()`
+  для Settings, Dashboard и install dialog.
+- Review fix: `kepler:focus-widget:set-state` снова принимает first-party shell
+  renderer calls, но продолжает проверять `focus.control` для extension senders.
+- Repo hygiene: `.agent` runtime artifacts игнорируются, root `Cargo.lock`
+  зафиксирован для binary workspace, Bun packageManager выровнен на `1.3.14`,
+  icon sources ужаты до 1024×1024, docs freshness guard проверяет root docs.
+- Agent skills updated: `.agents/skills/windows-sandbox/` добавлен как runbook
+  по повторяющимся Windows Sandbox failures; `bump` skill уточняет patch-only
+  default и обязательные build+publish шаги.
+
+Proof loops:
+
+- `.agent/tasks/2026-06-04-extension-permissions-consolidation/`
+- `.agent/tasks/2026-06-04-dictation-autostart-bugs/`
+- `.agent/tasks/2026-06-04-full-review-bump-release/`
+
+Checks: `bun test tests/unit/extension-permissions.test.ts tests/unit/settings-autostart-ui.test.ts tests/unit/ark-client-invoke-device-id.test.ts tests/unit/akasha-epub-guardrails.test.ts`,
+`bun run --cwd shell typecheck`, `bun run shell:build`,
+`bun run --cwd shell build:extensions`, `bun run docs:sync`,
+`bun run docs:check`, `bun run ark:guard:writes`, `bun run ark:smoke`,
+`bunx playwright test --config playwright.config.ts tests/e2e/extension-permissions.spec.ts tests/e2e/headless-window-repeat-open.spec.ts tests/e2e/delphi-legacy-cleanup.spec.ts tests/e2e/extensions-contract.spec.ts tests/e2e/commands-architecture.spec.ts tests/e2e/focus-widget-controls.spec.ts`,
+`git diff --check`.
+
 ## 2026-06-04 — Delphi on Kosmos visuals (Delphi 0.1.5 → 0.1.6, Kosmos Desktop 0.3.10 → 0.3.11)
 
 Delphi визуально переведён на settings-like chrome из `@kosmos/visuals`.
@@ -25,9 +70,9 @@ Proof loop: `.agent/tasks/2026-06-04-delphi-kosmos-visuals/`.
 
 Akasha больше не живёт как Rust/GPUI app внутри Kosmos workspace.
 
-- Старый GPUI-код из `apps/akasha` вынесен в приватный standalone repo
+- Старый GPUI-код Akasha вынесен в приватный standalone repo
   `ksanrse/akasha-gpui`.
-- `apps/akasha` удалён из Cargo workspace.
+- Бывший workspace Akasha удалён из Cargo workspace; current Kosmos reader живёт в `extensions/akasha`.
 - `extensions/akasha` переведён на обычный Vue-extension contract:
   `kind: "vue"`, `entryHtml: "dist/index.html"`, `devPort: 5185`.
 - Новый reader открывает `.epub` через file input, читает ZIP/OPF/spine в
@@ -535,12 +580,12 @@ derive'ятся Electron userData, ARK dataDir, productName, hotkey, autoupdater
 autorun. Цель — installed prod Kepler работает **одновременно** с dev-сессиями
 (и multi-agent worktree разработкой).
 
-| slot             | trigger                                                     | Electron userData             | ARK dataDir                 | hotkey      | autoupdater |
-| ---------------- | ----------------------------------------------------------- | ----------------------------- | --------------------------- | ----------- | ----------- |
-| `prod` (default) | installed `Kepler.exe`                                      | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`         | `Alt+Space` | on          |
-| `dev`            | `VITE_DEV_SERVER_URL` (`bun run --cwd shell dev`)           | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`     | `` Alt+` `` | off         |
-| `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `shell/.env.local`) | `%APPDATA%\Kepler-dev-<x>\`   | `%APPDATA%\Kosmos-dev-<x>\` | disabled    | off         |
-| `test-<x>`       | Playwright (`KOSMOS_DATA_DIR` set)                          | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR`           | disabled    | off         |
+| slot             | trigger                                                           | Electron userData             | ARK dataDir                 | hotkey      | autoupdater |
+| ---------------- | ----------------------------------------------------------------- | ----------------------------- | --------------------------- | ----------- | ----------- |
+| `prod` (default) | installed `Kepler.exe`                                            | `%APPDATA%\Kepler\`           | `%APPDATA%\Kosmos\`         | `Alt+Space` | on          |
+| `dev`            | `VITE_DEV_SERVER_URL` (`bun run --cwd shell dev`)                 | `%APPDATA%\Kepler-dev\`       | `%APPDATA%\Kosmos-dev\`     | `` Alt+` `` | off         |
+| `dev-<x>`        | `KEPLER_INSTANCE=dev-<x>` (per-worktree `.env.local` in `shell/`) | `%APPDATA%\Kepler-dev-<x>\`   | `%APPDATA%\Kosmos-dev-<x>\` | disabled    | off         |
+| `test-<x>`       | Playwright (`KOSMOS_DATA_DIR` set)                                | `<KOSMOS_DATA_DIR>/userdata/` | `KOSMOS_DATA_DIR`           | disabled    | off         |
 
 Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 `applyInstanceToApp()` вызывается в самом верху `main.ts` — до
@@ -552,7 +597,7 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 0 — Backend extraction
 
-- `services/kepler-backend/` (lib + bin) — Rust headless service. Extracted из старого `apps/kosmos/` (legacy Rust launcher).
+- `services/kepler-backend/` (lib + bin) — Rust headless service. Extracted из старого legacy Rust launcher.
 - 41 → 46 unit tests passing (5 новых для command_bus).
 
 ### Brand swap (Kepler ↔ Kosmos)
@@ -563,7 +608,7 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 1 — Electron Kepler shell
 
-- `apps/kepler-shell/` — Electron 41 + Vue 3.6 + electron-vite + TypeScript.
+- `shell/` — Electron + Vue 3.6 + electron-vite + TypeScript.
 - Frameless launcher 720×460, acrylic Mica на Win11, globalShortcut Ctrl+Shift+K.
 - Tray icon + menu (Открыть / Настройки / Выход).
 - Spawn `kepler-backend.exe` child + auto-connect через `ensureKeplerRunning`.
@@ -606,10 +651,10 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 
 ### Phase 8 — Production packaging
 
-- `electron-builder` NSIS config: `apps/kepler-shell/package.json` `build` section.
+- `electron-builder` NSIS config: `shell/package.json` `build` section.
 - `extraResources`: `kepler-backend.exe` + `ark-core-rpc.exe` + `extensions/<id>/dist+manifest+icon` + tray icon.
 - `afterPack.cjs` hook — PNG → ICO + rcedit embed metadata в `Kepler.exe`.
-- `bun run --cwd apps/kepler-shell build` → `release/Kepler Setup 0.1.6.exe`.
+- `bun run --cwd shell build` → `shell/release/Kosmos Setup X.Y.Z.exe`.
 - Install path: `%LOCALAPPDATA%\Programs\Kepler\` (per-user oneClick).
 
 ### Inter-app communication
@@ -720,7 +765,7 @@ bunx playwright test --list # parse-check
 - `scripts/measure-kepler-ram.ps1` — baseline / kepler / `-Compare` modes для RAM benchmarks.
 - `scripts/fix-mojibake.mjs` — UTF-8 recovery после PowerShell encoding bugs.
 - `scripts/merge-swap.mjs` — token swap helper после `git checkout --theirs` merge conflicts.
-- `scripts/dev-extensions.mjs` — orchestrator для Vite dev servers per extension.
+- `shell/scripts/dev-extensions.mjs` — orchestrator для Vite dev servers per extension.
 
 ## ⏳ Не сделано / отложено
 
@@ -732,18 +777,18 @@ LRU eviction, RAM budget management, lazy extension load/unload. Имеет см
 
 После production smoke testing:
 
-- `apps/kepler/` (старый Rust gpui launcher) — удалить.
+- Старый Rust GPUI launcher — удалить, если ещё всплывут остатки после migration cleanup.
 - `apps/{dashboard,delphi,horologion,arrancador}/` standalone Electron — удалить (extensions cover everything).
 - Eden — оставить пока не сделано Phase 6.
 - Auto-update mechanism (`electron-updater`) — **подключён** (Phase 8b, 2026-05-16): `shell/electron/autoupdater-host.ts` (state machine: idle/checking/available/downloading/downloaded/error), Raycast-style banner в Settings, launcher-команда `kepler:check-updates`, кнопка «Проверить обновления» в General. Distribution через `yoso-industries/kepler-releases`. См. [Distribution](docs-site/concepts/distribution.md#kepler-launcher-autoupdater).
 
 ### Phase 9 — Delphi UI на plain CSS (open question)
 
-Delphi extension использует **Tailwind v4** (наследие legacy `apps/delphi/ts/`). Все остальные extension'ы + Kepler launcher / settings — на **plain scoped CSS + `@kosmos/visuals` CSS variables**.
+Delphi extension использует **Tailwind v4** (наследие legacy standalone Delphi). Все остальные extension'ы + Kepler launcher / settings — на **plain scoped CSS + `@kosmos/visuals` CSS variables**.
 
 Что нужно для Phase 9 (open question):
 
-- ~30 .vue файлов в `apps/kepler-shell/extensions/delphi/src/` — удалить Tailwind utility classes из templates.
+- ~30 .vue файлов в `extensions/delphi/src/` — удалить Tailwind utility classes из templates.
 - Переписать стили в `<style scoped>` с CSS vars из `@kosmos/visuals`.
 - Удалить `@import "tailwindcss"` + `@source` из `extensions/delphi/src/global.css`.
 - Удалить `@tailwindcss/vite` plugin из vite configs.
@@ -775,17 +820,17 @@ Delphi extension использует **Tailwind v4** (наследие legacy `
 
 ```cmd
 :: Terminal 1: Vite dev servers per extension с HMR
-bun run --cwd apps/kepler-shell dev:extensions
+bun run --cwd shell dev:extensions
 ::   → dashboard:  http://localhost:5180/
 ::   → horologion: http://localhost:5181/
 ::   → delphi:     http://localhost:5182/
 ::   → arrancador: http://localhost:5183/
 
 :: Terminal 2: Kepler shell + main process
-bun run --cwd apps/kepler-shell dev:kepler
+bun run --cwd shell dev:kepler
 
 :: или для проверки prod build:
-bun run --cwd apps/kepler-shell dev
+bun run --cwd shell dev
 ```
 
 ### Production build
@@ -805,11 +850,11 @@ cargo build --manifest-path services/kepler-backend/Cargo.toml --bin kepler-back
 cargo test --manifest-path services/kepler-backend/Cargo.toml --lib
 
 :: TypeScript
-bun run --cwd packages/kosmos-ark typecheck
-bun run --cwd apps/kepler-shell typecheck
+bun run --cwd packages/ark typecheck
+bun run --cwd shell typecheck
 
 :: Extensions build
-bun run --cwd apps/kepler-shell build:extensions
+bun run --cwd shell build:extensions
 
 :: RAM benchmark
 pwsh scripts/measure-kepler-ram.ps1 -Mode baseline

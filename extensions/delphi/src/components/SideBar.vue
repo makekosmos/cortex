@@ -6,7 +6,6 @@ import {
   PhBookOpen,
   PhFolder,
   PhGear,
-  PhGlobe,
   PhStar,
   PhTrash,
   PhTray,
@@ -23,8 +22,6 @@ import { ProjectStatus } from "@/types/task";
 import { useRoute, useRouter } from "vue-router";
 import ProjectCreateDialog from "@/components/projects/ProjectCreateDialog.vue";
 import type { ProjectCreatePayload } from "@/components/projects/ProjectCreateDialog.vue";
-
-type SettingsTab = "general" | "spaces";
 
 const store = useTodoStore();
 const { projects } = storeToRefs(store);
@@ -56,11 +53,6 @@ const props = withDefaults(
 
 const isSettingsRoute = computed(() => route.path === "/settings");
 
-const activeSettingsTab = computed<SettingsTab>(() => {
-  const tabValue = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab;
-  return tabValue === "spaces" ? "spaces" : "general";
-});
-
 const existingProjectTitles = computed(() => projects.value.map((project) => project.title));
 
 const activeProjectItems = computed(() =>
@@ -74,17 +66,6 @@ const activeProjectItems = computed(() =>
       active: route.path === `/project/${project.id}`,
     })),
 );
-
-function setSettingsTab(tab: SettingsTab) {
-  if (activeSettingsTab.value === tab) return;
-
-  void router.replace({
-    query: {
-      ...route.query,
-      tab,
-    },
-  });
-}
 
 function handleSettingsBack() {
   if (window.history.length > 1) {
@@ -125,19 +106,11 @@ const primaryItems = computed<SidebarNavItem[]>(() => {
       },
       {
         id: "general",
-        icon: phosphorSidebarIcon(PhGear, activeSettingsTab.value === "general"),
+        icon: phosphorSidebarIcon(PhGear, true),
         label: "Общие",
-        active: activeSettingsTab.value === "general",
-        onClick: () => setSettingsTab("general"),
+        active: true,
+        onClick: () => undefined,
         testId: "settings-nav-general",
-      },
-      {
-        id: "spaces",
-        icon: phosphorSidebarIcon(PhGlobe, activeSettingsTab.value === "spaces"),
-        label: "Пространства",
-        active: activeSettingsTab.value === "spaces",
-        onClick: () => setSettingsTab("spaces"),
-        testId: "settings-nav-spaces",
       },
     ];
   }

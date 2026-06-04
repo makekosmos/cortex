@@ -424,6 +424,29 @@ export type EntityChangedCallback = (entityJson: string) => void;
 
 const MAX_QUEUE_SIZE = 500;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const LOCAL_WRITE_OPERATIONS = new Set([
+  "upsert_todo",
+  "delete_todo",
+  "batch_upsert_todos",
+  "upsert_project",
+  "delete_project",
+  "upsert_area",
+  "upsert_tag",
+  "upsert_heading",
+  "delete_heading",
+  "upsert_tracked_app",
+  "delete_tracked_app",
+  "upsert_usage_session",
+  "delete_usage_session",
+  "upsert_usage_event",
+  "delete_usage_event",
+  "upsert_object",
+  "delete_object",
+  "upsert_object_type",
+  "delete_object_type",
+  "upsert_object_link",
+  "delete_object_link",
+]);
 
 export class ArkClient {
   private readonly opts: ArkClientOptions;
@@ -781,7 +804,7 @@ export class ArkClient {
    * Гарантирует, что connection (kepler или self-managed child) инициализирован.
    */
   async invokeOperation<T>(req: { operation: string; [key: string]: unknown }): Promise<T> {
-    return this.requestAfterInit<T>(req as SidecarRequest);
+    return this.requestAfterInit<T>(this.withLocalWriteDeviceId(req as SidecarRequest));
   }
 
   // -------------------------------------------------------------------------
@@ -847,6 +870,14 @@ export class ArkClient {
   private async requestAfterInit<T>(req: SidecarRequest): Promise<T> {
     await this.ensureInitialized();
     return this.request<T>(req);
+  }
+
+  private withLocalWriteDeviceId(req: SidecarRequest): SidecarRequest {
+    if (!LOCAL_WRITE_OPERATIONS.has(req.operation)) return req;
+    return {
+      ...req,
+      device_id: this.opts.deviceId,
+    };
   }
 
   // -------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 {
   "id": "delphi",
   "name": "Delphi",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Менеджер задач",
   "keplerApiVersion": "^1.1.0",
   "kind": "vue",
@@ -13,6 +13,7 @@
   "minWidth": 800,
   "minHeight": 500,
   "windowEffect": "acrylic",
+  "permissions": ["objects.read", "objects.write", "commands.register", "commands.invoke"],
   "commands": [
     {
       "id": "open",

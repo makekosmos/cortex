@@ -166,7 +166,7 @@ fn blocklist_object_type_definition() -> Value {
 /// Идемпотентно регистрирует `blocklist_obj` object_type в ARK.
 ///
 /// Вызывается при каждой focus.* операции (а не только при первой) — это
-/// дёшево: `INSERT OR REPLACE`, и оставляет invariant'у "type существует"
+/// дёшево: `upsert_object_type`, и оставляет invariant'у "type существует"
 /// для любого вызова. Альтернатива (OnceCell) — лишнее состояние на модуле,
 /// сложнее testability.
 pub async fn ensure_blocklist_object_type<R: FocusArkRequester>(ark: &R) -> Result<(), String> {

@@ -26,6 +26,10 @@ import {
   createDictationConfig,
   DictationConfigKey,
 } from "./settings/composables/useDictationConfig";
+import {
+  resolveAutostartApplyFailure,
+  resolveAutostartApplySuccess,
+} from "./settings/autostart-ui";
 import { useKeplerUpdate } from "./settings/composables/useKeplerUpdate";
 import "./settings/settings-shared.css";
 import {
@@ -215,14 +219,18 @@ async function onToggleAutostart(e: Event) {
   autostartError.value = "";
   try {
     await window.kepler.settings.autostart.set(desired);
-    autostart.value = await window.kepler.settings.autostart.get();
-    if (autostart.value !== desired) {
-      autostartError.value = "Не удалось применить настройку";
-    }
+    // См. postmortems.md § 2026-06-04. Windows autorun readback can lag
+    // behind a successful set, so immediate mismatch is not a user-facing
+    // failure. A later loadGeneral/open will reconcile real state.
+    const applied = resolveAutostartApplySuccess(desired);
+    autostart.value = applied.checked;
+    autostartError.value = applied.error;
   } catch (err) {
     console.warn("autostart set failed", err);
-    autostartError.value = "Ошибка записи в реестр";
-    autostart.value = await window.kepler.settings.autostart.get();
+    const current = await window.kepler.settings.autostart.get();
+    const failed = resolveAutostartApplyFailure(current);
+    autostart.value = failed.checked;
+    autostartError.value = failed.error;
   }
 }
 

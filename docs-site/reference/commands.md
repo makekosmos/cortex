@@ -25,10 +25,14 @@
 Промежуточная сборка только JS/Rust артефактов (без установщика) — `bun run build:js` или `bun run package:dir` для unpacked-бандла.
 :::
 
-::: warning Bump версии после билда
-**После каждого успешного `bun run build`** (который произвёл установщик NSIS) — поднимаем `version` приложения в его `package.json` на `+0.0.1` (patch). Делается **сразу же**, в том же коммите, что и сам билд, чтобы следующий релиз не перезаписал предыдущий installer-файл (`release/<App> Setup X.Y.Z.exe`).
+::: warning Bump версии только по запросу
+`bun run build` может произвести и опубликовать NSIS installer, но сам по себе
+не является разрешением менять `version` в `package.json` / `manifest.json`.
 
-Минорные/мажорные bump'ы (`+0.1.0` / `+1.0.0`) — только по явному решению человека (новая большая фича, breaking change). По умолчанию — patch.
+Bump версии и release-публикация делаются только по явной команде человека
+(`бамп shell`, `бамп eden`, `релизни`). Не bump'ай версию «после успешного
+билда», «для закрытия фикса» или «чтобы следующий installer не перезаписался».
+Если нужен новый релиз, пользователь даст отдельную release-команду.
 :::
 
 ## Корневые
@@ -46,7 +50,7 @@ bun run ark:smoke                # ARK smoke matrix
 
 bun run docs:dev                 # запустить этот сайт (http://localhost:5173)
 bun run docs:sync                # регенерация AGENTS.md / CLAUDE.md / llms.txt
-bun run docs:check               # верификация stale references в docs-site/
+bun run docs:check               # верификация stale references в docs-site/ + root README/TODO/STATUS
 bun run docs:build               # docs:sync + статическая сборка
 bun run docs:preview             # превью собранного
 

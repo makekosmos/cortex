@@ -2,15 +2,10 @@
 // `window.kepler.ark.request(operation, params)` — единственного канала к ARK,
 // доступного в extension renderer'е.
 //
-// Зачем shim: existing Vue компоненты Delphi (App.vue, ProjectPage.vue, store,
-// space-manager, SpaceSetup, SpacesSettingsTab, local-db, json.electron) были
-// портированы как есть из standalone приложения, где Electron main process
-// предоставлял широкий набор IPC каналов (db:*, ark:*, lan-sync:*, sync:*,
-// space:*). В extension'е этих каналов нет — есть только `kepler.ark.request`.
-// Чтобы не переписывать каждый call-site, мы восстанавливаем форму
-// `window.electronAPI` и внутри транслируем legacy каналы в ARK operations
-// либо graceful no-op'ы для функций, которых физически нет (P2P sync, file
-// system, switch space).
+// Зачем shim: Delphi всё ещё содержит legacy call-sites, которые ожидают
+// `window.electronAPI.invoke(...)`. В extension'е real Electron IPC нет —
+// есть только `kepler.ark.request`, поэтому shim оставляет минимальную форму
+// API и транслирует task CRUD в ARK `task_obj`.
 //
 // Импортируется в `main.ts` как side-effect до `createApp(App).mount(...)`,
 // чтобы любой ранний обращающийся код увидел уже установленный shim.
@@ -440,65 +435,6 @@ async function invokeChannel(channel: string, args: unknown[]): Promise<unknown>
       warnOnce(channel);
       return channel === "db:getSyncKv" ? null : true;
 
-    // ---- LAN sync / space management ----
-    // В extension'е P2P sync не реализован — kepler-backend имеет собственный
-    // sync runtime, недоступный отсюда. Возвращаем "пусто", чтобы UI graceful
-    // показывал offline без crash'а.
-    case "lan-sync:start":
-      warnOnce(channel, "P2P sync вне scope extension");
-      return false;
-    case "lan-sync:getStatus":
-      return { active: false, peers: 0, peerNames: [] };
-    case "lan-sync:broadcastChange":
-    case "lan-sync:leaveSpace":
-      warnOnce(channel);
-      return true;
-    case "sync:getOwnAddresses":
-      warnOnce(channel);
-      return [] as string[];
-    case "sync:getQrPayload":
-      // Возвращаем undefined → caller fallback'ает на formatSpaceCode().
-      return undefined;
-
-    case "db:switchSpace":
-      // В extension'е база одна — глобальная ARK shell'а. Поэтому здесь
-      // graceful no-op: данные уже соответствуют активному пространству
-      // (если бэкенд переключал базы — это его ответственность).
-      warnOnce(channel);
-      return true;
-
-    case "db:deleteSpace":
-      warnOnce(channel);
-      return false;
-
-    // ---- File system (json.electron) ----
-    // Extension renderer не имеет filesystem доступа — компонент json.electron
-    // используется только legacy кодом, который сегодня не достижим в
-    // extension flow'е, поэтому warn'аем и возвращаем пусто.
-    case "space:getActive":
-      // 2026-05-15: концепция Kosmos spaces убрана, single DB per user.
-      // Возвращаем фиксированный «kepler-default» code чтобы Delphi
-      // App.vue прошёл через activateSpace вместо показа SpaceSetup modal'а.
-      // db:switchSpace ниже no-op'ит — ARK-данные всё равно из одной DB.
-      return "KEPLERDEFAULT";
-
-    case "space:getAll":
-      return [
-        {
-          code: "KEPLERDEFAULT",
-          name: "Kepler",
-          createdAt: "2026-05-15T00:00:00.000Z",
-        },
-      ];
-
-    case "space:save":
-    case "space:remove":
-    case "space:rename":
-    case "space:setActive":
-    case "space:getDbPath":
-      // No-op для kepler-mode. setActive игнорим (active всегда kepler-default).
-      return undefined;
-
     default:
       warnOnce(channel, "неизвестный канал");
       return null;
@@ -520,13 +456,6 @@ function subscribeChannel(channel: string, _handler: (...args: unknown[]) => voi
       // и тамошние router.push(...) / show() — отдельной подписки не нужно.
       return () => {};
 
-    case "lan-sync:change":
-    case "lan-sync:peerConnected":
-    case "lan-sync:peerDisconnected":
-      // P2P события вне scope extension'а — см. invokeChannel("lan-sync:start").
-      // Возвращаем no-op unsubscribe.
-      return () => {};
-
     default:
       warnOnce(`on:${channel}`, "неизвестное событие");
       return () => {};
@@ -541,12 +470,8 @@ const electronApiShim = {
   invoke: (channel: string, ...args: unknown[]): Promise<unknown> => invokeChannel(channel, args),
   on: (channel: string, handler: (...args: unknown[]) => void): (() => void) =>
     subscribeChannel(channel, handler),
-  // fs / db namespaces намеренно отсутствуют:
-  //   - `electronAPI.fs` нужен только legacy json.electron.ts, в extension
-  //     flow'е недостижимому. `getElectronFs()` вернёт undefined → no-op.
-  //   - `electronAPI.db` использовался для прямого Rust sidecar bridge'а;
-  //     в extension'е `isLocalDbAvailable()` вернёт false и компоненты
-  //     graceful fallback'ают на ARK через `electronAPI.invoke`.
+  // fs / db namespaces намеренно отсутствуют: renderer не получает filesystem
+  // или прямой sidecar bridge, только typed task CRUD через invokeChannel().
 };
 
 // Устанавливаем shim только если real preload его не предоставил

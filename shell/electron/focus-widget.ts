@@ -14,7 +14,7 @@
 
 import { BrowserWindow, ipcMain, screen, app, Menu } from "electron";
 import type { ArkClient } from "@kosmos/ark";
-import { openExtension } from "./extension-host";
+import { assertExtensionSenderHostPermissionIfExtension, openExtension } from "./extension-host";
 import { awaitArkReady } from "./main";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -323,7 +323,8 @@ export function getFocusState(): FocusState {
 
 // --- IPC --------------------------------------------------------------------
 
-ipcMain.handle("kepler:focus-widget:set-state", (_e, patch: Partial<FocusState>) => {
+ipcMain.handle("kepler:focus-widget:set-state", (e, patch: Partial<FocusState>) => {
+  assertExtensionSenderHostPermissionIfExtension(e.sender, "focus.control");
   if (!patch || typeof patch !== "object") return;
   setFocusState(patch);
 });

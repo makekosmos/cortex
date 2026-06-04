@@ -1,6 +1,6 @@
 {
   "name": "@kosmos/extension-akasha",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Akasha EPUB reader — Vue extension для Kosmos shell.",
   "type": "module",

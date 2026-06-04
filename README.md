@@ -1,41 +1,29 @@
 # Kosmos
 
-Kosmos is a monorepo for local-first personal software: a shared ARK data runtime plus focused desktop/mobile apps that render or capture specific workflows.
+Kosmos is a monorepo for local-first personal software: a shared ARK data runtime plus focused desktop/mobile surfaces that render or capture specific workflows.
 
 ## Core
 
-### [ARK](./packages/ark-core/README.md) - local-first data runtime
+### [ARK](./crates/ark-core/README.md) - local-first data runtime
 
-ARK is the shared Rust + SQLite runtime for long-lived personal data. The canonical desktop binary is `ark-core-rpc`; Electron apps should talk to it through `@kosmos/ark` from Electron main/preload facades instead of writing directly into ARK SQLite tables.
+ARK is the shared Rust + SQLite runtime for long-lived personal data. The canonical desktop binary is `ark-core-rpc`; Electron integrations talk to it through `@kosmos/ark` from Electron main/preload facades instead of writing directly into ARK SQLite tables.
 
-### [Eden](./apps/eden/README.md) - journal/editor
+### [Kosmos desktop shell](./shell/package.json)
 
-Eden is the writing and journal surface. It uses its own editor/search sidecar and integrates with ARK for shared objects/sync.
+The desktop host is the Electron launcher/settings/runtime shell. It owns extension hosting, the command bus bridge, packaging, and the built-in Dashboard view.
 
-## Helper Apps
+## Extensions
 
-Helper apps are thin workflow surfaces around shared data. Their job is quick capture, focused visualization, or domain-specific interaction while ARK owns storage/sync contracts.
+Desktop workflow apps live under `extensions/<id>/` and run inside the shell.
 
-### [Delphi](./apps/delphi/README.md)
+- [Eden](./extensions/eden/manifest.json) - notes and journal editor.
+- [Delphi](./extensions/delphi/manifest.json) - task tracking UI.
+- [Arrancador](./extensions/arrancador/manifest.json) - game library, playtime, backups, and ARK game-object integration.
+- [Horologion](./extensions/horologion/manifest.json) - time tracking, pomodoro, and focus sessions.
+- [Akasha](./extensions/akasha/README.md) - EPUB reader.
 
-Task tracking UI. The Electron package uses the shared `ark-core-rpc` binary.
-
-### [Arrancador](./apps/arrancador/README.md)
-
-Game library, playtime, backups, and ARK game-object integration.
-
-### [Dashboard](./apps/dashboard/README.md)
-
-Read-only usage analytics over ARK usage data.
-
-### [Olympia](./apps/olympia/README.md)
-
-Workout tracking.
-
-### [Elysium](./apps/elysium/README.md)
-
-Nutrition tracking.
+Dashboard is built into the shell under `shell/src/views/Dashboard*.vue` and `shell/src/dashboard/`.
 
 ## Current ARK Integration Rule
 
-New Electron integrations should use `@kosmos/ark` and `ark-core-rpc`. `@arksync/node` is compatibility-only. Direct writes into ARK SQLite tables are legacy or migration-only paths; if a process must write directly, it must use `ark_core::db` helpers so sync state is updated consistently.
+New Electron integrations should use `@kosmos/ark` and `ark-core-rpc`. Direct writes into ARK SQLite tables are legacy or migration-only paths; if a process must write directly, it must use `ark_core::db` helpers so sync state is updated consistently.

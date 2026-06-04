@@ -2,7 +2,7 @@
 /*
  * check-docs-freshness.mjs
  *
- * Сверяет содержимое docs-site/ с реальностью репозитория:
+ * Сверяет содержимое docs-site/ и корневых README/TODO/STATUS с реальностью репозитория:
  *
  *  1. Упомянутые пути файлов/папок (apps/<x>/..., packages/<x>/..., scripts/<x>.<ext>,
  *     docs/<x>.md, services/<x>/..., .agent/...) — реально существуют?
@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const DOCS = path.join(ROOT, "docs-site");
+const ROOT_DOCS = ["README.md", "TODO.md", "STATUS.md"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // сбор всех .md в docs-site
@@ -78,6 +79,10 @@ async function collectScripts() {
 const PATH_RE =
   /`((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy)\/[A-Za-z0-9._\-/]+)`/g;
 
+// markdown links to repo-local paths: [label](./packages/ark/README.md)
+const PATH_LINK_RE =
+  /\]\((?:\.\/)?((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy)\/[A-Za-z0-9._\-/]+)(?:#[A-Za-z0-9._\-/]+)?\)/g;
+
 // bun run <name> или bun run --cwd <path> <name>
 // "<name>" не должен содержать `<` (template-плейсхолдер) или `--` (флаг)
 const BUN_CMD_RE = /\bbun run (?:--cwd \S+ )?([a-z][a-z0-9:-]*)\b/g;
@@ -119,6 +124,35 @@ function pathExists(p) {
   return existsSync(path.join(ROOT, norm));
 }
 
+function shouldSkipPath(clean) {
+  // Skip явные template-плейсхолдеры с <...> и UPPER_CASE токенами
+  if (clean.includes("<") || clean.includes(">")) return true;
+  if (/\$\{/.test(clean)) return true;
+  if (/\b[A-Z_]{2,}\b/.test(clean)) return true;
+  // skip dynamic placeholders
+  if (clean.includes("/name/") || clean.includes("/app/")) return true;
+  // skip runtime артефакты
+  if (IGNORE_PATH_PARTS.some((part) => ("/" + clean).includes(part))) return true;
+  // skip намеренно удалённые / будущие
+  if (KNOWN_NONEXISTENT.has(clean)) return true;
+  return false;
+}
+
+function checkRepoPathReference({ issues, rel, p }) {
+  // нормализуем — убираем хвостовые `/`
+  const clean = p.replace(/\/+$/, "");
+  if (shouldSkipPath(clean)) return;
+
+  if (!pathExists(clean)) {
+    issues.push({
+      file: rel,
+      kind: "path",
+      ref: clean,
+      msg: `путь не существует: ${clean}`,
+    });
+  }
+}
+
 async function checkInternalLink(link) {
   // /agents/ → docs-site/agents/index.md
   // /apps/eden → docs-site/apps/eden.md (или index.md)
@@ -142,7 +176,10 @@ async function checkInternalLink(link) {
 async function main() {
   console.log("→ docs:check");
 
-  const mdFiles = await walk(DOCS);
+  const mdFiles = [
+    ...(await walk(DOCS)),
+    ...ROOT_DOCS.map((rel) => path.join(ROOT, rel)).filter((file) => existsSync(file)),
+  ];
   const scripts = await collectScripts();
 
   const issues = [];
@@ -153,28 +190,12 @@ async function main() {
 
     // 1. пути в backticks
     for (const m of text.matchAll(PATH_RE)) {
-      const p = m[1];
-      // нормализуем — убираем хвостовые `/`
-      const clean = p.replace(/\/+$/, "");
-      // Skip явные template-плейсхолдеры с <...> и UPPER_CASE токенами
-      if (clean.includes("<") || clean.includes(">")) continue;
-      if (/\$\{/.test(clean)) continue;
-      if (/\b[A-Z_]{2,}\b/.test(clean)) continue;
-      // skip dynamic placeholders
-      if (clean.includes("/name/") || clean.includes("/app/")) continue;
-      // skip runtime артефакты
-      if (IGNORE_PATH_PARTS.some((part) => ("/" + clean).includes(part))) continue;
-      // skip намеренно удалённые / будущие
-      if (KNOWN_NONEXISTENT.has(clean)) continue;
+      checkRepoPathReference({ issues, rel, p: m[1] });
+    }
 
-      if (!pathExists(clean)) {
-        issues.push({
-          file: rel,
-          kind: "path",
-          ref: clean,
-          msg: `путь не существует: ${clean}`,
-        });
-      }
+    // 1b. пути в markdown-ссылках
+    for (const m of text.matchAll(PATH_LINK_RE)) {
+      checkRepoPathReference({ issues, rel, p: m[1] });
     }
 
     // 2. bun run <script>

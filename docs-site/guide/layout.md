@@ -117,12 +117,17 @@ extensions/<id>/
 
 ```text
 <app-root>/build/
-├─ icon.png              # источник, ≥512×512 (рекомендуется ≥1024×1024)
+├─ icon.png              # источник, 512×512–1024×1024 PNG
 ├─ icon.ico              # кэш (генерируется автоматически из icon.png)
 └─ afterPack.cjs         # electron-builder hook: PNG→ICO + rcedit
 ```
 
 Для Vue-extensions внутри Kepler shell иконка живёт в `extensions/<id>/icon.png` (Kepler shell хост-окно отвечает за `BrowserWindow.icon`).
+
+Иконки в git — canonical source assets для launcher / package metadata, а не
+runtime cache. Держи их в диапазоне 512×512–1024×1024; 2375×2375+ PNG без
+отдельного дизайн-обоснования считаются лишним весом репозитория. Generated
+`*.ico`, extracted app icons и smoke screenshots не коммитятся.
 
 ### Конвенция в `package.json` приложения
 

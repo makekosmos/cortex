@@ -5,13 +5,9 @@
 //      server / URL navigation, BrowserWindow грузит `file://.../dist/index.html`.
 //   2. Command bus — регистрация Delphi-команд и подписка на `command_invoked`
 //      через `window.kepler.ark`. Legacy main process больше не нужен.
-//   3. Native main-process integrations (lan-sync:*, db:switchSpace и т.п.)
-//      недоступны в extension renderer. `lib/electron-api-shim.ts` бридж'ит
-//      legacy `window.electronAPI` поверх `window.kepler.ark.request`:
-//      ARK операции (task_obj / time_entry_obj CRUD) транслируются, а P2P
-//      sync / filesystem каналы становятся graceful no-op'ами. Это позволило
-//      оставить компоненты (App.vue, ProjectPage, SpaceSetup, SpacesSettingsTab,
-//      store/todos, services/space, services/storage) без массового rewrite'а.
+//   3. Legacy `window.electronAPI.invoke(...)` call-sites still exist in
+//      Delphi UI. `lib/electron-api-shim.ts` keeps only the minimal bridge over
+//      `window.kepler.ark.request`: task_obj CRUD and time_entry reads.
 
 // Shim должен быть установлен ДО mount'а Vue, поскольку App.vue читает
 // `window.electronAPI` синхронно в setup-блоке.

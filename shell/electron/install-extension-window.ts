@@ -18,10 +18,14 @@ const WINDOW_HEIGHT = 480;
 
 let installWindow: BrowserWindow | null = null;
 
+function isHeadlessOrTest(): boolean {
+  return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
+}
+
 export function openInstallExtensionWindow(sourcePath: string): void {
   if (installWindow && !installWindow.isDestroyed()) {
     // Если уже открыто — просто заменяем path query и фокусируем.
-    installWindow.focus();
+    if (!isHeadlessOrTest()) installWindow.focus();
     void installWindow.webContents.send("kepler:extension:install:source-changed", sourcePath);
     return;
   }
@@ -31,13 +35,13 @@ export function openInstallExtensionWindow(sourcePath: string): void {
     height: WINDOW_HEIGHT,
     x: Math.round((display.width - WINDOW_WIDTH) / 2),
     y: Math.round((display.height - WINDOW_HEIGHT) / 2),
-    show: process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1",
+    show: !isHeadlessOrTest(),
     frame: false,
     resizable: false,
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    skipTaskbar: process.env.KOSMOS_HEADLESS === "1",
+    skipTaskbar: isHeadlessOrTest(),
     alwaysOnTop: false,
     backgroundColor: "#1a1a1a",
     backgroundMaterial: "mica",

@@ -7,8 +7,8 @@
  *
  *   - AGENTS.md      (корень)        — auto-context для всех агентов
  *   - CLAUDE.md      (корень)        — auto-context для Claude Code
- *   - apps/<name>/AGENTS.md          — per-app правила
- *   - packages/<name>/AGENTS.md      — per-package правила (только ark-core)
+ *   - mobile/delphi/AGENTS.md        — Android Delphi правила
+ *   - crates/ark-core/AGENTS.md      — ark-core правила
  *   - services/<name>/AGENTS.md      — per-service правила (на данный момент таких нет; usage-tracker заморожен в legacy/)
  *   - docs-site/public/llms.txt      — полный inline-текст для агентов через WebFetch
  *

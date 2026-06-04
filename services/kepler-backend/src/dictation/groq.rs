@@ -37,6 +37,7 @@ const HARDCODED_PROMPT: &str = "Привет! Это транскрипция р
 /// (https://github.com/openai/whisper/discussions/1252 и др.).
 const NO_SPEECH_PROB_THRESHOLD: f64 = 0.6;
 const AVG_LOGPROB_THRESHOLD: f64 = -1.0;
+const LONG_FORM_CHUNK_SECONDS: u32 = 30;
 
 #[derive(Debug, Deserialize, Default)]
 pub struct VerboseSegment {
@@ -101,6 +102,37 @@ pub async fn transcribe(
     model: &str,
     prompt: &str,
 ) -> Result<TranscriptionResult, GroqError> {
+    let chunks = split_wav_for_transcription(&wav_bytes);
+    if chunks.len() > 1 {
+        let mut parts: Vec<String> = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            let part =
+                transcribe_single_wav(client, endpoint, api_key, chunk, language, model, prompt)
+                    .await?;
+            let trimmed = part.text.trim();
+            if !trimmed.is_empty() {
+                parts.push(trimmed.to_owned());
+            }
+        }
+        return Ok(TranscriptionResult {
+            text: parts.join(" ").trim().to_owned(),
+        });
+    }
+    transcribe_single_wav(
+        client, endpoint, api_key, wav_bytes, language, model, prompt,
+    )
+    .await
+}
+
+async fn transcribe_single_wav(
+    client: &reqwest::Client,
+    endpoint: &str,
+    api_key: &str,
+    wav_bytes: Vec<u8>,
+    language: &str,
+    model: &str,
+    prompt: &str,
+) -> Result<TranscriptionResult, GroqError> {
     let part = reqwest::multipart::Part::bytes(wav_bytes)
         .file_name("audio.wav")
         .mime_str("audio/wav")?;
@@ -143,6 +175,114 @@ pub async fn transcribe(
     Ok(TranscriptionResult { text: filtered })
 }
 
+#[derive(Debug)]
+struct PcmWav<'a> {
+    sample_rate: u32,
+    channels: u16,
+    bits_per_sample: u16,
+    data: &'a [u8],
+}
+
+fn split_wav_for_transcription(wav_bytes: &[u8]) -> Vec<Vec<u8>> {
+    let Some(parsed) = parse_pcm_wav(wav_bytes) else {
+        return vec![wav_bytes.to_vec()];
+    };
+    let bytes_per_sample = usize::from(parsed.bits_per_sample / 8);
+    let frame_bytes = usize::from(parsed.channels).saturating_mul(bytes_per_sample);
+    let max_data_bytes = usize::try_from(parsed.sample_rate)
+        .unwrap_or(0)
+        .saturating_mul(usize::try_from(LONG_FORM_CHUNK_SECONDS).unwrap_or(0))
+        .saturating_mul(frame_bytes);
+    if frame_bytes == 0 || max_data_bytes == 0 || parsed.data.len() <= max_data_bytes {
+        return vec![wav_bytes.to_vec()];
+    }
+
+    let chunk_data_bytes = max_data_bytes - (max_data_bytes % frame_bytes);
+    if chunk_data_bytes == 0 {
+        return vec![wav_bytes.to_vec()];
+    }
+    parsed
+        .data
+        .chunks(chunk_data_bytes)
+        .map(|data| {
+            encode_pcm_wav(
+                data,
+                parsed.sample_rate,
+                parsed.channels,
+                parsed.bits_per_sample,
+            )
+        })
+        .collect()
+}
+
+fn parse_pcm_wav(bytes: &[u8]) -> Option<PcmWav<'_>> {
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+    let mut offset = 12usize;
+    let mut sample_rate = 0u32;
+    let mut channels = 0u16;
+    let mut bits_per_sample = 0u16;
+    let mut data: Option<&[u8]> = None;
+
+    while offset.checked_add(8)? <= bytes.len() {
+        let id = &bytes[offset..offset + 4];
+        let size = u32::from_le_bytes(bytes[offset + 4..offset + 8].try_into().ok()?) as usize;
+        let start = offset + 8;
+        let end = start.checked_add(size)?;
+        if end > bytes.len() {
+            return None;
+        }
+        if id == b"fmt " {
+            if size < 16 {
+                return None;
+            }
+            let audio_format = u16::from_le_bytes(bytes[start..start + 2].try_into().ok()?);
+            channels = u16::from_le_bytes(bytes[start + 2..start + 4].try_into().ok()?);
+            sample_rate = u32::from_le_bytes(bytes[start + 4..start + 8].try_into().ok()?);
+            bits_per_sample = u16::from_le_bytes(bytes[start + 14..start + 16].try_into().ok()?);
+            if audio_format != 1 || channels == 0 || bits_per_sample != 16 {
+                return None;
+            }
+        } else if id == b"data" {
+            data = Some(&bytes[start..end]);
+        }
+        offset = end + (size % 2);
+    }
+
+    Some(PcmWav {
+        sample_rate,
+        channels,
+        bits_per_sample,
+        data: data?,
+    })
+}
+
+fn encode_pcm_wav(data: &[u8], sample_rate: u32, channels: u16, bits_per_sample: u16) -> Vec<u8> {
+    let byte_rate = sample_rate
+        .saturating_mul(u32::from(channels))
+        .saturating_mul(u32::from(bits_per_sample / 8));
+    let block_align = channels.saturating_mul(bits_per_sample / 8);
+    let data_len = u32::try_from(data.len()).unwrap_or(u32::MAX);
+    let riff_len = 36u32.saturating_add(data_len);
+    let mut wav = Vec::with_capacity(44 + data.len());
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&riff_len.to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&channels.to_le_bytes());
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&byte_rate.to_le_bytes());
+    wav.extend_from_slice(&block_align.to_le_bytes());
+    wav.extend_from_slice(&bits_per_sample.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_len.to_le_bytes());
+    wav.extend_from_slice(data);
+    wav
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +294,16 @@ mod tests {
             no_speech_prob: no_speech,
             avg_logprob,
         }
+    }
+
+    fn make_pcm_wav_seconds(seconds: u32) -> Vec<u8> {
+        let sample_rate = 16_000u32;
+        let data_len = usize::try_from(sample_rate)
+            .unwrap()
+            .saturating_mul(usize::try_from(seconds).unwrap())
+            .saturating_mul(2);
+        let data = vec![0u8; data_len];
+        encode_pcm_wav(&data, sample_rate, 1, 16)
     }
 
     #[test]
@@ -223,6 +373,29 @@ mod tests {
         };
         let out = filter_segments(&resp);
         assert_eq!(out, "fallback text");
+    }
+
+    #[test]
+    fn split_wav_for_transcription_keeps_short_audio_single_request() {
+        let wav = make_pcm_wav_seconds(30);
+        let chunks = split_wav_for_transcription(&wav);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], wav);
+    }
+
+    #[test]
+    fn split_wav_for_transcription_chunks_long_audio_by_30_seconds() {
+        // Regression: 2026-06-04. Long-form Whisper/Groq path must not send
+        // >30s dictation as one request, because users lose speech after the
+        // first model window.
+        let wav = make_pcm_wav_seconds(61);
+        let chunks = split_wav_for_transcription(&wav);
+        assert_eq!(chunks.len(), 3);
+        let durations: Vec<usize> = chunks
+            .iter()
+            .map(|chunk| parse_pcm_wav(chunk).unwrap().data.len() / (16_000 * 2))
+            .collect();
+        assert_eq!(durations, vec![30, 30, 1]);
     }
 
     #[tokio::test]
@@ -303,5 +476,37 @@ mod tests {
             .expect("send");
         assert!(resp.status().is_success());
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn transcribe_posts_long_audio_in_ordered_chunks() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/openai/v1/audio/transcriptions");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body(
+                        r#"{"text":"часть","segments":[{"text":"часть","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
+                    );
+            })
+            .await;
+
+        let client = reqwest::Client::new();
+        let url = format!("{}/openai/v1/audio/transcriptions", server.base_url());
+        let out = transcribe(
+            &client,
+            &url,
+            "fake-key",
+            make_pcm_wav_seconds(61),
+            "ru",
+            "whisper-large-v3",
+            "",
+        )
+        .await
+        .expect("transcribe");
+
+        assert_eq!(out.text, "часть часть часть");
+        assert_eq!(mock.hits_async().await, 3);
     }
 }

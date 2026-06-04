@@ -48,6 +48,12 @@ import {
   listBackups,
   uninstallExtension,
 } from "./extension-installer";
+import {
+  assertExtensionArkPermission,
+  assertExtensionEventPermission,
+  assertExtensionHostPermission,
+  type ExtensionSource as ExtensionPermissionSource,
+} from "./extension-permissions";
 
 // ESM shim — __dirname / __filename не определены в Node ESM bundles.
 const __filename = fileURLToPath(import.meta.url);
@@ -101,9 +107,9 @@ export interface ExtensionManifest {
    */
   author?: string;
   /**
-   * Декларируемые permissions. Сейчас только документационно: показываются
-   * в install dialog, но runtime не enforce'ит — extension получает полный
-   * `window.kepler.*` API. Зарезервировано на будущее (capability model).
+   * Декларируемые permissions. Для user-installed extension'ов runtime
+   * enforce'ит их в main-process IPC; repo-dev и bundled first-party copies
+   * считаются trusted, чтобы встроенные приложения не дублировали broad caps.
    */
   permissions?: string[];
   /**
@@ -248,9 +254,16 @@ let isAppQuitting = false;
 app.on("before-quit", () => {
   isAppQuitting = true;
 });
-// Reverse map: webContents.id → extension id. Нужен, чтобы из IPC handler'а
-// определить, какое окно отправило запрос (kepler.window.close и т.п.).
-const webContentsToExtensionId = new Map<number, string>();
+interface ExtensionRendererContext {
+  id: string;
+  source: ExtensionPermissionSource;
+  manifestPermissions?: readonly string[];
+}
+
+// Reverse map: webContents.id → extension context. Нужен, чтобы из IPC handler'а
+// определить, какое окно отправило запрос, и какие permissions были у кода при
+// открытии. Source snapshot важен: user-installed override нельзя доверять по id.
+const webContentsToExtensionContext = new Map<number, ExtensionRendererContext>();
 
 // ArkClient injected lazily из main.ts через `setArkClient`. Если null —
 // extension'ы получают ошибку при попытке ARK-запроса.
@@ -438,22 +451,32 @@ async function resolveExtensionSource(
 //      сборок: built-in extensions едут с Kepler installer'ом, user-installed
 //      их перекрывает, удаление user-папки откатывает на bundled.
 //
-// Per-id lookup (`resolveExtensionDir`) обходит цепочку и возвращает первый
+interface ExtensionRootEntry {
+  dir: string;
+  source: ExtensionPermissionSource;
+}
+
+// Per-id lookup (`resolveExtensionLocation`) обходит цепочку и возвращает первый
 // корень, где есть `manifest.json`. Это позволяет смешивать: Dashboard может
 // быть user-installed, а Horologion — bundled.
-function resolveExtensionRoots(): string[] {
-  const roots: string[] = [];
+function resolveExtensionRootEntries(): ExtensionRootEntry[] {
+  const roots: ExtensionRootEntry[] = [];
   // Repo dev tree: __dirname is shell/electron/ (or shell/dist-electron/),
   // extensions are at <repoRoot>/extensions/ — i.e. ../../extensions/ from here.
   const dev = path.resolve(__dirname, "..", "..", "extensions");
-  if (existsSync(dev)) roots.push(dev);
+  if (existsSync(dev)) roots.push({ dir: dev, source: "dev" });
   const userRoot = path.join(keplerDataDir(), "extensions");
-  if (!roots.includes(userRoot)) roots.push(userRoot);
+  if (!roots.some((root) => root.dir === userRoot)) roots.push({ dir: userRoot, source: "user" });
   if (process.resourcesPath) {
     const bundled = path.join(process.resourcesPath, "extensions");
-    if (!roots.includes(bundled)) roots.push(bundled);
+    if (!roots.some((root) => root.dir === bundled))
+      roots.push({ dir: bundled, source: "bundled" });
   }
   return roots;
+}
+
+function resolveExtensionRoots(): string[] {
+  return resolveExtensionRootEntries().map((root) => root.dir);
 }
 
 /**
@@ -521,12 +544,18 @@ function ensureUserDataDir(extId: string): string {
   return dir;
 }
 
-function resolveExtensionDir(id: string): string | null {
-  for (const root of resolveExtensionRoots()) {
-    const dir = path.join(root, id);
-    if (existsSync(path.join(dir, "manifest.json"))) return dir;
+function resolveExtensionLocation(
+  id: string,
+): { dir: string; source: ExtensionPermissionSource } | null {
+  for (const root of resolveExtensionRootEntries()) {
+    const dir = path.join(root.dir, id);
+    if (existsSync(path.join(dir, "manifest.json"))) return { dir, source: root.source };
   }
   return null;
+}
+
+function resolveExtensionDir(id: string): string | null {
+  return resolveExtensionLocation(id)?.dir ?? null;
 }
 
 function resolveSharedPreloadPath(): string {
@@ -539,7 +568,16 @@ export function loadExtensionManifest(id: string): ExtensionManifest | null {
   if (!dir) return null;
   const manifestPath = path.join(dir, "manifest.json");
   try {
-    return JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as ExtensionManifest;
+    if (manifest.id !== id) {
+      console.warn(
+        `[kepler-shell] extension manifest id mismatch: folder=${id}, manifest=${String(
+          manifest.id,
+        )}`,
+      );
+      return null;
+    }
+    return manifest;
   } catch (e) {
     console.error(`[kepler-shell] extension manifest invalid: ${id}`, e);
     return null;
@@ -939,11 +977,12 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
     openIncompatibilityWindow(manifest, incompat);
     return;
   }
-  const extensionDir = resolveExtensionDir(id);
-  if (!extensionDir) {
+  const location = resolveExtensionLocation(id);
+  if (!location) {
     console.warn(`[kepler-shell] extension dir disappeared: ${id}`);
     return;
   }
+  const extensionDir = location.dir;
   // Source resolution: dev-server (Vite HMR) или dist/. Probe-based, см.
   // resolveExtensionSource выше. null = ни Vite не отвечает, ни dist не
   // существует — открыть нечего, abort.
@@ -1130,9 +1169,13 @@ async function openExtensionImpl(id: string, route?: string): Promise<void> {
   // BrowserWindow.webContents уже destroyed и обращение к нему кидает
   // "Object has been destroyed".
   const wcId = win.webContents.id;
-  webContentsToExtensionId.set(wcId, id);
+  webContentsToExtensionContext.set(wcId, {
+    id,
+    source: location.source,
+    manifestPermissions: manifest.permissions,
+  });
   win.on("closed", () => {
-    webContentsToExtensionId.delete(wcId);
+    webContentsToExtensionContext.delete(wcId);
     extensionWindows.delete(id);
   });
   extensionWindows.set(id, {
@@ -1268,7 +1311,42 @@ function windowForSender(sender: WebContents): BrowserWindow | null {
 }
 
 function extensionIdForSender(sender: WebContents): string | null {
-  return webContentsToExtensionId.get(sender.id) ?? null;
+  return webContentsToExtensionContext.get(sender.id)?.id ?? null;
+}
+
+function extensionContextForSender(sender: WebContents): ExtensionRendererContext {
+  const context = webContentsToExtensionContext.get(sender.id);
+  if (!context) {
+    throw new Error("[kepler-shell] sender is not an extension");
+  }
+  return context;
+}
+
+export function assertExtensionSenderHostPermission(
+  sender: WebContents,
+  capability: "userData.read" | "userData.write" | "focus.control",
+): void {
+  const context = extensionContextForSender(sender);
+  assertExtensionHostPermission({
+    extensionId: context.id,
+    source: context.source,
+    manifestPermissions: context.manifestPermissions,
+    capability,
+  });
+}
+
+export function assertExtensionSenderHostPermissionIfExtension(
+  sender: WebContents,
+  capability: "userData.read" | "userData.write" | "focus.control",
+): void {
+  const context = webContentsToExtensionContext.get(sender.id);
+  if (!context) return;
+  assertExtensionHostPermission({
+    extensionId: context.id,
+    source: context.source,
+    manifestPermissions: context.manifestPermissions,
+    capability,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1286,12 +1364,33 @@ ipcMain.handle("kepler:extension:open", async (_e, id: string) => {
 
 ipcMain.handle(
   "kepler:extension:ark:request",
-  async (_e, operation: string, params?: Record<string, unknown>) => {
+  async (e, operation: string, params?: Record<string, unknown>) => {
     await awaitArkBridgeReady();
     if (!arkRequest) {
       throw new Error("ark bridge not ready");
     }
-    const req: Record<string, unknown> = { operation, ...params };
+    const context = extensionContextForSender(e.sender);
+    if (params && Object.prototype.hasOwnProperty.call(params, "operation")) {
+      throw new Error("[kepler-shell] extension ARK params must not include operation");
+    }
+    await assertExtensionArkPermission({
+      extensionId: context.id,
+      source: context.source,
+      manifestPermissions: context.manifestPermissions,
+      operation,
+      params,
+      // См. postmortems.md § 2026-06-04: type-scoped delete needs the target
+      // object's type before the write can be authorized.
+      resolveObjectType: async (id) => {
+        const object = (await arkRequest?.({ operation: "get_object", id })) as
+          | { typeId?: unknown; type_id?: unknown }
+          | null
+          | undefined;
+        const typeId = object?.typeId ?? object?.type_id;
+        return typeof typeId === "string" ? typeId : null;
+      },
+    });
+    const req: Record<string, unknown> = { ...params, operation };
     const result = await arkRequest(req);
 
     // Post-process: focus.set_active_state → spawn helper bin для модификации
@@ -1364,6 +1463,13 @@ ipcMain.handle("kepler:extension:ark:subscribe", async (e, event: string) => {
   if (!arkSubscribe) {
     throw new Error("ark bridge not ready");
   }
+  const context = extensionContextForSender(e.sender);
+  assertExtensionEventPermission({
+    extensionId: context.id,
+    source: context.source,
+    manifestPermissions: context.manifestPermissions,
+    event,
+  });
   const sender = e.sender;
   const key = `${sender.id}:${event}`;
   if (extensionEventUnsubscribers.has(key)) {
@@ -1556,18 +1662,17 @@ ipcMain.handle("kepler:extension:invoke-host", (_e, action: string, _payload?: u
 // extension не может писать в чужой namespace.
 
 function senderUserDataDir(sender: WebContents): string {
-  const extId = extensionIdForSender(sender);
-  if (!extId) {
-    throw new Error("[kepler-shell] userData: sender is not an extension");
-  }
-  return ensureUserDataDir(extId);
+  const context = extensionContextForSender(sender);
+  return ensureUserDataDir(context.id);
 }
 
 ipcMain.handle("kepler:extension:userData:path", (e) => {
+  assertExtensionSenderHostPermission(e.sender, "userData.read");
   return senderUserDataDir(e.sender);
 });
 
 ipcMain.handle("kepler:extension:userData:readJson", (e, name: string): unknown => {
+  assertExtensionSenderHostPermission(e.sender, "userData.read");
   assertSafeUserDataName(name);
   const dir = senderUserDataDir(e.sender);
   const filePath = path.join(dir, name);
@@ -1581,6 +1686,7 @@ ipcMain.handle("kepler:extension:userData:readJson", (e, name: string): unknown 
 });
 
 ipcMain.handle("kepler:extension:userData:writeJson", (e, name: string, value: unknown): void => {
+  assertExtensionSenderHostPermission(e.sender, "userData.write");
   assertSafeUserDataName(name);
   const dir = senderUserDataDir(e.sender);
   const filePath = path.join(dir, name);
@@ -1588,6 +1694,7 @@ ipcMain.handle("kepler:extension:userData:writeJson", (e, name: string, value: u
 });
 
 ipcMain.handle("kepler:extension:userData:readFile", (e, name: string): string | null => {
+  assertExtensionSenderHostPermission(e.sender, "userData.read");
   assertSafeUserDataName(name);
   const dir = senderUserDataDir(e.sender);
   const filePath = path.join(dir, name);
@@ -1601,6 +1708,7 @@ ipcMain.handle("kepler:extension:userData:readFile", (e, name: string): string |
 });
 
 ipcMain.handle("kepler:extension:userData:writeFile", (e, name: string, content: string): void => {
+  assertExtensionSenderHostPermission(e.sender, "userData.write");
   assertSafeUserDataName(name);
   if (typeof content !== "string") {
     throw new Error("[kepler-shell] userData.writeFile: content must be a string");
@@ -1611,6 +1719,7 @@ ipcMain.handle("kepler:extension:userData:writeFile", (e, name: string, content:
 });
 
 ipcMain.handle("kepler:extension:userData:readBinary", (e, name: string): string | null => {
+  assertExtensionSenderHostPermission(e.sender, "userData.read");
   const dir = senderUserDataDir(e.sender);
   const filePath = resolveSafeUserDataPath(dir, name);
   if (!existsSync(filePath)) return null;
@@ -1623,6 +1732,7 @@ ipcMain.handle("kepler:extension:userData:readBinary", (e, name: string): string
 });
 
 ipcMain.handle("kepler:extension:userData:writeBinary", (e, name: string, base64: string): void => {
+  assertExtensionSenderHostPermission(e.sender, "userData.write");
   if (typeof base64 !== "string") {
     throw new Error("[kepler-shell] userData.writeBinary: content must be a base64 string");
   }
@@ -1633,6 +1743,7 @@ ipcMain.handle("kepler:extension:userData:writeBinary", (e, name: string, base64
 });
 
 ipcMain.handle("kepler:extension:userData:deleteFile", (e, name: string): boolean => {
+  assertExtensionSenderHostPermission(e.sender, "userData.write");
   const dir = senderUserDataDir(e.sender);
   const filePath = resolveSafeUserDataPath(dir, name);
   if (!existsSync(filePath)) return false;

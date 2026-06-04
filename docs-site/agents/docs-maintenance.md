@@ -66,8 +66,8 @@ bun run docs:check
 
 Что делает (`scripts/check-docs-freshness.mjs`):
 
-- Парсит все `docs-site/**/*.md` (кроме сгенерированных).
-- Извлекает упоминания путей (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
+- Парсит все `docs-site/**/*.md` (кроме сгенерированных) и корневые `README.md` / `TODO.md` / `STATUS.md`.
+- Извлекает упоминания путей в backticks и markdown-ссылках (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
 - Проверяет, что эти пути существуют в репозитории.
 - Извлекает упоминания команд (`bun run <name>`, `cargo <subcmd>`).
 - Проверяет, что `bun run <name>` есть в каком-то `package.json` workspace'а.
@@ -99,7 +99,7 @@ git diff                # увидишь что регенерация поме�
 Поток:
 
 ```
-docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / apps/*/AGENTS.md / llms.txt
+docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / per-area AGENTS.md / llms.txt
                                               (все помечены <!-- AUTO-GENERATED -->)
 ```
 

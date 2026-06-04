@@ -20,7 +20,7 @@
 
 ### POC до полноценной работы
 
-Минимум для валидации концепции: новый `extensions/sample-raycast/` с `manifest.kind: "inline"`, монтируется в slot launcher window'а вместо открытия отдельного `BrowserWindow`, использует `<KList>` + `<KDetail>` из `@kosmos/visuals`, ESC → popToRoot, ⌘K → action panel, Enter → push view. Если POC работает быстро и приятно — расширяем API surface. Если упирается в архитектуру (IPC через `<webview>` медленный, sandbox vs DX trade-off) — пересматриваем модель.
+Минимум для валидации концепции: новый sample extension под `extensions/<id>/` с `manifest.kind: "inline"`, монтируется в slot launcher window'а вместо открытия отдельного `BrowserWindow`, использует `<KList>` + `<KDetail>` из `@kosmos/visuals`, ESC → popToRoot, ⌘K → action panel, Enter → push view. Если POC работает быстро и приятно — расширяем API surface. Если упирается в архитектуру (IPC через `<webview>` медленный, sandbox vs DX trade-off) — пересматриваем модель.
 
 ### Gap-list (отсортировано лёгкое → тяжёлое)
 
@@ -137,7 +137,7 @@ Action items (приоритет сверху вниз):
 - [ ] **`content_md` projection в read/write API.** `get_object` опционально возвращает `content_md` (TipTap JSON → markdown через существующий `note_md` converter из Phase 7). `upsert_object` принимает `content_md` и парсит обратно в TipTap JSON. Source of truth остаётся `content_json`, но для агентов и для человеческого чтения наружу торчит markdown. Нужно достроить обратный конвертер markdown → TipTap, если ещё нет (export-only сейчас).
 - [ ] **`get_neighborhood(id, depth)` ARK endpoint.** Возвращает subgraph: узлы (объекты) + рёбра (links) в радиусе N от заданного id. Сейчас агенту чтобы понять «что связано с этой заметкой» нужно `list_object_links` → фильтр → `get_objects_by_ids`. Один endpoint = multi-hop reasoning возможен в один tool-call.
 - [ ] **Read-only markdown mirror** под `<data_dir>/notes-md/` (и аналогично для других «человекочитаемых» типов: `tasks-md/`?). Регенерируется на save через `note_md` converter. User видит файлы в Explorer, может grep / git commit / открыть в Obsidian для чтения. Контракт: правки в файлах **игнорируются** (или показываются как hint «создать новую заметку из этого файла»). Source of truth — ARK SQLite. Это закрывает психологический запрос на portability без двойного sync'а.
-- [ ] **Conversational agent поверх ARK MCP (Hermes Agent? или тонкий собственный).** Идея — главный «собеседник» Kepler'а, с которым можно разговаривать (в т.ч. голосом через Kerux) и через которого делаются операции над графом: «закинь это в инбокс Delphi», «что я писал про X на прошлой неделе», «начни pomodoro на 25 минут». Кандидат — [Hermes Agent](https://github.com/NousResearch/hermes-agent) (NousResearch, MIT, MCP-compatible, self-improving, voice memo transcription, multi-channel gateway). Архитектура: MCP-фасад над `@kosmos/ark` (см. пункт выше) → Hermes Python sidecar под supervisor'ом `kepler-backend` → Vue-extension `extensions/hermes` с chat UI через command bus → Kerux как голосовой транспорт (hotkey → whisper → текст в Hermes). Развилка перед стартом: **либо Hermes** (self-improving, multi-channel — Telegram/Discord/Slack бонусом, но Python в стеке + второй memory store параллельно ARK), **либо тонкий ассистент на AI SDK + Anthropic/OpenAI** (~неделя, без Python, единственный memory — ARK). MCP-фасад нужен в обоих сценариях, поэтому решение реверсируемое. Обсуждение от 2026-05-20.
+- [ ] **Conversational agent поверх ARK MCP (Hermes Agent? или тонкий собственный).** Идея — главный «собеседник» Kepler'а, с которым можно разговаривать (в т.ч. голосом через Kerux) и через которого делаются операции над графом: «закинь это в инбокс Delphi», «что я писал про X на прошлой неделе», «начни pomodoro на 25 минут». Кандидат — [Hermes Agent](https://github.com/NousResearch/hermes-agent) (NousResearch, MIT, MCP-compatible, self-improving, voice memo transcription, multi-channel gateway). Архитектура: MCP-фасад над `@kosmos/ark` (см. пункт выше) → Hermes Python sidecar под supervisor'ом `kepler-backend` → будущий Vue-extension под `extensions/<id>/` с chat UI через command bus → Kerux как голосовой транспорт (hotkey → whisper → текст в Hermes). Развилка перед стартом: **либо Hermes** (self-improving, multi-channel — Telegram/Discord/Slack бонусом, но Python в стеке + второй memory store параллельно ARK), **либо тонкий ассистент на AI SDK + Anthropic/OpenAI** (~неделя, без Python, единственный memory — ARK). MCP-фасад нужен в обоих сценариях, поэтому решение реверсируемое. Обсуждение от 2026-05-20.
 
 Не делать:
 
@@ -150,10 +150,10 @@ The previous contents of this file described an older `packages/ark/` Python/ser
 
 Current ARK runtime documentation:
 
-- [`packages/ark-core/README.md`](./packages/ark-core/README.md)
-- Rust runtime: `packages/ark-core/rust`
-- Node/Electron SDK: `packages/kosmos-ark` (`@kosmos/ark`)
-- Compatibility SDK name: `packages/arksync-node` (`@arksync/node`)
+- [`crates/ark-core/README.md`](./crates/ark-core/README.md)
+- Rust runtime: `crates/ark-core/rust`
+- Node/Electron SDK: `packages/ark` (`@kosmos/ark`)
+- Compatibility SDK `@arksync/node` больше не поддерживается как workspace; current TS SDK — `packages/ark` (`@kosmos/ark`).
 - Canonical desktop sidecar: `ark-core-rpc`
 
 ## Current ARK Priorities

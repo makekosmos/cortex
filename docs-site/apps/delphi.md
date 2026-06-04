@@ -12,7 +12,8 @@ Delphi — приложение для управления задачами в 
 - **Старый Delphi-specific Rust DB sidecar удалён.** Не пересобирать, не восстанавливать, не упаковывать.
 - Задачи Delphi хранятся как обобщённые ARK-объекты с `type_id = task_obj`.
 - Extension обращается к ARK через `@kosmos/ark` (через `window.kepler.ark.request(...)` из Kepler shell preload).
-- На входе при смене shared-space **legacy todos мигрируются в `task_obj`**. После миграции object-данные — источник правды.
+- Desktop extension больше не имеет runtime shared-space / local JSON режима: на входе
+  сразу грузится single user ARK DB, а `task_obj` — источник правды для задач.
 
 ## Текущая модель
 
@@ -47,6 +48,20 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 - `mobile/delphi/` — Android-часть (отдельные правила, см. её `AGENTS.md`).
 - Desktop ARK-решения отсюда **не** применяются к Kotlin, если задача явно не говорит обратное.
 - `mobile/ark-service/` — Android Room ContentProvider для `mobile/delphi`.
+- `mobile/delphi/app/src/main/jniLibs/arm64-v8a/libark_core.so` — намеренно
+  закоммиченный native runtime для Android APK. Gradle ограничивает сборку
+  `arm64-v8a`, чтобы отсутствие этого файла не превращалось в silent
+  crash-on-launch. Не удалять как build artifact без замены на воспроизводимый
+  `cargo ndk` pipeline и обновления Android smoke.
+
+## Assets
+
+- `extensions/delphi/icon.png` и `extensions/delphi/src/assets/app-icon.png` —
+  canonical PNG sources для launcher / app UI, хранятся в 1024×1024.
+- `extensions/delphi/src/assets/fonts/zed-mono-extended.ttf` — intentional
+  Delphi-local font asset. Zed Mono был custom build Iosevka под SIL Open Font
+  License 1.1 ([zed-industries/zed-fonts](https://github.com/zed-industries/zed-fonts));
+  не удалять как неизвестный proprietary font без замены в UI.
 
 ## Запрещено
 
@@ -104,9 +119,14 @@ type Project = {
 
 ## electron-api shim в extension
 
-Delphi портирован в `extensions/delphi/` **как есть** из standalone Electron-апки — все компоненты, сторы и helpers продолжают звать `window.electronAPI.*` (legacy main process IPC). В extension renderer'е этих каналов нет — есть только `window.kepler.ark.request(operation, params)`.
+Delphi всё ещё содержит несколько legacy call-site'ов, которые ожидают
+`window.electronAPI.invoke(...)`. В extension renderer'е real Electron IPC нет —
+есть только `window.kepler.ark.request(operation, params)`.
 
-Чтобы не переписывать каждый call-site, существует **compatibility shim** `extensions/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как side-effect **до** `createApp(...).mount(...)` и устанавливает `window.electronAPI` поверх `kepler.ark.request`.
+Для них существует минимальный **compatibility shim**
+`extensions/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как
+side-effect **до** `createApp(...).mount(...)` и устанавливает
+`window.electronAPI` поверх `kepler.ark.request`.
 
 ### Mapping legacy каналов → ARK operations
 
@@ -120,14 +140,12 @@ Delphi портирован в `extensions/delphi/` **как есть** из sta
 
 `TodoItem ↔ ArkObjectRecord` mapping инлайнен прямо в shim — поля `billable` / `price` / `description` / `dates` / `priority` сериализуются в `propsJson`, plain text — в `contentJson`.
 
-### Graceful no-op'ы
+### Что удалено из runtime
 
-Каналы, которых физически нет в extension'е (P2P sync, file system, space management), возвращают пустые значения, чтобы UI graceful показывал offline без crash'а.
-
-- `lan-sync:start` → `false`, `lan-sync:getStatus` → `{ active: false, peers: 0, peerNames: [] }`.
-- `sync:getOwnAddresses` → `[]`, `sync:getQrPayload` → `undefined`.
-- `space:*` → `undefined` (концепция spaces удалена 2026-05-15 — single DB per user; Delphi shim просто отвечает no-op'ом legacy call-site'ам).
-- `db:switchSpace`, `db:deleteSpace`, `db:getSyncKv`, `db:setSyncKv`, `db:clearAll` — `warnOnce()` + no-op.
+`SpaceSetup`, `SpacesSettingsTab`, space-service, legacy P2P protocol,
+local JSON autosave и local DB fallback удалены из extension runtime. Если старый
+канал случайно оживёт, shim логирует `warnOnce()` и возвращает `null`, а не
+создаёт fake `KEPLERDEFAULT` / fake spaces / no-op P2P illusion.
 
 ### Tailwind
 

@@ -8,7 +8,9 @@
 
 ## Установка
 
-Пакет workspace-локальный, добавляется в `dependencies` приложения:
+Пакет workspace-локальный и source-only для этого монорепо: он не публикуется
+как отдельный npm package в текущем release flow. Приложения добавляют его в
+`dependencies` через workspace-ссылку:
 
 ```json
 {

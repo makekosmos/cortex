@@ -1,7 +1,7 @@
 {
   "id": "horologion",
   "name": "Horologion",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Трекер времени и pomodoro",
   "keplerApiVersion": "^1.1.0",
   "kind": "vue",
@@ -13,6 +13,14 @@
   "minWidth": 320,
   "minHeight": 280,
   "keepAliveInBackground": true,
+  "permissions": [
+    "objects.read",
+    "objects.write:time_entry_obj",
+    "commands.register",
+    "commands.invoke",
+    "focus.control",
+    "pomodoro.control"
+  ],
   "commands": [
     {
       "id": "open",

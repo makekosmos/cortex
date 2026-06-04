@@ -109,8 +109,13 @@ const SETTINGS_HEIGHT = 560;
 
 let settingsWindow: BrowserWindow | null = null;
 
+function isHeadlessOrTest(): boolean {
+  return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
+}
+
 export function openSettings(): void {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
+    if (isHeadlessOrTest()) return;
     settingsWindow.focus();
     return;
   }
@@ -122,7 +127,7 @@ export function openSettings(): void {
     minHeight: 560,
     x: Math.round((display.width - SETTINGS_WIDTH) / 2),
     y: Math.round((display.height - SETTINGS_HEIGHT) / 2),
-    show: process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1",
+    show: !isHeadlessOrTest(),
     frame: true,
     titleBarStyle: "hidden",
     titleBarOverlay: {

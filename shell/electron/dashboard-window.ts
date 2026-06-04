@@ -27,6 +27,10 @@ const STATE_FILENAME = "kepler-dashboard-window-state.json";
 let dashboardWin: BrowserWindow | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
+function isHeadlessOrTest(): boolean {
+  return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
+}
+
 interface DashboardWindowState {
   width: number;
   height: number;
@@ -86,6 +90,7 @@ function isOnSomeDisplay(x: number, y: number, w: number, h: number): boolean {
 
 export function openDashboardWindow(): void {
   if (dashboardWin && !dashboardWin.isDestroyed()) {
+    if (isHeadlessOrTest()) return;
     dashboardWin.show();
     dashboardWin.focus();
     return;
@@ -121,7 +126,7 @@ export function openDashboardWindow(): void {
     minHeight: DASHBOARD_MIN_HEIGHT,
     x,
     y,
-    show: process.env.KOSMOS_HEADLESS !== "1" && process.env.KOSMOS_TEST_MODE !== "1",
+    show: !isHeadlessOrTest(),
     title: "Kosmos",
     backgroundColor: "#0d0d0d",
     frame: true,

@@ -1,11 +1,10 @@
 /* eslint-disable no-console */
 
 /**
- * Sync entity types and data-conversion utilities for Delphi TS.
+ * Event-mapping utilities for Delphi browser mode.
  *
- * The active Electron sync runtime lives in the Rust sidecar and is accessed
- * through `lan-sync:*` IPC. This file only keeps pure mapping helpers shared by
- * the renderer. Browser builds also reuse the lightweight Ark HTTP helpers
+ * Desktop Delphi now reads/writes tasks through ARK `task_obj` in the
+ * extension shim. Browser builds still reuse the lightweight Ark HTTP helpers
  * below for initial bootstrap.
  */
 

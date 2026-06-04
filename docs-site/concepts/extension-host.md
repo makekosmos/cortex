@@ -212,6 +212,69 @@ webPreferences: {
 - `nodeIntegration: false` — extension не может `require('fs')`.
 - Preload — **shared** (`dist-electron/extension-preload.mjs`). Bundle'ится vite-plugin-electron'ом и подгружается во все extension windows. Exposes `window.kepler.ark.*` (proxy через main → ArkClient) и `window.kepler.window.{close, minimize, maximize}`.
 
+### Runtime permissions
+
+С 2026-06-04 permissions — не только install-dialog metadata. Main-process
+IPC проверяет capabilities перед тем как пропустить extension request:
+
+- `kepler:extension:ark:request` → `assertExtensionArkPermission(...)`.
+- `kepler:extension:ark:subscribe` → event permission check.
+- `kepler:extension:userData:*` → `userData.read` / `userData.write`.
+- `kepler:focus-widget:set-state` → `focus.control`.
+
+Trust определяется **по source**, а не по `extension.id`:
+
+- Repo dev tree (`extensions/<id>/`) и bundled resources считаются first-party
+  trusted и не обязаны дублировать broad permission list для текущих встроенных
+  apps.
+- User-installed override в `<dataDir>/extensions/<id>/` считается
+  untrusted/default-deny, даже если его id совпадает с `eden`, `delphi` или
+  другим first-party id.
+- При открытии окна `extension-host.ts` сохраняет snapshot `{ id, source,
+manifest.permissions }` по `webContents.id`; последующие IPC checks используют
+  этот snapshot, а не пере-resolve'ят папку с диска.
+
+Базовые capabilities:
+
+```text
+objects.read
+objects.write
+objects.write:<type_id>
+usage.read
+usage.write
+commands.register
+commands.invoke
+focus.control
+pomodoro.control
+arrancador.scan
+arrancador.launch
+userData.read
+userData.write
+hostIndex.read
+hostIndex.write
+export.read
+export.run
+dictation.control
+sync.read
+sync.admin
+```
+
+`objects.write:<type_id>` разрешает `upsert_object` для конкретного type и
+`delete_object` после lookup типа объекта. Schema/link операции
+(`upsert_object_type`, `upsert_object_link`, delete variants) требуют broad
+`objects.write`, потому что они меняют структуру object model, а не один object
+type. `commands.register` / `commands.unregister` дополнительно требуют, чтобы
+все command ids начинались с `${extensionId}:`; extension не может
+зарегистрировать или снять чужой namespace.
+
+IPC request запрещает `params.operation`: проверяемая operation должна быть
+тем же полем, которое уйдёт в ARK/backend. Иначе malicious extension мог бы
+пройти allowlist по первому аргументу и перезаписать operation внутри params.
+
+Auto-update extension'а не должен молча добавлять новые permissions. Если новая
+версия manifest'а требует дополнительные capabilities, update flow должен
+показывать это как explicit confirmation перед install.
+
 ## App icons
 
 Extension может задать `"icon": "icon.png"` в manifest. Файл лежит рядом с `manifest.json` (`extensions/<id>/icon.png`).
@@ -464,12 +527,10 @@ Extension ничего не делает — это shell-level автомати
 
 ### Permission model
 
-Нужен ли capabilities (manifest declares `permissions: ['ark.read', 'ark.write', 'fs.read']`)?
-
-- Pro: extensions можно будет ставить от third-party.
-- Con: пока все extensions = first-party (Kosmos апки), это overengineering.
-
-Решение по умолчанию — **нет permission model в Phase 4**, добавим если появятся third-party extensions.
+Capability model включён в runtime (см. [Runtime permissions](#runtime-permissions)).
+Open question остался не в enforcement, а в UX: marketplace/auto-update должны
+сравнивать старый и новый `manifest.permissions` и требовать явного согласия,
+если update добавляет capabilities.
 
 ### Lifecycle стратегия
 

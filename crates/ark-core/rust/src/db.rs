@@ -449,7 +449,7 @@ pub fn upsert_todo(conn: &Connection, todo: &TodoItem) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT OR REPLACE INTO todos
+        "INSERT INTO todos
             (id, title, notes, priority, scheduled_date, deadline, reminder_date,
              is_today, is_evening, is_someday, is_completed, completed_at,
              is_cancelled, cancelled_at, is_trashed, sort_order,
@@ -460,7 +460,30 @@ pub fn upsert_todo(conn: &Connection, todo: &TodoItem) -> Result<(), String> {
              ?8, ?9, ?10, ?11, ?12,
              ?13, ?14, ?15, ?16,
              ?17, ?18, ?19, ?20, ?21,
-             ?22, ?23)",
+             ?22, ?23)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            notes = excluded.notes,
+            priority = excluded.priority,
+            scheduled_date = excluded.scheduled_date,
+            deadline = excluded.deadline,
+            reminder_date = excluded.reminder_date,
+            is_today = excluded.is_today,
+            is_evening = excluded.is_evening,
+            is_someday = excluded.is_someday,
+            is_completed = excluded.is_completed,
+            completed_at = excluded.completed_at,
+            is_cancelled = excluded.is_cancelled,
+            cancelled_at = excluded.cancelled_at,
+            is_trashed = excluded.is_trashed,
+            sort_order = excluded.sort_order,
+            heading_id = excluded.heading_id,
+            project_id = excluded.project_id,
+            area_id = excluded.area_id,
+            tag_ids = excluded.tag_ids,
+            checklist_items = excluded.checklist_items,
+            recurrence_rule = excluded.recurrence_rule,
+            created_at = excluded.created_at",
         params![
             todo.id,
             todo.title,
@@ -515,9 +538,19 @@ pub fn delete_todo(conn: &Connection, id: &str) -> Result<(), String> {
 
 pub fn upsert_project(conn: &Connection, project: &Project) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO projects
+        "INSERT INTO projects
             (id, title, notes, status, scheduled_date, deadline, sort_order, color_tag, area_id, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            notes = excluded.notes,
+            status = excluded.status,
+            scheduled_date = excluded.scheduled_date,
+            deadline = excluded.deadline,
+            sort_order = excluded.sort_order,
+            color_tag = excluded.color_tag,
+            area_id = excluded.area_id,
+            created_at = excluded.created_at",
         params![
             project.id,
             project.title,
@@ -547,8 +580,12 @@ pub fn delete_project(conn: &Connection, id: &str) -> Result<(), String> {
 
 pub fn upsert_area(conn: &Connection, area: &Area) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO areas (id, title, sort_order, created_at)
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO areas (id, title, sort_order, created_at)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            sort_order = excluded.sort_order,
+            created_at = excluded.created_at",
         params![area.id, area.title, area.sort_order, area.created_at],
     )
     .map_err(|e| e.to_string())?;
@@ -561,8 +598,12 @@ pub fn upsert_area(conn: &Connection, area: &Area) -> Result<(), String> {
 
 pub fn upsert_tag(conn: &Connection, tag: &Tag) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO tags (id, title, color, created_at)
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO tags (id, title, color, created_at)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            color = excluded.color,
+            created_at = excluded.created_at",
         params![tag.id, tag.title, tag.color, tag.created_at],
     )
     .map_err(|e| e.to_string())?;
@@ -575,8 +616,12 @@ pub fn upsert_tag(conn: &Connection, tag: &Tag) -> Result<(), String> {
 
 pub fn upsert_heading(conn: &Connection, heading: &Heading) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO headings (id, title, sort_order, project_id)
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO headings (id, title, sort_order, project_id)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            sort_order = excluded.sort_order,
+            project_id = excluded.project_id",
         params![
             heading.id,
             heading.title,
@@ -667,8 +712,12 @@ pub fn insert_pending_object(
     let payload = serde_json::to_string(entity).map_err(|e| e.to_string())?;
     let now = Utc::now().to_rfc3339();
     conn.execute(
-        "INSERT OR REPLACE INTO sync_pending_objects (id, payload, awaited_type_id, received_at)
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO sync_pending_objects (id, payload, awaited_type_id, received_at)
+         VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT(id) DO UPDATE SET
+            payload = excluded.payload,
+            awaited_type_id = excluded.awaited_type_id,
+            received_at = excluded.received_at",
         params![entity.id, payload, awaited_type_id, now],
     )
     .map_err(|e| e.to_string())?;
@@ -1447,10 +1496,20 @@ pub fn list_object_links(conn: &Connection) -> Result<Vec<ObjectLink>, String> {
 
 pub fn upsert_tracked_app(conn: &Connection, tracked_app: &TrackedApp) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO tracked_apps
+        "INSERT INTO tracked_apps
             (id, platform, exe_path, normalized_exe_path, process_name,
              display_name, publisher, icon_ref, first_seen_at, last_seen_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+         ON CONFLICT(id) DO UPDATE SET
+            platform = excluded.platform,
+            exe_path = excluded.exe_path,
+            normalized_exe_path = excluded.normalized_exe_path,
+            process_name = excluded.process_name,
+            display_name = excluded.display_name,
+            publisher = excluded.publisher,
+            icon_ref = excluded.icon_ref,
+            first_seen_at = excluded.first_seen_at,
+            last_seen_at = excluded.last_seen_at",
         params![
             tracked_app.id,
             tracked_app.platform,
@@ -1477,13 +1536,29 @@ pub fn delete_tracked_app(conn: &Connection, id: &str) -> Result<(), String> {
 pub fn upsert_usage_session(conn: &Connection, session: &UsageSession) -> Result<(), String> {
     let meta_json = serde_json::to_string(&session.meta_json).map_err(|e| e.to_string())?;
     conn.execute(
-        "INSERT OR REPLACE INTO usage_sessions
+        "INSERT INTO usage_sessions
             (id, tracked_app_id, device_id, device_name, platform, started_at, ended_at,
              runtime_ms, foreground_ms, idle_ms, window_title, process_name, exe_path,
              pid_start, pid_end, meta_json)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7,
                  ?8, ?9, ?10, ?11, ?12, ?13,
-                 ?14, ?15, ?16)",
+                 ?14, ?15, ?16)
+         ON CONFLICT(id) DO UPDATE SET
+            tracked_app_id = excluded.tracked_app_id,
+            device_id = excluded.device_id,
+            device_name = excluded.device_name,
+            platform = excluded.platform,
+            started_at = excluded.started_at,
+            ended_at = excluded.ended_at,
+            runtime_ms = excluded.runtime_ms,
+            foreground_ms = excluded.foreground_ms,
+            idle_ms = excluded.idle_ms,
+            window_title = excluded.window_title,
+            process_name = excluded.process_name,
+            exe_path = excluded.exe_path,
+            pid_start = excluded.pid_start,
+            pid_end = excluded.pid_end,
+            meta_json = excluded.meta_json",
         params![
             session.id,
             session.tracked_app_id,
@@ -1516,13 +1591,28 @@ pub fn delete_usage_session(conn: &Connection, id: &str) -> Result<(), String> {
 pub fn upsert_usage_event(conn: &Connection, event: &UsageEvent) -> Result<(), String> {
     let meta_json = serde_json::to_string(&event.meta_json).map_err(|e| e.to_string())?;
     conn.execute(
-        "INSERT OR REPLACE INTO usage_events
+        "INSERT INTO usage_events
             (id, tracked_app_id, usage_session_id, device_id, device_name, platform,
              occurred_at, kind, window_title, process_name, exe_path, pid,
              is_foreground, is_idle, meta_json)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6,
                  ?7, ?8, ?9, ?10, ?11, ?12,
-                 ?13, ?14, ?15)",
+                 ?13, ?14, ?15)
+         ON CONFLICT(id) DO UPDATE SET
+            tracked_app_id = excluded.tracked_app_id,
+            usage_session_id = excluded.usage_session_id,
+            device_id = excluded.device_id,
+            device_name = excluded.device_name,
+            platform = excluded.platform,
+            occurred_at = excluded.occurred_at,
+            kind = excluded.kind,
+            window_title = excluded.window_title,
+            process_name = excluded.process_name,
+            exe_path = excluded.exe_path,
+            pid = excluded.pid,
+            is_foreground = excluded.is_foreground,
+            is_idle = excluded.is_idle,
+            meta_json = excluded.meta_json",
         params![
             event.id,
             event.tracked_app_id,
@@ -2291,7 +2381,8 @@ pub fn get_sync_kv(conn: &Connection, key: &str) -> Result<Option<String>, Strin
 
 pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO sync_kv (key, value) VALUES (?1, ?2)",
+        "INSERT INTO sync_kv (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![key, value],
     )
     .map_err(|e| e.to_string())?;

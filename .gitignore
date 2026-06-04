@@ -44,8 +44,9 @@ bun.lockb
 # === Rust ===
 target/
 target-*/
-Cargo.lock
 *.rlib
+# Frozen standalone crate excluded from the root Cargo workspace.
+legacy/usage-tracker/Cargo.lock
 
 # === Swift / Xcode ===
 DerivedData/
@@ -78,6 +79,14 @@ __pycache__/
 # === SQLite ===
 *.db-shm
 *.db-wal
+
+# === Agent artifacts ===
+.agent/tmp/
+.agent/tasks/**/smoke/
+.agent/tasks/**/*.db
+.agent/tasks/**/*.sqlite
+.agent/tasks/**/*.sqlite3
+.agent/tasks/**/*.zip
 
 # === Electron Builder ===
 release/

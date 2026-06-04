@@ -1,0 +1,36 @@
+{
+  "task_id": "2026-06-04-dictation-autostart-bugs",
+  "verified_at": "2026-06-04T00:00:00+03:00",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "commands": [
+        "bun test tests/unit/settings-autostart-ui.test.ts",
+        "bun run shell:typecheck",
+        "node .tmp/visual/2026-06-04-dictation-autostart-bugs/verify-settings-autostart.mjs"
+      ]
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "commands": [
+        "cargo test --manifest-path services/kepler-backend/Cargo.toml dictation::groq --lib"
+      ]
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "commands": [
+        "bun test tests/unit/settings-autostart-ui.test.ts",
+        "cargo test --manifest-path services/kepler-backend/Cargo.toml dictation::groq --lib",
+        "bun run ark:smoke"
+      ]
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "commands": ["bun run docs:sync", "bun run docs:check"]
+    }
+  ]
+}

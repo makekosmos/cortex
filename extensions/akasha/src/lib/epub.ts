@@ -43,6 +43,12 @@ interface PackageManifestItem {
 }
 
 const textDecoder = new TextDecoder("utf-8");
+const MAX_EPUB_BYTES = 80 * 1024 * 1024;
+const MAX_ZIP_ENTRIES = 4_000;
+const MAX_TOTAL_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
+const MAX_ENTRY_UNCOMPRESSED_BYTES = 20 * 1024 * 1024;
+const MAX_COVER_BYTES = 8 * 1024 * 1024;
+const MAX_READER_BLOCKS = 60_000;
 
 export async function readEpubFile(file: File): Promise<EpubBook> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -50,6 +56,7 @@ export async function readEpubFile(file: File): Promise<EpubBook> {
 }
 
 export async function readEpubBytes(bytes: Uint8Array, fallbackName: string): Promise<EpubBook> {
+  assertEpubSize(bytes);
   const entries = readZipEntries(bytes);
   const container = await readZipText(bytes, entries, "META-INF/container.xml");
   const rootfile = parseRootfilePath(container);
@@ -69,6 +76,9 @@ export async function readEpubBytes(bytes: Uint8Array, fallbackName: string): Pr
     const xhtml = await readZipText(bytes, entries, href);
     const chapterId = item.id;
     const chapterBlocks = parseXhtmlChapter(xhtml, chapterId);
+    if (blocks.length + chapterBlocks.length > MAX_READER_BLOCKS) {
+      throw new Error("EPUB слишком большой: слишком много текстовых блоков.");
+    }
     const fallbackTitle = titleFromHref(item.href);
     const title = chapterBlocks
       .find((block) => block.kind === "heading")
@@ -98,8 +108,12 @@ function readZipEntries(bytes: Uint8Array): Map<string, ZipEntry> {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const eocdOffset = findEndOfCentralDirectory(view);
   const entryCount = view.getUint16(eocdOffset + 10, true);
+  if (entryCount > MAX_ZIP_ENTRIES) {
+    throw new Error("EPUB слишком большой: слишком много файлов внутри архива.");
+  }
   let offset = view.getUint32(eocdOffset + 16, true);
   const entries = new Map<string, ZipEntry>();
+  let totalUncompressedSize = 0;
 
   for (let index = 0; index < entryCount; index += 1) {
     if (view.getUint32(offset, true) !== 0x02014b50) {
@@ -115,6 +129,13 @@ function readZipEntries(bytes: Uint8Array): Map<string, ZipEntry> {
     const localHeaderOffset = view.getUint32(offset + 42, true);
     const nameStart = offset + 46;
     const name = textDecoder.decode(bytes.subarray(nameStart, nameStart + nameLength));
+    totalUncompressedSize += uncompressedSize;
+    if (uncompressedSize > MAX_ENTRY_UNCOMPRESSED_BYTES) {
+      throw new Error(`EPUB слишком большой: файл ${name} превышает лимит размера.`);
+    }
+    if (totalUncompressedSize > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+      throw new Error("EPUB слишком большой: суммарный распакованный размер превышает лимит.");
+    }
 
     entries.set(name, {
       name,
@@ -128,6 +149,12 @@ function readZipEntries(bytes: Uint8Array): Map<string, ZipEntry> {
   }
 
   return entries;
+}
+
+function assertEpubSize(bytes: Uint8Array): void {
+  if (bytes.byteLength > MAX_EPUB_BYTES) {
+    throw new Error("EPUB слишком большой: выберите файл до 80 МБ.");
+  }
 }
 
 function findEndOfCentralDirectory(view: DataView): number {
@@ -244,6 +271,7 @@ async function readCoverDataUrl(
   const href = joinZipPath(base, coverItem.href);
   const entry = entries.get(href);
   if (!entry) return null;
+  if (entry.uncompressedSize > MAX_COVER_BYTES) return null;
   const data = await readZipEntry(bytes, entry);
   return `data:${coverItem.mediaType};base64,${uint8ToBase64(data)}`;
 }

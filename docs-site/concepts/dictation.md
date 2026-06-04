@@ -35,6 +35,9 @@ WAV encode (16-bit PCM, 16kHz, mono) → base64
 dictation.submit_audio { audioB64 }  →  state: Recording → Transcribing
    │
    ▼
+backend split на ≤30s WAV chunks для long-form audio
+   │
+   ▼
 POST api.groq.com/openai/v1/audio/transcriptions  (reqwest + опциональный DoH resolver)
    │
    ▼
@@ -59,7 +62,7 @@ state: Transcribing → Idle  +  pill.pillFinished() → hide window
 | Файл                                                               | Что делает                                                                                                                                                                                                                    |
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `services/kepler-backend/src/dictation/host.rs`                    | State machine `Idle → Recording → Transcribing → Idle\|Error`. Dispatch для `dictation.*` operations. `broadcast::Sender<Value>` для WS events.                                                                               |
-| `services/kepler-backend/src/dictation/groq.rs`                    | Multipart POST к `/openai/v1/audio/transcriptions`. `language="auto"` → пропускаем поле (Whisper auto-detect).                                                                                                                |
+| `services/kepler-backend/src/dictation/groq.rs`                    | Multipart POST к `/openai/v1/audio/transcriptions`. `language="auto"` → пропускаем поле (Whisper auto-detect). Long-form WAV режется на ≤30s chunks и склеивается обратно в один transcript.                                  |
 | `services/kepler-backend/src/dictation/inject.rs`                  | `enigo` Ctrl+V симуляция + `arboard` clipboard save/restore + `windows::Win32 GetForegroundWindow/SetForegroundWindow` для возврата фокуса. Все sleep'ы 80ms.                                                                 |
 | `services/kepler-backend/src/dictation/config.rs`                  | JSON (`<data_dir>/dictation-config.json`) для не-секретов + `keyring` (Windows Credential Manager target `kosmos-kepler` / user `groq-api-key`) для API ключа.                                                                |
 | `services/kepler-backend/src/dictation/network.rs`                 | Фабрика `reqwest::Client` с переключаемым DNS resolver'ом (System / Cloudflare DoH / Google DoH / custom DoH URL) через `hickory-resolver`. Scope: только AI HTTP.                                                            |
@@ -156,6 +159,19 @@ Whisper API принимает поле `prompt` — подсказка для d
 
 - **Silero-VAD предобработка** перед отправкой в Groq (резка длинных тишин). Снизит количество no-speech сегментов в принципе.
 - Учёт `compression_ratio_threshold > 2.4` (классический Whisper-индикатор повторов).
+
+## Long-form chunking
+
+Groq/Whisper file-based STT принимает длинные файлы, но long-form качество и полнота
+лучше, когда аудио подаётся сегментами около 30 секунд. Поэтому backend хранит
+исходный WAV в pending как один файл, но перед HTTP отправкой парсит наш PCM WAV
+и режет `data` chunk на ≤30s WAV-файлы. Каждый chunk отправляется в тот же
+`/audio/transcriptions` endpoint с теми же language/model/prompt настройками,
+а результаты склеиваются пробелом в исходном порядке.
+
+Если WAV не похож на ожидаемый 16-bit PCM формат, backend не пытается угадать
+структуру и отправляет файл одним запросом — это fallback для будущих источников
+аудио, но нормальный renderer path всегда генерирует поддерживаемый PCM WAV.
 
 ## Выбор модели
 
