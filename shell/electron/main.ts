@@ -165,10 +165,15 @@ let arkClient: ArkClient | null = null;
 const BACKEND_RESPAWN_DELAYS_MS = [1000, 5000, 30_000, 60_000, 120_000];
 const BACKEND_SUCCESSFUL_RUN_MS = 5 * 60 * 1000;
 const BACKEND_MAX_CRASH_STREAK = BACKEND_RESPAWN_DELAYS_MS.length;
+const ARK_CLIENT_LOCK_WAIT_MS = 30_000;
+const ARK_READY_REQUEST_TIMEOUT_MS = ARK_CLIENT_LOCK_WAIT_MS + 5_000;
+const ARK_INIT_RETRY_DELAYS_MS = [1000, 2000, 5000, 10_000];
 let backendCrashStreak = 0;
 let backendStartedAt = 0;
 let backendRespawnTimer: NodeJS.Timeout | null = null;
 let backendCrashDialogShown = false;
+let arkInitRetryTimer: NodeJS.Timeout | null = null;
+let arkInitRetryAttempt = 0;
 // Promise который резолвится когда arkClient готов принимать request'ы.
 // Renderer может стрелять kepler:ark:request как только подняло окно —
 // до того как initArkClient прошёл handshake. Handler ниже await'ит ready
@@ -724,6 +729,11 @@ function broadcastBackendEvent(
 async function resetArkClient(reason: string): Promise<void> {
   const wasConnected = arkClient !== null;
   const err = new Error(`ArkClient reset: ${reason}`);
+  if (arkInitRetryTimer) {
+    clearTimeout(arkInitRetryTimer);
+    arkInitRetryTimer = null;
+  }
+  arkInitRetryAttempt = 0;
   arkClientReadyReject?.(err);
   arkClientReadyResolve = null;
   arkClientReadyReject = null;
@@ -746,7 +756,25 @@ async function resetArkClient(reason: string): Promise<void> {
   }
 }
 
-export async function awaitArkReady(timeoutMs = 15000): Promise<ArkClient> {
+function scheduleArkClientInitRetry(reason: string): void {
+  if (arkClient || arkInitRetryTimer) return;
+  if (!backendProc || backendProc.killed) return;
+  const delay = ARK_INIT_RETRY_DELAYS_MS[arkInitRetryAttempt];
+  if (delay === undefined) {
+    keplerLog.error("ark", "ArkClient init retry exhausted", { reason });
+    return;
+  }
+  arkInitRetryAttempt += 1;
+  // См. postmortems.md § 2026-06-05: dev backend can write lock after the first
+  // self-managed handshake window; retry while the child process is still alive.
+  arkInitRetryTimer = setTimeout(() => {
+    arkInitRetryTimer = null;
+    void initArkClient();
+  }, delay);
+  keplerLog.warn("ark", "scheduled ArkClient init retry", { reason, delayMs: delay });
+}
+
+export async function awaitArkReady(timeoutMs = ARK_READY_REQUEST_TIMEOUT_MS): Promise<ArkClient> {
   if (arkClient) return arkClient;
   const p = ensureArkReadyPromise();
   let timer: NodeJS.Timeout | null = null;
@@ -776,7 +804,7 @@ async function initArkClient(): Promise<void> {
     const state = await ensureKeplerRunning({
       appDataPath: app.getPath("appData"),
       dataDir: keplerDataDir(),
-      waitMs: 10000,
+      waitMs: ARK_CLIENT_LOCK_WAIT_MS,
       autoLaunch: false,
     });
     if (state.kind !== "connected") {
@@ -790,6 +818,7 @@ async function initArkClient(): Promise<void> {
       arkClientReadyResolve = null;
       arkClientReadyReject = null;
       arkClientReady = null;
+      scheduleArkClientInitRetry(state.kind);
       return;
     }
     // DeviceId стабилен внутри slot'а (не зависит от точного userData path,
@@ -804,6 +833,7 @@ async function initArkClient(): Promise<void> {
     });
     await client.start();
     arkClient = client;
+    arkInitRetryAttempt = 0;
     arkClientReadyResolve?.(client);
     broadcastBackendEvent("kepler:backend:ready");
     console.error(

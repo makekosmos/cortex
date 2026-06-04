@@ -21,6 +21,17 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-05 — ArkClient не переподключался после delayed backend lock
+
+**Симптомы** — при `bun run --cwd shell dev` shell логирует `[kepler-shell] kepler-backend not-installed: ArkClient unavailable`, затем backend через несколько секунд пишет `WS listening` и `lock-file written`, но renderer IPC `kepler:ark:request` продолжает падать с `ArkClient not ready (timeout)`.
+**Где жило** — `shell/electron/main.ts::initArkClient`, `shell/electron/main.ts::awaitArkReady`, cold-start порядок `spawnBackend()` → `initArkClient()`.
+**Root cause** — `initArkClient()` делал один handshake через `ensureKeplerRunning({ autoLaunch: false, waitMs: 10000 })`. Если dev backend писал lock позже этого окна, `initArkClient()` reject'ил ready promise и возвращался. Backend уже запускался, но shell не ставил новый retry на lock-ready/child-alive состояние, поэтому последующие `awaitArkReady()` создавали fresh promise, который никто больше не resolve'ил.
+**Fix** — WIP: увеличено self-managed lock wait окно и добавлен bounded retry `initArkClient()` пока backend child жив, чтобы shell повторил handshake после delayed lock.
+**Регрешн-защита** — TBD: нужно добавить тест/ручной dev-start proof на сценарий delayed backend lock.
+**Prevention** — TBD после проверки.
+
+---
+
 ## 2026-06-04 — focus-widget set-state стал extension-only
 
 **Симптомы** — `window.kepler.focusWidget.setState(...)` из shell preload / launcher test helper начинает падать с `[kepler-shell] sender is not an extension` после добавления runtime permissions. Это ломает headless focus-widget tests и любые first-party shell windows, которые используют общий preload API.
