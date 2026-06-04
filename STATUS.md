@@ -1,4 +1,25 @@
-# Kosmos — статус проекта (2026-06-03)
+# Kosmos — статус проекта (2026-06-04)
+
+## 2026-06-04 — Delphi on Kosmos visuals (Delphi 0.1.5 → 0.1.6, Kosmos Desktop 0.3.10 → 0.3.11)
+
+Delphi визуально переведён на settings-like chrome из `@kosmos/visuals`.
+
+- Root окна теперь использует `DesktopChrome appearance="settings"`: прозрачный
+  titlebar без нижнего бордера и без лишних кнопок настроек / скрытия sidebar.
+- Sidebar собран на `SettingsSidebar` / `SettingsSidebarButton`, получил более
+  плотный Mica/Acrylic-тон и отключённое выделение текста на навигационных
+  кнопках.
+- Иконки навигации Delphi переведены на Phosphor Icons без градиентной
+  подложки: duotone в обычном состоянии, fill в активном.
+- Окно Delphi объявляет `windowEffect: "acrylic"`, а host теперь явно вызывает
+  `BrowserWindow.setBackgroundMaterial()` для extension windows, чтобы Mica /
+  Acrylic применялись как в Settings.
+- Быстрое создание задачи больше не даёт белую foreground-тень в тёмной теме.
+- `@kosmos/visuals` получил расширения для переиспользования этого паттерна:
+  `DesktopChrome.appearance`, прозрачный `Titlebar`, `SettingsSidebar.tone` и
+  plain-вариант иконок в `SettingsSidebarButton`.
+
+Proof loop: `.agent/tasks/2026-06-04-delphi-kosmos-visuals/`.
 
 ## 2026-06-03 — Akasha GPUI extracted, Vue reader in Kosmos
 
