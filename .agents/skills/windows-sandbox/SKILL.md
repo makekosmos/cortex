@@ -24,3 +24,10 @@ description: Windows Sandbox recovery rules for Codex in Kosmos. Use when shell 
 - Electron e2e commonly runs against `shell/dist-electron`. After editing `shell/electron/*.ts`, run `bun run shell:build` before Playwright if the test launches the built app.
 - `shell/playwright.config.ts` uses `shell/e2e`; root tests live under `tests/e2e` and should use root `playwright.config.ts`.
 - When rerunning after an escalated sandbox failure, record the original failure and the successful escalated rerun in proof-loop evidence.
+
+## Locked Windows Services
+
+- If `bun run --cwd shell build` / Cargo release build fails with `failed to remove file target\release\kepler-focus-svc.exe` and `os error 5`, check `sc.exe qc KeplerFocusSvc`.
+- If `BINARY_PATH_NAME` points into the workspace `target\release\kepler-focus-svc.exe`, the installed Windows service is locking the build artifact. Do not keep retrying Cargo.
+- Without an admin service stop, build Rust binaries into an alternate target dir, for example `.tmp\cargo-release`, then run electron-builder with a temporary config whose `extraResources` point at `.tmp/cargo-release/release/*.exe`.
+- Record this as an environment workaround in evidence; it is not a product-code failure.

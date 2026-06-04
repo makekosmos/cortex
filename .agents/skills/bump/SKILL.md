@@ -153,6 +153,20 @@ gh release create v<version> -R yoso-industries/kepler-releases `
 
 `latest.yml` **обязательно** прикреплять — autoUpdater старых установок ищет его
 для определения новой версии. Без него обновление не подхватится.
+
+После падения electron-builder на `GH_TOKEN` **проверь содержимое `latest.yml`**:
+
+```powershell
+Get-Content shell/release/latest.yml
+```
+
+Если там осталась старая версия, не загружай его как есть. Создай fresh metadata
+для новой версии: файл `latest.yml` должен указывать на реально загружаемый
+installer asset, содержать актуальные `version`, `path`, `files[].url`,
+`sha512`, `size`, `releaseDate`. В предыдущих релизах updater path использует
+hyphen-имя (`Kosmos-Setup-X.Y.Z.exe`), поэтому либо загружай asset с тем же
+именем, либо синхронно меняй `path/files[].url` на фактическое имя. Перед
+`gh release create` ещё раз проверь `latest.yml` глазами/командой.
 :::
 
 ### 5a. Multi-target bump в одном запросе
