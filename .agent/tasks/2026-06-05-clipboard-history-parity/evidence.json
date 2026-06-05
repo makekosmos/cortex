@@ -1,0 +1,57 @@
+{
+  "task_id": "2026-06-05-clipboard-history-parity",
+  "verified_at": "2026-06-05T11:15:00+03:00",
+  "classification": "FULL_LOOP",
+  "results": [
+    {
+      "ac": "AC1",
+      "verdict": "PASS",
+      "evidence": "ClipboardHistoryItem supports text/image/link/color/file, pinned, updatedAt, searchText, and metadata; store unit tests cover model behavior."
+    },
+    {
+      "ac": "AC2",
+      "verdict": "PASS",
+      "evidence": "Electron capture records text, images, and best-effort file paths; text classifier unit tests cover links and colors."
+    },
+    {
+      "ac": "AC3",
+      "verdict": "PASS",
+      "evidence": "IPC and store support copy/open/togglePin/delete/clear/clearAll; unit tests cover pin ordering and clear semantics."
+    },
+    {
+      "ac": "AC4",
+      "verdict": "PASS",
+      "evidence": "Launcher supports all type filters and clipboard shortcuts; screenshots captured for launcher all-types and color-filter states."
+    },
+    {
+      "ac": "AC5",
+      "verdict": "PASS",
+      "evidence": "Standalone view reuses ClipboardQuickPanel; screenshot captured for standalone state."
+    },
+    {
+      "ac": "AC6",
+      "verdict": "PASS",
+      "commands": [
+        "bun run shell:typecheck",
+        "bun test tests/unit/clipboard-history-store.test.ts tests/unit/raycast-api.test.ts tests/unit/raycast-manifest.test.ts tests/unit/raycast-command-runner.test.ts tests/unit/raycast-view-model.test.ts",
+        "bun run lint",
+        "bun run ark:guard:writes",
+        "bun run ark:smoke"
+      ]
+    },
+    {
+      "ac": "AC7",
+      "verdict": "PASS",
+      "evidence": "Merge can proceed after AC1-AC6 pass."
+    }
+  ],
+  "visual_artifacts": [
+    ".tmp/visual/2026-06-05-clipboard-history-parity/clipboard-standalone-1100x760.png",
+    ".tmp/visual/2026-06-05-clipboard-history-parity/clipboard-launcher-1100x760.png",
+    ".tmp/visual/2026-06-05-clipboard-history-parity/clipboard-launcher-color-filter-1100x760.png"
+  ],
+  "notes": [
+    "First ark:smoke run failed because PID 22356 locked target/debug/ark-core-rpc.exe; that workspace process was stopped and the rerun passed.",
+    "Encrypted persistence, ignore-app preferences, OS-level paste into previous app, and OCR are out of scope."
+  ]
+}

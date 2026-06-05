@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Clipboard, Image as ImageIcon, XCircle } from "@lucide/vue";
+import {
+  Clipboard,
+  ExternalLink,
+  File,
+  Image as ImageIcon,
+  Link,
+  Palette,
+  Pin,
+  PinOff,
+  Trash2,
+  XCircle,
+} from "@lucide/vue";
 import type { ClipboardHistoryItem } from "@shared/ipc-types";
 
 const props = defineProps<{
@@ -14,8 +25,11 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [index: number];
   copy: [index: number];
+  open: [index: number];
+  togglePin: [index: number];
   remove: [index: number];
   clear: [];
+  clearAll: [];
 }>();
 
 const formatter = new Intl.DateTimeFormat("ru-RU", {
@@ -53,12 +67,31 @@ function itemTime(item: ClipboardHistoryItem): string {
 }
 
 function itemKindLabel(item: ClipboardHistoryItem): string {
-  return item.kind === "image" ? "Изображение" : "Текст";
+  if (item.kind === "image") return "Изображение";
+  if (item.kind === "link") return "Ссылка";
+  if (item.kind === "color") return "Цвет";
+  if (item.kind === "file") return "Файл";
+  return "Текст";
 }
 
 function itemDetailLabel(item: ClipboardHistoryItem): string {
   if (item.kind === "image" && item.width && item.height) return `${item.width}×${item.height}`;
+  if (item.kind === "file") return item.filePath ?? item.text;
+  if (item.kind === "link") return item.url ?? item.text;
+  if (item.kind === "color") return item.color ?? item.text;
   return charLabel(item.charCount);
+}
+
+function itemMetricLabel(item: ClipboardHistoryItem): string {
+  if (item.kind === "image" && item.width && item.height) return `${item.width}×${item.height}`;
+  if (item.kind === "file") return "Путь";
+  if (item.kind === "link") return "URL";
+  if (item.kind === "color") return "HEX";
+  return "Символы";
+}
+
+function canOpen(item: ClipboardHistoryItem): boolean {
+  return item.kind === "link" || item.kind === "file";
 }
 
 function charLabel(count: number): string {
@@ -91,10 +124,19 @@ function charLabel(count: number): string {
               >
                 <span class="clipboard-panel__row-icon" aria-hidden="true">
                   <ImageIcon v-if="item.kind === 'image'" :size="15" />
+                  <Link v-else-if="item.kind === 'link'" :size="15" />
+                  <Palette v-else-if="item.kind === 'color'" :size="15" />
+                  <File v-else-if="item.kind === 'file'" :size="15" />
                   <Clipboard v-else :size="15" />
                 </span>
                 <span class="clipboard-panel__row-body">
-                  <span class="clipboard-panel__preview">{{ item.preview }}</span>
+                  <span class="clipboard-panel__preview">
+                    <Pin v-if="item.pinned" class="clipboard-panel__pin" :size="12" />
+                    <span>{{ item.preview }}</span>
+                  </span>
+                  <span class="clipboard-panel__row-subtitle">
+                    {{ itemKindLabel(item) }} · {{ itemTime(item) }}
+                  </span>
                 </span>
               </li>
             </ul>
@@ -114,7 +156,50 @@ function charLabel(count: number): string {
               :src="selectedItem.imageDataUrl"
               alt=""
             />
+            <div
+              v-else-if="selectedItem.kind === 'color'"
+              class="clipboard-panel__color-preview"
+              :style="{ backgroundColor: selectedItem.color ?? selectedItem.text }"
+            >
+              <span>{{ selectedItem.color ?? selectedItem.text }}</span>
+            </div>
             <pre v-else>{{ selectedItem.text }}</pre>
+          </div>
+          <div class="clipboard-panel__detail-actions">
+            <button
+              class="clipboard-panel__action clipboard-panel__action--primary"
+              type="button"
+              @click="emit('copy', selectedIndex)"
+            >
+              <Clipboard :size="14" />
+              <span>Скопировать</span>
+            </button>
+            <button
+              v-if="canOpen(selectedItem)"
+              class="clipboard-panel__action"
+              type="button"
+              @click="emit('open', selectedIndex)"
+            >
+              <ExternalLink :size="14" />
+              <span>Открыть</span>
+            </button>
+            <button
+              class="clipboard-panel__action"
+              type="button"
+              @click="emit('togglePin', selectedIndex)"
+            >
+              <PinOff v-if="selectedItem.pinned" :size="14" />
+              <Pin v-else :size="14" />
+              <span>{{ selectedItem.pinned ? "Открепить" : "Закрепить" }}</span>
+            </button>
+            <button
+              class="clipboard-panel__action"
+              type="button"
+              @click="emit('remove', selectedIndex)"
+            >
+              <Trash2 :size="14" />
+              <span>Удалить</span>
+            </button>
           </div>
           <dl class="clipboard-panel__metadata">
             <div class="clipboard-panel__metadata-heading">
@@ -130,8 +215,12 @@ function charLabel(count: number): string {
               <dd>{{ itemKindLabel(selectedItem) }}</dd>
             </div>
             <div>
-              <dt>{{ selectedItem.kind === "image" ? "Размер" : "Символы" }}</dt>
+              <dt>{{ itemMetricLabel(selectedItem) }}</dt>
               <dd>{{ itemDetailLabel(selectedItem) }}</dd>
+            </div>
+            <div>
+              <dt>Закреплено</dt>
+              <dd>{{ selectedItem.pinned ? "Да" : "Нет" }}</dd>
             </div>
             <div>
               <dt>Скопировано</dt>
@@ -160,11 +249,29 @@ function charLabel(count: number): string {
         <button
           class="clipboard-panel__footer-button"
           type="button"
+          :disabled="!selectedItem"
+          @click="selectedItem && emit('togglePin', selectedIndex)"
+        >
+          <Pin :size="14" />
+          <span>Закрепить</span>
+        </button>
+        <button
+          class="clipboard-panel__footer-button"
+          type="button"
           :disabled="items.length === 0"
           @click="emit('clear')"
         >
           <XCircle :size="14" />
           <span>Очистить</span>
+        </button>
+        <button
+          class="clipboard-panel__footer-button"
+          type="button"
+          :disabled="items.length === 0"
+          @click="emit('clearAll')"
+        >
+          <Trash2 :size="14" />
+          <span>Всё</span>
         </button>
         <span>Действия</span>
         <kbd>Ctrl</kbd>
@@ -263,10 +370,14 @@ function charLabel(count: number): string {
   display: grid;
   min-width: 0;
   flex: 1;
-  gap: 6px;
+  gap: 4px;
 }
 
 .clipboard-panel__preview {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
   overflow: hidden;
   color: var(--foreground);
   font-size: 14px;
@@ -276,9 +387,28 @@ function charLabel(count: number): string {
   white-space: nowrap;
 }
 
+.clipboard-panel__preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clipboard-panel__pin {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.clipboard-panel__row-subtitle {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--foreground) 46%, transparent);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .clipboard-panel__detail {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
 }
 
 .clipboard-panel__preview-pane {
@@ -300,6 +430,26 @@ function charLabel(count: number): string {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 9%, transparent);
 }
 
+.clipboard-panel__color-preview {
+  display: grid;
+  width: min(100%, 420px);
+  min-height: 180px;
+  place-items: end start;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+
+.clipboard-panel__color-preview span {
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+  color: var(--foreground);
+  margin: 12px;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .clipboard-panel__preview-pane pre {
   margin: 0;
   color: var(--foreground);
@@ -309,6 +459,34 @@ function charLabel(count: number): string {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.clipboard-panel__detail-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  padding: 10px 16px;
+}
+
+.clipboard-panel__action {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.clipboard-panel__action--primary {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .clipboard-panel__metadata {

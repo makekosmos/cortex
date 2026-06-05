@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { createClipboardHistoryStore } from "../../shell/electron/clipboard-history-store";
+import {
+  classifyClipboardText,
+  createClipboardHistoryStore,
+} from "../../shell/electron/clipboard-history-store";
 
 describe("clipboard history store", () => {
   test("records normalized text newest first", () => {
@@ -10,8 +13,8 @@ describe("clipboard history store", () => {
     store.record("второй\r\nтекст");
 
     expect(store.list()).toMatchObject([
-      { text: "второй\nтекст", charCount: 12 },
-      { text: "первый текст", charCount: 12 },
+      { kind: "text", text: "второй\nтекст", charCount: 12, pinned: false },
+      { kind: "text", text: "первый текст", charCount: 12, pinned: false },
     ]);
   });
 
@@ -25,7 +28,43 @@ describe("clipboard history store", () => {
 
     expect(repeated?.id).toBe(first?.id);
     expect(store.list().map((item) => item.text)).toEqual(["alpha", "beta"]);
-    expect(store.list()[0].createdAt).toBe(12);
+    expect(store.list()[0].createdAt).toBe(10);
+    expect(store.list()[0].updatedAt).toBe(12);
+  });
+
+  test("classifies links and colors", () => {
+    expect(classifyClipboardText("https://example.com/docs")).toMatchObject({
+      kind: "link",
+      url: "https://example.com/docs",
+    });
+    expect(classifyClipboardText("ff5c00")).toMatchObject({
+      kind: "color",
+      color: "#FF5C00",
+    });
+    expect(classifyClipboardText("rgb(255, 92, 0)")).toMatchObject({
+      kind: "color",
+      color: "#FF5C00",
+    });
+  });
+
+  test("records link, color, and file entries", () => {
+    let now = 30;
+    const store = createClipboardHistoryStore({ now: () => now++ });
+
+    store.record("https://example.com/docs");
+    store.record("#ff5c00");
+    store.recordFile("D:\\Personal\\note.md");
+
+    expect(store.list()).toMatchObject([
+      {
+        kind: "file",
+        preview: "note.md",
+        filePath: "D:\\Personal\\note.md",
+        searchText: "note.md D:\\Personal\\note.md",
+      },
+      { kind: "color", text: "#FF5C00", color: "#FF5C00" },
+      { kind: "link", url: "https://example.com/docs" },
+    ]);
   });
 
   test("records image entries and moves duplicate images to the top", () => {
@@ -51,7 +90,8 @@ describe("clipboard history store", () => {
         preview: "Изображение 1280×720",
         width: 1280,
         height: 720,
-        createdAt: 22,
+        createdAt: 20,
+        updatedAt: 22,
       },
       { kind: "text", text: "text" },
     ]);
@@ -66,6 +106,25 @@ describe("clipboard history store", () => {
     store.record("three");
 
     expect(store.list().map((item) => item.text)).toEqual(["three", "two"]);
+  });
+
+  test("keeps pinned items at the top and preserves them on normal clear", () => {
+    let now = 40;
+    const store = createClipboardHistoryStore({ now: () => now++ });
+
+    const pinned = store.record("keep");
+    store.record("remove");
+    expect(pinned).not.toBeNull();
+    store.togglePin(pinned!.id);
+    store.record("newer");
+
+    expect(store.list().map((item) => item.text)).toEqual(["keep", "newer", "remove"]);
+
+    store.clear();
+    expect(store.list()).toMatchObject([{ text: "keep", pinned: true }]);
+
+    store.clearAll();
+    expect(store.list()).toEqual([]);
   });
 
   test("removes and clears items", () => {

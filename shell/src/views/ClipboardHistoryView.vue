@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue";
-import { Check, Clipboard, Copy, Search, Trash2, X, XCircle } from "@lucide/vue";
+import { Check, Clipboard, Search, Trash2, X, XCircle } from "@lucide/vue";
 import { DesktopChrome, DesktopContentSurface } from "@kosmos/visuals";
 import type { ClipboardHistoryItem } from "../../shared/ipc-types";
+import ClipboardQuickPanel from "../components/ClipboardQuickPanel.vue";
 
 const items = shallowRef<ClipboardHistoryItem[]>([]);
 const query = shallowRef("");
@@ -12,20 +13,24 @@ const loading = shallowRef(true);
 let stopUpdates: (() => void) | null = null;
 let statusTimer: number | null = null;
 
-const formatter = new Intl.DateTimeFormat("ru-RU", {
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
 const filteredItems = computed(() => {
   const needle = query.value.trim().toLocaleLowerCase("ru-RU");
   if (!needle) return items.value;
-  return items.value.filter((item) => item.text.toLocaleLowerCase("ru-RU").includes(needle));
+  return items.value.filter((item) => item.searchText.toLocaleLowerCase("ru-RU").includes(needle));
 });
 
 const selectedItem = computed(() => {
   const id = selectedId.value;
   return filteredItems.value.find((item) => item.id === id) ?? filteredItems.value[0] ?? null;
+});
+
+const selectedIndex = computed(() => {
+  const item = selectedItem.value;
+  if (!item) return 0;
+  return Math.max(
+    0,
+    filteredItems.value.findIndex((candidate) => candidate.id === item.id),
+  );
 });
 
 onMounted(async () => {
@@ -52,8 +57,8 @@ async function loadItems(): Promise<void> {
   }
 }
 
-function selectItem(id: string): void {
-  selectedId.value = id;
+function selectIndex(index: number): void {
+  selectedId.value = filteredItems.value[index]?.id ?? null;
 }
 
 async function copyItem(id: string | null = selectedItem.value?.id ?? null): Promise<void> {
@@ -61,6 +66,28 @@ async function copyItem(id: string | null = selectedItem.value?.id ?? null): Pro
   const ok = await window.kepler.clipboardHistory.copy(id);
   if (ok) {
     showStatus("Скопировано");
+    await loadItems();
+  }
+}
+
+async function copyItemAt(index: number): Promise<void> {
+  await copyItem(filteredItems.value[index]?.id ?? null);
+}
+
+async function openItemAt(index: number): Promise<void> {
+  const id = filteredItems.value[index]?.id;
+  if (!id) return;
+  const ok = await window.kepler.clipboardHistory.open(id);
+  if (ok) showStatus("Открыто");
+}
+
+async function togglePinAt(index: number): Promise<void> {
+  const item = filteredItems.value[index];
+  if (!item) return;
+  const ok = await window.kepler.clipboardHistory.togglePin(item.id);
+  if (ok) {
+    selectedId.value = item.id;
+    showStatus(item.pinned ? "Откреплено" : "Закреплено");
     await loadItems();
   }
 }
@@ -77,8 +104,18 @@ async function deleteItem(id: string | null = selectedItem.value?.id ?? null): P
   }
 }
 
+async function deleteItemAt(index: number): Promise<void> {
+  await deleteItem(filteredItems.value[index]?.id ?? null);
+}
+
 async function clearItems(): Promise<void> {
   await window.kepler.clipboardHistory.clear();
+  showStatus("Незакреплённые записи очищены");
+  await loadItems();
+}
+
+async function clearAllItems(): Promise<void> {
+  await window.kepler.clipboardHistory.clearAll();
   selectedId.value = null;
   showStatus("История очищена");
   await loadItems();
@@ -99,6 +136,12 @@ function handleKeydown(event: KeyboardEvent): void {
   } else if (event.key === "Enter") {
     event.preventDefault();
     void copyItem();
+  } else if ((event.ctrlKey || event.metaKey) && event.code === "KeyO") {
+    event.preventDefault();
+    void openItemAt(selectedIndex.value);
+  } else if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.code === "KeyP") {
+    event.preventDefault();
+    void togglePinAt(selectedIndex.value);
   } else if (event.key === "Delete") {
     event.preventDefault();
     void deleteItem();
@@ -128,18 +171,6 @@ function showStatus(message: string): void {
     status.value = null;
     statusTimer = null;
   }, 1800);
-}
-
-function itemTime(item: ClipboardHistoryItem): string {
-  return formatter.format(new Date(item.createdAt));
-}
-
-function charLabel(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return `${count} символ`;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} символа`;
-  return `${count} символов`;
 }
 </script>
 
@@ -178,77 +209,39 @@ function charLabel(count: number): string {
       </label>
 
       <main class="clipboard-history__body">
-        <section class="clipboard-history__list" aria-label="История буфера обмена">
-          <div v-if="loading" class="clipboard-history__empty">Загружаю историю</div>
-          <div v-else-if="filteredItems.length === 0" class="clipboard-history__empty">
-            {{ items.length === 0 ? "История пока пустая" : "Ничего не найдено" }}
-          </div>
-          <button
-            v-for="item in filteredItems"
-            v-else
-            :key="item.id"
-            class="clipboard-history__row"
-            :class="{ 'clipboard-history__row--active': selectedItem?.id === item.id }"
-            type="button"
-            @click="selectItem(item.id)"
-            @dblclick="copyItem(item.id)"
-          >
-            <span class="clipboard-history__row-main">
-              <span class="clipboard-history__row-preview">{{ item.preview }}</span>
-              <span class="clipboard-history__row-meta">
-                <span>{{ itemTime(item) }}</span>
-                <span>{{ charLabel(item.charCount) }}</span>
-              </span>
-            </span>
-          </button>
-        </section>
-
-        <section class="clipboard-history__detail" aria-label="Предпросмотр записи">
-          <template v-if="selectedItem">
-            <div class="clipboard-history__detail-toolbar">
-              <div class="clipboard-history__detail-meta">
-                <strong>{{ itemTime(selectedItem) }}</strong>
-                <span>{{ charLabel(selectedItem.charCount) }}</span>
-              </div>
-              <div class="clipboard-history__actions">
-                <button
-                  class="clipboard-history__action clipboard-history__action--primary"
-                  type="button"
-                  @click="copyItem(selectedItem.id)"
-                >
-                  <Copy :size="15" />
-                  <span>Скопировать</span>
-                </button>
-                <button
-                  class="clipboard-history__action"
-                  type="button"
-                  title="Удалить запись"
-                  @click="deleteItem(selectedItem.id)"
-                >
-                  <Trash2 :size="15" />
-                </button>
-              </div>
-            </div>
-            <textarea
-              class="clipboard-history__preview"
-              :value="selectedItem.text"
-              readonly
-              spellcheck="false"
-            />
-          </template>
-          <div v-else class="clipboard-history__empty clipboard-history__empty--detail">
-            <Clipboard :size="28" />
-            <span>Скопируй текст, и он появится здесь</span>
-          </div>
-        </section>
+        <ClipboardQuickPanel
+          :items="filteredItems"
+          :selected-item="selectedItem"
+          :selected-index="selectedIndex"
+          :loading="loading"
+          :empty-label="items.length === 0 ? 'История пока пустая' : 'Ничего не найдено'"
+          @select="selectIndex"
+          @copy="copyItemAt"
+          @open="openItemAt"
+          @toggle-pin="togglePinAt"
+          @remove="deleteItemAt"
+          @clear="clearItems"
+          @clear-all="clearAllItems"
+        />
       </main>
 
       <footer class="clipboard-history__footer">
         <div class="clipboard-history__hints">
           <span>Enter — скопировать</span>
+          <span>Ctrl+O — открыть</span>
+          <span>Ctrl+Shift+P — закрепить</span>
           <span>Delete — удалить</span>
           <span>Esc — закрыть</span>
         </div>
+        <button
+          class="clipboard-history__clear"
+          type="button"
+          :disabled="items.length === 0"
+          @click="clearAllItems"
+        >
+          <Trash2 :size="15" />
+          <span>Удалить всё</span>
+        </button>
         <button
           class="clipboard-history__clear"
           type="button"
@@ -386,10 +379,16 @@ function charLabel(count: number): string {
 }
 
 .clipboard-history__body {
-  display: grid;
+  display: block;
   min-height: 0;
-  grid-template-columns: minmax(230px, 0.85fr) minmax(280px, 1.15fr);
-  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  overflow: hidden;
+}
+
+.clipboard-history__body :deep(.clipboard-panel) {
+  height: 100%;
 }
 
 .clipboard-history__list,

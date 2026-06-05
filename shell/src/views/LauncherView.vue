@@ -106,7 +106,8 @@ type LauncherMode = "commands" | "clipboard";
 const mode = ref<LauncherMode>("commands");
 const clipboardItems = ref<ClipboardHistoryItem[]>([]);
 const clipboardLoading = ref(false);
-const clipboardTypeFilter = ref<"all" | "text" | "image">("all");
+type ClipboardTypeFilter = "all" | ClipboardHistoryItem["kind"];
+const clipboardTypeFilter = ref<ClipboardTypeFilter>("all");
 const clipboardTypeFilterOpen = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
@@ -232,7 +233,7 @@ const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
   return clipboardItems.value.filter((item) => {
     if (type !== "all" && item.kind !== type) return false;
     if (!q) return true;
-    return `${item.preview} ${item.text}`.toLocaleLowerCase("ru-RU").includes(q);
+    return item.searchText.toLocaleLowerCase("ru-RU").includes(q);
   });
 });
 
@@ -243,9 +244,15 @@ const selectedClipboardItem = computed<ClipboardHistoryItem | null>(
 const clipboardTypeFilterLabel = computed(() =>
   clipboardTypeFilter.value === "image"
     ? "Изображения"
-    : clipboardTypeFilter.value === "text"
-      ? "Текст"
-      : "Все типы",
+    : clipboardTypeFilter.value === "link"
+      ? "Ссылки"
+      : clipboardTypeFilter.value === "color"
+        ? "Цвета"
+        : clipboardTypeFilter.value === "file"
+          ? "Файлы"
+          : clipboardTypeFilter.value === "text"
+            ? "Текст"
+            : "Все типы",
 );
 
 const searchPlaceholder = computed(() =>
@@ -525,7 +532,7 @@ function leaveClipboardMode(): void {
   clipboardTypeFilterOpen.value = false;
 }
 
-function setClipboardTypeFilter(value: "all" | "text" | "image"): void {
+function setClipboardTypeFilter(value: ClipboardTypeFilter): void {
   clipboardTypeFilter.value = value;
   clipboardTypeFilterOpen.value = false;
   selectedIndex.value = 0;
@@ -551,8 +558,31 @@ async function removeClipboardItem(index: number): Promise<void> {
   }
 }
 
+async function openClipboardItem(index: number): Promise<void> {
+  const item = filteredClipboardItems.value[index];
+  if (!item) return;
+  const ok = await window.kepler.clipboardHistory.open(item.id);
+  if (ok) {
+    leaveClipboardMode();
+    await window.kepler.window.hide();
+  }
+}
+
+async function toggleClipboardPin(index: number): Promise<void> {
+  const item = filteredClipboardItems.value[index];
+  if (!item) return;
+  const ok = await window.kepler.clipboardHistory.togglePin(item.id);
+  if (ok) await refreshClipboardHistory();
+}
+
 async function clearClipboardHistory(): Promise<void> {
   await window.kepler.clipboardHistory.clear();
+  selectedIndex.value = 0;
+  await refreshClipboardHistory();
+}
+
+async function clearAllClipboardHistory(): Promise<void> {
+  await window.kepler.clipboardHistory.clearAll();
   selectedIndex.value = 0;
   await refreshClipboardHistory();
 }
@@ -620,6 +650,18 @@ function onKey(e: KeyboardEvent) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       moveSelection(-1);
+    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyX") {
+      e.preventDefault();
+      void clearAllClipboardHistory();
+    } else if ((e.ctrlKey || e.metaKey) && e.code === "KeyX") {
+      e.preventDefault();
+      void removeClipboardItem(selectedIndex.value);
+    } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyP") {
+      e.preventDefault();
+      void toggleClipboardPin(selectedIndex.value);
+    } else if ((e.ctrlKey || e.metaKey) && e.code === "KeyO") {
+      e.preventDefault();
+      void openClipboardItem(selectedIndex.value);
     } else if (e.key === "Enter") {
       e.preventDefault();
       void copyClipboardItem(selectedIndex.value);
@@ -833,6 +875,30 @@ onUnmounted(() => {
         >
           Изображения
         </button>
+        <button
+          class="type-filter-menu__item"
+          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'link' }"
+          type="button"
+          @click="setClipboardTypeFilter('link')"
+        >
+          Ссылки
+        </button>
+        <button
+          class="type-filter-menu__item"
+          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'color' }"
+          type="button"
+          @click="setClipboardTypeFilter('color')"
+        >
+          Цвета
+        </button>
+        <button
+          class="type-filter-menu__item"
+          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'file' }"
+          type="button"
+          @click="setClipboardTypeFilter('file')"
+        >
+          Файлы
+        </button>
       </div>
     </div>
     <div
@@ -850,8 +916,11 @@ onUnmounted(() => {
         :empty-label="clipboardItems.length === 0 ? 'История пока пустая' : 'Ничего не найдено'"
         @select="selectedIndex = $event"
         @copy="copyClipboardItem"
+        @open="openClipboardItem"
+        @toggle-pin="toggleClipboardPin"
         @remove="removeClipboardItem"
         @clear="clearClipboardHistory"
+        @clear-all="clearAllClipboardHistory"
       />
       <template v-else>
         <template v-if="postUpdateVersion">

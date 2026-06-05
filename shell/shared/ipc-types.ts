@@ -175,14 +175,23 @@ export interface CommandRecord {
 
 export interface ClipboardHistoryItem {
   id: string;
-  kind: "text" | "image";
+  kind: "text" | "image" | "link" | "color" | "file";
   text: string;
   preview: string;
   createdAt: number;
+  updatedAt: number;
   charCount: number;
+  pinned: boolean;
+  searchText: string;
+  source?: string;
   imageDataUrl?: string;
   width?: number;
   height?: number;
+  url?: string;
+  color?: string;
+  filePath?: string;
+  fileName?: string;
+  mimeType?: string;
 }
 
 export interface KeplerApi {
@@ -258,8 +267,11 @@ export interface KeplerApi {
   clipboardHistory: {
     list(): Promise<ClipboardHistoryItem[]>;
     copy(id: string): Promise<boolean>;
+    open(id: string): Promise<boolean>;
+    togglePin(id: string): Promise<boolean>;
     delete(id: string): Promise<boolean>;
     clear(): Promise<void>;
+    clearAll(): Promise<void>;
     hide(): Promise<void>;
     onOpenShell(listener: () => void): () => void;
     onUpdated(listener: () => void): () => void;
