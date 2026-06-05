@@ -120,8 +120,8 @@ const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 720;
 const WINDOW_HEIGHT = 460;
-const CLIPBOARD_SURFACE_WIDTH = 920;
-const CLIPBOARD_SURFACE_HEIGHT = 560;
+const CLIPBOARD_SURFACE_WIDTH = 750;
+const CLIPBOARD_SURFACE_HEIGHT = 475;
 const WINDOW_STATE_FILENAME = "kepler-shell-window-state.json";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;

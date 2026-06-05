@@ -5,7 +5,10 @@ import {
   Settings as SettingsIcon,
   Database as DatabaseIcon,
   Clipboard as ClipboardIcon,
+  ArrowLeft,
   ArrowUpCircle,
+  ChevronDown,
+  ListFilter,
   Loader2,
   RefreshCw,
   Check,
@@ -232,7 +235,7 @@ const selectedClipboardItem = computed<ClipboardHistoryItem | null>(
 );
 
 const searchPlaceholder = computed(() =>
-  mode.value === "clipboard" ? "Поиск в буфере обмена" : "Поиск команд, приложений и файлов",
+  mode.value === "clipboard" ? "Фильтр записей..." : "Поиск команд, приложений и файлов",
 );
 
 const RECENTS_KEY = "kepler.launcher.recents";
@@ -746,19 +749,45 @@ onUnmounted(() => {
 
 <template>
   <div class="launcher" @keydown="onKey">
-    <input
-      ref="inputRef"
-      v-model="query"
-      class="search"
-      type="text"
-      :placeholder="searchPlaceholder"
-      spellcheck="false"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-      @input="onInput"
-    />
-    <div ref="listRef" class="list kosmos-scroll" @scroll="onListScroll">
+    <div class="search-bar" :class="{ 'search-bar--clipboard': mode === 'clipboard' }">
+      <button
+        v-if="mode === 'clipboard'"
+        class="search-icon-button"
+        type="button"
+        title="Назад"
+        @click="leaveClipboardMode"
+      >
+        <ArrowLeft :size="17" />
+      </button>
+      <input
+        ref="inputRef"
+        v-model="query"
+        class="search"
+        type="text"
+        :placeholder="searchPlaceholder"
+        spellcheck="false"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        @input="onInput"
+      />
+      <button
+        v-if="mode === 'clipboard'"
+        class="type-filter-button"
+        type="button"
+        title="Фильтр типа"
+      >
+        <ListFilter :size="17" />
+        <span>Все типы</span>
+        <ChevronDown :size="14" />
+      </button>
+    </div>
+    <div
+      ref="listRef"
+      class="list kosmos-scroll"
+      :class="{ 'list--clipboard': mode === 'clipboard' }"
+      @scroll="onListScroll"
+    >
       <ClipboardQuickPanel
         v-if="mode === 'clipboard'"
         :items="filteredClipboardItems"
@@ -974,9 +1003,23 @@ onUnmounted(() => {
   background: var(--main-background-color);
 }
 
-.search {
-  width: 100%;
+.search-bar {
+  display: flex;
+  align-items: center;
   height: 64px;
+  flex-shrink: 0;
+}
+
+.search-bar--clipboard {
+  gap: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  padding: 0 14px;
+}
+
+.search {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
   padding: 0 22px;
   border: none;
   outline: none;
@@ -984,7 +1027,36 @@ onUnmounted(() => {
   color: var(--foreground);
   font-size: 18px;
   font-weight: 400;
-  flex-shrink: 0;
+}
+
+.search-bar--clipboard .search {
+  padding: 0;
+}
+
+.search-icon-button,
+.type-filter-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+}
+
+.search-icon-button {
+  width: 34px;
+  flex: 0 0 auto;
+}
+
+.type-filter-button {
+  min-width: 196px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .search::placeholder {
@@ -996,6 +1068,11 @@ onUnmounted(() => {
   overflow-y: auto;
   border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
   padding: 8px 0;
+}
+
+.list--clipboard {
+  border-top: 0;
+  padding: 0;
 }
 
 .section-label {
