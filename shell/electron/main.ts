@@ -75,6 +75,7 @@ import { openDashboardWindow } from "./dashboard-window";
 import { openRaycastViewCommand } from "./raycast/view-host";
 import {
   registerClipboardHistoryIpc,
+  setClipboardHistoryShellOpener,
   startClipboardHistory,
   stopClipboardHistory,
 } from "./clipboard-history";
@@ -1286,7 +1287,7 @@ safeHandle("kepler:commands:invoke", async (_e, id: string): Promise<void> => {
     } catch (e) {
       console.error(`[kepler-shell] command ${id} failed:`, e);
     }
-    hideLauncher();
+    if (!internal.keepsLauncherOpen) hideLauncher();
     return;
   }
 
@@ -1664,6 +1665,10 @@ app.whenReady().then(async () => {
 
   spawnBackend();
   createLauncher();
+  setClipboardHistoryShellOpener(() => {
+    showLauncher();
+    mainWindow?.webContents.send("kepler:clipboard-history:open-shell");
+  });
   setTrayVisibilityController(setTrayVisible);
   setTrayVisible(isTrayIconEnabled());
   if (shouldShowLauncherOnStartup(process.argv)) {

@@ -55,6 +55,11 @@ const api: KeplerApi = {
     delete: (id) => ipcRenderer.invoke("kepler:clipboard-history:delete", id),
     clear: () => ipcRenderer.invoke("kepler:clipboard-history:clear"),
     hide: () => ipcRenderer.invoke("kepler:clipboard-history:hide"),
+    onOpenShell: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:clipboard-history:open-shell", handler);
+      return () => ipcRenderer.removeListener("kepler:clipboard-history:open-shell", handler);
+    },
     onUpdated: (listener) => {
       const handler = () => listener();
       ipcRenderer.on("kepler:clipboard-history:updated", handler);

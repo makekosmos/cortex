@@ -19,6 +19,7 @@ let clipboardWin: BrowserWindow | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let lastSeenText = "";
 let registered = false;
+let shellOpener: (() => void) | null = null;
 
 function isHeadlessOrTest(): boolean {
   return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
@@ -85,6 +86,18 @@ export function openClipboardHistoryWindow(): void {
       hash: "clipboard-history",
     });
   }
+}
+
+export function setClipboardHistoryShellOpener(opener: () => void): void {
+  shellOpener = opener;
+}
+
+export function openClipboardHistoryShell(): void {
+  if (shellOpener) {
+    shellOpener();
+    return;
+  }
+  openClipboardHistoryWindow();
 }
 
 export function startClipboardHistory(): void {

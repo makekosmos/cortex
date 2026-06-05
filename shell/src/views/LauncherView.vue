@@ -4,12 +4,14 @@ import type { Component } from "vue";
 import {
   Settings as SettingsIcon,
   Database as DatabaseIcon,
+  Clipboard as ClipboardIcon,
   ArrowUpCircle,
   Loader2,
   RefreshCw,
   Check,
 } from "@lucide/vue";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
+import ClipboardQuickPanel from "../components/ClipboardQuickPanel.vue";
 import FileSearchResultRow from "../components/FileSearchResultRow.vue";
 import holoSvg from "../assets/holo.svg";
 import holoPomoSvg from "../assets/holo-pomo.svg";
@@ -20,7 +22,7 @@ import arraSvg from "../assets/arra.svg";
 import edenSvg from "../assets/eden.svg";
 import edenAddSvg from "../assets/eden-add.svg";
 import edenDiarySvg from "../assets/eden-diary.svg";
-import type { CommandRecord, UpdateState } from "@shared/ipc-types";
+import type { ClipboardHistoryItem, CommandRecord, UpdateState } from "@shared/ipc-types";
 
 interface BuiltInIconConfig {
   icon?: Component;
@@ -66,6 +68,11 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     from: "oklch(0.62 0.16 165)",
     to: "oklch(0.42 0.14 175)",
   },
+  "kepler:clipboard-history": {
+    icon: ClipboardIcon,
+    from: "oklch(0.72 0.15 260)",
+    to: "oklch(0.48 0.17 270)",
+  },
   "horologion:open": { svgSrc: holoSvg, ...HOROLOGION_GRADIENT },
   "horologion:pomodoro:25": { svgSrc: holoPomoSvg, ...HOROLOGION_GRADIENT },
   "horologion:pomodoro:50": { svgSrc: holoPomoSvg, ...HOROLOGION_GRADIENT },
@@ -92,6 +99,10 @@ const query = ref("");
 const commands = ref<CommandRecord[]>([]);
 const fileCommands = ref<CommandRecord[]>([]);
 const selectedIndex = ref(0);
+type LauncherMode = "commands" | "clipboard";
+const mode = ref<LauncherMode>("commands");
+const clipboardItems = ref<ClipboardHistoryItem[]>([]);
+const clipboardLoading = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
 const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds";
@@ -209,6 +220,16 @@ const filteredCommands = computed<CommandRecord[]>(() => {
     .sort((a, b) => b.score - a.score)
     .map((x) => x.cmd);
 });
+
+const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
+  const q = query.value.trim().toLocaleLowerCase("ru-RU");
+  if (!q) return clipboardItems.value;
+  return clipboardItems.value.filter((item) => item.text.toLocaleLowerCase("ru-RU").includes(q));
+});
+
+const searchPlaceholder = computed(() =>
+  mode.value === "clipboard" ? "Поиск в буфере обмена" : "Поиск команд, приложений и файлов",
+);
 
 const RECENTS_KEY = "kepler.launcher.recents";
 const RECENTS_LIMIT = 5;
@@ -374,6 +395,7 @@ function onListScroll() {
 // banner, далее recent, далее all. flatList используется для invocation
 // (banner не реальная команда, потому фильтруется).
 function totalRows(): number {
+  if (mode.value === "clipboard") return filteredClipboardItems.value.length;
   const banner = updateBanner.value ? 1 : 0;
   if (groupedNoQuery.value) {
     return banner + groupedNoQuery.value.recent.length + groupedNoQuery.value.all.length;
@@ -381,7 +403,12 @@ function totalRows(): number {
   return banner + filteredCommands.value.length + fileCommands.value.length;
 }
 
-function rowAt(idx: number): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | null {
+function rowAt(
+  idx: number,
+): { kind: "banner" } | { kind: "cmd"; cmd: CommandRecord } | { kind: "clipboard" } | null {
+  if (mode.value === "clipboard") {
+    return filteredClipboardItems.value[idx] ? { kind: "clipboard" } : null;
+  }
   const banner = updateBanner.value ? 1 : 0;
   if (banner && idx === 0) return { kind: "banner" };
   const i = idx - banner;
@@ -400,6 +427,10 @@ function rowAt(idx: number): { kind: "banner" } | { kind: "cmd"; cmd: CommandRec
 async function invokeSelected() {
   const row = rowAt(selectedIndex.value);
   if (!row) return;
+  if (row.kind === "clipboard") {
+    await copyClipboardItem(selectedIndex.value);
+    return;
+  }
   if (row.kind === "banner") {
     await onBannerClick();
     return;
@@ -437,6 +468,65 @@ async function invokeSelected() {
   } catch {
     /* ignore */
   }
+}
+
+async function refreshClipboardHistory(): Promise<void> {
+  clipboardLoading.value = true;
+  try {
+    clipboardItems.value = await window.kepler.clipboardHistory.list();
+    if (selectedIndex.value >= filteredClipboardItems.value.length) {
+      selectedIndex.value = Math.max(0, filteredClipboardItems.value.length - 1);
+    }
+  } catch (e) {
+    console.warn("clipboardHistory.list failed", e);
+    clipboardItems.value = [];
+  } finally {
+    clipboardLoading.value = false;
+  }
+}
+
+async function enterClipboardMode(): Promise<void> {
+  mode.value = "clipboard";
+  query.value = "";
+  selectedIndex.value = 0;
+  fileCommands.value = [];
+  await refreshClipboardHistory();
+  await nextTick();
+  inputRef.value?.focus();
+  inputRef.value?.select();
+  if (listRef.value) listRef.value.scrollTop = 0;
+}
+
+function leaveClipboardMode(): void {
+  mode.value = "commands";
+  query.value = "";
+  selectedIndex.value = 0;
+}
+
+async function copyClipboardItem(index: number): Promise<void> {
+  const item = filteredClipboardItems.value[index];
+  if (!item) return;
+  const ok = await window.kepler.clipboardHistory.copy(item.id);
+  if (ok) {
+    leaveClipboardMode();
+    await window.kepler.window.hide();
+  }
+}
+
+async function removeClipboardItem(index: number): Promise<void> {
+  const item = filteredClipboardItems.value[index];
+  if (!item) return;
+  const ok = await window.kepler.clipboardHistory.delete(item.id);
+  if (ok) {
+    await refreshClipboardHistory();
+    selectedIndex.value = Math.min(index, Math.max(0, filteredClipboardItems.value.length - 1));
+  }
+}
+
+async function clearClipboardHistory(): Promise<void> {
+  await window.kepler.clipboardHistory.clear();
+  selectedIndex.value = 0;
+  await refreshClipboardHistory();
 }
 
 const SCROLL_EDGE_PADDING = 8;
@@ -487,6 +577,26 @@ function moveSelection(delta: number) {
 }
 
 function onKey(e: KeyboardEvent) {
+  if (mode.value === "clipboard") {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      leaveClipboardMode();
+      void window.kepler.window.hide();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      moveSelection(1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      moveSelection(-1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      void copyClipboardItem(selectedIndex.value);
+    } else if (e.key === "Delete") {
+      e.preventDefault();
+      void removeClipboardItem(selectedIndex.value);
+    }
+    return;
+  }
   if (e.key === "Escape") {
     e.preventDefault();
     void window.kepler.window.hide();
@@ -519,6 +629,8 @@ async function refreshCommands() {
 
 let offShow = () => {};
 let offCommandsUpdated = () => {};
+let offClipboardOpen = () => {};
+let offClipboardUpdated = () => {};
 let offCommandVisibilityStorage = () => {};
 let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let fileSearchRun = 0;
@@ -537,6 +649,10 @@ function scheduleFileSearch(text: string, run: number, delay: number) {
 }
 
 watch(query, (value) => {
+  if (mode.value === "clipboard") {
+    selectedIndex.value = 0;
+    return;
+  }
   const text = value.trim();
   const run = ++fileSearchRun;
   if (!text) {
@@ -556,6 +672,7 @@ onMounted(async () => {
       persisted &&
       launcherStateTtlMs.value > 0 &&
       Date.now() - persisted.savedAt <= launcherStateTtlMs.value;
+    mode.value = "commands";
     if (fresh && persisted) {
       query.value = persisted.query;
       selectedIndex.value = persisted.selectedIndex;
@@ -574,6 +691,12 @@ onMounted(async () => {
   });
   offCommandsUpdated = window.kepler.commands.onUpdated(() => {
     void refreshCommands();
+  });
+  offClipboardOpen = window.kepler.clipboardHistory.onOpenShell(() => {
+    void enterClipboardMode();
+  });
+  offClipboardUpdated = window.kepler.clipboardHistory.onUpdated(() => {
+    if (mode.value === "clipboard") void refreshClipboardHistory();
   });
   const onStorage = (event: StorageEvent) => {
     if (event.key !== HIDDEN_COMMANDS_KEY) return;
@@ -607,6 +730,8 @@ onMounted(async () => {
 onUnmounted(() => {
   offShow();
   offCommandsUpdated();
+  offClipboardOpen();
+  offClipboardUpdated();
   offCommandVisibilityStorage();
   fileSearchRun++;
   if (fileSearchTimer) clearTimeout(fileSearchTimer);
@@ -622,7 +747,7 @@ onUnmounted(() => {
       v-model="query"
       class="search"
       type="text"
-      placeholder="Поиск команд, приложений и файлов"
+      :placeholder="searchPlaceholder"
       spellcheck="false"
       autocomplete="off"
       autocorrect="off"
@@ -630,190 +755,205 @@ onUnmounted(() => {
       @input="onInput"
     />
     <div ref="listRef" class="list kosmos-scroll" @scroll="onListScroll">
-      <template v-if="postUpdateVersion">
-        <div class="section-label">Готово</div>
-        <ul class="results">
-          <li class="result update-tile post-update-tile" @click="dismissPostUpdate">
-            <span class="update-icon update-icon-large post-update-icon">
-              <Check :size="22" :stroke-width="2.5" />
-            </span>
-            <div class="update-body">
-              <div class="update-title">Kepler обновлён до v{{ postUpdateVersion }}</div>
-              <div class="update-description">Нажми, чтобы скрыть</div>
-            </div>
-          </li>
-        </ul>
-      </template>
-      <template v-else-if="updateBanner">
-        <div class="section-label">Обновление</div>
-        <ul class="results">
-          <li
-            class="result update-tile"
-            :class="{ selected: selectedIndex === 0, disabled: !updateBanner.clickable }"
-            @click="
-              () => {
-                selectedIndex = 0;
-                void invokeSelected();
-              }
-            "
-          >
-            <span class="update-icon update-icon-large">
-              <component
-                :is="updateBanner.icon"
-                :size="22"
-                :stroke-width="2"
-                :class="{ spin: updateBanner.spinning }"
-              />
-            </span>
-            <div class="update-body">
-              <div class="update-title">{{ updateBanner.title }}</div>
-              <div class="update-description">{{ updateBanner.description }}</div>
-            </div>
-            <span
-              v-if="updateBanner.progress !== undefined"
-              class="update-tile-progress"
-              :style="{ width: `${updateBanner.progress}%` }"
-            />
-          </li>
-        </ul>
-      </template>
-      <template v-if="groupedNoQuery">
-        <template v-if="groupedNoQuery.recent.length > 0">
-          <div class="section-label">Недавние</div>
-          <ul class="results">
-            <li
-              v-for="(cmd, idx) in groupedNoQuery.recent"
-              :key="`recent-${cmd.id}`"
-              class="result"
-              :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
-              @click="
-                () => {
-                  selectedIndex = (updateBanner ? 1 : 0) + idx;
-                  void invokeSelected();
-                }
-              "
-            >
-              <BuiltInIcon
-                v-if="builtInIconFor(cmd)"
-                :icon="builtInIconFor(cmd)!.icon"
-                :svg-src="builtInIconFor(cmd)!.svgSrc"
-                :icon-color="builtInIconFor(cmd)!.iconColor"
-                :from="builtInIconFor(cmd)!.from"
-                :to="builtInIconFor(cmd)!.to"
-              />
-              <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
-              <BuiltInIcon v-else />
-              <span class="title">{{ cmd.title }}</span>
-              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
-                cmd.subtitle
-              }}</span>
-              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-                cmd.appName
-              }}</span>
-              <span class="kind-label">{{
-                cmd.kind === "command" ? "Команда" : "Приложение"
-              }}</span>
-            </li>
-          </ul>
-        </template>
-        <template v-if="groupedNoQuery.all.length > 0">
-          <div class="section-label">Все</div>
-          <ul class="results">
-            <li
-              v-for="(cmd, idx) in groupedNoQuery.all"
-              :key="`all-${cmd.id}`"
-              class="result"
-              :class="{
-                selected:
-                  (updateBanner ? 1 : 0) + groupedNoQuery.recent.length + idx === selectedIndex,
-              }"
-              @click="
-                () => {
-                  selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery!.recent.length + idx;
-                  void invokeSelected();
-                }
-              "
-            >
-              <BuiltInIcon
-                v-if="builtInIconFor(cmd)"
-                :icon="builtInIconFor(cmd)!.icon"
-                :svg-src="builtInIconFor(cmd)!.svgSrc"
-                :icon-color="builtInIconFor(cmd)!.iconColor"
-                :from="builtInIconFor(cmd)!.from"
-                :to="builtInIconFor(cmd)!.to"
-              />
-              <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
-              <BuiltInIcon v-else />
-              <span class="title">{{ cmd.title }}</span>
-              <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
-                cmd.subtitle
-              }}</span>
-              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-                cmd.appName
-              }}</span>
-              <span class="kind-label">{{
-                cmd.kind === "command" ? "Команда" : "Приложение"
-              }}</span>
-            </li>
-          </ul>
-        </template>
-      </template>
+      <ClipboardQuickPanel
+        v-if="mode === 'clipboard'"
+        :items="filteredClipboardItems"
+        :selected-index="selectedIndex"
+        :loading="clipboardLoading"
+        :empty-label="clipboardItems.length === 0 ? 'История пока пустая' : 'Ничего не найдено'"
+        @select="selectedIndex = $event"
+        @copy="copyClipboardItem"
+        @remove="removeClipboardItem"
+        @clear="clearClipboardHistory"
+      />
       <template v-else>
-        <div v-if="filteredCommands.length === 0 && fileCommands.length === 0" class="empty">
-          Ничего не найдено
-        </div>
-        <template v-if="filteredCommands.length > 0">
-          <div class="section-label">Все</div>
+        <template v-if="postUpdateVersion">
+          <div class="section-label">Готово</div>
+          <ul class="results">
+            <li class="result update-tile post-update-tile" @click="dismissPostUpdate">
+              <span class="update-icon update-icon-large post-update-icon">
+                <Check :size="22" :stroke-width="2.5" />
+              </span>
+              <div class="update-body">
+                <div class="update-title">Kepler обновлён до v{{ postUpdateVersion }}</div>
+                <div class="update-description">Нажми, чтобы скрыть</div>
+              </div>
+            </li>
+          </ul>
+        </template>
+        <template v-else-if="updateBanner">
+          <div class="section-label">Обновление</div>
           <ul class="results">
             <li
-              v-for="(cmd, idx) in filteredCommands"
-              :key="cmd.id"
-              class="result"
-              :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+              class="result update-tile"
+              :class="{ selected: selectedIndex === 0, disabled: !updateBanner.clickable }"
               @click="
                 () => {
-                  selectedIndex = (updateBanner ? 1 : 0) + idx;
+                  selectedIndex = 0;
                   void invokeSelected();
                 }
               "
             >
-              <BuiltInIcon
-                v-if="builtInIconFor(cmd)"
-                :icon="builtInIconFor(cmd)!.icon"
-                :svg-src="builtInIconFor(cmd)!.svgSrc"
-                :icon-color="builtInIconFor(cmd)!.iconColor"
-                :from="builtInIconFor(cmd)!.from"
-                :to="builtInIconFor(cmd)!.to"
+              <span class="update-icon update-icon-large">
+                <component
+                  :is="updateBanner.icon"
+                  :size="22"
+                  :stroke-width="2"
+                  :class="{ spin: updateBanner.spinning }"
+                />
+              </span>
+              <div class="update-body">
+                <div class="update-title">{{ updateBanner.title }}</div>
+                <div class="update-description">{{ updateBanner.description }}</div>
+              </div>
+              <span
+                v-if="updateBanner.progress !== undefined"
+                class="update-tile-progress"
+                :style="{ width: `${updateBanner.progress}%` }"
               />
-              <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
-              <span v-else class="icon icon-placeholder" aria-hidden="true" />
-              <span class="title">{{ cmd.title }}</span>
-              <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
-                cmd.appName
-              }}</span>
-              <span class="kind-label">{{
-                cmd.kind === "command" ? "Команда" : "Приложение"
-              }}</span>
             </li>
           </ul>
         </template>
-        <template v-if="fileCommands.length > 0">
-          <div class="section-label">Файлы</div>
-          <ul class="results">
-            <template v-for="(cmd, idx) in fileCommands" :key="cmd.id">
-              <FileSearchResultRow
-                :title="cmd.title"
-                :path="cmd.subtitle ?? ''"
-                :selected="(updateBanner ? 1 : 0) + filteredCommands.length + idx === selectedIndex"
-                @select="
+        <template v-if="groupedNoQuery">
+          <template v-if="groupedNoQuery.recent.length > 0">
+            <div class="section-label">Недавние</div>
+            <ul class="results">
+              <li
+                v-for="(cmd, idx) in groupedNoQuery.recent"
+                :key="`recent-${cmd.id}`"
+                class="result"
+                :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+                @click="
                   () => {
-                    selectedIndex = (updateBanner ? 1 : 0) + filteredCommands.length + idx;
+                    selectedIndex = (updateBanner ? 1 : 0) + idx;
                     void invokeSelected();
                   }
                 "
-              />
-            </template>
-          </ul>
+              >
+                <BuiltInIcon
+                  v-if="builtInIconFor(cmd)"
+                  :icon="builtInIconFor(cmd)!.icon"
+                  :svg-src="builtInIconFor(cmd)!.svgSrc"
+                  :icon-color="builtInIconFor(cmd)!.iconColor"
+                  :from="builtInIconFor(cmd)!.from"
+                  :to="builtInIconFor(cmd)!.to"
+                />
+                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <BuiltInIcon v-else />
+                <span class="title">{{ cmd.title }}</span>
+                <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
+                  cmd.subtitle
+                }}</span>
+                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
+                  cmd.appName
+                }}</span>
+                <span class="kind-label">{{
+                  cmd.kind === "command" ? "Команда" : "Приложение"
+                }}</span>
+              </li>
+            </ul>
+          </template>
+          <template v-if="groupedNoQuery.all.length > 0">
+            <div class="section-label">Все</div>
+            <ul class="results">
+              <li
+                v-for="(cmd, idx) in groupedNoQuery.all"
+                :key="`all-${cmd.id}`"
+                class="result"
+                :class="{
+                  selected:
+                    (updateBanner ? 1 : 0) + groupedNoQuery.recent.length + idx === selectedIndex,
+                }"
+                @click="
+                  () => {
+                    selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery!.recent.length + idx;
+                    void invokeSelected();
+                  }
+                "
+              >
+                <BuiltInIcon
+                  v-if="builtInIconFor(cmd)"
+                  :icon="builtInIconFor(cmd)!.icon"
+                  :svg-src="builtInIconFor(cmd)!.svgSrc"
+                  :icon-color="builtInIconFor(cmd)!.iconColor"
+                  :from="builtInIconFor(cmd)!.from"
+                  :to="builtInIconFor(cmd)!.to"
+                />
+                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <BuiltInIcon v-else />
+                <span class="title">{{ cmd.title }}</span>
+                <span v-if="cmd.kind === 'file' && cmd.subtitle" class="subtitle">{{
+                  cmd.subtitle
+                }}</span>
+                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
+                  cmd.appName
+                }}</span>
+                <span class="kind-label">{{
+                  cmd.kind === "command" ? "Команда" : "Приложение"
+                }}</span>
+              </li>
+            </ul>
+          </template>
+        </template>
+        <template v-else>
+          <div v-if="filteredCommands.length === 0 && fileCommands.length === 0" class="empty">
+            Ничего не найдено
+          </div>
+          <template v-if="filteredCommands.length > 0">
+            <div class="section-label">Все</div>
+            <ul class="results">
+              <li
+                v-for="(cmd, idx) in filteredCommands"
+                :key="cmd.id"
+                class="result"
+                :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+                @click="
+                  () => {
+                    selectedIndex = (updateBanner ? 1 : 0) + idx;
+                    void invokeSelected();
+                  }
+                "
+              >
+                <BuiltInIcon
+                  v-if="builtInIconFor(cmd)"
+                  :icon="builtInIconFor(cmd)!.icon"
+                  :svg-src="builtInIconFor(cmd)!.svgSrc"
+                  :icon-color="builtInIconFor(cmd)!.iconColor"
+                  :from="builtInIconFor(cmd)!.from"
+                  :to="builtInIconFor(cmd)!.to"
+                />
+                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <span v-else class="icon icon-placeholder" aria-hidden="true" />
+                <span class="title">{{ cmd.title }}</span>
+                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
+                  cmd.appName
+                }}</span>
+                <span class="kind-label">{{
+                  cmd.kind === "command" ? "Команда" : "Приложение"
+                }}</span>
+              </li>
+            </ul>
+          </template>
+          <template v-if="fileCommands.length > 0">
+            <div class="section-label">Файлы</div>
+            <ul class="results">
+              <template v-for="(cmd, idx) in fileCommands" :key="cmd.id">
+                <FileSearchResultRow
+                  :title="cmd.title"
+                  :path="cmd.subtitle ?? ''"
+                  :selected="
+                    (updateBanner ? 1 : 0) + filteredCommands.length + idx === selectedIndex
+                  "
+                  @select="
+                    () => {
+                      selectedIndex = (updateBanner ? 1 : 0) + filteredCommands.length + idx;
+                      void invokeSelected();
+                    }
+                  "
+                />
+              </template>
+            </ul>
+          </template>
         </template>
       </template>
     </div>

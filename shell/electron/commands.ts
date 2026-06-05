@@ -8,7 +8,7 @@
 // extension-команды объявляются в их manifest.commands[] и резолвятся
 // через `loadDeclaredCommands` (extension-host.ts).
 import { openDashboardWindow } from "./dashboard-window";
-import { openClipboardHistoryWindow } from "./clipboard-history";
+import { openClipboardHistoryShell } from "./clipboard-history";
 import { openSettings } from "./settings-window";
 import { check as checkUpdates } from "./autoupdater-host";
 
@@ -35,6 +35,7 @@ export interface InternalCommand {
    * результат кешируется в extension-host.
    */
   icon?: () => string | undefined;
+  keepsLauncherOpen?: boolean;
   exec: () => Promise<void> | void;
 }
 
@@ -66,7 +67,8 @@ export const COMMANDS: InternalCommand[] = [
     category: "open",
     kind: "command",
     appName: "Kepler",
-    exec: () => openClipboardHistoryWindow(),
+    keepsLauncherOpen: true,
+    exec: () => openClipboardHistoryShell(),
   },
   {
     id: "settings:open",

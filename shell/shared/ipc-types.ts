@@ -257,6 +257,7 @@ export interface KeplerApi {
     delete(id: string): Promise<boolean>;
     clear(): Promise<void>;
     hide(): Promise<void>;
+    onOpenShell(listener: () => void): () => void;
     onUpdated(listener: () => void): () => void;
   };
 
