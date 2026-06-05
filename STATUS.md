@@ -1,4 +1,50 @@
-# Kosmos — статус проекта (2026-06-04)
+# Kosmos — статус проекта (2026-06-06)
+
+## 2026-06-06 — Raycast-style command surfaces and Focus hardening (Kosmos Desktop 0.3.12 → 0.4.0)
+
+Kosmos Desktop получил крупный shell release: launcher стал ближе к Raycast по
+модели команд, clipboard/focus переехали в command surfaces, а Focus mode
+получил app-blocking UX поверх запуска приложений из Kosmos.
+
+- Добавлен compatibility runtime для Raycast-like commands: host умеет запускать
+  command views, держать per-command session snapshots и рендерить List, Grid,
+  Detail, Form и Menu Bar style surfaces через встроенный renderer.
+- `@raycast/api` workspace package получил JSX/runtime bridge, navigation,
+  action panels, forms, dropdown/tag/file picker flows, keyboard shortcuts,
+  local storage и view-model тесты. Это foundation для будущих Kosmos/Raycast
+  compatible extensions без прямого доступа к Electron internals.
+- Clipboard history теперь живёт как Shell command surface: отдельный режим
+  launcher'а показывает текст, ссылки, цвета, файлы и изображения, поддерживает
+  фильтр типов, copy/open/delete/pin/clear и layout в стиле Raycast.
+- Focus command surface унифицирован с clipboard: форма открывается внутри
+  Shell, стартует сессию без лишней loading-паузы, сохраняет цель и Delphi task
+  через `@` mention, а launcher больше не теряет keyboard focus после переходов.
+- Во время активной focus-сессии launcher показывает state-aware команды вместо
+  сырого command-bus списка: «Приостановить/Продолжить», «Отметить задачу
+  выполненной», «Завершить», «Редактировать». «Начать фокус» видна только в idle.
+- Focus app blocking теперь использует launcher-facing identity: выбранные
+  приложения отображаются как user-facing chips, запуск заблокированного
+  приложения через Kosmos перехватывается, а full-screen overlay даёт короткий
+  snooze без выключения всей сессии.
+- Backend focus active state хранит `blocked_apps` metadata рядом с ids, а shell
+  process watcher закрывает уже запущенные/новые заблокированные процессы без
+  privileged hosts writes вне helper/service boundary.
+- Документация обновлена по command bus, extension host, focus mode, архитектуре
+  и app map; proof-loop evidence сохранён для Raycast host, clipboard parity,
+  focus mode unification, app mentions/blocking и focus launcher commands.
+
+Proof loops:
+
+- `.agent/tasks/2026-06-04-raycast-compat-runtime/`
+- `.agent/tasks/2026-06-05-clipboard-history-parity/`
+- `.agent/tasks/2026-06-05-focus-mode-unification/`
+- `.agent/tasks/2026-06-05-focus-app-mentions/`
+- `.agent/tasks/2026-06-05-focus-blocking-ux/`
+- `.agent/tasks/2026-06-05-focus-launcher-commands/`
+
+Checks: `bun test tests/unit/clipboard-history-store.test.ts tests/unit/focus-app-blocking.test.ts tests/unit/focus-command-instant-render.test.ts tests/unit/focus-command-payload.test.ts tests/unit/focus-launcher-commands.test.ts tests/unit/launcher-commands.test.ts tests/unit/raycast-api.test.ts tests/unit/raycast-command-runner.test.ts tests/unit/raycast-manifest.test.ts tests/unit/raycast-view-model.test.ts`,
+`bun run --cwd shell typecheck`, `bun run ark:guard:writes`,
+`bun run --cwd shell build:js:shell`, `bun run docs:sync`, `bun run docs:check`.
 
 ## 2026-06-04 — Permissions, dictation, Delphi cleanup (Kosmos Desktop 0.3.11 → 0.3.12, Akasha 0.1.1 → 0.1.2, Arrancador 0.1.3 → 0.1.4, Delphi 0.1.6 → 0.1.7, Eden 0.1.11 → 0.1.12, Horologion 0.1.6 → 0.1.7)
 
