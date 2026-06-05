@@ -120,6 +120,8 @@ const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 720;
 const WINDOW_HEIGHT = 460;
+const CLIPBOARD_SURFACE_WIDTH = 920;
+const CLIPBOARD_SURFACE_HEIGHT = 560;
 const WINDOW_STATE_FILENAME = "kepler-shell-window-state.json";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
@@ -617,6 +619,21 @@ function showLauncher() {
   }
   launcherHidden = false;
   mainWindow.webContents.send("kepler:window:show");
+}
+
+function showClipboardHistoryLauncher() {
+  showLauncher();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const display = screen.getPrimaryDisplay().workAreaSize;
+  const saved = loadWindowState();
+  const base = saved ?? defaultLauncherPosition();
+  mainWindow.setBounds({
+    x: Math.max(0, Math.round(base.x - (CLIPBOARD_SURFACE_WIDTH - WINDOW_WIDTH) / 2)),
+    y: Math.max(0, Math.round(display.height * 0.18)),
+    width: CLIPBOARD_SURFACE_WIDTH,
+    height: CLIPBOARD_SURFACE_HEIGHT,
+  });
+  mainWindow.webContents.send("kepler:clipboard-history:open-shell");
 }
 
 function hideLauncher() {
@@ -1665,10 +1682,7 @@ app.whenReady().then(async () => {
 
   spawnBackend();
   createLauncher();
-  setClipboardHistoryShellOpener(() => {
-    showLauncher();
-    mainWindow?.webContents.send("kepler:clipboard-history:open-shell");
-  });
+  setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
   setTrayVisibilityController(setTrayVisible);
   setTrayVisible(isTrayIconEnabled());
   if (shouldShowLauncherOnStartup(process.argv)) {

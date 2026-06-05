@@ -227,6 +227,10 @@ const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
   return clipboardItems.value.filter((item) => item.text.toLocaleLowerCase("ru-RU").includes(q));
 });
 
+const selectedClipboardItem = computed<ClipboardHistoryItem | null>(
+  () => filteredClipboardItems.value[selectedIndex.value] ?? null,
+);
+
 const searchPlaceholder = computed(() =>
   mode.value === "clipboard" ? "Поиск в буфере обмена" : "Поиск команд, приложений и файлов",
 );
@@ -758,6 +762,7 @@ onUnmounted(() => {
       <ClipboardQuickPanel
         v-if="mode === 'clipboard'"
         :items="filteredClipboardItems"
+        :selected-item="selectedClipboardItem"
         :selected-index="selectedIndex"
         :loading="clipboardLoading"
         :empty-label="clipboardItems.length === 0 ? 'История пока пустая' : 'Ничего не найдено'"
