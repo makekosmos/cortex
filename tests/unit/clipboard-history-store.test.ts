@@ -28,6 +28,35 @@ describe("clipboard history store", () => {
     expect(store.list()[0].createdAt).toBe(12);
   });
 
+  test("records image entries and moves duplicate images to the top", () => {
+    let now = 20;
+    const store = createClipboardHistoryStore({ now: () => now++ });
+
+    const first = store.recordImage({
+      dataUrl: "data:image/png;base64,abc",
+      width: 1280,
+      height: 720,
+    });
+    store.record("text");
+    const repeated = store.recordImage({
+      dataUrl: "data:image/png;base64,abc",
+      width: 1280,
+      height: 720,
+    });
+
+    expect(repeated?.id).toBe(first?.id);
+    expect(store.list()).toMatchObject([
+      {
+        kind: "image",
+        preview: "Изображение 1280×720",
+        width: 1280,
+        height: 720,
+        createdAt: 22,
+      },
+      { kind: "text", text: "text" },
+    ]);
+  });
+
   test("ignores empty text and respects max items", () => {
     const store = createClipboardHistoryStore({ maxItems: 2, now: () => 1 });
 

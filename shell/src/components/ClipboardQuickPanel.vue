@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Clipboard, XCircle } from "@lucide/vue";
+import { Clipboard, Image as ImageIcon, XCircle } from "@lucide/vue";
 import type { ClipboardHistoryItem } from "@shared/ipc-types";
 
 const props = defineProps<{
@@ -52,6 +52,15 @@ function itemTime(item: ClipboardHistoryItem): string {
   return formatter.format(new Date(item.createdAt));
 }
 
+function itemKindLabel(item: ClipboardHistoryItem): string {
+  return item.kind === "image" ? "Изображение" : "Текст";
+}
+
+function itemDetailLabel(item: ClipboardHistoryItem): string {
+  if (item.kind === "image" && item.width && item.height) return `${item.width}×${item.height}`;
+  return charLabel(item.charCount);
+}
+
 function charLabel(count: number): string {
   const mod10 = count % 10;
   const mod100 = count % 100;
@@ -81,7 +90,8 @@ function charLabel(count: number): string {
                 @dblclick="emit('copy', index)"
               >
                 <span class="clipboard-panel__row-icon" aria-hidden="true">
-                  <Clipboard :size="15" />
+                  <ImageIcon v-if="item.kind === 'image'" :size="15" />
+                  <Clipboard v-else :size="15" />
                 </span>
                 <span class="clipboard-panel__row-body">
                   <span class="clipboard-panel__preview">{{ item.preview }}</span>
@@ -94,8 +104,17 @@ function charLabel(count: number): string {
 
       <section class="clipboard-panel__detail" aria-label="Подробности буфера обмена">
         <template v-if="selectedItem">
-          <div class="clipboard-panel__preview-pane">
-            <pre>{{ selectedItem.text }}</pre>
+          <div
+            class="clipboard-panel__preview-pane"
+            :class="{ 'clipboard-panel__preview-pane--image': selectedItem.kind === 'image' }"
+          >
+            <img
+              v-if="selectedItem.kind === 'image' && selectedItem.imageDataUrl"
+              class="clipboard-panel__image-preview"
+              :src="selectedItem.imageDataUrl"
+              alt=""
+            />
+            <pre v-else>{{ selectedItem.text }}</pre>
           </div>
           <dl class="clipboard-panel__metadata">
             <div class="clipboard-panel__metadata-heading">
@@ -108,11 +127,11 @@ function charLabel(count: number): string {
             </div>
             <div>
               <dt>Тип</dt>
-              <dd>Текст</dd>
+              <dd>{{ itemKindLabel(selectedItem) }}</dd>
             </div>
             <div>
-              <dt>Символы</dt>
-              <dd>{{ selectedItem.charCount }}</dd>
+              <dt>{{ selectedItem.kind === "image" ? "Размер" : "Символы" }}</dt>
+              <dd>{{ itemDetailLabel(selectedItem) }}</dd>
             </div>
             <div>
               <dt>Скопировано</dt>
@@ -266,6 +285,19 @@ function charLabel(count: number): string {
   min-height: 0;
   overflow: auto;
   padding: 18px 16px;
+}
+
+.clipboard-panel__preview-pane--image {
+  display: grid;
+  place-items: center;
+}
+
+.clipboard-panel__image-preview {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  object-fit: contain;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 9%, transparent);
 }
 
 .clipboard-panel__preview-pane pre {

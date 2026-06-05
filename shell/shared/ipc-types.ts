@@ -175,10 +175,14 @@ export interface CommandRecord {
 
 export interface ClipboardHistoryItem {
   id: string;
+  kind: "text" | "image";
   text: string;
   preview: string;
   createdAt: number;
   charCount: number;
+  imageDataUrl?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface KeplerApi {

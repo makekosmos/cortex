@@ -5,6 +5,11 @@ const PREVIEW_LIMIT = 180;
 
 export interface ClipboardHistoryStore {
   record(text: string): ClipboardHistoryItem | null;
+  recordImage(args: {
+    dataUrl: string;
+    width: number;
+    height: number;
+  }): ClipboardHistoryItem | null;
   list(): ClipboardHistoryItem[];
   find(id: string): ClipboardHistoryItem | null;
   remove(id: string): boolean;
@@ -24,7 +29,7 @@ export function createClipboardHistoryStore(options?: {
     const normalized = normalizeClipboardText(text);
     if (!normalized) return null;
 
-    const existing = items.find((item) => item.text === normalized);
+    const existing = items.find((item) => item.kind === "text" && item.text === normalized);
     if (existing) {
       const updated = { ...existing, createdAt: now() };
       items = [updated, ...items.filter((item) => item.id !== existing.id)];
@@ -33,6 +38,7 @@ export function createClipboardHistoryStore(options?: {
 
     const item: ClipboardHistoryItem = {
       id: `clip-${nextId++}`,
+      kind: "text",
       text: normalized,
       preview: previewText(normalized),
       createdAt: now(),
@@ -42,8 +48,40 @@ export function createClipboardHistoryStore(options?: {
     return item;
   }
 
+  function recordImage(args: {
+    dataUrl: string;
+    width: number;
+    height: number;
+  }): ClipboardHistoryItem | null {
+    if (!args.dataUrl || args.width <= 0 || args.height <= 0) return null;
+
+    const existing = items.find(
+      (item) => item.kind === "image" && item.imageDataUrl === args.dataUrl,
+    );
+    if (existing) {
+      const updated = { ...existing, createdAt: now() };
+      items = [updated, ...items.filter((item) => item.id !== existing.id)];
+      return updated;
+    }
+
+    const item: ClipboardHistoryItem = {
+      id: `clip-${nextId++}`,
+      kind: "image",
+      text: "",
+      preview: `Изображение ${args.width}×${args.height}`,
+      createdAt: now(),
+      charCount: 0,
+      imageDataUrl: args.dataUrl,
+      width: args.width,
+      height: args.height,
+    };
+    items = [item, ...items].slice(0, maxItems);
+    return item;
+  }
+
   return {
     record,
+    recordImage,
     list: () => [...items],
     find: (id) => items.find((item) => item.id === id) ?? null,
     remove: (id) => {

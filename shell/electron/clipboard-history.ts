@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, screen } from "electron";
+import { BrowserWindow, clipboard, nativeImage, screen } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ClipboardHistoryItem } from "../shared/ipc-types";
@@ -18,6 +18,7 @@ const store = createClipboardHistoryStore();
 let clipboardWin: BrowserWindow | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let lastSeenText = "";
+let lastSeenImageDataUrl = "";
 let registered = false;
 let shellOpener: (() => void) | null = null;
 
@@ -102,9 +103,9 @@ export function openClipboardHistoryShell(): void {
 
 export function startClipboardHistory(): void {
   if (pollTimer) return;
-  recordClipboardText(clipboard.readText());
+  recordClipboardSnapshot();
   pollTimer = setInterval(() => {
-    recordClipboardText(clipboard.readText());
+    recordClipboardSnapshot();
   }, CLIPBOARD_POLL_MS);
 }
 
@@ -124,9 +125,21 @@ export function registerClipboardHistoryIpc(): void {
   safeHandle("kepler:clipboard-history:copy", async (_event, id: string): Promise<boolean> => {
     const item = store.find(id);
     if (!item) return false;
-    clipboard.writeText(item.text);
-    lastSeenText = item.text;
-    store.record(item.text);
+    if (item.kind === "image" && item.imageDataUrl) {
+      const image = nativeImage.createFromDataURL(item.imageDataUrl);
+      if (image.isEmpty()) return false;
+      clipboard.writeImage(image);
+      lastSeenImageDataUrl = item.imageDataUrl;
+      store.recordImage({
+        dataUrl: item.imageDataUrl,
+        width: item.width ?? image.getSize().width,
+        height: item.height ?? image.getSize().height,
+      });
+    } else {
+      clipboard.writeText(item.text);
+      lastSeenText = item.text;
+      store.record(item.text);
+    }
     broadcastUpdated();
     return true;
   });
@@ -144,11 +157,33 @@ export function registerClipboardHistoryIpc(): void {
   });
 }
 
-function recordClipboardText(text: string): void {
-  if (text === lastSeenText) return;
+function recordClipboardSnapshot(): void {
+  let updated = false;
+  if (recordClipboardText(clipboard.readText())) updated = true;
+  if (recordClipboardImage()) updated = true;
+  if (updated) broadcastUpdated();
+}
+
+function recordClipboardText(text: string): boolean {
+  if (text === lastSeenText) return false;
   lastSeenText = text;
   const item = store.record(text);
-  if (item) broadcastUpdated();
+  return !!item;
+}
+
+function recordClipboardImage(): boolean {
+  const image = clipboard.readImage();
+  if (image.isEmpty()) return false;
+  const dataUrl = image.toDataURL();
+  if (!dataUrl || dataUrl === lastSeenImageDataUrl) return false;
+  lastSeenImageDataUrl = dataUrl;
+  const size = image.getSize();
+  const item = store.recordImage({
+    dataUrl,
+    width: size.width,
+    height: size.height,
+  });
+  return !!item;
 }
 
 function broadcastUpdated(): void {

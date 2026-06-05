@@ -106,7 +106,7 @@ type LauncherMode = "commands" | "clipboard";
 const mode = ref<LauncherMode>("commands");
 const clipboardItems = ref<ClipboardHistoryItem[]>([]);
 const clipboardLoading = ref(false);
-const clipboardTypeFilter = ref<"all" | "text">("all");
+const clipboardTypeFilter = ref<"all" | "text" | "image">("all");
 const clipboardTypeFilterOpen = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
@@ -227,10 +227,13 @@ const filteredCommands = computed<CommandRecord[]>(() => {
 });
 
 const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
-  if (clipboardTypeFilter.value !== "all" && clipboardTypeFilter.value !== "text") return [];
+  const type = clipboardTypeFilter.value;
   const q = query.value.trim().toLocaleLowerCase("ru-RU");
-  if (!q) return clipboardItems.value;
-  return clipboardItems.value.filter((item) => item.text.toLocaleLowerCase("ru-RU").includes(q));
+  return clipboardItems.value.filter((item) => {
+    if (type !== "all" && item.kind !== type) return false;
+    if (!q) return true;
+    return `${item.preview} ${item.text}`.toLocaleLowerCase("ru-RU").includes(q);
+  });
 });
 
 const selectedClipboardItem = computed<ClipboardHistoryItem | null>(
@@ -238,7 +241,11 @@ const selectedClipboardItem = computed<ClipboardHistoryItem | null>(
 );
 
 const clipboardTypeFilterLabel = computed(() =>
-  clipboardTypeFilter.value === "text" ? "Текст" : "Все типы",
+  clipboardTypeFilter.value === "image"
+    ? "Изображения"
+    : clipboardTypeFilter.value === "text"
+      ? "Текст"
+      : "Все типы",
 );
 
 const searchPlaceholder = computed(() =>
@@ -518,7 +525,7 @@ function leaveClipboardMode(): void {
   clipboardTypeFilterOpen.value = false;
 }
 
-function setClipboardTypeFilter(value: "all" | "text"): void {
+function setClipboardTypeFilter(value: "all" | "text" | "image"): void {
   clipboardTypeFilter.value = value;
   clipboardTypeFilterOpen.value = false;
   selectedIndex.value = 0;
@@ -817,6 +824,14 @@ onUnmounted(() => {
           @click="setClipboardTypeFilter('text')"
         >
           Текст
+        </button>
+        <button
+          class="type-filter-menu__item"
+          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'image' }"
+          type="button"
+          @click="setClipboardTypeFilter('image')"
+        >
+          Изображения
         </button>
       </div>
     </div>
