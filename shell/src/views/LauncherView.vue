@@ -106,6 +106,8 @@ type LauncherMode = "commands" | "clipboard";
 const mode = ref<LauncherMode>("commands");
 const clipboardItems = ref<ClipboardHistoryItem[]>([]);
 const clipboardLoading = ref(false);
+const clipboardTypeFilter = ref<"all" | "text">("all");
+const clipboardTypeFilterOpen = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
 const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds";
@@ -225,6 +227,7 @@ const filteredCommands = computed<CommandRecord[]>(() => {
 });
 
 const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
+  if (clipboardTypeFilter.value !== "all" && clipboardTypeFilter.value !== "text") return [];
   const q = query.value.trim().toLocaleLowerCase("ru-RU");
   if (!q) return clipboardItems.value;
   return clipboardItems.value.filter((item) => item.text.toLocaleLowerCase("ru-RU").includes(q));
@@ -232,6 +235,10 @@ const filteredClipboardItems = computed<ClipboardHistoryItem[]>(() => {
 
 const selectedClipboardItem = computed<ClipboardHistoryItem | null>(
   () => filteredClipboardItems.value[selectedIndex.value] ?? null,
+);
+
+const clipboardTypeFilterLabel = computed(() =>
+  clipboardTypeFilter.value === "text" ? "Текст" : "Все типы",
 );
 
 const searchPlaceholder = computed(() =>
@@ -508,6 +515,13 @@ function leaveClipboardMode(): void {
   mode.value = "commands";
   query.value = "";
   selectedIndex.value = 0;
+  clipboardTypeFilterOpen.value = false;
+}
+
+function setClipboardTypeFilter(value: "all" | "text"): void {
+  clipboardTypeFilter.value = value;
+  clipboardTypeFilterOpen.value = false;
+  selectedIndex.value = 0;
 }
 
 async function copyClipboardItem(index: number): Promise<void> {
@@ -587,6 +601,10 @@ function onKey(e: KeyboardEvent) {
   if (mode.value === "clipboard") {
     if (e.key === "Escape") {
       e.preventDefault();
+      if (clipboardTypeFilterOpen.value) {
+        clipboardTypeFilterOpen.value = false;
+        return;
+      }
       leaveClipboardMode();
       void window.kepler.window.hide();
     } else if (e.key === "ArrowDown") {
@@ -776,11 +794,31 @@ onUnmounted(() => {
         class="type-filter-button"
         type="button"
         title="Фильтр типа"
+        :aria-expanded="clipboardTypeFilterOpen"
+        @click="clipboardTypeFilterOpen = !clipboardTypeFilterOpen"
       >
         <ListFilter :size="17" />
-        <span>Все типы</span>
+        <span>{{ clipboardTypeFilterLabel }}</span>
         <ChevronDown :size="14" />
       </button>
+      <div v-if="mode === 'clipboard' && clipboardTypeFilterOpen" class="type-filter-menu">
+        <button
+          class="type-filter-menu__item"
+          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'all' }"
+          type="button"
+          @click="setClipboardTypeFilter('all')"
+        >
+          Все типы
+        </button>
+        <button
+          class="type-filter-menu__item"
+          :class="{ 'type-filter-menu__item--active': clipboardTypeFilter === 'text' }"
+          type="button"
+          @click="setClipboardTypeFilter('text')"
+        >
+          Текст
+        </button>
+      </div>
     </div>
     <div
       ref="listRef"
@@ -1011,6 +1049,7 @@ onUnmounted(() => {
 }
 
 .search-bar--clipboard {
+  position: relative;
   gap: 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
   padding: 0 14px;
@@ -1051,12 +1090,42 @@ onUnmounted(() => {
 }
 
 .type-filter-button {
-  min-width: 196px;
+  min-width: 126px;
   justify-content: space-between;
   gap: 8px;
   padding: 0 11px;
   font-size: 13px;
   font-weight: 650;
+}
+
+.type-filter-menu {
+  position: absolute;
+  top: 52px;
+  right: 14px;
+  z-index: 10;
+  display: grid;
+  width: 150px;
+  gap: 2px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--background) 92%, var(--foreground) 8%);
+  padding: 5px;
+  box-shadow: 0 16px 36px color-mix(in srgb, var(--background) 52%, transparent);
+}
+
+.type-filter-menu__item {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--foreground);
+  padding: 7px 9px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.type-filter-menu__item:hover,
+.type-filter-menu__item--active {
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
 }
 
 .search::placeholder {
