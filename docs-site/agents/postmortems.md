@@ -21,6 +21,17 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-05 — Focus launcher показывал команды не по состоянию сессии
+
+**Симптомы** — в launcher были видны непонятные raw focus-команды, а «Начать фокус» оставалась доступной даже во время уже запущенной сессии.
+**Где жило** — `shell/src/lib/focusLauncherCommands.ts::buildFocusAwareCommands`, `shell/src/views/LauncherView.vue::displayCommands`, `shell/electron/focus-session.ts::completeFocusSession`.
+**Root cause** — command bus отдавал статический набор focus action id без знания текущего `pomodoro.get_state`, а launcher рендерил их как обычные команды. В результате lifecycle-команды не были связаны с active/paused состоянием и не заменяли стартовую команду.
+**Fix** — добавлен state-aware helper, который в idle оставляет только «Начать фокус», а в active-сессии подставляет понятные команды «Приостановить/Продолжить», «Отметить задачу выполненной», «Завершить», «Редактировать». Launcher подписан на `focusSession.onUpdated`, а «Выполнена» идёт через `focusSession.complete()` и `upsert_object` для привязанной `task_obj`.
+**Регрешн-защита** — `bun test tests/unit/focus-launcher-commands.test.ts`; `bun run shell:typecheck`; `bun run ark:guard:writes`; visual screenshots `.tmp/visual/2026-06-05-focus-launcher-commands/{launcher-idle.png,launcher-active-running.png,launcher-active-paused.png}`.
+**Prevention** — Команды lifecycle для stateful Shell-сущностей нельзя показывать как плоский статический command bus список. Перед рендером launcher должен нормализовать такие команды через snapshot текущего состояния и скрывать действия, которые в этом состоянии бессмысленны.
+
+---
+
 ## 2026-06-05 — LauncherView падал на обновлении списка команд
 
 **Симптомы** — после `refreshCommands()` Vue логировал `Unhandled error during execution of component update`, затем падал с `TypeError: Cannot set properties of null (setting '__vnode')`.

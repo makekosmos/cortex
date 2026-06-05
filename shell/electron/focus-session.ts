@@ -725,6 +725,58 @@ export async function stopFocusSessionCommand(): Promise<FocusSessionSnapshot> {
   return stopFocusSession();
 }
 
+// Помечает привязанную Delphi-задачу (`task_obj`) выполненной через тот же
+// write-path, что и time_entry (upsert_object → backend bump'ит sync version).
+// Поля синхронны с моделью Delphi: status="done" + is_completed + completed_at.
+async function markTaskDone(taskId: string): Promise<void> {
+  const existing = await invoke<ArkObjectLike | null>("get_object", { id: taskId });
+  if (!existing) return;
+  const now = new Date().toISOString();
+  const props = {
+    ...toProps(existing),
+    status: "done",
+    is_completed: true,
+    completed_at: now,
+  };
+  const record = {
+    id: existing.id,
+    typeId: existing.typeId ?? existing.type_id ?? "task_obj",
+    title: existing.title ?? "",
+    contentJson: existing.contentJson ?? existing.content_json ?? {},
+    propsJson: props,
+    createdAt: existing.createdAt ?? existing.created_at ?? now,
+    updatedAt: now,
+    deletedAt: existing.deletedAt ?? existing.deleted_at ?? null,
+  };
+  await invoke("upsert_object", { object: record });
+}
+
+// «Выполнена»: останавливает сессию (time_entry completed=true) и помечает
+// привязанную задачу выполненной. Без задачи — эквивалент stop.
+async function completeFocusSession(): Promise<FocusSessionSnapshot> {
+  const current = await snapshot();
+  const taskId = current.pomodoro.tasks?.[0]?.id ?? null;
+  stopProcessWatcher();
+  lastRawBlockedApps = [];
+  const state = await invoke<PomodoroState>("pomodoro.stop");
+  setFocusState(deriveFocusWidgetPatch(state));
+  await enqueueSideEffect(() => closeTimeEntry(true));
+  if (taskId) {
+    await markTaskDone(taskId);
+  }
+  await applyFocusState(false);
+  lastCategoryIds = [];
+  lastBlockedAppIds = [];
+  lastBlockedApps = [];
+  const next = await snapshot();
+  broadcastFocusSessionUpdated();
+  return next;
+}
+
+export async function completeFocusSessionCommand(): Promise<FocusSessionSnapshot> {
+  return completeFocusSession();
+}
+
 export async function toggleFocusSessionCommand(): Promise<void> {
   const state = await snapshot();
   if (state.pomodoro.phase === "idle") {
@@ -747,6 +799,7 @@ ipcMain.handle("kepler:focus-session:pause", () => pauseFocusSession());
 ipcMain.handle("kepler:focus-session:resume", () => resumeFocusSession());
 ipcMain.handle("kepler:focus-session:skip", () => skipFocusSession());
 ipcMain.handle("kepler:focus-session:stop", () => stopFocusSession());
+ipcMain.handle("kepler:focus-session:complete", () => completeFocusSession());
 ipcMain.handle("kepler:focus-session:snooze-app", (_e, appId: string) =>
   snoozeBlockedFocusApp(appId),
 );

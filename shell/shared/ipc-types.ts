@@ -377,6 +377,8 @@ export interface KeplerApi {
     resume(): Promise<FocusSessionSnapshot>;
     skip(): Promise<FocusSessionSnapshot>;
     stop(): Promise<FocusSessionSnapshot>;
+    /** «Выполнена»: stop + пометить привязанную задачу выполненной. */
+    complete(): Promise<FocusSessionSnapshot>;
     onOpenShell(listener: () => void): () => void;
     onUpdated(listener: () => void): () => void;
     onAppBlocked(

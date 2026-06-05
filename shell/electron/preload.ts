@@ -86,6 +86,7 @@ const api: KeplerApi = {
     resume: () => ipcRenderer.invoke("kepler:focus-session:resume"),
     skip: () => ipcRenderer.invoke("kepler:focus-session:skip"),
     stop: () => ipcRenderer.invoke("kepler:focus-session:stop"),
+    complete: () => ipcRenderer.invoke("kepler:focus-session:complete"),
     onOpenShell: (listener) => {
       const handler = () => listener();
       ipcRenderer.on("kepler:focus-session:open-shell", handler);

@@ -14,6 +14,10 @@ import {
   Loader2,
   RefreshCw,
   Check,
+  Pause,
+  Play,
+  Square,
+  Pencil,
 } from "@lucide/vue";
 import { KbdKey, ActionsPanel } from "@kosmos/visuals";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
@@ -21,13 +25,25 @@ import ClipboardQuickPanel from "../components/ClipboardQuickPanel.vue";
 import FileSearchResultRow from "../components/FileSearchResultRow.vue";
 import FocusCommandPanel from "../components/FocusCommandPanel.vue";
 import { dedupeCommandsById } from "../lib/launcherCommands";
+import {
+  buildFocusAwareCommands,
+  FOCUS_PAUSE_TOGGLE_ID,
+  FOCUS_DONE_ID,
+  FOCUS_STOP_ID,
+  FOCUS_EDIT_ID,
+} from "../lib/focusLauncherCommands";
 import delphiSvg from "../assets/delphi.svg";
 import delphiAddSvg from "../assets/delphi-add.svg";
 import arraSvg from "../assets/arra.svg";
 import edenSvg from "../assets/eden.svg";
 import edenAddSvg from "../assets/eden-add.svg";
 import edenDiarySvg from "../assets/eden-diary.svg";
-import type { ClipboardHistoryItem, CommandRecord, UpdateState } from "@shared/ipc-types";
+import type {
+  ClipboardHistoryItem,
+  CommandRecord,
+  FocusSessionSnapshot,
+  UpdateState,
+} from "@shared/ipc-types";
 
 interface BuiltInIconConfig {
   icon?: Component;
@@ -90,7 +106,21 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
   },
 };
 
+const FOCUS_GRADIENT = { from: "oklch(0.7 0.16 145)", to: "oklch(0.46 0.14 165)" };
+
 function builtInIconFor(cmd: CommandRecord): BuiltInIconConfig | null {
+  // Синтетические focus-команды (см. focusLauncherCommands.ts): иконки задаём
+  // здесь, т.к. их нет в command bus. Toggle паузы — Play/Pause по состоянию.
+  switch (cmd.id) {
+    case FOCUS_PAUSE_TOGGLE_ID:
+      return { icon: focusPaused.value ? Play : Pause, ...FOCUS_GRADIENT };
+    case FOCUS_DONE_ID:
+      return { icon: Check, ...FOCUS_GRADIENT };
+    case FOCUS_STOP_ID:
+      return { icon: Square, ...FOCUS_GRADIENT };
+    case FOCUS_EDIT_ID:
+      return { icon: Pencil, ...FOCUS_GRADIENT };
+  }
   return BUILTIN_ICONS[cmd.id] ?? null;
 }
 
@@ -98,6 +128,35 @@ const query = ref("");
 const commands = ref<CommandRecord[]>([]);
 const fileCommands = ref<CommandRecord[]>([]);
 const selectedIndex = ref(0);
+
+// Состояние активной фокус-сессии — управляет тем, какие focus-команды видны в
+// лаунчере (idle: «Начать фокус»; active: пауза/выполнена/завершить/редактировать).
+const focusSnapshot = ref<FocusSessionSnapshot | null>(null);
+const focusActive = computed(
+  () => !!focusSnapshot.value && focusSnapshot.value.pomodoro.phase !== "idle",
+);
+const focusPaused = computed(() => !!focusSnapshot.value?.pomodoro.isPaused);
+// Открыта ли focus-панель в режиме редактирования активной сессии (футер →
+// «Продолжить») vs запуска новой (футер → «Начать фокус»).
+const focusEditMode = ref(false);
+
+// Команды для отображения: сырой `commands` прогоняется через состояние-зависимую
+// трансформацию focus-команд. Используется во ВСЕХ местах рендера списка вместо
+// `commands.value`, чтобы favorites/recent/all согласованно учитывали состояние.
+const displayCommands = computed<CommandRecord[]>(() =>
+  buildFocusAwareCommands(commands.value, {
+    active: focusActive.value,
+    paused: focusPaused.value,
+  }),
+);
+
+async function refreshFocusSnapshot(): Promise<void> {
+  try {
+    focusSnapshot.value = await window.kepler.focusSession.snapshot();
+  } catch {
+    /* main may not be ready — ignore */
+  }
+}
 type LauncherMode = "commands" | "clipboard" | "focus" | "hidden";
 const mode = ref<LauncherMode>("commands");
 const clipboardItems = ref<ClipboardHistoryItem[]>([]);
@@ -216,8 +275,8 @@ function scoreCommand(cmd: CommandRecord, q: string): number {
 
 const filteredCommands = computed<CommandRecord[]>(() => {
   const q = query.value.trim();
-  if (!q) return commands.value;
-  return commands.value
+  if (!q) return displayCommands.value;
+  return displayCommands.value
     .map<ScoredCommand>((cmd) => ({ cmd, score: scoreCommand(cmd, q) }))
     .filter((x) => x.score >= 0)
     .sort((a, b) => b.score - a.score)
@@ -428,7 +487,7 @@ function recordRecent(id: string) {
 
 const groupedNoQuery = computed(() => {
   if (query.value.trim()) return null;
-  const byId = new Map(commands.value.map((c) => [c.id, c]));
+  const byId = new Map(displayCommands.value.map((c) => [c.id, c]));
   const favorites: CommandRecord[] = [];
   for (const id of favoriteIds.value) {
     const c = byId.get(id);
@@ -441,7 +500,7 @@ const groupedNoQuery = computed(() => {
   }
   // «Все» намеренно содержит все команды — в том числе те, что уже есть в
   // других секциях. Это дублирование запрошено: список «Все» должен быть полным.
-  return { favorites, recent, all: commands.value };
+  return { favorites, recent, all: displayCommands.value };
 });
 
 const selectedCommand = computed<CommandRecord | null>(() => {
@@ -478,6 +537,10 @@ function leaveHiddenMode(): void {
   query.value = "";
   selectedIndex.value = 0;
   savePersistedState();
+  void nextTick(() => {
+    inputRef.value?.focus();
+    inputRef.value?.select();
+  });
 }
 
 function openGitHub() {
@@ -507,6 +570,19 @@ function onInput() {
 
 function onListScroll() {
   scheduleSaveState();
+}
+
+// Клик по нефокусируемому ряду / пустому месту списка не должен уводить DOM-фокус
+// на body — иначе @keydown на `.launcher` перестаёт получать события и ломается
+// клавиатурная навигация/ввод. Держим фокус на поиске (click по @click ряду всё
+// равно срабатывает). В focus-режиме (своя contenteditable-панель) — не вмешиваемся.
+function onListMouseDown(e: MouseEvent) {
+  if (mode.value !== "commands" && mode.value !== "clipboard") return;
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
+  if (target.closest('input, textarea, [contenteditable="true"]')) return;
+  e.preventDefault();
+  inputRef.value?.focus();
 }
 
 // Шаблон уважает «виртуальный» banner-item впереди: selectedIndex 0 — это
@@ -561,6 +637,30 @@ async function invokeSelected() {
   }
   if (row.kind === "banner") {
     await onBannerClick();
+    return;
+  }
+  // Синтетические focus-команды (см. focusLauncherCommands.ts) — управление
+  // активной сессией. Лаунчер НЕ закрываем: список перерисуется на новое
+  // состояние (пауза↔продолжить; после stop/done вернётся «Начать фокус»).
+  if (row.cmd.id === FOCUS_PAUSE_TOGGLE_ID) {
+    focusSnapshot.value = focusPaused.value
+      ? await window.kepler.focusSession.resume()
+      : await window.kepler.focusSession.pause();
+    selectedIndex.value = 0;
+    return;
+  }
+  if (row.cmd.id === FOCUS_DONE_ID) {
+    focusSnapshot.value = await window.kepler.focusSession.complete();
+    selectedIndex.value = 0;
+    return;
+  }
+  if (row.cmd.id === FOCUS_STOP_ID) {
+    focusSnapshot.value = await window.kepler.focusSession.stop();
+    selectedIndex.value = 0;
+    return;
+  }
+  if (row.cmd.id === FOCUS_EDIT_ID) {
+    await enterFocusMode(true);
     return;
   }
   recordRecent(row.cmd.id);
@@ -642,10 +742,11 @@ function leaveClipboardMode(): void {
   savePersistedState();
 }
 
-async function enterFocusMode(): Promise<void> {
+async function enterFocusMode(edit = false): Promise<void> {
   actionsOpen.value = false;
   menuOpen.value = false;
   hiddenPanelOpen.value = false;
+  focusEditMode.value = edit;
   mode.value = "focus";
   query.value = "";
   selectedIndex.value = 0;
@@ -659,7 +760,16 @@ function leaveFocusMode(): void {
   mode.value = "commands";
   query.value = "";
   selectedIndex.value = 0;
+  focusEditMode.value = false;
+  void refreshFocusSnapshot();
   savePersistedState();
+  // Контейнер focus-панели (contenteditable) размонтируется → фокус уходит на
+  // body, и @keydown на `.launcher` перестаёт получать события. Возвращаем
+  // фокус на поиск, иначе стрелки/ввод мертвы. См. focus-mode UX отчёт.
+  void nextTick(() => {
+    inputRef.value?.focus();
+    inputRef.value?.select();
+  });
 }
 
 function leaveCommandMode(): void {
@@ -889,6 +999,7 @@ let offCommandsUpdated = () => {};
 let offClipboardOpen = () => {};
 let offClipboardUpdated = () => {};
 let offFocusOpen = () => {};
+let offFocusSessionUpdated = () => {};
 let offCommandVisibilityStorage = () => {};
 let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let fileSearchRun = 0;
@@ -941,6 +1052,7 @@ onMounted(async () => {
       selectedIndex.value = 0;
     }
     void refreshCommands();
+    void refreshFocusSnapshot();
     void nextTick(() => {
       if (mode.value !== "focus") {
         inputRef.value?.focus();
@@ -963,6 +1075,12 @@ onMounted(async () => {
   offFocusOpen = window.kepler.focusSession.onOpenShell(() => {
     void enterFocusMode();
   });
+  // Состояние сессии могло измениться извне (виджет: старт/пауза/стоп) пока
+  // лаунчер открыт — пересобираем focus-команды.
+  offFocusSessionUpdated = window.kepler.focusSession.onUpdated(() => {
+    void refreshFocusSnapshot();
+  });
+  void refreshFocusSnapshot();
   const onStorage = (event: StorageEvent) => {
     if (event.key !== HIDDEN_COMMANDS_KEY) return;
     hiddenCommandIds.value = loadHiddenCommandIds();
@@ -997,6 +1115,7 @@ onUnmounted(() => {
   offCommandsUpdated();
   offClipboardOpen();
   offClipboardUpdated();
+  offFocusSessionUpdated();
   offFocusOpen();
   offCommandVisibilityStorage();
   fileSearchRun++;
@@ -1107,6 +1226,7 @@ onUnmounted(() => {
       class="list kosmos-scroll"
       :class="{ 'list--clipboard': mode === 'clipboard', 'list--focus': mode === 'focus' }"
       @scroll="onListScroll"
+      @mousedown="onListMouseDown"
     >
       <ClipboardQuickPanel
         v-if="mode === 'clipboard'"
@@ -1509,7 +1629,7 @@ onUnmounted(() => {
         class="launcher-footer__hint-btn launcher-footer__hint-btn--primary"
         @click="void focusPanelRef?.start()"
       >
-        Начать фокус <KbdKey>↵</KbdKey>
+        {{ focusEditMode ? "Продолжить" : "Начать фокус" }} <KbdKey>↵</KbdKey>
       </button>
     </div>
 
