@@ -3,7 +3,7 @@
 Extension host — production foundation Kepler shell: продуктовые апки рендерятся как **Vue extension bundles** в отдельных BrowserWindow внутри kepler-shell, без собственных Electron .exe.
 
 ::: tip Текущий статус — Production foundation (Phase 4 + 6.0 ✅)
-Loader (`shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Мигрированы **все 5 Vue-extension апок**: Horologion, Delphi, Arrancador (full completion 2026-05-18: scanner + launcher + RAWG + SQOBA), Eden (Phase 6.0), Akasha (Vue reader). Dashboard теперь встроенный shell view.
+Loader (`shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Активные Vue-extension апки: Delphi, Arrancador, Eden, Akasha. Dashboard и Focus Session теперь встроенные shell views. Horologion source archived locally and is not active.
 
 RAM-эффект миграции зафиксирован в [RAM benchmarks](/concepts/ram-benchmarks): −124 MB Working Set / −209 MB Private Bytes / −4 процесса относительно baseline'а из 4 standalone Electron-апок (без Eden — Eden replaced standalone в Phase 6.0.A).
 :::
@@ -79,7 +79,7 @@ function resolveExtensionDir(id: string): string | null {
 }
 ```
 
-Per-id lookup означает, что Dashboard может быть user-installed (свежий через `ext:install`), Horologion — bundled (приехал с installer), и оба видны в одном `listExtensions()`. Удаление user-папки (см. [Extension installer](/concepts/extension-installer)) откатывает конкретный extension обратно на bundled.
+Per-id lookup означает, что один extension может быть user-installed (свежий через `ext:install`) или bundled (приехал с installer), и оба источника видны в одном `listExtensions()`. Удаление user-папки (см. [Extension installer](/concepts/extension-installer)) откатывает конкретный extension обратно на bundled.
 
 `listExtensions()` дедуплицирует по `id` — если один и тот же `<id>` присутствует и в user-installed, и в bundled, побеждает первый встреченный (т.е. user-installed override).
 

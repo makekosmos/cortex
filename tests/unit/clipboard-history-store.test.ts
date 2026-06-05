@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   classifyClipboardText,
   createClipboardHistoryStore,
@@ -139,5 +142,55 @@ describe("clipboard history store", () => {
     store.clear();
 
     expect(store.list()).toEqual([]);
+  });
+
+  test("persists entries and settings across store instances", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "kosmos-clipboard-"));
+    try {
+      const storagePath = path.join(dir, "clipboard-history.json");
+      const first = createClipboardHistoryStore({ storagePath, now: () => 100 });
+      first.record("persist me");
+      first.updateSettings({ retentionDays: 12, maxBytes: 1024 * 1024 });
+
+      const second = createClipboardHistoryStore({ storagePath, now: () => 200 });
+
+      expect(second.settings()).toEqual({ retentionDays: 12, maxBytes: 1024 * 1024 });
+      expect(second.list()).toMatchObject([{ text: "persist me" }]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("prunes expired unpinned items but keeps pinned entries", () => {
+    let now = 0;
+    const store = createClipboardHistoryStore({ now: () => now });
+
+    now = 1_000;
+    const old = store.record("old");
+    expect(old).not.toBeNull();
+    store.togglePin(old!.id);
+    now = 2_000;
+    store.record("unpinned old");
+    now = 4 * 24 * 60 * 60 * 1000;
+
+    store.updateSettings({ retentionDays: 1 });
+
+    expect(store.list().map((item) => item.text)).toEqual(["old"]);
+  });
+
+  test("prunes oldest unpinned items when storage budget is exceeded", () => {
+    let now = 10;
+    const store = createClipboardHistoryStore({ now: () => now++ });
+
+    const pinned = store.record("pin " + "x".repeat(80));
+    expect(pinned).not.toBeNull();
+    store.togglePin(pinned!.id);
+    store.record("first " + "a".repeat(80));
+    store.record("second " + "b".repeat(80));
+
+    const pinnedBytes = store.list().find((item) => item.pinned)?.storageBytes ?? 0;
+    store.updateSettings({ maxBytes: pinnedBytes + 80 });
+
+    expect(store.list().map((item) => item.text)).toEqual([pinned!.text]);
   });
 });

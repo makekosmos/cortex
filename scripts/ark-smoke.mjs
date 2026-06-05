@@ -39,7 +39,7 @@ const steps = [
 ];
 
 // Заметка: после Phase B-E + 6.0.A смок-матрица сжалась.
-// — Eden, Dashboard, Delphi, Horologion, Arrancador — Vue extensions в `extensions/<name>`,
+// — Eden, Dashboard, Delphi, Arrancador — Vue extensions в `extensions/<name>`,
 //   у них нет отдельных Electron unit / e2e наборов (host берёт на себя через Kepler shell).
 // — Standalone Eden удалён в Phase 6.0.A, миграции из vault'а Heart больше нет.
 // — Standalone сценарии покрывает `bun run --cwd shell test:e2e`,

@@ -13,6 +13,7 @@ import {
 import UpdateBanner from "./settings/components/UpdateBanner.vue";
 import AboutTab from "./settings/tabs/AboutTab.vue";
 import AppCommandsTab from "./settings/tabs/AppCommandsTab.vue";
+import ClipboardSettingsTab from "./settings/tabs/ClipboardSettingsTab.vue";
 import DebugTab from "./settings/tabs/DebugTab.vue";
 import DictationTab from "./settings/tabs/DictationTab.vue";
 import ExportTab from "./settings/tabs/ExportTab.vue";
@@ -558,6 +559,10 @@ onBeforeUnmount(() => {
 
         <template v-else-if="activeTab === 'file-search'">
           <FileSearchTab :intro="activeAdvancedIntro" />
+        </template>
+
+        <template v-else-if="activeTab === 'clipboard'">
+          <ClipboardSettingsTab :intro="activeAdvancedIntro" />
         </template>
 
         <!-- Extensions tab — плоский список установленных. Обновления подтягиваются из catalog.json. -->

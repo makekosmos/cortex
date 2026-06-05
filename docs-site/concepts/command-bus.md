@@ -117,7 +117,7 @@ commands.invoke({ id: string, params?: object })   → { ok: true }   // async �
 
 ```ts
 interface CommandManifest {
-  id: string; // глобально уникальный, например "horologion:pomodoro:25"
+  id: string; // глобально уникальный, например "delphi:task:create"
   title: string; // что показывать в launcher
   subtitle?: string; // обычно имя апки
   category: "open" | "action"; // 'action' — dynamic ручки апок; 'open' — static от kepler-shell
@@ -150,24 +150,24 @@ interface CommandRecord {
 
 ```mermaid
 sequenceDiagram
-  participant H as Horologion
+  participant D as Delphi
   participant B as kepler-backend
   participant K as kepler-shell
-  H->>B: connect (WS, bearer auth)
-  H->>B: commands.register([{ id: "horologion:pomodoro:25", ... }])
+  D->>B: connect (WS, bearer auth)
+  D->>B: commands.register([{ id: "delphi:task:create", ... }])
   B->>B: registrations[client_h].push(...)
   B-->>K: event commands_changed (snapshot)
-  B-->>H: event commands_changed (snapshot)
+  B-->>D: event commands_changed (snapshot)
   Note over K: kepler-shell перефетчит kepler:commands:list
-  K->>B: commands.invoke({ id: "horologion:pomodoro:25" })
-  B-->>H: event command_invoked
+  K->>B: commands.invoke({ id: "delphi:task:create" })
+  B-->>D: event command_invoked
   B-->>K: event command_invoked
-  H->>H: filter by prefix "horologion:" → start таймер
+  D->>D: filter by prefix "delphi:" → create task
   K->>K: ignore (не owning)
-  Note over H: апка квитает / падает
-  H--xB: WS disconnect
+  Note over D: апка квитает / падает
+  D--xB: WS disconnect
   B->>B: unregister_all(client_h)
-  B-->>K: event commands_changed (snapshot без horologion:*)
+  B-->>K: event commands_changed (snapshot без delphi:*)
 ```
 
 1. App connects к WS (kepler-mode `ArkClient`).
@@ -184,49 +184,39 @@ sequenceDiagram
 
 ## Code refs
 
-| Слой                 | Файл                                         | Что делает                                                                                                                                                                                                                                                                                                                          |
-| -------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend registry     | `services/kepler-backend/src/command_bus.rs` | `CommandBus` структура (registrations, broadcast), unit-тесты                                                                                                                                                                                                                                                                       |
-| Backend WS dispatch  | `services/kepler-backend/src/ws_server.rs`   | intercept `commands.*` operations, broadcast events                                                                                                                                                                                                                                                                                 |
-| TS SDK               | `packages/ark/src/ark-client.ts`             | `ArkCommandsApi`: `register/unregister/list/invoke/onInvoked/onChanged`                                                                                                                                                                                                                                                             |
-| Launcher merge       | `shell/electron/main.ts`                     | `kepler:commands:list` IPC = static `COMMANDS` ∪ `arkClient.commands.list()`                                                                                                                                                                                                                                                        |
-| Launcher invoke      | `shell/electron/main.ts`                     | `kepler:commands:invoke` — static exec локально, dynamic — `arkClient.commands.invoke(id)`                                                                                                                                                                                                                                          |
-| Static open-commands | `shell/electron/commands.ts`                 | `COMMANDS: InternalCommand[]` — open app tiles (Delphi / Horologion / Arrancador), builtin Kepler commands (Settings / Dashboard / Check updates), extension routes (`delphi:today`, `horologion:pomodoro`, …). Полный список — см. [Kepler → Static commands](/apps/kepler#static-commands-registry-в-shell-electron-commands-ts). |
+| Слой                     | Файл                                         | Что делает                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend registry         | `services/kepler-backend/src/command_bus.rs` | `CommandBus` структура (registrations, broadcast), unit-тесты                                                                                                                                                                                                                                                                                       |
+| Backend WS dispatch      | `services/kepler-backend/src/ws_server.rs`   | intercept `commands.*` operations, broadcast events                                                                                                                                                                                                                                                                                                 |
+| TS SDK                   | `packages/ark/src/ark-client.ts`             | `ArkCommandsApi`: `register/unregister/list/invoke/onInvoked/onChanged`                                                                                                                                                                                                                                                                             |
+| Launcher merge           | `shell/electron/main.ts`                     | `kepler:commands:list` IPC = static `COMMANDS` ∪ `arkClient.commands.list()`                                                                                                                                                                                                                                                                        |
+| Launcher invoke          | `shell/electron/main.ts`                     | `kepler:commands:invoke` — static exec локально, dynamic — `arkClient.commands.invoke(id)`                                                                                                                                                                                                                                                          |
+| Static/internal commands | `shell/electron/commands.ts`                 | `COMMANDS: InternalCommand[]` — shell-owned commands (Settings / Dashboard / Clipboard History / Focus command set / Check updates). Extension commands come from active `manifest.json` files or runtime dynamic registration. Полный список — см. [Kepler → Static commands](/apps/kepler#static-commands-registry-в-shell-electron-commands-ts). |
 
 ## Examples
 
-### Регистрация (Horologion extension при старте)
+### Регистрация (Delphi extension при старте)
 
-После миграции в extensions у апок нет собственного Electron main — всё идёт через `window.kepler.ark.request(...)` из renderer'а. Реальный пример из `extensions/horologion/src/main.ts`:
+После миграции в extensions у апок нет собственного Electron main — всё идёт через `window.kepler.ark.request(...)` из renderer'а. Упрощённый пример:
 
 ```ts
-// extensions/horologion/src/main.ts (renderer-side)
+// extension renderer-side
 const kepler = window.kepler;
 
 if (kepler) {
-  // Register дублирует manifest.commands[] (mode:"action") — manifest даёт
-  // launcher-visibility до запуска extension'а, а commands.register нужен
-  // чтобы shell::awaitExtensionCommand увидел id в arkClient.commands.list
-  // перед dispatch'ем. Backend dedup'ит по id — двойная регистрация безопасна.
   void kepler.ark
     .request("commands.register", {
       commands: [
         {
-          id: "horologion:pomodoro:25",
-          title: "Помодоро 25 минут",
-          subtitle: "Horologion",
-          category: "action",
-        },
-        {
-          id: "horologion:stopwatch:start",
-          title: "Старт секундомера",
-          subtitle: "Horologion",
+          id: "delphi:task:create",
+          title: "Создать задачу",
+          subtitle: "Delphi",
           category: "action",
         },
       ],
     })
     .catch((err: unknown) => {
-      console.warn("[horologion-extension] commands.register failed:", err);
+      console.warn("[delphi-extension] commands.register failed:", err);
     });
 }
 ```
@@ -237,13 +227,10 @@ if (kepler) {
 // Подписка через kepler.ark.subscribe — flat event с полем `event`.
 const off = kepler.ark.subscribe((e) => {
   if (e.event !== "command:invoked") return;
-  if (!e.id.startsWith("horologion:")) return;
+  if (!e.id.startsWith("delphi:")) return;
   switch (e.id) {
-    case "horologion:pomodoro:25":
-      pomodoro.start({ minutes: 25 });
-      break;
-    case "horologion:stopwatch:start":
-      stopwatch.start();
+    case "delphi:task:create":
+      tasks.createInboxTask();
       break;
   }
 });
@@ -256,7 +243,7 @@ window.addEventListener("beforeunload", () => off());
 
 ```ts
 // shell/electron/main.ts (упрощённо)
-await arkClient.commands.invoke("horologion:pomodoro:25");
+await arkClient.commands.invoke("delphi:task:create");
 ```
 
 ### Listen на изменения списка (kepler-shell)
@@ -282,7 +269,7 @@ client.commands.onChanged(() => {
 | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | «Покажи мне task с id X»         | ARK objects (get / list), не command bus                                                                  |
 | «Создай новую заметку с title Y» | command bus (action `<app>:note:create`)                                                                  |
-| «Запусти Pomodoro 25 минут»      | command bus (action `horologion:pomodoro:25`)                                                             |
+| «Начни фокус на 25 минут»        | shell internal command `kepler:focus-session`, дальше Focus Session вызывает `pomodoro.start`             |
 | «Объект task-1 изменился»        | entity events (`onEntityChanged`)                                                                         |
 | «Открой Delphi»                  | manifest-declared в `extensions/delphi/manifest.json` `commands[]` (`delphi:open` → `openExtension(...)`) |
 

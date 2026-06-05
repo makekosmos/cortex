@@ -1,94 +1,26 @@
-import { BrowserWindow, clipboard, nativeImage, screen, shell } from "electron";
+import { BrowserWindow, clipboard, nativeImage, shell } from "electron";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import type { ClipboardHistoryItem } from "../shared/ipc-types";
+import type {
+  ClipboardHistoryItem,
+  ClipboardHistorySettings,
+  ClipboardHistorySettingsPatch,
+  ClipboardHistoryStats,
+} from "../shared/ipc-types";
 import { createClipboardHistoryStore } from "./clipboard-history-store";
+import { keplerDataDir } from "./data-dir";
 import { safeHandle } from "./ipc-safe";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const CLIPBOARD_WINDOW_WIDTH = 760;
-const CLIPBOARD_WINDOW_HEIGHT = 520;
-const CLIPBOARD_WINDOW_MIN_WIDTH = 560;
-const CLIPBOARD_WINDOW_MIN_HEIGHT = 380;
 const CLIPBOARD_POLL_MS = 800;
 
-const store = createClipboardHistoryStore();
-let clipboardWin: BrowserWindow | null = null;
+const store = createClipboardHistoryStore({
+  storagePath: path.join(keplerDataDir(), "clipboard-history.json"),
+});
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let lastSeenText = "";
 let lastSeenImageDataUrl = "";
 let lastSeenFilePaths = "";
 let registered = false;
 let shellOpener: (() => void) | null = null;
-
-function isHeadlessOrTest(): boolean {
-  return process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
-}
-
-export function openClipboardHistoryWindow(): void {
-  if (clipboardWin && !clipboardWin.isDestroyed()) {
-    if (isHeadlessOrTest()) return;
-    clipboardWin.show();
-    clipboardWin.focus();
-    clipboardWin.webContents.send("kepler:clipboard-history:updated");
-    return;
-  }
-
-  const workArea = screen.getPrimaryDisplay().workArea;
-  const x = Math.round(workArea.x + (workArea.width - CLIPBOARD_WINDOW_WIDTH) / 2);
-  const y = Math.round(workArea.y + (workArea.height - CLIPBOARD_WINDOW_HEIGHT) / 2);
-
-  clipboardWin = new BrowserWindow({
-    width: CLIPBOARD_WINDOW_WIDTH,
-    height: CLIPBOARD_WINDOW_HEIGHT,
-    minWidth: CLIPBOARD_WINDOW_MIN_WIDTH,
-    minHeight: CLIPBOARD_WINDOW_MIN_HEIGHT,
-    x,
-    y,
-    show: !isHeadlessOrTest(),
-    title: "Буфер обмена",
-    backgroundColor: "#0d0d0d",
-    frame: true,
-    titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: "#00000000",
-      symbolColor: "#FFFFFF",
-      height: 36,
-    },
-    webPreferences: {
-      preload: path.join(__dirname, "preload.mjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: true,
-    },
-  });
-
-  clipboardWin.webContents.on("before-input-event", (event, input) => {
-    if (input.key === "F12" && !input.alt && !input.control && !input.shift && !input.meta) {
-      event.preventDefault();
-      try {
-        clipboardWin?.webContents.toggleDevTools();
-      } catch {
-        /* webContents destroyed mid-flight */
-      }
-    }
-  });
-
-  clipboardWin.on("closed", () => {
-    clipboardWin = null;
-  });
-
-  const devUrl = process.env.VITE_DEV_SERVER_URL;
-  if (devUrl) {
-    void clipboardWin.loadURL(`${devUrl}#clipboard-history`);
-  } else {
-    void clipboardWin.loadFile(path.join(__dirname, "../dist/index.html"), {
-      hash: "clipboard-history",
-    });
-  }
-}
 
 export function setClipboardHistoryShellOpener(opener: () => void): void {
   shellOpener = opener;
@@ -99,11 +31,12 @@ export function openClipboardHistoryShell(): void {
     shellOpener();
     return;
   }
-  openClipboardHistoryWindow();
+  console.warn("[clipboard-history] shell opener is not registered");
 }
 
 export function startClipboardHistory(): void {
   if (pollTimer) return;
+  store.pruneNow();
   recordClipboardSnapshot();
   pollTimer = setInterval(() => {
     recordClipboardSnapshot();
@@ -184,9 +117,21 @@ export function registerClipboardHistoryIpc(): void {
     store.clearAll();
     broadcastUpdated();
   });
-  safeHandle("kepler:clipboard-history:hide", async (): Promise<void> => {
-    clipboardWin?.hide();
+  safeHandle("kepler:clipboard-history:settings", async (): Promise<ClipboardHistorySettings> => {
+    return store.settings();
   });
+  safeHandle(
+    "kepler:clipboard-history:settings:update",
+    async (_event, patch: ClipboardHistorySettingsPatch): Promise<ClipboardHistorySettings> => {
+      const settings = store.updateSettings(patch);
+      broadcastUpdated();
+      return settings;
+    },
+  );
+  safeHandle("kepler:clipboard-history:stats", async (): Promise<ClipboardHistoryStats> => {
+    return store.stats();
+  });
+  safeHandle("kepler:clipboard-history:hide", async (): Promise<void> => {});
 }
 
 function recordClipboardSnapshot(): void {

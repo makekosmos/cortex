@@ -95,6 +95,11 @@ import {
 import { registerMarketplaceIpc, startPeriodicCatalogCheck } from "./extension-marketplace";
 // Side-effect: регистрирует kepler:focus-widget:* IPC handlers.
 import { setupFocusWidgetBackendSync, teardownFocusWidgetBackendSync } from "./focus-widget";
+import {
+  setupFocusSessionBackendSync,
+  setFocusSessionShellOpener,
+  teardownFocusSessionBackendSync,
+} from "./focus-session";
 import { setupDictationHotkey } from "./dictation-pill";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
@@ -120,8 +125,6 @@ const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 720;
 const WINDOW_HEIGHT = 460;
-const CLIPBOARD_SURFACE_WIDTH = 750;
-const CLIPBOARD_SURFACE_HEIGHT = 475;
 const WINDOW_STATE_FILENAME = "kepler-shell-window-state.json";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
@@ -624,16 +627,13 @@ function showLauncher() {
 function showClipboardHistoryLauncher() {
   showLauncher();
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const display = screen.getPrimaryDisplay().workAreaSize;
-  const saved = loadWindowState();
-  const base = saved ?? defaultLauncherPosition();
-  mainWindow.setBounds({
-    x: Math.max(0, Math.round(base.x - (CLIPBOARD_SURFACE_WIDTH - WINDOW_WIDTH) / 2)),
-    y: Math.max(0, Math.round(display.height * 0.18)),
-    width: CLIPBOARD_SURFACE_WIDTH,
-    height: CLIPBOARD_SURFACE_HEIGHT,
-  });
   mainWindow.webContents.send("kepler:clipboard-history:open-shell");
+}
+
+function showFocusSessionLauncher() {
+  showLauncher();
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("kepler:focus-session:open-shell");
 }
 
 function hideLauncher() {
@@ -770,6 +770,7 @@ async function resetArkClient(reason: string): Promise<void> {
   // останется double-subscribe на новый клиент.
   teardownPomodoroNotifier();
   teardownFocusWidgetBackendSync();
+  teardownFocusSessionBackendSync();
   if (prev) {
     try {
       await prev.stop();
@@ -874,6 +875,11 @@ async function initArkClient(): Promise<void> {
       setupFocusWidgetBackendSync({ arkClient: client });
     } catch (e) {
       keplerLog.error("focus-widget", "backend sync setup failed", { err: String(e) });
+    }
+    try {
+      setupFocusSessionBackendSync({ arkClient: client });
+    } catch (e) {
+      keplerLog.error("focus-session", "backend sync setup failed", { err: String(e) });
     }
     // Dictation hotkey — registers globalShortcut из dictation-config'а
     // backend'а и подписывается на `dictation_config_changed` для
@@ -1295,12 +1301,12 @@ async function launchRaycastDeclaredCommand(
   return true;
 }
 
-safeHandle("kepler:commands:invoke", async (_e, id: string): Promise<void> => {
+safeHandle("kepler:commands:invoke", async (event, id: string): Promise<void> => {
   // 1) Internal commands win — exec локально.
   const internal = findCommand(id);
   if (internal) {
     try {
-      await internal.exec();
+      await internal.exec(event);
     } catch (e) {
       console.error(`[kepler-shell] command ${id} failed:`, e);
     }
@@ -1683,6 +1689,7 @@ app.whenReady().then(async () => {
   spawnBackend();
   createLauncher();
   setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
+  setFocusSessionShellOpener(showFocusSessionLauncher);
   setTrayVisibilityController(setTrayVisible);
   setTrayVisible(isTrayIconEnabled());
   if (shouldShowLauncherOnStartup(process.argv)) {
@@ -1851,6 +1858,7 @@ app.on("will-quit", () => {
   console.error("[kepler-shell] will-quit: starting cleanup");
   globalShortcut.unregisterAll();
   setExtensionArkBridge({ request: null, subscribe: null });
+  teardownFocusSessionBackendSync();
   teardownPomodoroNotifier();
   stopClipboardHistory();
   if (windowStateSaveTimer) {

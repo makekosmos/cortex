@@ -1,6 +1,6 @@
 # Kosmos
 
-> Local-first монорепо для личной экосистемы: ARK runtime (Rust + SQLite + FTS5) + Electron-приложения (Kepler launcher + Vue extensions: Eden, Horologion, Delphi, Arrancador) + Android sync.
+> Local-first монорепо для личной экосистемы: ARK runtime (Rust + SQLite + FTS5) + Electron-приложения (Kepler launcher + Vue extensions: Eden, Delphi, Arrancador, Akasha; Focus Session встроен в shell) + Android sync.
 
 Эти ссылки — ключевой контекст для агентов, работающих над репо. Читай по порядку для полной картины архитектуры и правил. Если нужен весь контекст одним fetch'ом — [/full-llms.txt](/full-llms.txt).
 

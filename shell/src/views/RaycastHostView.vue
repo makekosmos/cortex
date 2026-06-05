@@ -31,7 +31,7 @@ const sessionId = computed(() => {
 onMounted(async () => {
   const id = sessionId.value;
   if (!id) {
-    error.value = "Сессия Raycast не передана";
+    error.value = "Сессия команды не передана";
     return;
   }
   try {
@@ -43,7 +43,7 @@ onMounted(async () => {
       });
     }
     snapshot.value = await window.kepler.raycast.snapshot(id);
-    if (!snapshot.value) error.value = "Сессия Raycast не найдена";
+    if (!snapshot.value) error.value = "Сессия команды не найдена";
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err);
   }
@@ -87,7 +87,7 @@ function dismissFeedback(id: number): void {
 </script>
 
 <template>
-  <DesktopChrome platform="windows" :title="snapshot?.commandTitle ?? 'Raycast'">
+  <DesktopChrome platform="windows" :title="snapshot?.commandTitle ?? 'Команда'">
     <DesktopContentSurface class="raycast-host">
       <RaycastListView
         v-if="snapshot?.root.type === 'List'"
@@ -116,9 +116,9 @@ function dismissFeedback(id: number): void {
         :session-id="snapshot.sessionId"
       />
       <section v-else class="raycast-host__state">
-        <h1 class="raycast-host__title">{{ snapshot?.commandTitle ?? "Raycast" }}</h1>
+        <h1 class="raycast-host__title">{{ snapshot?.commandTitle ?? "Команда" }}</h1>
         <p class="raycast-host__text">
-          {{ error ?? "Этот тип Raycast view пока не поддерживается" }}
+          {{ error ?? "Этот тип команды пока не поддерживается" }}
         </p>
       </section>
     </DesktopContentSurface>

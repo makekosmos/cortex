@@ -122,7 +122,7 @@ Substantial-задача → **proof loop** обязательно. Структ
 
 - Preload: `shell/electron/extension-preload.ts:1-215`
 - Host handlers: `shell/electron/extension-host.ts:1108-1504` (ark proxy `:1117`, navigation `:1236`, window `:1243-1372`, userData `:1396-1441`)
-- Manifest пример: `extensions/horologion/manifest.json`
+- Manifest пример: `extensions/delphi/manifest.json`
 - Real usage: `extensions/horologion/src/lib/horologionApi.ts`, `extensions/arrancador/src/lib/arkGames.ts`, `extensions/eden/src/lib/kepler-api-shim.ts`, `extensions/delphi/src/lib/electron-api-shim.ts`
 - Roadmap (Phase 13): `docs-site/apps/kepler-roadmap.md:339-361`
 - Distribution (Raycast-style two-repo update model): `docs-site/concepts/distribution.md:10`

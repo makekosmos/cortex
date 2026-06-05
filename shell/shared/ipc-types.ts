@@ -192,6 +192,76 @@ export interface ClipboardHistoryItem {
   filePath?: string;
   fileName?: string;
   mimeType?: string;
+  storageBytes?: number;
+}
+
+export interface ClipboardHistorySettings {
+  retentionDays: number;
+  maxBytes: number;
+}
+
+export interface ClipboardHistorySettingsPatch {
+  retentionDays?: number;
+  maxBytes?: number;
+}
+
+export interface ClipboardHistoryStats {
+  itemCount: number;
+  pinnedCount: number;
+  storageBytes: number;
+  oldestItemAt: number | null;
+}
+
+export type FocusSessionPhase = "idle" | "work" | "shortBreak" | "longBreak";
+
+export interface FocusSessionPomodoroState {
+  phase: FocusSessionPhase;
+  remainingMs: number;
+  totalMs: number;
+  completedPomodoros: number;
+  isRunning: boolean;
+  isPaused: boolean;
+  phaseEndsAtMs?: number | null;
+  title?: string;
+  tasks?: Array<{ id: string; title: string }>;
+}
+
+export interface FocusActiveState {
+  active: boolean;
+  blocklist_id?: string | null;
+  started_at?: string | null;
+}
+
+export interface FocusBlocklist {
+  id: string;
+  name: string;
+  domains: string[];
+  createdAt: string;
+  preset?: boolean;
+  icon?: string;
+  kind?: "domains" | "raw";
+}
+
+export interface FocusSessionTask {
+  id: string;
+  title: string;
+  status?: string | null;
+}
+
+export interface StartFocusSessionInput {
+  title: string;
+  durationMin: number;
+  taskId?: string | null;
+  taskTitle?: string | null;
+  mode?: "block" | "allow";
+  categoryIds?: string[];
+  blocklistId?: string | null;
+}
+
+export interface FocusSessionSnapshot {
+  pomodoro: FocusSessionPomodoroState;
+  focus: FocusActiveState;
+  runningEntryId: string | null;
 }
 
 export interface KeplerApi {
@@ -262,8 +332,8 @@ export interface KeplerApi {
     onUpdated(listener: () => void): () => void;
   };
 
-  /** Host-local Raycast-like clipboard history. Хранится только в памяти
-      текущего процесса Kosmos и не синхронизируется через ARK. */
+  /** Host-local clipboard history. Хранится в instance-scoped JSON storage
+      и не синхронизируется через ARK. */
   clipboardHistory: {
     list(): Promise<ClipboardHistoryItem[]>;
     copy(id: string): Promise<boolean>;
@@ -272,7 +342,26 @@ export interface KeplerApi {
     delete(id: string): Promise<boolean>;
     clear(): Promise<void>;
     clearAll(): Promise<void>;
+    settings(): Promise<ClipboardHistorySettings>;
+    updateSettings(patch: ClipboardHistorySettingsPatch): Promise<ClipboardHistorySettings>;
+    stats(): Promise<ClipboardHistoryStats>;
     hide(): Promise<void>;
+    onOpenShell(listener: () => void): () => void;
+    onUpdated(listener: () => void): () => void;
+  };
+
+  /** Shell-owned Focus Session command page. Main process owns pomodoro,
+      ARK time_entry and blocklist side effects; renderer only sends intents. */
+  focusSession: {
+    open(): Promise<void>;
+    snapshot(): Promise<FocusSessionSnapshot>;
+    listTasks(): Promise<FocusSessionTask[]>;
+    listBlocklists(): Promise<FocusBlocklist[]>;
+    start(input: StartFocusSessionInput): Promise<FocusSessionSnapshot>;
+    pause(): Promise<FocusSessionSnapshot>;
+    resume(): Promise<FocusSessionSnapshot>;
+    skip(): Promise<FocusSessionSnapshot>;
+    stop(): Promise<FocusSessionSnapshot>;
     onOpenShell(listener: () => void): () => void;
     onUpdated(listener: () => void): () => void;
   };

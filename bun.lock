@@ -108,24 +108,6 @@
         "vitest-browser-vue": "^2.1.0",
       },
     },
-    "extensions/horologion": {
-      "name": "@kosmos/extension-horologion",
-      "version": "0.1.7",
-      "dependencies": {
-        "@kosmos/ark": "workspace:*",
-        "@kosmos/visuals": "workspace:*",
-        "@lucide/vue": "^1.16.0",
-        "vue": "^3.6.0-beta.12",
-        "vue-router": "^5.0.7",
-      },
-      "devDependencies": {
-        "@vitejs/plugin-vue": "^6.0.7",
-        "@vitest/browser": "^4.1.6",
-        "@vitest/browser-playwright": "^4.1.6",
-        "vitest": "^4.1.6",
-        "vitest-browser-vue": "^2.1.0",
-      },
-    },
     "packages/ark": {
       "name": "@kosmos/ark",
       "version": "0.1.0",
@@ -350,8 +332,6 @@
     "@kosmos/extension-delphi": ["@kosmos/extension-delphi@workspace:extensions/delphi"],
 
     "@kosmos/extension-eden": ["@kosmos/extension-eden@workspace:extensions/eden"],
-
-    "@kosmos/extension-horologion": ["@kosmos/extension-horologion@workspace:extensions/horologion"],
 
     "@kosmos/visuals": ["@kosmos/visuals@workspace:packages/visuals"],
 

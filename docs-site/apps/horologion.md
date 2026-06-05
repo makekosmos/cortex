@@ -1,15 +1,15 @@
 # Horologion — трекер времени
 
 ::: tip Статус
-**MVP работает.** Единая Home-страница: pomodoro/секундомер с переключателем в шайбе (sliding pill), плавная анимация смены режимов (swipe + height transition card'а), @-mention задач Delphi (в т.ч. мульти-задачи в помодоро с равномерным дроблением сегмента), live duration в списке, edit-modal, ПКМ-удаление, группировка одинаковых, collapse/expand дней, помодоро со звуками и системными уведомлениями, tray + close-to-tray, NSIS one-click установщик, embed'нутая иконка в `.exe`.
+**Archived с 2026-06-05.** Horologion больше не активное Kosmos extension/window: `manifest.json` и `package.json` переименованы в archived variants, а текущий workflow фокус-сессий живёт в shell (`shell/electron/focus-session.ts`) и открывается внутри Shell command surface. Эта страница оставлена как legacy reference для восстановимого source archive.
 :::
 
 ::: info Имя
-Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). После Phase B-D Horologion живёт как Vue-extension внутри Kepler shell — `extensions/horologion/`. Внутренние идентификаторы (`HorologionApi`, `window.horologion`, IPC `horologion:*`) сохранились для совместимости с существующим Vue-кодом, через shim поверх Kepler ark bridge.
+Имя приложения — **Horologion** (греч. ὡρολόγιον — «часослов»). После Phase B-D Horologion жил как Vue-extension внутри Kepler shell — `extensions/horologion/`. С 2026-06-05 active surface заменён shell-owned Focus Session; внутренние идентификаторы в archived source сохранены как legacy compatibility context.
 :::
 
 - **Path**: `extensions/horologion/`
-- **Стек**: Vue 3.6 Vapor + `@kosmos/ark` + `@kosmos/visuals`. Открывается через Kepler shell `extension-host.ts` в отдельном `BrowserWindow`.
+- **Стек**: archived Vue 3.6 Vapor source + `@kosmos/ark` + `@kosmos/visuals`. Не открывается active shell `extension-host.ts`, пока не восстановить manifest/package.
 - **Аналог**: Toggl Track — без социалки, без web-app, локально, с интеграцией Delphi-задач.
 
 ## Список фич, которые планируется/нужно сделать

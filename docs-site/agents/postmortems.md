@@ -21,6 +21,37 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-05 — Shell TTL restore сбрасывал command page в список команд
+
+**Симптомы** — если закрыть Shell на странице `Буфер обмена` или `Фокус`, повторное открытие в пределах TTL из Settings возвращало список команд вместо последней command page.
+**Где жило** — `shell/src/views/LauncherView.vue::PersistedLauncherState`, `savePersistedState`, `window.kepler.window.onShow`.
+**Root cause** — persisted launcher state сохранял только `query`, `selectedIndex`, `scrollTop`, `savedAt`, но не surface `mode`. На каждом `kepler:window:show` renderer безусловно делал `mode.value = "commands"`, поэтому TTL реально восстанавливал только поисковую строку и scroll, а не текущую Shell-позицию.
+**Fix** — `PersistedLauncherState` получил `mode?: "commands" | "clipboard" | "focus"`, `savePersistedState()` пишет текущий mode, а show-handler восстанавливает fresh mode вместо безусловного сброса. `enterClipboardMode()` / `enterFocusMode()` сразу сохраняют state, чтобы закрытие Shell без дальнейшего scroll/input тоже переживало reopen.
+**Регрешн-защита** — visual capture `.tmp/visual/2026-06-05-shell-command-surfaces-clipboard/capture.mjs` теперь вызывает synthetic `kepler:window:show` после открытия Focus и проверяет, что `.focus-command` остаётся на экране.
+**Prevention** — TTL restore должен сохранять весь navigation surface, а не только локальное состояние списка. Любая новая Shell command page обязана либо участвовать в persisted `mode`, либо явно документировать, что она ephemeral и не восстанавливается.
+
+---
+
+## 2026-06-05 — Focus Session не стартовал из пустой формы
+
+**Симптомы** — при клике «Начать фокус» без ввода Shell показывал `An object could not be cloned`; правая idle-панель визуально распадалась, а задача Delphi была отдельным select вместо Horologion-style `@` mention.
+**Где жило** — `shell/src/components/FocusCommandPanel.vue::start`, `shell/electron/focus-session.ts::listTasks`, `shell/electron/focus-session.ts::startFocusSession`.
+**Root cause** — renderer отправлял в Electron IPC Vue reactive/proxy array (`selectedBlocklistIds.value`) как `categoryIds`; structured clone не умеет клонировать Proxy, поэтому main-process handler даже не получал нормальный payload. UI дополнительно разделил цель и задачу на два независимых поля, хотя исходная модель Horologion выбирала task mention внутри единого текстового поля.
+**Fix** — `FocusCommandPanel` теперь собирает IPC payload через `buildFocusSessionStartInput(...)`, который копирует reactive массивы в plain arrays перед `ipcRenderer.invoke`. Форма фокуса вернулась к Horologion-style модели: одно поле цели с `@` mention для незавершённых Delphi-задач, длительность выбирается через dropdown `25/45/60/90/Свое время`; правая панель `Сейчас` удалена полностью. Управление текущей сессией вынесено в отдельные Shell commands `kepler:focus-toggle`, `kepler:focus-pause`, `kepler:focus-resume`, `kepler:focus-skip`, `kepler:focus-complete`, как command-set модель Raycast Focus. `focus-session.ts::listTasks` фильтрует done/canceled/trashed задачи.
+**Регрешн-защита** — `bun test tests/unit/focus-command-payload.test.ts`; `bun run shell:typecheck`; `bun run lint`; `bun run --cwd shell build:js:shell`; visual screenshots `.tmp/visual/2026-06-05-shell-command-surfaces-clipboard/{shell-focus-idle-720x460.png,shell-focus-720x460.png}`.
+**Prevention** — Любой payload из Vue renderer в Electron IPC должен быть plain-data DTO. `ref([])` / `reactive([])` нельзя передавать в `ipcRenderer.invoke` напрямую; перед boundary делай `Array.from(...)` / object literal и добавляй structured-clone regression test для новых IPC DTO.
+
+---
+
+## 2026-06-05 — Встроенные команды Shell открывались вне Shell surface
+
+**Симптомы** — при запуске `Начать фокус` или `Буфер обмена` Shell либо менял размер без смены контента, либо открывал отдельное окно/route. Clipboard history также терялась после рестарта процесса.
+**Где жило** — `shell/electron/main.ts::showClipboardHistoryLauncher`, `shell/electron/clipboard-history.ts::openClipboardHistoryShell`, `shell/electron/commands.ts::kepler:focus-session`, `shell/electron/clipboard-history-store.ts::createClipboardHistoryStore`, `shell/src/views/LauncherView.vue`.
+**Root cause** — в Shell одновременно существовали две competing surface модели: встроенный режим `LauncherView` для clipboard и fallback `BrowserWindow`/hash-host route для command views. Clipboard opener дополнительно менял bounds основного окна, а focus command уходил в Raycast-compatible host вместо Shell content slot. Store был in-memory-only, поэтому lifecycle процесса был ошибочно принят за lifecycle истории.
+**Fix** — Clipboard History и Focus Session переведены в режимы `LauncherView`: opener'ы больше не создают fallback `BrowserWindow`, не меняют bounds shell'а и отправляют `kepler:clipboard-history:open-shell` / `kepler:focus-session:open-shell` в текущий launcher. `focus-session.ts` больше не импортирует Raycast host для built-in команды. Clipboard store получил instance-scoped JSON persistence, pruning по сроку/размеру и Settings tab с retention controls.
+**Регрешн-защита** — `bun test tests/unit/clipboard-history-store.test.ts`; visual verify screenshots `.tmp/visual/2026-06-05-shell-command-surfaces-clipboard/{shell-clipboard-720x460.png,shell-focus-720x460.png,settings-clipboard-880x560.png}`; `bun run shell:typecheck`; `bun run lint`; `bun run --cwd shell build:js:shell`; `bun run docs:check`; `bun run ark:guard:writes`; `bun run ark:smoke`.
+**Prevention** — Built-in Shell commands должны иметь ровно одного owner'а surface: `LauncherView` mode внутри текущего Shell. Opener built-in команды не должен иметь fallback на отдельный `BrowserWindow`/hash route, а persistence не должна зависеть от lifetime renderer/main process memory.
+
 ## 2026-06-05 — ArkClient не переподключался после delayed backend lock
 
 **Симптомы** — при `bun run --cwd shell dev` shell логирует `[kepler-shell] kepler-backend not-installed: ArkClient unavailable`, затем backend через несколько секунд пишет `WS listening` и `lock-file written`, но renderer IPC `kepler:ark:request` продолжает падать с `ArkClient not ready (timeout)`.

@@ -9,8 +9,17 @@
 // через `loadDeclaredCommands` (extension-host.ts).
 import { openDashboardWindow } from "./dashboard-window";
 import { openClipboardHistoryShell } from "./clipboard-history";
+import {
+  openFocusSessionShell,
+  pauseFocusSessionCommand,
+  resumeFocusSessionCommand,
+  skipFocusSessionCommand,
+  stopFocusSessionCommand,
+  toggleFocusSessionCommand,
+} from "./focus-session";
 import { openSettings } from "./settings-window";
 import { check as checkUpdates } from "./autoupdater-host";
+import type { IpcMainInvokeEvent } from "electron";
 
 export interface InternalCommand {
   id: string;
@@ -36,7 +45,7 @@ export interface InternalCommand {
    */
   icon?: () => string | undefined;
   keepsLauncherOpen?: boolean;
-  exec: () => Promise<void> | void;
+  exec: (event?: IpcMainInvokeEvent) => Promise<void> | void;
 }
 
 async function runCheckUpdates(): Promise<void> {
@@ -69,6 +78,69 @@ export const COMMANDS: InternalCommand[] = [
     appName: "Kepler",
     keepsLauncherOpen: true,
     exec: () => openClipboardHistoryShell(),
+  },
+  {
+    id: "kepler:focus-session",
+    title: "Начать фокус",
+    subtitle: "Таймер, задача и блокировка отвлечений",
+    category: "open",
+    kind: "command",
+    appName: "Kosmos",
+    keepsLauncherOpen: true,
+    exec: () => openFocusSessionShell(),
+  },
+  {
+    id: "kepler:focus-toggle",
+    title: "Переключить фокус",
+    subtitle: "Начать новую сессию или завершить текущую",
+    category: "action",
+    kind: "command",
+    appName: "Kosmos",
+    exec: () => toggleFocusSessionCommand(),
+  },
+  {
+    id: "kepler:focus-pause",
+    title: "Поставить фокус на паузу",
+    subtitle: "Временно остановить текущую фокус-сессию",
+    category: "action",
+    kind: "command",
+    appName: "Kosmos",
+    exec: async () => {
+      await pauseFocusSessionCommand();
+    },
+  },
+  {
+    id: "kepler:focus-resume",
+    title: "Продолжить фокус",
+    subtitle: "Вернуться к текущей фокус-сессии",
+    category: "action",
+    kind: "command",
+    appName: "Kosmos",
+    exec: async () => {
+      await resumeFocusSessionCommand();
+    },
+  },
+  {
+    id: "kepler:focus-skip",
+    title: "Пропустить фазу фокуса",
+    subtitle: "Перейти к следующей фазе pomodoro",
+    category: "action",
+    kind: "command",
+    appName: "Kosmos",
+    exec: async () => {
+      await skipFocusSessionCommand();
+    },
+  },
+  {
+    id: "kepler:focus-complete",
+    title: "Завершить фокус",
+    subtitle: "Остановить текущую фокус-сессию",
+    category: "action",
+    kind: "command",
+    appName: "Kosmos",
+    exec: async () => {
+      await stopFocusSessionCommand();
+    },
   },
   {
     id: "settings:open",

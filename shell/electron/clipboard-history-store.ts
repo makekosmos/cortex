@@ -1,7 +1,17 @@
-import type { ClipboardHistoryItem } from "../shared/ipc-types";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type {
+  ClipboardHistoryItem,
+  ClipboardHistorySettings,
+  ClipboardHistorySettingsPatch,
+  ClipboardHistoryStats,
+} from "../shared/ipc-types";
 
-const DEFAULT_MAX_ITEMS = 60;
+const DEFAULT_MAX_ITEMS = 10_000;
+const DEFAULT_RETENTION_DAYS = 30;
+const DEFAULT_MAX_BYTES = 512 * 1024 * 1024;
 const PREVIEW_LIMIT = 180;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ClipboardHistoryStore {
   record(text: string): ClipboardHistoryItem | null;
@@ -20,6 +30,10 @@ export interface ClipboardHistoryStore {
   remove(id: string): boolean;
   find(id: string): ClipboardHistoryItem | null;
   list(): ClipboardHistoryItem[];
+  settings(): ClipboardHistorySettings;
+  updateSettings(patch: ClipboardHistorySettingsPatch): ClipboardHistorySettings;
+  stats(): ClipboardHistoryStats;
+  pruneNow(): void;
 }
 
 type ClipboardTextKind = "text" | "link" | "color";
@@ -31,6 +45,20 @@ interface TextClassification {
   searchText: string;
   url?: string;
   color?: string;
+}
+
+interface PersistedClipboardHistory {
+  version: 1;
+  nextId: number;
+  settings: ClipboardHistorySettings;
+  items: ClipboardHistoryItem[];
+}
+
+export function defaultClipboardHistorySettings(): ClipboardHistorySettings {
+  return {
+    retentionDays: DEFAULT_RETENTION_DAYS,
+    maxBytes: DEFAULT_MAX_BYTES,
+  };
 }
 
 export function classifyClipboardText(text: string): TextClassification | null {
@@ -70,11 +98,19 @@ export function classifyClipboardText(text: string): TextClassification | null {
 export function createClipboardHistoryStore(options?: {
   maxItems?: number;
   now?: () => number;
+  storagePath?: string;
 }): ClipboardHistoryStore {
   const maxItems = options?.maxItems ?? DEFAULT_MAX_ITEMS;
   const now = options?.now ?? Date.now;
+  const storagePath = options?.storagePath;
+  let settings = defaultClipboardHistorySettings();
   let items: ClipboardHistoryItem[] = [];
   let nextId = 1;
+
+  hydrate();
+  if (items.length > 0) {
+    commit({ forceSave: false, pruneNow: now() });
+  }
 
   function record(text: string): ClipboardHistoryItem | null {
     const classified = classifyClipboardText(text);
@@ -88,7 +124,7 @@ export function createClipboardHistoryStore(options?: {
     if (existing) return touch(existing);
 
     const timestamp = now();
-    const item: ClipboardHistoryItem = {
+    const item: ClipboardHistoryItem = withStorageBytes({
       id: `clip-${nextId++}`,
       kind: classified.kind,
       text: classified.text,
@@ -100,8 +136,8 @@ export function createClipboardHistoryStore(options?: {
       searchText: classified.searchText,
       url: classified.url,
       color: classified.color,
-    };
-    insert(item);
+    });
+    insert(item, timestamp);
     return item;
   }
 
@@ -119,7 +155,7 @@ export function createClipboardHistoryStore(options?: {
     if (existing) return touch(existing);
 
     const timestamp = now();
-    const item: ClipboardHistoryItem = {
+    const item: ClipboardHistoryItem = withStorageBytes({
       id: `clip-${nextId++}`,
       kind: "image",
       text: "",
@@ -133,8 +169,8 @@ export function createClipboardHistoryStore(options?: {
       width: args.width,
       height: args.height,
       mimeType: args.mimeType,
-    };
-    insert(item);
+    });
+    insert(item, timestamp);
     return item;
   }
 
@@ -146,7 +182,7 @@ export function createClipboardHistoryStore(options?: {
 
     const fileName = normalized.split(/[\\/]/).filter(Boolean).at(-1) ?? normalized;
     const timestamp = now();
-    const item: ClipboardHistoryItem = {
+    const item: ClipboardHistoryItem = withStorageBytes({
       id: `clip-${nextId++}`,
       kind: "file",
       text: normalized,
@@ -158,43 +194,114 @@ export function createClipboardHistoryStore(options?: {
       searchText: `${fileName} ${normalized}`,
       filePath: normalized,
       fileName,
-    };
-    insert(item);
+    });
+    insert(item, timestamp);
     return item;
   }
 
   function touch(existing: ClipboardHistoryItem): ClipboardHistoryItem {
-    const updated = { ...existing, updatedAt: now() };
+    const timestamp = now();
+    const updated = withStorageBytes({ ...existing, updatedAt: timestamp });
     items = [updated, ...items.filter((item) => item.id !== existing.id)];
-    sortItems();
+    commit({ pruneNow: timestamp });
     return updated;
   }
 
-  function insert(item: ClipboardHistoryItem): void {
+  function insert(item: ClipboardHistoryItem, pruneNow: number): void {
     items = [item, ...items];
-    prune();
-    sortItems();
+    commit({ pruneNow });
   }
 
-  function sortItems(): void {
-    items = [...items].sort(
+  function hydrate(): void {
+    if (!storagePath || !existsSync(storagePath)) return;
+    try {
+      const parsed = JSON.parse(
+        readFileSync(storagePath, "utf8"),
+      ) as Partial<PersistedClipboardHistory>;
+      settings = normalizeSettings(parsed.settings);
+      items = Array.isArray(parsed.items) ? parsed.items.map(normalizeItem).filter(isItem) : [];
+      nextId = normalizeNextId(parsed.nextId, items);
+    } catch (e) {
+      console.error("[clipboard-history] failed to read persisted history:", e);
+      settings = defaultClipboardHistorySettings();
+      items = [];
+      nextId = 1;
+    }
+  }
+
+  function commit(opts?: { forceSave?: boolean; pruneNow?: number }): void {
+    const before = JSON.stringify(items);
+    items = prune(sortItems(items.map(withStorageBytes)), opts?.pruneNow ?? now());
+    const changed = before !== JSON.stringify(items);
+    if (opts?.forceSave === false && !changed) return;
+    save();
+  }
+
+  function sortItems(source: ClipboardHistoryItem[]): ClipboardHistoryItem[] {
+    return [...source].sort(
       (a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt,
     );
   }
 
-  function prune(): void {
-    const pinned = items.filter((item) => item.pinned);
-    const unpinned = items
+  function prune(source: ClipboardHistoryItem[], pruneNow: number): ClipboardHistoryItem[] {
+    const retentionDays = Math.floor(settings.retentionDays);
+    const cutoff = retentionDays > 0 ? pruneNow - retentionDays * DAY_MS : Number.NEGATIVE_INFINITY;
+    let next = source.filter((item) => item.pinned || item.updatedAt >= cutoff);
+
+    const pinned = next.filter((item) => item.pinned);
+    const unpinned = next
       .filter((item) => !item.pinned)
       .slice(0, Math.max(0, maxItems - pinned.length));
-    items = [...pinned, ...unpinned];
+    next = sortItems([...pinned, ...unpinned]);
+
+    if (settings.maxBytes > 0) {
+      next = pruneBySize(next, settings.maxBytes);
+    }
+    return next;
+  }
+
+  function pruneBySize(source: ClipboardHistoryItem[], maxBytes: number): ClipboardHistoryItem[] {
+    let total = totalStorageBytes(source);
+    if (total <= maxBytes) return source;
+
+    const removable = source
+      .filter((item) => !item.pinned)
+      .sort((a, b) => a.updatedAt - b.updatedAt);
+    const removed = new Set<string>();
+    for (const item of removable) {
+      if (total <= maxBytes) break;
+      removed.add(item.id);
+      total -= item.storageBytes ?? storageBytesForItem(item);
+    }
+    return source.filter((item) => !removed.has(item.id));
+  }
+
+  function save(): void {
+    if (!storagePath) return;
+    const payload: PersistedClipboardHistory = {
+      version: 1,
+      nextId,
+      settings,
+      items,
+    };
+    try {
+      mkdirSync(path.dirname(storagePath), { recursive: true });
+      const tmp = `${storagePath}.tmp`;
+      writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
+      renameSync(tmp, storagePath);
+    } catch (e) {
+      console.error("[clipboard-history] failed to persist history:", e);
+    }
   }
 
   return {
     record,
     recordImage,
     recordFile,
-    list: () => [...items],
+    list: () => {
+      commit();
+      return [...items];
+    },
     find: (id) => items.find((item) => item.id === id) ?? null,
     updateTimestamp: (id) => {
       const item = items.find((candidate) => candidate.id === id);
@@ -203,25 +310,47 @@ export function createClipboardHistoryStore(options?: {
     togglePin: (id) => {
       const item = items.find((candidate) => candidate.id === id);
       if (!item) return null;
-      const updated = { ...item, pinned: !item.pinned, updatedAt: now() };
+      const timestamp = now();
+      const updated = withStorageBytes({ ...item, pinned: !item.pinned, updatedAt: timestamp });
       items = [updated, ...items.filter((candidate) => candidate.id !== id)];
-      sortItems();
+      commit({ pruneNow: timestamp });
       return updated;
     },
     remove: (id) => {
       const before = items.length;
       items = items.filter((item) => item.id !== id);
-      return items.length !== before;
+      const removed = items.length !== before;
+      if (removed) commit();
+      return removed;
     },
     clearUnpinned: () => {
       items = items.filter((item) => item.pinned);
+      commit();
     },
     clear: () => {
       items = items.filter((item) => item.pinned);
+      commit();
     },
     clearAll: () => {
       items = [];
+      commit();
     },
+    settings: () => ({ ...settings }),
+    updateSettings: (patch) => {
+      settings = normalizeSettings({ ...settings, ...patch });
+      commit({ forceSave: true });
+      return { ...settings };
+    },
+    stats: () => {
+      commit();
+      return {
+        itemCount: items.length,
+        pinnedCount: items.filter((item) => item.pinned).length,
+        storageBytes: totalStorageBytes(items),
+        oldestItemAt: items.length > 0 ? Math.min(...items.map((item) => item.updatedAt)) : null,
+      };
+    },
+    pruneNow: () => commit({ forceSave: true }),
   };
 }
 
@@ -250,4 +379,82 @@ function normalizeColor(value: string): string | null {
     .map((part) => part.toString(16).padStart(2, "0"))
     .join("")
     .toUpperCase()}`;
+}
+
+function normalizeSettings(input: unknown): ClipboardHistorySettings {
+  const raw = (input ?? {}) as Partial<ClipboardHistorySettings>;
+  const defaults = defaultClipboardHistorySettings();
+  return {
+    retentionDays:
+      typeof raw.retentionDays === "number" && Number.isFinite(raw.retentionDays)
+        ? Math.max(0, Math.floor(raw.retentionDays))
+        : defaults.retentionDays,
+    maxBytes:
+      typeof raw.maxBytes === "number" && Number.isFinite(raw.maxBytes)
+        ? Math.max(0, Math.floor(raw.maxBytes))
+        : defaults.maxBytes,
+  };
+}
+
+function normalizeNextId(input: unknown, items: ClipboardHistoryItem[]): number {
+  if (typeof input === "number" && Number.isFinite(input) && input > 0) return Math.floor(input);
+  const maxId = items.reduce((max, item) => {
+    const parsed = item.id.match(/^clip-(\d+)$/)?.[1];
+    return parsed ? Math.max(max, Number(parsed)) : max;
+  }, 0);
+  return maxId + 1;
+}
+
+function normalizeItem(input: unknown): ClipboardHistoryItem {
+  const raw = input as Partial<ClipboardHistoryItem>;
+  return withStorageBytes({
+    id: typeof raw.id === "string" && raw.id ? raw.id : `clip-${Date.now()}`,
+    kind: isKind(raw.kind) ? raw.kind : "text",
+    text: typeof raw.text === "string" ? raw.text : "",
+    preview: typeof raw.preview === "string" ? raw.preview : "",
+    createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
+    updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : Date.now(),
+    charCount: typeof raw.charCount === "number" ? raw.charCount : (raw.text ?? "").length,
+    pinned: raw.pinned === true,
+    searchText: typeof raw.searchText === "string" ? raw.searchText : (raw.text ?? ""),
+    source: typeof raw.source === "string" ? raw.source : undefined,
+    imageDataUrl: typeof raw.imageDataUrl === "string" ? raw.imageDataUrl : undefined,
+    width: typeof raw.width === "number" ? raw.width : undefined,
+    height: typeof raw.height === "number" ? raw.height : undefined,
+    url: typeof raw.url === "string" ? raw.url : undefined,
+    color: typeof raw.color === "string" ? raw.color : undefined,
+    filePath: typeof raw.filePath === "string" ? raw.filePath : undefined,
+    fileName: typeof raw.fileName === "string" ? raw.fileName : undefined,
+    mimeType: typeof raw.mimeType === "string" ? raw.mimeType : undefined,
+  });
+}
+
+function isKind(value: unknown): value is ClipboardHistoryItem["kind"] {
+  return (
+    value === "text" ||
+    value === "image" ||
+    value === "link" ||
+    value === "color" ||
+    value === "file"
+  );
+}
+
+function isItem(item: ClipboardHistoryItem): boolean {
+  return Boolean(item.id && item.preview !== undefined && item.searchText !== undefined);
+}
+
+function withStorageBytes(item: ClipboardHistoryItem): ClipboardHistoryItem {
+  const { storageBytes: _storageBytes, ...rest } = item;
+  return {
+    ...rest,
+    storageBytes: storageBytesForItem(rest),
+  };
+}
+
+function storageBytesForItem(item: Omit<ClipboardHistoryItem, "storageBytes">): number {
+  return Buffer.byteLength(JSON.stringify(item), "utf8");
+}
+
+function totalStorageBytes(items: ClipboardHistoryItem[]): number {
+  return items.reduce((sum, item) => sum + (item.storageBytes ?? storageBytesForItem(item)), 0);
 }

@@ -26,7 +26,7 @@ features:
     link: /concepts/write-boundary
     linkText: Граница записи
   - title: Electron-приложения
-    details: Kepler shell (лаунчер + встроенный Dashboard / аналитика) и Vue-расширения внутри — Eden (заметки), Delphi (задачи), Horologion (время / pomodoro), Arrancador (игры). Каждый — тонкая продуктовая оболочка вокруг общего ARK.
+    details: Kepler shell (лаунчер + встроенные Dashboard / Focus Session) и Vue-расширения внутри — Eden (заметки), Delphi (задачи), Arrancador (игры), Akasha (чтение). Каждый — тонкая продуктовая оболочка вокруг общего ARK.
     link: /apps/
     linkText: Все приложения
   - title: Proof loop

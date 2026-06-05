@@ -8,6 +8,7 @@ import type { Component } from "vue";
 import {
   BookOpen,
   Bug,
+  Clipboard,
   Gamepad2,
   Info,
   ListTodo,
@@ -20,10 +21,6 @@ import {
   ShieldCheck,
   Timer,
 } from "@lucide/vue";
-import holoSvg from "../../assets/holo.svg";
-import holoPomoSvg from "../../assets/holo-pomo.svg";
-import holoSecoSvg from "../../assets/holo-seco.svg";
-import horoLogoPng from "../../assets/horo-logo.png";
 import delphiSvg from "../../assets/delphi.svg";
 import delphiAddSvg from "../../assets/delphi-add.svg";
 import arraSvg from "../../assets/arra.svg";
@@ -44,6 +41,7 @@ export type Tab =
   | "games"
   | "extensions"
   | "focus"
+  | "clipboard"
   | "dictation"
   | "file-search"
   | "export";
@@ -78,9 +76,9 @@ const DELPHI_COMMAND_GRADIENT = {
   iconFrom: "oklch(0.78 0.14 230)",
   iconTo: "oklch(0.5 0.18 245)",
 };
-const HOROLOGION_COMMAND_GRADIENT = {
-  iconFrom: "oklch(0.66 0.245 305)",
-  iconTo: "oklch(0.42 0.20 305)",
+const FOCUS_COMMAND_GRADIENT = {
+  iconFrom: "oklch(0.7 0.16 145)",
+  iconTo: "oklch(0.46 0.14 165)",
 };
 const ARRANCADOR_COMMAND_GRADIENT = {
   iconFrom: "oklch(0.7 0.2 25)",
@@ -126,28 +124,10 @@ export const appCommandSettings: Record<AppSettingsTab, AppCommandSetting[]> = {
   ],
   "time-tracker": [
     {
-      id: "horologion:open",
-      title: "Открыть Horologion",
-      icon: holoSvg,
-      ...HOROLOGION_COMMAND_GRADIENT,
-    },
-    {
-      id: "horologion:pomodoro:25",
-      title: "Помодоро 25 минут",
-      icon: holoPomoSvg,
-      ...HOROLOGION_COMMAND_GRADIENT,
-    },
-    {
-      id: "horologion:pomodoro:50",
-      title: "Помодоро 50 минут",
-      icon: holoPomoSvg,
-      ...HOROLOGION_COMMAND_GRADIENT,
-    },
-    {
-      id: "horologion:stopwatch:start",
-      title: "Запустить секундомер",
-      icon: holoSecoSvg,
-      ...HOROLOGION_COMMAND_GRADIENT,
+      id: "kepler:focus-session",
+      title: "Начать фокус",
+      icon: kosmosIconPng,
+      ...FOCUS_COMMAND_GRADIENT,
     },
   ],
   games: [
@@ -262,7 +242,7 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
       "eden",
       "delphi",
       "arrancador",
-      "horologion",
+      "focus",
     ],
   },
   {
@@ -282,6 +262,28 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
       "распознавание речи",
       "транскрипция",
       "voice",
+    ],
+  },
+  {
+    tab: "clipboard",
+    label: "Буфер обмена",
+    group: "advanced",
+    layout: "advanced",
+    icon: Clipboard,
+    iconGradient: {
+      from: "var(--accent)",
+      to: "color-mix(in srgb, var(--accent) 58%, var(--background))",
+    },
+    description: "История скопированных данных, срок хранения и лимит места.",
+    keywords: [
+      "буфер обмена",
+      "clipboard",
+      "история буфера",
+      "копирование",
+      "retention",
+      "пины",
+      "срок хранения",
+      "лимит места",
     ],
   },
   {
@@ -327,21 +329,21 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
   },
   {
     tab: "time-tracker",
-    label: "Времяметр",
+    label: "Фокус-таймер",
     group: "advanced",
     layout: "advanced",
     icon: Timer,
     iconGradient: { from: "#F59E0B", to: "#92400E" },
-    sidebarImage: horoLogoPng,
-    introImage: horoLogoPng,
-    description: "Horologion: учёт времени, сессии и pomodoro.",
+    sidebarImage: kosmosIconPng,
+    introImage: kosmosIconPng,
+    description: "Shell-owned фокус-сессии, задача и таймер.",
     keywords: [
-      "времяметр",
+      "фокус-таймер",
       "трекер времени",
-      "horologion",
       "time tracker",
       "pomodoro",
       "таймер",
+      "focus",
       "трекать активные приложения",
       "usage tracker",
     ],

@@ -14,15 +14,14 @@ The desktop host is the Electron launcher/settings/runtime shell. It owns extens
 
 ## Extensions
 
-Desktop workflow apps live under `extensions/<id>/` and run inside the shell.
+Desktop workflow apps live under `extensions/<id>/` and run inside the shell. Horologion source is archived under `extensions/horologion` without an active manifest/package; focus sessions now live in the shell.
 
 - [Eden](./extensions/eden/manifest.json) - notes and journal editor.
 - [Delphi](./extensions/delphi/manifest.json) - task tracking UI.
 - [Arrancador](./extensions/arrancador/manifest.json) - game library, playtime, backups, and ARK game-object integration.
-- [Horologion](./extensions/horologion/manifest.json) - time tracking, pomodoro, and focus sessions.
 - [Akasha](./extensions/akasha/README.md) - EPUB reader.
 
-Dashboard is built into the shell under `shell/src/views/Dashboard*.vue` and `shell/src/dashboard/`.
+Dashboard is built into the shell under `shell/src/views/Dashboard*.vue` and `shell/src/dashboard/`. Focus Session is shell-owned in `shell/electron/focus-session.ts` and renders through the shared Raycast host.
 
 ## Current ARK Integration Rule
 

@@ -54,26 +54,26 @@ bunx playwright test --config shell/playwright.config.ts   # e2e (всегда h
 
 ## Карта (где что)
 
-| Имя                                           | Где                                                           |
-| --------------------------------------------- | ------------------------------------------------------------- |
-| Eden (заметки, TipTap)                        | `extensions/eden/`                                            |
-| Delphi (задачи)                               | `extensions/delphi/`                                          |
-| Horologion (трекер/pomodoro, focus mode host) | `extensions/horologion/`                                      |
-| Arrancador (игровая библиотека)               | `extensions/arrancador/`                                      |
-| Kosmos desktop shell (лаунчер + focus widget) | `shell/`                                                      |
-| Kosmos Runtime / kepler-backend               | `services/kepler-backend/`                                    |
-| Kosmos Helper / System Service                | `services/kepler-focus-helper/`, `services/kepler-focus-svc/` |
-| ARK core (Rust runtime)                       | `crates/ark-core/`                                            |
-| `@kosmos/ark` (TS SDK)                        | `packages/ark/`                                               |
-| `@kosmos/visuals` (UI токены)                 | `packages/visuals/`                                           |
-| Dashboard (встроенный shell view)             | `shell/src/views/Dashboard*.vue`                              |
+| Имя                                           | Где                                                                                                        |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Eden (заметки, TipTap)                        | `extensions/eden/`                                                                                         |
+| Delphi (задачи)                               | `extensions/delphi/`                                                                                       |
+| Focus Session / Focus mode                    | `shell/electron/focus-*`, `shell/src/views/LauncherView.vue`, `shell/src/components/FocusCommandPanel.vue` |
+| Arrancador (игровая библиотека)               | `extensions/arrancador/`                                                                                   |
+| Kosmos desktop shell (лаунчер + focus widget) | `shell/`                                                                                                   |
+| Kosmos Runtime / kepler-backend               | `services/kepler-backend/`                                                                                 |
+| Kosmos Helper / System Service                | `services/kepler-focus-helper/`, `services/kepler-focus-svc/`                                              |
+| ARK core (Rust runtime)                       | `crates/ark-core/`                                                                                         |
+| `@kosmos/ark` (TS SDK)                        | `packages/ark/`                                                                                            |
+| `@kosmos/visuals` (UI токены)                 | `packages/visuals/`                                                                                        |
+| Dashboard (встроенный shell view)             | `shell/src/views/Dashboard*.vue`                                                                           |
 
 Подробное описание — `docs-site/agents/index.md` (Карта приложений).
 
 ## Жёсткие запреты (universal)
 
 ::: danger Никогда
-Полный список с обоснованиями (включая per-app: Eden / Delphi / Horologion / Focus mode / Kepler Shell / Command bus / Distribution / usage-tracker / Brand / Spaces / Dashboard) — `docs-site/agents/forbidden.md`. **Читай соответствующую секцию перед работой в области.**
+Полный список с обоснованиями (включая per-app: Eden / Delphi / Focus mode / Kepler Shell / Command bus / Distribution / usage-tracker / Brand / Spaces / Dashboard) — `docs-site/agents/forbidden.md`. **Читай соответствующую секцию перед работой в области.**
 :::
 
 ### ARK / data

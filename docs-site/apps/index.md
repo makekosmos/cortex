@@ -1,6 +1,6 @@
 # Приложения
 
-Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **пять Vue-extension'ов** внутри Kepler shell (**Eden**, Delphi, Arrancador, Horologion, Akasha), встроенный shell-view **Dashboard**, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
+Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **четыре активных Vue-extension'а** внутри Kepler shell (**Eden**, Delphi, Arrancador, Akasha), встроенный shell-view **Dashboard** и shell-owned **Focus Session** внутри Shell command surface, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
 
 ::: tip Live snapshot
 Актуальное состояние миграций / Phase trackers — `STATUS.md` в корне репозитория. Эта страница — концептуальная карта; STATUS.md — what's in flight прямо сейчас.
@@ -14,19 +14,19 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **п�
 
 ## Vue-extensions (внутри Kepler shell)
 
-| Приложение                     | Путь                    | Роль                                                           | Модель данных                                     |
-| ------------------------------ | ----------------------- | -------------------------------------------------------------- | ------------------------------------------------- |
-| [Eden](/apps/eden)             | `extensions/eden`       | заметки, дневник, typed notes                                  | `note_obj` + кастомные типы                       |
-| [Delphi](/apps/delphi)         | `extensions/delphi`     | задачи                                                         | `task_obj` (auto-миграция legacy todos на старте) |
-| [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы                           | `game_obj` + usage data                           |
-| [Horologion](/apps/horologion) | `extensions/horologion` | трекер времени, pomodoro + секундомер, ссылки на задачи Delphi | `time_entry_obj` + `tag_obj` (общий с Delphi)     |
-| [Akasha](/apps/akasha)         | `extensions/akasha`     | EPUB-читалка                                                   | local JSON v1                                     |
+| Приложение                     | Путь                    | Роль                                 | Модель данных                                     |
+| ------------------------------ | ----------------------- | ------------------------------------ | ------------------------------------------------- |
+| [Eden](/apps/eden)             | `extensions/eden`       | заметки, дневник, typed notes        | `note_obj` + кастомные типы                       |
+| [Delphi](/apps/delphi)         | `extensions/delphi`     | задачи                               | `task_obj` (auto-миграция legacy todos на старте) |
+| [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data                           |
+| [Akasha](/apps/akasha)         | `extensions/akasha`     | EPUB-читалка                         | local JSON v1                                     |
 
 ## Встроенные shell views
 
-| Приложение                   | Путь                                                      | Роль                                                                            | Модель данных       |
-| ---------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------- |
-| [Dashboard](/apps/dashboard) | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/` | встроенный ARK browser: welcome (space picker) + space view (sidebar + объекты) | read-only inspector |
+| Приложение                   | Путь                                                                             | Роль                                                                            | Модель данных                           |
+| ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------- |
+| [Dashboard](/apps/dashboard) | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`                        | встроенный ARK browser: welcome (space picker) + space view (sidebar + объекты) | read-only inspector                     |
+| Focus Session                | `shell/electron/focus-session.ts` + `shell/src/components/FocusCommandPanel.vue` | фокус-таймер, цель, задача Delphi, blocklist                                    | `time_entry_obj` + `focus.active_state` |
 
 ## Зарезервированные имена
 
@@ -35,7 +35,7 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **п�
 | [Digital Cave](/apps/digital-cave) <span class="kbadge info">TBD</span> | `apps/digital-cave` (зарезервировано) | focus-блокер (Cold Turkey Blocker аналог)                                        | TBD                                |
 | [Kerux](/apps/kerux) <span class="kbadge info">TBD</span>               | `apps/kerux` (зарезервировано)        | голосовой ввод по хоткею (Superwhisper аналог; faster-whisper / Groq Whisper-v3) | TBD (опционально `voice_clip_obj`) |
 
-Apps коннектятся к `kepler-backend` (Rust, spawn'ится Kepler host'ом) через `@kosmos/ark` WS-транспорт. Динамические команды (Pomodoro start, создание задачи Delphi, заметка Eden) регистрируются апками и доступны из Kepler launcher'а — см. [Command bus](/concepts/command-bus).
+Apps коннектятся к `kepler-backend` (Rust, spawn'ится Kepler host'ом) через `@kosmos/ark` WS-транспорт. Динамические команды (создание задачи Delphi, заметка Eden) регистрируются апками и доступны из Kepler launcher'а; Focus Session — shell-owned набор команд `kepler:focus-*`. См. [Command bus](/concepts/command-bus).
 
 Все desktop-приложения говорят с ARK через `@kosmos/ark` и используют общие UI-компоненты из `@kosmos/visuals` (Sidebar, Titlebar, DesktopChrome, и т.д.).
 
@@ -77,7 +77,7 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 | Delphi (desktop)               | ✅ (tasks как `task_obj`)                  | legacy DB sidecar **удалён**; auto-migration на старте; **TODO billing**: `propsJson.price` / `hourlyRate` на task_obj для расчёта $/час из связанных `time_entry_obj` |
 | Arrancador                     | ✅ (games как `game_obj`, usage через ARK) | завершён usage backfill                                                                                                                                                |
 | Dashboard                      | ✅ (read-only inspector)                   | предпочитать ARK analytics endpoints вместо raw SQL                                                                                                                    |
-| Horologion                     | ✅ (time_entry_obj)                        | tag picker UI и реальный `object_link` task↔entry — TODO (см. roadmap)                                                                                                 |
+| Focus Session (shell)          | ✅ (time_entry_obj + focus state)          | historical Horologion list/edit UI archived; текущий workflow — фокус-сессии в shell                                                                                   |
 | Akasha                         | ❌                                         | v1 хранит состояние локально в `extensions-data/akasha`; ARK-backed highlights/notes — будущая фаза                                                                    |
 | Digital Cave                   | ⏳ TBD                                     | зарезервировано, кода нет                                                                                                                                              |
 | Kerux                          | ⏳ TBD                                     | зарезервировано, кода нет                                                                                                                                              |

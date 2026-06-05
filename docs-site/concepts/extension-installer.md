@@ -10,7 +10,7 @@
 
 С 2026-05-15:
 
-- Built-ins (Dashboard, Horologion, Delphi, Arrancador) **продолжают ехать** с Kepler installer'ом — это безопасный дефолт «свежеустановленный Kepler — всё работает».
+- Built-ins (Eden, Delphi, Arrancador, Akasha) **продолжают ехать** с Kepler installer'ом — это безопасный дефолт «свежеустановленный Kepler — всё работает». Dashboard и Focus Session — shell views, не extensions. Horologion source archived locally and is not active.
 - Поверх можно положить user-installed копию в `%APPDATA%\Kosmos\extensions\<id>\`. Resolution chain в [extension-host.ts](/concepts/extension-host#текущая-реализация-loader-а) поднимает её первой, перекрывая bundled.
 - **`.kext`** — единый файл (zip с manifest + dist + icon), который пользователь устанавливает двойным кликом или через CLI.
 - **Backup на каждый install** — текущая версия сохраняется в `extensions-backups/<id>/<timestamp>/` (до 5 версий). Settings → Расширения позволяет откатиться на одну из них.

@@ -21,18 +21,19 @@
 │   ├─ LauncherView (frameless 720×460, Mica/Acrylic)        │
 │   ├─ SettingsView (отдельное окно)                         │
 │   ├─ Extension host (Phase 4) → BrowserWindow per ext      │
+│   ├─ Dashboard / Clipboard / Focus shell command surfaces    │
 │   ├─ Tray icon + globalShortcut Ctrl+Shift+K               │
 │   └─ IPC к extensions / Electron apps через preload        │
 └────────────────────────┬───────────────────────────────────┘
                          │ ws://127.0.0.1:<port>
        ┌──────────┬──────┴────────┬──────────┬─────────────┐
    ┌───┴───┐ ┌────┴────┐    ┌─────┴────┐ ┌───┴──────┐ ┌───┴─────┐
-   │Horolo-│ │ Delphi  │    │   Eden   │ │Arrancador│ │Dashboard│
-   │ gion  │ │         │    │          │ │          │ │         │
+   │ Focus │ │ Delphi  │    │   Eden   │ │Arrancador│ │Dashboard│
+   │Session│ │         │    │          │ │          │ │         │
    └───────┘ └─────────┘    └──────────┘ └──────────┘ └─────────┘
 ```
 
-Каждая extension-апка коннектится к `kepler-backend` через WebSocket (`@kosmos/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Когда юзер открывает Kosmos launcher и выбирает команду — runtime роутит её к нужной апке.
+Каждая extension-апка коннектится к `kepler-backend` через WebSocket (`@kosmos/ark` kepler mode), регистрирует свои команды через [Command bus](../concepts/command-bus.md) и слушает события `command_invoked`. Shell-owned views (Dashboard, Clipboard History, Focus Session) открываются внутренними командами внутри Shell surface. Когда юзер открывает Kosmos launcher и выбирает команду — runtime роутит её к нужной апке или shell surface.
 
 ## Стек
 
@@ -54,13 +55,13 @@ shell/                     # npm package "kepler-shell"
 │  ├─ main.ts              # backend spawn, BrowserWindow, tray, globalShortcut, IPC
 │  ├─ preload.ts           # window.kepler API (search / invoke / commands)
 │  ├─ extension-preload.ts # preload для extension windows
-│  ├─ commands.ts          # 3 builtin static команды (dashboard/settings/check-updates)
+│  ├─ commands.ts          # builtin static команды (dashboard/clipboard/focus/settings/check-updates)
 │  ├─ settings-window.ts   # отдельное окно настроек + IPC handlers
 │  ├─ extension-host.ts    # загрузчик Vue extensions
 │  ├─ extension-installer.ts / extension-marketplace.ts # установка + catalog lookup
 │  ├─ instance.ts          # slot-based isolation (prod / dev / test)
 │  ├─ install-extension-window.ts # окно установки .kext / extension package
-│  ├─ focus-widget.ts / focus-block.ts / focus-service.ts / pomodoro-notifier.ts
+│  ├─ focus-session.ts / focus-widget.ts / focus-block.ts / focus-service.ts / pomodoro-notifier.ts
 │  │                       # focus mode subsystem (см. [Focus mode](../concepts/focus-mode.md))
 ├─ shared/
 │  └─ ipc-types.ts         # KeplerApi (preload contract), CommandRecord, SearchResult
@@ -71,7 +72,7 @@ shell/                     # npm package "kepler-shell"
 │  └─ views/
 │     ├─ LauncherView.vue  # секции «Недавние»/«Все» + fuzzy filter + command visibility
 │     └─ SettingsView.vue  # sidebar навигация + поиск; страницы: Общие / О приложении /
-│                          #   Дебаг / Заметки / Задачи / Времяметр / Игры / Фокус /
+│                          #   Дебаг / Заметки / Задачи / Фокус-таймер / Игры / Фокус /
 │                          #   Расширения / Поиск файлов
 ├─ src/components/
 │  └─ BuiltInIcon.vue      # generic gradient icon (Lucide-based) для builtin команд
@@ -84,7 +85,8 @@ shell/                     # npm package "kepler-shell"
 └─ build/                     # иконки + afterPack hook
 
 extensions/                   # ← top-level рядом с shell/
-├─ dashboard/  ├─ delphi/  ├─ horologion/  ├─ arrancador/
+├─ akasha/  ├─ delphi/  ├─ eden/  ├─ arrancador/
+└─ horologion/                 # archived source: no manifest.json/package.json, not active
 ```
 
 ## Окно launcher'а
@@ -112,15 +114,22 @@ Kepler — точка входа для всех команд экосистем
 
 Каждая запись — `InternalCommand` с полями `id`, `title`, `subtitle`, `category` (`'open' | 'action'`), `kind` (`'app' | 'command'`), `appName?` и `icon?: () => string | undefined`.
 
-В `shell/electron/commands.ts` живут **только три** kepler-internal команды:
+В `shell/electron/commands.ts` живут kepler-internal команды:
 
-| id                     | kind                            | title                  | Что делает                                                                                           |
-| ---------------------- | ------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `dashboard:open`       | `command` (`appName: "Kepler"`) | Открыть таблицу данных | `openDashboardWindow()`                                                                              |
-| `settings:open`        | `command` (`appName: "Kepler"`) | Открыть настройки      | `openSettings()`                                                                                     |
-| `kepler:check-updates` | `command` (`appName: "Kepler"`) | Проверить обновления   | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
+| id                         | kind                            | title                    | Что делает                                                                                           |
+| -------------------------- | ------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `dashboard:open`           | `command` (`appName: "Kepler"`) | Открыть таблицу данных   | `openDashboardWindow()`                                                                              |
+| `kepler:clipboard-history` | `command` (`appName: "Kepler"`) | Открыть буфер обмена     | `openClipboardHistoryShell()`                                                                        |
+| `kepler:focus-session`     | `command` (`appName: "Kosmos"`) | Начать фокус             | `openFocusSessionShell()`                                                                            |
+| `kepler:focus-toggle`      | `command` (`appName: "Kosmos"`) | Переключить фокус        | open start form if idle, complete current session otherwise                                          |
+| `kepler:focus-pause`       | `command` (`appName: "Kosmos"`) | Поставить фокус на паузу | `pomodoro.pause` + shell side effects                                                                |
+| `kepler:focus-resume`      | `command` (`appName: "Kosmos"`) | Продолжить фокус         | `pomodoro.resume` + shell side effects                                                               |
+| `kepler:focus-skip`        | `command` (`appName: "Kosmos"`) | Пропустить фазу фокуса   | `pomodoro.skip`                                                                                      |
+| `kepler:focus-complete`    | `command` (`appName: "Kosmos"`) | Завершить фокус          | `pomodoro.stop` + shell side effects                                                                 |
+| `settings:open`            | `command` (`appName: "Kepler"`) | Открыть настройки        | `openSettings()`                                                                                     |
+| `kepler:check-updates`     | `command` (`appName: "Kepler"`) | Проверить обновления     | `autoupdater.check()` (без открытия Settings); результат — через update banner в launcher и Settings |
 
-Все остальные open-команды (`eden:open`, `delphi:open`, `horologion:open`, `arrancador:open`, `eden:note:create`, `eden:note:open-today`, `delphi:inbox`, `horologion:pomodoro:25` и т.д.) **объявляются в `extensions/<id>/manifest.json::commands[]`** и резолвятся `loadDeclaredCommands` из `extension-host.ts`. Источник правды для перечня открывающих команд каждого extension'а — соответствующий `manifest.json` (см. поле `commands` в [Eden](./eden.md), [Delphi](./delphi.md), [Horologion](./horologion.md)).
+Все остальные open-команды (`eden:open`, `delphi:open`, `arrancador:open`, `eden:note:create`, `eden:note:open-today`, `delphi:inbox` и т.д.) **объявляются в `extensions/<id>/manifest.json::commands[]`** и резолвятся `loadDeclaredCommands` из `extension-host.ts`. Источник правды для перечня открывающих команд каждого active extension'а — соответствующий `manifest.json` (см. поле `commands` в [Eden](./eden.md), [Delphi](./delphi.md)).
 
 ### Dynamic (action) commands
 
@@ -128,12 +137,13 @@ Kepler — точка входа для всех команд экосистем
 
 ## Extension host (Phase 4 ✅ + Phase 6.0 ✅)
 
-`shell/electron/extension-host.ts` — production loader. Все продуктовые апки, кроме встроенного Dashboard'а, рендерятся как Vue extensions внутри Kepler без отдельных Electron-процессов.
+`shell/electron/extension-host.ts` — production loader. Активные продуктовые extension-апки рендерятся как Vue extensions внутри Kepler без отдельных Electron-процессов. Dashboard, Clipboard History и Focus Session — встроенные shell views.
 
-- Extensions лежат в `extensions/<id>/` (top-level, рядом с `shell/`): **Eden, Horologion, Delphi, Arrancador** (четыре).
+- Active extensions лежат в `extensions/<id>/` (top-level, рядом с `shell/`): **Eden, Delphi, Arrancador, Akasha**.
 - Каждое — `manifest.json` + Vue bundle + опциональный preload.
 - Host открывает extension в отдельном `BrowserWindow` с reuse через `Map<id, BrowserWindow>`.
 - **Dashboard** — встроенный shell view (`shell/src/views/Dashboard*.vue`), не extension. Открывается через `openDashboardWindow()` из `commands.ts`.
+- **Focus Session** — shell-owned command set (`kepler:focus-session`, `kepler:focus-toggle`, `kepler:focus-pause`, `kepler:focus-resume`, `kepler:focus-skip`, `kepler:focus-complete`), не extension. Start/Edit surface открывается внутри текущего Shell через `openFocusSessionShell()`; остальные команды выполняют main-process intents без отдельной формы.
 - Eden мигрирован в extension в Phase 6.0 (2026-05-17), standalone `apps/eden/ts/` удалён в Phase 6.0.A.
 
 ### Иконки в launcher
@@ -212,15 +222,15 @@ NSIS-настройки: `oneClick: true`, `perMachine: false` (install в `%Loc
 
 ## Extension installer (Phase 10 MVP)
 
-Built-ins (Horologion, Delphi, Arrancador) едут с Kepler installer'ом в `<resourcesPath>/extensions/`. Поверх можно положить свежую копию extension'а в `%APPDATA%\Kosmos\extensions\<id>\` — resolution chain в `extension-host.ts` ставит её выше bundled, перекрывая для этого `id`. Удаление user-папки откатывает на bundled.
+Built-ins (Eden, Delphi, Arrancador, Akasha) едут с Kepler installer'ом в `<resourcesPath>/extensions/`. Поверх можно положить свежую копию extension'а в `%APPDATA%\Kosmos\extensions\<id>\` — resolution chain в `extension-host.ts` ставит её выше bundled, перекрывая для этого `id`. Удаление user-папки откатывает на bundled. Horologion source archived locally and is not shipped as an active built-in extension.
 
 Dashboard в этот список **не входит** — после 2026-05-14 он встроенный shell view (см. [Dashboard](/apps/dashboard)), не extension.
 
 ```powershell
 # install: <path-to-extension-dir> должен содержать manifest.json, dist/, icon.png
-bun run --cwd shell ext:install ./extensions/horologion
+bun run --cwd shell ext:install ./extensions/delphi
 # uninstall
-bun run --cwd shell ext:uninstall horologion
+bun run --cwd shell ext:uninstall delphi
 ```
 
 Подробно (atomic копирование, layout, что НЕ входит в MVP — auto-update, `.kext` формат, UI manager) — [Extension installer](../concepts/extension-installer.md).

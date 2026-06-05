@@ -5,6 +5,7 @@ import {
   Settings as SettingsIcon,
   Database as DatabaseIcon,
   Clipboard as ClipboardIcon,
+  Target as TargetIcon,
   ArrowLeft,
   ArrowUpCircle,
   ChevronDown,
@@ -16,9 +17,7 @@ import {
 import BuiltInIcon from "../components/BuiltInIcon.vue";
 import ClipboardQuickPanel from "../components/ClipboardQuickPanel.vue";
 import FileSearchResultRow from "../components/FileSearchResultRow.vue";
-import holoSvg from "../assets/holo.svg";
-import holoPomoSvg from "../assets/holo-pomo.svg";
-import holoSecoSvg from "../assets/holo-seco.svg";
+import FocusCommandPanel from "../components/FocusCommandPanel.vue";
 import delphiSvg from "../assets/delphi.svg";
 import delphiAddSvg from "../assets/delphi-add.svg";
 import arraSvg from "../assets/arra.svg";
@@ -34,13 +33,6 @@ interface BuiltInIconConfig {
   to: string;
   iconColor?: string;
 }
-
-// Horologion accent gradient — соответствует --horologion-accent
-// (`oklch(0.66 0.245 305)`) из extensions/horologion/src/styles.css.
-const HOROLOGION_GRADIENT = {
-  from: "oklch(0.66 0.245 305)",
-  to: "oklch(0.42 0.20 305)",
-};
 
 // Delphi accent gradient — sky blue.
 const DELPHI_GRADIENT = {
@@ -76,10 +68,11 @@ const BUILTIN_ICONS: Record<string, BuiltInIconConfig> = {
     from: "oklch(0.72 0.15 260)",
     to: "oklch(0.48 0.17 270)",
   },
-  "horologion:open": { svgSrc: holoSvg, ...HOROLOGION_GRADIENT },
-  "horologion:pomodoro:25": { svgSrc: holoPomoSvg, ...HOROLOGION_GRADIENT },
-  "horologion:pomodoro:50": { svgSrc: holoPomoSvg, ...HOROLOGION_GRADIENT },
-  "horologion:stopwatch:start": { svgSrc: holoSecoSvg, ...HOROLOGION_GRADIENT },
+  "kepler:focus-session": {
+    icon: TargetIcon,
+    from: "oklch(0.7 0.16 145)",
+    to: "oklch(0.46 0.14 165)",
+  },
   "delphi:open": { svgSrc: delphiSvg, ...DELPHI_GRADIENT },
   "delphi:inbox": { svgSrc: delphiAddSvg, ...DELPHI_GRADIENT },
   "arrancador:open": { svgSrc: arraSvg, ...ARRANCADOR_GRADIENT },
@@ -102,7 +95,7 @@ const query = ref("");
 const commands = ref<CommandRecord[]>([]);
 const fileCommands = ref<CommandRecord[]>([]);
 const selectedIndex = ref(0);
-type LauncherMode = "commands" | "clipboard";
+type LauncherMode = "commands" | "clipboard" | "focus";
 const mode = ref<LauncherMode>("commands");
 const clipboardItems = ref<ClipboardHistoryItem[]>([]);
 const clipboardLoading = ref(false);
@@ -259,16 +252,19 @@ const searchPlaceholder = computed(() =>
   mode.value === "clipboard" ? "Фильтр записей..." : "Поиск команд, приложений и файлов",
 );
 
+const headerTitle = computed(() => (mode.value === "focus" ? "Фокус" : ""));
+
 const RECENTS_KEY = "kepler.launcher.recents";
 const RECENTS_LIMIT = 5;
 
 // --- State restore (TTL-bound) ---------------------------------------------
-// Сохраняем последние { query, selectedIndex, scrollTop, savedAt } в
+// Сохраняем последние { mode, query, selectedIndex, scrollTop, savedAt } в
 // localStorage. При показе launcher'а — если прошло меньше TTL минут,
 // восстанавливаем. Иначе сбрасываем. TTL настраивается в Settings →
 // kepler-shell-settings.json::launcherStateTtlMinutes (default 5).
 const STATE_KEY = "kepler.launcher.state";
 interface PersistedLauncherState {
+  mode?: LauncherMode;
   query: string;
   selectedIndex: number;
   scrollTop: number;
@@ -288,6 +284,13 @@ function loadPersistedState(): PersistedLauncherState | null {
       typeof parsed.savedAt !== "number"
     )
       return null;
+    if (
+      parsed.mode !== undefined &&
+      parsed.mode !== "commands" &&
+      parsed.mode !== "clipboard" &&
+      parsed.mode !== "focus"
+    )
+      return null;
     return parsed;
   } catch {
     return null;
@@ -298,6 +301,7 @@ function savePersistedState() {
   if (typeof window === "undefined") return;
   try {
     const state: PersistedLauncherState = {
+      mode: mode.value,
       query: query.value,
       selectedIndex: selectedIndex.value,
       scrollTop: listRef.value?.scrollTop ?? 0,
@@ -424,6 +428,7 @@ function onListScroll() {
 // (banner не реальная команда, потому фильтруется).
 function totalRows(): number {
   if (mode.value === "clipboard") return filteredClipboardItems.value.length;
+  if (mode.value === "focus") return 0;
   const banner = updateBanner.value ? 1 : 0;
   if (groupedNoQuery.value) {
     return banner + groupedNoQuery.value.recent.length + groupedNoQuery.value.all.length;
@@ -437,6 +442,7 @@ function rowAt(
   if (mode.value === "clipboard") {
     return filteredClipboardItems.value[idx] ? { kind: "clipboard" } : null;
   }
+  if (mode.value === "focus") return null;
   const banner = updateBanner.value ? 1 : 0;
   if (banner && idx === 0) return { kind: "banner" };
   const i = idx - banner;
@@ -523,6 +529,7 @@ async function enterClipboardMode(): Promise<void> {
   inputRef.value?.focus();
   inputRef.value?.select();
   if (listRef.value) listRef.value.scrollTop = 0;
+  savePersistedState();
 }
 
 function leaveClipboardMode(): void {
@@ -530,6 +537,34 @@ function leaveClipboardMode(): void {
   query.value = "";
   selectedIndex.value = 0;
   clipboardTypeFilterOpen.value = false;
+  savePersistedState();
+}
+
+async function enterFocusMode(): Promise<void> {
+  mode.value = "focus";
+  query.value = "";
+  selectedIndex.value = 0;
+  fileCommands.value = [];
+  await nextTick();
+  if (listRef.value) listRef.value.scrollTop = 0;
+  savePersistedState();
+}
+
+function leaveFocusMode(): void {
+  mode.value = "commands";
+  query.value = "";
+  selectedIndex.value = 0;
+  savePersistedState();
+}
+
+function leaveCommandMode(): void {
+  if (mode.value === "clipboard") {
+    leaveClipboardMode();
+    return;
+  }
+  if (mode.value === "focus") {
+    leaveFocusMode();
+  }
 }
 
 function setClipboardTypeFilter(value: ClipboardTypeFilter): void {
@@ -635,6 +670,13 @@ function moveSelection(delta: number) {
 }
 
 function onKey(e: KeyboardEvent) {
+  if (mode.value === "focus") {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      leaveFocusMode();
+    }
+    return;
+  }
   if (mode.value === "clipboard") {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -705,6 +747,7 @@ let offShow = () => {};
 let offCommandsUpdated = () => {};
 let offClipboardOpen = () => {};
 let offClipboardUpdated = () => {};
+let offFocusOpen = () => {};
 let offCommandVisibilityStorage = () => {};
 let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let fileSearchRun = 0;
@@ -723,7 +766,7 @@ function scheduleFileSearch(text: string, run: number, delay: number) {
 }
 
 watch(query, (value) => {
-  if (mode.value === "clipboard") {
+  if (mode.value !== "commands") {
     selectedIndex.value = 0;
     return;
   }
@@ -746,18 +789,22 @@ onMounted(async () => {
       persisted &&
       launcherStateTtlMs.value > 0 &&
       Date.now() - persisted.savedAt <= launcherStateTtlMs.value;
-    mode.value = "commands";
     if (fresh && persisted) {
+      mode.value = persisted.mode ?? "commands";
       query.value = persisted.query;
       selectedIndex.value = persisted.selectedIndex;
+      if (mode.value === "clipboard") void refreshClipboardHistory();
     } else {
+      mode.value = "commands";
       query.value = "";
       selectedIndex.value = 0;
     }
     void refreshCommands();
     void nextTick(() => {
-      inputRef.value?.focus();
-      inputRef.value?.select();
+      if (mode.value !== "focus") {
+        inputRef.value?.focus();
+        inputRef.value?.select();
+      }
       if (listRef.value) {
         listRef.value.scrollTop = fresh && persisted ? persisted.scrollTop : 0;
       }
@@ -771,6 +818,9 @@ onMounted(async () => {
   });
   offClipboardUpdated = window.kepler.clipboardHistory.onUpdated(() => {
     if (mode.value === "clipboard") void refreshClipboardHistory();
+  });
+  offFocusOpen = window.kepler.focusSession.onOpenShell(() => {
+    void enterFocusMode();
   });
   const onStorage = (event: StorageEvent) => {
     if (event.key !== HIDDEN_COMMANDS_KEY) return;
@@ -806,6 +856,7 @@ onUnmounted(() => {
   offCommandsUpdated();
   offClipboardOpen();
   offClipboardUpdated();
+  offFocusOpen();
   offCommandVisibilityStorage();
   fileSearchRun++;
   if (fileSearchTimer) clearTimeout(fileSearchTimer);
@@ -816,17 +867,24 @@ onUnmounted(() => {
 
 <template>
   <div class="launcher" @keydown="onKey">
-    <div class="search-bar" :class="{ 'search-bar--clipboard': mode === 'clipboard' }">
+    <div
+      class="search-bar"
+      :class="{
+        'search-bar--subpage': mode !== 'commands',
+        'search-bar--clipboard': mode === 'clipboard',
+      }"
+    >
       <button
-        v-if="mode === 'clipboard'"
+        v-if="mode !== 'commands'"
         class="search-icon-button"
         type="button"
         title="Назад"
-        @click="leaveClipboardMode"
+        @click="leaveCommandMode"
       >
         <ArrowLeft :size="17" />
       </button>
       <input
+        v-if="mode !== 'focus'"
         ref="inputRef"
         v-model="query"
         class="search"
@@ -838,6 +896,7 @@ onUnmounted(() => {
         autocapitalize="off"
         @input="onInput"
       />
+      <div v-else class="search-heading">{{ headerTitle }}</div>
       <button
         v-if="mode === 'clipboard'"
         class="type-filter-button"
@@ -904,7 +963,7 @@ onUnmounted(() => {
     <div
       ref="listRef"
       class="list kosmos-scroll"
-      :class="{ 'list--clipboard': mode === 'clipboard' }"
+      :class="{ 'list--clipboard': mode === 'clipboard', 'list--focus': mode === 'focus' }"
       @scroll="onListScroll"
     >
       <ClipboardQuickPanel
@@ -922,6 +981,7 @@ onUnmounted(() => {
         @clear="clearClipboardHistory"
         @clear-all="clearAllClipboardHistory"
       />
+      <FocusCommandPanel v-else-if="mode === 'focus'" />
       <template v-else>
         <template v-if="postUpdateVersion">
           <div class="section-label">Готово</div>
@@ -1132,7 +1192,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.search-bar--clipboard {
+.search-bar--subpage {
   position: relative;
   gap: 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
@@ -1152,8 +1212,18 @@ onUnmounted(() => {
   font-weight: 400;
 }
 
-.search-bar--clipboard .search {
+.search-bar--subpage .search {
   padding: 0;
+}
+
+.search-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 750;
 }
 
 .search-icon-button,
@@ -1223,7 +1293,8 @@ onUnmounted(() => {
   padding: 8px 0;
 }
 
-.list--clipboard {
+.list--clipboard,
+.list--focus {
   border-top: 0;
   padding: 0;
 }

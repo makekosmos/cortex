@@ -57,6 +57,10 @@ const api: KeplerApi = {
     delete: (id) => ipcRenderer.invoke("kepler:clipboard-history:delete", id),
     clear: () => ipcRenderer.invoke("kepler:clipboard-history:clear"),
     clearAll: () => ipcRenderer.invoke("kepler:clipboard-history:clear-all"),
+    settings: () => ipcRenderer.invoke("kepler:clipboard-history:settings"),
+    updateSettings: (patch) =>
+      ipcRenderer.invoke("kepler:clipboard-history:settings:update", patch),
+    stats: () => ipcRenderer.invoke("kepler:clipboard-history:stats"),
     hide: () => ipcRenderer.invoke("kepler:clipboard-history:hide"),
     onOpenShell: (listener) => {
       const handler = () => listener();
@@ -67,6 +71,27 @@ const api: KeplerApi = {
       const handler = () => listener();
       ipcRenderer.on("kepler:clipboard-history:updated", handler);
       return () => ipcRenderer.removeListener("kepler:clipboard-history:updated", handler);
+    },
+  },
+  focusSession: {
+    open: () => ipcRenderer.invoke("kepler:focus-session:open"),
+    snapshot: () => ipcRenderer.invoke("kepler:focus-session:snapshot"),
+    listTasks: () => ipcRenderer.invoke("kepler:focus-session:list-tasks"),
+    listBlocklists: () => ipcRenderer.invoke("kepler:focus-session:list-blocklists"),
+    start: (input) => ipcRenderer.invoke("kepler:focus-session:start", input),
+    pause: () => ipcRenderer.invoke("kepler:focus-session:pause"),
+    resume: () => ipcRenderer.invoke("kepler:focus-session:resume"),
+    skip: () => ipcRenderer.invoke("kepler:focus-session:skip"),
+    stop: () => ipcRenderer.invoke("kepler:focus-session:stop"),
+    onOpenShell: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:focus-session:open-shell", handler);
+      return () => ipcRenderer.removeListener("kepler:focus-session:open-shell", handler);
+    },
+    onUpdated: (listener) => {
+      const handler = () => listener();
+      ipcRenderer.on("kepler:focus-session:updated", handler);
+      return () => ipcRenderer.removeListener("kepler:focus-session:updated", handler);
     },
   },
   raycast: {

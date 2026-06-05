@@ -89,12 +89,12 @@ Dashboard — встроенный shell view (shell/src/views/Dashboard*.vue), 
 
 ### Apps (consumers + producers)
 
-Eden, Delphi, Arrancador, Horologion — Vue-extensions в `extensions/<id>/`, открываются внутри Kepler shell. Dashboard — встроенный shell view. Связи:
+Eden, Delphi, Arrancador, Akasha — Vue-extensions в `extensions/<id>/`, открываются внутри Kepler shell. Dashboard и Focus Session — встроенные shell views. Связи:
 
 - **Renderer**: Vue 3 Vapor через `@kosmos/visuals` (`Sidebar`, `Titlebar`, `DesktopChrome`, `CommandPalette` и т.п.). Никакого SQLite, всё через preload IPC.
 - **Extension host** (Kepler shell main): коннектится к `kepler-backend` через `@kosmos/ark` (kepler-mode). Спавн собственного sidecar — **не делает**. Sync — **не запускает** (backend сам делает).
 - **Consumers**: читают/пишут ARK objects через `arkClient.objects.*` / `arkClient.links.*`. Подписываются на entity events.
-- **Producers**: регистрируют action-commands через `arkClient.commands.register(...)` и слушают `arkClient.commands.onInvoked(...)`. Пример — Horologion регистрирует `horologion:pomodoro:25` и при invoke стартует таймер.
+- **Producers**: регистрируют action-commands через `arkClient.commands.register(...)` и слушают `arkClient.commands.onInvoked(...)`. Пример — Delphi регистрирует `delphi:task:create` и при invoke создаёт задачу.
 
 См. [Command bus](/concepts/command-bus).
 
@@ -102,7 +102,7 @@ Eden, Delphi, Arrancador, Horologion — Vue-extensions в `extensions/<id>/`, �
 
 ### Renderer
 
-Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Horologion. Никогда не пишет напрямую в SQLite. Общается с Electron main через preload API.
+Vue 3.6 Vapor в Eden, Dashboard, Arrancador, Akasha и shell views. Никогда не пишет напрямую в SQLite. Общается с Electron main через preload API.
 
 Использует общие UI-примитивы из `@kosmos/visuals`: `Sidebar`, `Titlebar`, `TitlebarHistoryControls`, `DesktopChrome`, `DesktopContentSurface`, `CommandPalette`, `StatusDot`, `TodoRow`, `GamePosterCard`, `QuickEntryPanel`, `CustomCaret`.
 

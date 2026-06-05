@@ -14,7 +14,7 @@
 
 import { BrowserWindow, ipcMain, screen, app, Menu } from "electron";
 import type { ArkClient } from "@kosmos/ark";
-import { assertExtensionSenderHostPermissionIfExtension, openExtension } from "./extension-host";
+import { assertExtensionSenderHostPermissionIfExtension } from "./extension-host";
 import { awaitArkReady } from "./main";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -336,7 +336,8 @@ ipcMain.handle("kepler:focus-widget:hide", () => {
 });
 
 ipcMain.handle("kepler:focus-widget:open-horologion", async () => {
-  await openExtension("horologion");
+  const { openFocusSessionShell } = await import("./focus-session");
+  openFocusSessionShell();
 });
 
 ipcMain.handle("kepler:focus-widget:show-menu", () => {
@@ -346,7 +347,9 @@ ipcMain.handle("kepler:focus-widget:show-menu", () => {
     {
       label: "Редактировать",
       click: () => {
-        void openExtension("horologion");
+        void import("./focus-session").then(({ openFocusSessionShell }) => {
+          openFocusSessionShell();
+        });
       },
     },
     {

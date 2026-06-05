@@ -1,4 +1,4 @@
-import { createApp, defineAsyncComponent, h } from "vue";
+import { createApp, defineAsyncComponent, h, ref } from "vue";
 import { installScrollFadeListener } from "@kosmos/visuals";
 import App from "./App.vue";
 import SettingsView from "./views/SettingsView.vue";
@@ -13,38 +13,36 @@ installScrollFadeListener();
 //   (no hash)                  → launcher (App.vue → LauncherView)
 //   #settings                  → SettingsView
 //   #/dashboard                → DashboardRoot (DashboardView)
-const hash = window.location.hash;
+const hash = ref(window.location.hash);
+window.addEventListener("hashchange", () => {
+  hash.value = window.location.hash;
+});
 
 function rootView() {
-  if (hash.startsWith("#settings")) return SettingsView;
-  if (hash.startsWith("#install-extension")) {
+  const currentHash = hash.value;
+  if (currentHash.startsWith("#settings")) return SettingsView;
+  if (currentHash.startsWith("#install-extension")) {
     const InstallExtensionView = defineAsyncComponent(
       () => import("./views/InstallExtensionView.vue"),
     );
     return InstallExtensionView;
   }
-  if (hash.startsWith("#/dashboard")) {
+  if (currentHash.startsWith("#/dashboard")) {
     // Async — dashboard views и их деревья не нужны для launcher / settings окон.
     const DashboardRoot = defineAsyncComponent(() => import("./views/DashboardRoot.vue"));
     return DashboardRoot;
   }
-  if (hash.startsWith("#raycast-host")) {
+  if (currentHash.startsWith("#raycast-host") || currentHash.startsWith("#command-host")) {
     const RaycastHostView = defineAsyncComponent(() => import("./views/RaycastHostView.vue"));
     return RaycastHostView;
   }
-  if (hash.startsWith("#clipboard-history")) {
-    const ClipboardHistoryView = defineAsyncComponent(
-      () => import("./views/ClipboardHistoryView.vue"),
-    );
-    return ClipboardHistoryView;
-  }
-  if (hash.startsWith("#focus-widget")) {
+  if (currentHash.startsWith("#focus-widget")) {
     // Tiny always-on-top widget для активной pomodoro сессии. Async чтобы
     // не тащить в launcher bundle.
     const FocusWidgetView = defineAsyncComponent(() => import("./views/FocusWidgetView.vue"));
     return FocusWidgetView;
   }
-  if (hash.startsWith("#dictation-pill")) {
+  if (currentHash.startsWith("#dictation-pill")) {
     // Дикта-pill — overlay с waveform + таймером во время записи.
     // Async — audio capture / encoding в launcher bundle не нужны.
     const DictationPillView = defineAsyncComponent(() => import("./views/DictationPillView.vue"));
