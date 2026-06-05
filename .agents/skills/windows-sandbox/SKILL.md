@@ -24,6 +24,11 @@ description: Windows Sandbox recovery rules for Codex in Kosmos. Use when shell 
 - Electron e2e commonly runs against `shell/dist-electron`. After editing `shell/electron/*.ts`, run `bun run shell:build` before Playwright if the test launches the built app.
 - `shell/playwright.config.ts` uses `shell/e2e`; root tests live under `tests/e2e` and should use root `playwright.config.ts`.
 - When rerunning after an escalated sandbox failure, record the original failure and the successful escalated rerun in proof-loop evidence.
+- Do not assume port `5173` or the first listening Vite-like port is the target app. A stale server can be another Kosmos surface (for example Akasha). Verify the page by selector/title or start the exact target on a dedicated port with logs.
+- `shell/package.json` `dev:kepler` wraps Vite inside `node -e`; extra CLI args like `-- --port 5197` are passed to `node`, not Vite. For deterministic renderer visual checks, start Vite directly from `shell/`, for example `bunx vite --configLoader native --host 127.0.0.1 --port <port> --strictPort`.
+- If starting a temporary Vite server for verification, redirect stdout/stderr to `.tmp/*.log` and stop it before Cargo/build smoke. Shell Vite can spawn `target\debug\kepler-backend.exe` / `ark-core-rpc.exe`, which then lock Rust artifacts.
+- If Cargo fails with `failed to remove file target\debug\*.exe` and `os error 5`, check for workspace debug binaries first; do not keep retrying. Stop only the processes whose `Path` points inside this repo's `target\debug`, then rerun the build/test.
+- In PowerShell, `$PID` is a built-in read-only variable. In loops over process ids, use names like `$ownerPid` instead of `$pid`.
 
 ## Locked Windows Services
 

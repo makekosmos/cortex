@@ -229,7 +229,16 @@ export interface FocusSessionPomodoroState {
 export interface FocusActiveState {
   active: boolean;
   blocklist_id?: string | null;
+  blocked_app_ids?: string[];
+  blocked_apps?: FocusBlockedApp[];
   started_at?: string | null;
+}
+
+export interface FocusBlockedApp {
+  id: string;
+  name: string;
+  icon?: string | null;
+  exec_path?: string | null;
 }
 
 export interface FocusBlocklist {
@@ -256,6 +265,8 @@ export interface StartFocusSessionInput {
   mode?: "block" | "allow";
   categoryIds?: string[];
   blocklistId?: string | null;
+  blockedAppIds?: string[];
+  blockedApps?: FocusBlockedApp[];
 }
 
 export interface FocusSessionSnapshot {
@@ -288,6 +299,10 @@ export interface KeplerApi {
       commands: string[];
       commandsRegistered: number;
     }>;
+  };
+
+  shell: {
+    openExternal(url: string): Promise<void>;
   };
 
   /** Управление окном launcher'а. */
@@ -364,6 +379,10 @@ export interface KeplerApi {
     stop(): Promise<FocusSessionSnapshot>;
     onOpenShell(listener: () => void): () => void;
     onUpdated(listener: () => void): () => void;
+    onAppBlocked(
+      listener: (app: { id: string; title: string; icon?: string | null }) => void,
+    ): () => void;
+    snoozeApp(appId: string): Promise<void>;
   };
 
   /** Raycast-compatible command host snapshots. Renderer-only read model for
@@ -587,6 +606,15 @@ export interface KeplerApi {
       onStateChanged(listener: (state: UpdateState) => void): () => void;
     };
   };
+  focusOverlay: {
+    ready(): void;
+    onShow(
+      listener: (app: { id: string; title: string; icon?: string | null }) => void,
+    ): () => void;
+    setInteractive(interactive: boolean): Promise<void>;
+    showBlocked(app: { id: string; title: string; icon?: string | null }): Promise<void>;
+  };
+
   /** Crash reports — locations + management для Settings → Диагностика. */
   crashes: {
     /** List files в `<data_dir>/crashes/`. Sorted newest first. */

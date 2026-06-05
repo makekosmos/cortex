@@ -42,14 +42,7 @@ const KEPLER_INSTANCE = resolveInstance();
 applyInstanceToApp(KEPLER_INSTANCE);
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { ArkClient, ensureKeplerRunning } from "@kosmos/ark";
 import { keplerDataDir } from "./data-dir";
@@ -98,8 +91,10 @@ import { setupFocusWidgetBackendSync, teardownFocusWidgetBackendSync } from "./f
 import {
   setupFocusSessionBackendSync,
   setFocusSessionShellOpener,
+  setBlockedAppNotifier,
   teardownFocusSessionBackendSync,
 } from "./focus-session";
+import { createFocusBlockOverlay, showFocusBlockOverlay } from "./focus-overlay";
 import { setupDictationHotkey } from "./dictation-pill";
 import { getServiceStatus, runServiceCliElevated, pingService } from "./focus-service";
 import { findKextInArgv, openInstallExtensionWindow } from "./install-extension-window";
@@ -125,7 +120,6 @@ const __dirname = path.dirname(__filename);
 
 const WINDOW_WIDTH = 720;
 const WINDOW_HEIGHT = 460;
-const WINDOW_STATE_FILENAME = "kepler-shell-window-state.json";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -192,8 +186,6 @@ let arkInitRetryAttempt = 0;
 let arkClientReady: Promise<ArkClient> | null = null;
 let arkClientReadyResolve: ((c: ArkClient) => void) | null = null;
 let arkClientReadyReject: ((e: Error) => void) | null = null;
-let windowStateSaveTimer: NodeJS.Timeout | null = null;
-
 // --- single instance ---------------------------------------------------------
 
 if (!app.requestSingleInstanceLock()) {
@@ -455,68 +447,25 @@ function readBackendStatus(): BackendStatus {
   }
 }
 
-// --- window state persistence -----------------------------------------------
+// --- launcher position -------------------------------------------------------
 
-interface WindowState {
+interface LauncherPosition {
   x: number;
   y: number;
 }
 
-function windowStatePath(): string {
-  return path.join(keplerDataDir(), WINDOW_STATE_FILENAME);
-}
-
-function loadWindowState(): WindowState | null {
-  const p = windowStatePath();
-  if (!existsSync(p)) return null;
-  try {
-    const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<WindowState>;
-    if (typeof raw.x === "number" && typeof raw.y === "number") {
-      return { x: raw.x, y: raw.y };
-    }
-  } catch {
-    /* corrupt file — игнор, используем default */
-  }
-  return null;
-}
-
-function saveWindowStateNow() {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  const bounds = mainWindow.getBounds();
-  const state: WindowState = { x: bounds.x, y: bounds.y };
-  const targetPath = windowStatePath();
-  try {
-    mkdirSync(path.dirname(targetPath), { recursive: true });
-    // Атомарная запись через tmp + rename, чтобы прерванный shutdown не оставил пустой JSON.
-    const tmp = `${targetPath}.tmp`;
-    writeFileSync(tmp, JSON.stringify(state, null, 2), "utf8");
-    renameSync(tmp, targetPath);
-  } catch (e) {
-    keplerLog.warn("window", "saveWindowState failed", { err: String(e) });
-  }
-}
-
-function scheduleWindowStateSave() {
-  if (windowStateSaveTimer) clearTimeout(windowStateSaveTimer);
-  windowStateSaveTimer = setTimeout(() => {
-    windowStateSaveTimer = null;
-    saveWindowStateNow();
-  }, 500);
-}
-
-function defaultLauncherPosition(): WindowState {
+function defaultLauncherPosition(): LauncherPosition {
   const display = screen.getPrimaryDisplay().workAreaSize;
   return {
     x: Math.round((display.width - WINDOW_WIDTH) / 2),
-    y: Math.round(display.height * 0.25),
+    y: Math.round(display.height * 0.15),
   };
 }
 
 // --- launcher window ---------------------------------------------------------
 
 function createLauncher() {
-  const saved = loadWindowState();
-  const pos = saved ?? defaultLauncherPosition();
+  const pos = defaultLauncherPosition();
 
   mainWindow = new BrowserWindow({
     width: WINDOW_WIDTH,
@@ -531,7 +480,7 @@ function createLauncher() {
     // лучше визуально для launcher'а (как PowerToys Run / Raycast).
     transparent: false,
     resizable: false,
-    movable: true,
+    movable: false,
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -568,8 +517,6 @@ function createLauncher() {
       hideLauncher();
     }
   });
-  mainWindow.on("moved", () => scheduleWindowStateSave());
-
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     // detached DevTools — отдельное окно, не блокирует launcher.
@@ -590,8 +537,7 @@ function showLauncher() {
   if (!mainWindow) createLauncher();
   if (!mainWindow) return;
   const headless = process.env.KOSMOS_HEADLESS === "1" || process.env.KOSMOS_TEST_MODE === "1";
-  const saved = loadWindowState();
-  const pos = saved ?? defaultLauncherPosition();
+  const pos = defaultLauncherPosition();
   mainWindow.setBounds({
     x: pos.x,
     y: pos.y,
@@ -1029,6 +975,8 @@ safeHandle("kepler:backend:restart", async () => {
   // на всё время handshake'а — renderer покажет "загрузка" через ark:request.
   void initArkClient();
 });
+
+ipcMain.handle("kepler:shell:openExternal", (_e, url: string) => shell.openExternal(url));
 
 ipcMain.handle("kepler:window:hide", () => hideLauncher());
 
@@ -1690,6 +1638,10 @@ app.whenReady().then(async () => {
   createLauncher();
   setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
   setFocusSessionShellOpener(showFocusSessionLauncher);
+  setBlockedAppNotifier((app) => {
+    showFocusBlockOverlay(app);
+  });
+  createFocusBlockOverlay();
   setTrayVisibilityController(setTrayVisible);
   setTrayVisible(isTrayIconEnabled());
   if (shouldShowLauncherOnStartup(process.argv)) {
@@ -1861,11 +1813,6 @@ app.on("will-quit", () => {
   teardownFocusSessionBackendSync();
   teardownPomodoroNotifier();
   stopClipboardHistory();
-  if (windowStateSaveTimer) {
-    clearTimeout(windowStateSaveTimer);
-    windowStateSaveTimer = null;
-    saveWindowStateNow();
-  }
   if (backendProc && !backendProc.killed) {
     const pid = backendProc.pid;
     console.error(`[kepler-shell] will-quit: killing backend tree pid=${pid}`);

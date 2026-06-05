@@ -30,6 +30,8 @@ interface Props<V> {
   searchable?: boolean | "auto";
   /** Placeholder для search input'а. */
   searchPlaceholder?: string;
+  /** Максимальная высота popup в px. По умолчанию 200. */
+  maxHeightPx?: number;
 }
 
 const props = withDefaults(defineProps<Props<T>>(), {
@@ -38,6 +40,7 @@ const props = withDefaults(defineProps<Props<T>>(), {
   disabled: false,
   searchable: "auto",
   searchPlaceholder: "Поиск…",
+  maxHeightPx: 200,
 });
 
 const emit = defineEmits<{
@@ -79,6 +82,8 @@ const selectedOption = computed<Option<T> | null>(() => {
 const displayLabel = computed(() =>
   selectedOption.value ? selectedOption.value.label : props.placeholder,
 );
+
+const panelMaxHeight = computed(() => Math.max(80, Math.min(420, props.maxHeightPx)));
 
 function reposition() {
   const trigger = triggerRef.value;
@@ -256,12 +261,13 @@ onBeforeUnmount(() => {
         <div
           v-if="open"
           ref="panelRef"
-          class="fixed z-[9500] flex max-h-[min(200px,calc(100vh-32px))] min-w-[200px] flex-col overflow-hidden rounded-[var(--radius-button)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[var(--popover,color-mix(in_srgb,var(--background)_92%,black))] p-0 shadow-[0_16px_40px_color-mix(in_srgb,var(--background)_36%,transparent),0_8px_16px_color-mix(in_srgb,var(--background)_18%,transparent)] backdrop-blur-[20px] backdrop-saturate-[180%] [corner-shape:var(--corner-shape)]"
+          class="fixed z-[9500] flex min-w-[200px] flex-col overflow-hidden rounded-[var(--radius-button)] border border-[color-mix(in_srgb,var(--border)_80%,transparent)] bg-[var(--popover,color-mix(in_srgb,var(--background)_92%,black))] p-0 shadow-[0_16px_40px_color-mix(in_srgb,var(--background)_36%,transparent),0_8px_16px_color-mix(in_srgb,var(--background)_18%,transparent)] backdrop-blur-[20px] backdrop-saturate-[180%] [corner-shape:var(--corner-shape)]"
           role="listbox"
           :style="{
             top: panelPosition.top + 'px',
             left: panelPosition.left + 'px',
             width: matchTriggerWidth ? panelPosition.width + 'px' : undefined,
+            maxHeight: `min(${panelMaxHeight}px, calc(100vh - 32px))`,
           }"
         >
           <div v-if="isSearchable" class="px-2 pt-2 pb-1">

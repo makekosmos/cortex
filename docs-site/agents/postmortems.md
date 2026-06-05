@@ -21,6 +21,39 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-05 — LauncherView падал на обновлении списка команд
+
+**Симптомы** — после `refreshCommands()` Vue логировал `Unhandled error during execution of component update`, затем падал с `TypeError: Cannot set properties of null (setting '__vnode')`.
+**Где жило** — `shell/src/views/LauncherView.vue::refreshCommands`, template `v-for :key="cmd.id"` для списков команд.
+**Root cause** — `refreshCommands()` напрямую мержил `commands.list()` и `app_index.list_all()` в reactive `commands.value`. Если источники возвращали повторяющийся command id, renderer получал duplicate keys в одном `v-for`, и Vue patcher мог упасть не на пользовательском коде, а глубоко в runtime при component update.
+**Fix** — добавлен `dedupeCommandsById(...)`; `LauncherView::refreshCommands` теперь дедупит merged commands по id перед записью в `commands.value`.
+**Регрешн-защита** — `bun test tests/unit/launcher-commands.test.ts tests/unit/focus-command-payload.test.ts tests/unit/focus-app-blocking.test.ts`; `bun run shell:typecheck`.
+**Prevention** — Любой renderer list с `v-for :key` обязан получать уже нормализованный набор уникальных keys на data boundary. Если список мержится из нескольких источников (command bus + scanner + recents), дедуп делается до записи в reactive state, а не в template.
+
+---
+
+## 2026-06-05 — Focus app blocking выбрал не тот source of truth
+
+**Симптомы** — в поле «Блокировка» пользователю предлагались exe/process-like entries с путями, а не те приложения/игры, которые он реально видит и запускает через Shell по хоткею. Выбранные элементы плохо совпадали с фактическим launcher entry, task mention иногда не выбирался/залипал, а mention popover на тёмной теме имел неправильный светлый shadow.
+**Где жило** — `shell/src/components/FocusCommandPanel.vue::fetchApps`, `FocusCommandPanel.vue::pickTask`, `FocusCommandPanel.vue::.focus-command__mention`, `shell/src/views/LauncherView.vue::invokeSelected`.
+**Root cause** — реализация взяла `app_index.list_all` как source of truth для Focus block suggestions, хотя продуктовый intent был «заблокировать то, что запускается из Shell launcher». `app_index` полезен для построения launcher entries, но сама блокировка должна работать на normalized launcher command identity и display model, иначе UI показывает технические exe-пути и расходится с тем, что пользователь выбирает в Shell.
+**Fix** — Focus block payload теперь сохраняет `blockedApps` metadata (`id`, `name`, `icon`) рядом со старым `blockedAppIds`; backend active state хранит `blocked_apps`, а launcher отказывает запуск по exact id или normalized display name. Focus UI больше не показывает `exec_path` в suggestions, использует `@kosmos/visuals` `Textarea`, выбранная Delphi-задача и приложения рендерятся отдельными removable pills. Widget shield удалён. При blocked launch показывается overlay с 3-секундным hover-hold для разрешения на 5 минут.
+**Регрешн-защита** — `bun test tests/unit/focus-command-payload.test.ts tests/unit/focus-app-blocking.test.ts tests/unit/focus-command-instant-render.test.ts`; `bun run shell:typecheck`; `$env:CARGO_TARGET_DIR='.tmp\cargo-focus-app-test'; cargo test -p kepler-backend set_then_get_active_state_round_trip`.
+**Prevention** — Для UX, который должен совпадать с Shell launcher, source of truth обязан быть launcher-facing command identity/display model, а не raw backend scanner rows. Если backend scanner возвращает технические ids/paths, UI должен сохранять user-facing metadata и блокировать по стабильному id плюс normalized display name.
+
+---
+
+## 2026-06-05 — Focus command показывал прогрузку при входе
+
+**Симптомы** — при входе в Shell-команду «Фокус» пользователь видел промежуточную загрузку, хотя это встроенная часть Shell и должна открываться моментально.
+**Где жило** — `shell/src/components/FocusCommandPanel.vue::loading`, `FocusCommandPanel.vue::hydrate`, template branch `v-if="loading"`.
+**Root cause** — Focus command panel смешал first paint с async hydration: локальная форма имела валидные shell-дефолты (`25 минут`, пустая цель, без блокировок), но компонент всё равно ставил `loading=true` и полностью заменял UI на `Загружаю фокус`, пока три IPC-запроса (`snapshot`, `listTasks`, `listBlocklists`) не завершатся. Для built-in Shell surface это превращало обычный переход между command pages в network-like loading state.
+**Fix** — `FocusCommandPanel` больше не имеет blocking `loading` state: template всегда рендерит форму с локальными дефолтами, а `hydrate()` только фоном обновляет snapshot/tasks/blocklists и выставляет error при сбое IPC. Старый loading copy и CSS удалены.
+**Регрешн-защита** — `bun test tests/unit/focus-command-instant-render.test.ts` проверяет, что SFC не содержит `v-if="loading"` и `Загружаю фокус`; visual verify `.tmp/visual/2026-06-05-focus-instant-open/focus-instant-720x460-immediate-final.png` открывает Focus command при искусственно задержанных IPC и проверяет, что `.focus-command__form` появляется за 500ms без loading-текста.
+**Prevention** — Built-in Shell command pages не должны gate'ить first paint на async hydration, если у них есть валидные локальные defaults. IPC/ARK hydration может уточнять содержимое фоном, но shell navigation surface должен открываться сразу; loading-state допустим только для отсутствующего critical data, без которого нельзя показать осмысленный первый экран.
+
+---
+
 ## 2026-06-05 — Shell TTL restore сбрасывал command page в список команд
 
 **Симптомы** — если закрыть Shell на странице `Буфер обмена` или `Фокус`, повторное открытие в пределах TTL из Settings возвращало список команд вместо последней command page.

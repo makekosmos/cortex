@@ -22,6 +22,9 @@ const api: KeplerApi = {
       return () => ipcRenderer.removeListener("kepler:backend:disconnected", handler);
     },
   },
+  shell: {
+    openExternal: (url: string) => ipcRenderer.invoke("kepler:shell:openExternal", url),
+  },
   window: {
     hide: () => ipcRenderer.invoke("kepler:window:hide"),
     onShow: (listener) => {
@@ -93,6 +96,13 @@ const api: KeplerApi = {
       ipcRenderer.on("kepler:focus-session:updated", handler);
       return () => ipcRenderer.removeListener("kepler:focus-session:updated", handler);
     },
+    onAppBlocked: (listener) => {
+      const handler = (_e: Electron.IpcRendererEvent, app: unknown) =>
+        listener(app as { id: string; title: string; icon?: string | null });
+      ipcRenderer.on("kepler:focus:app-blocked", handler);
+      return () => ipcRenderer.removeListener("kepler:focus:app-blocked", handler);
+    },
+    snoozeApp: (appId: string) => ipcRenderer.invoke("kepler:focus-session:snooze-app", appId),
   },
   raycast: {
     snapshot: (sessionId) => ipcRenderer.invoke("kepler:raycast:snapshot", sessionId),
@@ -248,6 +258,18 @@ const api: KeplerApi = {
         return () => ipcRenderer.removeListener("kepler:settings:update:state", handler);
       },
     },
+  },
+  focusOverlay: {
+    ready: () => ipcRenderer.send("kepler:focus-overlay:ready"),
+    onShow: (listener) => {
+      const handler = (_e: Electron.IpcRendererEvent, app: unknown) =>
+        listener(app as { id: string; title: string; icon?: string | null });
+      ipcRenderer.on("kepler:focus-overlay:show", handler);
+      return () => ipcRenderer.removeListener("kepler:focus-overlay:show", handler);
+    },
+    setInteractive: (interactive: boolean) =>
+      ipcRenderer.invoke("kepler:focus-overlay:set-interactive", interactive),
+    showBlocked: (app) => ipcRenderer.invoke("kepler:focus-overlay:show-blocked", app),
   },
   crashes: {
     list: () => ipcRenderer.invoke("kepler:crashes:list"),

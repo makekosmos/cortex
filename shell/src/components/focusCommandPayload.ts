@@ -1,4 +1,4 @@
-import type { StartFocusSessionInput } from "@shared/ipc-types";
+import type { FocusBlockedApp, StartFocusSessionInput } from "@shared/ipc-types";
 
 interface BuildFocusSessionStartInputOptions {
   title: string;
@@ -6,6 +6,8 @@ interface BuildFocusSessionStartInputOptions {
   taskId: string | null;
   taskTitle: string | null;
   categoryIds: readonly string[];
+  blockedAppIds?: readonly string[];
+  blockedApps?: readonly FocusBlockedApp[];
 }
 
 export function buildFocusSessionStartInput(
@@ -18,5 +20,12 @@ export function buildFocusSessionStartInput(
     taskTitle: options.taskTitle,
     mode: "block",
     categoryIds: Array.from(options.categoryIds),
+    blockedAppIds: Array.from(options.blockedAppIds ?? []),
+    blockedApps: Array.from(options.blockedApps ?? []).map((app) => ({
+      id: app.id,
+      name: app.name,
+      icon: app.icon ?? null,
+      exec_path: app.exec_path ?? null,
+    })),
   };
 }

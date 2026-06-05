@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-05",
+  "status": "partial",
+  "classification": "FULL_LOOP",
+  "acceptanceCriteria": {
+    "AC1": "pass_by_code",
+    "AC2": "pass",
+    "AC3": "pass_by_code",
+    "AC4": "pass_by_code",
+    "AC5": "pass_by_code",
+    "AC6": "pass_by_code",
+    "AC7": "partial_visual_blocked"
+  },
+  "commands": [
+    {
+      "command": "bun test tests/unit/focus-command-payload.test.ts tests/unit/focus-app-blocking.test.ts tests/unit/focus-command-instant-render.test.ts",
+      "status": "pass"
+    },
+    { "command": "bun run shell:typecheck", "status": "pass" },
+    {
+      "command": "$env:CARGO_TARGET_DIR='.tmp\\cargo-focus-app-test'; cargo test -p kepler-backend set_then_get_active_state_round_trip",
+      "status": "pass"
+    }
+  ],
+  "visualVerification": {
+    "status": "blocked",
+    "reason": "Shell Vite dev server served initial HTML and then reset/refused module requests; .launcher never mounted."
+  },
+  "notRun": [
+    "bun run lint",
+    "bun run ark:guard:writes",
+    "bun run ark:smoke",
+    "bun run docs:sync",
+    "bun run docs:check"
+  ]
+}

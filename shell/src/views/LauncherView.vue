@@ -8,16 +8,19 @@ import {
   Target as TargetIcon,
   ArrowLeft,
   ArrowUpCircle,
+  EyeOff,
   ChevronDown,
   ListFilter,
   Loader2,
   RefreshCw,
   Check,
 } from "@lucide/vue";
+import { KbdKey, ActionsPanel } from "@kosmos/visuals";
 import BuiltInIcon from "../components/BuiltInIcon.vue";
 import ClipboardQuickPanel from "../components/ClipboardQuickPanel.vue";
 import FileSearchResultRow from "../components/FileSearchResultRow.vue";
 import FocusCommandPanel from "../components/FocusCommandPanel.vue";
+import { dedupeCommandsById } from "../lib/launcherCommands";
 import delphiSvg from "../assets/delphi.svg";
 import delphiAddSvg from "../assets/delphi-add.svg";
 import arraSvg from "../assets/arra.svg";
@@ -95,7 +98,7 @@ const query = ref("");
 const commands = ref<CommandRecord[]>([]);
 const fileCommands = ref<CommandRecord[]>([]);
 const selectedIndex = ref(0);
-type LauncherMode = "commands" | "clipboard" | "focus";
+type LauncherMode = "commands" | "clipboard" | "focus" | "hidden";
 const mode = ref<LauncherMode>("commands");
 const clipboardItems = ref<ClipboardHistoryItem[]>([]);
 const clipboardLoading = ref(false);
@@ -104,6 +107,7 @@ const clipboardTypeFilter = ref<ClipboardTypeFilter>("all");
 const clipboardTypeFilterOpen = ref(false);
 const inputRef = ref<HTMLInputElement | null>(null);
 const listRef = ref<HTMLDivElement | null>(null);
+const focusPanelRef = ref<{ start: () => Promise<void> } | null>(null);
 const HIDDEN_COMMANDS_KEY = "kepler.launcher.hiddenCommandIds";
 const hiddenCommandIds = ref<string[]>(loadHiddenCommandIds());
 
@@ -252,7 +256,9 @@ const searchPlaceholder = computed(() =>
   mode.value === "clipboard" ? "Фильтр записей..." : "Поиск команд, приложений и файлов",
 );
 
-const headerTitle = computed(() => (mode.value === "focus" ? "Фокус" : ""));
+const headerTitle = computed(() =>
+  mode.value === "focus" ? "Фокус" : mode.value === "hidden" ? "Скрытые команды" : "",
+);
 
 const RECENTS_KEY = "kepler.launcher.recents";
 const RECENTS_LIMIT = 5;
@@ -332,6 +338,25 @@ function loadRecents(): string[] {
 
 const recentIds = ref<string[]>(loadRecents());
 
+const FAVORITES_KEY = "kepler.launcher.favorites";
+
+function loadFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+const favoriteIds = ref<string[]>(loadFavorites());
+const actionsOpen = ref(false);
+const menuOpen = ref(false);
+const hiddenPanelOpen = ref(false);
+const allCommandsCache = ref<CommandRecord[]>([]);
+
 // --- Update banner state ----------------------------------------------------
 const updateState = ref<UpdateState>({ kind: "idle" });
 let unsubUpdateState: (() => void) | null = null;
@@ -404,18 +429,79 @@ function recordRecent(id: string) {
 const groupedNoQuery = computed(() => {
   if (query.value.trim()) return null;
   const byId = new Map(commands.value.map((c) => [c.id, c]));
+  const favorites: CommandRecord[] = [];
+  for (const id of favoriteIds.value) {
+    const c = byId.get(id);
+    if (c) favorites.push(c);
+  }
   const recent: CommandRecord[] = [];
   for (const id of recentIds.value) {
     const c = byId.get(id);
     if (c) recent.push(c);
   }
   // «Все» намеренно содержит все команды — в том числе те, что уже есть в
-  // «Недавние». Это дублирование запрошено: список «Все» должен быть полным.
-  return { recent, all: commands.value };
+  // других секциях. Это дублирование запрошено: список «Все» должен быть полным.
+  return { favorites, recent, all: commands.value };
 });
+
+const selectedCommand = computed<CommandRecord | null>(() => {
+  if (mode.value !== "commands") return null;
+  const row = rowAt(selectedIndex.value);
+  if (!row || row.kind !== "cmd") return null;
+  return row.cmd;
+});
+
+function toggleFavorite(id: string) {
+  const favs = [...favoriteIds.value];
+  const idx = favs.indexOf(id);
+  if (idx >= 0) favs.splice(idx, 1);
+  else favs.unshift(id);
+  favoriteIds.value = favs;
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs));
+  } catch {
+    /* ignore */
+  }
+}
+
+function enterHiddenMode(): void {
+  menuOpen.value = false;
+  hiddenPanelOpen.value = false;
+  mode.value = "hidden";
+  query.value = "";
+  selectedIndex.value = 0;
+  savePersistedState();
+}
+
+function leaveHiddenMode(): void {
+  mode.value = "commands";
+  query.value = "";
+  selectedIndex.value = 0;
+  savePersistedState();
+}
+
+function openGitHub() {
+  void window.kepler.shell.openExternal("https://github.com/ksanrse");
+}
+
+function toggleCommandVisibility(id: string) {
+  const hidden = [...hiddenCommandIds.value];
+  const idx = hidden.indexOf(id);
+  if (idx >= 0) hidden.splice(idx, 1);
+  else hidden.push(id);
+  hiddenCommandIds.value = hidden;
+  try {
+    localStorage.setItem(HIDDEN_COMMANDS_KEY, JSON.stringify(hidden));
+  } catch {
+    /* ignore */
+  }
+  selectedIndex.value = 0;
+  void refreshCommands();
+}
 
 function onInput() {
   selectedIndex.value = 0;
+  actionsOpen.value = false;
   scheduleSaveState();
 }
 
@@ -431,7 +517,12 @@ function totalRows(): number {
   if (mode.value === "focus") return 0;
   const banner = updateBanner.value ? 1 : 0;
   if (groupedNoQuery.value) {
-    return banner + groupedNoQuery.value.recent.length + groupedNoQuery.value.all.length;
+    return (
+      banner +
+      groupedNoQuery.value.favorites.length +
+      groupedNoQuery.value.recent.length +
+      groupedNoQuery.value.all.length
+    );
   }
   return banner + filteredCommands.value.length + fileCommands.value.length;
 }
@@ -447,11 +538,14 @@ function rowAt(
   if (banner && idx === 0) return { kind: "banner" };
   const i = idx - banner;
   if (groupedNoQuery.value) {
+    const fav = groupedNoQuery.value.favorites;
     const rec = groupedNoQuery.value.recent;
     const all = groupedNoQuery.value.all;
-    if (i < rec.length) return { kind: "cmd", cmd: rec[i]! };
-    const j = i - rec.length;
-    if (j < all.length) return { kind: "cmd", cmd: all[j]! };
+    if (i < fav.length) return { kind: "cmd", cmd: fav[i]! };
+    const j = i - fav.length;
+    if (j < rec.length) return { kind: "cmd", cmd: rec[j]! };
+    const k = j - rec.length;
+    if (k < all.length) return { kind: "cmd", cmd: all[k]! };
     return null;
   }
   const c = filteredCommands.value[i] ?? fileCommands.value[i - filteredCommands.value.length];
@@ -472,6 +566,11 @@ async function invokeSelected() {
   recordRecent(row.cmd.id);
   // App-команда (kind: "app" + id с префиксом `app:`) → app_index.launch.
   // Обычная command → command bus.
+  //
+  // Focus-блокировка приложений НЕ обрабатывается здесь: приложение
+  // запускается всегда, а main-process watcher (focus-session.ts) убивает
+  // процесс и показывает fullscreen-overlay — единый путь и для запуска из
+  // лаунчера, и для запуска извне (taskbar / Пуск).
   if (row.cmd.id.startsWith(FILE_ID_PREFIX)) {
     const path = row.cmd.id.slice(FILE_ID_PREFIX.length);
     try {
@@ -520,6 +619,9 @@ async function refreshClipboardHistory(): Promise<void> {
 }
 
 async function enterClipboardMode(): Promise<void> {
+  actionsOpen.value = false;
+  menuOpen.value = false;
+  hiddenPanelOpen.value = false;
   mode.value = "clipboard";
   query.value = "";
   selectedIndex.value = 0;
@@ -541,6 +643,9 @@ function leaveClipboardMode(): void {
 }
 
 async function enterFocusMode(): Promise<void> {
+  actionsOpen.value = false;
+  menuOpen.value = false;
+  hiddenPanelOpen.value = false;
   mode.value = "focus";
   query.value = "";
   selectedIndex.value = 0;
@@ -564,6 +669,10 @@ function leaveCommandMode(): void {
   }
   if (mode.value === "focus") {
     leaveFocusMode();
+    return;
+  }
+  if (mode.value === "hidden") {
+    leaveHiddenMode();
   }
 }
 
@@ -677,6 +786,13 @@ function onKey(e: KeyboardEvent) {
     }
     return;
   }
+  if (mode.value === "hidden") {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      leaveHiddenMode();
+    }
+    return;
+  }
   if (mode.value === "clipboard") {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -715,6 +831,10 @@ function onKey(e: KeyboardEvent) {
   }
   if (e.key === "Escape") {
     e.preventDefault();
+    if (actionsOpen.value) {
+      actionsOpen.value = false;
+      return;
+    }
     void window.kepler.window.hide();
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
@@ -725,6 +845,21 @@ function onKey(e: KeyboardEvent) {
   } else if (e.key === "Enter") {
     e.preventDefault();
     void invokeSelected();
+  } else if ((e.ctrlKey || e.metaKey) && e.code === "KeyK") {
+    e.preventDefault();
+    if (selectedCommand.value) actionsOpen.value = !actionsOpen.value;
+  } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyF") {
+    e.preventDefault();
+    if (selectedCommand.value) {
+      toggleFavorite(selectedCommand.value.id);
+      actionsOpen.value = false;
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.code === "KeyH") {
+    e.preventDefault();
+    if (selectedCommand.value && selectedCommand.value.kind !== "file") {
+      toggleCommandVisibility(selectedCommand.value.id);
+      actionsOpen.value = false;
+    }
   }
 }
 
@@ -740,8 +875,14 @@ async function refreshCommands() {
     }),
     fetchApps(),
   ]);
-  commands.value = [...cmds, ...apps].filter(isCommandVisible);
+  const deduped = dedupeCommandsById([...cmds, ...apps]);
+  allCommandsCache.value = deduped;
+  commands.value = deduped.filter(isCommandVisible);
 }
+
+const hiddenCommandsList = computed<CommandRecord[]>(() =>
+  allCommandsCache.value.filter((cmd) => hiddenCommandIds.value.includes(cmd.id)),
+);
 
 let offShow = () => {};
 let offCommandsUpdated = () => {};
@@ -872,6 +1013,7 @@ onUnmounted(() => {
       :class="{
         'search-bar--subpage': mode !== 'commands',
         'search-bar--clipboard': mode === 'clipboard',
+        'search-bar--hidden': mode === 'hidden',
       }"
     >
       <button
@@ -884,7 +1026,7 @@ onUnmounted(() => {
         <ArrowLeft :size="17" />
       </button>
       <input
-        v-if="mode !== 'focus'"
+        v-if="mode !== 'focus' && mode !== 'hidden'"
         ref="inputRef"
         v-model="query"
         class="search"
@@ -981,7 +1123,31 @@ onUnmounted(() => {
         @clear="clearClipboardHistory"
         @clear-all="clearAllClipboardHistory"
       />
-      <FocusCommandPanel v-else-if="mode === 'focus'" />
+      <FocusCommandPanel v-else-if="mode === 'focus'" ref="focusPanelRef" />
+      <template v-else-if="mode === 'hidden'">
+        <div v-if="hiddenCommandsList.length === 0" class="empty">Нет скрытых команд</div>
+        <ul v-else class="results">
+          <li v-for="cmd in hiddenCommandsList" :key="cmd.id" class="result result--hidden">
+            <BuiltInIcon
+              v-if="builtInIconFor(cmd)"
+              :icon="builtInIconFor(cmd)!.icon"
+              :svg-src="builtInIconFor(cmd)!.svgSrc"
+              :icon-color="builtInIconFor(cmd)!.iconColor"
+              :from="builtInIconFor(cmd)!.from"
+              :to="builtInIconFor(cmd)!.to"
+            />
+            <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+            <BuiltInIcon v-else />
+            <span class="title">{{ cmd.title }}</span>
+            <span class="kind-label">{{
+              cmd.appName ?? (cmd.kind === "app" ? "Приложение" : "Команда")
+            }}</span>
+            <button type="button" class="unhide-btn" @click.stop="toggleCommandVisibility(cmd.id)">
+              Показать
+            </button>
+          </li>
+        </ul>
+      </template>
       <template v-else>
         <template v-if="postUpdateVersion">
           <div class="section-label">Готово</div>
@@ -1031,6 +1197,42 @@ onUnmounted(() => {
           </ul>
         </template>
         <template v-if="groupedNoQuery">
+          <template v-if="groupedNoQuery.favorites.length > 0">
+            <div class="section-label">Избранное</div>
+            <ul class="results">
+              <li
+                v-for="(cmd, idx) in groupedNoQuery.favorites"
+                :key="`fav-${cmd.id}`"
+                class="result"
+                :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+                @click="selectedIndex = (updateBanner ? 1 : 0) + idx"
+                @dblclick="
+                  () => {
+                    selectedIndex = (updateBanner ? 1 : 0) + idx;
+                    void invokeSelected();
+                  }
+                "
+              >
+                <BuiltInIcon
+                  v-if="builtInIconFor(cmd)"
+                  :icon="builtInIconFor(cmd)!.icon"
+                  :svg-src="builtInIconFor(cmd)!.svgSrc"
+                  :icon-color="builtInIconFor(cmd)!.iconColor"
+                  :from="builtInIconFor(cmd)!.from"
+                  :to="builtInIconFor(cmd)!.to"
+                />
+                <img v-else-if="cmd.icon" :src="cmd.icon" class="icon" alt="" />
+                <BuiltInIcon v-else />
+                <span class="title">{{ cmd.title }}</span>
+                <span v-if="cmd.appName && cmd.kind === 'command'" class="app-name">{{
+                  cmd.appName
+                }}</span>
+                <span class="kind-label">{{
+                  cmd.kind === "command" ? "Команда" : "Приложение"
+                }}</span>
+              </li>
+            </ul>
+          </template>
           <template v-if="groupedNoQuery.recent.length > 0">
             <div class="section-label">Недавние</div>
             <ul class="results">
@@ -1038,10 +1240,17 @@ onUnmounted(() => {
                 v-for="(cmd, idx) in groupedNoQuery.recent"
                 :key="`recent-${cmd.id}`"
                 class="result"
-                :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
+                :class="{
+                  selected:
+                    (updateBanner ? 1 : 0) + groupedNoQuery.favorites.length + idx ===
+                    selectedIndex,
+                }"
                 @click="
+                  selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery!.favorites.length + idx
+                "
+                @dblclick="
                   () => {
-                    selectedIndex = (updateBanner ? 1 : 0) + idx;
+                    selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery!.favorites.length + idx;
                     void invokeSelected();
                   }
                 "
@@ -1078,11 +1287,26 @@ onUnmounted(() => {
                 class="result"
                 :class="{
                   selected:
-                    (updateBanner ? 1 : 0) + groupedNoQuery.recent.length + idx === selectedIndex,
+                    (updateBanner ? 1 : 0) +
+                      groupedNoQuery.favorites.length +
+                      groupedNoQuery.recent.length +
+                      idx ===
+                    selectedIndex,
                 }"
                 @click="
+                  selectedIndex =
+                    (updateBanner ? 1 : 0) +
+                    groupedNoQuery!.favorites.length +
+                    groupedNoQuery!.recent.length +
+                    idx
+                "
+                @dblclick="
                   () => {
-                    selectedIndex = (updateBanner ? 1 : 0) + groupedNoQuery!.recent.length + idx;
+                    selectedIndex =
+                      (updateBanner ? 1 : 0) +
+                      groupedNoQuery!.favorites.length +
+                      groupedNoQuery!.recent.length +
+                      idx;
                     void invokeSelected();
                   }
                 "
@@ -1123,7 +1347,8 @@ onUnmounted(() => {
                 :key="cmd.id"
                 class="result"
                 :class="{ selected: (updateBanner ? 1 : 0) + idx === selectedIndex }"
-                @click="
+                @click="selectedIndex = (updateBanner ? 1 : 0) + idx"
+                @dblclick="
                   () => {
                     selectedIndex = (updateBanner ? 1 : 0) + idx;
                     void invokeSelected();
@@ -1163,7 +1388,6 @@ onUnmounted(() => {
                   @select="
                     () => {
                       selectedIndex = (updateBanner ? 1 : 0) + filteredCommands.length + idx;
-                      void invokeSelected();
                     }
                   "
                 />
@@ -1173,11 +1397,151 @@ onUnmounted(() => {
         </template>
       </template>
     </div>
+    <div
+      v-if="actionsOpen || menuOpen"
+      class="actions-backdrop"
+      @click="
+        actionsOpen = false;
+        menuOpen = false;
+      "
+    />
+
+    <!-- Меню гамбургера -->
+    <div v-if="menuOpen" class="launcher-menu">
+      <ul class="launcher-menu__list">
+        <li
+          class="launcher-menu__item"
+          @click="
+            () => {
+              menuOpen = false;
+              openGitHub();
+            }
+          "
+        >
+          <span class="launcher-menu__label">На GitHub</span>
+          <span class="launcher-menu__hint">↗</span>
+        </li>
+        <li class="launcher-menu__item" @click="enterHiddenMode">
+          <span class="launcher-menu__label">Показать скрытые</span>
+          <span v-if="hiddenCommandIds.length > 0" class="launcher-menu__badge">{{
+            hiddenCommandIds.length
+          }}</span>
+        </li>
+      </ul>
+    </div>
+    <ActionsPanel
+      v-if="actionsOpen && selectedCommand"
+      :is-favorite="favoriteIds.includes(selectedCommand.id)"
+      :is-hidden="hiddenCommandIds.includes(selectedCommand.id)"
+      :can-hide="selectedCommand.kind !== 'file'"
+      @open="
+        () => {
+          actionsOpen = false;
+          void invokeSelected();
+        }
+      "
+      @toggle-favorite="
+        () => {
+          if (selectedCommand) {
+            toggleFavorite(selectedCommand.id);
+            actionsOpen = false;
+          }
+        }
+      "
+      @toggle-hide="
+        () => {
+          if (selectedCommand) {
+            toggleCommandVisibility(selectedCommand.id);
+            actionsOpen = false;
+          }
+        }
+      "
+    />
+    <!-- Footer: hidden mode -->
+    <div v-if="mode === 'hidden'" class="launcher-footer">
+      <span class="launcher-footer__left launcher-footer__left--mode">
+        <EyeOff :size="14" />
+        Скрытые команды
+      </span>
+    </div>
+
+    <!-- Footer: clipboard mode -->
+    <div v-else-if="mode === 'clipboard'" class="launcher-footer">
+      <span class="launcher-footer__left launcher-footer__left--mode">
+        <ClipboardIcon :size="14" />
+        Буфер обмена
+      </span>
+      <div class="launcher-footer__actions">
+        <button
+          type="button"
+          class="launcher-footer__hint-btn launcher-footer__hint-btn--primary"
+          @click="void copyClipboardItem(selectedIndex)"
+        >
+          Отправить <KbdKey>↵</KbdKey>
+        </button>
+        <span class="launcher-footer__sep" aria-hidden="true" />
+        <button
+          type="button"
+          class="launcher-footer__hint-btn"
+          @click="void openClipboardItem(selectedIndex)"
+        >
+          Открыть <KbdKey>Ctrl</KbdKey><KbdKey>O</KbdKey>
+        </button>
+        <span class="launcher-footer__sep" aria-hidden="true" />
+        <button
+          type="button"
+          class="launcher-footer__hint-btn"
+          @click="void removeClipboardItem(selectedIndex)"
+        >
+          Удалить <KbdKey>Ctrl</KbdKey><KbdKey>X</KbdKey>
+        </button>
+      </div>
+    </div>
+
+    <!-- Footer: focus mode -->
+    <div v-else-if="mode === 'focus'" class="launcher-footer">
+      <span class="launcher-footer__left launcher-footer__left--mode">
+        <TargetIcon :size="14" />
+        Фокус
+      </span>
+      <button
+        type="button"
+        class="launcher-footer__hint-btn launcher-footer__hint-btn--primary"
+        @click="void focusPanelRef?.start()"
+      >
+        Начать фокус <KbdKey>↵</KbdKey>
+      </button>
+    </div>
+
+    <!-- Footer: commands mode -->
+    <div v-else class="launcher-footer">
+      <button type="button" class="launcher-footer__menu-btn" @click="menuOpen = !menuOpen">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <rect x="1" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
+          <rect x="1" y="6.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
+          <rect x="1" y="9.5" width="12" height="1.5" rx="0.75" fill="currentColor" />
+        </svg>
+      </button>
+      <div class="launcher-footer__actions">
+        <button type="button" class="launcher-footer__hint-btn" @click="void invokeSelected()">
+          Открыть команды <KbdKey>↵</KbdKey>
+        </button>
+        <span class="launcher-footer__sep" aria-hidden="true" />
+        <button
+          type="button"
+          class="launcher-footer__hint-btn"
+          @click="selectedCommand && (actionsOpen = !actionsOpen)"
+        >
+          Опции <KbdKey>Ctrl</KbdKey><KbdKey>K</KbdKey>
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .launcher {
+  position: relative;
   width: 100%;
   height: 100%;
   display: flex;
@@ -1291,6 +1655,7 @@ onUnmounted(() => {
   overflow-y: auto;
   border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
   padding: 8px 0;
+  scrollbar-gutter: stable both-edges;
 }
 
 .list--clipboard,
@@ -1492,5 +1857,179 @@ onUnmounted(() => {
   text-align: center;
   color: color-mix(in srgb, var(--foreground) 40%, transparent);
   font-size: 13px;
+}
+
+.actions-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+}
+
+.result--hidden {
+  opacity: 0.55;
+}
+
+.unhide-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  height: 26px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+  font: inherit;
+  font-size: 12px;
+  padding: 0 10px;
+  cursor: default;
+}
+
+.unhide-btn:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+.launcher-menu {
+  position: absolute;
+  bottom: calc(36px + 8px);
+  left: 8px;
+  z-index: 20;
+  width: 220px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
+  border-radius: 8px;
+  background: var(--surface, #3a3a3e);
+  padding: 4px;
+  animation: panel-in 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.launcher-menu__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.launcher-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 5px;
+  cursor: default;
+}
+
+.launcher-menu__item:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.launcher-menu__label {
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.launcher-menu__hint {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+}
+
+.launcher-menu__badge {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.launcher-footer__menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 32%, transparent);
+  padding: 0;
+  cursor: default;
+  border-radius: 4px;
+}
+
+.launcher-footer__menu-btn:hover {
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.launcher-footer__left--mode {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: color-mix(in srgb, var(--foreground) 48%, transparent);
+  font-size: 12px;
+}
+
+.launcher-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.launcher-footer__left {
+  display: flex;
+  align-items: center;
+  color: color-mix(in srgb, var(--foreground) 32%, transparent);
+}
+
+.launcher-footer__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.launcher-footer__hint-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, var(--foreground) 52%, transparent);
+  font: inherit;
+  font-size: 12px;
+  cursor: default;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.launcher-footer__hint-btn:hover {
+  color: color-mix(in srgb, var(--foreground) 80%, transparent);
+}
+
+.launcher-footer__hint-btn--primary {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.launcher-footer__sep {
+  width: 1px;
+  height: 14px;
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 </style>

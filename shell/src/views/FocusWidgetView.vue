@@ -17,7 +17,7 @@ interface FocusState {
   label: string;
   /** 'work' (red accent) | 'break' (green accent) | 'stopwatch' (neutral). */
   mode: "work" | "break" | "stopwatch";
-  /** Применён ли активный блоклист — 🛡️ индикатор показывается слева от времени. */
+  /** Применён ли активный blocklist/app block. UI не показывает отдельный значок. */
   blockingActive: boolean;
   /** Pomodoro session на паузе — кнопка показывает Play вместо Pause. */
   isPaused: boolean;
@@ -125,13 +125,6 @@ async function onShowMenu(): Promise<void> {
   <div class="widget" :class="modeClass" :style="progressStyle">
     <div class="progress-fill" aria-hidden="true" />
     <div class="content" @dblclick="onClick">
-      <span
-        v-if="state.blockingActive"
-        class="shield"
-        :title="'Блокировка активна'"
-        aria-label="Блокировка активна"
-        >🛡️</span
-      >
       <div class="time">{{ timeText }}</div>
       <div class="label" :title="labelText">{{ labelText }}</div>
     </div>
@@ -243,13 +236,6 @@ async function onShowMenu(): Promise<void> {
   transition:
     opacity 120ms cubic-bezier(0.2, 0, 0, 1),
     transform 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.shield {
-  font-size: 14px;
-  line-height: 1;
-  opacity: 0.85;
-  margin-right: -4px;
 }
 
 .time {

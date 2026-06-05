@@ -56,6 +56,8 @@ export {
   Textarea,
   RadioGroup,
   HotkeyCapture,
+  KbdKey,
+  ActionsPanel,
 } from "./components";
 
 // Composables

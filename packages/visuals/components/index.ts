@@ -93,3 +93,7 @@ export { default as Textarea } from "./Textarea.vue";
 export { default as RadioGroup } from "./RadioGroup.vue";
 
 export { default as HotkeyCapture } from "./HotkeyCapture.vue";
+
+export { default as KbdKey } from "./KbdKey.vue";
+
+export { default as ActionsPanel } from "./ActionsPanel.vue";

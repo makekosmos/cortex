@@ -612,7 +612,7 @@ Single source of truth: `shell/electron/instance.ts::resolveInstance()`.
 - Frameless launcher 720×460, acrylic Mica на Win11, globalShortcut Ctrl+Shift+K.
 - Tray icon + menu (Открыть / Настройки / Выход).
 - Spawn `kepler-backend.exe` child + auto-connect через `ensureKeplerRunning`.
-- Window state persistence в `%APPDATA%\Kosmos\kepler-shell-window-state.json`.
+- Launcher fixed position: center horizontally, `15%` от высоты primary workArea сверху.
 - DevTools auto-open detached в dev mode.
 
 ### Phase 2 — Command bus full stack

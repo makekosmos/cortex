@@ -75,12 +75,24 @@ fn default_kind() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BlockedApp {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ActiveState {
     pub active: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blocklist_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_app_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_apps: Vec<BlockedApp>,
 }
 
 impl Default for ActiveState {
@@ -89,6 +101,8 @@ impl Default for ActiveState {
             active: false,
             blocklist_id: None,
             started_at: None,
+            blocked_app_ids: Vec::new(),
+            blocked_apps: Vec::new(),
         }
     }
 }
@@ -537,6 +551,10 @@ pub struct SetActiveStateParams {
     pub active: bool,
     #[serde(default)]
     pub blocklist_id: Option<String>,
+    #[serde(default)]
+    pub blocked_app_ids: Vec<String>,
+    #[serde(default)]
+    pub blocked_apps: Vec<BlockedApp>,
 }
 
 pub async fn set_active_state<R: FocusArkRequester>(
@@ -544,10 +562,32 @@ pub async fn set_active_state<R: FocusArkRequester>(
     params: SetActiveStateParams,
 ) -> Result<(), String> {
     let state = if params.active {
+        let blocked_apps: Vec<BlockedApp> = params
+            .blocked_apps
+            .into_iter()
+            .filter_map(|app| {
+                let id = app.id.trim().to_string();
+                let name = app.name.trim().to_string();
+                if id.is_empty() || name.is_empty() {
+                    return None;
+                }
+                Some(BlockedApp {
+                    id,
+                    name,
+                    icon: app.icon.filter(|icon| !icon.trim().is_empty()),
+                })
+            })
+            .collect();
         ActiveState {
             active: true,
             blocklist_id: params.blocklist_id,
             started_at: Some(now_iso()),
+            blocked_app_ids: params
+                .blocked_app_ids
+                .into_iter()
+                .filter(|id| !id.trim().is_empty())
+                .collect(),
+            blocked_apps,
         }
     } else {
         ActiveState::default()
@@ -991,6 +1031,24 @@ mod tests {
             SetActiveStateParams {
                 active: true,
                 blocklist_id: Some("bl-1".into()),
+                blocked_app_ids: vec!["steam".into(), "".into(), "discord".into()],
+                blocked_apps: vec![
+                    BlockedApp {
+                        id: "steam".into(),
+                        name: "Steam".into(),
+                        icon: None,
+                    },
+                    BlockedApp {
+                        id: "".into(),
+                        name: "Ignored".into(),
+                        icon: None,
+                    },
+                    BlockedApp {
+                        id: "discord".into(),
+                        name: "".into(),
+                        icon: None,
+                    },
+                ],
             },
         )
         .await
@@ -998,6 +1056,15 @@ mod tests {
         let state = get_active_state(&ark).await.unwrap();
         assert!(state.active);
         assert_eq!(state.blocklist_id.as_deref(), Some("bl-1"));
+        assert_eq!(state.blocked_app_ids, vec!["steam", "discord"]);
+        assert_eq!(
+            state.blocked_apps,
+            vec![BlockedApp {
+                id: "steam".into(),
+                name: "Steam".into(),
+                icon: None,
+            }]
+        );
         assert!(state.started_at.is_some());
 
         set_active_state(
@@ -1005,6 +1072,12 @@ mod tests {
             SetActiveStateParams {
                 active: false,
                 blocklist_id: None,
+                blocked_app_ids: vec!["steam".into()],
+                blocked_apps: vec![BlockedApp {
+                    id: "steam".into(),
+                    name: "Steam".into(),
+                    icon: None,
+                }],
             },
         )
         .await
@@ -1012,6 +1085,8 @@ mod tests {
         let state = get_active_state(&ark).await.unwrap();
         assert!(!state.active);
         assert!(state.blocklist_id.is_none());
+        assert!(state.blocked_app_ids.is_empty());
+        assert!(state.blocked_apps.is_empty());
         assert!(state.started_at.is_none());
     }
 

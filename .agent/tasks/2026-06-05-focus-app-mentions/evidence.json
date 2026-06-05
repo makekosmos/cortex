@@ -1,0 +1,36 @@
+{
+  "date": "2026-06-05",
+  "status": "pass",
+  "classification": "FULL_LOOP",
+  "acceptanceCriteria": {
+    "AC1": "pass",
+    "AC2": "pass",
+    "AC3": "pass",
+    "AC4": "pass",
+    "AC5": "pass"
+  },
+  "visualArtifacts": [
+    ".tmp/visual/2026-06-05-focus-app-mentions/focus-app-mention-720x460.png",
+    ".tmp/visual/2026-06-05-focus-app-mentions/launcher-blocked-app-720x460.png"
+  ],
+  "commands": [
+    { "command": "bun run lint", "status": "pass" },
+    {
+      "command": "bun test tests/unit/focus-command-payload.test.ts tests/unit/focus-app-blocking.test.ts tests/unit/focus-command-instant-render.test.ts",
+      "status": "pass"
+    },
+    { "command": "bun run shell:typecheck", "status": "pass" },
+    {
+      "command": "$env:CARGO_TARGET_DIR='.tmp\\cargo-focus-app-test'; cargo test -p kepler-backend set_then_get_active_state_round_trip",
+      "status": "pass"
+    },
+    { "command": "bun run ark:guard:writes", "status": "pass" },
+    { "command": "bun run ark:smoke", "status": "pass" },
+    { "command": "bun run docs:sync", "status": "pass" },
+    { "command": "bun run docs:check", "status": "pass" }
+  ],
+  "notes": [
+    "First ark:smoke attempt failed because the visual-verification dev server held target/debug/ark-core-rpc.exe; after stopping that dev watcher/backend, ark:smoke passed.",
+    "Implemented launcher-level app blocking only; apps launched outside Kosmos remain out of scope."
+  ]
+}
