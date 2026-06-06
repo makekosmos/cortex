@@ -28,6 +28,7 @@ import edenSvg from "../../assets/eden.svg";
 import edenAddSvg from "../../assets/eden-add.svg";
 import edenDiarySvg from "../../assets/eden-diary.svg";
 import kosmosIconPng from "../../../build/icon.png";
+import { CLIPBOARD_HISTORY_ENABLED } from "@shared/ipc-types";
 
 export type Tab =
   | "general"
@@ -264,28 +265,33 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
       "voice",
     ],
   },
-  {
-    tab: "clipboard",
-    label: "Буфер обмена",
-    group: "advanced",
-    layout: "advanced",
-    icon: Clipboard,
-    iconGradient: {
-      from: "var(--accent)",
-      to: "color-mix(in srgb, var(--accent) 58%, var(--background))",
-    },
-    description: "История скопированных данных, срок хранения и лимит места.",
-    keywords: [
-      "буфер обмена",
-      "clipboard",
-      "история буфера",
-      "копирование",
-      "retention",
-      "пины",
-      "срок хранения",
-      "лимит места",
-    ],
-  },
+  // Буфер обмена заморожен — вкладка скрыта (CLIPBOARD_HISTORY_ENABLED).
+  ...(CLIPBOARD_HISTORY_ENABLED
+    ? [
+        {
+          tab: "clipboard",
+          label: "Буфер обмена",
+          group: "advanced",
+          layout: "advanced",
+          icon: Clipboard,
+          iconGradient: {
+            from: "var(--accent)",
+            to: "color-mix(in srgb, var(--accent) 58%, var(--background))",
+          },
+          description: "История скопированных данных, срок хранения и лимит места.",
+          keywords: [
+            "буфер обмена",
+            "clipboard",
+            "история буфера",
+            "копирование",
+            "retention",
+            "пины",
+            "срок хранения",
+            "лимит места",
+          ],
+        } satisfies SettingsNavigationItem,
+      ]
+    : []),
   {
     tab: "focus",
     label: "Фокус",

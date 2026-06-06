@@ -9,6 +9,7 @@
 // через `loadDeclaredCommands` (extension-host.ts).
 import { openDashboardWindow } from "./dashboard-window";
 import { openClipboardHistoryShell } from "./clipboard-history";
+import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
 import {
   openFocusSessionShell,
   pauseFocusSessionCommand,
@@ -69,16 +70,21 @@ export const COMMANDS: InternalCommand[] = [
     appName: "Kepler",
     exec: () => openDashboardWindow(),
   },
-  {
-    id: "kepler:clipboard-history",
-    title: "Открыть буфер обмена",
-    subtitle: "История скопированного текста",
-    category: "open",
-    kind: "command",
-    appName: "Kepler",
-    keepsLauncherOpen: true,
-    exec: () => openClipboardHistoryShell(),
-  },
+  // Буфер обмена заморожен — команда скрыта (CLIPBOARD_HISTORY_ENABLED).
+  ...(CLIPBOARD_HISTORY_ENABLED
+    ? [
+        {
+          id: "kepler:clipboard-history",
+          title: "Открыть буфер обмена",
+          subtitle: "История скопированного текста",
+          category: "open",
+          kind: "command",
+          appName: "Kepler",
+          keepsLauncherOpen: true,
+          exec: () => openClipboardHistoryShell(),
+        } satisfies InternalCommand,
+      ]
+    : []),
   {
     id: "kepler:focus-session",
     title: "Начать фокус",

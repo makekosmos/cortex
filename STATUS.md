@@ -1,5 +1,35 @@
 # Kosmos — статус проекта (2026-06-06)
 
+## 2026-06-06 — Clipboard history заморожена + perf hardening (Kosmos Desktop 0.4.1 → 0.4.2)
+
+Фича «История буфера обмена» снята с глаз во всех сборках (dev и prod) — фоновый
+поллинг clipboard давал провисания ввода и сопутствующий coil-whine на нагруженной
+системе (репорт пользователя: провис при копировании текста; «бип» из колонок при
+100% CPU). Диагностика подтвердила два источника, оба устранены в коде, но фича
+всё равно заморожена до доработки поллинга.
+
+- Единый рубильник `CLIPBOARD_HISTORY_ENABLED` в `shell/shared/ipc-types.ts`
+  (`false`). Им загейтлены: запуск поллинга/IPC/shell-opener (`main.ts`), команда
+  лаунчера «Открыть буфер обмена» (`commands.ts`), вкладка настроек «Буфер обмена»
+  (`settings/navigation.ts`). Режим `clipboard` в `LauncherView.vue` остался в
+  коде, но недостижим (нет точек входа).
+- Первопричина провиса: `detectClipboardSource` запускал на КАЖДОЕ копирование
+  синхронный `powershell.exe` + `Add-Type` (компиляция C#). Определение источника
+  удалено полностью.
+- Картинка PNG-кодируется (`toDataURL`) только при смене отпечатка raw-битмапа
+  (`fingerprintImageBytes`), а не каждые 800 мс.
+- `commit` в store больше не сериализует всю историю трижды; запись на диск
+  асинхронная с дебаунсом; лимит на размер одной записи 10 МБ; дефолт истории
+  512 → 64 МБ.
+- Док: `docs-site/concepts/clipboard-history.md` (статус, причина, условия
+  расфриза) + ссылка в сайдбаре.
+
+Proof loop: `.agent/tasks/2026-06-06-clipboard-history-jank/`.
+
+Checks: `bun run shell:typecheck`, `bun test shell/electron/clipboard-history-store.test.ts`
+(6/6), `bun run ark:guard:writes`, `bun run docs:check`, визуальная проверка в dev
+(команда и вкладка скрыты, провисов при копировании нет).
+
 ## 2026-06-06 — Idle CPU and dev startup hardening (Kosmos Desktop 0.4.0 → 0.4.1)
 
 Kosmos Desktop получил patch release после диагностики фоновой нагрузки и

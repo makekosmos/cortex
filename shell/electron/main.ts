@@ -51,6 +51,7 @@ import { safeHandle } from "./ipc-safe";
 // Side-effect import: регистрирует kepler:diagnostics:* IPC handlers.
 import "./diagnostics";
 import type { BackendStatus, CommandRecord, SearchResult } from "../shared/ipc-types";
+import { CLIPBOARD_HISTORY_ENABLED } from "../shared/ipc-types";
 import { COMMANDS, findCommand } from "./commands";
 import {
   findDeclaredCommand,
@@ -1636,7 +1637,8 @@ app.whenReady().then(async () => {
 
   spawnBackend();
   createLauncher();
-  setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
+  // Буфер обмена заморожен — см. CLIPBOARD_HISTORY_ENABLED в shared/ipc-types.
+  if (CLIPBOARD_HISTORY_ENABLED) setClipboardHistoryShellOpener(showClipboardHistoryLauncher);
   setFocusSessionShellOpener(showFocusSessionLauncher);
   setBlockedAppNotifier((app) => {
     showFocusBlockOverlay(app);
@@ -1650,8 +1652,10 @@ app.whenReady().then(async () => {
 
   void initArkClient();
 
-  registerClipboardHistoryIpc();
-  startClipboardHistory();
+  if (CLIPBOARD_HISTORY_ENABLED) {
+    registerClipboardHistoryIpc();
+    startClipboardHistory();
+  }
   registerMarketplaceIpc();
   // autoupdater + periodic marketplace check разрешены только в prod slot'е.
   // Dev / dev-<x> / test не должны пуллить релизы и спамить GitHub.
@@ -1812,7 +1816,7 @@ app.on("will-quit", () => {
   setExtensionArkBridge({ request: null, subscribe: null });
   teardownFocusSessionBackendSync();
   teardownPomodoroNotifier();
-  stopClipboardHistory();
+  if (CLIPBOARD_HISTORY_ENABLED) stopClipboardHistory();
   if (backendProc && !backendProc.killed) {
     const pid = backendProc.pid;
     console.error(`[kepler-shell] will-quit: killing backend tree pid=${pid}`);

@@ -158,6 +158,7 @@ export default defineConfig({
             { text: "Proof loop", link: "/concepts/proof-loop" },
             { text: "Изоляция тестовых БД", link: "/concepts/test-isolation" },
             { text: "Instance slots (prod/dev/multi-dev)", link: "/concepts/instances" },
+            { text: "История буфера обмена (заморожено)", link: "/concepts/clipboard-history" },
           ],
         },
       ],

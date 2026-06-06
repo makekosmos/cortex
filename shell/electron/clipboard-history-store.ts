@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   ClipboardHistoryItem,
@@ -9,9 +10,11 @@ import type {
 
 const DEFAULT_MAX_ITEMS = 10_000;
 const DEFAULT_RETENTION_DAYS = 30;
-const DEFAULT_MAX_BYTES = 512 * 1024 * 1024;
+const DEFAULT_MAX_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_ITEM_BYTES = 10 * 1024 * 1024;
 const PREVIEW_LIMIT = 180;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SAVE_DEBOUNCE_MS = 400;
 
 export interface ClipboardHistoryStore {
   record(text: string, metadata?: ClipboardHistoryRecordMetadata): ClipboardHistoryItem | null;
@@ -104,15 +107,18 @@ export function classifyClipboardText(text: string): TextClassification | null {
 
 export function createClipboardHistoryStore(options?: {
   maxItems?: number;
+  maxItemBytes?: number;
   now?: () => number;
   storagePath?: string;
 }): ClipboardHistoryStore {
   const maxItems = options?.maxItems ?? DEFAULT_MAX_ITEMS;
+  const maxItemBytes = options?.maxItemBytes ?? DEFAULT_MAX_ITEM_BYTES;
   const now = options?.now ?? Date.now;
   const storagePath = options?.storagePath;
   let settings = defaultClipboardHistorySettings();
   let items: ClipboardHistoryItem[] = [];
   let nextId = 1;
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   hydrate();
   if (items.length > 0) {
@@ -149,6 +155,7 @@ export function createClipboardHistoryStore(options?: {
       url: classified.url,
       color: classified.color,
     });
+    if ((item.storageBytes ?? 0) > maxItemBytes) return null;
     insert(item, timestamp);
     return item;
   }
@@ -186,6 +193,7 @@ export function createClipboardHistoryStore(options?: {
       height: args.height,
       mimeType: args.mimeType,
     });
+    if ((item.storageBytes ?? 0) > maxItemBytes) return null;
     insert(item, timestamp);
     return item;
   }
@@ -216,6 +224,7 @@ export function createClipboardHistoryStore(options?: {
       filePath: normalized,
       fileName,
     });
+    if ((item.storageBytes ?? 0) > maxItemBytes) return null;
     insert(item, timestamp);
     return item;
   }
@@ -251,11 +260,21 @@ export function createClipboardHistoryStore(options?: {
   }
 
   function commit(opts?: { forceSave?: boolean; pruneNow?: number }): void {
-    const before = JSON.stringify(items);
-    items = prune(sortItems(items.map(withStorageBytes)), opts?.pruneNow ?? now());
-    const changed = before !== JSON.stringify(items);
-    if (opts?.forceSave === false && !changed) return;
-    save();
+    // storageBytes уже проставлен на каждом элементе при создании/изменении —
+    // повторно сериализовать всю историю здесь не нужно (раньше тройной
+    // JSON.stringify на каждое копирование вешал main-процесс).
+    const prevLength = items.length;
+    items = prune(sortItems(items), opts?.pruneNow ?? now());
+    if (opts?.forceSave === false && items.length === prevLength) return;
+    scheduleSave();
+  }
+
+  function scheduleSave(): void {
+    if (!storagePath || saveTimer) return;
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      void save();
+    }, SAVE_DEBOUNCE_MS);
   }
 
   function sortItems(source: ClipboardHistoryItem[]): ClipboardHistoryItem[] {
@@ -297,7 +316,7 @@ export function createClipboardHistoryStore(options?: {
     return source.filter((item) => !removed.has(item.id));
   }
 
-  function save(): void {
+  async function save(): Promise<void> {
     if (!storagePath) return;
     const payload: PersistedClipboardHistory = {
       version: 1,
@@ -306,10 +325,10 @@ export function createClipboardHistoryStore(options?: {
       items,
     };
     try {
-      mkdirSync(path.dirname(storagePath), { recursive: true });
+      await mkdir(path.dirname(storagePath), { recursive: true });
       const tmp = `${storagePath}.tmp`;
-      writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
-      renameSync(tmp, storagePath);
+      await writeFile(tmp, JSON.stringify(payload, null, 2), "utf8");
+      await rename(tmp, storagePath);
     } catch (e) {
       console.error("[clipboard-history] failed to persist history:", e);
     }
@@ -489,4 +508,20 @@ function storageBytesForItem(item: Omit<ClipboardHistoryItem, "storageBytes">): 
 
 function totalStorageBytes(items: ClipboardHistoryItem[]): number {
   return items.reduce((sum, item) => sum + (item.storageBytes ?? storageBytesForItem(item)), 0);
+}
+
+/**
+ * Быстрый отпечаток raw-битмапа изображения (FNV-1a по сэмплированным байтам).
+ * Нужен, чтобы определять смену картинки в буфере БЕЗ дорогого PNG-кодирования
+ * (`toDataURL`) на каждом тике поллинга — кодируем только когда отпечаток сменился.
+ */
+export function fingerprintImageBytes(width: number, height: number, bytes: Buffer): string {
+  let hash = 0x811c9dc5;
+  const len = bytes.length;
+  const step = Math.max(1, Math.floor(len / 4096));
+  for (let i = 0; i < len; i += step) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${width}x${height}:${len}:${(hash >>> 0).toString(16)}`;
 }

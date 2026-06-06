@@ -3,6 +3,15 @@
 // Renderer вызывает методы через `window.kepler.*` (см. preload.ts).
 // Main process реализует handlers в electron/main.ts через ipcMain.handle().
 
+/**
+ * Фича «История буфера обмена» ЗАМОРОЖЕНА (2026-06-06) и скрыта во всех сборках.
+ * Единый рубильник: им загейтлены запуск поллинга/IPC (main), команда лаунчера
+ * и вкладка настроек (renderer). Код намеренно оставлен в репо для будущей
+ * доработки — подробности и причина в `docs-site/concepts/clipboard-history.md`.
+ * Чтобы вернуть фичу — поставить `true` (и доделать производительность поллинга).
+ */
+export const CLIPBOARD_HISTORY_ENABLED = false;
+
 import type {
   RaycastActionRequest,
   RaycastActionResult,

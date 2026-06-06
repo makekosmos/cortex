@@ -28,5 +28,6 @@
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["src", "shared", "electron"]
+  "include": ["src", "shared", "electron"],
+  "exclude": ["**/*.test.ts"]
 }
