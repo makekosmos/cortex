@@ -35,6 +35,7 @@ use windows_capture::{
 const TRACKER_DEVICE_ID_KEY: &str = "usage_tracker.device_id";
 const DEFAULT_POLL_MS: u64 = 1_000;
 const DEFAULT_IDLE_SECS: u64 = 60;
+const SESSION_HEARTBEAT_FLUSH_MS: i64 = 60_000;
 
 /// Дефолтный blocklist для privacy. Match — case-insensitive substring в
 /// process name или window title. Если sample матчится — он не пишется в БД
@@ -210,14 +211,12 @@ async fn run(ark: Arc<ArkHost>, opts: UsageTrackerOpts) -> Result<(), String> {
                 foreground_key.as_ref() == Some(key),
                 window_state == ProcessWindowState::AliveVisible,
             );
-            if let Err(error) = persist_usage_session(
-                &ark,
-                &session.to_usage_session(&identity, None),
-                &identity.device_id,
-            )
-            .await
-            {
-                eprintln!("[usage-tracker] persist session failed: {error}");
+            if session.should_flush_heartbeat(SESSION_HEARTBEAT_FLUSH_MS) {
+                if let Err(error) =
+                    flush_session_heartbeat(&ark, &identity, session, &identity.device_id).await
+                {
+                    eprintln!("[usage-tracker] persist session heartbeat failed: {error}");
+                }
             }
         }
 
@@ -344,6 +343,7 @@ struct ActiveSession {
     current_is_visible: bool,
     current_is_idle: bool,
     sample_count: u64,
+    heartbeat_elapsed_ms: i64,
 }
 
 /// Локальный snapshot полей TrackedApp. Не используем ark_core::types::TrackedApp
@@ -381,6 +381,15 @@ impl ActiveSession {
             self.foreground_ms += delta_ms;
         }
         self.sample_count += 1;
+        self.heartbeat_elapsed_ms = self.heartbeat_elapsed_ms.saturating_add(delta_ms);
+    }
+
+    fn should_flush_heartbeat(&self, flush_interval_ms: i64) -> bool {
+        self.heartbeat_elapsed_ms >= flush_interval_ms
+    }
+
+    fn mark_heartbeat_flushed(&mut self) {
+        self.heartbeat_elapsed_ms = 0;
     }
 
     fn to_usage_session(&self, identity: &TrackerIdentity, ended_at: Option<String>) -> Value {
@@ -428,7 +437,6 @@ async fn update_active_session(
     active.current_is_idle = sample.is_idle;
     active.pid_end = i64::from(sample.pid);
 
-    persist_tracked_app(ark, &active.tracked_app, &identity.device_id).await?;
     if previous_window_title != sample.window_title {
         persist_usage_event(
             ark,
@@ -514,6 +522,7 @@ async fn start_session(
         current_is_visible: true,
         current_is_idle: sample.is_idle,
         sample_count: 1,
+        heartbeat_elapsed_ms: 0,
     };
 
     persist_usage_session(
@@ -542,6 +551,22 @@ async fn start_session(
 }
 
 #[cfg(target_os = "windows")]
+async fn flush_session_heartbeat(
+    ark: &Arc<ArkHost>,
+    identity: &TrackerIdentity,
+    active: &mut ActiveSession,
+    device_id: &str,
+) -> Result<(), String> {
+    // См. postmortems.md § 2026-06-06. Per-poll writes bump ARK sync state and
+    // keep ark-core-rpc hot; heartbeat is a bounded durability checkpoint. Do
+    // not persist tracked_app here: last_seen_at can wait until session end, and
+    // each extra upsert rewrites the sync version vector on large dev DBs.
+    persist_usage_session(ark, &active.to_usage_session(identity, None), device_id).await?;
+    active.mark_heartbeat_flushed();
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
 async fn finalize_session(
     ark: &Arc<ArkHost>,
     identity: &TrackerIdentity,
@@ -549,6 +574,7 @@ async fn finalize_session(
     ended_at: String,
     kind: &str,
 ) -> Result<(), String> {
+    persist_tracked_app(ark, &active.tracked_app, &identity.device_id).await?;
     persist_usage_session(
         ark,
         &active.to_usage_session(identity, Some(ended_at.clone())),
@@ -822,6 +848,7 @@ mod tests {
             current_is_visible: true,
             current_is_idle: false,
             sample_count: 0,
+            heartbeat_elapsed_ms: 0,
         }
     }
 
@@ -860,6 +887,24 @@ mod tests {
         assert_eq!(session.runtime_ms, 1_000);
         assert_eq!(session.foreground_ms, 1_000);
         assert_eq!(session.idle_ms, 0);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn active_session_heartbeat_flush_is_rate_limited() {
+        // Regression: 2026-06-06. Persisting the session every 1s poll kept
+        // ARK sync/version-vector hot while the foreground window was stable.
+        let mut session = test_session();
+        for _ in 0..59 {
+            session.accumulate(1_000, true, true);
+            assert!(!session.should_flush_heartbeat(SESSION_HEARTBEAT_FLUSH_MS));
+        }
+
+        session.accumulate(1_000, true, true);
+        assert!(session.should_flush_heartbeat(SESSION_HEARTBEAT_FLUSH_MS));
+
+        session.mark_heartbeat_flushed();
+        assert!(!session.should_flush_heartbeat(SESSION_HEARTBEAT_FLUSH_MS));
     }
 
     #[cfg(target_os = "windows")]

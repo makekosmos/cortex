@@ -100,6 +100,30 @@ describe("clipboard history store", () => {
     ]);
   });
 
+  test("records source metadata for new clipboard entries", () => {
+    let now = 50;
+    const store = createClipboardHistoryStore({ now: () => now++ });
+
+    const sharexIcon = "data:image/png;base64,sharex";
+    const explorerIcon = "data:image/png;base64,explorer";
+
+    store.record("from text", { source: "ShareX", sourceIcon: sharexIcon });
+    store.recordFile("D:\\Personal\\image.png", { source: "Explorer", sourceIcon: explorerIcon });
+    store.recordImage({
+      dataUrl: "data:image/png;base64,source",
+      width: 1400,
+      height: 800,
+      source: "ShareX",
+      sourceIcon: sharexIcon,
+    });
+
+    expect(store.list()).toMatchObject([
+      { kind: "image", source: "ShareX", sourceIcon: sharexIcon },
+      { kind: "file", source: "Explorer", sourceIcon: explorerIcon },
+      { kind: "text", source: "ShareX", sourceIcon: sharexIcon },
+    ]);
+  });
+
   test("ignores empty text and respects max items", () => {
     const store = createClipboardHistoryStore({ maxItems: 2, now: () => 1 });
 

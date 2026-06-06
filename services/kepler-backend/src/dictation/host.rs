@@ -296,8 +296,6 @@ pub(crate) enum SubmitError {
     Groq(#[from] GroqError),
     #[error("inject: {0}")]
     Inject(#[from] InjectError),
-    #[error("inject join: {0}")]
-    InjectJoin(String),
 }
 
 // ---------------------------------------------------------------------------
@@ -1658,31 +1656,6 @@ mod tests {
         wav.extend_from_slice(b"data");
         wav.extend_from_slice(&0u32.to_le_bytes());
         wav
-    }
-
-    /// Подписка на events с фильтром по type — собирает все state_changed
-    /// в Vec для проверки переходов.
-    async fn collect_state_events(
-        mut rx: tokio::sync::broadcast::Receiver<Value>,
-        deadline_ms: u64,
-    ) -> Vec<Value> {
-        let mut out = Vec::new();
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(deadline_ms);
-        loop {
-            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-            if remaining.is_zero() {
-                break;
-            }
-            match tokio::time::timeout(remaining, rx.recv()).await {
-                Ok(Ok(v)) => {
-                    if v["event"] == "dictation_state_changed" {
-                        out.push(v);
-                    }
-                }
-                _ => break,
-            }
-        }
-        out
     }
 
     #[tokio::test]

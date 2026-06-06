@@ -10,12 +10,15 @@
 // children, чтобы Ctrl+C корректно убивал всё дерево.
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shellRoot = path.resolve(__dirname, "..");
+const extensionsRoot = path.resolve(shellRoot, "..", "extensions");
+const shellDevPort = 5173;
 
 // --- .env.local loader (per-worktree dev slot override) ---------------------
 // `shell/.env.local` (gitignored) задаёт `KEPLER_INSTANCE=dev-<slug>` для
@@ -60,6 +63,56 @@ function loadDotenvLocal() {
 loadDotenvLocal();
 
 const children = [];
+
+function readExtensionDevPorts() {
+  const requestedIds = process.env.KEPLER_DEV_EXTENSIONS === "1" ? null : new Set(["akasha"]);
+  return readdirSync(extensionsRoot, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .filter((d) => !requestedIds || requestedIds.has(d.name))
+    .map((d) => {
+      const manifestPath = path.join(extensionsRoot, d.name, "manifest.json");
+      if (!existsSync(manifestPath)) return null;
+      try {
+        const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+        if (manifest.kind !== "vue" || !manifest.devPort) return null;
+        return { label: d.name, port: Number(manifest.devPort) };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function isPortAvailable(port, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen({ port, host, exclusive: true });
+  });
+}
+
+async function assertDevPortsAvailable() {
+  const checks = [{ label: "shell", port: shellDevPort }, ...readExtensionDevPorts()];
+  const busy = [];
+  for (const check of checks) {
+    if (!(await isPortAvailable(check.port))) {
+      busy.push(check);
+    }
+  }
+  if (busy.length === 0) return;
+
+  console.error("[dev] required dev port(s) are already in use:");
+  for (const check of busy) {
+    console.error(`  - ${check.label}: http://127.0.0.1:${check.port}/`);
+  }
+  console.error("[dev] stop the previous Kosmos dev run before starting a new one.");
+  process.exit(1);
+}
+
+await assertDevPortsAvailable();
 
 function startChild(name, cmd, args, env = {}) {
   const child = spawn(cmd, args, {
@@ -116,6 +169,19 @@ if (process.env.KEPLER_DEV_EXTENSIONS === "1") {
 
 // 2) Shell renderer Vite + Electron (KEPLER_DEV=1 → main process знает что
 //    мы в dev-сессии, не загружает production-mode пути).
-startChild("kepler-shell", "vite", ["--configLoader", "native"], {
-  KEPLER_DEV: "1",
-});
+startChild(
+  "kepler-shell",
+  "vite",
+  [
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(shellDevPort),
+    "--strictPort",
+    "--configLoader",
+    "native",
+  ],
+  {
+    KEPLER_DEV: "1",
+  },
+);

@@ -70,7 +70,7 @@ pub(crate) fn classify(err: &SubmitError) -> FailureKind {
                 user_msg: format!("Ошибка Groq {other}"),
             },
         },
-        SubmitError::Inject(_) | SubmitError::InjectJoin(_) => FailureKind::Fatal {
+        SubmitError::Inject(_) => FailureKind::Fatal {
             user_msg: "Не удалось вставить текст (transcript уже в буфере обмена)".into(),
         },
     }
@@ -259,12 +259,6 @@ mod tests {
             injected: 0,
             expected: 4,
         });
-        assert!(matches!(classify(&err), FailureKind::Fatal { .. }));
-    }
-
-    #[test]
-    fn classify_inject_join_is_fatal() {
-        let err = SubmitError::InjectJoin("task panicked".into());
         assert!(matches!(classify(&err), FailureKind::Fatal { .. }));
     }
 

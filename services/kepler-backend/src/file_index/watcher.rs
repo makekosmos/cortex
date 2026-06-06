@@ -9,6 +9,13 @@ pub fn start(roots: &[PathBuf], store: Arc<FileStore>) -> Option<RecommendedWatc
     if roots.is_empty() {
         return None;
     }
+    if !watcher_enabled() {
+        tracing::info!(
+            target: "file_index",
+            "recursive file watcher disabled; index updates on startup/manual rescan"
+        );
+        return None;
+    }
     let event_store = store.clone();
     let mut watcher = match RecommendedWatcher::new(
         move |event| handle_event(event, &event_store),
@@ -31,6 +38,14 @@ pub fn start(roots: &[PathBuf], store: Arc<FileStore>) -> Option<RecommendedWatc
         }
     }
     Some(watcher)
+}
+
+fn watcher_enabled() -> bool {
+    watcher_enabled_from(std::env::var("KEPLER_FILE_INDEX_WATCHER").ok().as_deref())
+}
+
+fn watcher_enabled_from(value: Option<&str>) -> bool {
+    value == Some("1")
 }
 
 fn handle_event(event: notify::Result<Event>, store: &FileStore) {
@@ -165,6 +180,16 @@ mod tests {
             Path::new(r"D:\ActiveBackup\note.md"),
             &roots
         ));
+    }
+
+    #[test]
+    fn recursive_watcher_is_opt_in() {
+        // Regression: 2026-06-06. Watching broad persisted roots recursively
+        // (for example a whole drive) can keep kepler-backend hot forever from
+        // ambient filesystem churn. Startup/manual rescan is the default path.
+        assert!(!watcher_enabled_from(None));
+        assert!(!watcher_enabled_from(Some("0")));
+        assert!(watcher_enabled_from(Some("1")));
     }
 }
 

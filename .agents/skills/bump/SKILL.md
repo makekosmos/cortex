@@ -128,6 +128,41 @@ bun run --cwd shell ext:catalog
 bun run --cwd shell build
 ```
 
+::: danger Windows build lock: не расследовать заново
+На этой машине установленный/запущенный `KeplerFocusSvc` может держать workspace
+artifact `target\release\kepler-focus-svc.exe`. Тогда Cargo/electron build падает
+на Windows с:
+
+```text
+failed to remove file target\release\kepler-focus-svc.exe
+Access is denied. (os error 5)
+```
+
+Это **известная Windows/service-lock проблема**, не баг продукта и не повод
+тратить время на повторное расследование. Для shell bump/release сразу делай так:
+
+1. Проверь сервис:
+   ```powershell
+   sc.exe qc KeplerFocusSvc
+   ```
+   Если `BINARY_PATH_NAME` указывает в `D:\Personal\Hobby\Coding\kosmos\target\release\...`,
+   обычный `bun run --cwd shell build` будет ненадёжен.
+2. Собери Rust backend/helper/service в alternate target dir:
+   ```powershell
+   $env:CARGO_TARGET_DIR = ".tmp\cargo-release"
+   cargo build --release --manifest-path Cargo.toml --bin kepler-backend --bin ark-core-rpc --bin kepler-focus-helper --bin kepler-focus-svc
+   ```
+3. Запускай electron-builder через временный config, где `extraResources` смотрит
+   на `.tmp\cargo-release\release\*.exe`, а не на `target\release\*.exe`.
+   Не правь постоянный `shell/package.json` ради этого workaround'а.
+4. В evidence/release notes фиксируй как environment workaround. Не называй bump
+   завершённым, пока installer/latest.yml реально не собраны и не опубликованы.
+
+Если обычный build уже прошёл без lock — отлично, workaround не нужен. Но при
+первом `os error 5` на `target\release\*.exe` не делай серию повторных попыток:
+сразу переходи на alternate target dir.
+:::
+
 ::: warning electron-builder publish step падает без GH_TOKEN
 У пользователя нет постоянного `GH_TOKEN` в env. `electron-builder --publish always`
 дойдёт до GitHubPublisher и упадёт с `GitHub Personal Access Token is not set`.

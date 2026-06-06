@@ -184,6 +184,7 @@ export interface ClipboardHistoryItem {
   pinned: boolean;
   searchText: string;
   source?: string;
+  sourceIcon?: string;
   imageDataUrl?: string;
   width?: number;
   height?: number;

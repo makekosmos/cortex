@@ -1,5 +1,35 @@
 # Kosmos — статус проекта (2026-06-06)
 
+## 2026-06-06 — Idle CPU and dev startup hardening (Kosmos Desktop 0.4.0 → 0.4.1)
+
+Kosmos Desktop получил patch release после диагностики фоновой нагрузки и
+повторных dev-запусков.
+
+- `usage_tracker` больше не пишет `tracked_app`/`usage_session` в ARK на каждый
+  poll стабильного foreground окна. Runtime копится in-memory, heartbeat
+  сохраняет `usage_session` не чаще раза в минуту, а `tracked_app.last_seen_at`
+  фиксируется при завершении session. На dev DB это убрало постоянный rewrite
+  `lan_sync.version_vector` и снизило idle CPU `kepler-backend`/`ark-core-rpc`
+  до нулевого прироста в 70-секундном clean dev замере.
+- Recursive file-index watcher больше не включается по умолчанию на широких
+  persisted roots. Startup/manual rescan остаётся, а постоянный recursive watch
+  требует явного `KEPLER_FILE_INDEX_WATCHER=1`.
+- `bun run --cwd shell dev` теперь заранее проверяет dev-порты shell/extension
+  (`5173`, `5185` для Akasha default-on) и останавливается с понятным сообщением,
+  если прошлый dev-run ещё жив. Shell Vite закреплён на `127.0.0.1:5173` со
+  `strictPort`, поэтому он больше не уезжает молча на `5174`.
+- Убран stale `SubmitError::InjectJoin`, который давал dead-code warning в
+  `kepler-backend` build.
+
+Proof loop: `.agent/tasks/2026-06-06-backend-cpu-loop/`.
+
+Checks: `cargo fmt --package kepler-backend`,
+`cargo test -p kepler-backend active_session_heartbeat_flush_is_rate_limited -- --nocapture`,
+`cargo test -p kepler-backend recursive_watcher_is_opt_in -- --nocapture`,
+`node --check shell/scripts/dev.mjs`, `node shell/scripts/dev.mjs` with busy
+ports, clean `bun run --cwd shell dev`, `bun run ark:guard:writes`,
+`bun run docs:sync`, `bun run docs:check`, `bun run ark:smoke`.
+
 ## 2026-06-06 — Raycast-style command surfaces and Focus hardening (Kosmos Desktop 0.3.12 → 0.4.0)
 
 Kosmos Desktop получил крупный shell release: launcher стал ближе к Raycast по
@@ -453,12 +483,12 @@ Setting в Settings → Общие.
 
 | Артефакт                                             | Версия                                                                                                              |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Kosmos Desktop (`shell/package.json`)                | **0.3.10**                                                                                                          |
-| Akasha extension (`extensions/akasha/manifest.json`) | **0.1.0** (Vue EPUB reader; old GPUI prototype extracted to private repo)                                           |
-| Eden extension (`extensions/eden/manifest.json`)     | **0.1.11** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
-| Delphi extension                                     | **0.1.5** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
+| Kosmos Desktop (`shell/package.json`)                | **0.4.1**                                                                                                           |
+| Akasha extension (`extensions/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                                                                 |
+| Eden extension (`extensions/eden/manifest.json`)     | **0.1.12** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
+| Delphi extension                                     | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |
 | Horologion extension                                 | **0.1.6** (keepAliveInBackground — pomodoro live в фоне)                                                            |
-| Arrancador extension                                 | **0.1.3**                                                                                                           |
+| Arrancador extension                                 | **0.1.4**                                                                                                           |
 | Dashboard                                            | встроен в shell (не extension)                                                                                      |
 
 ## 2026-05-22 — Horologion live-в-фоне + drag-select auto-scroll (Kepler 0.2.3 → 0.2.4, Eden 0.1.10 → 0.1.11, Horologion 0.1.5 → 0.1.6)

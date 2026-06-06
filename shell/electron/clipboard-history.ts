@@ -1,4 +1,5 @@
 import { BrowserWindow, clipboard, nativeImage, shell } from "electron";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import type {
   ClipboardHistoryItem,
@@ -11,6 +12,11 @@ import { keplerDataDir } from "./data-dir";
 import { safeHandle } from "./ipc-safe";
 
 const CLIPBOARD_POLL_MS = 800;
+
+interface ClipboardSourceInfo {
+  name?: string;
+  icon?: string;
+}
 
 const store = createClipboardHistoryStore({
   storagePath: path.join(keplerDataDir(), "clipboard-history.json"),
@@ -69,6 +75,8 @@ export function registerClipboardHistoryIpc(): void {
         width: item.width ?? image.getSize().width,
         height: item.height ?? image.getSize().height,
         mimeType: item.mimeType,
+        source: item.source,
+        sourceIcon: item.sourceIcon,
       });
     } else if (item.kind === "file" && item.filePath) {
       clipboard.writeText(item.filePath);
@@ -136,45 +144,125 @@ export function registerClipboardHistoryIpc(): void {
 
 function recordClipboardSnapshot(): void {
   let updated = false;
-  if (recordClipboardText(clipboard.readText())) updated = true;
-  if (recordClipboardFiles()) updated = true;
-  if (recordClipboardImage()) updated = true;
+  const source = createClipboardSourceGetter();
+  if (recordClipboardText(clipboard.readText(), source)) updated = true;
+  if (recordClipboardFiles(source)) updated = true;
+  if (recordClipboardImage(source)) updated = true;
   if (updated) broadcastUpdated();
 }
 
-function recordClipboardText(text: string): boolean {
+function recordClipboardText(text: string, source: () => ClipboardSourceInfo): boolean {
   if (text === lastSeenText) return false;
   lastSeenText = text;
-  const item = store.record(text);
+  const info = source();
+  const item = store.record(text, { source: info.name, sourceIcon: info.icon });
   return !!item;
 }
 
-function recordClipboardFiles(): boolean {
+function recordClipboardFiles(source: () => ClipboardSourceInfo): boolean {
   const paths = readClipboardFilePaths();
   const fingerprint = paths.join("\n");
   if (fingerprint === lastSeenFilePaths) return false;
   lastSeenFilePaths = fingerprint;
   let updated = false;
   for (const filePath of paths) {
-    if (store.recordFile(filePath)) updated = true;
+    const info = source();
+    if (store.recordFile(filePath, { source: info.name, sourceIcon: info.icon })) updated = true;
   }
   return updated;
 }
 
-function recordClipboardImage(): boolean {
+function recordClipboardImage(source: () => ClipboardSourceInfo): boolean {
   const image = clipboard.readImage();
   if (image.isEmpty()) return false;
   const dataUrl = image.toDataURL();
   if (!dataUrl || dataUrl === lastSeenImageDataUrl) return false;
   lastSeenImageDataUrl = dataUrl;
   const size = image.getSize();
+  const info = source();
   const item = store.recordImage({
     dataUrl,
     width: size.width,
     height: size.height,
     mimeType: "image/png",
+    source: info.name,
+    sourceIcon: info.icon,
   });
   return !!item;
+}
+
+function createClipboardSourceGetter(): () => ClipboardSourceInfo {
+  let resolved = false;
+  let value: ClipboardSourceInfo = {};
+  return () => {
+    if (!resolved) {
+      value = detectClipboardSource();
+      resolved = true;
+    }
+    return value;
+  };
+}
+
+function detectClipboardSource(): ClipboardSourceInfo {
+  if (process.platform !== "win32") return {};
+  try {
+    const output = execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        String.raw`
+Add-Type -Namespace Kosmos -Name Win32 -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern System.IntPtr GetClipboardOwner();
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern uint GetWindowThreadProcessId(System.IntPtr hWnd, out uint processId);
+'@
+$hwnd = [Kosmos.Win32]::GetClipboardOwner()
+if ($hwnd -eq [System.IntPtr]::Zero) { exit 0 }
+$processId = 0
+[void][Kosmos.Win32]::GetWindowThreadProcessId($hwnd, [ref]$processId)
+if ($processId -eq 0) { exit 0 }
+$p = Get-Process -Id $processId -ErrorAction SilentlyContinue
+if ($null -eq $p) { exit 0 }
+$icon = $null
+if ($p.Path) {
+  try {
+    Add-Type -AssemblyName System.Drawing
+    $extracted = [System.Drawing.Icon]::ExtractAssociatedIcon($p.Path)
+    if ($null -ne $extracted) {
+      $bitmap = $extracted.ToBitmap()
+      $stream = [System.IO.MemoryStream]::new()
+      $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+      $icon = "data:image/png;base64," + [Convert]::ToBase64String($stream.ToArray())
+      $stream.Dispose()
+      $bitmap.Dispose()
+      $extracted.Dispose()
+    }
+  } catch {}
+}
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+@{ name = $p.ProcessName; icon = $icon } | ConvertTo-Json -Compress
+`,
+      ],
+      { encoding: "utf8", timeout: 500, windowsHide: true },
+    );
+    const raw = output.trim();
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as { name?: unknown; icon?: unknown };
+    return {
+      name: typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : undefined,
+      icon:
+        typeof parsed.icon === "string" && parsed.icon.startsWith("data:image/")
+          ? parsed.icon
+          : undefined,
+    };
+  } catch {
+    return {};
+  }
 }
 
 function readClipboardFilePaths(): string[] {

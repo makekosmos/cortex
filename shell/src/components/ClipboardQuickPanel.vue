@@ -1,17 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import {
-  Clipboard,
-  ExternalLink,
-  File,
-  Image as ImageIcon,
-  Link,
-  Palette,
-  Pin,
-  PinOff,
-  Trash2,
-  XCircle,
-} from "@lucide/vue";
+import { computed, nextTick, onBeforeUpdate, watch } from "vue";
+import { Clipboard, File, Image as ImageIcon, Link, Palette, Pin } from "@lucide/vue";
 import type { ClipboardHistoryItem } from "@shared/ipc-types";
 
 const props = defineProps<{
@@ -21,6 +10,8 @@ const props = defineProps<{
   loading: boolean;
   emptyLabel: string;
 }>();
+
+const TEXT_PREVIEW_LIMIT = 1000;
 
 const emit = defineEmits<{
   select: [index: number];
@@ -32,7 +23,10 @@ const emit = defineEmits<{
   clearAll: [];
 }>();
 
-const formatter = new Intl.DateTimeFormat("ru-RU", {
+const detailDateFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
 });
@@ -62,8 +56,30 @@ const groupedItems = computed(() => {
   return groups.filter((group) => group.rows.length > 0);
 });
 
-function itemTime(item: ClipboardHistoryItem): string {
-  return formatter.format(new Date(item.createdAt));
+const rowRefs = new Map<number, HTMLElement>();
+
+function setRowRef(index: number, element: Element | null): void {
+  if (element instanceof HTMLElement) {
+    rowRefs.set(index, element);
+    return;
+  }
+  rowRefs.delete(index);
+}
+
+onBeforeUpdate(() => {
+  rowRefs.clear();
+});
+
+watch(
+  () => [props.selectedIndex, props.items.length],
+  async () => {
+    await nextTick();
+    rowRefs.get(props.selectedIndex)?.scrollIntoView({ block: "nearest" });
+  },
+);
+
+function itemDateTime(item: ClipboardHistoryItem): string {
+  return detailDateFormatter.format(new Date(item.createdAt));
 }
 
 function itemKindLabel(item: ClipboardHistoryItem): string {
@@ -83,15 +99,20 @@ function itemDetailLabel(item: ClipboardHistoryItem): string {
 }
 
 function itemMetricLabel(item: ClipboardHistoryItem): string {
-  if (item.kind === "image" && item.width && item.height) return `${item.width}×${item.height}`;
+  if (item.kind === "image" && item.width && item.height) return "Разрешение";
   if (item.kind === "file") return "Путь";
   if (item.kind === "link") return "URL";
   if (item.kind === "color") return "HEX";
   return "Символы";
 }
 
-function canOpen(item: ClipboardHistoryItem): boolean {
-  return item.kind === "link" || item.kind === "file";
+function previewText(item: ClipboardHistoryItem): string {
+  if (item.text.length <= TEXT_PREVIEW_LIMIT) return item.text;
+  return item.text.slice(0, TEXT_PREVIEW_LIMIT);
+}
+
+function hiddenTextLabel(item: ClipboardHistoryItem): string {
+  return `+ ${charLabel(Math.max(0, item.text.length - TEXT_PREVIEW_LIMIT))}`;
 }
 
 function charLabel(count: number): string {
@@ -106,7 +127,7 @@ function charLabel(count: number): string {
 <template>
   <div class="clipboard-panel">
     <div class="clipboard-panel__surface">
-      <section class="clipboard-panel__list" aria-label="История буфера обмена">
+      <section class="clipboard-panel__list kosmos-scroll" aria-label="История буфера обмена">
         <div v-if="loading" class="clipboard-panel__empty">Загружаю историю</div>
         <div v-else-if="items.length === 0" class="clipboard-panel__empty">{{ emptyLabel }}</div>
 
@@ -118,24 +139,28 @@ function charLabel(count: number): string {
                 v-for="{ item, index } in group.rows"
                 :key="item.id"
                 class="clipboard-panel__row result"
+                :ref="(element) => setRowRef(index, element)"
                 :class="{ selected: selectedIndex === index }"
                 @click="emit('select', index)"
                 @dblclick="emit('copy', index)"
               >
                 <span class="clipboard-panel__row-icon" aria-hidden="true">
-                  <ImageIcon v-if="item.kind === 'image'" :size="15" />
-                  <Link v-else-if="item.kind === 'link'" :size="15" />
-                  <Palette v-else-if="item.kind === 'color'" :size="15" />
-                  <File v-else-if="item.kind === 'file'" :size="15" />
-                  <Clipboard v-else :size="15" />
+                  <img
+                    v-if="item.kind === 'image' && item.imageDataUrl"
+                    class="clipboard-panel__row-thumb"
+                    :src="item.imageDataUrl"
+                    alt=""
+                  />
+                  <ImageIcon v-else-if="item.kind === 'image'" :size="13" />
+                  <Link v-else-if="item.kind === 'link'" :size="13" />
+                  <Palette v-else-if="item.kind === 'color'" :size="13" />
+                  <File v-else-if="item.kind === 'file'" :size="13" />
+                  <Clipboard v-else :size="13" />
                 </span>
                 <span class="clipboard-panel__row-body">
                   <span class="clipboard-panel__preview">
                     <Pin v-if="item.pinned" class="clipboard-panel__pin" :size="12" />
                     <span>{{ item.preview }}</span>
-                  </span>
-                  <span class="clipboard-panel__row-subtitle">
-                    {{ itemKindLabel(item) }} · {{ itemTime(item) }}
                   </span>
                 </span>
               </li>
@@ -163,52 +188,43 @@ function charLabel(count: number): string {
             >
               <span>{{ selectedItem.color ?? selectedItem.text }}</span>
             </div>
-            <pre v-else>{{ selectedItem.text }}</pre>
-          </div>
-          <div class="clipboard-panel__detail-actions">
-            <button
-              class="clipboard-panel__action clipboard-panel__action--primary"
-              type="button"
-              @click="emit('copy', selectedIndex)"
+            <div
+              v-else
+              class="clipboard-panel__text-preview kosmos-scroll"
+              :class="{
+                'clipboard-panel__text-preview--truncated':
+                  selectedItem.text.length > TEXT_PREVIEW_LIMIT,
+              }"
             >
-              <Clipboard :size="14" />
-              <span>Скопировать</span>
-            </button>
-            <button
-              v-if="canOpen(selectedItem)"
-              class="clipboard-panel__action"
-              type="button"
-              @click="emit('open', selectedIndex)"
-            >
-              <ExternalLink :size="14" />
-              <span>Открыть</span>
-            </button>
-            <button
-              class="clipboard-panel__action"
-              type="button"
-              @click="emit('togglePin', selectedIndex)"
-            >
-              <PinOff v-if="selectedItem.pinned" :size="14" />
-              <Pin v-else :size="14" />
-              <span>{{ selectedItem.pinned ? "Открепить" : "Закрепить" }}</span>
-            </button>
-            <button
-              class="clipboard-panel__action"
-              type="button"
-              @click="emit('remove', selectedIndex)"
-            >
-              <Trash2 :size="14" />
-              <span>Удалить</span>
-            </button>
-          </div>
-          <dl class="clipboard-panel__metadata">
-            <div class="clipboard-panel__metadata-heading">
-              <dt>Информация</dt>
-              <dd />
+              <div
+                class="clipboard-panel__text-preview-content"
+                :class="{
+                  'clipboard-panel__text-preview-content--truncated':
+                    selectedItem.text.length > TEXT_PREVIEW_LIMIT,
+                }"
+              >
+                <pre>{{ previewText(selectedItem) }}</pre>
+              </div>
+              <span
+                v-if="selectedItem.text.length > TEXT_PREVIEW_LIMIT"
+                class="clipboard-panel__text-overflow-count"
+              >
+                {{ hiddenTextLabel(selectedItem) }}
+              </span>
             </div>
-            <div>
+          </div>
+          <dl class="clipboard-panel__metadata kosmos-scroll">
+            <div v-if="selectedItem.source">
               <dt>Источник</dt>
-              <dd>Kosmos</dd>
+              <dd class="clipboard-panel__source-value">
+                <img
+                  v-if="selectedItem.sourceIcon"
+                  class="clipboard-panel__source-icon"
+                  :src="selectedItem.sourceIcon"
+                  alt=""
+                />
+                <span>{{ selectedItem.source }}</span>
+              </dd>
             </div>
             <div>
               <dt>Тип</dt>
@@ -224,7 +240,7 @@ function charLabel(count: number): string {
             </div>
             <div>
               <dt>Скопировано</dt>
-              <dd>{{ itemTime(selectedItem) }}</dd>
+              <dd>{{ itemDateTime(selectedItem) }}</dd>
             </div>
           </dl>
         </template>
@@ -234,71 +250,25 @@ function charLabel(count: number): string {
         </div>
       </section>
     </div>
-
-    <div class="clipboard-panel__footer">
-      <div class="clipboard-panel__footer-title">
-        <span class="clipboard-panel__footer-icon" aria-hidden="true">
-          <Clipboard :size="14" />
-        </span>
-        <span>История буфера</span>
-      </div>
-      <div class="clipboard-panel__footer-actions">
-        <span>Вставить</span>
-        <kbd>Enter</kbd>
-        <span class="clipboard-panel__footer-divider" />
-        <button
-          class="clipboard-panel__footer-button"
-          type="button"
-          :disabled="!selectedItem"
-          @click="selectedItem && emit('togglePin', selectedIndex)"
-        >
-          <Pin :size="14" />
-          <span>Закрепить</span>
-        </button>
-        <button
-          class="clipboard-panel__footer-button"
-          type="button"
-          :disabled="items.length === 0"
-          @click="emit('clear')"
-        >
-          <XCircle :size="14" />
-          <span>Очистить</span>
-        </button>
-        <button
-          class="clipboard-panel__footer-button"
-          type="button"
-          :disabled="items.length === 0"
-          @click="emit('clearAll')"
-        >
-          <Trash2 :size="14" />
-          <span>Всё</span>
-        </button>
-        <span>Действия</span>
-        <kbd>Ctrl</kbd>
-        <kbd>K</kbd>
-      </div>
-    </div>
   </div>
 </template>
 
 <style scoped>
 .clipboard-panel {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
 }
 
-.clipboard-panel__row,
-.clipboard-panel__footer,
-.clipboard-panel__footer-title,
-.clipboard-panel__footer-actions,
-.clipboard-panel__footer-button {
+.clipboard-panel__row {
   display: flex;
   align-items: center;
 }
 
 .clipboard-panel__surface {
   display: grid;
+  overflow: hidden;
   min-height: 0;
   grid-template-columns: minmax(286px, 0.78fr) minmax(390px, 1.22fr);
 }
@@ -313,6 +283,7 @@ function charLabel(count: number): string {
 }
 
 .clipboard-panel__list {
+  min-width: 0;
   border-right: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
   overflow-y: auto;
 }
@@ -337,13 +308,14 @@ function charLabel(count: number): string {
 }
 
 .clipboard-panel__row {
-  min-height: 38px;
+  min-width: 0;
+  min-height: 30px;
   gap: 8px;
   margin: 1px 0;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  padding: 6px 8px;
+  padding: 4px 8px;
 }
 
 .clipboard-panel__row:hover {
@@ -357,24 +329,30 @@ function charLabel(count: number): string {
 
 .clipboard-panel__row-icon {
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--foreground) 14%, transparent);
   color: color-mix(in srgb, var(--foreground) 82%, transparent);
 }
 
+.clipboard-panel__row-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
 .clipboard-panel__row-body {
-  display: grid;
+  display: flex;
   min-width: 0;
   flex: 1;
-  gap: 4px;
+  overflow: hidden;
 }
 
 .clipboard-panel__preview {
   display: flex;
+  width: 100%;
   min-width: 0;
   align-items: center;
   gap: 5px;
@@ -388,6 +366,7 @@ function charLabel(count: number): string {
 }
 
 .clipboard-panel__preview span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -397,23 +376,15 @@ function charLabel(count: number): string {
   color: var(--accent);
 }
 
-.clipboard-panel__row-subtitle {
-  overflow: hidden;
-  color: color-mix(in srgb, var(--foreground) 46%, transparent);
-  font-size: 11px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .clipboard-panel__detail {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .clipboard-panel__preview-pane {
+  height: 216px;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 18px 16px;
 }
 
@@ -424,10 +395,9 @@ function charLabel(count: number): string {
 
 .clipboard-panel__image-preview {
   max-width: 100%;
-  max-height: 100%;
+  max-height: 216px;
   border-radius: 6px;
   object-fit: contain;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 9%, transparent);
 }
 
 .clipboard-panel__color-preview {
@@ -450,7 +420,13 @@ function charLabel(count: number): string {
   font-weight: 700;
 }
 
-.clipboard-panel__preview-pane pre {
+.clipboard-panel__text-preview {
+  position: relative;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.clipboard-panel__text-preview pre {
   margin: 0;
   color: var(--foreground);
   font-family: var(--font-mono);
@@ -461,39 +437,43 @@ function charLabel(count: number): string {
   word-break: break-word;
 }
 
-.clipboard-panel__detail-actions {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-  padding: 10px 16px;
+.clipboard-panel__text-preview-content {
+  position: relative;
 }
 
-.clipboard-panel__action {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--foreground) 5%, transparent);
-  color: var(--foreground);
-  padding: 6px 9px;
-  font: inherit;
+.clipboard-panel__text-preview-content--truncated::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: block;
+  height: 64px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--main-background-color) 0%, transparent) 0%,
+    color-mix(in srgb, var(--main-background-color) 72%, transparent) 62%,
+    var(--main-background-color) 100%
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.clipboard-panel__text-overflow-count {
+  display: block;
+  color: color-mix(in srgb, var(--foreground) 58%, transparent);
   font-size: 12px;
-  font-weight: 650;
-}
-
-.clipboard-panel__action--primary {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-weight: 700;
+  padding-top: 10px;
+  pointer-events: none;
 }
 
 .clipboard-panel__metadata {
   display: grid;
+  min-height: 0;
   gap: 0;
   border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
   margin: 0;
+  overflow-y: auto;
   padding: 12px 16px;
 }
 
@@ -521,18 +501,20 @@ function charLabel(count: number): string {
   text-align: right;
 }
 
-.clipboard-panel__metadata-heading {
-  border-bottom: 0 !important;
-  padding-top: 0 !important;
+.clipboard-panel__source-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
-.clipboard-panel__metadata-heading dt {
-  grid-column: 1 / -1;
-  color: color-mix(in srgb, var(--foreground) 62%, transparent);
-}
-
-.clipboard-panel__metadata-heading dd {
-  display: none;
+.clipboard-panel__source-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  object-fit: cover;
 }
 
 .clipboard-panel__empty {
@@ -547,60 +529,5 @@ function charLabel(count: number): string {
 
 .clipboard-panel__empty--detail {
   min-height: 0;
-}
-
-.clipboard-panel__footer {
-  justify-content: space-between;
-  min-height: 40px;
-  border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
-  padding: 0 10px;
-  color: color-mix(in srgb, var(--foreground) 74%, transparent);
-  font-size: 12px;
-}
-
-.clipboard-panel__footer-title,
-.clipboard-panel__footer-actions,
-.clipboard-panel__footer-button {
-  gap: 7px;
-}
-
-.clipboard-panel__footer-icon {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent);
-}
-
-.clipboard-panel__footer-actions {
-  color: var(--foreground);
-  font-weight: 650;
-}
-
-.clipboard-panel__footer-actions kbd {
-  border: 1px solid color-mix(in srgb, var(--foreground) 14%, transparent);
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--foreground) 6%, transparent);
-  color: color-mix(in srgb, var(--foreground) 70%, transparent);
-  padding: 1px 5px 2px;
-  font: inherit;
-  font-size: 11px;
-}
-
-.clipboard-panel__footer-divider {
-  width: 1px;
-  height: 16px;
-  margin: 0 4px;
-  background: color-mix(in srgb, var(--foreground) 15%, transparent);
-}
-
-.clipboard-panel__footer-button {
-  border: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--foreground) 74%, transparent);
-  padding: 0;
-  font: inherit;
 }
 </style>

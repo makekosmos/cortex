@@ -14,14 +14,16 @@ const PREVIEW_LIMIT = 180;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ClipboardHistoryStore {
-  record(text: string): ClipboardHistoryItem | null;
+  record(text: string, metadata?: ClipboardHistoryRecordMetadata): ClipboardHistoryItem | null;
   recordImage(args: {
     dataUrl: string;
     width: number;
     height: number;
     mimeType?: string;
+    source?: string;
+    sourceIcon?: string;
   }): ClipboardHistoryItem | null;
-  recordFile(path: string): ClipboardHistoryItem | null;
+  recordFile(path: string, metadata?: ClipboardHistoryRecordMetadata): ClipboardHistoryItem | null;
   updateTimestamp(id: string): ClipboardHistoryItem | null;
   togglePin(id: string): ClipboardHistoryItem | null;
   clearAll(): void;
@@ -34,6 +36,11 @@ export interface ClipboardHistoryStore {
   updateSettings(patch: ClipboardHistorySettingsPatch): ClipboardHistorySettings;
   stats(): ClipboardHistoryStats;
   pruneNow(): void;
+}
+
+export interface ClipboardHistoryRecordMetadata {
+  source?: string;
+  sourceIcon?: string;
 }
 
 type ClipboardTextKind = "text" | "link" | "color";
@@ -112,7 +119,10 @@ export function createClipboardHistoryStore(options?: {
     commit({ forceSave: false, pruneNow: now() });
   }
 
-  function record(text: string): ClipboardHistoryItem | null {
+  function record(
+    text: string,
+    metadata: ClipboardHistoryRecordMetadata = {},
+  ): ClipboardHistoryItem | null {
     const classified = classifyClipboardText(text);
     if (!classified) return null;
 
@@ -134,6 +144,8 @@ export function createClipboardHistoryStore(options?: {
       charCount: classified.text.length,
       pinned: false,
       searchText: classified.searchText,
+      source: normalizeSource(metadata.source),
+      sourceIcon: normalizeSourceIcon(metadata.sourceIcon),
       url: classified.url,
       color: classified.color,
     });
@@ -146,6 +158,8 @@ export function createClipboardHistoryStore(options?: {
     width: number;
     height: number;
     mimeType?: string;
+    source?: string;
+    sourceIcon?: string;
   }): ClipboardHistoryItem | null {
     if (!args.dataUrl || args.width <= 0 || args.height <= 0) return null;
 
@@ -165,6 +179,8 @@ export function createClipboardHistoryStore(options?: {
       charCount: 0,
       pinned: false,
       searchText: `изображение image ${args.width} ${args.height}`,
+      source: normalizeSource(args.source),
+      sourceIcon: normalizeSourceIcon(args.sourceIcon),
       imageDataUrl: args.dataUrl,
       width: args.width,
       height: args.height,
@@ -174,7 +190,10 @@ export function createClipboardHistoryStore(options?: {
     return item;
   }
 
-  function recordFile(filePath: string): ClipboardHistoryItem | null {
+  function recordFile(
+    filePath: string,
+    metadata: ClipboardHistoryRecordMetadata = {},
+  ): ClipboardHistoryItem | null {
     const normalized = filePath.trim();
     if (!normalized) return null;
     const existing = items.find((item) => item.kind === "file" && item.filePath === normalized);
@@ -192,6 +211,8 @@ export function createClipboardHistoryStore(options?: {
       charCount: normalized.length,
       pinned: false,
       searchText: `${fileName} ${normalized}`,
+      source: normalizeSource(metadata.source),
+      sourceIcon: normalizeSourceIcon(metadata.sourceIcon),
       filePath: normalized,
       fileName,
     });
@@ -358,6 +379,16 @@ function normalizeClipboardText(text: string): string {
   return text.replace(/\r\n/g, "\n").trim();
 }
 
+function normalizeSource(source: string | undefined): string | undefined {
+  const value = source?.trim();
+  return value ? value : undefined;
+}
+
+function normalizeSourceIcon(sourceIcon: string | undefined): string | undefined {
+  const value = sourceIcon?.trim();
+  return value?.startsWith("data:image/") ? value : undefined;
+}
+
 function previewText(text: string): string {
   const compact = text.replace(/\s+/g, " ");
   if (compact.length <= PREVIEW_LIMIT) return compact;
@@ -418,6 +449,7 @@ function normalizeItem(input: unknown): ClipboardHistoryItem {
     pinned: raw.pinned === true,
     searchText: typeof raw.searchText === "string" ? raw.searchText : (raw.text ?? ""),
     source: typeof raw.source === "string" ? raw.source : undefined,
+    sourceIcon: typeof raw.sourceIcon === "string" ? raw.sourceIcon : undefined,
     imageDataUrl: typeof raw.imageDataUrl === "string" ? raw.imageDataUrl : undefined,
     width: typeof raw.width === "number" ? raw.width : undefined,
     height: typeof raw.height === "number" ? raw.height : undefined,

@@ -21,6 +21,39 @@ Workflow ведения постмортемов — `bug-postmortem` skill (`.c
 
 ---
 
+## 2026-06-06 — Shell dev повторно стартовал на чужих портах
+
+**Симптомы** — повторный `bun run --cwd shell dev` при уже живом dev-run строил backend/extensions, потом shell Vite писал `Port 5173 is in use, trying another one...`, уезжал на `5174`, Akasha падала с `Port 5185 is already in use`, а shutdown мог допечатать шум вроде `ERROR: The process "<pid>" not found`.
+**Где жило** — `shell/scripts/dev.mjs` и `shell/vite.config.mjs`.
+**Root cause** — extension dev servers уже запускались со `--strictPort`, а shell renderer Vite не имел strict port contract. Dev orchestrator не делал preflight по портам, поэтому вторая dev-сессия начинала частично стартовать и доходила до Electron/backend вместо раннего понятного отказа.
+**Fix** — `dev.mjs` до spawn children проверяет shell port `5173` и devPort'ы выбранных Vue extension'ов (`akasha` default-on, все extensions при `KEPLER_DEV_EXTENSIONS=1`). Если порт занят, скрипт выходит до запуска children и печатает список занятых endpoints. Shell Vite теперь закреплён на `127.0.0.1:5173` со `strictPort`.
+**Регрешн-защита** — `node --check shell/scripts/dev.mjs`; ручной busy-port check через `node shell/scripts/dev.mjs` при живых `5173/5185`; clean `bun run --cwd shell dev` должен показывать `http://127.0.0.1:5173/` и `http://127.0.0.1:5185/` без fallback на `5174`.
+**Prevention** — Dev orchestration не должен полагаться на Vite fallback ports. Любой port-bound dev target обязан либо строго занять ожидаемый порт, либо до запуска зависимых процессов объяснить, какой предыдущий listener надо остановить.
+
+---
+
+## 2026-06-06 — Backend жёг CPU usage heartbeat и file watcher'ом
+
+**Симптомы** — в простое `kepler-backend.exe` держал ~0.9-1.5 ядра, а `ark-core-rpc.exe` ещё ~0.3-0.5 ядра. RAM при этом не росла, поэтому проблема выглядела как CPU loop, а не memory leak.
+**Где жило** — `services/kepler-backend/src/usage_tracker/mod.rs::run`, `ActiveSession::accumulate`, `update_active_session`; `services/kepler-backend/src/file_index/watcher.rs::start`.
+**Root cause** — было два независимых фоновых churn-источника. Usage tracker каждую секунду для каждой активной in-memory session делал `upsert_usage_session`, а для foreground sample ещё и `upsert_tracked_app`; каждый ARK upsert bump'ал `lan_sync.version_vector`, поэтому без смены окна создавался постоянный write/sync churn. После снижения ARK churn `kepler-backend` всё ещё держал почти целое ядро: live dev profile показал `ark-core-rpc` ~9%, но backend ~98%. Изолированный backend с пустыми file-index roots потреблял ~0.2%, значит остаточный CPU шёл из recursive file watcher на persisted broad roots (`roots=2`, включая drive/user scope), который обрабатывал ambient filesystem events и писал локальный `file-index.db`.
+**Fix** — `ActiveSession` теперь копит heartbeat time in-memory и flush'ит `usage_session` в ARK не чаще чем раз в 60 секунд; `tracked_app.last_seen_at` сохраняется при завершении session, чтобы heartbeat не делал второй sync bump. Финальный flush при завершении session остаётся обязательным. `update_active_session` больше не пишет `tracked_app` на каждый стабильный foreground poll. Recursive file watcher стал opt-in через `KEPLER_FILE_INDEX_WATCHER=1`; по умолчанию file index обновляется startup/manual rescan'ом без постоянного notify-потока.
+**Регрешн-защита** — `cargo test -p kepler-backend active_session_heartbeat_flush_is_rate_limited` проверяет, что 59 секунд poll'ов не разрешают heartbeat flush, 60-я секунда разрешает, а после flush счётчик сбрасывается. `recursive_watcher_is_opt_in` фиксирует, что recursive watcher не включается без явного env opt-in.
+**Prevention** — Любой фоновой sampler должен разделять sampling cadence и persistence cadence. Poll каждую секунду допустим для in-memory state, но запись в синхронизируемое хранилище обязана быть event-driven или bounded heartbeat; иначе каждый “без изменений” poll становится sync write. Recursive filesystem watcher по широкому root'у (`drive`, `%USERPROFILE%`, workspace с build dirs) не может быть default-поведением desktop shell: это opt-in capability с явным performance budget.
+
+---
+
+## 2026-06-06 — Clipboard detail терял выбранную строку и источник
+
+**Симптомы** — при навигации стрелками по истории буфера выделение уходило ниже видимой области списка, поэтому пользователь не видел текущую выбранную запись. В detail-панели `Источник` либо показывал фейковый `Kosmos`, либо не мог показать реальный source вроде ShareX.
+**Где жило** — `shell/src/components/ClipboardQuickPanel.vue` selection rendering/detail metadata; `shell/electron/clipboard-history-store.ts` record methods.
+**Root cause** — список рендерил `selected` class по индексу, но не синхронизировал DOM viewport с программным `selectedIndex`, поэтому keyboard navigation меняла состояние без `scrollIntoView`. Clipboard store уже имел поле `source` в `ClipboardHistoryItem`/hydrate, но write path (`record`, `recordImage`, `recordFile`) не принимал source metadata, так что UI либо врал hardcoded строкой, либо не имел данных для честного источника.
+**Fix** — `ClipboardQuickPanel` держит refs строк и при изменении `selectedIndex` вызывает `scrollIntoView({ block: "nearest" })`, поэтому keyboard selection остаётся в видимой области без лишних прыжков. Detail metadata показывает `Источник` только при наличии `selectedItem.source`. Clipboard store теперь принимает source metadata в `record` / `recordImage` / `recordFile`, а main recorder best-effort определяет Windows clipboard owner process и associated icon при новом clipboard snapshot.
+**Регрешн-защита** — `bun test tests/unit/clipboard-history-store.test.ts` проверяет сохранение `source`/`sourceIcon` для text/file/image entries; `bun run shell:typecheck`; `bun run lint`.
+**Prevention** — Keyboard-driven selection в кастомных списках должен явно синхронизировать selected row с scroll container; hover/click поведения недостаточно. Metadata UI не должен hardcode'ить происхождение данных: если источник приходит с backend/store boundary, показывай его условно, а если источник ещё не определён — не заполняй поле декоративной догадкой.
+
+---
+
 ## 2026-06-05 — Focus launcher показывал команды не по состоянию сессии
 
 **Симптомы** — в launcher были видны непонятные raw focus-команды, а «Начать фокус» оставалась доступной даже во время уже запущенной сессии.
