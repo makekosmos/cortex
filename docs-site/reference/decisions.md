@@ -69,14 +69,14 @@ Search-решение:
 
 Поменяли семантику бренда:
 
-- **Kepler** теперь — имя **лаунчера** и его shell (`shell/`, `services/kepler-backend/`).
+- **Kepler** теперь — имя **лаунчера** и его shell (`platform/desktop/`, `platform/runtime/`).
 - **Kosmos** теперь — имя **экосистемы / монорепо** (`@kosmos/ark`, `@kosmos/visuals`, ARK runtime, документация).
 
 Раньше было наоборот. Все references в коде, конфигах, документации и токенах прошли через `scripts/migrate-kepler-to-kosmos.ps1`. Гард — `scripts/check-swap-completeness.ps1`.
 
 ### 2026-05-14 — Apps остаются standalone .exe + shared backend
 
-Решено **не** мигрировать приложения в extensions лаунчера (Phase 1-3 plan отброшен). Каждое приложение по-прежнему — независимый Electron `.exe` со своим окном и пакетом. Kepler-shell вызывает их через command bus; общий backend (`services/kepler-backend/`) хостит command registry и WS server.
+Решено **не** мигрировать приложения в extensions лаунчера (Phase 1-3 plan отброшен). Каждое приложение по-прежнему — независимый Electron `.exe` со своим окном и пакетом. Kepler-shell вызывает их через command bus; общий backend (`platform/runtime/`) хостит command registry и WS server.
 
 Причина: extension model в Phase 1 PoC показал нарастающую сложность (разделяемый renderer, конфликты CSS-токенов, packaging) при минимальной выгоде. Standalone-распространение проще и сохраняет user expectation «отдельная иконка в Start menu на каждое приложение».
 
@@ -136,7 +136,7 @@ Roadmap:
 - Phase 2 — локальные модели + download manager + AudioWorklet streaming.
 - Phase 3 — LLM post-processing транскрипта (cleanup, пунктуация, стиль под контекст).
 - ~~Phase 1.5~~ — push-to-talk через low-level hook + HTTP/SOCKS proxy + custom Whisper prompt — **DONE 2026-05-24**:
-  - PTT через Win32 `WH_KEYBOARD_LL` hook в `services/kepler-backend/src/dictation/hotkey_hook.rs`. Hook парсит accelerator → `Matcher`, emit'ит broadcast `dictation_ptt_trigger { phase }`. Electron в PTT mode НЕ регистрирует globalShortcut, листает hook events и вызывает `toggleDictation()` на каждое (down → старт, up → отправка).
+  - PTT через Win32 `WH_KEYBOARD_LL` hook в `platform/runtime/src/dictation/hotkey_hook.rs`. Hook парсит accelerator → `Matcher`, emit'ит broadcast `dictation_ptt_trigger { phase }`. Electron в PTT mode НЕ регистрирует globalShortcut, листает hook events и вызывает `toggleDictation()` на каждое (down → старт, up → отправка).
   - Proxy через `reqwest::Proxy::all(url)` (feature `socks` в reqwest). Ортогонально DoH — можно комбинировать.
   - Custom prompt — поле `transcriptionPrompt` в config'е, проходит в Groq multipart `prompt` field. Подсказка модели для domain-specific терминов и стиля.
 

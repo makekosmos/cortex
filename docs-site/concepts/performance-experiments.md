@@ -15,7 +15,7 @@ Permanent log: какие performance / optimization эксперименты б
 
 ### 2026-05-18 — Exp 08: `electronLanguages` restriction
 
-**Изменение:** `shell/package.json` build блок → `"electronLanguages": ["en-US", "ru"]`.
+**Изменение:** `platform/desktop/package.json` build блок → `"electronLanguages": ["en-US", "ru"]`.
 
 **Метод измерения:** `du -sb` на `release/win-unpacked/locales/` + `ls -la` на NSIS installer. Baseline — committed `Kepler Setup 0.1.9.exe` от 2026-05-16.
 
@@ -34,10 +34,10 @@ Permanent log: какие performance / optimization эксперименты б
 
 **Изменение:** `#app` / `.app-container` корни всех 4 extensions:
 
-- `extensions/horologion/src/styles.css`
-- `extensions/arrancador/src/styles.css`
-- `extensions/delphi/src/global.css`
-- `extensions/eden/src/App.css`
+- `incubator/horologion/src/styles.css`
+- `incubator/arrancador/src/styles.css`
+- `products/delphi/src/global.css`
+- `products/eden/src/App.css`
 
 **Метод измерения:** **(не замерял — нет render profiling baseline).** Изменение теоретически изолирует reflow scope, но конкретный effect на FPS / paint area не подтверждён реальным измерением. Применено как best-practice без regression risk (`contain: layout style` без `paint` — не обрезает shadows / overflow).
 
@@ -47,9 +47,9 @@ Permanent log: какие performance / optimization эксперименты б
 
 ### 2026-05-18 — Exp 39: TS `incremental` compilation
 
-**Изменение:** `shell/tsconfig.json` + `packages/ark/tsconfig.json` → `"incremental": true` + `"tsBuildInfoFile"`.
+**Изменение:** `platform/desktop/tsconfig.json` + `core/ark/packages/ark/tsconfig.json` → `"incremental": true` + `"tsBuildInfoFile"`.
 
-**Метод измерения:** `bun run --cwd shell typecheck` cold (после `rm -f .tsbuildinfo`) и warm (повторный запуск). Stop-watch timing через bash `START=$(date +%s%N) ... END=$(date +%s%N)`.
+**Метод измерения:** `bun run --cwd platform/desktop typecheck` cold (после `rm -f .tsbuildinfo`) и warm (повторный запуск). Stop-watch timing через bash `START=$(date +%s%N) ... END=$(date +%s%N)`.
 
 | Run                          |         Wall-clock |
 | ---------------------------- | -----------------: |
@@ -77,9 +77,9 @@ Permanent log: какие performance / optimization эксперименты б
 
 **Изменение:**
 
-- `shell/electron/main.ts` → `resolveLauncherBgMaterial()` default = `"mica"` (с env override `KEPLER_BG_MATERIAL`).
-- `shell/electron/settings-window.ts` → `"acrylic"` заменён на `"mica"`.
-- `shell/electron/install-extension-window.ts` → то же.
+- `platform/desktop/electron/main.ts` → `resolveLauncherBgMaterial()` default = `"mica"` (с env override `KEPLER_BG_MATERIAL`).
+- `platform/desktop/electron/settings-window.ts` → `"acrylic"` заменён на `"mica"`.
+- `platform/desktop/electron/install-extension-window.ts` → то же.
 - Dashboard оставлен solid `#0d0d0d` (не Mica — c `frame: true` + `titleBarOverlay` плохо смотрится).
 
 **Метод измерения:** `measure-kepler-ram.ps1 -Scenario exp23-acrylic/mica` (3 samples mean), production build, isolated data dir.

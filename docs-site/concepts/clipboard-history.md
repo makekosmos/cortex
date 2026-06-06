@@ -3,14 +3,14 @@
 ::: warning Статус: ЗАМОРОЖЕНО (2026-06-06)
 Фича **скрыта во всех сборках** (dev и prod). Код намеренно оставлен в репозитории
 для будущей доработки. Единый рубильник — `CLIPBOARD_HISTORY_ENABLED` в
-`shell/shared/ipc-types.ts` (сейчас `false`). Чтобы вернуть фичу — поставить `true`
+`platform/desktop/shared/ipc-types.ts` (сейчас `false`). Чтобы вернуть фичу — поставить `true`
 и довести до ума производительность поллинга (см. ниже).
 :::
 
 ## Что это
 
 Raycast-подобная история буфера обмена: фоновый поллинг системного clipboard
-(`shell/electron/clipboard-history.ts`), персистентное хранилище
+(`platform/desktop/electron/clipboard-history.ts`), персистентное хранилище
 (`clipboard-history-store.ts`, файл `clipboard-history.json`), панель в лаунчере
 (`ClipboardQuickPanel.vue`, режим `clipboard` в `LauncherView.vue`) и вкладка
 настроек (`ClipboardSettingsTab.vue`).

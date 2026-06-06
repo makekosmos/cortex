@@ -54,7 +54,7 @@ $forbiddenPatterns = @(
     @{ Pattern = 'kosmos\.lock\.json';         Reason = 'Lock-файл launcher теперь kepler.lock.json' }
     @{ Pattern = 'kosmos-singleton\.lock\.db'; Reason = 'Singleton lock теперь kepler-singleton.lock.db' }
     @{ Pattern = 'kosmos-device-id\.txt';      Reason = 'Device id теперь kepler-device-id.txt' }
-    @{ Pattern = 'services/kosmos-backend';    Reason = 'Должен быть services/kepler-backend' }
+    @{ Pattern = 'services/kosmos-backend';    Reason = 'Должен быть platform/runtime' }
     @{ Pattern = 'services\\kosmos-backend';   Reason = 'Должен быть services\\kepler-backend (Windows path)' }
     @{ Pattern = 'kosmos-backend';             Reason = 'Backend service переименован в kepler-backend' }
     @{ Pattern = 'KeplerKosmos';               Reason = 'HKCU Run key теперь KosmosKepler' }

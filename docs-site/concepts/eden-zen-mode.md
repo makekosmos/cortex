@@ -6,7 +6,7 @@ Phase 6.1 (2026-05-19). Eden получил режим фокуса (zen mode) �
 ## Дневник
 
 Системный тип `system-type-journal` (см.
-[`extensions/eden/src/lib/systemTypes.ts`](https://github.com/yoso-industries/kepler/blob/main/extensions/eden/src/lib/systemTypes.ts)
+[`products/eden/src/lib/systemTypes.ts`](https://github.com/yoso-industries/kepler/blob/main/products/eden/src/lib/systemTypes.ts)
 `SYSTEM_TYPE_JOURNAL`). Slug `journal`, icon `document-text`, color purple
 `#a855f7`. Schema наследует note: одно `description` поле + `related_notes`.
 
@@ -31,7 +31,7 @@ Eden запущен.
 | `eden:note:create`     | `/new`   | новая пустая заметка типа `note_obj`                                            |
 | `eden:open`            | —        | просто открыть Eden                                                             |
 
-Route'ы обрабатываются в `extensions/eden/src/main.ts` через
+Route'ы обрабатываются в `products/eden/src/main.ts` через
 `kepler.navigation.initialRoute` + `onNavigate`:
 
 ```ts
@@ -192,7 +192,7 @@ maximize», которое иначе срабатывало бы поверх �
 
 ### IPC и preload API
 
-`shell/electron/extension-host.ts` регистрирует:
+`platform/desktop/electron/extension-host.ts` регистрирует:
 
 ```ts
 ipcMain.handle('kepler:extension:window:toggle-dock-corner', ...)
@@ -216,19 +216,19 @@ window.kepler.window.setMaximizable(value: boolean): Promise<void>
 тонкая 2px полоса по верхней границе окна — gradient от
 `var(--eden-accent-color)` (`#ff5c00`) к темнее. Визуально подчёркивает,
 что окно сейчас в «закреплённом» режиме и поверх других. См.
-`extensions/eden/src/index.css`.
+`products/eden/src/index.css`.
 
 ## Eden accent color
 
 `--eden-accent-color: #ff5c00` (Eden orange) определён в
-`extensions/eden/src/index.css`. Применяется к:
+`products/eden/src/index.css`. Применяется к:
 
 - `::marker` bullet / ordered list в редакторе (`.ProseMirror ul li::marker`,
   `.ProseMirror ol li::marker`) — оранжевые маркеры списков.
 - Gradient в `.app-container.eden-docked::before` — accent-полоса
   dock-corner mode.
 
-Launcher gradient для Eden (`EDEN_GRADIENT` в `shell/electron/commands.ts`)
+Launcher gradient для Eden (`EDEN_GRADIENT` в `platform/desktop/electron/commands.ts`)
 тоже переведён на orange: `#ff5c00 → #b33800`.
 
 ## Связанное

@@ -1,6 +1,6 @@
 # ark-relay-server
 
-- **Path**: `services/ark-relay-server`
+- **Path**: `services/relay-reference`
 
 WebSocket-relay сервер для p2p-синхронизации ARK-пиров **через NAT**. Когда устройства не могут увидеть друг друга в LAN (разные подсети, NAT, мобильная сеть), relay-сервер выступает посредником.
 

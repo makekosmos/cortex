@@ -91,11 +91,11 @@ AC5. `bun run ark:guard:writes` — зелёный (никаких прямых 
 
 В задаче:
 
-- `crates/ark-core/rust/src/db.rs` — функция-агрегатор.
-- `crates/ark-core/rust/src/main.rs` — регистрация RPC operation `<snake_case_name>`.
-- `crates/ark-core/rust/src/types.rs` — request / response типы.
+- `core/ark/crates/ark-core/rust/src/db.rs` — функция-агрегатор.
+- `core/ark/crates/ark-core/rust/src/main.rs` — регистрация RPC operation `<snake_case_name>`.
+- `core/ark/crates/ark-core/rust/src/types.rs` — request / response типы.
 - Rust unit test для агрегатора.
-- `packages/ark/src/ark-client.ts` — обёртка `ark.<group>.<methodName>`.
+- `core/ark/packages/ark/src/ark-client.ts` — обёртка `ark.<group>.<methodName>`.
 - TS тип для request / response.
 
 Не в задаче:
@@ -107,8 +107,8 @@ AC5. `bun run ark:guard:writes` — зелёный (никаких прямых 
 
 AC1. `cargo test --manifest-path crates\ark-core\rust\Cargo.toml` — зелёный, новый тест есть.
 AC2. `cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc` — собирается.
-AC3. `bun run --cwd packages/ark typecheck` — зелёный, новый метод типизирован.
-AC4. `bun run --cwd packages/ark build` — собирается.
+AC3. `bun run --cwd core/ark/packages/ark typecheck` — зелёный, новый метод типизирован.
+AC4. `bun run --cwd core/ark/packages/ark build` — собирается.
 AC5. Wire-формат остался `snake_case`. Self-peer / routable filtering не тронуты.
 AC6. Schema-добавления (если были) — additive.
 

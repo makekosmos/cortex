@@ -32,7 +32,7 @@
 - ❌ Прямой SQL `INSERT`/`UPDATE`/`DELETE` в таблицы ARK из приложения. См. [Граница записи](/concepts/write-boundary).
 - ❌ Дефолтный путь к user ARK DB в тестах. См. [Изоляция тестовых БД](/concepts/test-isolation).
 - ❌ Возврат старого Delphi DB sidecar.
-- ❌ Возврат собственного usage tracker внутри Arrancador (он живёт в `services/kepler-backend/src/usage_tracker`).
+- ❌ Возврат собственного usage tracker внутри Arrancador (он живёт в `platform/runtime/src/usage_tracker`).
 - ❌ Возврат ripgrep как поискового движка Eden — он на Tantivy через Eden Heart.
 - ❌ Дублирование UI-компонентов, которые уже есть в `@kosmos/visuals` (Sidebar, Titlebar, DesktopChrome).
 - ❌ `--no-verify` при коммите.
@@ -40,7 +40,7 @@
 ## Когда нужно
 
 - ✅ Перед PR в data-слой — `bun run ark:guard:writes`.
-- ✅ Перед PR в любую часть ARK — `cargo test` + `bun run --cwd packages/ark typecheck`.
+- ✅ Перед PR в любую часть ARK — `cargo test` + `bun run --cwd core/ark/packages/ark typecheck`.
 - ✅ Перед PR в Electron-приложение — `bun run typecheck`, `bun run build`, `bun run test:e2e`.
 - ✅ Все новые тестовые БД — изолированные. Передавай путь через CLI/env, не дефолти в user data.
 - ✅ Если меняешь endpoint в `ark-core-rpc` — добавь тест миграции и репликации, не только локальный CRUD.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseRaycastPackageManifest } from "../../shell/electron/raycast/manifest";
+import { parseRaycastPackageManifest } from "../../platform/desktop/electron/raycast/manifest";
 
 describe("Raycast package manifest parser", () => {
   test("parses Raycast package.json metadata, commands, preferences, and kosmos namespace", () => {

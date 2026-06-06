@@ -35,9 +35,9 @@ jobs:
       - name: Install deps
         run: bun install --frozen-lockfile
       - name: Build backend (debug)
-        run: bun run --cwd shell build:backend:dev
+        run: bun run --cwd platform/desktop build:backend:dev
       - name: Build shell js + extensions
-        run: bun run --cwd shell build:js
+        run: bun run --cwd platform/desktop build:js
       - name: Playwright install browsers
         run: bunx playwright install chromium --with-deps
       - name: Run e2e

@@ -1,6 +1,6 @@
 // Eden TaskRef ArrowUp/ArrowDown navigation regression.
 //
-// Tested: `extensions/eden/src/components/TaskRefView.vue` → onTitleArrowVertical.
+// Tested: `products/eden/src/components/TaskRefView.vue` → onTitleArrowVertical.
 //
 // Инвариант: когда фокус в title input одного TaskRef и юзер нажимает
 // ArrowDown/ArrowUp, фокус прыгает в соседний TaskRef title input или

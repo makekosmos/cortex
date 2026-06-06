@@ -12,7 +12,7 @@
 
 ## B
 
-**Beacon** — UDP broadcast для discovery пиров в LAN. `crates/ark-core/rust/src/beacon.rs`.
+**Beacon** — UDP broadcast для discovery пиров в LAN. `core/ark/crates/ark-core/rust/src/beacon.rs`.
 
 ## C
 
@@ -20,11 +20,11 @@
 
 ## D
 
-**Direct writer** — Rust-процесс, который пишет напрямую в ARK SQLite через `ark_core::db` хелперы (не через RPC). Пример: `services/kepler-backend/src/usage_tracker`. **Обязан** обновлять `lan_sync.version_vector`.
+**Direct writer** — Rust-процесс, который пишет напрямую в ARK SQLite через `ark_core::db` хелперы (не через RPC). Пример: `platform/runtime/src/usage_tracker`. **Обязан** обновлять `lan_sync.version_vector`.
 
 ## E
 
-**Eden Heart** — историческая Rust sidecar архитектура Eden (Tantivy FTS, vault-локальные операции). Не используется после миграции Eden в extension (`extensions/eden/`, Phase 6.0). Термин сохранён только для исторического контекста ADR. См. [Eden](/apps/eden).
+**Eden Heart** — историческая Rust sidecar архитектура Eden (Tantivy FTS, vault-локальные операции). Не используется после миграции Eden в extension (`products/eden/`, Phase 6.0). Термин сохранён только для исторического контекста ADR. См. [Eden](/apps/eden).
 
 **Electron main** — главный процесс Electron-приложения. Только он имеет доступ к ARK и Node API. См. [Архитектура](/concepts/architecture).
 
@@ -34,7 +34,7 @@
 
 ## H
 
-**HLC** (Hybrid Logical Clock) — гибрид физического и логического времени. Каждое изменение получает HLC-метку для строгого порядка событий. `crates/ark-core/rust/src/hlc.rs`.
+**HLC** (Hybrid Logical Clock) — гибрид физического и логического времени. Каждое изменение получает HLC-метку для строгого порядка событий. `core/ark/crates/ark-core/rust/src/hlc.rs`.
 
 **HMAC peer auth** — опциональная аутентификация пиров через HMAC-SHA256 поверх `auth_secret`. **Не** шифрует трафик.
 
@@ -72,7 +72,7 @@
 
 ## R
 
-**Relay** — WebSocket-сервер `ark-relay-server` (`services/ark-relay-server`), посредник между пирами через NAT.
+**Relay** — WebSocket-сервер `ark-relay-server` (`services/relay-reference`), посредник между пирами через NAT.
 
 **Renderer** — процесс Electron, рендерящий UI. Не имеет прямого доступа к SQLite или ARK.
 
@@ -104,13 +104,13 @@
 
 **Tombstone** — запись об удалении сущности, нужна для propagation удалений на пиры.
 
-**`tracked_apps`**, **`usage_sessions`**, **`usage_events`** — ARK usage-таблицы. Пишутся `services/kepler-backend/src/usage_tracker` напрямую через `ark_core::db`.
+**`tracked_apps`**, **`usage_sessions`**, **`usage_events`** — ARK usage-таблицы. Пишутся `platform/runtime/src/usage_tracker` напрямую через `ark_core::db`.
 
 **Typed note** — заметка Eden с собственным `object_type` (не дефолтный `note_obj`). Имеет специализированный header и schema.
 
 ## U
 
-**UniFFI** — Mozilla-инструмент для генерации FFI-обвязок Rust → Kotlin/Swift. `crates/ark-core/rust/src/ffi.rs`.
+**UniFFI** — Mozilla-инструмент для генерации FFI-обвязок Rust → Kotlin/Swift. `core/ark/crates/ark-core/rust/src/ffi.rs`.
 
 ## V
 

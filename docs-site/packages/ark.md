@@ -1,7 +1,7 @@
 # @kosmos/ark — TypeScript SDK
 
 ::: tip Источник правды
-`packages/ark/README.md`
+`core/ark/packages/ark/README.md`
 :::
 
 `@kosmos/ark` — канонический TypeScript-клиент для ARK runtime. Используется в Electron main и в Node-сервисах. Renderer'ы **не** используют его напрямую — для renderer'ов поднимается узкий preload API в Electron main.
@@ -266,5 +266,5 @@ Usage process и game playtime summary — Rust/SQLite агрегация в `ar
 
 ## Источники
 
-- `packages/ark/src/ark-client.ts` — `ArkClient`, `ArkCommandsApi`, dispatch событий.
-- `packages/ark/src/ensure-kepler.ts` — `ensureKeplerRunning`, discovery + auto-launch.
+- `core/ark/packages/ark/src/ark-client.ts` — `ArkClient`, `ArkCommandsApi`, dispatch событий.
+- `core/ark/packages/ark/src/ensure-kepler.ts` — `ensureKeplerRunning`, discovery + auto-launch.

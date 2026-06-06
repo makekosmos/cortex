@@ -59,7 +59,7 @@ Kosmos — местo, которое унифицирует хранение в�
   <p>Eden, Delphi, Horologion, Arrancador</p>
 </a>
 
-<a class="tile" href="/manual/extensions/eden">
+<a class="tile" href="/manual/products/eden">
   <span class="tile-icon" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
   </span>
@@ -67,7 +67,7 @@ Kosmos — местo, которое унифицирует хранение в�
   <p>Заметки с rich-text и wikilink'ами</p>
 </a>
 
-<a class="tile" href="/manual/extensions/delphi">
+<a class="tile" href="/manual/products/delphi">
   <span class="tile-icon" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
   </span>
@@ -75,7 +75,7 @@ Kosmos — местo, которое унифицирует хранение в�
   <p>Задачи в Linear-стиле</p>
 </a>
 
-<a class="tile" href="/manual/extensions/horologion">
+<a class="tile" href="/manual/incubator/horologion">
   <span class="tile-icon" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/><path d="M12 10v3h3"/></svg>
   </span>
@@ -83,7 +83,7 @@ Kosmos — местo, которое унифицирует хранение в�
   <p>Pomodoro и focus widget</p>
 </a>
 
-<a class="tile" href="/manual/extensions/arrancador">
+<a class="tile" href="/manual/incubator/arrancador">
   <span class="tile-icon" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258A4 4 0 0 0 17.32 5z"/></svg>
   </span>

@@ -2,10 +2,10 @@
 
 ::: tip Источник правды
 
-- `services/kepler-backend/src/db_backup.rs` — periodic backup scheduler
-- `services/kepler-backend/src/crash_reporter.rs` — Rust panic hook
-- `crates/ark-core/rust/src/db.rs::check_integrity` + `backup_to_file`
-- `shell/electron/main.ts` — Electron crashReporter + supervisor logic
+- `platform/runtime/src/db_backup.rs` — periodic backup scheduler
+- `platform/runtime/src/crash_reporter.rs` — Rust panic hook
+- `core/ark/crates/ark-core/rust/src/db.rs::check_integrity` + `backup_to_file`
+- `platform/desktop/electron/main.ts` — Electron crashReporter + supervisor logic
   :::
 
 Локально-первый продукт = вся ответственность за data safety на твоей машине. Эта страница описывает все safety nets, которые работают за кулисами.
@@ -65,7 +65,7 @@ conn.query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
 
 ## Backend supervisor (Electron main)
 
-`shell/electron/main.ts` — exponential backoff respawn:
+`platform/desktop/electron/main.ts` — exponential backoff respawn:
 
 | Crash # | Delay перед respawn                    |
 | ------- | -------------------------------------- |
@@ -128,7 +128,7 @@ Settings → General → секция "Отчёты об ошибках":
 
 ## Mutex poison recovery
 
-В `crates/ark-core/rust/src/db.rs::SqliteStorageBackend` (sync runtime):
+В `core/ark/crates/ark-core/rust/src/db.rs::SqliteStorageBackend` (sync runtime):
 
 ```rust
 let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
@@ -142,13 +142,13 @@ let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
 
 ## Property-based tests
 
-`crates/ark-core/rust/tests/proptest_invariants.rs` — random Upsert/Delete sequences проверяют invariants:
+`core/ark/crates/ark-core/rust/tests/proptest_invariants.rs` — random Upsert/Delete sequences проверяют invariants:
 
 1. **List survives random ops** — никакая sequence не panic'ает list_objects().
 2. **HLC monotonic per entity** — version_vector HLC строго растёт после каждой write op.
 3. **Tombstone lifecycle consistent** — после delete есть tombstone, после re-insert исчез.
 
-Run: `cargo test --manifest-path crates/ark-core/rust/Cargo.toml --test proptest_invariants`.
+Run: `cargo test --manifest-path core/ark/crates/ark-core/rust/Cargo.toml --test proptest_invariants`.
 
 ## Что НЕ покрывают эти safety nets
 

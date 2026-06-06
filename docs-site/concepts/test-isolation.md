@@ -62,23 +62,23 @@ $env:KOSMOS_TEST_MODE = "1"
 playwright test
 ```
 
-Реализовано в `services/kepler-backend/src/lock_file.rs`
+Реализовано в `platform/runtime/src/lock_file.rs`
 (`kosmos_data_dir()`). Test helper `tests/e2e/helpers/launch.ts` форсит
 эту переменную для всех specs и явно отказывается принимать путь внутри
 `%APPDATA%`.
 
 ## Dev mode изоляция
 
-`bun run --cwd shell dev` **не пишет** в `%APPDATA%\Kosmos\` — он
+`bun run --cwd platform/desktop dev` **не пишет** в `%APPDATA%\Kosmos\` — он
 использует `%APPDATA%\Kosmos-dev\` (отдельная директория). Это
 гарантирует, что разработка / эксперименты с кодом не повреждают данные,
 которые видит production install.
 
-Resolution chain в `shell/electron/data-dir.ts` `keplerDataDir()`:
+Resolution chain в `platform/desktop/electron/data-dir.ts` `keplerDataDir()`:
 
 1. `KOSMOS_DATA_DIR` env (если set) — absolute path. Используется для
    Playwright e2e (test isolation).
-2. `VITE_DEV_SERVER_URL` set (`bun run --cwd shell dev` через Vite) →
+2. `VITE_DEV_SERVER_URL` set (`bun run --cwd platform/desktop dev` через Vite) →
    `<appData>\Kosmos-dev`.
 3. Иначе (production install): `<appData>\Kosmos`.
 

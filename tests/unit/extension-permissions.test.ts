@@ -4,7 +4,7 @@ import {
   assertExtensionEventPermission,
   assertExtensionHostPermission,
   type ExtensionSource,
-} from "../../shell/electron/extension-permissions";
+} from "../../platform/desktop/electron/extension-permissions";
 
 const USER: ExtensionSource = "user";
 

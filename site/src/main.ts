@@ -3,7 +3,7 @@ import App from "./App.vue";
 import "./styles.css";
 
 // Stub `window.kepler` чтобы реальный LauncherView.vue (импортированный
-// из shell/src/views/LauncherView.vue) рендерился в браузере без Electron
+// из platform/desktop/src/views/LauncherView.vue) рендерился в браузере без Electron
 // IPC. Surface — минимум того что LauncherView использует.
 
 const HARDCODED_COMMANDS = [

@@ -29,7 +29,7 @@ Read-only SQLite не ломает sync — он ничего не меняет.
 
 ## Dashboard — особый случай
 
-Dashboard — буквально read-only ARK inspector. Это встроенный view kepler-shell (`shell/src/views/Dashboard*.vue`), не отдельный app, не extension. Часть его product surface:
+Dashboard — буквально read-only ARK inspector. Это встроенный view kepler-shell (`platform/desktop/src/views/Dashboard*.vue`), не отдельный app, не extension. Часть его product surface:
 
 - Можно открывать любую выбранную ARK SQLite-БД через kepler-shell Electron main.
 - Можно показывать данные в UI.

@@ -60,7 +60,7 @@ test.describe("delphi legacy cleanup", () => {
 
       await captureExtensionWindow(
         app,
-        "extensions/delphi",
+        "products/delphi",
         path.join(VISUAL_DIR, "delphi-main-no-space-setup.png"),
       );
     } finally {

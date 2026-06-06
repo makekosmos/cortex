@@ -56,7 +56,7 @@ test.describe("launcher post-update banner", () => {
       const tile = launcher.locator(".post-update-tile");
       await expect(tile).toBeVisible();
       // Версия из app.getVersion() — в test bundle это валидная semver-строка
-      // (см. shell/package.json). Не хардкодим — просто проверяем что не пусто.
+      // (см. platform/desktop/package.json). Не хардкодим — просто проверяем что не пусто.
       const title = await tile.locator(".update-title").innerText();
       expect(title).toMatch(/Kepler обновл[её]н до v\d+\.\d+\.\d+/i);
 

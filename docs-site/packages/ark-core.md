@@ -1,7 +1,7 @@
 # ark-core
 
 ::: tip Источник правды
-`crates/ark-core/README.md`, `crates/ark-core/AGENTS.md`
+`core/ark/crates/ark-core/README.md`, `core/ark/crates/ark-core/AGENTS.md`
 :::
 
 Канонический local-first data runtime для Kosmos. Rust crate + sidecar бинарь `ark-core-rpc` поверх SQLite. Один и тот же runtime используется Electron-приложениями через JSON-RPC и Android/Swift через UniFFI.
@@ -16,7 +16,7 @@
 ## Архитектура
 
 ```text
-crates/ark-core/rust/src/
+core/ark/crates/ark-core/rust/src/
   main.rs              # stdin/stdout JSON-RPC sidecar для Electron callers
   ffi.rs               # UniFFI facade для Android / Swift / embedded callers
   lib.rs               # library entry point, public re-exports
@@ -41,10 +41,10 @@ crates/ark-core/rust/src/
 ## Сборка и тесты
 
 ```powershell
-cargo build --manifest-path crates/ark-core/rust/Cargo.toml --bin ark-core-rpc
-cargo test  --manifest-path crates/ark-core/rust/Cargo.toml
-bun run --cwd packages/ark typecheck
-bun run --cwd packages/ark build
+cargo build --manifest-path core/ark/crates/ark-core/rust/Cargo.toml --bin ark-core-rpc
+cargo test  --manifest-path core/ark/crates/ark-core/rust/Cargo.toml
+bun run --cwd core/ark/packages/ark typecheck
+bun run --cwd core/ark/packages/ark build
 ```
 
 ## Sidecar контракт
@@ -130,7 +130,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 ::: warning Жёстко
 
 - Каждая persisted syncable сущность обязана round-trip'иться через `db.rs::load_entities` и `db.rs::apply_entity`.
-- Direct writers вне RPC layer (`services/kepler-backend/src/usage_tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
+- Direct writers вне RPC layer (`platform/runtime/src/usage_tracker`) **обязаны** bump'ать `lan_sync.version_vector` после прямых писей. Stale version vector ломает CRDT-merge.
 - Schema-добавления **идемпотентны**. Используй `CREATE TABLE IF NOT EXISTS` / additive миграции, не destructive rewrites.
 - Wire-протокол sync остаётся `snake_case`. RPC может быть `camelCase` где зависят legacy Electron callers.
 - **Self-peer filtering** и **routable-address filtering** — обязательные инварианты. Не ослабляй при изменениях в sync startup или peer persistence.
@@ -138,7 +138,7 @@ Modern callers могут включать `id`; ответы echo'ят его. 
 
 ## Verification expectations
 
-- Запускай `cargo test` в `crates/ark-core/rust`.
+- Запускай `cargo test` в `core/ark/crates/ark-core/rust`.
 - Если трогаешь sync или schema — добавь/обнови тесты миграции и репликации, а не только локальный CRUD.
 
 ## Текущие ограничения

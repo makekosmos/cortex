@@ -5,7 +5,7 @@ import path from "node:path";
 import {
   classifyClipboardText,
   createClipboardHistoryStore,
-} from "../../shell/electron/clipboard-history-store";
+} from "../../platform/desktop/electron/clipboard-history-store";
 
 describe("clipboard history store", () => {
   test("records normalized text newest first", () => {

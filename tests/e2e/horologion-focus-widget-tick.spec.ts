@@ -3,7 +3,7 @@
 // renderer'е → Chromium throttling замораживал MM:SS, когда окно
 // уходило из foreground.
 //
-// Фикс — `shell/electron/focus-widget.ts::ensureTickTimer`: setInterval
+// Фикс — `platform/desktop/electron/focus-widget.ts::ensureTickTimer`: setInterval
 // в main process пересчитывает `remainingSec` из `phaseEndsAtMs`
 // wallclock anchor'а и broadcast'ит виджету.
 //

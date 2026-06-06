@@ -13,7 +13,7 @@
 - **Rust crate** — без scope: `ark-core` (у Cargo нет npm-style scopes).
 - **TypeScript-пакет** — `@kosmos/*` (npm scope монорепо).
 
-Папка в `packages/` может отличаться от npm-имени: `packages/ark/` → `@kosmos/ark`, `packages/visuals/` → `@kosmos/visuals`. В коде импортируется по **npm-имени**, в файловой системе и docs-ссылках — по **папке**.
+Папка в `packages/` может отличаться от npm-имени: `core/ark/packages/ark/` → `@kosmos/ark`, `packages/visuals/` → `@kosmos/visuals`. В коде импортируется по **npm-имени**, в файловой системе и docs-ссылках — по **папке**.
 :::
 
 ## Граф зависимостей
@@ -65,8 +65,8 @@ flowchart LR
 
 ## Workspace-имена
 
-| Папка              | Имя в `package.json` / `Cargo.toml` | Язык             |
-| ------------------ | ----------------------------------- | ---------------- |
-| `crates/ark-core`  | `ark-core` (Rust crate)             | Rust             |
-| `packages/ark`     | `@kosmos/ark`                       | TypeScript       |
-| `packages/visuals` | `@kosmos/visuals`                   | TypeScript + Vue |
+| Папка                      | Имя в `package.json` / `Cargo.toml` | Язык             |
+| -------------------------- | ----------------------------------- | ---------------- |
+| `core/ark/crates/ark-core` | `ark-core` (Rust crate)             | Rust             |
+| `core/ark/packages/ark`    | `@kosmos/ark`                       | TypeScript       |
+| `packages/visuals`         | `@kosmos/visuals`                   | TypeScript + Vue |

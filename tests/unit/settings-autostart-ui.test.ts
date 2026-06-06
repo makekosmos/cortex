@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   resolveAutostartApplyFailure,
   resolveAutostartApplySuccess,
-} from "../../shell/src/views/settings/autostart-ui";
+} from "../../platform/desktop/src/views/settings/autostart-ui";
 
 describe("settings autostart UI state", () => {
   test("does not surface a false apply error after set succeeds", () => {

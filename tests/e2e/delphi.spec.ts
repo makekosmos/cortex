@@ -26,7 +26,7 @@ test.describe("delphi extension", () => {
       });
 
       // Триггерим открытие Делphi через зарегистрированную command bus
-      // команду `delphi:open` (см. shell/electron/commands.ts).
+      // команду `delphi:open` (см. platform/desktop/electron/commands.ts).
       const opened = await app.evaluate(async ({ BrowserWindow }, commandId) => {
         const wins = BrowserWindow.getAllWindows();
         const launcher = wins[0];

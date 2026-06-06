@@ -77,24 +77,24 @@ cargo build --workspace                                                # всё 
 cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test  --manifest-path crates\ark-core\rust\Cargo.toml
 
-bun run --cwd packages/ark typecheck
-bun run --cwd packages/ark build
-bun run --cwd packages/ark test
+bun run --cwd core/ark/packages/ark typecheck
+bun run --cwd core/ark/packages/ark build
+bun run --cwd core/ark/packages/ark test
 ```
 
 ## Kepler Shell (главный путь)
 
-`shell/` — Electron-лаунчер Kepler (фронт для экосистемы Kosmos). Окно fixed-size 720×460, command bus как primary integration primitive.
+`platform/desktop/` — Electron-лаунчер Kepler (фронт для экосистемы Kosmos). Окно fixed-size 720×460, command bus как primary integration primitive.
 
 ```powershell
-cd shell
+cd platform/desktop
 bun run dev                # backend + extensions + Vite + Electron
 bun run dev:no-build       # Electron dev без предварительной сборки backend/extensions
 bun run typecheck          # TS check (renderer + main + preload)
 bun run build:js:shell     # сборка shell renderer/main/preload без extensions
 bun run build:js           # сборка renderer + main + preload + extensions (без установщика)
 bun run build              # full production chain:
-                            #   1. cargo build --release services/kepler-backend
+                            #   1. cargo build --release platform/runtime
                             #   2. tsc + vite (renderer / main / preload)
                             #   3. vite build per extension × 4 (Dashboard / Horologion / Delphi / Arrancador)
                             #   4. electron-builder --win nsis (one-click installer)
@@ -109,12 +109,12 @@ bun run ext:catalog        # пересобрать catalog.json со списк
 ```
 
 ::: tip
-Все `ext:*` команды живут в `shell/package.json` — запускай их из `shell/` (`cd shell` или `bun run --cwd shell ext:publish <id>`).
+Все `ext:*` команды живут в `platform/desktop/package.json` — запускай их из `platform/desktop/` (`cd platform/desktop` или `bun run --cwd platform/desktop ext:publish <id>`).
 :::
 
 Output финального билда:
 
-- Installer: `shell/release/Kosmos Setup X.Y.Z.exe` (per-user oneClick).
+- Installer: `platform/desktop/release/Kosmos Setup X.Y.Z.exe` (per-user oneClick).
 - Install path: `%LOCALAPPDATA%\Programs\Kepler\` (без UAC, без выбора директории).
 - Launch: `runAfterFinish: true`, ярлык на рабочем столе + Start Menu.
 
@@ -122,45 +122,45 @@ Extension dev mode (Raycast-style HMR, см. [Extension dev mode](/concepts/exte
 
 ```powershell
 # Vite dev servers всех Vue extension'ов (порты 5180–5185)
-bun run --cwd shell dev:extensions
+bun run --cwd platform/desktop dev:extensions
 
 # Только выбранные Vue extension'ы
-bun run --cwd shell dev:extensions:only eden,delphi
+bun run --cwd platform/desktop dev:extensions:only eden,delphi
 
 # Shell dev + Akasha HMR (:5185) по умолчанию
-bun run --cwd shell dev
+bun run --cwd platform/desktop dev
 
 # Shell dev + HMR всех extension'ов
-$env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd shell dev
+$env:KEPLER_DEV_EXTENSIONS = "1"; bun run --cwd platform/desktop dev
 
 # Авто-открыть все 4 extension'а через 5s после старта (для RAM benchmark или smoke)
-$env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd shell dev
+$env:KEPLER_BENCHMARK_OPEN_ALL = "1"; bun run --cwd platform/desktop dev
 ```
 
-Extension bundles лежат в `extensions/<id>/` — Eden / Horologion / Delphi / Arrancador. Dashboard — встроенный shell view (`shell/src/views/Dashboard*.vue`).
+Extension bundles лежат в `extensions/<id>/` — Eden / Horologion / Delphi / Arrancador. Dashboard — встроенный shell view (`platform/desktop/src/views/Dashboard*.vue`).
 
 ## Kepler Backend (Rust)
 
-`services/kepler-backend/` — supervisor для `ark-core-rpc`, WS-gateway, command bus, sync, встроенный usage_tracker модуль.
+`platform/runtime/` — supervisor для `ark-core-rpc`, WS-gateway, command bus, sync, встроенный usage_tracker модуль.
 
 ```powershell
-cargo build --manifest-path services/kepler-backend/Cargo.toml --bin kepler-backend
-cargo test  --manifest-path services/kepler-backend/Cargo.toml --lib
+cargo build --manifest-path platform/runtime/Cargo.toml --bin kepler-backend
+cargo test  --manifest-path platform/runtime/Cargo.toml --lib
 ```
 
 ## Vue-extensions
 
-Сборка extension'ов проходит **через Kepler shell**. У каждого extension'а есть свой `vite.config.mjs`, но командой `bun run --cwd shell build:extensions` Kepler shell их все билдит подряд.
+Сборка extension'ов проходит **через Kepler shell**. У каждого extension'а есть свой `vite.config.mjs`, но командой `bun run --cwd platform/desktop build:extensions` Kepler shell их все билдит подряд.
 
 Для `LIGHT_LOOP` можно строить только затронутые Vue extension'ы. Full-команды (`build:extensions`, `build:js`, `test:e2e`) остаются safe path для substantial-задач.
 
 ```powershell
-bun run --cwd shell build:extensions     # билд всех extensions/<id>/dist
-bun run --cwd shell build:extensions:only eden,delphi --skip-native
-bun run --cwd shell build:extensions:changed    # affected Vue extensions по git changes
-bun run --cwd shell build:extensions:vue
-bun run --cwd shell dev:extensions       # HMR dev servers на портах 5180-5185
-bun run --cwd shell dev:extensions:only eden
+bun run --cwd platform/desktop build:extensions     # билд всех extensions/<id>/dist
+bun run --cwd platform/desktop build:extensions:only eden,delphi --skip-native
+bun run --cwd platform/desktop build:extensions:changed    # affected Vue extensions по git changes
+bun run --cwd platform/desktop build:extensions:vue
+bun run --cwd platform/desktop dev:extensions       # HMR dev servers на портах 5180-5185
+bun run --cwd platform/desktop dev:extensions:only eden
 ```
 
 `build-extensions.mjs` поддерживает:
@@ -169,21 +169,21 @@ bun run --cwd shell dev:extensions:only eden
 - `--changed` — вывести affected extensions из `git diff` + untracked файлов.
 - `--vue-only` / `--skip-native` — не запускать native release build.
 
-`--only` и `--changed` взаимоисключающие. Shared frontend changes (`packages/visuals/**`, `packages/ark/**`, `shell/vite.extensions.config.mjs`, `bun.lock`) считаются affecting all Vue extensions.
+`--only` и `--changed` взаимоисключающие. Shared frontend changes (`packages/visuals/**`, `core/ark/packages/ark/**`, `platform/desktop/vite.extensions.config.mjs`, `bun.lock`) считаются affecting all Vue extensions.
 
 ## Android
 
 ### ark-service (Room ContentProvider)
 
 ```powershell
-cd mobile/ark-service
+cd incubator/mobile/ark-service
 .\gradlew build
 ```
 
 ### Delphi Android (UI)
 
 ```powershell
-cd mobile/delphi
+cd incubator/mobile/delphi
 .\gradlew build
 ```
 
@@ -204,8 +204,8 @@ cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc
 cargo test --manifest-path services\kepler-backend\Cargo.toml --lib
 
 # SDK
-bun run --cwd packages/ark typecheck
-bun run --cwd packages/ark test
+bun run --cwd core/ark/packages/ark typecheck
+bun run --cwd core/ark/packages/ark test
 
 # Guard
 bun run ark:guard:writes

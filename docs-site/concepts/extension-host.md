@@ -3,7 +3,7 @@
 Extension host — production foundation Kepler shell: продуктовые апки рендерятся как **Vue extension bundles** в отдельных BrowserWindow внутри kepler-shell, без собственных Electron .exe.
 
 ::: tip Текущий статус — Production foundation (Phase 4 + 6.0 ✅)
-Loader (`shell/electron/extension-host.ts`) и manifest spec используются продакшеном. Активные Vue-extension апки: Delphi, Arrancador, Eden, Akasha. Dashboard и Focus Session теперь встроенные shell views. Horologion source archived locally and is not active.
+Loader (`platform/desktop/electron/extension-host.ts`) и manifest spec используются продакшеном. Активные Vue-extension апки: Delphi, Arrancador, Eden, Akasha. Dashboard и Focus Session теперь встроенные shell views. Horologion source archived locally and is not active.
 
 RAM-эффект миграции зафиксирован в [RAM benchmarks](/concepts/ram-benchmarks): −124 MB Working Set / −209 MB Private Bytes / −4 процесса относительно baseline'а из 4 standalone Electron-апок (без Eden — Eden replaced standalone в Phase 6.0.A).
 :::
@@ -20,7 +20,7 @@ Phase 4 цель — превратить апки в **extensions**: Vue-бан
 
 ## Текущая реализация loader'а
 
-`shell/electron/extension-host.ts`:
+`platform/desktop/electron/extension-host.ts`:
 
 ```ts
 export interface ExtensionManifest {
@@ -218,9 +218,9 @@ e2e не показывали окна. Contract tests для native прове�
 2. **Existing window** — `openExtension(id, route)` фокусирует окно и **сразу** отправляет тот же event (без перезагрузки).
 3. **Renderer-side** — extension main.ts подписывается через `window.kepler.navigation.onNavigate(route → router.push(route))` и читает initial value через `window.kepler.navigation.initialRoute()` на mount.
 
-Это работает с любым vue-router `history` mode и не зависит от того, передаётся ли в URL hash. Контракт `kepler.navigation` экспортируется через extension preload (см. `shell/electron/extension-preload.ts`).
+Это работает с любым vue-router `history` mode и не зависит от того, передаётся ли в URL hash. Контракт `kepler.navigation` экспортируется через extension preload (см. `platform/desktop/electron/extension-preload.ts`).
 
-Используется в `shell/electron/commands.ts` для глубоких open-команд:
+Используется в `platform/desktop/electron/commands.ts` для глубоких open-команд:
 
 - `delphi:today` → `openExtension('delphi', '/today')`.
 - `eden:note:open-today` → `openExtension('eden', ...)` — Eden открывает сегодняшнюю заметку. (Horologion раньше имел открывающие `horologion:pomodoro` / `horologion:stopwatch`, в 2026-05-19 заменены action-командами `horologion:pomodoro:25` / `:50` / `:stopwatch:start` — `mode:"action"` в manifest, handler стартует таймер.)
@@ -544,7 +544,7 @@ window.kepler.userData = {
 };
 ```
 
-`name` — имя файла относительно user data dir. Запрещены символы кроме `[A-Za-z0-9._-]` и leading dot — path traversal заблокирован на стороне main процесса в модуле `extension-user-data` под `shell/electron/`.
+`name` — имя файла относительно user data dir. Запрещены символы кроме `[A-Za-z0-9._-]` и leading dot — path traversal заблокирован на стороне main процесса в модуле `extension-user-data` под `platform/desktop/electron/`.
 
 ```ts
 // Пример из extension renderer
@@ -557,7 +557,7 @@ await window.kepler.userData.writeJson("settings.json", settings);
 
 ### Window state
 
-`shell/electron/extension-host.ts → openExtension(id)` автоматически:
+`platform/desktop/electron/extension-host.ts → openExtension(id)` автоматически:
 
 1. Читает `<extensions-data>/<id>/window-state.json` перед созданием `BrowserWindow`.
 2. Если saved bounds валидные (попадают хотя бы частично в активный display) — применяет.
@@ -585,7 +585,7 @@ Extension ничего не делает — это shell-level автомати
 - Иначе — `win.loadFile(<root>/<id>/<entryHtml>, { hash: route })` из bundled dist.
 
 ::: warning KEPLER_DEV больше не включает extension HMR
-Раньше `isDeveloperModeActive()` возвращал `true` при `process.env.KEPLER_DEV === "1"`. Это ломало `bun run --cwd shell dev` (который сам выставляет `KEPLER_DEV=1`): shell пытался грузить extensions с Vite dev server'а, который не запущен → пустые extension окна. Сейчас `isDeveloperModeActive()` смотрит **только** настройку `developerMode` из `kepler-shell-settings.json`. Env var `KEPLER_DEV=1` влияет только на shell-level dev (DevTools шелла, dev URL шелла), но не на extension loader. Settings UI **отображает** `KEPLER_DEV=1 || developerMode` (чтобы toggle в dev-сессии выглядел консистентно), но это исключительно индикатор статуса — extension loader игнорирует env.
+Раньше `isDeveloperModeActive()` возвращал `true` при `process.env.KEPLER_DEV === "1"`. Это ломало `bun run --cwd platform/desktop dev` (который сам выставляет `KEPLER_DEV=1`): shell пытался грузить extensions с Vite dev server'а, который не запущен → пустые extension окна. Сейчас `isDeveloperModeActive()` смотрит **только** настройку `developerMode` из `kepler-shell-settings.json`. Env var `KEPLER_DEV=1` влияет только на shell-level dev (DevTools шелла, dev URL шелла), но не на extension loader. Settings UI **отображает** `KEPLER_DEV=1 || developerMode` (чтобы toggle в dev-сессии выглядел консистентно), но это исключительно индикатор статуса — extension loader игнорирует env.
 :::
 
 Полная схема — [Extension dev mode](/concepts/extension-dev-mode).
@@ -597,7 +597,7 @@ Extension ничего не делает — это shell-level автомати
 | Dashboard  | ✅              | Полная Vue migration, ~83 KB JS. Read-only, ARK через preload bridge.                                                                                                                  |
 | Horologion | ✅              | Полная Vue migration с `horologionApi` shim над `window.kepler.*`. Chunk `pomodoroSettings` ~102 KB.                                                                                   |
 | Delphi     | ✅ (с долгами)  | Vue + memory router, 3483 modules. `electronAPI` shim над `window.kepler.*`. Tailwind plugin подключён.                                                                                |
-| Arrancador | ✅ (2026-05-18) | Все 4 страницы оживлены + backend в `services/kepler-backend/src/arrancador/`: scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG client, SQOBA save backups.                  |
+| Arrancador | ✅ (2026-05-18) | Все 4 страницы оживлены + backend в `platform/runtime/src/arrancador/`: scanner Steam+Epic, launcher (Steam URL + exe spawn), RAWG client, SQOBA save backups.                         |
 | Eden       | ✅ (Phase 6.0)  | TipTap editor + Pinia + `kepler-api-shim` над `window.kepler.ark`. Main bundle ~353KB, lazy Editor chunk ~1.36MB. Hevy / code-tools / vault picker / Heart Rust удалены в Phase 6.0.A. |
 
 ## Open questions (design decisions для Phase 4)
@@ -640,13 +640,13 @@ Open question остался не в enforcement, а в UX: marketplace/auto-upd
 
 ## Code refs
 
-| Файл                               | Что                                          |
-| ---------------------------------- | -------------------------------------------- |
-| `shell/electron/extension-host.ts` | Loader, IPC handlers, BrowserWindow создание |
-| `shell/electron/commands.ts`       | `dashboard:extension:demo` — PoC trigger     |
-| `extensions/<id>/manifest.json`    | Per-extension Kosmos манифест                |
-| `extensions/<id>/package.json`     | Raycast-compatible package manifest          |
-| `extensions/<id>/index.html`       | Entry HTML                                   |
+| Файл                                          | Что                                          |
+| --------------------------------------------- | -------------------------------------------- |
+| `platform/desktop/electron/extension-host.ts` | Loader, IPC handlers, BrowserWindow создание |
+| `platform/desktop/electron/commands.ts`       | `dashboard:extension:demo` — PoC trigger     |
+| `extensions/<id>/manifest.json`               | Per-extension Kosmos манифест                |
+| `extensions/<id>/package.json`                | Raycast-compatible package manifest          |
+| `extensions/<id>/index.html`                  | Entry HTML                                   |
 
 ## Связанные документы
 

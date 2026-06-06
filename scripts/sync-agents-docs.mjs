@@ -7,8 +7,8 @@
  *
  *   - AGENTS.md      (корень)        — auto-context для всех агентов
  *   - CLAUDE.md      (корень)        — auto-context для Claude Code
- *   - mobile/delphi/AGENTS.md        — Android Delphi правила
- *   - crates/ark-core/AGENTS.md      — ark-core правила
+ *   - incubator/mobile/delphi/AGENTS.md        — Android Delphi правила
+ *   - core/ark/crates/ark-core/AGENTS.md      — ark-core правила
  *   - services/<name>/AGENTS.md      — per-service правила (на данный момент таких нет; usage-tracker заморожен в legacy/)
  *   - docs-site/public/llms.txt      — полный inline-текст для агентов через WebFetch
  *
@@ -32,8 +32,8 @@ const MARK =
 const GENERATED_CONTEXT_BUDGETS = {
   "AGENTS.md": { maxLines: 220, maxBytes: 32_000 },
   "CLAUDE.md": { maxLines: 220, maxBytes: 32_000 },
-  "mobile/delphi/AGENTS.md": { maxLines: 180, maxBytes: 24_000 },
-  "crates/ark-core/AGENTS.md": { maxLines: 180, maxBytes: 24_000 },
+  "incubator/mobile/delphi/AGENTS.md": { maxLines: 180, maxBytes: 24_000 },
+  "core/ark/crates/ark-core/AGENTS.md": { maxLines: 180, maxBytes: 24_000 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,7 +168,7 @@ async function buildRootAgents() {
 
 const TARGETS = [
   {
-    dest: "mobile/delphi/AGENTS.md",
+    dest: "incubator/mobile/delphi/AGENTS.md",
     title: "Delphi Android",
     sourceDocs: [
       "docs-site/apps/index.md#android-kotlin",
@@ -179,9 +179,9 @@ const TARGETS = [
       {
         title: "Scope",
         lines: [
-          "This file applies only to `mobile/delphi/` Android code.",
-          "Desktop Delphi lives in `extensions/delphi/`; do not apply desktop ARK or Vue assumptions here unless the task explicitly says so.",
-          "Android Delphi is package `com.kazui.delphi` and consumes data from the separate `mobile/ark-service` APK.",
+          "This file applies only to `incubator/mobile/delphi/` Android code.",
+          "Desktop Delphi lives in `products/delphi/`; do not apply desktop ARK or Vue assumptions here unless the task explicitly says so.",
+          "Android Delphi is package `com.kazui.delphi` and consumes data from the separate `incubator/mobile/ark-service` APK.",
         ],
       },
       {
@@ -195,23 +195,23 @@ const TARGETS = [
       {
         title: "Invariants",
         lines: [
-          "Android Delphi does not own the Room DB directly; data access goes through `com.kosmos.ark.data` ContentProvider from `mobile/ark-service`.",
+          "Android Delphi does not own the Room DB directly; data access goes through `com.kosmos.ark.data` ContentProvider from `incubator/mobile/ark-service`.",
           "The Android stack is currently isolated from desktop ARK: no desktop `ark.db`, no `ark-core-rpc`, no working desktop<->Android sync assumption.",
           "If `ark-service` is absent, Delphi must keep the install-required UX instead of crashing or silently writing elsewhere.",
-          "Changes to Android schema/provider contracts must be coordinated with `mobile/ark-service/`.",
+          "Changes to Android schema/provider contracts must be coordinated with `incubator/mobile/ark-service/`.",
         ],
       },
       {
         title: "Commands",
         lines: [
-          "`cd mobile/delphi; .\\gradlew build` — Android Delphi build.",
-          "`cd mobile/ark-service; .\\gradlew build` — provider build when provider contract changes.",
+          "`cd incubator/mobile/delphi; .\\gradlew build` — Android Delphi build.",
+          "`cd incubator/mobile/ark-service; .\\gradlew build` — provider build when provider contract changes.",
         ],
       },
     ],
   },
   {
-    dest: "crates/ark-core/AGENTS.md",
+    dest: "core/ark/crates/ark-core/AGENTS.md",
     title: "ark-core",
     sourceDocs: [
       "docs-site/packages/ark-core.md",
@@ -224,7 +224,7 @@ const TARGETS = [
       {
         title: "Scope",
         lines: [
-          "`crates/ark-core/` is the shared Rust + SQLite runtime and `ark-core-rpc` sidecar.",
+          "`core/ark/crates/ark-core/` is the shared Rust + SQLite runtime and `ark-core-rpc` sidecar.",
           "Electron callers use newline-delimited JSON-RPC; Android/Swift integration goes through UniFFI surfaces.",
           "Full RPC/entity reference lives in `docs-site/packages/ark-core.md`; do not inline it here.",
         ],
@@ -251,8 +251,8 @@ const TARGETS = [
       {
         title: "Commands",
         lines: [
-          "`cargo test --manifest-path crates/ark-core/rust/Cargo.toml` — core tests.",
-          "`cargo build --manifest-path crates/ark-core/rust/Cargo.toml --bin ark-core-rpc` — sidecar build.",
+          "`cargo test --manifest-path core/ark/crates/ark-core/rust/Cargo.toml` — core tests.",
+          "`cargo build --manifest-path core/ark/crates/ark-core/rust/Cargo.toml --bin ark-core-rpc` — sidecar build.",
           "`bun run ark:guard:writes` — after data-layer/write-boundary changes.",
           "`bun run ark:smoke` — after substantial runtime changes.",
         ],
@@ -430,7 +430,12 @@ async function buildLlmsTxt() {
 // (`oxfmt --check`) падает: генератор пишет «как есть», а CI/hook ожидают
 // форматированный output.
 function formatGenerated() {
-  const files = ["AGENTS.md", "CLAUDE.md", "mobile/delphi/AGENTS.md", "crates/ark-core/AGENTS.md"];
+  const files = [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "incubator/mobile/delphi/AGENTS.md",
+    "core/ark/crates/ark-core/AGENTS.md",
+  ];
   const bin = path.join(
     ROOT,
     "node_modules",

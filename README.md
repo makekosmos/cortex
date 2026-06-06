@@ -4,24 +4,24 @@ Kosmos is a monorepo for local-first personal software: a shared ARK data runtim
 
 ## Core
 
-### [ARK](./crates/ark-core/README.md) - local-first data runtime
+### [ARK](./core/ark/crates/ark-core/README.md) - local-first data runtime
 
 ARK is the shared Rust + SQLite runtime for long-lived personal data. The canonical desktop binary is `ark-core-rpc`; Electron integrations talk to it through `@kosmos/ark` from Electron main/preload facades instead of writing directly into ARK SQLite tables.
 
-### [Kosmos desktop shell](./shell/package.json)
+### [Kosmos desktop shell](./platform/desktop/package.json)
 
 The desktop host is the Electron launcher/settings/runtime shell. It owns extension hosting, the command bus bridge, packaging, and the built-in Dashboard view.
 
 ## Extensions
 
-Desktop workflow apps live under `extensions/<id>/` and run inside the shell. Horologion source is archived under `extensions/horologion` without an active manifest/package; focus sessions now live in the shell.
+Desktop workflow apps live under `extensions/<id>/` and run inside the shell. Horologion source is archived under `incubator/horologion` without an active manifest/package; focus sessions now live in the shell.
 
-- [Eden](./extensions/eden/manifest.json) - notes and journal editor.
-- [Delphi](./extensions/delphi/manifest.json) - task tracking UI.
-- [Arrancador](./extensions/arrancador/manifest.json) - game library, playtime, backups, and ARK game-object integration.
-- [Akasha](./extensions/akasha/README.md) - EPUB reader.
+- [Eden](./products/eden/manifest.json) - notes and journal editor.
+- [Delphi](./products/delphi/manifest.json) - task tracking UI.
+- [Arrancador](./incubator/arrancador/manifest.json) - game library, playtime, backups, and ARK game-object integration.
+- [Akasha](./incubator/akasha/README.md) - EPUB reader.
 
-Dashboard is built into the shell under `shell/src/views/Dashboard*.vue` and `shell/src/dashboard/`. Focus Session is shell-owned in `shell/electron/focus-session.ts` and renders through the shared Raycast host.
+Dashboard is built into the shell under `platform/desktop/src/views/Dashboard*.vue` and `platform/desktop/src/dashboard/`. Focus Session is shell-owned in `platform/desktop/electron/focus-session.ts` and renders through the shared Raycast host.
 
 ## Current ARK Integration Rule
 

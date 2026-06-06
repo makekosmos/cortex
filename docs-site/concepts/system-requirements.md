@@ -47,7 +47,7 @@
 
 - **Visual Studio Build Tools** — для `signtool.exe` (electron-builder NSIS signing на production build)
 - **Playwright Chromium** — для Storybook Vitest browser tests (`bun run --cwd packages/visuals test`)
-- **gh CLI** ИЛИ `GH_TOKEN` env var — для `bun run --cwd shell build` (publish step uploads release to `yoso-industries/kepler-releases`)
+- **gh CLI** ИЛИ `GH_TOKEN` env var — для `bun run --cwd platform/desktop build` (publish step uploads release to `yoso-industries/kepler-releases`)
 
 ## Зависимости компонентов
 
@@ -96,7 +96,7 @@
 
 ## Известные ограничения
 
-- **Headless / RDP** — globalShortcut launcher'а (`Alt+Space` в prod, см. `shell/electron/instance.ts`) может не сработать в Remote Desktop session (Windows блокирует hotkey registration в детачнутых session'ах)
+- **Headless / RDP** — globalShortcut launcher'а (`Alt+Space` в prod, см. `platform/desktop/electron/instance.ts`) может не сработать в Remote Desktop session (Windows блокирует hotkey registration в детачнутых session'ах)
 - **Multi-monitor** — Kosmos launcher позиционируется на primary display; extension окна имеют persisted position per-extension
 - **Antivirus / SmartScreen** — `Kosmos.exe` и helper binaries **не подписаны EV cert** → Windows SmartScreen warning на первом запуске («Unknown publisher»). Один клик «Run anyway». EV cert ~$200/год — отложено.
 - **Group Policy на managed машинах** — может запрещать установку Windows Service (Focus svc), service install fall back на helper-mode (UAC per toggle)

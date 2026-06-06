@@ -77,11 +77,11 @@ async function collectScripts() {
 // Только пути от корня репо. Относительные внутри приложений (main/, electron/, src/)
 // сюда не попадают — их не проверяем, потому что они контекст-зависимые.
 const PATH_RE =
-  /`((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy)\/[A-Za-z0-9._\-/]+)`/g;
+  /`((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy|core|platform|products|incubator)\/[A-Za-z0-9._\-/]+)`/g;
 
-// markdown links to repo-local paths: [label](./packages/ark/README.md)
+// markdown links to repo-local paths: [label](./core/ark/packages/ark/README.md)
 const PATH_LINK_RE =
-  /\]\((?:\.\/)?((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy)\/[A-Za-z0-9._\-/]+)(?:#[A-Za-z0-9._\-/]+)?\)/g;
+  /\]\((?:\.\/)?((?:apps|packages|services|scripts|docs|\.agent|docs-site|crates|shell|extensions|mobile|legacy|core|platform|products|incubator)\/[A-Za-z0-9._\-/]+)(?:#[A-Za-z0-9._\-/]+)?\)/g;
 
 // bun run <name> или bun run --cwd <path> <name>
 // "<name>" не должен содержать `<` (template-плейсхолдер) или `--` (флаг)
@@ -92,6 +92,7 @@ const IGNORE_PATH_PARTS = [
   ".e2e/",
   ".tmp/",
   "/dist/",
+  "/dist-electron/",
   "/build/",
   "/target/",
   "/release/",
@@ -108,7 +109,7 @@ const KNOWN_NONEXISTENT = new Set([
   "apps/eden", // удалён в Phase 6.0.A (Eden теперь extension)
   "apps/eden/ts",
   "apps/eden/kotlin",
-  "services/kepler-backend/src/backup.rs", // Phase 11 backup module — TBD
+  "platform/runtime/src/backup.rs", // Phase 11 backup module — TBD
 ]);
 
 // внутренние markdown-ссылки `/section/page` (с возможным якорем)

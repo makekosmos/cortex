@@ -12,8 +12,8 @@
 ```
 ksanrse/kepler (private monorepo)         ← source of truth
         │
-        │  bun run --cwd shell build
-        ↓                                  bun run --cwd shell ext:publish <id>
+        │  bun run --cwd platform/desktop build
+        ↓                                  bun run --cwd platform/desktop ext:publish <id>
 yoso-industries/kepler-releases             yoso-industries/kosmos-extensions
    v0.1.0/                                    horologion-v0.3.0/
      Kepler-Setup-0.1.0.exe                     horologion-0.3.0.kext
@@ -32,8 +32,8 @@ marketplace catalog.
 
 ## Kepler launcher: autoUpdater
 
-Реализация — `shell/electron/autoupdater-host.ts` (state machine поверх
-`electron-updater`). Вызывается из `shell/electron/main.ts` как
+Реализация — `platform/desktop/electron/autoupdater-host.ts` (state machine поверх
+`electron-updater`). Вызывается из `platform/desktop/electron/main.ts` как
 `setupAutoUpdater({ isDev })`.
 
 - Skip в dev mode (`isDev: true`, передаётся из main.ts когда
@@ -45,7 +45,7 @@ marketplace catalog.
   «Перезапустить сейчас?» появляется как **fallback через 5 минут**, если
   пользователь не нажал banner.
 
-Конфиг publish'а — в `shell/package.json → build.publish[0]` (provider github,
+Конфиг publish'а — в `platform/desktop/package.json → build.publish[0]` (provider github,
 owner yoso-industries, repo kepler-releases).
 
 ### State machine
@@ -104,7 +104,7 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 
 ### Raycast-style banner UI
 
-`shell/src/views/SettingsView.vue` рендерит sticky banner высотой 32px
+`platform/desktop/src/views/SettingsView.vue` рендерит sticky banner высотой 32px
 сверху Settings окна, если `state.kind !== "idle"` и `!= "not-available"`.
 
 | State         | Текст                                                        | Icon             | Поведение клика                                          |
@@ -123,7 +123,7 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 1. **Settings → General → кнопка «Проверить обновления»** — вызывает
    `window.kepler.settings.update.check()`.
 2. **Launcher команда `kepler:check-updates`** (Ctrl+Shift+K → «Проверить
-   обновления»). Хендлер `runCheckUpdates()` в `shell/electron/commands.ts`
+   обновления»). Хендлер `runCheckUpdates()` в `platform/desktop/electron/commands.ts`
    только вызывает `check()` из autoupdater-host — окно настроек не
    открывается. Обновлённый state приходит в launcher через update banner
    (pinned tile в секции «Обновление») и параллельно в Settings, если оно
@@ -132,11 +132,11 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 ### Tray icon в production
 
 В production окно tray грузит иконку из `process.resourcesPath/icon.png`.
-`shell/electron/main.ts → createTray()` пробует candidate-paths по
+`platform/desktop/electron/main.ts → createTray()` пробует candidate-paths по
 приоритету:
 
 1. `<process.resourcesPath>/icon.png` (production, кладётся через
-   `extraResources` в `shell/package.json → build`).
+   `extraResources` в `platform/desktop/package.json → build`).
 2. `<__dirname>/../build/icon.png` (dev fallback).
 3. `<__dirname>/../../build/icon.png` (dev из dist-electron).
 
@@ -148,7 +148,7 @@ const off = window.kepler.settings.update.onStateChanged((s) => {
 
 ```powershell
 # Один раз: $env:GH_TOKEN = (& "C:\Program Files\GitHub CLI\gh.exe" auth token)
-bun run --cwd shell build
+bun run --cwd platform/desktop build
 ```
 
 Что делает:
@@ -244,25 +244,25 @@ Settings → **Расширения** — плоский список устан
 
 ## Команды
 
-| Команда                                         | Описание                                                               |
-| ----------------------------------------------- | ---------------------------------------------------------------------- |
-| `bun run --cwd shell build`                     | Полный build launcher'а + publish в kepler-releases (нужен `GH_TOKEN`) |
-| `bun run --cwd shell ext:publish <id>`          | Build extension → .kext → release в kosmos-extensions                  |
-| `bun run --cwd shell ext:publish-all`           | То же для всех extensions                                              |
-| `bun run --cwd shell ext:catalog -- <out-path>` | Регенерация catalog.json из GitHub releases                            |
+| Команда                                                    | Описание                                                               |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `bun run --cwd platform/desktop build`                     | Полный build launcher'а + publish в kepler-releases (нужен `GH_TOKEN`) |
+| `bun run --cwd platform/desktop ext:publish <id>`          | Build extension → .kext → release в kosmos-extensions                  |
+| `bun run --cwd platform/desktop ext:publish-all`           | То же для всех extensions                                              |
+| `bun run --cwd platform/desktop ext:catalog -- <out-path>` | Регенерация catalog.json из GitHub releases                            |
 
-`shell/scripts/publish-extension.mjs` использует `gh release create` —
+`platform/desktop/scripts/publish-extension.mjs` использует `gh release create` —
 автоматически берёт `gh auth token` если `KEPLER_GH_PATH` не указан.
 
-`shell/scripts/generate-catalog.mjs` использует `gh api releases --paginate`.
+`platform/desktop/scripts/generate-catalog.mjs` использует `gh api releases --paginate`.
 
 ### Submission flow
 
 Сейчас (Phase 1):
 
 1. Maintainer (`ksanrse`) пишет / правит extension в `extensions/<id>/`.
-2. `bun run --cwd shell ext:publish <id>` → release в `kosmos-extensions`.
-3. `bun run --cwd shell ext:catalog -- .tmp/kosmos-extensions/catalog.json`.
+2. `bun run --cwd platform/desktop ext:publish <id>` → release в `kosmos-extensions`.
+3. `bun run --cwd platform/desktop ext:catalog -- .tmp/kosmos-extensions/catalog.json`.
 4. Commit + push catalog.json в `kosmos-extensions` main branch.
 
 Phase 2 (когда появятся внешние contributors):

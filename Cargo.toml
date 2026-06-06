@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/ark-core/rust",
-  "services/kepler-backend",
-  "services/ark-relay-server",
-  "services/kepler-watcher",
-  "services/kepler-focus-helper",
-  "services/kepler-focus-svc",
+  "core/ark/crates/ark-core/rust",
+  "platform/runtime",
+  "services/relay-reference",
+  "platform/native-services/kepler-watcher",
+  "platform/native-services/kepler-focus-helper",
+  "platform/native-services/kepler-focus-svc",
 ]
 # Замороженный код. Не build'ится по умолчанию; реактивация требует
 # proof-loop (см. legacy/README.md).

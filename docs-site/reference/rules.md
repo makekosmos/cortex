@@ -54,7 +54,7 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 - `bun install` после клона.
 - `bun run ark:guard:writes` перед PR в data-слой.
 - `bun run ark:smoke` перед нетривиальным PR.
-- `cargo test` в `crates/ark-core/rust` при правках runtime.
+- `cargo test` в `core/ark/crates/ark-core/rust` при правках runtime.
 
 См. [Стек и инструменты](/guide/tooling) и [Smoke-матрица](/reference/smoke-matrix).
 
@@ -68,12 +68,12 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 ## 8. Запреты per-app
 
-| Приложение | Не делать                                                                                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                                                                           |
-| Eden       | Возвращаться к ripgrep / Heart sidecar, ломать `save/move/delete` hardening в Pinia store (`extensions/eden/src/store/eden.ts`), возвращать ручные titlebar-offset |
-| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                                                                              |
-| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                                                                          |
+| Приложение | Не делать                                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Delphi     | Восстанавливать legacy DB sidecar / использовать old todo таблицы как long-term fallback                                                                         |
+| Eden       | Возвращаться к ripgrep / Heart sidecar, ломать `save/move/delete` hardening в Pinia store (`products/eden/src/store/eden.ts`), возвращать ручные titlebar-offset |
+| Arrancador | Возвращать собственный usage tracker / window polling, добавлять Tauri или React пути                                                                            |
+| Dashboard  | Открывать SQLite в renderer, дублировать ARK queries вне `electron/services/analytics.ts`                                                                        |
 
 ## 9. Brand consistency (Kosmos / Kepler)
 
@@ -88,7 +88,7 @@ Substantial-правки идут через `.agent/tasks/<DATE>-<slug>/`:
 
 - Apps регистрируют свои commands через `ArkClient.commands.register(...)` **только** в `kepler-mode` (когда лаунчер их вызвал). Регистрация — в `try/catch`: standalone-режим (без лаунчера) не имеет commands API, и это норма, не ошибка.
 - Wire format событий command bus — **flat**: `{event: "command:invoked", id: "...", ...fields}`. Не `{kind: "event", type: "...", payload: {...}}`. Согласовано с peer/sync events.
-- Command-категории в `shell/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
+- Command-категории в `platform/desktop/electron/commands.ts` — только `open` / `action`. Action commands в `commands.ts` **не хардкодятся**: они приходят dynamic от приложений.
 - Extension content в `extensions/<id>/` — static (no build step yet, PoC).
 
 ## 11. Стиль коммитов и кода

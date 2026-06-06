@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { CommandRecord } from "../../shell/shared/ipc-types";
-import { dedupeCommandsById } from "../../shell/src/lib/launcherCommands";
+import type { CommandRecord } from "../../platform/desktop/shared/ipc-types";
+import { dedupeCommandsById } from "../../platform/desktop/src/lib/launcherCommands";
 
 describe("launcher commands", () => {
   test("dedupes commands by id before Vue renders keyed lists", () => {

@@ -1,7 +1,7 @@
 # Eden — заметки и дневник
 
 ::: tip Источник правды
-`extensions/eden/manifest.json`, `extensions/eden/src/`, `.agent/tasks/2026-05-17-eden-extension/` (Phase 6.0 spec), `.agent/tasks/2026-05-17-eden-cleanup-and-hardening/` (Phase 6.0.A spec). Phase 6.1 (2026-05-19) — журнал, zen mode, acrylic backdrop, deep-link команды.
+`products/eden/manifest.json`, `products/eden/src/`, `.agent/tasks/2026-05-17-eden-extension/` (Phase 6.0 spec), `.agent/tasks/2026-05-17-eden-cleanup-and-hardening/` (Phase 6.0.A spec). Phase 6.1 (2026-05-19) — журнал, zen mode, acrylic backdrop, deep-link команды.
 :::
 
 Eden — приложение для записей: дневник, мысли, знания. Offline-first, local-first. Идея: пишешь свободно, AI-анализатор раскладывает информацию по нужным «папкам знаний» и строит персональный RAG.
@@ -13,32 +13,32 @@ Eden — приложение для записей: дневник, мысли,
 ```
 Kepler.exe (Electron host)
   └─ extension-host
-      └─ extensions/eden/  (Vue bundle, TipTap editor)
+      └─ products/eden/  (Vue bundle, TipTap editor)
             ↕
             kepler.ark.request(operation, params)  ─→  kepler-backend (WS)
                                                           ↓
                                                        ark-core-rpc (SQLite)
 ```
 
-- **`extensions/eden/src/`** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes; shared visuals из `@kosmos/visuals`.
-- **`extensions/eden/src/lib/kepler-api-shim.ts`** — мост: эмулирует `window.api` (как у standalone Eden), внутри роутит ARK операции через `window.kepler.ark.request(...)`. Это позволяет сохранять Eden codebase без массового rewrite call-sites при миграции в extension. Прецедент — Delphi `electron-api-shim.ts`.
-- **`extensions/eden/src/lib/edenApi.ts`** — публичный фасад для note CRUD / folders / search / typed-notes, импортирует функции из shim'а.
+- **`products/eden/src/`** — Vue 3.6 Vapor UI: редактор (TipTap), сайдбар, настройки, typed notes; shared visuals из `@kosmos/visuals`.
+- **`products/eden/src/lib/kepler-api-shim.ts`** — мост: эмулирует `window.api` (как у standalone Eden), внутри роутит ARK операции через `window.kepler.ark.request(...)`. Это позволяет сохранять Eden codebase без массового rewrite call-sites при миграции в extension. Прецедент — Delphi `electron-api-shim.ts`.
+- **`products/eden/src/lib/edenApi.ts`** — публичный фасад для note CRUD / folders / search / typed-notes, импортирует функции из shim'а.
 - **Heart Rust sidecar — удалён.** Search полностью через ARK FTS5 (`search_objects`). Vault filesystem manager стал не нужен — single ARK DB per user.
 
 ## Стек
 
-| Слой      | Технология                                                                |
-| --------- | ------------------------------------------------------------------------- |
-| UI        | Vue 3.6 **Vapor** + TipTap + Pinia                                        |
-| Транспорт | `window.kepler.ark.request` → kepler-backend WS → `ark-core-rpc`          |
-| Storage   | ARK SQLite (через runtime, не direct access)                              |
-| Search    | ARK FTS5 (`search_objects` endpoint)                                      |
-| Build     | Vite + Rolldown (per-extension, через `shell/vite.extensions.config.mjs`) |
+| Слой      | Технология                                                                           |
+| --------- | ------------------------------------------------------------------------------------ |
+| UI        | Vue 3.6 **Vapor** + TipTap + Pinia                                                   |
+| Транспорт | `window.kepler.ark.request` → kepler-backend WS → `ark-core-rpc`                     |
+| Storage   | ARK SQLite (через runtime, не direct access)                                         |
+| Search    | ARK FTS5 (`search_objects` endpoint)                                                 |
+| Build     | Vite + Rolldown (per-extension, через `platform/desktop/vite.extensions.config.mjs`) |
 
 ## Структура
 
 ```
-extensions/eden/
+products/eden/
 ├─ manifest.json              # id, kind=vue, devPort, размер окна
 ├─ package.json               # workspace @kosmos/extension-eden
 ├─ vite.config.mjs            # dev server (HMR на :5184)
@@ -76,14 +76,14 @@ extensions/eden/
 
 ```powershell
 # Сборка Eden extension'а (часть Kepler shell build)
-bun run --cwd shell build:extensions
+bun run --cwd platform/desktop build:extensions
 
 # Только Eden:
-bunx vite build --config shell/vite.extensions.config.mjs --mode eden
+bunx vite build --config platform/desktop/vite.extensions.config.mjs --mode eden
 
 # Dev mode с HMR (поднять Vite dev server отдельно):
-bun run --cwd shell dev:extensions          # все extensions, eden на :5184
-bun run --cwd shell dev                     # shell + extensions вместе
+bun run --cwd platform/desktop dev:extensions          # все extensions, eden на :5184
+bun run --cwd platform/desktop dev                     # shell + extensions вместе
 
 # Open Eden в running Kepler shell:
 # Ctrl+Shift+K → "Открыть Eden"
@@ -105,7 +105,7 @@ bun run --cwd shell dev                     # shell + extensions вместе
 
 ### Open-команды
 
-Объявлены в `extensions/eden/manifest.json::commands[]` (см. полный список в самом manifest'е, источник правды). Резолвятся `loadDeclaredCommands` в `shell/electron/extension-host.ts` — видны в launcher всегда, не зависят от того, запущен ли Eden:
+Объявлены в `products/eden/manifest.json::commands[]` (см. полный список в самом manifest'е, источник правды). Резолвятся `loadDeclaredCommands` в `platform/desktop/electron/extension-host.ts` — видны в launcher всегда, не зависят от того, запущен ли Eden:
 
 | id                     | route     | Что делает                                                                                                                |
 | ---------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -115,7 +115,7 @@ bun run --cwd shell dev                     # shell + extensions вместе
 
 ### Eden routing + pending dispatch queue
 
-`extensions/eden/src/main.ts` подписан на `window.kepler.navigation`:
+`products/eden/src/main.ts` подписан на `window.kepler.navigation`:
 
 - `initialRoute()` — читает route, переданный shell'ом при cold start.
 - `onNavigate(route → dispatch)` — при `openExtension("eden", route)` для уже-открытого окна.
@@ -207,22 +207,22 @@ Elevation surfaces (`dialog-card`, `search-overlay`, `note-type-menu`, etc.) о�
 @import "tailwindcss/utilities.css";
 ```
 
-Только utilities + theme (без preflight — иначе reset перебивает kosmos-tokens). Vite alias `tailwindcss → shell/node_modules/tailwindcss` живёт в `shell/vite.extensions.config.mjs` — чтобы extension резолвил тот же tailwind, что и shell, без дубль-install.
+Только utilities + theme (без preflight — иначе reset перебивает kosmos-tokens). Vite alias `tailwindcss → platform/desktop/node_modules/tailwindcss` живёт в `platform/desktop/vite.extensions.config.mjs` — чтобы extension резолвил тот же tailwind, что и shell, без дубль-install.
 
 ### InlineCaret отключён
 
-`InlineCaret` TipTap extension больше **не подключается** в `Editor.vue` (widget-decoration ломал drag-selection). Файл `extensions/eden/src/InlineCaret.ts` оставлен в репо, но не импортируется ни одним call-site'ом — только комментарий в `Editor.vue` отмечает причину отключения. Кастомный курсор остаётся через `CustomCaret` из `@kosmos/visuals` (Vapor-friendly overlay над браузерным).
+`InlineCaret` TipTap extension больше **не подключается** в `Editor.vue` (widget-decoration ломал drag-selection). Файл `products/eden/src/InlineCaret.ts` оставлен в репо, но не импортируется ни одним call-site'ом — только комментарий в `Editor.vue` отмечает причину отключения. Кастомный курсор остаётся через `CustomCaret` из `@kosmos/visuals` (Vapor-friendly overlay над браузерным).
 
 ### Accent color
 
 Eden использует свой accent — `--eden-accent-color: #ff5c00` (orange), задан
-в `extensions/eden/src/index.css`. Применяется к:
+в `products/eden/src/index.css`. Применяется к:
 
 - `::marker` bullet / ordered list в TipTap редакторе.
 - Gradient border в dock-corner widget mode (`.app-container.eden-docked::before`).
 
-Launcher gradient `EDEN_GRADIENT` (в `shell/electron/commands.ts`) синхронно
-переведён на orange `#ff5c00 → #b33800`. Иконка `extensions/eden/icon.png`
+Launcher gradient `EDEN_GRADIENT` (в `platform/desktop/electron/commands.ts`) синхронно
+переведён на orange `#ff5c00 → #b33800`. Иконка `products/eden/icon.png`
 обновлена (показывается в Settings → Extensions и в static open-командах
 launcher'а).
 
@@ -263,7 +263,7 @@ widget mode](../concepts/eden-zen-mode#dock-corner-widget-mode).
 
 ## Ключевые решения и инварианты
 
-- **Vapor mode**: leaf-компоненты — `<script setup vapor lang="ts">`; TipTap-компоненты — обычный VDOM. Interop включён через `vaporInterop: true` в `shell/vite.extensions.config.mjs`.
+- **Vapor mode**: leaf-компоненты — `<script setup vapor lang="ts">`; TipTap-компоненты — обычный VDOM. Interop включён через `vaporInterop: true` в `platform/desktop/vite.extensions.config.mjs`.
 - **Pinia stores**: `useEdenStore` (бизнес-логика, save coordinator) + `useLayoutStore` (UI/сайдбары).
 - **ARK FTS5** — единственный search engine. Не возвращаться к Tantivy/ripgrep.
 - **Storage hardening через ARK** — все писи идут через `upsert_object` с runtime валидацией; никаких прямых SQL write'ов из extension TS (см. [Граница записи](../concepts/write-boundary.md)).

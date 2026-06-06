@@ -58,12 +58,12 @@ raw: [`raw/baseline-cargo-test.txt`](https://github.com/ksanrse/kepler/blob/main
 
 **Найдено и удалено**: 6 orphan deps в 4 `Cargo.toml`'ах (−8 строк).
 
-| Где                         | Что удалено                                        |
-| --------------------------- | -------------------------------------------------- |
-| `crates/ark-core/rust`      | `uuid`                                             |
-| `services/ark-relay-server` | `axum`, `serde`, `uuid` (legacy после refactor'ов) |
-| `services/kepler-backend`   | `tokio-test` (dev-dep, никогда не использовался)   |
-| `services/kepler-watcher`   | `chrono`                                           |
+| Где                                       | Что удалено                                        |
+| ----------------------------------------- | -------------------------------------------------- |
+| `core/ark/crates/ark-core/rust`           | `uuid`                                             |
+| `services/relay-reference`                | `axum`, `serde`, `uuid` (legacy после refactor'ов) |
+| `platform/runtime`                        | `tokio-test` (dev-dep, никогда не использовался)   |
+| `platform/native-services/kepler-watcher` | `chrono`                                           |
 
 | Run        | Baseline cold-build (s) | After cold-build (s) |
 | ---------- | ----------------------- | -------------------- |
@@ -98,7 +98,7 @@ raw: [`raw/baseline-cargo-build-cold.txt`](https://github.com/ksanrse/kepler/blo
 
 **Verdict**: install дешевле ожидаемого. Drop-in, никакого behavior change, typecheck + build extensions зелёные. Полная миграция queries/mutations отложена до Phase 14.
 
-raw: bundle до — see git history, после — `extensions/eden/dist/assets/index-DkfQJbmO.js`. E2e baseline: [`raw/baseline-eden-e2e.txt`](https://github.com/ksanrse/kepler/blob/main/.agent/experiments/2026-05-19-tooling-pass/raw/baseline-eden-e2e.txt).
+raw: bundle до — see git history, после — `products/eden/dist/assets/index-DkfQJbmO.js`. E2e baseline: [`raw/baseline-eden-e2e.txt`](https://github.com/ksanrse/kepler/blob/main/.agent/experiments/2026-05-19-tooling-pass/raw/baseline-eden-e2e.txt).
 
 ### E4 — Vitest browser mode (capability add)
 
@@ -107,7 +107,7 @@ raw: bundle до — see git history, после — `extensions/eden/dist/asset
 | **Тип**     | Не perf-эксперимент — capability add. Был только bun:test (pure JS) и Playwright e2e (full Electron). Vitest browser — middle layer для Vue components на real Chromium. |
 | **Метрика** | sanity check — 5 pilot тестов работают.                                                                                                                                  |
 
-**Setup**: `vitest@4.1.6` + `@vitest/browser-playwright@4.1.6` + `vitest-browser-vue@2.1.0` + `@vitejs/plugin-vue@6.0.7`. Конфиг в `extensions/eden/vitest.config.ts`. Запуск: `bun run --cwd extensions/eden test:vue`.
+**Setup**: `vitest@4.1.6` + `@vitest/browser-playwright@4.1.6` + `vitest-browser-vue@2.1.0` + `@vitejs/plugin-vue@6.0.7`. Конфиг в `products/eden/vitest.config.ts`. Запуск: `bun run --cwd products/eden test:vue`.
 
 Pilot test `tests/components/CharCounter.spec.ts` — 5/5 passing на real Chromium за 1.9s.
 

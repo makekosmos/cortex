@@ -113,7 +113,7 @@ WebView2 children. Аргумент «Tauri экономит диск» = пра
 
 Из inventory Electron-поверхности Kosmos:
 
-- **5814 строк Electron TS** в `shell/electron/` → переписать на Rust.
+- **5814 строк Electron TS** в `platform/desktop/electron/` → переписать на Rust.
 - **70 IPC handlers** → каждый = `#[tauri::command]` с serde-типами.
 - **Preload bridge** (`window.kepler.*`, 4 extension'а) → JS shim над `__TAURI__`.
 - **Extension dev-mode** (Vite probe + HMR) — переизобрести под Tauri.

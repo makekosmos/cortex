@@ -24,8 +24,8 @@ New-Item -ItemType Directory -Force -Path $env:KOSMOS_SMOKE_ROOT | Out-Null
 ```powershell
 cargo test  --manifest-path crates\ark-core\rust\Cargo.toml
 cargo build --manifest-path crates\ark-core\rust\Cargo.toml --bin ark-core-rpc
-bun run --cwd packages/ark typecheck
-bun run --cwd packages/ark test
+bun run --cwd core/ark/packages/ark typecheck
+bun run --cwd core/ark/packages/ark test
 ```
 
 ## Kepler Backend (включая usage_tracker модуль)
@@ -38,9 +38,9 @@ cargo test  --manifest-path services\kepler-backend\Cargo.toml --lib
 ## Kepler Shell (launcher)
 
 ```powershell
-bun run --cwd shell typecheck
-bun run --cwd shell build:js
-bun run --cwd shell test:e2e
+bun run --cwd platform/desktop typecheck
+bun run --cwd platform/desktop build:js
+bun run --cwd platform/desktop test:e2e
 ```
 
 `test:e2e` — Playwright smoke по лаунчеру (открытие окна 720×460, выполнение зарегистрированной команды через command bus).
@@ -48,10 +48,10 @@ bun run --cwd shell test:e2e
 ## Eden extension
 
 ```powershell
-bun run --cwd shell build:extensions
-bun run --cwd shell typecheck
+bun run --cwd platform/desktop build:extensions
+bun run --cwd platform/desktop typecheck
 # Eden-specific e2e (Phase 6.0.5+): tests/e2e/eden.spec.ts
-cd shell; bunx playwright test --config playwright.config.ts --grep "eden"
+cd platform/desktop; bunx playwright test --config playwright.config.ts --grep "eden"
 ```
 
 Phase 6.0.A удалил standalone Eden; ARK migration smoke больше не нужен — все writes идут через `kepler-api-shim` поверх ARK (которые покрыты `ark:guard:writes` + cargo tests).
@@ -74,7 +74,7 @@ bun run ark:guard:writes
 
 - Standalone Arrancador / Dashboard / Delphi / Horologion — мигрированы в `extensions/<name>`, отдельных Electron unit/e2e наборов нет.
 - Dashboard `seedSmokeDb.ts` / `smokeAnalytics.ts` — переехали в архив, к smoke не подключены до Phase 6.
-- Standalone `usage-tracker.exe` — заморожен в `legacy/usage-tracker/`. Активные тесты — внутри `services/kepler-backend` lib.
+- Standalone `usage-tracker.exe` — заморожен в `legacy/usage-tracker/`. Активные тесты — внутри `platform/runtime` lib.
 
 ## Связанные документы
 

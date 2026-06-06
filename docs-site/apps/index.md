@@ -1,6 +1,6 @@
 # Приложения
 
-Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **четыре активных Vue-extension'а** внутри Kepler shell (**Eden**, Delphi, Arrancador, Akasha), встроенный shell-view **Dashboard** и shell-owned **Focus Session** внутри Shell command surface, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
+Kosmos — это **Kepler host** (Electron-launcher `platform/desktop/` + backend) + **четыре активных Vue-extension'а** внутри Kepler shell (**Eden**, Delphi, Arrancador, Akasha), встроенный shell-view **Dashboard** и shell-owned **Focus Session** внутри Shell command surface, **два зарезервированных имени** (Digital Cave, Kerux), плюс **отдельный Android-стек** (две APK в `mobile/`).
 
 ::: tip Live snapshot
 Актуальное состояние миграций / Phase trackers — `STATUS.md` в корне репозитория. Эта страница — концептуальная карта; STATUS.md — what's in flight прямо сейчас.
@@ -8,25 +8,25 @@ Kosmos — это **Kepler host** (Electron-launcher `shell/` + backend) + **ч�
 
 ## Desktop host
 
-| Приложение             | Путь     | Роль                                                                                                                                                                  |
-| ---------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Kepler](/apps/kepler) | `shell/` | Electron host + global launcher (Ctrl+Shift+K). Спавнит `kepler-backend.exe`, рутит [command bus](/concepts/command-bus), Phase 4 — extension host для остальных апок |
+| Приложение             | Путь                | Роль                                                                                                                                                                  |
+| ---------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Kepler](/apps/kepler) | `platform/desktop/` | Electron host + global launcher (Ctrl+Shift+K). Спавнит `kepler-backend.exe`, рутит [command bus](/concepts/command-bus), Phase 4 — extension host для остальных апок |
 
 ## Vue-extensions (внутри Kepler shell)
 
-| Приложение                     | Путь                    | Роль                                 | Модель данных                                     |
-| ------------------------------ | ----------------------- | ------------------------------------ | ------------------------------------------------- |
-| [Eden](/apps/eden)             | `extensions/eden`       | заметки, дневник, typed notes        | `note_obj` + кастомные типы                       |
-| [Delphi](/apps/delphi)         | `extensions/delphi`     | задачи                               | `task_obj` (auto-миграция legacy todos на старте) |
-| [Arrancador](/apps/arrancador) | `extensions/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data                           |
-| [Akasha](/apps/akasha)         | `extensions/akasha`     | EPUB-читалка                         | local JSON v1                                     |
+| Приложение                     | Путь                   | Роль                                 | Модель данных                                     |
+| ------------------------------ | ---------------------- | ------------------------------------ | ------------------------------------------------- |
+| [Eden](/apps/eden)             | `products/eden`        | заметки, дневник, typed notes        | `note_obj` + кастомные типы                       |
+| [Delphi](/apps/delphi)         | `products/delphi`      | задачи                               | `task_obj` (auto-миграция legacy todos на старте) |
+| [Arrancador](/apps/arrancador) | `incubator/arrancador` | игровая библиотека, playtime, бэкапы | `game_obj` + usage data                           |
+| [Akasha](/apps/akasha)         | `incubator/akasha`     | EPUB-читалка                         | local JSON v1                                     |
 
 ## Встроенные shell views
 
-| Приложение                   | Путь                                                                             | Роль                                                                            | Модель данных                           |
-| ---------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------- |
-| [Dashboard](/apps/dashboard) | `shell/src/views/Dashboard*.vue` + `shell/src/dashboard/`                        | встроенный ARK browser: welcome (space picker) + space view (sidebar + объекты) | read-only inspector                     |
-| Focus Session                | `shell/electron/focus-session.ts` + `shell/src/components/FocusCommandPanel.vue` | фокус-таймер, цель, задача Delphi, blocklist                                    | `time_entry_obj` + `focus.active_state` |
+| Приложение                   | Путь                                                                                                   | Роль                                                                            | Модель данных                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------- |
+| [Dashboard](/apps/dashboard) | `platform/desktop/src/views/Dashboard*.vue` + `platform/desktop/src/dashboard/`                        | встроенный ARK browser: welcome (space picker) + space view (sidebar + объекты) | read-only inspector                     |
+| Focus Session                | `platform/desktop/electron/focus-session.ts` + `platform/desktop/src/components/FocusCommandPanel.vue` | фокус-таймер, цель, задача Delphi, blocklist                                    | `time_entry_obj` + `focus.active_state` |
 
 ## Зарезервированные имена
 
@@ -43,13 +43,13 @@ Apps коннектятся к `kepler-backend` (Rust, spawn'ится Kepler hos
 
 Отдельный стек **только для Android**, изолированный от desktop ARK. Состоит из двух APK, связанных через signature-permission ContentProvider:
 
-| APK                              | Путь                 | Роль                                                                                        |
-| -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
-| Delphi (Android)                 | `mobile/delphi`      | UI, Compose. Package `com.kazui.delphi`.                                                    |
-| [ark-service](/apps/ark-service) | `mobile/ark-service` | Room SQLite + ContentProvider. Package `com.kosmos.ark.data`. Хранит данные Android Delphi. |
+| APK                              | Путь                           | Роль                                                                                        |
+| -------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------- |
+| Delphi (Android)                 | `incubator/mobile/delphi`      | UI, Compose. Package `com.kazui.delphi`.                                                    |
+| [ark-service](/apps/ark-service) | `incubator/mobile/ark-service` | Room SQLite + ContentProvider. Package `com.kosmos.ark.data`. Хранит данные Android Delphi. |
 
 ::: warning Не путать с desktop ARK
-Android-стек **сейчас не использует** `ark-core` Rust runtime — у него своя Room-база и свой ContentProvider. Sync между Android и desktop не работает. Долгосрочно планируется миграция Android Delphi на UniFFI-binding'и от `ark-core`, что позволит снести `mobile/ark-service` целиком. См. [ark-service](/apps/ark-service).
+Android-стек **сейчас не использует** `ark-core` Rust runtime — у него своя Room-база и свой ContentProvider. Sync между Android и desktop не работает. Долгосрочно планируется миграция Android Delphi на UniFFI-binding'и от `ark-core`, что позволит снести `incubator/mobile/ark-service` целиком. См. [ark-service](/apps/ark-service).
 :::
 
 ## Общие правила
@@ -59,7 +59,7 @@ Android-стек **сейчас не использует** `ark-core` Rust runt
 - Прямые SQL writes в ARK-таблицы запрещены. См. [Граница записи](/concepts/write-boundary).
 - Все тесты — на изолированных БД. См. [Изоляция тестовых БД](/concepts/test-isolation).
 - **Язык UI — русский.** Все user-facing строки (placeholder, labels, кнопки, эмпти-стейты, пилюли, заголовки view) — на русском. Английский только для technical-идентификаторов (id типов объектов, имена пакетов, log message'и). Это относится ко всем приложениям без исключения.
-- **Каждое приложение запоминает геометрию окна между запусками.** Для standalone Electron — сохранять `x` / `y` / `width` / `height` / `isMaximized` в `app.getPath("userData") + "/window-state.json"` на события `resize` / `move` / `maximize` / `unmaximize` / `close` (debounce 400мс на тики, final flush на close), и восстанавливать при `createWindow`. Для Vue-extensions внутри Kepler shell геометрию extension window'а сохраняет сам `shell/electron/extension-host.ts` (см. соответствующую секцию [Extension host](/concepts/extension-host)). Если сохранённый файл отсутствует или битый — fallback на дефолтные дименсии. Electron сам клампит bounds внутрь доступных дисплеев, если монитор отключили.
+- **Каждое приложение запоминает геометрию окна между запусками.** Для standalone Electron — сохранять `x` / `y` / `width` / `height` / `isMaximized` в `app.getPath("userData") + "/window-state.json"` на события `resize` / `move` / `maximize` / `unmaximize` / `close` (debounce 400мс на тики, final flush на close), и восстанавливать при `createWindow`. Для Vue-extensions внутри Kepler shell геометрию extension window'а сохраняет сам `platform/desktop/electron/extension-host.ts` (см. соответствующую секцию [Extension host](/concepts/extension-host)). Если сохранённый файл отсутствует или битый — fallback на дефолтные дименсии. Electron сам клампит bounds внутрь доступных дисплеев, если монитор отключили.
 - **Каждое приложение имеет свой `--<app>-accent` токен.** В локальном `styles.css` приложения объявляется `--<app>-accent` (например `--horologion-accent: oklch(0.66 0.245 305)` — Apple HIG systemPurple) + `--<app>-accent-foreground`, и переопределяется общий `--accent` / `--accent-foreground` на эти значения. Все компоненты автоматически подхватят свой цвет. Цвет выбирается осмысленно (Eden — оранжевый `#ff5c00`, Horologion — фиолетовый, и т.п.), желательно из официальных HIG-палитр для узнаваемости.
 - **Inter Variable как fallback-шрифт.** macOS подхватит системный SF Pro раньше, но Windows и Linux должны рендерить именно Inter — мы подгружаем его через `@fontsource-variable/inter` (variable-шрифт ~30KB woff2, все weights в одном файле). Импортируется одной строкой в `src/main.ts` приложения. Дальше fallback на Segoe UI / Helvetica / Arial. Порядок прописан в `--font-sans` в `@kosmos/visuals/theme/css-variables.css`.
 - **Settings — отдельное окно либо route внутри extension'а.** Для standalone Electron (Eden): открывать через IPC отдельный `BrowserWindow` с hash `#/settings`. Для Vue-extensions внутри Kepler shell: route `/settings` внутри memory router'а extension'а (см. [Horologion → Topbar](./horologion.md#topbar)).

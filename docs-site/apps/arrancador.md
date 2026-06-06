@@ -1,7 +1,7 @@
 # Arrancador — игры, playtime, бэкапы
 
 ::: tip Источник правды
-`extensions/arrancador/`
+`incubator/arrancador/`
 :::
 
 Arrancador — лаунчер для локальной игровой библиотеки. Управляет играми, отслеживает playtime (читая ARK usage data, **не** запуская собственный tracker), делает бэкапы сэйвов и держит системные инструменты. После Phase B-D — Vue-extension в Kepler shell.
@@ -9,13 +9,13 @@ Arrancador — лаунчер для локальной игровой библ�
 ## Стек
 
 - Frontend: Vue 3 + TypeScript + Vite (renderer внутри extension window).
-- Runtime: `extensions/arrancador/` — Vue-bundle, открывается через Kepler shell `extension-host.ts`.
+- Runtime: `incubator/arrancador/` — Vue-bundle, открывается через Kepler shell `extension-host.ts`.
 - Persistence: ARK objects + `@kosmos/ark` SDK (никаких локальных SQLite в extension).
 
 ## Структура
 
 ```
-extensions/arrancador/
+incubator/arrancador/
 ├─ manifest.json
 ├─ index.html
 ├─ vite.config.mjs
@@ -34,7 +34,7 @@ extensions/arrancador/
 ## Модель данных
 
 - **Игры** — ARK-объекты `game_obj`.
-- **Playtime / usage** — usage-слой ARK (`tracked_apps`, `usage_sessions`, `usage_events`), captured модулем `services/kepler-backend/src/usage_tracker/` (Phase E).
+- **Playtime / usage** — usage-слой ARK (`tracked_apps`, `usage_sessions`, `usage_events`), captured модулем `platform/runtime/src/usage_tracker/` (Phase E).
 - **Бэкапы и process search** — через `@kosmos/ark`.
 
 ## Команды
@@ -42,16 +42,16 @@ extensions/arrancador/
 Сборка проходит через Kepler shell:
 
 ```powershell
-bun run --cwd shell build:extensions
-bun run --cwd shell build:js
-bun run --cwd shell dev
+bun run --cwd platform/desktop build:extensions
+bun run --cwd platform/desktop build:js
+bun run --cwd platform/desktop dev
 ```
 
 ## Правила
 
 - ARK reads/writes — **только** через `@kosmos/ark`. Никаких прямых SQL writes (см. [Граница записи](/concepts/write-boundary)).
 - Игры мапятся на process bindings внутри Arrancador, дальше ARK runtime агрегирует usage.
-- **Не возвращай** в Arrancador собственный in-process tracker, window polling loop или Arrancador-owned usage SQLite. Usage capture теперь живёт в `services/kepler-backend/src/usage_tracker/`.
+- **Не возвращай** в Arrancador собственный in-process tracker, window polling loop или Arrancador-owned usage SQLite. Usage capture теперь живёт в `platform/runtime/src/usage_tracker/`.
 - React и Tauri **не** активные runtime пути для Arrancador.
 
 ## ARK runtime endpoints
@@ -86,7 +86,7 @@ Routing — Vue Router с `createMemoryHistory` (нет file-system URLs вну�
 
 ### Backend (kepler-backend Rust)
 
-После Arrancador full completion (2026-05-18) в `services/kepler-backend/src/arrancador/`:
+После Arrancador full completion (2026-05-18) в `platform/runtime/src/arrancador/`:
 
 - **`scanner.rs`** — Steam libraryfolders.vdf + appmanifest.acf custom parser (без deps), Epic Games Launcher `Data/Manifests/*.item` JSON. GOG скипнут в MVP.
 - **`launcher.rs`** — `steam://rungameid/<app_id>` через `cmd /c start` для Steam, прямой `Command::new(exe).spawn()` для Epic/manual. Fire-and-forget tracking (process polling в `usage_tracker` подхватывает по имени exe).
@@ -112,7 +112,7 @@ WS namespace `arrancador.*` (через preload — `window.kepler.arrancador.*`
 
 ## Command bus integration
 
-Arrancador интегрирован в [Kepler launcher](/apps/kepler) **как static "open" команда** — `arrancador:open` открывает extension window. Команда живёт в `shell/electron/commands.ts`.
+Arrancador интегрирован в [Kepler launcher](/apps/kepler) **как static "open" команда** — `arrancador:open` открывает extension window. Команда живёт в `platform/desktop/electron/commands.ts`.
 
 Dynamic action commands (`arrancador:game:launch:<id>`, `arrancador:backup:run`) — follow-up; сейчас вызывается всё через UI в самом extension'е через `window.kepler.arrancador.*` preload bridge.
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Catalog } from "../../shell/electron/extension-marketplace";
-import type { InstalledExtensionInfo } from "../../shell/electron/extension-installer";
-import { findExtensionUpdates } from "../../shell/electron/extension-update-plan";
+import type { Catalog } from "../../platform/desktop/electron/extension-marketplace";
+import type { InstalledExtensionInfo } from "../../platform/desktop/electron/extension-installer";
+import { findExtensionUpdates } from "../../platform/desktop/electron/extension-update-plan";
 
 function installed(
   id: string,

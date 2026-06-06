@@ -2,8 +2,8 @@
 // stopwatch режимов.
 //
 // Файлы:
-//   - shell/src/views/FocusWidgetView.vue — UI (btn + IconButton + aria-labels)
-//   - shell/electron/focus-widget.ts — `kepler:focus-widget:pomodoro:{pause,
+//   - platform/desktop/src/views/FocusWidgetView.vue — UI (btn + IconButton + aria-labels)
+//   - platform/desktop/electron/focus-widget.ts — `kepler:focus-widget:pomodoro:{pause,
 //     resume,skip,stop}` + native context menu для «Ещё»
 //   - FocusState расширен `isPaused: boolean`
 //

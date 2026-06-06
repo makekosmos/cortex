@@ -1,0 +1,38 @@
+/* Tailwind v4 utilities for shell + shared @kosmos/visuals components. */
+@import "tailwindcss";
+@source "../../../packages/visuals/**/*.{vue,ts}";
+
+@import "@kosmos/visuals/theme/css";
+
+/* Accent наследуется из @kosmos/visuals theme; никаких локальных override'ов. */
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-user-select: none;
+  user-select: none;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+input {
+  -webkit-user-select: text;
+  user-select: text;
+}

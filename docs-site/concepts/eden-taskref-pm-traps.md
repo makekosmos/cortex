@@ -234,4 +234,4 @@ D. См. (3): надёжная проверка NodeSelection через `.node 
 
 Все эти тесты валидируют **фактический рендеринг** (computed `backgroundColor`), не наличие CSS-классов — потому что классы могут оставаться, но highlight CSS на них может не реагировать (legitimate semantics без visual).
 
-Когда делаешь правки в этой области — **запускай оба spec'а на production-build'е** (`bun run --cwd shell build:js && bunx playwright test ...`). dev-mode прячет ловушку 3 и часть ловушки 4.
+Когда делаешь правки в этой области — **запускай оба spec'а на production-build'е** (`bun run --cwd platform/desktop build:js && bunx playwright test ...`). dev-mode прячет ловушку 3 и часть ловушки 4.

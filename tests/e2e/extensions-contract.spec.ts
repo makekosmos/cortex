@@ -11,7 +11,7 @@
 //   }
 //
 // Этот spec на boot:
-//   1) discover'ит все `extensions/<id>/manifest.json`
+//   1) discover'ит все source manifests under `products/`, `incubator/`, `extensions/`
 //   2) для каждого с `tests` блоком — генерирует test.describe
 //   3) каждый describe: открыть extension через command bus, дождаться
 //      окна, проверить commands.list + ARK round-trip
@@ -45,25 +45,34 @@ interface ExtensionManifest {
 }
 
 function discoverExtensionsWithTests(): ExtensionManifest[] {
-  const root = path.join(REPO_ROOT, "extensions");
-  if (!fs.existsSync(root)) return [];
   const result: ExtensionManifest[] = [];
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const manifestPath = path.join(root, entry.name, "manifest.json");
-    if (!fs.existsSync(manifestPath)) continue;
-    try {
-      const raw = fs.readFileSync(manifestPath, "utf-8");
-      const manifest = JSON.parse(raw) as ExtensionManifest;
-      if (manifest.tests) result.push(manifest);
-    } catch (e) {
-      console.warn(`[contract-spec] skip ${manifestPath}:`, e);
+  const seen = new Set<string>();
+  for (const rootName of ["products", "incubator", "extensions"]) {
+    const root = path.join(REPO_ROOT, rootName);
+    if (!fs.existsSync(root)) continue;
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const manifestPath = path.join(root, entry.name, "manifest.json");
+      if (!fs.existsSync(manifestPath)) continue;
+      try {
+        const raw = fs.readFileSync(manifestPath, "utf-8");
+        const manifest = JSON.parse(raw) as ExtensionManifest;
+        if (!manifest.tests || seen.has(manifest.id)) continue;
+        seen.add(manifest.id);
+        result.push(manifest);
+      } catch (e) {
+        console.warn(`[contract-spec] skip ${manifestPath}:`, e);
+      }
     }
   }
   return result;
 }
 
 const manifests = discoverExtensionsWithTests();
+
+test("extension contract discovery finds manifests with tests", () => {
+  expect(manifests.length).toBeGreaterThan(0);
+});
 
 for (const manifest of manifests) {
   test.describe(`extension contract: ${manifest.id}`, () => {

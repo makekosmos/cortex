@@ -7,32 +7,33 @@ pre-commit:
   parallel: false
   commands:
     ark-core-rust:
-      glob: "crates/ark-core/rust/**/*.rs"
-      run: cd crates/ark-core/rust && cargo check --quiet
+      glob: "core/ark/crates/ark-core/rust/**/*.rs"
+      run: cd core/ark/crates/ark-core/rust && cargo check --quiet
     # Phase 5 bug-detection: ts-rs bindings up-to-date guard.
     # Если правил types.rs и забыл cargo test --features ts-rs — fail.
     ts-rs-bindings-fresh:
-      glob: "crates/ark-core/rust/src/types.rs"
+      glob: "core/ark/crates/ark-core/rust/src/types.rs"
       run: |
-        cd crates/ark-core/rust && \
+        cd core/ark/crates/ark-core/rust && \
         cargo test --features ts-rs --quiet --lib export_bindings 2>&1 > /dev/null && \
         cd - && \
-        git diff --exit-code packages/ark/src/generated/
+        bunx oxfmt core/ark/packages/ark/src/generated/ && \
+        git diff --exit-code core/ark/packages/ark/src/generated/
     kepler-backend-rust:
-      glob: "services/kepler-backend/src/**/*.rs"
-      run: cd services/kepler-backend && cargo check --quiet
-    typecheck-shell:
-      glob: "shell/**/*.{ts,tsx,vue}"
-      run: cd shell && bunx tsc --noEmit
+      glob: "platform/runtime/src/**/*.rs"
+      run: cd platform/runtime && cargo check --quiet
+    typecheck-desktop:
+      glob: "platform/desktop/**/*.{ts,tsx,vue}"
+      run: cd platform/desktop && bunx tsc --noEmit
     oxlint:
       glob: "*.{ts,tsx,vue,mjs,cjs,js,jsx}"
       run: bunx oxlint {staged_files}
     ark-guard-writes:
-      glob: "{shell/electron,extensions,tests/e2e}/**/*.{ts,tsx,mjs,cjs,js}"
+      glob: "{platform/desktop/electron,products,incubator,extensions,tests/e2e}/**/*.{ts,tsx,mjs,cjs,js}"
       run: bun run ark:guard:writes
     docs-sync:
       glob: "docs-site/**/*.md"
-      run: bun run docs:sync && git diff --exit-code AGENTS.md CLAUDE.md mobile/*/AGENTS.md crates/ark-core/AGENTS.md docs-site/public/llms.txt docs-site/public/full-llms.txt
+      run: bun run docs:sync && git diff --exit-code AGENTS.md CLAUDE.md incubator/mobile/*/AGENTS.md core/ark/crates/ark-core/AGENTS.md docs-site/public/llms.txt docs-site/public/full-llms.txt
     docs-check:
       glob: "docs-site/**/*.md"
       run: bun run docs:check
@@ -43,11 +44,11 @@ pre-push:
   parallel: true
   commands:
     test-ark-core:
-      glob: "crates/ark-core/rust/**/*.rs"
-      run: cd crates/ark-core/rust && cargo nextest run
+      glob: "core/ark/crates/ark-core/rust/**/*.rs"
+      run: cd core/ark/crates/ark-core/rust && cargo nextest run
     test-kepler-backend:
-      glob: "services/kepler-backend/src/**/*.rs"
-      run: cd services/kepler-backend && cargo nextest run --lib
+      glob: "platform/runtime/src/**/*.rs"
+      run: cd platform/runtime && cargo nextest run --lib
     # Hygiene: orphan deps в Cargo workspace. Fail если найдены unused —
     # автор должен либо удалить (cargo shear --fix), либо добавить в
     # ignore-list если deps нужны для feature-flag'а / build-script'а.

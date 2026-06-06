@@ -6,7 +6,7 @@ describe("focus command instant render", () => {
   test("does not gate the shell focus form behind async hydration", () => {
     // Regression: 2026-06-05. Built-in Shell command pages must paint immediately.
     const source = readFileSync(
-      path.join(process.cwd(), "shell", "src", "components", "FocusCommandPanel.vue"),
+      path.join(process.cwd(), "platform", "desktop", "src", "components", "FocusCommandPanel.vue"),
       "utf8",
     );
 

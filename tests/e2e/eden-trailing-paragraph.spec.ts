@@ -1,6 +1,6 @@
 // Eden TrailingParagraph extension regression.
 //
-// Tested: `extensions/eden/src/TrailingParagraph.ts` + bootstrap в Editor.vue.
+// Tested: `products/eden/src/TrailingParagraph.ts` + bootstrap в Editor.vue.
 //
 // Инвариант: после ЛЮБОЙ транзакции последний top-level node документа =
 // пустой paragraph. Не дублируется (idempotent). Работает с heading'ами,

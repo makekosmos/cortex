@@ -1,14 +1,14 @@
 # Delphi — задачи
 
 ::: tip Источник правды
-`extensions/delphi/` (Vue-extension) + `docs/DELPHI-LEGACY-DB-DECISION.md`
+`products/delphi/` (Vue-extension) + `docs/DELPHI-LEGACY-DB-DECISION.md`
 :::
 
-Delphi — приложение для управления задачами в Kosmos. Десктопный UI **мигрирован в Vue-extension** внутри Kepler shell (`extensions/delphi/`). Android-часть живёт отдельно в `mobile/delphi/`.
+Delphi — приложение для управления задачами в Kosmos. Десктопный UI **мигрирован в Vue-extension** внутри Kepler shell (`products/delphi/`). Android-часть живёт отдельно в `incubator/mobile/delphi/`.
 
 ## ARK Runtime
 
-- Канонический desktop sidecar — `ark-core-rpc` из `crates/ark-core/rust`.
+- Канонический desktop sidecar — `ark-core-rpc` из `core/ark/crates/ark-core/rust`.
 - **Старый Delphi-specific Rust DB sidecar удалён.** Не пересобирать, не восстанавливать, не упаковывать.
 - Задачи Delphi хранятся как обобщённые ARK-объекты с `type_id = task_obj`.
 - Extension обращается к ARK через `@kosmos/ark` (через `window.kepler.ark.request(...)` из Kepler shell preload).
@@ -29,12 +29,12 @@ Delphi — приложение для управления задачами в 
 Сборка происходит через Kepler shell:
 
 ```powershell
-bun run --cwd shell build:extensions    # билдит все extensions включая Delphi
-bun run --cwd shell build:js            # tsc + vite + extensions
-bun run --cwd shell dev                 # dev: backend + extensions + Kepler shell renderer
+bun run --cwd platform/desktop build:extensions    # билдит все extensions включая Delphi
+bun run --cwd platform/desktop build:js            # tsc + vite + extensions
+bun run --cwd platform/desktop dev                 # dev: backend + extensions + Kepler shell renderer
 ```
 
-В dev mode (HMR) extension поднимается через `bun run --cwd shell dev:extensions` (см. [Extension dev mode](/concepts/extension-dev-mode)).
+В dev mode (HMR) extension поднимается через `bun run --cwd platform/desktop dev:extensions` (см. [Extension dev mode](/concepts/extension-dev-mode)).
 
 ## Boundaries
 
@@ -45,10 +45,10 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 
 ## Mobile / Native
 
-- `mobile/delphi/` — Android-часть (отдельные правила, см. её `AGENTS.md`).
+- `incubator/mobile/delphi/` — Android-часть (отдельные правила, см. её `AGENTS.md`).
 - Desktop ARK-решения отсюда **не** применяются к Kotlin, если задача явно не говорит обратное.
-- `mobile/ark-service/` — Android Room ContentProvider для `mobile/delphi`.
-- `mobile/delphi/app/src/main/jniLibs/arm64-v8a/libark_core.so` — намеренно
+- `incubator/mobile/ark-service/` — Android Room ContentProvider для `incubator/mobile/delphi`.
+- `incubator/mobile/delphi/app/src/main/jniLibs/arm64-v8a/libark_core.so` — намеренно
   закоммиченный native runtime для Android APK. Gradle ограничивает сборку
   `arm64-v8a`, чтобы отсутствие этого файла не превращалось в silent
   crash-on-launch. Не удалять как build artifact без замены на воспроизводимый
@@ -56,9 +56,9 @@ bun run --cwd shell dev                 # dev: backend + extensions + Kepler she
 
 ## Assets
 
-- `extensions/delphi/icon.png` и `extensions/delphi/src/assets/app-icon.png` —
+- `products/delphi/icon.png` и `products/delphi/src/assets/app-icon.png` —
   canonical PNG sources для launcher / app UI, хранятся в 1024×1024.
-- `extensions/delphi/src/assets/fonts/zed-mono-extended.ttf` — intentional
+- `products/delphi/src/assets/fonts/zed-mono-extended.ttf` — intentional
   Delphi-local font asset. Zed Mono был custom build Iosevka под SIL Open Font
   License 1.1 ([zed-industries/zed-fonts](https://github.com/zed-industries/zed-fonts));
   не удалять как неизвестный proprietary font без замены в UI.
@@ -124,7 +124,7 @@ Delphi всё ещё содержит несколько legacy call-site'ов, 
 есть только `window.kepler.ark.request(operation, params)`.
 
 Для них существует минимальный **compatibility shim**
-`extensions/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как
+`products/delphi/src/lib/electron-api-shim.ts`. Импортируется в `main.ts` как
 side-effect **до** `createApp(...).mount(...)` и устанавливает
 `window.electronAPI` поверх `kepler.ark.request`.
 
@@ -149,7 +149,7 @@ local JSON autosave и local DB fallback удалены из extension runtime. 
 
 ### Tailwind
 
-Delphi extension сохраняет Tailwind v4 (`@tailwindcss/vite` plugin в `extensions/delphi/vite.config.mjs` + `@import "tailwindcss"` в `src/global.css`). Оригинальный UI Delphi на Tailwind utility classes; переписывание на plain CSS — отдельная задача (см. [Kepler Roadmap → Phase 9](./kepler-roadmap.md#phase-9-delphi-ui-tailwind-plain-css-открытый-вопрос)).
+Delphi extension сохраняет Tailwind v4 (`@tailwindcss/vite` plugin в `products/delphi/vite.config.mjs` + `@import "tailwindcss"` в `src/global.css`). Оригинальный UI Delphi на Tailwind utility classes; переписывание на plain CSS — отдельная задача (см. [Kepler Roadmap → Phase 9](./kepler-roadmap.md#phase-9-delphi-ui-tailwind-plain-css-открытый-вопрос)).
 
 ## Command bus integration
 

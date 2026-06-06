@@ -11,10 +11,10 @@ const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 // Что ловим:
 //   1. SQL INSERT/UPDATE/DELETE для ARK таблиц в app TS service code
 //      (forbidden.md → ARK writes).
-//   2. `app.getPath('userData')` вне shell/electron/instance.ts —
+//   2. `app.getPath('userData')` вне platform/desktop/electron/instance.ts —
 //      нарушает single-source-of-truth для slot-based изоляции
 //      (forbidden.md → Instance slots).
-//   3. `path.join(..., "Kosmos" | "Kepler", ...)` в shell main process кроме
+//   3. `path.join(..., "Kosmos" | "Kepler", ...)` в desktop main process кроме
 //      instance.ts / data-dir.ts (тот же запрет, разный синтаксис).
 //   4. `KOSMOS_DATA_DIR=...APPDATA...` в tests/e2e/* вне helpers/launch.ts —
 //      форсирует тесты в real user data dir (forbidden.md → Тесты).
@@ -74,12 +74,17 @@ const writePattern = new RegExp(
 
 function checkDirectSqlWrites() {
   const roots = [
-    "extensions/arrancador/src",
+    "incubator/arrancador/src",
     "extensions/dashboard/src",
-    "extensions/delphi/src",
-    "extensions/eden/src",
-    "extensions/horologion/src",
-    "shell/electron",
+    "products/delphi/src",
+    "products/eden/src",
+    "incubator/horologion/src",
+    "products/delphi/src",
+    "products/eden/src",
+    "incubator/arrancador/src",
+    "incubator/akasha/src",
+    "incubator/horologion/src",
+    "platform/desktop/electron",
   ];
   const findings = [];
   for (const root of roots) {
@@ -105,8 +110,8 @@ function checkDirectSqlWrites() {
 const userDataPattern = /\bapp\.getPath\s*\(\s*["']userData["']\s*\)/;
 
 function checkUserDataAccess() {
-  const root = path.join(repoRoot, "shell/electron");
-  const allowlist = new Set(["shell/electron/instance.ts"]);
+  const root = path.join(repoRoot, "platform/desktop/electron");
+  const allowlist = new Set(["platform/desktop/electron/instance.ts"]);
   const findings = [];
   for (const filePath of walk(root)) {
     const rel = relRepo(filePath);
@@ -133,8 +138,11 @@ function checkUserDataAccess() {
 const pathJoinBrandPattern = /\bpath\.join\s*\([^)]*["'](?:Kosmos|Kepler)["']/;
 
 function checkBrandPathJoin() {
-  const root = path.join(repoRoot, "shell/electron");
-  const allowlist = new Set(["shell/electron/instance.ts", "shell/electron/data-dir.ts"]);
+  const root = path.join(repoRoot, "platform/desktop/electron");
+  const allowlist = new Set([
+    "platform/desktop/electron/instance.ts",
+    "platform/desktop/electron/data-dir.ts",
+  ]);
   const findings = [];
   for (const filePath of walk(root)) {
     const rel = relRepo(filePath);

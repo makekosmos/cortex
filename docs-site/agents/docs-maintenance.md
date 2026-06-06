@@ -67,7 +67,7 @@ bun run docs:check
 Что делает (`scripts/check-docs-freshness.mjs`):
 
 - Парсит все `docs-site/**/*.md` (кроме сгенерированных) и корневые `README.md` / `TODO.md` / `STATUS.md`.
-- Извлекает упоминания путей в backticks и markdown-ссылках (`apps/<x>/...`, `crates/<x>/...`, `shell/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
+- Извлекает упоминания путей в backticks и markdown-ссылках (`apps/<x>/...`, `crates/<x>/...`, `platform/desktop/<x>/...`, `extensions/<x>/...`, `packages/<x>/...`, `services/<x>/...`, `mobile/<x>/...`, `legacy/<x>/...`, `scripts/<x>.<ext>`, `docs/<x>.md`).
 - Проверяет, что эти пути существуют в репозитории.
 - Извлекает упоминания команд (`bun run <name>`, `cargo <subcmd>`).
 - Проверяет, что `bun run <name>` есть в каком-то `package.json` workspace'а.
@@ -106,18 +106,18 @@ docs-site/**/*.md     → bun run docs:sync →    AGENTS.md / CLAUDE.md / per-a
 Скрипт `scripts/sync-agents-docs.mjs` берёт:
 
 - `docs-site/agents/claude-md-core.md` → корневые `AGENTS.md` и `CLAUDE.md`.
-- Compact per-area summaries from `scripts/sync-agents-docs.mjs::TARGETS` + source-doc pointers → `mobile/delphi/AGENTS.md`, `crates/ark-core/AGENTS.md`.
+- Compact per-area summaries from `scripts/sync-agents-docs.mjs::TARGETS` + source-doc pointers → `incubator/mobile/delphi/AGENTS.md`, `core/ark/crates/ark-core/AGENTS.md`.
 - Ссылочный manifest ключевых страниц → `docs-site/public/llms.txt`.
 - Весь набор ключевых страниц inline → `docs-site/public/full-llms.txt`.
 
 Все `AGENTS.md` / `CLAUDE.md` — **boot context**, а не энциклопедия. Генератор держит жёсткий budget:
 
-| Файл                        | Budget              |
-| --------------------------- | ------------------- |
-| `AGENTS.md`                 | ≤ 220 строк / 32 KB |
-| `CLAUDE.md`                 | ≤ 220 строк / 32 KB |
-| `mobile/delphi/AGENTS.md`   | ≤ 180 строк / 24 KB |
-| `crates/ark-core/AGENTS.md` | ≤ 180 строк / 24 KB |
+| Файл                                 | Budget              |
+| ------------------------------------ | ------------------- |
+| `AGENTS.md`                          | ≤ 220 строк / 32 KB |
+| `CLAUDE.md`                          | ≤ 220 строк / 32 KB |
+| `incubator/mobile/delphi/AGENTS.md`  | ≤ 180 строк / 24 KB |
+| `core/ark/crates/ark-core/AGENTS.md` | ≤ 180 строк / 24 KB |
 
 Если `bun run docs:sync` падает на budget'е, не повышай лимит первым делом: вынеси подробности в тематическую страницу `docs-site/`, оставь в generated context одно правило или pointer.
 

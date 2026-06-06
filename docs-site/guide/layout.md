@@ -4,7 +4,7 @@
 
 ```text
 kepler/
-├─ shell/                  # ⭐ Kepler Electron host (npm: kepler-shell)
+├─ platform/desktop/                  # ⭐ Kepler Electron host (npm: kepler-shell)
 ├─ extensions/             # Vue-extensions внутри Kepler shell
 │  ├─ arrancador/          # игровая библиотека
 │  ├─ delphi/              # задачи
@@ -61,7 +61,7 @@ kepler/
 ### ARK runtime
 
 ```text
-crates/ark-core/
+core/ark/crates/ark-core/
 ├─ rust/
 │  ├─ Cargo.toml
 │  └─ src/
@@ -89,7 +89,7 @@ crates/ark-core/
 ### Kepler shell
 
 ```text
-shell/
+platform/desktop/
 ├─ electron/                  # main / preload / extension-host / commands / settings-window
 ├─ src/                       # Vue renderer (LauncherView, SettingsView)
 ├─ shared/ipc-types.ts        # KeplerApi (preload contract)
@@ -163,18 +163,18 @@ runtime cache. Держи их в диапазоне 512×512–1024×1024; 2375
 Не в `public/`, не в `electron/`, не в `src/`. `public/` доступен только из renderer по URL; `build/` — единственная конвенция, которую понимают electron-builder + `afterPack.cjs`.
 :::
 
-Референс реализации — `shell/build/` и `shell/build/afterPack.cjs`.
+Референс реализации — `platform/desktop/build/` и `platform/desktop/build/afterPack.cjs`.
 
 ## Куда складывать что
 
-| Это                                             | Куда                                                         |
-| ----------------------------------------------- | ------------------------------------------------------------ |
-| Новый ARK endpoint (Rust)                       | `crates/ark-core/rust/src/*.rs` + регистрация в `main.rs`    |
-| Новый метод в TS SDK                            | `packages/ark/src/ark-client.ts`                             |
-| UI-компонент, переиспользуемый в 2+ приложениях | `packages/visuals/components/`                               |
-| Локальная фича одного extension'а               | внутри `extensions/<id>/src/`                                |
-| Локальная фича Eden                             | внутри `extensions/eden/src/`                                |
-| Новый extension                                 | новая директория `extensions/<id>/` с `manifest.json`        |
-| Концепт / архитектурное решение                 | `docs/` (источник правды) + страница в `docs-site/concepts/` |
-| Артефакты proof-loop задачи                     | `.agent/tasks/<DATE>-<slug>/`                                |
-| Smoke-БД для тестов                             | `.tmp`, `.e2e`, `.agent/tasks/<TASK>/smoke/`, OS temp        |
+| Это                                             | Куда                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------ |
+| Новый ARK endpoint (Rust)                       | `core/ark/crates/ark-core/rust/src/*.rs` + регистрация в `main.rs` |
+| Новый метод в TS SDK                            | `core/ark/packages/ark/src/ark-client.ts`                          |
+| UI-компонент, переиспользуемый в 2+ приложениях | `packages/visuals/components/`                                     |
+| Локальная фича одного extension'а               | внутри `extensions/<id>/src/`                                      |
+| Локальная фича Eden                             | внутри `products/eden/src/`                                        |
+| Новый extension                                 | новая директория `extensions/<id>/` с `manifest.json`              |
+| Концепт / архитектурное решение                 | `docs/` (источник правды) + страница в `docs-site/concepts/`       |
+| Артефакты proof-loop задачи                     | `.agent/tasks/<DATE>-<slug>/`                                      |
+| Smoke-БД для тестов                             | `.tmp`, `.e2e`, `.agent/tasks/<TASK>/smoke/`, OS temp              |

@@ -1,8 +1,8 @@
 # Dashboard — встроенный ARK browser
 
 ::: tip Источник правды
-`shell/src/views/DashboardRoot.vue`, `shell/src/views/DashboardView.vue`,
-`shell/src/dashboard/`, `shell/electron/dashboard-window.ts`
+`platform/desktop/src/views/DashboardRoot.vue`, `platform/desktop/src/views/DashboardView.vue`,
+`platform/desktop/src/dashboard/`, `platform/desktop/electron/dashboard-window.ts`
 :::
 
 Dashboard — встроенная часть Kepler shell'а (не extension). Read-only
@@ -25,7 +25,7 @@ ARK browser: sidebar с object_types + таблица объектов.
 - Frontend: Vue 3 + Composition API + `<script setup lang="ts">`, тот же
   renderer-bundle, что launcher и settings.
 - Runtime: отдельный `BrowserWindow` внутри Kepler main process
-  (`shell/electron/dashboard-window.ts`).
+  (`platform/desktop/electron/dashboard-window.ts`).
 - Routing: hash-based, окно грузится с `#/dashboard` — `DashboardRoot.vue`
   безусловно рендерит `<DashboardView />`.
 - Data access: `window.kepler.ark.request(...)` через main process IPC.
@@ -35,7 +35,7 @@ ARK browser: sidebar с object_types + таблица объектов.
 ## Структура
 
 ```
-shell/
+platform/desktop/
 ├─ electron/
 │  ├─ dashboard-window.ts        # openDashboardWindow() + window state
 │  ├─ main.ts                    # kepler:ark:request handler
@@ -86,9 +86,9 @@ shell/
 ## Команды
 
 ```powershell
-bun run --cwd shell build:js               # tsc + vite renderer + extensions
-bun run --cwd shell typecheck              # tsc --noEmit
-bun run --cwd shell dev                    # backend + extensions + Kepler renderer
+bun run --cwd platform/desktop build:js               # tsc + vite renderer + extensions
+bun run --cwd platform/desktop typecheck              # tsc --noEmit
+bun run --cwd platform/desktop dev                    # backend + extensions + Kepler renderer
 ```
 
 В dev mode dashboard грузится с `${VITE_DEV_SERVER_URL}#/dashboard`
@@ -102,7 +102,7 @@ bun run --cwd shell dev                    # backend + extensions + Kepler rende
 
 Открытие окна:
 
-- Через static launcher command `dashboard:open` («Открыть таблицу данных», `kind: "command"`, `appName: "Kepler"`) в `shell/electron/commands.ts`. Иконка в launcher — `BuiltInIcon` (teal `Database` glyph).
+- Через static launcher command `dashboard:open` («Открыть таблицу данных», `kind: "command"`, `appName: "Kepler"`) в `platform/desktop/electron/commands.ts`. Иконка в launcher — `BuiltInIcon` (teal `Database` glyph).
 - Из tray menu Dashboard убран (2026-05-16) — теперь там только «Открыть», «Настройки», «Выход».
 
 ## ARK operations, которые Dashboard использует
@@ -111,7 +111,7 @@ bun run --cwd shell dev                    # backend + extensions + Kepler rende
 - `list_objects` — main pane «Всё».
 - `list_objects_by_type` — main pane после клика по типу в sidebar.
 
-Если нужен новый endpoint — добавь в `crates/ark-core/rust` и `packages/ark`,
+Если нужен новый endpoint — добавь в `core/ark/crates/ark-core/rust` и `core/ark/packages/ark`,
 не пиши raw SQL в shell.
 
 ## Связанные документы
