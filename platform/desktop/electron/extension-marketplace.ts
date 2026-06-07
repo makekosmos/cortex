@@ -1,7 +1,7 @@
-// Marketplace integration: fetch catalog.json от kosmos-extensions + download
+// Marketplace integration: fetch catalog.json от makekosmos/extensions + download
 // .kext по URL и delegate в существующий installFromPath flow.
 //
-// Catalog source: https://raw.githubusercontent.com/yoso-industries/kosmos-extensions/main/catalog.json
+// Catalog source: https://raw.githubusercontent.com/makekosmos/extensions/main/catalog.json
 //
 // Cache: in-memory, 1h TTL. Force refresh — параметр `force` в catalogFetch.
 
@@ -36,8 +36,7 @@ export interface Catalog {
   extensions: CatalogExtension[];
 }
 
-const CATALOG_URL =
-  "https://raw.githubusercontent.com/yoso-industries/kosmos-extensions/main/catalog.json";
+const CATALOG_URL = "https://raw.githubusercontent.com/makekosmos/extensions/main/catalog.json";
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1h
 
 let cachedCatalog: { data: Catalog; fetchedAt: number } | null = null;

@@ -2,8 +2,8 @@
 
 ::: tip TL;DR
 
-- **Kepler launcher** дистрибутится через `yoso-industries/kepler-releases` (NSIS installer + electron-updater).
-- **Расширения** дистрибутятся через `yoso-industries/kosmos-extensions` (per-extension tagged releases + `catalog.json`).
+- **Kosmos launcher** дистрибутится через `makekosmos/desktop` (NSIS/DMG/Linux installers + electron-updater metadata).
+- **Расширения** дистрибутятся через `makekosmos/extensions` (per-extension tagged releases + `catalog.json`).
 - **Source code** остаётся в `ksanrse/kepler` monorepo. Distribution repos — binary only.
   :::
 
@@ -14,7 +14,7 @@ ksanrse/kepler (private monorepo)         ← source of truth
         │
         │  bun run --cwd platform/desktop build
         ↓                                  bun run --cwd platform/desktop ext:publish ID
-yoso-industries/kepler-releases             yoso-industries/kosmos-extensions
+makekosmos/desktop                          makekosmos/extensions
    v0.1.0/                                    horologion-v0.3.0/
      Kepler-Setup-0.1.0.exe                     horologion-0.3.0.kext
      latest.yml                               delphi-v0.2.0/
@@ -45,8 +45,15 @@ marketplace catalog.
   «Перезапустить сейчас?» появляется как **fallback через 5 минут**, если
   пользователь не нажал banner.
 
-Конфиг publish'а — в `platform/desktop/package.json → build.publish[0]` (provider github,
-owner yoso-industries, repo kepler-releases).
+Конфиг publish'а — в `platform/desktop/package.json → build.publish`: primary
+provider `makekosmos/desktop`, bridge provider `yoso-industries/kepler-releases`
+для перехода уже установленных клиентов на новый update channel.
+
+Bridge release rule: `makekosmos/desktop` должен идти первым в publish array,
+чтобы новая установленная сборка уже проверяла обновления из makekosmos. Старый
+`yoso-industries/kepler-releases` временно получает тот же artifact/latest.yml,
+чтобы текущие установки нашли эту миграционную версию. После переходного окна
+legacy provider можно удалить.
 
 ### State machine
 
@@ -186,7 +193,7 @@ Schema:
       "id": "horologion",
       "name": "Horologion",
       "description": "Трекер времени и pomodoro",
-      "author": "yoso-industries",
+      "author": "makekosmos",
       "version": "0.3.0",
       "keplerApiVersion": "^1.0.0",
       "iconUrl": "https://raw.githubusercontent.com/.../icon.png",
@@ -246,8 +253,8 @@ Settings → **Расширения** — плоский список устан
 
 | Команда                                                  | Описание                                                               |
 | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `bun run --cwd platform/desktop build`                   | Полный build launcher'а + publish в kepler-releases (нужен `GH_TOKEN`) |
-| `bun run --cwd platform/desktop ext:publish ID`          | Build extension → .kext → release в kosmos-extensions                  |
+| `bun run --cwd platform/desktop build`                   | Полный build launcher'а + publish в desktop channel (нужен `GH_TOKEN`) |
+| `bun run --cwd platform/desktop ext:publish ID`          | Build extension → .kext → release в makekosmos/extensions              |
 | `bun run --cwd platform/desktop ext:publish-all`         | То же для всех extensions                                              |
 | `bun run --cwd platform/desktop ext:catalog -- OUT_PATH` | Регенерация catalog.json из GitHub releases                            |
 
@@ -261,13 +268,13 @@ Settings → **Расширения** — плоский список устан
 Сейчас (Phase 1):
 
 1. Maintainer (`ksanrse`) пишет / правит extension в `extensions/ID/`.
-2. `bun run --cwd platform/desktop ext:publish ID` → release в `kosmos-extensions`.
-3. `bun run --cwd platform/desktop ext:catalog -- .tmp/kosmos-extensions/catalog.json`.
-4. Commit + push catalog.json в `kosmos-extensions` main branch.
+2. `bun run --cwd platform/desktop ext:publish ID` → release в `makekosmos/extensions`.
+3. `bun run --cwd platform/desktop ext:catalog -- .tmp/extensions/catalog.json`.
+4. Commit + push catalog.json в `makekosmos/extensions` main branch.
 
 Phase 2 (когда появятся внешние contributors):
 
-- Fork main `yoso-industries/kepler` monorepo.
+- Fork main `ksanrse/kosmos` monorepo.
 - PR с extension'ом в `extensions/ID/`.
 - Maintainer review + merge + publish.
 

@@ -17,7 +17,7 @@ description: От установки до первой заметки за 5 ш�
       <h3 class="step-title">Скачай Kepler</h3>
       <p>Лаунчер Kosmos. Поставь, назначь горячую клавишу — и получишь свой shortcut ко всему.</p>
       <p>
-        <a class="step-button" href="https://github.com/yoso-industries/kepler-releases/releases/latest" target="_blank" rel="noopener">
+        <a class="step-button" href="https://github.com/makekosmos/desktop/releases/latest" target="_blank" rel="noopener">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M8 1.75v9m0 0 3.25-3.25M8 10.75 4.75 7.5"/><path d="M3 13.25h10"/></svg>
           Скачать Kepler
         </a>

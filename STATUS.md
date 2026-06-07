@@ -1,4 +1,24 @@
-# Kosmos — статус проекта (2026-06-06)
+# Kosmos — статус проекта (2026-06-07)
+
+## 2026-06-07 — Bridge release на makekosmos channels (Kosmos Desktop 0.4.2 → 0.4.3)
+
+Kosmos Desktop получил миграционный release для переноса update/distribution
+каналов в отдельную GitHub organization `makekosmos`.
+
+- Новый primary desktop channel: `makekosmos/desktop`. Он идёт первым в
+  `platform/desktop/package.json → build.publish`, чтобы установленная сборка
+  0.4.3 дальше проверяла обновления уже из makekosmos.
+- Legacy bridge channel: `yoso-industries/kepler-releases`. Тот же artifact
+  0.4.3 публикуется туда на переходный период, чтобы уже установленные версии,
+  которые ещё смотрят в старый updater repo, получили миграционное обновление.
+- Extension marketplace source-of-truth перенесён на `makekosmos/extensions`:
+  `extension-marketplace.ts → CATALOG_URL`, `publish-extension.mjs` и
+  `generate-catalog.mjs → RELEASES_REPO`.
+- Distribution docs, system requirements, forbidden rules и manual download link
+  обновлены под новые каналы. Legacy `yoso-industries/kepler-releases` описан
+  как временный bridge target, который можно убрать после переходного окна.
+
+Proof loop: `.agent/tasks/2026-06-07-makekosmos-release-channel/`.
 
 ## 2026-06-06 — Clipboard history заморожена + perf hardening (Kosmos Desktop 0.4.1 → 0.4.2)
 
@@ -513,7 +533,7 @@ Setting в Settings → Общие.
 
 | Артефакт                                            | Версия                                                                                                              |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.1**                                                                                                           |
+| Kosmos Desktop (`platform/desktop/package.json`)    | **0.4.3**                                                                                                           |
 | Akasha extension (`incubator/akasha/manifest.json`) | **0.1.2** (Vue EPUB reader; EPUB parser guardrails)                                                                 |
 | Eden extension (`products/eden/manifest.json`)      | **0.1.12** (Pattern B + Anytype block selection + Linear statuses + Ctrl+A markdown copy + drag-select auto-scroll) |
 | Delphi extension                                    | **0.1.7** (live ARK sync + «Когда-нибудь» + layout-agnostic Ctrl)                                                   |

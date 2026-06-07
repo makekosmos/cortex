@@ -44,7 +44,7 @@ LAN-синхронизация между твоими устройствами 
 <details class="faq-item">
 <summary>Что-то сломалось — куда писать?</summary>
 
-- GitHub Issues: [yoso-industries/kepler](https://github.com/yoso-industries)
+- GitHub Issues: [makekosmos](https://github.com/makekosmos)
 - Email: kazajackyyy@gmail.com
 
 Приложи к репорту:

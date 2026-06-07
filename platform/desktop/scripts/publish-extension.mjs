@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Публикует extension в github.com/yoso-industries/kosmos-extensions:
+// Публикует extension в github.com/makekosmos/extensions:
 //
 //   1. Читает source manifest.json → version.
 //   2. Билдит extension через build:extensions.
 //   3. Пакует dist/ + manifest.json + icon (+ README) в <id>-<version>.kext.
 //   4. Computes SHA-256.
-//   5. gh release create <id>-v<version> ... <kext-file> в kosmos-extensions.
+//   5. gh release create <id>-v<version> ... <kext-file> в makekosmos/extensions.
 //
 // После publish — запусти `bun run ext:catalog -- <path>` чтобы обновить
 // catalog.json (catalog генерится из gh api releases, не из локального state).
@@ -34,7 +34,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SHELL_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(SHELL_ROOT, "..", "..");
-const RELEASES_REPO = "yoso-industries/kosmos-extensions";
+const RELEASES_REPO = "makekosmos/extensions";
 
 function die(msg) {
   console.error(`[ext:publish] ${msg}`);
@@ -195,5 +195,5 @@ for (const r of results) {
   console.log(`  - ${r.tag} (sha256 ${r.sha.slice(0, 12)}...)`);
 }
 console.log(
-  `[ext:publish] Не забудь: bun run --cwd platform/desktop ext:catalog -- <output-path> и push в kosmos-extensions`,
+  `[ext:publish] Не забудь: bun run --cwd platform/desktop ext:catalog -- <output-path> и push в makekosmos/extensions`,
 );

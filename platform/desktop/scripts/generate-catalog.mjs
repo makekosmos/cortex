@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Генерирует catalog.json для kosmos-extensions marketplace.
+// Генерирует catalog.json для makekosmos/extensions marketplace.
 //
-// Источник правды: GitHub releases в yoso-industries/kosmos-extensions
+// Источник правды: GitHub releases в makekosmos/extensions
 // (per-extension tagged: horologion-v0.3.0 ...). Per group выбирает
 // highest semver. Metadata (name/description/keplerApiVersion) тянет
 // из локального source — products/<id>, incubator/<id> или legacy extensions/<id>.
 //
 // Usage:
 //   bun run --cwd platform/desktop ext:catalog -- <output-path>
-//   bun run --cwd platform/desktop ext:catalog -- .tmp/kosmos-extensions/catalog.json
+//   bun run --cwd platform/desktop ext:catalog -- .tmp/extensions/catalog.json
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SHELL_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(SHELL_ROOT, "..", "..");
-const RELEASES_REPO = "yoso-industries/kosmos-extensions";
+const RELEASES_REPO = "makekosmos/extensions";
 const RAW_BASE = `https://raw.githubusercontent.com/${RELEASES_REPO}/main`;
 const DOWNLOAD_BASE = `https://github.com/${RELEASES_REPO}/releases/download`;
 
@@ -147,7 +147,7 @@ async function main() {
       id,
       name: manifest.name ?? id,
       description: manifest.description ?? "",
-      // author — optional. Раньше fallback'или на "yoso-industries", но это
+      // author — optional. Раньше fallback'или на owner org, но это
       // вводило в заблуждение (показывался автор там где manifest его не
       // объявил). null/undefined → marketplace UI просто не рендерит автора.
       author: manifest.author ?? null,
