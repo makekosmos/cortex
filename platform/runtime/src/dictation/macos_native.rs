@@ -4,8 +4,6 @@
 // line-oriented JSON executables copied from sample/SuperCmd-main and built by
 // `platform/desktop/scripts/build-macos-native.mjs`.
 
-#![cfg(target_os = "macos")]
-
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -309,7 +307,14 @@ fn capture_value_to_accelerator(value: &Value) -> Option<String> {
 /// Собирает accelerator в том же порядке/нотации, что фронтовый
 /// `buildAccelerator` (Ctrl+Alt+Shift+Super+Key) — Cmd мапится в `Super`, как
 /// и Windows-side win. `parse_hotkey` и UI-display понимают этот формат.
-fn build_accelerator(key: &str, ctrl: bool, alt: bool, shift: bool, cmd: bool, function: bool) -> String {
+fn build_accelerator(
+    key: &str,
+    ctrl: bool,
+    alt: bool,
+    shift: bool,
+    cmd: bool,
+    function: bool,
+) -> String {
     let mut parts: Vec<&str> = Vec::new();
     if ctrl {
         parts.push("Ctrl");

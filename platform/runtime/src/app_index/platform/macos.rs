@@ -4,8 +4,6 @@
 // bundles through `/usr/bin/open`. Deeper Spotlight/LaunchServices metadata and
 // icon extraction can be added inside this adapter without changing callers.
 
-#![cfg(target_os = "macos")]
-
 use crate::app_index::app::{App, AppKind};
 use crate::app_index::{AppIndexError, AppSource, Result};
 use sha2::{Digest, Sha256};

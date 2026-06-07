@@ -9,54 +9,43 @@ use std::path::{Path, PathBuf};
 
 /// Keyring service name (общий для всего Kepler) + key для Groq API ключа.
 /// При добавлении других AI-провайдеров — новый username (service остаётся).
+#[cfg(not(test))]
 const KEYRING_SERVICE: &str = "kosmos-kepler";
+#[cfg(not(test))]
 const KEYRING_USER_GROQ: &str = "groq-api-key";
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TriggerMode {
     /// Phase 1: первый press запускает запись, второй — останавливает.
+    #[default]
     Toggle,
     /// Phase 1.5 (требует low-level hook): hold-to-record.
     PushToTalk,
 }
 
-impl Default for TriggerMode {
-    fn default() -> Self {
-        Self::Toggle
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum InjectMode {
     /// Default: clipboard сохраняется → текст → Ctrl+V → restore clipboard.
+    #[default]
     AutoPaste,
     /// Только записать в буфер обмена, пользователь сам жмёт Ctrl+V.
     ClipboardOnly,
 }
 
-impl Default for InjectMode {
-    fn default() -> Self {
-        Self::AutoPaste
-    }
-}
-
 /// DNS-резолвер для исходящих AI-запросов. Scope ограничен AI HTTP клиентом
 /// (не sync/RAWG/прочее) — см. forbidden.md → Dictation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NetworkProfile {
+    #[default]
     System,
     CloudflareDoh,
     GoogleDoh,
-    CustomDoh { url: String },
-}
-
-impl Default for NetworkProfile {
-    fn default() -> Self {
-        Self::System
-    }
+    CustomDoh {
+        url: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,24 +149,40 @@ pub fn save_to(path: &Path, cfg: &DictationConfig) -> std::io::Result<()> {
 // Keyring (API key) — отдельно от JSON. Никогда не пишем секрет в JSON.
 // ---------------------------------------------------------------------------
 
+#[cfg(not(test))]
 fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER_GROQ)
 }
 
+#[cfg(not(test))]
 pub fn get_api_key() -> Option<String> {
     let entry = keyring_entry().ok()?;
     entry.get_password().ok()
+}
+
+#[cfg(test)]
+pub fn get_api_key() -> Option<String> {
+    std::env::var("KOSMOS_TEST_GROQ_API_KEY")
+        .ok()
+        .filter(|key| !key.trim().is_empty())
 }
 
 pub fn has_api_key() -> bool {
     get_api_key().is_some()
 }
 
+#[cfg(not(test))]
 pub fn set_api_key(key: &str) -> Result<(), keyring::Error> {
     let entry = keyring_entry()?;
     entry.set_password(key)
 }
 
+#[cfg(test)]
+pub fn set_api_key(_key: &str) -> Result<(), keyring::Error> {
+    Ok(())
+}
+
+#[cfg(not(test))]
 pub fn clear_api_key() -> Result<(), keyring::Error> {
     let entry = keyring_entry()?;
     match entry.delete_credential() {
@@ -186,6 +191,11 @@ pub fn clear_api_key() -> Result<(), keyring::Error> {
         Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e),
     }
+}
+
+#[cfg(test)]
+pub fn clear_api_key() -> Result<(), keyring::Error> {
+    Ok(())
 }
 
 #[cfg(test)]

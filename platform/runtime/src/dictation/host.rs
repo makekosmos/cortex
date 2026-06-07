@@ -2182,11 +2182,11 @@ mod tests {
     // `KOSMOS_DATA_DIR`. `config::save` пишет по абсолютному пути из
     // env, поэтому без guard'а параллельные тесты ломают друг друга
     // ИЛИ затирают `%APPDATA%\Kosmos\dictation-config.json` пользователя.
-    static ENV_DATA_DIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    static ENV_DATA_DIR_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[tokio::test]
     async fn update_config_persists_and_emits_event() {
-        let _guard = ENV_DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = ENV_DATA_DIR_LOCK.lock().await;
         let tmp = tempfile::TempDir::new().expect("tempdir");
         std::env::set_var("KOSMOS_DATA_DIR", tmp.path());
 

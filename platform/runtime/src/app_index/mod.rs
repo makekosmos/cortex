@@ -11,7 +11,6 @@
 // См. spec: `.agent/tasks/2026-05-22-app-launcher/spec.md`.
 
 pub mod app;
-pub mod cache;
 pub mod icons;
 pub mod platform;
 pub mod ranking;
