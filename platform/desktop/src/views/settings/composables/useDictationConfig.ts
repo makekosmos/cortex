@@ -351,13 +351,18 @@ export function createDictationConfig() {
     if (!dictationCaptureUnsubscribe) {
       dictationCaptureUnsubscribe = window.kepler.dictation.onCaptureEvent((e) => {
         if (e.event === "dictation_capture_key") {
-          const acc = buildAccelerator({
-            vk: e.vk as number,
-            ctrl: e.ctrl as boolean,
-            shift: e.shift as boolean,
-            alt: e.alt as boolean,
-            win: e.win as boolean,
-          });
+          // Backend может прислать готовый accelerator (macOS-адаптер резолвит
+          // mac keyCode в строку сам) — тогда используем его. Иначе собираем из
+          // Windows-VK. Ветка платформо-агностична: «если резолвнуто — берём».
+          const acc =
+            (e.accelerator as string | undefined) ||
+            buildAccelerator({
+              vk: e.vk as number,
+              ctrl: e.ctrl as boolean,
+              shift: e.shift as boolean,
+              alt: e.alt as boolean,
+              win: e.win as boolean,
+            });
           if (acc) dictationCaptureAccelerator.value = acc;
         } else if (e.event === "dictation_capture_cancelled") {
           dictationCaptureCancelTick.value++;

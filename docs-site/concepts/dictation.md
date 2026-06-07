@@ -322,24 +322,19 @@ UI рендерит чек-листом + подсказку для первой
 - DoH для не-AI запросов (sync / RAWG / прочее) — out of scope.
 - Linux порт — Win32 `GetForegroundWindow` + `WH_KEYBOARD_LL` специфичны; native helpers есть только под macOS.
 - Persistent история транскрипций.
-- **macOS hotkey capture** через adapter — пока заглушка + UI-обход, см. § Tech debt.
 
-## Tech debt
+## macOS hotkey capture (adapter)
 
-### macOS hotkey capture — variation point протёк в UI (2026-06-07)
+Назначение хоткея в Settings → Диктация идёт через backend-op `dictation.begin_hotkey_capture` (adapter-метод) одинаково на обеих платформах; «как именно ловим сочетание» инкапсулировано per-OS внутри адаптера, UI платформо-агностичен (безусловный `external-capture`).
 
-**Что сейчас.** Назначение хоткея диктации в Settings → Диктация работает через backend-op `dictation.begin_hotkey_capture` (adapter-метод). Его Windows-ветка (`host.rs::op_begin_hotkey_capture`) запускает low-level hook (`hotkey_hook::set_capture_mode`), а **macOS-ветка — заглушка `Err("begin_hotkey_capture: Windows-only (Phase 1)")`** (незаполненный variation point из Phase 1). Чтобы UI не падал, временно вкручено условие `:external-capture="isWindows"` в `DictationTab.vue` — то есть на macOS используется локальный DOM-capture.
+- **Windows** — `host.rs::op_begin_hotkey_capture` → low-level hook (`hotkey_hook::set_capture_mode`), эмитит `dictation_capture_key { vk, ctrl, shift, alt, win }`.
+- **macOS** — Swift helper `capture-hotkey` (`platform/runtime/native/macos/capture-hotkey.swift`): `CGEventTap` без фильтра по keyCode, ловит первый `keyDown` с ≥1 квалифицирующим модификатором (cmd/ctrl/alt/shift). `macos_native::begin_capture` / `end_capture` читают helper, **резолвят mac `keyCode` → accelerator-строку в Rust** (`mac_key_name` — обратный маппинг к `mac_key_code`; cmd→`Super`) и эмитят `dictation_capture_key { accelerator }`; `Escape` → `dictation_capture_cancelled`.
 
-**Почему это долг.** Условие `isWindows` в `DictationTab` **протекает платформу в UI-слой**, нарушая adapter-first паттерн (платформенная логика должна жить в `#[cfg]`-ветках адаптера, а не в презентации). Добавление Linux потребует править UI; шов оказался не там, где его держит остальная кодовая база.
+::: tip Почему accelerator из Rust, а не `vk`
+macOS `CGKeyCode` ≠ Windows VK: фронтовый `vkToKeyName` ждёт Windows-коды. Поэтому строку собирает адаптер (`build_accelerator`), а `useDictationConfig.onDictationCaptureStart` предпочитает `e.accelerator` если он есть — ветка платформо-агностична, leak в UI не возвращается.
+:::
 
-**Что сделать (FULL_LOOP).**
-
-1. **Swift helper `capture-hotkey`** (`platform/runtime/native/macos/`) — вариация `hotkey-hold-monitor.swift`: тот же `CGEventTap`, но **без фильтра по конкретному keyCode** — ловит первое `keyDown` с модификаторами и эмитит JSON `{vk, ctrl, shift, alt, win}`; `Escape` → `cancelled`. ~80% переиспользование существующего helper'а. Добавить в `HELPERS` в `macos_native.rs` и в `build-macos-native.mjs`.
-2. **`macos_native.rs`** — `begin_capture(tx)` / `end_capture()`, эмитящие `dictation_capture_key` / `dictation_capture_cancelled` в общий broadcast (тот же канал, что слушает `useDictationConfig.onDictationCaptureStart`).
-3. **`host.rs`** — заполнить `#[cfg(target_os = "macos")]` ветку `op_begin_hotkey_capture` / `op_end_hotkey_capture` вызовом helper'а вместо `Err`.
-4. **Откатить UI-leak** — вернуть `DictationTab.vue` к безусловному `external-capture`, убрать `usePlatform()`/`isWindows`. UI снова платформо-агностичен.
-
-После этого «назначить хоткей» работает одинаково на обеих платформах через один adapter-метод, а «как именно ловим сочетание» инкапсулировано per-OS внутри адаптера.
+История долга (variation point протекал в UI через `:external-capture="isWindows"`, закрыт 2026-06-07) — `.agent/tasks/2026-06-07-macos-hotkey-capture-adapter/spec.md`.
 
 ## ADR
 

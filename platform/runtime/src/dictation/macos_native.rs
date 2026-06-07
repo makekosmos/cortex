@@ -19,9 +19,11 @@ use tokio::sync::broadcast;
 use super::config::TriggerMode;
 
 static WATCH_GENERATION: AtomicU64 = AtomicU64::new(0);
+static CAPTURE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 const HELPERS: &[&str] = &[
     "audio-capturer",
+    "capture-hotkey",
     "get-selected-text",
     "hotkey-hold-monitor",
     "input-monitoring-request",
@@ -196,6 +198,193 @@ fn watch_hotkey_once(
     let _ = child.wait();
     child_done.store(true, Ordering::SeqCst);
     Ok(())
+}
+
+/// Запускает one-shot hotkey-capture: спавнит `capture-hotkey` helper, читает
+/// первое `captured` / `cancelled` и эмитит в `tx` событие в том же формате,
+/// что Windows-ветка (`dictation_capture_key` с готовым `accelerator` /
+/// `dictation_capture_cancelled`). UI-слой остаётся платформо-агностичным.
+pub fn begin_capture(tx: broadcast::Sender<Value>) -> Result<(), NativeHelperError> {
+    let helper = resolve_helper("capture-hotkey")?;
+    let generation = CAPTURE_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    thread::spawn(move || {
+        if let Err(error) = run_capture_once(&helper, &tx, generation) {
+            // Любой сбой helper'а (нет permission, spawn fail) → отменяем
+            // capture, чтобы UI не висел в состоянии «жду нажатие».
+            let _ = error;
+            let _ = tx.send(json!({ "event": "dictation_capture_cancelled" }));
+        }
+    });
+    Ok(())
+}
+
+/// Останавливает активный capture (например юзер ушёл с поля / закрыл Settings
+/// до нажатия). Бамп generation → watchdog SIGTERM'ит lingering helper.
+pub fn end_capture() {
+    CAPTURE_GENERATION.fetch_add(1, Ordering::SeqCst);
+}
+
+fn run_capture_once(
+    helper: &Path,
+    tx: &broadcast::Sender<Value>,
+    generation: u64,
+) -> Result<(), String> {
+    let mut child = Command::new(helper)
+        .env("KOSMOS_PARENT_PID", std::process::id().to_string())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("spawn: {e}"))?;
+    let child_pid = child.id();
+    let child_done = Arc::new(AtomicBool::new(false));
+    {
+        let child_done = child_done.clone();
+        thread::spawn(move || {
+            while !child_done.load(Ordering::SeqCst)
+                && CAPTURE_GENERATION.load(Ordering::SeqCst) == generation
+            {
+                thread::sleep(std::time::Duration::from_millis(250));
+            }
+            if !child_done.load(Ordering::SeqCst) {
+                #[cfg(unix)]
+                unsafe {
+                    libc::kill(child_pid as libc::pid_t, libc::SIGTERM);
+                }
+            }
+        });
+    }
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "missing helper stdout".to_string())?;
+    let reader = BufReader::new(stdout);
+    for line in reader.lines() {
+        let line = line.map_err(|e| format!("read stdout: {e}"))?;
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if let Some(error) = value.get("error").and_then(|v| v.as_str()) {
+            child_done.store(true, Ordering::SeqCst);
+            let _ = child.wait();
+            return Err(error.to_string());
+        }
+        if value.get("cancelled").and_then(|v| v.as_bool()) == Some(true) {
+            let _ = tx.send(json!({ "event": "dictation_capture_cancelled" }));
+            break;
+        }
+        if value.get("captured").and_then(|v| v.as_bool()) == Some(true) {
+            if let Some(accel) = capture_value_to_accelerator(&value) {
+                let _ = tx.send(json!({
+                    "event": "dictation_capture_key",
+                    "accelerator": accel,
+                }));
+            }
+            break;
+        }
+    }
+
+    child_done.store(true, Ordering::SeqCst);
+    let _ = child.wait();
+    Ok(())
+}
+
+/// Конвертирует `captured`-payload helper'а в accelerator-строку. Возвращает
+/// `None` если keyCode неизвестен — тогда capture молча игнорится (как
+/// Windows-ветка при невалидной клавише).
+fn capture_value_to_accelerator(value: &Value) -> Option<String> {
+    let key_code = value.get("keyCode").and_then(|v| v.as_u64())? as u16;
+    let key = mac_key_name(key_code)?;
+    let flag = |name: &str| value.get(name).and_then(|v| v.as_bool()).unwrap_or(false);
+    Some(build_accelerator(
+        key,
+        flag("ctrl"),
+        flag("alt"),
+        flag("shift"),
+        flag("cmd"),
+        flag("fn"),
+    ))
+}
+
+/// Собирает accelerator в том же порядке/нотации, что фронтовый
+/// `buildAccelerator` (Ctrl+Alt+Shift+Super+Key) — Cmd мапится в `Super`, как
+/// и Windows-side win. `parse_hotkey` и UI-display понимают этот формат.
+fn build_accelerator(key: &str, ctrl: bool, alt: bool, shift: bool, cmd: bool, function: bool) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    if ctrl {
+        parts.push("Ctrl");
+    }
+    if alt {
+        parts.push("Alt");
+    }
+    if shift {
+        parts.push("Shift");
+    }
+    if cmd {
+        parts.push("Super");
+    }
+    if function {
+        parts.push("Fn");
+    }
+    parts.push(key);
+    parts.join("+")
+}
+
+/// Обратный маппинг к `mac_key_code`: CGKeyCode → каноничное имя клавиши в
+/// формате accelerator'а (буквы в upper-case, как фронтовый `vkToKeyName`).
+fn mac_key_name(code: u16) -> Option<&'static str> {
+    let name = match code {
+        0 => "A",
+        1 => "S",
+        2 => "D",
+        3 => "F",
+        4 => "H",
+        5 => "G",
+        6 => "Z",
+        7 => "X",
+        8 => "C",
+        9 => "V",
+        11 => "B",
+        12 => "Q",
+        13 => "W",
+        14 => "E",
+        15 => "R",
+        16 => "Y",
+        17 => "T",
+        18 => "1",
+        19 => "2",
+        20 => "3",
+        21 => "4",
+        22 => "6",
+        23 => "5",
+        24 => "=",
+        25 => "9",
+        26 => "7",
+        27 => "-",
+        28 => "8",
+        29 => "0",
+        30 => "]",
+        31 => "O",
+        32 => "U",
+        33 => "[",
+        34 => "I",
+        35 => "P",
+        37 => "L",
+        38 => "J",
+        39 => "'",
+        40 => "K",
+        41 => ";",
+        42 => "\\",
+        43 => ",",
+        44 => "/",
+        45 => "N",
+        46 => "M",
+        47 => ".",
+        49 => "Space",
+        50 => "`",
+        _ => return None,
+    };
+    Some(name)
 }
 
 fn bool_arg(value: bool) -> &'static str {
@@ -437,5 +626,47 @@ mod tests {
         assert_eq!(spec.key_code, 49);
         assert!(spec.cmd);
         assert!(!spec.ctrl);
+    }
+
+    #[test]
+    fn capture_builds_letter_accelerator() {
+        // Ctrl+Shift+H — keyCode 4 = "H", cmd→Super отсутствует.
+        let acc = capture_value_to_accelerator(&json!({
+            "captured": true, "keyCode": 4,
+            "cmd": false, "ctrl": true, "alt": false, "shift": true, "fn": false,
+        }));
+        assert_eq!(acc.as_deref(), Some("Ctrl+Shift+H"));
+    }
+
+    #[test]
+    fn capture_maps_cmd_to_super_and_symbol() {
+        // Cmd+; — keyCode 41 = ";", cmd мапится в Super.
+        let acc = capture_value_to_accelerator(&json!({
+            "captured": true, "keyCode": 41,
+            "cmd": true, "ctrl": false, "alt": false, "shift": false, "fn": false,
+        }));
+        assert_eq!(acc.as_deref(), Some("Super+;"));
+    }
+
+    #[test]
+    fn capture_unknown_keycode_is_ignored() {
+        let acc = capture_value_to_accelerator(&json!({
+            "captured": true, "keyCode": 9999,
+            "cmd": true, "ctrl": false, "alt": false, "shift": false, "fn": false,
+        }));
+        assert!(acc.is_none());
+    }
+
+    #[test]
+    fn capture_accelerator_roundtrips_through_parse() {
+        // Собранная строка должна обратно парситься в тот же spec.
+        let acc = capture_value_to_accelerator(&json!({
+            "captured": true, "keyCode": 49,
+            "cmd": true, "ctrl": false, "alt": false, "shift": false, "fn": false,
+        }))
+        .unwrap();
+        let spec = parse_hotkey(&acc).unwrap();
+        assert_eq!(spec.key_code, 49);
+        assert!(spec.cmd);
     }
 }

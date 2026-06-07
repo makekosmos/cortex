@@ -13,6 +13,30 @@
 
 ---
 
+## 🟠 Pending — macOS hotkey capture (2026-06-07)
+
+Заполнен variation point macOS hotkey capture (Swift helper `capture-hotkey` + adapter). Proof loop — `.agent/tasks/2026-06-07-macos-hotkey-capture-adapter/`.
+
+**Helper-уровень проверен автоматически на живом маке (2026-06-07)** через CGEvent-инъекцию (`capture-driver`, `.tmp/native-tests/`):
+
+- [x] event tap создаётся (`{"ready":true}`) — Input Monitoring permission ок.
+- [x] `Cmd+Shift+H` → `captured keyCode=4 cmd shift` (letter).
+- [x] `Ctrl+Alt+;` → `captured keyCode=41 ctrl alt` (symbol).
+- [x] `Escape` → `cancelled reason=escape`.
+- [x] пассивно (без нажатий) helper не эмитит фантомных `captured`.
+
+> No-modifier ignore инъекцией не проверяется надёжно: CGEventPost с `maskCommand` загрязняет глобальное состояние модификаторов и плодит эхо-события. Фильтр `if !(cmd||ctrl||alt||shift)` тривиален и виден в коде helper'а.
+
+**Осталось ручное (UI-уровень):** `bun run --cwd platform/desktop dev` на macOS:
+
+- [ ] Settings → Диктация → «Горячая клавиша» → клик → поле показывает «Нажми сочетание…».
+- [ ] Зажать `Cmd+Shift+;` — поле принимает сочетание (`⌘ ⇧ ;`), конфиг сохраняется (через `pendingAccelerator`).
+- [ ] `Escape` во время capture — отмена, поле возвращает прежнее значение.
+- [ ] Без Input Monitoring permission — capture не виснет (адаптер шлёт `cancelled`), UI выходит из ожидания.
+- [ ] Назначенный хоткей реально триггерит диктацию (hold-monitor подхватывает новый accelerator).
+
+---
+
 ## 🟠 Pending — Settings sidebar + command visibility (2026-05-23, Kepler 0.2.8)
 
 Полная переработка Settings UI: sidebar навигация, поиск, страницы с `SettingsAdvancedIntro`, tray-toggle и управление видимостью команд.

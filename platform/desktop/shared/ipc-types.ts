@@ -531,7 +531,9 @@ export interface KeplerApi {
     /** Подписка на capture events от Settings → Диктация → Горячая клавиша.
      * Backend hook ловит accelerator ниже системного уровня (это позволяет
      * назначать Win+H и др.). Events: `dictation_capture_key { vk, ctrl,
-     * shift, alt, win }` или `dictation_capture_cancelled` (Esc). */
+     * shift, alt, win }` (Windows) либо `{ accelerator }` (macOS — адаптер
+     * резолвит mac keyCode в строку сам) или `dictation_capture_cancelled`
+     * (Esc). */
     onCaptureEvent(cb: (payload: Record<string, unknown>) => void): () => void;
   };
 

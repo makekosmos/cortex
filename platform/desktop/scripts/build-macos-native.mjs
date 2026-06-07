@@ -25,6 +25,11 @@ const helpers = [
     frameworks: ["CoreGraphics", "AppKit", "Carbon"],
   },
   {
+    out: "capture-hotkey",
+    sources: ["capture-hotkey.swift"],
+    frameworks: ["CoreGraphics", "AppKit", "Carbon"],
+  },
+  {
     out: "audio-capturer",
     sources: ["audio-capturer.swift"],
     frameworks: ["AVFoundation", "Foundation"],
