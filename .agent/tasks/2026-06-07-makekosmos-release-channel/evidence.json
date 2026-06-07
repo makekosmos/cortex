@@ -1,0 +1,143 @@
+{
+  "date": "2026-06-07",
+  "branch": "codex/makekosmos-release-channel",
+  "classification": "FULL_LOOP",
+  "status": "ready",
+  "desktopVersion": "0.4.3",
+  "sourceCommit": "1c85fa17",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "title": "GitHub distribution repos",
+      "verdict": "PASS",
+      "evidence": [
+        "makekosmos/desktop exists and was initialized with README.md.",
+        "makekosmos/extensions exists and contains migrated releases/catalog.",
+        "Placeholder repos were renamed to desktop and extensions."
+      ]
+    },
+    {
+      "id": "AC2",
+      "title": "Desktop updater bridge",
+      "verdict": "PASS",
+      "evidence": [
+        "platform/desktop/package.json version is 0.4.3.",
+        "build.publish first provider is makekosmos/desktop.",
+        "build.publish second provider remains yoso-industries/kepler-releases for the bridge release."
+      ]
+    },
+    {
+      "id": "AC3",
+      "title": "Extension marketplace channel",
+      "verdict": "PASS",
+      "evidence": [
+        "extension-marketplace.ts catalog URL points to raw.githubusercontent.com/makekosmos/extensions/main/catalog.json.",
+        "publish-extension.mjs and generate-catalog.mjs target makekosmos/extensions.",
+        "Migrated makekosmos/extensions catalog preserves five extension entries."
+      ]
+    },
+    {
+      "id": "AC4",
+      "title": "Documentation",
+      "verdict": "PASS",
+      "evidence": [
+        "STATUS.md mentions the 0.4.3 bridge release.",
+        "docs-site/whats-new/kepler.md includes the user-facing bridge update note.",
+        "docs-site/concepts/distribution.md documents makekosmos/desktop, makekosmos/extensions, and the temporary yoso bridge.",
+        "bun run docs:sync passed.",
+        "bun run docs:check passed."
+      ]
+    },
+    {
+      "id": "AC5",
+      "title": "Verification and release",
+      "verdict": "PASS",
+      "evidence": [
+        "bun install --frozen-lockfile passed.",
+        "bunx oxlint . passed.",
+        "bunx oxfmt --check . passed after formatting extension-marketplace.ts.",
+        "bun run ark:guard:writes passed.",
+        "bun run --cwd platform/desktop typecheck passed.",
+        "bun run --cwd platform/desktop build:js:shell passed.",
+        "cargo build --release with CARGO_TARGET_DIR=.tmp/cargo-release passed for kepler-backend, ark-core-rpc, kepler-focus-helper, and kepler-focus-svc.",
+        "bun run --cwd platform/desktop build:js passed.",
+        "bun run --cwd platform/desktop stage:bundled-extensions passed.",
+        "electron-builder --win nsis --publish always published v0.4.3 to both desktop updater repos.",
+        "release/win-unpacked/resources/app-update.yml points to makekosmos/desktop."
+      ]
+    }
+  ],
+  "releases": [
+    {
+      "repository": "makekosmos/desktop",
+      "tag": "v0.4.3",
+      "url": "https://github.com/makekosmos/desktop/releases/tag/v0.4.3",
+      "isDraft": false,
+      "isPrerelease": false,
+      "assets": [
+        {
+          "name": "Kosmos-Setup-0.4.3.exe",
+          "size": 114088624,
+          "sha256": "2224eb331ef76f7c781cf10adcddc6ee27bc552427be8b56a6528c582aff801a"
+        },
+        {
+          "name": "Kosmos-Setup-0.4.3.exe.blockmap",
+          "size": 118398,
+          "sha256": "f7582c8ce73231db4f340ab40c492b475a9e16aa86a7ba082b95565b3e007329"
+        },
+        {
+          "name": "latest.yml",
+          "size": 341,
+          "sha256": "bc664fd374dca288d6dad8b758a9108f125256ac9422fc84c3dc4f02315a35a0"
+        }
+      ]
+    },
+    {
+      "repository": "yoso-industries/kepler-releases",
+      "tag": "v0.4.3",
+      "url": "https://github.com/yoso-industries/kepler-releases/releases/tag/v0.4.3",
+      "isDraft": false,
+      "isPrerelease": false,
+      "assets": [
+        {
+          "name": "Kosmos-Setup-0.4.3.exe",
+          "size": 114088624,
+          "sha256": "2224eb331ef76f7c781cf10adcddc6ee27bc552427be8b56a6528c582aff801a"
+        },
+        {
+          "name": "Kosmos-Setup-0.4.3.exe.blockmap",
+          "size": 118398,
+          "sha256": "f7582c8ce73231db4f340ab40c492b475a9e16aa86a7ba082b95565b3e007329"
+        },
+        {
+          "name": "latest.yml",
+          "size": 341,
+          "sha256": "bc664fd374dca288d6dad8b758a9108f125256ac9422fc84c3dc4f02315a35a0"
+        }
+      ]
+    }
+  ],
+  "updaterConfig": {
+    "owner": "makekosmos",
+    "repo": "desktop",
+    "provider": "github",
+    "releaseType": "release",
+    "updaterCacheDirName": "kepler-shell-updater"
+  },
+  "extensionMarketplace": {
+    "repository": "makekosmos/extensions",
+    "catalogUrl": "https://raw.githubusercontent.com/makekosmos/extensions/main/catalog.json",
+    "migratedReleaseTags": [
+      "akasha-v0.1.2",
+      "arrancador-v0.1.4",
+      "delphi-v0.1.7",
+      "eden-v0.1.12",
+      "horologion-v0.1.7"
+    ]
+  },
+  "environmentNotes": [
+    "Normal desktop build hit the known Windows service lock on target/release/kepler-focus-svc.exe.",
+    "Release used alternate Cargo target .tmp/cargo-release and temporary electron-builder config .tmp/electron-builder-bridge.json.",
+    "No permanent package config was changed for the service-lock workaround."
+  ]
+}
