@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft } from "@lucide/vue";
-import { DesktopChrome } from "@kosmos/visuals";
+import { DesktopChrome, usePlatform } from "@kosmos/visuals";
 import { computed, onBeforeUnmount, shallowRef, useTemplateRef } from "vue";
 import BookLibrarySidebar from "./BookLibrarySidebar.vue";
 import BookLibraryView from "./BookLibraryView.vue";
@@ -19,6 +19,8 @@ const librarySearchQuery = shallowRef("");
 const activeBook = shallowRef<BookRecord | null>(null);
 const fileInput = useTemplateRef<HTMLInputElement>("fileInput");
 const progressTimer = shallowRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+const { platform } = usePlatform();
 
 const library = useBookLibrary();
 const reader = useEpubReader();
@@ -83,6 +85,7 @@ onBeforeUnmount(() => {
 <template>
   <DesktopChrome
     class="akasha-shell"
+    :platform="platform"
     :class="{ 'akasha-shell--overlay-titlebar': mode === 'library' }"
   >
     <template #titlebar-leading>

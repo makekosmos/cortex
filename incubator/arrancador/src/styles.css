@@ -79,9 +79,12 @@ input {
   justify-content: space-between;
   gap: 12px;
   height: 44px;
+  /* Right safe-area — под Windows-overlay кнопки (env() = 0 на mac).
+     Left safe-area — под macOS traffic lights (токен = 0px на Windows,
+     80px при data-platform="mac"; см. @kosmos/visuals css-variables). */
   padding: 0
     max(16px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px)) 0
-    16px;
+    max(16px, var(--kosmos-mac-traffic-light-left-safe-area, 0px));
   border-bottom: 1px solid var(--border);
   background: var(--card);
   -webkit-app-region: drag;

@@ -78,7 +78,10 @@ function onSearchChange(value: string) {
   flex: 1;
   flex-direction: column;
   gap: 18px;
-  padding: 14px 8px 12px;
+  /* В library-режиме titlebar overlay'ится (absolute), сайдбар начинается от
+     top:0 — на macOS его верх (search) под traffic lights. Top safe-area
+     = 0px на Windows, 28px при data-platform="mac". */
+  padding: calc(14px + var(--kosmos-mac-traffic-light-top-safe-area, 0px)) 8px 12px;
 }
 
 .book-library-sidebar__search {
