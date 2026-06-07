@@ -3,7 +3,13 @@
 // триггера, inject mode, provider + статистика.
 
 import { inject, onMounted } from "vue";
-import { HotkeyCapture, SettingsDropdownRow, SettingsList, SettingsRow } from "@kosmos/visuals";
+import {
+  HotkeyCapture,
+  SettingsDropdownRow,
+  SettingsList,
+  SettingsRow,
+  usePlatform,
+} from "@kosmos/visuals";
 import AdvancedPageLayout, { type IntroDescriptor } from "../components/AdvancedPageLayout.vue";
 import {
   DICTATION_INJECT_OPTIONS,
@@ -15,6 +21,12 @@ import {
 import { useDictationPending } from "../composables/useDictationPending";
 
 defineProps<{ intro: IntroDescriptor | null }>();
+
+// Системный hotkey-capture (begin_hotkey_capture) реализован только на Windows
+// (low-level hook ловит даже системные сочетания до WebContents). На macOS
+// используем локальный DOM-capture — иначе capture-start падает с
+// "begin_hotkey_capture: Windows-only". Сам хоткей слушает native helper.
+const { isWindows } = usePlatform();
 
 const ctx = inject(DictationConfigKey);
 if (!ctx) throw new Error("DictationTab requires DictationConfigKey provider in parent");
@@ -152,7 +164,7 @@ onMounted(() => {
           <HotkeyCapture
             :model-value="dictationConfig.hotkey"
             capture-prompt="Нажми сочетание…"
-            external-capture
+            :external-capture="isWindows"
             :pending-accelerator="dictationCaptureAccelerator"
             :pending-cancel="dictationCaptureCancelTick"
             @capture-start="onDictationCaptureStart"
