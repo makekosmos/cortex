@@ -29,6 +29,7 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   screen,
 } from "electron";
 import { resolveInstance, applyInstanceToApp, verifyUserDataMatches } from "./instance";
@@ -190,6 +191,16 @@ let backendRespawnTimer: NodeJS.Timeout | null = null;
 let backendCrashDialogShown = false;
 let arkInitRetryTimer: NodeJS.Timeout | null = null;
 let arkInitRetryAttempt = 0;
+// Идёт ли прямо сейчас initArkClient handshake — чтобы recoverBackendIfDead не
+// вмешивался в штатный (re)connect и не плодил дублирующий backend.
+let arkInitInFlight = false;
+// Стартовый boot-init запущен. До этого recoverBackendIfDead — no-op (иначе
+// showLauncher на старте, до первого initArkClient, ложно «починит» только что
+// заспавненный backend). См. .agent/tasks/2026-06-07-backend-recovery-after-sleep.
+let bootInitStarted = false;
+// Re-entrancy guard для recoverBackendIfDead (probe async → дедуп нескольких
+// триггеров: powerMonitor resume + showLauncher одновременно).
+let recoveringBackend = false;
 // Promise который резолвится когда arkClient готов принимать request'ы.
 // Renderer может стрелять kepler:ark:request как только подняло окно —
 // до того как initArkClient прошёл handshake. Handler ниже await'ит ready
@@ -602,6 +613,9 @@ function showLauncher() {
   }
   launcherHidden = false;
   mainWindow.webContents.send("kepler:window:show");
+  // Self-heal: если backend умер (например после сна) — поднимаем его при
+  // открытии лаунчера. No-op пока backend жив или идёт штатный (re)connect.
+  void recoverBackendIfDead("launcher-show");
 }
 
 function showClipboardHistoryLauncher() {
@@ -795,6 +809,7 @@ export async function awaitArkReady(timeoutMs = ARK_READY_REQUEST_TIMEOUT_MS): P
 }
 
 async function initArkClient(): Promise<void> {
+  arkInitInFlight = true;
   try {
     const spaceId = KEPLER_SPACE_ID;
     ensureArkReadyPromise(); // создаём promise до handshake'а если ещё нет
@@ -893,6 +908,59 @@ async function initArkClient(): Promise<void> {
   } catch (e) {
     keplerLog.error("ark", "ArkClient init failed", { err: String(e) });
     arkClientReadyReject?.(e instanceof Error ? e : new Error(String(e)));
+  } finally {
+    arkInitInFlight = false;
+  }
+}
+
+/// Активная проверка живости ARK: probe лёгкой операцией с коротким таймаутом.
+/// `arkClient !== null` недостаточно — после suspend событие `exit` могло не
+/// прийти, и клиент держит ref на мёртвый WS (запросы висят). Probe это ловит.
+async function backendHealthy(timeoutMs = 1500): Promise<boolean> {
+  const client = arkClient;
+  if (!client) return false;
+  let timer: NodeJS.Timeout | null = null;
+  try {
+    await Promise.race([
+      client.commands.list(),
+      new Promise<never>((_, rej) => {
+        timer = setTimeout(() => rej(new Error("health probe timeout")), timeoutMs);
+      }),
+    ]);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/// On-demand recovery: если backend мёртв (process exit не доставлен во время
+/// сна / clean code=0 без respawn), reset + spawn + reconnect. Идемпотентно и
+/// не вмешивается в штатный (re)connect/respawn. Триггеры: powerMonitor resume,
+/// showLauncher. См. .agent/tasks/2026-06-07-backend-recovery-after-sleep.
+async function recoverBackendIfDead(reason: string): Promise<void> {
+  if (!bootInitStarted || recoveringBackend || isQuiting) return;
+  // Идёт штатный handshake или уже запланирован respawn/retry — не мешаем.
+  if (arkInitInFlight || arkInitRetryTimer || backendRespawnTimer) return;
+  recoveringBackend = true;
+  try {
+    if (await backendHealthy()) return;
+    keplerLog.warn("supervisor", "backend unhealthy — recovering", { reason });
+    backendCrashStreak = 0;
+    backendCrashDialogShown = false;
+    await resetArkClient(`recover: ${reason}`);
+    if (backendProc && !backendProc.killed) {
+      try {
+        backendProc.kill();
+      } catch {
+        // уже мёртв — ок
+      }
+    }
+    spawnBackend();
+    await initArkClient();
+  } finally {
+    recoveringBackend = false;
   }
 }
 
@@ -1106,9 +1174,20 @@ safeHandle("kepler:commands:list", async (): Promise<CommandRecord[]> => {
 
   // 3) Runtime dynamic (commands.register от running extension'ов).
   //    Видны только пока соответствующий extension запущен.
+  //    ВАЖНО: динамический ark-вызов ограничен коротким таймаутом. Если backend
+  //    мёртв (например после сна), `arkClient.commands.list()` висит ~30s на
+  //    собственном ark-таймауте и блокирует возврат даже статических команд —
+  //    лаунчер выглядит полностью пустым. Built-in команды (Настройки/Фокус/
+  //    Дашборд) обязаны показываться мгновенно при любом состоянии backend'а.
   if (arkClient) {
     try {
-      const dynamic = await arkClient.commands.list();
+      const COMMANDS_DYNAMIC_TIMEOUT_MS = 2000;
+      const dynamic = await Promise.race([
+        arkClient.commands.list(),
+        new Promise<never>((_, rej) =>
+          setTimeout(() => rej(new Error("dynamic commands timeout")), COMMANDS_DYNAMIC_TIMEOUT_MS),
+        ),
+      ]);
       if (Array.isArray(dynamic)) {
         for (const c of dynamic) {
           if (byId.has(c.id)) continue; // internal/manifest priority
@@ -1683,7 +1762,17 @@ app.whenReady().then(async () => {
     showLauncher();
   }
 
+  bootInitStarted = true;
   void initArkClient();
+
+  // Wake-from-sleep recovery: во время сна backend мог умереть так, что
+  // `backendProc.on("exit")` не доставился (electron-main был suspended) или
+  // backend вышел code=0 (supervisor не respawn'ит). На resume активно
+  // проверяем и поднимаем backend заново. См.
+  // .agent/tasks/2026-06-07-backend-recovery-after-sleep.
+  powerMonitor.on("resume", () => {
+    void recoverBackendIfDead("power-resume");
+  });
 
   if (CLIPBOARD_HISTORY_ENABLED) {
     registerClipboardHistoryIpc();

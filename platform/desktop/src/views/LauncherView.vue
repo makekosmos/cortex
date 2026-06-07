@@ -973,18 +973,24 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
+let commandsRefreshRun = 0;
 async function refreshCommands() {
   hiddenCommandIds.value = loadHiddenCommandIds();
-  // Загружаем команды от command bus и apps от app_index параллельно,
-  // мерджим в один массив. Apps идут после команд (запуск приложения —
-  // одна из подкатегорий «open»).
-  const [cmds, apps] = await Promise.all([
-    window.kepler.commands.list().catch((e) => {
-      console.warn("commands.list failed", e);
-      return [] as CommandRecord[];
-    }),
-    fetchApps(),
-  ]);
+  const run = ++commandsRefreshRun;
+  // Двухфазно: команды (built-in появляются МГНОВЕННО) отдельно от apps. При
+  // мёртвом backend'е `app_index.list_all` висит ~30s на ark-таймауте — нельзя
+  // блокировать на нём показ встроенных команд (иначе лаунчер выглядит пустым).
+  const cmds = await window.kepler.commands.list().catch((e) => {
+    console.warn("commands.list failed", e);
+    return [] as CommandRecord[];
+  });
+  if (run !== commandsRefreshRun) return; // более свежий refresh победил
+  const phase1 = dedupeCommandsById(cmds);
+  allCommandsCache.value = phase1;
+  commands.value = phase1.filter(isCommandVisible);
+  // Фаза 2: приложения (могут быть медленными/пустыми при мёртвом backend).
+  const apps = await fetchApps();
+  if (run !== commandsRefreshRun || apps.length === 0) return;
   const deduped = dedupeCommandsById([...cmds, ...apps]);
   allCommandsCache.value = deduped;
   commands.value = deduped.filter(isCommandVisible);
@@ -1001,6 +1007,7 @@ let offClipboardUpdated = () => {};
 let offFocusOpen = () => {};
 let offFocusSessionUpdated = () => {};
 let offCommandVisibilityStorage = () => {};
+let offBackendReady = () => {};
 let fileSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let fileSearchRun = 0;
 const FILE_SEARCH_DEBOUNCE_MS = 120;
@@ -1066,6 +1073,11 @@ onMounted(async () => {
   offCommandsUpdated = window.kepler.commands.onUpdated(() => {
     void refreshCommands();
   });
+  // Backend переподнялся (recovery после сна / restart) — перезапрашиваем
+  // команды и приложения, иначе список остаётся пустым до следующего show.
+  offBackendReady = window.kepler.backend.onReady(() => {
+    void refreshCommands();
+  });
   offClipboardOpen = window.kepler.clipboardHistory.onOpenShell(() => {
     void enterClipboardMode();
   });
@@ -1118,6 +1130,7 @@ onUnmounted(() => {
   offFocusSessionUpdated();
   offFocusOpen();
   offCommandVisibilityStorage();
+  offBackendReady();
   fileSearchRun++;
   if (fileSearchTimer) clearTimeout(fileSearchTimer);
   unsubUpdateState?.();
